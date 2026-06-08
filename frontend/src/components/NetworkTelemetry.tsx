@@ -13,7 +13,7 @@ import {
   CheckCircle2,
   XCircle
 } from 'lucide-react';
-import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip";
+import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tg-tooltip";
 import { api } from "../api/client";
 
 export const NetworkTelemetry: React.FC = () => {

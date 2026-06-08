@@ -6,7 +6,7 @@ import { useUI } from "../contexts/UIContext";
 import { useSettings } from "../contexts/SettingsContext";
 import { useScraper } from "../contexts/ScraperContext";
 import { useAI } from "../contexts/AIContext";
-import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip";
+import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tg-tooltip";
 
 export const SummaryConfig: React.FC = () => {
   const { channels } = useData();

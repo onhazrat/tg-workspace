@@ -5,7 +5,7 @@ import { highlightText } from "../lib/utils";
 import { useSettings } from "../contexts/SettingsContext";
 import { useScraper } from "../contexts/ScraperContext";
 import { useData } from "../contexts/DataContext";
-import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip";
+import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tg-tooltip";
 import { RelativeTime } from "./RelativeTime";
 import { getTranslation, saveTranslation } from "../lib/db";
 import { useTranslation } from "../contexts/TranslationContext";

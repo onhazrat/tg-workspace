@@ -6,7 +6,7 @@ import { useSettings } from "../contexts/SettingsContext";
 import { BotCredential, ChatDestination, PublishLog, NetworkLog } from "../types";
 import { saveBotCredential, deleteBotCredential, saveChatDestination, deleteChatDestination, savePublishLog, saveNetworkLog } from "../lib/db";
 import { toast } from "sonner";
-import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip";
+import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tg-tooltip";
 import { publishSummary } from "../services/telegram";
 import { api } from "../api/client";
 import { RelativeTime } from "./RelativeTime";

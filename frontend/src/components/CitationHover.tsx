@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { Post } from "../types";
 import { getPost } from "../lib/db";
-import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip";
+import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tg-tooltip";
 import { Loader2, ExternalLink } from "lucide-react";
 
 interface CitationHoverProps {

@@ -27,7 +27,7 @@ import { RelativeTime } from "./RelativeTime";
 import { useUI } from "../contexts/UIContext";
 import { deletePublishLog, clearPublishLogs, deleteSyncLog, clearSyncLogs, deleteLLMLog, clearLLMLogs, deleteNetworkLog, clearNetworkLogs, deleteEmbeddingLog, clearEmbeddingLogs } from "../lib/db";
 import { toast } from "sonner";
-import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip";
+import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tg-tooltip";
 import { formatDateToLocalISO } from "../lib/utils";
 
 type LogTab = "publish" | "sync" | "llm" | "network" | "embedding";

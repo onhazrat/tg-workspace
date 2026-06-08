@@ -8,7 +8,7 @@ import { useScraper } from '../contexts/ScraperContext';
 import { useUI } from '../contexts/UIContext';
 import { useSettings } from '../contexts/SettingsContext';
 import { saveChannel } from '../lib/db';
-import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip';
+import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tg-tooltip';
 
 interface ChannelCardProps {
   channel: Channel;

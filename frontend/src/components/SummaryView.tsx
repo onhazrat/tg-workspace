@@ -9,7 +9,7 @@ import { toast } from "sonner";
 import { useAI, generateDefaultMetadataText } from "../contexts/AIContext";
 import { useScraper } from "../contexts/ScraperContext";
 import { SummaryConfig } from "./SummaryConfig";
-import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip";
+import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tg-tooltip";
 import { RelativeTime } from "./RelativeTime";
 import { CitationHover } from "./CitationHover";
 import { formatDateToLocalISO } from "../lib/utils";

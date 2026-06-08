@@ -10,7 +10,7 @@ import { useScraper } from '../contexts/ScraperContext';
 import { saveChannel, deleteChannel, clearChannelPosts, saveNetworkLog } from '../lib/db';
 import { api } from '../api/client';
 import { Modal } from './ui/Modal';
-import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip';
+import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tg-tooltip';
 
 interface ChannelGridProps {}
 

@@ -10,7 +10,7 @@ import { useUI } from "../contexts/UIContext";
 import { useRAG } from "../contexts/RAGContext";
 import { useChatContext } from "../contexts/ChatContext";
 import { useData } from "../contexts/DataContext";
-import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip";
+import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tg-tooltip";
 import { CitationHover } from "./CitationHover";
 
 const replaceCitations = (nodes: React.ReactNode, sources: any[] | undefined): React.ReactNode => {

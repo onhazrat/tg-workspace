@@ -5,6 +5,8 @@ function headers(json = true): HeadersInit {
   const h: Record<string, string> = {};
   if (json) h["Content-Type"] = "application/json";
   if (API_KEY) h["X-API-Key"] = API_KEY;
+  const token = localStorage.getItem("access_token");
+  if (token) h["Authorization"] = `Bearer ${token}`;
   return h;
 }
 

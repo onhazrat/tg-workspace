@@ -6,7 +6,7 @@ import { RelativeTime } from "./RelativeTime";
 import { useData } from "../contexts/DataContext";
 import { toast } from "sonner";
 import { deleteSummary, saveSummary } from "../lib/db";
-import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip";
+import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tg-tooltip";
 import { formatDateToLocalISO } from "../lib/utils";
 
 const formatDuration = (start: number, end: number) => {

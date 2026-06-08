@@ -7,7 +7,7 @@ import { useSettings } from "../contexts/SettingsContext";
 import { exportDBMetadata, getPostCount, getPostsChunk, importDB, initDB, getTableSizes, runQuery, clearTable } from "../lib/db";
 import { toast } from "sonner";
 import { Modal } from "./ui/Modal";
-import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip";
+import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tg-tooltip";
 import { formatDateToLocalISO } from "../lib/utils";
 import { RelativeTime } from "./RelativeTime";
 import * as JSZip from "jszip";
