@@ -12,6 +12,7 @@ from app.api.main import api_router
 from app.api.routes import legacy
 from app.core.config import settings
 from app.core.db import engine, init_db
+from app.core.startup_checks import run_startup_checks
 from app.jobs.scheduler import start_scheduler, stop_scheduler
 from app.middleware.api_key import APIKeyMiddleware
 
@@ -28,6 +29,7 @@ if settings.SENTRY_DSN and settings.ENVIRONMENT != "local":
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
+    run_startup_checks()
     with Session(engine) as session:
         init_db(session)
     start_scheduler()

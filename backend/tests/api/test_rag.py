@@ -127,7 +127,10 @@ def test_rag_search_cosine_order_and_post_shape(
     _seed_posts_and_embeddings(client)
     mock_get_provider.return_value = _mock_provider([[1.0, 0.0, 0.0]])
 
-    r = client.post(f"{PREFIX}/search", json={"query": "alpha", "limit": 2})
+    headers = _auth(client)
+    r = client.post(
+        f"{PREFIX}/search", json={"query": "alpha", "limit": 2}, headers=headers
+    )
     assert r.status_code == 200, r.text
     data = r.json()
     assert len(data["results"]) == 2
@@ -150,6 +153,7 @@ def test_rag_search_date_and_channel_filters(
     _seed_posts_and_embeddings(client)
     mock_get_provider.return_value = _mock_provider([[1.0, 0.0, 0.0]])
 
+    headers = _auth(client)
     r = client.post(
         f"{PREFIX}/search",
         json={
@@ -159,6 +163,7 @@ def test_rag_search_date_and_channel_filters(
             "endDate": 2500,
             "limit": 10,
         },
+        headers=headers,
     )
     assert r.status_code == 200, r.text
     ids = [item["postId"] for item in r.json()["results"]]
@@ -182,7 +187,7 @@ def test_rag_status_pending_and_total(client: TestClient) -> None:
         headers=headers,
     )
 
-    r = client.get(f"{PREFIX}/status")
+    r = client.get(f"{PREFIX}/status", headers=headers)
     assert r.status_code == 200, r.text
     data = r.json()
     assert data["total"] >= 4
@@ -223,7 +228,7 @@ def test_backfill_embeddings_mocked_provider(
 
     embeddings_service._last_backfill_run_ms = None
     with patch("app.api.routes.rag.settings.GEMINI_API_KEY", "test-key"):
-        r = client.post(f"{PREFIX}/embed", json={"limit": 2})
+        r = client.post(f"{PREFIX}/embed", json={"limit": 2}, headers=headers)
     assert r.status_code == 200, r.text
     result = r.json()
     assert result["processed"] == 2
@@ -239,7 +244,7 @@ def test_backfill_embeddings_mocked_provider(
     assert emb["dimensions"] == 3
     assert emb["vector"] == [0.1, 0.2, 0.3]
 
-    status = client.get(f"{PREFIX}/status").json()
+    status = client.get(f"{PREFIX}/status", headers=headers).json()
     assert status["lastRun"] is not None
 
 

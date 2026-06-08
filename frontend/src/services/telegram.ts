@@ -70,9 +70,38 @@ export const publishSummary = async (
       logTelemetry("https://api.telegram.org/bot.../sendMessage", "POST", 200, data.telemetry, "Publisher");
     }
 
+    const results = data.results ?? [];
+    const allOk =
+      data.success !== false &&
+      results.length > 0 &&
+      results.every(
+        (r) =>
+          r &&
+          typeof r === "object" &&
+          (r as { ok?: boolean }).ok !== false
+      );
+
+    if (!allOk) {
+      const firstError = results.find(
+        (r) =>
+          r &&
+          typeof r === "object" &&
+          (r as { ok?: boolean }).ok === false
+      ) as { description?: string } | undefined;
+      return {
+        success: false,
+        error:
+          data.error ??
+          firstError?.description ??
+          "Publish failed: Telegram API returned an error",
+        responses: results,
+        requests: [requestBody],
+      };
+    }
+
     return {
-      success: true,
-      responses: data.results,
+      success: data.success ?? true,
+      responses: results,
       requests: [requestBody],
     };
   } catch (err) {

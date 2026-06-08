@@ -2,6 +2,7 @@
 
 from unittest.mock import AsyncMock, patch
 
+import pytest
 from fastapi.testclient import TestClient
 
 from app.core.config import settings
@@ -21,6 +22,19 @@ def _auth(client: TestClient) -> dict[str, str]:
     )
     token = login.json()["access_token"]
     return {"Authorization": f"Bearer {token}"}
+
+
+def test_decrypt_rejects_plaintext_in_non_local(monkeypatch: pytest.MonkeyPatch) -> None:
+    from app.core import secrets as secrets_mod
+
+    monkeypatch.setattr(secrets_mod.settings, "ENVIRONMENT", "production")
+    monkeypatch.setattr(
+        secrets_mod.settings,
+        "TOKEN_ENCRYPTION_KEY",
+        "rcVtgNgVUfmbrfU-cOzcseDe66PgU3jo4AjvfUA3X90=",
+    )
+    with pytest.raises(ValueError, match="not encrypted"):
+        decrypt_token("plaintext-token-value")
 
 
 def test_encrypt_decrypt_roundtrip() -> None:

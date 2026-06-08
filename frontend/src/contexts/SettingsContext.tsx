@@ -308,6 +308,10 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({ children }
   const networkHydrated = useRef(false);
   const networkSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // TODO(WS-E Sprint 2): On login, hydrate sync/retention/translation/jobs/ai
+  // from GET /api/v1/data/settings/{key} (server wins over localStorage), mirroring
+  // applyNetworkSettings below. Stop persisting server-owned keys to localStorage.
+
   const applyNetworkSettings = useCallback((value: Record<string, unknown>) => {
     if (Array.isArray(value.proxyUrls)) {
       setDefaultProxyUrls((value.proxyUrls as string[]).join("\n"));

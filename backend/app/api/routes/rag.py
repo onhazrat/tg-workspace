@@ -3,12 +3,12 @@
 from typing import Any
 
 import numpy as np
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
-from sqlmodel import Session, select
+from sqlmodel import select
 
 from app.ai.registry import get_provider
-from app.api.deps import get_db
+from app.api.deps import CurrentUser, SessionDep
 from app.core.config import settings
 from app.models_tg import Post, PostEmbedding
 from app.services.embeddings import backfill_embeddings, get_embedding_status
@@ -52,14 +52,15 @@ def _post_to_camel(post: Post) -> dict[str, Any]:
 
 
 @router.get("/status")
-def rag_status(session: Session = Depends(get_db)) -> dict[str, Any]:
+def rag_status(session: SessionDep, _current_user: CurrentUser) -> dict[str, Any]:
     return get_embedding_status(session)
 
 
 @router.post("/embed")
 async def rag_embed(
     body: RagEmbedRequest,
-    session: Session = Depends(get_db),
+    session: SessionDep,
+    _current_user: CurrentUser,
 ) -> dict[str, Any]:
     if not settings.GEMINI_API_KEY:
         raise HTTPException(status_code=503, detail="GEMINI_API_KEY not configured")
@@ -70,7 +71,11 @@ async def rag_embed(
 
 
 @router.post("/search")
-async def rag_search(body: RagSearchRequest, session: Session = Depends(get_db)) -> dict[str, Any]:
+async def rag_search(
+    body: RagSearchRequest,
+    session: SessionDep,
+    _current_user: CurrentUser,
+) -> dict[str, Any]:
     if not settings.GEMINI_API_KEY:
         raise HTTPException(status_code=503, detail="GEMINI_API_KEY not configured")
     provider = get_provider("gemini")

@@ -36,8 +36,12 @@ def decrypt_token(stored: str) -> str:
     try:
         return _fernet().decrypt(stored.encode()).decode()
     except InvalidToken:
-        # Legacy plaintext rows from before Phase 2 encryption.
-        return stored
+        if settings.ENVIRONMENT == "local":
+            # Legacy plaintext rows from before Phase 2 encryption (local dev only).
+            return stored
+        raise ValueError(
+            "Stored bot token is not encrypted; re-save the credential via the API"
+        ) from None
 
 
 def is_encrypted(stored: str) -> bool:

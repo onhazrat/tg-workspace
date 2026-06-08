@@ -1,3 +1,4 @@
+import logging
 import uuid
 from typing import Any
 
@@ -22,6 +23,7 @@ from app.services.network import fetch_with_retry, parse_telegram_entities
 from app.services.scraper import get_channel_info, resolve_start_time_to_id, scrape_channel
 
 router = APIRouter(prefix="/telegram", tags=["telegram"])
+logger = logging.getLogger(__name__)
 
 
 def _resolve_proxies(
@@ -46,19 +48,35 @@ def _resolve_bot_token(
     session: Session,
     credential_id: str | None,
     raw_token: str | None,
+    *,
+    current_user: Any | None = None,
 ) -> str:
     if credential_id:
         bot = session.get(BotCredential, credential_id)
         if not bot:
             raise HTTPException(status_code=404, detail="Bot credential not found")
-        return decrypt_token(bot.token_encrypted)
+        if (
+            current_user is not None
+            and bot.user_id is not None
+            and bot.user_id != current_user.id
+        ):
+            raise HTTPException(status_code=403, detail="Bot credential not accessible")
+        try:
+            return decrypt_token(bot.token_encrypted)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
     if raw_token:
+        if settings.ENVIRONMENT != "local":
+            raise HTTPException(
+                status_code=400,
+                detail="Raw bot tokens are not accepted; use credentialId instead",
+            )
         return raw_token
     raise HTTPException(status_code=400, detail="credentialId or token is required")
 
 
 @router.post("/scrape")
-async def api_scrape(body: ScrapeRequest) -> dict[str, Any]:
+async def api_scrape(body: ScrapeRequest, _current_user: CurrentUser) -> dict[str, Any]:
     try:
         return await scrape_channel(
             body.url,
@@ -83,11 +101,14 @@ async def api_scrape(body: ScrapeRequest) -> dict[str, Any]:
                 raise HTTPException(status_code=429, detail="Telegram rate limit exceeded") from exc
             if exc.response.status_code == 404:
                 raise HTTPException(status_code=404, detail="Channel not found or private.") from exc
-        raise HTTPException(status_code=500, detail=f"Failed to scrape: {msg}") from exc
+        logger.exception("Failed to scrape channel")
+        raise HTTPException(status_code=500, detail="Failed to scrape channel") from exc
 
 
 @router.post("/channel-info")
-async def api_channel_info(body: ChannelInfoRequest) -> dict[str, Any]:
+async def api_channel_info(
+    body: ChannelInfoRequest, _current_user: CurrentUser
+) -> dict[str, Any]:
     try:
         return await get_channel_info(
             body.channel_name,
@@ -102,11 +123,14 @@ async def api_channel_info(body: ChannelInfoRequest) -> dict[str, Any]:
                 status_code=400,
                 detail={"error": msg, "isUnavailableOnWebView": True},
             ) from exc
-        raise HTTPException(status_code=500, detail=f"Failed to fetch channel info: {msg}") from exc
+        logger.exception("Failed to fetch channel info")
+        raise HTTPException(status_code=500, detail="Failed to fetch channel info") from exc
 
 
 @router.post("/resolve-start-time")
-async def api_resolve_start_time(body: ResolveStartTimeRequest) -> dict[str, Any]:
+async def api_resolve_start_time(
+    body: ResolveStartTimeRequest, _current_user: CurrentUser
+) -> dict[str, Any]:
     try:
         start_id = await resolve_start_time_to_id(
             body.channel_name,
@@ -125,10 +149,8 @@ async def api_resolve_start_time(body: ResolveStartTimeRequest) -> dict[str, Any
             ) from exc
         raise HTTPException(status_code=400, detail=msg) from exc
     except Exception as exc:  # noqa: BLE001
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to resolve start time: {exc}",
-        ) from exc
+        logger.exception("Failed to resolve start time")
+        raise HTTPException(status_code=500, detail="Failed to resolve start time") from exc
 
 
 @router.post("/bot-info")
@@ -137,7 +159,9 @@ async def api_bot_info(
     session: SessionDep,
     current_user: CurrentUser,
 ) -> dict[str, Any]:
-    token = _resolve_bot_token(session, body.credential_id, body.token)
+    token = _resolve_bot_token(
+        session, body.credential_id, body.token, current_user=current_user
+    )
     target = f"https://api.telegram.org/bot{token}/{body.method}"
     if body.params:
         from urllib.parse import urlencode
@@ -158,7 +182,8 @@ async def api_bot_info(
             data = json.loads(data)
         return {**data, "telemetry": telemetry}
     except Exception as exc:  # noqa: BLE001
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+        logger.exception("Bot info request failed")
+        raise HTTPException(status_code=500, detail="Bot info request failed") from exc
 
 
 @router.post("/publish")
@@ -167,7 +192,9 @@ async def api_publish(
     session: SessionDep,
     current_user: CurrentUser,
 ) -> dict[str, Any]:
-    token = _resolve_bot_token(session, body.credential_id, body.token)
+    token = _resolve_bot_token(
+        session, body.credential_id, body.token, current_user=current_user
+    )
     target = f"https://api.telegram.org/bot{token}/sendMessage"
     results: list[Any] = []
     telemetry_logs: list[Any] = []
@@ -205,7 +232,8 @@ async def api_publish(
             await send_chunk(body.text[i : i + 4000])
         return {"success": True, "results": results, "telemetry": telemetry_logs}
     except Exception as exc:  # noqa: BLE001
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+        logger.exception("Publish request failed")
+        raise HTTPException(status_code=500, detail="Publish request failed") from exc
 
 
 @router.get("/bot-file/{credential_id}")
@@ -215,7 +243,9 @@ async def api_bot_file(
     current_user: CurrentUser,
     path: str = Query(..., min_length=1),
 ) -> Response:
-    token = _resolve_bot_token(session, credential_id, None)
+    token = _resolve_bot_token(
+        session, credential_id, None, current_user=current_user
+    )
     file_url = f"https://api.telegram.org/file/bot{token}/{path}"
     try:
         async with httpx.AsyncClient(timeout=60.0, follow_redirects=True) as client:
@@ -227,4 +257,5 @@ async def api_bot_file(
     except HTTPException:
         raise
     except Exception as exc:  # noqa: BLE001
-        raise HTTPException(status_code=502, detail=f"Failed to fetch bot file: {exc}") from exc
+        logger.exception("Failed to fetch bot file")
+        raise HTTPException(status_code=502, detail="Failed to fetch bot file") from exc

@@ -140,6 +140,20 @@ uv run prek install -f
 uv run prek run --all-files
 ```
 
+## Mode A deployment (hardened single-operator)
+
+Remediation chose **Mode A** on 2026-06-09 ([DECISIONS.md](docs/migration/DECISIONS.md)). Expectations:
+
+| Environment | Auth | Secrets |
+|-------------|------|---------|
+| `local` | JWT for UI; `API_KEY` optional | `TOKEN_ENCRYPTION_KEY` optional (dev fallback) |
+| `staging` / `production` | JWT or `X-API-Key`; fail-closed without either | `TOKEN_ENCRYPTION_KEY` required; `API_KEY` required in `production` |
+
+- Set `USERS_OPEN_REGISTRATION=false` in production.
+- All AI, RAG, network, telegram, and jobs routes require authentication.
+- Raw bot tokens in request bodies are rejected outside `local`; use stored `credentialId`.
+- Single superuser owns all Postgres data; per-user row scoping is deferred to Mode B.
+
 ## Migration
 
-TG-Summarizer → FastAPI migration docs live in [`docs/migration/`](docs/migration/README.md). Locked decisions: [DECISIONS.md](docs/migration/DECISIONS.md). Phased plan: [IMPLEMENTATION-PLAN.md](docs/migration/IMPLEMENTATION-PLAN.md).
+TG-Summarizer → FastAPI migration docs live in [`docs/migration/`](docs/migration/README.md). Locked decisions: [DECISIONS.md](docs/migration/DECISIONS.md). Phased plan: [IMPLEMENTATION-PLAN.md](docs/migration/IMPLEMENTATION-PLAN.md). Remediation: [REMEDIATION-PLAN.md](docs/migration/REMEDIATION-PLAN.md).

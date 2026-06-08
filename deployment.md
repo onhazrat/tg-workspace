@@ -51,6 +51,10 @@ Copy the project (excluding gitignored files):
 rsync -av --filter=":- .gitignore" ./ root@your-server.example.com:/root/code/app/
 ```
 
+### Deployment mode (Mode A)
+
+Production uses **Mode A — hardened single-operator** ([DECISIONS.md](docs/migration/DECISIONS.md)): one operator, JWT for the browser UI, and fail-closed auth on sensitive API routes. The backend **refuses to start** in `staging`/`production` without the secrets below.
+
 ### Required environment variables
 
 Generate secrets:
@@ -66,25 +70,26 @@ Set at minimum:
 | `ENVIRONMENT` | `staging` or `production` |
 | `DOMAIN` | e.g. `tg-summarizer.example.com` |
 | `STACK_NAME` | Unique per environment (used in Traefik labels) |
-| `SECRET_KEY` | JWT signing key — not `changethis` |
+| `SECRET_KEY` | JWT signing key — not `changethis`; must be stable across restarts |
 | `POSTGRES_PASSWORD` | Database password |
 | `FIRST_SUPERUSER` / `FIRST_SUPERUSER_PASSWORD` | Initial admin account |
 | `BACKEND_CORS_ORIGINS` | `https://dashboard.${DOMAIN},https://api.${DOMAIN}` |
 | `FRONTEND_HOST` | `https://dashboard.${DOMAIN}` |
+| `API_KEY` | **Required** in staging/production — scripts use `X-API-Key`; browser uses JWT |
+| `TOKEN_ENCRYPTION_KEY` | **Required** — Fernet key for bot tokens at rest (see `.env.example`) |
+| `USERS_OPEN_REGISTRATION` | **`false`** in production |
 
 ### TG Summarizer secrets
 
 | Variable | Purpose |
 |----------|---------|
 | `GEMINI_API_KEY` | Google Gemini API for summaries, chat, embeddings |
-| `API_KEY` | Optional shared key for `X-API-Key` auth (scripts/automation) |
 | `TOR_CONTROL_PASSWORD` | Tor control port password (if using Tor features) |
 | `TOR_CONTROL_PORT` | Default `9051` |
 | `TOR_SOCKS_PROXY` | Default `socks5h://127.0.0.1:9050` |
 | `DEFAULT_PROXY_URLS` | Comma-separated scrape proxy URLs |
 | `EMBEDDING_MODEL` | Default `gemini-embedding-2-preview` |
 | `DEFAULT_AI_MODEL` | Default `gemini-3-flash-preview` |
-| `USERS_OPEN_REGISTRATION` | Set `false` in production to disable signup |
 
 ### Manual deploy
 
@@ -128,7 +133,8 @@ For each environment, configure:
 
 **TG Summarizer (both environments)**
 * `GEMINI_API_KEY`
-* `API_KEY` (optional)
+* `API_KEY` (required for Mode A)
+* `TOKEN_ENCRYPTION_KEY` (required for Mode A)
 * `TOR_CONTROL_PASSWORD` (if using Tor)
 
 **CI only (repository secrets)**

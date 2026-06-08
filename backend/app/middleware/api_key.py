@@ -1,5 +1,6 @@
 """Optional API key auth for self-hosted deployment."""
 
+import logging
 from collections.abc import Callable
 
 import jwt
@@ -11,13 +12,21 @@ from starlette.responses import JSONResponse, Response
 from app.core import security
 from app.core.config import settings
 
-PUBLIC_PATHS = {
+logger = logging.getLogger(__name__)
+
+_BASE_PUBLIC_PATHS = {
     "/docs",
     "/redoc",
     "/api/v1/openapi.json",
     "/api/v1/utils/health-check/",
-    "/api/v1/users/signup",
 }
+
+
+def _public_paths() -> set[str]:
+    paths = set(_BASE_PUBLIC_PATHS)
+    if settings.USERS_OPEN_REGISTRATION:
+        paths.add("/api/v1/users/signup")
+    return paths
 
 
 def _bearer_token(request: Request) -> str | None:
@@ -35,22 +44,32 @@ def _is_valid_jwt(token: str) -> bool:
         return False
 
 
+def _has_valid_auth(request: Request) -> bool:
+    key = request.headers.get("X-API-Key") or request.headers.get("x-api-key")
+    if settings.API_KEY and key == settings.API_KEY:
+        return True
+    token = _bearer_token(request)
+    return bool(token and _is_valid_jwt(token))
+
+
 class APIKeyMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next: Callable) -> Response:
-        if not settings.API_KEY:
-            return await call_next(request)
         path = request.url.path
-        if path in PUBLIC_PATHS or path.startswith("/api/v1/login"):
+        if path in _public_paths() or path.startswith("/api/v1/login"):
             return await call_next(request)
 
-        key = request.headers.get("X-API-Key") or request.headers.get("x-api-key")
-        if key == settings.API_KEY:
+        if settings.ENVIRONMENT == "local" and not settings.API_KEY:
             return await call_next(request)
 
-        token = _bearer_token(request)
-        if token and _is_valid_jwt(token):
+        if settings.ENVIRONMENT != "local" and not settings.API_KEY:
+            logger.warning(
+                "API_KEY is unset in %s; rejecting unauthenticated requests",
+                settings.ENVIRONMENT,
+            )
+
+        if _has_valid_auth(request):
             return await call_next(request)
 
         return JSONResponse(
-            status_code=401, content={"detail": "Invalid or missing API key"}
+            status_code=401, content={"detail": "Authentication required"}
         )

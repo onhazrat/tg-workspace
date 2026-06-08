@@ -9,10 +9,23 @@ from unittest.mock import AsyncMock, patch
 import pytest
 from fastapi.testclient import TestClient
 
+from app.core.config import settings
 from app.main import app
 from app.services.scraper import resolve_start_time_to_id
 
 client = TestClient(app)
+
+
+def _auth_headers() -> dict[str, str]:
+    login = client.post(
+        f"{settings.API_V1_STR}/login/access-token",
+        data={
+            "username": settings.FIRST_SUPERUSER,
+            "password": settings.FIRST_SUPERUSER_PASSWORD,
+        },
+    )
+    token = login.json()["access_token"]
+    return {"Authorization": f"Bearer {token}"}
 
 POST_TIMES: dict[int, int] = {
     100: 1_000,
@@ -146,6 +159,7 @@ def test_api_resolve_start_time_v1(mock_resolver_deps: tuple[AsyncMock, AsyncMoc
         response = client.post(
             "/api/v1/telegram/resolve-start-time",
             json={"channelName": "testchannel", "targetTimeMs": 3_000},
+            headers=_auth_headers(),
         )
     assert response.status_code == 200
     assert response.json() == {"startId": 300}
@@ -161,6 +175,7 @@ def test_api_resolve_start_time_legacy_alias(mock_resolver_deps: tuple[AsyncMock
         response = client.post(
             "/api/resolve-start-time",
             json={"channelName": "testchannel", "targetTimeMs": 3_000},
+            headers=_auth_headers(),
         )
     assert response.status_code == 200
     assert response.json() == {"startId": 300}
@@ -174,6 +189,7 @@ def test_api_resolve_start_time_unavailable() -> None:
         response = client.post(
             "/api/v1/telegram/resolve-start-time",
             json={"channelName": "privatechannel", "targetTimeMs": 3_000},
+            headers=_auth_headers(),
         )
     assert response.status_code == 400
     detail = response.json()["detail"]

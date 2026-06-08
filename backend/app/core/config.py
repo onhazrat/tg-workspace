@@ -133,6 +133,16 @@ class Settings(BaseSettings):
             "FIRST_SUPERUSER_PASSWORD", self.FIRST_SUPERUSER_PASSWORD
         )
 
+        if self.ENVIRONMENT != "local":
+            if not self.TOKEN_ENCRYPTION_KEY.strip():
+                raise ValueError(
+                    "TOKEN_ENCRYPTION_KEY must be set when ENVIRONMENT is not 'local'"
+                )
+            if self.ENVIRONMENT == "production" and not self.API_KEY.strip():
+                raise ValueError(
+                    "API_KEY must be set when ENVIRONMENT is 'production'"
+                )
+
         return self
 
 

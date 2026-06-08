@@ -5,6 +5,7 @@ from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 
 from app.ai.models import ChatRequest, EmbedRequest, SummaryRequest, TranslateRequest
+from app.api.deps import CurrentUser
 from app.ai.registry import default_model, get_provider, list_all_models
 from app.core.config import settings
 from app.prompts.templates import CHAT_PROMPT, RAG_CHAT_PROMPT, SYSTEM_PROMPT
@@ -24,12 +25,12 @@ def _rtl(language: str) -> str:
 
 
 @router.get("/models")
-def api_list_models() -> dict:
+def api_list_models(_current_user: CurrentUser) -> dict:
     return {"models": list_all_models(), "default": default_model()}
 
 
 @router.post("/summary")
-async def api_summary(body: SummaryRequest) -> dict:
+async def api_summary(body: SummaryRequest, _current_user: CurrentUser) -> dict:
     if not settings.GEMINI_API_KEY:
         raise HTTPException(status_code=503, detail="GEMINI_API_KEY not configured")
     model = body.model or default_model()
@@ -45,7 +46,9 @@ async def api_summary(body: SummaryRequest) -> dict:
 
 
 @router.post("/summary/stream")
-async def api_summary_stream(body: SummaryRequest) -> StreamingResponse:
+async def api_summary_stream(
+    body: SummaryRequest, _current_user: CurrentUser
+) -> StreamingResponse:
     if not settings.GEMINI_API_KEY:
         raise HTTPException(status_code=503, detail="GEMINI_API_KEY not configured")
     model = body.model or default_model()
@@ -66,7 +69,7 @@ async def api_summary_stream(body: SummaryRequest) -> StreamingResponse:
 
 
 @router.post("/chat/stream")
-async def api_chat_stream(body: ChatRequest) -> StreamingResponse:
+async def api_chat_stream(body: ChatRequest, _current_user: CurrentUser) -> StreamingResponse:
     if not settings.GEMINI_API_KEY:
         raise HTTPException(status_code=503, detail="GEMINI_API_KEY not configured")
     model = body.model or default_model()
@@ -94,7 +97,7 @@ async def api_chat_stream(body: ChatRequest) -> StreamingResponse:
 
 
 @router.post("/embeddings")
-async def api_embeddings(body: EmbedRequest) -> dict:
+async def api_embeddings(body: EmbedRequest, _current_user: CurrentUser) -> dict:
     if not settings.GEMINI_API_KEY:
         raise HTTPException(status_code=503, detail="GEMINI_API_KEY not configured")
     model = body.model or settings.EMBEDDING_MODEL
@@ -104,7 +107,7 @@ async def api_embeddings(body: EmbedRequest) -> dict:
 
 
 @router.post("/translate")
-async def api_translate(body: TranslateRequest) -> dict:
+async def api_translate(body: TranslateRequest, _current_user: CurrentUser) -> dict:
     if not settings.GEMINI_API_KEY:
         raise HTTPException(status_code=503, detail="GEMINI_API_KEY not configured")
     model = body.model or default_model()

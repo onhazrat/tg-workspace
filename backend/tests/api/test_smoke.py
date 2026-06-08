@@ -9,6 +9,17 @@ from app.main import app
 client = TestClient(app)
 
 
+def _auth_headers() -> dict[str, str]:
+    login = client.post(
+        "/api/v1/login/access-token",
+        data={
+            "username": settings.FIRST_SUPERUSER,
+            "password": settings.FIRST_SUPERUSER_PASSWORD,
+        },
+    )
+    return {"Authorization": f"Bearer {login.json()['access_token']}"}
+
+
 def test_health_check() -> None:
     r = client.get("/api/v1/utils/health-check/")
     assert r.status_code == 200
@@ -16,20 +27,20 @@ def test_health_check() -> None:
 
 
 def test_proxy_health() -> None:
-    r = client.get("/api/proxy-health")
+    r = client.get("/api/proxy-health", headers=_auth_headers())
     assert r.status_code == 200
     assert "badProxies" in r.json()
 
 
 def test_tor_status() -> None:
-    r = client.get("/api/tor-status")
+    r = client.get("/api/tor-status", headers=_auth_headers())
     assert r.status_code == 200
     data = r.json()
     assert "running" in data
 
 
 def test_ai_models_without_key() -> None:
-    r = client.get("/api/v1/ai/models")
+    r = client.get("/api/v1/ai/models", headers=_auth_headers())
     assert r.status_code == 200
     data = r.json()
     assert len(data["models"]) >= 1
@@ -37,7 +48,7 @@ def test_ai_models_without_key() -> None:
 
 
 def test_jobs_status() -> None:
-    r = client.get("/api/v1/jobs/status")
+    r = client.get("/api/v1/jobs/status", headers=_auth_headers())
     assert r.status_code == 200
     data = r.json()
     for job_id in ("auto_sync", "embeddings", "auto_summary", "retention", "translation_batch"):
@@ -51,14 +62,7 @@ def test_sync_job_requires_auth() -> None:
 
 
 def test_data_channels_crud() -> None:
-    login = client.post(
-        "/api/v1/login/access-token",
-        data={
-            "username": settings.FIRST_SUPERUSER,
-            "password": settings.FIRST_SUPERUSER_PASSWORD,
-        },
-    )
-    headers = {"Authorization": f"Bearer {login.json()['access_token']}"}
+    headers = _auth_headers()
     r = client.put(
         "/api/v1/data/channels/smoke-test",
         json={"name": "smoke-test", "displayName": "Smoke Test"},
@@ -72,12 +76,16 @@ def test_data_channels_crud() -> None:
 
 
 def test_scrape_invalid_url() -> None:
-    r = client.post("/api/scrape", json={"url": "not-a-url"})
+    r = client.post(
+        "/api/scrape", json={"url": "not-a-url"}, headers=_auth_headers()
+    )
     assert r.status_code == 400
 
 
 def test_ai_embeddings() -> None:
-    r = client.post("/api/v1/ai/embeddings", json={"texts": ["hi"]})
+    r = client.post(
+        "/api/v1/ai/embeddings", json={"texts": ["hi"]}, headers=_auth_headers()
+    )
     if settings.GEMINI_API_KEY:
         assert r.status_code == 200
         data = r.json()
@@ -90,7 +98,9 @@ def test_ai_embeddings() -> None:
 def test_rag_search() -> None:
     if settings.GEMINI_API_KEY:
         pytest.skip("Live Gemini RAG is verified against a running server; sync TestClient hits event-loop issues")
-    r = client.post("/api/v1/rag/search", json={"query": "test"})
+    r = client.post(
+        "/api/v1/rag/search", json={"query": "test"}, headers=_auth_headers()
+    )
     assert r.status_code == 503
 
 

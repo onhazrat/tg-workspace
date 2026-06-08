@@ -198,13 +198,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     loadChannels();
     loadBots();
     loadHistory();
-    loadLogs();
-    loadSyncLogs();
-    loadLLMLogs();
-    loadEmbeddingLogs();
-    loadNetworkLogs();
-    loadDBStats();
-  }, [loadChannels, loadBots, loadHistory, loadLogs, loadSyncLogs, loadLLMLogs, loadEmbeddingLogs, loadNetworkLogs, loadDBStats]);
+  }, [loadChannels, loadBots, loadHistory]);
 
   return (
     <DataContext.Provider

@@ -23,8 +23,21 @@ from app.services.scraper_jobs import clear_jobs_for_tests
 PREFIX = f"{settings.API_V1_STR}/jobs"
 
 
+def _auth(client: TestClient) -> dict[str, str]:
+    login = client.post(
+        f"{settings.API_V1_STR}/login/access-token",
+        data={
+            "username": settings.FIRST_SUPERUSER,
+            "password": settings.FIRST_SUPERUSER_PASSWORD,
+        },
+    )
+    token = login.json()["access_token"]
+    return {"Authorization": f"Bearer {token}"}
+
+
 def test_jobs_status_lists_all_jobs(client: TestClient) -> None:
-    r = client.get(f"{PREFIX}/status")
+    headers = _auth(client)
+    r = client.get(f"{PREFIX}/status", headers=headers)
     assert r.status_code == 200
     data = r.json()
     for job_id in ("auto_sync", "embeddings", "auto_summary", "retention", "translation_batch"):
@@ -34,18 +47,20 @@ def test_jobs_status_lists_all_jobs(client: TestClient) -> None:
 
 
 def test_update_job_enabled(client: TestClient) -> None:
-    r = client.put(f"{PREFIX}/embeddings", json={"enabled": False})
+    headers = _auth(client)
+    r = client.put(f"{PREFIX}/embeddings", json={"enabled": False}, headers=headers)
     assert r.status_code == 200
     assert r.json()["enabled"] is False
 
-    status = client.get(f"{PREFIX}/status").json()
+    status = client.get(f"{PREFIX}/status", headers=headers).json()
     assert status["embeddings"]["enabled"] is False
 
-    client.put(f"{PREFIX}/embeddings", json={"enabled": True})
+    client.put(f"{PREFIX}/embeddings", json={"enabled": True}, headers=headers)
 
 
 def test_trigger_unknown_job(client: TestClient) -> None:
-    r = client.post(f"{PREFIX}/not-a-job/trigger")
+    headers = _auth(client)
+    r = client.post(f"{PREFIX}/not-a-job/trigger", headers=headers)
     assert r.status_code == 404
 
 
@@ -156,6 +171,11 @@ def test_auto_summary_regenerates_due_summary(mock_get_provider) -> None:
     mock_get_provider.return_value = mock_provider
 
     with Session(engine) as session:
+        for other in session.exec(select(Summary)).all():
+            if other.id != summary_id and (other.extra or {}).get("autoRegenerate"):
+                other.extra = {**(other.extra or {}), "autoRegenerate": False}
+                session.add(other)
+
         existing_summary = session.get(Summary, summary_id)
         if existing_summary:
             existing_summary.text = "old"

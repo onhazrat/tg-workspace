@@ -38,12 +38,12 @@ def _resolve_channel_entries(
 
 
 @router.get("/status")
-def jobs_status() -> dict:
+def jobs_status(_current_user: CurrentUser) -> dict:
     return get_job_status()
 
 
 @router.post("/{job_id}/trigger")
-async def trigger_scheduler_job(job_id: str) -> dict:
+async def trigger_scheduler_job(job_id: str, _current_user: CurrentUser) -> dict:
     if job_id not in JOB_IDS:
         raise HTTPException(status_code=404, detail=f"Unknown job: {job_id}")
     try:
@@ -53,7 +53,9 @@ async def trigger_scheduler_job(job_id: str) -> dict:
 
 
 @router.put("/{job_id}")
-def update_scheduler_job(job_id: str, body: UpdateJobRequest) -> dict:
+def update_scheduler_job(
+    job_id: str, body: UpdateJobRequest, _current_user: CurrentUser
+) -> dict:
     if job_id not in JOB_IDS:
         raise HTTPException(status_code=404, detail=f"Unknown job: {job_id}")
     try:
@@ -83,7 +85,9 @@ async def start_sync_job(
 
 
 @router.get("/sync/{job_id}", response_model=SyncJobStatusResponse)
-def get_sync_job_status(job_id: str) -> SyncJobStatusResponse:
+def get_sync_job_status(
+    job_id: str, _current_user: CurrentUser
+) -> SyncJobStatusResponse:
     job = get_job(job_id)
     if not job:
         raise HTTPException(status_code=404, detail="Sync job not found")
@@ -92,7 +96,9 @@ def get_sync_job_status(job_id: str) -> SyncJobStatusResponse:
 
 
 @router.post("/sync/{job_id}/cancel", response_model=CancelSyncJobResponse)
-async def cancel_sync_job(job_id: str) -> CancelSyncJobResponse:
+async def cancel_sync_job(
+    job_id: str, _current_user: CurrentUser
+) -> CancelSyncJobResponse:
     job = await cancel_job(job_id)
     if not job:
         raise HTTPException(status_code=404, detail="Sync job not found")

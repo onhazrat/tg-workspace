@@ -3,6 +3,17 @@
 **Date:** 2026-06-08  
 **Status:** Locked — do not revisit without explicit stakeholder sign-off.
 
+## Remediation deployment mode — **Mode A** (2026-06-09)
+
+**Choice:** Hardened single-operator ([REMEDIATION-PLAN.md](./REMEDIATION-PLAN.md) Phase 0.1).
+
+**Implications:**
+
+- Production requires `API_KEY`, `TOKEN_ENCRYPTION_KEY`, and a non-default `SECRET_KEY`.
+- `USERS_OPEN_REGISTRATION=false` in production; single superuser owns all data.
+- Nullable `user_id` on TG tables is forward-compatible metadata; reads remain unscoped.
+- WS-B tasks marked **(Mode B only)** are deferred unless multi-user is explicitly chosen later.
+
 These decisions resolve open questions from [TARGET-ARCHITECTURE.md](./TARGET-ARCHITECTURE.md), [DATA-MODEL.md](./DATA-MODEL.md), and the ADR series. Implementation details live in [IMPLEMENTATION-PLAN.md](./IMPLEMENTATION-PLAN.md).
 
 ## Summary table

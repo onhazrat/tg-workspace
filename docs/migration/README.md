@@ -12,6 +12,7 @@ Documentation for migrating the browser-first TG-Summarizer app to the FastAPI +
 |----------|-------------|
 | **[DECISIONS.md](./DECISIONS.md)** | Locked migration choices (2026-06-08) with rationale |
 | **[IMPLEMENTATION-PLAN.md](./IMPLEMENTATION-PLAN.md)** | Phased execution plan (Phases 0–7, **all complete**); critical path 0 → 1 → 4 → 6 |
+| **[REMEDIATION-PLAN.md](./REMEDIATION-PLAN.md)** | Post-migration audit fixes — 9 parallel workstreams, sprint allocation, quick wins |
 | **[TARGET-ARCHITECTURE.md](./TARGET-ARCHITECTURE.md)** | End-state module map and data flow |
 
 ## Discovery and inventory
