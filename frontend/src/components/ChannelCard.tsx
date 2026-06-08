@@ -1,0 +1,552 @@
+import React, { useState } from 'react';
+import { motion } from 'motion/react';
+import { Clock, Trash2, ExternalLink, X, Plus, Edit2, RotateCcw, Loader2, RefreshCw, Check, Snowflake, Activity, Users, Image as ImageIcon, Video, File, Link as LinkIcon } from 'lucide-react';
+import { Channel } from '../types';
+import { RelativeTime } from './RelativeTime';
+import { useData } from '../contexts/DataContext';
+import { useScraper } from '../contexts/ScraperContext';
+import { useUI } from '../contexts/UIContext';
+import { useSettings } from '../contexts/SettingsContext';
+import { saveChannel } from '../lib/db';
+import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip';
+
+interface ChannelCardProps {
+  channel: Channel;
+  handleRemoveChannel: (channel: Channel) => void;
+  handleResetAndSync: (channel: Channel) => void;
+}
+
+// Helper to generate a consistent gradient based on channel name
+const getGradientFromName = (name: string) => {
+  const gradients = [
+    'from-blue-400 to-blue-600',
+    'from-emerald-400 to-emerald-600',
+    'from-violet-400 to-violet-600',
+    'from-amber-400 to-orange-500',
+    'from-pink-400 to-rose-500',
+    'from-cyan-400 to-blue-500',
+  ];
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) {
+    hash = name.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  const index = Math.abs(hash) % gradients.length;
+  return gradients[index];
+};
+
+export const ChannelCard: React.FC<ChannelCardProps> = ({ 
+  channel, 
+  handleRemoveChannel, 
+  handleResetAndSync 
+}) => {
+  const { channelStats, selectedChannels, setSelectedChannels, setChannels } = useData();
+  const { scrapingChannels, syncQueue, filteredPosts, addToSyncQueue } = useScraper();
+  const { summarizing } = useUI();
+  const { 
+    showChannelBio, 
+    showChannelSubscribers, 
+    showChannelPhotos, 
+    showChannelVideos, 
+    showChannelFiles, 
+    showChannelLinks 
+  } = useSettings();
+
+  const [isAddingTag, setIsAddingTag] = useState<boolean>(false);
+  const [editingStartId, setEditingStartId] = useState<string | null>(null);
+
+  const stats = channelStats[channel.name];
+  const isScraping = scrapingChannels.has(channel.name);
+  const inScopeCount = filteredPosts.filter(p => p.channelName === channel.name).length;
+  const syncQueueIndex = syncQueue.findIndex(item => item.channel.id === channel.id);
+  const isEditing = editingStartId !== null;
+  const isSelected = selectedChannels.has(channel.name);
+
+  const toggleChannelSelection = () => {
+    if (channel.isFrozen) return;
+    setSelectedChannels(prev => {
+      const next = new Set(prev);
+      if (next.has(channel.name)) {
+        next.delete(channel.name);
+      } else {
+        next.add(channel.name);
+      }
+      return next;
+    });
+  };
+
+  const handleAddTag = async (tag: string) => {
+    if (!tag.trim()) {
+      setIsAddingTag(false);
+      return;
+    }
+    const newTags = Array.from(new Set([...(channel.tags || []), tag.trim()]));
+    const updatedChannel = { ...channel, tags: newTags };
+    await saveChannel(updatedChannel);
+    setChannels(prev => prev.map(c => c.id === channel.id ? updatedChannel : c));
+    setIsAddingTag(false);
+  };
+
+  const handleRemoveTag = async (tagToRemove: string) => {
+    const newTags = (channel.tags || []).filter(t => t !== tagToRemove);
+    const updatedChannel = { ...channel, tags: newTags };
+    await saveChannel(updatedChannel);
+    setChannels(prev => prev.map(c => c.id === channel.id ? updatedChannel : c));
+  };
+
+  const handleUpdateStartId = async (newStartIdStr: string) => {
+    const newStartId = parseInt(newStartIdStr, 10);
+    if (!isNaN(newStartId) && newStartId > 0) {
+      const updatedChannel = { ...channel, startId: newStartId };
+      await saveChannel(updatedChannel);
+      setChannels(prev => prev.map(c => c.id === channel.id ? updatedChannel : c));
+    }
+    setEditingStartId(null);
+  };
+
+  const handleToggleFreeze = async () => {
+    const updatedChannel = { ...channel, isFrozen: !channel.isFrozen };
+    await saveChannel(updatedChannel);
+    setChannels(prev => prev.map(c => c.id === channel.id ? updatedChannel : c));
+    
+    if (updatedChannel.isFrozen) {
+      setSelectedChannels(prev => {
+        const next = new Set(prev);
+        next.delete(channel.name);
+        return next;
+      });
+    }
+  };
+
+  const gradientClass = getGradientFromName(channel.name);
+
+  return (
+    <div 
+      onClick={toggleChannelSelection}
+      className={`relative flex flex-col h-full rounded-2xl border transition-all duration-200 overflow-hidden group
+        ${channel.isFrozen ? 'cursor-default opacity-80' : 'cursor-pointer'}
+        ${isSelected 
+          ? 'bg-app-card border-app-ink shadow-md' 
+          : 'bg-app-card border-app-ink/10 shadow-sm hover:border-app-ink/30 hover:shadow-md'
+        }
+        ${isScraping ? 'ring-2 ring-app-ink/20' : ''}
+      `}
+    >
+      {/* Syncing Overlay */}
+      {isScraping && (
+        <div className="absolute inset-0 bg-app-bg/60 backdrop-blur-[2px] flex items-center justify-center z-30">
+          <div className="flex flex-col items-center gap-3 w-full px-8">
+            <div className="relative">
+              <Loader2 size={32} className="animate-spin text-app-ink opacity-80" />
+              <div className="absolute inset-0 flex items-center justify-center">
+                <div className="w-1.5 h-1.5 bg-app-ink rounded-full animate-pulse" />
+              </div>
+            </div>
+            <div className="flex flex-col items-center gap-1.5 w-full">
+              <span className="text-[10px] uppercase font-bold tracking-widest text-app-ink bg-app-bg/80 px-3 py-1 rounded-full shadow-sm">
+                {stats?.latestId && stats.maxId 
+                  ? `Syncing ${Math.round((stats.maxId / stats.latestId) * 100)}%`
+                  : 'Syncing Data'}
+              </span>
+              {stats?.latestId && stats.maxId && (
+                <div className="w-full max-w-[120px] h-1 bg-app-ink/10 rounded-full overflow-hidden mt-1">
+                  <motion.div 
+                    className="h-full bg-app-ink"
+                    initial={{ width: 0 }}
+                    animate={{ width: `${Math.min(100, (stats.maxId / stats.latestId) * 100)}%` }}
+                  />
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Hidden Hover Action Bar (Destructive Actions) */}
+      <div className="absolute top-3 right-3 flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity z-20">
+        {!channel.isUnavailableOnWebView && (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                onClick={(e) => { e.stopPropagation(); handleToggleFreeze(); }}
+                className={`w-8 h-8 rounded-full bg-app-bg/90 backdrop-blur-sm border border-app-ink/10 flex items-center justify-center transition-colors shadow-sm ${
+                  channel.isFrozen 
+                    ? 'text-blue-500 hover:bg-blue-500 hover:text-white hover:border-blue-500' 
+                    : 'text-app-ink/70 hover:bg-app-ink hover:text-app-bg'
+                }`}
+              >
+                <Snowflake size={14} />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>{channel.isFrozen ? 'Unfreeze Channel' : 'Freeze Channel (Stop Syncing)'}</p>
+            </TooltipContent>
+          </Tooltip>
+        )}
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              onClick={(e) => { e.stopPropagation(); handleResetAndSync(channel); }}
+              disabled={isScraping || summarizing || channel.isFrozen || channel.isUnavailableOnWebView}
+              className="w-8 h-8 rounded-full bg-app-bg/90 backdrop-blur-sm border border-app-ink/10 flex items-center justify-center text-app-ink/70 hover:bg-app-ink hover:text-app-bg transition-colors shadow-sm disabled:opacity-50"
+            >
+              <RotateCcw size={14} />
+            </button>
+          </TooltipTrigger>
+          <TooltipContent>
+            <p>Reset & Sync from beginning</p>
+          </TooltipContent>
+        </Tooltip>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button 
+              onClick={(e) => { e.stopPropagation(); handleRemoveChannel(channel); }}
+              className="w-8 h-8 rounded-full bg-app-bg/90 backdrop-blur-sm border border-app-ink/10 flex items-center justify-center text-red-500/70 hover:bg-red-500 hover:text-white hover:border-red-500 transition-colors shadow-sm"
+            >
+              <Trash2 size={14} />
+            </button>
+          </TooltipTrigger>
+          <TooltipContent>
+            <p>Delete Channel</p>
+          </TooltipContent>
+        </Tooltip>
+      </div>
+
+      {/* Selection Indicator & Sync Queue Badge */}
+      <div className="absolute top-4 left-4 flex items-center gap-2 z-20">
+        <div className={`w-5 h-5 rounded-full border flex items-center justify-center transition-colors ${
+          isSelected ? 'bg-app-ink border-app-ink text-app-bg' : 'border-app-ink/20 bg-app-bg/50 text-transparent group-hover:border-app-ink/40'
+        }`}>
+          <Check size={12} strokeWidth={3} />
+        </div>
+        
+        {syncQueueIndex !== -1 && (
+          <div className="bg-app-ink text-app-bg text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1 shadow-sm">
+            <Clock size={10} />
+            <span>#{syncQueueIndex + 1}</span>
+          </div>
+        )}
+        
+        {channel.isUnavailableOnWebView && (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <div className="bg-red-500/10 text-red-500 border border-red-500/20 text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1 shadow-sm cursor-help">
+                <Activity size={10} />
+                <span>Unavailable</span>
+              </div>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>This channel is not available on the web view and cannot be scraped.</p>
+            </TooltipContent>
+          </Tooltip>
+        )}
+
+        {channel.language && (
+          <div className="bg-app-ink/5 text-app-ink/70 border border-app-ink/10 text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1 shadow-sm">
+            <span>{channel.language}</span>
+          </div>
+        )}
+      </div>
+
+      {/* Card Content */}
+      <div className="p-5 pt-12 flex flex-col h-full">
+        {/* Header Section */}
+        <div className="flex items-start gap-4 mb-4">
+          <div className="relative flex-shrink-0">
+            <div className={`w-14 h-14 rounded-full overflow-hidden flex items-center justify-center text-white font-bold text-xl shadow-inner bg-gradient-to-br ${gradientClass}`}>
+              {channel.photoUrl ? (
+                <img 
+                  src={channel.photoUrl} 
+                  alt={channel.displayName || channel.name}
+                  className="w-full h-full object-cover"
+                  referrerPolicy="no-referrer"
+                />
+              ) : (
+                (channel.displayName || channel.name)[0].toUpperCase()
+              )}
+            </div>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <a 
+                  href={`https://t.me/s/${channel.name}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={(e) => e.stopPropagation()}
+                  className="absolute -bottom-1 -right-1 w-6 h-6 bg-app-bg border border-app-ink/10 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all shadow-sm hover:bg-app-ink hover:text-app-bg"
+                >
+                  <ExternalLink size={10} />
+                </a>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Open in Telegram</p>
+              </TooltipContent>
+            </Tooltip>
+          </div>
+          
+          <div className="flex-1 min-w-0 pt-1">
+            <h4 className="font-bold text-lg leading-tight truncate mb-1 text-app-ink flex items-center gap-2">
+              {channel.displayName || channel.name}
+              {channel.isFrozen && (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Snowflake size={14} className="text-blue-500 flex-shrink-0" />
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>Channel is Frozen (Sync Disabled)</p>
+                  </TooltipContent>
+                </Tooltip>
+              )}
+            </h4>
+            <p className="text-[11px] opacity-50 font-mono truncate">@{channel.name}</p>
+          </div>
+        </div>
+
+        {/* Bio Section */}
+        {showChannelBio && channel.bio && (
+          <div className="mb-4">
+            <p className="text-[11px] leading-relaxed text-app-ink/70 line-clamp-2" title={channel.bio}>
+              {channel.bio}
+            </p>
+          </div>
+        )}
+
+        {/* Metadata Badges */}
+        <div className="flex flex-wrap items-center gap-2 mb-5">
+          <div className="bg-app-muted px-2.5 py-1 rounded-md text-[9px] font-bold uppercase tracking-wider text-app-ink/70 flex items-center gap-1.5 border border-app-ink/5">
+            <span>{(stats?.count || 0).toLocaleString()} Posts</span>
+            {inScopeCount > 0 && (
+              <span className="text-app-ink/40">({inScopeCount.toLocaleString()} in scope)</span>
+            )}
+          </div>
+          {stats?.velocity !== undefined && stats.velocity > 0 && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <div className="bg-app-muted px-2.5 py-1 rounded-md text-[9px] font-bold uppercase tracking-wider text-app-ink/70 flex items-center gap-1.5 border border-app-ink/5 cursor-help">
+                  <Activity size={10} className="opacity-50" />
+                  <span>{stats.velocity < 1 ? '< 1' : Math.round(stats.velocity)} / hr</span>
+                </div>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Activity Rate (Posts per hour)</p>
+              </TooltipContent>
+            </Tooltip>
+          )}
+          
+          {/* New Metadata Badges */}
+          {showChannelSubscribers && channel.subscribers && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <div className="bg-app-muted px-2.5 py-1 rounded-md text-[9px] font-bold uppercase tracking-wider text-app-ink/70 flex items-center gap-1.5 border border-app-ink/5 cursor-help">
+                  <Users size={10} className="opacity-50" />
+                  <span>{channel.subscribers}</span>
+                </div>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Subscribers</p>
+              </TooltipContent>
+            </Tooltip>
+          )}
+          {showChannelPhotos && channel.photos && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <div className="bg-app-muted px-2.5 py-1 rounded-md text-[9px] font-bold uppercase tracking-wider text-app-ink/70 flex items-center gap-1.5 border border-app-ink/5 cursor-help">
+                  <ImageIcon size={10} className="opacity-50" />
+                  <span>{channel.photos}</span>
+                </div>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Photos</p>
+              </TooltipContent>
+            </Tooltip>
+          )}
+          {showChannelVideos && channel.videos && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <div className="bg-app-muted px-2.5 py-1 rounded-md text-[9px] font-bold uppercase tracking-wider text-app-ink/70 flex items-center gap-1.5 border border-app-ink/5 cursor-help">
+                  <Video size={10} className="opacity-50" />
+                  <span>{channel.videos}</span>
+                </div>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Videos</p>
+              </TooltipContent>
+            </Tooltip>
+          )}
+          {showChannelFiles && channel.files && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <div className="bg-app-muted px-2.5 py-1 rounded-md text-[9px] font-bold uppercase tracking-wider text-app-ink/70 flex items-center gap-1.5 border border-app-ink/5 cursor-help">
+                  <File size={10} className="opacity-50" />
+                  <span>{channel.files}</span>
+                </div>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Files</p>
+              </TooltipContent>
+            </Tooltip>
+          )}
+          {showChannelLinks && channel.links && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <div className="bg-app-muted px-2.5 py-1 rounded-md text-[9px] font-bold uppercase tracking-wider text-app-ink/70 flex items-center gap-1.5 border border-app-ink/5 cursor-help">
+                  <LinkIcon size={10} className="opacity-50" />
+                  <span>{channel.links}</span>
+                </div>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Links</p>
+              </TooltipContent>
+            </Tooltip>
+          )}
+
+          <div className="bg-app-muted px-2.5 py-1 rounded-md text-[9px] font-bold uppercase tracking-wider text-app-ink/70 flex items-center gap-1.5 border border-app-ink/5">
+            <Clock size={10} className="opacity-50" />
+            <RelativeTime timestamp={channel.lastUpdated} />
+          </div>
+          {channel.followedAt && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <div className="bg-app-muted px-2.5 py-1 rounded-md text-[9px] font-bold uppercase tracking-wider text-app-ink/70 flex items-center gap-1.5 border border-app-ink/5 cursor-help">
+                  <span>Followed: {new Date(channel.followedAt).toLocaleDateString()}</span>
+                </div>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Followed on {new Date(channel.followedAt).toLocaleString()}</p>
+              </TooltipContent>
+            </Tooltip>
+          )}
+          {channel.discoveredVia && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <div className="bg-blue-500/10 px-2.5 py-1 rounded-md text-[9px] font-bold uppercase tracking-wider text-blue-600 flex items-center gap-1.5 border border-blue-500/20 cursor-help">
+                  <span>Auto-Followed</span>
+                </div>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" className="max-w-[200px] text-center">
+                <p>Discovered via a forwarded post in <strong>@{channel.discoveredVia.channelName}</strong></p>
+              </TooltipContent>
+            </Tooltip>
+          )}
+        </div>
+
+        {/* Tags Section */}
+        <div className="mb-5 flex flex-wrap gap-1.5">
+          {channel.tags?.map(tag => (
+            <span 
+              key={tag} 
+              className="text-[9px] uppercase font-bold px-2 py-1 bg-app-ink/5 border border-app-ink/10 flex items-center gap-1.5 group/tag rounded-md text-app-ink/80"
+            >
+              {tag}
+              <button 
+                onClick={(e) => { e.stopPropagation(); handleRemoveTag(tag); }}
+                className="opacity-0 group-hover/tag:opacity-50 hover:!opacity-100 transition-opacity"
+              >
+                <X size={10} />
+              </button>
+            </span>
+          ))}
+          {isAddingTag ? (
+            <input 
+              type="text"
+              autoFocus
+              placeholder="Tag..."
+              className="text-[9px] uppercase font-bold px-2 py-1 bg-app-bg border border-app-ink/20 focus:border-app-ink/40 focus:outline-none w-20 rounded-md shadow-inner"
+              onBlur={(e) => handleAddTag((e.target as HTMLInputElement).value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') handleAddTag((e.target as HTMLInputElement).value);
+                if (e.key === 'Escape') setIsAddingTag(false);
+              }}
+              onClick={(e) => e.stopPropagation()}
+            />
+          ) : (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button 
+                  onClick={(e) => { e.stopPropagation(); setIsAddingTag(true); }}
+                  className="text-[9px] uppercase font-bold px-2 py-1 border border-dashed border-app-ink/20 text-app-ink/50 hover:text-app-ink hover:border-solid hover:bg-app-ink/5 transition-all flex items-center gap-1 rounded-md"
+                >
+                  <Plus size={10} /> Add Tag
+                </button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Add a new tag to this channel</p>
+              </TooltipContent>
+            </Tooltip>
+          )}
+        </div>
+
+        {/* Bottom Section: Config & Sync Action */}
+        <div className="mt-auto flex items-center justify-between pt-4 border-t border-app-ink/5">
+          <div className="flex items-center gap-4">
+            <div className="group/config">
+              <p className="text-[9px] uppercase text-app-ink/40 font-bold tracking-widest mb-0.5">Start ID</p>
+              {isEditing ? (
+                <input 
+                  type="text"
+                  autoFocus
+                  value={editingStartId}
+                  onChange={(e) => setEditingStartId(e.target.value)}
+                  onBlur={() => handleUpdateStartId(editingStartId)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') handleUpdateStartId(editingStartId);
+                    if (e.key === 'Escape') setEditingStartId(null);
+                  }}
+                  onClick={(e) => e.stopPropagation()}
+                  className="w-16 bg-transparent text-sm font-bold leading-none focus:outline-none border-b border-app-ink/30"
+                />
+              ) : (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <div 
+                      className="flex items-center gap-1.5 cursor-pointer"
+                      onClick={(e) => { e.stopPropagation(); setEditingStartId((channel.startId ?? '').toString()); }}
+                    >
+                      <p className={`text-sm font-bold leading-none group-hover/config:text-app-ink/70 transition-colors ${channel.startId === undefined ? 'text-amber-500' : ''}`}>
+                        {channel.startId === undefined ? 'Auto' : channel.startId.toLocaleString()}
+                      </p>
+                      <Edit2 size={10} className="opacity-0 group-hover/config:opacity-40 transition-opacity" />
+                    </div>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>{channel.startId === undefined ? 'Start ID will be resolved automatically on next sync' : 'Edit the starting post ID for syncing'}</p>
+                  </TooltipContent>
+                </Tooltip>
+              )}
+            </div>
+            
+            <div>
+              <p className="text-[9px] uppercase text-app-ink/40 font-bold tracking-widest mb-0.5">Status</p>
+              <div className="flex items-center gap-1.5">
+                <div className={`w-1.5 h-1.5 rounded-full ${
+                  channel.isUnavailableOnWebView ? 'bg-red-500' : 
+                  channel.isFrozen ? 'bg-blue-500' : 
+                  stats?.maxId && stats?.latestId && stats.maxId >= stats.latestId ? 'bg-emerald-500' : 
+                  'bg-amber-500 animate-pulse'
+                }`} />
+                <p className="text-[10px] font-bold uppercase tracking-tight text-app-ink/70">
+                  {channel.isUnavailableOnWebView ? 'Restricted' : channel.isFrozen ? 'Frozen' : stats?.maxId && stats?.latestId && stats.maxId >= stats.latestId ? 'Up to date' : 'Pending'}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                onClick={(e) => { e.stopPropagation(); addToSyncQueue(channel, "Manual (Single Sync)", () => {}); }}
+                disabled={isScraping || summarizing || channel.isFrozen}
+                className="h-8 px-3 text-[10px] uppercase font-bold flex items-center justify-center gap-1.5 bg-app-ink/5 hover:bg-app-ink text-app-ink hover:text-app-bg transition-all disabled:opacity-30 rounded-lg border border-app-ink/10 hover:border-app-ink"
+              >
+                <RefreshCw size={12} className={isScraping ? "animate-spin" : ""} />
+                Sync
+              </button>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>{channel.isFrozen ? 'Channel is frozen' : 'Fetch latest posts'}</p>
+            </TooltipContent>
+          </Tooltip>
+        </div>
+      </div>
+    </div>
+  );
+};
+

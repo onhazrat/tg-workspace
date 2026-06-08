@@ -4,37 +4,37 @@ overview: "Discovery-first migration plan for a self-hosted always-on deployment
 todos:
   - id: inventory-app
     content: "Phase 0.1: Complete app inventory (types, db stores, routes, contexts, jobs, docs, tests)"
-    status: in_progress
+    status: completed
   - id: study-template
     content: "Phase 0.2: Study FastAPI full-stack template (backend layout, auth, Docker, OpenAPI client)"
-    status: pending
+    status: completed
   - id: python-spikes
     content: "Phase 0.3: Run time-boxed spikes for scrape, Gemini stream, Tor in container"
-    status: pending
+    status: completed
   - id: secrets-audit
     content: "Phase 0.4: Produce secrets matrix and security migration requirements"
-    status: pending
+    status: completed
   - id: write-adrs
     content: "Phase 0.5–0.6: Draft ADRs (auth, repo layout, data, jobs, vectors, API client, Tor, AI providers) and gate Phase 1"
-    status: pending
+    status: completed
   - id: phase1-parity
     content: "Phase 1: Bootstrap full template monorepo, port UI to frontend/, port Express routes, unify API client"
-    status: pending
+    status: completed
   - id: phase2-ai
     content: "Phase 2: Server-side AI via pluggable provider layer (Gemini first); remove client API key from bundle"
-    status: pending
+    status: completed
   - id: phase3-db
     content: "Phase 3: PostgreSQL source of truth + hybrid IndexedDB cache/sync layer + import tool"
-    status: pending
+    status: completed
   - id: phase4-jobs
     content: "Phase 4: Server-side schedulers for sync, embeddings, retention, auto-summary"
-    status: pending
+    status: completed
   - id: phase5-rag
     content: "Phase 5: Server vector search; retire vectorMath worker"
-    status: pending
+    status: completed
   - id: phase6-prod
     content: "Phase 6: Auth (per ADR), production Docker, remove Node server deps"
-    status: pending
+    status: completed
 isProject: false
 ---
 
