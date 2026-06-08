@@ -1,6 +1,6 @@
 from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 class ProxyConfig(BaseModel):
@@ -24,16 +24,30 @@ class ChannelInfoRequest(ProxyConfig):
 
 
 class BotInfoRequest(ProxyConfig):
-    token: str
+    credential_id: str | None = Field(None, alias="credentialId")
+    token: str | None = None
     method: str
     params: dict[str, Any] | None = None
 
+    @model_validator(mode="after")
+    def require_credential_or_token(self) -> "BotInfoRequest":
+        if not self.credential_id and not self.token:
+            raise ValueError("credentialId or token is required")
+        return self
+
 
 class PublishRequest(ProxyConfig):
-    token: str
+    credential_id: str | None = Field(None, alias="credentialId")
+    token: str | None = None
     chat_id: str = Field(..., alias="chatId")
     text: str
     metadata_text: str | None = Field(None, alias="metadataText")
+
+    @model_validator(mode="after")
+    def require_credential_or_token(self) -> "PublishRequest":
+        if not self.credential_id and not self.token:
+            raise ValueError("credentialId or token is required")
+        return self
 
 
 class TestProxyRequest(BaseModel):
@@ -44,3 +58,14 @@ class TestProxyRequest(BaseModel):
 
 class TorNewIdentityRequest(BaseModel):
     port: int | None = None
+
+
+class ResolveStartTimeRequest(ProxyConfig):
+    channel_name: str = Field(..., alias="channelName")
+    target_time_ms: int = Field(..., alias="targetTimeMs")
+
+
+class ResolveStartTimeResponse(BaseModel):
+    start_id: int = Field(..., alias="startId")
+
+    model_config = {"populate_by_name": True}

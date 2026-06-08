@@ -88,8 +88,26 @@ export const BotInfoRequestSchema = {
             title: 'Torrotationthreshold',
             default: 10
         },
+        credentialId: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Credentialid'
+        },
         token: {
-            type: 'string',
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
             title: 'Token'
         },
         method: {
@@ -110,8 +128,24 @@ export const BotInfoRequestSchema = {
         }
     },
     type: 'object',
-    required: ['token', 'method'],
+    required: ['method'],
     title: 'BotInfoRequest'
+} as const;
+
+export const CancelSyncJobResponseSchema = {
+    properties: {
+        jobId: {
+            type: 'string',
+            title: 'Jobid'
+        },
+        status: {
+            type: 'string',
+            title: 'Status'
+        }
+    },
+    type: 'object',
+    required: ['jobId', 'status'],
+    title: 'CancelSyncJobResponse'
 } as const;
 
 export const ChannelInfoRequestSchema = {
@@ -153,6 +187,53 @@ export const ChannelInfoRequestSchema = {
     type: 'object',
     required: ['channelName'],
     title: 'ChannelInfoRequest'
+} as const;
+
+export const ChannelSyncProgressSchema = {
+    properties: {
+        channelId: {
+            type: 'string',
+            title: 'Channelid'
+        },
+        channelName: {
+            type: 'string',
+            title: 'Channelname'
+        },
+        status: {
+            type: 'string',
+            title: 'Status'
+        },
+        postsFetched: {
+            type: 'integer',
+            title: 'Postsfetched',
+            default: 0
+        },
+        newLatestId: {
+            anyOf: [
+                {
+                    type: 'integer'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Newlatestid'
+        },
+        error: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Error'
+        }
+    },
+    type: 'object',
+    required: ['channelId', 'channelName', 'status'],
+    title: 'ChannelSyncProgress'
 } as const;
 
 export const ChatMessageSchema = {
@@ -491,8 +572,26 @@ export const PublishRequestSchema = {
             title: 'Torrotationthreshold',
             default: 10
         },
+        credentialId: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Credentialid'
+        },
         token: {
-            type: 'string',
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
             title: 'Token'
         },
         chatId: {
@@ -516,8 +615,20 @@ export const PublishRequestSchema = {
         }
     },
     type: 'object',
-    required: ['token', 'chatId', 'text'],
+    required: ['chatId', 'text'],
     title: 'PublishRequest'
+} as const;
+
+export const RagEmbedRequestSchema = {
+    properties: {
+        limit: {
+            type: 'integer',
+            title: 'Limit',
+            default: 100
+        }
+    },
+    type: 'object',
+    title: 'RagEmbedRequest'
 } as const;
 
 export const RagSearchRequestSchema = {
@@ -571,6 +682,51 @@ export const RagSearchRequestSchema = {
     type: 'object',
     required: ['query'],
     title: 'RagSearchRequest'
+} as const;
+
+export const ResolveStartTimeRequestSchema = {
+    properties: {
+        proxyEnabled: {
+            type: 'boolean',
+            title: 'Proxyenabled',
+            default: false
+        },
+        proxies: {
+            anyOf: [
+                {
+                    items: {
+                        type: 'string'
+                    },
+                    type: 'array'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Proxies'
+        },
+        torAutoRotate: {
+            type: 'boolean',
+            title: 'Torautorotate',
+            default: false
+        },
+        torRotationThreshold: {
+            type: 'integer',
+            title: 'Torrotationthreshold',
+            default: 10
+        },
+        channelName: {
+            type: 'string',
+            title: 'Channelname'
+        },
+        targetTimeMs: {
+            type: 'integer',
+            title: 'Targettimems'
+        }
+    },
+    type: 'object',
+    required: ['channelName', 'targetTimeMs'],
+    title: 'ResolveStartTimeRequest'
 } as const;
 
 export const ScrapeRequestSchema = {
@@ -647,6 +803,44 @@ export const ScrapeRequestSchema = {
     title: 'ScrapeRequest'
 } as const;
 
+export const StartSyncJobRequestSchema = {
+    properties: {
+        channelIds: {
+            anyOf: [
+                {
+                    items: {
+                        type: 'string'
+                    },
+                    type: 'array'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Channelids'
+        },
+        source: {
+            type: 'string',
+            title: 'Source',
+            default: 'Manual'
+        }
+    },
+    type: 'object',
+    title: 'StartSyncJobRequest'
+} as const;
+
+export const StartSyncJobResponseSchema = {
+    properties: {
+        jobId: {
+            type: 'string',
+            title: 'Jobid'
+        }
+    },
+    type: 'object',
+    required: ['jobId'],
+    title: 'StartSyncJobResponse'
+} as const;
+
 export const SummaryRequestSchema = {
     properties: {
         channels: {
@@ -690,6 +884,48 @@ export const SummaryRequestSchema = {
     type: 'object',
     required: ['channels', 'postsText'],
     title: 'SummaryRequest'
+} as const;
+
+export const SyncJobStatusResponseSchema = {
+    properties: {
+        jobId: {
+            type: 'string',
+            title: 'Jobid'
+        },
+        status: {
+            type: 'string',
+            title: 'Status'
+        },
+        source: {
+            type: 'string',
+            title: 'Source'
+        },
+        channels: {
+            items: {
+                '$ref': '#/components/schemas/ChannelSyncProgress'
+            },
+            type: 'array',
+            title: 'Channels'
+        },
+        createdAt: {
+            type: 'integer',
+            title: 'Createdat'
+        },
+        finishedAt: {
+            anyOf: [
+                {
+                    type: 'integer'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Finishedat'
+        }
+    },
+    type: 'object',
+    required: ['jobId', 'status', 'source', 'channels', 'createdAt'],
+    title: 'SyncJobStatusResponse'
 } as const;
 
 export const TestProxyRequestSchema = {
@@ -775,6 +1011,18 @@ export const TranslateRequestSchema = {
     type: 'object',
     required: ['posts', 'targetLanguage'],
     title: 'TranslateRequest'
+} as const;
+
+export const UpdateJobRequestSchema = {
+    properties: {
+        enabled: {
+            type: 'boolean',
+            title: 'Enabled'
+        }
+    },
+    type: 'object',
+    required: ['enabled'],
+    title: 'UpdateJobRequest'
 } as const;
 
 export const UpdatePasswordSchema = {

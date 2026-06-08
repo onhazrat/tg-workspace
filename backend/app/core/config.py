@@ -98,6 +98,8 @@ class Settings(BaseSettings):
     # TG Summarizer
     GEMINI_API_KEY: str = ""
     API_KEY: str = ""
+    TOKEN_ENCRYPTION_KEY: str = ""
+    TOR_ENABLED: bool = False
     TOR_CONTROL_PASSWORD: str = ""
     TOR_CONTROL_PORT: int = 9051
     TOR_SOCKS_PROXY: str = "socks5h://127.0.0.1:9050"

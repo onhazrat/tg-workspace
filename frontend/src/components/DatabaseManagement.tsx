@@ -4,7 +4,8 @@ import { Database, Download, Upload, Trash2, Clock, Hash, LayoutGrid, RefreshCw,
 import { useData } from "../contexts/DataContext";
 import { useUI } from "../contexts/UIContext";
 import { useSettings } from "../contexts/SettingsContext";
-import { exportDBMetadata, getPostCount, getPostsChunk, importDB, initDB, getTableSizes, runQuery, clearTable } from "../lib/db";
+import { exportDBMetadata, getTableSizes, runQuery, clearTable } from "../lib/cache";
+import { importIndexedDBToServer } from "../lib/repository";
 import { toast } from "sonner";
 import { Modal } from "./ui/Modal";
 import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tg-tooltip";
@@ -21,6 +22,7 @@ export const DatabaseManagement: React.FC = () => {
   
   const [isExporting, setIsExporting] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
+  const [isMigratingToServer, setIsMigratingToServer] = useState(false);
   const [confirmModal, setConfirmModal] = useState<{ isOpen: boolean; title: string; message: string; onConfirm: () => void } | null>(null);
 
   const [tableSizes, setTableSizes] = useState<{ name: string; size: number; count: number }[] | null>(() => {
@@ -96,6 +98,37 @@ export const DatabaseManagement: React.FC = () => {
 
   const handleRefreshStats = async () => {
     await loadDBStats();
+  };
+
+  const handleMigrateToServer = () => {
+    setConfirmModal({
+      isOpen: true,
+      title: "Migrate to Server",
+      message:
+        "This will export all IndexedDB data and upload it to the PostgreSQL backend. " +
+        "Existing server data for matching records will be updated. Continue?",
+      onConfirm: async () => {
+        setConfirmModal(null);
+        setIsMigratingToServer(true);
+        try {
+          const imported = await importIndexedDBToServer();
+          const summary = Object.entries(imported)
+            .map(([k, v]) => `${k}: ${v}`)
+            .join(", ");
+          toast.success(`Server migration complete (${summary || "no records"})`);
+          await loadDBStats();
+          await loadChannels();
+          await loadHistory();
+        } catch (err: unknown) {
+          console.error("Server migration failed:", err);
+          toast.error(
+            `Server migration failed: ${err instanceof Error ? err.message : String(err)}`
+          );
+        } finally {
+          setIsMigratingToServer(false);
+        }
+      },
+    });
   };
 
 
@@ -336,6 +369,30 @@ export const DatabaseManagement: React.FC = () => {
               </div>
             </div>
           </div>
+        </div>
+
+        {/* Server Migration */}
+        <div className="bg-app-card border border-app-ink/10 p-6 shadow-sm mb-8">
+          <div className="flex items-center gap-3 mb-4">
+            <Upload size={18} className="opacity-40" />
+            <h4 className="text-[11px] uppercase font-bold tracking-widest">Server Migration</h4>
+          </div>
+          <p className="text-[10px] opacity-50 italic serif mb-4">
+            One-time migration: upload your local IndexedDB data to the PostgreSQL backend.
+            Run this after logging in when moving from browser-only to the FastAPI stack.
+          </p>
+          <button
+            onClick={handleMigrateToServer}
+            disabled={isMigratingToServer}
+            className="px-4 py-2 text-[10px] uppercase font-bold flex items-center gap-2 border border-app-ink/20 hover:bg-app-ink hover:text-app-bg transition-colors disabled:opacity-50"
+          >
+            {isMigratingToServer ? (
+              <Loader2 size={14} className="animate-spin" />
+            ) : (
+              <Upload size={14} />
+            )}
+            Migrate IndexedDB to Server
+          </button>
         </div>
 
         {/* Data Retention */}

@@ -4,8 +4,13 @@ import uuid
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import Column, JSON, Text, UniqueConstraint
+from sqlalchemy import BigInteger, Column, JSON, Text, UniqueConstraint
 from sqlmodel import Field, SQLModel
+
+
+def _ms_ts(*, nullable: bool = False) -> Column[int]:
+    """Millisecond epoch column (JS Date.now() exceeds PostgreSQL INTEGER)."""
+    return Column(BigInteger, nullable=nullable)
 
 
 def utc_now() -> datetime:
@@ -16,6 +21,7 @@ class Channel(SQLModel, table=True):
     __tablename__ = "tg_channels"
 
     id: str = Field(primary_key=True)
+    user_id: uuid.UUID | None = Field(default=None, index=True)
     name: str
     display_name: str | None = None
     photo_url: str | None = None
@@ -26,13 +32,13 @@ class Channel(SQLModel, table=True):
     files: str | None = None
     links: str | None = None
     start_id: int | None = None
-    start_time: int | None = None
+    start_time: int | None = Field(default=None, sa_column=_ms_ts(nullable=True))
     tags: list[str] = Field(default_factory=list, sa_column=Column(JSON))
-    last_updated: int | None = None
+    last_updated: int | None = Field(default=None, sa_column=_ms_ts(nullable=True))
     is_frozen: bool = False
     is_unavailable_on_web_view: bool = False
     language: str | None = None
-    followed_at: int | None = None
+    followed_at: int | None = Field(default=None, sa_column=_ms_ts(nullable=True))
     discovered_via: dict[str, Any] | None = Field(default=None, sa_column=Column(JSON))
     updated_at: datetime = Field(default_factory=utc_now)
 
@@ -42,11 +48,12 @@ class Post(SQLModel, table=True):
     __table_args__ = (UniqueConstraint("channel_name", "post_id"),)
 
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    user_id: uuid.UUID | None = Field(default=None, index=True)
     channel_name: str = Field(index=True)
     post_id: int
     text: str = Field(sa_column=Column(Text))
     date: str = ""
-    timestamp: int = 0
+    timestamp: int = Field(default=0, sa_column=_ms_ts())
     forwarded_from: str | None = None
     forwarded_from_name: str | None = None
     updated_at: datetime = Field(default_factory=utc_now)
@@ -56,14 +63,15 @@ class Summary(SQLModel, table=True):
     __tablename__ = "tg_summaries"
 
     id: str = Field(primary_key=True)
+    user_id: uuid.UUID | None = Field(default=None, index=True)
     text: str = Field(sa_column=Column(Text))
     channels: list[str] = Field(default_factory=list, sa_column=Column(JSON))
-    start_date: int = 0
-    end_date: int = 0
+    start_date: int = Field(default=0, sa_column=_ms_ts())
+    end_date: int = Field(default=0, sa_column=_ms_ts())
     language: str = "English"
     model: str | None = None
     post_count: int | None = None
-    timestamp: int = 0
+    timestamp: int = Field(default=0, sa_column=_ms_ts())
     extra: dict[str, Any] = Field(default_factory=dict, sa_column=Column(JSON))
     updated_at: datetime = Field(default_factory=utc_now)
 
@@ -72,11 +80,12 @@ class BotCredential(SQLModel, table=True):
     __tablename__ = "tg_bot_credentials"
 
     id: str = Field(primary_key=True)
+    user_id: uuid.UUID | None = Field(default=None, index=True)
     name: str
     token_encrypted: str
     username: str | None = None
     photo_url: str | None = None
-    last_validated: int | None = None
+    last_validated: int | None = Field(default=None, sa_column=_ms_ts(nullable=True))
     updated_at: datetime = Field(default_factory=utc_now)
 
 
@@ -84,6 +93,7 @@ class ChatDestination(SQLModel, table=True):
     __tablename__ = "tg_chat_destinations"
 
     id: str = Field(primary_key=True)
+    user_id: uuid.UUID | None = Field(default=None, index=True)
     name: str
     chat_id: str
     updated_at: datetime = Field(default_factory=utc_now)
@@ -93,6 +103,7 @@ class PostEmbedding(SQLModel, table=True):
     __tablename__ = "tg_post_embeddings"
 
     id: str = Field(primary_key=True)
+    user_id: uuid.UUID | None = Field(default=None, index=True)
     channel_name: str
     post_id: int
     vector: list[float] = Field(sa_column=Column(JSON))
@@ -107,11 +118,12 @@ class PostTranslation(SQLModel, table=True):
     __tablename__ = "tg_post_translations"
 
     id: str = Field(primary_key=True)
+    user_id: uuid.UUID | None = Field(default=None, index=True)
     channel_name: str
     post_id: int
     language: str
     translated_text: str = Field(sa_column=Column(Text))
-    timestamp: int = 0
+    timestamp: int = Field(default=0, sa_column=_ms_ts())
     updated_at: datetime = Field(default_factory=utc_now)
 
 
@@ -119,7 +131,111 @@ class AppSetting(SQLModel, table=True):
     __tablename__ = "tg_app_settings"
 
     key: str = Field(primary_key=True)
+    user_id: uuid.UUID | None = Field(default=None, index=True)
     value: dict[str, Any] = Field(sa_column=Column(JSON))
+    updated_at: datetime = Field(default_factory=utc_now)
+
+
+class PublishLog(SQLModel, table=True):
+    __tablename__ = "tg_publish_logs"
+
+    id: str = Field(primary_key=True)
+    user_id: uuid.UUID | None = Field(default=None, index=True)
+    summary_id: str
+    bot_id: str
+    bot_name: str
+    chat_id: str
+    chat_name: str
+    status: str
+    error: str | None = None
+    timestamp: int = Field(default=0, sa_column=_ms_ts())
+    full_request: dict[str, Any] | None = Field(default=None, sa_column=Column(JSON))
+    full_response: dict[str, Any] | None = Field(default=None, sa_column=Column(JSON))
+    text_sent: str | None = None
+    updated_at: datetime = Field(default_factory=utc_now)
+
+
+class SyncLog(SQLModel, table=True):
+    __tablename__ = "tg_sync_logs"
+
+    id: str = Field(primary_key=True)
+    user_id: uuid.UUID | None = Field(default=None, index=True)
+    channel_name: str
+    status: str
+    posts_count: int = 0
+    new_latest_id: int | None = None
+    error: str | None = None
+    timestamp: int = Field(default=0, sa_column=_ms_ts())
+    source: str = ""
+    full_request: dict[str, Any] | None = Field(default=None, sa_column=Column(JSON))
+    full_response: dict[str, Any] | None = Field(default=None, sa_column=Column(JSON))
+    updated_at: datetime = Field(default_factory=utc_now)
+
+
+class LLMLog(SQLModel, table=True):
+    __tablename__ = "tg_llm_logs"
+
+    id: str = Field(primary_key=True)
+    user_id: uuid.UUID | None = Field(default=None, index=True)
+    model: str
+    prompt: str = Field(sa_column=Column(Text))
+    response: str = Field(sa_column=Column(Text))
+    system_instruction: str | None = Field(default=None, sa_column=Column(Text))
+    model_config_json: dict[str, Any] | None = Field(default=None, sa_column=Column(JSON))
+    full_request: dict[str, Any] | None = Field(default=None, sa_column=Column(JSON))
+    full_response: dict[str, Any] | None = Field(default=None, sa_column=Column(JSON))
+    tokens: int | None = None
+    duration: float | None = None
+    status: str
+    error: str | None = None
+    timestamp: int = Field(default=0, sa_column=_ms_ts())
+    log_type: str = "summary"
+    updated_at: datetime = Field(default_factory=utc_now)
+
+
+class EmbeddingLog(SQLModel, table=True):
+    __tablename__ = "tg_embedding_logs"
+
+    id: str = Field(primary_key=True)
+    user_id: uuid.UUID | None = Field(default=None, index=True)
+    text_count: int = 0
+    tokens_estimated: int | None = None
+    duration: float = 0
+    status: str
+    error: str | None = None
+    timestamp: int = Field(default=0, sa_column=_ms_ts())
+    updated_at: datetime = Field(default_factory=utc_now)
+
+
+class NetworkLog(SQLModel, table=True):
+    __tablename__ = "tg_network_logs"
+
+    id: str = Field(primary_key=True)
+    user_id: uuid.UUID | None = Field(default=None, index=True)
+    url: str
+    method: str
+    status: str
+    status_code: int | None = None
+    error: str | None = None
+    duration: float = 0
+    timestamp: int = Field(default=0, sa_column=_ms_ts())
+    source: str = ""
+    proxy_used: str | None = None
+    attempts: int | None = None
+    telemetry: dict[str, Any] | None = Field(default=None, sa_column=Column(JSON))
+    updated_at: datetime = Field(default_factory=utc_now)
+
+
+class SyncJob(SQLModel, table=True):
+    __tablename__ = "tg_sync_jobs"
+
+    id: str = Field(primary_key=True)
+    user_id: uuid.UUID | None = Field(default=None, index=True)
+    status: str = "pending"
+    source: str = ""
+    channels: list[dict[str, Any]] = Field(default_factory=list, sa_column=Column(JSON))
+    created_at: int = Field(default=0, sa_column=_ms_ts())
+    finished_at: int | None = Field(default=None, sa_column=_ms_ts(nullable=True))
     updated_at: datetime = Field(default_factory=utc_now)
 
 

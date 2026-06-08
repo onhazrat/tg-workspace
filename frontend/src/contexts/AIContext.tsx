@@ -1,6 +1,7 @@
-import React, { createContext, useContext, useState, useRef, useEffect } from "react";
+import React, { createContext, useContext, useState } from "react";
 import { Summary, PublishLog, LLMLog, Post } from "../types";
-import { saveSummary, getPostsByDateRange, savePublishLog, saveLLMLog } from "../lib/db";
+import { saveSummary, getPostsByDateRange, savePublishLog, saveLLMLog } from "../lib/repository";
+import { useApiStatus } from "../hooks/useApiStatus";
 import { useData } from "./DataContext";
 import { toast } from "sonner";
 import { useSettings } from "./SettingsContext";
@@ -53,24 +54,23 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({ children }
     selectedModel, 
     aiTemperature,
     proxyEnabled, 
-    proxyUrls, 
+    defaultProxyUrls, 
     torEnabled, 
     torMode, 
     torProxyUrls, 
     torAutoRotate, 
     torRotationThreshold, 
-    torControlPort, 
-    torControlPassword 
   } = useSettings();
   const { filteredPosts, scrapeChannelsInParallel, postSearch, semanticSearchQuery, semanticSearchRespectsTimeRange, semanticSearchRespectsChannels, handleFilterPosts } = useScraper();
   const { setChatMessages } = useChatContext();
+  const { isOffline } = useApiStatus();
 
   const [summary, setSummary] = useState<string | null>(null);
   const [regeneratingSummaries, setRegeneratingSummaries] = useState<Set<string>>(new Set());
   const [copied, setCopied] = useState(false);
 
   const getActiveProxies = () => {
-    const proxies = proxyUrls.split(/[\n,]+/).map(p => p.trim()).filter(p => p);
+    const proxies = defaultProxyUrls.split(/[\n,]+/).map(p => p.trim()).filter(p => p);
     const torPool = torProxyUrls.split(/[\n,]+/).map(p => p.trim()).filter(p => p);
     
     let activeProxies: string[] = [];
@@ -85,44 +85,11 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({ children }
     return activeProxies;
   };
 
-  const autoRegenerateDataRef = useRef({
-    summariesHistory,
-    regeneratingSummaries,
-    generateBackgroundSummary: (s: Summary, shiftTime?: boolean) => Promise.resolve()
-  });
-
-  useEffect(() => {
-    autoRegenerateDataRef.current = {
-      summariesHistory,
-      regeneratingSummaries,
-      generateBackgroundSummary
-    };
-  });
-
-  // Auto-regenerate summaries: server scheduler (Phase 4) handles always-on;
-  // client tick retained for responsiveness when UI is open.
-  useEffect(() => {
-    const CHECK_INTERVAL_MS = 60 * 1000;
-    const intervalId = setInterval(() => {
-      const {
-        summariesHistory: currentHistory,
-        regeneratingSummaries: currentRegenerating,
-        generateBackgroundSummary: currentGenerate,
-      } = autoRegenerateDataRef.current;
-      const now = Date.now();
-      currentHistory.forEach((s) => {
-        if (s.autoRegenerate && !currentRegenerating.has(s.id)) {
-          const durationMs = s.endDate - s.startDate;
-          if (durationMs < 60 * 1000) return;
-          const targetTime = s.endDate + durationMs;
-          if (now >= targetTime) currentGenerate(s);
-        }
-      });
-    }, CHECK_INTERVAL_MS);
-    return () => clearInterval(intervalId);
-  }, []);
-
   const handleSummarize = async () => {
+    if (isOffline) {
+      toast.warning("Server offline — summary generation disabled.");
+      return;
+    }
     const now = Date.now();
     const targetTs = Math.min(endDate, now);
     
@@ -250,6 +217,7 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({ children }
   };
 
   const generateBackgroundSummary = async (s: Summary, shiftTime: boolean = true) => {
+    if (isOffline) return;
     setRegeneratingSummaries(prev => new Set(prev).add(s.id));
     try {
       let newStartDate = s.startDate;
@@ -350,7 +318,7 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({ children }
           const activeProxies = getActiveProxies();
           const generatedMetadata = generateDefaultMetadataText(newSummary);
           const result = await publishSummary(
-            bot.token, 
+            bot.id, 
             dest.chatId, 
             fullSummaryText,
             newSummary.sendMetadata ? (newSummary.metadataText || generatedMetadata) : undefined,
@@ -358,8 +326,6 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({ children }
             activeProxies,
             torAutoRotate,
             torRotationThreshold,
-            torControlPort,
-            torControlPassword
           );
           
           // Log the result

@@ -1,6 +1,5 @@
-"""Server-side vector search."""
+"""Server-side vector search and embedding backfill."""
 
-import math
 from typing import Any
 
 import numpy as np
@@ -12,6 +11,7 @@ from app.ai.registry import get_provider
 from app.api.deps import get_db
 from app.core.config import settings
 from app.models_tg import Post, PostEmbedding
+from app.services.embeddings import backfill_embeddings, get_embedding_status
 
 router = APIRouter(prefix="/rag", tags=["rag"])
 
@@ -26,6 +26,10 @@ class RagSearchRequest(BaseModel):
     model_config = {"populate_by_name": True}
 
 
+class RagEmbedRequest(BaseModel):
+    limit: int = 100
+
+
 def _cosine(a: list[float], b: list[float]) -> float:
     va = np.array(a, dtype=float)
     vb = np.array(b, dtype=float)
@@ -33,6 +37,36 @@ def _cosine(a: list[float], b: list[float]) -> float:
     if denom == 0:
         return 0.0
     return float(np.dot(va, vb) / denom)
+
+
+def _post_to_camel(post: Post) -> dict[str, Any]:
+    return {
+        "id": post.post_id,
+        "channelName": post.channel_name,
+        "text": post.text,
+        "date": post.date,
+        "timestamp": post.timestamp,
+        "forwardedFrom": post.forwarded_from,
+        "forwardedFromName": post.forwarded_from_name,
+    }
+
+
+@router.get("/status")
+def rag_status(session: Session = Depends(get_db)) -> dict[str, Any]:
+    return get_embedding_status(session)
+
+
+@router.post("/embed")
+async def rag_embed(
+    body: RagEmbedRequest,
+    session: Session = Depends(get_db),
+) -> dict[str, Any]:
+    if not settings.GEMINI_API_KEY:
+        raise HTTPException(status_code=503, detail="GEMINI_API_KEY not configured")
+    try:
+        return await backfill_embeddings(session, limit=body.limit)
+    except ValueError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
 
 
 @router.post("/search")
@@ -47,18 +81,10 @@ async def rag_search(body: RagSearchRequest, session: Session = Depends(get_db))
 
     stmt = select(PostEmbedding)
     embeddings = session.exec(stmt).all()
-    scored: list[tuple[float, PostEmbedding]] = []
+    scored: list[tuple[float, PostEmbedding, Post | None]] = []
     for emb in embeddings:
         if body.channels and emb.channel_name not in body.channels:
             continue
-        score = _cosine(query_vec, emb.vector)
-        scored.append((score, emb))
-
-    scored.sort(key=lambda x: x[0], reverse=True)
-    top = scored[: body.limit]
-
-    results = []
-    for score, emb in top:
         post = session.exec(
             select(Post).where(
                 Post.channel_name == emb.channel_name,
@@ -66,25 +92,25 @@ async def rag_search(body: RagSearchRequest, session: Session = Depends(get_db))
             )
         ).first()
         if post:
-            if body.start_date and post.timestamp < body.start_date:
+            if body.start_date is not None and post.timestamp < body.start_date:
                 continue
-            if body.end_date and post.timestamp > body.end_date:
+            if body.end_date is not None and post.timestamp > body.end_date:
                 continue
+        score = _cosine(query_vec, emb.vector)
+        scored.append((score, emb, post))
+
+    scored.sort(key=lambda x: x[0], reverse=True)
+    top = scored[: body.limit]
+
+    results = []
+    for score, emb, post in top:
         results.append(
             {
                 "score": score,
                 "channelName": emb.channel_name,
                 "postId": emb.post_id,
                 "text": emb.text,
-                "post": {
-                    "id": emb.post_id,
-                    "channelName": emb.channel_name,
-                    "text": post.text if post else emb.text,
-                    "date": post.date if post else "",
-                    "timestamp": post.timestamp if post else 0,
-                }
-                if post
-                else None,
+                "post": _post_to_camel(post) if post else None,
             }
         )
     return {"results": results}

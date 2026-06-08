@@ -43,6 +43,9 @@ Or use the FastAPI CLI: `uv run fastapi dev app/main.py --port 8000`.
 
 Set `GEMINI_API_KEY` in the root `.env` for AI features.
 
+For **bot token encryption** (Phase 2), set `TOKEN_ENCRYPTION_KEY` in `.env` to a Fernet key (generate command in `.env.example`). Required when `ENVIRONMENT` is not `local`; local dev may leave it empty and the backend uses a dev-only fallback. Staging/production without this key will fail when storing or migrating bot credentials.
+
+
 ### Frontend
 
 ```bash
@@ -118,21 +121,14 @@ HTML report (local): `bunx playwright show-report`
 
 **Signup** (`/signup`) is enabled when `USERS_OPEN_REGISTRATION=true` (default in `.env.example`). Leave `VITE_API_URL` empty in `.env` so the Vite dev server proxies `/api` to the backend on port 8000.
 
-**Bootstrap superuser** — Docker Compose runs `scripts/prestart.sh`, which creates the first admin if missing:
+**Bootstrap superuser** — on backend startup (native dev, VS Code debug, and Docker), the app ensures the first admin exists if missing. Docker Compose also runs `scripts/prestart.sh` before the process starts (same idempotent check).
 
 | Variable | Default |
 |----------|---------|
 | `FIRST_SUPERUSER` | `admin@example.com` |
 | `FIRST_SUPERUSER_PASSWORD` | `changethis` |
 
-For native backend dev (without Docker), run once after migrations:
-
-```bash
-cd backend
-uv run python app/initial_data.py
-```
-
-Then log in at `/login` with those credentials, or sign up a new account when open registration is enabled.
+Log in at `/login` with those credentials, or sign up a new account when open registration is enabled. An existing superuser password is never overwritten.
 
 If signup is disabled (`USERS_OPEN_REGISTRATION=false`), use the bootstrap superuser or ask an admin to create your account.
 
@@ -143,3 +139,7 @@ cd backend
 uv run prek install -f
 uv run prek run --all-files
 ```
+
+## Migration
+
+TG-Summarizer → FastAPI migration docs live in [`docs/migration/`](docs/migration/README.md). Locked decisions: [DECISIONS.md](docs/migration/DECISIONS.md). Phased plan: [IMPLEMENTATION-PLAN.md](docs/migration/IMPLEMENTATION-PLAN.md).

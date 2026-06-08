@@ -1,20 +1,20 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from "react";
 import { Channel, BotCredential, ChatDestination, ChannelStats, Summary, DBStats, PublishLog, SyncLog, LLMLog, EmbeddingLog, NetworkLog } from "../types";
-import { 
-  getChannels, 
-  getBotCredentials, 
-  getChatDestinations, 
-  getDBStats, 
-  getChannelStats, 
-  getSummaries,
-  getBots,
-  deleteBot,
-  getPublishLogs,
-  getSyncLogs,
-  getLLMLogs,
-  getEmbeddingLogs,
-  getNetworkLogs
-} from "../lib/db";
+import { normalizeChannel } from "../lib/channelNormalize";
+import {
+  listChannels,
+  listBotCredentials,
+  listChatDestinations,
+  getDBStats,
+  getChannelStats,
+  listSummaries,
+  listPublishLogs,
+  listSyncLogs,
+  listLLMLogs,
+  listEmbeddingLogs,
+  listNetworkLogs,
+  cleanupLegacyBots,
+} from "../lib/repository";
 
 interface DataContextType {
   channels: Channel[];
@@ -114,27 +114,20 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, [prevChannelNames]);
 
   const loadChannels = useCallback(async () => {
-    const storedChannels = await getChannels();
-    // Ensure all channels have a startId (for backward compatibility), unless they have a startTime
-    const normalizedChannels = storedChannels.map(c => ({
-      ...c,
-      startId: c.startId !== undefined ? c.startId : (c.startTime !== undefined ? undefined : 1)
-    }));
+    const storedChannels = await listChannels();
+    const normalizedChannels = storedChannels.map(normalizeChannel);
     setChannels(normalizedChannels);
     
     const names = normalizedChannels.map(c => c.name);
     
-    // Use functional update to avoid dependency on prevChannelNames
     setPrevChannelNames(prevNames => {
       setSelectedChannels(currentSelected => {
         const nextSelected = new Set(currentSelected);
         names.forEach(name => {
-          // If it's a new channel we haven't seen before, select it by default
           if (!prevNames.has(name)) {
             nextSelected.add(name);
           }
         });
-        // Also remove channels that no longer exist
         const namesSet = new Set(names);
         Array.from(nextSelected).forEach(selectedName => {
           if (!namesSet.has(selectedName)) {
@@ -147,59 +140,52 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       return new Set(names);
     });
     
-    // Load stats for each channel
     const stats: Record<string, ChannelStats> = {};
     for (const channel of normalizedChannels) {
-      const s = await getChannelStats(channel.name);
+      const s = await getChannelStats(channel.id, channel.name);
       if (s) stats[channel.name] = s;
     }
     setChannelStats(stats);
-  }, []); // Empty dependencies!
+  }, []);
 
   const loadBots = useCallback(async () => {
-    const credentials = await getBotCredentials();
-    const destinations = await getChatDestinations();
+    const credentials = await listBotCredentials();
+    const destinations = await listChatDestinations();
     setBotCredentials(credentials);
     setChatDestinations(destinations);
     
-    // Cleanup old bot logic if needed
-    const oldBots = await getBots();
-    if (oldBots.length > 0) {
-      for (const bot of oldBots) {
-        await deleteBot(bot.id);
-      }
-      setBotCredentials(await getBotCredentials());
-      setChatDestinations(await getChatDestinations());
-    }
+    await cleanupLegacyBots();
+    setBotCredentials(await listBotCredentials());
+    setChatDestinations(await listChatDestinations());
   }, []);
 
   const loadHistory = useCallback(async () => {
-    const history = await getSummaries();
+    const history = await listSummaries();
     setSummariesHistory(history.sort((a, b) => b.timestamp - a.timestamp));
   }, []);
 
   const loadLogs = useCallback(async () => {
-    const logs = await getPublishLogs();
+    const logs = await listPublishLogs();
     setPublishLogs(logs.sort((a, b) => b.timestamp - a.timestamp));
   }, []);
 
   const loadSyncLogs = useCallback(async () => {
-    const logs = await getSyncLogs();
+    const logs = await listSyncLogs();
     setSyncLogs(logs.sort((a, b) => b.timestamp - a.timestamp));
   }, []);
 
   const loadLLMLogs = useCallback(async () => {
-    const logs = await getLLMLogs();
+    const logs = await listLLMLogs();
     setLlmLogs(logs.sort((a, b) => b.timestamp - a.timestamp));
   }, []);
 
   const loadEmbeddingLogs = useCallback(async () => {
-    const logs = await getEmbeddingLogs();
+    const logs = await listEmbeddingLogs();
     setEmbeddingLogs(logs.sort((a, b) => b.timestamp - a.timestamp));
   }, []);
 
   const loadNetworkLogs = useCallback(async () => {
-    const logs = await getNetworkLogs();
+    const logs = await listNetworkLogs();
     setNetworkLogs(logs.sort((a, b) => b.timestamp - a.timestamp));
   }, []);
 

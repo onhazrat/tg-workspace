@@ -39,16 +39,33 @@ def test_ai_models_without_key() -> None:
 def test_jobs_status() -> None:
     r = client.get("/api/v1/jobs/status")
     assert r.status_code == 200
-    assert "auto_sync" in r.json()
+    data = r.json()
+    for job_id in ("auto_sync", "embeddings", "auto_summary", "retention", "translation_batch"):
+        assert job_id in data
+        assert "lastStatus" in data[job_id]
+
+
+def test_sync_job_requires_auth() -> None:
+    r = client.post("/api/v1/jobs/sync", json={"channelIds": ["x"]})
+    assert r.status_code in (401, 403)
 
 
 def test_data_channels_crud() -> None:
+    login = client.post(
+        "/api/v1/login/access-token",
+        data={
+            "username": settings.FIRST_SUPERUSER,
+            "password": settings.FIRST_SUPERUSER_PASSWORD,
+        },
+    )
+    headers = {"Authorization": f"Bearer {login.json()['access_token']}"}
     r = client.put(
         "/api/v1/data/channels/smoke-test",
         json={"name": "smoke-test", "displayName": "Smoke Test"},
+        headers=headers,
     )
     assert r.status_code == 200
-    r2 = client.get("/api/v1/data/channels")
+    r2 = client.get("/api/v1/data/channels", headers=headers)
     assert r2.status_code == 200
     names = [c["name"] for c in r2.json()]
     assert "smoke-test" in names

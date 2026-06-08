@@ -7,7 +7,7 @@ import { useScraper } from "../contexts/ScraperContext";
 import { useData } from "../contexts/DataContext";
 import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tg-tooltip";
 import { RelativeTime } from "./RelativeTime";
-import { getTranslation, saveTranslation } from "../lib/db";
+import { getTranslation, saveTranslation } from "../lib/repository";
 import { useTranslation } from "../contexts/TranslationContext";
 import { toast } from "sonner";
 

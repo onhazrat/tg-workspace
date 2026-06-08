@@ -18,12 +18,15 @@ import { ChatView } from "./components/ChatView";
 import { SettingsHub } from "./components/SettingsHub";
 import { HistoryView } from "./components/HistoryView";
 import { LogsView } from "./components/LogsView";
-import { deleteChannel, clearChannelPosts, deleteOldPosts, deleteOldLogs } from "./lib/db";
+import { api } from "@/api";
+import { useApiStatus } from "./hooks/useApiStatus";
 import { RelativeTime } from "./components/RelativeTime";
 import { Tooltip, TooltipContent, TooltipTrigger } from "./components/ui/tg-tooltip";
 import { useGuidedTour } from "./hooks/useGuidedTour";
 
 export default function App() {
+  const { isOffline } = useApiStatus();
+
   const {
     channels,
     selectedChannels,
@@ -46,9 +49,6 @@ export default function App() {
     setSemanticSearchRespectsChannels,
     setRelatedPostSearch,
     filteredPosts,
-    isProcessingQueue,
-    scrapeChannelsInParallel,
-    syncQueue,
     autoSyncPauseUntil,
     setAutoSyncPauseUntil,
   } = useScraper();
@@ -71,109 +71,30 @@ export default function App() {
     setAiLanguage,
     selectedModel,
     setSelectedModel,
-    autoSyncEnabled,
-    setAutoSyncEnabled,
-    autoSyncInterval,
-    setAutoSyncInterval,
-    isRTL,
-    embeddingsEnabled,
     proxyEnabled,
     torEnabled,
-    postRetentionDays,
-    logRetentionDays,
   } = useSettings();
 
   const { startTour } = useGuidedTour();
 
-  const autoSyncDataRef = useRef({
-    channels,
-    scrapeChannelsInParallel,
-    syncQueue,
-    autoSyncInterval,
-    autoSyncPauseUntil
-  });
-
+  // Poll server job status for auto-sync pause banner (Phase 6 scheduler).
   useEffect(() => {
-    autoSyncDataRef.current = {
-      channels,
-      scrapeChannelsInParallel,
-      syncQueue,
-      autoSyncInterval,
-      autoSyncPauseUntil
-    };
-  }, [channels, scrapeChannelsInParallel, syncQueue, autoSyncInterval, autoSyncPauseUntil]);
+    if (isOffline) return;
 
-  // Auto-sync: server APScheduler handles always-on sync (Phase 4).
-  // Client-side check kept for immediate UX when tab is open.
-  useEffect(() => {
-    if (!autoSyncEnabled) return;
-
-    const CHECK_INTERVAL_MS = 60 * 1000;
-    
-    const intervalId = setInterval(() => {
-      const { 
-        channels: currentChannels, 
-        scrapeChannelsInParallel: currentScrape,
-        syncQueue: currentQueue,
-        autoSyncInterval: currentInterval,
-        autoSyncPauseUntil: currentPauseUntil
-      } = autoSyncDataRef.current;
-
-      const now = Date.now();
-      
-      if (currentPauseUntil && now < currentPauseUntil) {
-        return; // Skip auto-sync while paused
-      } else if (currentPauseUntil && now >= currentPauseUntil) {
-        // Clear pause if it has expired
-        setAutoSyncPauseUntil(null);
-      }
-
-      const intervalMs = currentInterval * 60 * 1000;
-
-      const candidateChannels = currentChannels;
-      
-      const channelsToScrape = candidateChannels.filter(channel => {
-        if (channel.isFrozen) return false;
-        
-        const timeSinceLastUpdate = now - (channel.lastUpdated || 0);
-        const needsUpdate = timeSinceLastUpdate >= intervalMs;
-        const inQueue = currentQueue.some(qItem => qItem.channel.id === channel.id);
-        
-        return needsUpdate && !inQueue;
-      });
-      
-      if (channelsToScrape.length > 0) {
-        currentScrape(channelsToScrape, "Auto Sync");
-      }
-    }, CHECK_INTERVAL_MS);
-
-    return () => clearInterval(intervalId);
-  }, [autoSyncEnabled]);
-
-  // Data Retention Cleanup
-  useEffect(() => {
-    const runCleanup = async () => {
+    const refreshPauseState = async () => {
       try {
-        if (postRetentionDays > 0) {
-          await deleteOldPosts(postRetentionDays);
-        }
-        if (logRetentionDays > 0) {
-          await deleteOldLogs(logRetentionDays);
-        }
+        const status = await api.jobsStatus();
+        const pauseUntil = status.auto_sync?.pauseUntil ?? null;
+        setAutoSyncPauseUntil(pauseUntil);
       } catch (err) {
-        console.error("[App] Data retention cleanup failed:", err);
+        console.error("[App] Failed to fetch job status:", err);
       }
     };
 
-    // Run immediately on mount or when settings change
-    runCleanup();
-
-    // Also run periodically (e.g., every 6 hours)
-    const CLEANUP_INTERVAL = 6 * 60 * 60 * 1000;
-    const intervalId = setInterval(runCleanup, CLEANUP_INTERVAL);
-
+    refreshPauseState();
+    const intervalId = setInterval(refreshPauseState, 30_000);
     return () => clearInterval(intervalId);
-  }, [postRetentionDays, logRetentionDays]);
+  }, [isOffline, setAutoSyncPauseUntil]);
 
   const toggleTheme = () => {
     setTheme(theme === "light" ? "dark" : "light");
@@ -204,6 +125,23 @@ export default function App() {
   return (
     <div className={`min-h-screen bg-app-bg text-app-ink font-sans selection:bg-app-ink selection:text-app-bg transition-colors duration-300 flex flex-col`}>
       <main className="flex-1 flex flex-col p-4 md:p-8 max-w-7xl mx-auto w-full">
+        {/* Offline Banner */}
+        <AnimatePresence>
+          {isOffline && (
+            <motion.div
+              initial={{ height: 0, opacity: 0, marginBottom: 0 }}
+              animate={{ height: 'auto', opacity: 1, marginBottom: 16 }}
+              exit={{ height: 0, opacity: 0, marginBottom: 0 }}
+              className="bg-amber-500/10 border border-amber-500/20 text-amber-700 dark:text-amber-400 px-4 py-3 flex items-center gap-3 text-xs rounded-md overflow-hidden"
+            >
+              <AlertTriangle className="w-4 h-4 shrink-0" />
+              <span>
+                <strong className="uppercase tracking-wider">Server offline.</strong> Showing cached data. Sync, summary, and publish actions are disabled.
+              </span>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
         {/* Auto-Sync Paused Banner */}
         <AnimatePresence>
           {autoSyncPauseUntil && Date.now() < autoSyncPauseUntil && (
@@ -220,7 +158,17 @@ export default function App() {
                 </span>
               </div>
               <button 
-                onClick={() => setAutoSyncPauseUntil(null)}
+                onClick={async () => {
+                  try {
+                    await api.putSetting("sync", {
+                      autoSyncPauseUntil: null,
+                      consecutiveFailures: 0,
+                    });
+                    setAutoSyncPauseUntil(null);
+                  } catch (err) {
+                    console.error("[App] Failed to resume auto-sync:", err);
+                  }
+                }}
                 className="px-3 py-1.5 hover:bg-red-500/10 rounded transition-colors font-medium font-mono uppercase tracking-widest text-[10px] whitespace-nowrap"
               >
                 Resume Now

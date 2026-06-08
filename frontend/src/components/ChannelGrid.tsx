@@ -7,8 +7,9 @@ import { useData } from '../contexts/DataContext';
 import { useUI } from '../contexts/UIContext';
 import { useSettings } from '../contexts/SettingsContext';
 import { useScraper } from '../contexts/ScraperContext';
-import { saveChannel, deleteChannel, clearChannelPosts, saveNetworkLog } from '../lib/db';
-import { api } from '../api/client';
+import { upsertChannel, deleteChannel, clearChannelPosts, saveNetworkLog } from '../lib/repository';
+import { useApiStatus } from '../hooks/useApiStatus';
+import { api } from "@/api";
 import { Modal } from './ui/Modal';
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tg-tooltip';
 
@@ -53,18 +54,18 @@ export const ChannelGrid: React.FC<ChannelGridProps> = () => {
     autoSyncInterval, 
     setAutoSyncInterval,
     proxyEnabled,
-    proxyUrls,
+    defaultProxyUrls,
     torEnabled,
     torMode,
     torProxyUrls,
     torRotationStrategy,
     torAutoRotate,
     torRotationThreshold,
-    torControlPort,
-    torControlPassword,
     getEffectiveGlobalStartTime,
     showChannelSubscribers
   } = useSettings();
+
+  const { isOffline } = useApiStatus();
 
   const {
     scrapingChannels,
@@ -206,7 +207,7 @@ export const ChannelGrid: React.FC<ChannelGridProps> = () => {
     setChannels(updatedChannels);
     for (const c of updatedChannels) {
       if (selectedChannels.has(c.name) && !c.isUnavailableOnWebView) {
-        await saveChannel(c);
+        await upsertChannel(c);
       }
     }
   };
@@ -221,7 +222,7 @@ export const ChannelGrid: React.FC<ChannelGridProps> = () => {
     setChannels(updatedChannels);
     for (const c of updatedChannels) {
       if (selectedChannels.has(c.name) && !c.isUnavailableOnWebView) {
-        await saveChannel(c);
+        await upsertChannel(c);
       }
     }
   };
@@ -239,7 +240,7 @@ export const ChannelGrid: React.FC<ChannelGridProps> = () => {
     setChannels(updatedChannels);
     for (const c of updatedChannels) {
       if (selectedChannels.has(c.name)) {
-        await saveChannel(c);
+        await upsertChannel(c);
       }
     }
     setBulkTagInput("");
@@ -258,7 +259,7 @@ export const ChannelGrid: React.FC<ChannelGridProps> = () => {
     setChannels(updatedChannels);
     for (const c of updatedChannels) {
       if (selectedChannels.has(c.name)) {
-        await saveChannel(c);
+        await upsertChannel(c);
       }
     }
     setBulkRemoveTagInput("");
@@ -296,7 +297,7 @@ export const ChannelGrid: React.FC<ChannelGridProps> = () => {
     let photoUrl = undefined;
     const effectiveStartTime = getEffectiveGlobalStartTime();
 
-    const proxies = proxyUrls.split(/[\n,]+/).map(p => p.trim()).filter(p => p);
+    const proxies = defaultProxyUrls.split(/[\n,]+/).map(p => p.trim()).filter(p => p);
     const torPool = torProxyUrls.split(/[\n,]+/).map(p => p.trim()).filter(p => p);
     
     let activeProxies: string[] = [];
@@ -332,7 +333,6 @@ export const ChannelGrid: React.FC<ChannelGridProps> = () => {
         proxies: activeProxies,
         torAutoRotate,
         torRotationThreshold,
-        torControlPort,
       }) as Record<string, unknown>;
       
       status = 200;
@@ -388,7 +388,7 @@ export const ChannelGrid: React.FC<ChannelGridProps> = () => {
       tags: []
     };
     
-    await saveChannel(newChannel);
+    await upsertChannel(newChannel);
     setChannels(prev => [...prev.filter(c => c.id !== newChannel.id), newChannel]);
     setSelectedChannels(prev => new Set(prev).add(channelName));
     setInlineChannelName("");
@@ -467,7 +467,7 @@ export const ChannelGrid: React.FC<ChannelGridProps> = () => {
                 <TooltipTrigger asChild>
                   <button
                     onClick={handleScrapeSelected}
-                    disabled={scrapingChannels.size > 0 || summarizing || selectedChannels.size === 0}
+                    disabled={isOffline || scrapingChannels.size > 0 || summarizing || selectedChannels.size === 0}
                     className="h-8 px-4 text-[10px] uppercase font-bold flex items-center gap-2 bg-app-ink/10 text-app-ink hover:bg-app-ink/20 transition-all rounded-lg disabled:opacity-30"
                   >
                     <RefreshCw size={12} className={scrapingChannels.size > 0 ? "animate-spin" : ""} />
@@ -481,7 +481,7 @@ export const ChannelGrid: React.FC<ChannelGridProps> = () => {
                 <TooltipTrigger asChild>
                   <button
                     onClick={handleScrapeAll}
-                    disabled={scrapingChannels.size > 0 || summarizing}
+                    disabled={isOffline || scrapingChannels.size > 0 || summarizing}
                     className="h-8 px-4 text-[10px] uppercase font-bold flex items-center gap-2 bg-app-ink text-app-bg hover:opacity-90 transition-all rounded-lg shadow-sm disabled:opacity-30"
                   >
                     <RefreshCw size={12} className={scrapingChannels.size > 0 ? "animate-spin" : ""} />

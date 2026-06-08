@@ -7,7 +7,7 @@ import { useData } from '../contexts/DataContext';
 import { useScraper } from '../contexts/ScraperContext';
 import { useUI } from '../contexts/UIContext';
 import { useSettings } from '../contexts/SettingsContext';
-import { saveChannel } from '../lib/db';
+import { upsertChannel } from '../lib/repository';
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tg-tooltip';
 
 interface ChannelCardProps {
@@ -81,7 +81,7 @@ export const ChannelCard: React.FC<ChannelCardProps> = ({
     }
     const newTags = Array.from(new Set([...(channel.tags || []), tag.trim()]));
     const updatedChannel = { ...channel, tags: newTags };
-    await saveChannel(updatedChannel);
+    await upsertChannel(updatedChannel);
     setChannels(prev => prev.map(c => c.id === channel.id ? updatedChannel : c));
     setIsAddingTag(false);
   };
@@ -89,7 +89,7 @@ export const ChannelCard: React.FC<ChannelCardProps> = ({
   const handleRemoveTag = async (tagToRemove: string) => {
     const newTags = (channel.tags || []).filter(t => t !== tagToRemove);
     const updatedChannel = { ...channel, tags: newTags };
-    await saveChannel(updatedChannel);
+    await upsertChannel(updatedChannel);
     setChannels(prev => prev.map(c => c.id === channel.id ? updatedChannel : c));
   };
 
@@ -97,7 +97,7 @@ export const ChannelCard: React.FC<ChannelCardProps> = ({
     const newStartId = parseInt(newStartIdStr, 10);
     if (!isNaN(newStartId) && newStartId > 0) {
       const updatedChannel = { ...channel, startId: newStartId };
-      await saveChannel(updatedChannel);
+      await upsertChannel(updatedChannel);
       setChannels(prev => prev.map(c => c.id === channel.id ? updatedChannel : c));
     }
     setEditingStartId(null);
@@ -105,7 +105,7 @@ export const ChannelCard: React.FC<ChannelCardProps> = ({
 
   const handleToggleFreeze = async () => {
     const updatedChannel = { ...channel, isFrozen: !channel.isFrozen };
-    await saveChannel(updatedChannel);
+    await upsertChannel(updatedChannel);
     setChannels(prev => prev.map(c => c.id === channel.id ? updatedChannel : c));
     
     if (updatedChannel.isFrozen) {
@@ -500,14 +500,14 @@ export const ChannelCard: React.FC<ChannelCardProps> = ({
                       className="flex items-center gap-1.5 cursor-pointer"
                       onClick={(e) => { e.stopPropagation(); setEditingStartId((channel.startId ?? '').toString()); }}
                     >
-                      <p className={`text-sm font-bold leading-none group-hover/config:text-app-ink/70 transition-colors ${channel.startId === undefined ? 'text-amber-500' : ''}`}>
-                        {channel.startId === undefined ? 'Auto' : channel.startId.toLocaleString()}
+                      <p className={`text-sm font-bold leading-none group-hover/config:text-app-ink/70 transition-colors ${channel.startId == null ? 'text-amber-500' : ''}`}>
+                        {channel.startId == null ? 'Auto' : channel.startId.toLocaleString()}
                       </p>
                       <Edit2 size={10} className="opacity-0 group-hover/config:opacity-40 transition-opacity" />
                     </div>
                   </TooltipTrigger>
                   <TooltipContent>
-                    <p>{channel.startId === undefined ? 'Start ID will be resolved automatically on next sync' : 'Edit the starting post ID for syncing'}</p>
+                    <p>{channel.startId == null ? 'Start ID will be resolved automatically on next sync' : 'Edit the starting post ID for syncing'}</p>
                   </TooltipContent>
                 </Tooltip>
               )}

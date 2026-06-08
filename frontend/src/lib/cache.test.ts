@@ -1,7 +1,6 @@
-import { describe, it, expect, vi } from 'vitest';
-import { exportDBMetadata } from './db';
+import { describe, it, expect } from 'vitest';
+import { exportDBMetadata } from './cache';
 
-// Mock localStorage
 const localStorageMock = (() => {
   let store: Record<string, string> = {};
   return {
@@ -29,14 +28,12 @@ Object.defineProperty(globalThis, 'localStorage', {
 describe('exportDBMetadata', () => {
   it('should only export localStorage and not load all stores into memory', async () => {
     localStorage.setItem('testKey', 'testValue');
-    
+
     const metadata = await exportDBMetadata();
-    
+
     expect(metadata.data.localStorage).toEqual({ testKey: 'testValue' });
-    
-    // Ensure it doesn't contain the huge arrays that would cause OOM
-    expect((metadata.data as any).channels).toBeUndefined();
-    expect((metadata.data as any).summaries).toBeUndefined();
-    expect((metadata.data as any).embedding_logs).toBeUndefined();
+    expect((metadata.data as Record<string, unknown>).channels).toBeUndefined();
+    expect((metadata.data as Record<string, unknown>).summaries).toBeUndefined();
+    expect((metadata.data as Record<string, unknown>).embedding_logs).toBeUndefined();
   });
 });

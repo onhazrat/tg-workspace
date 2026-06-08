@@ -5,9 +5,9 @@ import { LANGUAGES, MODELS } from "../constants";
 import { useSettings } from "../contexts/SettingsContext";
 import { toast } from "sonner";
 import { NetworkLog } from "../types";
-import { saveNetworkLog } from "../lib/db";
+import { saveNetworkLog } from "../lib/repository";
 import { useData } from "../contexts/DataContext";
-import { api } from "../api/client";
+import { api } from "@/api";
 
 export const SettingsView: React.FC<{ activeSection?: string }> = ({ activeSection = "preferences" }) => {
   const {
@@ -25,8 +25,10 @@ export const SettingsView: React.FC<{ activeSection?: string }> = ({ activeSecti
     setAiTemperature,
     proxyEnabled,
     setProxyEnabled,
-    proxyUrls,
-    setProxyUrls,
+    defaultProxyUrls,
+    setDefaultProxyUrls,
+    envFallbackConfigured,
+    torAvailable,
     torEnabled,
     setTorEnabled,
     torMode,
@@ -39,8 +41,6 @@ export const SettingsView: React.FC<{ activeSection?: string }> = ({ activeSecti
     setTorControlEnabled,
     torControlPort,
     setTorControlPort,
-    torControlPassword,
-    setTorControlPassword,
     torAutoRotate,
     setTorAutoRotate,
     torRotationThreshold,
@@ -94,6 +94,65 @@ export const SettingsView: React.FC<{ activeSection?: string }> = ({ activeSecti
   const [proxyTestResults, setProxyTestResults] = useState<Record<string, { success?: boolean; ip?: string; latency?: number; error?: string; testing?: boolean }>>({});
   const [isTestingAll, setIsTestingAll] = useState(false);
   const [badProxies, setBadProxies] = useState<{ url: string; cooldownRemaining: number }[]>([]);
+  const [jobStatus, setJobStatus] = useState<
+    Record<
+      string,
+      {
+        enabled: boolean;
+        lastRun: number | null;
+        lastStatus: string;
+        lastError?: string | null;
+        nextRun?: number | null;
+      }
+    >
+  >({});
+  const [triggeringJob, setTriggeringJob] = useState<string | null>(null);
+
+  const JOB_LABELS: Record<string, string> = {
+    auto_sync: "Auto Sync",
+    embeddings: "Embeddings",
+    auto_summary: "Auto Summary",
+    retention: "Retention",
+    translation_batch: "Translation Batch",
+  };
+
+  const fetchJobStatus = async () => {
+    try {
+      const status = await api.jobsStatus();
+      setJobStatus(status);
+    } catch (error) {
+      console.error("[Settings] Failed to fetch job status:", error);
+    }
+  };
+
+  useEffect(() => {
+    if (activeSection !== "sync") return;
+    fetchJobStatus();
+    const timer = setInterval(fetchJobStatus, 15_000);
+    return () => clearInterval(timer);
+  }, [activeSection]);
+
+  const handleTriggerJob = async (jobId: string) => {
+    setTriggeringJob(jobId);
+    try {
+      await api.triggerJob(jobId);
+      toast.success(`Triggered ${JOB_LABELS[jobId] || jobId}`);
+      await fetchJobStatus();
+    } catch (error) {
+      toast.error(`Failed to trigger ${JOB_LABELS[jobId] || jobId}`);
+    } finally {
+      setTriggeringJob(null);
+    }
+  };
+
+  const handleToggleJob = async (jobId: string, enabled: boolean) => {
+    try {
+      await api.updateJob(jobId, enabled);
+      await fetchJobStatus();
+    } catch (error) {
+      toast.error(`Failed to update ${JOB_LABELS[jobId] || jobId}`);
+    }
+  };
 
   const fetchProxyHealth = async () => {
     try {
@@ -633,6 +692,65 @@ export const SettingsView: React.FC<{ activeSection?: string }> = ({ activeSecti
                   </motion.div>
                 )}
               </AnimatePresence>
+
+              <div className="space-y-4 pt-6 border-t border-app-ink/5">
+                <div className="flex items-center gap-2 opacity-60 mb-2">
+                  <Activity size={14} />
+                  <span className="text-[10px] font-bold uppercase tracking-tight">Background Jobs (Server)</span>
+                </div>
+                <p className="text-[10px] opacity-40 italic serif mb-4">
+                  APScheduler runs these jobs even when the browser is closed.
+                </p>
+                <div className="space-y-2">
+                  {Object.entries(JOB_LABELS).map(([jobId, label]) => {
+                    const entry = jobStatus[jobId];
+                    const statusColor =
+                      entry?.lastStatus === "ok"
+                        ? "text-green-600"
+                        : entry?.lastStatus === "error"
+                          ? "text-red-500"
+                          : entry?.lastStatus === "running"
+                            ? "text-amber-600"
+                            : "text-app-ink/50";
+                    return (
+                      <div
+                        key={jobId}
+                        className="flex items-center justify-between gap-3 p-3 border border-app-ink/10 rounded-md bg-app-muted/30"
+                      >
+                        <div className="min-w-0">
+                          <div className="text-[10px] font-bold uppercase tracking-tight">{label}</div>
+                          <div className={`text-[9px] font-mono uppercase ${statusColor}`}>
+                            {entry?.lastStatus || "—"}
+                            {entry?.lastError ? ` · ${entry.lastError.slice(0, 60)}` : ""}
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0">
+                          <button
+                            onClick={() => handleToggleJob(jobId, !(entry?.enabled ?? true))}
+                            className={`w-8 h-4 transition-all relative border border-app-ink/20 rounded-sm ${
+                              entry?.enabled !== false ? "bg-green-500 border-green-600" : "bg-app-ink/10"
+                            }`}
+                            title={entry?.enabled !== false ? "Disable job" : "Enable job"}
+                          >
+                            <div
+                              className={`absolute top-0.5 w-2.5 h-2.5 bg-white transition-all rounded-sm ${
+                                entry?.enabled !== false ? "left-4" : "left-0.5"
+                              }`}
+                            />
+                          </button>
+                          <button
+                            onClick={() => handleTriggerJob(jobId)}
+                            disabled={triggeringJob === jobId}
+                            className="px-2 py-1 text-[9px] font-mono uppercase border border-app-ink/20 hover:bg-app-ink/5 disabled:opacity-50"
+                          >
+                            {triggeringJob === jobId ? "…" : "Run"}
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
             </div>
           </div>
           </div>
@@ -686,7 +804,7 @@ export const SettingsView: React.FC<{ activeSection?: string }> = ({ activeSecti
                           </button>
                         )}
                         <button 
-                          onClick={() => handleTestAllProxies(proxyUrls)}
+                          onClick={() => handleTestAllProxies(defaultProxyUrls)}
                           disabled={isTestingAll}
                           className="text-[9px] uppercase font-bold tracking-widest hover:underline flex items-center gap-1 disabled:opacity-30"
                         >
@@ -696,16 +814,16 @@ export const SettingsView: React.FC<{ activeSection?: string }> = ({ activeSecti
                       </div>
                     </div>
                     <textarea 
-                      value={proxyUrls}
-                      onChange={(e) => setProxyUrls(e.target.value)}
-                      placeholder="http://user:pass@1.2.3.4:8080&#10;socks5://5.6.7.8:1080"
+                      value={defaultProxyUrls}
+                      onChange={(e) => setDefaultProxyUrls(e.target.value)}
+                      placeholder="http://user:pass@host:port or socks5h://host:port (one per line)"
                       className="w-full h-32 bg-app-ink/5 border border-app-ink/10 p-3 text-[10px] font-mono focus:outline-none focus:border-app-ink/30 transition-all resize-none"
                     />
                     
                     {/* Proxy Test Results */}
-                    {Object.keys(proxyTestResults).length > 0 && proxyUrls.split(/[\n,]+/).some(p => proxyTestResults[p.trim()]) && (
+                    {Object.keys(proxyTestResults).length > 0 && defaultProxyUrls.split(/[\n,]+/).some(p => proxyTestResults[p.trim()]) && (
                       <div className="space-y-1 max-h-40 overflow-y-auto pr-2 custom-scrollbar">
-                        {proxyUrls.split(/[\n,]+/).map(p => p.trim()).filter(p => p && proxyTestResults[p]).map((url, idx) => {
+                        {defaultProxyUrls.split(/[\n,]+/).map(p => p.trim()).filter(p => p && proxyTestResults[p]).map((url, idx) => {
                           const res = proxyTestResults[url];
                           return (
                             <div key={idx} className="flex items-center justify-between text-[9px] bg-app-ink/5 p-2 border border-app-ink/5 rounded">
@@ -751,7 +869,12 @@ export const SettingsView: React.FC<{ activeSection?: string }> = ({ activeSecti
                       </div>
                     )}
                     
-                    <p className="text-[10px] opacity-40 italic serif">Enter one proxy URL per line or separated by commas.</p>
+                    <p className="text-[10px] opacity-40 italic serif">
+                      Your proxy list is saved to your account on the server.
+                      {envFallbackConfigured && (
+                        <> When empty and proxies are enabled, the server falls back to <code className="font-mono">DEFAULT_PROXY_URLS</code> env.</>
+                      )}
+                    </p>
                   </motion.div>
                 )}
               </AnimatePresence>
@@ -760,6 +883,11 @@ export const SettingsView: React.FC<{ activeSection?: string }> = ({ activeSecti
 
           {/* TOR Network */}
           <div className="bg-app-card border border-app-ink/10 p-6 shadow-sm">
+            {!torAvailable && (
+              <p className="text-[10px] text-amber-700/80 italic serif mb-4">
+                Tor is disabled on this server. Set <code className="font-mono">TOR_ENABLED=true</code> and configure the Tor sidecar to enable.
+              </p>
+            )}
             <div className="flex items-center justify-between mb-6">
               <div className="flex items-center gap-3">
                 <Shield size={18} className="opacity-40" />
@@ -999,7 +1127,7 @@ export const SettingsView: React.FC<{ activeSection?: string }> = ({ activeSecti
                             exit={{ opacity: 0, height: 0 }}
                             className="space-y-4 overflow-hidden"
                           >
-                            <div className="grid grid-cols-2 gap-4">
+                            <div className="grid grid-cols-1 gap-4">
                               <div className="space-y-2">
                                 <span className="text-[10px] font-bold uppercase tracking-tight opacity-60">Control Port</span>
                                 <input 
@@ -1009,16 +1137,9 @@ export const SettingsView: React.FC<{ activeSection?: string }> = ({ activeSecti
                                   className="w-full bg-app-ink/5 border border-app-ink/10 p-3 text-[10px] font-mono focus:outline-none focus:border-app-ink/30 transition-all rounded-lg"
                                 />
                               </div>
-                              <div className="space-y-2">
-                                <span className="text-[10px] font-bold uppercase tracking-tight opacity-60">Password</span>
-                                <input 
-                                  type="password"
-                                  value={torControlPassword}
-                                  onChange={(e) => setTorControlPassword(e.target.value)}
-                                  placeholder="Optional"
-                                  className="w-full bg-app-ink/5 border border-app-ink/10 p-3 text-[10px] font-mono focus:outline-none focus:border-app-ink/30 transition-all rounded-lg"
-                                />
-                              </div>
+                              <p className="text-[9px] opacity-50 italic serif">
+                                Tor control password is configured on the server via <code className="font-mono">TOR_CONTROL_PASSWORD</code>.
+                              </p>
                             </div>
                             <div className="flex items-center justify-between pt-2 bg-app-ink/5 p-3 rounded-lg border border-app-ink/10">
                               <p className="text-[9px] opacity-60 italic serif max-w-[200px]">Request a fresh IP from TOR when rate limited.</p>

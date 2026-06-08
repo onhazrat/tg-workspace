@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { Post } from "../types";
-import { getPost } from "../lib/db";
+import { getPost } from "../lib/repository";
 import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tg-tooltip";
 import { Loader2, ExternalLink } from "lucide-react";
 

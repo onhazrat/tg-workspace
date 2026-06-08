@@ -9,6 +9,7 @@ from app.schemas.telegram import (
     BotInfoRequest,
     ChannelInfoRequest,
     PublishRequest,
+    ResolveStartTimeRequest,
     ScrapeRequest,
     TestProxyRequest,
     TorNewIdentityRequest,
@@ -72,3 +73,9 @@ async def legacy_channel_info(request: Request) -> dict[str, Any]:
 async def legacy_scrape(request: Request) -> dict[str, Any]:
     body = ScrapeRequest.model_validate(await request.json())
     return await telegram.api_scrape(body)
+
+
+@router.post("/resolve-start-time")
+async def legacy_resolve_start_time(request: Request) -> dict[str, Any]:
+    body = ResolveStartTimeRequest.model_validate(await request.json())
+    return await telegram.api_resolve_start_time(body)

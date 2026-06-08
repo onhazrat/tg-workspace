@@ -26,6 +26,7 @@ dependencies = [
     "cryptography>=42.0.0",
     "stem>=1.8.0",
     "socksio>=1.0.0",
+    "langdetect>=1.0.9",
 ]
 
 [dependency-groups]

@@ -10,12 +10,32 @@ import { TranslationProvider } from "@/contexts/TranslationContext"
 import { UIProvider } from "@/contexts/UIContext"
 import { TgToaster } from "@/components/ui/tg-sonner"
 import { TooltipProvider } from "@/components/ui/tg-tooltip"
-import { migrateEmbeddingsData, migrateSummaryDates } from "@/lib/db"
+import { migrateEmbeddingsData, migrateSummaryDates } from "@/lib/cache"
+import { setWriteFallbackHandler } from "@/lib/repository"
+import { MigrationPrompt } from "@/components/MigrationPrompt"
+import { useBotCredentialMigration } from "@/hooks/useBotCredentialMigration"
+import { toast } from "sonner"
 
 migrateEmbeddingsData().catch(console.error)
 migrateSummaryDates().catch(console.error)
 
+const SILENT_FALLBACK_RESOURCES = new Set(["network_logs"])
+
+setWriteFallbackHandler((resource, error) => {
+  const message = error instanceof Error ? error.message : String(error)
+  const isAuthError =
+    message.includes("Not authenticated") ||
+    message.includes("Could not validate credentials") ||
+    message.includes("User not found")
+  if (isAuthError) return
+  console.warn(`[repository] API write failed for ${resource}, saved to local cache`, error)
+  if (SILENT_FALLBACK_RESOURCES.has(resource)) return
+  toast.warning(`Saved ${resource} locally only — server sync failed`, { duration: 5000 })
+})
+
 export function TgProviders({ children }: { children: ReactNode }) {
+  useBotCredentialMigration()
+
   return (
     <SettingsProvider>
       <DataProvider>
@@ -27,6 +47,7 @@ export function TgProviders({ children }: { children: ReactNode }) {
                   <TranslationProvider>
                     <TooltipProvider delay={500} closeDelay={300}>
                       {children}
+                      <MigrationPrompt />
                       <TgToaster richColors closeButton />
                     </TooltipProvider>
                   </TranslationProvider>

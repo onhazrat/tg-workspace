@@ -1,7 +1,9 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from "react";
+import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback, useRef } from "react";
 import { DEFAULT_AI_LANGUAGE, DEFAULT_MODEL, AUTO_SYNC_INTERVAL_DEFAULT, THEME_DEFAULT } from "../constants";
 import { isRTLLanguage } from "../lib/utils";
 import { GlobalStartTimeMode, GlobalStartTimeValue } from "../types";
+import { loadNetworkSettings, saveNetworkSettings } from "../lib/repository";
+import { api } from "@/api";
 
 interface SettingsContextType {
   theme: "light" | "dark";
@@ -19,8 +21,10 @@ interface SettingsContextType {
   isRTL: boolean;
   proxyEnabled: boolean;
   setProxyEnabled: (enabled: boolean) => void;
-  proxyUrls: string;
-  setProxyUrls: (urls: string) => void;
+  defaultProxyUrls: string;
+  setDefaultProxyUrls: (urls: string) => void;
+  envFallbackConfigured: boolean;
+  torAvailable: boolean;
   torEnabled: boolean;
   setTorEnabled: (enabled: boolean) => void;
   torMode: "auto" | "custom";
@@ -33,8 +37,6 @@ interface SettingsContextType {
   setTorControlEnabled: (enabled: boolean) => void;
   torControlPort: number;
   setTorControlPort: (port: number) => void;
-  torControlPassword: string;
-  setTorControlPassword: (password: string) => void;
   torAutoRotate: boolean;
   setTorAutoRotate: (enabled: boolean) => void;
   torRotationThreshold: number;
@@ -128,86 +130,29 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({ children }
     return 0.7;
   });
 
-  const [proxyEnabled, setProxyEnabled] = useState<boolean>(() => {
-    if (typeof window !== "undefined") {
-      return localStorage.getItem("proxyEnabled") === "true";
-    }
-    return false;
-  });
+  const [proxyEnabled, setProxyEnabled] = useState<boolean>(false);
 
-  const [proxyUrls, setProxyUrls] = useState<string>(() => {
-    if (typeof window !== "undefined") {
-      return localStorage.getItem("proxyUrls") || "";
-    }
-    return "";
-  });
+  const [defaultProxyUrls, setDefaultProxyUrls] = useState<string>("");
 
-  const [torEnabled, setTorEnabled] = useState<boolean>(() => {
-    if (typeof window !== "undefined") {
-      return localStorage.getItem("torEnabled") === "true";
-    }
-    return false;
-  });
+  const [envFallbackConfigured, setEnvFallbackConfigured] = useState<boolean>(false);
 
-  const [torMode, setTorMode] = useState<"auto" | "custom">(() => {
-    if (typeof window !== "undefined") {
-      const saved = localStorage.getItem("torMode");
-      return (saved as "auto" | "custom") || "auto";
-    }
-    return "auto";
-  });
+  const [torAvailable, setTorAvailable] = useState<boolean>(false);
 
-  const [torProxyUrls, setTorProxyUrls] = useState<string>(() => {
-    if (typeof window !== "undefined") {
-      return localStorage.getItem("torProxyUrls") || "socks5h://127.0.0.1:9050";
-    }
-    return "socks5h://127.0.0.1:9050";
-  });
+  const [torEnabled, setTorEnabled] = useState<boolean>(false);
 
-  const [torRotationStrategy, setTorRotationStrategy] = useState<"sequential" | "random">(() => {
-    if (typeof window !== "undefined") {
-      const saved = localStorage.getItem("torRotationStrategy");
-      return (saved as "sequential" | "random") || "sequential";
-    }
-    return "sequential";
-  });
+  const [torMode, setTorMode] = useState<"auto" | "custom">("auto");
 
-  const [torControlEnabled, setTorControlEnabled] = useState<boolean>(() => {
-    if (typeof window !== "undefined") {
-      return localStorage.getItem("torControlEnabled") === "true";
-    }
-    return false;
-  });
+  const [torProxyUrls, setTorProxyUrls] = useState<string>("socks5h://127.0.0.1:9050");
 
-  const [torControlPort, setTorControlPort] = useState<number>(() => {
-    if (typeof window !== "undefined") {
-      const saved = localStorage.getItem("torControlPort");
-      return saved ? parseInt(saved, 10) : 9051;
-    }
-    return 9051;
-  });
+  const [torRotationStrategy, setTorRotationStrategy] = useState<"sequential" | "random">("sequential");
 
-  const [torControlPassword, setTorControlPassword] = useState<string>(() => {
-    if (typeof window !== "undefined") {
-      return localStorage.getItem("torControlPassword") || "";
-    }
-    return "";
-  });
+  const [torControlEnabled, setTorControlEnabled] = useState<boolean>(false);
+
+  const [torControlPort, setTorControlPort] = useState<number>(9051);
   
-  const [torAutoRotate, setTorAutoRotate] = useState<boolean>(() => {
-    if (typeof window !== "undefined") {
-      return localStorage.getItem("torAutoRotate") === "true";
-    }
-    return false;
-  });
+  const [torAutoRotate, setTorAutoRotate] = useState<boolean>(false);
 
-  const [torRotationThreshold, setTorRotationThreshold] = useState<number>(() => {
-    if (typeof window !== "undefined") {
-      const saved = localStorage.getItem("torRotationThreshold");
-      return saved ? parseInt(saved, 10) : 10;
-    }
-    return 10;
-  });
+  const [torRotationThreshold, setTorRotationThreshold] = useState<number>(10);
 
   const [syncConcurrency, setSyncConcurrency] = useState<number>(() => {
     if (typeof window !== "undefined") {
@@ -360,6 +305,111 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({ children }
     return false;
   });
 
+  const networkHydrated = useRef(false);
+  const networkSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const applyNetworkSettings = useCallback((value: Record<string, unknown>) => {
+    if (Array.isArray(value.proxyUrls)) {
+      setDefaultProxyUrls((value.proxyUrls as string[]).join("\n"));
+    } else if (typeof value.defaultProxyUrls === "string") {
+      setDefaultProxyUrls(value.defaultProxyUrls);
+    }
+    if (typeof value.envFallbackConfigured === "boolean") {
+      setEnvFallbackConfigured(value.envFallbackConfigured);
+    }
+    if (typeof value.torAvailable === "boolean") setTorAvailable(value.torAvailable);
+    if (typeof value.proxyEnabled === "boolean") setProxyEnabled(value.proxyEnabled);
+    if (typeof value.torEnabled === "boolean") setTorEnabled(value.torEnabled);
+    if (value.torMode === "auto" || value.torMode === "custom") setTorMode(value.torMode);
+    if (typeof value.torProxyUrls === "string") setTorProxyUrls(value.torProxyUrls);
+    if (value.torRotationStrategy === "sequential" || value.torRotationStrategy === "random") {
+      setTorRotationStrategy(value.torRotationStrategy);
+    }
+    if (typeof value.torControlEnabled === "boolean") setTorControlEnabled(value.torControlEnabled);
+    if (typeof value.torControlPort === "number") setTorControlPort(value.torControlPort);
+    if (typeof value.torAutoRotate === "boolean") setTorAutoRotate(value.torAutoRotate);
+    if (typeof value.torRotationThreshold === "number") setTorRotationThreshold(value.torRotationThreshold);
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    localStorage.removeItem("proxyUrls");
+    localStorage.removeItem("torControlPassword");
+
+    if (!localStorage.getItem("access_token")) return;
+
+    loadNetworkSettings()
+      .then((value) => {
+        const legacy: Record<string, unknown> = {};
+        const legacyProxyEnabled = localStorage.getItem("proxyEnabled");
+        if (legacyProxyEnabled !== null && value.proxyEnabled === undefined) {
+          legacy.proxyEnabled = legacyProxyEnabled === "true";
+        }
+        const legacyTorEnabled = localStorage.getItem("torEnabled");
+        if (legacyTorEnabled !== null && value.torEnabled === undefined) {
+          legacy.torEnabled = legacyTorEnabled === "true";
+        }
+        applyNetworkSettings({ ...value, ...legacy });
+        networkHydrated.current = true;
+        if (Object.keys(legacy).length > 0) {
+          const proxyUrls = defaultProxyUrls
+            .split(/[\n,]+/)
+            .map((p) => p.trim())
+            .filter(Boolean);
+          saveNetworkSettings({
+            proxyEnabled: legacy.proxyEnabled as boolean,
+            proxyUrls,
+            torEnabled: legacy.torEnabled as boolean,
+            torMode,
+            torProxyUrls,
+            torRotationStrategy,
+            torControlEnabled,
+            torControlPort,
+            torAutoRotate,
+            torRotationThreshold,
+          }).catch(console.error);
+        }
+      })
+      .catch(console.error);
+  }, [applyNetworkSettings, torAutoRotate, torControlEnabled, torControlPort, torMode, torProxyUrls, torRotationStrategy, torRotationThreshold]);
+
+  useEffect(() => {
+    if (!networkHydrated.current || !localStorage.getItem("access_token")) return;
+    if (networkSaveTimer.current) clearTimeout(networkSaveTimer.current);
+    networkSaveTimer.current = setTimeout(() => {
+      const proxyUrls = defaultProxyUrls
+        .split(/[\n,]+/)
+        .map((p) => p.trim())
+        .filter(Boolean);
+      saveNetworkSettings({
+        proxyEnabled,
+        proxyUrls,
+        torEnabled,
+        torMode,
+        torProxyUrls,
+        torRotationStrategy,
+        torControlEnabled,
+        torControlPort,
+        torAutoRotate,
+        torRotationThreshold,
+      }).catch(console.error);
+    }, 400);
+    return () => {
+      if (networkSaveTimer.current) clearTimeout(networkSaveTimer.current);
+    };
+  }, [
+    proxyEnabled,
+    defaultProxyUrls,
+    torEnabled,
+    torMode,
+    torProxyUrls,
+    torRotationStrategy,
+    torControlEnabled,
+    torControlPort,
+    torAutoRotate,
+    torRotationThreshold,
+  ]);
+
   const getEffectiveGlobalStartTime = useCallback(() => {
     const now = Date.now();
     let targetTime = now;
@@ -420,50 +470,6 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({ children }
   useEffect(() => {
     localStorage.setItem("aiTemperature", aiTemperature.toString());
   }, [aiTemperature]);
-
-  useEffect(() => {
-    localStorage.setItem("proxyEnabled", proxyEnabled.toString());
-  }, [proxyEnabled]);
-
-  useEffect(() => {
-    localStorage.setItem("proxyUrls", proxyUrls);
-  }, [proxyUrls]);
-
-  useEffect(() => {
-    localStorage.setItem("torEnabled", torEnabled.toString());
-  }, [torEnabled]);
-
-  useEffect(() => {
-    localStorage.setItem("torMode", torMode);
-  }, [torMode]);
-
-  useEffect(() => {
-    localStorage.setItem("torProxyUrls", torProxyUrls);
-  }, [torProxyUrls]);
-
-  useEffect(() => {
-    localStorage.setItem("torRotationStrategy", torRotationStrategy);
-  }, [torRotationStrategy]);
-
-  useEffect(() => {
-    localStorage.setItem("torControlEnabled", torControlEnabled.toString());
-  }, [torControlEnabled]);
-
-  useEffect(() => {
-    localStorage.setItem("torControlPort", torControlPort.toString());
-  }, [torControlPort]);
-
-  useEffect(() => {
-    localStorage.setItem("torControlPassword", torControlPassword);
-  }, [torControlPassword]);
-
-  useEffect(() => {
-    localStorage.setItem("torAutoRotate", torAutoRotate.toString());
-  }, [torAutoRotate]);
-
-  useEffect(() => {
-    localStorage.setItem("torRotationThreshold", torRotationThreshold.toString());
-  }, [torRotationThreshold]);
 
   useEffect(() => {
     localStorage.setItem("syncConcurrency", syncConcurrency.toString());
@@ -541,6 +547,47 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({ children }
     localStorage.setItem("advancedMode", advancedMode.toString());
   }, [advancedMode]);
 
+  // Push scheduler-related settings to Postgres for APScheduler jobs (Phase 6).
+  useEffect(() => {
+    if (!localStorage.getItem("access_token")) return;
+    api
+      .putSetting("sync", {
+        autoSyncEnabled,
+        autoSyncInterval,
+        syncConcurrency,
+        autoFollowForwarded,
+        globalStartTimeMode,
+        globalStartTimeValue,
+      })
+      .catch((err) => console.warn("[Settings] Failed to sync scheduler settings:", err));
+  }, [
+    autoSyncEnabled,
+    autoSyncInterval,
+    syncConcurrency,
+    autoFollowForwarded,
+    globalStartTimeMode,
+    globalStartTimeValue,
+  ]);
+
+  useEffect(() => {
+    if (!localStorage.getItem("access_token")) return;
+    api
+      .putSetting("retention", { postRetentionDays, logRetentionDays })
+      .catch((err) => console.warn("[Settings] Failed to sync retention settings:", err));
+  }, [postRetentionDays, logRetentionDays]);
+
+  useEffect(() => {
+    if (!localStorage.getItem("access_token")) return;
+    api
+      .putSetting("translation", {
+        translationEnabled,
+        autoTranslate,
+        translationModel,
+        translationTargetLanguage,
+      })
+      .catch((err) => console.warn("[Settings] Failed to sync translation settings:", err));
+  }, [translationEnabled, autoTranslate, translationModel, translationTargetLanguage]);
+
   const isRTL = isRTLLanguage(aiLanguage);
 
   return (
@@ -561,8 +608,10 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({ children }
         isRTL,
         proxyEnabled,
         setProxyEnabled,
-        proxyUrls,
-        setProxyUrls,
+        defaultProxyUrls,
+        setDefaultProxyUrls,
+        envFallbackConfigured,
+        torAvailable,
         torEnabled,
         setTorEnabled,
         torMode,
@@ -575,8 +624,6 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({ children }
         setTorControlEnabled,
         torControlPort,
         setTorControlPort,
-        torControlPassword,
-        setTorControlPassword,
         torAutoRotate,
         setTorAutoRotate,
         torRotationThreshold,

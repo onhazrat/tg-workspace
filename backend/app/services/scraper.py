@@ -2,12 +2,18 @@
 
 from __future__ import annotations
 
+import asyncio
+import logging
+import math
 import re
+from datetime import datetime, timezone
 from typing import Any
 
 from bs4 import BeautifulSoup
 
 from app.services.network import fetch_with_retry
+
+logger = logging.getLogger(__name__)
 
 
 def _parse_posts_from_html(html: str, start_id: int, seen: set[int]) -> tuple[list[dict[str, Any]], str | None]:
@@ -278,3 +284,197 @@ async def scrape_channel(
         "latestId": latest_id,
         "telemetry": telemetry_logs,
     }
+
+
+def _post_time_ms(post: dict[str, Any]) -> int | None:
+    date = post.get("date") or ""
+    if date:
+        try:
+            dt = datetime.fromisoformat(date.replace("Z", "+00:00"))
+            return int(dt.timestamp() * 1000)
+        except ValueError:
+            pass
+    timestamp = post.get("timestamp")
+    if isinstance(timestamp, (int, float)) and timestamp > 0:
+        return int(timestamp)
+    return None
+
+
+async def _fetch_post_at_url(
+    url: str,
+    *,
+    pick_last: bool,
+    proxies: list[str] | None = None,
+    tor_auto_rotate: bool = False,
+    tor_rotation_threshold: int = 10,
+) -> dict[str, int] | None:
+    try:
+        res = await scrape_channel(
+            url,
+            proxies=proxies,
+            tor_auto_rotate=tor_auto_rotate,
+            tor_rotation_threshold=tor_rotation_threshold,
+        )
+        posts = res.get("posts") or []
+        if not posts:
+            return None
+        post = posts[-1] if pick_last else posts[0]
+        time_ms = _post_time_ms(post)
+        if time_ms is None:
+            return None
+        return {"id": int(post["id"]), "time": time_ms}
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("Failed to fetch post at %s: %s", url, exc)
+        return None
+
+
+async def resolve_start_time_to_id(
+    channel_name: str,
+    target_time_ms: int,
+    *,
+    proxies: list[str] | None = None,
+    tor_auto_rotate: bool = False,
+    tor_rotation_threshold: int = 10,
+) -> int:
+    """Map a wall-clock timestamp to the first post ID at or after that time."""
+    if target_time_ms is None or (
+        isinstance(target_time_ms, float) and math.isnan(target_time_ms)
+    ):
+        logger.warning("Invalid target_time_ms for @%s. Defaulting to 1.", channel_name)
+        return 1
+
+    logger.info(
+        "Resolving start time %s for @%s...",
+        datetime.fromtimestamp(target_time_ms / 1000, tz=timezone.utc).isoformat(),
+        channel_name,
+    )
+
+    async def fetch_post_at_or_after(post_id: int) -> dict[str, int] | None:
+        if post_id > 1:
+            url = f"https://t.me/s/{channel_name}?after={post_id - 1}"
+        else:
+            url = f"https://t.me/s/{channel_name}?after={post_id}"
+        return await _fetch_post_at_url(
+            url,
+            pick_last=False,
+            proxies=proxies,
+            tor_auto_rotate=tor_auto_rotate,
+            tor_rotation_threshold=tor_rotation_threshold,
+        )
+
+    async def fetch_post_at_or_before(post_id: int) -> dict[str, int] | None:
+        url = f"https://t.me/s/{channel_name}?before={post_id + 1}"
+        return await _fetch_post_at_url(
+            url,
+            pick_last=True,
+            proxies=proxies,
+            tor_auto_rotate=tor_auto_rotate,
+            tor_rotation_threshold=tor_rotation_threshold,
+        )
+
+    info = await get_channel_info(
+        channel_name,
+        proxies=proxies,
+        tor_auto_rotate=tor_auto_rotate,
+        tor_rotation_threshold=tor_rotation_threshold,
+    )
+    if info.get("isUnavailableOnWebView"):
+        raise ValueError("Channel is not available on the web view.")
+
+    latest_id = info.get("latestId")
+    if not latest_id:
+        raise ValueError("Could not determine latest ID for channel")
+
+    high_id = int(latest_id)
+    high_time = int(datetime.now().timestamp() * 1000)
+    high_post = await fetch_post_at_or_before(high_id)
+    if high_post:
+        high_id = high_post["id"]
+        high_time = high_post["time"]
+
+    if target_time_ms >= high_time:
+        logger.info("Target time is newer than latest post. Returning latest ID: %s", high_id)
+        return high_id
+
+    low_id = 1
+    low_time = 0
+    low_post = await fetch_post_at_or_after(low_id)
+    if not low_post:
+        return 1
+
+    low_id = low_post["id"]
+    low_time = low_post["time"]
+
+    if target_time_ms <= low_time:
+        logger.info("Target time is older than oldest post. Returning oldest ID: %s", low_id)
+        return low_id
+
+    logger.info(
+        "Bounds found: Low[%s] = %s, High[%s] = %s",
+        low_id,
+        datetime.fromtimestamp(low_time / 1000, tz=timezone.utc).isoformat(),
+        high_id,
+        datetime.fromtimestamp(high_time / 1000, tz=timezone.utc).isoformat(),
+    )
+
+    iterations = 0
+    max_iterations = 12
+    best_id = low_id
+
+    while low_id <= high_id and iterations < max_iterations:
+        iterations += 1
+
+        if high_time > low_time:
+            guess_id = low_id + int(
+                ((target_time_ms - low_time) / (high_time - low_time)) * (high_id - low_id)
+            )
+        else:
+            guess_id = (low_id + high_id) // 2
+
+        if guess_id <= low_id or guess_id >= high_id:
+            guess_id = (low_id + high_id) // 2
+
+        logger.info(
+            "Iteration %s: Guessing ID %s (Low: %s, High: %s)",
+            iterations,
+            guess_id,
+            low_id,
+            high_id,
+        )
+
+        await asyncio.sleep(0.8)
+
+        guess_post = await fetch_post_at_or_after(guess_id)
+        if not guess_post:
+            logger.warning(
+                "Could not fetch post around guess ID %s. Assuming guess is beyond latest ID.",
+                guess_id,
+            )
+            high_id = guess_id - 1
+            continue
+
+        logger.info(
+            "Guessed Post: ID %s, Time %s",
+            guess_post["id"],
+            datetime.fromtimestamp(
+                guess_post["time"] / 1000, tz=timezone.utc
+            ).isoformat(),
+        )
+
+        if guess_post["time"] == target_time_ms:
+            best_id = guess_post["id"]
+            break
+        if guess_post["time"] < target_time_ms:
+            low_id = guess_post["id"] + 1
+            low_time = guess_post["time"]
+        else:
+            high_id = guess_id - 1
+            high_time = guess_post["time"]
+            best_id = guess_post["id"]
+
+    logger.info(
+        "Resolved start time to ID: %s after %s iterations.",
+        best_id,
+        iterations,
+    )
+    return best_id

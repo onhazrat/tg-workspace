@@ -5,7 +5,7 @@ import { Summary, TabType } from "../types";
 import { RelativeTime } from "./RelativeTime";
 import { useData } from "../contexts/DataContext";
 import { toast } from "sonner";
-import { deleteSummary, saveSummary } from "../lib/db";
+import { deleteSummary, saveSummary } from "../lib/repository";
 import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tg-tooltip";
 import { formatDateToLocalISO } from "../lib/utils";
 

@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useRef, useEffect } from "react";
 import { ChatMessage, Summary, LLMLog } from "../types";
-import { saveSummary, saveLLMLog, getPostsByDateRange } from "../lib/db";
+import { saveSummary, saveLLMLog, getPostsByDateRange } from "../lib/repository";
 import { useData } from "./DataContext";
 import { useUI } from "./UIContext";
 import { useSettings } from "./SettingsContext";

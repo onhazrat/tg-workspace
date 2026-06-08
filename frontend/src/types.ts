@@ -57,8 +57,11 @@ export type GlobalStartTimeValue = number | string | null;
 export interface BotCredential {
   id: string;
   name: string;
-  token: string;
+  /** Present only when creating or migrating; never returned by GET. */
+  token?: string;
+  hasToken?: boolean;
   username?: string;
+  /** Telegram file path (e.g. photos/file.jpg) or legacy full URL. */
   photoUrl?: string;
   lastValidated?: number;
 }

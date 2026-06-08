@@ -3,7 +3,7 @@
 import type { CancelablePromise } from './core/CancelablePromise';
 import { OpenAPI } from './core/OpenAPI';
 import { request as __request } from './core/request';
-import type { AiApiListModelsResponse, AiApiSummaryData, AiApiSummaryResponse, AiApiSummaryStreamData, AiApiSummaryStreamResponse, AiApiChatStreamData, AiApiChatStreamResponse, AiApiEmbeddingsData, AiApiEmbeddingsResponse, AiApiTranslateData, AiApiTranslateResponse, DataGetSyncMetaResponse, DataListChannelsResponse, DataUpsertChannelData, DataUpsertChannelResponse, DataListPostsData, DataListPostsResponse, DataBulkUpsertPostsData, DataBulkUpsertPostsResponse, DataListSummariesResponse, DataUpsertSummaryData, DataUpsertSummaryResponse, DataGetSettingData, DataGetSettingResponse, DataPutSettingData, DataPutSettingResponse, DataImportDataData, DataImportDataResponse, DataExportDataResponse, ItemsReadItemsData, ItemsReadItemsResponse, ItemsCreateItemData, ItemsCreateItemResponse, ItemsReadItemData, ItemsReadItemResponse, ItemsUpdateItemData, ItemsUpdateItemResponse, ItemsDeleteItemData, ItemsDeleteItemResponse, JobsJobsStatusResponse, LegacyLegacyTestProxyResponse, LegacyLegacyProxyHealthResponse, LegacyLegacyTorStatusResponse, LegacyLegacyTorIpResponse, LegacyLegacyTorRestartResponse, LegacyLegacyTorNewIdentityResponse, LegacyLegacyBotInfoResponse, LegacyLegacyPublishResponse, LegacyLegacyChannelInfoResponse, LegacyLegacyScrapeResponse, LoginLoginAccessTokenData, LoginLoginAccessTokenResponse, LoginTestTokenResponse, LoginRecoverPasswordData, LoginRecoverPasswordResponse, LoginResetPasswordData, LoginResetPasswordResponse, LoginRecoverPasswordHtmlContentData, LoginRecoverPasswordHtmlContentResponse, NetworkApiTestProxyData, NetworkApiTestProxyResponse, NetworkApiProxyHealthResponse, NetworkApiTorStatusResponse, NetworkApiTorIpResponse, NetworkApiTorRestartResponse, NetworkApiTorNewIdentityData, NetworkApiTorNewIdentityResponse, PrivateCreateUserData, PrivateCreateUserResponse, RagRagSearchData, RagRagSearchResponse, TelegramApiScrapeData, TelegramApiScrapeResponse, TelegramApiChannelInfoData, TelegramApiChannelInfoResponse, TelegramApiBotInfoData, TelegramApiBotInfoResponse, TelegramApiPublishData, TelegramApiPublishResponse, UsersReadUsersData, UsersReadUsersResponse, UsersCreateUserData, UsersCreateUserResponse, UsersReadUserMeResponse, UsersDeleteUserMeResponse, UsersUpdateUserMeData, UsersUpdateUserMeResponse, UsersUpdatePasswordMeData, UsersUpdatePasswordMeResponse, UsersRegisterUserData, UsersRegisterUserResponse, UsersReadUserByIdData, UsersReadUserByIdResponse, UsersUpdateUserData, UsersUpdateUserResponse, UsersDeleteUserData, UsersDeleteUserResponse, UtilsTestEmailData, UtilsTestEmailResponse, UtilsHealthCheckResponse } from './types.gen';
+import type { AiApiListModelsResponse, AiApiSummaryData, AiApiSummaryResponse, AiApiSummaryStreamData, AiApiSummaryStreamResponse, AiApiChatStreamData, AiApiChatStreamResponse, AiApiEmbeddingsData, AiApiEmbeddingsResponse, AiApiTranslateData, AiApiTranslateResponse, DataGetSyncMetaResponse, DataListChannelsResponse, DataUpsertChannelData, DataUpsertChannelResponse, DataDeleteChannelData, DataDeleteChannelResponse, DataGetChannelStatsData, DataGetChannelStatsResponse, DataListPostsData, DataListPostsResponse, DataBulkUpsertPostsData, DataBulkUpsertPostsResponse, DataListSummariesResponse, DataUpsertSummaryData, DataUpsertSummaryResponse, DataDeleteSummaryData, DataDeleteSummaryResponse, DataListBotCredentialsResponse, DataUpsertBotCredentialData, DataUpsertBotCredentialResponse, DataDeleteBotCredentialData, DataDeleteBotCredentialResponse, DataMigrateBotCredentialsData, DataMigrateBotCredentialsResponse, DataListChatDestinationsResponse, DataUpsertChatDestinationData, DataUpsertChatDestinationResponse, DataDeleteChatDestinationData, DataDeleteChatDestinationResponse, DataListEmbeddingsResponse, DataUpsertEmbeddingsData, DataUpsertEmbeddingsResponse, DataListTranslationsResponse, DataUpsertTranslationsData, DataUpsertTranslationsResponse, DataListPublishLogsResponse, DataCreatePublishLogsData, DataCreatePublishLogsResponse, DataListSyncLogsResponse, DataCreateSyncLogsData, DataCreateSyncLogsResponse, DataListLlmLogsResponse, DataCreateLlmLogsData, DataCreateLlmLogsResponse, DataListEmbeddingLogsResponse, DataCreateEmbeddingLogsData, DataCreateEmbeddingLogsResponse, DataListNetworkLogsResponse, DataCreateNetworkLogsData, DataCreateNetworkLogsResponse, DataGetNetworkSettingsResponse, DataPutNetworkSettingsData, DataPutNetworkSettingsResponse, DataGetSettingData, DataGetSettingResponse, DataPutSettingData, DataPutSettingResponse, DataImportDataData, DataImportDataResponse, DataExportDataResponse, ItemsReadItemsData, ItemsReadItemsResponse, ItemsCreateItemData, ItemsCreateItemResponse, ItemsReadItemData, ItemsReadItemResponse, ItemsUpdateItemData, ItemsUpdateItemResponse, ItemsDeleteItemData, ItemsDeleteItemResponse, JobsJobsStatusResponse, JobsTriggerSchedulerJobData, JobsTriggerSchedulerJobResponse, JobsUpdateSchedulerJobData, JobsUpdateSchedulerJobResponse, JobsStartSyncJobData, JobsStartSyncJobResponse, JobsGetSyncJobStatusData, JobsGetSyncJobStatusResponse, JobsCancelSyncJobData, JobsCancelSyncJobResponse, LegacyLegacyTestProxyResponse, LegacyLegacyProxyHealthResponse, LegacyLegacyTorStatusResponse, LegacyLegacyTorIpResponse, LegacyLegacyTorRestartResponse, LegacyLegacyTorNewIdentityResponse, LegacyLegacyBotInfoResponse, LegacyLegacyPublishResponse, LegacyLegacyChannelInfoResponse, LegacyLegacyScrapeResponse, LegacyLegacyResolveStartTimeResponse, LoginLoginAccessTokenData, LoginLoginAccessTokenResponse, LoginTestTokenResponse, LoginRecoverPasswordData, LoginRecoverPasswordResponse, LoginResetPasswordData, LoginResetPasswordResponse, LoginRecoverPasswordHtmlContentData, LoginRecoverPasswordHtmlContentResponse, NetworkApiTestProxyData, NetworkApiTestProxyResponse, NetworkApiProxyHealthResponse, NetworkApiTorStatusResponse, NetworkApiTorIpResponse, NetworkApiTorRestartResponse, NetworkApiTorNewIdentityData, NetworkApiTorNewIdentityResponse, PrivateCreateUserData, PrivateCreateUserResponse, RagRagStatusResponse, RagRagEmbedData, RagRagEmbedResponse, RagRagSearchData, RagRagSearchResponse, TelegramApiScrapeData, TelegramApiScrapeResponse, TelegramApiChannelInfoData, TelegramApiChannelInfoResponse, TelegramApiResolveStartTimeData, TelegramApiResolveStartTimeResponse, TelegramApiBotInfoData, TelegramApiBotInfoResponse, TelegramApiPublishData, TelegramApiPublishResponse, TelegramApiBotFileData, TelegramApiBotFileResponse, UsersReadUsersData, UsersReadUsersResponse, UsersCreateUserData, UsersCreateUserResponse, UsersReadUserMeResponse, UsersDeleteUserMeResponse, UsersUpdateUserMeData, UsersUpdateUserMeResponse, UsersUpdatePasswordMeData, UsersUpdatePasswordMeResponse, UsersRegisterUserData, UsersRegisterUserResponse, UsersReadUserByIdData, UsersReadUserByIdResponse, UsersUpdateUserData, UsersUpdateUserResponse, UsersDeleteUserData, UsersDeleteUserResponse, UtilsTestEmailData, UtilsTestEmailResponse, UtilsHealthCheckResponse } from './types.gen';
 
 export class AiService {
     /**
@@ -163,9 +163,52 @@ export class DataService {
     }
     
     /**
+     * Delete Channel
+     * @param data The data for the request.
+     * @param data.channelId
+     * @returns string Successful Response
+     * @throws ApiError
+     */
+    public static deleteChannel(data: DataDeleteChannelData): CancelablePromise<DataDeleteChannelResponse> {
+        return __request(OpenAPI, {
+            method: 'DELETE',
+            url: '/api/v1/data/channels/{channel_id}',
+            path: {
+                channel_id: data.channelId
+            },
+            errors: {
+                422: 'Validation Error'
+            }
+        });
+    }
+    
+    /**
+     * Get Channel Stats
+     * @param data The data for the request.
+     * @param data.channelId
+     * @returns unknown Successful Response
+     * @throws ApiError
+     */
+    public static getChannelStats(data: DataGetChannelStatsData): CancelablePromise<DataGetChannelStatsResponse> {
+        return __request(OpenAPI, {
+            method: 'GET',
+            url: '/api/v1/data/channels/{channel_id}/stats',
+            path: {
+                channel_id: data.channelId
+            },
+            errors: {
+                422: 'Validation Error'
+            }
+        });
+    }
+    
+    /**
      * List Posts
      * @param data The data for the request.
+     * @param data.channelNames
      * @param data.channelName
+     * @param data.startDate
+     * @param data.endDate
      * @returns unknown Successful Response
      * @throws ApiError
      */
@@ -174,7 +217,10 @@ export class DataService {
             method: 'GET',
             url: '/api/v1/data/posts',
             query: {
-                channel_name: data.channelName
+                channelNames: data.channelNames,
+                channelName: data.channelName,
+                startDate: data.startDate,
+                endDate: data.endDate
             },
             errors: {
                 422: 'Validation Error'
@@ -186,7 +232,7 @@ export class DataService {
      * Bulk Upsert Posts
      * @param data The data for the request.
      * @param data.requestBody
-     * @returns unknown Successful Response
+     * @returns number Successful Response
      * @throws ApiError
      */
     public static bulkUpsertPosts(data: DataBulkUpsertPostsData): CancelablePromise<DataBulkUpsertPostsResponse> {
@@ -228,6 +274,403 @@ export class DataService {
             path: {
                 summary_id: data.summaryId
             },
+            body: data.requestBody,
+            mediaType: 'application/json',
+            errors: {
+                422: 'Validation Error'
+            }
+        });
+    }
+    
+    /**
+     * Delete Summary
+     * @param data The data for the request.
+     * @param data.summaryId
+     * @returns string Successful Response
+     * @throws ApiError
+     */
+    public static deleteSummary(data: DataDeleteSummaryData): CancelablePromise<DataDeleteSummaryResponse> {
+        return __request(OpenAPI, {
+            method: 'DELETE',
+            url: '/api/v1/data/summaries/{summary_id}',
+            path: {
+                summary_id: data.summaryId
+            },
+            errors: {
+                422: 'Validation Error'
+            }
+        });
+    }
+    
+    /**
+     * List Bot Credentials
+     * @returns unknown Successful Response
+     * @throws ApiError
+     */
+    public static listBotCredentials(): CancelablePromise<DataListBotCredentialsResponse> {
+        return __request(OpenAPI, {
+            method: 'GET',
+            url: '/api/v1/data/bot-credentials'
+        });
+    }
+    
+    /**
+     * Upsert Bot Credential
+     * @param data The data for the request.
+     * @param data.botId
+     * @param data.requestBody
+     * @returns unknown Successful Response
+     * @throws ApiError
+     */
+    public static upsertBotCredential(data: DataUpsertBotCredentialData): CancelablePromise<DataUpsertBotCredentialResponse> {
+        return __request(OpenAPI, {
+            method: 'PUT',
+            url: '/api/v1/data/bot-credentials/{bot_id}',
+            path: {
+                bot_id: data.botId
+            },
+            body: data.requestBody,
+            mediaType: 'application/json',
+            errors: {
+                422: 'Validation Error'
+            }
+        });
+    }
+    
+    /**
+     * Delete Bot Credential
+     * @param data The data for the request.
+     * @param data.botId
+     * @returns string Successful Response
+     * @throws ApiError
+     */
+    public static deleteBotCredential(data: DataDeleteBotCredentialData): CancelablePromise<DataDeleteBotCredentialResponse> {
+        return __request(OpenAPI, {
+            method: 'DELETE',
+            url: '/api/v1/data/bot-credentials/{bot_id}',
+            path: {
+                bot_id: data.botId
+            },
+            errors: {
+                422: 'Validation Error'
+            }
+        });
+    }
+    
+    /**
+     * Migrate Bot Credentials
+     * @param data The data for the request.
+     * @param data.requestBody
+     * @returns unknown Successful Response
+     * @throws ApiError
+     */
+    public static migrateBotCredentials(data: DataMigrateBotCredentialsData): CancelablePromise<DataMigrateBotCredentialsResponse> {
+        return __request(OpenAPI, {
+            method: 'POST',
+            url: '/api/v1/data/bot-credentials/migrate',
+            body: data.requestBody,
+            mediaType: 'application/json',
+            errors: {
+                422: 'Validation Error'
+            }
+        });
+    }
+    
+    /**
+     * List Chat Destinations
+     * @returns unknown Successful Response
+     * @throws ApiError
+     */
+    public static listChatDestinations(): CancelablePromise<DataListChatDestinationsResponse> {
+        return __request(OpenAPI, {
+            method: 'GET',
+            url: '/api/v1/data/chat-destinations'
+        });
+    }
+    
+    /**
+     * Upsert Chat Destination
+     * @param data The data for the request.
+     * @param data.destId
+     * @param data.requestBody
+     * @returns unknown Successful Response
+     * @throws ApiError
+     */
+    public static upsertChatDestination(data: DataUpsertChatDestinationData): CancelablePromise<DataUpsertChatDestinationResponse> {
+        return __request(OpenAPI, {
+            method: 'PUT',
+            url: '/api/v1/data/chat-destinations/{dest_id}',
+            path: {
+                dest_id: data.destId
+            },
+            body: data.requestBody,
+            mediaType: 'application/json',
+            errors: {
+                422: 'Validation Error'
+            }
+        });
+    }
+    
+    /**
+     * Delete Chat Destination
+     * @param data The data for the request.
+     * @param data.destId
+     * @returns string Successful Response
+     * @throws ApiError
+     */
+    public static deleteChatDestination(data: DataDeleteChatDestinationData): CancelablePromise<DataDeleteChatDestinationResponse> {
+        return __request(OpenAPI, {
+            method: 'DELETE',
+            url: '/api/v1/data/chat-destinations/{dest_id}',
+            path: {
+                dest_id: data.destId
+            },
+            errors: {
+                422: 'Validation Error'
+            }
+        });
+    }
+    
+    /**
+     * List Embeddings
+     * @returns unknown Successful Response
+     * @throws ApiError
+     */
+    public static listEmbeddings(): CancelablePromise<DataListEmbeddingsResponse> {
+        return __request(OpenAPI, {
+            method: 'GET',
+            url: '/api/v1/data/embeddings'
+        });
+    }
+    
+    /**
+     * Upsert Embeddings
+     * @param data The data for the request.
+     * @param data.requestBody
+     * @returns number Successful Response
+     * @throws ApiError
+     */
+    public static upsertEmbeddings(data: DataUpsertEmbeddingsData): CancelablePromise<DataUpsertEmbeddingsResponse> {
+        return __request(OpenAPI, {
+            method: 'POST',
+            url: '/api/v1/data/embeddings',
+            body: data.requestBody,
+            mediaType: 'application/json',
+            errors: {
+                422: 'Validation Error'
+            }
+        });
+    }
+    
+    /**
+     * List Translations
+     * @returns unknown Successful Response
+     * @throws ApiError
+     */
+    public static listTranslations(): CancelablePromise<DataListTranslationsResponse> {
+        return __request(OpenAPI, {
+            method: 'GET',
+            url: '/api/v1/data/translations'
+        });
+    }
+    
+    /**
+     * Upsert Translations
+     * @param data The data for the request.
+     * @param data.requestBody
+     * @returns number Successful Response
+     * @throws ApiError
+     */
+    public static upsertTranslations(data: DataUpsertTranslationsData): CancelablePromise<DataUpsertTranslationsResponse> {
+        return __request(OpenAPI, {
+            method: 'POST',
+            url: '/api/v1/data/translations',
+            body: data.requestBody,
+            mediaType: 'application/json',
+            errors: {
+                422: 'Validation Error'
+            }
+        });
+    }
+    
+    /**
+     * List Publish Logs
+     * @returns unknown Successful Response
+     * @throws ApiError
+     */
+    public static listPublishLogs(): CancelablePromise<DataListPublishLogsResponse> {
+        return __request(OpenAPI, {
+            method: 'GET',
+            url: '/api/v1/data/publish-logs'
+        });
+    }
+    
+    /**
+     * Create Publish Logs
+     * @param data The data for the request.
+     * @param data.requestBody
+     * @returns number Successful Response
+     * @throws ApiError
+     */
+    public static createPublishLogs(data: DataCreatePublishLogsData): CancelablePromise<DataCreatePublishLogsResponse> {
+        return __request(OpenAPI, {
+            method: 'POST',
+            url: '/api/v1/data/publish-logs',
+            body: data.requestBody,
+            mediaType: 'application/json',
+            errors: {
+                422: 'Validation Error'
+            }
+        });
+    }
+    
+    /**
+     * List Sync Logs
+     * @returns unknown Successful Response
+     * @throws ApiError
+     */
+    public static listSyncLogs(): CancelablePromise<DataListSyncLogsResponse> {
+        return __request(OpenAPI, {
+            method: 'GET',
+            url: '/api/v1/data/sync-logs'
+        });
+    }
+    
+    /**
+     * Create Sync Logs
+     * @param data The data for the request.
+     * @param data.requestBody
+     * @returns number Successful Response
+     * @throws ApiError
+     */
+    public static createSyncLogs(data: DataCreateSyncLogsData): CancelablePromise<DataCreateSyncLogsResponse> {
+        return __request(OpenAPI, {
+            method: 'POST',
+            url: '/api/v1/data/sync-logs',
+            body: data.requestBody,
+            mediaType: 'application/json',
+            errors: {
+                422: 'Validation Error'
+            }
+        });
+    }
+    
+    /**
+     * List Llm Logs
+     * @returns unknown Successful Response
+     * @throws ApiError
+     */
+    public static listLlmLogs(): CancelablePromise<DataListLlmLogsResponse> {
+        return __request(OpenAPI, {
+            method: 'GET',
+            url: '/api/v1/data/llm-logs'
+        });
+    }
+    
+    /**
+     * Create Llm Logs
+     * @param data The data for the request.
+     * @param data.requestBody
+     * @returns number Successful Response
+     * @throws ApiError
+     */
+    public static createLlmLogs(data: DataCreateLlmLogsData): CancelablePromise<DataCreateLlmLogsResponse> {
+        return __request(OpenAPI, {
+            method: 'POST',
+            url: '/api/v1/data/llm-logs',
+            body: data.requestBody,
+            mediaType: 'application/json',
+            errors: {
+                422: 'Validation Error'
+            }
+        });
+    }
+    
+    /**
+     * List Embedding Logs
+     * @returns unknown Successful Response
+     * @throws ApiError
+     */
+    public static listEmbeddingLogs(): CancelablePromise<DataListEmbeddingLogsResponse> {
+        return __request(OpenAPI, {
+            method: 'GET',
+            url: '/api/v1/data/embedding-logs'
+        });
+    }
+    
+    /**
+     * Create Embedding Logs
+     * @param data The data for the request.
+     * @param data.requestBody
+     * @returns number Successful Response
+     * @throws ApiError
+     */
+    public static createEmbeddingLogs(data: DataCreateEmbeddingLogsData): CancelablePromise<DataCreateEmbeddingLogsResponse> {
+        return __request(OpenAPI, {
+            method: 'POST',
+            url: '/api/v1/data/embedding-logs',
+            body: data.requestBody,
+            mediaType: 'application/json',
+            errors: {
+                422: 'Validation Error'
+            }
+        });
+    }
+    
+    /**
+     * List Network Logs
+     * @returns unknown Successful Response
+     * @throws ApiError
+     */
+    public static listNetworkLogs(): CancelablePromise<DataListNetworkLogsResponse> {
+        return __request(OpenAPI, {
+            method: 'GET',
+            url: '/api/v1/data/network-logs'
+        });
+    }
+    
+    /**
+     * Create Network Logs
+     * @param data The data for the request.
+     * @param data.requestBody
+     * @returns number Successful Response
+     * @throws ApiError
+     */
+    public static createNetworkLogs(data: DataCreateNetworkLogsData): CancelablePromise<DataCreateNetworkLogsResponse> {
+        return __request(OpenAPI, {
+            method: 'POST',
+            url: '/api/v1/data/network-logs',
+            body: data.requestBody,
+            mediaType: 'application/json',
+            errors: {
+                422: 'Validation Error'
+            }
+        });
+    }
+    
+    /**
+     * Get Network Settings
+     * @returns unknown Successful Response
+     * @throws ApiError
+     */
+    public static getNetworkSettings(): CancelablePromise<DataGetNetworkSettingsResponse> {
+        return __request(OpenAPI, {
+            method: 'GET',
+            url: '/api/v1/data/settings/network'
+        });
+    }
+    
+    /**
+     * Put Network Settings
+     * @param data The data for the request.
+     * @param data.requestBody
+     * @returns unknown Successful Response
+     * @throws ApiError
+     */
+    public static putNetworkSettings(data: DataPutNetworkSettingsData): CancelablePromise<DataPutNetworkSettingsResponse> {
+        return __request(OpenAPI, {
+            method: 'PUT',
+            url: '/api/v1/data/settings/network',
             body: data.requestBody,
             mediaType: 'application/json',
             errors: {
@@ -281,7 +724,7 @@ export class DataService {
     
     /**
      * Import Data
-     * Import from TG-Summarizer ZIP export JSON structure.
+     * Import from IndexedDB export JSON structure.
      * @param data The data for the request.
      * @param data.requestBody
      * @returns unknown Successful Response
@@ -435,6 +878,108 @@ export class JobsService {
             url: '/api/v1/jobs/status'
         });
     }
+    
+    /**
+     * Trigger Scheduler Job
+     * @param data The data for the request.
+     * @param data.jobId
+     * @returns unknown Successful Response
+     * @throws ApiError
+     */
+    public static triggerSchedulerJob(data: JobsTriggerSchedulerJobData): CancelablePromise<JobsTriggerSchedulerJobResponse> {
+        return __request(OpenAPI, {
+            method: 'POST',
+            url: '/api/v1/jobs/{job_id}/trigger',
+            path: {
+                job_id: data.jobId
+            },
+            errors: {
+                422: 'Validation Error'
+            }
+        });
+    }
+    
+    /**
+     * Update Scheduler Job
+     * @param data The data for the request.
+     * @param data.jobId
+     * @param data.requestBody
+     * @returns unknown Successful Response
+     * @throws ApiError
+     */
+    public static updateSchedulerJob(data: JobsUpdateSchedulerJobData): CancelablePromise<JobsUpdateSchedulerJobResponse> {
+        return __request(OpenAPI, {
+            method: 'PUT',
+            url: '/api/v1/jobs/{job_id}',
+            path: {
+                job_id: data.jobId
+            },
+            body: data.requestBody,
+            mediaType: 'application/json',
+            errors: {
+                422: 'Validation Error'
+            }
+        });
+    }
+    
+    /**
+     * Start Sync Job
+     * @param data The data for the request.
+     * @param data.requestBody
+     * @returns StartSyncJobResponse Successful Response
+     * @throws ApiError
+     */
+    public static startSyncJob(data: JobsStartSyncJobData): CancelablePromise<JobsStartSyncJobResponse> {
+        return __request(OpenAPI, {
+            method: 'POST',
+            url: '/api/v1/jobs/sync',
+            body: data.requestBody,
+            mediaType: 'application/json',
+            errors: {
+                422: 'Validation Error'
+            }
+        });
+    }
+    
+    /**
+     * Get Sync Job Status
+     * @param data The data for the request.
+     * @param data.jobId
+     * @returns SyncJobStatusResponse Successful Response
+     * @throws ApiError
+     */
+    public static getSyncJobStatus(data: JobsGetSyncJobStatusData): CancelablePromise<JobsGetSyncJobStatusResponse> {
+        return __request(OpenAPI, {
+            method: 'GET',
+            url: '/api/v1/jobs/sync/{job_id}',
+            path: {
+                job_id: data.jobId
+            },
+            errors: {
+                422: 'Validation Error'
+            }
+        });
+    }
+    
+    /**
+     * Cancel Sync Job
+     * @param data The data for the request.
+     * @param data.jobId
+     * @returns CancelSyncJobResponse Successful Response
+     * @throws ApiError
+     */
+    public static cancelSyncJob(data: JobsCancelSyncJobData): CancelablePromise<JobsCancelSyncJobResponse> {
+        return __request(OpenAPI, {
+            method: 'POST',
+            url: '/api/v1/jobs/sync/{job_id}/cancel',
+            path: {
+                job_id: data.jobId
+            },
+            errors: {
+                422: 'Validation Error'
+            }
+        });
+    }
 }
 
 export class LegacyService {
@@ -555,6 +1100,18 @@ export class LegacyService {
         return __request(OpenAPI, {
             method: 'POST',
             url: '/api/scrape'
+        });
+    }
+    
+    /**
+     * Legacy Resolve Start Time
+     * @returns unknown Successful Response
+     * @throws ApiError
+     */
+    public static legacyResolveStartTime(): CancelablePromise<LegacyLegacyResolveStartTimeResponse> {
+        return __request(OpenAPI, {
+            method: 'POST',
+            url: '/api/resolve-start-time'
         });
     }
 }
@@ -768,6 +1325,37 @@ export class PrivateService {
 
 export class RagService {
     /**
+     * Rag Status
+     * @returns unknown Successful Response
+     * @throws ApiError
+     */
+    public static ragStatus(): CancelablePromise<RagRagStatusResponse> {
+        return __request(OpenAPI, {
+            method: 'GET',
+            url: '/api/v1/rag/status'
+        });
+    }
+    
+    /**
+     * Rag Embed
+     * @param data The data for the request.
+     * @param data.requestBody
+     * @returns unknown Successful Response
+     * @throws ApiError
+     */
+    public static ragEmbed(data: RagRagEmbedData): CancelablePromise<RagRagEmbedResponse> {
+        return __request(OpenAPI, {
+            method: 'POST',
+            url: '/api/v1/rag/embed',
+            body: data.requestBody,
+            mediaType: 'application/json',
+            errors: {
+                422: 'Validation Error'
+            }
+        });
+    }
+    
+    /**
      * Rag Search
      * @param data The data for the request.
      * @param data.requestBody
@@ -827,6 +1415,25 @@ export class TelegramService {
     }
     
     /**
+     * Api Resolve Start Time
+     * @param data The data for the request.
+     * @param data.requestBody
+     * @returns unknown Successful Response
+     * @throws ApiError
+     */
+    public static apiResolveStartTime(data: TelegramApiResolveStartTimeData): CancelablePromise<TelegramApiResolveStartTimeResponse> {
+        return __request(OpenAPI, {
+            method: 'POST',
+            url: '/api/v1/telegram/resolve-start-time',
+            body: data.requestBody,
+            mediaType: 'application/json',
+            errors: {
+                422: 'Validation Error'
+            }
+        });
+    }
+    
+    /**
      * Api Bot Info
      * @param data The data for the request.
      * @param data.requestBody
@@ -858,6 +1465,30 @@ export class TelegramService {
             url: '/api/v1/telegram/publish',
             body: data.requestBody,
             mediaType: 'application/json',
+            errors: {
+                422: 'Validation Error'
+            }
+        });
+    }
+    
+    /**
+     * Api Bot File
+     * @param data The data for the request.
+     * @param data.credentialId
+     * @param data.path
+     * @returns unknown Successful Response
+     * @throws ApiError
+     */
+    public static apiBotFile(data: TelegramApiBotFileData): CancelablePromise<TelegramApiBotFileResponse> {
+        return __request(OpenAPI, {
+            method: 'GET',
+            url: '/api/v1/telegram/bot-file/{credential_id}',
+            path: {
+                credential_id: data.credentialId
+            },
+            query: {
+                path: data.path
+            },
             errors: {
                 422: 'Validation Error'
             }

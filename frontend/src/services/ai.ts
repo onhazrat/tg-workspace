@@ -1,6 +1,6 @@
 import { Summary, EmbeddingLog } from "../types";
-import { api } from "../api/client";
-import { saveEmbeddingLog } from "../lib/db";
+import { api } from "@/api";
+import { saveEmbeddingLog } from "../lib/repository";
 
 export class AIServiceError extends Error {
   constructor(message: string) {

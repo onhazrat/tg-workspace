@@ -1,59 +1,39 @@
-import { PostEmbedding } from '../types';
-import { api } from '../api/client';
-import { getPost } from '../lib/db';
+import { Post } from '../types';
+import { api } from "@/api";
+import { getPost } from '../lib/repository';
 
-/**
- * Server-side RAG search (Phase 5). Falls back to empty when server unavailable.
- */
-export async function searchSimilarEmbeddings(
-  queryVector: number[],
-  limit: number = 10,
-  options?: {
-    channels?: string[];
-    startDate?: number;
-    endDate?: number;
-    queryText?: string;
-  }
-): Promise<PostEmbedding[]> {
-  if (options?.queryText) {
-    try {
-      const result = await api.ragSearch({
-        query: options.queryText,
-        channels: options.channels,
-        startDate: options.startDate,
-        endDate: options.endDate,
-        limit,
-      }) as { results: Array<{ channelName: string; postId: number; text: string; score: number }> };
-      return result.results.map((r) => ({
-        id: `${r.channelName}_${r.postId}`,
-        channelName: r.channelName,
-        postId: r.postId,
-        vector: queryVector,
-        text: r.text,
-      }));
-    } catch {
-      /* fall through to local */
-    }
-  }
-  return [];
+export interface RagSearchResult {
+  score: number;
+  channelName: string;
+  postId: number;
+  text: string;
+  post: Post | null;
 }
 
+/**
+ * Server-side RAG search (Phase 5). Hydrates posts from response or repository cache.
+ */
 export async function searchSimilarPostsFromQuery(
   query: string,
   limit: number = 10,
   channels?: string[],
   startDate?: number,
   endDate?: number
-) {
+): Promise<Post[]> {
   const result = await api.ragSearch({
     query,
     channels,
     startDate,
     endDate,
     limit,
-  }) as { results: Array<{ channelName: string; postId: number }> };
-  const posts = [];
+  }) as { results: RagSearchResult[] };
+
+  const posts: Post[] = [];
   for (const r of result.results) {
+    if (r.post) {
+      posts.push(r.post);
+      continue;
+    }
     const post = await getPost(r.channelName, r.postId);
     if (post) posts.push(post);
   }

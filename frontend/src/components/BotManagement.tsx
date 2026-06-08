@@ -4,12 +4,12 @@ import { Bot, Plus, Loader2, CheckCircle2, XCircle, RefreshCw, Trash2, Send, Rot
 import { useData } from "../contexts/DataContext";
 import { useSettings } from "../contexts/SettingsContext";
 import { BotCredential, ChatDestination, PublishLog, NetworkLog } from "../types";
-import { saveBotCredential, deleteBotCredential, saveChatDestination, deleteChatDestination, savePublishLog, saveNetworkLog } from "../lib/db";
+import { saveBotCredential, deleteBotCredential, saveChatDestination, deleteChatDestination, savePublishLog, saveNetworkLog } from "../lib/repository";
 import { toast } from "sonner";
 import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tg-tooltip";
-import { publishSummary } from "../services/telegram";
-import { api } from "../api/client";
+import { publishSummary, fetchBotInfo as fetchBotInfoApi } from "../services/telegram";
 import { RelativeTime } from "./RelativeTime";
+import { BotAvatar } from "./BotAvatar";
 
 interface BotManagementProps {}
 
@@ -17,14 +17,12 @@ export const BotManagement: React.FC<BotManagementProps> = () => {
   const { loadLogs, botCredentials, setBotCredentials, chatDestinations, setChatDestinations, publishLogs, loadNetworkLogs } = useData();
   const { 
     proxyEnabled, 
-    proxyUrls, 
+    defaultProxyUrls, 
     torEnabled, 
     torMode, 
     torProxyUrls, 
     torAutoRotate, 
     torRotationThreshold, 
-    torControlPort, 
-    torControlPassword 
   } = useSettings();
 
   const [selectedQuickBotId, setSelectedQuickBotId] = useState<string>("");
@@ -40,7 +38,7 @@ export const BotManagement: React.FC<BotManagementProps> = () => {
   const [botValidation, setBotValidation] = useState<Record<string, { isValid: boolean; botInfo?: string; loading: boolean }>>({});
 
   const getActiveProxies = () => {
-    const proxies = proxyUrls.split(/[\n,]+/).map(p => p.trim()).filter(p => p);
+    const proxies = defaultProxyUrls.split(/[\n,]+/).map(p => p.trim()).filter(p => p);
     const torPool = torProxyUrls.split(/[\n,]+/).map(p => p.trim()).filter(p => p);
     
     let activeProxies: string[] = [];
@@ -56,7 +54,12 @@ export const BotManagement: React.FC<BotManagementProps> = () => {
   };
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const fetchBotInfo = async (token: string, method: string, params?: Record<string, string | number>): Promise<any> => {
+  const fetchBotInfo = async (
+    credentialId: string | undefined,
+    token: string | undefined,
+    method: string,
+    params?: Record<string, string | number>
+  ): Promise<any> => {
     const activeProxies = getActiveProxies();
     const startTime = Date.now();
     let status = 0;
@@ -64,16 +67,16 @@ export const BotManagement: React.FC<BotManagementProps> = () => {
     let telemetryData: any;
 
     try {
-      const data: any = await api.botInfo({
+      const data: any = await fetchBotInfoApi(
+        credentialId,
         token,
         method,
         params,
-        proxyEnabled: activeProxies.length > 0,
-        proxies: activeProxies,
+        activeProxies.length > 0,
+        activeProxies,
         torAutoRotate,
         torRotationThreshold,
-        torControlPort,
-      });
+      );
       status = 200;
       telemetryData = data.telemetry;
       return data;
@@ -109,7 +112,7 @@ export const BotManagement: React.FC<BotManagementProps> = () => {
     if (token.includes(":") && token.length > 20) {
       setIsAutoFetchingBot(true);
       try {
-        const data = await fetchBotInfo(token, "getMe");
+        const data = await fetchBotInfo(undefined, token, "getMe");
         if (data.ok && !newBotName) {
           setNewBotName(data.result.first_name || data.result.username || "");
         }
@@ -127,7 +130,7 @@ export const BotManagement: React.FC<BotManagementProps> = () => {
       const bot = botCredentials[0];
       setIsAutoFetchingDest(true);
       try {
-        const data = await fetchBotInfo(bot.token, "getChat", { chat_id: chatId });
+        const data = await fetchBotInfo(bot.id, undefined, "getChat", { chat_id: chatId });
         if (data.ok && !newDestName) {
           setNewDestName(data.result.title || data.result.username || data.result.first_name || "");
         }
@@ -151,28 +154,26 @@ export const BotManagement: React.FC<BotManagementProps> = () => {
       token: newBotToken,
     };
     await saveBotCredential(newBot);
-    setBotCredentials(prev => [...prev, newBot]);
+    setBotCredentials(prev => [...prev, { ...newBot, token: undefined, hasToken: true }]);
     setNewBotName("");
     setNewBotToken("");
-    // Trigger validation immediately for the new bot
-    handleCheckBotToken(newBot.id, newBot.token);
+    handleCheckBotToken(newBot.id);
   };
 
-  const handleCheckBotToken = async (id: string, token: string) => {
+  const handleCheckBotToken = async (id: string) => {
     setBotValidation(prev => ({ ...prev, [id]: { isValid: false, loading: true } }));
     try {
-      const data = await fetchBotInfo(token, "getMe");
+      const data = await fetchBotInfo(id, undefined, "getMe");
       if (data.ok) {
-        let photoUrl = "";
+        let photoPath = "";
         if (data.result.can_join_groups && data.result.can_read_all_group_messages !== undefined) {
-          // Attempt to get profile photo
           try {
-            const photosData = await fetchBotInfo(token, "getUserProfilePhotos", { user_id: data.result.id, limit: 1 });
+            const photosData = await fetchBotInfo(id, undefined, "getUserProfilePhotos", { user_id: data.result.id, limit: 1 });
             if (photosData.ok && photosData.result.total_count > 0) {
               const fileId = photosData.result.photos[0][0].file_id;
-              const fileData = await fetchBotInfo(token, "getFile", { file_id: fileId });
+              const fileData = await fetchBotInfo(id, undefined, "getFile", { file_id: fileId });
               if (fileData.ok) {
-                photoUrl = `https://api.telegram.org/file/bot${token}/${fileData.result.file_path}`;
+                photoPath = fileData.result.file_path;
               }
             }
           } catch (e) {
@@ -185,8 +186,9 @@ export const BotManagement: React.FC<BotManagementProps> = () => {
           const newBot = { 
             ...updatedBot, 
             username: data.result.username, 
-            photoUrl: photoUrl,
-            lastValidated: Date.now()
+            photoUrl: photoPath || updatedBot.photoUrl,
+            lastValidated: Date.now(),
+            hasToken: true,
           };
           await saveBotCredential(newBot);
           setBotCredentials(prev => prev.map(b => b.id === id ? newBot : b));
@@ -226,7 +228,7 @@ export const BotManagement: React.FC<BotManagementProps> = () => {
     setDestValidation(prev => ({ ...prev, [destId]: { isValid: false, loading: true } }));
     
     try {
-      const data = await fetchBotInfo(bot.token, "getChat", { chat_id: chatId });
+      const data = await fetchBotInfo(bot.id, undefined, "getChat", { chat_id: chatId });
       
       if (data.ok) {
         let info = data.result.title || data.result.username || data.result.first_name || "Valid Chat";
@@ -281,12 +283,12 @@ export const BotManagement: React.FC<BotManagementProps> = () => {
     if (selectedQuickDestId === id) setSelectedQuickDestId("");
   };
 
-  const handleTestBot = async (token: string, chatId: string, botName: string, botId: string, destName: string) => {
+  const handleTestBot = async (botId: string, chatId: string, botName: string, destName: string) => {
     const testMessage = `🔔 Test Connection: Bot "${botName}" is working correctly!`;
     try {
       const activeProxies = getActiveProxies();
       const result = await publishSummary(
-        token, 
+        botId, 
         chatId, 
         testMessage,
         undefined,
@@ -294,8 +296,6 @@ export const BotManagement: React.FC<BotManagementProps> = () => {
         activeProxies,
         torAutoRotate,
         torRotationThreshold,
-        torControlPort,
-        torControlPassword
       );
       
       // Log the result
@@ -326,11 +326,11 @@ export const BotManagement: React.FC<BotManagementProps> = () => {
     }
   };
 
-  const handlePublish = async (token: string, chatId: string, botName: string, text: string, botId: string, destName: string) => {
+  const handlePublish = async (botId: string, chatId: string, botName: string, text: string, destName: string) => {
     try {
       const activeProxies = getActiveProxies();
       const result = await publishSummary(
-        token, 
+        botId, 
         chatId, 
         text,
         undefined,
@@ -338,8 +338,6 @@ export const BotManagement: React.FC<BotManagementProps> = () => {
         activeProxies,
         torAutoRotate,
         torRotationThreshold,
-        torControlPort,
-        torControlPassword
       );
       
       // Log the result
@@ -450,18 +448,7 @@ export const BotManagement: React.FC<BotManagementProps> = () => {
                       <div className="flex justify-between items-start">
                         <div className="flex items-start gap-4 min-w-0 flex-1">
                           <div className="relative shrink-0 mt-0.5">
-                            {bot.photoUrl ? (
-                              <img 
-                                src={bot.photoUrl} 
-                                alt={bot.name} 
-                                referrerPolicy="no-referrer"
-                                className="w-10 h-10 rounded-full border border-app-ink/10 object-cover"
-                              />
-                            ) : (
-                              <div className="w-10 h-10 rounded-full bg-app-ink/5 border border-app-ink/10 flex items-center justify-center">
-                                <Bot size={16} className="opacity-40" />
-                              </div>
-                            )}
+                            <BotAvatar bot={bot} />
                             {botValidation[bot.id]?.isValid && (
                               <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-green-500 rounded-full border-2 border-app-card flex items-center justify-center">
                                 <CheckCircle2 size={10} className="text-white" />
@@ -475,7 +462,7 @@ export const BotManagement: React.FC<BotManagementProps> = () => {
                                 <span className="text-[9px] font-mono text-blue-500">@{bot.username}</span>
                               )}
                               <span className="text-[9px] font-mono opacity-40 truncate">
-                                {bot.token.slice(0, 10)}••••••••{bot.token.slice(-5)}
+                                {bot.hasToken ? "Token stored on server" : "No token"}
                               </span>
                             </div>
                           </div>
@@ -484,7 +471,7 @@ export const BotManagement: React.FC<BotManagementProps> = () => {
                           <Tooltip>
                             <TooltipTrigger asChild>
                               <button
-                                onClick={() => handleCheckBotToken(bot.id, bot.token)}
+                                onClick={() => handleCheckBotToken(bot.id)}
                                 disabled={botValidation[bot.id]?.loading}
                                 className="p-2 hover:bg-app-ink/5 rounded-full transition-colors opacity-60 hover:opacity-100 disabled:opacity-20"
                               >
@@ -585,7 +572,7 @@ export const BotManagement: React.FC<BotManagementProps> = () => {
                     const bot = botCredentials.find(b => b.id === selectedQuickBotId);
                     const dest = chatDestinations.find(d => d.id === selectedQuickDestId);
                     if (bot && dest && quickMessage) {
-                      handlePublish(bot.token, dest.chatId, bot.name, quickMessage, bot.id, dest.name);
+                      handlePublish(bot.id, dest.chatId, bot.name, quickMessage, dest.name);
                       setQuickMessage("");
                     } else {
                       toast.error("Please select a bot, a destination, and type a message.");
@@ -695,7 +682,7 @@ export const BotManagement: React.FC<BotManagementProps> = () => {
                               <button
                                 onClick={() => {
                                   const bot = botCredentials[0]; // Use first bot for quick test
-                                  handleTestBot(bot.token, dest.chatId, bot.name, bot.id, dest.name);
+                                  handleTestBot(bot.id, dest.chatId, bot.name, dest.name);
                                 }}
                                 className="p-2 hover:bg-app-ink/5 rounded-full transition-colors opacity-60 hover:opacity-100"
                               >

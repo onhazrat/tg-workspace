@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
-import { getNetworkLogs } from '../lib/db';
+import { listNetworkLogs } from '../lib/repository';
 import { NetworkLog } from '../types';
 import { 
   Activity, 
@@ -14,7 +14,7 @@ import {
   XCircle
 } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tg-tooltip";
-import { api } from "../api/client";
+import { api } from "@/api";
 
 export const NetworkTelemetry: React.FC = () => {
   const [logs, setLogs] = useState<NetworkLog[]>([]);
@@ -24,7 +24,7 @@ export const NetworkTelemetry: React.FC = () => {
   const loadData = async () => {
     setLoading(true);
     try {
-      const fetchedLogs = await getNetworkLogs();
+      const fetchedLogs = await listNetworkLogs();
       setLogs(fetchedLogs.sort((a, b) => b.timestamp - a.timestamp));
       
       try {

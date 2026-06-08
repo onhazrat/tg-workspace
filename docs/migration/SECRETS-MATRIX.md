@@ -5,7 +5,7 @@
 | `GEMINI_API_KEY` | Vite bundle (`vite.config.ts`) | Server env only (`backend` settings) |
 | Bot tokens | IndexedDB, sent per request | Postgres encrypted; server calls Telegram API |
 | Tor control password | `localStorage`, request body | Server env only; never in browser |
-| Proxy URLs | `localStorage` | Server env defaults + optional UI overrides (no credentials in proxy URLs in browser) |
+| Proxy URLs | `localStorage` | Per-user `proxyUrls` in Postgres (`AppSetting` key `network`, scoped by `user_id`); `DEFAULT_PROXY_URLS` env is fallback only when user list is empty; credentials redacted in logs |
 | `SECRET_KEY` / JWT | N/A | Template JWT + optional `API_KEY` for light auth |
 | Postgres password | N/A | Docker `.env` |
 

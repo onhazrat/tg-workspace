@@ -15,7 +15,8 @@ import { CitationHover } from "./CitationHover";
 import { formatDateToLocalISO } from "../lib/utils";
 
 import { publishSummary } from "../services/telegram";
-import { savePublishLog, saveSummary } from "../lib/db";
+import { savePublishLog, saveSummary } from "../lib/repository";
+import { useApiStatus } from "../hooks/useApiStatus";
 import { PublishLog } from "../types";
 
 const extractText = (children: React.ReactNode): string => {
@@ -131,6 +132,7 @@ interface SummaryViewProps {}
 
 export const SummaryView: React.FC<SummaryViewProps> = () => {
   const { summary, handleSummarize, generateBackgroundSummary, regeneratingSummaries } = useAI();
+  const { isOffline } = useApiStatus();
   const [copied, setCopied] = useState(false);
   const { loadLogs, botCredentials, chatDestinations, selectedChannels, summariesHistory, loadHistory } = useData();
   const { startDate, endDate, currentSummaryId, summarizing, setActiveTab } = useUI();
@@ -140,6 +142,10 @@ export const SummaryView: React.FC<SummaryViewProps> = () => {
   const isRegenerating = currentSummary ? regeneratingSummaries.has(currentSummary.id) : false;
 
   const handleRerun = async () => {
+    if (isOffline) {
+      toast.warning("Server offline — summary generation disabled.");
+      return;
+    }
     if (currentSummary) {
       toast.promise(generateBackgroundSummary(currentSummary, false), {
         loading: "Re-analyzing current time window...",
@@ -167,14 +173,12 @@ export const SummaryView: React.FC<SummaryViewProps> = () => {
     aiLanguage, 
     isRTL,
     proxyEnabled, 
-    proxyUrls, 
+    defaultProxyUrls, 
     torEnabled, 
     torMode, 
     torProxyUrls, 
     torAutoRotate, 
     torRotationThreshold, 
-    torControlPort, 
-    torControlPassword 
   } = useSettings();
 
   const [selectedBotId, setSelectedBotId] = useState<string>("");
@@ -212,7 +216,7 @@ export const SummaryView: React.FC<SummaryViewProps> = () => {
   };
 
   const getActiveProxies = () => {
-    const proxies = proxyUrls.split(/[\n,]+/).map(p => p.trim()).filter(p => p);
+    const proxies = defaultProxyUrls.split(/[\n,]+/).map(p => p.trim()).filter(p => p);
     const torPool = torProxyUrls.split(/[\n,]+/).map(p => p.trim()).filter(p => p);
     
     let activeProxies: string[] = [];
@@ -227,11 +231,15 @@ export const SummaryView: React.FC<SummaryViewProps> = () => {
     return activeProxies;
   };
 
-  const handlePublish = async (token: string, chatId: string, botName: string, text: string, botId: string, destName: string) => {
+  const handlePublish = async (botId: string, chatId: string, botName: string, text: string, destName: string) => {
+    if (isOffline) {
+      toast.warning("Server offline — publish disabled.");
+      return;
+    }
     try {
       const activeProxies = getActiveProxies();
       const result = await publishSummary(
-        token, 
+        botId, 
         chatId, 
         text,
         sendMetadata ? metadataText : undefined,
@@ -239,8 +247,6 @@ export const SummaryView: React.FC<SummaryViewProps> = () => {
         activeProxies,
         torAutoRotate,
         torRotationThreshold,
-        torControlPort,
-        torControlPassword
       );
       
       // Log the result
@@ -330,7 +336,7 @@ export const SummaryView: React.FC<SummaryViewProps> = () => {
                           onClick={() => {
                             const bot = botCredentials.find(b => b.id === selectedBotId);
                             const dest = chatDestinations.find(d => d.id === selectedDestId);
-                            if (bot && dest && summary) handlePublish(bot.token, dest.chatId, bot.name, summary, bot.id, dest.name);
+                            if (bot && dest && summary) handlePublish(bot.id, dest.chatId, bot.name, summary, dest.name);
                             else toast.error("Please select both Bot and Destination.");
                           }}
                           disabled={!selectedBotId || !selectedDestId}
