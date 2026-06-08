@@ -10,3 +10,9 @@ _template_tmp
 TG-Summarizer/tor-bin
 *.pyc
 .DS_Store
+package-lock.json
+frontend/playwright-report/
+frontend/blob-report/
+frontend/test-results/
+frontend/playwright/.cache/
+frontend/playwright/.auth/

@@ -1,0 +1,37 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "Docker: Postgres",
+            "type": "shell",
+            "command": "docker compose up db -d",
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "Frontend: Vite dev",
+            "type": "shell",
+            "command": "bun run dev",
+            "options": {
+                "cwd": "${workspaceFolder}/frontend",
+                "env": {
+                    "PATH": "${env:HOME}/.bun/bin:${env:PATH}"
+                }
+            },
+            "isBackground": true,
+            "problemMatcher": {
+                "owner": "typescript",
+                "pattern": {
+                    "regexp": "^$"
+                },
+                "background": {
+                    "activeOnStart": true,
+                    "beginsPattern": ".",
+                    "endsPattern": "Local:"
+                }
+            }
+        }
+    ]
+}

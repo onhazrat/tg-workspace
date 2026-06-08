@@ -22,9 +22,8 @@ uv run fastapi dev app/main.py --port 8000
 ### Frontend
 
 ```bash
-cd frontend
-npm install
-npm run dev
+bun install
+bun run dev
 ```
 
 Set `GEMINI_API_KEY` in `.env` for AI features.
@@ -43,6 +42,11 @@ docker compose up --build
 
 - Legacy routes: `/api/scrape`, `/api/channel-info`, etc.
 - Versioned routes: `/api/v1/telegram/*`, `/api/v1/network/*`, `/api/v1/ai/*`, `/api/v1/data/*`, `/api/v1/rag/*`, `/api/v1/jobs/*`
+
+## Deployment & development
+
+- [deployment.md](deployment.md) — Traefik, Docker Compose production stack, GitHub Actions CD
+- [development.md](development.md) — local Docker, bun dev, Playwright, OpenAPI client generation
 
 ## Migration docs
 

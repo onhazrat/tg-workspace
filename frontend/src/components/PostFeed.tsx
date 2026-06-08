@@ -8,8 +8,8 @@ import { PostCard } from "./PostCard";
 interface PostFeedProps {
   postSearch: string;
   setPostSearch: (val: string) => void;
-  loadMoreRef: React.RefObject<HTMLDivElement>;
-  scrollContainerRef: React.RefObject<HTMLDivElement>;
+  loadMoreRef: React.RefObject<HTMLDivElement | null>;
+  scrollContainerRef: React.RefObject<HTMLDivElement | null>;
 }
 
 export const PostFeed: React.FC<PostFeedProps> = ({

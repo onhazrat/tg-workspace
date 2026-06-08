@@ -1,4 +1,6 @@
-import React from 'react';
+import React from "react"
+import { type ClassValue, clsx } from "clsx"
+import { twMerge } from "tailwind-merge"
 
 export const highlightText = (text: string, highlight: string) => {
   if (!highlight.trim() || !text) {
@@ -16,20 +18,9 @@ export const highlightText = (text: string, highlight: string) => {
   );
 };
 
-export const cn = (...classes: (string | boolean | undefined | Record<string, boolean | undefined>)[]) => {
-  return classes
-    .flatMap(c => {
-      if (typeof c === 'string') return c;
-      if (typeof c === 'object' && c !== null) {
-        return Object.entries(c)
-          .filter(([_, value]) => Boolean(value))
-          .map(([key]) => key);
-      }
-      return undefined;
-    })
-    .filter(Boolean)
-    .join(' ');
-};
+export function cn(...inputs: ClassValue[]) {
+  return twMerge(clsx(inputs))
+}
 
 export const isRTLLanguage = (language: string) => {
   return ["Arabic", "Hebrew", "Persian", "Urdu"].includes(language);

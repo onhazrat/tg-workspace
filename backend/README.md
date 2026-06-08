@@ -31,9 +31,12 @@ Modify or add SQLModel models for data and SQL tables in `./backend/app/models.p
 
 ## VS Code
 
-There are already configurations in place to run the backend through the VS Code debugger, so that you can use breakpoints, pause and explore variables, etc.
+Open the repository root in VS Code. Debug and test settings live in [`/.vscode/`](../.vscode/):
 
-The setup is also already configured so you can run the tests through the VS Code Python tests tab.
+* **Run and Debug** — launch the FastAPI backend (debugpy + uvicorn on port 8000), the frontend in Chrome (port 5173), or the full-stack compound configuration.
+* **Testing** — run `backend/tests` from the Python tests tab (pytest is configured in `/.vscode/settings.json`).
+
+See [development.md](../development.md#vs-code-debugging) for native dev context.
 
 ## Docker Compose Override
 

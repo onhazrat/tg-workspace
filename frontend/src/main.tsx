@@ -1,73 +1,87 @@
-import {StrictMode} from 'react';
-import {createRoot} from 'react-dom/client';
-import App from './App.tsx';
-import './index.css';
-import { SettingsProvider } from './contexts/SettingsContext.tsx';
-import { DataProvider } from './contexts/DataContext.tsx';
-import { UIProvider } from './contexts/UIContext.tsx';
-import { RAGProvider } from './contexts/RAGContext.tsx';
-import { ScraperProvider } from './contexts/ScraperContext.tsx';
-import { ChatProvider } from './contexts/ChatContext.tsx';
-import { AIProvider } from './contexts/AIContext.tsx';
-import { TranslationProvider } from './contexts/TranslationContext.tsx';
-import { TooltipProvider } from './components/ui/tooltip.tsx';
-import { migrateEmbeddingsData, migrateSummaryDates } from './lib/db.ts';
+import {
+  MutationCache,
+  QueryCache,
+  QueryClient,
+  QueryClientProvider,
+} from "@tanstack/react-query"
+import { createRouter, RouterProvider } from "@tanstack/react-router"
+import { StrictMode } from "react"
+import { createRoot } from "react-dom/client"
+
+import { ApiError, OpenAPI } from "@/client"
+import { ThemeProvider } from "@/components/theme-provider"
+import { routeTree } from "@/routeTree.gen"
+import "./index.css"
 
 // Safely override showPicker to prevent SecurityError in cross-origin iframes
-if (typeof HTMLSelectElement !== 'undefined' && HTMLSelectElement.prototype.showPicker) {
-  const originalSelectShowPicker = HTMLSelectElement.prototype.showPicker;
-  HTMLSelectElement.prototype.showPicker = function() {
+if (typeof HTMLSelectElement !== "undefined" && HTMLSelectElement.prototype.showPicker) {
+  const originalSelectShowPicker = HTMLSelectElement.prototype.showPicker
+  HTMLSelectElement.prototype.showPicker = function () {
     try {
-      originalSelectShowPicker.call(this);
-    } catch (e: any) {
-      if (e.name === 'SecurityError') {
-        console.warn('showPicker() blocked by cross-origin iframe policy.');
+      originalSelectShowPicker.call(this)
+    } catch (e: unknown) {
+      if (e instanceof DOMException && e.name === "SecurityError") {
+        console.warn("showPicker() blocked by cross-origin iframe policy.")
       } else {
-        throw e;
+        throw e
       }
     }
-  };
+  }
 }
 
-if (typeof HTMLInputElement !== 'undefined' && HTMLInputElement.prototype.showPicker) {
-  const originalInputShowPicker = HTMLInputElement.prototype.showPicker;
-  HTMLInputElement.prototype.showPicker = function() {
+if (typeof HTMLInputElement !== "undefined" && HTMLInputElement.prototype.showPicker) {
+  const originalInputShowPicker = HTMLInputElement.prototype.showPicker
+  HTMLInputElement.prototype.showPicker = function () {
     try {
-      originalInputShowPicker.call(this);
-    } catch (e: any) {
-      if (e.name === 'SecurityError') {
-        console.warn('showPicker() blocked by cross-origin iframe policy.');
+      originalInputShowPicker.call(this)
+    } catch (e: unknown) {
+      if (e instanceof DOMException && e.name === "SecurityError") {
+        console.warn("showPicker() blocked by cross-origin iframe policy.")
       } else {
-        throw e;
+        throw e
       }
     }
-  };
+  }
 }
 
-// Run one-time migrations
-migrateEmbeddingsData().catch(console.error);
-migrateSummaryDates().catch(console.error);
+OpenAPI.BASE = import.meta.env.VITE_API_URL || ""
+OpenAPI.TOKEN = async () => localStorage.getItem("access_token") || ""
 
-createRoot(document.getElementById('root')!).render(
+const apiKey = import.meta.env.VITE_API_KEY
+if (apiKey) {
+  OpenAPI.HEADERS = { "X-API-Key": apiKey }
+}
+
+const handleApiError = (error: Error) => {
+  if (
+    error instanceof ApiError &&
+    [401, 403].includes(error.status) &&
+    localStorage.getItem("access_token")
+  ) {
+    localStorage.removeItem("access_token")
+    window.location.href = "/login"
+  }
+}
+
+const queryClient = new QueryClient({
+  queryCache: new QueryCache({ onError: handleApiError }),
+  mutationCache: new MutationCache({ onError: handleApiError }),
+})
+
+const router = createRouter({ routeTree })
+
+declare module "@tanstack/react-router" {
+  interface Register {
+    router: typeof router
+  }
+}
+
+createRoot(document.getElementById("root")!).render(
   <StrictMode>
-    <SettingsProvider>
-      <DataProvider>
-        <UIProvider>
-          <RAGProvider>
-            <ScraperProvider>
-              <ChatProvider>
-                <AIProvider>
-                  <TranslationProvider>
-                    <TooltipProvider delay={500} closeDelay={300}>
-                      <App />
-                    </TooltipProvider>
-                  </TranslationProvider>
-                </AIProvider>
-              </ChatProvider>
-            </ScraperProvider>
-          </RAGProvider>
-        </UIProvider>
-      </DataProvider>
-    </SettingsProvider>
+    <ThemeProvider defaultTheme="dark" storageKey="vite-ui-theme">
+      <QueryClientProvider client={queryClient}>
+        <RouterProvider router={router} />
+      </QueryClientProvider>
+    </ThemeProvider>
   </StrictMode>,
-);
+)

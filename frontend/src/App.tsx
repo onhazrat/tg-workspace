@@ -20,8 +20,7 @@ import { HistoryView } from "./components/HistoryView";
 import { LogsView } from "./components/LogsView";
 import { deleteChannel, clearChannelPosts, deleteOldPosts, deleteOldLogs } from "./lib/db";
 import { RelativeTime } from "./components/RelativeTime";
-import { Toaster } from "./components/ui/sonner";
-import { Tooltip, TooltipContent, TooltipTrigger } from "./components/ui/tooltip";
+import { Tooltip, TooltipContent, TooltipTrigger } from "./components/ui/tg-tooltip";
 import { useGuidedTour } from "./hooks/useGuidedTour";
 
 export default function App() {
@@ -398,7 +397,6 @@ export default function App() {
         </div>
       </main>
 
-      <Toaster />
     </div>
   );
 }
