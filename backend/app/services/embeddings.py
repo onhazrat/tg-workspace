@@ -6,6 +6,7 @@ import time
 import uuid
 from datetime import datetime
 from typing import Any
+from uuid import UUID
 
 from sqlalchemy import func
 from sqlmodel import Session, col, select
@@ -34,7 +35,11 @@ def _touch_sync(session: Session, resource: str) -> None:
     session.commit()
 
 
-def _posts_without_embeddings_stmt(limit: int | None = None):
+def _posts_without_embeddings_stmt(
+    limit: int | None = None,
+    *,
+    channel_names: set[str] | None = None,
+):
     stmt = (
         select(Post)
         .outerjoin(
@@ -45,6 +50,8 @@ def _posts_without_embeddings_stmt(limit: int | None = None):
         .where(col(PostEmbedding.id).is_(None))
         .order_by(Post.timestamp.desc())
     )
+    if channel_names:
+        stmt = stmt.where(col(Post.channel_name).in_(channel_names))
     if limit is not None:
         stmt = stmt.limit(limit)
     return stmt
@@ -74,14 +81,24 @@ def get_embedding_status(session: Session) -> dict[str, Any]:
     }
 
 
-async def backfill_embeddings(session: Session, *, limit: int = 100) -> dict[str, Any]:
+async def backfill_embeddings(
+    session: Session,
+    *,
+    limit: int = 100,
+    operator_id: UUID | None = None,
+) -> dict[str, Any]:
     """Embed up to *limit* posts that lack a PostEmbedding row."""
     global _last_backfill_run_ms
 
     if not settings.GEMINI_API_KEY:
         raise ValueError("GEMINI_API_KEY not configured")
 
-    posts = session.exec(_posts_without_embeddings_stmt(limit)).all()
+    from app.services.channels import channel_names_for_operator
+
+    operator_channels = channel_names_for_operator(session, operator_id)
+    posts = session.exec(
+        _posts_without_embeddings_stmt(limit, channel_names=operator_channels or None)
+    ).all()
     if not posts:
         _last_backfill_run_ms = int(time.time() * 1000)
         return {"processed": 0, "upserted": 0, "pending": count_posts_without_embeddings(session)}

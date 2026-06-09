@@ -101,6 +101,23 @@ docker compose -f compose.yml up -d
 
 Use `compose.yml` only in production (not `compose.override.yml`).
 
+### Post-deploy (Mode A, one-time)
+
+After the first deploy (or when upgrading from pre–Sprint 2 data), assign all existing TG rows to the operator superuser so scheduler jobs and sync scope correctly:
+
+```bash
+# from repo root (e.g. /root/code/app)
+uv run python backend/scripts/backfill_user_id.py --dry-run   # preview
+uv run python backend/scripts/backfill_user_id.py             # apply
+
+# or from backend/
+cd /root/code/app/backend
+uv run python scripts/backfill_user_id.py --dry-run   # preview
+uv run python scripts/backfill_user_id.py             # apply
+```
+
+**Single-owner model:** Mode A treats the bootstrap superuser as the sole data owner. Scheduler jobs (auto-sync, retention, summaries) and manual sync without `channelIds` only touch channels/posts linked to that user. Legacy `/api/*` routes return **410 Gone** in production; use `/api/v1/*` only.
+
 ## Continuous deployment (GitHub Actions)
 
 Workflows deploy via self-hosted runners with labels:

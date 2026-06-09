@@ -2,9 +2,10 @@ import logging
 from contextlib import asynccontextmanager
 
 import sentry_sdk
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.routing import APIRoute
 from starlette.middleware.cors import CORSMiddleware
+from starlette.responses import JSONResponse
 
 from sqlmodel import Session
 
@@ -57,5 +58,24 @@ if settings.all_cors_origins:
 
 app.add_middleware(APIKeyMiddleware)
 
+
+@app.middleware("http")
+async def block_legacy_api_in_production(request: Request, call_next):
+    path = request.url.path
+    if (
+        settings.ENVIRONMENT == "production"
+        and path.startswith("/api/")
+        and not path.startswith(settings.API_V1_STR)
+    ):
+        return JSONResponse(
+            status_code=410,
+            content={"detail": "Legacy /api/* removed; use /api/v1/*"},
+        )
+    return await call_next(request)
+
+
 app.include_router(api_router, prefix=settings.API_V1_STR)
-app.include_router(legacy.router)
+if settings.ENVIRONMENT != "production":
+    app.include_router(legacy.router)
+else:
+    logger.info("Legacy /api/* router disabled in production (use /api/v1/*)")

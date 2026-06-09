@@ -132,6 +132,18 @@ Log in at `/login` with those credentials, or sign up a new account when open re
 
 If signup is disabled (`USERS_OPEN_REGISTRATION=false`), use the bootstrap superuser or ask an admin to create your account.
 
+## Sprint 3 / UI
+
+Frontend hardening from Sprint 3 (full workstream log: [REMEDIATION-PLAN.md Appendix C](docs/migration/REMEDIATION-PLAN.md#appendix-c-sprint-3-implementation-log-2026-06-09)).
+
+### Summarizer tabs (URL)
+
+The active summarizer tab comes from the `tab` search param on `/summarizer`, not from `localStorage`. Valid values: `summary`, `posts`, `channels`, `history`, `chat`, `settings` (default when missing or invalid). Legacy `?tab=network` maps to `settings`. Tab changes update the URL via `useSummarizerTab` (replace navigation). Example: `http://localhost:5173/summarizer?tab=settings`. Successful login redirects to `/summarizer?tab=summary`.
+
+### Theme
+
+Light / dark / system theme is owned by `theme-provider` in `main.tsx` (`frontend/src/components/theme-provider.tsx`). Preference persists in `localStorage` under `vite-ui-theme`. Do not reintroduce a separate theme toggle in `SettingsContext`.
+
 ## Pre-commit
 
 ```bash
@@ -153,6 +165,19 @@ Remediation chose **Mode A** on 2026-06-09 ([DECISIONS.md](docs/migration/DECISI
 - All AI, RAG, network, telegram, and jobs routes require authentication.
 - Raw bot tokens in request bodies are rejected outside `local`; use stored `credentialId`.
 - Single superuser owns all Postgres data; per-user row scoping is deferred to Mode B.
+- After importing legacy IndexedDB data, backfill `user_id` so scheduler/sync jobs see your channels (script loads the repo-root `.env`):
+
+  ```bash
+  # from repo root
+  uv run python backend/scripts/backfill_user_id.py --dry-run
+  uv run python backend/scripts/backfill_user_id.py
+
+  # or from backend/
+  cd backend && uv run python scripts/backfill_user_id.py --dry-run
+  cd backend && uv run python scripts/backfill_user_id.py
+  ```
+
+  If sync returns `No channels to sync` despite visible channels (stale `user_id` from old test accounts), add `--reassign-all` (always `--dry-run` first).
 
 ## Migration
 

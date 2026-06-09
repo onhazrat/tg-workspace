@@ -5,15 +5,18 @@ from typing import Any
 import numpy as np
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
-from sqlmodel import select
+from sqlmodel import col, select
 
 from app.ai.registry import get_provider
 from app.api.deps import CurrentUser, SessionDep
 from app.core.config import settings
 from app.models_tg import Post, PostEmbedding
 from app.services.embeddings import backfill_embeddings, get_embedding_status
+from app.services.channels import channel_names_for_operator
 
 router = APIRouter(prefix="/rag", tags=["rag"])
+
+DEFAULT_SCAN_LIMIT = 5000
 
 
 class RagSearchRequest(BaseModel):
@@ -22,6 +25,7 @@ class RagSearchRequest(BaseModel):
     start_date: int | None = Field(None, alias="startDate")
     end_date: int | None = Field(None, alias="endDate")
     limit: int = 20
+    scan_limit: int = Field(DEFAULT_SCAN_LIMIT, alias="scanLimit")
 
     model_config = {"populate_by_name": True}
 
@@ -51,6 +55,17 @@ def _post_to_camel(post: Post) -> dict[str, Any]:
     }
 
 
+def _effective_operator_channels(
+    session: SessionDep,
+    current_user: CurrentUser,
+    requested: list[str] | None,
+) -> set[str]:
+    operator_channels = channel_names_for_operator(session, current_user.id)
+    if requested:
+        return operator_channels.intersection(requested)
+    return operator_channels
+
+
 @router.get("/status")
 def rag_status(session: SessionDep, _current_user: CurrentUser) -> dict[str, Any]:
     return get_embedding_status(session)
@@ -60,12 +75,12 @@ def rag_status(session: SessionDep, _current_user: CurrentUser) -> dict[str, Any
 async def rag_embed(
     body: RagEmbedRequest,
     session: SessionDep,
-    _current_user: CurrentUser,
+    current_user: CurrentUser,
 ) -> dict[str, Any]:
     if not settings.GEMINI_API_KEY:
         raise HTTPException(status_code=503, detail="GEMINI_API_KEY not configured")
     try:
-        return await backfill_embeddings(session, limit=body.limit)
+        return await backfill_embeddings(session, limit=body.limit, operator_id=current_user.id)
     except ValueError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
 
@@ -74,7 +89,7 @@ async def rag_embed(
 async def rag_search(
     body: RagSearchRequest,
     session: SessionDep,
-    _current_user: CurrentUser,
+    current_user: CurrentUser,
 ) -> dict[str, Any]:
     if not settings.GEMINI_API_KEY:
         raise HTTPException(status_code=503, detail="GEMINI_API_KEY not configured")
@@ -84,12 +99,20 @@ async def rag_search(
     except ValueError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
 
-    stmt = select(PostEmbedding)
+    allowed_channels = _effective_operator_channels(session, current_user, body.channels)
+    if not allowed_channels:
+        return {"results": []}
+
+    scan_cap = min(max(body.scan_limit, 1), DEFAULT_SCAN_LIMIT)
+    stmt = (
+        select(PostEmbedding)
+        .where(col(PostEmbedding.channel_name).in_(allowed_channels))
+        .limit(scan_cap)
+    )
     embeddings = session.exec(stmt).all()
+
     scored: list[tuple[float, PostEmbedding, Post | None]] = []
     for emb in embeddings:
-        if body.channels and emb.channel_name not in body.channels:
-            continue
         post = session.exec(
             select(Post).where(
                 Post.channel_name == emb.channel_name,

@@ -5,12 +5,12 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
-from sqlmodel import Session, select
+from sqlmodel import Session
 
 from app.core.db import engine
 from app.jobs.settings import load_sync_settings, save_setting
-from app.models_tg import Channel
 from app.services.network_settings import get_network_setting_row
+from app.services.operator import get_operator_user_id, select_operator_channels
 from app.services.scraper_jobs import create_job, has_active_sync_job
 from app.services.sync_orchestrator import run_sync_job
 
@@ -46,7 +46,9 @@ async def run_auto_sync() -> dict:
         interval_min = int(sync_cfg.get("autoSyncInterval") or 60)
         interval_ms = interval_min * 60 * 1000
 
-        channels = session.exec(select(Channel).where(Channel.is_frozen == False)).all()  # noqa: E712
+        net_row = get_network_setting_row(session)
+        owner_id = (net_row.user_id if net_row else None) or get_operator_user_id(session)
+        channels = select_operator_channels(session, operator_id=owner_id, unfrozen_only=True)
         stale = [
             ch
             for ch in channels
@@ -56,8 +58,6 @@ async def run_auto_sync() -> dict:
             return {"skipped": True, "reason": "no_stale_channels", "checked": len(channels)}
 
         entries = [(ch.id, ch.name) for ch in stale]
-        net_row = get_network_setting_row(session)
-        owner_id = net_row.user_id if net_row else None
         job = await create_job(
             channel_entries=entries,
             source=CHECK_SOURCE,

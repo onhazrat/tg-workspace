@@ -9,6 +9,7 @@ import { StrictMode } from "react"
 import { createRoot } from "react-dom/client"
 
 import { ApiError, OpenAPI } from "@/client"
+import { clearStaleSession, isAuthFailure } from "@/api/base"
 import { ThemeProvider } from "@/components/theme-provider"
 import { routeTree } from "@/routeTree.gen"
 import "./index.css"
@@ -53,13 +54,10 @@ if (apiKey) {
 }
 
 const handleApiError = (error: Error) => {
-  if (
-    error instanceof ApiError &&
-    [401, 403].includes(error.status) &&
-    localStorage.getItem("access_token")
-  ) {
-    localStorage.removeItem("access_token")
-    window.location.href = "/login"
+  const status = error instanceof ApiError ? error.status : 401
+  const detail = error instanceof Error ? error.message : String(error)
+  if (localStorage.getItem("access_token") && isAuthFailure(status, detail)) {
+    clearStaleSession()
   }
 }
 

@@ -38,6 +38,7 @@ export const Route = createFileRoute("/login")({
     if (isLoggedIn()) {
       throw redirect({
         to: "/summarizer",
+        search: { tab: "summary" },
       })
     }
   },

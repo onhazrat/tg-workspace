@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useCallback, useEffect, use
 import { Channel, Post } from "../types";
 import { getPostsByDateRange, upsertChannel, getChannelStats } from "../lib/repository";
 import { useApiStatus } from "../hooks/useApiStatus";
+import { useDebouncedValue } from "../hooks/useDebouncedValue";
 import { useSyncQueue } from "../hooks/useSyncQueue";
 import { useData } from "./DataContext";
 import { useUI } from "./UIContext";
@@ -9,6 +10,7 @@ import { useSettings } from "./SettingsContext";
 import { toast } from "sonner";
 import { useRAG } from "./RAGContext";
 import { detectLanguageFromPosts } from "../lib/language";
+import { buildActiveProxies, isNetworkRoutingActive } from "../lib/syncSettings";
 import { api } from "@/api";
 
 const POLL_INTERVAL_MS = 1000;
@@ -83,6 +85,9 @@ export const ScraperProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const scrapingLocksRef = React.useRef<Set<string>>(new Set());
   const activeJobRef = useRef<string | null>(null);
 
+  const debouncedPostSearch = useDebouncedValue(postSearch, 300);
+  const debouncedSemanticSearchQuery = useDebouncedValue(semanticSearchQuery, 300);
+
   // Background language detection for existing channels
   useEffect(() => {
     const detectMissingLanguages = async () => {
@@ -112,7 +117,10 @@ export const ScraperProvider: React.FC<{ children: React.ReactNode }> = ({ child
     return () => clearTimeout(timer);
   }, [channels.length]);
 
-  const handleFilterPosts = useCallback(async () => {
+  const handleFilterPosts = useCallback(async (
+    searchText = debouncedPostSearch,
+    semanticQuery = debouncedSemanticSearchQuery,
+  ) => {
     setIsFiltering(true);
     try {
       if (embeddingsEnabled && relatedPostSearch) {
@@ -138,9 +146,9 @@ export const ScraperProvider: React.FC<{ children: React.ReactNode }> = ({ child
         return;
       }
 
-      if (embeddingsEnabled && semanticSearchQuery.trim()) {
+      if (embeddingsEnabled && semanticQuery.trim()) {
         try {
-          let results = await searchSimilarPosts(semanticSearchQuery, 50, {
+          let results = await searchSimilarPosts(semanticQuery, 50, {
             startDate: semanticSearchRespectsTimeRange ? startDate : undefined,
             endDate: semanticSearchRespectsTimeRange ? endDate : undefined,
             channels:
@@ -170,8 +178,8 @@ export const ScraperProvider: React.FC<{ children: React.ReactNode }> = ({ child
       const selectedNames = Array.from(selectedChannels);
       let posts = await getPostsByDateRange(selectedNames, startDate, endDate);
 
-      if (postSearch.trim()) {
-        const query = postSearch.toLowerCase();
+      if (searchText.trim()) {
+        const query = searchText.toLowerCase();
         posts = posts.filter(post =>
           post.text.toLowerCase().includes(query) ||
           post.channelName.toLowerCase().includes(query)
@@ -191,7 +199,7 @@ export const ScraperProvider: React.FC<{ children: React.ReactNode }> = ({ child
     } finally {
       setIsFiltering(false);
     }
-  }, [startDate, endDate, selectedChannels, postSearch, semanticSearchQuery, relatedPostSearch, embeddingsEnabled, semanticSearchRespectsTimeRange, semanticSearchRespectsChannels, searchSimilarPosts, forwardedFilter, channels]);
+  }, [startDate, endDate, selectedChannels, debouncedPostSearch, debouncedSemanticSearchQuery, relatedPostSearch, embeddingsEnabled, semanticSearchRespectsTimeRange, semanticSearchRespectsChannels, searchSimilarPosts, forwardedFilter, channels]);
 
   const pollSyncJob = useCallback(async (jobId: string, channelNames: string[]) => {
     const started = Date.now();
@@ -236,7 +244,16 @@ export const ScraperProvider: React.FC<{ children: React.ReactNode }> = ({ child
     });
 
     try {
-      const { jobId } = await api.startSyncJob({ channelIds, source });
+      let jobId: string;
+      try {
+        ({ jobId } = await api.startSyncJob({ channelIds, source }));
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        if (message.includes("No channels to sync")) {
+          toast.error("No channels available to sync. Try re-adding the channel or run the user_id backfill script.");
+        }
+        throw err;
+      }
       activeJobRef.current = jobId;
       const result = await pollSyncJob(jobId, channelNames);
 
@@ -399,26 +416,18 @@ export const ScraperProvider: React.FC<{ children: React.ReactNode }> = ({ child
     let isUnavailableOnWebView = false;
     const effectiveStartTime = getEffectiveGlobalStartTime();
 
-    const proxies = defaultProxyUrls.split(/[\n,]+/).map(p => p.trim()).filter(p => p);
-    const torPool = torProxyUrls.split(/[\n,]+/).map(p => p.trim()).filter(p => p);
-
-    let activeProxies: string[] = [];
-    if (proxyEnabled) {
-      activeProxies.push(...proxies);
-    }
-
-    if (torEnabled) {
-      if (torMode === "auto") {
-        activeProxies.push("socks5h://127.0.0.1:9050");
-      } else {
-        activeProxies.push(...torPool);
-      }
-    }
+    const activeProxies = buildActiveProxies({
+      proxyEnabled,
+      defaultProxyUrls,
+      torEnabled,
+      torMode,
+      torProxyUrls,
+    });
 
     try {
       const data = await api.channelInfo({
         channelName: cleanName,
-        proxyEnabled: proxyEnabled || torEnabled,
+        proxyEnabled: isNetworkRoutingActive({ proxyEnabled, defaultProxyUrls, torEnabled, torMode, torProxyUrls }),
         proxies: activeProxies,
         torAutoRotate,
         torRotationThreshold,

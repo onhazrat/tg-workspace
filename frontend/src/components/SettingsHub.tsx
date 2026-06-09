@@ -1,13 +1,45 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { SETTINGS_TABS } from "../constants";
 import { Settings, Cpu, Globe, Send, Database, List, Activity, Layout, RefreshCw } from "lucide-react";
 import { SettingsView } from "./SettingsView";
 import { BotManagement } from "./BotManagement";
 import { DatabaseManagement } from "./DatabaseManagement";
 import { DiagnosticsView } from "./DiagnosticsView";
+import { useData } from "../contexts/DataContext";
 
 export const SettingsHub: React.FC = () => {
   const [activeSettingsTab, setActiveSettingsTab] = useState<string>("appearance");
+  const {
+    loadDBStats,
+    loadLogs,
+    loadSyncLogs,
+    loadLLMLogs,
+    loadEmbeddingLogs,
+    loadNetworkLogs,
+  } = useData();
+
+  useEffect(() => {
+    if (activeSettingsTab === "db") {
+      void loadDBStats();
+    }
+    if (activeSettingsTab === "diagnostics") {
+      void Promise.all([
+        loadLogs(),
+        loadSyncLogs(),
+        loadLLMLogs(),
+        loadEmbeddingLogs(),
+        loadNetworkLogs(),
+      ]);
+    }
+  }, [
+    activeSettingsTab,
+    loadDBStats,
+    loadLogs,
+    loadSyncLogs,
+    loadLLMLogs,
+    loadEmbeddingLogs,
+    loadNetworkLogs,
+  ]);
 
   const renderContent = () => {
     switch (activeSettingsTab) {

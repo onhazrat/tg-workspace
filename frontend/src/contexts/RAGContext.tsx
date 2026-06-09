@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
+import { toast } from 'sonner';
 import { Post } from '../types';
 import { useSettings } from './SettingsContext';
 import { searchSimilarPostsFromQuery } from '../services/rag';
@@ -68,7 +69,8 @@ export const RAGProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       );
     } catch (error) {
       console.error('[RAGProvider] Search failed:', error);
-      return [];
+      const message = error instanceof Error ? error.message : "Semantic search failed";
+      throw new Error(message);
     }
   }, [embeddingsEnabled]);
 
@@ -79,6 +81,8 @@ export const RAGProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       await refreshStatus();
     } catch (error) {
       console.error('[RAGProvider] Server embed backfill failed:', error);
+      const message = error instanceof Error ? error.message : "Embedding backfill failed";
+      toast.error(message);
     }
   }, [embeddingsEnabled, refreshStatus]);
 

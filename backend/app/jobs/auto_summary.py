@@ -8,10 +8,12 @@ import time
 import uuid
 from datetime import datetime
 
-from sqlmodel import Session, col, select
+from sqlmodel import Session, col, or_, select
 
 from app.ai.registry import default_model, get_provider
-from app.api.routes.data import _touch_sync, _upsert_llm_log, _upsert_publish_log
+from app.services.logs import upsert_llm_log, upsert_publish_log
+from app.services.operator import get_operator_user_id, select_operator_channels
+from app.services.sync_meta import touch_sync
 from app.core.config import settings
 from app.core.db import engine
 from app.models_tg import Channel, ChatDestination, Post, Summary
@@ -89,22 +91,24 @@ async def _sync_channels_for_summary(
     session: Session,
     channel_names: list[str],
     end_ts: int,
+    operator_id,
 ) -> None:
     if has_active_sync_job():
         return
+    operator_channels = {ch.name: ch for ch in select_operator_channels(session, operator_id=operator_id)}
     stale = []
     for name in channel_names:
-        ch = session.exec(select(Channel).where(col(Channel.name) == name)).first()
+        ch = operator_channels.get(name)
         if ch and not ch.is_frozen and (ch.last_updated or 0) < end_ts:
             stale.append(ch)
     if not stale:
         return
     job = await create_job(
         channel_entries=[(ch.id, ch.name) for ch in stale],
-        source=f"Auto-Regenerate Summary (scheduler)",
-        user_id=None,
+        source="Auto-Regenerate Summary (scheduler)",
+        user_id=str(operator_id) if operator_id else None,
     )
-    await run_sync_job(job, None)
+    await run_sync_job(job, operator_id)
 
 
 async def _regenerate_one(session: Session, summary: Summary) -> str | None:
@@ -113,7 +117,8 @@ async def _regenerate_one(session: Session, summary: Summary) -> str | None:
     new_start = summary.end_date
     new_end = summary.end_date + duration_ms
 
-    await _sync_channels_for_summary(session, summary.channels or [], new_end)
+    operator_id = summary.user_id or get_operator_user_id(session)
+    await _sync_channels_for_summary(session, summary.channels or [], new_end, operator_id)
 
     posts = session.exec(
         select(Post)
@@ -150,7 +155,7 @@ async def _regenerate_one(session: Session, summary: Summary) -> str | None:
         result = await provider.complete(prompt, model=model, temperature=0.7)
         duration = time.perf_counter() - start
         full_text = result.text
-        _upsert_llm_log(
+        upsert_llm_log(
             session,
             {
                 "id": str(uuid.uuid4()),
@@ -205,7 +210,7 @@ async def _regenerate_one(session: Session, summary: Summary) -> str | None:
     summary.updated_at = datetime.utcnow()
     session.add(summary)
     session.commit()
-    _touch_sync(session, "summaries")
+    touch_sync(session, "summaries")
 
     if extra.get("autoPublish") and extra.get("publishBotId") and extra.get("publishChatId") and posts:
         await _auto_publish(session, new_summary, new_extra, full_text)
@@ -244,7 +249,7 @@ async def _auto_publish(
             tor_rotation_threshold=int(network.get("torRotationThreshold") or 10),
         )
         text_sent = f"{metadata}\n\n{full_text}" if metadata else full_text
-        _upsert_publish_log(
+        upsert_publish_log(
             session,
             {
                 "id": str(uuid.uuid4()),
@@ -261,10 +266,10 @@ async def _auto_publish(
             summary.user_id,
         )
         session.commit()
-        _touch_sync(session, "publish_logs")
+        touch_sync(session, "publish_logs")
     except Exception as exc:  # noqa: BLE001
         logger.exception("Auto-publish failed for summary %s", summary.id)
-        _upsert_publish_log(
+        upsert_publish_log(
             session,
             {
                 "id": str(uuid.uuid4()),
@@ -281,7 +286,7 @@ async def _auto_publish(
             summary.user_id,
         )
         session.commit()
-        _touch_sync(session, "publish_logs")
+        touch_sync(session, "publish_logs")
 
 
 async def run_auto_summary() -> dict:
@@ -290,7 +295,13 @@ async def run_auto_summary() -> dict:
     errors: list[str] = []
 
     with Session(engine) as session:
-        summaries = session.exec(select(Summary)).all()
+        operator_id = get_operator_user_id(session)
+        stmt = select(Summary)
+        if operator_id is not None:
+            stmt = stmt.where(
+                or_(Summary.user_id == operator_id, col(Summary.user_id).is_(None))
+            )
+        summaries = session.exec(stmt).all()
         due = [s for s in summaries if _is_due(s, now) and s.id not in _regenerating]
 
     for summary in due:
@@ -314,7 +325,7 @@ async def run_auto_summary() -> dict:
                         row.extra = {**_summary_extra(row), "autoRegenerate": False}
                         session.add(row)
                         session.commit()
-                        _touch_sync(session, "summaries")
+                        touch_sync(session, "summaries")
         finally:
             _regenerating.discard(summary.id)
 

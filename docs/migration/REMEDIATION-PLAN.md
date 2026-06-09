@@ -650,4 +650,27 @@ Remediation is **complete** when all items below pass.
 
 ---
 
-*Document version: 1.0 — 2026-06-09*
+---
+
+## Appendix B: Sprint 2 implementation log (2026-06-09)
+
+| Workstream | Completed | Deferred |
+|------------|-----------|----------|
+| **WS-E** | Settings hydration (sync/retention/translation); `GET /data/stats`; `DELETE /data/logs`; repository API-first stats/log deletes; write-fallback toast for all resources | `jobs`/`ai` AppSetting hydration; `embeddingsEnabled` still UI-localStorage; frontend SettingsContext unit test |
+| **WS-B (Mode A)** | `backfill_user_id.py`; scheduler scoping (auto_sync, retention, auto_summary, translation_batch); jobs sync channel resolution; AppSetting `user_id` on save | `deployment.md` single-owner doc (Sprint 1 carryover); run backfill in prod manually |
+| **WS-D** | `sync_meta`, `channels`, `posts`, `logs`, `stats`, `serialization` services; jobs/services no longer import `app.api.routes` | Full `data.py` thin-handler refactor; `summaries`/`settings_store` modules; batch channel stats endpoint |
+| **WS-C** | Legacy DI fixed (Sprint 1); production 410 middleware + conditional router mount; `test_legacy.py` updated | Full legacy router removal in all environments (dev still serves deprecated routes) |
+| **WS-H** | `test_stats_logs.py`, `test_tenancy.py`, settings round-trip test; 123 backend tests green; vitest repository/telegram pass | `npm test` (Playwright/bunx) unavailable in CI shell; frontend SettingsContext test |
+
+*Document version: 1.2 — 2026-06-09*
+
+---
+
+## Appendix C: Sprint 3 implementation log (2026-06-09)
+
+| Workstream | Completed | Deferred |
+|------------|-----------|----------|
+| **WS-F** | React Query hooks (`useChannels`, `useSummaries`, `useLogs`); DataContext migrated to queries; URL tab search params (`/summarizer?tab=`); debounced `handleFilterPosts`; `syncSettings.ts` proxy helper (ScraperContext, AIContext); theme via `theme-provider`; lazy log/stats prefetch; dead App.tsx imports removed; auth handler shared via `@/api/base` | Full provider flattening (≤4 providers); deprecate `@/client` for admin routes; migrate ChannelGrid/SummaryView/BotManagement to `syncSettings`; remove `constants.ts` SYSTEM_PROMPT/CHAT_PROMPT (backend prompts authoritative); SettingsHub settings sub-tab URL params |
+| **WS-G** | RAG search scoped to operator channels + SQL filter before cosine; `scanLimit` cap (5000); embedding backfill scoped to operator; RAGContext surfaces search errors; batch channel stats via `GET /channels?includeStats=true` | pgvector migration; embedding status counts still global (not operator-scoped) |
+| **WS-D** | `compute_channel_stats_batch`; `includeStats` on list channels | Remaining `data.py` thin-handler refactor; `summaries`/`settings_store` service modules |
+| **WS-H** | `test_rag.py` operator-scoping test; `useChannels.test.ts`, `syncSettings.test.ts`; scheduler/tenancy test isolation fixes; **124** backend tests green; **9** vitest tests green | Playwright `npm test` in CI; React Query integration test with MSW |

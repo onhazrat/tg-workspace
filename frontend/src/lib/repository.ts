@@ -100,19 +100,44 @@ async function listWithStaleCheck<T>(
 // --- channels ---
 
 export async function listChannels(): Promise<Channel[]> {
+  const { channels } = await listChannelsWithStats();
+  return channels;
+}
+
+/** Single round-trip for channels + per-channel stats (avoids N+1). */
+export async function listChannelsWithStats(): Promise<{
+  channels: Channel[];
+  stats: Record<string, ChannelStats>;
+}> {
+  const persist = async (rows: (Channel & { stats?: ChannelStats })[]) => {
+    const channels: Channel[] = [];
+    const stats: Record<string, ChannelStats> = {};
+    for (const row of rows) {
+      const { stats: channelStats, ...channel } = row;
+      channels.push(channel);
+      if (channelStats) stats[channel.name] = channelStats;
+      await cache.saveChannel(channel);
+    }
+    return { channels, stats };
+  };
+
   if (await isResourceStale("channels")) {
     try {
-      const remote = await api.listChannels();
-      for (const ch of remote) {
-        await cache.saveChannel(ch);
-      }
+      const remote = await api.listChannels({ includeStats: true });
+      const result = await persist(remote);
       markResourceSynced("channels");
-      return remote;
+      return result;
     } catch {
       /* fall through to cache */
     }
   }
-  return cache.getChannels();
+  const cached = await cache.getChannels();
+  const stats: Record<string, ChannelStats> = {};
+  for (const ch of cached) {
+    const s = await cache.getChannelStats(ch.name);
+    if (s) stats[ch.name] = s;
+  }
+  return { channels: cached, stats };
 }
 
 export async function upsertChannel(channel: Channel): Promise<Channel> {
@@ -466,55 +491,116 @@ export async function saveNetworkLog(log: NetworkLog): Promise<void> {
   );
 }
 
+async function deleteLogOnServer(
+  type: "publish" | "sync" | "llm" | "embedding" | "network",
+  opts: { logId?: string; clearAll?: boolean; olderThanDays?: number }
+): Promise<void> {
+  try {
+    await api.deleteLogs({ type, ...opts });
+    await refreshSyncMeta();
+  } catch (error) {
+    onWriteFallback?.(`${type}_logs`, error);
+    throw error;
+  }
+}
+
 export async function deletePublishLog(id: string): Promise<void> {
+  await deleteLogOnServer("publish", { logId: id });
   await cache.deletePublishLog(id);
+  markResourceSynced("publish_logs");
 }
 
 export async function clearPublishLogs(): Promise<void> {
+  await deleteLogOnServer("publish", { clearAll: true });
   await cache.clearPublishLogs();
+  markResourceSynced("publish_logs");
 }
 
 export async function deleteSyncLog(id: string): Promise<void> {
+  await deleteLogOnServer("sync", { logId: id });
   await cache.deleteSyncLog(id);
+  markResourceSynced("sync_logs");
 }
 
 export async function clearSyncLogs(): Promise<void> {
+  await deleteLogOnServer("sync", { clearAll: true });
   await cache.clearSyncLogs();
+  markResourceSynced("sync_logs");
 }
 
 export async function deleteLLMLog(id: string): Promise<void> {
+  await deleteLogOnServer("llm", { logId: id });
   await cache.deleteLLMLog(id);
+  markResourceSynced("llm_logs");
 }
 
 export async function clearLLMLogs(): Promise<void> {
+  await deleteLogOnServer("llm", { clearAll: true });
   await cache.clearLLMLogs();
+  markResourceSynced("llm_logs");
 }
 
 export async function deleteEmbeddingLog(id: string): Promise<void> {
+  await deleteLogOnServer("embedding", { logId: id });
   await cache.deleteEmbeddingLog(id);
+  markResourceSynced("embedding_logs");
 }
 
 export async function clearEmbeddingLogs(): Promise<void> {
+  await deleteLogOnServer("embedding", { clearAll: true });
   await cache.clearEmbeddingLogs();
+  markResourceSynced("embedding_logs");
 }
 
 export async function deleteNetworkLog(id: string): Promise<void> {
+  await deleteLogOnServer("network", { logId: id });
   await cache.deleteNetworkLog(id);
+  markResourceSynced("network_logs");
 }
 
 export async function clearNetworkLogs(): Promise<void> {
+  await deleteLogOnServer("network", { clearAll: true });
   await cache.clearNetworkLogs();
+  markResourceSynced("network_logs");
 }
 
 export async function deleteOldLogs(days: number): Promise<number> {
-  return cache.deleteOldLogs(days);
+  try {
+    const result = await api.deleteLogs({ olderThanDays: days });
+    await refreshSyncMeta();
+    const total = result.total ?? 0;
+    await cache.deleteOldLogs(days);
+    return total;
+  } catch (error) {
+    onWriteFallback?.("logs", error);
+    return cache.deleteOldLogs(days);
+  }
 }
 
 // --- stats & legacy bot cleanup ---
 
 export async function getDBStats(): Promise<DBStats> {
-  const stats = await cache.getDBStats();
-  return stats as DBStats;
+  try {
+    const remote = await api.getStats();
+    const local = await cache.getDBStats();
+    return {
+      ...local,
+      postCount: remote.postCount ?? local.postCount,
+      channelCount: remote.channelCount ?? local.channelCount,
+      summaryCount: remote.summaryCount ?? local.summaryCount,
+      embeddedPostCount: remote.embeddedPostCount ?? local.embeddedPostCount,
+      botCount: remote.botCount,
+      destinationCount: remote.destinationCount,
+      publishLogCount: remote.publishLogCount,
+      syncLogCount: remote.syncLogCount,
+      llmLogCount: remote.llmLogCount,
+      embeddingLogCount: remote.embeddingLogCount ?? local.embeddingLogCount,
+      networkLogCount: remote.networkLogCount ?? local.networkLogCount,
+    } as DBStats;
+  } catch {
+    const stats = await cache.getDBStats();
+    return stats as DBStats;
+  }
 }
 
 export async function cleanupLegacyBots(): Promise<void> {

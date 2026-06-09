@@ -1,12 +1,10 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Channel, BotCredential, ChatDestination, ChannelStats, Summary, DBStats, PublishLog, SyncLog, LLMLog, EmbeddingLog, NetworkLog } from "../types";
-import { normalizeChannel } from "../lib/channelNormalize";
 import {
-  listChannels,
   listBotCredentials,
   listChatDestinations,
   getDBStats,
-  getChannelStats,
   listSummaries,
   listPublishLogs,
   listSyncLogs,
@@ -15,6 +13,10 @@ import {
   listNetworkLogs,
   cleanupLegacyBots,
 } from "../lib/repository";
+import { useChannelsQuery, useInvalidateChannels } from "../hooks/useChannels";
+import { useSummariesQuery, useInvalidateSummaries } from "../hooks/useSummaries";
+import { useLogsQuery } from "../hooks/useLogs";
+import { queryKeys } from "../hooks/queryKeys";
 
 interface DataContextType {
   channels: Channel[];
@@ -69,12 +71,39 @@ interface DataContextType {
 const DataContext = createContext<DataContextType | undefined>(undefined);
 
 export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
+  const queryClient = useQueryClient();
+  const invalidateChannels = useInvalidateChannels();
+  const invalidateSummaries = useInvalidateSummaries();
+
+  const channelsQuery = useChannelsQuery();
+  const summariesQuery = useSummariesQuery();
+
+  const botsQuery = useQuery({
+    queryKey: queryKeys.bots,
+    queryFn: async () => {
+      await cleanupLegacyBots();
+      const [credentials, destinations] = await Promise.all([
+        listBotCredentials(),
+        listChatDestinations(),
+      ]);
+      return { credentials, destinations };
+    },
+    staleTime: 30_000,
+  });
+
   const [channels, setChannels] = useState<Channel[]>([]);
+  const [channelStats, setChannelStats] = useState<Record<string, ChannelStats>>({});
   const [botCredentials, setBotCredentials] = useState<BotCredential[]>([]);
   const [chatDestinations, setChatDestinations] = useState<ChatDestination[]>([]);
-  const [channelStats, setChannelStats] = useState<Record<string, ChannelStats>>({});
   const [summariesHistory, setSummariesHistory] = useState<Summary[]>([]);
   const [dbStats, setDbStats] = useState<DBStats | null>(null);
+
+  const publishLogsQuery = useLogsQuery("publish", false);
+  const syncLogsQuery = useLogsQuery("sync", false);
+  const llmLogsQuery = useLogsQuery("llm", false);
+  const embeddingLogsQuery = useLogsQuery("embedding", false);
+  const networkLogsQuery = useLogsQuery("network", false);
+
   const [publishLogs, setPublishLogs] = useState<PublishLog[]>([]);
   const [syncLogs, setSyncLogs] = useState<SyncLog[]>([]);
   const [llmLogs, setLlmLogs] = useState<LLMLog[]>([]);
@@ -113,92 +142,127 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     localStorage.setItem("prevChannelNames", JSON.stringify(Array.from(prevChannelNames)));
   }, [prevChannelNames]);
 
-  const loadChannels = useCallback(async () => {
-    const storedChannels = await listChannels();
-    const normalizedChannels = storedChannels.map(normalizeChannel);
+  useEffect(() => {
+    if (!channelsQuery.data) return;
+    const normalizedChannels = channelsQuery.data.channels;
     setChannels(normalizedChannels);
-    
-    const names = normalizedChannels.map(c => c.name);
-    
-    setPrevChannelNames(prevNames => {
-      setSelectedChannels(currentSelected => {
+    setChannelStats(channelsQuery.data.channelStats);
+
+    const names = normalizedChannels.map((c) => c.name);
+    setPrevChannelNames((prevNames) => {
+      setSelectedChannels((currentSelected) => {
         const nextSelected = new Set(currentSelected);
-        names.forEach(name => {
-          if (!prevNames.has(name)) {
-            nextSelected.add(name);
-          }
+        names.forEach((name) => {
+          if (!prevNames.has(name)) nextSelected.add(name);
         });
         const namesSet = new Set(names);
-        Array.from(nextSelected).forEach(selectedName => {
-          if (!namesSet.has(selectedName)) {
-            nextSelected.delete(selectedName);
-          }
+        Array.from(nextSelected).forEach((selectedName) => {
+          if (!namesSet.has(selectedName)) nextSelected.delete(selectedName);
         });
         return nextSelected;
       });
-      
       return new Set(names);
     });
-    
-    const stats: Record<string, ChannelStats> = {};
-    for (const channel of normalizedChannels) {
-      const s = await getChannelStats(channel.id, channel.name);
-      if (s) stats[channel.name] = s;
+  }, [channelsQuery.data]);
+
+  useEffect(() => {
+    if (botsQuery.data) {
+      setBotCredentials(botsQuery.data.credentials);
+      setChatDestinations(botsQuery.data.destinations);
     }
-    setChannelStats(stats);
-  }, []);
+  }, [botsQuery.data]);
+
+  useEffect(() => {
+    if (summariesQuery.data) setSummariesHistory(summariesQuery.data);
+  }, [summariesQuery.data]);
+
+  useEffect(() => {
+    if (publishLogsQuery.data) setPublishLogs(publishLogsQuery.data as PublishLog[]);
+  }, [publishLogsQuery.data]);
+
+  useEffect(() => {
+    if (syncLogsQuery.data) setSyncLogs(syncLogsQuery.data as SyncLog[]);
+  }, [syncLogsQuery.data]);
+
+  useEffect(() => {
+    if (llmLogsQuery.data) setLlmLogs(llmLogsQuery.data as LLMLog[]);
+  }, [llmLogsQuery.data]);
+
+  useEffect(() => {
+    if (embeddingLogsQuery.data) setEmbeddingLogs(embeddingLogsQuery.data as EmbeddingLog[]);
+  }, [embeddingLogsQuery.data]);
+
+  useEffect(() => {
+    if (networkLogsQuery.data) setNetworkLogs(networkLogsQuery.data as NetworkLog[]);
+  }, [networkLogsQuery.data]);
+
+  const loadChannels = useCallback(async () => {
+    await invalidateChannels();
+  }, [invalidateChannels]);
 
   const loadBots = useCallback(async () => {
-    const credentials = await listBotCredentials();
-    const destinations = await listChatDestinations();
-    setBotCredentials(credentials);
-    setChatDestinations(destinations);
-    
-    await cleanupLegacyBots();
-    setBotCredentials(await listBotCredentials());
-    setChatDestinations(await listChatDestinations());
-  }, []);
+    await queryClient.invalidateQueries({ queryKey: queryKeys.bots });
+  }, [queryClient]);
 
   const loadHistory = useCallback(async () => {
-    const history = await listSummaries();
-    setSummariesHistory(history.sort((a, b) => b.timestamp - a.timestamp));
-  }, []);
+    await invalidateSummaries();
+  }, [invalidateSummaries]);
 
   const loadLogs = useCallback(async () => {
-    const logs = await listPublishLogs();
-    setPublishLogs(logs.sort((a, b) => b.timestamp - a.timestamp));
-  }, []);
+    await queryClient.fetchQuery({
+      queryKey: queryKeys.logs.publish,
+      queryFn: async () => {
+        const logs = await listPublishLogs();
+        return logs.sort((a, b) => b.timestamp - a.timestamp);
+      },
+    });
+  }, [queryClient]);
 
   const loadSyncLogs = useCallback(async () => {
-    const logs = await listSyncLogs();
-    setSyncLogs(logs.sort((a, b) => b.timestamp - a.timestamp));
-  }, []);
+    await queryClient.fetchQuery({
+      queryKey: queryKeys.logs.sync,
+      queryFn: async () => {
+        const logs = await listSyncLogs();
+        return logs.sort((a, b) => b.timestamp - a.timestamp);
+      },
+    });
+  }, [queryClient]);
 
   const loadLLMLogs = useCallback(async () => {
-    const logs = await listLLMLogs();
-    setLlmLogs(logs.sort((a, b) => b.timestamp - a.timestamp));
-  }, []);
+    await queryClient.fetchQuery({
+      queryKey: queryKeys.logs.llm,
+      queryFn: async () => {
+        const logs = await listLLMLogs();
+        return logs.sort((a, b) => b.timestamp - a.timestamp);
+      },
+    });
+  }, [queryClient]);
 
   const loadEmbeddingLogs = useCallback(async () => {
-    const logs = await listEmbeddingLogs();
-    setEmbeddingLogs(logs.sort((a, b) => b.timestamp - a.timestamp));
-  }, []);
+    await queryClient.fetchQuery({
+      queryKey: queryKeys.logs.embedding,
+      queryFn: async () => {
+        const logs = await listEmbeddingLogs();
+        return logs.sort((a, b) => b.timestamp - a.timestamp);
+      },
+    });
+  }, [queryClient]);
 
   const loadNetworkLogs = useCallback(async () => {
-    const logs = await listNetworkLogs();
-    setNetworkLogs(logs.sort((a, b) => b.timestamp - a.timestamp));
-  }, []);
+    await queryClient.fetchQuery({
+      queryKey: queryKeys.logs.network,
+      queryFn: async () => {
+        const logs = await listNetworkLogs();
+        return logs.sort((a, b) => b.timestamp - a.timestamp);
+      },
+    });
+  }, [queryClient]);
 
   const loadDBStats = useCallback(async () => {
     const stats = await getDBStats();
     setDbStats(stats);
-  }, []);
-
-  useEffect(() => {
-    loadChannels();
-    loadBots();
-    loadHistory();
-  }, [loadChannels, loadBots, loadHistory]);
+    await queryClient.setQueryData(queryKeys.dbStats, stats);
+  }, [queryClient]);
 
   return (
     <DataContext.Provider

@@ -1,5 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from "react";
 import { TabType } from "../types";
+import { useSummarizerTab } from "../hooks/useSummarizerTab";
+import { useLazyTabData } from "../hooks/useLazyTabData";
 
 interface UIContextType {
   activeTab: TabType;
@@ -20,14 +22,8 @@ interface UIContextType {
 const UIContext = createContext<UIContextType | undefined>(undefined);
 
 export const UIProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  const [activeTab, setActiveTab] = useState<TabType>(() => {
-    if (typeof window !== "undefined") {
-      const saved = localStorage.getItem("activeTab");
-      if (saved === "network") return "settings";
-      return (saved as TabType) || "summary";
-    }
-    return "summary";
-  });
+  const { activeTab, setActiveTab } = useSummarizerTab();
+  useLazyTabData(activeTab);
 
   const [isRateLimited, setIsRateLimited] = useState<boolean>(false);
   const [summarizing, setSummarizing] = useState<boolean>(false);
@@ -37,7 +33,6 @@ export const UIProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
     if (typeof window !== "undefined") {
       const saved = localStorage.getItem("startDateTs");
       if (saved && !isNaN(Number(saved))) return Number(saved);
-      // Fallback for old string format
       const oldSaved = localStorage.getItem("startDate");
       if (oldSaved) {
         const ts = new Date(oldSaved).getTime();
@@ -51,7 +46,6 @@ export const UIProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
     if (typeof window !== "undefined") {
       const saved = localStorage.getItem("endDateTs");
       if (saved && !isNaN(Number(saved))) return Number(saved);
-      // Fallback for old string format
       const oldSaved = localStorage.getItem("endDate");
       if (oldSaved) {
         const ts = new Date(oldSaved).getTime();
@@ -109,10 +103,9 @@ export const UIProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   };
 
   useEffect(() => {
-    localStorage.setItem("activeTab", activeTab);
     localStorage.setItem("startDateTs", startDate.toString());
     localStorage.setItem("endDateTs", endDate.toString());
-  }, [activeTab, startDate, endDate]);
+  }, [startDate, endDate]);
 
   return (
     <UIContext.Provider

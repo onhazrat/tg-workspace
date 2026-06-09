@@ -9,12 +9,27 @@ from sqlmodel import Session, col, select
 
 from app.api.deps import CurrentUser, SessionDep
 from app.core.secrets import encrypt_token, is_encrypted
+from app.services.channels import compute_channel_stats, compute_channel_stats_batch
+from app.services.logs import (
+    LOG_MODELS,
+    clear_logs,
+    delete_log_by_id,
+    delete_old_logs,
+    upsert_embedding_log,
+    upsert_llm_log,
+    upsert_network_log,
+    upsert_publish_log,
+    upsert_sync_log,
+)
 from app.services.network_settings import (
     get_network_setting_row,
     load_network_settings,
     merge_network_put,
     network_settings_payload,
 )
+from app.services.posts import bulk_upsert_posts_impl
+from app.services.stats import get_db_stats
+from app.services.sync_meta import touch_sync
 from app.models_tg import (
     AppSetting,
     BotCredential,
@@ -237,15 +252,8 @@ def _apply_channel_fields(ch: Channel, body: dict[str, Any]) -> None:
 
 
 def _touch_sync(session: Session, resource: str) -> None:
-    meta = session.get(SyncMeta, resource)
-    etag = str(uuid.uuid4())
-    if meta:
-        meta.etag = etag
-        meta.updated_at = datetime.utcnow()
-        session.add(meta)
-    else:
-        session.add(SyncMeta(resource=resource, etag=etag))
-    session.commit()
+    """Backward-compatible alias; prefer app.services.sync_meta.touch_sync."""
+    touch_sync(session, resource)
 
 
 def _unwrap_import_body(body: dict[str, Any]) -> dict[str, Any]:
@@ -254,35 +262,6 @@ def _unwrap_import_body(body: dict[str, Any]) -> dict[str, Any]:
         if any(k in inner for k in ("channels", "posts", "summaries", "bot_credentials")):
             return inner
     return body
-
-
-def _compute_channel_stats(session: Session, channel_name: str) -> dict[str, Any] | None:
-    posts = session.exec(
-        select(Post).where(Post.channel_name == channel_name).order_by(col(Post.post_id))
-    ).all()
-    if not posts:
-        return None
-    post_ids = [p.post_id for p in posts]
-    timestamps = sorted(p.timestamp for p in posts if p.timestamp)
-    velocity = 0.0
-    if len(timestamps) >= 2:
-        recent = timestamps[-100:]
-        ema_diff = (recent[1] - recent[0]) / (1000 * 60 * 60)
-        alpha = 0.1
-        for i in range(2, len(recent)):
-            diff = (recent[i] - recent[i - 1]) / (1000 * 60 * 60)
-            ema_diff = alpha * diff + (1 - alpha) * ema_diff
-        time_since_last = (datetime.utcnow().timestamp() * 1000 - recent[-1]) / (1000 * 60 * 60)
-        if time_since_last > ema_diff:
-            ema_diff = alpha * time_since_last + (1 - alpha) * ema_diff
-        if ema_diff > 0:
-            velocity = 1 / ema_diff
-    return {
-        "count": len(posts),
-        "minId": min(post_ids),
-        "maxId": max(post_ids),
-        "velocity": velocity,
-    }
 
 
 # --- routes ---
@@ -301,9 +280,19 @@ def get_sync_meta(
 def list_channels(
     session: SessionDep,
     current_user: CurrentUser,
+    include_stats: bool = Query(False, alias="includeStats"),
 ) -> list[dict[str, Any]]:
     channels = session.exec(select(Channel)).all()
-    return [_channel_to_camel(c) for c in channels]
+    stats_map: dict[str, dict[str, Any]] = {}
+    if include_stats and channels:
+        stats_map = compute_channel_stats_batch(session, [c.name for c in channels])
+    result = []
+    for ch in channels:
+        row = _channel_to_camel(ch)
+        if include_stats and ch.name in stats_map:
+            row["stats"] = stats_map[ch.name]
+        result.append(row)
+    return result
 
 
 @router.put("/channels/{channel_id}")
@@ -361,7 +350,7 @@ def get_channel_stats(
     ch = session.get(Channel, channel_id)
     if not ch:
         raise HTTPException(status_code=404, detail="Channel not found")
-    stats = _compute_channel_stats(session, ch.name)
+    stats = compute_channel_stats(session, ch.name)
     if not stats:
         raise HTTPException(status_code=404, detail="No posts for channel")
     return stats
@@ -393,38 +382,8 @@ def list_posts(
 
 
 def _bulk_upsert_posts_impl(body: list[dict[str, Any]], session: Session) -> int:
-    count = 0
-    for item in body:
-        channel = item.get("channelName") or item.get("channel_name", "")
-        post_id = int(item.get("id") or item.get("post_id", 0))
-        existing = session.exec(
-            select(Post).where(Post.channel_name == channel, Post.post_id == post_id)
-        ).first()
-        if existing:
-            existing.text = item.get("text", existing.text)
-            existing.date = item.get("date", existing.date)
-            existing.timestamp = item.get("timestamp", existing.timestamp)
-            existing.forwarded_from = item.get("forwardedFrom") or item.get("forwarded_from")
-            existing.forwarded_from_name = item.get("forwardedFromName") or item.get(
-                "forwarded_from_name"
-            )
-            existing.updated_at = datetime.utcnow()
-            session.add(existing)
-        else:
-            session.add(
-                Post(
-                    channel_name=channel,
-                    post_id=post_id,
-                    text=item.get("text", ""),
-                    date=item.get("date", ""),
-                    timestamp=item.get("timestamp", 0),
-                    forwarded_from=item.get("forwardedFrom") or item.get("forwarded_from"),
-                    forwarded_from_name=item.get("forwardedFromName")
-                    or item.get("forwarded_from_name"),
-                )
-            )
-        count += 1
-    return count
+    """Backward-compatible alias; prefer app.services.posts.bulk_upsert_posts_impl."""
+    return bulk_upsert_posts_impl(body, session)
 
 
 @router.post("/posts/bulk")
@@ -773,141 +732,31 @@ def upsert_translations(
 def _upsert_publish_log(
     session: Session, item: dict[str, Any], user_id: uuid.UUID | None = None
 ) -> None:
-    normalized = _normalize_body(item)
-    log_id = normalized.get("id") or str(uuid.uuid4())
-    existing = session.get(PublishLog, log_id)
-    fields = {
-        "user_id": user_id,
-        "summary_id": normalized.get("summary_id", ""),
-        "bot_id": normalized.get("bot_id", ""),
-        "bot_name": normalized.get("bot_name", ""),
-        "chat_id": normalized.get("chat_id", ""),
-        "chat_name": normalized.get("chat_name", ""),
-        "status": normalized.get("status", "success"),
-        "error": normalized.get("error"),
-        "timestamp": normalized.get("timestamp", 0),
-        "full_request": normalized.get("full_request"),
-        "full_response": normalized.get("full_response"),
-        "text_sent": normalized.get("text_sent"),
-    }
-    if existing:
-        for k, v in fields.items():
-            setattr(existing, k, v)
-        existing.updated_at = datetime.utcnow()
-        session.add(existing)
-    else:
-        session.add(PublishLog(id=log_id, **fields))
+    upsert_publish_log(session, item, user_id)
 
 
 def _upsert_sync_log(
     session: Session, item: dict[str, Any], user_id: uuid.UUID | None = None
 ) -> None:
-    normalized = _normalize_body(item)
-    log_id = normalized.get("id") or str(uuid.uuid4())
-    existing = session.get(SyncLog, log_id)
-    fields = {
-        "user_id": user_id,
-        "channel_name": normalized.get("channel_name", ""),
-        "status": normalized.get("status", "success"),
-        "posts_count": normalized.get("posts_count", 0),
-        "new_latest_id": normalized.get("new_latest_id"),
-        "error": normalized.get("error"),
-        "timestamp": normalized.get("timestamp", 0),
-        "source": normalized.get("source", ""),
-        "full_request": normalized.get("full_request"),
-        "full_response": normalized.get("full_response"),
-    }
-    if existing:
-        for k, v in fields.items():
-            setattr(existing, k, v)
-        existing.updated_at = datetime.utcnow()
-        session.add(existing)
-    else:
-        session.add(SyncLog(id=log_id, **fields))
+    upsert_sync_log(session, item, user_id)
 
 
 def _upsert_llm_log(
     session: Session, item: dict[str, Any], user_id: uuid.UUID | None = None
 ) -> None:
-    normalized = _normalize_body(item)
-    log_id = normalized.get("id") or str(uuid.uuid4())
-    existing = session.get(LLMLog, log_id)
-    fields = {
-        "user_id": user_id,
-        "model": normalized.get("model", ""),
-        "prompt": normalized.get("prompt", ""),
-        "response": normalized.get("response", ""),
-        "system_instruction": normalized.get("system_instruction"),
-        "model_config_json": normalized.get("model_config_json"),
-        "full_request": normalized.get("full_request"),
-        "full_response": normalized.get("full_response"),
-        "tokens": normalized.get("tokens"),
-        "duration": normalized.get("duration"),
-        "status": normalized.get("status", "success"),
-        "error": normalized.get("error"),
-        "timestamp": normalized.get("timestamp", 0),
-        "log_type": normalized.get("log_type") or normalized.get("type", "summary"),
-    }
-    if existing:
-        for k, v in fields.items():
-            setattr(existing, k, v)
-        existing.updated_at = datetime.utcnow()
-        session.add(existing)
-    else:
-        session.add(LLMLog(id=log_id, **fields))
+    upsert_llm_log(session, item, user_id)
 
 
 def _upsert_embedding_log(
     session: Session, item: dict[str, Any], user_id: uuid.UUID | None = None
 ) -> None:
-    normalized = _normalize_body(item)
-    log_id = normalized.get("id") or str(uuid.uuid4())
-    existing = session.get(EmbeddingLog, log_id)
-    fields = {
-        "user_id": user_id,
-        "text_count": normalized.get("text_count", 0),
-        "tokens_estimated": normalized.get("tokens_estimated"),
-        "duration": normalized.get("duration", 0),
-        "status": normalized.get("status", "success"),
-        "error": normalized.get("error"),
-        "timestamp": normalized.get("timestamp", 0),
-    }
-    if existing:
-        for k, v in fields.items():
-            setattr(existing, k, v)
-        existing.updated_at = datetime.utcnow()
-        session.add(existing)
-    else:
-        session.add(EmbeddingLog(id=log_id, **fields))
+    upsert_embedding_log(session, item, user_id)
 
 
 def _upsert_network_log(
     session: Session, item: dict[str, Any], user_id: uuid.UUID | None = None
 ) -> None:
-    normalized = _normalize_body(item)
-    log_id = normalized.get("id") or str(uuid.uuid4())
-    existing = session.get(NetworkLog, log_id)
-    fields = {
-        "user_id": user_id,
-        "url": normalized.get("url", ""),
-        "method": normalized.get("method", "GET"),
-        "status": normalized.get("status", "success"),
-        "status_code": normalized.get("status_code"),
-        "error": normalized.get("error"),
-        "duration": normalized.get("duration", 0),
-        "timestamp": normalized.get("timestamp", 0),
-        "source": normalized.get("source", ""),
-        "proxy_used": normalized.get("proxy_used"),
-        "attempts": normalized.get("attempts"),
-        "telemetry": normalized.get("telemetry"),
-    }
-    if existing:
-        for k, v in fields.items():
-            setattr(existing, k, v)
-        existing.updated_at = datetime.utcnow()
-        session.add(existing)
-    else:
-        session.add(NetworkLog(id=log_id, **fields))
+    upsert_network_log(session, item, user_id)
 
 
 @router.get("/publish-logs")
@@ -1013,6 +862,56 @@ def create_network_logs(
     session.commit()
     _touch_sync(session, "network_logs")
     return {"upserted": len(body)}
+
+
+@router.get("/stats")
+def db_stats(
+    session: SessionDep,
+    current_user: CurrentUser,
+) -> dict[str, Any]:
+    return get_db_stats(session, operator_id=current_user.id)
+
+
+@router.delete("/logs")
+def purge_logs(
+    session: SessionDep,
+    current_user: CurrentUser,
+    older_than_days: int | None = Query(default=None, alias="olderThanDays"),
+    log_type: str | None = Query(default=None, alias="type"),
+    log_id: str | None = Query(default=None, alias="logId"),
+    clear_all: bool = Query(default=False, alias="clearAll"),
+) -> dict[str, Any]:
+    if older_than_days is not None and older_than_days > 0:
+        deleted = delete_old_logs(session, older_than_days, operator_id=current_user.id)
+        for resource in {LOG_MODELS[k][1] for k in deleted if deleted[k]}:
+            _touch_sync(session, resource)
+        return {"deleted": deleted, "total": sum(deleted.values())}
+
+    if log_type is None:
+        raise HTTPException(
+            status_code=400,
+            detail="Provide olderThanDays, or type with logId/clearAll",
+        )
+    if log_type not in LOG_MODELS:
+        raise HTTPException(status_code=400, detail=f"Unknown log type: {log_type}")
+
+    resource = LOG_MODELS[log_type][1]
+    if log_id:
+        if not delete_log_by_id(session, log_type, log_id):
+            raise HTTPException(status_code=404, detail="Log entry not found")
+        _touch_sync(session, resource)
+        return {"deleted": 1}
+
+    if clear_all:
+        count = clear_logs(session, log_type)
+        if count:
+            _touch_sync(session, resource)
+        return {"deleted": count}
+
+    raise HTTPException(
+        status_code=400,
+        detail="Provide logId or clearAll=true with type",
+    )
 
 
 # --- settings ---

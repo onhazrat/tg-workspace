@@ -46,10 +46,16 @@ def load_setting(session: Session, key: str, defaults: dict[str, Any]) -> dict[s
 
 
 def save_setting(session: Session, key: str, value: dict[str, Any], user_id=None) -> None:
+    if user_id is None:
+        from app.services.operator import get_operator_user_id
+
+        user_id = get_operator_user_id(session)
     row = session.get(AppSetting, key)
     if row:
         row.value = value
         row.updated_at = utc_now()
+        if row.user_id is None and user_id is not None:
+            row.user_id = user_id
     else:
         row = AppSetting(key=key, value=value, user_id=user_id)
     session.add(row)

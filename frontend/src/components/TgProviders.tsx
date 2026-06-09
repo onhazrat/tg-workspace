@@ -19,8 +19,6 @@ import { toast } from "sonner"
 migrateEmbeddingsData().catch(console.error)
 migrateSummaryDates().catch(console.error)
 
-const SILENT_FALLBACK_RESOURCES = new Set(["network_logs"])
-
 setWriteFallbackHandler((resource, error) => {
   const message = error instanceof Error ? error.message : String(error)
   const isAuthError =
@@ -29,8 +27,7 @@ setWriteFallbackHandler((resource, error) => {
     message.includes("User not found")
   if (isAuthError) return
   console.warn(`[repository] API write failed for ${resource}, saved to local cache`, error)
-  if (SILENT_FALLBACK_RESOURCES.has(resource)) return
-  toast.warning(`Saved ${resource} locally only — server sync failed`, { duration: 5000 })
+  toast.warning(`Saved ${resource} locally only — server sync failed`, { duration: 6000 })
 })
 
 export function TgProviders({ children }: { children: ReactNode }) {

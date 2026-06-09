@@ -8,7 +8,7 @@ import { useSettings } from "./SettingsContext";
 import { useScraper } from "./ScraperContext";
 import { useChatContext } from "./ChatContext";
 import { useUI } from "./UIContext";
-import { SYSTEM_PROMPT } from "../constants";
+import { buildActiveProxies } from "../lib/syncSettings";
 import { generateSummaryStream, generateSummary, AIServiceError } from "../services/ai";
 import { publishSummary } from "../services/telegram";
 
@@ -69,21 +69,14 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({ children }
   const [regeneratingSummaries, setRegeneratingSummaries] = useState<Set<string>>(new Set());
   const [copied, setCopied] = useState(false);
 
-  const getActiveProxies = () => {
-    const proxies = defaultProxyUrls.split(/[\n,]+/).map(p => p.trim()).filter(p => p);
-    const torPool = torProxyUrls.split(/[\n,]+/).map(p => p.trim()).filter(p => p);
-    
-    let activeProxies: string[] = [];
-    if (proxyEnabled) activeProxies.push(...proxies);
-    if (torEnabled) {
-      if (torMode === "auto") {
-        activeProxies.push("socks5h://127.0.0.1:9050");
-      } else {
-        activeProxies.push(...torPool);
-      }
-    }
-    return activeProxies;
-  };
+  const getActiveProxies = () =>
+    buildActiveProxies({
+      proxyEnabled,
+      defaultProxyUrls,
+      torEnabled,
+      torMode,
+      torProxyUrls,
+    });
 
   const handleSummarize = async () => {
     if (isOffline) {

@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback, useRef } from "react";
-import { DEFAULT_AI_LANGUAGE, DEFAULT_MODEL, AUTO_SYNC_INTERVAL_DEFAULT, THEME_DEFAULT } from "../constants";
+import { DEFAULT_AI_LANGUAGE, DEFAULT_MODEL, AUTO_SYNC_INTERVAL_DEFAULT } from "../constants";
+import { useTheme } from "@/components/theme-provider";
 import { isRTLLanguage } from "../lib/utils";
 import { GlobalStartTimeMode, GlobalStartTimeValue } from "../types";
 import { loadNetworkSettings, saveNetworkSettings } from "../lib/repository";
@@ -85,13 +86,18 @@ interface SettingsContextType {
 const SettingsContext = createContext<SettingsContextType | undefined>(undefined);
 
 export const SettingsProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  const [theme, setTheme] = useState<"light" | "dark">(() => {
-    if (typeof window !== "undefined") {
-      const saved = localStorage.getItem("theme");
-      return (saved as "light" | "dark") || THEME_DEFAULT;
+  const { resolvedTheme, setTheme: setGlobalTheme } = useTheme();
+
+  useEffect(() => {
+    const legacy = localStorage.getItem("theme");
+    if (legacy === "light" || legacy === "dark") {
+      setGlobalTheme(legacy);
+      localStorage.removeItem("theme");
     }
-    return THEME_DEFAULT;
-  });
+  }, [setGlobalTheme]);
+
+  const theme = resolvedTheme;
+  const setTheme = (next: "light" | "dark") => setGlobalTheme(next);
 
   const [aiLanguage, setAiLanguage] = useState(() => {
     if (typeof window !== "undefined") {
@@ -306,11 +312,25 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({ children }
   });
 
   const networkHydrated = useRef(false);
+  const appSettingsHydrated = useRef(false);
   const networkSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // TODO(WS-E Sprint 2): On login, hydrate sync/retention/translation/jobs/ai
-  // from GET /api/v1/data/settings/{key} (server wins over localStorage), mirroring
-  // applyNetworkSettings below. Stop persisting server-owned keys to localStorage.
+  const applyAppSettings = useCallback((sync: Record<string, unknown>, retention: Record<string, unknown>, translation: Record<string, unknown>) => {
+    if (typeof sync.autoSyncEnabled === "boolean") setAutoSyncEnabled(sync.autoSyncEnabled);
+    if (typeof sync.autoSyncInterval === "number") setAutoSyncInterval(sync.autoSyncInterval);
+    if (typeof sync.syncConcurrency === "number") setSyncConcurrency(sync.syncConcurrency);
+    if (typeof sync.autoFollowForwarded === "boolean") setAutoFollowForwarded(sync.autoFollowForwarded);
+    if (sync.globalStartTimeMode === "retention" || sync.globalStartTimeMode === "relative" || sync.globalStartTimeMode === "absolute") {
+      setGlobalStartTimeMode(sync.globalStartTimeMode);
+    }
+    if (sync.globalStartTimeValue !== undefined) setGlobalStartTimeValue(sync.globalStartTimeValue as GlobalStartTimeValue);
+    if (typeof retention.postRetentionDays === "number") setPostRetentionDays(retention.postRetentionDays);
+    if (typeof retention.logRetentionDays === "number") setLogRetentionDays(retention.logRetentionDays);
+    if (typeof translation.translationEnabled === "boolean") setTranslationEnabled(translation.translationEnabled);
+    if (typeof translation.autoTranslate === "boolean") setAutoTranslate(translation.autoTranslate);
+    if (typeof translation.translationModel === "string") setTranslationModel(translation.translationModel);
+    if (typeof translation.translationTargetLanguage === "string") setTranslationTargetLanguage(translation.translationTargetLanguage);
+  }, []);
 
   const applyNetworkSettings = useCallback((value: Record<string, unknown>) => {
     if (Array.isArray(value.proxyUrls)) {
@@ -376,6 +396,50 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({ children }
       })
       .catch(console.error);
   }, [applyNetworkSettings, torAutoRotate, torControlEnabled, torControlPort, torMode, torProxyUrls, torRotationStrategy, torRotationThreshold]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (!localStorage.getItem("access_token")) return;
+
+    Promise.all([
+      api.getSetting("sync"),
+      api.getSetting("retention"),
+      api.getSetting("translation"),
+    ])
+      .then(([syncRow, retentionRow, translationRow]) => {
+        const sync = syncRow.value ?? {};
+        const retention = retentionRow.value ?? {};
+        const translation = translationRow.value ?? {};
+        const legacy: { sync: Record<string, unknown>; retention: Record<string, unknown>; translation: Record<string, unknown> } = {
+          sync: {},
+          retention: {},
+          translation: {},
+        };
+        const legacyAutoSync = localStorage.getItem("autoSyncEnabled");
+        if (legacyAutoSync !== null && sync.autoSyncEnabled === undefined) {
+          legacy.sync.autoSyncEnabled = legacyAutoSync === "true";
+        }
+        const legacyInterval = localStorage.getItem("autoSyncInterval");
+        if (legacyInterval !== null && sync.autoSyncInterval === undefined) {
+          legacy.sync.autoSyncInterval = parseInt(legacyInterval, 10);
+        }
+        const legacyPostRetention = localStorage.getItem("postRetentionDays");
+        if (legacyPostRetention !== null && retention.postRetentionDays === undefined) {
+          legacy.retention.postRetentionDays = parseInt(legacyPostRetention, 10);
+        }
+        applyAppSettings(
+          { ...sync, ...legacy.sync },
+          { ...retention, ...legacy.retention },
+          { ...translation, ...legacy.translation }
+        );
+        appSettingsHydrated.current = true;
+        if (Object.keys(legacy.sync).length > 0 || Object.keys(legacy.retention).length > 0) {
+          api.putSetting("sync", { ...sync, ...legacy.sync }).catch(console.error);
+          api.putSetting("retention", { ...retention, ...legacy.retention }).catch(console.error);
+        }
+      })
+      .catch(console.error);
+  }, [applyAppSettings]);
 
   useEffect(() => {
     if (!networkHydrated.current || !localStorage.getItem("access_token")) return;
@@ -447,15 +511,6 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({ children }
   }, [globalStartTimeMode, globalStartTimeValue, postRetentionDays]);
 
   useEffect(() => {
-    localStorage.setItem("theme", theme);
-    if (theme === "dark") {
-      document.documentElement.classList.add("dark");
-    } else {
-      document.documentElement.classList.remove("dark");
-    }
-  }, [theme]);
-
-  useEffect(() => {
     localStorage.setItem("aiLanguage", aiLanguage);
   }, [aiLanguage]);
 
@@ -464,20 +519,8 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({ children }
   }, [selectedModel]);
 
   useEffect(() => {
-    localStorage.setItem("autoSyncEnabled", autoSyncEnabled.toString());
-  }, [autoSyncEnabled]);
-
-  useEffect(() => {
-    localStorage.setItem("autoSyncInterval", autoSyncInterval.toString());
-  }, [autoSyncInterval]);
-
-  useEffect(() => {
     localStorage.setItem("aiTemperature", aiTemperature.toString());
   }, [aiTemperature]);
-
-  useEffect(() => {
-    localStorage.setItem("syncConcurrency", syncConcurrency.toString());
-  }, [syncConcurrency]);
 
   useEffect(() => {
     localStorage.setItem("embeddingsEnabled", embeddingsEnabled.toString());
@@ -486,42 +529,6 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({ children }
   useEffect(() => {
     localStorage.setItem("embeddingsPaused", embeddingsPaused.toString());
   }, [embeddingsPaused]);
-
-  useEffect(() => {
-    localStorage.setItem("translationEnabled", translationEnabled.toString());
-  }, [translationEnabled]);
-
-  useEffect(() => {
-    localStorage.setItem("autoTranslate", autoTranslate.toString());
-  }, [autoTranslate]);
-
-  useEffect(() => {
-    localStorage.setItem("translationModel", translationModel);
-  }, [translationModel]);
-
-  useEffect(() => {
-    localStorage.setItem("translationTargetLanguage", translationTargetLanguage);
-  }, [translationTargetLanguage]);
-
-  useEffect(() => {
-    localStorage.setItem("autoFollowForwarded", autoFollowForwarded.toString());
-  }, [autoFollowForwarded]);
-
-  useEffect(() => {
-    localStorage.setItem("postRetentionDays", postRetentionDays.toString());
-  }, [postRetentionDays]);
-
-  useEffect(() => {
-    localStorage.setItem("logRetentionDays", logRetentionDays.toString());
-  }, [logRetentionDays]);
-
-  useEffect(() => {
-    localStorage.setItem("globalStartTimeMode", globalStartTimeMode);
-  }, [globalStartTimeMode]);
-
-  useEffect(() => {
-    localStorage.setItem("globalStartTimeValue", JSON.stringify(globalStartTimeValue));
-  }, [globalStartTimeValue]);
 
   useEffect(() => {
     localStorage.setItem("showChannelBio", showChannelBio.toString());
@@ -553,7 +560,7 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({ children }
 
   // Push scheduler-related settings to Postgres for APScheduler jobs (Phase 6).
   useEffect(() => {
-    if (!localStorage.getItem("access_token")) return;
+    if (!localStorage.getItem("access_token") || !appSettingsHydrated.current) return;
     api
       .putSetting("sync", {
         autoSyncEnabled,
@@ -574,14 +581,14 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({ children }
   ]);
 
   useEffect(() => {
-    if (!localStorage.getItem("access_token")) return;
+    if (!localStorage.getItem("access_token") || !appSettingsHydrated.current) return;
     api
       .putSetting("retention", { postRetentionDays, logRetentionDays })
       .catch((err) => console.warn("[Settings] Failed to sync retention settings:", err));
   }, [postRetentionDays, logRetentionDays]);
 
   useEffect(() => {
-    if (!localStorage.getItem("access_token")) return;
+    if (!localStorage.getItem("access_token") || !appSettingsHydrated.current) return;
     api
       .putSetting("translation", {
         translationEnabled,

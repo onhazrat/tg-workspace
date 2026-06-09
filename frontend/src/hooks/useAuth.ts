@@ -48,7 +48,7 @@ const useAuth = () => {
   const loginMutation = useMutation({
     mutationFn: login,
     onSuccess: () => {
-      navigate({ to: "/summarizer" })
+      navigate({ to: "/summarizer", search: { tab: "summary" } })
     },
     onError: handleError.bind(showErrorToast),
   })

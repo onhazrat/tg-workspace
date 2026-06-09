@@ -73,3 +73,16 @@ def test_legacy_bot_info_with_jwt(mock_fetch: AsyncMock, client: TestClient) -> 
     assert r.headers.get("Deprecation") == "true"
 
     client.delete(f"{DATA}/bot-credentials/leg-info-1", headers=headers)
+
+
+def test_legacy_routes_blocked_in_production(
+    client: TestClient, monkeypatch
+) -> None:
+    from app.core.config import settings as app_settings
+
+    monkeypatch.setattr(app_settings, "ENVIRONMENT", "production")
+    r = client.post(
+        "/api/publish",
+        json={"credentialId": "x", "chatId": "1", "text": "hi"},
+    )
+    assert r.status_code == 410

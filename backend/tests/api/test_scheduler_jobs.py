@@ -18,9 +18,18 @@ from app.jobs.retention import run_retention_cleanup
 from app.jobs.settings import save_setting
 from app.jobs.translation_batch import run_translation_batch
 from app.models_tg import Channel, Post, Summary
+from app.services.network_settings import get_network_setting_row
+from app.services.operator import get_operator_user_id
 from app.services.scraper_jobs import clear_jobs_for_tests
 
 PREFIX = f"{settings.API_V1_STR}/jobs"
+
+
+def _freeze_channels_except(session: Session, keep_ids: set[str]) -> None:
+    for ch in session.exec(select(Channel)).all():
+        if ch.id not in keep_ids:
+            ch.is_frozen = True
+            session.add(ch)
 
 
 def _auth(client: TestClient) -> dict[str, str]:
@@ -99,9 +108,17 @@ def test_auto_sync_triggers_stale_channels(
                 "autoSyncPauseUntil": None,
             },
         )
+        operator_id = get_operator_user_id(session)
+        net_row = get_network_setting_row(session)
+        if net_row and operator_id:
+            net_row.user_id = operator_id
+            session.add(net_row)
+
         ch = session.get(Channel, "stale-ch")
         if ch:
             ch.last_updated = now - 120 * 60 * 1000
+            ch.user_id = operator_id
+            ch.is_frozen = False
             session.add(ch)
         else:
             session.add(
@@ -109,8 +126,10 @@ def test_auto_sync_triggers_stale_channels(
                     id="stale-ch",
                     name="stale-ch",
                     last_updated=now - 120 * 60 * 1000,
+                    user_id=operator_id,
                 )
             )
+        _freeze_channels_except(session, {"stale-ch"})
         session.commit()
 
     mock_job = MagicMock()
@@ -171,6 +190,23 @@ def test_auto_summary_regenerates_due_summary(mock_get_provider) -> None:
     mock_get_provider.return_value = mock_provider
 
     with Session(engine) as session:
+        operator_id = get_operator_user_id(session)
+        net_row = get_network_setting_row(session)
+        if net_row and operator_id:
+            net_row.user_id = operator_id
+            session.add(net_row)
+
+        ch1 = session.get(Channel, "ch1")
+        if ch1:
+            ch1.user_id = operator_id
+            ch1.is_frozen = False
+            ch1.last_updated = now
+            session.add(ch1)
+        elif operator_id:
+            session.add(
+                Channel(id="ch1", name="ch1", user_id=operator_id, last_updated=now)
+            )
+
         for other in session.exec(select(Summary)).all():
             if other.id != summary_id and (other.extra or {}).get("autoRegenerate"):
                 other.extra = {**(other.extra or {}), "autoRegenerate": False}
@@ -183,6 +219,7 @@ def test_auto_summary_regenerates_due_summary(mock_get_provider) -> None:
             existing_summary.start_date = now - 2 * duration
             existing_summary.end_date = now - duration
             existing_summary.extra = {"autoRegenerate": True}
+            existing_summary.user_id = operator_id
             session.add(existing_summary)
         else:
             session.add(
@@ -195,6 +232,7 @@ def test_auto_summary_regenerates_due_summary(mock_get_provider) -> None:
                     language="English",
                     model="gemini-3-flash-preview",
                     extra={"autoRegenerate": True},
+                    user_id=operator_id,
                 )
             )
         post = session.exec(

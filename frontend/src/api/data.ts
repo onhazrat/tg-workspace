@@ -19,7 +19,10 @@ export const dataApi = {
   syncMeta: () =>
     request<Record<string, { etag: string; updatedAt?: string }>>("/api/v1/data/sync-meta"),
 
-  listChannels: () => request<Channel[]>("/api/v1/data/channels"),
+  listChannels: (params?: { includeStats?: boolean }) => {
+    const qs = params?.includeStats ? "?includeStats=true" : "";
+    return request<(Channel & { stats?: ChannelStats })[]>(`/api/v1/data/channels${qs}`);
+  },
 
   upsertChannel: (id: string, channel: Partial<Channel>) =>
     request<Channel>(`/api/v1/data/channels/${id}`, {
@@ -85,11 +88,34 @@ export const dataApi = {
       body: JSON.stringify(value),
     }),
 
+  getSetting: (key: string) =>
+    request<{ key: string; value: Record<string, unknown> }>(`/api/v1/data/settings/${key}`),
+
   putSetting: (key: string, value: Record<string, unknown>) =>
     request<{ key: string; value: Record<string, unknown> }>(`/api/v1/data/settings/${key}`, {
       method: "PUT",
       body: JSON.stringify(value),
     }),
+
+  getStats: () => request<Record<string, number>>("/api/v1/data/stats"),
+
+  deleteLogs: (params: {
+    olderThanDays?: number;
+    type?: "publish" | "sync" | "llm" | "embedding" | "network";
+    logId?: string;
+    clearAll?: boolean;
+  }) => {
+    const qs = new URLSearchParams();
+    if (params.olderThanDays != null) qs.set("olderThanDays", String(params.olderThanDays));
+    if (params.type) qs.set("type", params.type);
+    if (params.logId) qs.set("logId", params.logId);
+    if (params.clearAll) qs.set("clearAll", "true");
+    const q = qs.toString();
+    return request<{ deleted?: number; total?: number }>(
+      `/api/v1/data/logs${q ? `?${q}` : ""}`,
+      { method: "DELETE" }
+    );
+  },
 
   listChatDestinations: () => request<ChatDestination[]>("/api/v1/data/chat-destinations"),
 

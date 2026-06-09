@@ -35,6 +35,20 @@ def _seed_posts_and_embeddings(client: TestClient) -> None:
         json={"name": "rag-ch"},
         headers=headers,
     )
+    from app.core.db import engine
+    from sqlmodel import Session
+
+    from app.models_tg import Channel
+    from app.services.operator import get_operator_user_id
+
+    with Session(engine) as session:
+        operator_id = get_operator_user_id(session)
+        ch = session.get(Channel, "rag-ch")
+        if ch and operator_id:
+            ch.user_id = operator_id
+            ch.is_frozen = False
+            session.add(ch)
+            session.commit()
     posts = [
         {
             "id": 1,
@@ -203,6 +217,24 @@ def test_backfill_embeddings_mocked_provider(
 ) -> None:
     headers = _auth(client)
     client.put(f"{DATA}/channels/backfill-ch", json={"name": "backfill-ch"}, headers=headers)
+    from app.core.db import engine
+    from sqlmodel import Session, select
+
+    from app.models_tg import Channel, PostEmbedding
+    from app.services.operator import get_operator_user_id
+
+    with Session(engine) as session:
+        operator_id = get_operator_user_id(session)
+        ch = session.get(Channel, "backfill-ch")
+        if ch and operator_id:
+            ch.user_id = operator_id
+            ch.is_frozen = False
+            session.add(ch)
+        for emb in session.exec(
+            select(PostEmbedding).where(PostEmbedding.channel_name == "backfill-ch")
+        ).all():
+            session.delete(emb)
+        session.commit()
     client.post(
         f"{DATA}/posts/bulk",
         json=[
@@ -246,6 +278,78 @@ def test_backfill_embeddings_mocked_provider(
 
     status = client.get(f"{PREFIX}/status", headers=headers).json()
     assert status["lastRun"] is not None
+
+
+@patch("app.api.routes.rag.settings.GEMINI_API_KEY", "test-key")
+@patch("app.api.routes.rag.get_provider")
+def test_rag_search_scoped_to_operator_channels(
+    mock_get_provider: AsyncMock,
+    client: TestClient,
+) -> None:
+    """Embeddings on non-operator channels must not appear in search results."""
+    headers = _auth(client)
+    client.put(f"{DATA}/channels/op-ch", json={"name": "op-ch"}, headers=headers)
+    client.put(f"{DATA}/channels/other-ch", json={"name": "other-ch"}, headers=headers)
+    client.post(
+        f"{DATA}/posts/bulk",
+        json=[
+            {
+                "id": 1,
+                "channelName": "op-ch",
+                "text": "operator post",
+                "date": "2024-01-01",
+                "timestamp": 1000,
+            },
+            {
+                "id": 2,
+                "channelName": "other-ch",
+                "text": "foreign post",
+                "date": "2024-01-02",
+                "timestamp": 2000,
+            },
+        ],
+        headers=headers,
+    )
+    client.post(
+        f"{DATA}/embeddings",
+        json=[
+            {
+                "id": "op-ch_1",
+                "channelName": "op-ch",
+                "postId": 1,
+                "vector": [1.0, 0.0, 0.0],
+                "text": "operator post",
+                "provider": "gemini",
+                "model": "test-embed",
+                "dimensions": 3,
+            },
+            {
+                "id": "other-ch_2",
+                "channelName": "other-ch",
+                "postId": 2,
+                "vector": [1.0, 0.0, 0.0],
+                "text": "foreign post",
+                "provider": "gemini",
+                "model": "test-embed",
+                "dimensions": 3,
+            },
+        ],
+        headers=headers,
+    )
+    mock_get_provider.return_value = _mock_provider([[1.0, 0.0, 0.0]])
+
+    with patch(
+        "app.api.routes.rag.channel_names_for_operator",
+        return_value={"op-ch"},
+    ):
+        r = client.post(
+            f"{PREFIX}/search",
+            json={"query": "post", "limit": 10},
+            headers=headers,
+        )
+    assert r.status_code == 200, r.text
+    channels = {item["channelName"] for item in r.json()["results"]}
+    assert channels == {"op-ch"}
 
 
 def test_cosine_matches_numpy_baseline() -> None:

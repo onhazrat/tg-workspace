@@ -1,5 +1,5 @@
 import { openDB } from 'idb';
-import { DB_VERSION } from '../lib/db';
+import { DB_VERSION } from '../lib/cache';
 
 const DB_NAME = 'TelegramSummarizerDB';
 const CHUNK_SIZE = 500;

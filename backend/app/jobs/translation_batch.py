@@ -10,7 +10,9 @@ from datetime import datetime
 from sqlmodel import Session, col, select
 
 from app.ai.registry import default_model, get_provider
-from app.api.routes.data import _touch_sync
+from app.services.channels import channel_names_for_operator
+from app.services.operator import get_operator_user_id
+from app.services.sync_meta import touch_sync
 from app.core.config import settings
 from app.core.db import engine
 from app.jobs.settings import load_translation_settings
@@ -26,7 +28,12 @@ def _posts_needing_translation(
     session: Session,
     language: str,
     limit: int,
+    *,
+    operator_id,
 ) -> list[Post]:
+    channel_names = channel_names_for_operator(session, operator_id)
+    if not channel_names:
+        return []
     stmt = (
         select(Post)
         .outerjoin(
@@ -36,6 +43,7 @@ def _posts_needing_translation(
             & (PostTranslation.language == language),
         )
         .where(col(PostTranslation.id).is_(None))
+        .where(col(Post.channel_name).in_(channel_names))
         .order_by(Post.timestamp.desc())
         .limit(limit)
     )
@@ -51,7 +59,10 @@ async def run_translation_batch() -> dict:
         target_language = str(cfg.get("translationTargetLanguage") or "English")
         model = str(cfg.get("translationModel") or default_model())
 
-        posts = _posts_needing_translation(session, target_language, BATCH_LIMIT)
+        operator_id = get_operator_user_id(session)
+        posts = _posts_needing_translation(
+            session, target_language, BATCH_LIMIT, operator_id=operator_id
+        )
         if not posts:
             return {"skipped": True, "reason": "no_posts", "translated": 0}
 
@@ -107,6 +118,6 @@ async def run_translation_batch() -> dict:
 
         session.commit()
         if upserted:
-            _touch_sync(session, "translations")
+            touch_sync(session, "translations")
 
         return {"translated": upserted, "language": target_language}

@@ -2,12 +2,12 @@ import asyncio
 import uuid
 
 from fastapi import APIRouter, HTTPException
-from sqlmodel import Session, select
+from sqlmodel import Session
 
 from app.api.deps import CurrentUser, SessionDep
 from app.jobs.scheduler import get_job_status, set_job_enabled_flag, trigger_job
 from app.jobs.settings import JOB_IDS
-from app.models_tg import Channel
+from app.services.operator import get_operator_user_id, select_operator_channels
 from app.schemas.jobs import UpdateJobRequest
 from app.schemas.sync_jobs import (
     CancelSyncJobResponse,
@@ -24,17 +24,24 @@ router = APIRouter(prefix="/jobs", tags=["jobs"])
 def _resolve_channel_entries(
     session: Session,
     channel_ids: list[str] | None,
+    operator_id,
 ) -> list[tuple[str, str]]:
+    operator_channels = {
+        ch.id: ch for ch in select_operator_channels(session, operator_id=operator_id)
+    }
     if channel_ids:
         entries: list[tuple[str, str]] = []
         for cid in channel_ids:
-            ch = session.get(Channel, cid)
-            if ch:
+            ch = operator_channels.get(cid)
+            if ch and not ch.is_frozen:
                 entries.append((ch.id, ch.name))
         return entries
 
-    channels = session.exec(select(Channel).where(Channel.is_frozen == False)).all()  # noqa: E712
-    return [(c.id, c.name) for c in channels]
+    return [
+        (c.id, c.name)
+        for c in operator_channels.values()
+        if not c.is_frozen
+    ]
 
 
 @router.get("/status")
@@ -70,7 +77,8 @@ async def start_sync_job(
     session: SessionDep,
     current_user: CurrentUser,
 ) -> StartSyncJobResponse:
-    entries = _resolve_channel_entries(session, body.channel_ids)
+    operator_id = current_user.id or get_operator_user_id(session)
+    entries = _resolve_channel_entries(session, body.channel_ids, operator_id)
     if not entries:
         raise HTTPException(status_code=400, detail="No channels to sync")
 

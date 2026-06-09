@@ -12,13 +12,10 @@ from typing import Any
 import httpx
 from sqlmodel import Session, col, select
 
-from app.api.routes.data import (
-    _bulk_upsert_posts_impl,
-    _compute_channel_stats,
-    _touch_sync,
-    _upsert_network_log,
-    _upsert_sync_log,
-)
+from app.services.channels import compute_channel_stats
+from app.services.logs import upsert_network_log, upsert_sync_log
+from app.services.posts import bulk_upsert_posts_impl
+from app.services.sync_meta import touch_sync
 from app.core.config import settings
 from app.core.db import engine
 from app.models_tg import AppSetting, Channel, Post
@@ -78,7 +75,7 @@ def _save_network_telemetry(
             continue
         attempts = t.get("attempts") or []
         proxy_used = attempts[-1].get("proxyUrl") if attempts else None
-        _upsert_network_log(
+        upsert_network_log(
             session,
             {
                 "id": str(uuid.uuid4()),
@@ -230,7 +227,7 @@ async def _maybe_add_forwarded_channel(
         )
     )
     session.commit()
-    _touch_sync(session, "channels")
+    touch_sync(session, "channels")
 
 
 async def sync_single_channel(
@@ -297,7 +294,7 @@ async def sync_single_channel(
                     session.add(channel)
                     session.commit()
 
-                stats = _compute_channel_stats(session, channel.name)
+                stats = compute_channel_stats(session, channel.name)
                 current_max_id = (stats["maxId"] if stats else None) or (channel.start_id or 1) - 1
                 known_latest_id = 0
                 has_more = True
@@ -335,7 +332,7 @@ async def sync_single_channel(
                             user_id=user_id,
                         )
                         session.commit()
-                        _touch_sync(session, "network_logs")
+                        touch_sync(session, "network_logs")
 
                     posts = response.get("posts") or []
                     latest_id = int(response.get("latestId") or 0)
@@ -382,9 +379,9 @@ async def sync_single_channel(
                             }
                         )
 
-                    _bulk_upsert_posts_impl(posts_to_save, session)
+                    bulk_upsert_posts_impl(posts_to_save, session)
                     session.commit()
-                    _touch_sync(session, "posts")
+                    touch_sync(session, "posts")
                     total_new_posts += len(posts_to_save)
                     ch_state.posts_fetched = total_new_posts
                     await persist_job(job)
@@ -453,12 +450,12 @@ async def sync_single_channel(
                 channel.updated_at = datetime.utcnow()
                 session.add(channel)
                 session.commit()
-                _touch_sync(session, "channels")
+                touch_sync(session, "channels")
 
                 ch_state.status = "success"
                 ch_state.new_latest_id = final_latest_id or None
 
-                _upsert_sync_log(
+                upsert_sync_log(
                     session,
                     {
                         "id": str(uuid.uuid4()),
@@ -474,7 +471,7 @@ async def sync_single_channel(
                     user_id,
                 )
                 session.commit()
-                _touch_sync(session, "sync_logs")
+                touch_sync(session, "sync_logs")
                 await persist_job(job)
 
             except SyncScrapeError as exc:
@@ -484,13 +481,13 @@ async def sync_single_channel(
                     channel.updated_at = datetime.utcnow()
                     session.add(channel)
                     session.commit()
-                    _touch_sync(session, "channels")
+                    touch_sync(session, "channels")
 
                 ch_state.status = "failed"
                 ch_state.error = str(exc)
                 ch_state.posts_fetched = total_new_posts
 
-                _upsert_sync_log(
+                upsert_sync_log(
                     session,
                     {
                         "id": str(uuid.uuid4()),
@@ -506,7 +503,7 @@ async def sync_single_channel(
                     user_id,
                 )
                 session.commit()
-                _touch_sync(session, "sync_logs")
+                touch_sync(session, "sync_logs")
                 await persist_job(job)
 
             except Exception as exc:  # noqa: BLE001
@@ -515,7 +512,7 @@ async def sync_single_channel(
                 ch_state.error = str(exc)
                 ch_state.posts_fetched = total_new_posts
 
-                _upsert_sync_log(
+                upsert_sync_log(
                     session,
                     {
                         "id": str(uuid.uuid4()),
@@ -531,7 +528,7 @@ async def sync_single_channel(
                     user_id,
                 )
                 session.commit()
-                _touch_sync(session, "sync_logs")
+                touch_sync(session, "sync_logs")
                 await persist_job(job)
 
 
