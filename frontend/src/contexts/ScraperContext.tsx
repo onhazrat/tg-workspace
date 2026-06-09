@@ -140,7 +140,9 @@ export const ScraperProvider: React.FC<{ children: React.ReactNode }> = ({ child
           setVisiblePosts(20);
         } catch (error) {
           console.error("Related post search failed:", error);
-          toast.error("Related post search failed. Falling back to normal view.");
+          const message =
+            error instanceof Error ? error.message : "Related post search failed";
+          toast.error(`${message}. Falling back to normal view.`);
           setRelatedPostSearch(null);
         }
         return;
@@ -169,7 +171,9 @@ export const ScraperProvider: React.FC<{ children: React.ReactNode }> = ({ child
           setVisiblePosts(20);
         } catch (error) {
           console.error("Semantic search failed:", error);
-          toast.error("Semantic search failed. Falling back to normal view.");
+          const message =
+            error instanceof Error ? error.message : "Semantic search failed";
+          toast.error(`${message}. Falling back to normal view.`);
           setSemanticSearchQuery("");
         }
         return;

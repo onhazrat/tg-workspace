@@ -15,6 +15,7 @@ import { CitationHover } from "./CitationHover";
 import { formatDateToLocalISO } from "../lib/utils";
 
 import { publishSummary } from "../services/telegram";
+import { buildActiveProxies } from "@/lib/syncSettings";
 import { savePublishLog, saveSummary } from "../lib/repository";
 import { useApiStatus } from "../hooks/useApiStatus";
 import { PublishLog } from "../types";
@@ -215,21 +216,14 @@ export const SummaryView: React.FC<SummaryViewProps> = () => {
     toast.success("Note deleted.");
   };
 
-  const getActiveProxies = () => {
-    const proxies = defaultProxyUrls.split(/[\n,]+/).map(p => p.trim()).filter(p => p);
-    const torPool = torProxyUrls.split(/[\n,]+/).map(p => p.trim()).filter(p => p);
-    
-    let activeProxies: string[] = [];
-    if (proxyEnabled) activeProxies.push(...proxies);
-    if (torEnabled) {
-      if (torMode === "auto") {
-        activeProxies.push("socks5h://127.0.0.1:9050");
-      } else {
-        activeProxies.push(...torPool);
-      }
-    }
-    return activeProxies;
-  };
+  const getActiveProxies = () =>
+    buildActiveProxies({
+      proxyEnabled,
+      defaultProxyUrls,
+      torEnabled,
+      torMode,
+      torProxyUrls,
+    });
 
   const handlePublish = async (botId: string, chatId: string, botName: string, text: string, destName: string) => {
     if (isOffline) {

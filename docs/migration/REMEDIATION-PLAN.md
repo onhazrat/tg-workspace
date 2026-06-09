@@ -674,3 +674,19 @@ Remediation is **complete** when all items below pass.
 | **WS-G** | RAG search scoped to operator channels + SQL filter before cosine; `scanLimit` cap (5000); embedding backfill scoped to operator; RAGContext surfaces search errors; batch channel stats via `GET /channels?includeStats=true` | pgvector migration; embedding status counts still global (not operator-scoped) |
 | **WS-D** | `compute_channel_stats_batch`; `includeStats` on list channels | Remaining `data.py` thin-handler refactor; `summaries`/`settings_store` service modules |
 | **WS-H** | `test_rag.py` operator-scoping test; `useChannels.test.ts`, `syncSettings.test.ts`; scheduler/tenancy test isolation fixes; **124** backend tests green; **9** vitest tests green | Playwright `npm test` in CI; React Query integration test with MSW |
+
+---
+
+## Appendix D: Optional polish log (2026-06-09)
+
+Mode A locked. Deferred items from Sprints 1–3 appendices B/C addressed where feasible.
+
+| Workstream | Completed (polish) | Still deferred |
+|------------|-------------------|------------------|
+| **WS-F** | `syncSettings` adopted in ChannelGrid, SummaryView, BotManagement; removed unused `SYSTEM_PROMPT`/`CHAT_PROMPT` from `constants.ts`; deleted deprecated `frontend/src/lib/db.ts` re-export; SettingsHub `section` URL param (`?tab=settings&section=`); `settingsSection.ts` + `useSettingsSection` hook | Full provider flattening (≤4 providers); deprecate `@/client` for admin routes |
+| **WS-G** | Operator-scoped embedding status on `GET /rag/status` | pgvector migration |
+| **WS-D** | `services/summaries.py`, `services/settings_store.py`; data.py handlers delegate to services | Remaining large `data.py` extractions (bots, import/export) |
+| **WS-H** | `settingsSection.test.ts`; Playwright settings tab + section URL flow in `summarizer.spec.ts`; operator-scoped status test in `test_rag.py` | Playwright in CI shell; React Query + MSW integration test |
+| **WS-E** | — | `jobs`/`ai` AppSetting hydration; `embeddingsEnabled` UI-localStorage; SettingsContext unit test |
+
+*Document version: 1.3 — 2026-06-09*

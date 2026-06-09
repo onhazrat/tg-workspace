@@ -57,7 +57,13 @@ def _posts_without_embeddings_stmt(
     return stmt
 
 
-def count_posts_without_embeddings(session: Session) -> int:
+def count_posts_without_embeddings(
+    session: Session,
+    *,
+    channel_names: set[str] | None = None,
+) -> int:
+    if channel_names is not None and not channel_names:
+        return 0
     stmt = (
         select(func.count())
         .select_from(Post)
@@ -68,12 +74,27 @@ def count_posts_without_embeddings(session: Session) -> int:
         )
         .where(col(PostEmbedding.id).is_(None))
     )
+    if channel_names is not None:
+        stmt = stmt.where(col(Post.channel_name).in_(channel_names))
     return int(session.exec(stmt).one())
 
 
-def get_embedding_status(session: Session) -> dict[str, Any]:
-    total = int(session.exec(select(func.count()).select_from(Post)).one())
-    pending = count_posts_without_embeddings(session)
+def get_embedding_status(
+    session: Session,
+    *,
+    channel_names: set[str] | None = None,
+) -> dict[str, Any]:
+    if channel_names is not None and not channel_names:
+        return {
+            "pending": 0,
+            "total": 0,
+            "lastRun": get_last_backfill_run(),
+        }
+    total_stmt = select(func.count()).select_from(Post)
+    if channel_names is not None:
+        total_stmt = total_stmt.where(col(Post.channel_name).in_(channel_names))
+    total = int(session.exec(total_stmt).one())
+    pending = count_posts_without_embeddings(session, channel_names=channel_names)
     return {
         "pending": pending,
         "total": total,
@@ -101,7 +122,13 @@ async def backfill_embeddings(
     ).all()
     if not posts:
         _last_backfill_run_ms = int(time.time() * 1000)
-        return {"processed": 0, "upserted": 0, "pending": count_posts_without_embeddings(session)}
+        return {
+            "processed": 0,
+            "upserted": 0,
+            "pending": count_posts_without_embeddings(
+                session, channel_names=operator_channels or None
+            ),
+        }
 
     provider = get_provider("gemini")
     model = settings.EMBEDDING_MODEL
@@ -174,5 +201,7 @@ async def backfill_embeddings(
     return {
         "processed": len(posts),
         "upserted": upserted,
-        "pending": count_posts_without_embeddings(session),
+        "pending": count_posts_without_embeddings(
+            session, channel_names=operator_channels or None
+        ),
     }

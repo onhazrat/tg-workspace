@@ -352,6 +352,79 @@ def test_rag_search_scoped_to_operator_channels(
     assert channels == {"op-ch"}
 
 
+def test_rag_status_scoped_to_operator_channels(client: TestClient) -> None:
+    """Status counts must reflect operator channels only."""
+    from app.core.db import engine
+    from sqlmodel import Session, select
+
+    from app.models_tg import Channel, Post
+
+    headers = _auth(client)
+    op_ch = "op-status-ch"
+    foreign_ch = "foreign-status-ch"
+    with Session(engine) as session:
+        for ch_id, name in ((op_ch, op_ch), (foreign_ch, foreign_ch)):
+            existing = session.get(Channel, ch_id)
+            if existing:
+                existing.name = name
+                existing.is_frozen = False
+                session.add(existing)
+            else:
+                session.add(Channel(id=ch_id, name=name, is_frozen=False))
+        for post_id, channel_name, text, ts in (
+            (901, op_ch, "operator post", 1000),
+            (902, foreign_ch, "foreign post", 2000),
+        ):
+            existing = session.exec(
+                select(Post).where(
+                    Post.channel_name == channel_name,
+                    Post.post_id == post_id,
+                )
+            ).first()
+            if existing:
+                existing.text = text
+                existing.timestamp = ts
+                session.add(existing)
+            else:
+                session.add(
+                    Post(
+                        channel_name=channel_name,
+                        post_id=post_id,
+                        text=text,
+                        date="2024-01-01",
+                        timestamp=ts,
+                    )
+                )
+        session.commit()
+
+    try:
+        with patch(
+            "app.api.routes.rag.channel_names_for_operator",
+            return_value={op_ch},
+        ):
+            r = client.get(f"{PREFIX}/status", headers=headers)
+        assert r.status_code == 200, r.text
+        data = r.json()
+        assert data["total"] == 1
+        assert data["pending"] == 1
+    finally:
+        with Session(engine) as session:
+            for post_id, channel_name in ((901, op_ch), (902, foreign_ch)):
+                row = session.exec(
+                    select(Post).where(
+                        Post.channel_name == channel_name,
+                        Post.post_id == post_id,
+                    )
+                ).first()
+                if row:
+                    session.delete(row)
+            for ch_id in (op_ch, foreign_ch):
+                row = session.get(Channel, ch_id)
+                if row:
+                    session.delete(row)
+            session.commit()
+
+
 def test_cosine_matches_numpy_baseline() -> None:
     from app.api.routes.rag import _cosine
 

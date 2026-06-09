@@ -138,11 +138,59 @@ Frontend hardening from Sprint 3 (full workstream log: [REMEDIATION-PLAN.md Appe
 
 ### Summarizer tabs (URL)
 
-The active summarizer tab comes from the `tab` search param on `/summarizer`, not from `localStorage`. Valid values: `summary`, `posts`, `channels`, `history`, `chat`, `settings` (default when missing or invalid). Legacy `?tab=network` maps to `settings`. Tab changes update the URL via `useSummarizerTab` (replace navigation). Example: `http://localhost:5173/summarizer?tab=settings`. Successful login redirects to `/summarizer?tab=summary`.
+The active summarizer tab comes from the `tab` search param on `/summarizer`, not from `localStorage`. Valid values: `summary`, `posts`, `channels`, `history`, `chat`, `settings` (default when missing or invalid). Legacy `?tab=network` maps to `settings` with `section=network`. Tab changes update the URL via `useSummarizerTab` (replace navigation). Example: `http://localhost:5173/summarizer?tab=settings`.
+
+### Settings sub-tabs (URL)
+
+When the settings workspace tab is active, the Engine Room sidebar section is driven by the `section` search param. Valid values: `appearance`, `sync`, `ai`, `network`, `db`, `publishing`, `diagnostics` (default `appearance` when missing or invalid). Example deep link: `http://localhost:5173/summarizer?tab=settings&section=network`. Section changes update the URL via `useSettingsSection` (replace navigation).
+
+Successful login redirects to `/summarizer?tab=summary`.
 
 ### Theme
 
 Light / dark / system theme is owned by `theme-provider` in `main.tsx` (`frontend/src/components/theme-provider.tsx`). Preference persists in `localStorage` under `vite-ui-theme`. Do not reintroduce a separate theme toggle in `SettingsContext`.
+
+## Testing
+
+Backend pytest **always** uses a separate Postgres database (`app_test` by default). It never reads or writes the dev database (`app`).
+
+### One-time setup
+
+**Native Postgres** (from repo root):
+
+```bash
+createdb app_test
+cd backend && POSTGRES_DB=app_test uv run alembic upgrade head
+```
+
+**Docker Compose** — new volumes run `scripts/postgres-init/01-create-test-db.sh` on first boot. If the volume already existed before that script was added:
+
+```bash
+docker compose exec db psql -U postgres -d app -c "CREATE DATABASE app_test;"
+docker compose run --rm prestart bash -c "POSTGRES_DB=app_test alembic upgrade head"
+```
+
+Set `POSTGRES_DB_TEST=app_test` in `.env` (see `.env.example`). `conftest.py` overrides `POSTGRES_DB` to that value for every pytest run.
+
+### Run tests
+
+```bash
+cd backend && uv run pytest tests/ -q
+```
+
+Each test truncates all `tg_*` tables afterward so suites cannot pollute each other.
+
+### Clean test pollution from dev DB
+
+If pytest previously ran against `app`, remove leftover test channels once:
+
+```bash
+uv run python backend/scripts/cleanup_test_channels.py --dry-run
+uv run python backend/scripts/cleanup_test_channels.py
+uv run python backend/scripts/backfill_user_id.py --reassign-all
+```
+
+`cleanup_test_channels.py` deletes known test channel IDs/names, dependent posts/embeddings/summaries/sync logs, and network log `nl-test-1`, then optionally reassigns `user_id` on remaining rows.
 
 ## Pre-commit
 

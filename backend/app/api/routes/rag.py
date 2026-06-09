@@ -67,8 +67,9 @@ def _effective_operator_channels(
 
 
 @router.get("/status")
-def rag_status(session: SessionDep, _current_user: CurrentUser) -> dict[str, Any]:
-    return get_embedding_status(session)
+def rag_status(session: SessionDep, current_user: CurrentUser) -> dict[str, Any]:
+    operator_channels = channel_names_for_operator(session, current_user.id)
+    return get_embedding_status(session, channel_names=operator_channels)
 
 
 @router.post("/embed")

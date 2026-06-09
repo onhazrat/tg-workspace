@@ -63,16 +63,19 @@ def test_sync_job_requires_auth() -> None:
 
 def test_data_channels_crud() -> None:
     headers = _auth_headers()
-    r = client.put(
-        "/api/v1/data/channels/smoke-test",
-        json={"name": "smoke-test", "displayName": "Smoke Test"},
-        headers=headers,
-    )
-    assert r.status_code == 200
-    r2 = client.get("/api/v1/data/channels", headers=headers)
-    assert r2.status_code == 200
-    names = [c["name"] for c in r2.json()]
-    assert "smoke-test" in names
+    try:
+        r = client.put(
+            "/api/v1/data/channels/smoke-test",
+            json={"name": "smoke-test", "displayName": "Smoke Test"},
+            headers=headers,
+        )
+        assert r.status_code == 200
+        r2 = client.get("/api/v1/data/channels", headers=headers)
+        assert r2.status_code == 200
+        names = [c["name"] for c in r2.json()]
+        assert "smoke-test" in names
+    finally:
+        client.delete("/api/v1/data/channels/smoke-test", headers=headers)
 
 
 def test_scrape_invalid_url() -> None:

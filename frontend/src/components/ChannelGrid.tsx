@@ -10,6 +10,7 @@ import { useScraper } from '../contexts/ScraperContext';
 import { upsertChannel, deleteChannel, clearChannelPosts, saveNetworkLog } from '../lib/repository';
 import { useApiStatus } from '../hooks/useApiStatus';
 import { api } from "@/api";
+import { buildActiveProxies, isNetworkRoutingActive } from "@/lib/syncSettings";
 import { Modal } from './ui/Modal';
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tg-tooltip';
 
@@ -297,22 +298,14 @@ export const ChannelGrid: React.FC<ChannelGridProps> = () => {
     let photoUrl = undefined;
     const effectiveStartTime = getEffectiveGlobalStartTime();
 
-    const proxies = defaultProxyUrls.split(/[\n,]+/).map(p => p.trim()).filter(p => p);
-    const torPool = torProxyUrls.split(/[\n,]+/).map(p => p.trim()).filter(p => p);
-    
-    let activeProxies: string[] = [];
-    if (proxyEnabled) {
-      activeProxies.push(...proxies);
-    }
-    
-    if (torEnabled) {
-      if (torMode === "auto") {
-        activeProxies.push("socks5h://127.0.0.1:9050");
-      } else {
-        // In custom mode, add all proxies from the TOR pool
-        activeProxies.push(...torPool);
-      }
-    }
+    const proxySettings = {
+      proxyEnabled,
+      defaultProxyUrls,
+      torEnabled,
+      torMode,
+      torProxyUrls,
+    };
+    const activeProxies = buildActiveProxies(proxySettings);
 
     const startTime = Date.now();
     let status = 0;
@@ -329,7 +322,7 @@ export const ChannelGrid: React.FC<ChannelGridProps> = () => {
     try {
       const data = await api.channelInfo({
         channelName,
-        proxyEnabled: proxyEnabled || torEnabled,
+        proxyEnabled: isNetworkRoutingActive(proxySettings),
         proxies: activeProxies,
         torAutoRotate,
         torRotationThreshold,

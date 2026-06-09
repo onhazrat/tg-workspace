@@ -215,36 +215,49 @@ def test_network_logs_crud(client: TestClient) -> None:
             "telemetry": {"success": True, "attempts": [{"attempt": 1, "proxyUrl": "socks5h://127.0.0.1:9050"}]},
         }
     ]
-    r = client.post(f"{PREFIX}/network-logs", json=body, headers=headers)
-    assert r.status_code == 200, r.text
-    assert r.json()["upserted"] == 1
+    try:
+        r = client.post(f"{PREFIX}/network-logs", json=body, headers=headers)
+        assert r.status_code == 200, r.text
+        assert r.json()["upserted"] == 1
 
-    r2 = client.get(f"{PREFIX}/network-logs", headers=headers)
-    assert r2.status_code == 200
-    logs = r2.json()
-    assert any(l["id"] == "nl-test-1" for l in logs)
-    saved = next(l for l in logs if l["id"] == "nl-test-1")
-    assert saved["statusCode"] == 200
-    assert saved["proxyUsed"] == "socks5h://127.0.0.1:9050"
-    assert saved["source"] == "ChannelGrid"
-    assert saved["timestamp"] == js_timestamp
+        r2 = client.get(f"{PREFIX}/network-logs", headers=headers)
+        assert r2.status_code == 200
+        logs = r2.json()
+        assert any(l["id"] == "nl-test-1" for l in logs)
+        saved = next(l for l in logs if l["id"] == "nl-test-1")
+        assert saved["statusCode"] == 200
+        assert saved["proxyUsed"] == "socks5h://127.0.0.1:9050"
+        assert saved["source"] == "ChannelGrid"
+        assert saved["timestamp"] == js_timestamp
+    finally:
+        from sqlmodel import Session, delete
+
+        from app.core.db import engine
+        from app.models_tg import NetworkLog
+
+        with Session(engine) as session:
+            session.exec(delete(NetworkLog).where(NetworkLog.id == "nl-test-1"))
+            session.commit()
 
 
 def test_channel_upsert_ms_timestamps(client: TestClient) -> None:
     headers = _auth(client)
     js_now = 1_780_946_501_328
-    r = client.put(
-        f"{PREFIX}/channels/ch-ms-ts",
-        json={
-            "name": "ch-ms-ts",
-            "lastUpdated": js_now,
-            "followedAt": js_now,
-            "startTime": js_now,
-        },
-        headers=headers,
-    )
-    assert r.status_code == 200, r.text
-    data = r.json()
-    assert data["lastUpdated"] == js_now
-    assert data["followedAt"] == js_now
-    assert data["startTime"] == js_now
+    try:
+        r = client.put(
+            f"{PREFIX}/channels/ch-ms-ts",
+            json={
+                "name": "ch-ms-ts",
+                "lastUpdated": js_now,
+                "followedAt": js_now,
+                "startTime": js_now,
+            },
+            headers=headers,
+        )
+        assert r.status_code == 200, r.text
+        data = r.json()
+        assert data["lastUpdated"] == js_now
+        assert data["followedAt"] == js_now
+        assert data["startTime"] == js_now
+    finally:
+        client.delete(f"{PREFIX}/channels/ch-ms-ts", headers=headers)

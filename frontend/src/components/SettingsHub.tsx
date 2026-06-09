@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useEffect } from "react";
 import { SETTINGS_TABS } from "../constants";
 import { Settings, Cpu, Globe, Send, Database, List, Activity, Layout, RefreshCw } from "lucide-react";
 import { SettingsView } from "./SettingsView";
@@ -6,9 +6,12 @@ import { BotManagement } from "./BotManagement";
 import { DatabaseManagement } from "./DatabaseManagement";
 import { DiagnosticsView } from "./DiagnosticsView";
 import { useData } from "../contexts/DataContext";
+import { useSettingsSection } from "@/hooks/useSettingsSection";
+import type { SettingsSection } from "@/lib/settingsSection";
 
 export const SettingsHub: React.FC = () => {
-  const [activeSettingsTab, setActiveSettingsTab] = useState<string>("appearance");
+  const { activeSection: activeSettingsTab, setActiveSection: setActiveSettingsTab } =
+    useSettingsSection();
   const {
     loadDBStats,
     loadLogs,
@@ -84,7 +87,7 @@ export const SettingsHub: React.FC = () => {
               return (
                 <button
                   key={tab.id}
-                  onClick={() => setActiveSettingsTab(tab.id)}
+                  onClick={() => setActiveSettingsTab(tab.id as SettingsSection)}
                   className={`flex items-center gap-3 px-3 py-2 text-left text-[11px] font-mono uppercase tracking-widest transition-all rounded-sm ${
                     isActive
                       ? "bg-app-ink text-app-bg font-bold"

@@ -84,9 +84,16 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (chatMode === "history") {
         // RAG Logic
         toast.info("Searching history for relevant context...");
-        
-        // Search for similar posts using the new RAG service
-        const similarPosts = await searchSimilarPosts(userMessage, 20);
+
+        let similarPosts;
+        try {
+          similarPosts = await searchSimilarPosts(userMessage, 20);
+        } catch (error) {
+          const message =
+            error instanceof Error ? error.message : "Semantic search failed";
+          toast.error(message);
+          throw error;
+        }
         similarPostsUsed = similarPosts;
         
         if (similarPosts.length === 0) {

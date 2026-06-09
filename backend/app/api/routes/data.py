@@ -28,7 +28,14 @@ from app.services.network_settings import (
     network_settings_payload,
 )
 from app.services.posts import bulk_upsert_posts_impl
+from app.services.settings_store import get_app_setting, put_app_setting
 from app.services.stats import get_db_stats
+from app.services.summaries import (
+    delete_summary as delete_summary_impl,
+    list_summaries as list_summaries_impl,
+    summary_to_camel,
+    upsert_summary as upsert_summary_impl,
+)
 from app.services.sync_meta import touch_sync
 from app.models_tg import (
     AppSetting,
@@ -160,21 +167,6 @@ def _post_to_camel(p: Post) -> dict[str, Any]:
         "forwardedFrom": p.forwarded_from,
         "forwardedFromName": p.forwarded_from_name,
     }
-
-
-def _summary_to_camel(s: Summary) -> dict[str, Any]:
-    base = {
-        "id": s.id,
-        "text": s.text,
-        "channels": s.channels,
-        "startDate": s.start_date,
-        "endDate": s.end_date,
-        "language": s.language,
-        "model": s.model,
-        "postCount": s.post_count,
-        "timestamp": s.timestamp,
-    }
-    return {**base, **(s.extra or {})}
 
 
 def _bot_to_camel(b: BotCredential) -> dict[str, Any]:
@@ -403,7 +395,7 @@ def list_summaries(
     session: SessionDep,
     current_user: CurrentUser,
 ) -> list[dict[str, Any]]:
-    return [_summary_to_camel(s) for s in session.exec(select(Summary)).all()]
+    return list_summaries_impl(session)
 
 
 @router.put("/summaries/{summary_id}")
@@ -413,48 +405,11 @@ def upsert_summary(
     session: SessionDep,
     current_user: CurrentUser,
 ) -> dict[str, Any]:
-    s = session.get(Summary, summary_id)
-    known = {
-        "id",
-        "text",
-        "channels",
-        "start_date",
-        "end_date",
-        "startDate",
-        "endDate",
-        "language",
-        "model",
-        "post_count",
-        "postCount",
-        "timestamp",
-    }
-    if s:
-        for k, v in body.items():
-            snake = _to_snake(k)
-            if snake in ("start_date", "end_date", "post_count", "text", "channels", "language", "model", "timestamp"):
-                setattr(s, snake, v)
-        extra = {k: v for k, v in body.items() if _to_snake(k) not in known and k != "id"}
-        s.extra = {**(s.extra or {}), **extra}
-        s.updated_at = datetime.utcnow()
-    else:
-        s = Summary(
-            id=summary_id,
-            user_id=current_user.id,
-            text=body.get("text", ""),
-            channels=body.get("channels", []),
-            start_date=body.get("startDate", body.get("start_date", 0)),
-            end_date=body.get("endDate", body.get("end_date", 0)),
-            language=body.get("language", "English"),
-            model=body.get("model"),
-            post_count=body.get("postCount", body.get("post_count")),
-            timestamp=body.get("timestamp", 0),
-            extra={k: v for k, v in body.items() if _to_snake(k) not in known},
-        )
-    session.add(s)
-    session.commit()
-    session.refresh(s)
+    result = upsert_summary_impl(
+        session, summary_id, body, user_id=current_user.id
+    )
     _touch_sync(session, "summaries")
-    return _summary_to_camel(s)
+    return result
 
 
 @router.delete("/summaries/{summary_id}")
@@ -463,11 +418,7 @@ def delete_summary(
     session: SessionDep,
     current_user: CurrentUser,
 ) -> dict[str, str]:
-    s = session.get(Summary, summary_id)
-    if not s:
-        raise HTTPException(status_code=404, detail="Summary not found")
-    session.delete(s)
-    session.commit()
+    delete_summary_impl(session, summary_id)
     _touch_sync(session, "summaries")
     return {"status": "deleted"}
 
@@ -959,10 +910,7 @@ def get_setting(
     session: SessionDep,
     current_user: CurrentUser,
 ) -> dict[str, Any]:
-    row = session.get(AppSetting, key)
-    if not row:
-        return {"key": key, "value": {}}
-    return {"key": key, "value": row.value}
+    return get_app_setting(session, key)
 
 
 @router.put("/settings/{key}")
@@ -972,17 +920,9 @@ def put_setting(
     session: SessionDep,
     current_user: CurrentUser,
 ) -> dict[str, Any]:
-    row = session.get(AppSetting, key)
-    merged = {**(row.value if row else {}), **body}
-    if row:
-        row.value = merged
-        row.updated_at = datetime.utcnow()
-    else:
-        row = AppSetting(key=key, value=merged, user_id=current_user.id)
-    session.add(row)
-    session.commit()
+    result = put_app_setting(session, key, body, user_id=current_user.id)
     _touch_sync(session, "settings")
-    return {"key": key, "value": row.value}
+    return result
 
 
 # --- import / export ---
@@ -1180,7 +1120,7 @@ def export_data(
         "data": {
             "channels": [_channel_to_camel(c) for c in session.exec(select(Channel)).all()],
             "posts": [_post_to_camel(p) for p in session.exec(select(Post)).all()],
-            "summaries": [_summary_to_camel(s) for s in session.exec(select(Summary)).all()],
+            "summaries": [summary_to_camel(s) for s in session.exec(select(Summary)).all()],
             "bot_credentials": [_bot_to_camel(b) for b in session.exec(select(BotCredential)).all()],
             "chat_destinations": [
                 _chat_dest_to_camel(d) for d in session.exec(select(ChatDestination)).all()

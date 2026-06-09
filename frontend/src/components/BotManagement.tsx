@@ -8,6 +8,7 @@ import { saveBotCredential, deleteBotCredential, saveChatDestination, deleteChat
 import { toast } from "sonner";
 import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tg-tooltip";
 import { publishSummary, fetchBotInfo as fetchBotInfoApi } from "../services/telegram";
+import { buildActiveProxies } from "@/lib/syncSettings";
 import { RelativeTime } from "./RelativeTime";
 import { BotAvatar } from "./BotAvatar";
 
@@ -37,21 +38,14 @@ export const BotManagement: React.FC<BotManagementProps> = () => {
   const [isAutoFetchingDest, setIsAutoFetchingDest] = useState(false);
   const [botValidation, setBotValidation] = useState<Record<string, { isValid: boolean; botInfo?: string; loading: boolean }>>({});
 
-  const getActiveProxies = () => {
-    const proxies = defaultProxyUrls.split(/[\n,]+/).map(p => p.trim()).filter(p => p);
-    const torPool = torProxyUrls.split(/[\n,]+/).map(p => p.trim()).filter(p => p);
-    
-    let activeProxies: string[] = [];
-    if (proxyEnabled) activeProxies.push(...proxies);
-    if (torEnabled) {
-      if (torMode === "auto") {
-        activeProxies.push("socks5h://127.0.0.1:9050");
-      } else {
-        activeProxies.push(...torPool);
-      }
-    }
-    return activeProxies;
-  };
+  const getActiveProxies = () =>
+    buildActiveProxies({
+      proxyEnabled,
+      defaultProxyUrls,
+      torEnabled,
+      torMode,
+      torProxyUrls,
+    });
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const fetchBotInfo = async (
