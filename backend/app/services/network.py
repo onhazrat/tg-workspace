@@ -53,6 +53,15 @@ def _build_client(proxy_url: str | None) -> httpx.AsyncClient:
     return httpx.AsyncClient(**kwargs)
 
 
+def _rotate_tor_identity_sync(control_port: int, password: str) -> None:
+    with Controller.from_port(port=control_port) as controller:
+        if password:
+            controller.authenticate(password=password)
+        else:
+            controller.authenticate()
+        controller.signal(Signal.NEWNYM)
+
+
 async def rotate_tor_identity(control_port: int | None = None, password: str | None = None) -> None:
     global _is_rotating_tor, _tor_request_counter
     if _is_rotating_tor:
@@ -61,12 +70,7 @@ async def rotate_tor_identity(control_port: int | None = None, password: str | N
     port = control_port or settings.TOR_CONTROL_PORT
     pwd = password or settings.TOR_CONTROL_PASSWORD or ""
     try:
-        with Controller.from_port(port=port) as controller:
-            if pwd:
-                controller.authenticate(password=pwd)
-            else:
-                controller.authenticate()
-            controller.signal(Signal.NEWNYM)
+        await asyncio.to_thread(_rotate_tor_identity_sync, port, pwd)
         _tor_request_counter = 0
         await asyncio.sleep(2)
     finally:

@@ -13,7 +13,6 @@ class SyncRuntimeSettings(BaseModel):
     auto_sync_enabled: bool = Field(..., alias="autoSyncEnabled")
     auto_sync_interval: int = Field(..., alias="autoSyncInterval")
     sync_concurrency: int = Field(..., alias="syncConcurrency")
-    auto_follow_forwarded: bool = Field(..., alias="autoFollowForwarded")
     consecutive_failures: int = Field(..., alias="consecutiveFailures")
     auto_sync_pause_until: int | None = Field(None, alias="autoSyncPauseUntil")
     global_start_time_mode: str | None = Field(None, alias="globalStartTimeMode")

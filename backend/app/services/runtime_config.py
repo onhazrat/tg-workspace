@@ -38,7 +38,6 @@ def _sync_runtime_payload(sync_settings: dict[str, Any]) -> dict[str, Any]:
                 sync_settings.get("syncConcurrency") or settings.SYNC_CONCURRENCY_DEFAULT
             ),
         ),
-        "autoFollowForwarded": bool(sync_settings.get("autoFollowForwarded")),
         "consecutiveFailures": int(sync_settings.get("consecutiveFailures") or 0),
         "autoSyncPauseUntil": sync_settings.get("autoSyncPauseUntil"),
         "globalStartTimeMode": sync_settings.get("globalStartTimeMode") or "retention",

@@ -12,6 +12,7 @@ _CAMEL_OVERRIDES = {
     "last_updated": "lastUpdated",
     "is_frozen": "isFrozen",
     "is_unavailable_on_web_view": "isUnavailableOnWebView",
+    "auto_follow_forwarded": "autoFollowForwarded",
     "followed_at": "followedAt",
     "discovered_via": "discoveredVia",
     "channel_name": "channelName",

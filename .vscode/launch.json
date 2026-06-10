@@ -19,7 +19,7 @@
             "python": "${workspaceFolder}/.venv/bin/python",
             "jinja": true,
             "envFile": "${workspaceFolder}/.env",
-            "preLaunchTask": "Docker: Postgres"
+            "preLaunchTask": "Backend: Prepare"
         },
         {
             "type": "chrome",

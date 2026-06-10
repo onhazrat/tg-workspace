@@ -47,6 +47,7 @@ export interface Channel {
   lastUpdated?: number;
   isFrozen?: boolean;
   isUnavailableOnWebView?: boolean;
+  autoFollowForwarded?: boolean;
   language?: string;
   followedAt?: number;
   discoveredVia?: {

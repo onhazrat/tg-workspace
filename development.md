@@ -270,6 +270,7 @@ Remediation chose **Mode A** on 2026-06-09 ([DECISIONS.md](docs/migration/DECISI
 
   If sync returns `No channels to sync` despite visible channels (stale `user_id` from old test accounts), add `--reassign-all` (always `--dry-run` first).
 
-## Migration
+## Documentation
 
-TG-Summarizer → FastAPI migration docs live in [`docs/migration/`](docs/migration/README.md). Locked decisions: [DECISIONS.md](docs/migration/DECISIONS.md). Phased plan: [IMPLEMENTATION-PLAN.md](docs/migration/IMPLEMENTATION-PLAN.md). Remediation: [REMEDIATION-PLAN.md](docs/migration/REMEDIATION-PLAN.md).
+- **Ideas log** — [`docs/ideas-log/`](docs/ideas-log/README.md) for backlog items to pick up in a later session (reference an `IDEA-NNN` id when starting work with the agent).
+- **Migration** — [`docs/migration/`](docs/migration/README.md). Locked decisions: [DECISIONS.md](docs/migration/DECISIONS.md). Phased plan: [IMPLEMENTATION-PLAN.md](docs/migration/IMPLEMENTATION-PLAN.md). Remediation: [REMEDIATION-PLAN.md](docs/migration/REMEDIATION-PLAN.md).

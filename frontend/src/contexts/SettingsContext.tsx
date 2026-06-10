@@ -56,8 +56,6 @@ interface SettingsContextType {
   setTranslationModel: (model: string) => void;
   translationTargetLanguage: string;
   setTranslationTargetLanguage: (language: string) => void;
-  autoFollowForwarded: boolean;
-  setAutoFollowForwarded: (enabled: boolean) => void;
   postRetentionDays: number;
   setPostRetentionDays: (days: number) => void;
   logRetentionDays: number;
@@ -210,13 +208,6 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({ children }
     return DEFAULT_AI_LANGUAGE;
   });
 
-  const [autoFollowForwarded, setAutoFollowForwarded] = useState<boolean>(() => {
-    if (typeof window !== "undefined") {
-      return localStorage.getItem("autoFollowForwarded") === "true";
-    }
-    return false;
-  });
-
   const [postRetentionDays, setPostRetentionDays] = useState<number>(() => {
     if (typeof window !== "undefined") {
       const saved = localStorage.getItem("postRetentionDays");
@@ -319,7 +310,6 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({ children }
     if (typeof sync.autoSyncEnabled === "boolean") setAutoSyncEnabled(sync.autoSyncEnabled);
     if (typeof sync.autoSyncInterval === "number") setAutoSyncInterval(sync.autoSyncInterval);
     if (typeof sync.syncConcurrency === "number") setSyncConcurrency(sync.syncConcurrency);
-    if (typeof sync.autoFollowForwarded === "boolean") setAutoFollowForwarded(sync.autoFollowForwarded);
     if (sync.globalStartTimeMode === "retention" || sync.globalStartTimeMode === "relative" || sync.globalStartTimeMode === "absolute") {
       setGlobalStartTimeMode(sync.globalStartTimeMode);
     }
@@ -575,7 +565,6 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({ children }
         autoSyncEnabled,
         autoSyncInterval,
         syncConcurrency,
-        autoFollowForwarded,
         globalStartTimeMode,
         globalStartTimeValue,
       })
@@ -584,7 +573,6 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({ children }
     autoSyncEnabled,
     autoSyncInterval,
     syncConcurrency,
-    autoFollowForwarded,
     globalStartTimeMode,
     globalStartTimeValue,
   ]);
@@ -669,8 +657,6 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({ children }
         setTranslationModel,
         translationTargetLanguage,
         setTranslationTargetLanguage,
-        autoFollowForwarded,
-        setAutoFollowForwarded,
         postRetentionDays,
         setPostRetentionDays,
         logRetentionDays,

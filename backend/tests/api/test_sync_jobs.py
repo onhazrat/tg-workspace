@@ -384,3 +384,104 @@ def test_sync_job_persists_to_postgres(client: TestClient) -> None:
 
     client.delete(f"{DATA}/channels/persist-ch", headers=headers)
     clear_jobs_for_tests()
+
+
+def _wait_for_job(client: TestClient, job_id: str, headers: dict[str, str]) -> dict:
+    deadline = time.time() + 10
+    data: dict = {}
+    while time.time() < deadline:
+        status_r = client.get(f"{PREFIX}/sync/{job_id}", headers=headers)
+        data = status_r.json()
+        if data["status"] in ("completed", "failed", "cancelled"):
+            break
+        time.sleep(0.1)
+    return data
+
+
+def _forwarded_post() -> dict:
+    return {
+        "id": 200,
+        "text": "Forwarded content",
+        "date": "2024-06-01T12:00:00+00:00",
+        "timestamp": 1_716_724_800_000,
+        "forwardedFrom": "fwd-target-ch",
+        "forwardedFromName": "Fwd Target",
+    }
+
+
+def test_sync_auto_follow_enabled_creates_forwarded_channel(client: TestClient) -> None:
+    clear_jobs_for_tests()
+    headers = _auth(client)
+
+    client.put(
+        f"{DATA}/channels/source-ch",
+        json={"name": "source-ch", "autoFollowForwarded": True},
+        headers=headers,
+    )
+
+    with (
+        patch(
+            "app.services.sync_orchestrator.scrape_channel_page",
+            new_callable=AsyncMock,
+            return_value=_mock_page_response("source-ch", [_forwarded_post()], next_before_id=None),
+        ),
+        patch(
+            "app.services.sync_orchestrator.get_channel_info",
+            new_callable=AsyncMock,
+            return_value={
+                "displayName": "Fwd Target",
+                "photoUrl": "https://example.com/fwd.jpg",
+                "isUnavailableOnWebView": False,
+            },
+        ),
+    ):
+        r = client.post(
+            f"{PREFIX}/sync",
+            json={"channelIds": ["source-ch"], "source": "Test"},
+            headers=headers,
+        )
+        data = _wait_for_job(client, r.json()["jobId"], headers)
+        assert data["status"] == "completed"
+
+    channels_r = client.get(f"{DATA}/channels", headers=headers)
+    names = {c["name"] for c in channels_r.json()}
+    assert "fwd-target-ch" in names
+
+    fwd = next(c for c in channels_r.json() if c["name"] == "fwd-target-ch")
+    assert fwd["discoveredVia"]["channelName"] == "source-ch"
+    assert fwd["discoveredVia"]["postId"] == 200
+
+    client.delete(f"{DATA}/channels/fwd-target-ch", headers=headers)
+    client.delete(f"{DATA}/channels/source-ch", headers=headers)
+    clear_jobs_for_tests()
+
+
+def test_sync_auto_follow_disabled_skips_forwarded_channel(client: TestClient) -> None:
+    clear_jobs_for_tests()
+    headers = _auth(client)
+
+    client.put(
+        f"{DATA}/channels/no-follow-ch",
+        json={"name": "no-follow-ch", "autoFollowForwarded": False},
+        headers=headers,
+    )
+
+    with patch(
+        "app.services.sync_orchestrator.scrape_channel_page",
+        new_callable=AsyncMock,
+        return_value=_mock_page_response("no-follow-ch", [_forwarded_post()], next_before_id=None),
+    ):
+        r = client.post(
+            f"{PREFIX}/sync",
+            json={"channelIds": ["no-follow-ch"], "source": "Test"},
+            headers=headers,
+        )
+        data = _wait_for_job(client, r.json()["jobId"], headers)
+        assert data["status"] == "completed"
+
+    channels_r = client.get(f"{DATA}/channels", headers=headers)
+    names = {c["name"] for c in channels_r.json()}
+    assert "fwd-target-ch" not in names
+
+    client.delete(f"{DATA}/channels/no-follow-ch", headers=headers)
+    clear_jobs_for_tests()

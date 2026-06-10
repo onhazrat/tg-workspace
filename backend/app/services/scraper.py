@@ -180,6 +180,29 @@ async def scrape_channel_page(
         tor_auto_rotate=tor_auto_rotate,
         tor_rotation_threshold=tor_rotation_threshold,
     )
+    return await asyncio.to_thread(
+        _parse_scrape_channel_page,
+        html,
+        channel_name,
+        url,
+        before_id,
+        known_latest_id,
+        known_display_name,
+        known_photo_url,
+        telemetry,
+    )
+
+
+def _parse_scrape_channel_page(
+    html: str,
+    channel_name: str,
+    url: str,
+    before_id: int | None,
+    known_latest_id: int | None,
+    known_display_name: str | None,
+    known_photo_url: str | None,
+    telemetry: dict[str, Any],
+) -> dict[str, Any]:
     soup = BeautifulSoup(html, "html.parser")
     posts, _next_url = _parse_posts_from_html(html, 0, set())
     posts = _enrich_posts_with_timestamps(posts, channel_name)

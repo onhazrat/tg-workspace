@@ -59,8 +59,6 @@ export const SettingsView: React.FC<{ activeSection?: string }> = ({ activeSecti
     setTranslationModel,
     translationTargetLanguage,
     setTranslationTargetLanguage,
-    autoFollowForwarded,
-    setAutoFollowForwarded,
     postRetentionDays,
     setPostRetentionDays,
     logRetentionDays,
@@ -547,22 +545,6 @@ export const SettingsView: React.FC<{ activeSection?: string }> = ({ activeSecti
                   </button>
                 </div>
                 <p className="text-[10px] opacity-40 italic serif">Automatically fetch new posts from selected channels in the background.</p>
-              </div>
-
-              <div className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2 opacity-60">
-                    <RefreshCw size={14} />
-                    <span className="text-[10px] font-bold uppercase tracking-tight">Auto-Follow Forwarded</span>
-                  </div>
-                  <button 
-                    onClick={() => setAutoFollowForwarded(!autoFollowForwarded)}
-                    className={`w-10 h-5 transition-all relative border border-app-ink/20 ${autoFollowForwarded ? 'bg-green-500 border-green-600' : 'bg-app-ink/10'}`}
-                  >
-                    <div className={`absolute top-0.5 w-3.5 h-3.5 bg-white transition-all ${autoFollowForwarded ? 'left-5.5' : 'left-0.5'}`}></div>
-                  </button>
-                </div>
-                <p className="text-[10px] opacity-40 italic serif">Automatically follow new channels when posts are forwarded from them.</p>
               </div>
 
               <div className="space-y-4 pt-4 border-t border-app-ink/5">

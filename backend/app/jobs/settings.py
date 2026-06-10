@@ -33,7 +33,6 @@ def _default_sync() -> dict[str, Any]:
         "autoSyncEnabled": True,
         "autoSyncInterval": settings.AUTO_SYNC_INTERVAL_MINUTES_DEFAULT,
         "syncConcurrency": settings.SYNC_CONCURRENCY_DEFAULT,
-        "autoFollowForwarded": False,
         "consecutiveFailures": 0,
         "autoSyncPauseUntil": None,
     }

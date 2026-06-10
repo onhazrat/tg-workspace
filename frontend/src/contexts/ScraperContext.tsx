@@ -486,6 +486,7 @@ export const ScraperProvider: React.FC<{ children: React.ReactNode }> = ({ child
       tags: [],
       isFrozen: isUnavailableOnWebView,
       isUnavailableOnWebView,
+      autoFollowForwarded: false,
       discoveredVia
     };
 

@@ -31,6 +31,15 @@ def test_channels_crud_roundtrip(client: TestClient) -> None:
     assert data["name"] == "ch-test"
     assert data["displayName"] == "Test Channel"
     assert data["startId"] == 42
+    assert data["autoFollowForwarded"] is False
+
+    r_update = client.put(
+        f"{PREFIX}/channels/ch-test",
+        json={"name": "ch-test", "autoFollowForwarded": True},
+        headers=headers,
+    )
+    assert r_update.status_code == 200
+    assert r_update.json()["autoFollowForwarded"] is True
 
     r2 = client.get(f"{PREFIX}/channels", headers=headers)
     assert r2.status_code == 200

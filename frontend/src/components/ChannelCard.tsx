@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { motion } from 'motion/react';
-import { Clock, Trash2, ExternalLink, X, Plus, Edit2, RotateCcw, Loader2, RefreshCw, Check, Snowflake, Activity, Users, Image as ImageIcon, Video, File, Link as LinkIcon } from 'lucide-react';
+import { Clock, Trash2, ExternalLink, X, Plus, Edit2, RotateCcw, Loader2, RefreshCw, Check, Snowflake, Activity, Users, Image as ImageIcon, Video, File, Link as LinkIcon, Share2 } from 'lucide-react';
 import { Channel } from '../types';
 import { RelativeTime } from './RelativeTime';
 import { useData } from '../contexts/DataContext';
@@ -117,13 +117,18 @@ export const ChannelCard: React.FC<ChannelCardProps> = ({
     }
   };
 
+  const handleToggleAutoFollow = async () => {
+    const updatedChannel = { ...channel, autoFollowForwarded: !channel.autoFollowForwarded };
+    await upsertChannel(updatedChannel);
+    setChannels(prev => prev.map(c => c.id === channel.id ? updatedChannel : c));
+  };
+
   const gradientClass = getGradientFromName(channel.name);
 
   return (
     <div 
-      onClick={toggleChannelSelection}
       className={`relative flex flex-col h-full rounded-2xl border transition-all duration-200 overflow-hidden group
-        ${channel.isFrozen ? 'cursor-default opacity-80' : 'cursor-pointer'}
+        ${channel.isFrozen ? 'opacity-80' : ''}
         ${isSelected 
           ? 'bg-app-card border-app-ink shadow-md' 
           : 'bg-app-card border-app-ink/10 shadow-sm hover:border-app-ink/30 hover:shadow-md'
@@ -213,11 +218,18 @@ export const ChannelCard: React.FC<ChannelCardProps> = ({
 
       {/* Selection Indicator & Sync Queue Badge */}
       <div className="absolute top-4 left-4 flex items-center gap-2 z-20">
-        <div className={`w-5 h-5 rounded-full border flex items-center justify-center transition-colors ${
-          isSelected ? 'bg-app-ink border-app-ink text-app-bg' : 'border-app-ink/20 bg-app-bg/50 text-transparent group-hover:border-app-ink/40'
-        }`}>
+        <button
+          type="button"
+          onClick={toggleChannelSelection}
+          disabled={channel.isFrozen}
+          aria-label={isSelected ? `Deselect ${channel.name}` : `Select ${channel.name}`}
+          aria-pressed={isSelected}
+          className={`w-5 h-5 rounded-full border flex items-center justify-center transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
+            isSelected ? 'bg-app-ink border-app-ink text-app-bg' : 'border-app-ink/20 bg-app-bg/50 text-transparent hover:border-app-ink/40'
+          }`}
+        >
           <Check size={12} strokeWidth={3} />
-        </div>
+        </button>
         
         {syncQueueIndex !== -1 && (
           <div className="bg-app-ink text-app-bg text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1 shadow-sm">
@@ -540,6 +552,31 @@ export const ChannelCard: React.FC<ChannelCardProps> = ({
                   {channel.isUnavailableOnWebView ? 'Restricted' : channel.isFrozen ? 'Frozen' : stats?.maxId && stats?.latestId && stats.maxId >= stats.latestId ? 'Up to date' : 'Pending'}
                 </p>
               </div>
+            </div>
+
+            <div className="group/auto-follow" onClick={(e) => e.stopPropagation()}>
+              <p className="text-[9px] uppercase text-app-ink/40 font-bold tracking-widest mb-0.5 flex items-center gap-1">
+                <Share2 size={9} className="opacity-50" />
+                Auto-Follow
+              </p>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    type="button"
+                    onClick={handleToggleAutoFollow}
+                    className={`w-10 h-5 transition-all relative border border-app-ink/20 ${
+                      channel.autoFollowForwarded ? 'bg-green-500 border-green-600' : 'bg-app-ink/10'
+                    }`}
+                  >
+                    <div className={`absolute top-0.5 w-3.5 h-3.5 bg-white transition-all ${
+                      channel.autoFollowForwarded ? 'left-5.5' : 'left-0.5'
+                    }`} />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom" className="max-w-[220px] text-center">
+                  <p>When syncing this channel, automatically follow new channels forwarded from its posts.</p>
+                </TooltipContent>
+              </Tooltip>
             </div>
           </div>
 

@@ -37,6 +37,7 @@ class Channel(SQLModel, table=True):
     last_updated: int | None = Field(default=None, sa_column=_ms_ts(nullable=True))
     is_frozen: bool = False
     is_unavailable_on_web_view: bool = False
+    auto_follow_forwarded: bool = False
     language: str | None = None
     followed_at: int | None = Field(default=None, sa_column=_ms_ts(nullable=True))
     discovered_via: dict[str, Any] | None = Field(default=None, sa_column=Column(JSON))

@@ -11,6 +11,28 @@
             "problemMatcher": []
         },
         {
+            "label": "Backend: Alembic migrate",
+            "type": "shell",
+            "command": "uv run alembic upgrade head",
+            "options": {
+                "cwd": "${workspaceFolder}/backend"
+            },
+            "dependsOn": ["Docker: Postgres"],
+            "problemMatcher": []
+        },
+        {
+            "label": "Backend: Prepare",
+            "dependsOn": ["Backend: Alembic migrate"],
+            "dependsOrder": "sequence",
+            "problemMatcher": []
+        },
+        {
+            "label": "Backend: Wait for health",
+            "type": "shell",
+            "command": "bash ${workspaceFolder}/scripts/wait-for-backend.sh",
+            "problemMatcher": []
+        },
+        {
             "label": "Frontend: Vite dev",
             "type": "shell",
             "command": "bun run dev",
@@ -20,6 +42,7 @@
                     "PATH": "${env:HOME}/.bun/bin:${env:PATH}"
                 }
             },
+            "dependsOn": ["Backend: Wait for health"],
             "isBackground": true,
             "problemMatcher": {
                 "owner": "typescript",

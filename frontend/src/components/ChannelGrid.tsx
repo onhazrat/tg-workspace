@@ -387,7 +387,8 @@ export const ChannelGrid: React.FC<ChannelGridProps> = () => {
       startTime: effectiveStartTime,
       lastUpdated: Date.now(),
       followedAt: Date.now(),
-      tags: []
+      tags: [],
+      autoFollowForwarded: false,
     };
     
     await upsertChannel(newChannel);

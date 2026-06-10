@@ -172,18 +172,23 @@ async def _notify_job_update(job: SyncJobState) -> None:
 
 async def touch_job(job: SyncJobState) -> None:
     """Update in-memory job state, notify SSE subscribers, flush DB when needed."""
+    should_flush = False
     async with _jobs_lock:
         _active_jobs[job.job_id] = job
-        if _should_flush_db(job):
-            _persist_job(job)
+        should_flush = _should_flush_db(job)
+
+    if should_flush:
+        await asyncio.to_thread(_persist_job, job)
+        async with _jobs_lock:
             _mark_flushed(job)
+
     await _notify_job_update(job)
 
 
 async def persist_job(job: SyncJobState) -> None:
     """Force a DB flush (job create, cancel, terminal)."""
+    await asyncio.to_thread(_persist_job, job)
     async with _jobs_lock:
-        _persist_job(job)
         _mark_flushed(job)
         _active_jobs[job.job_id] = job
     await _notify_job_update(job)

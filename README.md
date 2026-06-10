@@ -6,7 +6,7 @@ Self-hosted Telegram channel summarizer migrated to a FastAPI + React monorepo.
 
 - `backend/` — FastAPI API, AI providers, scraping, jobs, PostgreSQL
 - `frontend/` — React 19 + Vite UI (ported from TG-Summarizer)
-- `docs/migration/` — Architecture decisions and inventory
+- `docs/` — [Ideas log](docs/ideas-log/), [migration ADRs](docs/migration/)
 - `TG-Summarizer/` — Original reference implementation
 
 ## Quick start (local)
@@ -48,6 +48,7 @@ docker compose up --build
 - [deployment.md](deployment.md) — Traefik, Docker Compose production stack, GitHub Actions CD
 - [development.md](development.md) — local Docker, bun dev, Playwright, OpenAPI client generation
 
-## Migration docs
+## Documentation
 
-See [docs/migration/](docs/migration/) for ADRs, data model, and risks.
+- [Ideas log](docs/ideas-log/) — backlog for future work sessions
+- [Migration docs](docs/migration/) — ADRs, data model, and risks
