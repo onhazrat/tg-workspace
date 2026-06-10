@@ -4,6 +4,7 @@ import { Post } from '../types';
 import { useSettings } from './SettingsContext';
 import { searchSimilarPostsFromQuery } from '../services/rag';
 import { api } from "@/api";
+import { env } from "@/lib/env";
 
 interface RAGSearchOptions {
   channels?: string[];
@@ -19,8 +20,6 @@ interface RAGContextType {
 }
 
 const RAGContext = createContext<RAGContextType | undefined>(undefined);
-
-const STATUS_POLL_MS = 10_000;
 
 export const RAGProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const { embeddingsEnabled } = useSettings();
@@ -48,7 +47,7 @@ export const RAGProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   useEffect(() => {
     if (!embeddingsEnabled) return;
     refreshStatus();
-    const timer = setInterval(refreshStatus, STATUS_POLL_MS);
+    const timer = setInterval(refreshStatus, env.ragStatusPollMs);
     return () => clearInterval(timer);
   }, [embeddingsEnabled, refreshStatus]);
 

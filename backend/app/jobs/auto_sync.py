@@ -7,6 +7,7 @@ import logging
 import time
 from sqlmodel import Session
 
+from app.core.config import settings
 from app.core.db import engine
 from app.jobs.settings import load_sync_settings, save_setting
 from app.services.network_settings import get_network_setting_row
@@ -16,7 +17,6 @@ from app.services.sync_orchestrator import run_sync_job
 
 logger = logging.getLogger(__name__)
 
-PAUSE_DURATION_MS = 10 * 60 * 1000
 CHECK_SOURCE = "Auto Sync (scheduler)"
 
 
@@ -43,7 +43,9 @@ async def run_auto_sync() -> dict:
         if has_active_sync_job():
             return {"skipped": True, "reason": "sync_job_active"}
 
-        interval_min = int(sync_cfg.get("autoSyncInterval") or 60)
+        interval_min = int(
+            sync_cfg.get("autoSyncInterval") or settings.AUTO_SYNC_INTERVAL_MINUTES_DEFAULT
+        )
         interval_ms = interval_min * 60 * 1000
 
         net_row = get_network_setting_row(session)
@@ -74,9 +76,9 @@ async def run_auto_sync() -> dict:
                 prev_failures = int(sync_cfg.get("consecutiveFailures") or 0)
                 next_failures = prev_failures + len(failures)
                 updates: dict = {"consecutiveFailures": next_failures}
-                threshold = max(3, len(channels))
+                threshold = max(settings.AUTO_SYNC_FAILURE_THRESHOLD_MIN, len(channels))
                 if next_failures >= threshold:
-                    updates["autoSyncPauseUntil"] = now + PAUSE_DURATION_MS
+                    updates["autoSyncPauseUntil"] = now + settings.AUTO_SYNC_PAUSE_DURATION_MS
                     logger.warning(
                         "Auto-sync paused for 10 minutes after %s consecutive failures",
                         next_failures,

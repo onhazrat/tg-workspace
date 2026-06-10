@@ -4,6 +4,7 @@
  */
 
 import { api } from "@/api";
+import { env } from "@/lib/env";
 import type {
   BotCredential,
   Channel,
@@ -24,6 +25,7 @@ import * as cache from "./cache";
 import { stripToken } from "./botCredential";
 
 let syncMeta: Record<string, { etag: string }> = {};
+let syncMetaFetchedAt = 0;
 
 type WriteFallbackHandler = (resource: string, error: unknown) => void;
 let onWriteFallback: WriteFallbackHandler | null = null;
@@ -36,12 +38,21 @@ export function getSyncMeta(): Record<string, { etag: string }> {
   return { ...syncMeta };
 }
 
-export async function refreshSyncMeta(): Promise<void> {
+export async function refreshSyncMeta(force = false): Promise<void> {
+  const now = Date.now();
+  if (!force && now - syncMetaFetchedAt < env.syncMetaMinIntervalMs) {
+    return;
+  }
   try {
     syncMeta = await api.syncMeta();
+    syncMetaFetchedAt = now;
   } catch {
     /* server unavailable — use cache only */
   }
+}
+
+export function invalidateSyncMetaCache(): void {
+  syncMetaFetchedAt = 0;
 }
 
 async function isResourceStale(resource: string): Promise<boolean> {
@@ -68,7 +79,7 @@ async function apiWrite<T>(
   try {
     const result = await apiFn();
     await cacheFn();
-    await refreshSyncMeta();
+    await refreshSyncMeta(true);
     markResourceSynced(resource);
     return result;
   } catch (error) {
@@ -152,7 +163,7 @@ export async function deleteChannel(id: string): Promise<void> {
   try {
     await api.deleteChannel(id);
     await cache.deleteChannel(id);
-    await refreshSyncMeta();
+    await refreshSyncMeta(true);
     markResourceSynced("channels");
   } catch (error) {
     await cache.deleteChannel(id);
@@ -253,7 +264,7 @@ export async function deleteSummary(id: string): Promise<void> {
   try {
     await api.deleteSummary(id);
     await cache.deleteSummary(id);
-    await refreshSyncMeta();
+    await refreshSyncMeta(true);
     markResourceSynced("summaries");
   } catch (error) {
     await cache.deleteSummary(id);
@@ -295,7 +306,7 @@ export async function deleteBotCredential(id: string): Promise<void> {
   try {
     await api.deleteBotCredential(id);
     await cache.deleteBotCredential(id);
-    await refreshSyncMeta();
+    await refreshSyncMeta(true);
     markResourceSynced("bot_credentials");
   } catch (error) {
     await cache.deleteBotCredential(id);
@@ -334,7 +345,7 @@ export async function deleteChatDestination(id: string): Promise<void> {
   try {
     await api.deleteChatDestination(id);
     await cache.deleteChatDestination(id);
-    await refreshSyncMeta();
+    await refreshSyncMeta(true);
     markResourceSynced("chat_destinations");
   } catch (error) {
     await cache.deleteChatDestination(id);
@@ -497,7 +508,7 @@ async function deleteLogOnServer(
 ): Promise<void> {
   try {
     await api.deleteLogs({ type, ...opts });
-    await refreshSyncMeta();
+    await refreshSyncMeta(true);
   } catch (error) {
     onWriteFallback?.(`${type}_logs`, error);
     throw error;
@@ -567,7 +578,7 @@ export async function clearNetworkLogs(): Promise<void> {
 export async function deleteOldLogs(days: number): Promise<number> {
   try {
     const result = await api.deleteLogs({ olderThanDays: days });
-    await refreshSyncMeta();
+    await refreshSyncMeta(true);
     const total = result.total ?? 0;
     await cache.deleteOldLogs(days);
     return total;
@@ -630,7 +641,7 @@ export async function checkNeedsMigration(): Promise<boolean> {
   const localChannels = await cache.getChannels();
   if (localChannels.length === 0) return false;
   try {
-    await refreshSyncMeta();
+    await refreshSyncMeta(true);
     const remote = await api.listChannels();
     return remote.length === 0;
   } catch {
@@ -656,7 +667,7 @@ export async function importIndexedDBToServer(): Promise<Record<string, number>>
     },
   };
   const result = await api.importData(payload);
-  await refreshSyncMeta();
+  await refreshSyncMeta(true);
   return result.imported;
 }
 

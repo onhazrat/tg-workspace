@@ -10,6 +10,7 @@ from typing import Any
 
 from sqlmodel import Session, delete
 
+from app.core.config import settings
 from app.core.db import engine
 from app.models_tg import SyncJob as SyncJobRow
 from app.models_tg import utc_now
@@ -18,6 +19,8 @@ _channel_locks: dict[str, asyncio.Lock] = {}
 _cancel_events: dict[str, asyncio.Event] = {}
 _active_jobs: dict[str, SyncJobState] = {}
 _jobs_lock = asyncio.Lock()
+
+_TERMINAL_JOB_STATUSES = frozenset({"completed", "failed", "cancelled"})
 
 
 def _channel_lock(channel_name: str) -> asyncio.Lock:
@@ -56,6 +59,15 @@ class SyncJobState:
     finished_at: int | None = None
     cancel_event: asyncio.Event = field(default_factory=asyncio.Event)
     user_id: str | None = None
+    _update_condition: asyncio.Condition = field(
+        default_factory=asyncio.Condition, repr=False
+    )
+    _update_seq: int = field(default=0, repr=False)
+    _flushed_job_status: str = field(default="", repr=False)
+    _flushed_channel_statuses: dict[str, str] = field(
+        default_factory=dict, repr=False
+    )
+    _last_persist_at_ms: float = field(default=0.0, repr=False)
 
     def to_camel(self) -> dict[str, Any]:
         return {
@@ -87,6 +99,27 @@ def _channels_from_json(data: list[dict[str, Any]]) -> dict[str, ChannelSyncStat
     return result
 
 
+def _channel_statuses(job: SyncJobState) -> dict[str, str]:
+    return {cid: ch.status for cid, ch in job.channels.items()}
+
+
+def _mark_flushed(job: SyncJobState) -> None:
+    job._flushed_job_status = job.status
+    job._flushed_channel_statuses = _channel_statuses(job)
+    job._last_persist_at_ms = time.monotonic() * 1000
+
+
+def _should_flush_db(job: SyncJobState) -> bool:
+    if job.status in _TERMINAL_JOB_STATUSES:
+        return True
+    if job.status != job._flushed_job_status:
+        return True
+    if _channel_statuses(job) != job._flushed_channel_statuses:
+        return True
+    elapsed_ms = time.monotonic() * 1000 - job._last_persist_at_ms
+    return elapsed_ms >= settings.SYNC_JOB_PERSIST_INTERVAL_MS
+
+
 def _get_cancel_event(job_id: str) -> asyncio.Event:
     if job_id not in _cancel_events:
         _cancel_events[job_id] = asyncio.Event()
@@ -94,7 +127,7 @@ def _get_cancel_event(job_id: str) -> asyncio.Event:
 
 
 def _row_to_state(row: SyncJobRow) -> SyncJobState:
-    return SyncJobState(
+    job = SyncJobState(
         job_id=row.id,
         source=row.source,
         status=row.status,
@@ -104,6 +137,8 @@ def _row_to_state(row: SyncJobRow) -> SyncJobState:
         cancel_event=_get_cancel_event(row.id),
         user_id=str(row.user_id) if row.user_id else None,
     )
+    _mark_flushed(job)
+    return job
 
 
 def _persist_job(job: SyncJobState) -> None:
@@ -129,10 +164,46 @@ def _persist_job(job: SyncJobState) -> None:
         session.commit()
 
 
+async def _notify_job_update(job: SyncJobState) -> None:
+    async with job._update_condition:
+        job._update_seq += 1
+        job._update_condition.notify_all()
+
+
+async def touch_job(job: SyncJobState) -> None:
+    """Update in-memory job state, notify SSE subscribers, flush DB when needed."""
+    async with _jobs_lock:
+        _active_jobs[job.job_id] = job
+        if _should_flush_db(job):
+            _persist_job(job)
+            _mark_flushed(job)
+    await _notify_job_update(job)
+
+
 async def persist_job(job: SyncJobState) -> None:
-    """Write current job state to Postgres."""
+    """Force a DB flush (job create, cancel, terminal)."""
     async with _jobs_lock:
         _persist_job(job)
+        _mark_flushed(job)
+        _active_jobs[job.job_id] = job
+    await _notify_job_update(job)
+
+
+async def wait_job_update(
+    job: SyncJobState, *, seen_seq: int, timeout_s: float
+) -> int:
+    """Wait until the job is updated or timeout. Returns the current update seq."""
+    async with job._update_condition:
+        if job._update_seq > seen_seq:
+            return job._update_seq
+        try:
+            await asyncio.wait_for(
+                job._update_condition.wait_for(lambda: job._update_seq > seen_seq),
+                timeout=timeout_s,
+            )
+        except TimeoutError:
+            pass
+        return job._update_seq
 
 
 async def create_job(
@@ -153,8 +224,8 @@ async def create_job(
         user_id=user_id,
         cancel_event=_get_cancel_event(job_id),
     )
+    await persist_job(job)
     async with _jobs_lock:
-        _persist_job(job)
         _active_jobs[job_id] = job
     return job
 
@@ -180,9 +251,7 @@ async def cancel_job(job_id: str) -> SyncJobState | None:
         for ch in job.channels.values():
             if ch.status in ("pending", "running"):
                 ch.status = "cancelled"
-    async with _jobs_lock:
-        _persist_job(job)
-        _active_jobs[job_id] = job
+    await persist_job(job)
     return job
 
 
@@ -199,6 +268,32 @@ def deactivate_job(job_id: str) -> None:
 def has_active_sync_job() -> bool:
     """True when a sync job is pending or running (single-instance guard)."""
     return any(j.status in ("pending", "running") for j in _active_jobs.values())
+
+
+def get_active_sync_job_summary(
+    *, allowed_concurrency: int
+) -> dict[str, Any] | None:
+    """Snapshot of the in-flight sync job for runtime config / diagnostics."""
+    for job in _active_jobs.values():
+        if job.status not in ("pending", "running"):
+            continue
+        running_channels = sum(
+            1 for ch in job.channels.values() if ch.status == "running"
+        )
+        pending_channels = sum(
+            1 for ch in job.channels.values() if ch.status == "pending"
+        )
+        return {
+            "jobId": job.job_id,
+            "status": job.status,
+            "source": job.source,
+            "channelCount": len(job.channels),
+            "runningChannels": running_channels,
+            "pendingChannels": pending_channels,
+            "allowedConcurrency": allowed_concurrency,
+            "concurrencyInUse": min(running_channels, allowed_concurrency),
+        }
+    return None
 
 
 def clear_active_jobs_for_tests() -> None:

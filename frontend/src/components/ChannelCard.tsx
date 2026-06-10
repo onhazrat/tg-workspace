@@ -245,6 +245,20 @@ export const ChannelCard: React.FC<ChannelCardProps> = ({
             <span>{channel.language}</span>
           </div>
         )}
+
+        {channel.historyCompleteToCutoff === false && (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <div className="bg-amber-500/10 text-amber-700 border border-amber-500/30 text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1 shadow-sm cursor-help">
+                <Clock size={10} />
+                <span>Partial history</span>
+              </div>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>History does not reach retention window</p>
+            </TooltipContent>
+          </Tooltip>
+        )}
       </div>
 
       {/* Card Content */}

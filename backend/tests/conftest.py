@@ -56,6 +56,17 @@ def _assert_test_database() -> Generator[None, None, None]:
 
 
 @pytest.fixture(scope="session", autouse=True)
+def _apply_alembic_migrations() -> Generator[None, None, None]:
+    """Ensure test database schema matches latest Alembic revision."""
+    from alembic import command
+    from alembic.config import Config
+
+    alembic_cfg = Config(str(Path(__file__).resolve().parents[1] / "alembic.ini"))
+    command.upgrade(alembic_cfg, "head")
+    yield
+
+
+@pytest.fixture(scope="session", autouse=True)
 def db() -> Generator[Session | None, None, None]:
     try:
         with Session(engine) as session:

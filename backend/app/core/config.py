@@ -107,6 +107,59 @@ class Settings(BaseSettings):
     EMBEDDING_MODEL: str = "gemini-embedding-2-preview"
     DEFAULT_AI_MODEL: str = "gemini-3-flash-preview"
 
+    # Sync & scraping
+    SYNC_CONCURRENCY_DEFAULT: int = 3
+    SYNC_MAX_RETRIES: int = 3
+    SYNC_RETRY_BACKOFF_BASE_MS: int = 2000
+    SYNC_JOB_SSE_THROTTLE_MS: int = 1000
+    SYNC_JOB_PERSIST_INTERVAL_MS: int = 5000
+    AUTO_SYNC_CHECK_INTERVAL_SECONDS: int = 60
+    AUTO_SYNC_INTERVAL_MINUTES_DEFAULT: int = 60
+    AUTO_SYNC_PAUSE_DURATION_MS: int = 10 * 60 * 1000
+    AUTO_SYNC_FAILURE_THRESHOLD_MIN: int = 3
+    SCRAPER_MAX_POSTS_PER_CHANNEL: int = 300
+    SCRAPER_ITERATION_LIMIT: int = 15
+
+    # Background job scheduler intervals
+    EMBEDDINGS_JOB_INTERVAL_SECONDS: int = 60
+    AUTO_SUMMARY_JOB_INTERVAL_SECONDS: int = 60
+    RETENTION_JOB_INTERVAL_HOURS: int = 6
+    TRANSLATION_BATCH_JOB_INTERVAL_SECONDS: int = 30
+
+    # Default enabled state when no jobs AppSetting row exists yet
+    JOBS_EMBEDDINGS_ENABLED_DEFAULT: bool = False
+    JOBS_AUTO_SYNC_ENABLED_DEFAULT: bool = True
+    JOBS_AUTO_SUMMARY_ENABLED_DEFAULT: bool = True
+    JOBS_RETENTION_ENABLED_DEFAULT: bool = True
+    JOBS_TRANSLATION_BATCH_ENABLED_DEFAULT: bool = False
+
+    # Embeddings backfill
+    EMBEDDINGS_CHUNK_SIZE: int = 20
+    EMBEDDINGS_BACKFILL_LIMIT_DEFAULT: int = 100
+
+    # Retention defaults (AppSetting bootstrap)
+    RETENTION_POST_DAYS_DEFAULT: int = 90
+    RETENTION_LOG_DAYS_DEFAULT: int = 30
+
+    # Translation batch job
+    TRANSLATION_BATCH_LIMIT: int = 20
+    TRANSLATION_BATCH_MAX_CHARS: int = 4000
+    TRANSLATION_TARGET_LANGUAGE_DEFAULT: str = "English"
+
+    # RAG / vector search
+    RAG_SCAN_LIMIT_MAX: int = 5000
+    RAG_SEARCH_LIMIT_DEFAULT: int = 20
+    RAG_EMBED_LIMIT_DEFAULT: int = 100
+
+    # Network / HTTP client
+    NETWORK_PROXY_COOLDOWN_MS: int = 10 * 60 * 1000
+    NETWORK_FETCH_RETRIES: int = 8
+    NETWORK_FETCH_INITIAL_DELAY_MS: int = 3000
+    NETWORK_FETCH_TIMEOUT_SECONDS: float = 60.0
+    NETWORK_TOR_ROTATION_THRESHOLD: int = 10
+    TELEGRAM_API_RETRIES: int = 3
+    TELEGRAM_API_INITIAL_DELAY_MS: int = 2000
+
     @computed_field  # type: ignore[prop-decorator]
     @property
     def default_proxies(self) -> list[str]:

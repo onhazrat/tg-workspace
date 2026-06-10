@@ -41,7 +41,17 @@ uv run python -m uvicorn app.main:app --reload --port 8000
 
 Or use the FastAPI CLI: `uv run fastapi dev app/main.py --port 8000`.
 
+**Postgres schema (native dev)** — keep `POSTGRES_DB=app` in `.env` for the API (pytest uses `POSTGRES_DB_TEST=app_test` separately; do not point `POSTGRES_DB` at the test database). If only the Compose `db` container is running, apply migrations to `app` before startup:
+
+```bash
+cd backend && uv run alembic upgrade head
+```
+
+A startup error `relation "user" does not exist` means `app` exists but has no tables yet (run the command above).
+
 Set `GEMINI_API_KEY` in the root `.env` for AI features.
+
+**Tunable defaults** — sync concurrency, scheduler intervals, RAG limits, network retries, job enabled defaults (`JOBS_*_ENABLED_DEFAULT`), and frontend poll intervals are documented in [`.env.example`](.env.example). Backend reads them via `app.core.config.Settings`; frontend reads `VITE_*` vars through `frontend/src/lib/env.ts` (build-time for production Docker images). On a fresh database, scheduler job enabled flags come from those env vars until persisted in the `jobs` AppSetting row (embeddings and translation batch default to off).
 
 For **bot token encryption** (Phase 2), set `TOKEN_ENCRYPTION_KEY` in `.env` to a Fernet key (generate command in `.env.example`). Required when `ENVIRONMENT` is not `local`; local dev may leave it empty and the backend uses a dev-only fallback. Staging/production without this key will fail when storing or migrating bot credentials.
 
@@ -149,6 +159,39 @@ Successful login redirects to `/summarizer?tab=summary`.
 ### Theme
 
 Light / dark / system theme is owned by `theme-provider` in `main.tsx` (`frontend/src/components/theme-provider.tsx`). Preference persists in `localStorage` under `vite-ui-theme`. Do not reintroduce a separate theme toggle in `SettingsContext`.
+
+## Sync job progress (SSE)
+
+Channel sync progress is pushed over **Server-Sent Events** instead of client polling:
+
+| Endpoint | Purpose |
+|----------|---------|
+| `POST /api/v1/jobs/sync` | Start a sync job |
+| `GET /api/v1/jobs/sync/{job_id}/events` | SSE stream of full `SyncJobStatus` snapshots |
+| `GET /api/v1/jobs/sync/{job_id}` | One-shot status (reconnect / fallback polling) |
+
+Backend tunables (root `.env`): `SYNC_JOB_SSE_THROTTLE_MS` (default 1000), `SYNC_JOB_PERSIST_INTERVAL_MS` (default 5000). Frontend: `VITE_SYNC_JOB_TIMEOUT_MS`, `VITE_SYNC_JOB_FALLBACK_POLL_MS`, `VITE_SYNC_META_MIN_INTERVAL_MS` (default 5000 — throttles etag polling).
+
+## Bulk start-ID fix (2000+ channels)
+
+After correcting **Default Channel Start Time** in Settings → Scraping & Sync, re-resolve metadata without scraping:
+
+```bash
+# Preview scope (safe default)
+cd backend && uv run python scripts/bulk_reresolve_start_ids.py --dry-run
+
+# Apply for all operator channels
+uv run python scripts/bulk_reresolve_start_ids.py
+
+# Limit / filter
+uv run python scripts/bulk_reresolve_start_ids.py --limit 100 --auto-follow-only
+```
+
+API: `POST /api/v1/data/channels/bulk-reresolve-start-ids` (same logic; UI button in Settings → Scraping & Sync).
+
+Optional full re-scrape: `POST /api/v1/data/channels/bulk-reset-sync` with `{"confirm": true}` (clears posts, nulls `startId`, queues one sync job).
+
+**Disable auto-follow:** Settings → Scraping & Sync → turn off **Auto-Follow Forwarded** (`autoFollowForwarded` in sync AppSetting). To remove existing auto-followed channels: `uv run python scripts/cleanup_auto_follow_channels.py --dry-run` then `--freeze` or `--delete`.
 
 ## Testing
 

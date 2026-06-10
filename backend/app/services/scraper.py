@@ -11,6 +11,7 @@ from typing import Any
 
 from bs4 import BeautifulSoup
 
+from app.core.config import settings
 from app.services.network import fetch_with_retry
 
 logger = logging.getLogger(__name__)
@@ -140,11 +141,81 @@ def _parse_channel_meta(soup: BeautifulSoup, channel_name: str) -> dict[str, Any
     }
 
 
+def _enrich_posts_with_timestamps(
+    posts: list[dict[str, Any]], channel_name: str
+) -> list[dict[str, Any]]:
+    for post in posts:
+        post["channelName"] = channel_name
+        if post.get("date"):
+            try:
+                dt = datetime.fromisoformat(post["date"].replace("Z", "+00:00"))
+                post["timestamp"] = int(dt.timestamp() * 1000)
+            except ValueError:
+                post["timestamp"] = 0
+        elif "timestamp" not in post:
+            post["timestamp"] = 0
+    return posts
+
+
+async def scrape_channel_page(
+    channel_name: str,
+    *,
+    before_id: int | None = None,
+    known_latest_id: int | None = None,
+    known_display_name: str | None = None,
+    known_photo_url: str | None = None,
+    proxies: list[str] | None = None,
+    tor_auto_rotate: bool = False,
+    tor_rotation_threshold: int | None = None,
+) -> dict[str, Any]:
+    """Fetch a single backward-pagination window from the Telegram web view."""
+    if before_id is None:
+        url = f"https://t.me/s/{channel_name}"
+    else:
+        url = f"https://t.me/s/{channel_name}?before={before_id}"
+
+    html, telemetry = await fetch_with_retry(
+        url,
+        proxies=proxies,
+        tor_auto_rotate=tor_auto_rotate,
+        tor_rotation_threshold=tor_rotation_threshold,
+    )
+    soup = BeautifulSoup(html, "html.parser")
+    posts, _next_url = _parse_posts_from_html(html, 0, set())
+    posts = _enrich_posts_with_timestamps(posts, channel_name)
+
+    meta = _parse_channel_meta(soup, channel_name)
+    latest_id = known_latest_id or meta.get("latestId") or 0
+    if not latest_id and posts:
+        latest_id = max(p["id"] for p in posts)
+
+    page_ids = [p["id"] for p in posts]
+    next_before_id = min(page_ids) if page_ids else None
+
+    return {
+        "channelName": channel_name,
+        "displayName": known_display_name or meta.get("displayName") or channel_name,
+        "photoUrl": known_photo_url or meta.get("photoUrl") or "",
+        "bio": meta.get("bio") or "",
+        "subscribers": meta.get("subscribers") or "",
+        "photos": meta.get("photos") or "",
+        "videos": meta.get("videos") or "",
+        "files": meta.get("files") or "",
+        "links": meta.get("links") or "",
+        "posts": posts,
+        "latestId": latest_id,
+        "nextBeforeId": next_before_id,
+        "channelMeta": meta,
+        "telemetry": telemetry,
+        "fullRequest": {"url": url, "beforeId": before_id},
+    }
+
+
 async def get_channel_info(
     channel_name: str,
     proxies: list[str] | None = None,
     tor_auto_rotate: bool = False,
-    tor_rotation_threshold: int = 10,
+    tor_rotation_threshold: int | None = None,
 ) -> dict[str, Any]:
     url = f"https://t.me/s/{channel_name}"
     html, telemetry = await fetch_with_retry(
@@ -167,7 +238,7 @@ async def scrape_channel(
     known_photo_url: str | None = None,
     proxies: list[str] | None = None,
     tor_auto_rotate: bool = False,
-    tor_rotation_threshold: int = 10,
+    tor_rotation_threshold: int | None = None,
 ) -> dict[str, Any]:
     telemetry_logs: list[Any] = []
     match_after = re.search(r"t\.me/s/([^/?]+)\?after=(\d+)", url)
@@ -191,8 +262,8 @@ async def scrape_channel(
 
     seen: set[int] = set()
     all_posts: list[dict[str, Any]] = []
-    max_posts = 300
-    iteration_limit = 15
+    max_posts = settings.SCRAPER_MAX_POSTS_PER_CHANNEL
+    iteration_limit = settings.SCRAPER_ITERATION_LIMIT
 
     async def fetch_posts(target_url: str) -> tuple[list[dict[str, Any]], str | None]:
         html, telem = await fetch_with_retry(

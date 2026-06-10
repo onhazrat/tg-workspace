@@ -119,6 +119,53 @@ def test_resolve_binary_search_finds_post(mock_resolver_deps: tuple[AsyncMock, A
     assert asyncio.run(run()) == 300
 
 
+def test_resolve_last_week_ms_not_low_post_ids() -> None:
+    """Regression: ms 'last week' target must not collapse to post IDs 1-5."""
+    channel_info = AsyncMock(
+        return_value={"latestId": 9500, "isUnavailableOnWebView": False}
+    )
+    post_times_ms = {
+        2: 1_650_000_000_000,
+        8000: 1_700_050_000_000,
+        9500: 1_701_000_000_000,
+    }
+
+    async def fetch(url: str, *, pick_last: bool, **_: object) -> dict[str, int] | None:
+        del pick_last
+        after = re.search(r"after=(\d+)", url)
+        if after:
+            start_id = int(after.group(1)) + 1
+            candidates = [pid for pid in post_times_ms if pid >= start_id]
+            if not candidates:
+                return None
+            pid = min(candidates)
+            return {"id": pid, "time": post_times_ms[pid]}
+        before = re.search(r"before=(\d+)", url)
+        if before:
+            end_id = int(before.group(1))
+            candidates = [pid for pid in post_times_ms if pid < end_id]
+            if not candidates:
+                return None
+            pid = max(candidates)
+            return {"id": pid, "time": post_times_ms[pid]}
+        return None
+
+    last_week_ms = 1_700_000_000_000
+
+    async def run(target_ms: int) -> int:
+        with (
+            patch("app.services.scraper.get_channel_info", channel_info),
+            patch("app.services.scraper._fetch_post_at_url", AsyncMock(side_effect=fetch)),
+            patch("app.services.scraper.asyncio.sleep", AsyncMock()),
+        ):
+            return await resolve_start_time_to_id("activechannel", target_ms)
+
+    assert asyncio.run(run(0)) == 2
+    resolved = asyncio.run(run(last_week_ms))
+    assert resolved > 5
+    assert resolved == 8000
+
+
 def test_resolve_no_oldest_post_returns_one() -> None:
     channel_info = AsyncMock(
         return_value={"latestId": 1000, "isUnavailableOnWebView": False}

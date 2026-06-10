@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import time
 from unittest.mock import AsyncMock, patch
 
@@ -34,35 +35,28 @@ def _auth(client: TestClient) -> dict[str, str]:
     return {"Authorization": f"Bearer {token}"}
 
 
-def _mock_scrape_response(start_id: int = 100) -> dict:
+def _mock_page_response(
+    channel_name: str,
+    posts: list[dict],
+    *,
+    latest_id: int | None = None,
+    next_before_id: int | None = None,
+) -> dict:
+    latest = latest_id or (max(p["id"] for p in posts) if posts else 0)
     return {
-        "channelName": "sync-test-ch",
+        "channelName": channel_name,
         "displayName": "Sync Test",
         "photoUrl": "https://example.com/photo.jpg",
         "bio": "bio",
         "subscribers": "1K",
-        "posts": [
-            {
-                "id": start_id,
-                "text": "Hello world",
-                "date": "2024-06-01T12:00:00+00:00",
-                "timestamp": 1_716_724_800_000,
-            },
-            {
-                "id": start_id + 1,
-                "text": "Second post",
-                "date": "2024-06-01T13:00:00+00:00",
-                "timestamp": 1_716_728_400_000,
-            },
-        ],
-        "latestId": start_id + 1,
-        "telemetry": [
-            {
-                "success": True,
-                "totalDuration": 120,
-                "attempts": [{"proxyUrl": "direct", "success": True}],
-            }
-        ],
+        "posts": posts,
+        "latestId": latest,
+        "nextBeforeId": next_before_id,
+        "telemetry": {
+            "success": True,
+            "totalDuration": 120,
+            "attempts": [{"proxyUrl": "direct", "success": True}],
+        },
     }
 
 
@@ -72,14 +66,29 @@ def test_start_sync_job_and_poll_status(client: TestClient) -> None:
 
     client.put(
         f"{DATA}/channels/sync-test-ch",
-        json={"name": "sync-test-ch", "displayName": "Sync Test", "startId": 100},
+        json={"name": "sync-test-ch", "displayName": "Sync Test"},
         headers=headers,
     )
 
+    posts = [
+        {
+            "id": 100,
+            "text": "Hello world",
+            "date": "2024-06-01T12:00:00+00:00",
+            "timestamp": 1_716_724_800_000,
+        },
+        {
+            "id": 101,
+            "text": "Second post",
+            "date": "2024-06-01T13:00:00+00:00",
+            "timestamp": 1_716_728_400_000,
+        },
+    ]
+
     with patch(
-        "app.services.sync_orchestrator.scrape_channel",
+        "app.services.sync_orchestrator.scrape_channel_page",
         new_callable=AsyncMock,
-        return_value=_mock_scrape_response(100),
+        return_value=_mock_page_response("sync-test-ch", posts, next_before_id=None),
     ):
         r = client.post(
             f"{PREFIX}/sync",
@@ -116,6 +125,9 @@ def test_start_sync_job_and_poll_status(client: TestClient) -> None:
     )
     assert posts_r.status_code == 200
     assert len(posts_r.json()) == 2
+    first_post = posts_r.json()[0]
+    assert first_post.get("retrievalPass") == "initial"
+    assert first_post.get("retrievedAt")
 
     sync_meta = client.get(f"{DATA}/sync-meta", headers=headers)
     assert sync_meta.status_code == 200
@@ -135,7 +147,7 @@ def test_cancel_sync_job(client: TestClient) -> None:
     headers = _auth(client)
     client.put(
         f"{DATA}/channels/cancel-ch",
-        json={"name": "cancel-ch", "displayName": "Cancel", "startId": 1},
+        json={"name": "cancel-ch", "displayName": "Cancel"},
         headers=headers,
     )
 
@@ -143,10 +155,10 @@ def test_cancel_sync_job(client: TestClient) -> None:
         import asyncio
 
         await asyncio.sleep(5)
-        return _mock_scrape_response(1)
+        return _mock_page_response("cancel-ch", [])
 
     with patch(
-        "app.services.sync_orchestrator.scrape_channel",
+        "app.services.sync_orchestrator.scrape_channel_page",
         new_callable=AsyncMock,
         side_effect=slow_scrape,
     ):
@@ -175,6 +187,135 @@ def test_sync_job_not_found(client: TestClient) -> None:
     assert r.status_code == 404
 
 
+def test_sync_job_sse_events(client: TestClient) -> None:
+    clear_jobs_for_tests()
+    headers = _auth(client)
+
+    client.put(
+        f"{DATA}/channels/sse-ch",
+        json={"name": "sse-ch", "displayName": "SSE"},
+        headers=headers,
+    )
+
+    with patch(
+        "app.services.sync_orchestrator.scrape_channel_page",
+        new_callable=AsyncMock,
+        return_value=_mock_page_response(
+            "sse-ch",
+            [
+                {
+                    "id": 10,
+                    "text": "x",
+                    "date": "2024-06-01T12:00:00+00:00",
+                    "timestamp": 1_716_724_800_000,
+                }
+            ],
+            next_before_id=None,
+        ),
+    ):
+        r = client.post(
+            f"{PREFIX}/sync",
+            json={"channelIds": ["sse-ch"], "source": "SSETest"},
+            headers=headers,
+        )
+        job_id = r.json()["jobId"]
+
+        events: list[dict] = []
+        with client.stream(
+            "GET", f"{PREFIX}/sync/{job_id}/events", headers=headers
+        ) as stream_r:
+            assert stream_r.status_code == 200
+            assert "text/event-stream" in stream_r.headers.get("content-type", "")
+            for line in stream_r.iter_lines():
+                if not line.startswith("data: "):
+                    continue
+                payload = line.removeprefix("data: ")
+                if payload == "[DONE]":
+                    break
+                events.append(json.loads(payload))
+
+        assert len(events) >= 1
+        assert events[0]["jobId"] == job_id
+        assert events[-1]["status"] == "completed"
+        assert events[-1]["channels"][0]["status"] == "success"
+
+    client.delete(f"{DATA}/channels/sse-ch", headers=headers)
+    clear_jobs_for_tests()
+
+
+def test_sync_incremental_stops_at_existing_post(client: TestClient) -> None:
+    clear_jobs_for_tests()
+    headers = _auth(client)
+
+    client.put(
+        f"{DATA}/channels/incr-ch",
+        json={"name": "incr-ch", "displayName": "Incremental"},
+        headers=headers,
+    )
+    client.post(
+        f"{DATA}/posts/bulk",
+        json=[
+            {
+                "id": 50,
+                "channelName": "incr-ch",
+                "text": "existing",
+                "date": "2024-01-01",
+                "timestamp": 1_700_000_000_000,
+            }
+        ],
+        headers=headers,
+    )
+
+    page_posts = [
+        {
+            "id": 52,
+            "text": "new",
+            "date": "2024-06-02T12:00:00+00:00",
+            "timestamp": 1_716_800_000_000,
+        },
+        {
+            "id": 50,
+            "text": "existing",
+            "date": "2024-01-01T12:00:00+00:00",
+            "timestamp": 1_700_000_000_000,
+        },
+    ]
+
+    with patch(
+        "app.services.sync_orchestrator.scrape_channel_page",
+        new_callable=AsyncMock,
+        return_value=_mock_page_response("incr-ch", page_posts, next_before_id=49),
+    ):
+        r = client.post(
+            f"{PREFIX}/sync",
+            json={"channelIds": ["incr-ch"], "source": "Test"},
+            headers=headers,
+        )
+        job_id = r.json()["jobId"]
+
+        deadline = time.time() + 10
+        while time.time() < deadline:
+            status_r = client.get(f"{PREFIX}/sync/{job_id}", headers=headers)
+            data = status_r.json()
+            if data["status"] in ("completed", "failed", "cancelled"):
+                break
+            time.sleep(0.1)
+
+        assert data["status"] == "completed"
+        assert data["channels"][0]["postsFetched"] == 1
+
+    posts_r = client.get(
+        f"{DATA}/posts",
+        params={"channelNames": "incr-ch"},
+        headers=headers,
+    )
+    ids = {p["id"] for p in posts_r.json()}
+    assert ids == {50, 52}
+
+    client.delete(f"{DATA}/channels/incr-ch", headers=headers)
+    clear_jobs_for_tests()
+
+
 def test_sync_job_persists_to_postgres(client: TestClient) -> None:
     """Job status survives clearing in-memory state (simulated restart)."""
     clear_jobs_for_tests()
@@ -182,14 +323,31 @@ def test_sync_job_persists_to_postgres(client: TestClient) -> None:
 
     client.put(
         f"{DATA}/channels/persist-ch",
-        json={"name": "persist-ch", "displayName": "Persist", "startId": 50},
+        json={"name": "persist-ch", "displayName": "Persist"},
         headers=headers,
     )
 
     with patch(
-        "app.services.sync_orchestrator.scrape_channel",
+        "app.services.sync_orchestrator.scrape_channel_page",
         new_callable=AsyncMock,
-        return_value=_mock_scrape_response(50),
+        return_value=_mock_page_response(
+            "persist-ch",
+            [
+                {
+                    "id": 50,
+                    "text": "a",
+                    "date": "2024-06-01T12:00:00+00:00",
+                    "timestamp": 1_716_724_800_000,
+                },
+                {
+                    "id": 51,
+                    "text": "b",
+                    "date": "2024-06-01T13:00:00+00:00",
+                    "timestamp": 1_716_728_400_000,
+                },
+            ],
+            next_before_id=None,
+        ),
     ):
         r = client.post(
             f"{PREFIX}/sync",

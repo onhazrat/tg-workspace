@@ -1,22 +1,36 @@
 import asyncio
+import json
+import time
 import uuid
+from collections.abc import AsyncIterator
 
 from fastapi import APIRouter, HTTPException
+from fastapi.responses import StreamingResponse
 from sqlmodel import Session
 
 from app.api.deps import CurrentUser, SessionDep
+from app.core.config import settings
 from app.jobs.scheduler import get_job_status, set_job_enabled_flag, trigger_job
 from app.jobs.settings import JOB_IDS
 from app.services.operator import get_operator_user_id, select_operator_channels
 from app.schemas.jobs import UpdateJobRequest
+from app.schemas.runtime_config import RuntimeConfigResponse
 from app.schemas.sync_jobs import (
     CancelSyncJobResponse,
     StartSyncJobRequest,
     StartSyncJobResponse,
     SyncJobStatusResponse,
 )
-from app.services.scraper_jobs import cancel_job, create_job, get_job
+from app.services.runtime_config import build_runtime_config
+from app.services.scraper_jobs import (
+    cancel_job,
+    create_job,
+    get_job,
+    wait_job_update,
+)
 from app.services.sync_orchestrator import run_sync_job
+
+_TERMINAL_SYNC_STATUSES = frozenset({"completed", "failed", "cancelled"})
 
 router = APIRouter(prefix="/jobs", tags=["jobs"])
 
@@ -47,6 +61,15 @@ def _resolve_channel_entries(
 @router.get("/status")
 def jobs_status(_current_user: CurrentUser) -> dict:
     return get_job_status()
+
+
+@router.get("/runtime-config", response_model=RuntimeConfigResponse)
+def get_runtime_config(
+    session: SessionDep,
+    current_user: CurrentUser,
+) -> RuntimeConfigResponse:
+    payload = build_runtime_config(session, user_id=current_user.id)
+    return RuntimeConfigResponse(**payload)
 
 
 @router.post("/{job_id}/trigger")
@@ -101,6 +124,69 @@ def get_sync_job_status(
         raise HTTPException(status_code=404, detail="Sync job not found")
     data = job.to_camel()
     return SyncJobStatusResponse(**data)
+
+
+def _sync_status_changed(
+    previous: dict | None, current: dict
+) -> bool:
+    if previous is None:
+        return True
+    if previous.get("status") != current.get("status"):
+        return True
+    prev_channels = {
+        ch["channelId"]: ch["status"]
+        for ch in previous.get("channels", [])
+    }
+    for ch in current.get("channels", []):
+        if prev_channels.get(ch["channelId"]) != ch["status"]:
+            return True
+    return False
+
+
+@router.get("/sync/{job_id}/events")
+async def sync_job_events(
+    job_id: str, _current_user: CurrentUser
+) -> StreamingResponse:
+    job = get_job(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Sync job not found")
+
+    throttle_ms = settings.SYNC_JOB_SSE_THROTTLE_MS
+    throttle_s = max(throttle_ms, 1) / 1000
+
+    async def event_stream() -> AsyncIterator[str]:
+        seen_seq = job._update_seq
+        last_sent_at = 0.0
+        last_snapshot: dict | None = None
+
+        while True:
+            current_job = get_job(job_id)
+            if current_job is None:
+                break
+
+            snapshot = current_job.to_camel()
+            now_ms = time.monotonic() * 1000
+            status_changed = _sync_status_changed(last_snapshot, snapshot)
+            should_send = (
+                last_snapshot is None
+                or status_changed
+                or now_ms - last_sent_at >= throttle_ms
+            )
+
+            if should_send:
+                yield f"data: {json.dumps(snapshot)}\n\n"
+                last_sent_at = now_ms
+                last_snapshot = snapshot
+
+            if snapshot["status"] in _TERMINAL_SYNC_STATUSES:
+                yield "data: [DONE]\n\n"
+                return
+
+            seen_seq = await wait_job_update(
+                current_job, seen_seq=seen_seq, timeout_s=throttle_s
+            )
+
+    return StreamingResponse(event_stream(), media_type="text/event-stream")
 
 
 @router.post("/sync/{job_id}/cancel", response_model=CancelSyncJobResponse)

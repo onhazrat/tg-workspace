@@ -20,9 +20,6 @@ from app.models_tg import Post, PostTranslation
 
 logger = logging.getLogger(__name__)
 
-BATCH_LIMIT = 20
-MAX_BATCH_CHARS = 4000
-
 
 def _posts_needing_translation(
     session: Session,
@@ -44,6 +41,7 @@ def _posts_needing_translation(
         )
         .where(col(PostTranslation.id).is_(None))
         .where(col(Post.channel_name).in_(channel_names))
+        .where(col(Post.is_anchor) == False)  # noqa: E712
         .order_by(Post.timestamp.desc())
         .limit(limit)
     )
@@ -61,7 +59,10 @@ async def run_translation_batch() -> dict:
 
         operator_id = get_operator_user_id(session)
         posts = _posts_needing_translation(
-            session, target_language, BATCH_LIMIT, operator_id=operator_id
+            session,
+            target_language,
+            settings.TRANSLATION_BATCH_LIMIT,
+            operator_id=operator_id,
         )
         if not posts:
             return {"skipped": True, "reason": "no_posts", "translated": 0}
@@ -73,7 +74,7 @@ async def run_translation_batch() -> dict:
         char_count = 0
         for post in posts:
             text_len = len(post.text or "")
-            if selected and char_count + text_len > MAX_BATCH_CHARS:
+            if selected and char_count + text_len > settings.TRANSLATION_BATCH_MAX_CHARS:
                 break
             selected.append(post)
             char_count += text_len

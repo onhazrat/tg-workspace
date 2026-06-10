@@ -170,8 +170,8 @@ async def api_bot_info(
     try:
         data, telemetry = await fetch_with_retry(
             target,
-            retries=3,
-            initial_delay_ms=2000,
+            retries=settings.TELEGRAM_API_RETRIES,
+            initial_delay_ms=settings.TELEGRAM_API_INITIAL_DELAY_MS,
             proxies=_resolve_proxies(body, session=session, user_id=current_user.id),
             tor_auto_rotate=body.tor_auto_rotate,
             tor_rotation_threshold=body.tor_rotation_threshold,
@@ -209,8 +209,8 @@ async def api_publish(
             payload["entities"] = entities
         data, telem = await fetch_with_retry(
             target,
-            retries=3,
-            initial_delay_ms=2000,
+            retries=settings.TELEGRAM_API_RETRIES,
+            initial_delay_ms=settings.TELEGRAM_API_INITIAL_DELAY_MS,
             proxies=_resolve_proxies(body, session=session, user_id=current_user.id),
             tor_auto_rotate=body.tor_auto_rotate,
             tor_rotation_threshold=body.tor_rotation_threshold,

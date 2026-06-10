@@ -191,4 +191,35 @@ export const dataApi = {
     }),
 
   exportData: () => request<Record<string, unknown>>("/api/v1/data/export"),
+
+  bulkReresolveStartIds: (body?: {
+    dryRun?: boolean;
+    limit?: number;
+    channelIds?: string[];
+    autoFollowOnly?: boolean;
+  }) =>
+    request<{
+      updated: number;
+      skipped: number;
+      wouldUpdate: number;
+      errors: { channelId: string; channelName: string; error: string }[];
+    }>("/api/v1/data/channels/bulk-reresolve-start-ids", {
+      method: "POST",
+      body: JSON.stringify(body ?? {}),
+    }),
+
+  bulkResetSync: (body: {
+    confirm: boolean;
+    channelIds?: string[];
+    autoFollowOnly?: boolean;
+  }) =>
+    request<{
+      channelsReset: number;
+      postsDeleted: number;
+      jobId: string | null;
+      errors: { channelId: string; channelName: string; error: string }[];
+    }>("/api/v1/data/channels/bulk-reset-sync", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
 };

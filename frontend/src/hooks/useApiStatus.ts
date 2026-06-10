@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { api } from "@/api";
 
-const POLL_INTERVAL_MS = 30_000;
+import { env } from "@/lib/env";
 
 export function useApiStatus() {
   const [isOnline, setIsOnline] = useState(true);
@@ -19,7 +19,7 @@ export function useApiStatus() {
 
   useEffect(() => {
     checkHealth();
-    const id = setInterval(checkHealth, POLL_INTERVAL_MS);
+    const id = setInterval(checkHealth, env.apiHealthPollMs);
     return () => clearInterval(id);
   }, [checkHealth]);
 

@@ -13,28 +13,28 @@ from typing import Any, Awaitable, Callable
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from sqlmodel import Session
 
+from app.core.config import settings
 from app.core.db import engine
 from app.jobs.auto_summary import run_auto_summary
 from app.jobs.auto_sync import run_auto_sync
 from app.jobs.retention import run_retention_cleanup
-from app.jobs.settings import JOB_IDS, is_job_enabled, load_jobs_settings, set_job_enabled
+from app.jobs.settings import (
+    JOB_IDS,
+    default_job_enabled,
+    is_job_enabled,
+    load_jobs_settings,
+    set_job_enabled,
+)
 from app.jobs.translation_batch import run_translation_batch
 from app.services.embeddings import backfill_embeddings
 
 logger = logging.getLogger(__name__)
 
-# Check interval for auto_sync (staleness threshold comes from AppSetting sync).
-AUTO_SYNC_CHECK_SECONDS = 60
-EMBEDDINGS_INTERVAL_SECONDS = 60
-AUTO_SUMMARY_INTERVAL_SECONDS = 60
-RETENTION_INTERVAL_HOURS = 6
-TRANSLATION_BATCH_INTERVAL_SECONDS = 30
-
 scheduler = AsyncIOScheduler()
 
 _job_status: dict[str, dict[str, Any]] = {
     job_id: {
-        "enabled": True,
+        "enabled": default_job_enabled(job_id),
         "lastRun": None,
         "lastStatus": "idle",
         "lastError": None,
@@ -135,7 +135,11 @@ def _refresh_enabled_flags() -> None:
         jobs_cfg = load_jobs_settings(session)
         for job_id in JOB_IDS:
             entry = jobs_cfg.get(job_id, {})
-            enabled = bool(entry.get("enabled", True)) if isinstance(entry, dict) else True
+            enabled = (
+                bool(entry.get("enabled", default_job_enabled(job_id)))
+                if isinstance(entry, dict)
+                else default_job_enabled(job_id)
+            )
             _job_status[job_id]["enabled"] = enabled
             _job_status[job_id]["nextRun"] = _next_run_ms(job_id)
 
@@ -183,35 +187,35 @@ def start_scheduler() -> None:
     scheduler.add_job(
         job_auto_sync,
         "interval",
-        seconds=AUTO_SYNC_CHECK_SECONDS,
+        seconds=settings.AUTO_SYNC_CHECK_INTERVAL_SECONDS,
         id="auto_sync",
         replace_existing=True,
     )
     scheduler.add_job(
         job_embeddings,
         "interval",
-        seconds=EMBEDDINGS_INTERVAL_SECONDS,
+        seconds=settings.EMBEDDINGS_JOB_INTERVAL_SECONDS,
         id="embeddings",
         replace_existing=True,
     )
     scheduler.add_job(
         job_auto_summary,
         "interval",
-        seconds=AUTO_SUMMARY_INTERVAL_SECONDS,
+        seconds=settings.AUTO_SUMMARY_JOB_INTERVAL_SECONDS,
         id="auto_summary",
         replace_existing=True,
     )
     scheduler.add_job(
         job_retention,
         "interval",
-        hours=RETENTION_INTERVAL_HOURS,
+        hours=settings.RETENTION_JOB_INTERVAL_HOURS,
         id="retention",
         replace_existing=True,
     )
     scheduler.add_job(
         job_translation_batch,
         "interval",
-        seconds=TRANSLATION_BATCH_INTERVAL_SECONDS,
+        seconds=settings.TRANSLATION_BATCH_JOB_INTERVAL_SECONDS,
         id="translation_batch",
         replace_existing=True,
     )
@@ -220,7 +224,9 @@ def start_scheduler() -> None:
         jobs_cfg = load_jobs_settings(session)
         for job_id in JOB_IDS:
             entry = jobs_cfg.get(job_id, {})
-            if isinstance(entry, dict) and not entry.get("enabled", True):
+            if isinstance(entry, dict) and not entry.get(
+                "enabled", default_job_enabled(job_id)
+            ):
                 ap_job = scheduler.get_job(job_id)
                 if ap_job:
                     ap_job.pause()

@@ -1,3 +1,5 @@
+import { env } from "@/lib/env";
+
 /** React Query keys for summarizer server state. */
 export const queryKeys = {
   channels: ["channels"] as const,
@@ -13,4 +15,4 @@ export const queryKeys = {
   },
 } as const;
 
-export const SUMMARIZER_STALE_TIME = 30_000;
+export const SUMMARIZER_STALE_TIME = env.queryStaleTimeMs;

@@ -6,6 +6,11 @@ export interface Post {
   timestamp: number;
   forwardedFrom?: string;
   forwardedFromName?: string;
+  isAnchor?: boolean;
+  retrievedAt?: number;
+  retrievalJobId?: string;
+  retrievalPass?: "initial" | "incremental";
+  retrievalSource?: string;
 }
 
 export interface PostEmbedding {
@@ -49,6 +54,9 @@ export interface Channel {
     postId: number;
     timestamp: number;
   };
+  historyCompleteToCutoff?: boolean;
+  anchorPostId?: number;
+  oldestStoredPostTimestamp?: number;
 }
 
 export type GlobalStartTimeMode = "relative" | "absolute" | "retention";

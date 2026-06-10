@@ -282,11 +282,20 @@ export const ChannelGrid: React.FC<ChannelGridProps> = () => {
   };
 
   const executeResetAndSync = async () => {
-    if (confirmResetModal) {
+    if (!confirmResetModal) return;
+    try {
+      await api.bulkResetSync({
+        confirm: true,
+        channelIds: [confirmResetModal.id],
+      });
+      await clearChannelPosts(confirmResetModal.name);
+      await loadChannels();
+    } catch (err) {
+      console.error("Reset & sync failed:", err);
       await clearChannelPosts(confirmResetModal.name);
       addToSyncQueue(confirmResetModal, "Manual (Reset & Sync)", () => {});
-      setConfirmResetModal(null);
     }
+    setConfirmResetModal(null);
   };
 
   const handleAddChannel = async () => {
@@ -382,7 +391,7 @@ export const ChannelGrid: React.FC<ChannelGridProps> = () => {
     };
     
     await upsertChannel(newChannel);
-    setChannels(prev => [...prev.filter(c => c.id !== newChannel.id), newChannel]);
+    await loadChannels();
     setSelectedChannels(prev => new Set(prev).add(channelName));
     setInlineChannelName("");
     addToSyncQueue(newChannel, "Initial Sync", () => {});

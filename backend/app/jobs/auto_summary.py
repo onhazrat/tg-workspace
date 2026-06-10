@@ -126,6 +126,7 @@ async def _regenerate_one(session: Session, summary: Summary) -> str | None:
             col(Post.channel_name).in_(summary.channels or []),
             col(Post.timestamp) >= new_start,
             col(Post.timestamp) <= new_end,
+            col(Post.is_anchor) == False,  # noqa: E712
         )
         .order_by(col(Post.timestamp).desc())
     ).all()

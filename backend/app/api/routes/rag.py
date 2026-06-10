@@ -16,22 +16,20 @@ from app.services.channels import channel_names_for_operator
 
 router = APIRouter(prefix="/rag", tags=["rag"])
 
-DEFAULT_SCAN_LIMIT = 5000
-
 
 class RagSearchRequest(BaseModel):
     query: str
     channels: list[str] | None = None
     start_date: int | None = Field(None, alias="startDate")
     end_date: int | None = Field(None, alias="endDate")
-    limit: int = 20
-    scan_limit: int = Field(DEFAULT_SCAN_LIMIT, alias="scanLimit")
+    limit: int = settings.RAG_SEARCH_LIMIT_DEFAULT
+    scan_limit: int = Field(settings.RAG_SCAN_LIMIT_MAX, alias="scanLimit")
 
     model_config = {"populate_by_name": True}
 
 
 class RagEmbedRequest(BaseModel):
-    limit: int = 100
+    limit: int = settings.RAG_EMBED_LIMIT_DEFAULT
 
 
 def _cosine(a: list[float], b: list[float]) -> float:
@@ -104,7 +102,7 @@ async def rag_search(
     if not allowed_channels:
         return {"results": []}
 
-    scan_cap = min(max(body.scan_limit, 1), DEFAULT_SCAN_LIMIT)
+    scan_cap = min(max(body.scan_limit, 1), settings.RAG_SCAN_LIMIT_MAX)
     stmt = (
         select(PostEmbedding)
         .where(col(PostEmbedding.channel_name).in_(allowed_channels))

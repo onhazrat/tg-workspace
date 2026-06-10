@@ -1,4 +1,4 @@
-import { request } from "./base";
+import { request, sseJsonStream } from "./base";
 
 export type JobStatusEntry = {
   enabled: boolean;
@@ -55,3 +55,13 @@ export const jobsApi = {
 
   healthCheck: () => request<boolean>("/api/v1/utils/health-check/"),
 };
+
+/** Subscribe to sync job progress via SSE (full status snapshots). */
+export async function* subscribeSyncJobEvents(
+  jobId: string,
+  signal?: AbortSignal,
+): AsyncGenerator<SyncJobStatus> {
+  yield* sseJsonStream<SyncJobStatus>(`/api/v1/jobs/sync/${jobId}/events`, {
+    signal,
+  });
+}

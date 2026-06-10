@@ -405,8 +405,9 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({ children }
       api.getSetting("sync"),
       api.getSetting("retention"),
       api.getSetting("translation"),
+      api.jobsStatus(),
     ])
-      .then(([syncRow, retentionRow, translationRow]) => {
+      .then(([syncRow, retentionRow, translationRow, jobsStatus]) => {
         const sync = syncRow.value ?? {};
         const retention = retentionRow.value ?? {};
         const translation = translationRow.value ?? {};
@@ -432,6 +433,9 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({ children }
           { ...retention, ...legacy.retention },
           { ...translation, ...legacy.translation }
         );
+        if (typeof jobsStatus.embeddings?.enabled === "boolean") {
+          setEmbeddingsEnabled(jobsStatus.embeddings.enabled);
+        }
         appSettingsHydrated.current = true;
         if (Object.keys(legacy.sync).length > 0 || Object.keys(legacy.retention).length > 0) {
           api.putSetting("sync", { ...sync, ...legacy.sync }).catch(console.error);
@@ -489,8 +493,13 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({ children }
         targetTime = 0; // No retention limit
       }
     } else if (globalStartTimeMode === "relative") {
-      const days = typeof globalStartTimeValue === "number" ? globalStartTimeValue : 7;
-      targetTime = now - days * 24 * 60 * 60 * 1000;
+      if (typeof globalStartTimeValue === "number" && globalStartTimeValue > 0) {
+        targetTime = now - globalStartTimeValue * 24 * 60 * 60 * 1000;
+      } else if (postRetentionDays > 0) {
+        targetTime = now - postRetentionDays * 24 * 60 * 60 * 1000;
+      } else {
+        targetTime = 0;
+      }
     } else if (globalStartTimeMode === "absolute") {
       const dateStr = typeof globalStartTimeValue === "string" ? globalStartTimeValue : new Date().toISOString();
       targetTime = new Date(dateStr).getTime();
@@ -586,6 +595,13 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({ children }
       .putSetting("retention", { postRetentionDays, logRetentionDays })
       .catch((err) => console.warn("[Settings] Failed to sync retention settings:", err));
   }, [postRetentionDays, logRetentionDays]);
+
+  useEffect(() => {
+    if (!localStorage.getItem("access_token") || !appSettingsHydrated.current) return;
+    api
+      .updateJob("embeddings", embeddingsEnabled)
+      .catch((err) => console.warn("[Settings] Failed to sync embeddings job:", err));
+  }, [embeddingsEnabled]);
 
   useEffect(() => {
     if (!localStorage.getItem("access_token") || !appSettingsHydrated.current) return;

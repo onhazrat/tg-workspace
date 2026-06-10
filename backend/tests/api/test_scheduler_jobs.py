@@ -15,7 +15,7 @@ from app.jobs import scheduler as sched
 from app.jobs.auto_summary import run_auto_summary
 from app.jobs.auto_sync import run_auto_sync
 from app.jobs.retention import run_retention_cleanup
-from app.jobs.settings import save_setting
+from app.jobs.settings import default_job_enabled, save_setting
 from app.jobs.translation_batch import run_translation_batch
 from app.models_tg import Channel, Post, Summary
 from app.services.network_settings import get_network_setting_row
@@ -53,6 +53,18 @@ def test_jobs_status_lists_all_jobs(client: TestClient) -> None:
         assert job_id in data
         assert "enabled" in data[job_id]
         assert "lastStatus" in data[job_id]
+
+
+def test_embeddings_default_from_env(client: TestClient) -> None:
+    headers = _auth(client)
+    status = client.get(f"{PREFIX}/status", headers=headers).json()
+    assert status["embeddings"]["enabled"] is default_job_enabled("embeddings")
+
+
+def test_translation_batch_default_from_env(client: TestClient) -> None:
+    headers = _auth(client)
+    status = client.get(f"{PREFIX}/status", headers=headers).json()
+    assert status["translation_batch"]["enabled"] is default_job_enabled("translation_batch")
 
 
 def test_update_job_enabled(client: TestClient) -> None:

@@ -2,6 +2,7 @@ import React, { createContext, useContext, useEffect, useRef, ReactNode, useCall
 import { useSettings } from './SettingsContext';
 import { translateTextBatch } from '../services/ai';
 import { toast } from 'sonner';
+import { env } from '@/lib/env';
 
 interface TranslationRequest {
   id: string;
@@ -16,8 +17,6 @@ interface TranslationContextType {
 
 const TranslationContext = createContext<TranslationContextType | undefined>(undefined);
 
-const MAX_BATCH_CHARS = 4000;
-const DEBOUNCE_MS = 1000;
 
 export const TranslationProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const { 
@@ -85,7 +84,7 @@ export const TranslationProvider: React.FC<{ children: ReactNode }> = ({ childre
 
       const currentChars = queueRef.current.reduce((acc, req) => acc + req.text.length, 0);
 
-      if (currentChars >= MAX_BATCH_CHARS) {
+      if (currentChars >= env.translationMaxBatchChars) {
         if (timerRef.current) {
           clearTimeout(timerRef.current);
           timerRef.current = null;
@@ -97,7 +96,7 @@ export const TranslationProvider: React.FC<{ children: ReactNode }> = ({ childre
         }
         timerRef.current = setTimeout(() => {
           processQueue();
-        }, DEBOUNCE_MS);
+        }, env.translationDebounceMs);
       }
     });
   }, [translationEnabled, processQueue]);

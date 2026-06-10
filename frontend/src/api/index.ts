@@ -29,5 +29,7 @@ export {
   isAuthFailure,
   request,
   requestBlob,
+  sseJsonStream,
   sseTextStream,
 } from "./base";
+export { subscribeSyncJobEvents } from "./jobs";

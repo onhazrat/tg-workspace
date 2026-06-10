@@ -6,6 +6,7 @@ from typing import Any
 
 from sqlmodel import Session
 
+from app.core.config import settings
 from app.core.secrets import decrypt_token
 from app.models_tg import BotCredential
 from app.services.network import fetch_with_retry, parse_telegram_entities
@@ -41,8 +42,8 @@ async def publish_summary_text(
             payload["entities"] = entities
         data, telem = await fetch_with_retry(
             target,
-            retries=3,
-            initial_delay_ms=2000,
+            retries=settings.TELEGRAM_API_RETRIES,
+            initial_delay_ms=settings.TELEGRAM_API_INITIAL_DELAY_MS,
             proxies=proxies or None,
             tor_auto_rotate=tor_auto_rotate,
             tor_rotation_threshold=tor_rotation_threshold,

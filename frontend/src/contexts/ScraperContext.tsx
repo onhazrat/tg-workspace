@@ -11,10 +11,8 @@ import { toast } from "sonner";
 import { useRAG } from "./RAGContext";
 import { detectLanguageFromPosts } from "../lib/language";
 import { buildActiveProxies, isNetworkRoutingActive } from "../lib/syncSettings";
-import { api } from "@/api";
-
-const POLL_INTERVAL_MS = 1000;
-const JOB_TIMEOUT_MS = 30 * 60 * 1000;
+import { api, subscribeSyncJobEvents, type SyncJobStatus } from "@/api";
+import { env } from "@/lib/env";
 
 interface ScraperContextType {
   postSearch: string;
@@ -205,28 +203,57 @@ export const ScraperProvider: React.FC<{ children: React.ReactNode }> = ({ child
     }
   }, [startDate, endDate, selectedChannels, debouncedPostSearch, debouncedSemanticSearchQuery, relatedPostSearch, embeddingsEnabled, semanticSearchRespectsTimeRange, semanticSearchRespectsChannels, searchSimilarPosts, forwardedFilter, channels]);
 
-  const pollSyncJob = useCallback(async (jobId: string, channelNames: string[]) => {
-    const started = Date.now();
-    while (Date.now() - started < JOB_TIMEOUT_MS) {
+  const applySyncJobStatus = useCallback((status: SyncJobStatus) => {
+    const active = status.channels
+      .filter(ch => ch.status === "running" || ch.status === "pending")
+      .map(ch => ch.channelName);
+    setScrapingChannels(new Set(active));
+
+    const hasRateLimit = status.channels.some(
+      ch => ch.error && /rate limit/i.test(ch.error)
+    );
+    setIsRateLimited(hasRateLimit);
+  }, [setIsRateLimited]);
+
+  const pollSyncJobFallback = useCallback(async (jobId: string) => {
+    const deadline = Date.now() + env.syncJobTimeoutMs;
+    while (Date.now() < deadline) {
       const status = await api.getSyncJobStatus(jobId);
-      const active = status.channels
-        .filter(ch => ch.status === "running" || ch.status === "pending")
-        .map(ch => ch.channelName);
-      setScrapingChannels(new Set(active));
-
-      const hasRateLimit = status.channels.some(
-        ch => ch.error && /rate limit/i.test(ch.error)
-      );
-      setIsRateLimited(hasRateLimit);
-
+      applySyncJobStatus(status);
       if (["completed", "failed", "cancelled"].includes(status.status)) {
         return status;
       }
-      await new Promise(resolve => setTimeout(resolve, POLL_INTERVAL_MS));
+      await new Promise(resolve => setTimeout(resolve, env.syncJobFallbackPollMs));
     }
     await api.cancelSyncJob(jobId);
     throw new Error("Sync job timed out");
-  }, [setIsRateLimited]);
+  }, [applySyncJobStatus]);
+
+  const waitSyncJob = useCallback(async (jobId: string) => {
+    const abortController = new AbortController();
+    const timeoutId = window.setTimeout(() => abortController.abort(), env.syncJobTimeoutMs);
+
+    try {
+      for await (const status of subscribeSyncJobEvents(jobId, abortController.signal)) {
+        applySyncJobStatus(status);
+        if (["completed", "failed", "cancelled"].includes(status.status)) {
+          return status;
+        }
+      }
+      const finalStatus = await api.getSyncJobStatus(jobId);
+      applySyncJobStatus(finalStatus);
+      return finalStatus;
+    } catch (err) {
+      if (abortController.signal.aborted) {
+        await api.cancelSyncJob(jobId);
+        throw new Error("Sync job timed out");
+      }
+      console.warn("[Scraper] SSE sync progress failed, falling back to polling:", err);
+      return pollSyncJobFallback(jobId);
+    } finally {
+      window.clearTimeout(timeoutId);
+    }
+  }, [applySyncJobStatus, pollSyncJobFallback]);
 
   const runServerSync = useCallback(async (
     channelIds: string[],
@@ -259,7 +286,7 @@ export const ScraperProvider: React.FC<{ children: React.ReactNode }> = ({ child
         throw err;
       }
       activeJobRef.current = jobId;
-      const result = await pollSyncJob(jobId, channelNames);
+      const result = await waitSyncJob(jobId);
 
       const failures = result.channels.filter(ch => ch.status === "failed");
       const successes = result.channels.filter(ch => ch.status === "success");
@@ -295,8 +322,9 @@ export const ScraperProvider: React.FC<{ children: React.ReactNode }> = ({ child
         }
       }
 
+      // Always reload channels so resolved startId appears after first sync.
+      await loadChannels();
       if (refresh) {
-        await loadChannels();
         await loadSyncLogs();
         await handleFilterPosts();
       }
@@ -312,7 +340,7 @@ export const ScraperProvider: React.FC<{ children: React.ReactNode }> = ({ child
         return next;
       });
     }
-  }, [isOffline, channels.length, pollSyncJob, loadChannels, loadSyncLogs, handleFilterPosts, setChannelStats]);
+  }, [isOffline, channels.length, waitSyncJob, loadChannels, loadSyncLogs, handleFilterPosts, setChannelStats]);
 
   const handleScrapeChannel = useCallback(async (channel: Channel, refresh = true, source = "Manual") => {
     if (channel.isFrozen) {

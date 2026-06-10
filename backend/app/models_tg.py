@@ -40,6 +40,11 @@ class Channel(SQLModel, table=True):
     language: str | None = None
     followed_at: int | None = Field(default=None, sa_column=_ms_ts(nullable=True))
     discovered_via: dict[str, Any] | None = Field(default=None, sa_column=Column(JSON))
+    history_complete_to_cutoff: bool = True
+    anchor_post_id: int | None = None
+    oldest_stored_post_timestamp: int | None = Field(
+        default=None, sa_column=_ms_ts(nullable=True)
+    )
     updated_at: datetime = Field(default_factory=utc_now)
 
 
@@ -56,6 +61,25 @@ class Post(SQLModel, table=True):
     timestamp: int = Field(default=0, sa_column=_ms_ts())
     forwarded_from: str | None = None
     forwarded_from_name: str | None = None
+    is_anchor: bool = Field(default=False, index=True)
+    retrieved_at: int | None = Field(default=None, sa_column=_ms_ts(nullable=True))
+    retrieval_job_id: str | None = None
+    retrieval_pass: str | None = None
+    retrieval_source: str | None = None
+    updated_at: datetime = Field(default_factory=utc_now)
+
+
+class PostSyncState(SQLModel, table=True):
+    __tablename__ = "tg_post_sync_state"
+    __table_args__ = (UniqueConstraint("channel_name", "post_id"),)
+
+    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    user_id: uuid.UUID | None = Field(default=None, index=True)
+    channel_name: str = Field(index=True)
+    post_id: int
+    state: str = "confirmed_gap"
+    confirmed_at: int = Field(default=0, sa_column=_ms_ts())
+    confirmed_job_id: str | None = None
     updated_at: datetime = Field(default_factory=utc_now)
 
 
@@ -149,8 +173,8 @@ class PublishLog(SQLModel, table=True):
     status: str
     error: str | None = None
     timestamp: int = Field(default=0, sa_column=_ms_ts())
-    full_request: dict[str, Any] | None = Field(default=None, sa_column=Column(JSON))
-    full_response: dict[str, Any] | None = Field(default=None, sa_column=Column(JSON))
+    full_request: dict[str, Any] | list[Any] | None = Field(default=None, sa_column=Column(JSON))
+    full_response: dict[str, Any] | list[Any] | None = Field(default=None, sa_column=Column(JSON))
     text_sent: str | None = None
     updated_at: datetime = Field(default_factory=utc_now)
 
@@ -167,8 +191,8 @@ class SyncLog(SQLModel, table=True):
     error: str | None = None
     timestamp: int = Field(default=0, sa_column=_ms_ts())
     source: str = ""
-    full_request: dict[str, Any] | None = Field(default=None, sa_column=Column(JSON))
-    full_response: dict[str, Any] | None = Field(default=None, sa_column=Column(JSON))
+    full_request: dict[str, Any] | list[Any] | None = Field(default=None, sa_column=Column(JSON))
+    full_response: dict[str, Any] | list[Any] | None = Field(default=None, sa_column=Column(JSON))
     updated_at: datetime = Field(default_factory=utc_now)
 
 
@@ -182,8 +206,8 @@ class LLMLog(SQLModel, table=True):
     response: str = Field(sa_column=Column(Text))
     system_instruction: str | None = Field(default=None, sa_column=Column(Text))
     model_config_json: dict[str, Any] | None = Field(default=None, sa_column=Column(JSON))
-    full_request: dict[str, Any] | None = Field(default=None, sa_column=Column(JSON))
-    full_response: dict[str, Any] | None = Field(default=None, sa_column=Column(JSON))
+    full_request: dict[str, Any] | list[Any] | None = Field(default=None, sa_column=Column(JSON))
+    full_response: dict[str, Any] | list[Any] | None = Field(default=None, sa_column=Column(JSON))
     tokens: int | None = None
     duration: float | None = None
     status: str

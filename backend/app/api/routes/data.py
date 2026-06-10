@@ -4,12 +4,15 @@ import uuid
 from datetime import datetime
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Body, HTTPException, Query
+from pydantic import BaseModel, Field
 from sqlmodel import Session, col, select
 
 from app.api.deps import CurrentUser, SessionDep
 from app.core.secrets import encrypt_token, is_encrypted
+from app.services.bulk_channels import bulk_reresolve_start_ids, bulk_reset_and_queue_sync
 from app.services.channels import compute_channel_stats, compute_channel_stats_batch
+from app.services.operator import get_operator_user_id
 from app.services.logs import (
     LOG_MODELS,
     clear_logs,
@@ -55,6 +58,23 @@ from app.models_tg import (
 )
 
 router = APIRouter(prefix="/data", tags=["data"])
+
+
+class BulkReresolveStartIdsRequest(BaseModel):
+    dry_run: bool = Field(default=False, alias="dryRun")
+    limit: int | None = None
+    channel_ids: list[str] | None = Field(default=None, alias="channelIds")
+    auto_follow_only: bool = Field(default=False, alias="autoFollowOnly")
+
+    model_config = {"populate_by_name": True}
+
+
+class BulkResetSyncRequest(BaseModel):
+    confirm: bool = False
+    channel_ids: list[str] | None = Field(default=None, alias="channelIds")
+    auto_follow_only: bool = Field(default=False, alias="autoFollowOnly")
+
+    model_config = {"populate_by_name": True}
 
 _CAMEL_OVERRIDES = {
     "display_name": "displayName",
@@ -154,6 +174,9 @@ def _channel_to_camel(ch: Channel) -> dict[str, Any]:
         "language": ch.language,
         "followedAt": ch.followed_at,
         "discoveredVia": ch.discovered_via,
+        "historyCompleteToCutoff": ch.history_complete_to_cutoff,
+        "anchorPostId": ch.anchor_post_id,
+        "oldestStoredPostTimestamp": ch.oldest_stored_post_timestamp,
     }
 
 
@@ -166,6 +189,11 @@ def _post_to_camel(p: Post) -> dict[str, Any]:
         "timestamp": p.timestamp,
         "forwardedFrom": p.forwarded_from,
         "forwardedFromName": p.forwarded_from_name,
+        "isAnchor": p.is_anchor,
+        "retrievedAt": p.retrieved_at,
+        "retrievalJobId": p.retrieval_job_id,
+        "retrievalPass": p.retrieval_pass,
+        "retrievalSource": p.retrieval_source,
     }
 
 
@@ -312,6 +340,57 @@ def upsert_channel(
     session.refresh(ch)
     _touch_sync(session, "channels")
     return _channel_to_camel(ch)
+
+
+@router.post("/channels/bulk-reresolve-start-ids")
+async def bulk_reresolve_start_ids_endpoint(
+    session: SessionDep,
+    current_user: CurrentUser,
+    body: BulkReresolveStartIdsRequest = Body(default_factory=BulkReresolveStartIdsRequest),
+) -> dict[str, Any]:
+    operator_id = current_user.id or get_operator_user_id(session)
+    result = await bulk_reresolve_start_ids(
+        session,
+        operator_id=operator_id,
+        dry_run=body.dry_run,
+        limit=body.limit,
+        channel_ids=body.channel_ids,
+        auto_follow_only=body.auto_follow_only,
+    )
+    return {
+        "updated": result.updated,
+        "skipped": result.skipped,
+        "wouldUpdate": result.would_update,
+        "errors": result.errors,
+        "deprecated": result.deprecated,
+        "message": result.message,
+    }
+
+
+@router.post("/channels/bulk-reset-sync")
+async def bulk_reset_sync_endpoint(
+    session: SessionDep,
+    current_user: CurrentUser,
+    body: BulkResetSyncRequest = Body(...),
+) -> dict[str, Any]:
+    if not body.confirm:
+        raise HTTPException(
+            status_code=400,
+            detail="Set confirm=true to clear posts and queue sync for selected channels.",
+        )
+    operator_id = current_user.id or get_operator_user_id(session)
+    result = await bulk_reset_and_queue_sync(
+        session,
+        operator_id=operator_id,
+        channel_ids=body.channel_ids,
+        auto_follow_only=body.auto_follow_only,
+    )
+    return {
+        "channelsReset": result.channels_reset,
+        "postsDeleted": result.posts_deleted,
+        "jobId": result.job_id,
+        "errors": result.errors,
+    }
 
 
 @router.delete("/channels/{channel_id}")

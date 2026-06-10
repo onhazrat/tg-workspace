@@ -1,4 +1,4 @@
-"""Server-side channel sync orchestration (ported from ScraperContext.tsx)."""
+"""Server-side channel sync orchestration (backward pagination)."""
 
 from __future__ import annotations
 
@@ -12,29 +12,32 @@ from typing import Any
 import httpx
 from sqlmodel import Session, col, select
 
-from app.services.channels import compute_channel_stats
-from app.services.logs import upsert_network_log, upsert_sync_log
-from app.services.posts import bulk_upsert_posts_impl
-from app.services.sync_meta import touch_sync
 from app.core.config import settings
 from app.core.db import engine
-from app.models_tg import AppSetting, Channel, Post
+from app.jobs.settings import compute_scrape_cutoff_ms, load_retention_settings, load_sync_settings
+from app.models_tg import Channel, Post
+from app.services.channels import update_channel_coverage
 from app.services.language import detect_language_from_posts
+from app.services.logs import upsert_network_log, upsert_sync_log
 from app.services.network import rotate_tor_identity
 from app.services.network_settings import load_network_settings, redact_proxy_url, resolve_proxies
-from app.services.scraper import get_channel_info, resolve_start_time_to_id, scrape_channel
+from app.services.post_sync_state import (
+    record_gaps_from_page,
+    record_gaps_to_existing_post,
+)
+from app.services.posts import bulk_upsert_posts_impl
+from app.services.scraper import get_channel_info, scrape_channel_page
 from app.services.scraper_jobs import (
     ChannelSyncState,
     SyncJobState,
     acquire_channel,
     deactivate_job,
     persist_job,
+    touch_job,
 )
+from app.services.sync_meta import touch_sync
 
 logger = logging.getLogger(__name__)
-
-DEFAULT_SYNC_CONCURRENCY = 3
-MAX_RETRIES = 3
 
 
 class SyncScrapeError(Exception):
@@ -52,13 +55,6 @@ class SyncScrapeError(Exception):
         self.is_unavailable = is_unavailable
         self.full_request = full_request
         self.full_response = full_response
-
-
-def _load_sync_settings(session: Session) -> dict[str, Any]:
-    row = session.get(AppSetting, "sync")
-    if row and row.value:
-        return row.value
-    return {"syncConcurrency": DEFAULT_SYNC_CONCURRENCY, "autoFollowForwarded": False}
 
 
 def _save_network_telemetry(
@@ -94,10 +90,48 @@ def _save_network_telemetry(
         )
 
 
-async def _scrape_with_retry(
+def _posts_to_save(channel_name: str, posts: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    out: list[dict[str, Any]] = []
+    for p in posts:
+        ts = p.get("timestamp")
+        if not ts and p.get("date"):
+            try:
+                dt = datetime.fromisoformat(p["date"].replace("Z", "+00:00"))
+                ts = int(dt.timestamp() * 1000)
+            except ValueError:
+                ts = int(time.time() * 1000)
+        out.append(
+            {
+                "id": p["id"],
+                "channelName": channel_name,
+                "text": p.get("text", ""),
+                "date": p.get("date", ""),
+                "timestamp": ts or int(time.time() * 1000),
+                "forwardedFrom": p.get("forwardedFrom"),
+                "forwardedFromName": p.get("forwardedFromName"),
+            }
+        )
+    return out
+
+
+def _existing_post_ids(
+    session: Session, channel_name: str, post_ids: list[int]
+) -> set[int]:
+    if not post_ids:
+        return set()
+    rows = session.exec(
+        select(Post.post_id).where(
+            Post.channel_name == channel_name,
+            col(Post.post_id).in_(post_ids),
+        )
+    ).all()
+    return set(rows)
+
+
+async def _scrape_page_with_retry(
     channel_name: str,
-    start_id: int,
     *,
+    before_id: int | None,
     known_latest_id: int,
     known_display_name: str | None,
     known_photo_url: str | None,
@@ -107,19 +141,20 @@ async def _scrape_with_retry(
     tor_control_enabled: bool,
     tor_control_port: int,
 ) -> dict[str, Any]:
-    url = f"https://t.me/s/{channel_name}/{start_id}"
     request_body = {
-        "url": url,
+        "url": f"https://t.me/s/{channel_name}"
+        if before_id is None
+        else f"https://t.me/s/{channel_name}?before={before_id}",
+        "beforeId": before_id,
         "knownLatestId": known_latest_id if known_latest_id > 0 else None,
-        "knownDisplayName": known_display_name if known_latest_id > 0 else None,
-        "knownPhotoUrl": known_photo_url if known_latest_id > 0 else None,
     }
 
     retry_count = 0
     while True:
         try:
-            return await scrape_channel(
-                url,
+            response = await scrape_channel_page(
+                channel_name,
+                before_id=before_id,
                 known_latest_id=known_latest_id if known_latest_id > 0 else None,
                 known_display_name=known_display_name if known_latest_id > 0 else None,
                 known_photo_url=known_photo_url if known_latest_id > 0 else None,
@@ -127,6 +162,8 @@ async def _scrape_with_retry(
                 tor_auto_rotate=tor_auto_rotate,
                 tor_rotation_threshold=tor_rotation_threshold,
             )
+            response["fullRequest"] = request_body
+            return response
         except Exception as exc:  # noqa: BLE001
             is_rate_limit = isinstance(exc, httpx.HTTPStatusError) and exc.response.status_code == 429
             is_network = isinstance(exc, (httpx.HTTPError, ConnectionError, OSError)) or (
@@ -142,20 +179,20 @@ async def _scrape_with_retry(
                     full_response={"error": str(exc)},
                 ) from exc
 
-            if retry_count < MAX_RETRIES and (is_rate_limit or is_network):
+            if retry_count < settings.SYNC_MAX_RETRIES and (is_rate_limit or is_network):
                 if is_rate_limit and tor_control_enabled and proxies:
                     try:
                         await rotate_tor_identity(tor_control_port)
                     except Exception as tor_exc:  # noqa: BLE001
                         logger.error("TOR NEWNYM failed: %s", tor_exc)
                 retry_count += 1
-                backoff_ms = (2**retry_count) * 2000
+                backoff_ms = (2**retry_count) * settings.SYNC_RETRY_BACKOFF_BASE_MS
                 logger.info(
                     "Retrying scrape for @%s in %sms (attempt %s/%s)",
                     channel_name,
                     backoff_ms,
                     retry_count,
-                    MAX_RETRIES,
+                    settings.SYNC_MAX_RETRIES,
                 )
                 await asyncio.sleep(backoff_ms / 1000)
                 continue
@@ -238,28 +275,29 @@ async def sync_single_channel(
 ) -> None:
     if job.cancel_event.is_set():
         ch_state.status = "cancelled"
-        await persist_job(job)
+        await touch_job(job)
         return
 
     lock = acquire_channel(ch_state.channel_name)
     async with lock:
         if job.cancel_event.is_set():
             ch_state.status = "cancelled"
-            await persist_job(job)
+            await touch_job(job)
             return
 
         ch_state.status = "running"
-        await persist_job(job)
+        await touch_job(job)
         total_new_posts = 0
         final_latest_id = 0
         requests_log: list[Any] = []
         responses_log: list[Any] = []
+        session_seen_ids: set[int] = set()
 
         with Session(engine) as session:
             channel = session.get(Channel, ch_state.channel_id)
             effective_user_id = user_id or (channel.user_id if channel else None)
             network = load_network_settings(session, effective_user_id)
-            sync_settings = _load_sync_settings(session)
+            sync_settings = load_sync_settings(session)
             proxies = resolve_proxies(network)
             tor_auto_rotate = bool(network.get("torAutoRotate"))
             tor_rotation_threshold = int(network.get("torRotationThreshold") or 10)
@@ -268,41 +306,44 @@ async def sync_single_channel(
                 network.get("torControlPort") or network.get("torControlPortDefault") or settings.TOR_CONTROL_PORT
             )
             auto_follow = bool(sync_settings.get("autoFollowForwarded"))
-            effective_start_time = int(sync_settings.get("globalStartTime") or 0)
+            retention_settings = load_retention_settings(session)
+            scrape_cutoff_ms = compute_scrape_cutoff_ms(sync_settings, retention_settings)
+            effective_start_time = scrape_cutoff_ms
 
             if not channel:
                 ch_state.status = "failed"
                 ch_state.error = "Channel not found"
-                await persist_job(job)
+                await touch_job(job)
                 return
             if channel.is_frozen:
                 ch_state.status = "skipped"
-                await persist_job(job)
+                await touch_job(job)
                 return
 
+            has_existing_posts = (
+                session.exec(
+                    select(Post.post_id)
+                    .where(Post.channel_name == channel.name)
+                    .limit(1)
+                ).first()
+                is not None
+            )
+            retrieval_pass = "incremental" if has_existing_posts else "initial"
+
             try:
-                if channel.start_id is None and channel.start_time is not None:
-                    resolved = await resolve_start_time_to_id(
-                        channel.name,
-                        channel.start_time,
-                        proxies=proxies or None,
-                        tor_auto_rotate=tor_auto_rotate,
-                        tor_rotation_threshold=tor_rotation_threshold,
-                    )
-                    channel.start_id = resolved
-                    channel.updated_at = datetime.utcnow()
-                    session.add(channel)
-                    session.commit()
-
-                stats = compute_channel_stats(session, channel.name)
-                current_max_id = (stats["maxId"] if stats else None) or (channel.start_id or 1) - 1
                 known_latest_id = 0
-                has_more = True
+                before_id: int | None = None
+                iterations = 0
+                stop_sync = False
 
-                while has_more and not job.cancel_event.is_set():
-                    response = await _scrape_with_retry(
+                while not stop_sync and not job.cancel_event.is_set():
+                    if iterations >= settings.SCRAPER_ITERATION_LIMIT:
+                        break
+                    iterations += 1
+
+                    response = await _scrape_page_with_retry(
                         channel.name,
-                        current_max_id + 1,
+                        before_id=before_id,
                         known_latest_id=known_latest_id,
                         known_display_name=channel.display_name,
                         known_photo_url=channel.photo_url,
@@ -315,15 +356,9 @@ async def sync_single_channel(
 
                     if response.get("fullRequest"):
                         requests_log.append(response["fullRequest"])
-                    requests_log.append(
-                        {
-                            "url": f"https://t.me/s/{channel.name}/{current_max_id + 1}",
-                            "knownLatestId": known_latest_id or None,
-                        }
-                    )
                     responses_log.append(response)
 
-                    scrape_url = f"https://t.me/s/{channel.name}/{current_max_id + 1}"
+                    scrape_url = response.get("fullRequest", {}).get("url", "")
                     if response.get("telemetry"):
                         _save_network_telemetry(
                             session,
@@ -336,7 +371,7 @@ async def sync_single_channel(
 
                     posts = response.get("posts") or []
                     latest_id = int(response.get("latestId") or 0)
-                    final_latest_id = latest_id
+                    final_latest_id = latest_id or final_latest_id
                     if latest_id:
                         known_latest_id = latest_id
 
@@ -354,72 +389,103 @@ async def sync_single_channel(
                         if val and getattr(channel, attr) != val:
                             setattr(channel, attr, val)
 
+                    page_ids = [p["id"] for p in posts]
+                    record_gaps_from_page(
+                        session,
+                        channel.name,
+                        page_ids,
+                        job_id=job.job_id,
+                        user_id=user_id,
+                        session_seen_ids=session_seen_ids,
+                    )
+
                     if not posts:
-                        has_more = False
+                        stop_sync = True
                         break
 
-                    posts_to_save = []
-                    for p in posts:
-                        ts = p.get("timestamp")
-                        if not ts and p.get("date"):
-                            try:
-                                dt = datetime.fromisoformat(p["date"].replace("Z", "+00:00"))
-                                ts = int(dt.timestamp() * 1000)
-                            except ValueError:
-                                ts = int(time.time() * 1000)
-                        posts_to_save.append(
-                            {
-                                "id": p["id"],
-                                "channelName": channel.name,
-                                "text": p.get("text", ""),
-                                "date": p.get("date", ""),
-                                "timestamp": ts or int(time.time() * 1000),
-                                "forwardedFrom": p.get("forwardedFrom"),
-                                "forwardedFromName": p.get("forwardedFromName"),
-                            }
+                    existing_on_page = _existing_post_ids(session, channel.name, page_ids)
+                    new_on_page = [pid for pid in page_ids if pid not in existing_on_page]
+
+                    if retrieval_pass == "incremental" and existing_on_page:
+                        if new_on_page:
+                            anchor_existing = min(existing_on_page)
+                            record_gaps_to_existing_post(
+                                session,
+                                channel.name,
+                                new_on_page,
+                                anchor_existing,
+                                job_id=job.job_id,
+                                user_id=user_id,
+                                session_seen_ids=session_seen_ids,
+                            )
+                        stop_sync = True
+
+                    posts_to_save = _posts_to_save(channel.name, posts)
+                    if retrieval_pass == "incremental" and existing_on_page:
+                        posts_to_save = [p for p in posts_to_save if p["id"] not in existing_on_page]
+
+                    if posts_to_save:
+                        bulk_upsert_posts_impl(
+                            posts_to_save,
+                            session,
+                            retrieval_job_id=job.job_id,
+                            retrieval_pass=retrieval_pass,
+                            retrieval_source=job.source,
                         )
+                        session.commit()
+                        touch_sync(session, "posts")
+                        total_new_posts += len(posts_to_save)
+                        ch_state.posts_fetched = total_new_posts
+                        await touch_job(job)
 
-                    bulk_upsert_posts_impl(posts_to_save, session)
-                    session.commit()
-                    touch_sync(session, "posts")
-                    total_new_posts += len(posts_to_save)
-                    ch_state.posts_fetched = total_new_posts
-                    await persist_job(job)
+                        if auto_follow:
+                            known_names = {
+                                c.name.lower()
+                                for c in session.exec(select(Channel)).all()
+                            }
+                            for p in posts_to_save:
+                                fwd = p.get("forwardedFrom")
+                                if not fwd:
+                                    continue
+                                clean_fwd = fwd.strip().replace("@", "").split("/")[-1]
+                                if clean_fwd and clean_fwd.lower() not in known_names:
+                                    known_names.add(clean_fwd.lower())
+                                    await _maybe_add_forwarded_channel(
+                                        session,
+                                        clean_fwd,
+                                        discovered_via={
+                                            "channelName": channel.name,
+                                            "postId": p["id"],
+                                            "timestamp": p["timestamp"],
+                                        },
+                                        proxies=proxies,
+                                        tor_auto_rotate=tor_auto_rotate,
+                                        tor_rotation_threshold=tor_rotation_threshold,
+                                        user_id=user_id,
+                                        effective_start_time=effective_start_time,
+                                    )
 
-                    if auto_follow:
-                        known_names = {
-                            c.name.lower()
-                            for c in session.exec(select(Channel)).all()
-                        }
-                        for p in posts_to_save:
-                            fwd = p.get("forwardedFrom")
-                            if not fwd:
-                                continue
-                            clean_fwd = fwd.strip().replace("@", "").split("/")[-1]
-                            if clean_fwd and clean_fwd.lower() not in known_names:
-                                known_names.add(clean_fwd.lower())
-                                await _maybe_add_forwarded_channel(
-                                    session,
-                                    clean_fwd,
-                                    discovered_via={
-                                        "channelName": channel.name,
-                                        "postId": p["id"],
-                                        "timestamp": p["timestamp"],
-                                    },
-                                    proxies=proxies,
-                                    tor_auto_rotate=tor_auto_rotate,
-                                    tor_rotation_threshold=tor_rotation_threshold,
-                                    user_id=user_id,
-                                    effective_start_time=effective_start_time,
-                                )
+                    if retrieval_pass == "incremental" and existing_on_page:
+                        break
 
-                    new_max_id = max(p["id"] for p in posts_to_save)
-                    current_max_id = new_max_id
+                    oldest_ts = min(
+                        (p.get("timestamp") or 0 for p in posts),
+                        default=0,
+                    )
+                    if retrieval_pass == "initial" and scrape_cutoff_ms > 0 and oldest_ts < scrape_cutoff_ms:
+                        stop_sync = True
+                        break
 
-                    if current_max_id >= latest_id:
-                        has_more = False
-                    if len(posts) < 10:
-                        has_more = False
+                    next_before = response.get("nextBeforeId")
+                    if next_before is None:
+                        stop_sync = True
+                        break
+                    if before_id is not None and next_before >= before_id:
+                        stop_sync = True
+                        break
+                    before_id = next_before
+
+                update_channel_coverage(session, channel, scrape_cutoff_ms)
 
                 detected_language = channel.language
                 if not detected_language:
@@ -472,7 +538,7 @@ async def sync_single_channel(
                 )
                 session.commit()
                 touch_sync(session, "sync_logs")
-                await persist_job(job)
+                await touch_job(job)
 
             except SyncScrapeError as exc:
                 if exc.is_unavailable:
@@ -504,7 +570,7 @@ async def sync_single_channel(
                 )
                 session.commit()
                 touch_sync(session, "sync_logs")
-                await persist_job(job)
+                await touch_job(job)
 
             except Exception as exc:  # noqa: BLE001
                 logger.exception("Sync failed for @%s", ch_state.channel_name)
@@ -529,15 +595,18 @@ async def sync_single_channel(
                 )
                 session.commit()
                 touch_sync(session, "sync_logs")
-                await persist_job(job)
+                await touch_job(job)
 
 
 async def run_sync_job(job: SyncJobState, user_id: uuid.UUID | None) -> None:
     job.status = "running"
-    await persist_job(job)
+    await touch_job(job)
     with Session(engine) as session:
-        sync_settings = _load_sync_settings(session)
-        concurrency = max(1, int(sync_settings.get("syncConcurrency") or DEFAULT_SYNC_CONCURRENCY))
+        sync_settings = load_sync_settings(session)
+        concurrency = max(
+            1,
+            int(sync_settings.get("syncConcurrency") or settings.SYNC_CONCURRENCY_DEFAULT),
+        )
 
     sem = asyncio.Semaphore(concurrency)
 

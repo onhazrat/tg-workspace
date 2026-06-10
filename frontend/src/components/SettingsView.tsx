@@ -85,8 +85,10 @@ export const SettingsView: React.FC<{ activeSection?: string }> = ({ activeSecti
     advancedMode,
     setAdvancedMode,
   } = useSettings();
-  const { loadNetworkLogs } = useData();
+  const { loadChannels, loadNetworkLogs } = useData();
 
+  const [bulkReresolveConfirm, setBulkReresolveConfirm] = useState(false);
+  const [bulkReresolveLoading, setBulkReresolveLoading] = useState(false);
   const [torStatus, setTorStatus] = useState<{ running: boolean; socksInUse: boolean; controlInUse: boolean; autoSpawned: boolean } | null>(null);
   const [torIp, setTorIp] = useState<string | null>(null);
   const [isCheckingIp, setIsCheckingIp] = useState(false);
@@ -565,6 +567,34 @@ export const SettingsView: React.FC<{ activeSection?: string }> = ({ activeSecti
 
               <div className="space-y-4 pt-4 border-t border-app-ink/5">
                 <div className="flex items-center gap-2 opacity-60 mb-2">
+                  <Zap size={14} />
+                  <span className="text-[10px] font-bold uppercase tracking-tight">Sync Concurrency</span>
+                </div>
+                <p className="text-[10px] opacity-40 italic serif mb-2">
+                  Number of channels to sync in parallel. Higher is faster but riskier.
+                </p>
+                <div className="flex items-center gap-3">
+                  <input
+                    type="number"
+                    min="1"
+                    value={syncConcurrency}
+                    onChange={(e) => {
+                      const val = parseInt(e.target.value, 10);
+                      setSyncConcurrency(!isNaN(val) && val >= 1 ? val : 1);
+                    }}
+                    className="w-20 bg-app-ink/5 border border-app-ink/10 p-2 text-[10px] font-mono focus:outline-none focus:border-app-ink/30 transition-all rounded"
+                  />
+                  <span className="text-[10px] opacity-60 uppercase tracking-widest font-bold">Parallel channels</span>
+                </div>
+                {syncConcurrency > 50 && (
+                  <p className="text-[8px] text-amber-600/80 italic serif">
+                    Values above 50 may trigger rate limits or bans. Use with caution.
+                  </p>
+                )}
+              </div>
+
+              <div className="space-y-4 pt-4 border-t border-app-ink/5">
+                <div className="flex items-center gap-2 opacity-60 mb-2">
                   <Database size={14} />
                   <span className="text-[10px] font-bold uppercase tracking-tight">Default Channel Start Time</span>
                 </div>
@@ -584,7 +614,12 @@ export const SettingsView: React.FC<{ activeSection?: string }> = ({ activeSecti
                     Match Retention
                   </button>
                   <button
-                    onClick={() => setGlobalStartTimeMode("relative")}
+                    onClick={() => {
+                      setGlobalStartTimeMode("relative");
+                      if (typeof globalStartTimeValue !== "number") {
+                        setGlobalStartTimeValue(1);
+                      }
+                    }}
                     className={`flex-1 py-1.5 text-[9px] uppercase font-bold tracking-widest transition-all rounded-md ${
                       globalStartTimeMode === "relative"
                         ? "bg-app-ink text-app-bg shadow-sm"
@@ -618,7 +653,7 @@ export const SettingsView: React.FC<{ activeSection?: string }> = ({ activeSecti
                         <input
                           type="number"
                           min="1"
-                          value={typeof globalStartTimeValue === "number" ? globalStartTimeValue : 7}
+                          value={typeof globalStartTimeValue === "number" ? globalStartTimeValue : 1}
                           onChange={(e) => setGlobalStartTimeValue(parseInt(e.target.value) || 1)}
                           className="w-20 bg-app-ink/5 border border-app-ink/10 p-2 text-[10px] font-mono focus:outline-none focus:border-app-ink/30 transition-all rounded"
                         />
@@ -661,6 +696,60 @@ export const SettingsView: React.FC<{ activeSection?: string }> = ({ activeSecti
                   <p className="text-[8px] opacity-40 italic serif text-right">
                     Clamped by {postRetentionDays} days retention policy.
                   </p>
+                )}
+              </div>
+
+              <div className="space-y-3 pt-4 border-t border-app-ink/5">
+                <div className="flex items-center gap-2 opacity-60">
+                  <RotateCw size={14} />
+                  <span className="text-[10px] font-bold uppercase tracking-tight">Bulk Re-sync</span>
+                </div>
+                <p className="text-[10px] opacity-40 italic serif">
+                  Clear stored posts and re-backfill all channels from the latest page backward to the retention window.
+                </p>
+                {!bulkReresolveConfirm ? (
+                  <button
+                    type="button"
+                    onClick={() => setBulkReresolveConfirm(true)}
+                    disabled={bulkReresolveLoading}
+                    className="px-4 py-2 text-[10px] uppercase font-bold tracking-widest border border-app-ink/20 bg-app-ink/5 hover:bg-app-ink/10 transition-all disabled:opacity-40"
+                  >
+                    Reset &amp; sync all channels
+                  </button>
+                ) : (
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      type="button"
+                      disabled={bulkReresolveLoading}
+                      onClick={async () => {
+                        setBulkReresolveLoading(true);
+                        try {
+                          const result = await api.bulkResetSync({ confirm: true });
+                          await loadChannels();
+                          toast.success(
+                            `Reset ${result.channelsReset} channel(s); deleted ${result.postsDeleted} post(s).` +
+                              (result.errors.length ? ` ${result.errors.length} error(s).` : "")
+                          );
+                        } catch (err) {
+                          toast.error(err instanceof Error ? err.message : "Bulk re-sync failed");
+                        } finally {
+                          setBulkReresolveLoading(false);
+                          setBulkReresolveConfirm(false);
+                        }
+                      }}
+                      className="px-4 py-2 text-[10px] uppercase font-bold tracking-widest border border-green-600/40 bg-green-500/10 hover:bg-green-500/20 transition-all disabled:opacity-40"
+                    >
+                      {bulkReresolveLoading ? "Running…" : "Confirm reset & sync"}
+                    </button>
+                    <button
+                      type="button"
+                      disabled={bulkReresolveLoading}
+                      onClick={() => setBulkReresolveConfirm(false)}
+                      className="px-3 py-2 text-[10px] uppercase font-bold tracking-widest opacity-50 hover:opacity-80"
+                    >
+                      Cancel
+                    </button>
+                  </div>
                 )}
               </div>
 
@@ -1199,30 +1288,6 @@ export const SettingsView: React.FC<{ activeSection?: string }> = ({ activeSecti
                           </motion.div>
                         )}
                       </AnimatePresence>
-                    </div>
-
-                    {/* Sync Performance */}
-                    <div className="pt-6 border-t border-app-ink/5 space-y-4">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2 opacity-60">
-                          <Zap size={14} />
-                          <div className="flex flex-col">
-                            <span className="text-[10px] font-bold uppercase tracking-tight">Sync Concurrency</span>
-                            <span className="text-[8px] opacity-40 italic serif">Number of channels to sync in parallel. Higher is faster but riskier.</span>
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-3">
-                          <span className="text-[10px] font-mono font-bold">{syncConcurrency}</span>
-                          <input 
-                            type="range" 
-                            min="1" 
-                            max="10" 
-                            value={syncConcurrency}
-                            onChange={(e) => setSyncConcurrency(parseInt(e.target.value))}
-                            className="w-24 accent-app-ink"
-                          />
-                        </div>
-                      </div>
                     </div>
                   </motion.div>
                 )}

@@ -14,7 +14,6 @@ from stem.control import Controller
 
 from app.core.config import settings
 
-PROXY_COOLDOWN_MS = 10 * 60 * 1000
 _bad_proxies: dict[str, float] = {}
 _tor_request_counter = 0
 _is_rotating_tor = False
@@ -45,7 +44,10 @@ def _normalize_proxy_url(proxy_url: str) -> str:
 
 
 def _build_client(proxy_url: str | None) -> httpx.AsyncClient:
-    kwargs: dict[str, Any] = {"timeout": 60.0, "follow_redirects": True}
+    kwargs: dict[str, Any] = {
+        "timeout": settings.NETWORK_FETCH_TIMEOUT_SECONDS,
+        "follow_redirects": True,
+    }
     if proxy_url:
         kwargs["proxy"] = _normalize_proxy_url(proxy_url)
     return httpx.AsyncClient(**kwargs)
@@ -74,21 +76,34 @@ async def rotate_tor_identity(control_port: int | None = None, password: str | N
 async def fetch_with_retry(
     url: str,
     *,
-    retries: int = 8,
-    initial_delay_ms: int = 3000,
+    retries: int | None = None,
+    initial_delay_ms: int | None = None,
     proxies: list[str] | None = None,
     tor_auto_rotate: bool = False,
-    tor_rotation_threshold: int = 10,
+    tor_rotation_threshold: int | None = None,
     tor_control_port: int | None = None,
     method: str = "GET",
     json_body: dict[str, Any] | None = None,
 ) -> tuple[Any, dict[str, Any]]:
     global _tor_request_counter
+    effective_retries = (
+        retries if retries is not None else settings.NETWORK_FETCH_RETRIES
+    )
+    effective_initial_delay_ms = (
+        initial_delay_ms
+        if initial_delay_ms is not None
+        else settings.NETWORK_FETCH_INITIAL_DELAY_MS
+    )
+    effective_tor_rotation_threshold = (
+        tor_rotation_threshold
+        if tor_rotation_threshold is not None
+        else settings.NETWORK_TOR_ROTATION_THRESHOLD
+    )
     tried: set[str] = set()
     telemetry: dict[str, Any] = {"attempts": []}
     start_total = time.time() * 1000
 
-    for i in range(retries):
+    for i in range(effective_retries):
         attempt_start = time.time() * 1000
         now = time.time() * 1000
         proxy_url: str | None = None
@@ -107,7 +122,7 @@ async def fetch_with_retry(
         is_local_tor = proxy_url and ("127.0.0.1" in proxy_url or "localhost" in proxy_url)
         if is_local_tor and tor_auto_rotate:
             _tor_request_counter += 1
-            if _tor_request_counter >= tor_rotation_threshold:
+            if _tor_request_counter >= effective_tor_rotation_threshold:
                 await rotate_tor_identity(tor_control_port)
 
         try:
@@ -146,7 +161,9 @@ async def fetch_with_retry(
             is_rate_limit = isinstance(exc, httpx.HTTPStatusError) and exc.response.status_code == 429
 
             if proxy_url and is_network and not is_soft_block:
-                _bad_proxies[proxy_url] = time.time() * 1000 + PROXY_COOLDOWN_MS
+                _bad_proxies[proxy_url] = (
+                    time.time() * 1000 + settings.NETWORK_PROXY_COOLDOWN_MS
+                )
 
             telemetry["attempts"].append(
                 {
@@ -158,8 +175,8 @@ async def fetch_with_retry(
                 }
             )
 
-            if i < retries - 1 and (is_network or is_rate_limit):
-                backoff = (2**i) * initial_delay_ms + random.randint(0, 1000)
+            if i < effective_retries - 1 and (is_network or is_rate_limit):
+                backoff = (2**i) * effective_initial_delay_ms + random.randint(0, 1000)
                 if is_rate_limit:
                     backoff = max(backoff, 10000)
                 await asyncio.sleep(backoff / 1000)

@@ -15,7 +15,6 @@ from app.ai.registry import get_provider
 from app.core.config import settings
 from app.models_tg import EmbeddingLog, Post, PostEmbedding, SyncMeta
 
-CHUNK_SIZE = 20
 _last_backfill_run_ms: int | None = None
 
 
@@ -48,6 +47,7 @@ def _posts_without_embeddings_stmt(
             & (Post.post_id == PostEmbedding.post_id),
         )
         .where(col(PostEmbedding.id).is_(None))
+        .where(col(Post.is_anchor) == False)  # noqa: E712
         .order_by(Post.timestamp.desc())
     )
     if channel_names:
@@ -73,6 +73,7 @@ def count_posts_without_embeddings(
             & (Post.post_id == PostEmbedding.post_id),
         )
         .where(col(PostEmbedding.id).is_(None))
+        .where(col(Post.is_anchor) == False)  # noqa: E712
     )
     if channel_names is not None:
         stmt = stmt.where(col(Post.channel_name).in_(channel_names))
@@ -90,7 +91,11 @@ def get_embedding_status(
             "total": 0,
             "lastRun": get_last_backfill_run(),
         }
-    total_stmt = select(func.count()).select_from(Post)
+    total_stmt = (
+        select(func.count())
+        .select_from(Post)
+        .where(col(Post.is_anchor) == False)  # noqa: E712
+    )
     if channel_names is not None:
         total_stmt = total_stmt.where(col(Post.channel_name).in_(channel_names))
     total = int(session.exec(total_stmt).one())
@@ -105,11 +110,14 @@ def get_embedding_status(
 async def backfill_embeddings(
     session: Session,
     *,
-    limit: int = 100,
+    limit: int | None = None,
     operator_id: UUID | None = None,
 ) -> dict[str, Any]:
     """Embed up to *limit* posts that lack a PostEmbedding row."""
     global _last_backfill_run_ms
+
+    if limit is None:
+        limit = settings.EMBEDDINGS_BACKFILL_LIMIT_DEFAULT
 
     if not settings.GEMINI_API_KEY:
         raise ValueError("GEMINI_API_KEY not configured")
@@ -136,8 +144,9 @@ async def backfill_embeddings(
     start = time.perf_counter()
 
     try:
-        for i in range(0, len(posts), CHUNK_SIZE):
-            chunk = posts[i : i + CHUNK_SIZE]
+        chunk_size = settings.EMBEDDINGS_CHUNK_SIZE
+        for i in range(0, len(posts), chunk_size):
+            chunk = posts[i : i + chunk_size]
             texts = [p.text or p.channel_name for p in chunk]
             result = await provider.embed(texts, model=model)
 

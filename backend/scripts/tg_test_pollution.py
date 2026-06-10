@@ -55,6 +55,7 @@ TEST_NETWORK_LOG_IDS: frozenset[str] = frozenset({"nl-test-1"})
 ALL_TEST_CHANNEL_KEYS: frozenset[str] = TEST_CHANNEL_IDS | TEST_CHANNEL_NAMES
 
 TG_TABLES: tuple[str, ...] = (
+    "tg_post_sync_state",
     "tg_post_embeddings",
     "tg_post_translations",
     "tg_posts",
