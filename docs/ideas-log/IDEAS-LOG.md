@@ -2,19 +2,13 @@
 
 > Quick capture for later. See [README](./README.md) for workflow and [_template.md](./_template.md) for detail files.
 
-**Last reviewed:** —
+**Last reviewed:** 2026-06-10
 
 ## Backlog
 
 | Id | Title | Area | Priority | Added | Detail | Notes |
 |----|-------|------|----------|-------|--------|-------|
-| — | *No ideas yet* | — | — | — | — | Add rows below this line |
-
-<!--
-Example row (delete when adding real ideas):
-
-| IDEA-001 | Export channel posts to CSV | backend | medium | 2026-06-10 | [detail](./ideas/IDEA-001-export-csv.md) | Optional one-line context |
--->
+| IDEA-001 | Frontend command palette (fuzzy command line) | frontend | medium | 2026-06-10 | [detail](./ideas/IDEA-001-command-palette.md) | Keyboard-driven actions & navigation instead of hunting through tabs/settings |
 
 ## In progress
 
