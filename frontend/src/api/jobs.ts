@@ -27,6 +27,24 @@ export type SyncJobStatus = {
   finishedAt?: number;
 };
 
+export type RuntimeConfig = {
+  nowMs: number;
+  scrapeCutoffMs: number;
+  effectiveGlobalStartTimeMs: number;
+  globalStartTime: {
+    mode: string;
+    value: string | number | null;
+    effectiveMs: number;
+  };
+  sync: Record<string, unknown>;
+  scraper: Record<string, unknown>;
+  network: Record<string, unknown>;
+  jobs: Record<string, unknown>;
+  retention: Record<string, unknown>;
+  constants: Record<string, unknown>;
+  activeSyncJob: Record<string, unknown> | null;
+};
+
 export const jobsApi = {
   jobsStatus: () => request<Record<string, JobStatusEntry>>("/api/v1/jobs/status"),
 
@@ -54,6 +72,8 @@ export const jobsApi = {
     }),
 
   healthCheck: () => request<boolean>("/api/v1/utils/health-check/"),
+
+  getRuntimeConfig: () => request<RuntimeConfig>("/api/v1/jobs/runtime-config"),
 };
 
 /** Subscribe to sync job progress via SSE (full status snapshots). */

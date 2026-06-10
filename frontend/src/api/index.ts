@@ -18,7 +18,12 @@ export const api = {
 export { aiApi } from "./ai";
 export { dataApi } from "./data";
 export { jobsApi } from "./jobs";
-export type { JobStatusEntry, SyncJobChannelStatus, SyncJobStatus } from "./jobs";
+export type {
+  JobStatusEntry,
+  RuntimeConfig,
+  SyncJobChannelStatus,
+  SyncJobStatus,
+} from "./jobs";
 export { networkApi } from "./network";
 export { ragApi } from "./rag";
 export { tgApi } from "./tg";

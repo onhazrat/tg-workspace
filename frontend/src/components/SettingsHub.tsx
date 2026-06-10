@@ -1,10 +1,11 @@
 import React, { useEffect } from "react";
 import { SETTINGS_TABS } from "../constants";
-import { Settings, Cpu, Globe, Send, Database, List, Activity, Layout, RefreshCw } from "lucide-react";
+import { Settings, Cpu, Globe, Send, Database, List, Activity, Layout, RefreshCw, Braces } from "lucide-react";
 import { SettingsView } from "./SettingsView";
 import { BotManagement } from "./BotManagement";
 import { DatabaseManagement } from "./DatabaseManagement";
 import { DiagnosticsView } from "./DiagnosticsView";
+import { RuntimeConfigView } from "./RuntimeConfigView";
 import { useData } from "../contexts/DataContext";
 import { useSettingsSection } from "@/hooks/useSettingsSection";
 import type { SettingsSection } from "@/lib/settingsSection";
@@ -57,6 +58,8 @@ export const SettingsHub: React.FC = () => {
         return <DatabaseManagement />;
       case "diagnostics":
         return <DiagnosticsView />;
+      case "runtime-config":
+        return <RuntimeConfigView />;
       default:
         return <SettingsView activeSection="appearance" />;
     }
@@ -80,6 +83,7 @@ export const SettingsHub: React.FC = () => {
                 Activity,
                 Layout,
                 RefreshCw,
+                Braces,
               }[tab.icon] || Settings;
 
               const isActive = activeSettingsTab === tab.id;
@@ -104,7 +108,7 @@ export const SettingsHub: React.FC = () => {
       </div>
 
       {/* Content Area */}
-      <div className={`flex-1 p-8 overflow-y-auto bg-app-card transition-colors ${activeSettingsTab === "diagnostics" ? "terminal-theme text-app-ink" : ""}`}>
+      <div className={`flex-1 p-8 overflow-y-auto bg-app-card transition-colors ${activeSettingsTab === "diagnostics" || activeSettingsTab === "runtime-config" ? "terminal-theme text-app-ink" : ""}`}>
         {renderContent()}
       </div>
     </div>

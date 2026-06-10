@@ -21,5 +21,6 @@ describe("settingsSection", () => {
   it("normalizes network section for deep links", () => {
     expect(normalizeSettingsSection("network")).toBe("network");
     expect(normalizeSettingsSection("diagnostics")).toBe("diagnostics");
+    expect(normalizeSettingsSection("runtime-config")).toBe("runtime-config");
   });
 });

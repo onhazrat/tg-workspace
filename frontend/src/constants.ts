@@ -21,6 +21,7 @@ export const SETTINGS_TABS = [
   { id: "db", label: "Data Management", icon: "Database" },
   { id: "publishing", label: "Publishing", icon: "Send" },
   { id: "diagnostics", label: "Diagnostics", icon: "Activity" },
+  { id: "runtime-config", label: "Runtime Config", icon: "Braces" },
 ] as const;
 
 export const MODELS = [
