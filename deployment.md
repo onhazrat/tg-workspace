@@ -5,8 +5,9 @@ Deploy the stack with Docker Compose on a remote server behind a shared Traefik 
 ## Preparation
 
 * Remote server with [Docker Engine](https://docs.docker.com/engine/install/) installed.
-* DNS A record for your domain pointing to the server.
-* Wildcard DNS for subdomains (`*.example.com`, `*.staging.example.com`) so services are reachable at `dashboard.`, `api.`, `adminer.`, `traefik.`, etc.
+* Domain DNS hosted on **Cloudflare** (required for automatic certificate issuance).
+* DNS A records for your domain (and subdomains, or a wildcard) pointing to the server — e.g. `api.`, `dashboard.`, `adminer.`, `traefik.` under `${DOMAIN}`. Orange-cloud (proxied) records are supported with the DNS-01 challenge.
+* A Cloudflare **API token** with **Zone → DNS → Edit** and **Zone → Zone → Read** for the target zone.
 * [GitHub Actions self-hosted runners](https://docs.github.com/en/actions/hosting-your-own-runners) (optional, for CD).
 
 ## Public Traefik (one-time)
@@ -34,6 +35,7 @@ export PASSWORD=changethis
 export HASHED_PASSWORD=$(openssl passwd -apr1 $PASSWORD)
 export DOMAIN=tg-summarizer.example.com
 export EMAIL=admin@your-real-domain.com
+export CF_DNS_API_TOKEN=your-cloudflare-api-token
 ```
 
 Start Traefik:
