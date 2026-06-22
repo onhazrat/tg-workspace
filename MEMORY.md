@@ -8,7 +8,7 @@ Self-hosted Telegram channel summarizer. Migrated from browser-heavy `TG-Summari
 
 ## Architecture
 
-- **`backend/`** — FastAPI (`app/main.py`), SQLModel (`app/models_tg.py`), Alembic, services (`scraper.py`, `sync_orchestrator.py`, `proxy_pool.py`, `network_settings.py`, `embeddings.py`, `bulk_channels.py`, `post_sync_state.py`, `runtime_config.py`, `operator.py`, …), APScheduler jobs (`app/jobs/`), pluggable AI (`app/ai/`, Gemini first).
+- **`backend/`** — FastAPI (`app/main.py`), SQLModel (`app/models_tg.py`), Alembic, services (`scraper.py`, `sync_orchestrator.py`, `proxy_pool.py`, `network_settings.py`, `summaries.py`, `embeddings.py`, `bulk_channels.py`, `post_sync_state.py`, `runtime_config.py`, `operator.py`, …), APScheduler jobs (`app/jobs/`), pluggable AI (`app/ai/`, Gemini first), shared prompts (`app/prompts/summary.py`).
 - **`frontend/`** — React 19 + Vite + TanStack Router/Query; dual-route UI:
   - **`/_tg/summarizer`** — full-screen TG app (`App.tsx` + `TgProviders`)
   - **`/_layout/*`** — template admin shell (`/`, `/items`, `/admin`, `/settings`)
@@ -25,6 +25,7 @@ Self-hosted Telegram channel summarizer. Migrated from browser-heavy `TG-Summari
 ### Key API surfaces
 
 - Versioned: `/api/v1/telegram/*`, `/network/*`, `/ai/*`, `/data/*`, `/rag/*`, `/jobs/*`
+- **AI summary:** `POST /api/v1/ai/summary` (generate), `POST /api/v1/ai/summary/stream`, **`POST /api/v1/ai/summary/prompt`** (server-built prompt only — no LLM call; used by Copy Prompt)
 - **Legacy `/api/*`:** served in `local` only; **410 Gone in production** (`main.py` middleware).
 - **Channel sync:** `POST /api/v1/jobs/sync` → progress via **SSE** `GET /api/v1/jobs/sync/{jobId}/events` (fallback poll: `GET .../sync/{jobId}`).
 - **Runtime diagnostics:** `GET /api/v1/jobs/runtime-config` — effective sync/scraper/network/job/retention settings + optional `activeSyncJob` (`allowedConcurrency`, `concurrencyInUse`, `effectiveProxyCapacity`, `proxyLanes`, …). Secrets/proxy creds redacted.
@@ -58,13 +59,14 @@ Self-hosted Telegram channel summarizer. Migrated from browser-heavy `TG-Summari
 - **Auto-follow UI:** Toggle on each **ChannelCard** (not global Settings). Distinct from **Auto-Followed** badge (`discoveredVia` set) = channel was discovered via another channel's forward.
 - **Channel normalization:** `frontend/src/lib/channelNormalize.ts`.
 - **Proxy resolution:** Per-user `proxyUrls` in Postgres `AppSetting`; `DEFAULT_PROXY_URLS` env is fallback only ([DECISIONS #11](docs/migration/DECISIONS.md)).
-- **Summarizer UI:** URL tabs `/summarizer?tab=`; settings `?tab=settings&section=` (`useSettingsSection`).
+- **Summarizer UI:** URL tabs `/summarizer?tab=`; settings `?tab=settings&section=` (`useSettingsSection`). Summary toolbar: **Generate Summary** + **Copy Prompt** (`SummaryConfig.tsx`).
+- **External AI summary flow:** Copy Prompt → clipboard + **pending** history entry (same metadata as generate: channels, date range, post count, language, model). Pending state in `Summary.extra`: `status: "pending"` + `promptText`. User completes via **`PasteSummaryModal`** on that history item (Summary view CTA or History list) — **no global paste toolbar button**. Completed: `source: "pasted"`; model `"external"` (`PASTED_SUMMARY_MODEL`) or optional user-typed name; **no LLM log**. Re-paste blocked once completed; pending persists until completed or deleted. `summaries.py` upsert: **`null` extra fields remove keys** (clears `status` on completion).
 - **Theme:** `theme-provider` (`vite-ui-theme`); not `SettingsContext`.
 - **Sync logs:** `full_request` / `full_response` on log models accept **dict or list** (per-page backward scrape telemetry).
 
 ## Decisions (stable)
 
-Locked [DECISIONS.md](docs/migration/DECISIONS.md) + **Mode A hardened single-operator (2026-06-09)** + **backward sync (2026-06-10)** + **per-channel auto-follow (2026-06-10)** + **Cloudflare DNS TLS (2026-06-16)** + **proxy-bound worker pool (2026-06-22, IDEA-003)**:
+Locked [DECISIONS.md](docs/migration/DECISIONS.md) + **Mode A hardened single-operator (2026-06-09)** + **backward sync (2026-06-10)** + **per-channel auto-follow (2026-06-10)** + **Cloudflare DNS TLS (2026-06-16)** + **proxy-bound worker pool (2026-06-22, IDEA-003)** + **external AI summary workflow (2026-06-22)**:
 
 1. **Single-operator (Mode A)** — Production: `API_KEY`, `TOKEN_ENCRYPTION_KEY`, strong `SECRET_KEY`, `USERS_OPEN_REGISTRATION=false`. Reads unscoped; `user_id` columns are forward-compatible metadata. Mode B multi-user deferred.
 2. **Auth** — JWT + optional `X-API-Key`; fail-closed on sensitive routes in non-local.
@@ -81,6 +83,7 @@ Locked [DECISIONS.md](docs/migration/DECISIONS.md) + **Mode A hardened single-op
 13. **Auto-follow forwarded** — `Channel.auto_follow_forwarded` (DB/API `autoFollowForwarded`); decided per source channel during sync. **Removed** global `sync.autoFollowForwarded` from defaults, runtime-config, and Settings UI. Migration: all existing channels `false` (user choice; no copy from old global).
 14. **Let's Encrypt via Cloudflare DNS-01** — `compose.traefik.yml` uses `dnschallenge.provider=cloudflare` + `CF_DNS_API_TOKEN` (Zone:Read + DNS:Edit). **Rejected TLS-01** (breaks behind orange-cloud proxy). DNS challenge does not require the server to be publicly reachable on :443.
 15. **Proxy-bound worker pool** — Per-proxy lane semaphores + reused httpx clients gate proxied HTTP; least-loaded dispatch; `syncConcurrency` capped by pool capacity when proxies active. `test_proxy` and direct fetches bypass pool. Detail: [IDEA-003](docs/ideas-log/ideas/IDEA-003-proxy-bound-worker-pool.md).
+16. **External AI summary workflow** — `POST /api/v1/ai/summary/prompt` returns server-built prompt (`app/prompts/summary.py`). Copy Prompt creates pending history entry; paste completes **that item** via modal. Optional external model name; default display **External**. No `saveLLMLog` for pasted completions.
 
 ### Explicitly rejected / deferred
 
@@ -94,6 +97,10 @@ Locked [DECISIONS.md](docs/migration/DECISIONS.md) + **Mode A hardened single-op
 - **mkcert** as default local TLS path (optional alternative; prod-like local uses real LE + Cloudflare).
 - **Producer-consumer sync queue** — deferred; current model is semaphore-limited in-process jobs.
 - **Proxy pool v2** — weighted proxy pick, full circuit breaker, `http2=True` on lane clients ([IDEA-003 follow-ups](docs/ideas-log/ideas/IDEA-003-proxy-bound-worker-pool.md)).
+- **Global "Paste AI Response" toolbar button** — replaced by history-linked pending flow.
+- **Overwrite current summary on paste** — paste updates the pending entry in place, not the loaded summary.
+- **One-click clipboard paste** without review modal.
+- **In-app `selectedModel` dropdown** for pasted summary attribution (optional free-text field instead).
 
 ## User preferences
 
@@ -105,6 +112,7 @@ Locked [DECISIONS.md](docs/migration/DECISIONS.md) + **Mode A hardened single-op
 - **Sync concurrency** in Scraping & Sync with arbitrary numeric choice (not capped slider).
 - **Auto-follow migration:** existing channels default off; enable per channel as needed.
 - **Single root `.env`** for Traefik + app when both compose files run from repo root; no separate Traefik env file unless split deploy layout.
+- **External AI:** prefer explicit user review before saving pasted responses (modal, not one-click).
 
 ## Environment & fixes
 
@@ -149,3 +157,8 @@ Locked [DECISIONS.md](docs/migration/DECISIONS.md) + **Mode A hardened single-op
 - Hover translation server-side (deferred).
 - Sync job chunking / lighter SSE for 2000+ channel jobs.
 - **Ideas backlog** — [IDEAS-LOG.md](docs/ideas-log/IDEAS-LOG.md): [IDEA-001](docs/ideas-log/ideas/IDEA-001-command-palette.md) command palette; [IDEA-002](docs/ideas-log/ideas/IDEA-002-tanstack-devtools.md) TanStack devtools (dev-only).
+
+## Session log
+
+- **2026-06-22** — IDEA-003 proxy-bound worker pool shipped (per-proxy lanes, settings, runtime-config, tests).
+- **2026-06-22** — External AI workflow: Copy Prompt + pending history + per-item paste modal; shared `app/prompts/summary.py`.
