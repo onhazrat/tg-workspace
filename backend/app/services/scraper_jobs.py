@@ -125,6 +125,9 @@ def _get_cancel_event(job_id: str) -> asyncio.Event:
 
 
 def _row_to_state(row: SyncJobRow) -> SyncJobState:
+    cancel_event = _get_cancel_event(row.id)
+    if row.status == "cancelled":
+        cancel_event.set()
     job = SyncJobState(
         job_id=row.id,
         source=row.source,
@@ -132,7 +135,7 @@ def _row_to_state(row: SyncJobRow) -> SyncJobState:
         channels=_channels_from_json(row.channels),
         created_at=row.created_at,
         finished_at=row.finished_at,
-        cancel_event=_get_cancel_event(row.id),
+        cancel_event=cancel_event,
         user_id=str(row.user_id) if row.user_id else None,
     )
     _mark_flushed(job)
