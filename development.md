@@ -172,26 +172,23 @@ Channel sync progress is pushed over **Server-Sent Events** instead of client po
 
 Backend tunables (root `.env`): `SYNC_JOB_SSE_THROTTLE_MS` (default 1000), `SYNC_JOB_PERSIST_INTERVAL_MS` (default 5000). Frontend: `VITE_SYNC_JOB_TIMEOUT_MS`, `VITE_SYNC_JOB_FALLBACK_POLL_MS`, `VITE_SYNC_META_MIN_INTERVAL_MS` (default 5000 — throttles etag polling).
 
-## Bulk start-ID fix (2000+ channels)
+## Bulk re-backfill (2000+ channels)
 
-After correcting **Default Channel Start Time** in Settings → Scraping & Sync, re-resolve metadata without scraping:
+After correcting **Default Channel Start Time** in Settings → Scraping & Sync, run a full re-backfill:
 
 ```bash
-# Preview scope (safe default)
-cd backend && uv run python scripts/bulk_reresolve_start_ids.py --dry-run
-
-# Apply for all operator channels
-uv run python scripts/bulk_reresolve_start_ids.py
-
-# Limit / filter
-uv run python scripts/bulk_reresolve_start_ids.py --limit 100 --auto-follow-only
+# API (preferred)
+curl -X POST http://localhost:8000/api/v1/data/channels/bulk-reset-sync \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"confirm": true}'
 ```
 
-API: `POST /api/v1/data/channels/bulk-reresolve-start-ids` (same logic; UI button in Settings → Scraping & Sync).
+`POST /api/v1/data/channels/bulk-reset-sync` with `{"confirm": true}` clears posts, nulls `startId`, and queues one sync job per channel. UI button in Settings → Scraping & Sync.
 
-Optional full re-scrape: `POST /api/v1/data/channels/bulk-reset-sync` with `{"confirm": true}` (clears posts, nulls `startId`, queues one sync job).
+**Deprecated:** `bulk_reresolve_start_ids.py` and `POST /api/v1/data/channels/bulk-reresolve-start-ids` are backward-compat no-ops — use bulk reset-sync instead. See [MEMORY.md](MEMORY.md) maintenance scripts table.
 
-**Disable auto-follow:** Settings → Scraping & Sync → turn off **Auto-Follow Forwarded** (`autoFollowForwarded` in sync AppSetting). To remove existing auto-followed channels: `uv run python scripts/cleanup_auto_follow_channels.py --dry-run` then `--freeze` or `--delete`.
+**Auto-follow forwarded:** enable per channel on each **ChannelCard** (`autoFollowForwarded` toggle). There is no global Settings toggle. To clean up channels discovered via forwards: `uv run python backend/scripts/cleanup_auto_follow_channels.py --dry-run` then `--freeze` or `--delete` (add `--auto-follow-only` to limit scope).
 
 ## Testing
 
@@ -235,12 +232,56 @@ uv run python backend/scripts/backfill_user_id.py --reassign-all
 
 `cleanup_test_channels.py` deletes known test channel IDs/names, dependent posts/embeddings/summaries/sync logs, and network log `nl-test-1`, then optionally reassigns `user_id` on remaining rows.
 
-## Pre-commit
+## Pre-commits and code linting
+
+We use [prek](https://prek.j178.dev/) (modern alternative to [Pre-commit](https://pre-commit.com/)) for code linting and formatting.
+
+When you install it, it runs right before making a commit in git. This way it ensures that the code is consistent and formatted even before it is committed.
+
+You can find a file `.pre-commit-config.yaml` with configurations at the root of the project.
+
+#### Install prek to run automatically
+
+`prek` is already part of the dependencies of the project.
+
+After having the `prek` tool installed and available, you need to "install" it in the local repository, so that it runs automatically before each commit.
+
+Using `uv`, you could do it with (make sure you are inside `backend` folder):
 
 ```bash
-cd backend
-uv run prek install -f
-uv run prek run --all-files
+❯ uv run prek install -f
+prek installed at `../.git/hooks/pre-commit`
+```
+
+The `-f` flag forces the installation, in case there was already a `pre-commit` hook previously installed.
+
+Now whenever you try to commit, e.g. with:
+
+```bash
+git commit
+```
+
+...prek will run and check and format the code you are about to commit, and will ask you to add that code (stage it) with git again before committing.
+
+Then you can `git add` the modified/fixed files again and now you can commit.
+
+#### Running prek hooks manually
+
+you can also run `prek` manually on all the files, you can do it using `uv` with:
+
+```bash
+❯ uv run prek run --all-files
+check for added large files..............................................Passed
+check toml...............................................................Passed
+check yaml...............................................................Passed
+fix end of files.........................................................Passed
+trim trailing whitespace.................................................Passed
+typos....................................................................Passed
+biome check..............................................................Passed
+ruff check...............................................................Passed
+ruff format..............................................................Passed
+mypy check...............................................................Passed
+ty check.................................................................Passed
 ```
 
 ## Mode A deployment (hardened single-operator)

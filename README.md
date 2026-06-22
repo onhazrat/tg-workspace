@@ -40,8 +40,7 @@ docker compose up --build
 
 ## API
 
-- Legacy routes: `/api/scrape`, `/api/channel-info`, etc.
-- Versioned routes: `/api/v1/telegram/*`, `/api/v1/network/*`, `/api/v1/ai/*`, `/api/v1/data/*`, `/api/v1/rag/*`, `/api/v1/jobs/*`
+Supported surface: `/api/v1/telegram/*`, `/api/v1/network/*`, `/api/v1/ai/*`, `/api/v1/data/*`, `/api/v1/rag/*`, `/api/v1/jobs/*`. OpenAPI: `/docs`, `/api/v1/openapi.json`. Legacy `/api/*` routes are local-only (410 in production).
 
 ## Deployment & development
 

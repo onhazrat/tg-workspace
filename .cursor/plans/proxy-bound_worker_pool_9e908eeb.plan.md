@@ -4,28 +4,28 @@ overview: Introduce a per-proxy asyncio lane pool in the network layer that gate
 todos:
   - id: proxy-pool-module
     content: Add proxy_pool.py with ProxyLane, ProxyPoolManager (configure, acquire, snapshot), cooldown integration
-    status: pending
+    status: completed
   - id: network-fetch-refactor
     content: Refactor fetch_with_retry to use pool for proxied requests; bypass_pool for test_proxy
-    status: pending
+    status: completed
   - id: network-settings-schema
     content: Add proxyDefaultConcurrency + proxyConcurrencyOverrides to network_settings, config env default, merge/validate
-    status: pending
+    status: completed
   - id: wire-callers
     content: Pass concurrency config through scraper, sync_orchestrator, telegram routes; cap run_sync_job concurrency
-    status: pending
+    status: completed
   - id: runtime-config
     content: Expose effectiveProxyCapacity, lane snapshot, overrides in runtime_config + schema
-    status: pending
+    status: completed
   - id: frontend-settings
     content: "Network UI: default slots + per-proxy override table; persist via settings/network PUT"
-    status: pending
+    status: completed
   - id: tests
     content: test_proxy_pool.py + network_settings/runtime_config updates; optional concurrent fetch test
-    status: pending
+    status: completed
   - id: docs
     content: IDEA-003 detail file, IDEAS-LOG entry, MEMORY.md proxy pool note
-    status: pending
+    status: completed
 isProject: false
 ---
 

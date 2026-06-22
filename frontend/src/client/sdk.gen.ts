@@ -3,7 +3,7 @@
 import type { CancelablePromise } from './core/CancelablePromise';
 import { OpenAPI } from './core/OpenAPI';
 import { request as __request } from './core/request';
-import type { AiApiListModelsResponse, AiApiSummaryData, AiApiSummaryResponse, AiApiSummaryStreamData, AiApiSummaryStreamResponse, AiApiChatStreamData, AiApiChatStreamResponse, AiApiEmbeddingsData, AiApiEmbeddingsResponse, AiApiTranslateData, AiApiTranslateResponse, DataGetSyncMetaResponse, DataListChannelsResponse, DataUpsertChannelData, DataUpsertChannelResponse, DataDeleteChannelData, DataDeleteChannelResponse, DataGetChannelStatsData, DataGetChannelStatsResponse, DataListPostsData, DataListPostsResponse, DataBulkUpsertPostsData, DataBulkUpsertPostsResponse, DataListSummariesResponse, DataUpsertSummaryData, DataUpsertSummaryResponse, DataDeleteSummaryData, DataDeleteSummaryResponse, DataListBotCredentialsResponse, DataUpsertBotCredentialData, DataUpsertBotCredentialResponse, DataDeleteBotCredentialData, DataDeleteBotCredentialResponse, DataMigrateBotCredentialsData, DataMigrateBotCredentialsResponse, DataListChatDestinationsResponse, DataUpsertChatDestinationData, DataUpsertChatDestinationResponse, DataDeleteChatDestinationData, DataDeleteChatDestinationResponse, DataListEmbeddingsResponse, DataUpsertEmbeddingsData, DataUpsertEmbeddingsResponse, DataListTranslationsResponse, DataUpsertTranslationsData, DataUpsertTranslationsResponse, DataListPublishLogsResponse, DataCreatePublishLogsData, DataCreatePublishLogsResponse, DataListSyncLogsResponse, DataCreateSyncLogsData, DataCreateSyncLogsResponse, DataListLlmLogsResponse, DataCreateLlmLogsData, DataCreateLlmLogsResponse, DataListEmbeddingLogsResponse, DataCreateEmbeddingLogsData, DataCreateEmbeddingLogsResponse, DataListNetworkLogsResponse, DataCreateNetworkLogsData, DataCreateNetworkLogsResponse, DataGetNetworkSettingsResponse, DataPutNetworkSettingsData, DataPutNetworkSettingsResponse, DataGetSettingData, DataGetSettingResponse, DataPutSettingData, DataPutSettingResponse, DataImportDataData, DataImportDataResponse, DataExportDataResponse, ItemsReadItemsData, ItemsReadItemsResponse, ItemsCreateItemData, ItemsCreateItemResponse, ItemsReadItemData, ItemsReadItemResponse, ItemsUpdateItemData, ItemsUpdateItemResponse, ItemsDeleteItemData, ItemsDeleteItemResponse, JobsJobsStatusResponse, JobsTriggerSchedulerJobData, JobsTriggerSchedulerJobResponse, JobsUpdateSchedulerJobData, JobsUpdateSchedulerJobResponse, JobsStartSyncJobData, JobsStartSyncJobResponse, JobsGetSyncJobStatusData, JobsGetSyncJobStatusResponse, JobsCancelSyncJobData, JobsCancelSyncJobResponse, LegacyLegacyTestProxyResponse, LegacyLegacyProxyHealthResponse, LegacyLegacyTorStatusResponse, LegacyLegacyTorIpResponse, LegacyLegacyTorRestartResponse, LegacyLegacyTorNewIdentityResponse, LegacyLegacyBotInfoResponse, LegacyLegacyPublishResponse, LegacyLegacyChannelInfoResponse, LegacyLegacyScrapeResponse, LegacyLegacyResolveStartTimeResponse, LoginLoginAccessTokenData, LoginLoginAccessTokenResponse, LoginTestTokenResponse, LoginRecoverPasswordData, LoginRecoverPasswordResponse, LoginResetPasswordData, LoginResetPasswordResponse, LoginRecoverPasswordHtmlContentData, LoginRecoverPasswordHtmlContentResponse, NetworkApiTestProxyData, NetworkApiTestProxyResponse, NetworkApiProxyHealthResponse, NetworkApiTorStatusResponse, NetworkApiTorIpResponse, NetworkApiTorRestartResponse, NetworkApiTorNewIdentityData, NetworkApiTorNewIdentityResponse, PrivateCreateUserData, PrivateCreateUserResponse, RagRagStatusResponse, RagRagEmbedData, RagRagEmbedResponse, RagRagSearchData, RagRagSearchResponse, TelegramApiScrapeData, TelegramApiScrapeResponse, TelegramApiChannelInfoData, TelegramApiChannelInfoResponse, TelegramApiResolveStartTimeData, TelegramApiResolveStartTimeResponse, TelegramApiBotInfoData, TelegramApiBotInfoResponse, TelegramApiPublishData, TelegramApiPublishResponse, TelegramApiBotFileData, TelegramApiBotFileResponse, UsersReadUsersData, UsersReadUsersResponse, UsersCreateUserData, UsersCreateUserResponse, UsersReadUserMeResponse, UsersDeleteUserMeResponse, UsersUpdateUserMeData, UsersUpdateUserMeResponse, UsersUpdatePasswordMeData, UsersUpdatePasswordMeResponse, UsersRegisterUserData, UsersRegisterUserResponse, UsersReadUserByIdData, UsersReadUserByIdResponse, UsersUpdateUserData, UsersUpdateUserResponse, UsersDeleteUserData, UsersDeleteUserResponse, UtilsTestEmailData, UtilsTestEmailResponse, UtilsHealthCheckResponse } from './types.gen';
+import type { AiApiListModelsResponse, AiApiSummaryData, AiApiSummaryResponse, AiApiSummaryPromptData, AiApiSummaryPromptResponse, AiApiSummaryStreamData, AiApiSummaryStreamResponse, AiApiChatStreamData, AiApiChatStreamResponse, AiApiEmbeddingsData, AiApiEmbeddingsResponse, AiApiTranslateData, AiApiTranslateResponse, DataGetSyncMetaResponse, DataListChannelsData, DataListChannelsResponse, DataUpsertChannelData, DataUpsertChannelResponse, DataDeleteChannelData, DataDeleteChannelResponse, DataBulkReresolveStartIdsEndpointData, DataBulkReresolveStartIdsEndpointResponse, DataBulkResetSyncEndpointData, DataBulkResetSyncEndpointResponse, DataGetChannelStatsData, DataGetChannelStatsResponse, DataListPostsData, DataListPostsResponse, DataBulkUpsertPostsData, DataBulkUpsertPostsResponse, DataListSummariesResponse, DataUpsertSummaryData, DataUpsertSummaryResponse, DataDeleteSummaryData, DataDeleteSummaryResponse, DataListBotCredentialsResponse, DataUpsertBotCredentialData, DataUpsertBotCredentialResponse, DataDeleteBotCredentialData, DataDeleteBotCredentialResponse, DataMigrateBotCredentialsData, DataMigrateBotCredentialsResponse, DataListChatDestinationsResponse, DataUpsertChatDestinationData, DataUpsertChatDestinationResponse, DataDeleteChatDestinationData, DataDeleteChatDestinationResponse, DataListEmbeddingsResponse, DataUpsertEmbeddingsData, DataUpsertEmbeddingsResponse, DataListTranslationsResponse, DataUpsertTranslationsData, DataUpsertTranslationsResponse, DataListPublishLogsResponse, DataCreatePublishLogsData, DataCreatePublishLogsResponse, DataListSyncLogsResponse, DataCreateSyncLogsData, DataCreateSyncLogsResponse, DataListLlmLogsResponse, DataCreateLlmLogsData, DataCreateLlmLogsResponse, DataListEmbeddingLogsResponse, DataCreateEmbeddingLogsData, DataCreateEmbeddingLogsResponse, DataListNetworkLogsResponse, DataCreateNetworkLogsData, DataCreateNetworkLogsResponse, DataDbStatsResponse, DataPurgeLogsData, DataPurgeLogsResponse, DataGetNetworkSettingsResponse, DataPutNetworkSettingsData, DataPutNetworkSettingsResponse, DataGetSettingData, DataGetSettingResponse, DataPutSettingData, DataPutSettingResponse, DataImportDataData, DataImportDataResponse, DataExportDataResponse, ItemsReadItemsData, ItemsReadItemsResponse, ItemsCreateItemData, ItemsCreateItemResponse, ItemsReadItemData, ItemsReadItemResponse, ItemsUpdateItemData, ItemsUpdateItemResponse, ItemsDeleteItemData, ItemsDeleteItemResponse, JobsJobsStatusResponse, JobsGetRuntimeConfigResponse, JobsTriggerSchedulerJobData, JobsTriggerSchedulerJobResponse, JobsUpdateSchedulerJobData, JobsUpdateSchedulerJobResponse, JobsStartSyncJobData, JobsStartSyncJobResponse, JobsGetSyncJobStatusData, JobsGetSyncJobStatusResponse, JobsSyncJobEventsData, JobsSyncJobEventsResponse, JobsCancelSyncJobData, JobsCancelSyncJobResponse, LoginLoginAccessTokenData, LoginLoginAccessTokenResponse, LoginTestTokenResponse, LoginRecoverPasswordData, LoginRecoverPasswordResponse, LoginResetPasswordData, LoginResetPasswordResponse, LoginRecoverPasswordHtmlContentData, LoginRecoverPasswordHtmlContentResponse, NetworkApiTestProxyData, NetworkApiTestProxyResponse, NetworkApiProxyHealthResponse, NetworkApiTorStatusResponse, NetworkApiTorIpResponse, NetworkApiTorRestartResponse, NetworkApiTorNewIdentityData, NetworkApiTorNewIdentityResponse, RagRagStatusResponse, RagRagEmbedData, RagRagEmbedResponse, RagRagSearchData, RagRagSearchResponse, TelegramApiScrapeData, TelegramApiScrapeResponse, TelegramApiChannelInfoData, TelegramApiChannelInfoResponse, TelegramApiResolveStartTimeData, TelegramApiResolveStartTimeResponse, TelegramApiBotInfoData, TelegramApiBotInfoResponse, TelegramApiPublishData, TelegramApiPublishResponse, TelegramApiBotFileData, TelegramApiBotFileResponse, UsersReadUsersData, UsersReadUsersResponse, UsersCreateUserData, UsersCreateUserResponse, UsersReadUserMeResponse, UsersDeleteUserMeResponse, UsersUpdateUserMeData, UsersUpdateUserMeResponse, UsersUpdatePasswordMeData, UsersUpdatePasswordMeResponse, UsersRegisterUserData, UsersRegisterUserResponse, UsersReadUserByIdData, UsersReadUserByIdResponse, UsersUpdateUserData, UsersUpdateUserResponse, UsersDeleteUserData, UsersDeleteUserResponse, UtilsTestEmailData, UtilsTestEmailResponse, UtilsHealthCheckResponse } from './types.gen';
 
 export class AiService {
     /**
@@ -29,6 +29,25 @@ export class AiService {
         return __request(OpenAPI, {
             method: 'POST',
             url: '/api/v1/ai/summary',
+            body: data.requestBody,
+            mediaType: 'application/json',
+            errors: {
+                422: 'Validation Error'
+            }
+        });
+    }
+    
+    /**
+     * Api Summary Prompt
+     * @param data The data for the request.
+     * @param data.requestBody
+     * @returns unknown Successful Response
+     * @throws ApiError
+     */
+    public static apiSummaryPrompt(data: AiApiSummaryPromptData): CancelablePromise<AiApiSummaryPromptResponse> {
+        return __request(OpenAPI, {
+            method: 'POST',
+            url: '/api/v1/ai/summary/prompt',
             body: data.requestBody,
             mediaType: 'application/json',
             errors: {
@@ -129,13 +148,21 @@ export class DataService {
     
     /**
      * List Channels
+     * @param data The data for the request.
+     * @param data.includeStats
      * @returns unknown Successful Response
      * @throws ApiError
      */
-    public static listChannels(): CancelablePromise<DataListChannelsResponse> {
+    public static listChannels(data: DataListChannelsData = {}): CancelablePromise<DataListChannelsResponse> {
         return __request(OpenAPI, {
             method: 'GET',
-            url: '/api/v1/data/channels'
+            url: '/api/v1/data/channels',
+            query: {
+                includeStats: data.includeStats
+            },
+            errors: {
+                422: 'Validation Error'
+            }
         });
     }
     
@@ -176,6 +203,44 @@ export class DataService {
             path: {
                 channel_id: data.channelId
             },
+            errors: {
+                422: 'Validation Error'
+            }
+        });
+    }
+    
+    /**
+     * Bulk Reresolve Start Ids Endpoint
+     * @param data The data for the request.
+     * @param data.requestBody
+     * @returns unknown Successful Response
+     * @throws ApiError
+     */
+    public static bulkReresolveStartIdsEndpoint(data: DataBulkReresolveStartIdsEndpointData = {}): CancelablePromise<DataBulkReresolveStartIdsEndpointResponse> {
+        return __request(OpenAPI, {
+            method: 'POST',
+            url: '/api/v1/data/channels/bulk-reresolve-start-ids',
+            body: data.requestBody,
+            mediaType: 'application/json',
+            errors: {
+                422: 'Validation Error'
+            }
+        });
+    }
+    
+    /**
+     * Bulk Reset Sync Endpoint
+     * @param data The data for the request.
+     * @param data.requestBody
+     * @returns unknown Successful Response
+     * @throws ApiError
+     */
+    public static bulkResetSyncEndpoint(data: DataBulkResetSyncEndpointData): CancelablePromise<DataBulkResetSyncEndpointResponse> {
+        return __request(OpenAPI, {
+            method: 'POST',
+            url: '/api/v1/data/channels/bulk-reset-sync',
+            body: data.requestBody,
+            mediaType: 'application/json',
             errors: {
                 422: 'Validation Error'
             }
@@ -649,6 +714,44 @@ export class DataService {
     }
     
     /**
+     * Db Stats
+     * @returns unknown Successful Response
+     * @throws ApiError
+     */
+    public static dbStats(): CancelablePromise<DataDbStatsResponse> {
+        return __request(OpenAPI, {
+            method: 'GET',
+            url: '/api/v1/data/stats'
+        });
+    }
+    
+    /**
+     * Purge Logs
+     * @param data The data for the request.
+     * @param data.olderThanDays
+     * @param data.type
+     * @param data.logId
+     * @param data.clearAll
+     * @returns unknown Successful Response
+     * @throws ApiError
+     */
+    public static purgeLogs(data: DataPurgeLogsData = {}): CancelablePromise<DataPurgeLogsResponse> {
+        return __request(OpenAPI, {
+            method: 'DELETE',
+            url: '/api/v1/data/logs',
+            query: {
+                olderThanDays: data.olderThanDays,
+                type: data.type,
+                logId: data.logId,
+                clearAll: data.clearAll
+            },
+            errors: {
+                422: 'Validation Error'
+            }
+        });
+    }
+    
+    /**
      * Get Network Settings
      * @returns unknown Successful Response
      * @throws ApiError
@@ -880,6 +983,18 @@ export class JobsService {
     }
     
     /**
+     * Get Runtime Config
+     * @returns RuntimeConfigResponse Successful Response
+     * @throws ApiError
+     */
+    public static getRuntimeConfig(): CancelablePromise<JobsGetRuntimeConfigResponse> {
+        return __request(OpenAPI, {
+            method: 'GET',
+            url: '/api/v1/jobs/runtime-config'
+        });
+    }
+    
+    /**
      * Trigger Scheduler Job
      * @param data The data for the request.
      * @param data.jobId
@@ -962,6 +1077,26 @@ export class JobsService {
     }
     
     /**
+     * Sync Job Events
+     * @param data The data for the request.
+     * @param data.jobId
+     * @returns unknown Successful Response
+     * @throws ApiError
+     */
+    public static syncJobEvents(data: JobsSyncJobEventsData): CancelablePromise<JobsSyncJobEventsResponse> {
+        return __request(OpenAPI, {
+            method: 'GET',
+            url: '/api/v1/jobs/sync/{job_id}/events',
+            path: {
+                job_id: data.jobId
+            },
+            errors: {
+                422: 'Validation Error'
+            }
+        });
+    }
+    
+    /**
      * Cancel Sync Job
      * @param data The data for the request.
      * @param data.jobId
@@ -978,140 +1113,6 @@ export class JobsService {
             errors: {
                 422: 'Validation Error'
             }
-        });
-    }
-}
-
-export class LegacyService {
-    /**
-     * Legacy Test Proxy
-     * @returns unknown Successful Response
-     * @throws ApiError
-     */
-    public static legacyTestProxy(): CancelablePromise<LegacyLegacyTestProxyResponse> {
-        return __request(OpenAPI, {
-            method: 'POST',
-            url: '/api/test-proxy'
-        });
-    }
-    
-    /**
-     * Legacy Proxy Health
-     * @returns unknown Successful Response
-     * @throws ApiError
-     */
-    public static legacyProxyHealth(): CancelablePromise<LegacyLegacyProxyHealthResponse> {
-        return __request(OpenAPI, {
-            method: 'GET',
-            url: '/api/proxy-health'
-        });
-    }
-    
-    /**
-     * Legacy Tor Status
-     * @returns unknown Successful Response
-     * @throws ApiError
-     */
-    public static legacyTorStatus(): CancelablePromise<LegacyLegacyTorStatusResponse> {
-        return __request(OpenAPI, {
-            method: 'GET',
-            url: '/api/tor-status'
-        });
-    }
-    
-    /**
-     * Legacy Tor Ip
-     * @returns unknown Successful Response
-     * @throws ApiError
-     */
-    public static legacyTorIp(): CancelablePromise<LegacyLegacyTorIpResponse> {
-        return __request(OpenAPI, {
-            method: 'GET',
-            url: '/api/tor-ip'
-        });
-    }
-    
-    /**
-     * Legacy Tor Restart
-     * @returns unknown Successful Response
-     * @throws ApiError
-     */
-    public static legacyTorRestart(): CancelablePromise<LegacyLegacyTorRestartResponse> {
-        return __request(OpenAPI, {
-            method: 'POST',
-            url: '/api/tor-restart'
-        });
-    }
-    
-    /**
-     * Legacy Tor New Identity
-     * @returns unknown Successful Response
-     * @throws ApiError
-     */
-    public static legacyTorNewIdentity(): CancelablePromise<LegacyLegacyTorNewIdentityResponse> {
-        return __request(OpenAPI, {
-            method: 'POST',
-            url: '/api/tor-new-identity'
-        });
-    }
-    
-    /**
-     * Legacy Bot Info
-     * @returns unknown Successful Response
-     * @throws ApiError
-     */
-    public static legacyBotInfo(): CancelablePromise<LegacyLegacyBotInfoResponse> {
-        return __request(OpenAPI, {
-            method: 'POST',
-            url: '/api/bot-info'
-        });
-    }
-    
-    /**
-     * Legacy Publish
-     * @returns unknown Successful Response
-     * @throws ApiError
-     */
-    public static legacyPublish(): CancelablePromise<LegacyLegacyPublishResponse> {
-        return __request(OpenAPI, {
-            method: 'POST',
-            url: '/api/publish'
-        });
-    }
-    
-    /**
-     * Legacy Channel Info
-     * @returns unknown Successful Response
-     * @throws ApiError
-     */
-    public static legacyChannelInfo(): CancelablePromise<LegacyLegacyChannelInfoResponse> {
-        return __request(OpenAPI, {
-            method: 'POST',
-            url: '/api/channel-info'
-        });
-    }
-    
-    /**
-     * Legacy Scrape
-     * @returns unknown Successful Response
-     * @throws ApiError
-     */
-    public static legacyScrape(): CancelablePromise<LegacyLegacyScrapeResponse> {
-        return __request(OpenAPI, {
-            method: 'POST',
-            url: '/api/scrape'
-        });
-    }
-    
-    /**
-     * Legacy Resolve Start Time
-     * @returns unknown Successful Response
-     * @throws ApiError
-     */
-    public static legacyResolveStartTime(): CancelablePromise<LegacyLegacyResolveStartTimeResponse> {
-        return __request(OpenAPI, {
-            method: 'POST',
-            url: '/api/resolve-start-time'
         });
     }
 }
@@ -1292,28 +1293,6 @@ export class NetworkService {
         return __request(OpenAPI, {
             method: 'POST',
             url: '/api/v1/network/tor-new-identity',
-            body: data.requestBody,
-            mediaType: 'application/json',
-            errors: {
-                422: 'Validation Error'
-            }
-        });
-    }
-}
-
-export class PrivateService {
-    /**
-     * Create User
-     * Create a new user.
-     * @param data The data for the request.
-     * @param data.requestBody
-     * @returns UserPublic Successful Response
-     * @throws ApiError
-     */
-    public static createUser(data: PrivateCreateUserData): CancelablePromise<PrivateCreateUserResponse> {
-        return __request(OpenAPI, {
-            method: 'POST',
-            url: '/api/v1/private/users/',
             body: data.requestBody,
             mediaType: 'application/json',
             errors: {
