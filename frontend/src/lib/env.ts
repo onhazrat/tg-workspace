@@ -9,45 +9,44 @@ function parseStringEnv(value: string | undefined, fallback: string): string {
   return value
 }
 
+const viteEnv = typeof import.meta !== "undefined" ? import.meta.env : undefined
+
 /** Vite build-time tunables — see root `.env.example` for documentation. */
 export const env = {
   syncJobTimeoutMs: parseIntEnv(
-    import.meta.env.VITE_SYNC_JOB_TIMEOUT_MS,
+    viteEnv?.VITE_SYNC_JOB_TIMEOUT_MS,
     30 * 60 * 1000,
   ),
   syncJobFallbackPollMs: parseIntEnv(
-    import.meta.env.VITE_SYNC_JOB_FALLBACK_POLL_MS,
+    viteEnv?.VITE_SYNC_JOB_FALLBACK_POLL_MS,
     1000,
   ),
-  ragStatusPollMs: parseIntEnv(import.meta.env.VITE_RAG_STATUS_POLL_MS, 10_000),
-  apiHealthPollMs: parseIntEnv(import.meta.env.VITE_API_HEALTH_POLL_MS, 30_000),
+  ragStatusPollMs: parseIntEnv(viteEnv?.VITE_RAG_STATUS_POLL_MS, 10_000),
+  apiHealthPollMs: parseIntEnv(viteEnv?.VITE_API_HEALTH_POLL_MS, 30_000),
   translationDebounceMs: parseIntEnv(
-    import.meta.env.VITE_TRANSLATION_DEBOUNCE_MS,
+    viteEnv?.VITE_TRANSLATION_DEBOUNCE_MS,
     1000,
   ),
   translationMaxBatchChars: parseIntEnv(
-    import.meta.env.VITE_TRANSLATION_MAX_BATCH_CHARS,
+    viteEnv?.VITE_TRANSLATION_MAX_BATCH_CHARS,
     4000,
   ),
   autoSyncIntervalDefault: parseIntEnv(
-    import.meta.env.VITE_AUTO_SYNC_INTERVAL_DEFAULT,
+    viteEnv?.VITE_AUTO_SYNC_INTERVAL_DEFAULT,
     60,
   ),
   defaultAiModel: parseStringEnv(
-    import.meta.env.VITE_DEFAULT_AI_MODEL,
+    viteEnv?.VITE_DEFAULT_AI_MODEL,
     "gemini-3-flash-preview",
   ),
   defaultAiLanguage: parseStringEnv(
-    import.meta.env.VITE_DEFAULT_AI_LANGUAGE,
+    viteEnv?.VITE_DEFAULT_AI_LANGUAGE,
     "English",
   ),
-  queryStaleTimeMs: parseIntEnv(
-    import.meta.env.VITE_QUERY_STALE_TIME_MS,
-    30_000,
-  ),
+  queryStaleTimeMs: parseIntEnv(viteEnv?.VITE_QUERY_STALE_TIME_MS, 30_000),
   /** Minimum interval between GET /sync-meta calls (ms). */
   syncMetaMinIntervalMs: parseIntEnv(
-    import.meta.env.VITE_SYNC_META_MIN_INTERVAL_MS,
+    viteEnv?.VITE_SYNC_META_MIN_INTERVAL_MS,
     5_000,
   ),
 } as const

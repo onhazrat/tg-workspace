@@ -5,7 +5,9 @@ set -x
 
 cd backend
 # Production mode excludes legacy /api/* from OpenAPI; use throwaway secrets for export only.
-ENVIRONMENT=production \
+# Override with ENVIRONMENT=local when generating a client for Playwright/private routes.
+: "${ENVIRONMENT:=production}"
+ENVIRONMENT="${ENVIRONMENT}" \
 SECRET_KEY=openapi-export-secret \
 POSTGRES_PASSWORD=openapi-export-password \
 FIRST_SUPERUSER_PASSWORD=openapi-export-password \
