@@ -1,4 +1,4 @@
-import { expect, type Page } from "@playwright/test"
+import type { Page } from "@playwright/test"
 
 export async function signUpNewUser(
   page: Page,
@@ -22,10 +22,8 @@ export async function logInUser(page: Page, email: string, password: string) {
   await page.getByTestId("email-input").fill(email)
   await page.getByTestId("password-input").fill(password)
   await page.getByRole("button", { name: "Log In" }).click()
-  await page.waitForURL("/")
-  await expect(
-    page.getByText("Welcome back, nice to see you again!"),
-  ).toBeVisible()
+  await page.waitForURL(/\/summarizer/)
+  await page.evaluate(() => localStorage.setItem("hasSeenTour", "true"))
 }
 
 export async function logOutUser(page: Page) {

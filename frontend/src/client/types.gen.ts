@@ -181,6 +181,13 @@ export type NewPassword = {
     new_password: string;
 };
 
+export type PrivateUserCreate = {
+    email: string;
+    password: string;
+    full_name: string;
+    is_verified?: boolean;
+};
+
 export type ProxyLaneSnapshot = {
     proxyUrl: string;
     maxParallel: number;
@@ -834,6 +841,78 @@ export type JobsCancelSyncJobData = {
 
 export type JobsCancelSyncJobResponse = (CancelSyncJobResponse);
 
+export type LegacyLegacyTestProxyData = {
+    requestBody: TestProxyRequest;
+};
+
+export type LegacyLegacyTestProxyResponse = ({
+    [key: string]: unknown;
+});
+
+export type LegacyLegacyProxyHealthResponse = ({
+    [key: string]: unknown;
+});
+
+export type LegacyLegacyTorStatusResponse = ({
+    [key: string]: unknown;
+});
+
+export type LegacyLegacyTorIpResponse = ({
+    [key: string]: unknown;
+});
+
+export type LegacyLegacyTorRestartResponse = ({
+    [key: string]: unknown;
+});
+
+export type LegacyLegacyTorNewIdentityData = {
+    requestBody: TorNewIdentityRequest;
+};
+
+export type LegacyLegacyTorNewIdentityResponse = ({
+    [key: string]: unknown;
+});
+
+export type LegacyLegacyBotInfoData = {
+    requestBody: BotInfoRequest;
+};
+
+export type LegacyLegacyBotInfoResponse = ({
+    [key: string]: unknown;
+});
+
+export type LegacyLegacyPublishData = {
+    requestBody: PublishRequest;
+};
+
+export type LegacyLegacyPublishResponse = ({
+    [key: string]: unknown;
+});
+
+export type LegacyLegacyChannelInfoData = {
+    requestBody: ChannelInfoRequest;
+};
+
+export type LegacyLegacyChannelInfoResponse = ({
+    [key: string]: unknown;
+});
+
+export type LegacyLegacyScrapeData = {
+    requestBody: ScrapeRequest;
+};
+
+export type LegacyLegacyScrapeResponse = ({
+    [key: string]: unknown;
+});
+
+export type LegacyLegacyResolveStartTimeData = {
+    requestBody: ResolveStartTimeRequest;
+};
+
+export type LegacyLegacyResolveStartTimeResponse = ({
+    [key: string]: unknown;
+});
+
 export type LoginLoginAccessTokenData = {
     formData: Body_login_login_access_token;
 };
@@ -891,6 +970,12 @@ export type NetworkApiTorNewIdentityData = {
 export type NetworkApiTorNewIdentityResponse = ({
     [key: string]: unknown;
 });
+
+export type PrivateCreateUserData = {
+    requestBody: PrivateUserCreate;
+};
+
+export type PrivateCreateUserResponse = (UserPublic);
 
 export type RagRagStatusResponse = ({
     [key: string]: unknown;

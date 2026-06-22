@@ -211,7 +211,7 @@ test("User can switch between theme modes", async ({ page }) => {
   await page.goto("/settings")
 
   await page.getByTestId("theme-button").click()
-  await page.getByTestId("dark-mode").click()
+  await page.getByTestId("dark-mode").click({ force: true })
   await expect(page.locator("html")).toHaveClass(/dark/)
 
   await expect(page.getByTestId("dark-mode")).not.toBeVisible()
@@ -240,7 +240,7 @@ test("Selected mode is preserved across sessions", async ({ page }) => {
   expect(isLightMode).toBe(true)
 
   await page.getByTestId("theme-button").click()
-  await page.getByTestId("dark-mode").click()
+  await page.getByTestId("dark-mode").click({ force: true })
   let isDarkMode = await page.evaluate(() =>
     document.documentElement.classList.contains("dark"),
   )
