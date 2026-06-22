@@ -1,10 +1,13 @@
 """Tests for per-user network settings and proxy resolution."""
 
 from app.services.network_settings import (
+    compute_proxy_pool_capacity,
     merge_network_put,
     network_settings_payload,
+    normalize_proxy_url,
     redact_proxy_url,
     resolve_proxies,
+    resolve_proxy_concurrency,
 )
 
 
@@ -76,3 +79,73 @@ def test_redact_proxy_url_masks_credentials() -> None:
     )
     assert redact_proxy_url("direct") == "direct"
     assert redact_proxy_url(None) is None
+
+
+def test_merge_network_put_clamps_proxy_concurrency() -> None:
+    merged = merge_network_put(
+        {
+            "proxyDefaultConcurrency": 99,
+            "proxyConcurrencyOverrides": {"http://a:1": 0, "socks5://b:2": 25},
+        },
+        None,
+    )
+    assert merged["proxyDefaultConcurrency"] == 20
+    assert merged["proxyConcurrencyOverrides"] == {
+        "http://a:1": 1,
+        "socks5h://b:2": 20,
+    }
+
+
+def test_resolve_proxy_concurrency_defaults(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "app.services.network_settings.settings.PROXY_DEFAULT_CONCURRENCY_DEFAULT",
+        2,
+    )
+    default, overrides = resolve_proxy_concurrency({})
+    assert default == 2
+    assert overrides == {}
+
+
+def test_compute_proxy_pool_capacity_empty() -> None:
+    assert compute_proxy_pool_capacity([], 1, {}) == 0
+
+
+def test_merge_network_put_validates_proxy_concurrency() -> None:
+    merged = merge_network_put(
+        {
+            "proxyDefaultConcurrency": 25,
+            "proxyConcurrencyOverrides": {
+                "http://a:1": 0,
+                "socks5://b:2": 5,
+            },
+        },
+        None,
+    )
+    assert merged["proxyDefaultConcurrency"] == 20
+    assert merged["proxyConcurrencyOverrides"][normalize_proxy_url("http://a:1")] == 1
+    assert merged["proxyConcurrencyOverrides"][normalize_proxy_url("socks5://b:2")] == 5
+
+
+def test_network_settings_payload_includes_proxy_concurrency_defaults(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "app.services.network_settings.settings.PROXY_DEFAULT_CONCURRENCY_DEFAULT",
+        2,
+    )
+    payload = network_settings_payload({})
+    assert payload["proxyDefaultConcurrency"] == 2
+    assert payload["proxyConcurrencyOverrides"] == {}
+
+
+def test_resolve_proxy_concurrency_and_capacity() -> None:
+    network = {
+        "proxyDefaultConcurrency": 2,
+        "proxyConcurrencyOverrides": {"http://fast:1": 4},
+    }
+    default, overrides = resolve_proxy_concurrency(network)
+    assert default == 2
+    assert overrides[normalize_proxy_url("http://fast:1")] == 4
+    assert compute_proxy_pool_capacity(
+        ["http://fast:1", "http://slow:2"],
+        default,
+        overrides,
+    ) == 6

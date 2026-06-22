@@ -11,7 +11,11 @@ from app.api.deps import CurrentUser, SessionDep
 from app.core.config import settings
 from app.core.secrets import decrypt_token
 from app.models_tg import BotCredential
-from app.services.network_settings import resolve_proxies_for_user
+from app.services.network_settings import (
+    load_network_settings,
+    resolve_proxies_for_user,
+    resolve_proxy_concurrency,
+)
 from app.schemas.telegram import (
     BotInfoRequest,
     ChannelInfoRequest,
@@ -24,6 +28,18 @@ from app.services.scraper import get_channel_info, resolve_start_time_to_id, scr
 
 router = APIRouter(prefix="/telegram", tags=["telegram"])
 logger = logging.getLogger(__name__)
+
+
+def _resolve_proxy_concurrency(
+    body: ScrapeRequest | ChannelInfoRequest | BotInfoRequest | PublishRequest | ResolveStartTimeRequest,
+    *,
+    session: Session | None = None,
+    user_id: uuid.UUID | None = None,
+) -> tuple[int, dict[str, int]] | None:
+    if session is not None and user_id is not None:
+        network = load_network_settings(session, user_id)
+        return resolve_proxy_concurrency(network)
+    return None
 
 
 def _resolve_proxies(
@@ -86,6 +102,7 @@ async def api_scrape(body: ScrapeRequest, _current_user: CurrentUser) -> dict[st
             proxies=_resolve_proxies(body),
             tor_auto_rotate=body.tor_auto_rotate,
             tor_rotation_threshold=body.tor_rotation_threshold,
+            proxy_concurrency=_resolve_proxy_concurrency(body),
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -115,6 +132,7 @@ async def api_channel_info(
             proxies=_resolve_proxies(body),
             tor_auto_rotate=body.tor_auto_rotate,
             tor_rotation_threshold=body.tor_rotation_threshold,
+            proxy_concurrency=_resolve_proxy_concurrency(body),
         )
     except Exception as exc:  # noqa: BLE001
         msg = str(exc)
@@ -138,6 +156,7 @@ async def api_resolve_start_time(
             proxies=_resolve_proxies(body),
             tor_auto_rotate=body.tor_auto_rotate,
             tor_rotation_threshold=body.tor_rotation_threshold,
+            proxy_concurrency=_resolve_proxy_concurrency(body),
         )
         return {"startId": start_id}
     except ValueError as exc:
@@ -175,6 +194,9 @@ async def api_bot_info(
             proxies=_resolve_proxies(body, session=session, user_id=current_user.id),
             tor_auto_rotate=body.tor_auto_rotate,
             tor_rotation_threshold=body.tor_rotation_threshold,
+            proxy_concurrency=_resolve_proxy_concurrency(
+                body, session=session, user_id=current_user.id
+            ),
         )
         if isinstance(data, str):
             import json
@@ -214,6 +236,9 @@ async def api_publish(
             proxies=_resolve_proxies(body, session=session, user_id=current_user.id),
             tor_auto_rotate=body.tor_auto_rotate,
             tor_rotation_threshold=body.tor_rotation_threshold,
+            proxy_concurrency=_resolve_proxy_concurrency(
+                body, session=session, user_id=current_user.id
+            ),
             method="POST",
             json_body=payload,
         )

@@ -9,8 +9,9 @@ import { useScraper } from "./ScraperContext";
 import { useChatContext } from "./ChatContext";
 import { useUI } from "./UIContext";
 import { buildActiveProxies } from "../lib/syncSettings";
-import { generateSummaryStream, generateSummary, AIServiceError } from "../services/ai";
+import { generateSummaryStream, generateSummary, getSummaryPrompt, AIServiceError } from "../services/ai";
 import { publishSummary } from "../services/telegram";
+import { formatSummaryModelLabel, resolvePastedSummaryModel, isPendingSummary } from "../constants";
 
 const extractCitedPosts = (text: string, availablePosts: Post[]): Record<string, Post> => {
   const cited: Record<string, Post> = {};
@@ -30,8 +31,23 @@ const extractCitedPosts = (text: string, availablePosts: Post[]): Record<string,
   return cited;
 };
 
+const buildPostsText = (posts: Post[]): string =>
+  posts
+    .map((p) => `[${p.channelName}] ID: ${p.id}\nDate: ${p.date}\nContent: ${p.text}`)
+    .join("\n\n---\n\n");
+
+const filterPostsForSummary = (posts: Post[], postSearch?: string): Post[] => {
+  if (!postSearch?.trim()) return posts;
+  const query = postSearch.toLowerCase();
+  return posts.filter(
+    (post) =>
+      post.text.toLowerCase().includes(query) ||
+      post.channelName.toLowerCase().includes(query)
+  );
+};
+
 export const generateDefaultMetadataText = (s: Summary): string => {
-  return `📊 *Analysis Metadata*\n🕒 *Time Range:* ${new Date(s.startDate).toLocaleString()} - ${new Date(s.endDate).toLocaleString()}\n📡 *Channels Used:* ${s.channels?.length || 0}\n📋 *Channel List:* ${(s.channels || []).map(c => `@${c}`).join(', ')}\n🤖 *AI Model:* ${s.model || "gemini-3-flash-preview"}\n📝 *Posts Analyzed:* ${s.postCount || 0}`;
+  return `📊 *Analysis Metadata*\n🕒 *Time Range:* ${new Date(s.startDate).toLocaleString()} - ${new Date(s.endDate).toLocaleString()}\n📡 *Channels Used:* ${s.channels?.length || 0}\n📋 *Channel List:* ${(s.channels || []).map(c => `@${c}`).join(', ')}\n🤖 *AI Model:* ${formatSummaryModelLabel(s.model)}\n📝 *Posts Analyzed:* ${s.postCount || 0}`;
 };
 
 interface AIContextType {
@@ -40,6 +56,8 @@ interface AIContextType {
   regeneratingSummaries: Set<string>;
   copied: boolean;
   handleSummarize: () => Promise<void>;
+  copySummaryPrompt: () => Promise<void>;
+  completePendingSummary: (summaryId: string, text: string, modelName?: string) => Promise<boolean>;
   generateBackgroundSummary: (s: Summary, shiftTime?: boolean) => Promise<void>;
   copyToClipboard: () => void;
 }
@@ -125,9 +143,7 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({ children }
     setActiveTab("summary");
 
     try {
-      const postsText = postsToSummarize
-        .map((p) => `[${p.channelName}] ID: ${p.id}\nDate: ${p.date}\nContent: ${p.text}`)
-        .join("\n\n---\n\n");
+      const postsText = buildPostsText(postsToSummarize);
 
       const startTime = Date.now();
       const { stream, prompt, config } = await generateSummaryStream(
@@ -209,6 +225,117 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({ children }
     }
   };
 
+  const copySummaryPrompt = async () => {
+    if (isOffline) {
+      toast.warning("Server offline — cannot build summary prompt.");
+      return;
+    }
+    if (filteredPosts.length === 0) {
+      toast.error("No posts found in the selected date range. Try scraping first.");
+      return;
+    }
+
+    try {
+      const prompt = await getSummaryPrompt(
+        channels.map((c) => c.name),
+        buildPostsText(filteredPosts),
+        aiLanguage,
+        selectedModel,
+        aiTemperature
+      );
+      await navigator.clipboard.writeText(prompt);
+
+      const newId = Date.now().toString();
+      const pendingSummary: Summary = {
+        id: newId,
+        text: "",
+        channels: Array.from(selectedChannels),
+        startDate,
+        endDate,
+        language: aiLanguage,
+        model: selectedModel,
+        postCount: filteredPosts.length,
+        timestamp: Date.now(),
+        sendMetadata: true,
+        postSearch: postSearch || undefined,
+        semanticSearchQuery: semanticSearchQuery || undefined,
+        semanticSearchRespectsTimeRange,
+        semanticSearchRespectsChannels,
+        status: "pending",
+        promptText: prompt,
+      };
+
+      await saveSummary(pendingSummary);
+      setCurrentSummaryId(newId);
+      setSummary(null);
+      setChatMessages([]);
+      await loadHistory();
+      setActiveTab("summary");
+      toast.success("Prompt copied. Paste the AI response when ready.");
+    } catch (err: unknown) {
+      console.error(err);
+      if (err instanceof AIServiceError) {
+        toast.error(err.message);
+      } else if (err instanceof Error) {
+        toast.error(err.message);
+      } else {
+        toast.error("Failed to copy summary prompt");
+      }
+    }
+  };
+
+  const completePendingSummary = async (
+    summaryId: string,
+    text: string,
+    modelName?: string
+  ): Promise<boolean> => {
+    const pending = summariesHistory.find((s) => s.id === summaryId);
+    if (!pending || !isPendingSummary(pending)) {
+      toast.error("This history item is not awaiting an external AI response.");
+      return false;
+    }
+
+    const trimmed = text.trim();
+    if (!trimmed) {
+      toast.error("Summary text cannot be empty.");
+      return false;
+    }
+
+    try {
+      let posts = await getPostsByDateRange(pending.channels, pending.startDate, pending.endDate);
+      posts = filterPostsForSummary(posts, pending.postSearch);
+      const citedPosts = extractCitedPosts(trimmed, posts);
+
+      const completedSummary: Summary = {
+        ...pending,
+        text: trimmed,
+        model: modelName?.trim()
+          ? resolvePastedSummaryModel(modelName)
+          : pending.model || resolvePastedSummaryModel(),
+        source: "pasted",
+        citedPosts,
+      };
+      delete completedSummary.status;
+
+      await saveSummary({ ...completedSummary, status: null } as unknown as Summary);
+      setCurrentSummaryId(summaryId);
+      setSummary(trimmed);
+      setChatMessages([]);
+      await loadHistory();
+      setActiveTab("summary");
+      toast.success("External AI response saved.");
+      return true;
+    } catch (err: unknown) {
+      console.error(err);
+      if (err instanceof Error) {
+        toast.error(err.message);
+      } else {
+        toast.error("Failed to save pasted summary");
+      }
+      return false;
+    }
+  };
+
   const generateBackgroundSummary = async (s: Summary, shiftTime: boolean = true) => {
     if (isOffline) return;
     setRegeneratingSummaries(prev => new Set(prev).add(s.id));
@@ -241,9 +368,7 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({ children }
       if (posts.length === 0) {
         fullSummaryText = `No new posts found in the selected channels between ${new Date(newStartDate).toLocaleString()} and ${new Date(newEndDate).toLocaleString()}.`;
       } else {
-        const postsText = posts
-          .map((p) => `[${p.channelName}] ID: ${p.id}\nDate: ${p.date}\nContent: ${p.text}`)
-          .join("\n\n---\n\n");
+        const postsText = buildPostsText(posts);
 
         const startTime = Date.now();
         const result = await generateSummary(
@@ -410,6 +535,8 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({ children }
       regeneratingSummaries,
       copied,
       handleSummarize,
+      copySummaryPrompt,
+      completePendingSummary,
       generateBackgroundSummary,
       copyToClipboard
     }}>

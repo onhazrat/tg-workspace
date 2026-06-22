@@ -14,10 +14,15 @@ from app.models_tg import AppSetting
 
 NETWORK_SETTING_KEY = "network"
 
+PROXY_CONCURRENCY_MIN = 1
+PROXY_CONCURRENCY_MAX = 20
+
 NETWORK_UI_KEYS = frozenset(
     {
         "proxyEnabled",
         "proxyUrls",
+        "proxyDefaultConcurrency",
+        "proxyConcurrencyOverrides",
         "torEnabled",
         "torMode",
         "torProxyUrls",
@@ -31,6 +36,22 @@ NETWORK_UI_KEYS = frozenset(
 
 # Legacy key from Phase 2 env-only proxy config.
 _LEGACY_PROXY_KEY = "defaultProxyUrls"
+
+
+def normalize_proxy_url(proxy_url: str) -> str:
+    url = proxy_url.strip()
+    if "://" not in url:
+        if "127.0.0.1" in url or "localhost" in url:
+            url = f"socks5h://{url}"
+        else:
+            url = f"http://{url}"
+    if url.startswith("socks5://"):
+        url = url.replace("socks5://", "socks5h://", 1)
+    return url
+
+
+def clamp_proxy_concurrency(value: int) -> int:
+    return max(PROXY_CONCURRENCY_MIN, min(PROXY_CONCURRENCY_MAX, int(value)))
 
 
 def _parse_proxy_list(raw: str | list[str] | None) -> list[str]:
@@ -89,9 +110,12 @@ def network_settings_payload(
     proxy_urls = _stored_proxy_urls(stored)
     env_fallback = settings.default_proxies
 
+    default_concurrency, overrides = resolve_proxy_concurrency(stored)
     payload: dict[str, Any] = {
         **ui,
         "proxyUrls": proxy_urls,
+        "proxyDefaultConcurrency": default_concurrency,
+        "proxyConcurrencyOverrides": overrides,
         "envFallbackConfigured": bool(env_fallback),
         "usingEnvFallback": bool(ui.get("proxyEnabled")) and not proxy_urls and bool(env_fallback),
         "torAvailable": settings.TOR_ENABLED,
@@ -112,6 +136,10 @@ def merge_network_put(body: dict[str, Any], stored: dict[str, Any] | None) -> di
         if key == "proxyUrls":
             merged["proxyUrls"] = _parse_proxy_list(value)
             merged.pop(_LEGACY_PROXY_KEY, None)
+        elif key == "proxyDefaultConcurrency":
+            merged["proxyDefaultConcurrency"] = clamp_proxy_concurrency(int(value))
+        elif key == "proxyConcurrencyOverrides":
+            merged["proxyConcurrencyOverrides"] = _normalize_concurrency_overrides(value)
         else:
             merged[key] = value
     # Accept legacy textarea field when client did not send proxyUrls.
@@ -119,6 +147,44 @@ def merge_network_put(body: dict[str, Any], stored: dict[str, Any] | None) -> di
         merged["proxyUrls"] = _parse_proxy_list(body[_LEGACY_PROXY_KEY])
         merged.pop(_LEGACY_PROXY_KEY, None)
     return merged
+
+
+def _normalize_concurrency_overrides(raw: Any) -> dict[str, int]:
+    if not isinstance(raw, dict):
+        return {}
+    overrides: dict[str, int] = {}
+    for url, slots in raw.items():
+        if not isinstance(url, str) or not url.strip():
+            continue
+        if not isinstance(slots, (int, float)):
+            continue
+        overrides[normalize_proxy_url(url)] = clamp_proxy_concurrency(int(slots))
+    return overrides
+
+
+def resolve_proxy_concurrency(network: dict[str, Any]) -> tuple[int, dict[str, int]]:
+    default = clamp_proxy_concurrency(
+        int(
+            network.get("proxyDefaultConcurrency")
+            or settings.PROXY_DEFAULT_CONCURRENCY_DEFAULT
+        )
+    )
+    overrides = _normalize_concurrency_overrides(network.get("proxyConcurrencyOverrides"))
+    return default, overrides
+
+
+def compute_proxy_pool_capacity(
+    proxies: list[str],
+    default_slots: int,
+    overrides: dict[str, int],
+) -> int:
+    if not proxies:
+        return 0
+    total = 0
+    for proxy in proxies:
+        norm = normalize_proxy_url(proxy)
+        total += overrides.get(norm, default_slots)
+    return total
 
 
 def resolve_proxies(network: dict[str, Any]) -> list[str]:

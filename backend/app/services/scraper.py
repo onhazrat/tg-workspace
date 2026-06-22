@@ -167,6 +167,7 @@ async def scrape_channel_page(
     proxies: list[str] | None = None,
     tor_auto_rotate: bool = False,
     tor_rotation_threshold: int | None = None,
+    proxy_concurrency: tuple[int, dict[str, int]] | None = None,
 ) -> dict[str, Any]:
     """Fetch a single backward-pagination window from the Telegram web view."""
     if before_id is None:
@@ -179,6 +180,7 @@ async def scrape_channel_page(
         proxies=proxies,
         tor_auto_rotate=tor_auto_rotate,
         tor_rotation_threshold=tor_rotation_threshold,
+        proxy_concurrency=proxy_concurrency,
     )
     return await asyncio.to_thread(
         _parse_scrape_channel_page,
@@ -239,6 +241,7 @@ async def get_channel_info(
     proxies: list[str] | None = None,
     tor_auto_rotate: bool = False,
     tor_rotation_threshold: int | None = None,
+    proxy_concurrency: tuple[int, dict[str, int]] | None = None,
 ) -> dict[str, Any]:
     url = f"https://t.me/s/{channel_name}"
     html, telemetry = await fetch_with_retry(
@@ -246,6 +249,7 @@ async def get_channel_info(
         proxies=proxies,
         tor_auto_rotate=tor_auto_rotate,
         tor_rotation_threshold=tor_rotation_threshold,
+        proxy_concurrency=proxy_concurrency,
     )
     soup = BeautifulSoup(html, "html.parser")
     result = _parse_channel_meta(soup, channel_name)
@@ -262,6 +266,7 @@ async def scrape_channel(
     proxies: list[str] | None = None,
     tor_auto_rotate: bool = False,
     tor_rotation_threshold: int | None = None,
+    proxy_concurrency: tuple[int, dict[str, int]] | None = None,
 ) -> dict[str, Any]:
     telemetry_logs: list[Any] = []
     match_after = re.search(r"t\.me/s/([^/?]+)\?after=(\d+)", url)
@@ -294,6 +299,7 @@ async def scrape_channel(
             proxies=proxies,
             tor_auto_rotate=tor_auto_rotate,
             tor_rotation_threshold=tor_rotation_threshold,
+            proxy_concurrency=proxy_concurrency,
         )
         telemetry_logs.append(telem)
         return _parse_posts_from_html(html, start_id, seen)
@@ -309,6 +315,7 @@ async def scrape_channel(
             proxies=proxies,
             tor_auto_rotate=tor_auto_rotate,
             tor_rotation_threshold=tor_rotation_threshold,
+            proxy_concurrency=proxy_concurrency,
         )
         telemetry_logs.append(root_telem)
         meta = _parse_channel_meta(BeautifulSoup(root_html, "html.parser"), channel_name)
@@ -401,6 +408,7 @@ async def _fetch_post_at_url(
     proxies: list[str] | None = None,
     tor_auto_rotate: bool = False,
     tor_rotation_threshold: int = 10,
+    proxy_concurrency: tuple[int, dict[str, int]] | None = None,
 ) -> dict[str, int] | None:
     try:
         res = await scrape_channel(
@@ -408,6 +416,7 @@ async def _fetch_post_at_url(
             proxies=proxies,
             tor_auto_rotate=tor_auto_rotate,
             tor_rotation_threshold=tor_rotation_threshold,
+            proxy_concurrency=proxy_concurrency,
         )
         posts = res.get("posts") or []
         if not posts:
@@ -429,6 +438,7 @@ async def resolve_start_time_to_id(
     proxies: list[str] | None = None,
     tor_auto_rotate: bool = False,
     tor_rotation_threshold: int = 10,
+    proxy_concurrency: tuple[int, dict[str, int]] | None = None,
 ) -> int:
     """Map a wall-clock timestamp to the first post ID at or after that time."""
     if target_time_ms is None or (
@@ -454,6 +464,7 @@ async def resolve_start_time_to_id(
             proxies=proxies,
             tor_auto_rotate=tor_auto_rotate,
             tor_rotation_threshold=tor_rotation_threshold,
+            proxy_concurrency=proxy_concurrency,
         )
 
     async def fetch_post_at_or_before(post_id: int) -> dict[str, int] | None:
@@ -464,6 +475,7 @@ async def resolve_start_time_to_id(
             proxies=proxies,
             tor_auto_rotate=tor_auto_rotate,
             tor_rotation_threshold=tor_rotation_threshold,
+            proxy_concurrency=proxy_concurrency,
         )
 
     info = await get_channel_info(
@@ -471,6 +483,7 @@ async def resolve_start_time_to_id(
         proxies=proxies,
         tor_auto_rotate=tor_auto_rotate,
         tor_rotation_threshold=tor_rotation_threshold,
+        proxy_concurrency=proxy_concurrency,
     )
     if info.get("isUnavailableOnWebView"):
         raise ValueError("Channel is not available on the web view.")

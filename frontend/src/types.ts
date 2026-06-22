@@ -105,6 +105,12 @@ export interface Summary {
   semanticSearchRespectsTimeRange?: boolean;
   semanticSearchRespectsChannels?: boolean;
   citedPosts?: Record<string, Post>;
+  /** Provenance when summary was not generated in-app (persisted in server `extra`). */
+  source?: "pasted";
+  /** Awaiting external AI response after Copy Prompt (persisted in server `extra`). */
+  status?: "pending";
+  /** Full prompt text saved when user copies for external AI (persisted in server `extra`). */
+  promptText?: string;
 }
 
 export interface PublishLog {

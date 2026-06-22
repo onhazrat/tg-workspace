@@ -58,6 +58,10 @@ def test_runtime_config_effective_values(client: TestClient, db: Session) -> Non
     assert data["scraper"]["maxPostsPerChannel"] == settings.SCRAPER_MAX_POSTS_PER_CHANNEL
     assert data["scraper"]["iterationLimit"] == settings.SCRAPER_ITERATION_LIMIT
     assert data["network"]["fetchRetries"] == settings.NETWORK_FETCH_RETRIES
+    assert data["network"]["proxyDefaultConcurrency"] >= 1
+    assert isinstance(data["network"]["proxyConcurrencyOverrides"], dict)
+    assert isinstance(data["network"]["effectiveProxyCapacity"], int)
+    assert isinstance(data["network"]["proxyLanes"], list)
     assert data["jobs"]["enabled"]["auto_sync"] is True
     assert data["jobs"]["intervals"]["autoSyncCheckSeconds"] == (
         settings.AUTO_SYNC_CHECK_INTERVAL_SECONDS

@@ -30,6 +30,28 @@ export const MODELS = [
   { id: "gemini-3.1-flash-lite-preview", label: "Gemini 3.1 Flash Lite" },
 ];
 
+/** Stored in Summary.model for externally pasted AI responses (not in-app generation). */
+export const PASTED_SUMMARY_MODEL = "external";
+
+export function isPastedSummaryModel(model?: string | null): boolean {
+  return model === PASTED_SUMMARY_MODEL;
+}
+
+export function formatSummaryModelLabel(model?: string | null): string {
+  if (!model) return "Unknown";
+  if (isPastedSummaryModel(model)) return "External";
+  return MODELS.find((m) => m.id === model)?.label ?? model;
+}
+
+export function resolvePastedSummaryModel(optionalName?: string): string {
+  const trimmed = optionalName?.trim();
+  return trimmed ? trimmed : PASTED_SUMMARY_MODEL;
+}
+
+export function isPendingSummary(summary: { status?: string; text?: string }): boolean {
+  return summary.status === "pending";
+}
+
 export const LANGUAGES = [
   "English",
   "Persian",

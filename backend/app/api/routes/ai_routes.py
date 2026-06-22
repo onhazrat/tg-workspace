@@ -8,20 +8,10 @@ from app.ai.models import ChatRequest, EmbedRequest, SummaryRequest, TranslateRe
 from app.api.deps import CurrentUser
 from app.ai.registry import default_model, get_provider, list_all_models
 from app.core.config import settings
-from app.prompts.templates import CHAT_PROMPT, RAG_CHAT_PROMPT, SYSTEM_PROMPT
+from app.prompts.summary import format_summary_prompt, rtl_instruction
+from app.prompts.templates import CHAT_PROMPT, RAG_CHAT_PROMPT
 
 router = APIRouter(prefix="/ai", tags=["ai"])
-
-RTL_LANGUAGES = {"Persian", "Arabic", "فارسی", "العربية"}
-
-
-def _rtl(language: str) -> str:
-    if language in RTL_LANGUAGES:
-        return (
-            "IMPORTANT: Since this is a Right-to-Left (RTL) language, ensure the entire "
-            "summary is formatted correctly for RTL reading."
-        )
-    return ""
 
 
 @router.get("/models")
@@ -35,14 +25,23 @@ async def api_summary(body: SummaryRequest, _current_user: CurrentUser) -> dict:
         raise HTTPException(status_code=503, detail="GEMINI_API_KEY not configured")
     model = body.model or default_model()
     provider = get_provider(body.provider)
-    prompt = SYSTEM_PROMPT.format(
-        channels=", ".join(body.channels),
+    prompt = format_summary_prompt(
+        channels=body.channels,
         language=body.language,
-        rtl_instruction=_rtl(body.language),
         posts_text=body.posts_text,
     )
     result = await provider.complete(prompt, model=model, temperature=body.temperature)
     return result.model_dump()
+
+
+@router.post("/summary/prompt")
+def api_summary_prompt(body: SummaryRequest, _current_user: CurrentUser) -> dict:
+    prompt = format_summary_prompt(
+        channels=body.channels,
+        language=body.language,
+        posts_text=body.posts_text,
+    )
+    return {"prompt": prompt}
 
 
 @router.post("/summary/stream")
@@ -53,10 +52,9 @@ async def api_summary_stream(
         raise HTTPException(status_code=503, detail="GEMINI_API_KEY not configured")
     model = body.model or default_model()
     provider = get_provider(body.provider)
-    prompt = SYSTEM_PROMPT.format(
-        channels=", ".join(body.channels),
+    prompt = format_summary_prompt(
+        channels=body.channels,
         language=body.language,
-        rtl_instruction=_rtl(body.language),
         posts_text=body.posts_text,
     )
 
@@ -78,7 +76,7 @@ async def api_chat_stream(body: ChatRequest, _current_user: CurrentUser) -> Stre
     system = template.format(
         channels=", ".join(body.channels),
         language=body.language,
-        rtl_instruction=_rtl(body.language),
+        rtl_instruction=rtl_instruction(body.language),
         posts_text=body.posts_text,
     )
 

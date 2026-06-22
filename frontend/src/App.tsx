@@ -2,7 +2,7 @@ import { useRef, useEffect } from "react";
 import { HelpCircle, Database, List, MessageSquare, Settings, History, Send, AlertCircle, Moon, Sun, AlertTriangle, Sparkles, FileText, Activity } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { Summary, TabType } from "./types";
-import { WORKSPACE_TABS } from "./constants";
+import { WORKSPACE_TABS, isPastedSummaryModel, isPendingSummary } from "./constants";
 import { useSettings } from "./contexts/SettingsContext";
 import { useData } from "./contexts/DataContext";
 import { useUI } from "./contexts/UIContext";
@@ -98,10 +98,10 @@ export default function App() {
   };
 
   const handleSelectHistorySummary = (s: Summary) => {
-    setSummary(s.text);
+    setSummary(isPendingSummary(s) ? null : s.text);
     setDateRange(s.startDate, s.endDate);
     setAiLanguage(s.language);
-    if (s.model) setSelectedModel(s.model);
+    if (s.model && !isPastedSummaryModel(s.model)) setSelectedModel(s.model);
     setSelectedChannels(new Set(s.channels || []));
     setChatMessages(s.chatMessages || []);
     setCurrentSummaryId(s.id);

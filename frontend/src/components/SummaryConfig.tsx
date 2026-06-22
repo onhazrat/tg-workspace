@@ -1,5 +1,5 @@
 import React from "react";
-import { Send, Loader2, Brain, Languages, SlidersHorizontal } from "lucide-react";
+import { Send, Loader2, Brain, Languages, SlidersHorizontal, Copy } from "lucide-react";
 import { MODELS, LANGUAGES as APP_LANGUAGES } from "../constants";
 import { useData } from "../contexts/DataContext";
 import { useUI } from "../contexts/UIContext";
@@ -12,8 +12,11 @@ export const SummaryConfig: React.FC = () => {
   const { channels } = useData();
   const { summarizing } = useUI();
   const { selectedModel, setSelectedModel, aiLanguage, setAiLanguage } = useSettings();
-  const { scrapingChannels } = useScraper();
-  const { handleSummarize } = useAI();
+  const { scrapingChannels, filteredPosts } = useScraper();
+  const { handleSummarize, copySummaryPrompt } = useAI();
+
+  const actionsDisabled =
+    scrapingChannels.size > 0 || summarizing || channels.length === 0 || filteredPosts.length === 0;
 
   return (
     <section className="bg-app-card rounded-xl border border-app-ink/10 shadow-sm overflow-hidden mb-6">
@@ -61,8 +64,25 @@ export const SummaryConfig: React.FC = () => {
           <Tooltip>
             <TooltipTrigger asChild>
               <button
+                type="button"
+                onClick={() => void copySummaryPrompt()}
+                disabled={actionsDisabled}
+                className="flex items-center gap-2 px-4 h-10 border border-app-ink/10 rounded-lg hover:bg-app-muted/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <Copy size={14} className="opacity-60" />
+                <span className="text-xs font-bold tracking-wide">Copy Prompt</span>
+              </button>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>Copies the prompt to your clipboard and creates a history entry awaiting the external AI response.</p>
+            </TooltipContent>
+          </Tooltip>
+
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
                 onClick={handleSummarize}
-                disabled={scrapingChannels.size > 0 || summarizing || channels.length === 0}
+                disabled={actionsDisabled}
                 className="flex items-center gap-2 px-6 h-10 bg-app-ink text-app-bg rounded-lg hover:opacity-90 transition-all disabled:opacity-50 disabled:cursor-not-allowed group shadow-sm"
               >
                 {summarizing ? (

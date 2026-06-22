@@ -152,6 +152,7 @@ class Settings(BaseSettings):
     RAG_EMBED_LIMIT_DEFAULT: int = 100
 
     # Network / HTTP client
+    PROXY_DEFAULT_CONCURRENCY_DEFAULT: int = 1
     NETWORK_PROXY_COOLDOWN_MS: int = 10 * 60 * 1000
     NETWORK_FETCH_RETRIES: int = 8
     NETWORK_FETCH_INITIAL_DELAY_MS: int = 3000

@@ -8,9 +8,10 @@ interface ModalProps {
   title: string;
   children: React.ReactNode;
   footer?: React.ReactNode;
+  panelClassName?: string;
 }
 
-export function Modal({ isOpen, onClose, title, children, footer }: ModalProps) {
+export function Modal({ isOpen, onClose, title, children, footer, panelClassName }: ModalProps) {
   return (
     <AnimatePresence>
       {isOpen && (
@@ -26,7 +27,7 @@ export function Modal({ isOpen, onClose, title, children, footer }: ModalProps) 
             initial={{ opacity: 0, scale: 0.95, y: 20 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: 20 }}
-            className="relative w-full max-w-md bg-app-card border border-app-ink border-opacity-10 shadow-2xl flex flex-col max-h-[90vh]"
+            className={`relative w-full max-w-md bg-app-card border border-app-ink border-opacity-10 shadow-2xl flex flex-col max-h-[90vh] ${panelClassName ?? ""}`}
           >
             <div className="flex justify-between items-center p-4 border-b border-app-ink/10 shrink-0">
               <h3 className="text-lg font-bold tracking-tight">{title}</h3>

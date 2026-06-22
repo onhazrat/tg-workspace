@@ -30,9 +30,24 @@ class ScraperRuntimeSettings(BaseModel):
     model_config = {"populate_by_name": True}
 
 
+class ProxyLaneSnapshot(BaseModel):
+    proxy_url: str = Field(..., alias="proxyUrl")
+    max_parallel: int = Field(..., alias="maxParallel")
+    in_use: int = Field(..., alias="inUse")
+    in_cooldown: bool = Field(..., alias="inCooldown")
+
+    model_config = {"populate_by_name": True}
+
+
 class NetworkRuntimeSettings(BaseModel):
     proxy_enabled: bool = Field(False, alias="proxyEnabled")
     proxy_urls: list[str] = Field(default_factory=list, alias="proxyUrls")
+    proxy_default_concurrency: int = Field(1, alias="proxyDefaultConcurrency")
+    proxy_concurrency_overrides: dict[str, int] = Field(
+        default_factory=dict, alias="proxyConcurrencyOverrides"
+    )
+    effective_proxy_capacity: int = Field(0, alias="effectiveProxyCapacity")
+    proxy_lanes: list[ProxyLaneSnapshot] = Field(default_factory=list, alias="proxyLanes")
     tor_enabled: bool = Field(False, alias="torEnabled")
     tor_mode: str | None = Field(None, alias="torMode")
     tor_proxy_urls: str | None = Field(None, alias="torProxyUrls")
@@ -109,6 +124,8 @@ class ActiveSyncJobSummary(BaseModel):
     pending_channels: int = Field(..., alias="pendingChannels")
     allowed_concurrency: int = Field(..., alias="allowedConcurrency")
     concurrency_in_use: int = Field(..., alias="concurrencyInUse")
+    effective_proxy_capacity: int | None = Field(None, alias="effectiveProxyCapacity")
+    effective_proxy_capacity: int | None = Field(None, alias="effectiveProxyCapacity")
 
     model_config = {"populate_by_name": True}
 

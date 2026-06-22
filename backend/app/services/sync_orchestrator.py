@@ -21,7 +21,13 @@ from app.services.channels import update_channel_coverage
 from app.services.language import detect_language_from_posts
 from app.services.logs import upsert_network_log, upsert_sync_log
 from app.services.network import rotate_tor_identity
-from app.services.network_settings import load_network_settings, redact_proxy_url, resolve_proxies
+from app.services.network_settings import (
+    compute_proxy_pool_capacity,
+    load_network_settings,
+    redact_proxy_url,
+    resolve_proxies,
+    resolve_proxy_concurrency,
+)
 from app.services.post_sync_state import (
     record_gaps_from_page,
     record_gaps_to_existing_post,
@@ -142,6 +148,7 @@ async def _scrape_page_with_retry(
     tor_rotation_threshold: int,
     tor_control_enabled: bool,
     tor_control_port: int,
+    proxy_concurrency: tuple[int, dict[str, int]],
 ) -> dict[str, Any]:
     request_body = {
         "url": f"https://t.me/s/{channel_name}"
@@ -163,6 +170,7 @@ async def _scrape_page_with_retry(
                 proxies=proxies or None,
                 tor_auto_rotate=tor_auto_rotate,
                 tor_rotation_threshold=tor_rotation_threshold,
+                proxy_concurrency=proxy_concurrency,
             )
             response["fullRequest"] = request_body
             return response
@@ -264,6 +272,7 @@ async def _maybe_add_forwarded_channel(
     tor_rotation_threshold: int,
     user_id: uuid.UUID | None,
     effective_start_time: int,
+    proxy_concurrency: tuple[int, dict[str, int]],
 ) -> None:
     clean = forwarded_name.strip().replace("@", "").split("/")[-1]
     if not clean:
@@ -281,6 +290,7 @@ async def _maybe_add_forwarded_channel(
             proxies=proxies or None,
             tor_auto_rotate=tor_auto_rotate,
             tor_rotation_threshold=tor_rotation_threshold,
+            proxy_concurrency=proxy_concurrency,
         )
         display_name = info.get("displayName") or clean
         photo_url = info.get("photoUrl")
@@ -312,6 +322,7 @@ class _ChannelSyncCtx:
     language: str | None
     auto_follow: bool
     proxies: list[str]
+    proxy_concurrency: tuple[int, dict[str, int]]
     tor_auto_rotate: bool
     tor_rotation_threshold: int
     tor_control_enabled: bool
@@ -357,6 +368,7 @@ def _prepare_channel_sync(
             is not None
         )
 
+        proxy_default, proxy_overrides = resolve_proxy_concurrency(network)
         return "ok", _ChannelSyncCtx(
             channel_id=channel.id,
             channel_name=channel.name,
@@ -365,6 +377,7 @@ def _prepare_channel_sync(
             language=channel.language,
             auto_follow=bool(channel.auto_follow_forwarded),
             proxies=resolve_proxies(network),
+            proxy_concurrency=(proxy_default, proxy_overrides),
             tor_auto_rotate=bool(network.get("torAutoRotate")),
             tor_rotation_threshold=int(network.get("torRotationThreshold") or 10),
             tor_control_enabled=bool(network.get("torControlEnabled")),
@@ -736,6 +749,7 @@ async def sync_single_channel(
                     tor_rotation_threshold=ctx.tor_rotation_threshold,
                     tor_control_enabled=ctx.tor_control_enabled,
                     tor_control_port=ctx.tor_control_port,
+                    proxy_concurrency=ctx.proxy_concurrency,
                 )
 
                 if response.get("fullRequest"):
@@ -775,6 +789,7 @@ async def sync_single_channel(
                             tor_rotation_threshold=ctx.tor_rotation_threshold,
                             user_id=user_id,
                             effective_start_time=ctx.effective_start_time,
+                            proxy_concurrency=ctx.proxy_concurrency,
                         )
 
                 stop_sync = page_result.stop_sync
@@ -830,19 +845,26 @@ async def sync_single_channel(
             await touch_job(job)
 
 
-def _load_sync_concurrency() -> int:
+def _load_sync_job_concurrency(user_id: uuid.UUID | None) -> tuple[int, int | None]:
     with Session(engine) as session:
         sync_settings = load_sync_settings(session)
-        return max(
+        network = load_network_settings(session, user_id)
+        configured = max(
             1,
             int(sync_settings.get("syncConcurrency") or settings.SYNC_CONCURRENCY_DEFAULT),
         )
+        proxies = resolve_proxies(network)
+        if not proxies:
+            return configured, None
+        default_slots, overrides = resolve_proxy_concurrency(network)
+        capacity = compute_proxy_pool_capacity(proxies, default_slots, overrides)
+        return min(configured, capacity), capacity
 
 
 async def run_sync_job(job: SyncJobState, user_id: uuid.UUID | None) -> None:
     job.status = "running"
     await touch_job(job)
-    concurrency = await run_db(_load_sync_concurrency)
+    concurrency, _proxy_capacity = await run_db(_load_sync_job_concurrency, user_id)
 
     sem = asyncio.Semaphore(concurrency)
 

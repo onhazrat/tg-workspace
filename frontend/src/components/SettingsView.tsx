@@ -27,6 +27,10 @@ export const SettingsView: React.FC<{ activeSection?: string }> = ({ activeSecti
     setProxyEnabled,
     defaultProxyUrls,
     setDefaultProxyUrls,
+    proxyDefaultConcurrency,
+    setProxyDefaultConcurrency,
+    proxyConcurrencyOverrides,
+    setProxyConcurrencyOverrides,
     envFallbackConfigured,
     torAvailable,
     torEnabled,
@@ -94,6 +98,36 @@ export const SettingsView: React.FC<{ activeSection?: string }> = ({ activeSecti
   const [proxyTestResults, setProxyTestResults] = useState<Record<string, { success?: boolean; ip?: string; latency?: number; error?: string; testing?: boolean }>>({});
   const [isTestingAll, setIsTestingAll] = useState(false);
   const [badProxies, setBadProxies] = useState<{ url: string; cooldownRemaining: number }[]>([]);
+
+  const proxyLines = defaultProxyUrls
+    .split(/[\n,]+/)
+    .map((p) => p.trim())
+    .filter(Boolean);
+
+  const normalizeProxyUrl = (proxyUrl: string): string => {
+    let url = proxyUrl.trim();
+    if (!url.includes("://")) {
+      if (url.includes("127.0.0.1") || url.includes("localhost")) {
+        url = `socks5h://${url}`;
+      } else {
+        url = `http://${url}`;
+      }
+    }
+    if (url.startsWith("socks5://")) {
+      url = url.replace("socks5://", "socks5h://");
+    }
+    return url;
+  };
+
+  const slotsForProxy = (url: string): number => {
+    const norm = normalizeProxyUrl(url);
+    return proxyConcurrencyOverrides[norm] ?? proxyDefaultConcurrency;
+  };
+
+  const effectiveProxyCapacity = proxyLines.reduce(
+    (sum, url) => sum + slotsForProxy(url),
+    0,
+  );
   const [jobStatus, setJobStatus] = useState<
     Record<
       string,
@@ -890,6 +924,66 @@ export const SettingsView: React.FC<{ activeSection?: string }> = ({ activeSecti
                       placeholder="http://user:pass@host:port or socks5h://host:port (one per line)"
                       className="w-full h-32 bg-app-ink/5 border border-app-ink/10 p-3 text-[10px] font-mono focus:outline-none focus:border-app-ink/30 transition-all resize-none"
                     />
+
+                    <div className="space-y-3 pt-2 border-t border-app-ink/5">
+                      <div className="flex items-center justify-between gap-4">
+                        <span className="text-[10px] font-bold uppercase tracking-tight opacity-60">
+                          Default slots per proxy
+                        </span>
+                        <input
+                          type="number"
+                          min={1}
+                          max={20}
+                          value={proxyDefaultConcurrency}
+                          onChange={(e) =>
+                            setProxyDefaultConcurrency(
+                              Math.max(1, Math.min(20, parseInt(e.target.value, 10) || 1)),
+                            )
+                          }
+                          className="w-16 bg-app-ink/5 border border-app-ink/10 p-2 text-[10px] font-mono text-right focus:outline-none focus:border-app-ink/30"
+                        />
+                      </div>
+                      {proxyLines.length > 0 && (
+                        <div className="space-y-2">
+                          <span className="text-[10px] font-bold uppercase tracking-tight opacity-60">
+                            Per-proxy overrides
+                          </span>
+                          <div className="space-y-1">
+                            {proxyLines.map((url) => (
+                              <div
+                                key={url}
+                                className="flex items-center justify-between gap-3 text-[9px] bg-app-ink/5 p-2 border border-app-ink/5 rounded"
+                              >
+                                <span className="font-mono truncate flex-1 opacity-60">{url}</span>
+                                <input
+                                  type="number"
+                                  min={1}
+                                  max={20}
+                                  value={slotsForProxy(url)}
+                                  onChange={(e) => {
+                                    const slots = Math.max(
+                                      1,
+                                      Math.min(20, parseInt(e.target.value, 10) || 1),
+                                    );
+                                    const norm = normalizeProxyUrl(url);
+                                    setProxyConcurrencyOverrides({
+                                      ...proxyConcurrencyOverrides,
+                                      [norm]: slots,
+                                    });
+                                  }}
+                                  className="w-14 bg-white/50 border border-app-ink/10 p-1 text-[9px] font-mono text-right focus:outline-none"
+                                />
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      <p className="text-[8px] opacity-40 italic serif">
+                        Effective parallel HTTP capacity ≈ {effectiveProxyCapacity || proxyDefaultConcurrency} slot
+                        {(effectiveProxyCapacity || proxyDefaultConcurrency) === 1 ? "" : "s"}.
+                        Keep <strong>Sync concurrency</strong> (Scraping &amp; Sync) at or below this when using proxies.
+                      </p>
+                    </div>
                     
                     {/* Proxy Test Results */}
                     {Object.keys(proxyTestResults).length > 0 && defaultProxyUrls.split(/[\n,]+/).some(p => proxyTestResults[p.trim()]) && (

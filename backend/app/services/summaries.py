@@ -67,12 +67,20 @@ def upsert_summary(
                 "timestamp",
             ):
                 setattr(summary, snake, value)
-        extra = {
-            key: value
-            for key, value in body.items()
-            if to_snake(key) not in known and key != "id"
-        }
-        summary.extra = {**(summary.extra or {}), **extra}
+        extra_updates: dict[str, Any] = {}
+        extra_removals: list[str] = []
+        for key, value in body.items():
+            snake = to_snake(key)
+            if snake in known or key == "id":
+                continue
+            if value is None:
+                extra_removals.extend({key, snake})
+            else:
+                extra_updates[key] = value
+        merged_extra = {**(summary.extra or {}), **extra_updates}
+        for key in extra_removals:
+            merged_extra.pop(key, None)
+        summary.extra = merged_extra
         summary.updated_at = datetime.utcnow()
     else:
         summary = Summary(

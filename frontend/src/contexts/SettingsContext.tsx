@@ -6,6 +6,21 @@ import { GlobalStartTimeMode, GlobalStartTimeValue } from "../types";
 import { loadNetworkSettings, saveNetworkSettings } from "../lib/repository";
 import { api } from "@/api";
 
+function normalizeProxyUrl(proxyUrl: string): string {
+  let url = proxyUrl.trim();
+  if (!url.includes("://")) {
+    if (url.includes("127.0.0.1") || url.includes("localhost")) {
+      url = `socks5h://${url}`;
+    } else {
+      url = `http://${url}`;
+    }
+  }
+  if (url.startsWith("socks5://")) {
+    url = url.replace("socks5://", "socks5h://");
+  }
+  return url;
+}
+
 interface SettingsContextType {
   theme: "light" | "dark";
   setTheme: (theme: "light" | "dark") => void;
@@ -24,6 +39,10 @@ interface SettingsContextType {
   setProxyEnabled: (enabled: boolean) => void;
   defaultProxyUrls: string;
   setDefaultProxyUrls: (urls: string) => void;
+  proxyDefaultConcurrency: number;
+  setProxyDefaultConcurrency: (slots: number) => void;
+  proxyConcurrencyOverrides: Record<string, number>;
+  setProxyConcurrencyOverrides: (overrides: Record<string, number>) => void;
   envFallbackConfigured: boolean;
   torAvailable: boolean;
   torEnabled: boolean;
@@ -137,6 +156,10 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({ children }
   const [proxyEnabled, setProxyEnabled] = useState<boolean>(false);
 
   const [defaultProxyUrls, setDefaultProxyUrls] = useState<string>("");
+
+  const [proxyDefaultConcurrency, setProxyDefaultConcurrency] = useState<number>(1);
+
+  const [proxyConcurrencyOverrides, setProxyConcurrencyOverrides] = useState<Record<string, number>>({});
 
   const [envFallbackConfigured, setEnvFallbackConfigured] = useState<boolean>(false);
 
@@ -333,6 +356,12 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({ children }
     }
     if (typeof value.torAvailable === "boolean") setTorAvailable(value.torAvailable);
     if (typeof value.proxyEnabled === "boolean") setProxyEnabled(value.proxyEnabled);
+    if (typeof value.proxyDefaultConcurrency === "number") {
+      setProxyDefaultConcurrency(value.proxyDefaultConcurrency);
+    }
+    if (value.proxyConcurrencyOverrides && typeof value.proxyConcurrencyOverrides === "object") {
+      setProxyConcurrencyOverrides(value.proxyConcurrencyOverrides as Record<string, number>);
+    }
     if (typeof value.torEnabled === "boolean") setTorEnabled(value.torEnabled);
     if (value.torMode === "auto" || value.torMode === "custom") setTorMode(value.torMode);
     if (typeof value.torProxyUrls === "string") setTorProxyUrls(value.torProxyUrls);
@@ -446,6 +475,8 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({ children }
       saveNetworkSettings({
         proxyEnabled,
         proxyUrls,
+        proxyDefaultConcurrency,
+        proxyConcurrencyOverrides,
         torEnabled,
         torMode,
         torProxyUrls,
@@ -462,6 +493,8 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({ children }
   }, [
     proxyEnabled,
     defaultProxyUrls,
+    proxyDefaultConcurrency,
+    proxyConcurrencyOverrides,
     torEnabled,
     torMode,
     torProxyUrls,
@@ -625,6 +658,10 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({ children }
         setProxyEnabled,
         defaultProxyUrls,
         setDefaultProxyUrls,
+        proxyDefaultConcurrency,
+        setProxyDefaultConcurrency,
+        proxyConcurrencyOverrides,
+        setProxyConcurrencyOverrides,
         envFallbackConfigured,
         torAvailable,
         torEnabled,

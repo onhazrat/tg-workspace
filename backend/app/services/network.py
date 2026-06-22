@@ -1,4 +1,4 @@
-"""HTTP client with proxy rotation, Tor support, and telemetry."""
+"""HTTP client with proxy lane pool, Tor support, and telemetry."""
 
 from __future__ import annotations
 
@@ -6,6 +6,7 @@ import asyncio
 import random
 import re
 import time
+from contextlib import asynccontextmanager
 from typing import Any
 
 import httpx
@@ -13,6 +14,8 @@ from stem import Signal
 from stem.control import Controller
 
 from app.core.config import settings
+from app.services.network_settings import normalize_proxy_url
+from app.services.proxy_pool import ProxyLane
 
 _bad_proxies: dict[str, float] = {}
 _tor_request_counter = 0
@@ -31,16 +34,9 @@ def get_bad_proxies() -> list[dict[str, Any]]:
     ]
 
 
-def _normalize_proxy_url(proxy_url: str) -> str:
-    url = proxy_url.strip()
-    if "://" not in url:
-        if "127.0.0.1" in url or "localhost" in url:
-            url = f"socks5h://{url}"
-        else:
-            url = f"http://{url}"
-    if url.startswith("socks5://"):
-        url = url.replace("socks5://", "socks5h://", 1)
-    return url
+def proxy_in_cooldown(proxy_url: str) -> bool:
+    now = time.time() * 1000
+    return _bad_proxies.get(proxy_url, 0) > now
 
 
 def _build_client(proxy_url: str | None) -> httpx.AsyncClient:
@@ -49,8 +45,37 @@ def _build_client(proxy_url: str | None) -> httpx.AsyncClient:
         "follow_redirects": True,
     }
     if proxy_url:
-        kwargs["proxy"] = _normalize_proxy_url(proxy_url)
+        kwargs["proxy"] = normalize_proxy_url(proxy_url)
     return httpx.AsyncClient(**kwargs)
+
+
+async def _fetch_once(
+    url: str,
+    proxy_url: str | None,
+    *,
+    client: httpx.AsyncClient | None = None,
+    method: str = "GET",
+    json_body: dict[str, Any] | None = None,
+) -> Any:
+    async def _request(http_client: httpx.AsyncClient) -> Any:
+        if method == "POST":
+            response = await http_client.post(url, json=json_body)
+        else:
+            response = await http_client.get(url)
+        response.raise_for_status()
+        data = response.text if "t.me" in url else response.json()
+        if isinstance(data, str) and "t.me/s/" in url:
+            has_action = "tgme_page_action" in data
+            has_widgets = "tgme_widget_message_date" in data
+            if has_action and not has_widgets:
+                raise ConnectionError("Channel is not available on the web view.")
+        return data
+
+    if client is not None:
+        return await _request(client)
+
+    async with _build_client(proxy_url) as ephemeral:
+        return await _request(ephemeral)
 
 
 def _rotate_tor_identity_sync(control_port: int, password: str) -> None:
@@ -77,12 +102,56 @@ async def rotate_tor_identity(control_port: int | None = None, password: str | N
         _is_rotating_tor = False
 
 
+def _pick_random_proxy(
+    proxies: list[str],
+    tried: set[str],
+    *,
+    now_ms: float,
+) -> str:
+    available = [
+        p
+        for p in proxies
+        if p not in tried and _bad_proxies.get(p, 0) <= now_ms
+    ]
+    pool = available or [p for p in proxies if _bad_proxies.get(p, 0) <= now_ms] or proxies
+    return random.choice(pool)
+
+
+@asynccontextmanager
+async def _proxy_acquire(
+    proxies: list[str],
+    tried: set[str],
+    *,
+    proxy_concurrency: tuple[int, dict[str, int]] | None,
+    bypass_pool: bool,
+):
+    if bypass_pool:
+        now_ms = time.time() * 1000
+        proxy_url = _pick_random_proxy(proxies, tried, now_ms=now_ms)
+        tried.add(proxy_url)
+        yield proxy_url
+        return
+
+    from app.services.proxy_pool import ProxyPoolExhausted, ensure_pool_configured
+
+    default_slots, overrides = proxy_concurrency if proxy_concurrency else (1, {})
+    pool = await ensure_pool_configured(proxies, default_slots, overrides)
+    try:
+        async with pool.acquire(exclude=tried) as lane:
+            tried.add(lane.url)
+            yield lane
+    except ProxyPoolExhausted as exc:
+        raise ConnectionError(str(exc)) from exc
+
+
 async def fetch_with_retry(
     url: str,
     *,
     retries: int | None = None,
     initial_delay_ms: int | None = None,
     proxies: list[str] | None = None,
+    proxy_concurrency: tuple[int, dict[str, int]] | None = None,
+    bypass_pool: bool = False,
     tor_auto_rotate: bool = False,
     tor_rotation_threshold: int | None = None,
     tor_control_port: int | None = None,
@@ -109,40 +178,40 @@ async def fetch_with_retry(
 
     for i in range(effective_retries):
         attempt_start = time.time() * 1000
-        now = time.time() * 1000
         proxy_url: str | None = None
 
-        if proxies:
-            available = [
-                p
-                for p in proxies
-                if p not in tried
-                and (_bad_proxies.get(p, 0) <= now)
-            ]
-            pool = available or [p for p in proxies if _bad_proxies.get(p, 0) <= now] or proxies
-            proxy_url = random.choice(pool)
-            tried.add(proxy_url)
-
-        is_local_tor = proxy_url and ("127.0.0.1" in proxy_url or "localhost" in proxy_url)
-        if is_local_tor and tor_auto_rotate:
-            _tor_request_counter += 1
-            if _tor_request_counter >= effective_tor_rotation_threshold:
-                await rotate_tor_identity(tor_control_port)
-
         try:
-            async with _build_client(proxy_url) as client:
-                if method == "POST":
-                    response = await client.post(url, json=json_body)
-                else:
-                    response = await client.get(url)
-                response.raise_for_status()
-                data = response.text if "t.me" in url else response.json()
-
-            if isinstance(data, str) and "t.me/s/" in url:
-                has_action = "tgme_page_action" in data
-                has_widgets = "tgme_widget_message_date" in data
-                if has_action and not has_widgets:
-                    raise ConnectionError("Channel is not available on the web view.")
+            if proxies:
+                async with _proxy_acquire(
+                    proxies,
+                    tried,
+                    proxy_concurrency=proxy_concurrency,
+                    bypass_pool=bypass_pool,
+                ) as acquired:
+                    if isinstance(acquired, ProxyLane):
+                        proxy_url = acquired.url
+                        pool_client = acquired.client
+                    else:
+                        proxy_url = acquired
+                        pool_client = None
+                    is_local_tor = proxy_url and (
+                        "127.0.0.1" in proxy_url or "localhost" in proxy_url
+                    )
+                    if is_local_tor and tor_auto_rotate:
+                        _tor_request_counter += 1
+                        if _tor_request_counter >= effective_tor_rotation_threshold:
+                            await rotate_tor_identity(tor_control_port)
+                    data = await _fetch_once(
+                        url,
+                        proxy_url,
+                        client=pool_client,
+                        method=method,
+                        json_body=json_body,
+                    )
+            else:
+                data = await _fetch_once(
+                    url, None, method=method, json_body=json_body
+                )
 
             if proxy_url:
                 _bad_proxies.pop(proxy_url, None)

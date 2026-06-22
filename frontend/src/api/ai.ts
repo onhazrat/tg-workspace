@@ -6,6 +6,18 @@ export const aiApi = {
       "/api/v1/ai/models"
     ),
 
+  summaryPrompt: (body: {
+    channels: string[];
+    postsText: string;
+    language: string;
+    model?: string;
+    temperature?: number;
+  }) =>
+    request<{ prompt: string }>("/api/v1/ai/summary/prompt", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
   summaryStream: (body: Record<string, unknown>) =>
     sseTextStream("/api/v1/ai/summary/stream", body, "text"),
 

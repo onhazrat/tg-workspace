@@ -31,6 +31,23 @@ async function* wrapStream(
   }
 }
 
+export const getSummaryPrompt = async (
+  channels: string[],
+  postsText: string,
+  language: string,
+  model: string,
+  temperature: number = 0.7
+): Promise<string> => {
+  const result = await api.summaryPrompt({
+    channels,
+    postsText,
+    language,
+    model,
+    temperature,
+  });
+  return result.prompt;
+};
+
 export const generateSummaryStream = async (
   channels: string[],
   postsText: string,

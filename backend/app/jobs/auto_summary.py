@@ -17,26 +17,20 @@ from app.services.sync_meta import touch_sync
 from app.core.config import settings
 from app.core.db import engine
 from app.models_tg import Channel, ChatDestination, Post, Summary
-from app.prompts.templates import SYSTEM_PROMPT
+from app.prompts.summary import format_summary_prompt
 from app.services.publish import publish_summary_text
-from app.services.network_settings import load_network_settings, resolve_proxies
+from app.services.network_settings import (
+    load_network_settings,
+    resolve_proxies,
+    resolve_proxy_concurrency,
+)
 from app.services.scraper_jobs import create_job, has_active_sync_job
 from app.services.sync_orchestrator import run_sync_job
 
 logger = logging.getLogger(__name__)
 
-RTL_LANGUAGES = {"Persian", "Arabic", "فارسی", "العربية"}
 _regenerating: set[str] = set()
 _CITATION_RE = re.compile(r"\[([^\]]+?)\s*#(\d+)\]")
-
-
-def _rtl(language: str) -> str:
-    if language in RTL_LANGUAGES:
-        return (
-            "IMPORTANT: Since this is a Right-to-Left (RTL) language, ensure the entire "
-            "summary is formatted correctly for RTL reading."
-        )
-    return ""
 
 
 def _extract_cited_posts(text: str, posts: list[Post]) -> dict[str, dict]:
@@ -146,10 +140,9 @@ async def _regenerate_one(session: Session, summary: Summary) -> str | None:
         )
         model = summary.model or default_model()
         provider = get_provider("gemini")
-        prompt = SYSTEM_PROMPT.format(
-            channels=", ".join(summary.channels or []),
+        prompt = format_summary_prompt(
+            channels=summary.channels or [],
             language=summary.language,
-            rtl_instruction=_rtl(summary.language),
             posts_text=posts_text,
         )
         start = time.perf_counter()
@@ -234,6 +227,7 @@ async def _auto_publish(
 
     network = load_network_settings(session, summary.user_id)
     proxies = resolve_proxies(network)
+    proxy_concurrency = resolve_proxy_concurrency(network)
     metadata = None
     if extra.get("sendMetadata", True):
         metadata = extra.get("metadataText") or _default_metadata(summary, extra)
@@ -246,6 +240,7 @@ async def _auto_publish(
             text=full_text,
             metadata_text=metadata,
             proxies=proxies,
+            proxy_concurrency=proxy_concurrency,
             tor_auto_rotate=bool(network.get("torAutoRotate")),
             tor_rotation_threshold=int(network.get("torRotationThreshold") or 10),
         )

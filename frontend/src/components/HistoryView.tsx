@@ -8,6 +8,7 @@ import { toast } from "sonner";
 import { deleteSummary, saveSummary } from "../lib/repository";
 import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tg-tooltip";
 import { formatDateToLocalISO } from "../lib/utils";
+import { formatSummaryModelLabel, isPendingSummary } from "../constants";
 
 const formatDuration = (start: number, end: number) => {
   const diffMs = Math.max(0, end - start);
@@ -109,9 +110,10 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
         const query = searchQuery.toLowerCase();
         const matchesChannels = s.channels.some(c => c.toLowerCase().includes(query));
         const matchesText = s.text.toLowerCase().includes(query);
+        const matchesPrompt = s.promptText?.toLowerCase().includes(query);
         const matchesModel = s.model?.toLowerCase().includes(query);
         const matchesNote = s.note?.toLowerCase().includes(query);
-        if (!matchesChannels && !matchesText && !matchesModel && !matchesNote) return false;
+        if (!matchesChannels && !matchesText && !matchesPrompt && !matchesModel && !matchesNote) return false;
       }
 
       // Model filter
@@ -310,7 +312,7 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
                   >
                     <option value="all">All Models</option>
                     {uniqueModels.map(m => (
-                      <option key={m} value={m}>{m}</option>
+                      <option key={m} value={m}>{formatSummaryModelLabel(m)}</option>
                     ))}
                   </select>
                 </div>
@@ -426,7 +428,11 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
             <div 
               key={s.id}
               onClick={() => handleSelectHistorySummary(s)}
-              className="bg-app-card border border-app-ink/10 rounded-xl p-5 shadow-sm hover:shadow-md hover:border-app-ink/20 transition-all cursor-pointer group relative flex flex-col gap-3"
+              className={`bg-app-card border rounded-xl p-5 shadow-sm hover:shadow-md transition-all cursor-pointer group relative flex flex-col gap-3 ${
+                isPendingSummary(s)
+                  ? "border-amber-500/30 hover:border-amber-500/50 bg-amber-500/[0.03]"
+                  : "border-app-ink/10 hover:border-app-ink/20"
+              }`}
             >
               {/* Card Header */}
               <div className="flex justify-between items-start gap-4">
@@ -436,6 +442,11 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
                       {s.channels.join(", ")}
                     </h4>
                     <div className="flex gap-1 shrink-0">
+                      {isPendingSummary(s) && (
+                        <span className="px-2 py-0.5 rounded-md text-[9px] font-bold uppercase tracking-wider bg-amber-500/15 text-amber-800 dark:text-amber-200">
+                          Awaiting response
+                        </span>
+                      )}
                       {s.autoRegenerate && (
                         <Tooltip>
                           <TooltipTrigger asChild>
@@ -496,7 +507,8 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
                     <TooltipTrigger asChild>
                       <button 
                         onClick={(e) => handleToggleAutoRegenerate(s, e)}
-                        className={`p-1.5 rounded-md transition-all ${s.autoRegenerate ? 'text-green-600 bg-green-500/10' : 'text-app-ink/50 hover:text-app-ink hover:bg-app-ink/5'}`}
+                        disabled={isPendingSummary(s)}
+                        className={`p-1.5 rounded-md transition-all ${s.autoRegenerate ? 'text-green-600 bg-green-500/10' : 'text-app-ink/50 hover:text-app-ink hover:bg-app-ink/5'} disabled:opacity-30 disabled:cursor-not-allowed`}
                       >
                         <RefreshCw size={14} className={regeneratingSummaries.has(s.id) ? "animate-spin" : ""} />
                       </button>
@@ -535,9 +547,15 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
               </div>
 
               {/* Card Content (Snippet) */}
-              <p className={`text-[12px] opacity-70 line-clamp-2 leading-relaxed ${s.language === "Persian" ? "font-persian text-right" : ""}`}>
-                {s.text.substring(0, 200)}...
-              </p>
+              {isPendingSummary(s) ? (
+                <p className="text-[12px] text-amber-800/80 dark:text-amber-200/80 leading-relaxed">
+                  Prompt copied — paste the external AI response to complete this entry.
+                </p>
+              ) : (
+                <p className={`text-[12px] opacity-70 line-clamp-2 leading-relaxed ${s.language === "Persian" ? "font-persian text-right" : ""}`}>
+                  {s.text.substring(0, 200)}...
+                </p>
+              )}
 
               {/* Notes Section */}
               {editingNoteId === s.id ? (
@@ -660,7 +678,7 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
                     {formatDuration(s.startDate, s.endDate)}
                   </span>
                   <span className="bg-app-muted px-2 py-1 rounded-md text-[9px] font-mono uppercase tracking-widest opacity-70">
-                    {s.model || "Unknown"}
+                    {formatSummaryModelLabel(s.model)}
                   </span>
                   <span className="bg-app-muted px-2 py-1 rounded-md text-[9px] font-mono uppercase tracking-widest opacity-70">
                     {s.language}

@@ -102,6 +102,41 @@ def test_summaries_crud(client: TestClient) -> None:
     assert r3.status_code == 200
 
 
+def test_summaries_pending_prompt_extra(client: TestClient) -> None:
+    headers = _auth(client)
+    pending = {
+        "text": "",
+        "channels": ["ch1"],
+        "startDate": 1000,
+        "endDate": 2000,
+        "timestamp": 5000,
+        "status": "pending",
+        "promptText": "Analyze these posts...",
+        "postCount": 12,
+        "language": "English",
+    }
+    r = client.put(f"{PREFIX}/summaries/pending-1", json=pending, headers=headers)
+    assert r.status_code == 200
+    data = r.json()
+    assert data["status"] == "pending"
+    assert data["promptText"] == "Analyze these posts..."
+
+    complete = {
+        **pending,
+        "text": "Completed summary",
+        "source": "pasted",
+        "status": None,
+    }
+    r2 = client.put(f"{PREFIX}/summaries/pending-1", json=complete, headers=headers)
+    assert r2.status_code == 200
+    completed = r2.json()
+    assert completed["text"] == "Completed summary"
+    assert completed["source"] == "pasted"
+    assert "status" not in completed
+
+    client.delete(f"{PREFIX}/summaries/pending-1", headers=headers)
+
+
 def test_bot_credentials_export_import(client: TestClient) -> None:
     headers = _auth(client)
     r = client.put(

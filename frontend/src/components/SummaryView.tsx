@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { motion } from "motion/react";
-import { Database, Tag, Send, Clock, Copy, Check, Download, MessageSquare, RefreshCw, Loader2, StickyNote, FileText } from "lucide-react";
+import { Database, Tag, Send, Clock, Copy, Check, Download, MessageSquare, RefreshCw, Loader2, StickyNote, FileText, ClipboardPaste } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import { useData } from "../contexts/DataContext";
 import { useUI } from "../contexts/UIContext";
@@ -13,12 +13,14 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tg-tooltip";
 import { RelativeTime } from "./RelativeTime";
 import { CitationHover } from "./CitationHover";
 import { formatDateToLocalISO } from "../lib/utils";
+import { formatSummaryModelLabel, isPendingSummary } from "../constants";
 
 import { publishSummary } from "../services/telegram";
 import { buildActiveProxies } from "@/lib/syncSettings";
 import { savePublishLog, saveSummary } from "../lib/repository";
 import { useApiStatus } from "../hooks/useApiStatus";
 import { PublishLog } from "../types";
+import { PasteSummaryModal } from "./PasteSummaryModal";
 
 const extractText = (children: React.ReactNode): string => {
   if (typeof children === 'string') return children;
@@ -132,7 +134,7 @@ const markdownComponents = {
 interface SummaryViewProps {}
 
 export const SummaryView: React.FC<SummaryViewProps> = () => {
-  const { summary, handleSummarize, generateBackgroundSummary, regeneratingSummaries } = useAI();
+  const { summary, handleSummarize, generateBackgroundSummary, regeneratingSummaries, completePendingSummary } = useAI();
   const { isOffline } = useApiStatus();
   const [copied, setCopied] = useState(false);
   const { loadLogs, botCredentials, chatDestinations, selectedChannels, summariesHistory, loadHistory } = useData();
@@ -140,7 +142,9 @@ export const SummaryView: React.FC<SummaryViewProps> = () => {
   const { filteredPosts, setSemanticSearchQuery } = useScraper();
 
   const currentSummary = summariesHistory.find(s => s.id === currentSummaryId);
+  const isPending = currentSummary ? isPendingSummary(currentSummary) : false;
   const isRegenerating = currentSummary ? regeneratingSummaries.has(currentSummary.id) : false;
+  const [pasteModalOpen, setPasteModalOpen] = useState(false);
 
   const handleRerun = async () => {
     if (isOffline) {
@@ -284,7 +288,78 @@ export const SummaryView: React.FC<SummaryViewProps> = () => {
         dir={isRTL ? "rtl" : "ltr"}
         className={`relative border border-app-ink/10 bg-app-card rounded-xl p-8 md:p-12 shadow-sm ${isRTL ? "text-right" : ""} ${aiLanguage === "Persian" ? "font-persian leading-loose" : isRTL ? "font-serif leading-loose" : ""}`}
       >
-        {summary ? (
+        {isPending && currentSummary ? (
+          <>
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8 border-b border-app-ink/10 pb-6">
+              <div>
+                <div className="flex flex-wrap items-center gap-2 mb-3">
+                  <h3 className="text-2xl font-bold tracking-tight">Awaiting External Response</h3>
+                  <span className="bg-amber-500/15 text-amber-800 dark:text-amber-200 px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider">
+                    Prompt copied
+                  </span>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <span className="bg-app-muted/50 px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider text-app-ink/60 flex items-center gap-1.5">
+                    <Clock size={12} /> <RelativeTime timestamp={currentSummary.timestamp} />
+                  </span>
+                  <span className="bg-app-muted/50 px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider text-app-ink/60 flex items-center gap-1.5">
+                    <Database size={12} /> {formatSummaryModelLabel(currentSummary.model)}
+                  </span>
+                  <span className="bg-app-muted/50 px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider text-app-ink/60 flex items-center gap-1.5">
+                    <Tag size={12} /> {currentSummary.language}
+                  </span>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setPasteModalOpen(true)}
+                className="flex items-center gap-2 px-5 h-11 bg-app-ink text-app-bg rounded-lg hover:opacity-90 transition-all text-xs font-bold tracking-wide shadow-sm"
+              >
+                <ClipboardPaste size={14} />
+                Paste AI Response
+              </button>
+            </div>
+
+            <p className="text-sm text-app-ink/70 mb-4">
+              Use the prompt below in your external AI tool, then paste the response here to complete this history entry.
+            </p>
+
+            <div className="rounded-xl border border-app-ink/10 bg-app-muted/10 p-4 md:p-6">
+              <div className="flex items-center justify-between mb-3">
+                <h4 className="text-[10px] font-bold uppercase tracking-widest text-app-ink/60">Copied Prompt</h4>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (currentSummary.promptText) {
+                      void navigator.clipboard.writeText(currentSummary.promptText);
+                      toast.success("Prompt copied again.");
+                    }
+                  }}
+                  disabled={!currentSummary.promptText}
+                  className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-app-ink/10 hover:bg-app-muted/30 text-[10px] font-bold uppercase tracking-wide disabled:opacity-50"
+                >
+                  <Copy size={12} />
+                  Copy again
+                </button>
+              </div>
+              <pre className="text-xs font-mono whitespace-pre-wrap leading-relaxed text-app-ink/80 max-h-[480px] overflow-y-auto custom-scrollbar">
+                {currentSummary.promptText || "Prompt text unavailable."}
+              </pre>
+            </div>
+
+            <div className="mt-8 pt-6 border-t border-app-ink/10 flex flex-wrap gap-2">
+              <span className="bg-app-muted/30 px-2 py-1 rounded-md text-[9px] font-mono uppercase tracking-widest text-app-ink/50">
+                {currentSummary.postCount ?? 0} Posts
+              </span>
+              <span className="bg-app-muted/30 px-2 py-1 rounded-md text-[9px] font-mono uppercase tracking-widest text-app-ink/50">
+                {currentSummary.channels.length} Channels
+              </span>
+              <span className="bg-app-muted/30 px-2 py-1 rounded-md text-[9px] font-mono uppercase tracking-widest text-app-ink/50">
+                Range: {new Date(currentSummary.startDate).toLocaleString()} - {new Date(currentSummary.endDate).toLocaleString()}
+              </span>
+            </div>
+          </>
+        ) : summary ? (
           <>
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-10 border-b border-app-ink/10 pb-6">
               <div>
@@ -294,10 +369,10 @@ export const SummaryView: React.FC<SummaryViewProps> = () => {
                     <Clock size={12} /> <RelativeTime timestamp={displayDate.getTime()} />
                   </span>
                   <span className="bg-app-muted/50 px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider text-app-ink/60 flex items-center gap-1.5">
-                    <Database size={12} /> {currentSummary.model}
+                    <Database size={12} /> {formatSummaryModelLabel(currentSummary?.model)}
                   </span>
                   <span className="bg-app-muted/50 px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider text-app-ink/60 flex items-center gap-1.5">
-                    <Tag size={12} /> {currentSummary.language}
+                    <Tag size={12} /> {currentSummary?.language}
                   </span>
                 </div>
               </div>
@@ -596,6 +671,7 @@ export const SummaryView: React.FC<SummaryViewProps> = () => {
               </div>
             )}
 
+            {currentSummary && (
             <div className="mt-12 pt-6 border-t border-app-ink/10 flex flex-col md:flex-row justify-between items-center gap-4">
               <div className="flex items-center gap-2">
                 <span className="bg-app-muted/30 px-2 py-1 rounded-md text-[9px] font-mono uppercase tracking-widest text-app-ink/50">
@@ -611,6 +687,7 @@ export const SummaryView: React.FC<SummaryViewProps> = () => {
                 </span>
               </div>
             </div>
+            )}
           </>
         ) : summarizing ? (
           <div className="h-full flex flex-col py-12 space-y-8 animate-pulse">
@@ -643,12 +720,20 @@ export const SummaryView: React.FC<SummaryViewProps> = () => {
               <FileText size={40} className="opacity-20" strokeWidth={1.5} />
             </div>
             <h3 className="text-lg font-bold tracking-tight mb-2">Ready to Summarize</h3>
-            <p className="text-xs text-app-ink/50 max-w-[250px] mx-auto leading-relaxed">
-              Select your parameters and hit Generate to create an AI analysis of your selected posts.
+            <p className="text-xs text-app-ink/50 max-w-[280px] mx-auto leading-relaxed">
+              Generate in-app, or use Copy Prompt to run an external AI and paste the response from History.
             </p>
           </div>
         )}
       </div>
+
+      {currentSummary && isPending && (
+        <PasteSummaryModal
+          isOpen={pasteModalOpen}
+          onClose={() => setPasteModalOpen(false)}
+          onSave={(text, modelName) => completePendingSummary(currentSummary.id, text, modelName)}
+        />
+      )}
     </motion.div>
   );
 };

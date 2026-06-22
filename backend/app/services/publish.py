@@ -20,6 +20,7 @@ async def publish_summary_text(
     text: str,
     metadata_text: str | None = None,
     proxies: list[str] | None = None,
+    proxy_concurrency: tuple[int, dict[str, int]] | None = None,
     tor_auto_rotate: bool = False,
     tor_rotation_threshold: int = 10,
 ) -> dict[str, Any]:
@@ -45,6 +46,7 @@ async def publish_summary_text(
             retries=settings.TELEGRAM_API_RETRIES,
             initial_delay_ms=settings.TELEGRAM_API_INITIAL_DELAY_MS,
             proxies=proxies or None,
+            proxy_concurrency=proxy_concurrency,
             tor_auto_rotate=tor_auto_rotate,
             tor_rotation_threshold=tor_rotation_threshold,
             method="POST",

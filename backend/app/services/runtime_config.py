@@ -19,10 +19,13 @@ from app.jobs.settings import (
     load_sync_settings,
 )
 from app.services.network_settings import (
+    compute_proxy_pool_capacity,
     load_network_settings,
     redact_proxy_url,
     resolve_proxies,
+    resolve_proxy_concurrency,
 )
+from app.services.proxy_pool import configure_proxy_pool, get_proxy_pool
 from app.services.scraper_jobs import get_active_sync_job_summary
 
 
@@ -51,6 +54,36 @@ def _network_runtime_payload(
 ) -> dict[str, Any]:
     network = load_network_settings(session, user_id)
     resolved = resolve_proxies(network)
+    default_slots, overrides = resolve_proxy_concurrency(network)
+    effective_capacity = compute_proxy_pool_capacity(resolved, default_slots, overrides)
+    if resolved:
+        configure_proxy_pool(resolved, default_slots, overrides)
+    pool = get_proxy_pool()
+    lane_snapshot = pool.snapshot()
+    if not lane_snapshot and resolved:
+        from app.services.network import proxy_in_cooldown
+        from app.services.network_settings import normalize_proxy_url
+
+        lane_snapshot = [
+            {
+                "proxyUrl": normalize_proxy_url(proxy),
+                "maxParallel": overrides.get(normalize_proxy_url(proxy), default_slots),
+                "inUse": 0,
+                "inCooldown": proxy_in_cooldown(normalize_proxy_url(proxy)),
+            }
+            for proxy in resolved
+        ]
+    proxy_lanes = [
+        {
+            **lane,
+            "proxyUrl": redact_proxy_url(lane["proxyUrl"]) or lane["proxyUrl"],
+        }
+        for lane in lane_snapshot
+    ]
+    redacted_overrides = {
+        redact_proxy_url(url) or url: slots
+        for url, slots in overrides.items()
+    }
     tor_enabled = bool(network.get("torEnabled")) or settings.TOR_ENABLED
     tor_rotation_threshold = int(
         network.get("torRotationThreshold") or settings.NETWORK_TOR_ROTATION_THRESHOLD
@@ -89,6 +122,10 @@ def _network_runtime_payload(
         "fetchRetries": settings.NETWORK_FETCH_RETRIES,
         "fetchInitialDelayMs": settings.NETWORK_FETCH_INITIAL_DELAY_MS,
         "proxyCooldownMs": settings.NETWORK_PROXY_COOLDOWN_MS,
+        "proxyDefaultConcurrency": default_slots,
+        "proxyConcurrencyOverrides": redacted_overrides,
+        "effectiveProxyCapacity": effective_capacity,
+        "proxyLanes": proxy_lanes,
         "telegramApiRetries": settings.TELEGRAM_API_RETRIES,
         "telegramApiInitialDelayMs": settings.TELEGRAM_API_INITIAL_DELAY_MS,
     }
@@ -148,9 +185,17 @@ def build_runtime_config(
         sync_settings, retention_settings, now_ms=now
     )
     sync_payload = _sync_runtime_payload(sync_settings)
-    allowed_concurrency = sync_payload["syncConcurrency"]
+    network_payload = _network_runtime_payload(session, user_id)
+    configured_concurrency = sync_payload["syncConcurrency"]
+    effective_capacity = network_payload.get("effectiveProxyCapacity")
+    allowed_concurrency = (
+        min(configured_concurrency, effective_capacity)
+        if effective_capacity
+        else configured_concurrency
+    )
     active_sync_job = get_active_sync_job_summary(
-        allowed_concurrency=allowed_concurrency
+        allowed_concurrency=allowed_concurrency,
+        effective_proxy_capacity=effective_capacity,
     )
 
     return {
@@ -177,7 +222,7 @@ def build_runtime_config(
                 or settings.RETENTION_LOG_DAYS_DEFAULT
             ),
         },
-        "network": _network_runtime_payload(session, user_id),
+        "network": network_payload,
         "jobs": _jobs_runtime_payload(session),
         "constants": _constants_payload(),
         "activeSyncJob": active_sync_job,

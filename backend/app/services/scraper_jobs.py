@@ -276,7 +276,7 @@ def has_active_sync_job() -> bool:
 
 
 def get_active_sync_job_summary(
-    *, allowed_concurrency: int
+    *, allowed_concurrency: int, effective_proxy_capacity: int | None = None
 ) -> dict[str, Any] | None:
     """Snapshot of the in-flight sync job for runtime config / diagnostics."""
     for job in _active_jobs.values():
@@ -297,6 +297,7 @@ def get_active_sync_job_summary(
             "pendingChannels": pending_channels,
             "allowedConcurrency": allowed_concurrency,
             "concurrencyInUse": min(running_channels, allowed_concurrency),
+            "effectiveProxyCapacity": effective_proxy_capacity,
         }
     return None
 
