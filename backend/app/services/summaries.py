@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import uuid
 from datetime import datetime
 from typing import Any
 
@@ -36,7 +37,7 @@ def upsert_summary(
     summary_id: str,
     body: dict[str, Any],
     *,
-    user_id,
+    user_id: uuid.UUID | None,
 ) -> dict[str, Any]:
     summary = session.get(Summary, summary_id)
     known = {
@@ -95,9 +96,7 @@ def upsert_summary(
             post_count=body.get("postCount", body.get("post_count")),
             timestamp=body.get("timestamp", 0),
             extra={
-                key: value
-                for key, value in body.items()
-                if to_snake(key) not in known
+                key: value for key, value in body.items() if to_snake(key) not in known
             },
         )
     session.add(summary)

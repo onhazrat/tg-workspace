@@ -18,7 +18,7 @@ class LLMProvider(Protocol):
         system_instruction: str | None = None,
     ) -> CompletionResult: ...
 
-    async def stream(
+    def stream(
         self,
         prompt: str,
         *,

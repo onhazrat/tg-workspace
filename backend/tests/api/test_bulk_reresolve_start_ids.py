@@ -52,9 +52,7 @@ def test_bulk_reset_sync_requires_confirm(client: TestClient, tg_test_channel) -
     assert r.status_code == 400
 
 
-def test_bulk_reset_sync_queues_job(
-    client: TestClient, tg_test_channel
-) -> None:
+def test_bulk_reset_sync_queues_job(client: TestClient, tg_test_channel) -> None:
     clear_jobs_for_tests()
     headers = _auth(client)
     tg_test_channel("bulk-reset-ch-2", start_id=100, start_time=1_700_000_000_000)
@@ -83,7 +81,11 @@ def test_bulk_reset_sync_queues_job(
         patch(
             "app.services.sync_orchestrator.scrape_channel_page",
             new_callable=AsyncMock,
-            return_value={"posts": [], "latestId": 100, "channelName": "bulk-reset-ch-2"},
+            return_value={
+                "posts": [],
+                "latestId": 100,
+                "channelName": "bulk-reset-ch-2",
+            },
         ),
     ):
         mock_task.return_value = None

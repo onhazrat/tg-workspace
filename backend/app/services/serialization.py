@@ -1,8 +1,23 @@
-"""Camel/snake normalization for TG API payloads."""
+"""Camel/snake normalization and TG API response serializers."""
 
 from __future__ import annotations
 
+import uuid
 from typing import Any
+
+from app.models_tg import (
+    BotCredential,
+    Channel,
+    ChatDestination,
+    EmbeddingLog,
+    LLMLog,
+    NetworkLog,
+    Post,
+    PostEmbedding,
+    PostTranslation,
+    PublishLog,
+    SyncLog,
+)
 
 _CAMEL_OVERRIDES = {
     "display_name": "displayName",
@@ -58,5 +73,129 @@ def to_snake(key: str) -> str:
     return "".join(out)
 
 
+def to_camel(key: str) -> str:
+    if key in _CAMEL_OVERRIDES:
+        return _CAMEL_OVERRIDES[key]
+    parts = key.split("_")
+    return parts[0] + "".join(p.capitalize() for p in parts[1:])
+
+
 def normalize_body(body: dict[str, Any]) -> dict[str, Any]:
     return {to_snake(k): v for k, v in body.items()}
+
+
+def model_to_camel(row: Any, *, skip: frozenset[str] = frozenset()) -> dict[str, Any]:
+    data = row.model_dump()
+    result: dict[str, Any] = {}
+    for key, value in data.items():
+        if key in skip or key in ("id", "user_id", "updated_at"):
+            continue
+        camel = to_camel(key)
+        if isinstance(value, uuid.UUID):
+            value = str(value)
+        result[camel] = value
+    return result
+
+
+def channel_to_camel(ch: Channel) -> dict[str, Any]:
+    return {
+        "id": ch.id,
+        "name": ch.name,
+        "displayName": ch.display_name,
+        "photoUrl": ch.photo_url,
+        "bio": ch.bio,
+        "subscribers": ch.subscribers,
+        "photos": ch.photos,
+        "videos": ch.videos,
+        "files": ch.files,
+        "links": ch.links,
+        "startId": ch.start_id,
+        "startTime": ch.start_time,
+        "tags": ch.tags,
+        "lastUpdated": ch.last_updated,
+        "isFrozen": ch.is_frozen,
+        "isUnavailableOnWebView": ch.is_unavailable_on_web_view,
+        "autoFollowForwarded": ch.auto_follow_forwarded,
+        "language": ch.language,
+        "followedAt": ch.followed_at,
+        "discoveredVia": ch.discovered_via,
+        "historyCompleteToCutoff": ch.history_complete_to_cutoff,
+        "anchorPostId": ch.anchor_post_id,
+        "oldestStoredPostTimestamp": ch.oldest_stored_post_timestamp,
+    }
+
+
+def post_to_camel(p: Post) -> dict[str, Any]:
+    return {
+        "id": p.post_id,
+        "channelName": p.channel_name,
+        "text": p.text,
+        "date": p.date,
+        "timestamp": p.timestamp,
+        "forwardedFrom": p.forwarded_from,
+        "forwardedFromName": p.forwarded_from_name,
+        "isAnchor": p.is_anchor,
+        "retrievedAt": p.retrieved_at,
+        "retrievalJobId": p.retrieval_job_id,
+        "retrievalPass": p.retrieval_pass,
+        "retrievalSource": p.retrieval_source,
+    }
+
+
+def bot_to_camel(b: BotCredential) -> dict[str, Any]:
+    return {
+        "id": b.id,
+        "name": b.name,
+        "hasToken": bool(b.token_encrypted),
+        "username": b.username,
+        "photoUrl": b.photo_url,
+        "lastValidated": b.last_validated,
+    }
+
+
+def chat_dest_to_camel(d: ChatDestination) -> dict[str, Any]:
+    return {"id": d.id, "name": d.name, "chatId": d.chat_id}
+
+
+def embedding_to_camel(e: PostEmbedding) -> dict[str, Any]:
+    return {
+        "id": e.id,
+        "channelName": e.channel_name,
+        "postId": e.post_id,
+        "vector": e.vector,
+        "text": e.text,
+        "provider": e.provider,
+        "model": e.model,
+        "dimensions": e.dimensions,
+    }
+
+
+def translation_to_camel(t: PostTranslation) -> dict[str, Any]:
+    return {
+        "id": t.id,
+        "channelName": t.channel_name,
+        "postId": t.post_id,
+        "language": t.language,
+        "translatedText": t.translated_text,
+        "timestamp": t.timestamp,
+    }
+
+
+def publish_log_to_camel(log: PublishLog) -> dict[str, Any]:
+    return {"id": log.id, **model_to_camel(log)}
+
+
+def sync_log_to_camel(log: SyncLog) -> dict[str, Any]:
+    return {"id": log.id, **model_to_camel(log)}
+
+
+def llm_log_to_camel(log: LLMLog) -> dict[str, Any]:
+    return {"id": log.id, **model_to_camel(log)}
+
+
+def embedding_log_to_camel(log: EmbeddingLog) -> dict[str, Any]:
+    return {"id": log.id, **model_to_camel(log)}
+
+
+def network_log_to_camel(log: NetworkLog) -> dict[str, Any]:
+    return {"id": log.id, **model_to_camel(log)}

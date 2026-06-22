@@ -4,21 +4,24 @@
 
 ## Purpose
 
-Self-hosted Telegram channel summarizer. Migrated from browser-heavy `TG-Summarizer/` (React + Express + IndexedDB) to a **FastAPI + React monorepo** with scraping, scheduling, AI, and PostgreSQL on the server. **Migration Phases 0–7 complete (2026-06-08).** **Mode A remediation** largely complete through 2026-06-09 — see [REMEDIATION-PLAN.md](docs/migration/REMEDIATION-PLAN.md). Run commands: [README.md](README.md), [development.md](development.md).
+Self-hosted Telegram channel summarizer. Migrated from browser-heavy `TG-Summarizer/` (React + Express + IndexedDB) to a **FastAPI + React monorepo** with scraping, scheduling, AI, and PostgreSQL on the server. **Migration Phases 0–7 complete (2026-06-08).** **Mode A remediation** largely complete through 2026-06-09 — see [REMEDIATION-PLAN.md](docs/migration/REMEDIATION-PLAN.md). **Pre-feature codebase cleanup complete (2026-06-22)** — all 17 todos in [pre-feature cleanup plan](.cursor/plans/pre-feature_codebase_cleanup_77a87231.plan.md). Run commands: [README.md](README.md), [development.md](development.md).
 
 ## Architecture
 
-- **`backend/`** — FastAPI (`app/main.py`), SQLModel (`app/models_tg.py`), Alembic, services (`scraper.py`, `sync_orchestrator.py`, `proxy_pool.py`, `network_settings.py`, `summaries.py`, `embeddings.py`, `bulk_channels.py`, `post_sync_state.py`, `runtime_config.py`, `operator.py`, …), APScheduler jobs (`app/jobs/`), pluggable AI (`app/ai/`, Gemini first), shared prompts (`app/prompts/summary.py`).
+- **`backend/`** — FastAPI (`app/main.py`), SQLModel (`app/models_tg.py`), Alembic, services (`scraper.py`, `sync_orchestrator.py`, `proxy_pool.py`, `network_settings.py`, `summaries.py`, `embeddings.py`, `bulk_channels.py`, `post_sync_state.py`, `runtime_config.py`, `operator.py`, `credentials.py`, `data_import_export.py`, `data_vectors.py`, `posts.py`, …), APScheduler jobs (`app/jobs/`), pluggable AI (`app/ai/`, Gemini first), shared prompts (`app/prompts/summary.py`).
 - **`frontend/`** — React 19 + Vite + TanStack Router/Query; dual-route UI:
   - **`/_tg/summarizer`** — full-screen TG app (`App.tsx` + `TgProviders`)
   - **`/_layout/*`** — template admin shell (`/`, `/items`, `/admin`, `/settings`)
-- **API clients (ADR-006):** hand-written `frontend/src/api/` (summarizer); generated `frontend/src/client/` (admin/auth). Regenerate: `bash scripts/generate-client.sh`.
+- **API clients (ADR-006):** hand-written `frontend/src/api/` (summarizer); generated `frontend/src/client/` (admin/auth). Regenerate: `bash scripts/generate-client.sh` (uses `ENVIRONMENT=production` — no legacy routes in committed SDK).
 - **Data layer (frontend):** `repository.ts` API-first → `cache.ts` (IndexedDB). **`db.ts` removed** (was deprecated re-export).
+- **Data API routes:** `backend/app/api/routes/data.py` (~565 lines, down from ~1,222). Handlers thin; business logic in services. Shared serializers in `serialization.py`; request bodies in `schemas/data.py`.
 - **Tunables:** `backend/app/core/config.py` (`Settings`) + `frontend/src/lib/env.ts` (`VITE_*`); documented in `.env.example`.
 - **Proxy lane pool (`proxy_pool.py`):** per-proxy `asyncio.Semaphore` + reused `httpx.AsyncClient` (`build_lane_client`, limits aligned to slots). Least-loaded dispatch; cooldown proxies skipped. All proxied `fetch_with_retry` gated through pool; **direct** and **`test_proxy`** bypass pool. Wired in sync, scrape, publish, auto-summary.
 - **`TG-Summarizer/`** — Original reference; keep indefinitely; not deployed (still has legacy global auto-follow code).
 - **`docs/ideas-log/`** — Backlog for deferred product/engineering ideas (`IDEA-NNN` ids, detail files under `ideas/`). Index: [docs/README.md](docs/README.md). Master table: [IDEAS-LOG.md](docs/ideas-log/IDEAS-LOG.md).
+- **`_template_tmp/`** — Local clone of [Full Stack FastAPI Template](https://github.com/fastapi/full-stack-fastapi-template); reference for tooling conventions (prek, Biome, zizmor, typos).
 - **uv workspace** — `.venv` at repo root; **bun** for frontend.
+- **Quality gates (template-aligned, 2026-06-22):** `.pre-commit-config.yaml` (ruff, mypy, ty, Biome, typos, zizmor, `generate-frontend-sdk` hook). CI: `.github/workflows/pre-commit.yml` (prek on PRs), `zizmor.yml`, `playwright.yml`, `test-backend.yml`. Local: `uv run prek run --all-files`, `bash scripts/lint.sh`, `bun run lint` (Biome). **Vitest removed** — Playwright only (`frontend/tests/summarizer.spec.ts`).
 - **TLS / Traefik:** `compose.traefik.yml` — shared reverse proxy; Let's Encrypt **DNS-01** via Cloudflare (`CF_DNS_API_TOKEN`). App services in `compose.yml` expose `api.`, `dashboard.`, `adminer.` under `${DOMAIN}` with `certresolver=le`. See [deployment.md](deployment.md).
 - **Local Docker:** `compose.override.yml` adds HTTP-only `proxy` (port 80, no ACME). `docker compose watch` auto-merges override → **no HTTPS**.
 
@@ -66,7 +69,7 @@ Self-hosted Telegram channel summarizer. Migrated from browser-heavy `TG-Summari
 
 ## Decisions (stable)
 
-Locked [DECISIONS.md](docs/migration/DECISIONS.md) + **Mode A hardened single-operator (2026-06-09)** + **backward sync (2026-06-10)** + **per-channel auto-follow (2026-06-10)** + **Cloudflare DNS TLS (2026-06-16)** + **proxy-bound worker pool (2026-06-22, IDEA-003)** + **external AI summary workflow (2026-06-22)**:
+Locked [DECISIONS.md](docs/migration/DECISIONS.md) + **Mode A hardened single-operator (2026-06-09)** + **backward sync (2026-06-10)** + **per-channel auto-follow (2026-06-10)** + **Cloudflare DNS TLS (2026-06-16)** + **proxy-bound worker pool (2026-06-22, IDEA-003)** + **external AI summary workflow (2026-06-22)** + **template tooling alignment (2026-06-22)**:
 
 1. **Single-operator (Mode A)** — Production: `API_KEY`, `TOKEN_ENCRYPTION_KEY`, strong `SECRET_KEY`, `USERS_OPEN_REGISTRATION=false`. Reads unscoped; `user_id` columns are forward-compatible metadata. Mode B multi-user deferred.
 2. **Auth** — JWT + optional `X-API-Key`; fail-closed on sensitive routes in non-local.
@@ -83,7 +86,8 @@ Locked [DECISIONS.md](docs/migration/DECISIONS.md) + **Mode A hardened single-op
 13. **Auto-follow forwarded** — `Channel.auto_follow_forwarded` (DB/API `autoFollowForwarded`); decided per source channel during sync. **Removed** global `sync.autoFollowForwarded` from defaults, runtime-config, and Settings UI. Migration: all existing channels `false` (user choice; no copy from old global).
 14. **Let's Encrypt via Cloudflare DNS-01** — `compose.traefik.yml` uses `dnschallenge.provider=cloudflare` + `CF_DNS_API_TOKEN` (Zone:Read + DNS:Edit). **Rejected TLS-01** (breaks behind orange-cloud proxy). DNS challenge does not require the server to be publicly reachable on :443.
 15. **Proxy-bound worker pool** — Per-proxy lane semaphores + reused httpx clients gate proxied HTTP; least-loaded dispatch; `syncConcurrency` capped by pool capacity when proxies active. `test_proxy` and direct fetches bypass pool. Detail: [IDEA-003](docs/ideas-log/ideas/IDEA-003-proxy-bound-worker-pool.md).
-16. **External AI summary workflow** — `POST /api/v1/ai/summary/prompt` returns server-built prompt (`app/prompts/summary.py`). Copy Prompt creates pending history entry; paste completes **that item** via modal. Optional external model name; default display **External**. No `saveLLMLog` for pasted completions.
+16. **External AI summary workflow** — `POST /api/v1/ai/summary/prompt` returns server-built prompt (`app/prompts/summary.py`). Copy Prompt creates pending history entry; paste completes **that item** via modal. Optional external model name; default display **External**. No `saveLLMLog` for pasted completions. Tested: `backend/tests/api/test_ai_summary.py`.
+17. **Template tooling (pre-feature cleanup)** — Align with Full Stack FastAPI Template (`_template_tmp/`): prek/pre-commit at repo root (not separate `lint.yml` CI), Biome frontend lint, zizmor workflow + hook, `[tool.typos]` in root `pyproject.toml`. OpenAPI/client regen excludes legacy routes (`ENVIRONMENT=production` in `generate-client.sh`). **Vitest removed**; E2E via Playwright only. `data.py` decomposed into services/schemas/serialization; optional future split to ~300 lines if handlers still feel heavy.
 
 ### Explicitly rejected / deferred
 
@@ -101,6 +105,7 @@ Locked [DECISIONS.md](docs/migration/DECISIONS.md) + **Mode A hardened single-op
 - **Overwrite current summary on paste** — paste updates the pending entry in place, not the loaded summary.
 - **One-click clipboard paste** without review modal.
 - **In-app `selectedModel` dropdown** for pasted summary attribution (optional free-text field instead).
+- **Separate `lint.yml` CI workflow** — pre-commit/prek workflow covers backend + frontend (template pattern).
 
 ## User preferences
 
@@ -113,12 +118,14 @@ Locked [DECISIONS.md](docs/migration/DECISIONS.md) + **Mode A hardened single-op
 - **Auto-follow migration:** existing channels default off; enable per channel as needed.
 - **Single root `.env`** for Traefik + app when both compose files run from repo root; no separate Traefik env file unless split deploy layout.
 - **External AI:** prefer explicit user review before saving pasted responses (modal, not one-click).
+- **Tooling:** follow Full Stack FastAPI Template conventions where possible; document TG-specific deviations (legacy OpenAPI exclusion, dual API clients).
 
 ## Environment & fixes
 
 - **Native dev:** `uv sync` → `cd backend && uv run alembic upgrade head` (on `app`) → uvicorn :8000; `bun run dev` :5173. **`POSTGRES_DB=app`** for API; never point dev server at `app_test`.
+- **Pre-commit:** `cd backend && uv run prek install -f`; run all hooks: `uv run prek run --all-files`. PR CI runs same via `pre-commit.yml`.
 - **`relation "user" does not exist`** — run Alembic on `app` (empty DB volume).
-- **pytest:** `cd backend && uv run pytest tests/ -q` (uses `app_test`).
+- **pytest:** `cd backend && uv run pytest tests/ -q` (uses `app_test`). Session reported **196 passed** after cleanup.
 - **Bootstrap superuser:** `FIRST_SUPERUSER` / `FIRST_SUPERUSER_PASSWORD` in `.env`; auto-created on lifespan.
 - **`GEMINI_API_KEY`** — required for AI/embeddings/RAG.
 - **Operator data fix** — `uv run python backend/scripts/backfill_user_id.py --reassign-all` after migration/import.
@@ -127,6 +134,7 @@ Locked [DECISIONS.md](docs/migration/DECISIONS.md) + **Mode A hardened single-op
 - **Traefik env (`.env.example` Traefik section):** `DOMAIN`, `CF_DNS_API_TOKEN`, `EMAIL`, `USERNAME`, `HASHED_PASSWORD`. **`HASHED_PASSWORD`** must be a pre-computed `openssl passwd -apr1` hash; escape `$` as `$$` in `.env` for Docker Compose. **One canonical `DOMAIN`** — duplicate keys in `.env` cause silent wrong host routing.
 - **Local prod-like HTTPS:** `docker network create traefik-public` (once), then `docker compose -f compose.yml -f compose.traefik.yml up -d` — **not** `docker compose watch` (override = HTTP-only). Set `FRONTEND_HOST` and `BACKEND_CORS_ORIGINS` to `https://dashboard.${DOMAIN}` / `https://api.${DOMAIN}`. `/etc/hosts` or DNS must resolve subdomains to the machine.
 - **ACME retry after failure:** delete stale `_acme-challenge.*` TXT records in Cloudflare, then `docker compose … restart traefik`. Until LE succeeds, Traefik serves its **default self-signed cert** (browser warning).
+- **Bulk re-backfill / auto-follow docs:** `development.md` updated — `bulk-reset-sync` API, per-channel `autoFollowForwarded` on ChannelCard; `bulk_reresolve_start_ids.py` deprecated.
 
 ### Maintenance scripts (`backend/scripts/`)
 
@@ -142,23 +150,24 @@ Locked [DECISIONS.md](docs/migration/DECISIONS.md) + **Mode A hardened single-op
 - **Never commit `.env`** or expose API keys.
 - **Single scheduler instance** — no multi-replica without coordination.
 - **`concurrencyInUse` vs `allowedConcurrency`:** `allowedConcurrency` = configured semaphore (may be pool-capped); `concurrencyInUse` = channels in `running` status now (snapshot). Large jobs (2000+ channels) throttle via sync `touch_job` persisting full channel JSON, blocking ORM in async, proxy latency.
-- **DB engine** (`app/core/db.py`) uses default SQLAlchemy pool (no custom `pool_size`); long-held `Session` per channel during sync may limit throughput.
+- **DB engine** (`app/core/db.py`) uses default SQLAlchemy pool (no custom `pool_size`); sync orchestrator DB offload audit done in cleanup — remaining `Session(engine)` blocks classified; further pool tuning deferred unless profiling shows need.
 - **Proxies** — lane pool default 1 slot/proxy; raising slots without enough proxies still caps at pool sum; cooldown excludes lane from acquire.
 - **AppSetting `jobs` row** overrides env job defaults once saved in UI.
 - **Auto-follow** can explode channel count; only channels with `autoFollowForwarded` enabled discover forwards; auto-followed channels get DB row only (no automatic first sync queued).
-- **`development.md`** — bulk-reresolve and global auto-follow Settings instructions may be stale; use per-channel toggle on ChannelCard and **bulk-reset-sync**.
+- **`data.py`** still above ~300-line aspirational target (~565 lines); optional further domain splits if adding heavy data API features.
 - **`docker compose watch`** — HTTP-only Traefik proxy; no port 443, no Let's Encrypt.
 
 ## Out of scope / roadmap
 
 - Mode B multi-user tenancy.
 - pgvector, Celery/Redis.
-- Provider flattening (≤4 React contexts), Playwright in CI, full `data.py` thin-handler refactor.
+- React context flattening (8 → 4 contexts).
+- Optional further `data.py` route split (~300 lines).
 - Hover translation server-side (deferred).
 - Sync job chunking / lighter SSE for 2000+ channel jobs.
+- Template workflows not yet adopted: `smokeshow.yml` coverage badge, `guard-dependencies.yml`.
 - **Ideas backlog** — [IDEAS-LOG.md](docs/ideas-log/IDEAS-LOG.md): [IDEA-001](docs/ideas-log/ideas/IDEA-001-command-palette.md) command palette; [IDEA-002](docs/ideas-log/ideas/IDEA-002-tanstack-devtools.md) TanStack devtools (dev-only).
 
 ## Session log
 
-- **2026-06-22** — IDEA-003 proxy-bound worker pool shipped (per-proxy lanes, settings, runtime-config, tests).
-- **2026-06-22** — External AI workflow: Copy Prompt + pending history + per-item paste modal; shared `app/prompts/summary.py`.
+- **2026-06-22** — Pre-feature cleanup complete: template tooling (prek, Biome, zizmor, typos), OpenAPI regen, `data.py` decomposition, legacy docs, sync DB audit, Vitest removal, Playwright Copy Prompt spec, `development.md` fixes, proxy-bound plan archived.

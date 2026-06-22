@@ -1,150 +1,158 @@
-import { useCallback, useEffect, useState } from 'react';
-import { driver } from 'driver.js';
-import 'driver.js/dist/driver.css';
-import { useData } from '../contexts/DataContext';
-import { useUI } from '../contexts/UIContext';
+import { driver } from "driver.js"
+import { useCallback, useEffect, useState } from "react"
+import "driver.js/dist/driver.css"
+import { useData } from "../contexts/DataContext"
+import { useUI } from "../contexts/UIContext"
 
 export const useGuidedTour = () => {
-  const { channels } = useData();
-  const { setActiveTab } = useUI();
+  const { channels } = useData()
+  const { setActiveTab } = useUI()
   const [hasSeenTour, setHasSeenTour] = useState(() => {
-    if (typeof window !== 'undefined') {
-      return localStorage.getItem('hasSeenTour') === 'true';
+    if (typeof window !== "undefined") {
+      return localStorage.getItem("hasSeenTour") === "true"
     }
-    return false;
-  });
+    return false
+  })
 
   const startTour = useCallback(() => {
     const driverObj = driver({
       showProgress: true,
       animate: true,
       allowClose: true,
-      doneBtnText: 'Finish',
-      nextBtnText: 'Next',
-      prevBtnText: 'Previous',
-      onPopoverRender: (popover, { config, state }) => {
+      doneBtnText: "Finish",
+      nextBtnText: "Next",
+      prevBtnText: "Previous",
+      onPopoverRender: (_popover, _options) => {
         // Optional: Custom styling or logic when popover renders
       },
       onDestroyStarted: () => {
         if (!hasSeenTour) {
-          localStorage.setItem('hasSeenTour', 'true');
-          setHasSeenTour(true);
+          localStorage.setItem("hasSeenTour", "true")
+          setHasSeenTour(true)
         }
-        driverObj.destroy();
+        driverObj.destroy()
       },
       steps: [
         {
-          element: '#tour-add-channel',
+          element: "#tour-add-channel",
           onHighlightStarted: () => {
-            setActiveTab('channels');
+            setActiveTab("channels")
           },
           popover: {
-            title: 'Add Channels',
-            description: 'Start here! Type a Telegram channel username (e.g., @telegram) and hit Enter to start tracking it.',
-            side: 'bottom',
-            align: 'start'
-          }
+            title: "Add Channels",
+            description:
+              "Start here! Type a Telegram channel username (e.g., @telegram) and hit Enter to start tracking it.",
+            side: "bottom",
+            align: "start",
+          },
         },
         {
-          element: '#tour-channel-grid',
+          element: "#tour-channel-grid",
           onHighlightStarted: () => {
-            setActiveTab('channels');
+            setActiveTab("channels")
           },
           popover: {
-            title: 'Manage Channels',
-            description: 'Your tracked channels appear here. Click on channels to select them for reading, summarizing, or chatting. The app automatically fetches their latest posts.',
-            side: 'top',
-            align: 'center'
-          }
+            title: "Manage Channels",
+            description:
+              "Your tracked channels appear here. Click on channels to select them for reading, summarizing, or chatting. The app automatically fetches their latest posts.",
+            side: "top",
+            align: "center",
+          },
         },
         {
-          element: '#tour-tab-posts',
+          element: "#tour-tab-posts",
           onHighlightStarted: () => {
-            setActiveTab('posts');
+            setActiveTab("posts")
           },
           popover: {
-            title: 'Read Posts',
-            description: 'View raw posts from your selected channels. You can set a time-range and apply filters here to narrow down exactly which posts you want to analyze.',
-            side: 'bottom',
-            align: 'center'
-          }
+            title: "Read Posts",
+            description:
+              "View raw posts from your selected channels. You can set a time-range and apply filters here to narrow down exactly which posts you want to analyze.",
+            side: "bottom",
+            align: "center",
+          },
         },
         {
-          element: '#tour-tab-summary',
+          element: "#tour-tab-summary",
           onHighlightStarted: () => {
-            setActiveTab('summary');
+            setActiveTab("summary")
           },
           popover: {
-            title: 'AI Summaries',
-            description: 'Generate intelligent, categorized summaries of the posts you\'ve selected and filtered using Google Gemini.',
-            side: 'bottom',
-            align: 'center'
-          }
+            title: "AI Summaries",
+            description:
+              "Generate intelligent, categorized summaries of the posts you've selected and filtered using Google Gemini.",
+            side: "bottom",
+            align: "center",
+          },
         },
         {
-          element: '#tour-tab-chat',
+          element: "#tour-tab-chat",
           onHighlightStarted: () => {
-            setActiveTab('chat');
+            setActiveTab("chat")
           },
           popover: {
-            title: 'Chat with Data',
-            description: 'Ask questions about your synced data. You can send all filtered posts directly to the AI, or use RAG to only send relevant posts (RAG requires enabling Embeddings in Advanced Settings).',
-            side: 'bottom',
-            align: 'center'
-          }
+            title: "Chat with Data",
+            description:
+              "Ask questions about your synced data. You can send all filtered posts directly to the AI, or use RAG to only send relevant posts (RAG requires enabling Embeddings in Advanced Settings).",
+            side: "bottom",
+            align: "center",
+          },
         },
         {
-          element: '#tour-tab-history',
+          element: "#tour-tab-history",
           onHighlightStarted: () => {
-            setActiveTab('history');
+            setActiveTab("history")
           },
           popover: {
-            title: 'History',
-            description: 'Selecting an item in history will automatically apply its channel selection and post-filtration. You can regenerate the summary via different settings or chat with those specific posts.',
-            side: 'bottom',
-            align: 'center'
-          }
+            title: "History",
+            description:
+              "Selecting an item in history will automatically apply its channel selection and post-filtration. You can regenerate the summary via different settings or chat with those specific posts.",
+            side: "bottom",
+            align: "center",
+          },
         },
         {
-          element: '#tour-tab-settings',
+          element: "#tour-tab-settings",
           onHighlightStarted: () => {
-            setActiveTab('settings');
+            setActiveTab("settings")
           },
           popover: {
-            title: 'Settings & Proxies',
-            description: 'Configure AI models, proxies, TOR, and advanced network settings here.',
-            side: 'bottom',
-            align: 'center'
-          }
+            title: "Settings & Proxies",
+            description:
+              "Configure AI models, proxies, TOR, and advanced network settings here.",
+            side: "bottom",
+            align: "center",
+          },
         },
         {
-          element: '#tour-help-button',
+          element: "#tour-help-button",
           popover: {
-            title: 'Revisit Tour',
-            description: 'Need a refresher? Click here anytime to replay this tour. Happy tracking!',
-            side: 'left',
-            align: 'center'
-          }
-        }
-      ]
-    });
+            title: "Revisit Tour",
+            description:
+              "Need a refresher? Click here anytime to replay this tour. Happy tracking!",
+            side: "left",
+            align: "center",
+          },
+        },
+      ],
+    })
 
-    setActiveTab('channels');
+    setActiveTab("channels")
     setTimeout(() => {
-      driverObj.drive();
-    }, 100);
-  }, [hasSeenTour, setActiveTab]);
+      driverObj.drive()
+    }, 100)
+  }, [hasSeenTour, setActiveTab])
 
   // Auto-start tour on first visit if no channels exist
   useEffect(() => {
     if (!hasSeenTour && channels.length === 0) {
       // Small delay to ensure UI is fully rendered
       const timer = setTimeout(() => {
-        startTour();
-      }, 500);
-      return () => clearTimeout(timer);
+        startTour()
+      }, 500)
+      return () => clearTimeout(timer)
     }
-  }, [hasSeenTour, channels.length, startTour]);
+  }, [hasSeenTour, channels.length, startTour])
 
-  return { startTour, hasSeenTour };
-};
+  return { startTour, hasSeenTour }
+}

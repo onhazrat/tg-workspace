@@ -22,17 +22,14 @@ def test_relative_mode_uses_configured_days() -> None:
             now_ms=NOW,
         )
         assert result == NOW - days * DAY_MS
-    assert (
-        compute_effective_global_start_time_ms(
-            {"globalStartTimeMode": "relative", "globalStartTimeValue": 7},
-            {"postRetentionDays": 0},
-            now_ms=NOW,
-        )
-        != compute_effective_global_start_time_ms(
-            {"globalStartTimeMode": "relative", "globalStartTimeValue": 14},
-            {"postRetentionDays": 0},
-            now_ms=NOW,
-        )
+    assert compute_effective_global_start_time_ms(
+        {"globalStartTimeMode": "relative", "globalStartTimeValue": 7},
+        {"postRetentionDays": 0},
+        now_ms=NOW,
+    ) != compute_effective_global_start_time_ms(
+        {"globalStartTimeMode": "relative", "globalStartTimeValue": 14},
+        {"postRetentionDays": 0},
+        now_ms=NOW,
     )
 
 

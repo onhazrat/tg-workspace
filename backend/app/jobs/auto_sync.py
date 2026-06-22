@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
-import asyncio
 import logging
 import time
+from typing import Any
+
 from sqlmodel import Session
 
 from app.core.config import settings
@@ -20,13 +21,13 @@ logger = logging.getLogger(__name__)
 CHECK_SOURCE = "Auto Sync (scheduler)"
 
 
-def _update_sync_state(session: Session, updates: dict) -> None:
+def _update_sync_state(session: Session, updates: dict[str, Any]) -> None:
     current = load_sync_settings(session)
     current.update(updates)
     save_setting(session, "sync", current)
 
 
-async def run_auto_sync() -> dict:
+async def run_auto_sync() -> dict[str, Any]:
     """Trigger sync for channels stale beyond configured interval."""
     with Session(engine) as session:
         sync_cfg = load_sync_settings(session)
@@ -38,26 +39,33 @@ async def run_auto_sync() -> dict:
         if pause_until and now < int(pause_until):
             return {"skipped": True, "reason": "paused", "pauseUntil": pause_until}
         if pause_until and now >= int(pause_until):
-            _update_sync_state(session, {"autoSyncPauseUntil": None, "consecutiveFailures": 0})
+            _update_sync_state(
+                session, {"autoSyncPauseUntil": None, "consecutiveFailures": 0}
+            )
 
         if has_active_sync_job():
             return {"skipped": True, "reason": "sync_job_active"}
 
         interval_min = int(
-            sync_cfg.get("autoSyncInterval") or settings.AUTO_SYNC_INTERVAL_MINUTES_DEFAULT
+            sync_cfg.get("autoSyncInterval")
+            or settings.AUTO_SYNC_INTERVAL_MINUTES_DEFAULT
         )
         interval_ms = interval_min * 60 * 1000
 
         net_row = get_network_setting_row(session)
-        owner_id = (net_row.user_id if net_row else None) or get_operator_user_id(session)
-        channels = select_operator_channels(session, operator_id=owner_id, unfrozen_only=True)
-        stale = [
-            ch
-            for ch in channels
-            if (now - (ch.last_updated or 0)) >= interval_ms
-        ]
+        owner_id = (net_row.user_id if net_row else None) or get_operator_user_id(
+            session
+        )
+        channels = select_operator_channels(
+            session, operator_id=owner_id, unfrozen_only=True
+        )
+        stale = [ch for ch in channels if (now - (ch.last_updated or 0)) >= interval_ms]
         if not stale:
-            return {"skipped": True, "reason": "no_stale_channels", "checked": len(channels)}
+            return {
+                "skipped": True,
+                "reason": "no_stale_channels",
+                "checked": len(channels),
+            }
 
         entries = [(ch.id, ch.name) for ch in stale]
         job = await create_job(
@@ -75,10 +83,12 @@ async def run_auto_sync() -> dict:
             if failures:
                 prev_failures = int(sync_cfg.get("consecutiveFailures") or 0)
                 next_failures = prev_failures + len(failures)
-                updates: dict = {"consecutiveFailures": next_failures}
+                updates: dict[str, Any] = {"consecutiveFailures": next_failures}
                 threshold = max(settings.AUTO_SYNC_FAILURE_THRESHOLD_MIN, len(channels))
                 if next_failures >= threshold:
-                    updates["autoSyncPauseUntil"] = now + settings.AUTO_SYNC_PAUSE_DURATION_MS
+                    updates["autoSyncPauseUntil"] = (
+                        now + settings.AUTO_SYNC_PAUSE_DURATION_MS
+                    )
                     logger.warning(
                         "Auto-sync paused for 10 minutes after %s consecutive failures",
                         next_failures,

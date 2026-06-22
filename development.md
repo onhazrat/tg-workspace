@@ -190,6 +190,17 @@ curl -X POST http://localhost:8000/api/v1/data/channels/bulk-reset-sync \
 
 **Auto-follow forwarded:** enable per channel on each **ChannelCard** (`autoFollowForwarded` toggle). There is no global Settings toggle. To clean up channels discovered via forwards: `uv run python backend/scripts/cleanup_auto_follow_channels.py --dry-run` then `--freeze` or `--delete` (add `--auto-follow-only` to limit scope).
 
+## Legacy API (`/api/*`)
+
+**Supported surface:** `/api/v1/*` only. Use hand-written `frontend/src/api/` for the summarizer and generated `frontend/src/client/` for the admin shell ([ADR-006](docs/migration/ADR-006-api-client.md)).
+
+- **Local dev:** `legacy.router` mounts `/api/*` aliases with `Deprecation` headers pointing to `/api/v1/*`.
+- **Production:** middleware returns **410 Gone** for any `/api/*` path (not under `/api/v1/`).
+- **OpenAPI client regen:** `scripts/generate-client.sh` sets `ENVIRONMENT=production` so committed `frontend/openapi.json` excludes legacy routes.
+- **`bulk-reresolve-start-ids`:** deprecated no-op; use `bulk-reset-sync` instead.
+
+The `TG-Summarizer/` reference tree may be absent from some clones; it is kept for parity reference, not deployment.
+
 ## Testing
 
 Backend pytest **always** uses a separate Postgres database (`app_test` by default). It never reads or writes the dev database (`app`).

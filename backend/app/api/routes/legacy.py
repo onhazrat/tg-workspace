@@ -1,4 +1,9 @@
-"""Legacy /api/* route aliases for backward compatibility during migration."""
+"""Legacy /api/* route aliases for backward compatibility during migration.
+
+DEPRECATED: Use /api/v1/* routes only. This router is mounted in non-production
+environments only; production returns 410 Gone for /api/* paths. Scheduled for
+removal after one release cycle once all clients migrate to /api/v1/*.
+"""
 
 import logging
 from typing import Any
@@ -32,31 +37,39 @@ async def legacy_test_proxy(
     body: TestProxyRequest,
     _current_user: CurrentUser,
     response: Response,
-) -> dict:
+) -> dict[str, Any]:
     _mark_deprecated(response)
     return await network.api_test_proxy(body, _current_user)
 
 
 @router.get("/proxy-health")
-def legacy_proxy_health(_current_user: CurrentUser, response: Response) -> dict:
+def legacy_proxy_health(
+    _current_user: CurrentUser, response: Response
+) -> dict[str, Any]:
     _mark_deprecated(response)
     return network.api_proxy_health(_current_user)
 
 
 @router.get("/tor-status")
-async def legacy_tor_status(_current_user: CurrentUser, response: Response) -> dict:
+async def legacy_tor_status(
+    _current_user: CurrentUser, response: Response
+) -> dict[str, Any]:
     _mark_deprecated(response)
     return await network.api_tor_status(_current_user)
 
 
 @router.get("/tor-ip")
-async def legacy_tor_ip(_current_user: CurrentUser, response: Response) -> dict:
+async def legacy_tor_ip(
+    _current_user: CurrentUser, response: Response
+) -> dict[str, Any]:
     _mark_deprecated(response)
     return await network.api_tor_ip(_current_user)
 
 
 @router.post("/tor-restart")
-async def legacy_tor_restart(_current_user: CurrentUser, response: Response) -> dict:
+async def legacy_tor_restart(
+    _current_user: CurrentUser, response: Response
+) -> dict[str, Any]:
     _mark_deprecated(response)
     return await network.api_tor_restart(_current_user)
 
@@ -66,7 +79,7 @@ async def legacy_tor_new_identity(
     body: TorNewIdentityRequest,
     _current_user: CurrentUser,
     response: Response,
-) -> dict:
+) -> dict[str, Any]:
     _mark_deprecated(response)
     return await network.api_tor_new_identity(body, _current_user)
 

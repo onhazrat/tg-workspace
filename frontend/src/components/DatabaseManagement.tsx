@@ -1,104 +1,136 @@
-import React, { useState } from "react";
-import { motion } from "motion/react";
-import { Database, Download, Upload, Trash2, Clock, Hash, LayoutGrid, RefreshCw, HardDrive, AlertCircle, Settings, Loader2, ShieldAlert, FileArchive, Search, Play, Activity } from "lucide-react";
-import { useData } from "../contexts/DataContext";
-import { useUI } from "../contexts/UIContext";
-import { useSettings } from "../contexts/SettingsContext";
-import { exportDBMetadata, getTableSizes, runQuery, clearTable } from "../lib/cache";
-import { importIndexedDBToServer } from "../lib/repository";
-import { toast } from "sonner";
-import { Modal } from "./ui/Modal";
-import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tg-tooltip";
-import { formatDateToLocalISO } from "../lib/utils";
-import { RelativeTime } from "./RelativeTime";
-import * as JSZip from "jszip";
+import * as JSZip from "jszip"
+import {
+  Activity,
+  AlertCircle,
+  Database,
+  Download,
+  HardDrive,
+  Loader2,
+  Play,
+  RefreshCw,
+  Search,
+  Trash2,
+  Upload,
+} from "lucide-react"
+import { motion } from "motion/react"
+import type React from "react"
+import { useState } from "react"
+import { toast } from "sonner"
+import { useData } from "../contexts/DataContext"
+import { useSettings } from "../contexts/SettingsContext"
+import {
+  clearTable,
+  exportDBMetadata,
+  getTableSizes,
+  runQuery,
+} from "../lib/cache"
+import { importIndexedDBToServer } from "../lib/repository"
+import { formatDateToLocalISO } from "../lib/utils"
+import { RelativeTime } from "./RelativeTime"
+import { Modal } from "./ui/Modal"
+import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tg-tooltip"
 
-console.log("JSZip loaded:", JSZip);
+console.log("JSZip loaded:", JSZip)
 
 export const DatabaseManagement: React.FC = () => {
-  const { dbStats, loadDBStats, loadChannels, loadHistory } = useData();
-  const { setActiveTab } = useUI();
-  const { postRetentionDays, setPostRetentionDays, logRetentionDays, setLogRetentionDays } = useSettings();
-  
-  const [isExporting, setIsExporting] = useState(false);
-  const [isImporting, setIsImporting] = useState(false);
-  const [isMigratingToServer, setIsMigratingToServer] = useState(false);
-  const [confirmModal, setConfirmModal] = useState<{ isOpen: boolean; title: string; message: string; onConfirm: () => void } | null>(null);
+  const { dbStats, loadDBStats, loadChannels, loadHistory } = useData()
+  const {
+    postRetentionDays,
+    setPostRetentionDays,
+    logRetentionDays,
+    setLogRetentionDays,
+  } = useSettings()
 
-  const [tableSizes, setTableSizes] = useState<{ name: string; size: number; count: number }[] | null>(() => {
-    const cached = localStorage.getItem('tableSizesCache');
+  const [isExporting, setIsExporting] = useState(false)
+  const [isImporting, setIsImporting] = useState(false)
+  const [isMigratingToServer, setIsMigratingToServer] = useState(false)
+  const [confirmModal, setConfirmModal] = useState<{
+    isOpen: boolean
+    title: string
+    message: string
+    onConfirm: () => void
+  } | null>(null)
+
+  const [tableSizes, setTableSizes] = useState<
+    { name: string; size: number; count: number }[] | null
+  >(() => {
+    const cached = localStorage.getItem("tableSizesCache")
     if (cached) {
       try {
-        return JSON.parse(cached);
-      } catch (e) {
-        return null;
+        return JSON.parse(cached)
+      } catch (_e) {
+        return null
       }
     }
-    return null;
-  });
-  const [tableSizesLastCalculated, setTableSizesLastCalculated] = useState<number | null>(() => {
-    const cached = localStorage.getItem('tableSizesLastCalculated');
-    return cached ? parseInt(cached, 10) : null;
-  });
-  const [selectedTablesForExport, setSelectedTablesForExport] = useState<Set<string>>(() => {
-    const cached = localStorage.getItem('tableSizesCache');
+    return null
+  })
+  const [tableSizesLastCalculated, setTableSizesLastCalculated] = useState<
+    number | null
+  >(() => {
+    const cached = localStorage.getItem("tableSizesLastCalculated")
+    return cached ? parseInt(cached, 10) : null
+  })
+  const [selectedTablesForExport, setSelectedTablesForExport] = useState<
+    Set<string>
+  >(() => {
+    const cached = localStorage.getItem("tableSizesCache")
     if (cached) {
       try {
-        const sizes = JSON.parse(cached);
-        return new Set(sizes.map((s: any) => s.name));
-      } catch (e) {
-        return new Set();
+        const sizes = JSON.parse(cached)
+        return new Set(sizes.map((s: any) => s.name))
+      } catch (_e) {
+        return new Set()
       }
     }
-    return new Set();
-  });
-  const [isCalculatingSizes, setIsCalculatingSizes] = useState(false);
-  const [selectedTable, setSelectedTable] = useState<string>("");
-  const [query, setQuery] = useState<string>("");
-  const [queryResults, setQueryResults] = useState<any[] | null>(null);
-  const [isQuerying, setIsQuerying] = useState(false);
-  const [queryError, setQueryError] = useState<string | null>(null);
+    return new Set()
+  })
+  const [isCalculatingSizes, setIsCalculatingSizes] = useState(false)
+  const [selectedTable, setSelectedTable] = useState<string>("")
+  const [query, setQuery] = useState<string>("")
+  const [queryResults, setQueryResults] = useState<any[] | null>(null)
+  const [isQuerying, setIsQuerying] = useState(false)
+  const [queryError, setQueryError] = useState<string | null>(null)
 
   const handleCalculateSizes = async () => {
-    setIsCalculatingSizes(true);
+    setIsCalculatingSizes(true)
     try {
-      const sizes = await getTableSizes();
-      setTableSizes(sizes);
-      setSelectedTablesForExport(new Set(sizes.map(s => s.name)));
-      const now = Date.now();
-      setTableSizesLastCalculated(now);
-      localStorage.setItem('tableSizesCache', JSON.stringify(sizes));
-      localStorage.setItem('tableSizesLastCalculated', now.toString());
+      const sizes = await getTableSizes()
+      setTableSizes(sizes)
+      setSelectedTablesForExport(new Set(sizes.map((s) => s.name)))
+      const now = Date.now()
+      setTableSizesLastCalculated(now)
+      localStorage.setItem("tableSizesCache", JSON.stringify(sizes))
+      localStorage.setItem("tableSizesLastCalculated", now.toString())
       if (sizes.length > 0 && !selectedTable) {
-        setSelectedTable(sizes[0].name);
+        setSelectedTable(sizes[0].name)
       }
     } catch (err) {
-      console.error("Failed to calculate sizes:", err);
-      toast.error("Failed to calculate table sizes");
+      console.error("Failed to calculate sizes:", err)
+      toast.error("Failed to calculate table sizes")
     } finally {
-      setIsCalculatingSizes(false);
+      setIsCalculatingSizes(false)
     }
-  };
+  }
 
   const handleRunQuery = async () => {
-    if (!selectedTable) return;
-    setIsQuerying(true);
-    setQueryError(null);
+    if (!selectedTable) return
+    setIsQuerying(true)
+    setQueryError(null)
     try {
-      const results = await runQuery(selectedTable, query);
-      setQueryResults(results);
+      const results = await runQuery(selectedTable, query)
+      setQueryResults(results)
     } catch (err: any) {
-      console.error("Query failed:", err);
-      setQueryError(err.message);
-      setQueryResults(null);
+      console.error("Query failed:", err)
+      setQueryError(err.message)
+      setQueryResults(null)
     } finally {
-      setIsQuerying(false);
+      setIsQuerying(false)
     }
-  };
+  }
 
   const handleRefreshStats = async () => {
-    await loadDBStats();
-  };
+    await loadDBStats()
+  }
 
   const handleMigrateToServer = () => {
     setConfirmModal({
@@ -108,133 +140,148 @@ export const DatabaseManagement: React.FC = () => {
         "This will export all IndexedDB data and upload it to the PostgreSQL backend. " +
         "Existing server data for matching records will be updated. Continue?",
       onConfirm: async () => {
-        setConfirmModal(null);
-        setIsMigratingToServer(true);
+        setConfirmModal(null)
+        setIsMigratingToServer(true)
         try {
-          const imported = await importIndexedDBToServer();
+          const imported = await importIndexedDBToServer()
           const summary = Object.entries(imported)
             .map(([k, v]) => `${k}: ${v}`)
-            .join(", ");
-          toast.success(`Server migration complete (${summary || "no records"})`);
-          await loadDBStats();
-          await loadChannels();
-          await loadHistory();
+            .join(", ")
+          toast.success(
+            `Server migration complete (${summary || "no records"})`,
+          )
+          await loadDBStats()
+          await loadChannels()
+          await loadHistory()
         } catch (err: unknown) {
-          console.error("Server migration failed:", err);
+          console.error("Server migration failed:", err)
           toast.error(
-            `Server migration failed: ${err instanceof Error ? err.message : String(err)}`
-          );
+            `Server migration failed: ${err instanceof Error ? err.message : String(err)}`,
+          )
         } finally {
-          setIsMigratingToServer(false);
+          setIsMigratingToServer(false)
         }
       },
-    });
-  };
-
+    })
+  }
 
   const handleExportDB = async () => {
     try {
-      let fileHandle;
-      let useOPFS = false;
+      let fileHandle
+      let useOPFS = false
       try {
         fileHandle = await (window as any).showSaveFilePicker({
-          suggestedName: `telegram-summarizer-db-${formatDateToLocalISO(new Date()).replace('T', '_').replace(/:/g, '-')}.jsonl`,
-          types: [{
-            description: 'JSON Lines File',
-            accept: { 'application/jsonl': ['.jsonl'] },
-          }],
-        });
+          suggestedName: `telegram-summarizer-db-${formatDateToLocalISO(new Date()).replace("T", "_").replace(/:/g, "-")}.jsonl`,
+          types: [
+            {
+              description: "JSON Lines File",
+              accept: { "application/jsonl": [".jsonl"] },
+            },
+          ],
+        })
       } catch (err: any) {
-        if (err.name === 'AbortError') return;
+        if (err.name === "AbortError") return
         // Fallback to OPFS if showSaveFilePicker is restricted (e.g., in iframe)
-        useOPFS = true;
+        useOPFS = true
       }
 
-      setIsExporting(true);
-      const metadata = await exportDBMetadata();
+      setIsExporting(true)
+      const metadata = await exportDBMetadata()
 
-      const worker = new Worker(new URL('../workers/dbWorker.ts', import.meta.url), { type: 'module' });
+      const worker = new Worker(
+        new URL("../workers/dbWorker.ts", import.meta.url),
+        { type: "module" },
+      )
 
       worker.onmessage = (e) => {
-        if (e.data.type === 'PROGRESS') {
-          toast.info(e.data.message, { id: 'export-progress' });
-        } else if (e.data.type === 'SUCCESS') {
+        if (e.data.type === "PROGRESS") {
+          toast.info(e.data.message, { id: "export-progress" })
+        } else if (e.data.type === "SUCCESS") {
           if (e.data.file) {
             // Download the file generated in OPFS
-            const url = URL.createObjectURL(e.data.file);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `telegram-summarizer-db-${formatDateToLocalISO(new Date()).replace('T', '_').replace(/:/g, '-')}.jsonl`;
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            URL.revokeObjectURL(url);
+            const url = URL.createObjectURL(e.data.file)
+            const a = document.createElement("a")
+            a.href = url
+            a.download = `telegram-summarizer-db-${formatDateToLocalISO(new Date()).replace("T", "_").replace(/:/g, "-")}.jsonl`
+            document.body.appendChild(a)
+            a.click()
+            document.body.removeChild(a)
+            URL.revokeObjectURL(url)
           }
-          toast.success("Database exported successfully", { id: 'export-progress' });
-          setIsExporting(false);
-          worker.terminate();
-        } else if (e.data.type === 'ERROR') {
-          toast.error(`Export failed: ${e.data.error}`, { id: 'export-progress' });
-          setIsExporting(false);
-          worker.terminate();
+          toast.success("Database exported successfully", {
+            id: "export-progress",
+          })
+          setIsExporting(false)
+          worker.terminate()
+        } else if (e.data.type === "ERROR") {
+          toast.error(`Export failed: ${e.data.error}`, {
+            id: "export-progress",
+          })
+          setIsExporting(false)
+          worker.terminate()
         }
-      };
+      }
 
-      worker.postMessage({ 
-        type: 'EXPORT', 
-        fileHandle, 
-        useOPFS, 
-        metadata, 
-        selectedTables: Array.from(selectedTablesForExport) 
-      });
+      worker.postMessage({
+        type: "EXPORT",
+        fileHandle,
+        useOPFS,
+        metadata,
+        selectedTables: Array.from(selectedTablesForExport),
+      })
     } catch (err: any) {
-      console.error("Export error:", err);
-      toast.error("Failed to start export");
-      setIsExporting(false);
+      console.error("Export error:", err)
+      toast.error("Failed to start export")
+      setIsExporting(false)
     }
-  };
+  }
 
   const handleImportDB = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+    const file = e.target.files?.[0]
+    if (!file) return
 
     try {
-      setIsImporting(true);
+      setIsImporting(true)
 
-      const worker = new Worker(new URL('../workers/dbWorker.ts', import.meta.url), { type: 'module' });
+      const worker = new Worker(
+        new URL("../workers/dbWorker.ts", import.meta.url),
+        { type: "module" },
+      )
 
       worker.onmessage = async (e) => {
-        if (e.data.type === 'PROGRESS') {
-          toast.info(e.data.message, { id: 'import-progress' });
-        } else if (e.data.type === 'METADATA') {
-          const meta = e.data.data;
-          if (meta && meta.localStorage) {
-            localStorage.clear();
+        if (e.data.type === "PROGRESS") {
+          toast.info(e.data.message, { id: "import-progress" })
+        } else if (e.data.type === "METADATA") {
+          const meta = e.data.data
+          if (meta?.localStorage) {
+            localStorage.clear()
             for (const [key, value] of Object.entries(meta.localStorage)) {
-              localStorage.setItem(key, value as string);
+              localStorage.setItem(key, value as string)
             }
           }
-        } else if (e.data.type === 'SUCCESS') {
-          toast.success(e.data.message, { id: 'import-progress' });
-          setIsImporting(false);
-          worker.terminate();
+        } else if (e.data.type === "SUCCESS") {
+          toast.success(e.data.message, { id: "import-progress" })
+          setIsImporting(false)
+          worker.terminate()
           setTimeout(() => {
-            window.location.reload();
-          }, 1500);
-        } else if (e.data.type === 'ERROR') {
-          toast.error(`Import failed: ${e.data.error}`, { id: 'import-progress' });
-          setIsImporting(false);
-          worker.terminate();
+            window.location.reload()
+          }, 1500)
+        } else if (e.data.type === "ERROR") {
+          toast.error(`Import failed: ${e.data.error}`, {
+            id: "import-progress",
+          })
+          setIsImporting(false)
+          worker.terminate()
         }
-      };
+      }
 
-      worker.postMessage({ type: 'IMPORT', file, clear: true });
+      worker.postMessage({ type: "IMPORT", file, clear: true })
     } catch (err: any) {
-      console.error("Import error:", err);
-      toast.error("Failed to start import");
-      setIsImporting(false);
+      console.error("Import error:", err)
+      toast.error("Failed to start import")
+      setIsImporting(false)
     }
-  };
+  }
 
   const handleClearTable = (tableName: string) => {
     setConfirmModal({
@@ -243,18 +290,18 @@ export const DatabaseManagement: React.FC = () => {
       message: `Are you sure you want to delete all entries from the ${tableName} table? This cannot be undone.`,
       onConfirm: async () => {
         try {
-          await clearTable(tableName);
-          await loadDBStats();
-          await handleCalculateSizes();
-          setConfirmModal(null);
-          toast.success(`Table ${tableName} cleared successfully`);
+          await clearTable(tableName)
+          await loadDBStats()
+          await handleCalculateSizes()
+          setConfirmModal(null)
+          toast.success(`Table ${tableName} cleared successfully`)
         } catch (err) {
-          console.error(`Failed to clear table ${tableName}:`, err);
-          toast.error(`Failed to clear table ${tableName}`);
+          console.error(`Failed to clear table ${tableName}:`, err)
+          toast.error(`Failed to clear table ${tableName}`)
         }
-      }
-    });
-  };
+      },
+    })
+  }
 
   return (
     <motion.div
@@ -276,6 +323,7 @@ export const DatabaseManagement: React.FC = () => {
           <Tooltip>
             <TooltipTrigger asChild>
               <button
+                type="button"
                 onClick={handleRefreshStats}
                 className="p-2 hover:bg-app-ink/5 rounded-full transition-colors opacity-60 hover:opacity-100"
               >
@@ -293,20 +341,34 @@ export const DatabaseManagement: React.FC = () => {
             <div>
               <div className="flex items-center gap-3 mb-6 opacity-40">
                 <Database size={16} />
-                <h4 className="text-[11px] uppercase font-bold tracking-widest">Records</h4>
+                <h4 className="text-[11px] uppercase font-bold tracking-widest">
+                  Records
+                </h4>
               </div>
               <div className="space-y-4">
                 <div className="flex justify-between items-center">
-                  <span className="text-[10px] uppercase opacity-50 tracking-widest">Total Posts</span>
-                  <span className="font-mono font-bold text-[12px]">{dbStats?.postCount?.toLocaleString() || 0}</span>
+                  <span className="text-[10px] uppercase opacity-50 tracking-widest">
+                    Total Posts
+                  </span>
+                  <span className="font-mono font-bold text-[12px]">
+                    {dbStats?.postCount?.toLocaleString() || 0}
+                  </span>
                 </div>
                 <div className="flex justify-between items-center">
-                  <span className="text-[10px] uppercase opacity-50 tracking-widest">Channels</span>
-                  <span className="font-mono font-bold text-[12px]">{dbStats?.channelCount?.toLocaleString() || 0}</span>
+                  <span className="text-[10px] uppercase opacity-50 tracking-widest">
+                    Channels
+                  </span>
+                  <span className="font-mono font-bold text-[12px]">
+                    {dbStats?.channelCount?.toLocaleString() || 0}
+                  </span>
                 </div>
                 <div className="flex justify-between items-center">
-                  <span className="text-[10px] uppercase opacity-50 tracking-widest">Summaries</span>
-                  <span className="font-mono font-bold text-[12px]">{dbStats?.summaryCount?.toLocaleString() || 0}</span>
+                  <span className="text-[10px] uppercase opacity-50 tracking-widest">
+                    Summaries
+                  </span>
+                  <span className="font-mono font-bold text-[12px]">
+                    {dbStats?.summaryCount?.toLocaleString() || 0}
+                  </span>
                 </div>
               </div>
             </div>
@@ -316,33 +378,42 @@ export const DatabaseManagement: React.FC = () => {
             <div>
               <div className="flex items-center gap-3 mb-6 opacity-40">
                 <HardDrive size={16} />
-                <h4 className="text-[11px] uppercase font-bold tracking-widest">Storage</h4>
+                <h4 className="text-[11px] uppercase font-bold tracking-widest">
+                  Storage
+                </h4>
               </div>
               <div className="space-y-4">
                 <div className="flex justify-between items-center">
-                  <span className="text-[10px] uppercase opacity-50 tracking-widest">Used</span>
+                  <span className="text-[10px] uppercase opacity-50 tracking-widest">
+                    Used
+                  </span>
                   <span className="font-mono font-bold text-[12px]">
-                    {dbStats?.storageEstimate?.usage 
-                      ? `${(dbStats.storageEstimate.usage / (1024 * 1024)).toFixed(2)} MB` 
+                    {dbStats?.storageEstimate?.usage
+                      ? `${(dbStats.storageEstimate.usage / (1024 * 1024)).toFixed(2)} MB`
                       : "Unknown"}
                   </span>
                 </div>
                 <div className="flex justify-between items-center">
-                  <span className="text-[10px] uppercase opacity-50 tracking-widest">Quota</span>
+                  <span className="text-[10px] uppercase opacity-50 tracking-widest">
+                    Quota
+                  </span>
                   <span className="font-mono font-bold text-[12px]">
-                    {dbStats?.storageEstimate?.quota 
-                      ? `${(dbStats.storageEstimate.quota / (1024 * 1024 * 1024)).toFixed(2)} GB` 
+                    {dbStats?.storageEstimate?.quota
+                      ? `${(dbStats.storageEstimate.quota / (1024 * 1024 * 1024)).toFixed(2)} GB`
                       : "Unknown"}
                   </span>
                 </div>
-                {dbStats?.storageEstimate?.usage && dbStats?.storageEstimate?.quota && (
-                  <div className="w-full h-1.5 bg-app-ink/5 rounded-full overflow-hidden mt-3">
-                    <div 
-                      className="h-full bg-app-ink/40" 
-                      style={{ width: `${(dbStats.storageEstimate.usage / dbStats.storageEstimate.quota) * 100}%` }}
-                    />
-                  </div>
-                )}
+                {dbStats?.storageEstimate?.usage &&
+                  dbStats?.storageEstimate?.quota && (
+                    <div className="w-full h-1.5 bg-app-ink/5 rounded-full overflow-hidden mt-3">
+                      <div
+                        className="h-full bg-app-ink/40"
+                        style={{
+                          width: `${(dbStats.storageEstimate.usage / dbStats.storageEstimate.quota) * 100}%`,
+                        }}
+                      />
+                    </div>
+                  )}
               </div>
             </div>
           </div>
@@ -351,20 +422,35 @@ export const DatabaseManagement: React.FC = () => {
             <div>
               <div className="flex items-center gap-3 mb-6 opacity-40">
                 <AlertCircle size={16} />
-                <h4 className="text-[11px] uppercase font-bold tracking-widest">Info</h4>
+                <h4 className="text-[11px] uppercase font-bold tracking-widest">
+                  Info
+                </h4>
               </div>
               <div className="space-y-4">
                 <div className="flex justify-between items-center">
-                  <span className="text-[10px] uppercase opacity-50 tracking-widest">DB Name</span>
-                  <span className="font-mono font-bold text-[10px] truncate max-w-[100px]" title="TelegramSummarizerDB">TelegramSummarizerDB</span>
+                  <span className="text-[10px] uppercase opacity-50 tracking-widest">
+                    DB Name
+                  </span>
+                  <span
+                    className="font-mono font-bold text-[10px] truncate max-w-[100px]"
+                    title="TelegramSummarizerDB"
+                  >
+                    TelegramSummarizerDB
+                  </span>
                 </div>
                 <div className="flex justify-between items-center">
-                  <span className="text-[10px] uppercase opacity-50 tracking-widest">Version</span>
+                  <span className="text-[10px] uppercase opacity-50 tracking-widest">
+                    Version
+                  </span>
                   <span className="font-mono font-bold text-[12px]">2</span>
                 </div>
                 <div className="flex justify-between items-center">
-                  <span className="text-[10px] uppercase opacity-50 tracking-widest">Persistence</span>
-                  <span className="font-mono font-bold text-[10px]">Persistent</span>
+                  <span className="text-[10px] uppercase opacity-50 tracking-widest">
+                    Persistence
+                  </span>
+                  <span className="font-mono font-bold text-[10px]">
+                    Persistent
+                  </span>
                 </div>
               </div>
             </div>
@@ -375,13 +461,17 @@ export const DatabaseManagement: React.FC = () => {
         <div className="bg-app-card border border-app-ink/10 p-6 shadow-sm mb-8">
           <div className="flex items-center gap-3 mb-4">
             <Upload size={18} className="opacity-40" />
-            <h4 className="text-[11px] uppercase font-bold tracking-widest">Server Migration</h4>
+            <h4 className="text-[11px] uppercase font-bold tracking-widest">
+              Server Migration
+            </h4>
           </div>
           <p className="text-[10px] opacity-50 italic serif mb-4">
-            One-time migration: upload your local IndexedDB data to the PostgreSQL backend.
-            Run this after logging in when moving from browser-only to the FastAPI stack.
+            One-time migration: upload your local IndexedDB data to the
+            PostgreSQL backend. Run this after logging in when moving from
+            browser-only to the FastAPI stack.
           </p>
           <button
+            type="button"
             onClick={handleMigrateToServer}
             disabled={isMigratingToServer}
             className="px-4 py-2 text-[10px] uppercase font-bold flex items-center gap-2 border border-app-ink/20 hover:bg-app-ink hover:text-app-bg transition-colors disabled:opacity-50"
@@ -399,18 +489,24 @@ export const DatabaseManagement: React.FC = () => {
         <div className="bg-app-card border border-app-ink/10 p-6 shadow-sm mb-8">
           <div className="flex items-center gap-3 mb-6">
             <Database size={18} className="opacity-40" />
-            <h4 className="text-[11px] uppercase font-bold tracking-widest">Data Retention</h4>
+            <h4 className="text-[11px] uppercase font-bold tracking-widest">
+              Data Retention
+            </h4>
           </div>
 
           <div className="space-y-6">
             <div className="space-y-4">
               <div className="flex items-center gap-2 opacity-60">
                 <Database size={14} />
-                <span className="text-[10px] font-bold uppercase tracking-tight">Post Retention</span>
+                <span className="text-[10px] font-bold uppercase tracking-tight">
+                  Post Retention
+                </span>
               </div>
               <select
                 value={postRetentionDays}
-                onChange={(e) => setPostRetentionDays(parseInt(e.target.value, 10))}
+                onChange={(e) =>
+                  setPostRetentionDays(parseInt(e.target.value, 10))
+                }
                 className="w-full bg-app-bg border border-app-ink/20 p-2 text-[11px] font-mono focus:border-app-ink focus:outline-none transition-colors"
               >
                 <option value={0}>Never Delete (Keep Forever)</option>
@@ -420,18 +516,23 @@ export const DatabaseManagement: React.FC = () => {
                 <option value={90}>Auto-delete older than 90 days</option>
               </select>
               <p className="text-[10px] opacity-40 italic serif">
-                Automatically delete posts older than the selected timeframe. Summaries and chat history are always preserved.
+                Automatically delete posts older than the selected timeframe.
+                Summaries and chat history are always preserved.
               </p>
             </div>
 
             <div className="space-y-4">
               <div className="flex items-center gap-2 opacity-60">
                 <Activity size={14} />
-                <span className="text-[10px] font-bold uppercase tracking-tight">Log Retention</span>
+                <span className="text-[10px] font-bold uppercase tracking-tight">
+                  Log Retention
+                </span>
               </div>
               <select
                 value={logRetentionDays}
-                onChange={(e) => setLogRetentionDays(parseInt(e.target.value, 10))}
+                onChange={(e) =>
+                  setLogRetentionDays(parseInt(e.target.value, 10))
+                }
                 className="w-full bg-app-bg border border-app-ink/20 p-2 text-[11px] font-mono focus:border-app-ink focus:outline-none transition-colors"
               >
                 <option value={0}>Never Delete (Keep Forever)</option>
@@ -441,7 +542,8 @@ export const DatabaseManagement: React.FC = () => {
                 <option value={90}>Auto-delete older than 90 days</option>
               </select>
               <p className="text-[10px] opacity-40 italic serif">
-                Automatically delete system logs (sync, network, AI) older than the selected timeframe.
+                Automatically delete system logs (sync, network, AI) older than
+                the selected timeframe.
               </p>
             </div>
           </div>
@@ -453,10 +555,13 @@ export const DatabaseManagement: React.FC = () => {
             <div className="flex items-center gap-3">
               <Search size={18} className="opacity-40" />
               <div className="flex flex-col">
-                <h4 className="text-[11px] uppercase font-bold tracking-widest">Table Sizes & Queries</h4>
+                <h4 className="text-[11px] uppercase font-bold tracking-widest">
+                  Table Sizes & Queries
+                </h4>
                 {tableSizesLastCalculated && (
                   <span className="text-[9px] opacity-50 italic serif mt-0.5">
-                    Last calculated: <RelativeTime timestamp={tableSizesLastCalculated} />
+                    Last calculated:{" "}
+                    <RelativeTime timestamp={tableSizesLastCalculated} />
                   </span>
                 )}
               </div>
@@ -465,16 +570,23 @@ export const DatabaseManagement: React.FC = () => {
               <Tooltip>
                 <TooltipTrigger asChild>
                   <button
+                    type="button"
                     onClick={handleExportDB}
                     disabled={isExporting || selectedTablesForExport.size === 0}
                     className="px-4 py-2 text-[10px] uppercase font-bold flex items-center gap-2 border border-app-ink/20 hover:bg-app-ink hover:text-app-bg transition-colors disabled:opacity-50"
                   >
-                    {isExporting ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}
+                    {isExporting ? (
+                      <Loader2 size={14} className="animate-spin" />
+                    ) : (
+                      <Download size={14} />
+                    )}
                     Export
                   </button>
                 </TooltipTrigger>
                 <TooltipContent>
-                  <p className="text-[9px] uppercase font-bold">Export selected tables as JSONL</p>
+                  <p className="text-[9px] uppercase font-bold">
+                    Export selected tables as JSONL
+                  </p>
                 </TooltipContent>
               </Tooltip>
               <div className="relative">
@@ -488,24 +600,36 @@ export const DatabaseManagement: React.FC = () => {
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <button
+                      type="button"
                       disabled={isImporting}
                       className="px-4 py-2 text-[10px] uppercase font-bold flex items-center gap-2 border border-app-ink/20 hover:bg-app-ink hover:text-app-bg transition-colors disabled:opacity-50"
                     >
-                      {isImporting ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />}
+                      {isImporting ? (
+                        <Loader2 size={14} className="animate-spin" />
+                      ) : (
+                        <Upload size={14} />
+                      )}
                       Import
                     </button>
                   </TooltipTrigger>
                   <TooltipContent>
-                    <p className="text-[9px] uppercase font-bold">Import database from JSONL</p>
+                    <p className="text-[9px] uppercase font-bold">
+                      Import database from JSONL
+                    </p>
                   </TooltipContent>
                 </Tooltip>
               </div>
               <button
+                type="button"
                 onClick={handleCalculateSizes}
                 disabled={isCalculatingSizes}
                 className="px-4 py-2 text-[10px] uppercase font-bold flex items-center gap-2 border border-app-ink/20 hover:bg-app-ink hover:text-app-bg transition-colors disabled:opacity-50"
               >
-                {isCalculatingSizes ? <Loader2 size={14} className="animate-spin" /> : <HardDrive size={14} />}
+                {isCalculatingSizes ? (
+                  <Loader2 size={14} className="animate-spin" />
+                ) : (
+                  <HardDrive size={14} />
+                )}
                 Calculate Sizes
               </button>
             </div>
@@ -515,9 +639,9 @@ export const DatabaseManagement: React.FC = () => {
             <div className="space-y-6">
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {tableSizes.map((table) => (
-                  <div 
-                    key={table.name} 
-                    className={`p-4 border transition-colors cursor-pointer group relative ${selectedTable === table.name ? 'border-app-ink bg-app-ink/5' : 'border-app-ink/10 hover:border-app-ink/30'}`}
+                  <div
+                    key={table.name}
+                    className={`p-4 border transition-colors cursor-pointer group relative ${selectedTable === table.name ? "border-app-ink bg-app-ink/5" : "border-app-ink/10 hover:border-app-ink/30"}`}
                     onClick={() => setSelectedTable(table.name)}
                   >
                     <div className="flex justify-between items-center mb-2">
@@ -526,29 +650,34 @@ export const DatabaseManagement: React.FC = () => {
                           type="checkbox"
                           checked={selectedTablesForExport.has(table.name)}
                           onChange={(e) => {
-                            e.stopPropagation();
-                            const newSet = new Set(selectedTablesForExport);
+                            e.stopPropagation()
+                            const newSet = new Set(selectedTablesForExport)
                             if (e.target.checked) {
-                              newSet.add(table.name);
+                              newSet.add(table.name)
                             } else {
-                              newSet.delete(table.name);
+                              newSet.delete(table.name)
                             }
-                            setSelectedTablesForExport(newSet);
+                            setSelectedTablesForExport(newSet)
                           }}
                           className="w-3 h-3 accent-app-ink"
                         />
-                        <span className="text-[11px] font-bold uppercase tracking-widest">{table.name}</span>
+                        <span className="text-[11px] font-bold uppercase tracking-widest">
+                          {table.name}
+                        </span>
                       </div>
-                      <span className="text-[10px] font-mono opacity-60">{table.count.toLocaleString()} records</span>
+                      <span className="text-[10px] font-mono opacity-60">
+                        {table.count.toLocaleString()} records
+                      </span>
                     </div>
                     <div className="flex justify-between items-center">
                       <div className="text-[12px] font-mono font-bold">
                         {(table.size / (1024 * 1024)).toFixed(2)} MB
                       </div>
                       <button
+                        type="button"
                         onClick={(e) => {
-                          e.stopPropagation();
-                          handleClearTable(table.name);
+                          e.stopPropagation()
+                          handleClearTable(table.name)
                         }}
                         className="opacity-0 group-hover:opacity-100 p-1.5 text-red-500 hover:bg-red-500/10 rounded transition-all"
                         title={`Clear all entries in ${table.name}`}
@@ -572,19 +701,31 @@ export const DatabaseManagement: React.FC = () => {
                       onChange={(e) => setQuery(e.target.value)}
                       placeholder="e.g. channelName === 'mychannel' (leave empty for all)"
                       className="flex-1 bg-app-card border border-app-ink/20 px-3 py-2 text-[11px] font-mono focus:outline-none focus:border-app-ink/50"
-                      onKeyDown={(e) => e.key === 'Enter' && handleRunQuery()}
+                      onKeyDown={(e) => e.key === "Enter" && handleRunQuery()}
                     />
                     <button
+                      type="button"
                       onClick={handleRunQuery}
                       disabled={isQuerying}
                       className="px-4 py-2 bg-app-ink text-app-bg text-[10px] uppercase font-bold flex items-center gap-2 disabled:opacity-50"
                     >
-                      {isQuerying ? <Loader2 size={14} className="animate-spin" /> : <Play size={14} />}
+                      {isQuerying ? (
+                        <Loader2 size={14} className="animate-spin" />
+                      ) : (
+                        <Play size={14} />
+                      )}
                       Run
                     </button>
                   </div>
                   <p className="text-[9px] opacity-50 italic mb-4">
-                    Uses simple JS evaluation. Example: <code className="bg-app-ink/10 px-1 py-0.5 rounded">id &gt; 100</code> or <code className="bg-app-ink/10 px-1 py-0.5 rounded">text.includes('crypto')</code>
+                    Uses simple JS evaluation. Example:{" "}
+                    <code className="bg-app-ink/10 px-1 py-0.5 rounded">
+                      id &gt; 100
+                    </code>{" "}
+                    or{" "}
+                    <code className="bg-app-ink/10 px-1 py-0.5 rounded">
+                      text.includes('crypto')
+                    </code>
                   </p>
 
                   {queryError && (
@@ -596,13 +737,18 @@ export const DatabaseManagement: React.FC = () => {
                   {queryResults && (
                     <div className="border border-app-ink/10 bg-app-card overflow-hidden">
                       <div className="p-2 bg-app-ink/5 border-b border-app-ink/10 flex justify-between items-center">
-                        <span className="text-[10px] font-bold uppercase tracking-widest">Results ({queryResults.length}{queryResults.length === 100 ? '+' : ''})</span>
+                        <span className="text-[10px] font-bold uppercase tracking-widest">
+                          Results ({queryResults.length}
+                          {queryResults.length === 100 ? "+" : ""})
+                        </span>
                       </div>
                       <div className="max-h-96 overflow-auto p-4 text-[11px] font-mono whitespace-pre-wrap">
                         {queryResults.length > 0 ? (
                           JSON.stringify(queryResults, null, 2)
                         ) : (
-                          <span className="opacity-50 italic">No results found.</span>
+                          <span className="opacity-50 italic">
+                            No results found.
+                          </span>
                         )}
                       </div>
                     </div>
@@ -615,11 +761,15 @@ export const DatabaseManagement: React.FC = () => {
       </div>
 
       <div className="p-6 bg-app-ink/5 border border-app-ink/10">
-        <h3 className="text-[11px] uppercase font-bold tracking-widest mb-3">About Local Storage</h3>
+        <h3 className="text-[11px] uppercase font-bold tracking-widest mb-3">
+          About Local Storage
+        </h3>
         <p className="text-[11px] opacity-60 leading-relaxed font-serif">
-          This application uses your browser's IndexedDB to store all channel data and posts locally. 
-          No data is sent to our servers except for the content you explicitly send to AI models for analysis.
-          Exporting your database regularly is recommended to prevent data loss if you clear your browser cache.
+          This application uses your browser's IndexedDB to store all channel
+          data and posts locally. No data is sent to our servers except for the
+          content you explicitly send to AI models for analysis. Exporting your
+          database regularly is recommended to prevent data loss if you clear
+          your browser cache.
         </p>
       </div>
 
@@ -631,12 +781,14 @@ export const DatabaseManagement: React.FC = () => {
           footer={
             <div className="flex justify-end gap-3">
               <button
+                type="button"
                 onClick={() => setConfirmModal(null)}
                 className="px-4 py-2 border border-app-ink/20 hover:bg-app-ink/5 transition-colors text-sm font-medium"
               >
                 Cancel
               </button>
               <button
+                type="button"
                 onClick={confirmModal.onConfirm}
                 className="px-4 py-2 bg-red-500 text-white hover:bg-red-600 transition-colors text-sm font-medium"
               >
@@ -649,5 +801,5 @@ export const DatabaseManagement: React.FC = () => {
         </Modal>
       )}
     </motion.div>
-  );
-};
+  )
+}

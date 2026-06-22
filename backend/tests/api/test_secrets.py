@@ -24,7 +24,9 @@ def _auth(client: TestClient) -> dict[str, str]:
     return {"Authorization": f"Bearer {token}"}
 
 
-def test_decrypt_rejects_plaintext_in_non_local(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_decrypt_rejects_plaintext_in_non_local(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     from app.core import secrets as secrets_mod
 
     monkeypatch.setattr(secrets_mod.settings, "ENVIRONMENT", "production")
@@ -104,7 +106,10 @@ def test_network_settings_get_put(client: TestClient) -> None:
         json={
             "proxyEnabled": True,
             "torAutoRotate": True,
-            "proxyUrls": ["http://proxy1.example:8080", "socks5h://proxy2.example:1080"],
+            "proxyUrls": [
+                "http://proxy1.example:8080",
+                "socks5h://proxy2.example:1080",
+            ],
         },
         headers=headers,
     )

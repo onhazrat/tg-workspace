@@ -10,6 +10,7 @@ from uuid import UUID
 
 from sqlalchemy import func
 from sqlmodel import Session, col, select
+from sqlmodel.sql.expression import SelectOfScalar
 
 from app.ai.registry import get_provider
 from app.core.config import settings
@@ -38,17 +39,17 @@ def _posts_without_embeddings_stmt(
     limit: int | None = None,
     *,
     channel_names: set[str] | None = None,
-):
-    stmt = (
+) -> SelectOfScalar[Post]:
+    stmt: SelectOfScalar[Post] = (
         select(Post)
         .outerjoin(
             PostEmbedding,
-            (Post.channel_name == PostEmbedding.channel_name)
-            & (Post.post_id == PostEmbedding.post_id),
+            (col(Post.channel_name) == col(PostEmbedding.channel_name))
+            & (col(Post.post_id) == col(PostEmbedding.post_id)),
         )
         .where(col(PostEmbedding.id).is_(None))
         .where(col(Post.is_anchor) == False)  # noqa: E712
-        .order_by(Post.timestamp.desc())
+        .order_by(col(Post.timestamp).desc())
     )
     if channel_names:
         stmt = stmt.where(col(Post.channel_name).in_(channel_names))
@@ -69,8 +70,8 @@ def count_posts_without_embeddings(
         .select_from(Post)
         .outerjoin(
             PostEmbedding,
-            (Post.channel_name == PostEmbedding.channel_name)
-            & (Post.post_id == PostEmbedding.post_id),
+            (col(Post.channel_name) == col(PostEmbedding.channel_name))
+            & (col(Post.post_id) == col(PostEmbedding.post_id)),
         )
         .where(col(PostEmbedding.id).is_(None))
         .where(col(Post.is_anchor) == False)  # noqa: E712
@@ -92,9 +93,7 @@ def get_embedding_status(
             "lastRun": get_last_backfill_run(),
         }
     total_stmt = (
-        select(func.count())
-        .select_from(Post)
-        .where(col(Post.is_anchor) == False)  # noqa: E712
+        select(func.count()).select_from(Post).where(col(Post.is_anchor) == False)  # noqa: E712
     )
     if channel_names is not None:
         total_stmt = total_stmt.where(col(Post.channel_name).in_(channel_names))

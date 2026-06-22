@@ -1,7 +1,7 @@
 """Optional API key auth for self-hosted deployment."""
 
 import logging
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 
 import jwt
 from jwt.exceptions import InvalidTokenError
@@ -53,7 +53,11 @@ def _has_valid_auth(request: Request) -> bool:
 
 
 class APIKeyMiddleware(BaseHTTPMiddleware):
-    async def dispatch(self, request: Request, call_next: Callable) -> Response:
+    async def dispatch(
+        self,
+        request: Request,
+        call_next: Callable[[Request], Awaitable[Response]],
+    ) -> Response:
         path = request.url.path
         if path in _public_paths() or path.startswith("/api/v1/login"):
             return await call_next(request)

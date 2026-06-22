@@ -1,40 +1,43 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { motion } from "motion/react";
-import { Braces, Check, Copy, Loader2, RefreshCw } from "lucide-react";
-import { api } from "@/api";
-import type { RuntimeConfig } from "@/api/jobs";
-import { useCopyToClipboard } from "@/hooks/useCopyToClipboard";
+import { Braces, Check, Copy, Loader2, RefreshCw } from "lucide-react"
+import { motion } from "motion/react"
+import type React from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
+import { api } from "@/api"
+import type { RuntimeConfig } from "@/api/jobs"
+import { useCopyToClipboard } from "@/hooks/useCopyToClipboard"
 
 export const RuntimeConfigView: React.FC = () => {
-  const [config, setConfig] = useState<RuntimeConfig | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [copiedText, copy] = useCopyToClipboard();
+  const [config, setConfig] = useState<RuntimeConfig | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [copiedText, copy] = useCopyToClipboard()
 
   const loadConfig = useCallback(async () => {
-    setLoading(true);
-    setError(null);
+    setLoading(true)
+    setError(null)
     try {
-      const data = await api.getRuntimeConfig();
-      setConfig(data);
+      const data = await api.getRuntimeConfig()
+      setConfig(data)
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load runtime config");
-      setConfig(null);
+      setError(
+        err instanceof Error ? err.message : "Failed to load runtime config",
+      )
+      setConfig(null)
     } finally {
-      setLoading(false);
+      setLoading(false)
     }
-  }, []);
+  }, [])
 
   useEffect(() => {
-    void loadConfig();
-  }, [loadConfig]);
+    void loadConfig()
+  }, [loadConfig])
 
   const formattedJson = useMemo(
     () => (config ? JSON.stringify(config, null, 2) : ""),
     [config],
-  );
+  )
 
-  const isCopied = copiedText === formattedJson && formattedJson.length > 0;
+  const isCopied = copiedText === formattedJson && formattedJson.length > 0
 
   return (
     <motion.div
@@ -50,10 +53,13 @@ export const RuntimeConfigView: React.FC = () => {
               <h3 className="text-sm uppercase font-bold tracking-widest">
                 Runtime Config
               </h3>
-              <span className="text-[10px] font-mono opacity-40">[EFFECTIVE_VALUES]</span>
+              <span className="text-[10px] font-mono opacity-40">
+                [EFFECTIVE_VALUES]
+              </span>
             </div>
             <p className="text-[10px] italic serif opacity-50 mt-1">
-              Effective sync, scraper, network, job, and retention settings resolved at runtime.
+              Effective sync, scraper, network, job, and retention settings
+              resolved at runtime.
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -107,5 +113,5 @@ export const RuntimeConfigView: React.FC = () => {
         </div>
       )}
     </motion.div>
-  );
-};
+  )
+}

@@ -1,12 +1,13 @@
 import json
 from collections.abc import AsyncIterator
+from typing import Any
 
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 
 from app.ai.models import ChatRequest, EmbedRequest, SummaryRequest, TranslateRequest
-from app.api.deps import CurrentUser
 from app.ai.registry import default_model, get_provider, list_all_models
+from app.api.deps import CurrentUser
 from app.core.config import settings
 from app.prompts.summary import format_summary_prompt, rtl_instruction
 from app.prompts.templates import CHAT_PROMPT, RAG_CHAT_PROMPT
@@ -15,12 +16,14 @@ router = APIRouter(prefix="/ai", tags=["ai"])
 
 
 @router.get("/models")
-def api_list_models(_current_user: CurrentUser) -> dict:
+def api_list_models(_current_user: CurrentUser) -> dict[str, Any]:
     return {"models": list_all_models(), "default": default_model()}
 
 
 @router.post("/summary")
-async def api_summary(body: SummaryRequest, _current_user: CurrentUser) -> dict:
+async def api_summary(
+    body: SummaryRequest, _current_user: CurrentUser
+) -> dict[str, Any]:
     if not settings.GEMINI_API_KEY:
         raise HTTPException(status_code=503, detail="GEMINI_API_KEY not configured")
     model = body.model or default_model()
@@ -35,7 +38,9 @@ async def api_summary(body: SummaryRequest, _current_user: CurrentUser) -> dict:
 
 
 @router.post("/summary/prompt")
-def api_summary_prompt(body: SummaryRequest, _current_user: CurrentUser) -> dict:
+def api_summary_prompt(
+    body: SummaryRequest, _current_user: CurrentUser
+) -> dict[str, Any]:
     prompt = format_summary_prompt(
         channels=body.channels,
         language=body.language,
@@ -59,7 +64,9 @@ async def api_summary_stream(
     )
 
     async def event_stream() -> AsyncIterator[str]:
-        async for chunk in provider.stream(prompt, model=model, temperature=body.temperature):
+        async for chunk in provider.stream(
+            prompt, model=model, temperature=body.temperature
+        ):
             yield f"data: {json.dumps({'text': chunk})}\n\n"
         yield "data: [DONE]\n\n"
 
@@ -67,7 +74,9 @@ async def api_summary_stream(
 
 
 @router.post("/chat/stream")
-async def api_chat_stream(body: ChatRequest, _current_user: CurrentUser) -> StreamingResponse:
+async def api_chat_stream(
+    body: ChatRequest, _current_user: CurrentUser
+) -> StreamingResponse:
     if not settings.GEMINI_API_KEY:
         raise HTTPException(status_code=503, detail="GEMINI_API_KEY not configured")
     model = body.model or default_model()
@@ -95,7 +104,9 @@ async def api_chat_stream(body: ChatRequest, _current_user: CurrentUser) -> Stre
 
 
 @router.post("/embeddings")
-async def api_embeddings(body: EmbedRequest, _current_user: CurrentUser) -> dict:
+async def api_embeddings(
+    body: EmbedRequest, _current_user: CurrentUser
+) -> dict[str, Any]:
     if not settings.GEMINI_API_KEY:
         raise HTTPException(status_code=503, detail="GEMINI_API_KEY not configured")
     model = body.model or settings.EMBEDDING_MODEL
@@ -105,7 +116,9 @@ async def api_embeddings(body: EmbedRequest, _current_user: CurrentUser) -> dict
 
 
 @router.post("/translate")
-async def api_translate(body: TranslateRequest, _current_user: CurrentUser) -> dict:
+async def api_translate(
+    body: TranslateRequest, _current_user: CurrentUser
+) -> dict[str, Any]:
     if not settings.GEMINI_API_KEY:
         raise HTTPException(status_code=503, detail="GEMINI_API_KEY not configured")
     model = body.model or default_model()

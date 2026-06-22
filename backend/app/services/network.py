@@ -6,8 +6,9 @@ import asyncio
 import random
 import re
 import time
+from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from typing import Any
+from typing import Any, cast
 
 import httpx
 from stem import Signal
@@ -87,7 +88,9 @@ def _rotate_tor_identity_sync(control_port: int, password: str) -> None:
         controller.signal(Signal.NEWNYM)
 
 
-async def rotate_tor_identity(control_port: int | None = None, password: str | None = None) -> None:
+async def rotate_tor_identity(
+    control_port: int | None = None, password: str | None = None
+) -> None:
     global _is_rotating_tor, _tor_request_counter
     if _is_rotating_tor:
         return
@@ -109,11 +112,11 @@ def _pick_random_proxy(
     now_ms: float,
 ) -> str:
     available = [
-        p
-        for p in proxies
-        if p not in tried and _bad_proxies.get(p, 0) <= now_ms
+        p for p in proxies if p not in tried and _bad_proxies.get(p, 0) <= now_ms
     ]
-    pool = available or [p for p in proxies if _bad_proxies.get(p, 0) <= now_ms] or proxies
+    pool = (
+        available or [p for p in proxies if _bad_proxies.get(p, 0) <= now_ms] or proxies
+    )
     return random.choice(pool)
 
 
@@ -124,7 +127,7 @@ async def _proxy_acquire(
     *,
     proxy_concurrency: tuple[int, dict[str, int]] | None,
     bypass_pool: bool,
-):
+) -> AsyncIterator[str | ProxyLane]:
     if bypass_pool:
         now_ms = time.time() * 1000
         proxy_url = _pick_random_proxy(proxies, tried, now_ms=now_ms)
@@ -209,9 +212,7 @@ async def fetch_with_retry(
                         json_body=json_body,
                     )
             else:
-                data = await _fetch_once(
-                    url, None, method=method, json_body=json_body
-                )
+                data = await _fetch_once(url, None, method=method, json_body=json_body)
 
             if proxy_url:
                 _bad_proxies.pop(proxy_url, None)
@@ -230,8 +231,14 @@ async def fetch_with_retry(
 
         except Exception as exc:  # noqa: BLE001
             is_soft_block = "not available on the web view" in str(exc)
-            is_network = isinstance(exc, (httpx.HTTPError, ConnectionError, OSError)) or is_soft_block
-            is_rate_limit = isinstance(exc, httpx.HTTPStatusError) and exc.response.status_code == 429
+            is_network = (
+                isinstance(exc, (httpx.HTTPError, ConnectionError, OSError))
+                or is_soft_block
+            )
+            is_rate_limit = (
+                isinstance(exc, httpx.HTTPStatusError)
+                and exc.response.status_code == 429
+            )
 
             if proxy_url and is_network and not is_soft_block:
                 _bad_proxies[proxy_url] = (
@@ -257,7 +264,7 @@ async def fetch_with_retry(
 
             telemetry["totalDuration"] = int(time.time() * 1000 - start_total)
             telemetry["success"] = False
-            exc.telemetry = telemetry  # type: ignore[attr-defined]
+            cast(Any, exc).telemetry = telemetry
             raise
 
     raise RuntimeError("fetch_with_retry exhausted retries")
@@ -285,7 +292,11 @@ async def get_tor_ip() -> str:
     async with _build_client(proxy) as client:
         response = await client.get("https://api.ipify.org?format=json")
         response.raise_for_status()
-        return response.json()["ip"]
+        data = response.json()
+        ip = data.get("ip")
+        if not isinstance(ip, str):
+            raise ValueError("Unexpected response from ipify")
+        return ip
 
 
 async def is_port_in_use(port: int) -> bool:
@@ -349,7 +360,12 @@ def parse_telegram_entities(text: str) -> tuple[str, list[dict[str, Any]]]:
             url = match.group(12) or ""
             plain += inner
             entities.append(
-                {"type": "text_link", "offset": offset, "length": len(inner), "url": url}
+                {
+                    "type": "text_link",
+                    "offset": offset,
+                    "length": len(inner),
+                    "url": url,
+                }
             )
 
         last_index = match.end()

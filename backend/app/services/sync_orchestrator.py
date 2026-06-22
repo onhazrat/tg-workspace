@@ -15,8 +15,13 @@ from sqlmodel import Session, col, select
 
 from app.core.config import settings
 from app.core.db import engine
-from app.jobs.settings import compute_scrape_cutoff_ms, load_retention_settings, load_sync_settings
+from app.jobs.settings import (
+    compute_scrape_cutoff_ms,
+    load_retention_settings,
+    load_sync_settings,
+)
 from app.models_tg import Channel, Post
+from app.services.async_db import run_db
 from app.services.channels import update_channel_coverage
 from app.services.language import detect_language_from_posts
 from app.services.logs import upsert_network_log, upsert_sync_log
@@ -33,7 +38,6 @@ from app.services.post_sync_state import (
     record_gaps_to_existing_post,
 )
 from app.services.posts import bulk_upsert_posts_impl
-from app.services.async_db import run_db
 from app.services.scraper import get_channel_info, scrape_channel_page
 from app.services.scraper_jobs import (
     ChannelSyncState,
@@ -98,7 +102,9 @@ def _save_network_telemetry(
         )
 
 
-def _posts_to_save(channel_name: str, posts: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def _posts_to_save(
+    channel_name: str, posts: list[dict[str, Any]]
+) -> list[dict[str, Any]]:
     out: list[dict[str, Any]] = []
     for p in posts:
         ts = p.get("timestamp")
@@ -175,10 +181,13 @@ async def _scrape_page_with_retry(
             response["fullRequest"] = request_body
             return response
         except Exception as exc:  # noqa: BLE001
-            is_rate_limit = isinstance(exc, httpx.HTTPStatusError) and exc.response.status_code == 429
-            is_network = isinstance(exc, (httpx.HTTPError, ConnectionError, OSError)) or (
-                "not available on the web view" in str(exc)
+            is_rate_limit = (
+                isinstance(exc, httpx.HTTPStatusError)
+                and exc.response.status_code == 429
             )
+            is_network = isinstance(
+                exc, (httpx.HTTPError, ConnectionError, OSError)
+            ) or ("not available on the web view" in str(exc))
             is_unavailable = "not available on the web view" in str(exc)
 
             if is_unavailable:
@@ -189,7 +198,9 @@ async def _scrape_page_with_retry(
                     full_response={"error": str(exc)},
                 ) from exc
 
-            if retry_count < settings.SYNC_MAX_RETRIES and (is_rate_limit or is_network):
+            if retry_count < settings.SYNC_MAX_RETRIES and (
+                is_rate_limit or is_network
+            ):
                 if is_rate_limit and tor_control_enabled and proxies:
                     try:
                         await rotate_tor_identity(tor_control_port)
@@ -215,10 +226,16 @@ async def _scrape_page_with_retry(
             ) from exc
 
 
+# All sync DB work runs in thread-pool workers via run_db(); Session(engine)
+# blocks here are sync-only helpers — never held across await I/O in async paths.
+
+
 def _channel_name_exists(channel_name: str) -> bool:
     with Session(engine) as session:
         return (
-            session.exec(select(Channel).where(col(Channel.name) == channel_name)).first()
+            session.exec(
+                select(Channel).where(col(Channel.name) == channel_name)
+            ).first()
             is not None
         )
 
@@ -239,9 +256,7 @@ def _create_forwarded_channel(
         if session.exec(select(Channel).where(col(Channel.name) == clean)).first():
             return
         if telemetry_url and telemetry:
-            _save_network_telemetry(
-                session, telemetry_url, telemetry, user_id=user_id
-            )
+            _save_network_telemetry(session, telemetry_url, telemetry, user_id=user_id)
         now = int(time.time() * 1000)
         session.add(
             Channel(
@@ -361,9 +376,7 @@ def _prepare_channel_sync(
         scrape_cutoff_ms = compute_scrape_cutoff_ms(sync_settings, retention_settings)
         has_existing_posts = (
             session.exec(
-                select(Post.post_id)
-                .where(Post.channel_name == channel.name)
-                .limit(1)
+                select(Post.post_id).where(Post.channel_name == channel.name).limit(1)
             ).first()
             is not None
         )
@@ -486,7 +499,9 @@ def _apply_scrape_page(
 
         posts_to_save = _posts_to_save(channel.name, posts)
         if ctx.retrieval_pass == "incremental" and existing_on_page:
-            posts_to_save = [p for p in posts_to_save if p["id"] not in existing_on_page]
+            posts_to_save = [
+                p for p in posts_to_save if p["id"] not in existing_on_page
+            ]
 
         if posts_to_save:
             bulk_upsert_posts_impl(
@@ -710,7 +725,9 @@ async def sync_single_channel(
         ch_state.status = "running"
         await touch_job(job)
 
-        prep_status, ctx = await run_db(_prepare_channel_sync, ch_state.channel_id, user_id)
+        prep_status, ctx = await run_db(
+            _prepare_channel_sync, ch_state.channel_id, user_id
+        )
         if prep_status == "missing":
             ch_state.status = "failed"
             ch_state.error = "Channel not found"
@@ -851,7 +868,10 @@ def _load_sync_job_concurrency(user_id: uuid.UUID | None) -> tuple[int, int | No
         network = load_network_settings(session, user_id)
         configured = max(
             1,
-            int(sync_settings.get("syncConcurrency") or settings.SYNC_CONCURRENCY_DEFAULT),
+            int(
+                sync_settings.get("syncConcurrency")
+                or settings.SYNC_CONCURRENCY_DEFAULT
+            ),
         )
         proxies = resolve_proxies(network)
         if not proxies:

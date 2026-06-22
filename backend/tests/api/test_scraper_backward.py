@@ -26,7 +26,10 @@ def test_scrape_channel_page_returns_next_before_id() -> None:
         with patch(
             "app.services.scraper.fetch_with_retry",
             new_callable=AsyncMock,
-            return_value=(SAMPLE_HTML, {"success": True, "totalDuration": 1, "attempts": []}),
+            return_value=(
+                SAMPLE_HTML,
+                {"success": True, "totalDuration": 1, "attempts": []},
+            ),
         ):
             return await scrape_channel_page("ch", before_id=None)
 

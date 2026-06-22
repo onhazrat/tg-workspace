@@ -7,7 +7,6 @@ import time
 from unittest.mock import AsyncMock, patch
 
 from fastapi.testclient import TestClient
-
 from sqlmodel import Session
 
 from app.core.config import settings
@@ -135,8 +134,10 @@ def test_start_sync_job_and_poll_status(client: TestClient) -> None:
 
     logs_r = client.get(f"{DATA}/sync-logs", headers=headers)
     assert logs_r.status_code == 200
-    matching = [l for l in logs_r.json() if l.get("channelName") == "sync-test-ch"]
-    assert any(l["status"] == "success" for l in matching)
+    matching = [
+        log for log in logs_r.json() if log.get("channelName") == "sync-test-ch"
+    ]
+    assert any(log["status"] == "success" for log in matching)
 
     client.delete(f"{DATA}/channels/sync-test-ch", headers=headers)
     clear_jobs_for_tests()
@@ -423,7 +424,9 @@ def test_sync_auto_follow_enabled_creates_forwarded_channel(client: TestClient) 
         patch(
             "app.services.sync_orchestrator.scrape_channel_page",
             new_callable=AsyncMock,
-            return_value=_mock_page_response("source-ch", [_forwarded_post()], next_before_id=None),
+            return_value=_mock_page_response(
+                "source-ch", [_forwarded_post()], next_before_id=None
+            ),
         ),
         patch(
             "app.services.sync_orchestrator.get_channel_info",
@@ -469,7 +472,9 @@ def test_sync_auto_follow_disabled_skips_forwarded_channel(client: TestClient) -
     with patch(
         "app.services.sync_orchestrator.scrape_channel_page",
         new_callable=AsyncMock,
-        return_value=_mock_page_response("no-follow-ch", [_forwarded_post()], next_before_id=None),
+        return_value=_mock_page_response(
+            "no-follow-ch", [_forwarded_post()], next_before_id=None
+        ),
     ):
         r = client.post(
             f"{PREFIX}/sync",

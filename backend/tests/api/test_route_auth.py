@@ -27,7 +27,11 @@ def _auth(client: TestClient) -> dict[str, str]:
     "method,path,json_body",
     [
         ("GET", f"{PREFIX}/ai/models", None),
-        ("POST", f"{PREFIX}/ai/summary", {"channels": [], "language": "English", "postsText": ""}),
+        (
+            "POST",
+            f"{PREFIX}/ai/summary",
+            {"channels": [], "language": "English", "postsText": ""},
+        ),
         ("GET", f"{PREFIX}/rag/status", None),
         ("POST", f"{PREFIX}/rag/search", {"query": "test"}),
         ("GET", f"{PREFIX}/network/proxy-health", None),

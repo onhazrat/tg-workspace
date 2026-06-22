@@ -22,7 +22,7 @@ def run_startup_checks() -> None:
     if not token_key:
         raise ValueError(
             "TOKEN_ENCRYPTION_KEY must be set when ENVIRONMENT is not 'local'. "
-            "Generate: python -c \"from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())\""
+            'Generate: python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"'
         )
     if token_key == _DEV_FERNET_KEY:
         raise ValueError(
@@ -36,7 +36,7 @@ def run_startup_checks() -> None:
 
     if not settings.USERS_OPEN_REGISTRATION:
         logger.info("USERS_OPEN_REGISTRATION=false; public signup is disabled")
-    elif settings.ENVIRONMENT != "local":
+    else:
         logger.warning(
             "USERS_OPEN_REGISTRATION=true in %s; set false for production deployments",
             settings.ENVIRONMENT,

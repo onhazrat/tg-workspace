@@ -9,7 +9,6 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 from sqlmodel import Session, select
 
-from app.core.config import settings
 from app.core.db import engine
 from app.jobs.auto_sync import run_auto_sync
 from app.jobs.settings import save_setting
@@ -95,7 +94,10 @@ def test_auto_sync_scopes_to_operator_channels(
     result = asyncio.run(run_auto_sync())
     assert mock_create.await_args is not None, f"create_job not called: {result}"
 
-    called_entries = mock_create.await_args.kwargs.get("channel_entries") or mock_create.await_args.args[0]
+    called_entries = (
+        mock_create.await_args.kwargs.get("channel_entries")
+        or mock_create.await_args.args[0]
+    )
     names = [name for _id, name in called_entries]
     assert "op-channel" in names
     assert "other-channel" not in names

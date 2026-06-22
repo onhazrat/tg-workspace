@@ -51,7 +51,13 @@ def test_jobs_status() -> None:
     r = client.get("/api/v1/jobs/status", headers=_auth_headers())
     assert r.status_code == 200
     data = r.json()
-    for job_id in ("auto_sync", "embeddings", "auto_summary", "retention", "translation_batch"):
+    for job_id in (
+        "auto_sync",
+        "embeddings",
+        "auto_summary",
+        "retention",
+        "translation_batch",
+    ):
         assert job_id in data
         assert "lastStatus" in data[job_id]
 
@@ -79,9 +85,7 @@ def test_data_channels_crud() -> None:
 
 
 def test_scrape_invalid_url() -> None:
-    r = client.post(
-        "/api/scrape", json={"url": "not-a-url"}, headers=_auth_headers()
-    )
+    r = client.post("/api/scrape", json={"url": "not-a-url"}, headers=_auth_headers())
     assert r.status_code == 400
 
 
@@ -100,7 +104,9 @@ def test_ai_embeddings() -> None:
 
 def test_rag_search() -> None:
     if settings.GEMINI_API_KEY:
-        pytest.skip("Live Gemini RAG is verified against a running server; sync TestClient hits event-loop issues")
+        pytest.skip(
+            "Live Gemini RAG is verified against a running server; sync TestClient hits event-loop issues"
+        )
     r = client.post(
         "/api/v1/rag/search", json={"query": "test"}, headers=_auth_headers()
     )

@@ -4,9 +4,10 @@ from __future__ import annotations
 
 import asyncio
 import time
+from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
-from typing import Any, AsyncIterator
+from typing import Any
 
 import httpx
 
@@ -126,7 +127,9 @@ class ProxyPoolManager:
         return [lane for _, _, lane in ranked]
 
     @asynccontextmanager
-    async def acquire(self, exclude: set[str] | None = None) -> AsyncIterator[ProxyLane]:
+    async def acquire(
+        self, exclude: set[str] | None = None
+    ) -> AsyncIterator[ProxyLane]:
         excluded = exclude or set()
         deadline = time.monotonic() + ACQUIRE_TIMEOUT_SECONDS
 
@@ -134,7 +137,8 @@ class ProxyPoolManager:
             ranked = self._rank_lanes(excluded)
             if not ranked:
                 healthy_any = any(
-                    not self._proxy_in_cooldown(lane.url) for lane in self._lanes.values()
+                    not self._proxy_in_cooldown(lane.url)
+                    for lane in self._lanes.values()
                 )
                 if not healthy_any:
                     raise ProxyPoolExhausted("No healthy proxy lanes available")

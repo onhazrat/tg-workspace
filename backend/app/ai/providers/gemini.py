@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from collections.abc import AsyncIterator
+from typing import cast
 
 from google import genai
 from google.genai import types
@@ -37,9 +38,17 @@ class GeminiProvider:
     @staticmethod
     def list_models_static() -> list[ModelInfo]:
         return [
-            ModelInfo(id="gemini-3-flash-preview", label="Gemini 3 Flash", provider="gemini"),
-            ModelInfo(id="gemini-3.1-pro-preview", label="Gemini 3.1 Pro", provider="gemini"),
-            ModelInfo(id="gemini-3.1-flash-lite-preview", label="Gemini 3.1 Flash Lite", provider="gemini"),
+            ModelInfo(
+                id="gemini-3-flash-preview", label="Gemini 3 Flash", provider="gemini"
+            ),
+            ModelInfo(
+                id="gemini-3.1-pro-preview", label="Gemini 3.1 Pro", provider="gemini"
+            ),
+            ModelInfo(
+                id="gemini-3.1-flash-lite-preview",
+                label="Gemini 3.1 Flash Lite",
+                provider="gemini",
+            ),
         ]
 
     def list_models_sync(self) -> list[ModelInfo]:
@@ -88,7 +97,9 @@ class GeminiProvider:
             contents: list[types.Content] = []
             for msg in history:
                 role = "user" if msg.role == "user" else "model"
-                contents.append(types.Content(role=role, parts=[types.Part(text=msg.text)]))
+                contents.append(
+                    types.Content(role=role, parts=[types.Part(text=msg.text)])
+                )
             contents.append(types.Content(role="user", parts=[types.Part(text=prompt)]))
             stream = await self._get_client().aio.models.generate_content_stream(
                 model=model, contents=contents, config=config
@@ -109,7 +120,9 @@ class GeminiProvider:
         )
         vectors = [list(e.values or []) for e in (result.embeddings or [])]
         dims = len(vectors[0]) if vectors else 0
-        return EmbeddingResult(vectors=vectors, model=model, provider=self.name, dimensions=dims)
+        return EmbeddingResult(
+            vectors=vectors, model=model, provider=self.name, dimensions=dims
+        )
 
     async def translate_batch(
         self,
@@ -132,4 +145,5 @@ TEXTS:
         response = await self._get_client().aio.models.generate_content(
             model=model, contents=prompt, config=config
         )
-        return json.loads(response.text or "[]")
+        parsed = json.loads(response.text or "[]")
+        return cast(list[dict[str, str]], parsed)

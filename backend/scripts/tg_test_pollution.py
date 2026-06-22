@@ -98,13 +98,13 @@ def count_test_pollution(session: Session) -> dict[str, int]:
     channel_keys |= ALL_TEST_CHANNEL_KEYS
 
     counts["tg_posts"] = len(
-        session.exec(
-            select(Post).where(col(Post.channel_name).in_(channel_keys))
-        ).all()
+        session.exec(select(Post).where(col(Post.channel_name).in_(channel_keys))).all()
     )
     counts["tg_post_embeddings"] = len(
         session.exec(
-            select(PostEmbedding).where(col(PostEmbedding.channel_name).in_(channel_keys))
+            select(PostEmbedding).where(
+                col(PostEmbedding.channel_name).in_(channel_keys)
+            )
         ).all()
     )
     counts["tg_post_translations"] = len(
@@ -124,8 +124,7 @@ def count_test_pollution(session: Session) -> dict[str, int]:
     counts["tg_summaries"] = sum(
         1
         for s in summary_rows
-        if s.id in TEST_SUMMARY_IDS
-        or _summary_references_test_channels(s.channels)
+        if s.id in TEST_SUMMARY_IDS or _summary_references_test_channels(s.channels)
     )
 
     counts["tg_network_logs"] = len(
@@ -154,8 +153,14 @@ def delete_test_pollution(session: Session, *, dry_run: bool = False) -> dict[st
     channel_keys = {ch.id for ch in channel_rows} | {ch.name for ch in channel_rows}
     channel_keys |= ALL_TEST_CHANNEL_KEYS
 
-    session.exec(delete(PostEmbedding).where(col(PostEmbedding.channel_name).in_(channel_keys)))
-    session.exec(delete(PostTranslation).where(col(PostTranslation.channel_name).in_(channel_keys)))
+    session.exec(
+        delete(PostEmbedding).where(col(PostEmbedding.channel_name).in_(channel_keys))
+    )
+    session.exec(
+        delete(PostTranslation).where(
+            col(PostTranslation.channel_name).in_(channel_keys)
+        )
+    )
     session.exec(delete(Post).where(col(Post.channel_name).in_(channel_keys)))
     session.exec(delete(SyncLog).where(col(SyncLog.channel_name).in_(channel_keys)))
 
@@ -183,16 +188,16 @@ def truncate_tg_tables(session: Session) -> None:
     session.commit()
 
 
-def cleanup_channel_keys(
-    session: Session, channel_keys: Iterable[str]
-) -> None:
+def cleanup_channel_keys(session: Session, channel_keys: Iterable[str]) -> None:
     """Delete one or more channels and rows that reference them by name/id."""
     keys = set(channel_keys)
     if not keys:
         return
 
     session.exec(delete(PostEmbedding).where(col(PostEmbedding.channel_name).in_(keys)))
-    session.exec(delete(PostTranslation).where(col(PostTranslation.channel_name).in_(keys)))
+    session.exec(
+        delete(PostTranslation).where(col(PostTranslation.channel_name).in_(keys))
+    )
     session.exec(delete(Post).where(col(Post.channel_name).in_(keys)))
     session.exec(delete(SyncLog).where(col(SyncLog.channel_name).in_(keys)))
 

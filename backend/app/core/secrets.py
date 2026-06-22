@@ -16,7 +16,9 @@ def _fernet_key() -> bytes:
         if settings.ENVIRONMENT == "local":
             raw = _LOCAL_DEV_FERNET_KEY
         else:
-            raise ValueError("TOKEN_ENCRYPTION_KEY must be set in non-local environments")
+            raise ValueError(
+                "TOKEN_ENCRYPTION_KEY must be set in non-local environments"
+            )
     return raw.encode()
 
 

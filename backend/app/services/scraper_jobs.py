@@ -64,9 +64,7 @@ class SyncJobState:
     )
     _update_seq: int = field(default=0, repr=False)
     _flushed_job_status: str = field(default="", repr=False)
-    _flushed_channel_statuses: dict[str, str] = field(
-        default_factory=dict, repr=False
-    )
+    _flushed_channel_statuses: dict[str, str] = field(default_factory=dict, repr=False)
     _last_persist_at_ms: float = field(default=0.0, repr=False)
 
     def to_camel(self) -> dict[str, Any]:
@@ -194,9 +192,7 @@ async def persist_job(job: SyncJobState) -> None:
     await _notify_job_update(job)
 
 
-async def wait_job_update(
-    job: SyncJobState, *, seen_seq: int, timeout_s: float
-) -> int:
+async def wait_job_update(job: SyncJobState, *, seen_seq: int, timeout_s: float) -> int:
     """Wait until the job is updated or timeout. Returns the current update seq."""
     async with job._update_condition:
         if job._update_seq > seen_seq:

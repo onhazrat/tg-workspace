@@ -1,11 +1,12 @@
-import React, { useState } from "react";
-import { motion, AnimatePresence } from "motion/react";
-import { List, Activity } from "lucide-react";
-import { LogsView } from "./LogsView";
-import { NetworkTelemetry } from "./NetworkTelemetry";
+import { Activity, List } from "lucide-react"
+import { AnimatePresence, motion } from "motion/react"
+import type React from "react"
+import { useState } from "react"
+import { LogsView } from "./LogsView"
+import { NetworkTelemetry } from "./NetworkTelemetry"
 
 export const DiagnosticsView: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<"logs" | "telemetry">("logs");
+  const [activeTab, setActiveTab] = useState<"logs" | "telemetry">("logs")
 
   return (
     <motion.div
@@ -21,7 +22,9 @@ export const DiagnosticsView: React.FC = () => {
               <h3 className="text-sm uppercase font-bold tracking-widest">
                 Diagnostics
               </h3>
-              <span className="text-[10px] font-mono opacity-40">[SYSTEM_HEALTH]</span>
+              <span className="text-[10px] font-mono opacity-40">
+                [SYSTEM_HEALTH]
+              </span>
             </div>
             <p className="text-[10px] italic serif opacity-50 mt-1">
               Monitor system logs, telemetry, and network connections.
@@ -33,6 +36,7 @@ export const DiagnosticsView: React.FC = () => {
 
       <div className="flex bg-app-ink/5 p-1 rounded-lg border border-app-ink/10 w-fit mb-6">
         <button
+          type="button"
           onClick={() => setActiveTab("logs")}
           className={`px-4 py-2 text-[10px] uppercase font-bold tracking-widest transition-all flex items-center gap-2 ${
             activeTab === "logs"
@@ -43,6 +47,7 @@ export const DiagnosticsView: React.FC = () => {
           <List size={12} /> View Logs
         </button>
         <button
+          type="button"
           onClick={() => setActiveTab("telemetry")}
           className={`px-4 py-2 text-[10px] uppercase font-bold tracking-widest transition-all flex items-center gap-2 ${
             activeTab === "telemetry"
@@ -77,5 +82,5 @@ export const DiagnosticsView: React.FC = () => {
         )}
       </AnimatePresence>
     </motion.div>
-  );
-};
+  )
+}

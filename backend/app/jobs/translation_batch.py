@@ -6,17 +6,18 @@ import logging
 import time
 import uuid
 from datetime import datetime
+from typing import Any
 
 from sqlmodel import Session, col, select
 
 from app.ai.registry import default_model, get_provider
-from app.services.channels import channel_names_for_operator
-from app.services.operator import get_operator_user_id
-from app.services.sync_meta import touch_sync
 from app.core.config import settings
 from app.core.db import engine
 from app.jobs.settings import load_translation_settings
 from app.models_tg import Post, PostTranslation
+from app.services.channels import channel_names_for_operator
+from app.services.operator import get_operator_user_id
+from app.services.sync_meta import touch_sync
 
 logger = logging.getLogger(__name__)
 
@@ -26,7 +27,7 @@ def _posts_needing_translation(
     language: str,
     limit: int,
     *,
-    operator_id,
+    operator_id: uuid.UUID | None,
 ) -> list[Post]:
     channel_names = channel_names_for_operator(session, operator_id)
     if not channel_names:
@@ -35,20 +36,20 @@ def _posts_needing_translation(
         select(Post)
         .outerjoin(
             PostTranslation,
-            (Post.channel_name == PostTranslation.channel_name)
-            & (Post.post_id == PostTranslation.post_id)
-            & (PostTranslation.language == language),
+            (col(Post.channel_name) == col(PostTranslation.channel_name))
+            & (col(Post.post_id) == col(PostTranslation.post_id))
+            & (col(PostTranslation.language) == language),
         )
         .where(col(PostTranslation.id).is_(None))
         .where(col(Post.channel_name).in_(channel_names))
         .where(col(Post.is_anchor) == False)  # noqa: E712
-        .order_by(Post.timestamp.desc())
+        .order_by(col(Post.timestamp).desc())
         .limit(limit)
     )
     return list(session.exec(stmt).all())
 
 
-async def run_translation_batch() -> dict:
+async def run_translation_batch() -> dict[str, Any]:
     with Session(engine) as session:
         cfg = load_translation_settings(session)
         if not cfg.get("translationEnabled") or not cfg.get("autoTranslate"):
@@ -74,7 +75,10 @@ async def run_translation_batch() -> dict:
         char_count = 0
         for post in posts:
             text_len = len(post.text or "")
-            if selected and char_count + text_len > settings.TRANSLATION_BATCH_MAX_CHARS:
+            if (
+                selected
+                and char_count + text_len > settings.TRANSLATION_BATCH_MAX_CHARS
+            ):
                 break
             selected.append(post)
             char_count += text_len

@@ -4,7 +4,7 @@ import uuid
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import BigInteger, Column, JSON, Text, UniqueConstraint
+from sqlalchemy import JSON, BigInteger, Column, Text, UniqueConstraint
 from sqlmodel import Field, SQLModel
 
 
@@ -174,8 +174,12 @@ class PublishLog(SQLModel, table=True):
     status: str
     error: str | None = None
     timestamp: int = Field(default=0, sa_column=_ms_ts())
-    full_request: dict[str, Any] | list[Any] | None = Field(default=None, sa_column=Column(JSON))
-    full_response: dict[str, Any] | list[Any] | None = Field(default=None, sa_column=Column(JSON))
+    full_request: dict[str, Any] | list[Any] | None = Field(
+        default=None, sa_column=Column(JSON)
+    )
+    full_response: dict[str, Any] | list[Any] | None = Field(
+        default=None, sa_column=Column(JSON)
+    )
     text_sent: str | None = None
     updated_at: datetime = Field(default_factory=utc_now)
 
@@ -192,8 +196,12 @@ class SyncLog(SQLModel, table=True):
     error: str | None = None
     timestamp: int = Field(default=0, sa_column=_ms_ts())
     source: str = ""
-    full_request: dict[str, Any] | list[Any] | None = Field(default=None, sa_column=Column(JSON))
-    full_response: dict[str, Any] | list[Any] | None = Field(default=None, sa_column=Column(JSON))
+    full_request: dict[str, Any] | list[Any] | None = Field(
+        default=None, sa_column=Column(JSON)
+    )
+    full_response: dict[str, Any] | list[Any] | None = Field(
+        default=None, sa_column=Column(JSON)
+    )
     updated_at: datetime = Field(default_factory=utc_now)
 
 
@@ -206,9 +214,15 @@ class LLMLog(SQLModel, table=True):
     prompt: str = Field(sa_column=Column(Text))
     response: str = Field(sa_column=Column(Text))
     system_instruction: str | None = Field(default=None, sa_column=Column(Text))
-    model_config_json: dict[str, Any] | None = Field(default=None, sa_column=Column(JSON))
-    full_request: dict[str, Any] | list[Any] | None = Field(default=None, sa_column=Column(JSON))
-    full_response: dict[str, Any] | list[Any] | None = Field(default=None, sa_column=Column(JSON))
+    model_config_json: dict[str, Any] | None = Field(
+        default=None, sa_column=Column(JSON)
+    )
+    full_request: dict[str, Any] | list[Any] | None = Field(
+        default=None, sa_column=Column(JSON)
+    )
+    full_response: dict[str, Any] | list[Any] | None = Field(
+        default=None, sa_column=Column(JSON)
+    )
     tokens: int | None = None
     duration: float | None = None
     status: str

@@ -74,7 +74,14 @@ def redact_proxy_url(proxy_url: str | None) -> str | None:
                 host = f"{host}:{parsed.port}"
             netloc = f"***@{host}" if host else "***"
             return urlunparse(
-                (parsed.scheme, netloc, parsed.path, parsed.params, parsed.query, parsed.fragment)
+                (
+                    parsed.scheme,
+                    netloc,
+                    parsed.path,
+                    parsed.params,
+                    parsed.query,
+                    parsed.fragment,
+                )
             )
     except Exception:  # noqa: BLE001
         pass
@@ -93,11 +100,15 @@ def get_network_setting_row(session: Session) -> AppSetting | None:
     return session.get(AppSetting, NETWORK_SETTING_KEY)
 
 
-def load_network_settings(session: Session, user_id: uuid.UUID | None = None) -> dict[str, Any]:
+def load_network_settings(
+    session: Session, user_id: uuid.UUID | None = None
+) -> dict[str, Any]:
     """Load merged network settings for proxy resolution (includes server env metadata)."""
     row = get_network_setting_row(session)
     stored = row.value if row else {}
-    return network_settings_payload(stored, owner_user_id=row.user_id if row else user_id)
+    return network_settings_payload(
+        stored, owner_user_id=row.user_id if row else user_id
+    )
 
 
 def network_settings_payload(
@@ -117,7 +128,9 @@ def network_settings_payload(
         "proxyDefaultConcurrency": default_concurrency,
         "proxyConcurrencyOverrides": overrides,
         "envFallbackConfigured": bool(env_fallback),
-        "usingEnvFallback": bool(ui.get("proxyEnabled")) and not proxy_urls and bool(env_fallback),
+        "usingEnvFallback": bool(ui.get("proxyEnabled"))
+        and not proxy_urls
+        and bool(env_fallback),
         "torAvailable": settings.TOR_ENABLED,
         "torControlPortDefault": settings.TOR_CONTROL_PORT,
         "torSocksProxy": settings.TOR_SOCKS_PROXY,
@@ -127,7 +140,9 @@ def network_settings_payload(
     return payload
 
 
-def merge_network_put(body: dict[str, Any], stored: dict[str, Any] | None) -> dict[str, Any]:
+def merge_network_put(
+    body: dict[str, Any], stored: dict[str, Any] | None
+) -> dict[str, Any]:
     merged = {**(stored or {})}
     for key in NETWORK_UI_KEYS:
         if key not in body:
@@ -139,7 +154,9 @@ def merge_network_put(body: dict[str, Any], stored: dict[str, Any] | None) -> di
         elif key == "proxyDefaultConcurrency":
             merged["proxyDefaultConcurrency"] = clamp_proxy_concurrency(int(value))
         elif key == "proxyConcurrencyOverrides":
-            merged["proxyConcurrencyOverrides"] = _normalize_concurrency_overrides(value)
+            merged["proxyConcurrencyOverrides"] = _normalize_concurrency_overrides(
+                value
+            )
         else:
             merged[key] = value
     # Accept legacy textarea field when client did not send proxyUrls.
@@ -169,7 +186,9 @@ def resolve_proxy_concurrency(network: dict[str, Any]) -> tuple[int, dict[str, i
             or settings.PROXY_DEFAULT_CONCURRENCY_DEFAULT
         )
     )
-    overrides = _normalize_concurrency_overrides(network.get("proxyConcurrencyOverrides"))
+    overrides = _normalize_concurrency_overrides(
+        network.get("proxyConcurrencyOverrides")
+    )
     return default, overrides
 
 

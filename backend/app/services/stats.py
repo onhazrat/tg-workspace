@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import uuid
-from typing import Any
+from typing import Any, cast
 
 from sqlmodel import Session, col, func, or_, select
 
@@ -25,24 +25,25 @@ from app.services.operator import get_operator_user_id
 
 def _scoped_count(
     session: Session,
-    model: type,
+    model: type[Any],
     operator_id: uuid.UUID | None,
 ) -> int:
-    stmt = select(func.count()).select_from(model)  # type: ignore[arg-type]
+    stmt = select(func.count()).select_from(model)
     if operator_id is not None and hasattr(model, "user_id"):
+        user_id_col = cast(Any, model).user_id
         stmt = stmt.where(
-            or_(col(model.user_id) == operator_id, col(model.user_id).is_(None))  # type: ignore[attr-defined]
+            or_(col(user_id_col) == operator_id, col(user_id_col).is_(None))
         )
     return session.exec(stmt).one()
 
 
-def get_db_stats(session: Session, operator_id: uuid.UUID | None = None) -> dict[str, Any]:
+def get_db_stats(
+    session: Session, operator_id: uuid.UUID | None = None
+) -> dict[str, Any]:
     if operator_id is None:
         operator_id = get_operator_user_id(session)
 
-    embedded = session.exec(
-        select(func.count()).select_from(PostEmbedding)
-    ).one()
+    embedded = session.exec(select(func.count()).select_from(PostEmbedding)).one()
 
     return {
         "postCount": _scoped_count(session, Post, operator_id),

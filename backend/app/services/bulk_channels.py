@@ -7,7 +7,6 @@ import logging
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any
 
 from sqlmodel import Session, col, delete, select
 
@@ -28,9 +27,7 @@ class BulkReresolveResult:
     would_update: int = 0
     errors: list[dict[str, str]] = field(default_factory=list)
     deprecated: bool = True
-    message: str = (
-        "bulk_reresolve_start_ids is deprecated; use bulk_reset_sync for full re-backfill."
-    )
+    message: str = "bulk_reresolve_start_ids is deprecated; use bulk_reset_sync for full re-backfill."
 
 
 @dataclass
@@ -75,6 +72,7 @@ async def bulk_reresolve_start_ids(
     auto_follow_only: bool = False,
 ) -> BulkReresolveResult:
     """Deprecated — retained for API compatibility; does not modify channels."""
+    _ = dry_run
     channels = select_bulk_channels(
         session,
         operator_id=operator_id,
@@ -91,7 +89,9 @@ async def bulk_reresolve_start_ids(
 
 
 def _clear_channel_posts(session: Session, channel_name: str) -> int:
-    posts = list(session.exec(select(Post).where(Post.channel_name == channel_name)).all())
+    posts = list(
+        session.exec(select(Post).where(Post.channel_name == channel_name)).all()
+    )
     if not posts:
         return 0
     session.exec(

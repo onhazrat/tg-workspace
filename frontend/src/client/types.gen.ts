@@ -438,7 +438,7 @@ export type AiApiTranslateResponse = ({
     [key: string]: unknown;
 });
 
-export type DataGetSyncMetaResponse = ({
+export type DataGetSyncMetaRouteResponse = ({
     [key: string]: unknown;
 });
 
@@ -504,13 +504,13 @@ export type DataListPostsResponse = (Array<{
     [key: string]: unknown;
 }>);
 
-export type DataBulkUpsertPostsData = {
+export type DataBulkUpsertPostsRouteData = {
     requestBody: Array<{
         [key: string]: unknown;
     }>;
 };
 
-export type DataBulkUpsertPostsResponse = ({
+export type DataBulkUpsertPostsRouteResponse = ({
     [key: string]: (number);
 });
 
@@ -621,7 +621,7 @@ export type DataUpsertTranslationsResponse = ({
     [key: string]: (number);
 });
 
-export type DataListPublishLogsResponse = (Array<{
+export type DataListPublishLogsRouteResponse = (Array<{
     [key: string]: unknown;
 }>);
 
@@ -635,7 +635,7 @@ export type DataCreatePublishLogsResponse = ({
     [key: string]: (number);
 });
 
-export type DataListSyncLogsResponse = (Array<{
+export type DataListSyncLogsRouteResponse = (Array<{
     [key: string]: unknown;
 }>);
 
@@ -649,7 +649,7 @@ export type DataCreateSyncLogsResponse = ({
     [key: string]: (number);
 });
 
-export type DataListLlmLogsResponse = (Array<{
+export type DataListLlmLogsRouteResponse = (Array<{
     [key: string]: unknown;
 }>);
 
@@ -663,7 +663,7 @@ export type DataCreateLlmLogsResponse = ({
     [key: string]: (number);
 });
 
-export type DataListEmbeddingLogsResponse = (({
+export type DataListEmbeddingLogsRouteResponse = (({
     [key: string]: unknown;
 } | Array<{
     [key: string]: unknown;
@@ -679,7 +679,7 @@ export type DataCreateEmbeddingLogsResponse = ({
     [key: string]: (number);
 });
 
-export type DataListNetworkLogsResponse = (Array<{
+export type DataListNetworkLogsRouteResponse = (Array<{
     [key: string]: unknown;
 }>);
 

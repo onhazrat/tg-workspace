@@ -7,7 +7,6 @@ import uuid
 import pytest
 from sqlmodel import Session
 
-from app.core.config import settings
 from app.core.db import engine
 from app.services.operator import get_operator_user_id, select_operator_channels
 

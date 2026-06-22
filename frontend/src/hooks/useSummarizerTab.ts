@@ -1,6 +1,6 @@
-import { getRouteApi } from "@tanstack/react-router";
+import { getRouteApi } from "@tanstack/react-router"
 
-import type { TabType } from "@/types";
+import type { TabType } from "@/types"
 
 const VALID_TABS: TabType[] = [
   "summary",
@@ -9,21 +9,23 @@ const VALID_TABS: TabType[] = [
   "history",
   "chat",
   "settings",
-];
+]
 
-const summarizerRoute = getRouteApi("/_tg/summarizer");
+const summarizerRoute = getRouteApi("/_tg/summarizer")
 
 export function useSummarizerTab() {
-  const { tab } = summarizerRoute.useSearch();
-  const navigate = summarizerRoute.useNavigate();
+  const { tab } = summarizerRoute.useSearch()
+  const navigate = summarizerRoute.useNavigate()
 
-  const activeTab = (VALID_TABS.includes(tab as TabType) ? tab : "summary") as TabType;
+  const activeTab = (
+    VALID_TABS.includes(tab as TabType) ? tab : "summary"
+  ) as TabType
 
   const setActiveTab = (next: TabType | ((prev: TabType) => TabType)) => {
-    const resolved = typeof next === "function" ? next(activeTab) : next;
-    const safe = VALID_TABS.includes(resolved) ? resolved : "summary";
-    navigate({ search: (prev) => ({ ...prev, tab: safe }), replace: true });
-  };
+    const resolved = typeof next === "function" ? next(activeTab) : next
+    const safe = VALID_TABS.includes(resolved) ? resolved : "summary"
+    navigate({ search: (prev) => ({ ...prev, tab: safe }), replace: true })
+  }
 
-  return { activeTab, setActiveTab };
+  return { activeTab, setActiveTab }
 }

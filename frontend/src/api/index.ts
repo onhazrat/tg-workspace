@@ -1,9 +1,9 @@
-import { aiApi } from "./ai";
-import { dataApi } from "./data";
-import { jobsApi } from "./jobs";
-import { networkApi } from "./network";
-import { ragApi } from "./rag";
-import { tgApi } from "./tg";
+import { aiApi } from "./ai"
+import { dataApi } from "./data"
+import { jobsApi } from "./jobs"
+import { networkApi } from "./network"
+import { ragApi } from "./rag"
+import { tgApi } from "./tg"
 
 /** Unified hand-written TG summarizer API client (REST + SSE). */
 export const api = {
@@ -13,20 +13,9 @@ export const api = {
   ...ragApi,
   ...jobsApi,
   ...dataApi,
-};
+}
 
-export { aiApi } from "./ai";
-export { dataApi } from "./data";
-export { jobsApi } from "./jobs";
-export type {
-  JobStatusEntry,
-  RuntimeConfig,
-  SyncJobChannelStatus,
-  SyncJobStatus,
-} from "./jobs";
-export { networkApi } from "./network";
-export { ragApi } from "./rag";
-export { tgApi } from "./tg";
+export { aiApi } from "./ai"
 export {
   API_BASE,
   clearStaleSession,
@@ -36,5 +25,15 @@ export {
   requestBlob,
   sseJsonStream,
   sseTextStream,
-} from "./base";
-export { subscribeSyncJobEvents } from "./jobs";
+} from "./base"
+export { dataApi } from "./data"
+export type {
+  JobStatusEntry,
+  RuntimeConfig,
+  SyncJobChannelStatus,
+  SyncJobStatus,
+} from "./jobs"
+export { jobsApi, subscribeSyncJobEvents } from "./jobs"
+export { networkApi } from "./network"
+export { ragApi } from "./rag"
+export { tgApi } from "./tg"

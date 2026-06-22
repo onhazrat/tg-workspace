@@ -1,4 +1,4 @@
-import { request } from "./base";
+import { request } from "./base"
 
 export const networkApi = {
   testProxy: (proxyUrl: string) =>
@@ -7,11 +7,12 @@ export const networkApi = {
       body: JSON.stringify({ proxyUrl }),
     }),
 
-  proxyHealth: () => request<{ badProxies: unknown[] }>("/api/v1/network/proxy-health"),
+  proxyHealth: () =>
+    request<{ badProxies: unknown[] }>("/api/v1/network/proxy-health"),
 
   torStatus: () =>
     request<{ running: boolean; socksInUse: boolean; controlInUse: boolean }>(
-      "/api/v1/network/tor-status"
+      "/api/v1/network/tor-status",
     ),
 
   torIp: () => request<{ ip: string }>("/api/v1/network/tor-ip"),
@@ -23,4 +24,4 @@ export const networkApi = {
       method: "POST",
       body: JSON.stringify({ port }),
     }),
-};
+}

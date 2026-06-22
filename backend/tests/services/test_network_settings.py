@@ -126,7 +126,9 @@ def test_merge_network_put_validates_proxy_concurrency() -> None:
     assert merged["proxyConcurrencyOverrides"][normalize_proxy_url("socks5://b:2")] == 5
 
 
-def test_network_settings_payload_includes_proxy_concurrency_defaults(monkeypatch) -> None:
+def test_network_settings_payload_includes_proxy_concurrency_defaults(
+    monkeypatch,
+) -> None:
     monkeypatch.setattr(
         "app.services.network_settings.settings.PROXY_DEFAULT_CONCURRENCY_DEFAULT",
         2,
@@ -144,8 +146,11 @@ def test_resolve_proxy_concurrency_and_capacity() -> None:
     default, overrides = resolve_proxy_concurrency(network)
     assert default == 2
     assert overrides[normalize_proxy_url("http://fast:1")] == 4
-    assert compute_proxy_pool_capacity(
-        ["http://fast:1", "http://slow:2"],
-        default,
-        overrides,
-    ) == 6
+    assert (
+        compute_proxy_pool_capacity(
+            ["http://fast:1", "http://slow:2"],
+            default,
+            overrides,
+        )
+        == 6
+    )

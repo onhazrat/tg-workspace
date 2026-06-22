@@ -1,6 +1,6 @@
 # Implementation Plan
 
-**Date:** 2026-06-08  
+**Date:** 2026-06-08
 **Locked decisions:** [DECISIONS.md](./DECISIONS.md)
 
 Phased migration from browser-first TG-Summarizer (IndexedDB + Express) to FastAPI + PostgreSQL with hybrid read-through cache. Critical path: **Phase 0 → 1 → 4 → 6**.

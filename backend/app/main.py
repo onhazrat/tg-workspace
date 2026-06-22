@@ -1,13 +1,14 @@
 import logging
+from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from typing import Any
 
 import sentry_sdk
 from fastapi import FastAPI, Request
 from fastapi.routing import APIRoute
+from sqlmodel import Session
 from starlette.middleware.cors import CORSMiddleware
 from starlette.responses import JSONResponse
-
-from sqlmodel import Session
 
 from app.api.main import api_router
 from app.api.routes import legacy
@@ -29,7 +30,7 @@ if settings.SENTRY_DSN and settings.ENVIRONMENT != "local":
 
 
 @asynccontextmanager
-async def lifespan(_app: FastAPI):
+async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     run_startup_checks()
     with Session(engine) as session:
         init_db(session)
@@ -60,7 +61,7 @@ app.add_middleware(APIKeyMiddleware)
 
 
 @app.middleware("http")
-async def block_legacy_api_in_production(request: Request, call_next):
+async def block_legacy_api_in_production(request: Request, call_next: Any) -> Any:
     path = request.url.path
     if (
         settings.ENVIRONMENT == "production"

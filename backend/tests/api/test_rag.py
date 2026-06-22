@@ -35,9 +35,9 @@ def _seed_posts_and_embeddings(client: TestClient) -> None:
         json={"name": "rag-ch"},
         headers=headers,
     )
-    from app.core.db import engine
     from sqlmodel import Session
 
+    from app.core.db import engine
     from app.models_tg import Channel
     from app.services.operator import get_operator_user_id
 
@@ -216,10 +216,12 @@ def test_backfill_embeddings_mocked_provider(
     client: TestClient,
 ) -> None:
     headers = _auth(client)
-    client.put(f"{DATA}/channels/backfill-ch", json={"name": "backfill-ch"}, headers=headers)
-    from app.core.db import engine
+    client.put(
+        f"{DATA}/channels/backfill-ch", json={"name": "backfill-ch"}, headers=headers
+    )
     from sqlmodel import Session, select
 
+    from app.core.db import engine
     from app.models_tg import Channel, PostEmbedding
     from app.services.operator import get_operator_user_id
 
@@ -238,20 +240,20 @@ def test_backfill_embeddings_mocked_provider(
     client.post(
         f"{DATA}/posts/bulk",
         json=[
-                {
-                    "id": 10,
-                    "channelName": "backfill-ch",
-                    "text": "needs embedding",
-                    "date": "2024-02-01",
-                    "timestamp": 9_999_999_999_000,
-                },
-                {
-                    "id": 11,
-                    "channelName": "backfill-ch",
-                    "text": "also needs embedding",
-                    "date": "2024-02-02",
-                    "timestamp": 9_999_999_998_000,
-                },
+            {
+                "id": 10,
+                "channelName": "backfill-ch",
+                "text": "needs embedding",
+                "date": "2024-02-01",
+                "timestamp": 9_999_999_999_000,
+            },
+            {
+                "id": 11,
+                "channelName": "backfill-ch",
+                "text": "also needs embedding",
+                "date": "2024-02-02",
+                "timestamp": 9_999_999_998_000,
+            },
         ],
         headers=headers,
     )
@@ -354,9 +356,9 @@ def test_rag_search_scoped_to_operator_channels(
 
 def test_rag_status_scoped_to_operator_channels(client: TestClient) -> None:
     """Status counts must reflect operator channels only."""
-    from app.core.db import engine
     from sqlmodel import Session, select
 
+    from app.core.db import engine
     from app.models_tg import Channel, Post
 
     headers = _auth(client)

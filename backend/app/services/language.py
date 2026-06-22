@@ -75,4 +75,5 @@ def detect_language_from_posts(posts: list[dict[str, Any]]) -> str | None:
         "pl": "pol",
     }
     iso3 = iso3_map.get(code, code)
-    return _ISO639_3_TO_NAME.get(iso3, code)
+    name = _ISO639_3_TO_NAME.get(iso3, code)
+    return str(name)

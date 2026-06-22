@@ -1,4 +1,4 @@
-"""Post bulk upsert (extracted from data routes)."""
+"""Post list and bulk upsert (extracted from data routes)."""
 
 from __future__ import annotations
 
@@ -6,9 +6,11 @@ import time
 from datetime import datetime
 from typing import Any
 
-from sqlmodel import Session, select
+from sqlmodel import Session, col, select
 
 from app.models_tg import Post
+from app.services.serialization import post_to_camel
+from app.services.sync_meta import touch_sync
 
 
 def bulk_upsert_posts_impl(
@@ -40,9 +42,21 @@ def bulk_upsert_posts_impl(
             existing.updated_at = datetime.utcnow()
             session.add(existing)
         else:
-            job_id = item.get("retrievalJobId") or item.get("retrieval_job_id") or retrieval_job_id
-            pass_val = item.get("retrievalPass") or item.get("retrieval_pass") or retrieval_pass
-            source = item.get("retrievalSource") or item.get("retrieval_source") or retrieval_source
+            job_id = (
+                item.get("retrievalJobId")
+                or item.get("retrieval_job_id")
+                or retrieval_job_id
+            )
+            pass_val = (
+                item.get("retrievalPass")
+                or item.get("retrieval_pass")
+                or retrieval_pass
+            )
+            source = (
+                item.get("retrievalSource")
+                or item.get("retrieval_source")
+                or retrieval_source
+            )
             session.add(
                 Post(
                     channel_name=channel,
@@ -50,7 +64,8 @@ def bulk_upsert_posts_impl(
                     text=item.get("text", ""),
                     date=item.get("date", ""),
                     timestamp=item.get("timestamp", 0),
-                    forwarded_from=item.get("forwardedFrom") or item.get("forwarded_from"),
+                    forwarded_from=item.get("forwardedFrom")
+                    or item.get("forwarded_from"),
                     forwarded_from_name=item.get("forwardedFromName")
                     or item.get("forwarded_from_name"),
                     retrieved_at=now_ms,
@@ -61,3 +76,27 @@ def bulk_upsert_posts_impl(
             )
         count += 1
     return count
+
+
+def list_posts(
+    session: Session,
+    *,
+    channel_names: list[str] | None = None,
+    start_date: int | None = None,
+    end_date: int | None = None,
+) -> list[dict[str, Any]]:
+    stmt = select(Post)
+    if channel_names:
+        stmt = stmt.where(col(Post.channel_name).in_(channel_names))
+    if start_date is not None:
+        stmt = stmt.where(Post.timestamp >= start_date)
+    if end_date is not None:
+        stmt = stmt.where(Post.timestamp <= end_date)
+    return [post_to_camel(p) for p in session.exec(stmt).all()]
+
+
+def bulk_upsert_posts(session: Session, body: list[dict[str, Any]]) -> dict[str, int]:
+    count = bulk_upsert_posts_impl(body, session)
+    session.commit()
+    touch_sync(session, "posts")
+    return {"upserted": count}

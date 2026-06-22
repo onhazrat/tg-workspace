@@ -193,9 +193,7 @@ class Settings(BaseSettings):
                     "TOKEN_ENCRYPTION_KEY must be set when ENVIRONMENT is not 'local'"
                 )
             if self.ENVIRONMENT == "production" and not self.API_KEY.strip():
-                raise ValueError(
-                    "API_KEY must be set when ENVIRONMENT is 'production'"
-                )
+                raise ValueError("API_KEY must be set when ENVIRONMENT is 'production'")
 
         return self
 

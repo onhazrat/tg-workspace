@@ -1,4 +1,4 @@
-import { env } from "@/lib/env";
+import { env } from "@/lib/env"
 
 /** React Query keys for summarizer server state. */
 export const queryKeys = {
@@ -13,6 +13,6 @@ export const queryKeys = {
     embedding: ["logs", "embedding"] as const,
     network: ["logs", "network"] as const,
   },
-} as const;
+} as const
 
-export const SUMMARIZER_STALE_TIME = env.queryStaleTimeMs;
+export const SUMMARIZER_STALE_TIME = env.queryStaleTimeMs

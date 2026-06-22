@@ -1,12 +1,13 @@
-import React, { useEffect, useState } from "react";
-import { ClipboardPaste, Loader2 } from "lucide-react";
-import { toast } from "sonner";
-import { Modal } from "./ui/Modal";
+import { ClipboardPaste, Loader2 } from "lucide-react"
+import type React from "react"
+import { useEffect, useState } from "react"
+import { toast } from "sonner"
+import { Modal } from "./ui/Modal"
 
 interface PasteSummaryModalProps {
-  isOpen: boolean;
-  onClose: () => void;
-  onSave: (text: string, modelName?: string) => Promise<boolean>;
+  isOpen: boolean
+  onClose: () => void
+  onSave: (text: string, modelName?: string) => Promise<boolean>
 }
 
 export const PasteSummaryModal: React.FC<PasteSummaryModalProps> = ({
@@ -14,60 +15,60 @@ export const PasteSummaryModal: React.FC<PasteSummaryModalProps> = ({
   onClose,
   onSave,
 }) => {
-  const [text, setText] = useState("");
-  const [modelName, setModelName] = useState("");
-  const [saving, setSaving] = useState(false);
-  const [pasting, setPasting] = useState(false);
+  const [text, setText] = useState("")
+  const [modelName, setModelName] = useState("")
+  const [saving, setSaving] = useState(false)
+  const [pasting, setPasting] = useState(false)
 
   useEffect(() => {
     if (!isOpen) {
-      setText("");
-      setModelName("");
-      setSaving(false);
-      setPasting(false);
+      setText("")
+      setModelName("")
+      setSaving(false)
+      setPasting(false)
     }
-  }, [isOpen]);
+  }, [isOpen])
 
   const handlePasteFromClipboard = async () => {
     if (!navigator.clipboard?.readText) {
-      toast.error("Clipboard access is not available in this browser.");
-      return;
+      toast.error("Clipboard access is not available in this browser.")
+      return
     }
 
-    setPasting(true);
+    setPasting(true)
     try {
-      const clipText = await navigator.clipboard.readText();
+      const clipText = await navigator.clipboard.readText()
       if (!clipText.trim()) {
-        toast.warning("Clipboard is empty.");
-        return;
+        toast.warning("Clipboard is empty.")
+        return
       }
-      setText(clipText);
-      toast.success("Pasted from clipboard.");
+      setText(clipText)
+      toast.success("Pasted from clipboard.")
     } catch (err: unknown) {
-      console.error(err);
+      console.error(err)
       toast.error(
-        "Could not read clipboard. Grant permission or paste manually (Cmd/Ctrl+V)."
-      );
+        "Could not read clipboard. Grant permission or paste manually (Cmd/Ctrl+V).",
+      )
     } finally {
-      setPasting(false);
+      setPasting(false)
     }
-  };
+  }
 
   const handleSave = async () => {
-    const trimmed = text.trim();
+    const trimmed = text.trim()
     if (!trimmed) {
-      toast.error("Summary text cannot be empty.");
-      return;
+      toast.error("Summary text cannot be empty.")
+      return
     }
 
-    setSaving(true);
+    setSaving(true)
     try {
-      const saved = await onSave(trimmed, modelName.trim() || undefined);
-      if (saved) onClose();
+      const saved = await onSave(trimmed, modelName.trim() || undefined)
+      if (saved) onClose()
     } finally {
-      setSaving(false);
+      setSaving(false)
     }
-  };
+  }
 
   return (
     <Modal
@@ -99,8 +100,8 @@ export const PasteSummaryModal: React.FC<PasteSummaryModalProps> = ({
     >
       <div className="space-y-4">
         <p className="text-sm text-app-ink/70">
-          Paste the summary from your external AI tool. Review and edit before saving — this
-          history entry will be completed with your response.
+          Paste the summary from your external AI tool. Review and edit before
+          saving — this history entry will be completed with your response.
         </p>
         <button
           type="button"
@@ -131,5 +132,5 @@ export const PasteSummaryModal: React.FC<PasteSummaryModalProps> = ({
         />
       </div>
     </Modal>
-  );
-};
+  )
+}

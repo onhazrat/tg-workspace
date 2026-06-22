@@ -4,11 +4,15 @@ from __future__ import annotations
 
 import asyncio
 import time
+
 import httpx
 import pytest
 
 from app.services.network import _bad_proxies, proxy_in_cooldown
-from app.services.network_settings import compute_proxy_pool_capacity, normalize_proxy_url
+from app.services.network_settings import (
+    compute_proxy_pool_capacity,
+    normalize_proxy_url,
+)
 from app.services.proxy_pool import (
     ProxyPoolExhausted,
     ProxyPoolManager,

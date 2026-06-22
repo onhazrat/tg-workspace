@@ -17,12 +17,22 @@ from app.services.network import fetch_with_retry
 logger = logging.getLogger(__name__)
 
 
-def _parse_posts_from_html(html: str, start_id: int, seen: set[int]) -> tuple[list[dict[str, Any]], str | None]:
+def _attr_str(value: str | list[str] | None) -> str | None:
+    if value is None:
+        return None
+    if isinstance(value, list):
+        return value[0] if value else None
+    return value
+
+
+def _parse_posts_from_html(
+    html: str, start_id: int, seen: set[int]
+) -> tuple[list[dict[str, Any]], str | None]:
     soup = BeautifulSoup(html, "html.parser")
     posts: list[dict[str, Any]] = []
 
     for el in soup.select(".tgme_widget_message"):
-        data_post = el.get("data-post")
+        data_post = _attr_str(el.get("data-post"))
         post_id: int | None = None
         if data_post:
             parts = data_post.split("/")
@@ -31,7 +41,7 @@ def _parse_posts_from_html(html: str, start_id: int, seen: set[int]) -> tuple[li
 
         if not post_id:
             date_link = el.select_one(".tgme_widget_message_date")
-            href = date_link.get("href") if date_link else None
+            href = _attr_str(date_link.get("href") if date_link else None)
             if href:
                 m = re.search(r"/(\d+)$", href)
                 if m:
@@ -55,14 +65,14 @@ def _parse_posts_from_html(html: str, start_id: int, seen: set[int]) -> tuple[li
                 text = ""
 
         time_el = el.select_one("time[datetime]")
-        date = time_el.get("datetime", "") if time_el else ""
+        date = _attr_str(time_el.get("datetime") if time_el else None) or ""
 
         forwarded_from: str | None = None
         forwarded_from_name: str | None = None
         fwd_el = el.select_one(".tgme_widget_message_forwarded_from_name")
         if fwd_el:
             forwarded_from_name = fwd_el.get_text(strip=True)
-            href = fwd_el.get("href")
+            href = _attr_str(fwd_el.get("href"))
             if href:
                 m = re.search(r"t\.me/([^/]+)", href)
                 if m:
@@ -83,9 +93,10 @@ def _parse_posts_from_html(html: str, start_id: int, seen: set[int]) -> tuple[li
 
     more = soup.select_one(".tgme_messages_more")
     next_url = None
-    if more and more.get("href"):
-        href = more["href"]
-        next_url = href if href.startswith("http") else f"https://t.me{href}"
+    if more:
+        href = _attr_str(more.get("href"))
+        if href:
+            next_url = href if href.startswith("http") else f"https://t.me{href}"
 
     return posts, next_url
 
@@ -118,7 +129,7 @@ def _parse_channel_meta(soup: BeautifulSoup, channel_name: str) -> dict[str, Any
     latest_id = 0
     for el in soup.select(".tgme_widget_message"):
         date_link = el.select_one(".tgme_widget_message_date")
-        href = date_link.get("href") if date_link else None
+        href = _attr_str(date_link.get("href") if date_link else None)
         if href:
             m = re.search(r"/(\d+)$", href)
             if m:
@@ -318,7 +329,9 @@ async def scrape_channel(
             proxy_concurrency=proxy_concurrency,
         )
         telemetry_logs.append(root_telem)
-        meta = _parse_channel_meta(BeautifulSoup(root_html, "html.parser"), channel_name)
+        meta = _parse_channel_meta(
+            BeautifulSoup(root_html, "html.parser"), channel_name
+        )
         display_name = meta["displayName"]
         photo_url = meta.get("photoUrl") or ""
         bio = meta.get("bio") or ""
@@ -335,9 +348,15 @@ async def scrape_channel(
     if not is_search_mode:
         last_fetched = max((p["id"] for p in all_posts), default=start_id - 1)
         iterations = 0
-        while last_fetched < latest_id and len(all_posts) < max_posts and iterations < iteration_limit:
+        while (
+            last_fetched < latest_id
+            and len(all_posts) < max_posts
+            and iterations < iteration_limit
+        ):
             iterations += 1
-            target = current_next or f"https://t.me/s/{channel_name}?after={last_fetched}"
+            target = (
+                current_next or f"https://t.me/s/{channel_name}?after={last_fetched}"
+            )
             next_posts, current_next = await fetch_posts(target)
             if not next_posts and not current_next:
                 if last_fetched < latest_id:
@@ -500,7 +519,9 @@ async def resolve_start_time_to_id(
         high_time = high_post["time"]
 
     if target_time_ms >= high_time:
-        logger.info("Target time is newer than latest post. Returning latest ID: %s", high_id)
+        logger.info(
+            "Target time is newer than latest post. Returning latest ID: %s", high_id
+        )
         return high_id
 
     low_id = 1
@@ -513,7 +534,9 @@ async def resolve_start_time_to_id(
     low_time = low_post["time"]
 
     if target_time_ms <= low_time:
-        logger.info("Target time is older than oldest post. Returning oldest ID: %s", low_id)
+        logger.info(
+            "Target time is older than oldest post. Returning oldest ID: %s", low_id
+        )
         return low_id
 
     logger.info(
@@ -533,7 +556,8 @@ async def resolve_start_time_to_id(
 
         if high_time > low_time:
             guess_id = low_id + int(
-                ((target_time_ms - low_time) / (high_time - low_time)) * (high_id - low_id)
+                ((target_time_ms - low_time) / (high_time - low_time))
+                * (high_id - low_id)
             )
         else:
             guess_id = (low_id + high_id) // 2

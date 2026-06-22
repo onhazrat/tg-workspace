@@ -6,25 +6,27 @@ import logging
 import re
 import time
 import uuid
+from collections.abc import Sequence
 from datetime import datetime
+from typing import Any
 
 from sqlmodel import Session, col, or_, select
 
 from app.ai.registry import default_model, get_provider
-from app.services.logs import upsert_llm_log, upsert_publish_log
-from app.services.operator import get_operator_user_id, select_operator_channels
-from app.services.sync_meta import touch_sync
 from app.core.config import settings
 from app.core.db import engine
-from app.models_tg import Channel, ChatDestination, Post, Summary
+from app.models_tg import ChatDestination, Post, Summary
 from app.prompts.summary import format_summary_prompt
-from app.services.publish import publish_summary_text
+from app.services.logs import upsert_llm_log, upsert_publish_log
 from app.services.network_settings import (
     load_network_settings,
     resolve_proxies,
     resolve_proxy_concurrency,
 )
+from app.services.operator import get_operator_user_id, select_operator_channels
+from app.services.publish import publish_summary_text
 from app.services.scraper_jobs import create_job, has_active_sync_job
+from app.services.sync_meta import touch_sync
 from app.services.sync_orchestrator import run_sync_job
 
 logger = logging.getLogger(__name__)
@@ -33,8 +35,8 @@ _regenerating: set[str] = set()
 _CITATION_RE = re.compile(r"\[([^\]]+?)\s*#(\d+)\]")
 
 
-def _extract_cited_posts(text: str, posts: list[Post]) -> dict[str, dict]:
-    cited: dict[str, dict] = {}
+def _extract_cited_posts(text: str, posts: Sequence[Post]) -> dict[str, dict[str, Any]]:
+    cited: dict[str, dict[str, Any]] = {}
     for match in _CITATION_RE.finditer(text):
         channel_name = match.group(1).strip()
         post_id = int(match.group(2))
@@ -53,7 +55,7 @@ def _extract_cited_posts(text: str, posts: list[Post]) -> dict[str, dict]:
     return cited
 
 
-def _default_metadata(summary: Summary, extra: dict) -> str:
+def _default_metadata(summary: Summary, extra: dict[str, Any]) -> str:
     channels = summary.channels or []
     return (
         f"📊 *Analysis Metadata*\n"
@@ -66,7 +68,7 @@ def _default_metadata(summary: Summary, extra: dict) -> str:
     )
 
 
-def _summary_extra(s: Summary) -> dict:
+def _summary_extra(s: Summary) -> dict[str, Any]:
     return s.extra or {}
 
 
@@ -85,11 +87,13 @@ async def _sync_channels_for_summary(
     session: Session,
     channel_names: list[str],
     end_ts: int,
-    operator_id,
+    operator_id: uuid.UUID | None,
 ) -> None:
     if has_active_sync_job():
         return
-    operator_channels = {ch.name: ch for ch in select_operator_channels(session, operator_id=operator_id)}
+    operator_channels = {
+        ch.name: ch for ch in select_operator_channels(session, operator_id=operator_id)
+    }
     stale = []
     for name in channel_names:
         ch = operator_channels.get(name)
@@ -112,7 +116,9 @@ async def _regenerate_one(session: Session, summary: Summary) -> str | None:
     new_end = summary.end_date + duration_ms
 
     operator_id = summary.user_id or get_operator_user_id(session)
-    await _sync_channels_for_summary(session, summary.channels or [], new_end, operator_id)
+    await _sync_channels_for_summary(
+        session, summary.channels or [], new_end, operator_id
+    )
 
     posts = session.exec(
         select(Post)
@@ -206,7 +212,12 @@ async def _regenerate_one(session: Session, summary: Summary) -> str | None:
     session.commit()
     touch_sync(session, "summaries")
 
-    if extra.get("autoPublish") and extra.get("publishBotId") and extra.get("publishChatId") and posts:
+    if (
+        extra.get("autoPublish")
+        and extra.get("publishBotId")
+        and extra.get("publishChatId")
+        and posts
+    ):
         await _auto_publish(session, new_summary, new_extra, full_text)
 
     return new_id
@@ -215,7 +226,7 @@ async def _regenerate_one(session: Session, summary: Summary) -> str | None:
 async def _auto_publish(
     session: Session,
     summary: Summary,
-    extra: dict,
+    extra: dict[str, Any],
     full_text: str,
 ) -> None:
     bot_id = str(extra.get("publishBotId"))
@@ -285,7 +296,7 @@ async def _auto_publish(
         touch_sync(session, "publish_logs")
 
 
-async def run_auto_summary() -> dict:
+async def run_auto_summary() -> dict[str, Any]:
     now = int(time.time() * 1000)
     regenerated: list[str] = []
     errors: list[str] = []

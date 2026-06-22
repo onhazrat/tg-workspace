@@ -33,12 +33,14 @@ def _sync_runtime_payload(sync_settings: dict[str, Any]) -> dict[str, Any]:
     return {
         "autoSyncEnabled": bool(sync_settings.get("autoSyncEnabled", True)),
         "autoSyncInterval": int(
-            sync_settings.get("autoSyncInterval") or settings.AUTO_SYNC_INTERVAL_MINUTES_DEFAULT
+            sync_settings.get("autoSyncInterval")
+            or settings.AUTO_SYNC_INTERVAL_MINUTES_DEFAULT
         ),
         "syncConcurrency": max(
             1,
             int(
-                sync_settings.get("syncConcurrency") or settings.SYNC_CONCURRENCY_DEFAULT
+                sync_settings.get("syncConcurrency")
+                or settings.SYNC_CONCURRENCY_DEFAULT
             ),
         ),
         "consecutiveFailures": int(sync_settings.get("consecutiveFailures") or 0),
@@ -76,13 +78,13 @@ def _network_runtime_payload(
     proxy_lanes = [
         {
             **lane,
-            "proxyUrl": redact_proxy_url(lane["proxyUrl"]) or lane["proxyUrl"],
+            "proxyUrl": redact_proxy_url(str(lane.get("proxyUrl") or ""))
+            or str(lane.get("proxyUrl") or ""),
         }
         for lane in lane_snapshot
     ]
     redacted_overrides = {
-        redact_proxy_url(url) or url: slots
-        for url, slots in overrides.items()
+        redact_proxy_url(url) or url: slots for url, slots in overrides.items()
     }
     tor_enabled = bool(network.get("torEnabled")) or settings.TOR_ENABLED
     tor_rotation_threshold = int(
@@ -94,8 +96,7 @@ def _network_runtime_payload(
         or settings.TOR_CONTROL_PORT
     )
     proxy_urls = [
-        redact_proxy_url(url) or url
-        for url in network.get("proxyUrls") or []
+        redact_proxy_url(url) or url for url in network.get("proxyUrls") or []
     ]
     tor_proxy_urls = network.get("torProxyUrls")
     if isinstance(tor_proxy_urls, str) and tor_proxy_urls.strip():

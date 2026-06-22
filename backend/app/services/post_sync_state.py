@@ -4,8 +4,9 @@ from __future__ import annotations
 
 import time
 import uuid
-from typing import Iterable
+from collections.abc import Iterable
 
+from sqlalchemy import and_
 from sqlmodel import Session, col, delete, select
 
 from app.models_tg import Post, PostSyncState
@@ -96,7 +97,7 @@ def record_gaps_from_page(
         return
     session_seen_ids.update(page_post_ids)
     sorted_ids = sorted(page_post_ids)
-    for low_id, high_id in zip(sorted_ids, sorted_ids[1:]):
+    for low_id, high_id in zip(sorted_ids, sorted_ids[1:], strict=False):
         _gaps_between_neighbors(
             session,
             channel_name=channel_name,
@@ -171,8 +172,10 @@ def prune_sync_state_for_post_ids(
         return 0
     session.exec(
         delete(PostSyncState).where(
-            PostSyncState.channel_name == channel_name,
-            col(PostSyncState.post_id).in_(post_ids),
+            and_(
+                col(PostSyncState.channel_name) == channel_name,
+                col(PostSyncState.post_id).in_(post_ids),
+            )
         )
     )
     return len(post_ids)

@@ -8,7 +8,7 @@ import sys
 from pathlib import Path
 
 from dotenv import load_dotenv
-from sqlmodel import Session, col, delete, select
+from sqlmodel import Session, col, delete
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(_REPO_ROOT / "backend") not in sys.path:
@@ -28,20 +28,26 @@ def _parse_args() -> argparse.Namespace:
         description="Freeze or delete auto-followed channels (discovered_via set)."
     )
     parser.add_argument("--dry-run", action="store_true", help="Report counts only.")
-    parser.add_argument("--limit", type=int, default=None, help="Max channels to affect.")
+    parser.add_argument(
+        "--limit", type=int, default=None, help="Max channels to affect."
+    )
     parser.add_argument(
         "--freeze",
         action="store_true",
         help="Mark channels frozen instead of deleting (default when neither flag set).",
     )
-    parser.add_argument("--delete", action="store_true", help="Delete channels and their posts.")
+    parser.add_argument(
+        "--delete", action="store_true", help="Delete channels and their posts."
+    )
     return parser.parse_args()
 
 
 def _delete_channel(session: Session, channel: Channel) -> None:
     name = channel.name
     session.exec(delete(PostEmbedding).where(col(PostEmbedding.channel_name) == name))
-    session.exec(delete(PostTranslation).where(col(PostTranslation.channel_name) == name))
+    session.exec(
+        delete(PostTranslation).where(col(PostTranslation.channel_name) == name)
+    )
     session.exec(delete(Post).where(col(Post.channel_name) == name))
     session.delete(channel)
 

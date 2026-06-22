@@ -7,15 +7,17 @@ import {
 import { createRouter, RouterProvider } from "@tanstack/react-router"
 import { StrictMode } from "react"
 import { createRoot } from "react-dom/client"
-
-import { ApiError, OpenAPI } from "@/client"
 import { clearStaleSession, isAuthFailure } from "@/api/base"
+import { ApiError, OpenAPI } from "@/client"
 import { ThemeProvider } from "@/components/theme-provider"
 import { routeTree } from "@/routeTree.gen"
 import "./index.css"
 
 // Safely override showPicker to prevent SecurityError in cross-origin iframes
-if (typeof HTMLSelectElement !== "undefined" && HTMLSelectElement.prototype.showPicker) {
+if (
+  typeof HTMLSelectElement !== "undefined" &&
+  HTMLSelectElement.prototype.showPicker
+) {
   const originalSelectShowPicker = HTMLSelectElement.prototype.showPicker
   HTMLSelectElement.prototype.showPicker = function () {
     try {
@@ -30,7 +32,10 @@ if (typeof HTMLSelectElement !== "undefined" && HTMLSelectElement.prototype.show
   }
 }
 
-if (typeof HTMLInputElement !== "undefined" && HTMLInputElement.prototype.showPicker) {
+if (
+  typeof HTMLInputElement !== "undefined" &&
+  HTMLInputElement.prototype.showPicker
+) {
   const originalInputShowPicker = HTMLInputElement.prototype.showPicker
   HTMLInputElement.prototype.showPicker = function () {
     try {

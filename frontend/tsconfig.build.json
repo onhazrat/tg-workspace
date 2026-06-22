@@ -1,28 +1,4 @@
 {
   "extends": "./tsconfig.json",
-  "compilerOptions": {
-    "strict": false,
-    "strictNullChecks": true,
-    "noUnusedLocals": false,
-    "noUnusedParameters": false
-  },
-  "include": [
-    "src/main.tsx",
-    "src/routeTree.gen.ts",
-    "src/routes/**/*",
-    "src/hooks/**/*",
-    "src/client/**/*",
-    "src/utils.ts",
-    "src/lib/utils.tsx",
-    "src/components/Common/**/*",
-    "src/components/Sidebar/**/*",
-    "src/components/Admin/**/*",
-    "src/components/Items/**/*",
-    "src/components/UserSettings/**/*",
-    "src/components/Pending/**/*",
-    "src/components/theme-provider.tsx",
-    "src/components/TgProviders.tsx",
-    "src/components/ui/**/*"
-  ],
   "exclude": ["tests/**/*.ts", "src/workers/**/*.ts"]
 }

@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Vazirmatn:wght@100..900&display=swap');
+@import url("https://fonts.googleapis.com/css2?family=Vazirmatn:wght@100..900&display=swap");
 @import "@fontsource-variable/geist";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
@@ -15,16 +15,18 @@
   --color-app-line: var(--line-color);
   --font-sans: "Geist Variable", "Vazirmatn", sans-serif;
   --font-serif: "Georgia", "Vazirmatn", serif;
-  --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", "Vazirmatn", monospace;
+  --font-mono:
+    ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono",
+    "Courier New", "Vazirmatn", monospace;
   --font-persian: "Vazirmatn", sans-serif;
 }
 
 :root {
   color-scheme: light;
-  --bg: #E4E3E0;
+  --bg: #e4e3e0;
   --ink: #141414;
-  --card-bg: #FFFFFF;
-  --muted-bg: #F5F5F3;
+  --card-bg: #ffffff;
+  --muted-bg: #f5f5f3;
   --line-color: rgba(20, 20, 20, 0.1);
   --background: oklch(1 0 0);
   --foreground: oklch(0.145 0 0);
@@ -62,9 +64,9 @@
 
 .dark {
   color-scheme: dark;
-  --bg: #0F0F0F;
-  --ink: #E4E3E0;
-  --card-bg: #1A1A1A;
+  --bg: #0f0f0f;
+  --ink: #e4e3e0;
+  --card-bg: #1a1a1a;
   --muted-bg: #252525;
   --line-color: rgba(228, 227, 224, 0.1);
   --background: oklch(0.145 0 0);
@@ -167,7 +169,7 @@ body {
 }
 
 .prose a[href^="cite://"] {
-  text-decoration: none !important;
-  color: inherit !important;
-  font-weight: inherit !important;
+  text-decoration: none;
+  color: inherit;
+  font-weight: inherit;
 }

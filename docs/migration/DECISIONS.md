@@ -1,6 +1,6 @@
 # Locked Migration Decisions
 
-**Date:** 2026-06-08  
+**Date:** 2026-06-08
 **Status:** Locked — do not revisit without explicit stakeholder sign-off.
 
 ## Remediation deployment mode — **Mode A** (2026-06-09)

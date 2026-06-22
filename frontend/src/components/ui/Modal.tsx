@@ -38,7 +38,7 @@ export function Modal({ isOpen, onClose, title, children, footer, panelClassName
                 <X size={18} />
               </button>
             </div>
-            
+
             <div className="p-6 overflow-y-auto flex-1">
               {children}
             </div>

@@ -11,11 +11,6 @@ from app.api.deps import CurrentUser, SessionDep
 from app.core.config import settings
 from app.core.secrets import decrypt_token
 from app.models_tg import BotCredential
-from app.services.network_settings import (
-    load_network_settings,
-    resolve_proxies_for_user,
-    resolve_proxy_concurrency,
-)
 from app.schemas.telegram import (
     BotInfoRequest,
     ChannelInfoRequest,
@@ -24,14 +19,27 @@ from app.schemas.telegram import (
     ScrapeRequest,
 )
 from app.services.network import fetch_with_retry, parse_telegram_entities
-from app.services.scraper import get_channel_info, resolve_start_time_to_id, scrape_channel
+from app.services.network_settings import (
+    load_network_settings,
+    resolve_proxies_for_user,
+    resolve_proxy_concurrency,
+)
+from app.services.scraper import (
+    get_channel_info,
+    resolve_start_time_to_id,
+    scrape_channel,
+)
 
 router = APIRouter(prefix="/telegram", tags=["telegram"])
 logger = logging.getLogger(__name__)
 
 
 def _resolve_proxy_concurrency(
-    body: ScrapeRequest | ChannelInfoRequest | BotInfoRequest | PublishRequest | ResolveStartTimeRequest,
+    _body: ScrapeRequest
+    | ChannelInfoRequest
+    | BotInfoRequest
+    | PublishRequest
+    | ResolveStartTimeRequest,
     *,
     session: Session | None = None,
     user_id: uuid.UUID | None = None,
@@ -43,7 +51,11 @@ def _resolve_proxy_concurrency(
 
 
 def _resolve_proxies(
-    body: ScrapeRequest | ChannelInfoRequest | BotInfoRequest | PublishRequest | ResolveStartTimeRequest,
+    body: ScrapeRequest
+    | ChannelInfoRequest
+    | BotInfoRequest
+    | PublishRequest
+    | ResolveStartTimeRequest,
     *,
     session: Session | None = None,
     user_id: uuid.UUID | None = None,
@@ -115,9 +127,13 @@ async def api_scrape(body: ScrapeRequest, _current_user: CurrentUser) -> dict[st
             ) from exc
         if isinstance(exc, httpx.HTTPStatusError):
             if exc.response.status_code == 429:
-                raise HTTPException(status_code=429, detail="Telegram rate limit exceeded") from exc
+                raise HTTPException(
+                    status_code=429, detail="Telegram rate limit exceeded"
+                ) from exc
             if exc.response.status_code == 404:
-                raise HTTPException(status_code=404, detail="Channel not found or private.") from exc
+                raise HTTPException(
+                    status_code=404, detail="Channel not found or private."
+                ) from exc
         logger.exception("Failed to scrape channel")
         raise HTTPException(status_code=500, detail="Failed to scrape channel") from exc
 
@@ -142,7 +158,9 @@ async def api_channel_info(
                 detail={"error": msg, "isUnavailableOnWebView": True},
             ) from exc
         logger.exception("Failed to fetch channel info")
-        raise HTTPException(status_code=500, detail="Failed to fetch channel info") from exc
+        raise HTTPException(
+            status_code=500, detail="Failed to fetch channel info"
+        ) from exc
 
 
 @router.post("/resolve-start-time")
@@ -169,7 +187,9 @@ async def api_resolve_start_time(
         raise HTTPException(status_code=400, detail=msg) from exc
     except Exception as exc:  # noqa: BLE001
         logger.exception("Failed to resolve start time")
-        raise HTTPException(status_code=500, detail="Failed to resolve start time") from exc
+        raise HTTPException(
+            status_code=500, detail="Failed to resolve start time"
+        ) from exc
 
 
 @router.post("/bot-info")
@@ -268,9 +288,7 @@ async def api_bot_file(
     current_user: CurrentUser,
     path: str = Query(..., min_length=1),
 ) -> Response:
-    token = _resolve_bot_token(
-        session, credential_id, None, current_user=current_user
-    )
+    token = _resolve_bot_token(session, credential_id, None, current_user=current_user)
     file_url = f"https://api.telegram.org/file/bot{token}/{path}"
     try:
         async with httpx.AsyncClient(timeout=60.0, follow_redirects=True) as client:

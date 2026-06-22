@@ -27,6 +27,7 @@ def _auth_headers() -> dict[str, str]:
     token = login.json()["access_token"]
     return {"Authorization": f"Bearer {token}"}
 
+
 POST_TIMES: dict[int, int] = {
     100: 1_000,
     300: 3_000,
@@ -77,7 +78,9 @@ def test_resolve_invalid_target_defaults_to_one() -> None:
     assert start_id == 1
 
 
-def test_resolve_target_newer_than_latest(mock_resolver_deps: tuple[AsyncMock, AsyncMock]) -> None:
+def test_resolve_target_newer_than_latest(
+    mock_resolver_deps: tuple[AsyncMock, AsyncMock],
+) -> None:
     channel_info, fetch_post = mock_resolver_deps
 
     async def run() -> int:
@@ -91,7 +94,9 @@ def test_resolve_target_newer_than_latest(mock_resolver_deps: tuple[AsyncMock, A
     assert asyncio.run(run()) == 1000
 
 
-def test_resolve_target_older_than_oldest(mock_resolver_deps: tuple[AsyncMock, AsyncMock]) -> None:
+def test_resolve_target_older_than_oldest(
+    mock_resolver_deps: tuple[AsyncMock, AsyncMock],
+) -> None:
     channel_info, fetch_post = mock_resolver_deps
 
     async def run() -> int:
@@ -105,7 +110,9 @@ def test_resolve_target_older_than_oldest(mock_resolver_deps: tuple[AsyncMock, A
     assert asyncio.run(run()) == 100
 
 
-def test_resolve_binary_search_finds_post(mock_resolver_deps: tuple[AsyncMock, AsyncMock]) -> None:
+def test_resolve_binary_search_finds_post(
+    mock_resolver_deps: tuple[AsyncMock, AsyncMock],
+) -> None:
     channel_info, fetch_post = mock_resolver_deps
 
     async def run() -> int:
@@ -155,7 +162,9 @@ def test_resolve_last_week_ms_not_low_post_ids() -> None:
     async def run(target_ms: int) -> int:
         with (
             patch("app.services.scraper.get_channel_info", channel_info),
-            patch("app.services.scraper._fetch_post_at_url", AsyncMock(side_effect=fetch)),
+            patch(
+                "app.services.scraper._fetch_post_at_url", AsyncMock(side_effect=fetch)
+            ),
             patch("app.services.scraper.asyncio.sleep", AsyncMock()),
         ):
             return await resolve_start_time_to_id("activechannel", target_ms)
@@ -196,7 +205,9 @@ def test_resolve_unavailable_channel_raises() -> None:
     asyncio.run(run())
 
 
-def test_api_resolve_start_time_v1(mock_resolver_deps: tuple[AsyncMock, AsyncMock]) -> None:
+def test_api_resolve_start_time_v1(
+    mock_resolver_deps: tuple[AsyncMock, AsyncMock],
+) -> None:
     channel_info, fetch_post = mock_resolver_deps
     with (
         patch("app.services.scraper.get_channel_info", channel_info),
@@ -212,7 +223,9 @@ def test_api_resolve_start_time_v1(mock_resolver_deps: tuple[AsyncMock, AsyncMoc
     assert response.json() == {"startId": 300}
 
 
-def test_api_resolve_start_time_legacy_alias(mock_resolver_deps: tuple[AsyncMock, AsyncMock]) -> None:
+def test_api_resolve_start_time_legacy_alias(
+    mock_resolver_deps: tuple[AsyncMock, AsyncMock],
+) -> None:
     channel_info, fetch_post = mock_resolver_deps
     with (
         patch("app.services.scraper.get_channel_info", channel_info),

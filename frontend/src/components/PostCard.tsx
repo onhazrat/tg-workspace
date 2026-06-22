@@ -1,88 +1,129 @@
-import React, { useState, useEffect } from "react";
-import { Copy, ExternalLink, Hash, Sparkles, Languages, Loader2, Clock, PlusCircle } from "lucide-react";
-import { Post } from "../types";
-import { highlightText } from "../lib/utils";
-import { useSettings } from "../contexts/SettingsContext";
-import { useScraper } from "../contexts/ScraperContext";
-import { useData } from "../contexts/DataContext";
-import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tg-tooltip";
-import { RelativeTime } from "./RelativeTime";
-import { getTranslation, saveTranslation } from "../lib/repository";
-import { useTranslation } from "../contexts/TranslationContext";
-import { toast } from "sonner";
+import {
+  Clock,
+  Copy,
+  ExternalLink,
+  Hash,
+  Languages,
+  Loader2,
+  PlusCircle,
+  Sparkles,
+} from "lucide-react"
+import type React from "react"
+import { useCallback, useEffect, useState } from "react"
+import { toast } from "sonner"
+import { useData } from "../contexts/DataContext"
+import { useScraper } from "../contexts/ScraperContext"
+import { useSettings } from "../contexts/SettingsContext"
+import { useTranslation } from "../contexts/TranslationContext"
+import { getTranslation, saveTranslation } from "../lib/repository"
+import { highlightText } from "../lib/utils"
+import type { Post } from "../types"
+import { RelativeTime } from "./RelativeTime"
+import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tg-tooltip"
 
 interface PostCardProps {
-  post: Post;
-  postSearch: string;
+  post: Post
+  postSearch: string
 }
 
 export const PostCard: React.FC<PostCardProps> = ({ post, postSearch }) => {
-  const { embeddingsEnabled, translationEnabled, autoTranslate, setAutoTranslate, translationTargetLanguage } = useSettings();
-  const { setRelatedPostSearch, addNewChannel } = useScraper();
-  const { channels } = useData();
-  const { requestTranslation } = useTranslation();
-  
-  const [translatedText, setTranslatedText] = useState<string | null>(null);
-  const [isTranslating, setIsTranslating] = useState(false);
-  const [showTranslation, setShowTranslation] = useState(false);
+  const {
+    embeddingsEnabled,
+    translationEnabled,
+    autoTranslate,
+    translationTargetLanguage,
+  } = useSettings()
+  const { setRelatedPostSearch, addNewChannel } = useScraper()
+  const { channels } = useData()
+  const { requestTranslation } = useTranslation()
 
-  useEffect(() => {
-    const loadTranslation = async () => {
-      if (!translationEnabled) return;
-      
-      const existingTranslation = await getTranslation(post.channelName, post.id, translationTargetLanguage);
-      if (existingTranslation) {
-        setTranslatedText(existingTranslation.translatedText);
-        if (autoTranslate) {
-          setShowTranslation(true);
-        }
-      } else if (autoTranslate) {
-        handleTranslate();
-      }
-    };
-    
-    loadTranslation();
-  }, [post.channelName, post.id, translationEnabled, autoTranslate, translationTargetLanguage]);
+  const [translatedText, setTranslatedText] = useState<string | null>(null)
+  const [isTranslating, setIsTranslating] = useState(false)
+  const [showTranslation, setShowTranslation] = useState(false)
 
-  const handleTranslate = async () => {
-    if (isTranslating) return;
-    
+  const handleTranslate = useCallback(async () => {
+    if (isTranslating) return
+
     if (translatedText && showTranslation) {
-      setShowTranslation(false);
-      return;
-    }
-    
-    if (translatedText && !showTranslation) {
-      setShowTranslation(true);
-      return;
+      setShowTranslation(false)
+      return
     }
 
-    setIsTranslating(true);
+    if (translatedText && !showTranslation) {
+      setShowTranslation(true)
+      return
+    }
+
+    setIsTranslating(true)
     try {
-      const result = await requestTranslation(`${post.channelName}_${post.id}`, post.text);
-      setTranslatedText(result);
-      setShowTranslation(true);
-      
+      const result = await requestTranslation(
+        `${post.channelName}_${post.id}`,
+        post.text,
+      )
+      setTranslatedText(result)
+      setShowTranslation(true)
+
       await saveTranslation({
         id: `${post.channelName}_${post.id}_${translationTargetLanguage}`,
         channelName: post.channelName,
         postId: post.id,
         language: translationTargetLanguage,
         translatedText: result,
-        timestamp: Date.now()
-      });
+        timestamp: Date.now(),
+      })
     } catch (error: any) {
-      console.error("Translation failed:", error);
+      console.error("Translation failed:", error)
       // The TranslationContext handles the toast and disabling auto-translate for quota errors,
       // so we don't need to duplicate it here unless it's a different error.
-      const errorMsg = error instanceof Error ? error.message : String(error);
-      if (!errorMsg.toLowerCase().includes("quota") && !errorMsg.toLowerCase().includes("429")) {
-        toast.error("Failed to translate post");
+      const errorMsg = error instanceof Error ? error.message : String(error)
+      if (
+        !errorMsg.toLowerCase().includes("quota") &&
+        !errorMsg.toLowerCase().includes("429")
+      ) {
+        toast.error("Failed to translate post")
       }
     } finally {
-      setIsTranslating(false);
+      setIsTranslating(false)
     }
-  };
+  }, [
+    isTranslating,
+    translatedText,
+    showTranslation,
+    requestTranslation,
+    post.channelName,
+    post.id,
+    post.text,
+    translationTargetLanguage,
+  ])
+
+  useEffect(() => {
+    const loadTranslation = async () => {
+      if (!translationEnabled) return
+
+      const existingTranslation = await getTranslation(
+        post.channelName,
+        post.id,
+        translationTargetLanguage,
+      )
+      if (existingTranslation) {
+        setTranslatedText(existingTranslation.translatedText)
+        if (autoTranslate) {
+          setShowTranslation(true)
+        }
+      } else if (autoTranslate) {
+        handleTranslate()
+      }
+    }
+
+    loadTranslation()
+  }, [
+    post.channelName,
+    post.id,
+    translationEnabled,
+    autoTranslate,
+    translationTargetLanguage,
+    handleTranslate,
+  ])
 
   return (
     <div className="bg-app-card border border-app-ink/10 rounded-xl shadow-sm hover:shadow-md hover:-translate-y-0.5 hover:border-app-ink/20 transition-all duration-200 group overflow-hidden flex flex-col">
@@ -93,24 +134,31 @@ export const PostCard: React.FC<PostCardProps> = ({ post, postSearch }) => {
             {post.channelName.charAt(0)}
           </div>
           <div className="flex flex-col">
-            <span className="text-[13px] font-bold uppercase tracking-tight">@{highlightText(post.channelName, postSearch)}</span>
+            <span className="text-[13px] font-bold uppercase tracking-tight">
+              @{highlightText(post.channelName, postSearch)}
+            </span>
             <div className="flex items-center gap-2">
               <span className="text-[10px] font-mono text-app-ink/40 flex items-center gap-1">
                 <Hash size={10} /> {post.id}
               </span>
               {post.forwardedFrom && (
                 <span className="text-[10px] font-mono text-app-ink/40 flex items-center gap-1 border-l border-app-ink/10 pl-2">
-                  Forwarded from: 
-                  {channels.some(c => c.name.toLowerCase() === post.forwardedFrom?.toLowerCase()) ? (
+                  Forwarded from:
+                  {channels.some(
+                    (c) =>
+                      c.name.toLowerCase() ===
+                      post.forwardedFrom?.toLowerCase(),
+                  ) ? (
                     <span className="text-app-ink/60 font-medium">
                       {post.forwardedFromName || post.forwardedFrom}
                     </span>
                   ) : (
-                    <button 
+                    <button
+                      type="button"
                       onClick={(e) => {
-                        e.stopPropagation();
+                        e.stopPropagation()
                         if (post.forwardedFrom) {
-                          addNewChannel(post.forwardedFrom);
+                          addNewChannel(post.forwardedFrom)
                         }
                       }}
                       className="text-blue-500 hover:text-blue-600 hover:bg-blue-500/10 px-1.5 py-0.5 rounded transition-colors flex items-center gap-1 font-medium"
@@ -125,29 +173,36 @@ export const PostCard: React.FC<PostCardProps> = ({ post, postSearch }) => {
             </div>
           </div>
         </div>
-        
+
         <div className="flex items-center gap-4">
           <span className="text-[10px] font-mono text-app-ink/40 uppercase tracking-widest flex items-center gap-1.5 bg-app-ink/5 px-2.5 py-1 rounded-full">
             <Clock size={10} />
-            <RelativeTime timestamp={post.timestamp || new Date(post.date).getTime()} />
+            <RelativeTime
+              timestamp={post.timestamp || new Date(post.date).getTime()}
+            />
           </span>
-          
+
           {/* Action Bar */}
           <div className="absolute right-4 top-1/2 -translate-y-1/2 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all duration-200 translate-x-2 group-hover:translate-x-0 bg-app-card/90 backdrop-blur-md p-1 rounded-full border border-app-ink/10 shadow-sm">
             {translationEnabled && (
               <>
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <button 
+                    <button
+                      type="button"
                       onClick={handleTranslate}
                       disabled={isTranslating}
-                      className={`p-1.5 rounded-full transition-all ${showTranslation ? 'text-blue-500 bg-blue-500/10' : 'text-app-ink/50 hover:text-blue-500 hover:bg-blue-500/10'}`}
+                      className={`p-1.5 rounded-full transition-all ${showTranslation ? "text-blue-500 bg-blue-500/10" : "text-app-ink/50 hover:text-blue-500 hover:bg-blue-500/10"}`}
                     >
-                      {isTranslating ? <Loader2 size={14} className="animate-spin" /> : <Languages size={14} />}
+                      {isTranslating ? (
+                        <Loader2 size={14} className="animate-spin" />
+                      ) : (
+                        <Languages size={14} />
+                      )}
                     </button>
                   </TooltipTrigger>
                   <TooltipContent>
-                    <p>{showTranslation ? 'Show Original' : 'Translate'}</p>
+                    <p>{showTranslation ? "Show Original" : "Translate"}</p>
                   </TooltipContent>
                 </Tooltip>
                 <div className="w-px h-4 bg-app-ink/10 mx-0.5" />
@@ -157,10 +212,11 @@ export const PostCard: React.FC<PostCardProps> = ({ post, postSearch }) => {
               <>
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <button 
+                    <button
+                      type="button"
                       onClick={() => {
-                        setRelatedPostSearch(post);
-                        window.scrollTo({ top: 0, behavior: 'smooth' });
+                        setRelatedPostSearch(post)
+                        window.scrollTo({ top: 0, behavior: "smooth" })
                       }}
                       className="p-1.5 rounded-full text-purple-500/70 hover:text-purple-600 hover:bg-purple-500/10 transition-all"
                     >
@@ -176,9 +232,12 @@ export const PostCard: React.FC<PostCardProps> = ({ post, postSearch }) => {
             )}
             <Tooltip>
               <TooltipTrigger asChild>
-                <button 
+                <button
+                  type="button"
                   onClick={() => {
-                    navigator.clipboard.writeText(`https://t.me/s/${post.channelName}/${post.id}`);
+                    navigator.clipboard.writeText(
+                      `https://t.me/s/${post.channelName}/${post.id}`,
+                    )
                   }}
                   className="p-1.5 rounded-full text-app-ink/50 hover:text-app-ink hover:bg-app-ink/5 transition-all"
                 >
@@ -192,7 +251,7 @@ export const PostCard: React.FC<PostCardProps> = ({ post, postSearch }) => {
             <div className="w-px h-4 bg-app-ink/10 mx-0.5" />
             <Tooltip>
               <TooltipTrigger asChild>
-                <a 
+                <a
                   href={`https://t.me/s/${post.channelName}/${post.id}`}
                   target="_blank"
                   rel="noopener noreferrer"
@@ -208,13 +267,18 @@ export const PostCard: React.FC<PostCardProps> = ({ post, postSearch }) => {
           </div>
         </div>
       </div>
-      
+
       {/* Post Body */}
       <div className="p-5">
-        <p dir="auto" className="text-[14px] leading-relaxed whitespace-pre-wrap font-sans text-app-ink/80">
-          {showTranslation && translatedText ? translatedText : highlightText(post.text, postSearch)}
+        <p
+          dir="auto"
+          className="text-[14px] leading-relaxed whitespace-pre-wrap font-sans text-app-ink/80"
+        >
+          {showTranslation && translatedText
+            ? translatedText
+            : highlightText(post.text, postSearch)}
         </p>
       </div>
     </div>
-  );
-};
+  )
+}

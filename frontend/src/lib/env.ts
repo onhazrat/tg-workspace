@@ -1,12 +1,12 @@
 function parseIntEnv(value: string | undefined, fallback: number): number {
-  if (value === undefined || value === "") return fallback;
-  const parsed = Number.parseInt(value, 10);
-  return Number.isFinite(parsed) ? parsed : fallback;
+  if (value === undefined || value === "") return fallback
+  const parsed = Number.parseInt(value, 10)
+  return Number.isFinite(parsed) ? parsed : fallback
 }
 
 function parseStringEnv(value: string | undefined, fallback: string): string {
-  if (value === undefined || value === "") return fallback;
-  return value;
+  if (value === undefined || value === "") return fallback
+  return value
 }
 
 /** Vite build-time tunables — see root `.env.example` for documentation. */
@@ -20,10 +20,7 @@ export const env = {
     1000,
   ),
   ragStatusPollMs: parseIntEnv(import.meta.env.VITE_RAG_STATUS_POLL_MS, 10_000),
-  apiHealthPollMs: parseIntEnv(
-    import.meta.env.VITE_API_HEALTH_POLL_MS,
-    30_000,
-  ),
+  apiHealthPollMs: parseIntEnv(import.meta.env.VITE_API_HEALTH_POLL_MS, 30_000),
   translationDebounceMs: parseIntEnv(
     import.meta.env.VITE_TRANSLATION_DEBOUNCE_MS,
     1000,
@@ -53,4 +50,4 @@ export const env = {
     import.meta.env.VITE_SYNC_META_MIN_INTERVAL_MS,
     5_000,
   ),
-} as const;
+} as const

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import time
+import uuid
 from datetime import datetime, timezone
 from typing import Any
 
@@ -27,6 +28,7 @@ def default_job_enabled(job_id: str) -> bool:
 
 def _default_jobs() -> dict[str, dict[str, Any]]:
     return {job_id: {"enabled": default_job_enabled(job_id)} for job_id in JOB_IDS}
+
 
 def _default_sync() -> dict[str, Any]:
     return {
@@ -58,12 +60,16 @@ def _merge(defaults: dict[str, Any], stored: dict[str, Any] | None) -> dict[str,
     return {**defaults, **(stored or {})}
 
 
-def load_setting(session: Session, key: str, defaults: dict[str, Any]) -> dict[str, Any]:
+def load_setting(
+    session: Session, key: str, defaults: dict[str, Any]
+) -> dict[str, Any]:
     row = session.get(AppSetting, key)
     return _merge(defaults, row.value if row else None)
 
 
-def save_setting(session: Session, key: str, value: dict[str, Any], user_id=None) -> None:
+def save_setting(
+    session: Session, key: str, value: dict[str, Any], user_id: uuid.UUID | None = None
+) -> None:
     if user_id is None:
         from app.services.operator import get_operator_user_id
 
@@ -110,7 +116,9 @@ def compute_effective_global_start_time_ms(
     day_ms = 24 * 60 * 60 * 1000
 
     if mode == "retention":
-        target_time = now - post_retention_days * day_ms if post_retention_days > 0 else 0
+        target_time = (
+            now - post_retention_days * day_ms if post_retention_days > 0 else 0
+        )
     elif mode == "relative":
         if isinstance(value, (int, float)) and int(value) > 0:
             target_time = now - int(value) * day_ms
@@ -119,7 +127,9 @@ def compute_effective_global_start_time_ms(
                 now - post_retention_days * day_ms if post_retention_days > 0 else 0
             )
     elif mode == "absolute":
-        date_str = value if isinstance(value, str) else datetime.now(timezone.utc).isoformat()
+        date_str = (
+            value if isinstance(value, str) else datetime.now(timezone.utc).isoformat()
+        )
         try:
             parsed = datetime.fromisoformat(date_str.replace("Z", "+00:00"))
             target_time = int(parsed.timestamp() * 1000)

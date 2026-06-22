@@ -12,7 +12,9 @@ from app.models_tg import Post
 
 def test_retention_keeps_anchor_posts() -> None:
     with Session(engine) as session:
-        save_setting(session, "retention", {"postRetentionDays": 30, "logRetentionDays": 0})
+        save_setting(
+            session, "retention", {"postRetentionDays": 30, "logRetentionDays": 0}
+        )
         old_ts = 1_000_000_000_000
         anchor = Post(
             channel_name="ret-anchor-ch",

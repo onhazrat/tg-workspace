@@ -17,9 +17,9 @@ if str(_SCRIPTS_DIR) not in sys.path:
 load_dotenv(_REPO_ROOT / ".env")
 
 from sqlmodel import Session
+from tg_test_pollution import count_test_pollution, delete_test_pollution
 
 from app.core.db import engine
-from tg_test_pollution import count_test_pollution, delete_test_pollution
 
 
 def main() -> None:

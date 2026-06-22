@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime
-from typing import Any, TypeVar
+from typing import Any, TypeVar, cast
 
 from sqlmodel import Session, SQLModel, col, select
 
@@ -15,11 +15,18 @@ from app.models_tg import (
     PublishLog,
     SyncLog,
 )
-from app.services.serialization import normalize_body
+from app.services.serialization import (
+    embedding_log_to_camel,
+    llm_log_to_camel,
+    network_log_to_camel,
+    normalize_body,
+    publish_log_to_camel,
+    sync_log_to_camel,
+)
 
 LogModel = TypeVar("LogModel", bound=SQLModel)
 
-LOG_MODELS: dict[str, tuple[type[LogModel], str]] = {
+LOG_MODELS: dict[str, tuple[type[SQLModel], str]] = {
     "publish": (PublishLog, "publish_logs"),
     "sync": (SyncLog, "sync_logs"),
     "llm": (LLMLog, "llm_logs"),
@@ -54,7 +61,7 @@ def upsert_publish_log(
         existing.updated_at = datetime.utcnow()
         session.add(existing)
     else:
-        session.add(PublishLog(id=log_id, **fields))
+        session.add(PublishLog(id=log_id, **cast(Any, fields)))
 
 
 def upsert_sync_log(
@@ -81,7 +88,7 @@ def upsert_sync_log(
         existing.updated_at = datetime.utcnow()
         session.add(existing)
     else:
-        session.add(SyncLog(id=log_id, **fields))
+        session.add(SyncLog(id=log_id, **cast(Any, fields)))
 
 
 def upsert_llm_log(
@@ -112,7 +119,7 @@ def upsert_llm_log(
         existing.updated_at = datetime.utcnow()
         session.add(existing)
     else:
-        session.add(LLMLog(id=log_id, **fields))
+        session.add(LLMLog(id=log_id, **cast(Any, fields)))
 
 
 def upsert_embedding_log(
@@ -136,7 +143,7 @@ def upsert_embedding_log(
         existing.updated_at = datetime.utcnow()
         session.add(existing)
     else:
-        session.add(EmbeddingLog(id=log_id, **fields))
+        session.add(EmbeddingLog(id=log_id, **cast(Any, fields)))
 
 
 def upsert_network_log(
@@ -165,12 +172,12 @@ def upsert_network_log(
         existing.updated_at = datetime.utcnow()
         session.add(existing)
     else:
-        session.add(NetworkLog(id=log_id, **fields))
+        session.add(NetworkLog(id=log_id, **cast(Any, fields)))
 
 
 def delete_log_by_id(session: Session, log_type: str, log_id: str) -> bool:
     model, _ = LOG_MODELS[log_type]
-    row = session.get(model, log_id)  # type: ignore[arg-type]
+    row = session.get(model, log_id)
     if not row:
         return False
     session.delete(row)
@@ -180,7 +187,7 @@ def delete_log_by_id(session: Session, log_type: str, log_id: str) -> bool:
 
 def clear_logs(session: Session, log_type: str) -> int:
     model, _ = LOG_MODELS[log_type]
-    rows = session.exec(select(model)).all()  # type: ignore[arg-type]
+    rows = session.exec(select(model)).all()
     count = len(rows)
     for row in rows:
         session.delete(row)
@@ -199,13 +206,17 @@ def delete_old_logs(
 
     if operator_id is None:
         operator_id = get_operator_user_id(session)
-    cutoff = int(datetime.utcnow().timestamp() * 1000) - older_than_days * 24 * 60 * 60 * 1000
+    cutoff = (
+        int(datetime.utcnow().timestamp() * 1000)
+        - older_than_days * 24 * 60 * 60 * 1000
+    )
     deleted: dict[str, int] = {}
     for log_type, (model, _) in LOG_MODELS.items():
-        stmt = select(model).where(col(model.timestamp) < cutoff)  # type: ignore[attr-defined]
+        stmt = select(model).where(col(cast(Any, model).timestamp) < cutoff)
         if operator_id is not None and hasattr(model, "user_id"):
+            user_id_col = cast(Any, model).user_id
             stmt = stmt.where(
-                (col(model.user_id) == operator_id) | col(model.user_id).is_(None)  # type: ignore[attr-defined]
+                (col(user_id_col) == operator_id) | col(user_id_col).is_(None)
             )
         rows = session.exec(stmt).all()
         for row in rows:
@@ -214,3 +225,49 @@ def delete_old_logs(
             session.commit()
         deleted[log_type] = len(rows)
     return deleted
+
+
+def list_publish_logs(session: Session) -> list[dict[str, Any]]:
+    return [publish_log_to_camel(log) for log in session.exec(select(PublishLog)).all()]
+
+
+def list_sync_logs(session: Session) -> list[dict[str, Any]]:
+    return [sync_log_to_camel(log) for log in session.exec(select(SyncLog)).all()]
+
+
+def list_llm_logs(session: Session) -> list[dict[str, Any]]:
+    return [llm_log_to_camel(log) for log in session.exec(select(LLMLog)).all()]
+
+
+def list_embedding_logs(session: Session) -> list[dict[str, Any]]:
+    return [
+        embedding_log_to_camel(log) for log in session.exec(select(EmbeddingLog)).all()
+    ]
+
+
+def list_network_logs(session: Session) -> list[dict[str, Any]]:
+    return [network_log_to_camel(log) for log in session.exec(select(NetworkLog)).all()]
+
+
+def create_logs(
+    session: Session,
+    log_type: str,
+    body: list[dict[str, Any]],
+    *,
+    user_id: uuid.UUID | None = None,
+) -> dict[str, int]:
+    upsert_fn = {
+        "publish": upsert_publish_log,
+        "sync": upsert_sync_log,
+        "llm": upsert_llm_log,
+        "embedding": upsert_embedding_log,
+        "network": upsert_network_log,
+    }[log_type]
+    resource = LOG_MODELS[log_type][1]
+    for item in body:
+        upsert_fn(session, item, user_id)
+    session.commit()
+    from app.services.sync_meta import touch_sync
+
+    touch_sync(session, resource)
+    return {"upserted": len(body)}

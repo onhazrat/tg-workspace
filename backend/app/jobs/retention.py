@@ -4,13 +4,11 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime
+from typing import Any, cast
 
-from sqlmodel import Session, col, delete, func, or_, select
+from sqlmodel import Session, col, func, or_, select
 
 from app.jobs.settings import load_retention_settings
-from app.services.operator import get_operator_user_id
-from app.services.post_sync_state import prune_sync_state_below, prune_sync_state_for_post_ids
-from app.services.sync_meta import touch_sync
 from app.models_tg import (
     Channel,
     EmbeddingLog,
@@ -22,6 +20,12 @@ from app.models_tg import (
     PublishLog,
     SyncLog,
 )
+from app.services.operator import get_operator_user_id
+from app.services.post_sync_state import (
+    prune_sync_state_below,
+    prune_sync_state_for_post_ids,
+)
+from app.services.sync_meta import touch_sync
 
 logger = logging.getLogger(__name__)
 
@@ -36,7 +40,9 @@ def run_retention_cleanup(session: Session) -> dict[str, int]:
     deleted_logs = 0
 
     if post_days > 0:
-        cutoff = int(datetime.utcnow().timestamp() * 1000) - post_days * 24 * 60 * 60 * 1000
+        cutoff = (
+            int(datetime.utcnow().timestamp() * 1000) - post_days * 24 * 60 * 60 * 1000
+        )
         stmt = select(Post).where(
             col(Post.timestamp) < cutoff,
             col(Post.is_anchor) == False,  # noqa: E712
@@ -88,20 +94,24 @@ def run_retention_cleanup(session: Session) -> dict[str, int]:
             touch_sync(session, "channels")
 
     if log_days > 0:
-        cutoff = int(datetime.utcnow().timestamp() * 1000) - log_days * 24 * 60 * 60 * 1000
-        for model, resource in (
+        cutoff = (
+            int(datetime.utcnow().timestamp() * 1000) - log_days * 24 * 60 * 60 * 1000
+        )
+        for model_cls, resource in (
             (PublishLog, "publish_logs"),
             (SyncLog, "sync_logs"),
             (LLMLog, "llm_logs"),
             (EmbeddingLog, "embedding_logs"),
             (NetworkLog, "network_logs"),
         ):
-            stmt = select(model).where(col(model.timestamp) < cutoff)  # type: ignore[arg-type]
+            timestamp_col = cast(Any, model_cls).timestamp
+            log_stmt = select(model_cls).where(col(timestamp_col) < cutoff)
             if operator_id is not None:
-                stmt = stmt.where(
-                    or_(model.user_id == operator_id, col(model.user_id).is_(None))  # type: ignore[attr-defined]
+                user_id_col = cast(Any, model_cls).user_id
+                log_stmt = log_stmt.where(
+                    or_(col(user_id_col) == operator_id, col(user_id_col).is_(None))
                 )
-            old_rows = session.exec(stmt).all()
+            old_rows = session.exec(log_stmt).all()
             for row in old_rows:
                 session.delete(row)
                 deleted_logs += 1

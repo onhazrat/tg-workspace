@@ -3,8 +3,8 @@
  * On API write failure: fall back to IndexedDB and notify via onWriteFallback.
  */
 
-import { api } from "@/api";
-import { env } from "@/lib/env";
+import { api } from "@/api"
+import { env } from "@/lib/env"
 import type {
   BotCredential,
   Channel,
@@ -20,72 +20,74 @@ import type {
   PublishLog,
   Summary,
   SyncLog,
-} from "../types";
-import * as cache from "./cache";
-import { stripToken } from "./botCredential";
+} from "../types"
+import { stripToken } from "./botCredential"
+import * as cache from "./cache"
 
-let syncMeta: Record<string, { etag: string }> = {};
-let syncMetaFetchedAt = 0;
+let syncMeta: Record<string, { etag: string }> = {}
+let syncMetaFetchedAt = 0
 
-type WriteFallbackHandler = (resource: string, error: unknown) => void;
-let onWriteFallback: WriteFallbackHandler | null = null;
+type WriteFallbackHandler = (resource: string, error: unknown) => void
+let onWriteFallback: WriteFallbackHandler | null = null
 
-export function setWriteFallbackHandler(handler: WriteFallbackHandler | null): void {
-  onWriteFallback = handler;
+export function setWriteFallbackHandler(
+  handler: WriteFallbackHandler | null,
+): void {
+  onWriteFallback = handler
 }
 
 export function getSyncMeta(): Record<string, { etag: string }> {
-  return { ...syncMeta };
+  return { ...syncMeta }
 }
 
 export async function refreshSyncMeta(force = false): Promise<void> {
-  const now = Date.now();
+  const now = Date.now()
   if (!force && now - syncMetaFetchedAt < env.syncMetaMinIntervalMs) {
-    return;
+    return
   }
   try {
-    syncMeta = await api.syncMeta();
-    syncMetaFetchedAt = now;
+    syncMeta = await api.syncMeta()
+    syncMetaFetchedAt = now
   } catch {
     /* server unavailable — use cache only */
   }
 }
 
 export function invalidateSyncMetaCache(): void {
-  syncMetaFetchedAt = 0;
+  syncMetaFetchedAt = 0
 }
 
 async function isResourceStale(resource: string): Promise<boolean> {
-  await refreshSyncMeta();
-  const remote = syncMeta[resource]?.etag;
-  if (!remote) return false;
-  const localKey = `sync_etag_${resource}`;
-  const local = localStorage.getItem(localKey);
-  return local !== remote;
+  await refreshSyncMeta()
+  const remote = syncMeta[resource]?.etag
+  if (!remote) return false
+  const localKey = `sync_etag_${resource}`
+  const local = localStorage.getItem(localKey)
+  return local !== remote
 }
 
 function markResourceSynced(resource: string): void {
-  const remote = syncMeta[resource]?.etag;
+  const remote = syncMeta[resource]?.etag
   if (remote) {
-    localStorage.setItem(`sync_etag_${resource}`, remote);
+    localStorage.setItem(`sync_etag_${resource}`, remote)
   }
 }
 
 async function apiWrite<T>(
   resource: string,
   apiFn: () => Promise<T>,
-  cacheFn: () => Promise<void>
+  cacheFn: () => Promise<void>,
 ): Promise<T> {
   try {
-    const result = await apiFn();
-    await cacheFn();
-    await refreshSyncMeta(true);
-    markResourceSynced(resource);
-    return result;
+    const result = await apiFn()
+    await cacheFn()
+    await refreshSyncMeta(true)
+    markResourceSynced(resource)
+    return result
   } catch (error) {
-    await cacheFn();
-    onWriteFallback?.(resource, error);
-    throw error;
+    await cacheFn()
+    onWriteFallback?.(resource, error)
+    throw error
   }
 }
 
@@ -93,90 +95,93 @@ async function listWithStaleCheck<T>(
   resource: string,
   fetchRemote: () => Promise<T[]>,
   persistRemote: (items: T[]) => Promise<void>,
-  readCache: () => Promise<T[]>
+  readCache: () => Promise<T[]>,
 ): Promise<T[]> {
   if (await isResourceStale(resource)) {
     try {
-      const remote = await fetchRemote();
-      await persistRemote(remote);
-      markResourceSynced(resource);
-      return remote;
+      const remote = await fetchRemote()
+      await persistRemote(remote)
+      markResourceSynced(resource)
+      return remote
     } catch {
       /* fall through to cache */
     }
   }
-  return readCache();
+  return readCache()
 }
 
 // --- channels ---
 
 export async function listChannels(): Promise<Channel[]> {
-  const { channels } = await listChannelsWithStats();
-  return channels;
+  const { channels } = await listChannelsWithStats()
+  return channels
 }
 
 /** Single round-trip for channels + per-channel stats (avoids N+1). */
 export async function listChannelsWithStats(): Promise<{
-  channels: Channel[];
-  stats: Record<string, ChannelStats>;
+  channels: Channel[]
+  stats: Record<string, ChannelStats>
 }> {
   const persist = async (rows: (Channel & { stats?: ChannelStats })[]) => {
-    const channels: Channel[] = [];
-    const stats: Record<string, ChannelStats> = {};
+    const channels: Channel[] = []
+    const stats: Record<string, ChannelStats> = {}
     for (const row of rows) {
-      const { stats: channelStats, ...channel } = row;
-      channels.push(channel);
-      if (channelStats) stats[channel.name] = channelStats;
-      await cache.saveChannel(channel);
+      const { stats: channelStats, ...channel } = row
+      channels.push(channel)
+      if (channelStats) stats[channel.name] = channelStats
+      await cache.saveChannel(channel)
     }
-    return { channels, stats };
-  };
+    return { channels, stats }
+  }
 
   if (await isResourceStale("channels")) {
     try {
-      const remote = await api.listChannels({ includeStats: true });
-      const result = await persist(remote);
-      markResourceSynced("channels");
-      return result;
+      const remote = await api.listChannels({ includeStats: true })
+      const result = await persist(remote)
+      markResourceSynced("channels")
+      return result
     } catch {
       /* fall through to cache */
     }
   }
-  const cached = await cache.getChannels();
-  const stats: Record<string, ChannelStats> = {};
+  const cached = await cache.getChannels()
+  const stats: Record<string, ChannelStats> = {}
   for (const ch of cached) {
-    const s = await cache.getChannelStats(ch.name);
-    if (s) stats[ch.name] = s;
+    const s = await cache.getChannelStats(ch.name)
+    if (s) stats[ch.name] = s
   }
-  return { channels: cached, stats };
+  return { channels: cached, stats }
 }
 
 export async function upsertChannel(channel: Channel): Promise<Channel> {
   return apiWrite(
     "channels",
     () => api.upsertChannel(channel.id, channel),
-    () => cache.saveChannel(channel)
-  );
+    () => cache.saveChannel(channel),
+  )
 }
 
 export async function deleteChannel(id: string): Promise<void> {
   try {
-    await api.deleteChannel(id);
-    await cache.deleteChannel(id);
-    await refreshSyncMeta(true);
-    markResourceSynced("channels");
+    await api.deleteChannel(id)
+    await cache.deleteChannel(id)
+    await refreshSyncMeta(true)
+    markResourceSynced("channels")
   } catch (error) {
-    await cache.deleteChannel(id);
-    onWriteFallback?.("channels", error);
-    throw error;
+    await cache.deleteChannel(id)
+    onWriteFallback?.("channels", error)
+    throw error
   }
 }
 
-export async function getChannelStats(channelId: string, channelName: string): Promise<ChannelStats | null> {
+export async function getChannelStats(
+  channelId: string,
+  channelName: string,
+): Promise<ChannelStats | null> {
   try {
-    return await api.getChannelStats(channelId);
+    return await api.getChannelStats(channelId)
   } catch {
-    return cache.getChannelStats(channelName);
+    return cache.getChannelStats(channelName)
   }
 }
 
@@ -185,53 +190,62 @@ export async function getChannelStats(channelId: string, channelName: string): P
 export async function getPostsByDateRange(
   channelNames: string[],
   startDate: number,
-  endDate: number
+  endDate: number,
 ): Promise<Post[]> {
   if (await isResourceStale("posts")) {
     try {
-      const remote = await api.getPosts({ channelNames, startDate, endDate });
-      await cache.savePosts(remote);
-      markResourceSynced("posts");
-      return remote;
+      const remote = await api.getPosts({ channelNames, startDate, endDate })
+      await cache.savePosts(remote)
+      markResourceSynced("posts")
+      return remote
     } catch {
       /* fall through */
     }
   }
-  return cache.getPostsByDateRange(channelNames, startDate, endDate);
+  return cache.getPostsByDateRange(channelNames, startDate, endDate)
 }
 
-export async function getPost(channelName: string, id: number): Promise<Post | undefined> {
+export async function getPost(
+  channelName: string,
+  id: number,
+): Promise<Post | undefined> {
   try {
-    const posts = await api.getPosts({ channelNames: [channelName], startDate: 0, endDate: Date.now() + 86400000 });
-    const match = posts.find((p) => p.id === id);
+    const posts = await api.getPosts({
+      channelNames: [channelName],
+      startDate: 0,
+      endDate: Date.now() + 86400000,
+    })
+    const match = posts.find((p) => p.id === id)
     if (match) {
-      await cache.savePosts([match]);
-      return match;
+      await cache.savePosts([match])
+      return match
     }
   } catch {
     /* fall through */
   }
-  return cache.getPost(channelName, id);
+  return cache.getPost(channelName, id)
 }
 
 export async function bulkUpsertPosts(posts: Post[]): Promise<void> {
   await apiWrite(
     "posts",
     () => api.bulkUpsertPosts(posts),
-    () => cache.savePosts(posts)
-  );
+    () => cache.savePosts(posts),
+  )
 }
 
-export async function getPostsWithoutEmbeddings(limit: number = 50): Promise<Post[]> {
-  return cache.getPostsWithoutEmbeddings(limit);
+export async function getPostsWithoutEmbeddings(
+  limit: number = 50,
+): Promise<Post[]> {
+  return cache.getPostsWithoutEmbeddings(limit)
 }
 
 export async function clearChannelPosts(channelName: string): Promise<void> {
-  await cache.clearChannelPosts(channelName);
+  await cache.clearChannelPosts(channelName)
 }
 
 export async function deleteOldPosts(days: number): Promise<number> {
-  return cache.deleteOldPosts(days);
+  return cache.deleteOldPosts(days)
 }
 
 // --- summaries ---
@@ -239,37 +253,37 @@ export async function deleteOldPosts(days: number): Promise<number> {
 export async function listSummaries(): Promise<Summary[]> {
   if (await isResourceStale("summaries")) {
     try {
-      const remote = await api.listSummaries();
+      const remote = await api.listSummaries()
       for (const s of remote) {
-        await cache.saveSummary(s);
+        await cache.saveSummary(s)
       }
-      markResourceSynced("summaries");
-      return remote;
+      markResourceSynced("summaries")
+      return remote
     } catch {
       /* fall through */
     }
   }
-  return cache.getSummaries();
+  return cache.getSummaries()
 }
 
 export async function saveSummary(summary: Summary): Promise<Summary> {
   return apiWrite(
     "summaries",
     () => api.upsertSummary(summary.id, summary),
-    () => cache.saveSummary(summary)
-  );
+    () => cache.saveSummary(summary),
+  )
 }
 
 export async function deleteSummary(id: string): Promise<void> {
   try {
-    await api.deleteSummary(id);
-    await cache.deleteSummary(id);
-    await refreshSyncMeta(true);
-    markResourceSynced("summaries");
+    await api.deleteSummary(id)
+    await cache.deleteSummary(id)
+    await refreshSyncMeta(true)
+    markResourceSynced("summaries")
   } catch (error) {
-    await cache.deleteSummary(id);
-    onWriteFallback?.("summaries", error);
-    throw error;
+    await cache.deleteSummary(id)
+    onWriteFallback?.("summaries", error)
+    throw error
   }
 }
 
@@ -278,40 +292,42 @@ export async function deleteSummary(id: string): Promise<void> {
 export async function listBotCredentials(): Promise<BotCredential[]> {
   if (await isResourceStale("bot_credentials")) {
     try {
-      const remote = await api.listBotCredentials();
+      const remote = await api.listBotCredentials()
       for (const b of remote) {
-        await cache.saveBotCredential(stripToken(b));
+        await cache.saveBotCredential(stripToken(b))
       }
-      markResourceSynced("bot_credentials");
-      return remote.map(stripToken);
+      markResourceSynced("bot_credentials")
+      return remote.map(stripToken)
     } catch {
       /* fall through */
     }
   }
-  const cached = await cache.getBotCredentials();
-  return cached.map(stripToken);
+  const cached = await cache.getBotCredentials()
+  return cached.map(stripToken)
 }
 
-export async function saveBotCredential(bot: BotCredential): Promise<BotCredential> {
-  const payload: BotCredential = { ...bot };
+export async function saveBotCredential(
+  bot: BotCredential,
+): Promise<BotCredential> {
+  const payload: BotCredential = { ...bot }
   const saved = await apiWrite(
     "bot_credentials",
     () => api.upsertBotCredential(bot.id, payload),
-    () => cache.saveBotCredential(stripToken(bot))
-  );
-  return stripToken(saved);
+    () => cache.saveBotCredential(stripToken(bot)),
+  )
+  return stripToken(saved)
 }
 
 export async function deleteBotCredential(id: string): Promise<void> {
   try {
-    await api.deleteBotCredential(id);
-    await cache.deleteBotCredential(id);
-    await refreshSyncMeta(true);
-    markResourceSynced("bot_credentials");
+    await api.deleteBotCredential(id)
+    await cache.deleteBotCredential(id)
+    await refreshSyncMeta(true)
+    markResourceSynced("bot_credentials")
   } catch (error) {
-    await cache.deleteBotCredential(id);
-    onWriteFallback?.("bot_credentials", error);
-    throw error;
+    await cache.deleteBotCredential(id)
+    onWriteFallback?.("bot_credentials", error)
+    throw error
   }
 }
 
@@ -320,37 +336,39 @@ export async function deleteBotCredential(id: string): Promise<void> {
 export async function listChatDestinations(): Promise<ChatDestination[]> {
   if (await isResourceStale("chat_destinations")) {
     try {
-      const remote = await api.listChatDestinations();
+      const remote = await api.listChatDestinations()
       for (const d of remote) {
-        await cache.saveChatDestination(d);
+        await cache.saveChatDestination(d)
       }
-      markResourceSynced("chat_destinations");
-      return remote;
+      markResourceSynced("chat_destinations")
+      return remote
     } catch {
       /* fall through */
     }
   }
-  return cache.getChatDestinations();
+  return cache.getChatDestinations()
 }
 
-export async function saveChatDestination(dest: ChatDestination): Promise<ChatDestination> {
+export async function saveChatDestination(
+  dest: ChatDestination,
+): Promise<ChatDestination> {
   return apiWrite(
     "chat_destinations",
     () => api.upsertChatDestination(dest.id, dest),
-    () => cache.saveChatDestination(dest)
-  );
+    () => cache.saveChatDestination(dest),
+  )
 }
 
 export async function deleteChatDestination(id: string): Promise<void> {
   try {
-    await api.deleteChatDestination(id);
-    await cache.deleteChatDestination(id);
-    await refreshSyncMeta(true);
-    markResourceSynced("chat_destinations");
+    await api.deleteChatDestination(id)
+    await cache.deleteChatDestination(id)
+    await refreshSyncMeta(true)
+    markResourceSynced("chat_destinations")
   } catch (error) {
-    await cache.deleteChatDestination(id);
-    onWriteFallback?.("chat_destinations", error);
-    throw error;
+    await cache.deleteChatDestination(id)
+    onWriteFallback?.("chat_destinations", error)
+    throw error
   }
 }
 
@@ -359,50 +377,54 @@ export async function deleteChatDestination(id: string): Promise<void> {
 export async function listEmbeddings(): Promise<PostEmbedding[]> {
   if (await isResourceStale("embeddings")) {
     try {
-      const remote = await api.listEmbeddings();
-      await cache.saveEmbeddings(remote);
-      markResourceSynced("embeddings");
-      return remote;
+      const remote = await api.listEmbeddings()
+      await cache.saveEmbeddings(remote)
+      markResourceSynced("embeddings")
+      return remote
     } catch {
       /* fall through */
     }
   }
-  return cache.getAllEmbeddings();
+  return cache.getAllEmbeddings()
 }
 
-export async function saveEmbeddings(embeddings: PostEmbedding[]): Promise<void> {
+export async function saveEmbeddings(
+  embeddings: PostEmbedding[],
+): Promise<void> {
   await apiWrite(
     "embeddings",
     () => api.upsertEmbeddings(embeddings),
-    () => cache.saveEmbeddings(embeddings)
-  );
+    () => cache.saveEmbeddings(embeddings),
+  )
 }
 
 export async function getTranslation(
   channelName: string,
   postId: number,
-  language: string
+  language: string,
 ): Promise<PostTranslation | undefined> {
   if (await isResourceStale("translations")) {
     try {
-      const remote = await api.listTranslations();
+      const remote = await api.listTranslations()
       for (const t of remote) {
-        await cache.saveTranslation(t);
+        await cache.saveTranslation(t)
       }
-      markResourceSynced("translations");
+      markResourceSynced("translations")
     } catch {
       /* fall through */
     }
   }
-  return cache.getTranslation(channelName, postId, language);
+  return cache.getTranslation(channelName, postId, language)
 }
 
-export async function saveTranslation(translation: PostTranslation): Promise<void> {
+export async function saveTranslation(
+  translation: PostTranslation,
+): Promise<void> {
   await apiWrite(
     "translations",
     () => api.upsertTranslations([translation]),
-    () => cache.saveTranslation(translation)
-  );
+    () => cache.saveTranslation(translation),
+  )
 }
 
 // --- logs (reads API-first, deletes cache-only until server endpoints exist) ---
@@ -412,10 +434,10 @@ export async function listPublishLogs(): Promise<PublishLog[]> {
     "publish_logs",
     () => api.listPublishLogs(),
     async (logs) => {
-      for (const log of logs) await cache.savePublishLog(log);
+      for (const log of logs) await cache.savePublishLog(log)
     },
-    () => cache.getPublishLogs()
-  );
+    () => cache.getPublishLogs(),
+  )
 }
 
 export async function listSyncLogs(): Promise<SyncLog[]> {
@@ -423,10 +445,10 @@ export async function listSyncLogs(): Promise<SyncLog[]> {
     "sync_logs",
     () => api.listSyncLogs(),
     async (logs) => {
-      for (const log of logs) await cache.saveSyncLog(log);
+      for (const log of logs) await cache.saveSyncLog(log)
     },
-    () => cache.getSyncLogs()
-  );
+    () => cache.getSyncLogs(),
+  )
 }
 
 export async function listLLMLogs(): Promise<LLMLog[]> {
@@ -434,10 +456,10 @@ export async function listLLMLogs(): Promise<LLMLog[]> {
     "llm_logs",
     () => api.listLLMLogs(),
     async (logs) => {
-      for (const log of logs) await cache.saveLLMLog(log);
+      for (const log of logs) await cache.saveLLMLog(log)
     },
-    () => cache.getLLMLogs()
-  );
+    () => cache.getLLMLogs(),
+  )
 }
 
 export async function listEmbeddingLogs(): Promise<EmbeddingLog[]> {
@@ -445,10 +467,10 @@ export async function listEmbeddingLogs(): Promise<EmbeddingLog[]> {
     "embedding_logs",
     () => api.listEmbeddingLogs(),
     async (logs) => {
-      for (const log of logs) await cache.saveEmbeddingLog(log);
+      for (const log of logs) await cache.saveEmbeddingLog(log)
     },
-    () => cache.getEmbeddingLogs()
-  );
+    () => cache.getEmbeddingLogs(),
+  )
 }
 
 export async function listNetworkLogs(): Promise<NetworkLog[]> {
@@ -456,135 +478,135 @@ export async function listNetworkLogs(): Promise<NetworkLog[]> {
     "network_logs",
     () => api.listNetworkLogs(),
     async (logs) => {
-      for (const log of logs) await cache.saveNetworkLog(log);
+      for (const log of logs) await cache.saveNetworkLog(log)
     },
-    () => cache.getNetworkLogs()
-  );
+    () => cache.getNetworkLogs(),
+  )
 }
 
 export async function savePublishLog(log: PublishLog): Promise<void> {
   await apiWrite(
     "publish_logs",
     () => api.createPublishLogs([log]),
-    () => cache.savePublishLog(log)
-  );
+    () => cache.savePublishLog(log),
+  )
 }
 
 export async function saveSyncLog(log: SyncLog): Promise<void> {
   await apiWrite(
     "sync_logs",
     () => api.createSyncLogs([log]),
-    () => cache.saveSyncLog(log)
-  );
+    () => cache.saveSyncLog(log),
+  )
 }
 
 export async function saveLLMLog(log: LLMLog): Promise<void> {
   await apiWrite(
     "llm_logs",
     () => api.createLLMLogs([log]),
-    () => cache.saveLLMLog(log)
-  );
+    () => cache.saveLLMLog(log),
+  )
 }
 
 export async function saveEmbeddingLog(log: EmbeddingLog): Promise<void> {
   await apiWrite(
     "embedding_logs",
     () => api.createEmbeddingLogs([log]),
-    () => cache.saveEmbeddingLog(log)
-  );
+    () => cache.saveEmbeddingLog(log),
+  )
 }
 
 export async function saveNetworkLog(log: NetworkLog): Promise<void> {
   await apiWrite(
     "network_logs",
     () => api.createNetworkLogs([log]),
-    () => cache.saveNetworkLog(log)
-  );
+    () => cache.saveNetworkLog(log),
+  )
 }
 
 async function deleteLogOnServer(
   type: "publish" | "sync" | "llm" | "embedding" | "network",
-  opts: { logId?: string; clearAll?: boolean; olderThanDays?: number }
+  opts: { logId?: string; clearAll?: boolean; olderThanDays?: number },
 ): Promise<void> {
   try {
-    await api.deleteLogs({ type, ...opts });
-    await refreshSyncMeta(true);
+    await api.deleteLogs({ type, ...opts })
+    await refreshSyncMeta(true)
   } catch (error) {
-    onWriteFallback?.(`${type}_logs`, error);
-    throw error;
+    onWriteFallback?.(`${type}_logs`, error)
+    throw error
   }
 }
 
 export async function deletePublishLog(id: string): Promise<void> {
-  await deleteLogOnServer("publish", { logId: id });
-  await cache.deletePublishLog(id);
-  markResourceSynced("publish_logs");
+  await deleteLogOnServer("publish", { logId: id })
+  await cache.deletePublishLog(id)
+  markResourceSynced("publish_logs")
 }
 
 export async function clearPublishLogs(): Promise<void> {
-  await deleteLogOnServer("publish", { clearAll: true });
-  await cache.clearPublishLogs();
-  markResourceSynced("publish_logs");
+  await deleteLogOnServer("publish", { clearAll: true })
+  await cache.clearPublishLogs()
+  markResourceSynced("publish_logs")
 }
 
 export async function deleteSyncLog(id: string): Promise<void> {
-  await deleteLogOnServer("sync", { logId: id });
-  await cache.deleteSyncLog(id);
-  markResourceSynced("sync_logs");
+  await deleteLogOnServer("sync", { logId: id })
+  await cache.deleteSyncLog(id)
+  markResourceSynced("sync_logs")
 }
 
 export async function clearSyncLogs(): Promise<void> {
-  await deleteLogOnServer("sync", { clearAll: true });
-  await cache.clearSyncLogs();
-  markResourceSynced("sync_logs");
+  await deleteLogOnServer("sync", { clearAll: true })
+  await cache.clearSyncLogs()
+  markResourceSynced("sync_logs")
 }
 
 export async function deleteLLMLog(id: string): Promise<void> {
-  await deleteLogOnServer("llm", { logId: id });
-  await cache.deleteLLMLog(id);
-  markResourceSynced("llm_logs");
+  await deleteLogOnServer("llm", { logId: id })
+  await cache.deleteLLMLog(id)
+  markResourceSynced("llm_logs")
 }
 
 export async function clearLLMLogs(): Promise<void> {
-  await deleteLogOnServer("llm", { clearAll: true });
-  await cache.clearLLMLogs();
-  markResourceSynced("llm_logs");
+  await deleteLogOnServer("llm", { clearAll: true })
+  await cache.clearLLMLogs()
+  markResourceSynced("llm_logs")
 }
 
 export async function deleteEmbeddingLog(id: string): Promise<void> {
-  await deleteLogOnServer("embedding", { logId: id });
-  await cache.deleteEmbeddingLog(id);
-  markResourceSynced("embedding_logs");
+  await deleteLogOnServer("embedding", { logId: id })
+  await cache.deleteEmbeddingLog(id)
+  markResourceSynced("embedding_logs")
 }
 
 export async function clearEmbeddingLogs(): Promise<void> {
-  await deleteLogOnServer("embedding", { clearAll: true });
-  await cache.clearEmbeddingLogs();
-  markResourceSynced("embedding_logs");
+  await deleteLogOnServer("embedding", { clearAll: true })
+  await cache.clearEmbeddingLogs()
+  markResourceSynced("embedding_logs")
 }
 
 export async function deleteNetworkLog(id: string): Promise<void> {
-  await deleteLogOnServer("network", { logId: id });
-  await cache.deleteNetworkLog(id);
-  markResourceSynced("network_logs");
+  await deleteLogOnServer("network", { logId: id })
+  await cache.deleteNetworkLog(id)
+  markResourceSynced("network_logs")
 }
 
 export async function clearNetworkLogs(): Promise<void> {
-  await deleteLogOnServer("network", { clearAll: true });
-  await cache.clearNetworkLogs();
-  markResourceSynced("network_logs");
+  await deleteLogOnServer("network", { clearAll: true })
+  await cache.clearNetworkLogs()
+  markResourceSynced("network_logs")
 }
 
 export async function deleteOldLogs(days: number): Promise<number> {
   try {
-    const result = await api.deleteLogs({ olderThanDays: days });
-    await refreshSyncMeta(true);
-    const total = result.total ?? 0;
-    await cache.deleteOldLogs(days);
-    return total;
+    const result = await api.deleteLogs({ olderThanDays: days })
+    await refreshSyncMeta(true)
+    const total = result.total ?? 0
+    await cache.deleteOldLogs(days)
+    return total
   } catch (error) {
-    onWriteFallback?.("logs", error);
-    return cache.deleteOldLogs(days);
+    onWriteFallback?.("logs", error)
+    return cache.deleteOldLogs(days)
   }
 }
 
@@ -592,8 +614,8 @@ export async function deleteOldLogs(days: number): Promise<number> {
 
 export async function getDBStats(): Promise<DBStats> {
   try {
-    const remote = await api.getStats();
-    const local = await cache.getDBStats();
+    const remote = await api.getStats()
+    const local = await cache.getDBStats()
     return {
       ...local,
       postCount: remote.postCount ?? local.postCount,
@@ -607,18 +629,18 @@ export async function getDBStats(): Promise<DBStats> {
       llmLogCount: remote.llmLogCount,
       embeddingLogCount: remote.embeddingLogCount ?? local.embeddingLogCount,
       networkLogCount: remote.networkLogCount ?? local.networkLogCount,
-    } as DBStats;
+    } as DBStats
   } catch {
-    const stats = await cache.getDBStats();
-    return stats as DBStats;
+    const stats = await cache.getDBStats()
+    return stats as DBStats
   }
 }
 
 export async function cleanupLegacyBots(): Promise<void> {
-  const oldBots = await cache.getBots();
+  const oldBots = await cache.getBots()
   if (oldBots.length > 0) {
     for (const bot of oldBots) {
-      await cache.deleteBot(bot.id);
+      await cache.deleteBot(bot.id)
     }
   }
 }
@@ -626,38 +648,43 @@ export async function cleanupLegacyBots(): Promise<void> {
 // --- network settings (server-backed) ---
 
 export async function loadNetworkSettings(): Promise<Record<string, unknown>> {
-  const row = await api.getNetworkSettings();
-  return row.value;
+  const row = await api.getNetworkSettings()
+  return row.value
 }
 
-export async function saveNetworkSettings(value: Record<string, unknown>): Promise<Record<string, unknown>> {
-  const row = await api.putNetworkSettings(value);
-  return row.value;
+export async function saveNetworkSettings(
+  value: Record<string, unknown>,
+): Promise<Record<string, unknown>> {
+  const row = await api.putNetworkSettings(value)
+  return row.value
 }
 
 // --- server migration ---
 
 export async function checkNeedsMigration(): Promise<boolean> {
-  const localChannels = await cache.getChannels();
-  if (localChannels.length === 0) return false;
+  const localChannels = await cache.getChannels()
+  if (localChannels.length === 0) return false
   try {
-    await refreshSyncMeta(true);
-    const remote = await api.listChannels();
-    return remote.length === 0;
+    await refreshSyncMeta(true)
+    const remote = await api.listChannels()
+    return remote.length === 0
   } catch {
-    return false;
+    return false
   }
 }
 
-export async function importIndexedDBToServer(): Promise<Record<string, number>> {
-  const exported = await cache.exportDB();
+export async function importIndexedDBToServer(): Promise<
+  Record<string, number>
+> {
+  const exported = await cache.exportDB()
   const [embeddings, translations] = await Promise.all([
     cache.getAllEmbeddings(),
     cache.initDB().then(async (db) => {
-      if (!db.objectStoreNames.contains("translations")) return [] as PostTranslation[];
-      return (await db.getAll("translations")) as PostTranslation[];
+      if (!db.objectStoreNames.contains("translations"))
+        return [] as PostTranslation[]
+      return (await db.getAll("translations")) as PostTranslation[]
     }),
-  ]);
+  ])
   const payload = {
     ...exported,
     data: {
@@ -665,24 +692,24 @@ export async function importIndexedDBToServer(): Promise<Record<string, number>>
       embeddings,
       translations,
     },
-  };
-  const result = await api.importData(payload);
-  await refreshSyncMeta(true);
-  return result.imported;
+  }
+  const result = await api.importData(payload)
+  await refreshSyncMeta(true)
+  return result.imported
 }
 
 /** @deprecated Use getPostsByDateRange — kept for backward compatibility */
 export async function getPostsByDateRangeCached(
   channelNames: string[],
   startDate: number,
-  endDate: number
+  endDate: number,
 ) {
-  return getPostsByDateRange(channelNames, startDate, endDate);
+  return getPostsByDateRange(channelNames, startDate, endDate)
 }
 
 /** @deprecated Use saveSummary — kept for backward compatibility */
 export async function saveSummarySynced(summary: Summary) {
-  return saveSummary(summary);
+  return saveSummary(summary)
 }
 
-export { cache };
+export { cache }

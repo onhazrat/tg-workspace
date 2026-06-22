@@ -1,14 +1,22 @@
-import { NetworkLog } from "../types";
-import { api } from "@/api";
-import { saveNetworkLog } from "../lib/repository";
+import { api } from "@/api"
+import { saveNetworkLog } from "../lib/repository"
+import type { NetworkLog } from "../types"
 
-const logTelemetry = async (url: string, method: string, status: number, telemetryData: any, source: string) => {
-  if (!telemetryData) return;
-  
-  const logsToSave: any[] = Array.isArray(telemetryData) ? telemetryData : [telemetryData];
-  
+const logTelemetry = async (
+  url: string,
+  method: string,
+  status: number,
+  telemetryData: any,
+  source: string,
+) => {
+  if (!telemetryData) return
+
+  const logsToSave: any[] = Array.isArray(telemetryData)
+    ? telemetryData
+    : [telemetryData]
+
   for (const t of logsToSave) {
-    if (!t) continue;
+    if (!t) continue
     const logEntry: NetworkLog = {
       id: crypto.randomUUID(),
       url,
@@ -20,26 +28,26 @@ const logTelemetry = async (url: string, method: string, status: number, telemet
       timestamp: Date.now(),
       proxyUsed: t.attempts?.[t.attempts.length - 1]?.proxyUrl,
       attempts: t.attempts?.length || 1,
-      telemetry: t
-    };
+      telemetry: t,
+    }
     try {
-      await saveNetworkLog(logEntry);
+      await saveNetworkLog(logEntry)
     } catch (e) {
-      console.error("Failed to save network log:", e);
+      console.error("Failed to save network log:", e)
     }
   }
-};
+}
 
 export interface PublishResult {
-  success: boolean;
-  error?: string;
-  responses?: any[];
-  requests?: any[];
+  success: boolean
+  error?: string
+  responses?: any[]
+  requests?: any[]
 }
 
 export const publishSummary = async (
   credentialId: string,
-  chatId: string, 
+  chatId: string,
   text: string,
   metadataText?: string,
   proxyEnabled?: boolean,
@@ -57,37 +65,39 @@ export const publishSummary = async (
       proxies,
       torAutoRotate,
       torRotationThreshold,
-    };
-
-    const data = (await api.publish(requestBody)) as {
-      success?: boolean;
-      results?: unknown[];
-      telemetry?: unknown;
-      error?: string;
-    };
-
-    if (data.telemetry) {
-      logTelemetry("https://api.telegram.org/bot.../sendMessage", "POST", 200, data.telemetry, "Publisher");
     }
 
-    const results = data.results ?? [];
+    const data = (await api.publish(requestBody)) as {
+      success?: boolean
+      results?: unknown[]
+      telemetry?: unknown
+      error?: string
+    }
+
+    if (data.telemetry) {
+      logTelemetry(
+        "https://api.telegram.org/bot.../sendMessage",
+        "POST",
+        200,
+        data.telemetry,
+        "Publisher",
+      )
+    }
+
+    const results = data.results ?? []
     const allOk =
       data.success !== false &&
       results.length > 0 &&
       results.every(
         (r) =>
-          r &&
-          typeof r === "object" &&
-          (r as { ok?: boolean }).ok !== false
-      );
+          r && typeof r === "object" && (r as { ok?: boolean }).ok !== false,
+      )
 
     if (!allOk) {
       const firstError = results.find(
         (r) =>
-          r &&
-          typeof r === "object" &&
-          (r as { ok?: boolean }).ok === false
-      ) as { description?: string } | undefined;
+          r && typeof r === "object" && (r as { ok?: boolean }).ok === false,
+      ) as { description?: string } | undefined
       return {
         success: false,
         error:
@@ -96,23 +106,23 @@ export const publishSummary = async (
           "Publish failed: Telegram API returned an error",
         responses: results,
         requests: [requestBody],
-      };
+      }
     }
 
     return {
       success: data.success ?? true,
       responses: results,
       requests: [requestBody],
-    };
+    }
   } catch (err) {
-    return { 
-      success: false, 
+    return {
+      success: false,
       error: err instanceof Error ? err.message : String(err),
       responses: [],
-      requests: []
-    };
+      requests: [],
+    }
   }
-};
+}
 
 export const fetchBotInfo = async (
   credentialId: string | undefined,
@@ -131,11 +141,11 @@ export const fetchBotInfo = async (
     proxies,
     torAutoRotate,
     torRotationThreshold,
-  };
-  if (credentialId) {
-    body.credentialId = credentialId;
-  } else if (token) {
-    body.token = token;
   }
-  return api.botInfo(body);
-};
+  if (credentialId) {
+    body.credentialId = credentialId
+  } else if (token) {
+    body.token = token
+  }
+  return api.botInfo(body)
+}

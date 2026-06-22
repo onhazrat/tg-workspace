@@ -15,10 +15,14 @@ def test_startup_checks_local_noop(monkeypatch: pytest.MonkeyPatch) -> None:
     run_startup_checks()
 
 
-def test_production_settings_reject_missing_api_key(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_production_settings_reject_missing_api_key(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     monkeypatch.setenv("ENVIRONMENT", "production")
     monkeypatch.setenv("API_KEY", "")
-    monkeypatch.setenv("TOKEN_ENCRYPTION_KEY", "dGVzdC1mZXJuZXQta2V5LWZvci1wcm9kLXRlc3RzMTI=")
+    monkeypatch.setenv(
+        "TOKEN_ENCRYPTION_KEY", "dGVzdC1mZXJuZXQta2V5LWZvci1wcm9kLXRlc3RzMTI="
+    )
     monkeypatch.setenv("SECRET_KEY", "not-changethis-production-secret-key")
     monkeypatch.setenv("POSTGRES_PASSWORD", "not-changethis-postgres")
     monkeypatch.setenv("FIRST_SUPERUSER_PASSWORD", "not-changethis-admin")
@@ -28,10 +32,14 @@ def test_production_settings_reject_missing_api_key(monkeypatch: pytest.MonkeyPa
         Settings()
 
 
-def test_startup_checks_production_missing_api_key(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_startup_checks_production_missing_api_key(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     monkeypatch.setenv("ENVIRONMENT", "production")
     monkeypatch.setenv("API_KEY", "")
-    monkeypatch.setenv("TOKEN_ENCRYPTION_KEY", "dGVzdC1mZXJuZXQta2V5LWZvci1wcm9kLXRlc3RzMTI=")
+    monkeypatch.setenv(
+        "TOKEN_ENCRYPTION_KEY", "dGVzdC1mZXJuZXQta2V5LWZvci1wcm9kLXRlc3RzMTI="
+    )
     monkeypatch.setenv("SECRET_KEY", "not-changethis-production-secret-key")
     monkeypatch.setenv("POSTGRES_PASSWORD", "not-changethis-postgres")
     monkeypatch.setenv("FIRST_SUPERUSER_PASSWORD", "not-changethis-admin")

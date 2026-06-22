@@ -51,7 +51,9 @@ def backfill(dry_run: bool = False, reassign_all: bool = False) -> dict[str, int
     with Session(engine) as session:
         operator_id = get_operator_user_id(session)
         if operator_id is None:
-            print("ERROR: first superuser not found — run init_db first", file=sys.stderr)
+            print(
+                "ERROR: first superuser not found — run init_db first", file=sys.stderr
+            )
             sys.exit(1)
 
         for model in TABLES:
@@ -76,7 +78,9 @@ def backfill(dry_run: bool = False, reassign_all: bool = False) -> dict[str, int
                     session.add(row)
                 if rows:
                     session.commit()
-            print(f"{'[dry-run] ' if dry_run else ''}{name}: {len(rows)} rows to backfill")
+            print(
+                f"{'[dry-run] ' if dry_run else ''}{name}: {len(rows)} rows to backfill"
+            )
 
     return counts
 

@@ -49,7 +49,13 @@ def test_jobs_status_lists_all_jobs(client: TestClient) -> None:
     r = client.get(f"{PREFIX}/status", headers=headers)
     assert r.status_code == 200
     data = r.json()
-    for job_id in ("auto_sync", "embeddings", "auto_summary", "retention", "translation_batch"):
+    for job_id in (
+        "auto_sync",
+        "embeddings",
+        "auto_summary",
+        "retention",
+        "translation_batch",
+    ):
         assert job_id in data
         assert "enabled" in data[job_id]
         assert "lastStatus" in data[job_id]
@@ -64,7 +70,9 @@ def test_embeddings_default_from_env(client: TestClient) -> None:
 def test_translation_batch_default_from_env(client: TestClient) -> None:
     headers = _auth(client)
     status = client.get(f"{PREFIX}/status", headers=headers).json()
-    assert status["translation_batch"]["enabled"] is default_job_enabled("translation_batch")
+    assert status["translation_batch"]["enabled"] is default_job_enabled(
+        "translation_batch"
+    )
 
 
 def test_update_job_enabled(client: TestClient) -> None:
@@ -154,14 +162,19 @@ def test_auto_sync_triggers_stale_channels(
     assert result.get("channels", 0) >= 1
     mock_create.assert_awaited_once()
     mock_run.assert_awaited_once()
-    called_entries = mock_create.await_args.kwargs.get("channel_entries") or mock_create.await_args.args[0]
+    called_entries = (
+        mock_create.await_args.kwargs.get("channel_entries")
+        or mock_create.await_args.args[0]
+    )
     assert any(name == "stale-ch" for _id, name in called_entries)
 
 
 def test_retention_deletes_old_posts() -> None:
     now = int(time.time() * 1000)
     with Session(engine) as session:
-        save_setting(session, "retention", {"postRetentionDays": 30, "logRetentionDays": 0})
+        save_setting(
+            session, "retention", {"postRetentionDays": 30, "logRetentionDays": 0}
+        )
         session.add(
             Post(
                 channel_name="ret-ch",

@@ -173,3 +173,40 @@ The email templates are in `./backend/app/email-templates/`. Here, there are two
 Before continuing, ensure you have the [MJML extension](https://github.com/mjmlio/vscode-mjml) installed in your VS Code.
 
 Once you have the MJML extension installed, you can create a new email template in the `src` directory. After creating the new email template and with the `.mjml` file open in your editor, open the command palette with `Ctrl+Shift+P` and search for `MJML: Export to HTML`. This will convert the `.mjml` file to a `.html` file and now you can save it in the build directory.
+
+---
+
+## TG Summarizer domain
+
+This backend extends the FastAPI template with Telegram summarizer-specific models and services.
+
+### Domain models
+
+- **`app/models_tg.py`** — Channels, posts, summaries, bot credentials, embeddings, logs, sync metadata, and `AppSetting` rows (not `models.py`, which holds template `User` / `Item`).
+- **`app/models.py`** — Template auth models (`User`, `Item`).
+
+### Key services
+
+| Module | Role |
+|--------|------|
+| `sync_orchestrator.py` | Channel sync jobs, backward pagination, auto-follow |
+| `proxy_pool.py` | Per-proxy lane semaphores for proxied HTTP |
+| `scraper.py` | `t.me` page fetch and parse |
+| `summaries.py` | Summary CRUD and camelCase responses |
+| `embeddings.py` | Server-side embedding backfill |
+| `bulk_channels.py` | Bulk reset-sync and deprecated start-id reresolve |
+| `network_settings.py` | Proxy URLs, Tor, concurrency overrides |
+| `runtime_config.py` | Effective sync/scraper/network diagnostics |
+| `channels.py`, `posts.py`, `credentials.py`, `data_import_export.py` | Data API business logic (thin routes in `api/routes/data.py`) |
+
+### Scheduler caveat
+
+APScheduler runs **in-process** in a single replica. Do not scale the backend horizontally without external job coordination — see [ADR-004](../docs/migration/ADR-004-job-runner.md).
+
+### Test isolation
+
+pytest uses `POSTGRES_DB=app_test` only (see `tests/conftest.py`). Never point the dev server at `app_test`. Maintenance scripts live in `backend/scripts/` — see [MEMORY.md](../MEMORY.md).
+
+### Operator runbooks
+
+Sync, bulk re-backfill, per-channel auto-follow, and proxy tuning: [development.md](../development.md).

@@ -47,7 +47,9 @@ class NetworkRuntimeSettings(BaseModel):
         default_factory=dict, alias="proxyConcurrencyOverrides"
     )
     effective_proxy_capacity: int = Field(0, alias="effectiveProxyCapacity")
-    proxy_lanes: list[ProxyLaneSnapshot] = Field(default_factory=list, alias="proxyLanes")
+    proxy_lanes: list[ProxyLaneSnapshot] = Field(
+        default_factory=list, alias="proxyLanes"
+    )
     tor_enabled: bool = Field(False, alias="torEnabled")
     tor_mode: str | None = Field(None, alias="torMode")
     tor_proxy_urls: str | None = Field(None, alias="torProxyUrls")
@@ -103,7 +105,9 @@ class RuntimeConstants(BaseModel):
     sync_job_sse_throttle_ms: int = Field(..., alias="syncJobSseThrottleMs")
     sync_job_persist_interval_ms: int = Field(..., alias="syncJobPersistIntervalMs")
     auto_sync_pause_duration_ms: int = Field(..., alias="autoSyncPauseDurationMs")
-    auto_sync_failure_threshold_min: int = Field(..., alias="autoSyncFailureThresholdMin")
+    auto_sync_failure_threshold_min: int = Field(
+        ..., alias="autoSyncFailureThresholdMin"
+    )
     embeddings_chunk_size: int = Field(..., alias="embeddingsChunkSize")
     embeddings_backfill_limit_default: int = Field(
         ..., alias="embeddingsBackfillLimitDefault"
@@ -124,7 +128,6 @@ class ActiveSyncJobSummary(BaseModel):
     pending_channels: int = Field(..., alias="pendingChannels")
     allowed_concurrency: int = Field(..., alias="allowedConcurrency")
     concurrency_in_use: int = Field(..., alias="concurrencyInUse")
-    effective_proxy_capacity: int | None = Field(None, alias="effectiveProxyCapacity")
     effective_proxy_capacity: int | None = Field(None, alias="effectiveProxyCapacity")
 
     model_config = {"populate_by_name": True}

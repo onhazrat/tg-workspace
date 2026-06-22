@@ -8,7 +8,8 @@ from __future__ import annotations
 
 import logging
 import time
-from typing import Any, Awaitable, Callable
+from collections.abc import Awaitable, Callable
+from typing import Any
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from sqlmodel import Session
@@ -161,7 +162,8 @@ async def trigger_job(job_id: str) -> dict[str, Any]:
     if not runner:
         raise ValueError(f"Unknown job: {job_id}")
     await runner()
-    return get_job_status()[job_id]
+    result: dict[str, Any] = dict(get_job_status()[job_id])
+    return result
 
 
 def set_job_enabled_flag(job_id: str, enabled: bool) -> dict[str, Any]:
@@ -177,7 +179,8 @@ def set_job_enabled_flag(job_id: str, enabled: bool) -> dict[str, Any]:
             ap_job.pause()
     _job_status[job_id]["enabled"] = enabled
     _job_status[job_id]["nextRun"] = _next_run_ms(job_id)
-    return get_job_status()[job_id]
+    result: dict[str, Any] = dict(get_job_status()[job_id])
+    return result
 
 
 def start_scheduler() -> None:

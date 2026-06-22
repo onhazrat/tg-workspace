@@ -3,6 +3,7 @@ import json
 import time
 import uuid
 from collections.abc import AsyncIterator
+from typing import Any
 
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
@@ -12,7 +13,6 @@ from app.api.deps import CurrentUser, SessionDep
 from app.core.config import settings
 from app.jobs.scheduler import get_job_status, set_job_enabled_flag, trigger_job
 from app.jobs.settings import JOB_IDS
-from app.services.operator import get_operator_user_id, select_operator_channels
 from app.schemas.jobs import UpdateJobRequest
 from app.schemas.runtime_config import RuntimeConfigResponse
 from app.schemas.sync_jobs import (
@@ -21,6 +21,7 @@ from app.schemas.sync_jobs import (
     StartSyncJobResponse,
     SyncJobStatusResponse,
 )
+from app.services.operator import get_operator_user_id, select_operator_channels
 from app.services.runtime_config import build_runtime_config
 from app.services.scraper_jobs import (
     cancel_job,
@@ -38,7 +39,7 @@ router = APIRouter(prefix="/jobs", tags=["jobs"])
 def _resolve_channel_entries(
     session: Session,
     channel_ids: list[str] | None,
-    operator_id,
+    operator_id: uuid.UUID | None,
 ) -> list[tuple[str, str]]:
     operator_channels = {
         ch.id: ch for ch in select_operator_channels(session, operator_id=operator_id)
@@ -51,15 +52,11 @@ def _resolve_channel_entries(
                 entries.append((ch.id, ch.name))
         return entries
 
-    return [
-        (c.id, c.name)
-        for c in operator_channels.values()
-        if not c.is_frozen
-    ]
+    return [(c.id, c.name) for c in operator_channels.values() if not c.is_frozen]
 
 
 @router.get("/status")
-def jobs_status(_current_user: CurrentUser) -> dict:
+def jobs_status(_current_user: CurrentUser) -> dict[str, Any]:
     return get_job_status()
 
 
@@ -73,7 +70,9 @@ def get_runtime_config(
 
 
 @router.post("/{job_id}/trigger")
-async def trigger_scheduler_job(job_id: str, _current_user: CurrentUser) -> dict:
+async def trigger_scheduler_job(
+    job_id: str, _current_user: CurrentUser
+) -> dict[str, Any]:
     if job_id not in JOB_IDS:
         raise HTTPException(status_code=404, detail=f"Unknown job: {job_id}")
     try:
@@ -85,7 +84,7 @@ async def trigger_scheduler_job(job_id: str, _current_user: CurrentUser) -> dict
 @router.put("/{job_id}")
 def update_scheduler_job(
     job_id: str, body: UpdateJobRequest, _current_user: CurrentUser
-) -> dict:
+) -> dict[str, Any]:
     if job_id not in JOB_IDS:
         raise HTTPException(status_code=404, detail=f"Unknown job: {job_id}")
     try:
@@ -127,15 +126,14 @@ def get_sync_job_status(
 
 
 def _sync_status_changed(
-    previous: dict | None, current: dict
+    previous: dict[str, Any] | None, current: dict[str, Any]
 ) -> bool:
     if previous is None:
         return True
     if previous.get("status") != current.get("status"):
         return True
     prev_channels = {
-        ch["channelId"]: ch["status"]
-        for ch in previous.get("channels", [])
+        ch["channelId"]: ch["status"] for ch in previous.get("channels", [])
     }
     for ch in current.get("channels", []):
         if prev_channels.get(ch["channelId"]) != ch["status"]:
@@ -144,9 +142,7 @@ def _sync_status_changed(
 
 
 @router.get("/sync/{job_id}/events")
-async def sync_job_events(
-    job_id: str, _current_user: CurrentUser
-) -> StreamingResponse:
+async def sync_job_events(job_id: str, _current_user: CurrentUser) -> StreamingResponse:
     job = get_job(job_id)
     if not job:
         raise HTTPException(status_code=404, detail="Sync job not found")
@@ -157,7 +153,7 @@ async def sync_job_events(
     async def event_stream() -> AsyncIterator[str]:
         seen_seq = job._update_seq
         last_sent_at = 0.0
-        last_snapshot: dict | None = None
+        last_snapshot: dict[str, Any] | None = None
 
         while True:
             current_job = get_job(job_id)

@@ -27,7 +27,7 @@ What is explicitly out of scope for this idea?
 
 ## Open questions
 
-- 
+-
 
 ## References
 

@@ -58,9 +58,27 @@ def test_posts_date_range_query(client: TestClient) -> None:
         headers=headers,
     )
     posts = [
-        {"id": 1, "channelName": "range-ch", "text": "old", "date": "2024-01-01", "timestamp": 1000},
-        {"id": 2, "channelName": "range-ch", "text": "mid", "date": "2024-01-02", "timestamp": 2000},
-        {"id": 3, "channelName": "range-ch", "text": "new", "date": "2024-01-03", "timestamp": 3000},
+        {
+            "id": 1,
+            "channelName": "range-ch",
+            "text": "old",
+            "date": "2024-01-01",
+            "timestamp": 1000,
+        },
+        {
+            "id": 2,
+            "channelName": "range-ch",
+            "text": "mid",
+            "date": "2024-01-02",
+            "timestamp": 2000,
+        },
+        {
+            "id": 3,
+            "channelName": "range-ch",
+            "text": "new",
+            "date": "2024-01-03",
+            "timestamp": 3000,
+        },
     ]
     r = client.post(f"{PREFIX}/posts/bulk", json=posts, headers=headers)
     assert r.status_code == 200
@@ -256,7 +274,10 @@ def test_network_logs_crud(client: TestClient) -> None:
             "source": "ChannelGrid",
             "proxyUsed": "socks5h://127.0.0.1:9050",
             "attempts": 1,
-            "telemetry": {"success": True, "attempts": [{"attempt": 1, "proxyUrl": "socks5h://127.0.0.1:9050"}]},
+            "telemetry": {
+                "success": True,
+                "attempts": [{"attempt": 1, "proxyUrl": "socks5h://127.0.0.1:9050"}],
+            },
         }
     ]
     try:
@@ -267,8 +288,8 @@ def test_network_logs_crud(client: TestClient) -> None:
         r2 = client.get(f"{PREFIX}/network-logs", headers=headers)
         assert r2.status_code == 200
         logs = r2.json()
-        assert any(l["id"] == "nl-test-1" for l in logs)
-        saved = next(l for l in logs if l["id"] == "nl-test-1")
+        assert any(log["id"] == "nl-test-1" for log in logs)
+        saved = next(log for log in logs if log["id"] == "nl-test-1")
         assert saved["statusCode"] == 200
         assert saved["proxyUsed"] == "socks5h://127.0.0.1:9050"
         assert saved["source"] == "ChannelGrid"

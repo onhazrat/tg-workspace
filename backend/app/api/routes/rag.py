@@ -11,8 +11,9 @@ from app.ai.registry import get_provider
 from app.api.deps import CurrentUser, SessionDep
 from app.core.config import settings
 from app.models_tg import Post, PostEmbedding
-from app.services.embeddings import backfill_embeddings, get_embedding_status
 from app.services.channels import channel_names_for_operator
+from app.services.embeddings import backfill_embeddings, get_embedding_status
+from app.services.serialization import post_to_camel
 
 router = APIRouter(prefix="/rag", tags=["rag"])
 
@@ -41,18 +42,6 @@ def _cosine(a: list[float], b: list[float]) -> float:
     return float(np.dot(va, vb) / denom)
 
 
-def _post_to_camel(post: Post) -> dict[str, Any]:
-    return {
-        "id": post.post_id,
-        "channelName": post.channel_name,
-        "text": post.text,
-        "date": post.date,
-        "timestamp": post.timestamp,
-        "forwardedFrom": post.forwarded_from,
-        "forwardedFromName": post.forwarded_from_name,
-    }
-
-
 def _effective_operator_channels(
     session: SessionDep,
     current_user: CurrentUser,
@@ -79,7 +68,9 @@ async def rag_embed(
     if not settings.GEMINI_API_KEY:
         raise HTTPException(status_code=503, detail="GEMINI_API_KEY not configured")
     try:
-        return await backfill_embeddings(session, limit=body.limit, operator_id=current_user.id)
+        return await backfill_embeddings(
+            session, limit=body.limit, operator_id=current_user.id
+        )
     except ValueError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
 
@@ -94,11 +85,15 @@ async def rag_search(
         raise HTTPException(status_code=503, detail="GEMINI_API_KEY not configured")
     provider = get_provider("gemini")
     try:
-        query_vec = (await provider.embed([body.query], model=settings.EMBEDDING_MODEL)).vectors[0]
+        query_vec = (
+            await provider.embed([body.query], model=settings.EMBEDDING_MODEL)
+        ).vectors[0]
     except ValueError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
 
-    allowed_channels = _effective_operator_channels(session, current_user, body.channels)
+    allowed_channels = _effective_operator_channels(
+        session, current_user, body.channels
+    )
     if not allowed_channels:
         return {"results": []}
 
@@ -137,7 +132,7 @@ async def rag_search(
                 "channelName": emb.channel_name,
                 "postId": emb.post_id,
                 "text": emb.text,
-                "post": _post_to_camel(post) if post else None,
+                "post": post_to_camel(post) if post else None,
             }
         )
     return {"results": results}

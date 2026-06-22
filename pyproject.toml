@@ -9,3 +9,42 @@ dev = [
 github-actions = [
     "smokeshow >=0.5.0",
 ]
+
+[tool.typos.files]
+extend-exclude = [
+    "img/",
+    "uv.lock",
+    "bun.lock",
+    "backend/coverage/",
+    "backend/htmlcov/",
+    "frontend/dist/",
+    "frontend/public/assets/images/",
+]
+
+[tool.typos.default]
+extend-ignore-re = [
+    # GitHub usernames in @mentions
+    "@[a-zA-Z0-9](?:-?[a-zA-Z0-9])*",
+    # Name of the package in the PR title
+    "Bump certifi ",
+]
+
+[tool.typos.default.extend-identifiers]
+alls = "alls"
+AIMD = "AIMD"
+
+[tool.mypy]
+strict = true
+exclude = ["venv", ".venv", "alembic"]
+
+[[tool.mypy.overrides]]
+module = [
+    "apscheduler",
+    "apscheduler.*",
+    "stem",
+    "stem.*",
+    "langdetect",
+    "langdetect.*",
+]
+ignore_missing_imports = true
+disable_error_code = ["import-untyped"]

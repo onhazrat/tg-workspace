@@ -1,7 +1,7 @@
 # Remediation Plan
 
-**Date:** 2026-06-09  
-**Context:** Post-migration security and architecture audit (Phases 0–7 complete per [IMPLEMENTATION-PLAN.md](./IMPLEMENTATION-PLAN.md))  
+**Date:** 2026-06-09
+**Context:** Post-migration security and architecture audit (Phases 0–7 complete per [IMPLEMENTATION-PLAN.md](./IMPLEMENTATION-PLAN.md))
 **Related:** [DECISIONS.md](./DECISIONS.md), [ADR-002-auth.md](./ADR-002-auth.md), [ADR-004-job-runner.md](./ADR-004-job-runner.md), [SECRETS-MATRIX.md](./SECRETS-MATRIX.md)
 
 This document turns audit findings into **actionable, parallelizable engineering workstreams**. It does not replace locked migration decisions; it remediates gaps between current code and those decisions.
@@ -122,7 +122,7 @@ flowchart TB
   - When `ENVIRONMENT != "local"`: reject unauthenticated requests even if `API_KEY` is empty (fail closed).
   - Add `REQUIRE_API_KEY: bool` or derive from `ENVIRONMENT == "production"`.
   - Expand `PUBLIC_PATHS` audit: keep health-check, login; remove or gate `/api/v1/users/signup` when `USERS_OPEN_REGISTRATION=false`.
-- [ ] **Route-level JWT on sensitive handlers** — add `CurrentUser` to routes that today rely on middleware only:
+- [x] **Route-level JWT on sensitive handlers** — add `CurrentUser` to routes that today rely on middleware only:
   - `backend/app/api/routes/ai_routes.py` — all `/ai/*` handlers
   - `backend/app/api/routes/rag.py` — `rag_status`, `rag_embed`, `rag_search` (currently `Depends(get_db)` only)
   - `backend/app/api/routes/network.py` — all `/network/*` handlers
@@ -220,15 +220,15 @@ flowchart TB
 
 #### Tasks
 
-- [ ] **Immediate fix (Option: Fix+deprecate)** — `legacy.py`
+- [x] **Immediate fix (Option: Fix+deprecate)** — `legacy.py`
   - Add `session: SessionDep`, `current_user: CurrentUser` to legacy wrappers; pass through to `api_bot_info` / `api_publish`.
   - Apply same pattern to all legacy telegram/network delegates.
   - Add `Deprecation: true` response header or log warning.
-- [ ] **Frontend cutover** — verify no callers use `/api/*`:
+- [x] **Frontend cutover** — verify no callers use `/api/*`:
   - `frontend/src/api/tg.ts`, `frontend/src/api/network.ts`, `frontend/src/services/telegram.ts` — all should use `/api/v1/...` via `frontend/src/api/base.ts`.
   - Grep repo for `"/api/publish"`, `"/api/bot-info"`, `"/api/scrape"`.
 - [ ] **Remove legacy router** — `backend/app/main.py` — delete `app.include_router(legacy.router)` after cutover + one release cycle.
-- [ ] **OpenAPI cleanup** — ensure generated client (`frontend/src/client/sdk.gen.ts`) has no legacy paths after regen.
+- [x] **OpenAPI cleanup** — ensure generated client (`frontend/src/client/sdk.gen.ts`) has no legacy paths after regen.
 
 #### Acceptance criteria
 
@@ -258,16 +258,16 @@ Inverted layering: `backend/app/jobs/retention.py` imports `_touch_sync` from `b
 
 #### Tasks
 
-- [ ] **Create sync meta service** — `backend/app/services/sync_meta.py`
+- [x] **Create sync meta service** — `backend/app/services/sync_meta.py`
   - Move `_touch_sync`, etag helpers from `data.py`.
   - Update `data.py`, `retention.py`, import paths in jobs to use service.
-- [ ] **Create data service modules** (extract from `data.py` without changing API contracts):
+- [x] **Create data service modules** (extract from `data.py` without changing API contracts):
   - `backend/app/services/channels.py` — list, upsert, stats (`_compute_channel_stats`)
   - `backend/app/services/posts.py` — list, bulk upsert
   - `backend/app/services/summaries.py`
   - `backend/app/services/logs.py` — publish/sync/llm/embedding/network logs
   - `backend/app/services/settings_store.py` — merge `jobs/settings.py` + `data.py` settings routes logic
-- [ ] **Thin route handlers** — `data.py` routes become: auth → service call → camelCase response.
+- [x] **Thin route handlers** — `data.py` routes become: auth → service call → camelCase response.
 - [ ] **Job modules call services only** — `auto_sync.py`, `retention.py`, `auto_summary.py`, `translation_batch.py`.
 - [ ] **Batch channel stats** — `backend/app/services/channels.py`
   - Add `get_channel_stats_batch(session, channel_names)` to fix N+1 in frontend (`DataContext.loadChannels` loops per channel).
@@ -431,7 +431,7 @@ Inverted layering: `backend/app/jobs/retention.py` imports `_touch_sync` from `b
 
 #### Tasks
 
-- [ ] **Security regression suite** — new marker `@pytest.mark.security` for WS-A tests.
+- [x] **Security regression suite** — new marker `@pytest.mark.security` for WS-A tests.
 - [ ] **Frontend unit tests in CI** — ensure `npm test` runs in GitHub Actions for `frontend/src/services/`, `contexts/`.
 - [ ] **Coverage thresholds** — prioritize:
   - `backend/app/middleware/api_key.py`
@@ -465,7 +465,7 @@ Inverted layering: `backend/app/jobs/retention.py` imports `_touch_sync` from `b
 
 #### Tasks
 
-- [ ] **Startup validation module** — `backend/app/core/startup_checks.py`
+- [x] **Startup validation module** — `backend/app/core/startup_checks.py`
   - Called from `backend/app/main.py` lifespan before scheduler start.
   - Validate: secrets, `API_KEY` in prod, `TOKEN_ENCRYPTION_KEY`, `USERS_OPEN_REGISTRATION` warning.
 - [ ] **Update `.env.example`** — document Mode A production block:
