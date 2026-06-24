@@ -1,5 +1,6 @@
 import type { CommandContext } from "@/lib/commands/types"
 import { getPostsByDateRange } from "@/lib/repository"
+import { searchSimilarPostsFromQuery } from "@/services/rag"
 import type { Post, Summary } from "@/types"
 
 export const SEARCH_RESULTS_CAP = 50
@@ -64,6 +65,27 @@ export function searchSummariesForPalette(
   return filterSummariesByTextQuery(ctx.summariesHistory, query)
     .sort((left, right) => right.timestamp - left.timestamp)
     .slice(0, SEARCH_RESULTS_CAP)
+}
+
+export async function semanticSearchPostsForPalette(
+  ctx: CommandContext,
+  query: string,
+): Promise<Post[]> {
+  if (!query.trim()) return []
+  const range = ctx.postDateRange ?? {
+    startDate: 0,
+    endDate: Date.now(),
+  }
+  const channels =
+    ctx.selectedChannels.size > 0 ? Array.from(ctx.selectedChannels) : undefined
+  const posts = await searchSimilarPostsFromQuery(
+    query,
+    SEARCH_RESULTS_CAP,
+    channels,
+    range.startDate,
+    range.endDate,
+  )
+  return posts.slice(0, SEARCH_RESULTS_CAP)
 }
 
 export function truncatePreview(text: string, maxLength = 80): string {

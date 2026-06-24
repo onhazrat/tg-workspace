@@ -12,9 +12,19 @@ export function buildTimestampedFilename(prefix: string): string {
   return `${prefix}-${stamp}.jsonl`
 }
 
+function shouldUseBlobDownloadFallback(): boolean {
+  if (typeof navigator === "undefined") return true
+  if (navigator.webdriver) return true
+  return false
+}
+
 export async function pickSaveFile(
   suggestedName: string,
 ): Promise<SaveFileResult> {
+  if (shouldUseBlobDownloadFallback()) {
+    return { useBlobFallback: true }
+  }
+
   try {
     const fileHandle = await (
       window as Window & {

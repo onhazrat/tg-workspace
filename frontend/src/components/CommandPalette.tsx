@@ -22,13 +22,25 @@ import { useCommandPalette } from "@/hooks/useCommandPalette"
 import { useCommandRegistry } from "@/hooks/useCommandRegistry"
 import { useCommandSearchAffinity } from "@/hooks/useCommandSearchAffinity"
 import { useRecentCommands } from "@/hooks/useRecentCommands"
+import { removeTagFromChannel } from "@/lib/channels/channel-tags"
 import { normalizeChannelHandle } from "@/lib/commands/channel-ops"
+import {
+  findPostByEntityId,
+  getExtendedEntityCandidates,
+  isNonChannelEntityFlow,
+} from "@/lib/commands/entity-candidates"
+import {
+  getChainedEditorApply,
+  getChainedEditorField,
+  runChainedChannelEntityPick,
+} from "@/lib/commands/extended-commands"
 import { filterAndRank } from "@/lib/commands/rank-commands"
 import {
   pickSearchPost,
   pickSearchSummary,
   searchPostsForPalette,
   searchSummariesForPalette,
+  semanticSearchPostsForPalette,
   truncatePreview,
 } from "@/lib/commands/search-filters"
 import type { CommandDef } from "@/lib/commands/types"
@@ -38,7 +50,7 @@ import {
   runEntityChannelAction,
 } from "@/lib/commands/useChannelEntityFlow"
 import { env } from "@/lib/env"
-import type { Post, Summary } from "@/types"
+import type { Channel, Post, Summary } from "@/types"
 
 function groupCommands(commands: CommandDef[]): Map<string, CommandDef[]> {
   const groups = new Map<string, CommandDef[]>()
@@ -207,9 +219,24 @@ export function CommandPalette() {
 
   const entityCandidates = useMemo(() => {
     if (!entityCommand?.entityFlow) return []
-    const pool = getEntityCandidates(entityCommand.entityFlow, context)
+    const flow = entityCommand.entityFlow
+    if (isNonChannelEntityFlow(flow)) {
+      const items = getExtendedEntityCandidates(
+        flow,
+        context,
+        palette.entityPayload,
+      )
+      const normalizedQuery = entityQuery.trim().toLowerCase()
+      if (!normalizedQuery) return items
+      return items.filter(
+        (item) =>
+          item.label.toLowerCase().includes(normalizedQuery) ||
+          item.id.toLowerCase().includes(normalizedQuery),
+      )
+    }
+    const pool = getEntityCandidates(flow, context)
     return filterChannelsByQuery(pool, entityQuery)
-  }, [context, entityCommand, entityQuery])
+  }, [context, entityCommand, entityQuery, palette.entityPayload])
 
   const finishCommand = async (
     command: CommandDef,
@@ -250,20 +277,102 @@ export function CommandPalette() {
     await finishCommand(command)
   }
 
-  const handleEntityPick = async (channelName: string) => {
+  const handleEntityPick = async (value: string) => {
     if (!entityCommand?.entityFlow) return
-    const channel = context.channels.find((entry) => entry.name === channelName)
+    const flow = entityCommand.entityFlow
+
+    if (flow === "remove-tag-pick") {
+      const channel = palette.entityPayload as Channel | undefined
+      if (!channel) return
+      await removeTagFromChannel(channel, value, context)
+      const rootQuery = palette.getRootQuery()
+      if (rootQuery.trim()) {
+        recordPick(rootQuery, entityCommand.id)
+      }
+      recordRecent(entityCommand.id)
+      close()
+      return
+    }
+
+    if (flow === "delete-summary") {
+      const summary = context.summariesHistory.find(
+        (entry) => entry.id === value,
+      )
+      if (!summary) return
+      if (entityCommand.requiresConfirmation) {
+        palette.openConfirm(entityCommand, summary)
+        return
+      }
+      await entityCommand.run(context, summary)
+      await finishCommand(entityCommand)
+      return
+    }
+
+    if (flow === "pick-post") {
+      const post = findPostByEntityId(context.filteredPosts, value)
+      if (!post) return
+      await entityCommand.run(context, post)
+      const rootQuery = palette.getRootQuery()
+      if (rootQuery.trim()) {
+        recordPick(rootQuery, entityCommand.id)
+      }
+      recordRecent(entityCommand.id)
+      close()
+      return
+    }
+
+    if (flow === "clear-db-table") {
+      if (entityCommand.requiresConfirmation) {
+        palette.openConfirm(entityCommand, value)
+        return
+      }
+      await entityCommand.run(context, value)
+      await finishCommand(entityCommand)
+      return
+    }
+
+    const channel = context.channels.find((entry) => entry.name === value)
     if (!channel) return
 
-    if (
-      entityCommand.entityFlow === "delete-channel" &&
-      entityCommand.requiresConfirmation
-    ) {
+    if (flow === "delete-channel" && entityCommand.requiresConfirmation) {
       palette.openConfirm(entityCommand, channel)
       return
     }
 
-    await runEntityChannelAction(entityCommand.entityFlow, channel, context)
+    if (flow === "reset-sync-channel" && entityCommand.requiresConfirmation) {
+      palette.openConfirm(entityCommand, channel)
+      return
+    }
+
+    const chained = await runChainedChannelEntityPick(flow, channel, context)
+    if (chained === "editor") {
+      const field = getChainedEditorField(entityCommand.id, channel)
+      setEditorValue(field?.getValue() ?? "")
+      palette.openEditor(entityCommand)
+      return
+    }
+    if (chained === "tag-pick") {
+      palette.setEntityCommand({
+        ...entityCommand,
+        entityFlow: "remove-tag-pick",
+      })
+      setEntityQuery("")
+      requestAnimationFrame(() => {
+        entityInputRef.current?.focus()
+      })
+      return
+    }
+    if (chained === "done") {
+      const rootQuery = palette.getRootQuery()
+      if (rootQuery.trim()) {
+        recordPick(rootQuery, entityCommand.id)
+      }
+      recordRecent(entityCommand.id)
+      close()
+      return
+    }
+
+    await runEntityChannelAction(flow, channel, context)
 
     const shouldClose = entityCommand.closeOnPick !== false
     if (shouldClose) {
@@ -285,6 +394,16 @@ export function CommandPalette() {
   const handleEditorApply = async () => {
     if (!editorCommand?.editorField) return
 
+    if (
+      editorCommand.id === "add-tag-channel" ||
+      editorCommand.id === "edit-channel-start-id"
+    ) {
+      await getChainedEditorApply(editorCommand.id, context, editorValue)
+      recordRecent(editorCommand.id)
+      close()
+      return
+    }
+
     const normalizedHandle = normalizeChannelHandle(editorValue)
     if (
       editorCommand.id === "add-channel" &&
@@ -301,7 +420,10 @@ export function CommandPalette() {
 
     if (editorCommand.searchResultsKind === "posts") {
       const query = editorValue.trim()
-      const items = await searchPostsForPalette(context, query)
+      const items =
+        editorCommand.id === "semantic-search-posts"
+          ? await semanticSearchPostsForPalette(context, query)
+          : await searchPostsForPalette(context, query)
       palette.openSearchResults(
         { kind: "posts", query, items, totalCount: items.length },
         editorCommand,
@@ -472,7 +594,10 @@ export function CommandPalette() {
                 htmlFor="command-palette-editor"
                 className="text-xs font-mono uppercase tracking-widest text-app-ink/60"
               >
-                {editorCommand.editorField.label}
+                {getChainedEditorField(
+                  editorCommand.id,
+                  palette.entityPayload as Channel | undefined,
+                )?.label ?? editorCommand.editorField.label}
               </label>
               {editorCommand.editorField.type === "textarea" ? (
                 <textarea
@@ -538,7 +663,13 @@ export function CommandPalette() {
             </div>
             <CommandInput
               ref={entityInputRef}
-              placeholder="Name, display name, tag, #tag, or tag:tag..."
+              placeholder={
+                isNonChannelEntityFlow(
+                  entityCommand.entityFlow ?? "search-channel",
+                )
+                  ? "Filter..."
+                  : "Name, display name, tag, #tag, or tag:tag..."
+              }
               value={entityQuery}
               onValueChange={setEntityQuery}
               onKeyDown={(event) => handleSubViewBackspace(event, entityQuery)}
@@ -548,23 +679,55 @@ export function CommandPalette() {
                 {entityCommand.entityFlow === "deselect-channel" &&
                 !entityQuery.trim()
                   ? "No channels selected."
-                  : "No channels found."}
+                  : entityCommand.entityFlow === "pick-post"
+                    ? "No posts in current filter. Try widening the date range."
+                    : entityCommand.entityFlow === "delete-summary"
+                      ? "No summaries in history."
+                      : entityCommand.entityFlow === "remove-tag-pick"
+                        ? "No tags on this channel."
+                        : "No matches found."}
               </CommandEmpty>
-              <CommandGroup heading="Channels">
-                {entityCandidates.map((channel) => (
-                  <CommandItem
-                    key={channel.id}
-                    value={channel.name}
-                    onSelect={() => handleEntityPick(channel.name)}
-                  >
-                    <span>@{channel.name}</span>
-                    {channel.displayName ? (
-                      <span className="text-xs text-muted-foreground">
-                        {channel.displayName}
-                      </span>
-                    ) : null}
-                  </CommandItem>
-                ))}
+              <CommandGroup
+                heading={
+                  isNonChannelEntityFlow(
+                    entityCommand.entityFlow ?? "search-channel",
+                  )
+                    ? entityCommand.entityFlow === "delete-summary"
+                      ? "Summaries"
+                      : entityCommand.entityFlow === "pick-post"
+                        ? "Posts"
+                        : entityCommand.entityFlow === "clear-db-table"
+                          ? "Tables"
+                          : "Tags"
+                    : "Channels"
+                }
+              >
+                {isNonChannelEntityFlow(
+                  entityCommand.entityFlow ?? "search-channel",
+                )
+                  ? entityCandidates.map((item) => (
+                      <CommandItem
+                        key={item.id}
+                        value={item.id}
+                        onSelect={() => handleEntityPick(item.id)}
+                      >
+                        <span className="truncate">{item.label}</span>
+                      </CommandItem>
+                    ))
+                  : (entityCandidates as Channel[]).map((channel) => (
+                      <CommandItem
+                        key={channel.id}
+                        value={channel.name}
+                        onSelect={() => handleEntityPick(channel.name)}
+                      >
+                        <span>@{channel.name}</span>
+                        {channel.displayName ? (
+                          <span className="text-xs text-muted-foreground">
+                            {channel.displayName}
+                          </span>
+                        ) : null}
+                      </CommandItem>
+                    ))}
               </CommandGroup>
             </CommandList>
           </Command>

@@ -30,7 +30,13 @@ export function getEntityCandidates(
       return ctx.channels
     case "sync-channel":
     case "delete-channel":
+    case "reset-sync-channel":
+    case "add-tag-channel":
+    case "edit-start-id-channel":
+    case "refresh-metadata-channel":
       return ctx.channels
+    case "remove-tag-channel":
+      return ctx.channels.filter((channel) => (channel.tags?.length ?? 0) > 0)
     case "open-post":
       return []
     default:

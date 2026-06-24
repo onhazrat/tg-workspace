@@ -10,11 +10,13 @@ import { useApiStatus } from "@/hooks/useApiStatus"
 import { useGuidedTour } from "@/hooks/useGuidedTour"
 import { useJobToggles } from "@/hooks/useJobToggles"
 import { useSettingsSection } from "@/hooks/useSettingsSection"
+import { INDEXEDDB_STORE_NAMES } from "@/lib/cache"
 import {
   buildActionCommands,
   buildChannelEntityCommands,
   buildChannelOpsCommands,
   buildDataTransferCommands,
+  buildExtendedCommands,
   buildNavigateCommands,
   buildSettingCommands,
 } from "@/lib/commands"
@@ -34,6 +36,7 @@ export function useCommandRegistry(): {
     loadChannels,
     loadDBStats,
     loadNetworkLogs,
+    loadHistory,
   } = useData()
   const {
     setActiveTab,
@@ -41,8 +44,11 @@ export function useCommandRegistry(): {
     endDate,
     setDateRange,
     setCurrentSummaryId,
+    currentSummaryId,
     historySearchQuery,
     setHistorySearchQuery,
+    starredOnly,
+    setStarredOnly,
   } = useUI()
   const { setActiveSection } = useSettingsSection()
   const {
@@ -59,8 +65,16 @@ export function useCommandRegistry(): {
     setSemanticSearchRespectsChannels,
     setRelatedPostSearch,
     handleFilterPosts,
+    forwardedFilter,
+    setForwardedFilter,
+    filteredPosts,
   } = useScraper()
-  const { setSummary } = useAI()
+  const {
+    setSummary,
+    handleSummarize,
+    copySummaryPrompt,
+    completePendingSummary,
+  } = useAI()
   const { setChatMessages } = useChatContext()
   const { getEffectiveGlobalStartTime } = useSettings()
   const { isOffline } = useApiStatus()
@@ -105,6 +119,7 @@ export function useCommandRegistry(): {
       setDateRange,
       setChatMessages,
       setCurrentSummaryId,
+      currentSummaryId,
       settings: {
         theme: settings.theme,
         setTheme: settings.setTheme,
@@ -179,14 +194,30 @@ export function useCommandRegistry(): {
         advancedMode: settings.advancedMode,
         setAdvancedMode: settings.setAdvancedMode,
       },
+      forwardedFilter,
+      setForwardedFilter,
+      filteredPosts,
+      starredOnly,
+      setStarredOnly,
+      handleSummarize,
+      copySummaryPrompt,
+      completePendingSummary,
+      loadHistory,
+      indexedDbTables: [...INDEXEDDB_STORE_NAMES],
     }),
     [
       addToSyncQueue,
       autoSyncPauseUntil,
       channels,
+      completePendingSummary,
+      copySummaryPrompt,
+      currentSummaryId,
       endDate,
+      filteredPosts,
+      forwardedFilter,
       getEffectiveGlobalStartTime,
       handleFilterPosts,
+      handleSummarize,
       handleScrapeAll,
       handleScrapeChannel,
       handleScrapeSelected,
@@ -195,6 +226,7 @@ export function useCommandRegistry(): {
       jobToggles,
       loadChannels,
       loadDBStats,
+      loadHistory,
       loadNetworkLogs,
       palette,
       postSearch,
@@ -206,6 +238,7 @@ export function useCommandRegistry(): {
       setChatMessages,
       setCurrentSummaryId,
       setDateRange,
+      setForwardedFilter,
       setHistorySearchQuery,
       setPostSearch,
       setRelatedPostSearch,
@@ -213,10 +246,12 @@ export function useCommandRegistry(): {
       setSemanticSearchQuery,
       setSemanticSearchRespectsChannels,
       setSemanticSearchRespectsTimeRange,
+      setStarredOnly,
       setSummary,
       settings,
       startDate,
       startTour,
+      starredOnly,
       summariesHistory,
     ],
   )
@@ -229,6 +264,7 @@ export function useCommandRegistry(): {
       ...buildChannelEntityCommands(),
       ...buildChannelOpsCommands(),
       ...buildDataTransferCommands(),
+      ...buildExtendedCommands(),
     ]
     return all.filter((command) => !command.when || command.when(context))
   }, [context])

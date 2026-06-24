@@ -65,7 +65,12 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
 }) => {
   const { botCredentials, chatDestinations, loadHistory, summariesHistory } =
     useData()
-  const { historySearchQuery, setHistorySearchQuery } = useUI()
+  const {
+    historySearchQuery,
+    setHistorySearchQuery,
+    starredOnly,
+    setStarredOnly,
+  } = useUI()
 
   const [regeneratingSummaries, _setRegeneratingSummaries] = useState<
     Set<string>
@@ -78,7 +83,6 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
   const [languageFilter, setLanguageFilter] = useState<string>("all")
   const [startDateFilter, setStartDateFilter] = useState<number | null>(null)
   const [endDateFilter, setEndDateFilter] = useState<number | null>(null)
-  const [starredOnly, setStarredOnly] = useState<boolean>(false)
   const [editingNoteId, setEditingNoteId] = useState<string | null>(null)
   const [noteValue, setNoteValue] = useState<string>("")
   const [visibleHistory, setVisibleHistory] = useState(20)

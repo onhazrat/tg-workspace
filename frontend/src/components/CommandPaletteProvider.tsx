@@ -42,6 +42,7 @@ export function CommandPaletteProvider({ children }: { children: ReactNode }) {
   const [entityCommand, setEntityCommand] = useState<CommandDef | null>(null)
   const [editorCommand, setEditorCommand] = useState<CommandDef | null>(null)
   const [confirmPayload, setConfirmPayload] = useState<unknown>(null)
+  const [entityPayload, setEntityPayload] = useState<unknown>(null)
   const [searchResultsState, setSearchResultsState] =
     useState<SearchResultsState | null>(null)
   const [searchResultsCommand, setSearchResultsCommand] =
@@ -56,6 +57,7 @@ export function CommandPaletteProvider({ children }: { children: ReactNode }) {
     setEntityCommand(null)
     setEditorCommand(null)
     setConfirmPayload(null)
+    setEntityPayload(null)
     setSearchResultsState(null)
     setSearchResultsCommand(null)
     rootQueryRef.current = ""
@@ -69,6 +71,7 @@ export function CommandPaletteProvider({ children }: { children: ReactNode }) {
         setEntityCommand(null)
         setEditorCommand(null)
         setConfirmPayload(null)
+        setEntityPayload(null)
         setSearchResultsState(null)
         setSearchResultsCommand(null)
         rootQueryRef.current = ""
@@ -101,7 +104,10 @@ export function CommandPaletteProvider({ children }: { children: ReactNode }) {
         setPendingCommand(null)
         setConfirmPayload(null)
       }
-      if (popped === "entity") setEntityCommand(null)
+      if (popped === "entity") {
+        setEntityCommand(null)
+        setEntityPayload(null)
+      }
       if (popped === "editor") setEditorCommand(null)
       if (popped === "search-results") {
         setSearchResultsState(null)
@@ -161,6 +167,8 @@ export function CommandPaletteProvider({ children }: { children: ReactNode }) {
       openSearchResults,
       getRootQuery,
       confirmPayload,
+      entityPayload,
+      setEntityPayload,
       searchResultsState,
       searchResultsCommand,
       mode,
@@ -176,6 +184,7 @@ export function CommandPaletteProvider({ children }: { children: ReactNode }) {
     [
       close,
       confirmPayload,
+      entityPayload,
       editorCommand,
       entityCommand,
       getRootQuery,

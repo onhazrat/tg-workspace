@@ -26,6 +26,8 @@ interface UIContextType {
   setCurrentSummaryId: React.Dispatch<React.SetStateAction<string | null>>
   historySearchQuery: string
   setHistorySearchQuery: React.Dispatch<React.SetStateAction<string>>
+  starredOnly: boolean
+  setStarredOnly: React.Dispatch<React.SetStateAction<boolean>>
 }
 
 const UIContext = createContext<UIContextType | undefined>(undefined)
@@ -38,6 +40,7 @@ export const UIProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [summarizing, setSummarizing] = useState<boolean>(false)
   const [currentSummaryId, setCurrentSummaryId] = useState<string | null>(null)
   const [historySearchQuery, setHistorySearchQuery] = useState("")
+  const [starredOnly, setStarredOnly] = useState(false)
 
   const [startDate, setStartDateInternal] = useState<number>(() => {
     if (typeof window !== "undefined") {
@@ -135,6 +138,8 @@ export const UIProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
         setCurrentSummaryId,
         historySearchQuery,
         setHistorySearchQuery,
+        starredOnly,
+        setStarredOnly,
       }}
     >
       {children}

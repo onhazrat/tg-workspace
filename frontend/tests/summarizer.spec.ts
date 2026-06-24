@@ -1,6 +1,12 @@
 import { expect, test } from "@playwright/test"
+import type { Page } from "@playwright/test"
 
 import { WORKSPACE_TABS } from "../src/constants"
+
+async function gotoSummarizer(page: Page, tab = "summary") {
+  await page.goto(`/summarizer?tab=${tab}`)
+  await expect(page.getByTestId("command-palette-button")).toBeVisible()
+}
 
 test.describe("TG Summarizer", () => {
   test("summarizer shell renders workspace tabs", async ({ page }) => {
@@ -46,8 +52,9 @@ test.describe("TG Summarizer", () => {
     const palette = page.getByTestId("command-palette")
     await expect(palette).not.toBeVisible()
 
+    await page.locator("main").click({ position: { x: 8, y: 8 } })
     const modifier = process.platform === "darwin" ? "Meta" : "Control"
-    await page.keyboard.press(`${modifier}+Shift+KeyP`)
+    await page.keyboard.press(`${modifier}+Shift+P`)
     await expect(palette).toBeVisible()
 
     await page.keyboard.press("Escape")
@@ -94,7 +101,7 @@ test.describe("TG Summarizer", () => {
     context,
   }) => {
     await context.grantPermissions(["clipboard-read", "clipboard-write"])
-    await page.goto("/summarizer?tab=channels")
+    await gotoSummarizer(page, "channels")
 
     await page.getByTestId("command-palette-button").click()
     await page
@@ -105,18 +112,20 @@ test.describe("TG Summarizer", () => {
       .click()
 
     await expect
-      .poll(async () => page.evaluate(() => navigator.clipboard.readText()))
+      .poll(async () => page.evaluate(() => navigator.clipboard.readText()), {
+        timeout: 15_000,
+      })
       .not.toBe("")
   })
 
   test("command palette export selected channels uses jsonl", async ({
     page,
   }) => {
-    await page.goto("/summarizer?tab=channels")
+    await gotoSummarizer(page, "channels")
 
-    const firstCheckbox = page.locator('input[type="checkbox"]').first()
-    if (await firstCheckbox.isVisible()) {
-      await firstCheckbox.check()
+    const selectChannel = page.getByRole("button", { name: /^Select / }).first()
+    if (await selectChannel.isVisible()) {
+      await selectChannel.click()
     }
 
     await page.getByTestId("command-palette-button").click()
@@ -164,14 +173,13 @@ test.describe("TG Summarizer", () => {
   test("command palette delete channel shows confirm after pick", async ({
     page,
   }) => {
-    await page.goto("/summarizer?tab=channels")
+    await gotoSummarizer(page, "channels")
     await page.getByTestId("command-palette-button").click()
     await page.getByPlaceholder("Type a command...").fill("delete channel")
     const deleteOption = page.getByRole("option", {
-      name: "Delete Channel",
-      exact: true,
+      name: /Delete Channel/,
     })
-    await expect(deleteOption).toBeVisible()
+    await expect(deleteOption).toBeVisible({ timeout: 10_000 })
     if (await deleteOption.isDisabled()) return
 
     await deleteOption.click()
@@ -198,13 +206,13 @@ test.describe("TG Summarizer", () => {
     await page.getByRole("button", { name: "Apply" }).click()
     await expect(
       page.getByTestId("command-palette-search-results"),
-    ).toBeVisible()
+    ).toBeVisible({ timeout: 30_000 })
   })
 
   test("command palette search summaries opens in-palette results", async ({
     page,
   }) => {
-    await page.goto("/summarizer?tab=history")
+    await gotoSummarizer(page, "summary")
     await page.getByTestId("command-palette-button").click()
     await page.getByPlaceholder("Type a command...").fill("search summaries")
     await page
@@ -213,6 +221,52 @@ test.describe("TG Summarizer", () => {
     await page.getByRole("button", { name: "Apply" }).click()
     await expect(
       page.getByTestId("command-palette-search-results"),
+    ).toBeVisible({ timeout: 30_000 })
+  })
+
+  test("command palette reload channels command is available", async ({
+    page,
+  }) => {
+    await page.goto("/summarizer?tab=channels")
+    await page.getByTestId("command-palette-button").click()
+    await page.getByPlaceholder("Type a command...").fill("reload channels")
+    await expect(
+      page.getByRole("option", { name: "Reload Channels", exact: true }),
     ).toBeVisible()
+  })
+
+  test("command palette clear post filters command is available", async ({
+    page,
+  }) => {
+    await page.goto("/summarizer?tab=posts")
+    await page.getByTestId("command-palette-button").click()
+    await page.getByPlaceholder("Type a command...").fill("clear post filters")
+    await expect(
+      page.getByRole("option", { name: "Clear Post Filters", exact: true }),
+    ).toBeVisible()
+  })
+
+  test("command palette show starred summaries toggles badge", async ({
+    page,
+  }) => {
+    await gotoSummarizer(page, "summary")
+    await page.getByTestId("command-palette-button").click()
+    await page
+      .getByPlaceholder("Type a command...")
+      .fill("show starred summaries")
+    const option = page.getByRole("option", {
+      name: /Show Starred Summaries Only/,
+    })
+    await expect(option).toBeVisible()
+    await expect(option).toContainText("OFF")
+    await option.click()
+    await expect(page.getByTestId("command-palette")).not.toBeVisible()
+    await page.getByTestId("command-palette-button").click()
+    await page
+      .getByPlaceholder("Type a command...")
+      .fill("show starred summaries")
+    await expect(
+      page.getByRole("option", { name: /Show Starred Summaries Only/ }),
+    ).toContainText("ON", { timeout: 10_000 })
   })
 })

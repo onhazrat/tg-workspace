@@ -39,6 +39,15 @@ export type EntityFlowType =
   | "delete-channel"
   | "toggle-auto-follow"
   | "open-post"
+  | "reset-sync-channel"
+  | "add-tag-channel"
+  | "remove-tag-channel"
+  | "remove-tag-pick"
+  | "edit-start-id-channel"
+  | "refresh-metadata-channel"
+  | "delete-summary"
+  | "pick-post"
+  | "clear-db-table"
 
 export interface CommandDisabledState {
   disabled: boolean
@@ -89,6 +98,8 @@ export interface PaletteControls {
   openConfirm: (command: CommandDef, payload?: unknown) => void
   openSearchResults: (state: SearchResultsState, command: CommandDef) => void
   confirmPayload: unknown
+  entityPayload: unknown
+  setEntityPayload: (payload: unknown) => void
   searchResultsState: SearchResultsState | null
   searchResultsCommand: CommandDef | null
   getRootQuery: () => string
@@ -149,6 +160,23 @@ export interface CommandContext {
     messages: { role: "user" | "model"; text: string }[],
   ) => void
   setCurrentSummaryId: (id: string | null) => void
+  forwardedFilter: "all" | "forwarded" | "original" | "unfollowed_forwarded"
+  setForwardedFilter: (
+    value: "all" | "forwarded" | "original" | "unfollowed_forwarded",
+  ) => void
+  filteredPosts: import("@/types").Post[]
+  starredOnly: boolean
+  setStarredOnly: (value: boolean) => void
+  handleSummarize: () => Promise<void>
+  copySummaryPrompt: () => Promise<void>
+  completePendingSummary: (
+    summaryId: string,
+    text: string,
+    modelName?: string,
+  ) => Promise<boolean>
+  loadHistory: () => Promise<void>
+  currentSummaryId: string | null
+  indexedDbTables: string[]
 }
 
 export interface CommandSettingsSlice {

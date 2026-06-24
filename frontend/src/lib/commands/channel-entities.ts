@@ -66,16 +66,6 @@ export function buildChannelEntityCommands(): CommandDef[] {
       run: () => {},
     },
     {
-      id: "open-post",
-      kind: "entity-root",
-      label: "Open Post by ID",
-      keywords: ["post", "open", "id"],
-      group: "Channels",
-      entityFlow: "open-post",
-      when: () => false,
-      run: () => {},
-    },
-    {
       id: "select-all-channels",
       kind: "action",
       label: "Select All Channels",
