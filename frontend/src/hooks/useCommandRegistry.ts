@@ -1,0 +1,237 @@
+import { useMemo } from "react"
+import { useCommandPaletteContext } from "@/components/CommandPaletteProvider"
+import { useAI } from "@/contexts/AIContext"
+import { useChatContext } from "@/contexts/ChatContext"
+import { useData } from "@/contexts/DataContext"
+import { useScraper } from "@/contexts/ScraperContext"
+import { useSettings } from "@/contexts/SettingsContext"
+import { useUI } from "@/contexts/UIContext"
+import { useApiStatus } from "@/hooks/useApiStatus"
+import { useGuidedTour } from "@/hooks/useGuidedTour"
+import { useJobToggles } from "@/hooks/useJobToggles"
+import { useSettingsSection } from "@/hooks/useSettingsSection"
+import {
+  buildActionCommands,
+  buildChannelEntityCommands,
+  buildChannelOpsCommands,
+  buildDataTransferCommands,
+  buildNavigateCommands,
+  buildSettingCommands,
+} from "@/lib/commands"
+import type { CommandContext, CommandDef } from "@/lib/commands/types"
+
+export function useCommandRegistry(): {
+  commands: CommandDef[]
+  context: CommandContext
+} {
+  const settings = useSettings()
+  const {
+    channels,
+    selectedChannels,
+    setSelectedChannels,
+    setChannels,
+    summariesHistory,
+    loadChannels,
+    loadDBStats,
+    loadNetworkLogs,
+  } = useData()
+  const {
+    setActiveTab,
+    startDate,
+    endDate,
+    setDateRange,
+    setCurrentSummaryId,
+    historySearchQuery,
+    setHistorySearchQuery,
+  } = useUI()
+  const { setActiveSection } = useSettingsSection()
+  const {
+    handleScrapeAll,
+    handleScrapeSelected,
+    handleScrapeChannel,
+    addToSyncQueue,
+    autoSyncPauseUntil,
+    setAutoSyncPauseUntil,
+    postSearch,
+    setPostSearch,
+    setSemanticSearchQuery,
+    setSemanticSearchRespectsTimeRange,
+    setSemanticSearchRespectsChannels,
+    setRelatedPostSearch,
+    handleFilterPosts,
+  } = useScraper()
+  const { setSummary } = useAI()
+  const { setChatMessages } = useChatContext()
+  const { getEffectiveGlobalStartTime } = useSettings()
+  const { isOffline } = useApiStatus()
+  const { startTour } = useGuidedTour()
+  const jobToggles = useJobToggles()
+  const palette = useCommandPaletteContext()
+
+  const context = useMemo<CommandContext>(
+    () => ({
+      setActiveTab,
+      setActiveSection,
+      channels,
+      selectedChannels,
+      setSelectedChannels,
+      setChannels,
+      handleScrapeAll,
+      handleScrapeSelected,
+      handleScrapeChannel,
+      addToSyncQueue,
+      loadChannels,
+      loadDBStats,
+      loadNetworkLogs,
+      getEffectiveGlobalStartTime,
+      isOffline,
+      autoSyncPauseUntil,
+      setAutoSyncPauseUntil,
+      startTour,
+      jobToggles,
+      palette,
+      summariesHistory,
+      postDateRange: { startDate, endDate },
+      postSearch,
+      setPostSearch,
+      setSemanticSearchQuery,
+      setSemanticSearchRespectsTimeRange,
+      setSemanticSearchRespectsChannels,
+      setRelatedPostSearch,
+      handleFilterPosts,
+      historySearchQuery,
+      setHistorySearchQuery,
+      setSummary,
+      setDateRange,
+      setChatMessages,
+      setCurrentSummaryId,
+      settings: {
+        theme: settings.theme,
+        setTheme: settings.setTheme,
+        aiLanguage: settings.aiLanguage,
+        setAiLanguage: settings.setAiLanguage,
+        selectedModel: settings.selectedModel,
+        setSelectedModel: settings.setSelectedModel,
+        autoSyncEnabled: settings.autoSyncEnabled,
+        setAutoSyncEnabled: settings.setAutoSyncEnabled,
+        autoSyncInterval: settings.autoSyncInterval,
+        setAutoSyncInterval: settings.setAutoSyncInterval,
+        aiTemperature: settings.aiTemperature,
+        setAiTemperature: settings.setAiTemperature,
+        proxyEnabled: settings.proxyEnabled,
+        setProxyEnabled: settings.setProxyEnabled,
+        defaultProxyUrls: settings.defaultProxyUrls,
+        setDefaultProxyUrls: settings.setDefaultProxyUrls,
+        proxyDefaultConcurrency: settings.proxyDefaultConcurrency,
+        setProxyDefaultConcurrency: settings.setProxyDefaultConcurrency,
+        proxyConcurrencyOverrides: settings.proxyConcurrencyOverrides,
+        setProxyConcurrencyOverrides: settings.setProxyConcurrencyOverrides,
+        torEnabled: settings.torEnabled,
+        setTorEnabled: settings.setTorEnabled,
+        torMode: settings.torMode,
+        setTorMode: settings.setTorMode,
+        torProxyUrls: settings.torProxyUrls,
+        setTorProxyUrls: settings.setTorProxyUrls,
+        torRotationStrategy: settings.torRotationStrategy,
+        setTorRotationStrategy: settings.setTorRotationStrategy,
+        torControlEnabled: settings.torControlEnabled,
+        setTorControlEnabled: settings.setTorControlEnabled,
+        torControlPort: settings.torControlPort,
+        setTorControlPort: settings.setTorControlPort,
+        torAutoRotate: settings.torAutoRotate,
+        setTorAutoRotate: settings.setTorAutoRotate,
+        torRotationThreshold: settings.torRotationThreshold,
+        setTorRotationThreshold: settings.setTorRotationThreshold,
+        syncConcurrency: settings.syncConcurrency,
+        setSyncConcurrency: settings.setSyncConcurrency,
+        embeddingsEnabled: settings.embeddingsEnabled,
+        setEmbeddingsEnabled: settings.setEmbeddingsEnabled,
+        embeddingsPaused: settings.embeddingsPaused,
+        setEmbeddingsPaused: settings.setEmbeddingsPaused,
+        translationEnabled: settings.translationEnabled,
+        setTranslationEnabled: settings.setTranslationEnabled,
+        autoTranslate: settings.autoTranslate,
+        setAutoTranslate: settings.setAutoTranslate,
+        translationModel: settings.translationModel,
+        setTranslationModel: settings.setTranslationModel,
+        translationTargetLanguage: settings.translationTargetLanguage,
+        setTranslationTargetLanguage: settings.setTranslationTargetLanguage,
+        postRetentionDays: settings.postRetentionDays,
+        setPostRetentionDays: settings.setPostRetentionDays,
+        logRetentionDays: settings.logRetentionDays,
+        setLogRetentionDays: settings.setLogRetentionDays,
+        globalStartTimeMode: settings.globalStartTimeMode,
+        setGlobalStartTimeMode: settings.setGlobalStartTimeMode,
+        globalStartTimeValue: settings.globalStartTimeValue,
+        setGlobalStartTimeValue: settings.setGlobalStartTimeValue,
+        showChannelBio: settings.showChannelBio,
+        setShowChannelBio: settings.setShowChannelBio,
+        showChannelSubscribers: settings.showChannelSubscribers,
+        setShowChannelSubscribers: settings.setShowChannelSubscribers,
+        showChannelPhotos: settings.showChannelPhotos,
+        setShowChannelPhotos: settings.setShowChannelPhotos,
+        showChannelVideos: settings.showChannelVideos,
+        setShowChannelVideos: settings.setShowChannelVideos,
+        showChannelFiles: settings.showChannelFiles,
+        setShowChannelFiles: settings.setShowChannelFiles,
+        showChannelLinks: settings.showChannelLinks,
+        setShowChannelLinks: settings.setShowChannelLinks,
+        advancedMode: settings.advancedMode,
+        setAdvancedMode: settings.setAdvancedMode,
+      },
+    }),
+    [
+      addToSyncQueue,
+      autoSyncPauseUntil,
+      channels,
+      endDate,
+      getEffectiveGlobalStartTime,
+      handleFilterPosts,
+      handleScrapeAll,
+      handleScrapeChannel,
+      handleScrapeSelected,
+      historySearchQuery,
+      isOffline,
+      jobToggles,
+      loadChannels,
+      loadDBStats,
+      loadNetworkLogs,
+      palette,
+      postSearch,
+      selectedChannels,
+      setActiveSection,
+      setActiveTab,
+      setAutoSyncPauseUntil,
+      setChannels,
+      setChatMessages,
+      setCurrentSummaryId,
+      setDateRange,
+      setHistorySearchQuery,
+      setPostSearch,
+      setRelatedPostSearch,
+      setSelectedChannels,
+      setSemanticSearchQuery,
+      setSemanticSearchRespectsChannels,
+      setSemanticSearchRespectsTimeRange,
+      setSummary,
+      settings,
+      startDate,
+      startTour,
+      summariesHistory,
+    ],
+  )
+
+  const commands = useMemo(() => {
+    const all = [
+      ...buildNavigateCommands(),
+      ...buildActionCommands(),
+      ...buildSettingCommands(),
+      ...buildChannelEntityCommands(),
+      ...buildChannelOpsCommands(),
+      ...buildDataTransferCommands(),
+    ]
+    return all.filter((command) => !command.when || command.when(context))
+  }, [context])
+
+  return { commands, context }
+}

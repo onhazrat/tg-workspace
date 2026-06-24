@@ -24,6 +24,7 @@ import { api } from "@/api"
 import { LANGUAGES, MODELS } from "../constants"
 import { useData } from "../contexts/DataContext"
 import { useSettings } from "../contexts/SettingsContext"
+import { JOB_LABELS, useJobToggles } from "../hooks/useJobToggles"
 import { saveNetworkLog } from "../lib/repository"
 import type { NetworkLog } from "../types"
 
@@ -163,50 +164,22 @@ export const SettingsView: React.FC<{ activeSection?: string }> = ({
     (sum, url) => sum + slotsForProxy(url),
     0,
   )
-  const [jobStatus, setJobStatus] = useState<
-    Record<
-      string,
-      {
-        enabled: boolean
-        lastRun: number | null
-        lastStatus: string
-        lastError?: string | null
-        nextRun?: number | null
-      }
-    >
-  >({})
+  const { jobStatus, refreshJobStatus, toggleJob } = useJobToggles()
   const [triggeringJob, setTriggeringJob] = useState<string | null>(null)
-
-  const JOB_LABELS: Record<string, string> = {
-    auto_sync: "Auto Sync",
-    embeddings: "Embeddings",
-    auto_summary: "Auto Summary",
-    retention: "Retention",
-    translation_batch: "Translation Batch",
-  }
-
-  const fetchJobStatus = async () => {
-    try {
-      const status = await api.jobsStatus()
-      setJobStatus(status)
-    } catch (error) {
-      console.error("[Settings] Failed to fetch job status:", error)
-    }
-  }
 
   useEffect(() => {
     if (activeSection !== "sync") return
-    fetchJobStatus()
-    const timer = setInterval(fetchJobStatus, 15_000)
+    refreshJobStatus()
+    const timer = setInterval(refreshJobStatus, 15_000)
     return () => clearInterval(timer)
-  }, [activeSection, fetchJobStatus])
+  }, [activeSection, refreshJobStatus])
 
   const handleTriggerJob = async (jobId: string) => {
     setTriggeringJob(jobId)
     try {
       await api.triggerJob(jobId)
       toast.success(`Triggered ${JOB_LABELS[jobId] || jobId}`)
-      await fetchJobStatus()
+      await refreshJobStatus()
     } catch (_error) {
       toast.error(`Failed to trigger ${JOB_LABELS[jobId] || jobId}`)
     } finally {
@@ -215,12 +188,7 @@ export const SettingsView: React.FC<{ activeSection?: string }> = ({
   }
 
   const handleToggleJob = async (jobId: string, enabled: boolean) => {
-    try {
-      await api.updateJob(jobId, enabled)
-      await fetchJobStatus()
-    } catch (_error) {
-      toast.error(`Failed to update ${JOB_LABELS[jobId] || jobId}`)
-    }
+    await toggleJob(jobId, enabled)
   }
 
   const fetchProxyHealth = async () => {

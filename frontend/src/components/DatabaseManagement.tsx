@@ -24,8 +24,12 @@ import {
   getTableSizes,
   runQuery,
 } from "../lib/cache"
+import {
+  buildTimestampedFilename,
+  downloadBlob,
+  pickSaveFile,
+} from "../lib/data-transfer/download"
 import { importIndexedDBToServer } from "../lib/repository"
-import { formatDateToLocalISO } from "../lib/utils"
 import { RelativeTime } from "./RelativeTime"
 import { Modal } from "./ui/Modal"
 import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tg-tooltip"
@@ -167,21 +171,16 @@ export const DatabaseManagement: React.FC = () => {
 
   const handleExportDB = async () => {
     try {
-      let fileHandle
+      let fileHandle: FileSystemFileHandle | undefined
       let useOPFS = false
       try {
-        fileHandle = await (window as any).showSaveFilePicker({
-          suggestedName: `telegram-summarizer-db-${formatDateToLocalISO(new Date()).replace("T", "_").replace(/:/g, "-")}.jsonl`,
-          types: [
-            {
-              description: "JSON Lines File",
-              accept: { "application/jsonl": [".jsonl"] },
-            },
-          ],
-        })
-      } catch (err: any) {
-        if (err.name === "AbortError") return
-        // Fallback to OPFS if showSaveFilePicker is restricted (e.g., in iframe)
+        const saveResult = await pickSaveFile(
+          buildTimestampedFilename("telegram-summarizer-db"),
+        )
+        fileHandle = saveResult.fileHandle
+        useOPFS = saveResult.useBlobFallback
+      } catch (err: unknown) {
+        if (err instanceof DOMException && err.name === "AbortError") return
         useOPFS = true
       }
 
@@ -198,15 +197,10 @@ export const DatabaseManagement: React.FC = () => {
           toast.info(e.data.message, { id: "export-progress" })
         } else if (e.data.type === "SUCCESS") {
           if (e.data.file) {
-            // Download the file generated in OPFS
-            const url = URL.createObjectURL(e.data.file)
-            const a = document.createElement("a")
-            a.href = url
-            a.download = `telegram-summarizer-db-${formatDateToLocalISO(new Date()).replace("T", "_").replace(/:/g, "-")}.jsonl`
-            document.body.appendChild(a)
-            a.click()
-            document.body.removeChild(a)
-            URL.revokeObjectURL(url)
+            downloadBlob(
+              e.data.file,
+              buildTimestampedFilename("telegram-summarizer-db"),
+            )
           }
           toast.success("Database exported successfully", {
             id: "export-progress",

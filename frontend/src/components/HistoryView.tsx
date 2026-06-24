@@ -18,6 +18,8 @@ import { useEffect, useMemo, useRef, useState } from "react"
 import { toast } from "sonner"
 import { formatSummaryModelLabel, isPendingSummary } from "../constants"
 import { useData } from "../contexts/DataContext"
+import { useUI } from "../contexts/UIContext"
+import { filterSummariesByTextQuery } from "../lib/commands/search-filters"
 import { deleteSummary, saveSummary } from "../lib/repository"
 import { formatDateToLocalISO } from "../lib/utils"
 import type { Summary, TabType } from "../types"
@@ -63,6 +65,7 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
 }) => {
   const { botCredentials, chatDestinations, loadHistory, summariesHistory } =
     useData()
+  const { historySearchQuery, setHistorySearchQuery } = useUI()
 
   const [regeneratingSummaries, _setRegeneratingSummaries] = useState<
     Set<string>
@@ -70,7 +73,6 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
   const [historyFilter, setHistoryFilter] = useState<
     "all" | "summary" | "chat"
   >("all")
-  const [searchQuery, setSearchQuery] = useState("")
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false)
   const [modelFilter, setModelFilter] = useState<string>("all")
   const [languageFilter, setLanguageFilter] = useState<string>("all")
@@ -124,7 +126,11 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
   }, [summariesHistory])
 
   const filteredHistory = useMemo(() => {
-    return summariesHistory.filter((s) => {
+    const textMatches = filterSummariesByTextQuery(
+      summariesHistory,
+      historySearchQuery,
+    )
+    return textMatches.filter((s) => {
       // Type filter
       if (historyFilter !== "all") {
         const hasChat = s.chatMessages && s.chatMessages.length > 0
@@ -132,25 +138,7 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
         if (historyFilter === "summary" && hasChat) return false
       }
 
-      // Search query
-      if (searchQuery) {
-        const query = searchQuery.toLowerCase()
-        const matchesChannels = s.channels.some((c) =>
-          c.toLowerCase().includes(query),
-        )
-        const matchesText = s.text.toLowerCase().includes(query)
-        const matchesPrompt = s.promptText?.toLowerCase().includes(query)
-        const matchesModel = s.model?.toLowerCase().includes(query)
-        const matchesNote = s.note?.toLowerCase().includes(query)
-        if (
-          !matchesChannels &&
-          !matchesText &&
-          !matchesPrompt &&
-          !matchesModel &&
-          !matchesNote
-        )
-          return false
-      }
+      // Search query handled by filterSummariesByTextQuery above
 
       // Model filter
       if (modelFilter !== "all" && s.model !== modelFilter) return false
@@ -175,7 +163,7 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
   }, [
     summariesHistory,
     historyFilter,
-    searchQuery,
+    historySearchQuery,
     modelFilter,
     languageFilter,
     startDateFilter,
@@ -330,14 +318,14 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
             <input
               type="text"
               placeholder="Search channels, content, or models..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              value={historySearchQuery}
+              onChange={(e) => setHistorySearchQuery(e.target.value)}
               className="w-full bg-app-card border border-app-ink/10 rounded-xl py-2.5 pl-10 pr-10 text-[13px] focus:outline-none focus:border-app-ink/30 focus:ring-4 focus:ring-app-ink/5 transition-all shadow-sm"
             />
-            {searchQuery && (
+            {historySearchQuery && (
               <button
                 type="button"
-                onClick={() => setSearchQuery("")}
+                onClick={() => setHistorySearchQuery("")}
                 className="absolute right-3 top-1/2 -translate-y-1/2 opacity-40 hover:opacity-100 transition-opacity p-1 rounded-md hover:bg-app-ink/5"
               >
                 <X size={14} />
@@ -529,6 +517,7 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
           {filteredHistory.slice(0, visibleHistory).map((s) => (
             <div
               key={s.id}
+              data-history-summary-id={s.id}
               onClick={() => handleSelectHistorySummary(s)}
               className={`bg-app-card border rounded-xl p-5 shadow-sm hover:shadow-md transition-all cursor-pointer group relative flex flex-col gap-3 ${
                 isPendingSummary(s)

@@ -166,6 +166,7 @@ export const ChannelCard: React.FC<ChannelCardProps> = ({
 
   return (
     <div
+      data-channel-name={channel.name}
       className={`relative flex flex-col h-full rounded-2xl border transition-all duration-200 overflow-hidden group
         ${channel.isFrozen ? "opacity-80" : ""}
         ${

@@ -10,19 +10,15 @@ import { motion } from "motion/react"
 import type React from "react"
 import { useEffect, useMemo, useRef, useState } from "react"
 import { api } from "@/api"
-import { buildActiveProxies, isNetworkRoutingActive } from "@/lib/syncSettings"
+import { addChannelByName } from "@/lib/channels/add-channel"
+import { deleteChannelByRecord } from "@/lib/channels/delete-channel"
 import { useData } from "../contexts/DataContext"
 import { useScraper } from "../contexts/ScraperContext"
 import { useSettings } from "../contexts/SettingsContext"
 import { useUI } from "../contexts/UIContext"
 import { useApiStatus } from "../hooks/useApiStatus"
-import {
-  clearChannelPosts,
-  deleteChannel,
-  saveNetworkLog,
-  upsertChannel,
-} from "../lib/repository"
-import type { Channel, NetworkLog } from "../types"
+import { clearChannelPosts, upsertChannel } from "../lib/repository"
+import type { Channel } from "../types"
 import { ChannelCard } from "./ChannelCard"
 import { Modal } from "./ui/Modal"
 import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tg-tooltip"
@@ -219,10 +215,11 @@ export const ChannelGrid: React.FC<ChannelGridProps> = () => {
 
   const executeDeleteChannel = async () => {
     if (!confirmDeleteChannel) return
-    await deleteChannel(confirmDeleteChannel.id)
-    await clearChannelPosts(confirmDeleteChannel.name)
-    await loadChannels()
-    await loadDBStats()
+    await deleteChannelByRecord(confirmDeleteChannel, {
+      setSelectedChannels,
+      loadChannels,
+      loadDBStats,
+    })
     setConfirmDeleteChannel(null)
   }
 
@@ -296,11 +293,14 @@ export const ChannelGrid: React.FC<ChannelGridProps> = () => {
 
   const executeBulkDelete = async () => {
     for (const name of Array.from(selectedChannels)) {
-      await deleteChannel(name)
-      await clearChannelPosts(name)
+      const channel = channels.find((entry) => entry.name === name)
+      if (!channel) continue
+      await deleteChannelByRecord(channel, {
+        setSelectedChannels,
+        loadChannels,
+        loadDBStats,
+      })
     }
-    await loadChannels()
-    await loadDBStats()
     setSelectedChannels(new Set())
     setConfirmBulkDelete(false)
   }
@@ -328,106 +328,24 @@ export const ChannelGrid: React.FC<ChannelGridProps> = () => {
 
   const handleAddChannel = async () => {
     if (!inlineChannelName) return
-    const channelName =
-      inlineChannelName.trim().replace(/^@/, "").split("/").pop() || ""
-    if (!channelName) return
-
-    let displayName = channelName
-    let photoUrl
-    const effectiveStartTime = getEffectiveGlobalStartTime()
-
-    const proxySettings = {
-      proxyEnabled,
-      defaultProxyUrls,
-      torEnabled,
-      torMode,
-      torProxyUrls,
-    }
-    const activeProxies = buildActiveProxies(proxySettings)
-
-    const startTime = Date.now()
-    let status = 0
-    let errorMsg: string | undefined
-    let telemetryData: any
-
-    let bio: string | undefined
-    let subscribers: string | undefined
-    let photos: string | undefined
-    let videos: string | undefined
-    let files: string | undefined
-    let links: string | undefined
-
-    try {
-      const data = (await api.channelInfo({
-        channelName,
-        proxyEnabled: isNetworkRoutingActive(proxySettings),
-        proxies: activeProxies,
+    const result = await addChannelByName(inlineChannelName, {
+      channels,
+      setSelectedChannels,
+      loadChannels,
+      loadNetworkLogs,
+      addToSyncQueue,
+      getEffectiveGlobalStartTime,
+      settings: {
+        proxyEnabled,
+        defaultProxyUrls,
+        torEnabled,
+        torMode,
+        torProxyUrls,
         torAutoRotate,
         torRotationThreshold,
-      })) as Record<string, unknown>
-
-      status = 200
-      telemetryData = data.telemetry
-
-      if (data.displayName) displayName = data.displayName as string
-      if (data.photoUrl) photoUrl = data.photoUrl as string
-      if (data.bio) bio = data.bio as string
-      if (data.subscribers) subscribers = data.subscribers as string
-      if (data.photos) photos = data.photos as string
-      if (data.videos) videos = data.videos as string
-      if (data.files) files = data.files as string
-      if (data.links) links = data.links as string
-    } catch (err: any) {
-      console.error("Failed to fetch initial channel info:", err)
-      errorMsg = err.message
-    } finally {
-      const duration = Date.now() - startTime
-      const proxyUsed =
-        telemetryData?.attempts?.[telemetryData.attempts.length - 1]?.proxyUrl
-      const attempts = telemetryData?.attempts?.length || 1
-
-      const logEntry: NetworkLog = {
-        id: crypto.randomUUID(),
-        url: `https://t.me/s/${channelName}`,
-        method: "GET",
-        status: status === 200 ? "success" : "failed",
-        statusCode: status,
-        duration: telemetryData?.totalDuration || duration,
-        source: "ChannelGrid",
-        timestamp: Date.now(),
-        error: errorMsg,
-        proxyUsed,
-        attempts,
-        telemetry: telemetryData,
-      }
-      saveNetworkLog(logEntry)
-        .then(() => loadNetworkLogs())
-        .catch((e) => console.error("Failed to save network log:", e))
-    }
-
-    const newChannel: Channel = {
-      id: channelName,
-      name: channelName,
-      displayName,
-      photoUrl,
-      bio,
-      subscribers,
-      photos,
-      videos,
-      files,
-      links,
-      startTime: effectiveStartTime,
-      lastUpdated: Date.now(),
-      followedAt: Date.now(),
-      tags: [],
-      autoFollowForwarded: false,
-    }
-
-    await upsertChannel(newChannel)
-    await loadChannels()
-    setSelectedChannels((prev) => new Set(prev).add(channelName))
-    setInlineChannelName("")
-    addToSyncQueue(newChannel, "Initial Sync", () => {})
+      },
+    })
+    if (result.ok) setInlineChannelName("")
   }
 
   return (

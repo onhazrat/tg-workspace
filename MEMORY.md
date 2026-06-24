@@ -1,6 +1,6 @@
 # TG Summarizer — Project Memory
 
-> Last synced: 2026-06-22
+> Last synced: 2026-06-24
 
 ## Purpose
 
@@ -10,18 +10,22 @@ Self-hosted Telegram channel summarizer. Migrated from browser-heavy `TG-Summari
 
 - **`backend/`** — FastAPI (`app/main.py`), SQLModel (`app/models_tg.py`), Alembic, services (`scraper.py`, `sync_orchestrator.py`, `proxy_pool.py`, `network_settings.py`, `summaries.py`, `embeddings.py`, `bulk_channels.py`, `post_sync_state.py`, `runtime_config.py`, `operator.py`, `credentials.py`, `data_import_export.py`, `data_vectors.py`, `posts.py`, …), APScheduler jobs (`app/jobs/`), pluggable AI (`app/ai/`, Gemini first), shared prompts (`app/prompts/summary.py`).
 - **`frontend/`** — React 19 + Vite + TanStack Router/Query; dual-route UI:
-  - **`/_tg/summarizer`** — full-screen TG app (`App.tsx` + `TgProviders`)
+  - **`/_tg/summarizer`** — full-screen TG app (`App.tsx` + `TgProviders`); **command palette** (IDEA-001/004/005, 2026-06-24): `cmdk` + shadcn `command`, `Cmd/Ctrl+Shift+P`, summarizer only — see [IDEA-001](docs/ideas-log/ideas/IDEA-001-command-palette.md), [IDEA-004](docs/ideas-log/ideas/IDEA-004-command-palette-data-transfer.md), [IDEA-005](docs/ideas-log/ideas/IDEA-005-command-palette-channel-ops-search.md).
   - **`/_layout/*`** — template admin shell (`/`, `/items`, `/admin`, `/settings`)
-- **API clients (ADR-006):** hand-written `frontend/src/api/` (summarizer); generated `frontend/src/client/` (admin/auth). Regenerate: `bash scripts/generate-client.sh` (uses `ENVIRONMENT=production` — no legacy routes in committed SDK).
+- **Command palette (frontend, uncommitted):** `CommandPalette*.tsx`, `CommandConfirmDialog.tsx`; hooks `useCommandPalette`, `useCommandRegistry`, `useCommandSearchAffinity`, `useRecentCommands`, `useJobToggles`; registry in `frontend/src/lib/commands/` (settings, navigate, channel-entities, channel-ops, data-commands, `filter-channels.ts`, `search-filters.ts`); data transfer in `frontend/src/lib/data-transfer/` (21 copy/export/import commands); channel CRUD helpers in `frontend/src/lib/channels/` (`add-channel.ts`, `delete-channel.ts`).
+- **API clients (ADR-006):** hand-written `frontend/src/api/` (summarizer); generated `frontend/src/client/` (admin/auth). Regenerate: `bash scripts/generate-client.sh` (default `ENVIRONMENT=production` — no legacy routes in committed SDK; override `ENVIRONMENT=local` for Playwright/private routes).
 - **Data layer (frontend):** `repository.ts` API-first → `cache.ts` (IndexedDB). **`db.ts` removed** (was deprecated re-export).
 - **Data API routes:** `backend/app/api/routes/data.py` (~565 lines, down from ~1,222). Handlers thin; business logic in services. Shared serializers in `serialization.py`; request bodies in `schemas/data.py`.
-- **Tunables:** `backend/app/core/config.py` (`Settings`) + `frontend/src/lib/env.ts` (`VITE_*`); documented in `.env.example`.
+- **Tunables:** `backend/app/core/config.py` (`Settings`) + `frontend/src/lib/env.ts` (`VITE_*`); documented in `.env.example` (incl. `VITE_COMMAND_PALETTE_RECENT_COUNT`, default 5).
 - **Proxy lane pool (`proxy_pool.py`):** per-proxy `asyncio.Semaphore` + reused `httpx.AsyncClient` (`build_lane_client`, limits aligned to slots). Least-loaded dispatch; cooldown proxies skipped. All proxied `fetch_with_retry` gated through pool; **direct** and **`test_proxy`** bypass pool. Wired in sync, scrape, publish, auto-summary.
 - **`TG-Summarizer/`** — Original reference; keep indefinitely; not deployed (still has legacy global auto-follow code).
 - **`docs/ideas-log/`** — Backlog for deferred product/engineering ideas (`IDEA-NNN` ids, detail files under `ideas/`). Index: [docs/README.md](docs/README.md). Master table: [IDEAS-LOG.md](docs/ideas-log/IDEAS-LOG.md).
-- **`_template_tmp/`** — Local clone of [Full Stack FastAPI Template](https://github.com/fastapi/full-stack-fastapi-template); reference for tooling conventions (prek, Biome, zizmor, typos).
+- **`_template_tmp/`** — Optional local clone of [Full Stack FastAPI Template](https://github.com/fastapi/full-stack-fastapi-template); reference for tooling conventions. **Not** tracked as a git submodule (broken gitlink removed 2026-06-22).
 - **uv workspace** — `.venv` at repo root; **bun** for frontend.
-- **Quality gates (template-aligned, 2026-06-22):** `.pre-commit-config.yaml` (ruff, mypy, ty, Biome, typos, zizmor, `generate-frontend-sdk` hook). CI: `.github/workflows/pre-commit.yml` (prek on PRs), `zizmor.yml`, `playwright.yml`, `test-backend.yml`. Local: `uv run prek run --all-files`, `bash scripts/lint.sh`, `bun run lint` (Biome). **Vitest removed** — Playwright only (`frontend/tests/summarizer.spec.ts`).
+- **Quality gates (template-aligned, 2026-06-22):** `.pre-commit-config.yaml` (ruff, mypy, ty, Biome, typos, zizmor, `generate-frontend-sdk` hook). Local: `uv run prek run --all-files`, `bash scripts/lint.sh`, `bun run lint` (Biome). **Vitest removed** — Playwright E2E only (**~74 tests** in `frontend/tests/`; palette cases in `summarizer.spec.ts`).
+- **CI (GitHub-hosted, push to `main`):** `zizmor.yml`, `test-backend.yml`, `test-docker-compose.yml`, `playwright.yml`. **Private repo:** workflows need `permissions: contents: read`; artifact jobs need `actions: write`. Docker CI copies `.env.example` → `.env`. Zizmor: `advanced-security: false`, `annotations: true` (no SARIF without GHAS). Playwright CI: `ENVIRONMENT=local` client gen, `fetch-depth: 0` on paths-filter job.
+- **pre-commit.yml** — runs on **pull_request only** (`opened`/`synchronize`), **not** on push to `main`. Optional `PRE_COMMIT` secret (PAT) for auto-fix commits on PR branches.
+- **CD (self-hosted):** `deploy-staging.yml` on push to `main` (runner labels `self-hosted` + `staging`); `deploy-production.yml` on release published (`production` label). Uses `compose.yml` only + GitHub Environment secrets — see [deployment.md](deployment.md).
 - **TLS / Traefik:** `compose.traefik.yml` — shared reverse proxy; Let's Encrypt **DNS-01** via Cloudflare (`CF_DNS_API_TOKEN`). App services in `compose.yml` expose `api.`, `dashboard.`, `adminer.` under `${DOMAIN}` with `certresolver=le`. See [deployment.md](deployment.md).
 - **Local Docker:** `compose.override.yml` adds HTTP-only `proxy` (port 80, no ACME). `docker compose watch` auto-merges override → **no HTTPS**.
 
@@ -62,14 +66,15 @@ Self-hosted Telegram channel summarizer. Migrated from browser-heavy `TG-Summari
 - **Auto-follow UI:** Toggle on each **ChannelCard** (not global Settings). Distinct from **Auto-Followed** badge (`discoveredVia` set) = channel was discovered via another channel's forward.
 - **Channel normalization:** `frontend/src/lib/channelNormalize.ts`.
 - **Proxy resolution:** Per-user `proxyUrls` in Postgres `AppSetting`; `DEFAULT_PROXY_URLS` env is fallback only ([DECISIONS #11](docs/migration/DECISIONS.md)).
-- **Summarizer UI:** URL tabs `/summarizer?tab=`; settings `?tab=settings&section=` (`useSettingsSection`). Summary toolbar: **Generate Summary** + **Copy Prompt** (`SummaryConfig.tsx`).
+- **Summarizer UI:** URL tabs `/summarizer?tab=`; settings `?tab=settings&section=` (`useSettingsSection`). **Post-login redirect:** `/summarizer` (not template dashboard `/`). Guided tour auto-starts when no channels — E2E sets `localStorage.hasSeenTour=true`. Summary toolbar: **Generate Summary** + **Copy Prompt** (`SummaryConfig.tsx`).
+- **Command palette:** `Cmd+Shift+P` / `Ctrl+Shift+P` + header icon; `CommandPaletteProvider` in `TgProviders`. Settings + job toggles + navigate + channel entity flows + channel ops + data transfer + in-palette search. Recents when search empty; query→command affinity (`localStorage`); `VITE_COMMAND_PALETTE_RECENT_COUNT` (default 5). Entity sub-flows: `closeOnPick: false` for select/deselect/freeze/unfreeze/toggle-auto-follow (multi-pick stays open). Tag search: `tag:` / `#` prefix via `filter-channels.ts`. Post/summary search: in-palette `search-results` mode (cap 50); empty query clears filter; post search clears semantic. Entity input refocus via `requestAnimationFrame`. `requiresConfirmation` on bulk freeze/unfreeze, delete channel, import, clear cache.
 - **External AI summary flow:** Copy Prompt → clipboard + **pending** history entry (same metadata as generate: channels, date range, post count, language, model). Pending state in `Summary.extra`: `status: "pending"` + `promptText`. User completes via **`PasteSummaryModal`** on that history item (Summary view CTA or History list) — **no global paste toolbar button**. Completed: `source: "pasted"`; model `"external"` (`PASTED_SUMMARY_MODEL`) or optional user-typed name; **no LLM log**. Re-paste blocked once completed; pending persists until completed or deleted. `summaries.py` upsert: **`null` extra fields remove keys** (clears `status` on completion).
 - **Theme:** `theme-provider` (`vite-ui-theme`); not `SettingsContext`.
 - **Sync logs:** `full_request` / `full_response` on log models accept **dict or list** (per-page backward scrape telemetry).
 
 ## Decisions (stable)
 
-Locked [DECISIONS.md](docs/migration/DECISIONS.md) + **Mode A hardened single-operator (2026-06-09)** + **backward sync (2026-06-10)** + **per-channel auto-follow (2026-06-10)** + **Cloudflare DNS TLS (2026-06-16)** + **proxy-bound worker pool (2026-06-22, IDEA-003)** + **external AI summary workflow (2026-06-22)** + **template tooling alignment (2026-06-22)**:
+Locked [DECISIONS.md](docs/migration/DECISIONS.md) + **Mode A hardened single-operator (2026-06-09)** + **backward sync (2026-06-10)** + **per-channel auto-follow (2026-06-10)** + **Cloudflare DNS TLS (2026-06-16)** + **proxy-bound worker pool (2026-06-22, IDEA-003)** + **external AI summary workflow (2026-06-22)** + **template tooling alignment (2026-06-22)** + **command palette (2026-06-24, IDEA-001/004/005)**:
 
 1. **Single-operator (Mode A)** — Production: `API_KEY`, `TOKEN_ENCRYPTION_KEY`, strong `SECRET_KEY`, `USERS_OPEN_REGISTRATION=false`. Reads unscoped; `user_id` columns are forward-compatible metadata. Mode B multi-user deferred.
 2. **Auth** — JWT + optional `X-API-Key`; fail-closed on sensitive routes in non-local.
@@ -87,7 +92,11 @@ Locked [DECISIONS.md](docs/migration/DECISIONS.md) + **Mode A hardened single-op
 14. **Let's Encrypt via Cloudflare DNS-01** — `compose.traefik.yml` uses `dnschallenge.provider=cloudflare` + `CF_DNS_API_TOKEN` (Zone:Read + DNS:Edit). **Rejected TLS-01** (breaks behind orange-cloud proxy). DNS challenge does not require the server to be publicly reachable on :443.
 15. **Proxy-bound worker pool** — Per-proxy lane semaphores + reused httpx clients gate proxied HTTP; least-loaded dispatch; `syncConcurrency` capped by pool capacity when proxies active. `test_proxy` and direct fetches bypass pool. Detail: [IDEA-003](docs/ideas-log/ideas/IDEA-003-proxy-bound-worker-pool.md).
 16. **External AI summary workflow** — `POST /api/v1/ai/summary/prompt` returns server-built prompt (`app/prompts/summary.py`). Copy Prompt creates pending history entry; paste completes **that item** via modal. Optional external model name; default display **External**. No `saveLLMLog` for pasted completions. Tested: `backend/tests/api/test_ai_summary.py`.
-17. **Template tooling (pre-feature cleanup)** — Align with Full Stack FastAPI Template (`_template_tmp/`): prek/pre-commit at repo root (not separate `lint.yml` CI), Biome frontend lint, zizmor workflow + hook, `[tool.typos]` in root `pyproject.toml`. OpenAPI/client regen excludes legacy routes (`ENVIRONMENT=production` in `generate-client.sh`). **Vitest removed**; E2E via Playwright only. `data.py` decomposed into services/schemas/serialization; optional future split to ~300 lines if handlers still feel heavy.
+17. **Template tooling (pre-feature cleanup)** — Align with Full Stack FastAPI Template (`_template_tmp/`): prek/pre-commit at repo root (not separate `lint.yml` CI), Biome frontend lint, zizmor workflow + hook, `[tool.typos]` in root `pyproject.toml`. OpenAPI/client regen excludes legacy routes by default (`ENVIRONMENT=production`). **Vitest removed**; E2E via Playwright only. `data.py` decomposed into services/schemas/serialization; optional future split to ~300 lines if handlers still feel heavy.
+18. **CI hardening (2026-06-22)** — Private-repo checkout fix (`contents: read`). Flaky `test_cancel_sync_job`: `_row_to_state` sets `cancel_event` when DB status is `cancelled`. Linux CI: lowercase shadcn UI filenames (`button.tsx`, etc.). `frontend/src/lib/env.ts` guards `import.meta` for Playwright Node runner. Playwright tests aligned to TG app (login→`/summarizer`, `toPlaywrightAppUrl()` for reset-password emails).
+19. **Command palette core (IDEA-001)** — `cmdk` + shadcn on `/_tg/summarizer` only. **`Cmd+Shift+P` / `Ctrl+Shift+P`** (rejected `Cmd/Ctrl+K`). All `SettingsContext` mutables + 5 job toggles via `useJobToggles`; Publishing CRUD excluded. Boolean commands: Toggle/Enable/Disable + ON/OFF badge; enums flat; free-form via in-palette editor; `requiresConfirmation` on bulk freeze/unfreeze + clear cache + import (not sync). Recents + search-affinity ranking (`rank-commands.ts`). Entity sub-flows: Backspace-on-empty / Escape / Back returns to root. NL assistant + open-post: stubs only.
+20. **Palette data transfer (IDEA-004)** — `frontend/src/lib/data-transfer/`: entity JSONL envelope (`header` + `record` lines, schema v1); **21 commands** (copy/export/import × channels/posts/summaries). Channels: all/selected/frozen filters; posts/summaries: all/selected; **selected** posts/summaries intersect `selectedChannels`. Import merge-by-id with confirm dialog.
+21. **Palette channel ops & search (IDEA-005)** — Add/delete/sync channel; search posts/summaries. **In-palette search** (`search-results` mode), not navigate-only. Add channel: `closeOnApply: false` (palette stays open). Delete/sync entity pickers include **all channels** (incl. frozen); sync uses `ignoreFrozen: true`. Empty search clears filter; post search clears semantic. **Rename channel rejected.**
 
 ### Explicitly rejected / deferred
 
@@ -106,6 +115,12 @@ Locked [DECISIONS.md](docs/migration/DECISIONS.md) + **Mode A hardened single-op
 - **One-click clipboard paste** without review modal.
 - **In-app `selectedModel` dropdown** for pasted summary attribution (optional free-text field instead).
 - **Separate `lint.yml` CI workflow** — pre-commit/prek workflow covers backend + frontend (template pattern).
+- **`Cmd/Ctrl+K` command palette shortcut** — use `Cmd/Ctrl+Shift+P` (VS Code style).
+- **Publishing bot/destination CRUD in palette** — excluded from v1.
+- **NL assistant execution inside palette** — stub only; Chat tab stays separate.
+- **Open post by ID in palette** — deferred (stub `entity-root`).
+- **Admin template shell palette** (`/_layout/*`) — summarizer only.
+- **Rename channel in palette** — explicitly rejected by user.
 
 ## User preferences
 
@@ -119,13 +134,15 @@ Locked [DECISIONS.md](docs/migration/DECISIONS.md) + **Mode A hardened single-op
 - **Single root `.env`** for Traefik + app when both compose files run from repo root; no separate Traefik env file unless split deploy layout.
 - **External AI:** prefer explicit user review before saving pasted responses (modal, not one-click).
 - **Tooling:** follow Full Stack FastAPI Template conventions where possible; document TG-specific deviations (legacy OpenAPI exclusion, dual API clients).
+- **Command palette:** brainstorm with explicit AskQuestion choices before implementing; **no assumptions** on shortcuts, phasing, or UX without user confirmation. **Rename channel** explicitly rejected.
 
 ## Environment & fixes
 
 - **Native dev:** `uv sync` → `cd backend && uv run alembic upgrade head` (on `app`) → uvicorn :8000; `bun run dev` :5173. **`POSTGRES_DB=app`** for API; never point dev server at `app_test`.
-- **Pre-commit:** `cd backend && uv run prek install -f`; run all hooks: `uv run prek run --all-files`. PR CI runs same via `pre-commit.yml`.
+- **Pre-commit:** `cd backend && uv run prek install -f`; run all hooks: `uv run prek run --all-files`. PR-only CI: `pre-commit.yml` (won't run if you push straight to `main`).
+- **Playwright (CI-parity):** `ENVIRONMENT=local bash scripts/generate-client.sh` → `docker compose build playwright` → `docker compose run --rm playwright bunx playwright test --fail-on-flaky-tests`. Faster loop: stack up + `cd frontend && bunx playwright install chromium && bunx playwright test` (see [development.md](development.md)). **Cursor agent sandbox:** `playwright install chromium` may hang at zip extraction — run E2E locally if needed.
 - **`relation "user" does not exist`** — run Alembic on `app` (empty DB volume).
-- **pytest:** `cd backend && uv run pytest tests/ -q` (uses `app_test`). Session reported **196 passed** after cleanup.
+- **pytest:** `cd backend && uv run pytest tests/ -q` (uses `app_test`).
 - **Bootstrap superuser:** `FIRST_SUPERUSER` / `FIRST_SUPERUSER_PASSWORD` in `.env`; auto-created on lifespan.
 - **`GEMINI_API_KEY`** — required for AI/embeddings/RAG.
 - **Operator data fix** — `uv run python backend/scripts/backfill_user_id.py --reassign-all` after migration/import.
@@ -135,6 +152,7 @@ Locked [DECISIONS.md](docs/migration/DECISIONS.md) + **Mode A hardened single-op
 - **Local prod-like HTTPS:** `docker network create traefik-public` (once), then `docker compose -f compose.yml -f compose.traefik.yml up -d` — **not** `docker compose watch` (override = HTTP-only). Set `FRONTEND_HOST` and `BACKEND_CORS_ORIGINS` to `https://dashboard.${DOMAIN}` / `https://api.${DOMAIN}`. `/etc/hosts` or DNS must resolve subdomains to the machine.
 - **ACME retry after failure:** delete stale `_acme-challenge.*` TXT records in Cloudflare, then `docker compose … restart traefik`. Until LE succeeds, Traefik serves its **default self-signed cert** (browser warning).
 - **Bulk re-backfill / auto-follow docs:** `development.md` updated — `bulk-reset-sync` API, per-channel `autoFollowForwarded` on ChannelCard; `bulk_reresolve_start_ids.py` deprecated.
+- **Palette bugs fixed (2026-06-23/24):** query reset on `jobToggles` dep (use stable `refreshJobStatus` only); cmdk arrow/hover desync; entity sub-view input focus (`requestAnimationFrame`); deselect multi-pick `closeOnPick: false`; search commands briefly unwired in registry — fixed in follow-up.
 
 ### Maintenance scripts (`backend/scripts/`)
 
@@ -156,6 +174,9 @@ Locked [DECISIONS.md](docs/migration/DECISIONS.md) + **Mode A hardened single-op
 - **Auto-follow** can explode channel count; only channels with `autoFollowForwarded` enabled discover forwards; auto-followed channels get DB row only (no automatic first sync queued).
 - **`data.py`** still above ~300-line aspirational target (~565 lines); optional further domain splits if adding heavy data API features.
 - **`docker compose watch`** — HTTP-only Traefik proxy; no port 443, no Let's Encrypt.
+- **Deploy to Staging queued** — not a code failure; needs an online self-hosted runner with labels `self-hosted` and `staging`.
+- **PAT push to workflows** — changing `.github/workflows/*` requires GitHub token with `workflow` scope.
+- **Command palette (IDEA-001/004/005)** — implemented in working tree (**not yet committed** as of 2026-06-24); `lint`/`build` pass locally; palette E2E added in `summarizer.spec.ts` but **unverified in CI/agent sandbox** (Chromium install issues).
 
 ## Out of scope / roadmap
 
@@ -166,8 +187,4 @@ Locked [DECISIONS.md](docs/migration/DECISIONS.md) + **Mode A hardened single-op
 - Hover translation server-side (deferred).
 - Sync job chunking / lighter SSE for 2000+ channel jobs.
 - Template workflows not yet adopted: `smokeshow.yml` coverage badge, `guard-dependencies.yml`.
-- **Ideas backlog** — [IDEAS-LOG.md](docs/ideas-log/IDEAS-LOG.md): [IDEA-001](docs/ideas-log/ideas/IDEA-001-command-palette.md) command palette; [IDEA-002](docs/ideas-log/ideas/IDEA-002-tanstack-devtools.md) TanStack devtools (dev-only).
-
-## Session log
-
-- **2026-06-22** — Pre-feature cleanup complete: template tooling (prek, Biome, zizmor, typos), OpenAPI regen, `data.py` decomposition, legacy docs, sync DB audit, Vitest removal, Playwright Copy Prompt spec, `development.md` fixes, proxy-bound plan archived.
+- **Ideas backlog** — [IDEAS-LOG.md](docs/ideas-log/IDEAS-LOG.md): **IDEA-001/004/005 implemented locally (2026-06-24), pending commit + E2E verify**; [IDEA-002](docs/ideas-log/ideas/IDEA-002-tanstack-devtools.md) TanStack devtools (dev-only).

@@ -49,4 +49,9 @@ export const env = {
     viteEnv?.VITE_SYNC_META_MIN_INTERVAL_MS,
     5_000,
   ),
+  /** Max recent commands shown in palette when search is empty. */
+  commandPaletteRecentCount: parseIntEnv(
+    viteEnv?.VITE_COMMAND_PALETTE_RECENT_COUNT,
+    5,
+  ),
 } as const

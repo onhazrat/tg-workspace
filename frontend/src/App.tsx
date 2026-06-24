@@ -2,6 +2,7 @@ import {
   Activity,
   AlertCircle,
   AlertTriangle,
+  Command as CommandIcon,
   Database,
   FileText,
   HelpCircle,
@@ -19,6 +20,7 @@ import { useEffect, useRef } from "react"
 import { api } from "@/api"
 import { ChannelGrid } from "./components/ChannelGrid"
 import { ChatView } from "./components/ChatView"
+import { useCommandPaletteContext } from "./components/CommandPaletteProvider"
 import { HistoryView } from "./components/HistoryView"
 import { PostFeed } from "./components/PostFeed"
 import { RelativeTime } from "./components/RelativeTime"
@@ -29,11 +31,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "./components/ui/tg-tooltip"
-import {
-  isPastedSummaryModel,
-  isPendingSummary,
-  WORKSPACE_TABS,
-} from "./constants"
+import { WORKSPACE_TABS } from "./constants"
 import { useAI } from "./contexts/AIContext"
 import { useChatContext } from "./contexts/ChatContext"
 import { useData } from "./contexts/DataContext"
@@ -42,6 +40,7 @@ import { useSettings } from "./contexts/SettingsContext"
 import { useUI } from "./contexts/UIContext"
 import { useApiStatus } from "./hooks/useApiStatus"
 import { useGuidedTour } from "./hooks/useGuidedTour"
+import { applyHistorySummarySelection } from "./lib/commands/history-selection"
 import type { Summary, TabType } from "./types"
 
 export default function App() {
@@ -87,6 +86,7 @@ export default function App() {
   } = useSettings()
 
   const { startTour } = useGuidedTour()
+  const { setOpen: setCommandPaletteOpen } = useCommandPaletteContext()
 
   // Poll server job status for auto-sync pause banner (Phase 6 scheduler).
   useEffect(() => {
@@ -112,30 +112,23 @@ export default function App() {
   }
 
   const handleSelectHistorySummary = (s: Summary) => {
-    setSummary(isPendingSummary(s) ? null : s.text)
-    setDateRange(s.startDate, s.endDate)
-    setAiLanguage(s.language)
-    if (s.model && !isPastedSummaryModel(s.model)) setSelectedModel(s.model)
-    setSelectedChannels(new Set(s.channels || []))
-    setChatMessages(s.chatMessages || [])
-    setCurrentSummaryId(s.id)
-    setPostSearch(s.postSearch || "")
-    setSemanticSearchQuery(s.semanticSearchQuery || "")
-    setSemanticSearchRespectsTimeRange(
-      s.semanticSearchRespectsTimeRange || false,
-    )
-    setSemanticSearchRespectsChannels(s.semanticSearchRespectsChannels || false)
-    setRelatedPostSearch(null)
-
-    // If it's a chat-only session, go to chat tab
-    if (
-      s.text.startsWith("Chat: ") &&
-      (!s.chatMessages || s.chatMessages.length > 0)
-    ) {
-      setActiveTab("chat")
-    } else {
-      setActiveTab("summary")
-    }
+    applyHistorySummarySelection(s, {
+      setActiveTab,
+      setDateRange,
+      setSelectedChannels,
+      setChatMessages,
+      setCurrentSummaryId,
+      setPostSearch,
+      setSemanticSearchQuery,
+      setSemanticSearchRespectsTimeRange,
+      setSemanticSearchRespectsChannels,
+      setRelatedPostSearch,
+      setSummary,
+      settings: {
+        setAiLanguage,
+        setSelectedModel,
+      },
+    })
   }
 
   return (
@@ -225,6 +218,22 @@ export default function App() {
                   className={`w-1 h-1 rounded-full animate-pulse ${torEnabled ? "bg-green-500" : proxyEnabled ? "bg-purple-500" : "bg-blue-500"}`}
                 />
               </div>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    type="button"
+                    id="command-palette-button"
+                    data-testid="command-palette-button"
+                    onClick={() => setCommandPaletteOpen(true)}
+                    className="p-1.5 border border-app-ink border-opacity-10 hover:border-opacity-40 transition-all rounded-md"
+                  >
+                    <CommandIcon size={14} />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Command Palette (⌘⇧P)</p>
+                </TooltipContent>
+              </Tooltip>
               <Tooltip>
                 <TooltipTrigger asChild>
                   <button

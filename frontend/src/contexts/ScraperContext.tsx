@@ -52,6 +52,7 @@ interface ScraperContextType {
     channel: Channel,
     refresh?: boolean,
     source?: string,
+    options?: { ignoreFrozen?: boolean },
   ) => Promise<void>
   handleScrapeAll: () => Promise<void>
   handleScrapeSelected: () => Promise<void>
@@ -501,8 +502,13 @@ export const ScraperProvider: React.FC<{ children: React.ReactNode }> = ({
   )
 
   const handleScrapeChannel = useCallback(
-    async (channel: Channel, refresh = true, source = "Manual") => {
-      if (channel.isFrozen) {
+    async (
+      channel: Channel,
+      refresh = true,
+      source = "Manual",
+      options?: { ignoreFrozen?: boolean },
+    ) => {
+      if (channel.isFrozen && !options?.ignoreFrozen) {
         console.log(
           `[Scraper] Skipping sync for @${channel.name} because it is frozen.`,
         )

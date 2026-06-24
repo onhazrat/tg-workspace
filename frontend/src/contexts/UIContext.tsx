@@ -24,6 +24,8 @@ interface UIContextType {
   setSummarizing: React.Dispatch<React.SetStateAction<boolean>>
   currentSummaryId: string | null
   setCurrentSummaryId: React.Dispatch<React.SetStateAction<string | null>>
+  historySearchQuery: string
+  setHistorySearchQuery: React.Dispatch<React.SetStateAction<string>>
 }
 
 const UIContext = createContext<UIContextType | undefined>(undefined)
@@ -35,6 +37,7 @@ export const UIProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [isRateLimited, setIsRateLimited] = useState<boolean>(false)
   const [summarizing, setSummarizing] = useState<boolean>(false)
   const [currentSummaryId, setCurrentSummaryId] = useState<string | null>(null)
+  const [historySearchQuery, setHistorySearchQuery] = useState("")
 
   const [startDate, setStartDateInternal] = useState<number>(() => {
     if (typeof window !== "undefined") {
@@ -130,6 +133,8 @@ export const UIProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
         setSummarizing,
         currentSummaryId,
         setCurrentSummaryId,
+        historySearchQuery,
+        setHistorySearchQuery,
       }}
     >
       {children}

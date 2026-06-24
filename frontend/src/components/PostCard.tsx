@@ -126,7 +126,10 @@ export const PostCard: React.FC<PostCardProps> = ({ post, postSearch }) => {
   ])
 
   return (
-    <div className="bg-app-card border border-app-ink/10 rounded-xl shadow-sm hover:shadow-md hover:-translate-y-0.5 hover:border-app-ink/20 transition-all duration-200 group overflow-hidden flex flex-col">
+    <div
+      data-post-key={`${post.channelName}_${post.id}`}
+      className="bg-app-card border border-app-ink/10 rounded-xl shadow-sm hover:shadow-md hover:-translate-y-0.5 hover:border-app-ink/20 transition-all duration-200 group overflow-hidden flex flex-col"
+    >
       {/* Post Header */}
       <div className="flex items-center justify-between px-5 py-3 bg-app-muted/30 border-b border-app-ink/5 relative">
         <div className="flex items-center gap-3">

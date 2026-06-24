@@ -1,5 +1,7 @@
 import type { ReactNode } from "react"
 import { toast } from "sonner"
+import { CommandPalette } from "@/components/CommandPalette"
+import { CommandPaletteProvider } from "@/components/CommandPaletteProvider"
 import { MigrationPrompt } from "@/components/MigrationPrompt"
 import { TgToaster } from "@/components/ui/tg-sonner"
 import { TooltipProvider } from "@/components/ui/tg-tooltip"
@@ -45,13 +47,16 @@ export function TgProviders({ children }: { children: ReactNode }) {
             <ScraperProvider>
               <ChatProvider>
                 <AIProvider>
-                  <TranslationProvider>
-                    <TooltipProvider delay={500} closeDelay={300}>
-                      {children}
-                      <MigrationPrompt />
-                      <TgToaster richColors closeButton />
-                    </TooltipProvider>
-                  </TranslationProvider>
+                  <CommandPaletteProvider>
+                    <TranslationProvider>
+                      <TooltipProvider delay={500} closeDelay={300}>
+                        {children}
+                        <CommandPalette />
+                        <MigrationPrompt />
+                        <TgToaster richColors closeButton />
+                      </TooltipProvider>
+                    </TranslationProvider>
+                  </CommandPaletteProvider>
                 </AIProvider>
               </ChatProvider>
             </ScraperProvider>
