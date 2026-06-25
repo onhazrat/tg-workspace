@@ -9,6 +9,9 @@ setup("authenticate", async ({ page }) => {
   await page.getByTestId("password-input").fill(firstSuperuserPassword)
   await page.getByRole("button", { name: "Log In" }).click()
   await page.waitForURL(/\/summarizer/)
-  await page.evaluate(() => localStorage.setItem("hasSeenTour", "true"))
+  await page.evaluate(() => {
+    localStorage.setItem("hasSeenTour", "true")
+    localStorage.setItem("selectedChannels", "[]")
+  })
   await page.context().storageState({ path: authFile })
 })

@@ -92,6 +92,12 @@ function cmdkScore(command: CommandDef, query: string): number {
     else if (haystack.includes(normalized)) best = Math.max(best, 0.75)
     else if (fuzzyIncludes(normalized, haystack)) best = Math.max(best, 0.55)
   }
+
+  if (command.id.startsWith("navigate-tab-")) {
+    const tabId = command.id.slice("navigate-tab-".length)
+    if (tabId === normalized) best = Math.max(best, 1.15)
+  }
+
   return best
 }
 

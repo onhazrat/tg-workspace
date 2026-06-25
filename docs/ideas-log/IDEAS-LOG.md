@@ -13,6 +13,7 @@
 | IDEA-004 | Command palette data copy / export / import | frontend | medium | 2026-06-23 | [detail](./ideas/IDEA-004-command-palette-data-transfer.md) | Granular JSONL + clipboard commands; plan ready — channels phase 1 |
 | IDEA-005 | Command palette channel ops & search | frontend | medium | 2026-06-24 | [detail](./ideas/IDEA-005-command-palette-channel-ops-search.md) | Add/delete/sync channel, search posts/summaries; freeze/unfreeze already done |
 | IDEA-006 | Command palette extended commands | frontend | medium | 2026-06-24 | [detail](./ideas/IDEA-006-command-palette-extended.md) | Reset sync, tags, semantic search, tor/AI/DB quick actions |
+| IDEA-007 | Command palette keyboard UX | frontend | medium | 2026-06-25 | [detail](./ideas/IDEA-007-command-palette-keyboard-ux.md) | Full keyboard operability for all palette modes and chained flows |
 
 ## In progress
 

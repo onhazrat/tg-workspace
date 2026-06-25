@@ -2,6 +2,10 @@ import { ArrowLeft, Check } from "lucide-react"
 import { type KeyboardEvent, useEffect, useMemo, useRef, useState } from "react"
 import { CommandConfirmDialog } from "@/components/CommandConfirmDialog"
 import { useCommandPaletteContext } from "@/components/CommandPaletteProvider"
+import {
+  PaletteFooterHints,
+  PaletteSubViewHeader,
+} from "@/components/PaletteKeyboardChrome"
 import { Badge } from "@/components/ui/badge"
 import {
   Command,
@@ -21,6 +25,7 @@ import {
 import { useCommandPalette } from "@/hooks/useCommandPalette"
 import { useCommandRegistry } from "@/hooks/useCommandRegistry"
 import { useCommandSearchAffinity } from "@/hooks/useCommandSearchAffinity"
+import { usePaletteListSelection } from "@/hooks/usePaletteListSelection"
 import { useRecentCommands } from "@/hooks/useRecentCommands"
 import { removeTagFromChannel } from "@/lib/channels/channel-tags"
 import { normalizeChannelHandle } from "@/lib/commands/channel-ops"
@@ -43,7 +48,7 @@ import {
   semanticSearchPostsForPalette,
   truncatePreview,
 } from "@/lib/commands/search-filters"
-import type { CommandDef } from "@/lib/commands/types"
+import type { CommandDef, EntityFlowType } from "@/lib/commands/types"
 import {
   filterChannelsByQuery,
   getEntityCandidates,
@@ -51,6 +56,23 @@ import {
 } from "@/lib/commands/useChannelEntityFlow"
 import { env } from "@/lib/env"
 import type { Channel, Post, Summary } from "@/types"
+
+function getStayOpenAnnouncement(flow: EntityFlowType): string {
+  switch (flow) {
+    case "select-channel":
+      return "Channel selected, palette open"
+    case "deselect-channel":
+      return "Channel deselected, palette open"
+    case "freeze-channel":
+      return "Channel frozen, palette open"
+    case "unfreeze-channel":
+      return "Channel unfrozen, palette open"
+    case "toggle-auto-follow":
+      return "Auto-follow toggled, palette open"
+    default:
+      return "Selection updated, palette open"
+  }
+}
 
 function groupCommands(commands: CommandDef[]): Map<string, CommandDef[]> {
   const groups = new Map<string, CommandDef[]>()
@@ -73,7 +95,8 @@ export function CommandPalette() {
   const [entityQuery, setEntityQuery] = useState("")
   const [editorValue, setEditorValue] = useState("")
   const [searchResultsQuery, setSearchResultsQuery] = useState("")
-  const [selectedCommandId, setSelectedCommandId] = useState("")
+  const [isEditorApplying, setIsEditorApplying] = useState(false)
+  const [liveAnnouncement, setLiveAnnouncement] = useState("")
   const commandListRef = useRef<HTMLDivElement>(null)
   const entityListRef = useRef<HTMLDivElement>(null)
   const searchResultsListRef = useRef<HTMLDivElement>(null)
@@ -137,6 +160,7 @@ export function CommandPalette() {
   ) => {
     handleSubViewBackspace(event, editorValue)
     if (event.defaultPrevented) return
+    if (isEditorApplying) return
 
     if (event.key !== "Enter") return
 
@@ -157,24 +181,13 @@ export function CommandPalette() {
     setEntityQuery("")
     setEditorValue("")
     setSearchResultsQuery("")
-    setSelectedCommandId("")
+    setIsEditorApplying(false)
+    setLiveAnnouncement("")
   }, [open, refreshJobStatus])
 
   useEffect(() => {
     palette.rootQueryRef.current = query
   }, [palette, query])
-
-  useEffect(() => {
-    commandListRef.current?.scrollTo({ top: 0 })
-  }, [query])
-
-  useEffect(() => {
-    entityListRef.current?.scrollTo({ top: 0 })
-  }, [entityQuery])
-
-  useEffect(() => {
-    searchResultsListRef.current?.scrollTo({ top: 0 })
-  }, [searchResultsQuery, searchResultsState?.items.length])
 
   // Sub-view inputs mount after mode transitions; Radix Dialog keeps focus on
   // the dialog shell unless we explicitly move it to the search field.
@@ -216,10 +229,20 @@ export function CommandPalette() {
   // Initialize from schema when opening an editor — not on every context change,
   // which would reset in-progress typing (e.g. add-channel getValue is always "").
   useEffect(() => {
-    if (!editorCommand?.editorField) return
-    const current = editorCommand.editorField.getValue(context)
-    setEditorValue(String(current))
-  }, [editorCommand?.id])
+    if (!editorCommand) return
+    if (editorCommand.editorField) {
+      const current = editorCommand.editorField.getValue(context)
+      setEditorValue(String(current))
+      return
+    }
+    const chained = getChainedEditorField(
+      editorCommand.id,
+      palette.entityPayload as Channel | undefined,
+    )
+    if (chained) {
+      setEditorValue(chained.getValue())
+    }
+  }, [editorCommand?.id, palette.entityPayload])
 
   const rankedCommands = useMemo(() => {
     return filterAndRank(commands, query, affinityEntries).map(
@@ -250,11 +273,14 @@ export function CommandPalette() {
       "")
     : (rankedCommands[0]?.id ?? "")
 
-  useEffect(() => {
-    if (!open || mode !== "commands") return
-    setSelectedCommandId(firstNavigableId)
-    commandListRef.current?.scrollTo({ top: 0 })
-  }, [firstNavigableId, mode, open, query])
+  const { selectedId: selectedCommandId, setSelectedId: setSelectedCommandId } =
+    usePaletteListSelection({
+      isActive: mode === "commands",
+      open,
+      firstNavigableId,
+      filterKey: query,
+      listRef: commandListRef,
+    })
 
   const entityCandidates = useMemo(() => {
     if (!entityCommand?.entityFlow) return []
@@ -276,6 +302,24 @@ export function CommandPalette() {
     const pool = getEntityCandidates(flow, context)
     return filterChannelsByQuery(pool, entityQuery)
   }, [context, entityCommand, entityQuery, palette.entityPayload])
+
+  const firstEntityId = useMemo(() => {
+    if (entityCandidates.length === 0) return ""
+    const flow = entityCommand?.entityFlow ?? "search-channel"
+    if (isNonChannelEntityFlow(flow)) {
+      return (entityCandidates[0] as { id: string }).id
+    }
+    return (entityCandidates[0] as Channel).name
+  }, [entityCandidates, entityCommand?.entityFlow])
+
+  const { selectedId: selectedEntityId, setSelectedId: setSelectedEntityId } =
+    usePaletteListSelection({
+      isActive: mode === "entity",
+      open,
+      firstNavigableId: firstEntityId,
+      filterKey: entityQuery,
+      listRef: entityListRef,
+    })
 
   const finishCommand = async (
     command: CommandDef,
@@ -314,6 +358,53 @@ export function CommandPalette() {
     }
 
     await finishCommand(command)
+  }
+
+  const handleCommandInputKeyDown = (event: KeyboardEvent) => {
+    handleSubViewBackspace(event, query)
+    if (event.defaultPrevented) return
+    if (event.key !== "Enter") return
+    const isModifierEnter = event.metaKey || event.ctrlKey
+    if (event.shiftKey && !isModifierEnter) return
+
+    const command =
+      commands.find((entry) => entry.id === selectedCommandId) ??
+      rankedCommands.find((entry) => entry.id === selectedCommandId) ??
+      rankedCommands[0]
+    if (!command) return
+
+    event.preventDefault()
+    void handleSelectCommand(command)
+  }
+
+  const handleEntityInputKeyDown = (event: KeyboardEvent) => {
+    handleSubViewBackspace(event, entityQuery)
+    if (event.defaultPrevented) return
+    if (event.key !== "Enter") return
+
+    const flow = entityCommand?.entityFlow
+    if (!flow) return
+
+    let pickId = ""
+    if (isNonChannelEntityFlow(flow)) {
+      pickId =
+        selectedEntityId ||
+        ((entityCandidates[0] as { id: string } | undefined)?.id ?? "")
+    } else {
+      const q = entityQuery.trim().toLowerCase()
+      const channels = entityCandidates as Channel[]
+      pickId =
+        channels.find((channel) => channel.name.toLowerCase() === q)?.name ??
+        channels.find((channel) => channel.name.toLowerCase().startsWith(q))
+          ?.name ??
+        selectedEntityId ??
+        channels[0]?.name ??
+        ""
+    }
+    if (!pickId) return
+
+    event.preventDefault()
+    void handleEntityPick(pickId)
   }
 
   const handleEntityPick = async (value: string) => {
@@ -425,23 +516,31 @@ export function CommandPalette() {
     }
 
     setEntityQuery("")
+    setLiveAnnouncement(getStayOpenAnnouncement(flow))
     requestAnimationFrame(() => {
       entityInputRef.current?.focus()
     })
   }
 
   const handleEditorApply = async () => {
-    if (!editorCommand?.editorField) return
+    if (!editorCommand || isEditorApplying) return
 
     if (
       editorCommand.id === "add-tag-channel" ||
       editorCommand.id === "edit-channel-start-id"
     ) {
-      await getChainedEditorApply(editorCommand.id, context, editorValue)
-      recordRecent(editorCommand.id)
-      close()
+      setIsEditorApplying(true)
+      try {
+        await getChainedEditorApply(editorCommand.id, context, editorValue)
+        recordRecent(editorCommand.id)
+        close()
+      } finally {
+        setIsEditorApplying(false)
+      }
       return
     }
+
+    if (!editorCommand.editorField) return
 
     const normalizedHandle = normalizeChannelHandle(editorValue)
     if (
@@ -455,47 +554,53 @@ export function CommandPalette() {
     if (editorCommand.editorField.advancedOnly) {
       context.settings.setAdvancedMode(true)
     }
-    await editorCommand.editorField.apply(context, editorValue)
 
-    if (editorCommand.searchResultsKind === "posts") {
-      const query = editorValue.trim()
-      const items =
-        editorCommand.id === "semantic-search-posts"
-          ? await semanticSearchPostsForPalette(context, query)
-          : await searchPostsForPalette(context, query)
-      palette.openSearchResults(
-        { kind: "posts", query, items, totalCount: items.length },
-        editorCommand,
-      )
-      setSearchResultsQuery("")
+    setIsEditorApplying(true)
+    try {
+      await editorCommand.editorField.apply(context, editorValue)
+
+      if (editorCommand.searchResultsKind === "posts") {
+        const query = editorValue.trim()
+        const items =
+          editorCommand.id === "semantic-search-posts"
+            ? await semanticSearchPostsForPalette(context, query)
+            : await searchPostsForPalette(context, query)
+        palette.openSearchResults(
+          { kind: "posts", query, items, totalCount: items.length },
+          editorCommand,
+        )
+        setSearchResultsQuery("")
+        recordRecent(editorCommand.id)
+        return
+      }
+
+      if (editorCommand.searchResultsKind === "summaries") {
+        const query = editorValue.trim()
+        const items = searchSummariesForPalette(context, query)
+        palette.openSearchResults(
+          { kind: "summaries", query, items, totalCount: items.length },
+          editorCommand,
+        )
+        setSearchResultsQuery("")
+        recordRecent(editorCommand.id)
+        return
+      }
+
       recordRecent(editorCommand.id)
-      return
+
+      const shouldClose = editorCommand.closeOnApply !== false
+      if (shouldClose) {
+        close()
+        return
+      }
+
+      setEditorValue("")
+      requestAnimationFrame(() => {
+        ;(editorInputRef.current ?? editorTextareaRef.current)?.focus()
+      })
+    } finally {
+      setIsEditorApplying(false)
     }
-
-    if (editorCommand.searchResultsKind === "summaries") {
-      const query = editorValue.trim()
-      const items = searchSummariesForPalette(context, query)
-      palette.openSearchResults(
-        { kind: "summaries", query, items, totalCount: items.length },
-        editorCommand,
-      )
-      setSearchResultsQuery("")
-      recordRecent(editorCommand.id)
-      return
-    }
-
-    recordRecent(editorCommand.id)
-
-    const shouldClose = editorCommand.closeOnApply !== false
-    if (shouldClose) {
-      close()
-      return
-    }
-
-    setEditorValue("")
-    requestAnimationFrame(() => {
-      ;(editorInputRef.current ?? editorTextareaRef.current)?.focus()
-    })
   }
 
   const filteredSearchResults = useMemo(() => {
@@ -525,6 +630,26 @@ export function CommandPalette() {
     })
   }, [searchResultsQuery, searchResultsState])
 
+  const firstSearchResultId = useMemo(() => {
+    if (filteredSearchResults.length === 0) return ""
+    if (searchResultsState?.kind === "posts") {
+      const post = filteredSearchResults[0] as Post
+      return `${post.channelName}_${post.id}`
+    }
+    return (filteredSearchResults[0] as Summary).id
+  }, [filteredSearchResults, searchResultsState?.kind])
+
+  const {
+    selectedId: selectedSearchResultId,
+    setSelectedId: setSelectedSearchResultId,
+  } = usePaletteListSelection({
+    isActive: mode === "search-results",
+    open,
+    firstNavigableId: firstSearchResultId,
+    filterKey: `${searchResultsQuery}:${searchResultsState?.items.length ?? 0}`,
+    listRef: searchResultsListRef,
+  })
+
   const handleSearchResultPick = (item: Post | Summary) => {
     if (!searchResultsCommand || !searchResultsState) return
 
@@ -541,6 +666,27 @@ export function CommandPalette() {
     recordRecent(searchResultsCommand.id)
     close()
   }
+
+  const isListMode =
+    mode === "commands" || mode === "entity" || mode === "search-results"
+
+  const chainedEditorField = editorCommand
+    ? getChainedEditorField(
+        editorCommand.id,
+        palette.entityPayload as Channel | undefined,
+      )
+    : null
+  const activeEditorField = editorCommand?.editorField
+  const showEditorPanel = Boolean(
+    mode === "editor" &&
+      editorCommand &&
+      (activeEditorField || chainedEditorField),
+  )
+
+  const editorFooterHint =
+    activeEditorField?.type === "textarea"
+      ? "⌃↵ apply · esc back · ⌫ parent"
+      : "↵ apply · esc back · ⌫ parent"
 
   const renderBadge = (command: CommandDef) => {
     const badge = command.getBadge?.(context)
@@ -574,8 +720,10 @@ export function CommandPalette() {
     >
       <DialogContent
         showCloseButton
+        closeButtonTabIndex={isListMode ? -1 : undefined}
         className="overflow-hidden border-app-ink/20 bg-app-card p-0 sm:max-w-xl"
         data-testid="command-palette"
+        onOpenAutoFocus={(event) => event.preventDefault()}
         onEscapeKeyDown={(event) => {
           if (modeStack.length > 1) {
             event.preventDefault()
@@ -587,6 +735,9 @@ export function CommandPalette() {
           <DialogTitle>Command Palette</DialogTitle>
           <DialogDescription>Search commands and settings</DialogDescription>
         </DialogHeader>
+        <div aria-live="polite" aria-atomic="true" className="sr-only">
+          {liveAnnouncement}
+        </div>
 
         {mode === "confirm" && palette.pendingCommand ? (
           <CommandConfirmDialog
@@ -618,90 +769,87 @@ export function CommandPalette() {
           </div>
         ) : null}
 
-        {mode === "editor" && editorCommand?.editorField ? (
-          <div className="space-y-4 p-4">
-            <button
-              type="button"
-              onClick={goBackSubView}
-              className="inline-flex items-center gap-2 text-xs uppercase tracking-widest text-app-ink/60 hover:text-app-ink"
-            >
-              <ArrowLeft size={14} />
-              Back
-            </button>
-            <div className="space-y-2">
-              <label
-                htmlFor="command-palette-editor"
-                className="text-xs font-mono uppercase tracking-widest text-app-ink/60"
-              >
-                {getChainedEditorField(
-                  editorCommand.id,
-                  palette.entityPayload as Channel | undefined,
-                )?.label ?? editorCommand.editorField.label}
-              </label>
-              {editorCommand.editorField.type === "textarea" ? (
-                <textarea
-                  ref={editorTextareaRef}
-                  id="command-palette-editor"
-                  value={editorValue}
-                  onChange={(event) => setEditorValue(event.target.value)}
-                  onKeyDown={(event) =>
-                    handleEditorKeyDown(event, { isTextarea: true })
-                  }
-                  className="min-h-28 w-full rounded-md border border-app-ink/20 bg-app-bg p-3 text-sm"
-                />
-              ) : (
-                <input
-                  ref={editorInputRef}
-                  id="command-palette-editor"
-                  type={(() => {
-                    const field = editorCommand.editorField
-                    if (!field) return "text"
-                    if (field.id === "globalStartTimeValue") {
-                      return context.settings.globalStartTimeMode === "absolute"
-                        ? "datetime-local"
-                        : "number"
+        {showEditorPanel && editorCommand ? (
+          <div className="space-y-0">
+            <PaletteSubViewHeader
+              label={editorCommand.label}
+              onBack={goBackSubView}
+            />
+            <div className="space-y-4 p-4">
+              <div className="space-y-2">
+                <label
+                  htmlFor="command-palette-editor"
+                  className="text-xs font-mono uppercase tracking-widest text-app-ink/60"
+                >
+                  {chainedEditorField?.label ?? activeEditorField?.label}
+                </label>
+                {activeEditorField?.type === "textarea" ? (
+                  <textarea
+                    ref={editorTextareaRef}
+                    id="command-palette-editor"
+                    value={editorValue}
+                    onChange={(event) => setEditorValue(event.target.value)}
+                    onKeyDown={(event) =>
+                      handleEditorKeyDown(event, { isTextarea: true })
                     }
-                    return field.type === "number" ? "number" : "text"
-                  })()}
-                  min={editorCommand.editorField.min}
-                  max={editorCommand.editorField.max}
-                  step={editorCommand.editorField.step}
-                  value={editorValue}
-                  onChange={(event) => setEditorValue(event.target.value)}
-                  onKeyDown={(event) =>
-                    handleEditorKeyDown(event, { isTextarea: false })
-                  }
-                  className="w-full rounded-md border border-app-ink/20 bg-app-bg p-3 text-sm"
-                />
-              )}
+                    disabled={isEditorApplying}
+                    className="min-h-28 w-full rounded-md border border-app-ink/20 bg-app-bg p-3 text-sm disabled:opacity-50"
+                  />
+                ) : (
+                  <input
+                    ref={editorInputRef}
+                    id="command-palette-editor"
+                    type={(() => {
+                      const field = activeEditorField
+                      if (!field) return "text"
+                      if (field.id === "globalStartTimeValue") {
+                        return context.settings.globalStartTimeMode ===
+                          "absolute"
+                          ? "datetime-local"
+                          : "number"
+                      }
+                      return field.type === "number" ? "number" : "text"
+                    })()}
+                    min={activeEditorField?.min}
+                    max={activeEditorField?.max}
+                    step={activeEditorField?.step}
+                    value={editorValue}
+                    onChange={(event) => setEditorValue(event.target.value)}
+                    onKeyDown={(event) =>
+                      handleEditorKeyDown(event, { isTextarea: false })
+                    }
+                    disabled={isEditorApplying}
+                    className="w-full rounded-md border border-app-ink/20 bg-app-bg p-3 text-sm disabled:opacity-50"
+                  />
+                )}
+              </div>
+              <button
+                type="button"
+                data-testid="command-palette-editor-apply"
+                disabled={isEditorApplying}
+                onClick={handleEditorApply}
+                className="inline-flex items-center gap-2 rounded-md border border-app-ink/20 bg-app-ink px-3 py-2 text-xs font-mono uppercase tracking-widest text-app-bg disabled:opacity-50"
+              >
+                <Check size={14} />
+                {isEditorApplying ? "Applying…" : "Apply"}
+              </button>
             </div>
-            <button
-              type="button"
-              onClick={handleEditorApply}
-              className="inline-flex items-center gap-2 rounded-md border border-app-ink/20 bg-app-ink px-3 py-2 text-xs font-mono uppercase tracking-widest text-app-bg"
-            >
-              <Check size={14} />
-              Apply
-            </button>
+            <PaletteFooterHints hints={editorFooterHint} />
           </div>
         ) : null}
 
         {mode === "entity" && entityCommand ? (
-          <Command shouldFilter={false} loop={false} className="bg-app-card">
-            <div className="flex items-center gap-2 border-b border-app-ink/10 px-3 py-2 text-[10px] font-mono uppercase tracking-widest text-app-ink/50">
-              <button
-                type="button"
-                onClick={goBackSubView}
-                className="inline-flex items-center gap-1.5 hover:text-app-ink"
-              >
-                <ArrowLeft size={12} />
-                Back
-              </button>
-              <span className="truncate text-app-ink/70 normal-case tracking-normal">
-                {entityCommand.label}
-              </span>
-              <span className="ml-auto shrink-0">⌫ empty</span>
-            </div>
+          <Command
+            shouldFilter={false}
+            loop
+            value={selectedEntityId}
+            onValueChange={setSelectedEntityId}
+            className="bg-app-card"
+          >
+            <PaletteSubViewHeader
+              label={entityCommand.label}
+              onBack={goBackSubView}
+            />
             <CommandInput
               ref={entityInputRef}
               placeholder={
@@ -713,7 +861,7 @@ export function CommandPalette() {
               }
               value={entityQuery}
               onValueChange={setEntityQuery}
-              onKeyDown={(event) => handleSubViewBackspace(event, entityQuery)}
+              onKeyDown={handleEntityInputKeyDown}
             />
             <CommandList ref={entityListRef}>
               <CommandEmpty>
@@ -746,19 +894,29 @@ export function CommandPalette() {
                 {isNonChannelEntityFlow(
                   entityCommand.entityFlow ?? "search-channel",
                 )
-                  ? entityCandidates.map((item) => (
+                  ? entityCandidates.map((item, index) => (
                       <CommandItem
                         key={item.id}
                         value={item.id}
+                        data-testid={
+                          index === 0
+                            ? "command-palette-entity-item-first"
+                            : undefined
+                        }
                         onSelect={() => handleEntityPick(item.id)}
                       >
                         <span className="truncate">{item.label}</span>
                       </CommandItem>
                     ))
-                  : (entityCandidates as Channel[]).map((channel) => (
+                  : (entityCandidates as Channel[]).map((channel, index) => (
                       <CommandItem
                         key={channel.id}
                         value={channel.name}
+                        data-testid={
+                          index === 0
+                            ? "command-palette-entity-item-first"
+                            : undefined
+                        }
                         onSelect={() => handleEntityPick(channel.name)}
                       >
                         <span>@{channel.name}</span>
@@ -779,27 +937,20 @@ export function CommandPalette() {
         searchResultsCommand ? (
           <Command
             shouldFilter={false}
-            loop={false}
+            loop
+            value={selectedSearchResultId}
+            onValueChange={setSelectedSearchResultId}
             className="bg-app-card"
             data-testid="command-palette-search-results"
           >
-            <div className="flex items-center gap-2 border-b border-app-ink/10 px-3 py-2 text-[10px] font-mono uppercase tracking-widest text-app-ink/50">
-              <button
-                type="button"
-                onClick={goBackSubView}
-                className="inline-flex items-center gap-1.5 hover:text-app-ink"
-              >
-                <ArrowLeft size={12} />
-                Back
-              </button>
-              <span className="truncate text-app-ink/70 normal-case tracking-normal">
-                {searchResultsCommand.label}
-                {searchResultsState.query
+            <PaletteSubViewHeader
+              label={`${searchResultsCommand.label}${
+                searchResultsState.query
                   ? ` — "${searchResultsState.query}"`
-                  : ""}
-              </span>
-              <span className="ml-auto shrink-0">⌫ empty</span>
-            </div>
+                  : ""
+              }`}
+              onBack={goBackSubView}
+            />
             <CommandInput
               ref={searchResultsInputRef}
               placeholder="Filter results..."
@@ -868,7 +1019,7 @@ export function CommandPalette() {
         {mode === "commands" ? (
           <Command
             shouldFilter={false}
-            loop={false}
+            loop
             value={selectedCommandId}
             onValueChange={setSelectedCommandId}
             className="bg-app-card"
@@ -878,9 +1029,7 @@ export function CommandPalette() {
               placeholder="Type a command..."
               value={query}
               onValueChange={setQuery}
-              onKeyDown={(event) => {
-                handleSubViewBackspace(event, query)
-              }}
+              onKeyDown={handleCommandInputKeyDown}
             />
             <CommandList ref={commandListRef}>
               <CommandEmpty>No commands found.</CommandEmpty>
@@ -925,6 +1074,7 @@ export function CommandPalette() {
                 ),
               )}
             </CommandList>
+            <PaletteFooterHints hints="↵ run · esc close · ⌫ parent" />
           </Command>
         ) : null}
       </DialogContent>

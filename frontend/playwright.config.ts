@@ -9,6 +9,10 @@ import 'dotenv/config'
 /**
  * See https://playwright.dev/docs/test-configuration.
  */
+const playwrightApiUrl = process.env.PLAYWRIGHT_API_URL
+const devPort = playwrightApiUrl ? "5180" : "5173"
+const baseURL = `http://localhost:${devPort}`
+
 export default defineConfig({
   testDir: './tests',
   /* Run tests in files in parallel */
@@ -24,10 +28,19 @@ export default defineConfig({
   /* Shared settings for all the projects below. See https://playwright.dev/docs/api/class-testoptions. */
   use: {
     /* Base URL to use in actions like `await page.goto('/')`. */
-    baseURL: 'http://localhost:5173',
+    baseURL,
 
     /* Collect trace when retrying the failed test. See https://playwright.dev/docs/trace-viewer */
     trace: 'on-first-retry',
+
+    ...(process.env.PLAYWRIGHT_CHANNEL
+      ? {
+          channel: process.env.PLAYWRIGHT_CHANNEL as
+            | 'chrome'
+            | 'chromium'
+            | 'msedge',
+        }
+      : {}),
   },
 
   /* Configure projects for major browsers */
@@ -84,8 +97,10 @@ export default defineConfig({
 
   /* Run your local dev server before starting the tests */
   webServer: {
-    command: 'bun run dev',
-    url: 'http://localhost:5173',
+    command: playwrightApiUrl
+      ? `PLAYWRIGHT_API_URL=${playwrightApiUrl} bun run dev -- --port ${devPort} --strictPort`
+      : "bun run dev",
+    url: baseURL,
     reuseExistingServer: !process.env.CI,
   },
 });
