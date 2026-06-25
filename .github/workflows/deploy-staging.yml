@@ -26,14 +26,57 @@ jobs:
       SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
       EMAILS_FROM_EMAIL: ${{ secrets.EMAILS_FROM_EMAIL }}
       POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+      POSTGRES_USER: postgres
+      POSTGRES_DB: app
+      POSTGRES_PORT: "5432"
       SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
       GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
       API_KEY: ${{ secrets.API_KEY }}
+      TOKEN_ENCRYPTION_KEY: ${{ secrets.TOKEN_ENCRYPTION_KEY }}
       TOR_CONTROL_PASSWORD: ${{ secrets.TOR_CONTROL_PASSWORD }}
+      DOCKER_IMAGE_BACKEND: backend
+      DOCKER_IMAGE_FRONTEND: frontend
+      USERS_OPEN_REGISTRATION: "false"
+      PROJECT_NAME: TG Summarizer
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           persist-credentials: false
+
+      - name: Create .env
+        run: |
+          {
+            echo "ENVIRONMENT=${ENVIRONMENT}"
+            echo "DOMAIN=${DOMAIN}"
+            echo "STACK_NAME=${STACK_NAME}"
+            echo "PROJECT_NAME=${PROJECT_NAME}"
+            echo "FRONTEND_HOST=https://dashboard.${DOMAIN}"
+            echo "BACKEND_CORS_ORIGINS=https://dashboard.${DOMAIN},https://api.${DOMAIN}"
+            echo "SECRET_KEY=${SECRET_KEY}"
+            echo "FIRST_SUPERUSER=${FIRST_SUPERUSER}"
+            echo "FIRST_SUPERUSER_PASSWORD=${FIRST_SUPERUSER_PASSWORD}"
+            echo "USERS_OPEN_REGISTRATION=${USERS_OPEN_REGISTRATION}"
+            echo "API_KEY=${API_KEY}"
+            echo "TOKEN_ENCRYPTION_KEY=${TOKEN_ENCRYPTION_KEY}"
+            echo "SMTP_HOST=${SMTP_HOST}"
+            echo "SMTP_USER=${SMTP_USER}"
+            echo "SMTP_PASSWORD=${SMTP_PASSWORD}"
+            echo "EMAILS_FROM_EMAIL=${EMAILS_FROM_EMAIL}"
+            echo "POSTGRES_SERVER=db"
+            echo "POSTGRES_PORT=${POSTGRES_PORT}"
+            echo "POSTGRES_DB=${POSTGRES_DB}"
+            echo "POSTGRES_USER=${POSTGRES_USER}"
+            echo "POSTGRES_PASSWORD=${POSTGRES_PASSWORD}"
+            echo "SENTRY_DSN=${SENTRY_DSN}"
+            echo "GEMINI_API_KEY=${GEMINI_API_KEY}"
+            echo "TOR_CONTROL_PASSWORD=${TOR_CONTROL_PASSWORD}"
+            echo "TOR_CONTROL_PORT=9051"
+            echo "TOR_SOCKS_PROXY=socks5h://127.0.0.1:9050"
+            echo "DOCKER_IMAGE_BACKEND=${DOCKER_IMAGE_BACKEND}"
+            echo "DOCKER_IMAGE_FRONTEND=${DOCKER_IMAGE_FRONTEND}"
+            echo "VITE_API_KEY=${API_KEY}"
+          } > .env
+
       - run: docker compose -f compose.yml --project-name ${{ secrets.STACK_NAME_STAGING }} build
       - run: docker compose -f compose.yml --project-name ${{ secrets.STACK_NAME_STAGING }} up -d
