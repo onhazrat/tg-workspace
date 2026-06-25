@@ -80,6 +80,8 @@ export function CommandPalette() {
   const commandInputRef = useRef<HTMLInputElement>(null)
   const entityInputRef = useRef<HTMLInputElement>(null)
   const searchResultsInputRef = useRef<HTMLInputElement>(null)
+  const editorInputRef = useRef<HTMLInputElement>(null)
+  const editorTextareaRef = useRef<HTMLTextAreaElement>(null)
 
   const {
     open,
@@ -160,7 +162,12 @@ export function CommandPalette() {
   // the dialog shell unless we explicitly move it to the search field.
   useEffect(() => {
     if (!open) return
-    if (mode !== "commands" && mode !== "entity" && mode !== "search-results") {
+    if (
+      mode !== "commands" &&
+      mode !== "entity" &&
+      mode !== "search-results" &&
+      mode !== "editor"
+    ) {
       return
     }
 
@@ -169,18 +176,32 @@ export function CommandPalette() {
         ? entityInputRef
         : mode === "search-results"
           ? searchResultsInputRef
-          : commandInputRef
+          : mode === "editor"
+            ? editorInputRef
+            : commandInputRef
     const frame = requestAnimationFrame(() => {
+      if (mode === "editor") {
+        ;(editorInputRef.current ?? editorTextareaRef.current)?.focus()
+        return
+      }
       inputRef.current?.focus()
     })
     return () => cancelAnimationFrame(frame)
-  }, [entityCommand?.id, mode, open, searchResultsState?.kind])
+  }, [
+    editorCommand?.id,
+    entityCommand?.id,
+    mode,
+    open,
+    searchResultsState?.kind,
+  ])
 
+  // Initialize from schema when opening an editor — not on every context change,
+  // which would reset in-progress typing (e.g. add-channel getValue is always "").
   useEffect(() => {
     if (!editorCommand?.editorField) return
     const current = editorCommand.editorField.getValue(context)
     setEditorValue(String(current))
-  }, [context, editorCommand])
+  }, [editorCommand?.id])
 
   const rankedCommands = useMemo(() => {
     return filterAndRank(commands, query, affinityEntries).map(
@@ -455,7 +476,7 @@ export function CommandPalette() {
 
     setEditorValue("")
     requestAnimationFrame(() => {
-      document.getElementById("command-palette-editor")?.focus()
+      ;(editorInputRef.current ?? editorTextareaRef.current)?.focus()
     })
   }
 
@@ -601,6 +622,7 @@ export function CommandPalette() {
               </label>
               {editorCommand.editorField.type === "textarea" ? (
                 <textarea
+                  ref={editorTextareaRef}
                   id="command-palette-editor"
                   value={editorValue}
                   onChange={(event) => setEditorValue(event.target.value)}
@@ -611,6 +633,7 @@ export function CommandPalette() {
                 />
               ) : (
                 <input
+                  ref={editorInputRef}
                   id="command-palette-editor"
                   type={(() => {
                     const field = editorCommand.editorField

@@ -96,7 +96,9 @@ test.describe("Admin user management", () => {
 
     await expect(page.getByText("User updated successfully")).toBeVisible()
     await expect(editDialog).not.toBeVisible()
-    await expect(userRow.getByText(updatedName)).toBeVisible({ timeout: 15_000 })
+    await expect(userRow.getByText(updatedName)).toBeVisible({
+      timeout: 15_000,
+    })
   })
 
   test("Delete a user successfully", async ({ page }) => {

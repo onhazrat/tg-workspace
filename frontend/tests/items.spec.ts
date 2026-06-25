@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test"
-import { createUser } from "./utils/privateApi"
 import { replaceFieldValue } from "./utils/form"
+import { createUser } from "./utils/privateApi"
 import {
   randomEmail,
   randomItemDescription,

@@ -1,5 +1,5 @@
-import { expect, test } from "@playwright/test"
 import type { Page } from "@playwright/test"
+import { expect, test } from "@playwright/test"
 
 import { WORKSPACE_TABS } from "../src/constants"
 import { seedTestChannel } from "./utils/seed-channel"
