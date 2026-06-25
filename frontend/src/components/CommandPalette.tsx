@@ -131,6 +131,24 @@ export function CommandPalette() {
     goBackSubView()
   }
 
+  const handleEditorKeyDown = (
+    event: KeyboardEvent,
+    options: { isTextarea: boolean },
+  ) => {
+    handleSubViewBackspace(event, editorValue)
+    if (event.defaultPrevented) return
+
+    if (event.key !== "Enter") return
+
+    const shouldApply = options.isTextarea
+      ? event.metaKey || event.ctrlKey
+      : true
+    if (!shouldApply) return
+
+    event.preventDefault()
+    void handleEditorApply()
+  }
+
   // Reset input only when palette opens — not when jobToggles object identity changes.
   useEffect(() => {
     if (!open) return
@@ -627,7 +645,7 @@ export function CommandPalette() {
                   value={editorValue}
                   onChange={(event) => setEditorValue(event.target.value)}
                   onKeyDown={(event) =>
-                    handleSubViewBackspace(event, editorValue)
+                    handleEditorKeyDown(event, { isTextarea: true })
                   }
                   className="min-h-28 w-full rounded-md border border-app-ink/20 bg-app-bg p-3 text-sm"
                 />
@@ -651,7 +669,7 @@ export function CommandPalette() {
                   value={editorValue}
                   onChange={(event) => setEditorValue(event.target.value)}
                   onKeyDown={(event) =>
-                    handleSubViewBackspace(event, editorValue)
+                    handleEditorKeyDown(event, { isTextarea: false })
                   }
                   className="w-full rounded-md border border-app-ink/20 bg-app-bg p-3 text-sm"
                 />
