@@ -16,3 +16,4 @@ frontend/blob-report/
 frontend/test-results/
 frontend/playwright/.cache/
 frontend/playwright/.auth/
+frontend/.playwright-browsers/
