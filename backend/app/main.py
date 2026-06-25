@@ -47,7 +47,9 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# Set all CORS enabled origins
+app.add_middleware(APIKeyMiddleware)
+
+# CORS must be outermost so preflight OPTIONS is handled before API key auth.
 if settings.all_cors_origins:
     app.add_middleware(
         CORSMiddleware,
@@ -56,8 +58,6 @@ if settings.all_cors_origins:
         allow_methods=["*"],
         allow_headers=["*"],
     )
-
-app.add_middleware(APIKeyMiddleware)
 
 
 @app.middleware("http")

@@ -58,6 +58,10 @@ class APIKeyMiddleware(BaseHTTPMiddleware):
         request: Request,
         call_next: Callable[[Request], Awaitable[Response]],
     ) -> Response:
+        # Browsers send unauthenticated CORS preflight requests.
+        if request.method == "OPTIONS":
+            return await call_next(request)
+
         path = request.url.path
         if path in _public_paths() or path.startswith("/api/v1/login"):
             return await call_next(request)
