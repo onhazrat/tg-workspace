@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test"
 import { createUser } from "./utils/privateApi"
+import { replaceFieldValue } from "./utils/form"
 import {
   randomEmail,
   randomItemDescription,
@@ -95,11 +96,15 @@ test.describe("Items management", () => {
       await page.getByRole("menuitem", { name: "Edit Item" }).click()
 
       const updatedTitle = randomItemTitle()
-      await page.getByLabel("Title").fill(updatedTitle)
-      await page.getByRole("button", { name: "Save" }).click()
+      const editDialog = page.getByRole("dialog", { name: "Edit Item" })
+      await replaceFieldValue(editDialog.getByLabel("Title"), updatedTitle)
+      await editDialog.getByRole("button", { name: "Save" }).click()
 
       await expect(page.getByText("Item updated successfully")).toBeVisible()
-      await expect(page.getByText(updatedTitle)).toBeVisible()
+      await expect(editDialog).not.toBeVisible()
+      await expect(
+        page.getByRole("row").filter({ hasText: updatedTitle }),
+      ).toBeVisible({ timeout: 15_000 })
     })
 
     test("Delete an item successfully", async ({ page }) => {

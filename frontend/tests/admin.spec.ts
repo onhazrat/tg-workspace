@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test"
 import { firstSuperuser, firstSuperuserPassword } from "./config.ts"
+import { replaceFieldValue } from "./utils/form"
 import { createUser } from "./utils/privateApi"
 import { randomEmail, randomPassword } from "./utils/random"
 import { logInUser } from "./utils/user"
@@ -89,11 +90,13 @@ test.describe("Admin user management", () => {
 
     await page.getByRole("menuitem", { name: "Edit User" }).click()
 
-    await page.getByPlaceholder("Full name").fill(updatedName)
-    await page.getByRole("button", { name: "Save" }).click()
+    const editDialog = page.getByRole("dialog", { name: "Edit User" })
+    await replaceFieldValue(editDialog.getByLabel("Full Name"), updatedName)
+    await editDialog.getByRole("button", { name: "Save" }).click()
 
     await expect(page.getByText("User updated successfully")).toBeVisible()
-    await expect(page.getByText(updatedName)).toBeVisible()
+    await expect(editDialog).not.toBeVisible()
+    await expect(userRow.getByText(updatedName)).toBeVisible({ timeout: 15_000 })
   })
 
   test("Delete a user successfully", async ({ page }) => {

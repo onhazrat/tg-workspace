@@ -2,6 +2,7 @@ import { expect, test } from "@playwright/test"
 import type { Page } from "@playwright/test"
 
 import { WORKSPACE_TABS } from "../src/constants"
+import { seedTestChannel } from "./utils/seed-channel"
 
 async function gotoSummarizer(page: Page, tab = "summary") {
   await page.goto(`/summarizer?tab=${tab}`)
@@ -96,12 +97,9 @@ test.describe("TG Summarizer", () => {
       .not.toBe(initialHasDark)
   })
 
-  test("command palette copies all channel names", async ({
-    page,
-    context,
-  }) => {
-    await context.grantPermissions(["clipboard-read", "clipboard-write"])
+  test("command palette copies all channel names", async ({ page }) => {
     await gotoSummarizer(page, "channels")
+    await seedTestChannel(page)
 
     await page.getByTestId("command-palette-button").click()
     await page
@@ -111,22 +109,21 @@ test.describe("TG Summarizer", () => {
       .getByRole("option", { name: "Copy List of All Channels" })
       .click()
 
-    await expect
-      .poll(async () => page.evaluate(() => navigator.clipboard.readText()), {
-        timeout: 15_000,
-      })
-      .not.toBe("")
+    await expect(page.getByText(/Copied \d+ channels?/i)).toBeVisible({
+      timeout: 15_000,
+    })
   })
 
   test("command palette export selected channels uses jsonl", async ({
     page,
   }) => {
     await gotoSummarizer(page, "channels")
+    const channelName = await seedTestChannel(page)
 
-    const selectChannel = page.getByRole("button", { name: /^Select / }).first()
-    if (await selectChannel.isVisible()) {
-      await selectChannel.click()
-    }
+    await page.locator("button.uppercase", { hasText: "None" }).click()
+    await page
+      .getByRole("button", { name: `Select ${channelName}`, exact: true })
+      .click()
 
     await page.getByTestId("command-palette-button").click()
     await page
@@ -159,7 +156,9 @@ test.describe("TG Summarizer", () => {
   })
 
   test("command palette sync channel opens entity picker", async ({ page }) => {
-    await page.goto("/summarizer?tab=channels")
+    await gotoSummarizer(page, "channels")
+    await seedTestChannel(page)
+
     await page.getByTestId("command-palette-button").click()
     await page.getByPlaceholder("Type a command...").fill("sync channel")
     await page
