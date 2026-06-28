@@ -30,6 +30,7 @@ import {
   AUTO_SYNC_INTERVAL_MAX_MINUTES,
   AUTO_SYNC_INTERVAL_MIN_MINUTES,
 } from "@/constants"
+import { addChannelByName } from "@/lib/channels/add-channel"
 import { deleteChannelByRecord } from "@/lib/channels/delete-channel"
 import { useData } from "../contexts/DataContext"
 import { useScraper } from "../contexts/ScraperContext"
