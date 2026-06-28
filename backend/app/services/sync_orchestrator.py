@@ -11,7 +11,7 @@ from datetime import datetime
 from typing import Any, Literal
 
 import httpx
-from sqlmodel import Session, col, select
+from sqlmodel import Session, col, func, select
 
 from app.core.config import settings
 from app.core.db import engine
@@ -344,6 +344,8 @@ class _ChannelSyncCtx:
     tor_control_enabled: bool
     tor_control_port: int
     retrieval_pass: str
+    needs_backfill: bool
+    min_stored_post_id: int | None
     scrape_cutoff_ms: int
     effective_start_time: int
 
@@ -381,6 +383,15 @@ def _prepare_channel_sync(
             ).first()
             is not None
         )
+        min_stored_post_id: int | None = None
+        if has_existing_posts:
+            min_row = session.exec(
+                select(func.min(Post.post_id)).where(Post.channel_name == channel.name)
+            ).one()
+            if min_row is not None:
+                min_stored_post_id = int(min_row)
+
+        needs_backfill = has_existing_posts and not channel.history_complete_to_cutoff
 
         proxy_default, proxy_overrides = resolve_proxy_concurrency(network)
         return "ok", _ChannelSyncCtx(
@@ -401,6 +412,8 @@ def _prepare_channel_sync(
                 or settings.TOR_CONTROL_PORT
             ),
             retrieval_pass="incremental" if has_existing_posts else "initial",
+            needs_backfill=needs_backfill,
+            min_stored_post_id=min_stored_post_id,
             scrape_cutoff_ms=scrape_cutoff_ms,
             effective_start_time=scrape_cutoff_ms,
         )
@@ -499,7 +512,7 @@ def _apply_scrape_page(
             result.break_incremental = True
 
         posts_to_save = _posts_to_save(channel.name, posts)
-        if ctx.retrieval_pass == "incremental" and existing_on_page:
+        if ctx.retrieval_pass in ("incremental", "backfill") and existing_on_page:
             posts_to_save = [
                 p for p in posts_to_save if p["id"] not in existing_on_page
             ]
@@ -544,7 +557,7 @@ def _apply_scrape_page(
 
         oldest_ts = min((p.get("timestamp") or 0 for p in posts), default=0)
         if (
-            ctx.retrieval_pass == "initial"
+            ctx.retrieval_pass in ("initial", "backfill")
             and ctx.scrape_cutoff_ms > 0
             and oldest_ts < ctx.scrape_cutoff_ms
         ):
@@ -750,6 +763,7 @@ async def sync_single_channel(
             before_id: int | None = None
             iterations = 0
             stop_sync = False
+            in_backfill = False
 
             while not stop_sync and not job.cancel_event.is_set():
                 if iterations >= settings.SCRAPER_ITERATION_LIMIT:
@@ -815,9 +829,22 @@ async def sync_single_channel(
                             proxy_concurrency=ctx.proxy_concurrency,
                         )
 
-                stop_sync = page_result.stop_sync
                 if page_result.break_incremental:
+                    if ctx.needs_backfill and not in_backfill:
+                        in_backfill = True
+                        ctx.retrieval_pass = "backfill"
+                        before_id = ctx.min_stored_post_id
+                        continue
                     break
+
+                stop_sync = page_result.stop_sync
+                if stop_sync and ctx.needs_backfill and not in_backfill:
+                    in_backfill = True
+                    ctx.retrieval_pass = "backfill"
+                    before_id = ctx.min_stored_post_id
+                    stop_sync = False
+                    continue
+
                 before_id = page_result.next_before_id
 
             await run_db(

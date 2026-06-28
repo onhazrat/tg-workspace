@@ -118,7 +118,7 @@ class Settings(BaseSettings):
     AUTO_SYNC_PAUSE_DURATION_MS: int = 10 * 60 * 1000
     AUTO_SYNC_FAILURE_THRESHOLD_MIN: int = 3
     SCRAPER_MAX_POSTS_PER_CHANNEL: int = 300
-    SCRAPER_ITERATION_LIMIT: int = 15
+    SCRAPER_ITERATION_LIMIT: int = 50
 
     # Background job scheduler intervals
     EMBEDDINGS_JOB_INTERVAL_SECONDS: int = 60

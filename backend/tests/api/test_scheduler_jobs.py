@@ -169,6 +169,69 @@ def test_auto_sync_triggers_stale_channels(
     assert any(name == "stale-ch" for _id, name in called_entries)
 
 
+@patch("app.jobs.auto_sync.run_sync_job", new_callable=AsyncMock)
+@patch("app.jobs.auto_sync.create_job", new_callable=AsyncMock)
+def test_auto_sync_includes_fresh_partial_history_channels(
+    mock_create: AsyncMock,
+    mock_run: AsyncMock,
+) -> None:
+    clear_jobs_for_tests()
+    now = int(time.time() * 1000)
+
+    with Session(engine) as session:
+        save_setting(
+            session,
+            "sync",
+            {
+                "autoSyncEnabled": True,
+                "autoSyncInterval": 60,
+                "consecutiveFailures": 0,
+                "autoSyncPauseUntil": None,
+                "autoSyncPartialCursor": 0,
+            },
+        )
+        operator_id = get_operator_user_id(session)
+        net_row = get_network_setting_row(session)
+        if net_row and operator_id:
+            net_row.user_id = operator_id
+            session.add(net_row)
+
+        _freeze_channels_except(session, {"partial-ch"})
+        partial = session.get(Channel, "partial-ch")
+        if partial:
+            partial.last_updated = now
+            partial.history_complete_to_cutoff = False
+            partial.user_id = operator_id
+            partial.is_frozen = False
+            session.add(partial)
+        else:
+            session.add(
+                Channel(
+                    id="partial-ch",
+                    name="partial-ch",
+                    last_updated=now,
+                    history_complete_to_cutoff=False,
+                    user_id=operator_id,
+                )
+            )
+        session.commit()
+
+    mock_job = MagicMock()
+    mock_job.job_id = "job-partial"
+    mock_job.status = "completed"
+    mock_job.channels = {"partial-ch": MagicMock(status="success")}
+    mock_create.return_value = mock_job
+
+    result = asyncio.run(run_auto_sync())
+    assert result.get("partial") == 1
+    mock_create.assert_awaited_once()
+    called_entries = (
+        mock_create.await_args.kwargs.get("channel_entries")
+        or mock_create.await_args.args[0]
+    )
+    assert any(name == "partial-ch" for _id, name in called_entries)
+
+
 def test_retention_deletes_old_posts() -> None:
     now = int(time.time() * 1000)
     with Session(engine) as session:

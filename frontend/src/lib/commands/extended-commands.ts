@@ -4,6 +4,10 @@ import { api } from "@/api"
 import { JOB_LABELS, SERVER_JOB_IDS } from "@/hooks/useJobToggles"
 import { clearTable } from "@/lib/cache"
 import {
+  backfillSyncChannel,
+  bulkBackfillPartialHistoryChannels,
+} from "@/lib/channels/backfill-sync"
+import {
   addTagToChannel,
   selectChannelsByTag,
 } from "@/lib/channels/channel-tags"
@@ -11,7 +15,6 @@ import { deleteSelectedChannels } from "@/lib/channels/delete-selected"
 import { refreshChannelMetadata } from "@/lib/channels/refresh-metadata"
 import {
   bulkResetSyncAllChannels,
-  bulkResetSyncPartialHistoryChannels,
   resetAndSyncChannel,
 } from "@/lib/channels/reset-sync"
 import { updateChannelStartId } from "@/lib/channels/update-start-id"
@@ -108,9 +111,9 @@ export function buildExtendedCommands(): CommandDef[] {
       getConfirmDescription: (_ctx, payload) => {
         const channel = payload as Channel | undefined
         if (!channel) {
-          return "Reset stored posts and re-backfill this channel to the retention window?"
+          return "Resume backfill for this channel toward the retention window?"
         }
-        return `Fix partial history for @${channel.name}? Clears stored posts and re-backfills to the retention window.`
+        return `Fix partial history for @${channel.name}? Resumes backfill toward the retention window without clearing stored posts.`
       },
       disabled: partialHistoryDisabled,
       run: async (ctx, payload) => {
@@ -118,7 +121,7 @@ export function buildExtendedCommands(): CommandDef[] {
           (payload as Channel | undefined) ??
           (ctx.palette.confirmPayload as Channel | undefined)
         if (!channel) return
-        await resetAndSyncChannel(channel, ctx)
+        await backfillSyncChannel(channel, ctx)
       },
     },
     {
@@ -239,11 +242,11 @@ export function buildExtendedCommands(): CommandDef[] {
       requiresConfirmation: true,
       getConfirmDescription: (ctx) => {
         const count = filterPartialHistoryChannels(ctx.channels).length
-        return `Fix partial history for ${count} channel(s)? Clears stored posts and re-backfills each to the retention window.`
+        return `Fix partial history for ${count} channel(s)? Resumes backfill toward the retention window without clearing stored posts.`
       },
       disabled: partialHistoryDisabled,
       run: async (ctx) => {
-        await bulkResetSyncPartialHistoryChannels(ctx)
+        await bulkBackfillPartialHistoryChannels(ctx)
       },
     },
     {

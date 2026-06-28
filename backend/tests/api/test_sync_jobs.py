@@ -490,3 +490,166 @@ def test_sync_auto_follow_disabled_skips_forwarded_channel(client: TestClient) -
 
     client.delete(f"{DATA}/channels/no-follow-ch", headers=headers)
     clear_jobs_for_tests()
+
+
+def test_sync_backfill_completes_partial_history_in_multiple_passes(
+    client: TestClient,
+) -> None:
+    """Partial channels resume backfill from oldest stored post across sync runs."""
+    clear_jobs_for_tests()
+    headers = _auth(client)
+
+    with Session(engine) as session:
+        from app.jobs.settings import save_setting
+
+        save_setting(
+            session,
+            "sync",
+            {
+                "globalStartTimeMode": "absolute",
+                "globalStartTimeValue": "2001-09-09T01:46:40+00:00",
+            },
+        )
+        save_setting(session, "retention", {"postRetentionDays": 0, "logRetentionDays": 0})
+
+    client.put(
+        f"{DATA}/channels/backfill-ch",
+        json={
+            "name": "backfill-ch",
+            "displayName": "Backfill",
+            "historyCompleteToCutoff": False,
+        },
+        headers=headers,
+    )
+    client.post(
+        f"{DATA}/posts/bulk",
+        json=[
+            {
+                "id": 200,
+                "channelName": "backfill-ch",
+                "text": "newest stored",
+                "date": "2033-05-18T03:33:20+00:00",
+                "timestamp": 2_000_000_000_000,
+            }
+        ],
+        headers=headers,
+    )
+
+    async def mock_scrape(
+        channel_name: str,
+        *,
+        before_id: int | None = None,
+        **_: object,
+    ) -> dict:
+        if before_id is None:
+            return _mock_page_response(
+                channel_name,
+                [
+                    {
+                        "id": 201,
+                        "text": "head",
+                        "date": "2033-09-09T01:46:40+00:00",
+                        "timestamp": 2_100_000_000_000,
+                    },
+                    {
+                        "id": 200,
+                        "text": "newest stored",
+                        "date": "2033-05-18T03:33:20+00:00",
+                        "timestamp": 2_000_000_000_000,
+                    },
+                ],
+                next_before_id=199,
+            )
+        if before_id == 200:
+            return _mock_page_response(
+                channel_name,
+                [
+                    {
+                        "id": 198,
+                        "text": "mid",
+                        "date": "2017-07-14T02:40:00+00:00",
+                        "timestamp": 1_500_000_000_000,
+                    },
+                    {
+                        "id": 199,
+                        "text": "mid2",
+                        "date": "2017-07-14T02:40:00+00:00",
+                        "timestamp": 1_500_000_000_000,
+                    },
+                ],
+                next_before_id=197,
+            )
+        if before_id in (197, 198):
+            return _mock_page_response(
+                channel_name,
+                [
+                    {
+                        "id": 196,
+                        "text": "old",
+                        "date": "1985-11-05T03:20:00+00:00",
+                        "timestamp": 500_000_000_000,
+                    },
+                    {
+                        "id": 197,
+                        "text": "old2",
+                        "date": "1985-11-05T03:20:00+00:00",
+                        "timestamp": 500_000_000_000,
+                    },
+                ],
+                next_before_id=None,
+            )
+        return _mock_page_response(channel_name, [], next_before_id=None)
+
+    with (
+        patch.object(settings, "SCRAPER_ITERATION_LIMIT", 2),
+        patch(
+            "app.services.sync_orchestrator.scrape_channel_page",
+            new_callable=AsyncMock,
+            side_effect=mock_scrape,
+        ),
+    ):
+        r = client.post(
+            f"{PREFIX}/sync",
+            json={"channelIds": ["backfill-ch"], "source": "Test"},
+            headers=headers,
+        )
+        data = _wait_for_job(client, r.json()["jobId"], headers)
+        assert data["status"] == "completed"
+
+    channels_r = client.get(f"{DATA}/channels", headers=headers)
+    ch = next(c for c in channels_r.json() if c["name"] == "backfill-ch")
+    assert ch["historyCompleteToCutoff"] is False
+
+    posts_r = client.get(
+        f"{DATA}/posts",
+        params={"channelNames": "backfill-ch"},
+        headers=headers,
+    )
+    backfill_posts = [
+        p for p in posts_r.json() if p.get("retrievalPass") == "backfill"
+    ]
+    assert len(backfill_posts) >= 2
+
+    with (
+        patch.object(settings, "SCRAPER_ITERATION_LIMIT", 2),
+        patch(
+            "app.services.sync_orchestrator.scrape_channel_page",
+            new_callable=AsyncMock,
+            side_effect=mock_scrape,
+        ),
+    ):
+        r2 = client.post(
+            f"{PREFIX}/sync",
+            json={"channelIds": ["backfill-ch"], "source": "Test"},
+            headers=headers,
+        )
+        data2 = _wait_for_job(client, r2.json()["jobId"], headers)
+        assert data2["status"] == "completed"
+
+    channels_r2 = client.get(f"{DATA}/channels", headers=headers)
+    ch2 = next(c for c in channels_r2.json() if c["name"] == "backfill-ch")
+    assert ch2["historyCompleteToCutoff"] is True
+    assert ch2["anchorPostId"] == 197
+
+    client.delete(f"{DATA}/channels/backfill-ch", headers=headers)
+    clear_jobs_for_tests()

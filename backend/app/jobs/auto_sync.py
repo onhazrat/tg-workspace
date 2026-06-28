@@ -11,6 +11,7 @@ from sqlmodel import Session
 from app.core.config import settings
 from app.core.db import engine
 from app.jobs.settings import load_sync_settings, save_setting
+from app.models_tg import Channel
 from app.services.network_settings import get_network_setting_row
 from app.services.operator import get_operator_user_id, select_operator_channels
 from app.services.scraper_jobs import create_job, has_active_sync_job
@@ -60,14 +61,42 @@ async def run_auto_sync() -> dict[str, Any]:
             session, operator_id=owner_id, unfrozen_only=True
         )
         stale = [ch for ch in channels if (now - (ch.last_updated or 0)) >= interval_ms]
-        if not stale:
+        stale_ids = {ch.id for ch in stale}
+
+        partial = [
+            ch
+            for ch in channels
+            if not ch.history_complete_to_cutoff and ch.id not in stale_ids
+        ]
+        partial_batch: list[Channel] = []
+        if partial:
+            partial_sorted = sorted(partial, key=lambda ch: ch.id)
+            cursor = int(sync_cfg.get("autoSyncPartialCursor") or 0)
+            batch_size = max(1, int(sync_cfg.get("autoSyncPartialBatchSize") or 1))
+            for i in range(min(batch_size, len(partial_sorted))):
+                idx = (cursor + i) % len(partial_sorted)
+                partial_batch.append(partial_sorted[idx])
+            _update_sync_state(
+                session, {"autoSyncPartialCursor": cursor + len(partial_batch)}
+            )
+
+        to_sync: list[Channel] = []
+        seen_ids: set[str] = set()
+        for ch in stale + partial_batch:
+            if ch.id in seen_ids:
+                continue
+            seen_ids.add(ch.id)
+            to_sync.append(ch)
+
+        if not to_sync:
             return {
                 "skipped": True,
                 "reason": "no_stale_channels",
                 "checked": len(channels),
+                "partialCandidates": len(partial),
             }
 
-        entries = [(ch.id, ch.name) for ch in stale]
+        entries = [(ch.id, ch.name) for ch in to_sync]
         job = await create_job(
             channel_entries=entries,
             source=CHECK_SOURCE,
@@ -99,7 +128,9 @@ async def run_auto_sync() -> dict[str, Any]:
 
         return {
             "jobId": job.job_id,
-            "channels": len(stale),
+            "channels": len(to_sync),
+            "stale": len(stale),
+            "partial": len(partial_batch),
             "failures": len(failures),
             "successes": len(successes),
             "status": job.status,
