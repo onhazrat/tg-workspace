@@ -12,6 +12,7 @@ from typing import Any
 from bs4 import BeautifulSoup
 
 from app.core.config import settings
+from app.services.channel_photos import resolve_cached_photo_url
 from app.services.network import fetch_with_retry
 
 logger = logging.getLogger(__name__)
@@ -101,20 +102,30 @@ def _parse_posts_from_html(
     return posts, next_url
 
 
+def _extract_channel_photo_url(soup: BeautifulSoup) -> str | None:
+    for selector in (
+        ".tgme_channel_info_header .tgme_page_photo_image img",
+        ".tgme_channel_info_header_img img",
+        ".tgme_page_photo_image img",
+    ):
+        photo_el = soup.select_one(selector)
+        if photo_el:
+            src = _attr_str(photo_el.get("src"))
+            if src:
+                return src
+    og_image = soup.select_one("meta[property='og:image']")
+    if og_image:
+        return _attr_str(og_image.get("content"))
+    return None
+
+
 def _parse_channel_meta(soup: BeautifulSoup, channel_name: str) -> dict[str, Any]:
     display = soup.select_one(".tgme_channel_info_header_title span")
     if not display:
         display = soup.select_one(".tgme_page_title span")
     display_name = display.get_text(strip=True) if display else channel_name
 
-    photo_el = soup.select_one(".tgme_channel_info_header_img img")
-    if not photo_el:
-        photo_el = soup.select_one(".tgme_page_photo_image")
-    if not photo_el:
-        photo_el = soup.select_one("meta[property='og:image']")
-    photo_url = None
-    if photo_el:
-        photo_url = photo_el.get("src") or photo_el.get("content")
+    photo_url = _extract_channel_photo_url(soup)
 
     bio_el = soup.select_one(".tgme_channel_info_description")
     bio = bio_el.get_text(strip=True) if bio_el else ""
@@ -265,6 +276,9 @@ async def get_channel_info(
     soup = BeautifulSoup(html, "html.parser")
     result = _parse_channel_meta(soup, channel_name)
     result["telemetry"] = telemetry
+    result["photoUrl"] = await resolve_cached_photo_url(
+        channel_name, result.get("photoUrl")
+    )
     return result
 
 

@@ -10,6 +10,7 @@ from fastapi import HTTPException
 from sqlmodel import Session, col, func, select
 
 from app.models_tg import Channel, Post
+from app.services.channel_photos import delete_cached_photo
 from app.services.serialization import channel_to_camel, normalize_body
 from app.services.sync_meta import touch_sync
 
@@ -175,6 +176,7 @@ def delete_channel(session: Session, channel_id: str) -> dict[str, str]:
         session.delete(post)
     session.delete(ch)
     session.commit()
+    delete_cached_photo(channel_id)
     touch_sync(session, "channels")
     touch_sync(session, "posts")
     return {"status": "deleted"}

@@ -2,7 +2,10 @@ import type { Page } from "@playwright/test"
 import { expect, test } from "@playwright/test"
 
 import { WORKSPACE_TABS } from "../src/constants"
-import { seedTestChannel } from "./utils/seed-channel"
+import {
+  seedPartialHistoryChannel,
+  seedTestChannel,
+} from "./utils/seed-channel"
 
 function paletteModifier() {
   return process.platform === "darwin" ? "Meta" : "Control"
@@ -329,6 +332,51 @@ test.describe("TG Summarizer", () => {
     await expect(
       page.getByRole("option", { name: "Clear Post Filters", exact: true }),
     ).toBeVisible()
+  })
+
+  test("command palette fix all partial history command is available", async ({
+    page,
+  }) => {
+    await gotoSummarizer(page, "channels")
+    await seedPartialHistoryChannel(page)
+
+    await page.getByTestId("command-palette-button").click()
+    await page
+      .getByPlaceholder("Type a command...")
+      .fill("fix all partial history")
+    await expect(
+      page.getByRole("option", {
+        name: "Fix All Partial History",
+        exact: true,
+      }),
+    ).toBeVisible()
+  })
+
+  test("command palette fix partial history opens filtered entity picker", async ({
+    page,
+  }) => {
+    await gotoSummarizer(page, "channels")
+    const partialChannel = await seedPartialHistoryChannel(page)
+    await seedTestChannel(page)
+
+    await page.getByTestId("command-palette-button").click()
+    await page
+      .getByPlaceholder("Type a command...")
+      .fill("fix partial history channel")
+    await page
+      .getByRole("option", {
+        name: "Fix Partial History (Channel)",
+        exact: true,
+      })
+      .click()
+
+    const entityInput = page.getByPlaceholder(entityChannelInputPlaceholder)
+    await expect(entityInput).toBeVisible()
+    await entityInput.fill(partialChannel)
+    await expect(
+      page.getByRole("option", { name: new RegExp(`@${partialChannel}`) }),
+    ).toBeVisible()
+    await expect(page.getByRole("option", { name: /@e2e/ })).not.toBeVisible()
   })
 
   test("command palette show starred summaries toggles badge", async ({
@@ -717,5 +765,28 @@ test.describe("command palette keyboard", () => {
     await closePaletteKeyboard(page)
 
     await expect(card.getByText("Frozen", { exact: true })).not.toBeVisible()
+  })
+
+  test("K18: fix partial history channel stays open after confirm", async ({
+    page,
+  }) => {
+    await gotoSummarizer(page, "channels")
+    const first = await seedPartialHistoryChannel(page)
+    const second = await seedPartialHistoryChannel(page)
+
+    await openPaletteKeyboard(page)
+    await runPaletteCommand(page, "fix partial history channel")
+
+    const entityInput = page.getByPlaceholder(entityChannelInputPlaceholder)
+    for (const name of [first, second]) {
+      await entityInput.fill(name)
+      await entityInput.press("Enter")
+      await expect(page.getByTestId("command-palette-confirm")).toBeVisible()
+      await page.getByTestId("command-palette-confirm-confirm").click()
+      await expect(page.getByTestId("command-palette")).toBeVisible()
+      await expect(entityInput).toBeVisible()
+    }
+
+    await closePaletteKeyboard(page)
   })
 })

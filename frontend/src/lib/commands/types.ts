@@ -40,6 +40,7 @@ export type EntityFlowType =
   | "toggle-auto-follow"
   | "open-post"
   | "reset-sync-channel"
+  | "fix-partial-history-channel"
   | "add-tag-channel"
   | "remove-tag-channel"
   | "remove-tag-pick"

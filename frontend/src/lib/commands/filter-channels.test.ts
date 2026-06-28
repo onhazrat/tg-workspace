@@ -3,6 +3,7 @@ import type { Channel } from "@/types"
 import {
   channelMatchesSearch,
   filterChannelsByQuery,
+  filterPartialHistoryChannels,
   parseChannelSearchQuery,
 } from "./filter-channels"
 
@@ -94,5 +95,20 @@ describe("filterChannelsByQuery", () => {
     expect(
       channelMatchesSearch(sampleChannels[2], "tag-only", "anything"),
     ).toBe(false)
+  })
+})
+
+describe("filterPartialHistoryChannels", () => {
+  test("returns only channels with historyCompleteToCutoff === false", () => {
+    const channels: Channel[] = [
+      { id: "1", name: "complete", historyCompleteToCutoff: true },
+      { id: "2", name: "partial", historyCompleteToCutoff: false },
+      { id: "3", name: "unknown" },
+      { id: "4", name: "also-partial", historyCompleteToCutoff: false },
+    ]
+    expect(filterPartialHistoryChannels(channels).map((c) => c.name)).toEqual([
+      "partial",
+      "also-partial",
+    ])
   })
 })

@@ -19,6 +19,7 @@ from app.schemas.telegram import (
     ScrapeRequest,
 )
 from app.services.network import fetch_with_retry, parse_telegram_entities
+from app.services.channel_photos import read_cached_photo
 from app.services.network_settings import (
     load_network_settings,
     resolve_proxies_for_user,
@@ -279,6 +280,18 @@ async def api_publish(
     except Exception as exc:  # noqa: BLE001
         logger.exception("Publish request failed")
         raise HTTPException(status_code=500, detail="Publish request failed") from exc
+
+
+@router.get("/channel-photo/{channel_id}")
+async def api_channel_photo(
+    channel_id: str,
+    _current_user: CurrentUser,
+) -> Response:
+    cached = read_cached_photo(channel_id)
+    if not cached:
+        raise HTTPException(status_code=404, detail="Channel photo not found")
+    content, content_type = cached
+    return Response(content=content, media_type=content_type)
 
 
 @router.get("/bot-file/{credential_id}")

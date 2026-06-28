@@ -1,3 +1,4 @@
+import { filterPartialHistoryChannels } from "@/lib/commands/filter-channels"
 import type { CommandContext, EntityFlowType } from "@/lib/commands/types"
 import { upsertChannel } from "@/lib/repository"
 import type { Channel } from "@/types"
@@ -28,6 +29,8 @@ export function getEntityCandidates(
       return ctx.channels.filter((channel) => channel.isFrozen)
     case "toggle-auto-follow":
       return ctx.channels
+    case "fix-partial-history-channel":
+      return filterPartialHistoryChannels(ctx.channels)
     case "sync-channel":
     case "delete-channel":
     case "reset-sync-channel":

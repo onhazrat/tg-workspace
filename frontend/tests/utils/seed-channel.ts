@@ -58,3 +58,73 @@ export async function seedTestChannel(
 
   return name
 }
+
+export async function seedPartialHistoryChannel(
+  page: Page,
+  channelName?: string,
+): Promise<string> {
+  const name = channelName ?? `partial${Date.now()}`
+
+  await page.evaluate(
+    async ({ seedName }) => {
+      const token = localStorage.getItem("access_token")
+      if (!token) {
+        throw new Error("seedPartialHistoryChannel: missing access_token")
+      }
+
+      const headers = {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      }
+
+      const createResponse = await fetch(`/api/v1/data/channels/${seedName}`, {
+        method: "PUT",
+        headers,
+        body: JSON.stringify({
+          id: seedName,
+          name: seedName,
+          historyCompleteToCutoff: false,
+        }),
+      })
+      if (!createResponse.ok) {
+        throw new Error(
+          `seedPartialHistoryChannel failed (${createResponse.status}): ${await createResponse.text()}`,
+        )
+      }
+    },
+    { seedName: name },
+  )
+
+  await expect
+    .poll(async () => {
+      return page.evaluate(async (seedName) => {
+        const token = localStorage.getItem("access_token")
+        if (!token) return false
+
+        const response = await fetch("/api/v1/data/channels", {
+          headers: { Authorization: `Bearer ${token}` },
+        })
+        if (!response.ok) return false
+
+        const channels = (await response.json()) as Array<{
+          name: string
+          historyCompleteToCutoff?: boolean
+        }>
+        return channels.some(
+          (channel) =>
+            channel.name === seedName &&
+            channel.historyCompleteToCutoff === false,
+        )
+      }, name)
+    })
+    .toBe(true)
+
+  await page.reload()
+  await expect(page.getByTestId("command-palette-button")).toBeVisible()
+  await page.getByPlaceholder("Search channels...").fill(name)
+  await expect(page.locator(`[data-channel-name="${name}"]`)).toBeVisible({
+    timeout: 15_000,
+  })
+
+  return name
+}

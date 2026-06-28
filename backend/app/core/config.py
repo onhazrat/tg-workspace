@@ -161,6 +161,9 @@ class Settings(BaseSettings):
     TELEGRAM_API_RETRIES: int = 3
     TELEGRAM_API_INITIAL_DELAY_MS: int = 2000
 
+    # Cached channel avatar images (relative to repo root unless absolute)
+    CHANNEL_PHOTO_DIR: str = "data/channel-photos"
+
     @computed_field  # type: ignore[prop-decorator]
     @property
     def default_proxies(self) -> list[str]:

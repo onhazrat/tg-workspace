@@ -48,3 +48,8 @@ export function filterChannelsByQuery(
 
   return channels.filter((channel) => channelMatchesSearch(channel, mode, term))
 }
+
+/** Channels whose stored posts do not reach the scrape retention cutoff. */
+export function filterPartialHistoryChannels(channels: Channel[]): Channel[] {
+  return channels.filter((channel) => channel.historyCompleteToCutoff === false)
+}

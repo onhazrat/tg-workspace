@@ -69,6 +69,8 @@ function getStayOpenAnnouncement(flow: EntityFlowType): string {
       return "Channel unfrozen, palette open"
     case "toggle-auto-follow":
       return "Auto-follow toggled, palette open"
+    case "fix-partial-history-channel":
+      return "Partial history fix queued, palette open"
     default:
       return "Selection updated, palette open"
   }
@@ -335,6 +337,23 @@ export function CommandPalette() {
     close()
   }
 
+  const finishEntityConfirm = async (
+    command: CommandDef,
+    payload?: unknown,
+  ) => {
+    await command.run(context, payload)
+    await context.loadChannels()
+    popMode()
+    setEntityQuery("")
+    const flow = entityCommand?.entityFlow
+    if (flow) {
+      setLiveAnnouncement(getStayOpenAnnouncement(flow))
+    }
+    requestAnimationFrame(() => {
+      entityInputRef.current?.focus()
+    })
+  }
+
   const handleSelectCommand = async (command: CommandDef) => {
     const disabled = command.disabled?.(context)
     if (disabled?.disabled) return
@@ -469,7 +488,11 @@ export function CommandPalette() {
       return
     }
 
-    if (flow === "reset-sync-channel" && entityCommand.requiresConfirmation) {
+    if (
+      (flow === "reset-sync-channel" ||
+        flow === "fix-partial-history-channel") &&
+      entityCommand.requiresConfirmation
+    ) {
       palette.openConfirm(entityCommand, channel)
       return
     }
@@ -746,6 +769,13 @@ export function CommandPalette() {
             onConfirm={async () => {
               const command = palette.pendingCommand
               if (!command) return
+              const stayInEntity =
+                entityCommand?.closeOnPick === false &&
+                command.id === entityCommand.id
+              if (stayInEntity) {
+                await finishEntityConfirm(command, palette.confirmPayload)
+                return
+              }
               await finishCommand(command, undefined, palette.confirmPayload)
             }}
           />
@@ -866,13 +896,16 @@ export function CommandPalette() {
                 {entityCommand.entityFlow === "deselect-channel" &&
                 !entityQuery.trim()
                   ? "No channels selected."
-                  : entityCommand.entityFlow === "pick-post"
-                    ? "No posts in current filter. Try widening the date range."
-                    : entityCommand.entityFlow === "delete-summary"
-                      ? "No summaries in history."
-                      : entityCommand.entityFlow === "remove-tag-pick"
-                        ? "No tags on this channel."
-                        : "No matches found."}
+                  : entityCommand.entityFlow ===
+                        "fix-partial-history-channel" && !entityQuery.trim()
+                    ? "No channels with partial history."
+                    : entityCommand.entityFlow === "pick-post"
+                      ? "No posts in current filter. Try widening the date range."
+                      : entityCommand.entityFlow === "delete-summary"
+                        ? "No summaries in history."
+                        : entityCommand.entityFlow === "remove-tag-pick"
+                          ? "No tags on this channel."
+                          : "No matches found."}
               </CommandEmpty>
               <CommandGroup
                 heading={

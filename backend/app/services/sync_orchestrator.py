@@ -39,6 +39,7 @@ from app.services.post_sync_state import (
 )
 from app.services.posts import bulk_upsert_posts_impl
 from app.services.scraper import get_channel_info, scrape_channel_page
+from app.services.channel_photos import resolve_cached_photo_url
 from app.services.scraper_jobs import (
     ChannelSyncState,
     SyncJobState,
@@ -767,6 +768,11 @@ async def sync_single_channel(
                     tor_control_enabled=ctx.tor_control_enabled,
                     tor_control_port=ctx.tor_control_port,
                     proxy_concurrency=ctx.proxy_concurrency,
+                )
+
+                response["photoUrl"] = await resolve_cached_photo_url(
+                    ctx.channel_id,
+                    response.get("photoUrl") or None,
                 )
 
                 if response.get("fullRequest"):

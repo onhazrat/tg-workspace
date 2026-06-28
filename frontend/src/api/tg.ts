@@ -35,4 +35,9 @@ export const tgApi = {
     const qs = new URLSearchParams({ path })
     return requestBlob(`/api/v1/telegram/bot-file/${credentialId}?${qs}`)
   },
+
+  fetchChannelPhoto: (channelId: string) =>
+    requestBlob(
+      `/api/v1/telegram/channel-photo/${encodeURIComponent(channelId)}`,
+    ),
 }

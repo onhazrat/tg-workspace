@@ -27,6 +27,7 @@ import { useSettings } from "../contexts/SettingsContext"
 import { useUI } from "../contexts/UIContext"
 import { upsertChannel } from "../lib/repository"
 import type { Channel } from "../types"
+import { ChannelAvatar } from "./ChannelAvatar"
 import { RelativeTime } from "./RelativeTime"
 import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tg-tooltip"
 
@@ -34,24 +35,6 @@ interface ChannelCardProps {
   channel: Channel
   handleRemoveChannel: (channel: Channel) => void
   handleResetAndSync: (channel: Channel) => void
-}
-
-// Helper to generate a consistent gradient based on channel name
-const getGradientFromName = (name: string) => {
-  const gradients = [
-    "from-blue-400 to-blue-600",
-    "from-emerald-400 to-emerald-600",
-    "from-violet-400 to-violet-600",
-    "from-amber-400 to-orange-500",
-    "from-pink-400 to-rose-500",
-    "from-cyan-400 to-blue-500",
-  ]
-  let hash = 0
-  for (let i = 0; i < name.length; i++) {
-    hash = name.charCodeAt(i) + ((hash << 5) - hash)
-  }
-  const index = Math.abs(hash) % gradients.length
-  return gradients[index]
 }
 
 export const ChannelCard: React.FC<ChannelCardProps> = ({
@@ -162,8 +145,6 @@ export const ChannelCard: React.FC<ChannelCardProps> = ({
       prev.map((c) => (c.id === channel.id ? updatedChannel : c)),
     )
   }
-
-  const gradientClass = getGradientFromName(channel.name)
 
   return (
     <div
@@ -353,20 +334,7 @@ export const ChannelCard: React.FC<ChannelCardProps> = ({
         {/* Header Section */}
         <div className="flex items-start gap-4 mb-4">
           <div className="relative flex-shrink-0">
-            <div
-              className={`w-14 h-14 rounded-full overflow-hidden flex items-center justify-center text-white font-bold text-xl shadow-inner bg-gradient-to-br ${gradientClass}`}
-            >
-              {channel.photoUrl ? (
-                <img
-                  src={channel.photoUrl}
-                  alt={channel.displayName || channel.name}
-                  className="w-full h-full object-cover"
-                  referrerPolicy="no-referrer"
-                />
-              ) : (
-                (channel.displayName || channel.name)[0].toUpperCase()
-              )}
-            </div>
+            <ChannelAvatar channel={channel} />
             <Tooltip>
               <TooltipTrigger asChild>
                 <a

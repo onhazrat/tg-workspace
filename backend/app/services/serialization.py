@@ -18,6 +18,7 @@ from app.models_tg import (
     PublishLog,
     SyncLog,
 )
+from app.services.channel_photos import channel_photo_api_path, has_cached_photo
 
 _CAMEL_OVERRIDES = {
     "display_name": "displayName",
@@ -98,11 +99,14 @@ def model_to_camel(row: Any, *, skip: frozenset[str] = frozenset()) -> dict[str,
 
 
 def channel_to_camel(ch: Channel) -> dict[str, Any]:
+    photo_url = ch.photo_url
+    if has_cached_photo(ch.id):
+        photo_url = channel_photo_api_path(ch.id)
     return {
         "id": ch.id,
         "name": ch.name,
         "displayName": ch.display_name,
-        "photoUrl": ch.photo_url,
+        "photoUrl": photo_url,
         "bio": ch.bio,
         "subscribers": ch.subscribers,
         "photos": ch.photos,

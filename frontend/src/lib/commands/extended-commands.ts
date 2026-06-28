@@ -11,9 +11,11 @@ import { deleteSelectedChannels } from "@/lib/channels/delete-selected"
 import { refreshChannelMetadata } from "@/lib/channels/refresh-metadata"
 import {
   bulkResetSyncAllChannels,
+  bulkResetSyncPartialHistoryChannels,
   resetAndSyncChannel,
 } from "@/lib/channels/reset-sync"
 import { updateChannelStartId } from "@/lib/channels/update-start-id"
+import { filterPartialHistoryChannels } from "@/lib/commands/filter-channels"
 import { parseOpenPostInput } from "@/lib/commands/open-post"
 import {
   applyForwardedFilter,
@@ -47,6 +49,16 @@ function embeddingsDisabled(ctx: CommandContext) {
   return { disabled: false }
 }
 
+function partialHistoryDisabled(ctx: CommandContext) {
+  if (ctx.isOffline) {
+    return { disabled: true, reason: "Server offline" }
+  }
+  if (filterPartialHistoryChannels(ctx.channels).length === 0) {
+    return { disabled: true, reason: "No channels with partial history" }
+  }
+  return { disabled: false }
+}
+
 export function buildExtendedCommands(): CommandDef[] {
   const commands: CommandDef[] = [
     // --- Channels ---
@@ -66,6 +78,41 @@ export function buildExtendedCommands(): CommandDef[] {
         return `Reset & sync @${channel.name}? Clears local posts and re-backfills from ID ${channel.startId ?? 1}.`
       },
       disabled: offlineDisabled("Server offline"),
+      run: async (ctx, payload) => {
+        const channel =
+          (payload as Channel | undefined) ??
+          (ctx.palette.confirmPayload as Channel | undefined)
+        if (!channel) return
+        await resetAndSyncChannel(channel, ctx)
+      },
+    },
+    {
+      id: "fix-partial-history-channel",
+      kind: "entity-root",
+      label: "Fix Partial History (Channel)",
+      keywords: [
+        "channel",
+        "partial",
+        "history",
+        "incomplete",
+        "cutoff",
+        "retention",
+        "backfill",
+        "reset",
+        "sync",
+      ],
+      group: "Sync",
+      entityFlow: "fix-partial-history-channel",
+      closeOnPick: false,
+      requiresConfirmation: true,
+      getConfirmDescription: (_ctx, payload) => {
+        const channel = payload as Channel | undefined
+        if (!channel) {
+          return "Reset stored posts and re-backfill this channel to the retention window?"
+        }
+        return `Fix partial history for @${channel.name}? Clears stored posts and re-backfills to the retention window.`
+      },
+      disabled: partialHistoryDisabled,
       run: async (ctx, payload) => {
         const channel =
           (payload as Channel | undefined) ??
@@ -170,6 +217,33 @@ export function buildExtendedCommands(): CommandDef[] {
         await api.putSetting("sync", { autoSyncPauseUntil: until })
         ctx.setAutoSyncPauseUntil(until)
         toast.success("Auto-sync paused for 10 minutes")
+      },
+    },
+    {
+      id: "fix-all-partial-history",
+      kind: "action",
+      label: "Fix All Partial History",
+      keywords: [
+        "partial",
+        "history",
+        "incomplete",
+        "cutoff",
+        "retention",
+        "backfill",
+        "reset",
+        "sync",
+        "bulk",
+        "all",
+      ],
+      group: "Sync",
+      requiresConfirmation: true,
+      getConfirmDescription: (ctx) => {
+        const count = filterPartialHistoryChannels(ctx.channels).length
+        return `Fix partial history for ${count} channel(s)? Clears stored posts and re-backfills each to the retention window.`
+      },
+      disabled: partialHistoryDisabled,
+      run: async (ctx) => {
+        await bulkResetSyncPartialHistoryChannels(ctx)
       },
     },
     {
@@ -519,6 +593,7 @@ export async function runChainedChannelEntityPick(
 ): Promise<"editor" | "tag-pick" | "confirm" | "done" | null> {
   switch (flow) {
     case "reset-sync-channel":
+    case "fix-partial-history-channel":
       return "confirm"
     case "add-tag-channel":
       ctx.palette.setEntityPayload(channel)
