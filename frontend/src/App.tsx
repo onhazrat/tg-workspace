@@ -183,7 +183,7 @@ export default function App() {
       </a>
       <main
         id="main-content"
-        className="flex-1 flex flex-col p-4 md:p-8 max-w-7xl mx-auto w-full"
+        className="app-shell flex-1 flex flex-col p-4 md:p-8"
       >
         {/* Offline Banner */}
         <AnimatePresence>

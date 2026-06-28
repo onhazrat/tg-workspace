@@ -19,6 +19,13 @@
     ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono",
     "Courier New", "Vazirmatn", monospace;
   --font-persian: "Vazirmatn", sans-serif;
+  --max-width-app: 80rem;
+  --max-width-app-xl: 90rem;
+  --max-width-app-2xl: 100rem;
+}
+
+@utility app-shell {
+  @apply mx-auto w-full max-w-app xl:max-w-app-xl 2xl:max-w-app-2xl;
 }
 
 :root {

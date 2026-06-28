@@ -373,7 +373,7 @@ export const SettingsView: React.FC<{ activeSection?: string }> = ({
       key="settings"
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
-      className="space-y-8 max-w-5xl pb-20"
+      className="space-y-8 pb-20"
     >
       <div className="flex flex-col gap-4 mb-6">
         <div className="flex justify-between items-end">
