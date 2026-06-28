@@ -62,16 +62,7 @@ def update_channel_coverage(
     session.add(channel)
 
 
-def compute_channel_stats(session: Session, channel_name: str) -> dict[str, Any] | None:
-    posts = session.exec(
-        select(Post)
-        .where(Post.channel_name == channel_name)
-        .order_by(col(Post.post_id))
-    ).all()
-    if not posts:
-        return None
-    post_ids = [p.post_id for p in posts]
-    timestamps = sorted(p.timestamp for p in posts if p.timestamp)
+def _velocity_from_timestamps(timestamps: list[int]) -> float:
     velocity = 0.0
     if len(timestamps) >= 2:
         recent = timestamps[-100:]
@@ -87,12 +78,76 @@ def compute_channel_stats(session: Session, channel_name: str) -> dict[str, Any]
             ema_diff = alpha * time_since_last + (1 - alpha) * ema_diff
         if ema_diff > 0:
             velocity = 1 / ema_diff
+    return velocity
+
+
+def _fetch_channel_aggregates(
+    session: Session, channel_names: list[str]
+) -> dict[str, dict[str, int]]:
+    rows = session.exec(
+        select(
+            Post.channel_name,
+            func.count().label("count"),
+            func.min(Post.post_id).label("min_id"),
+            func.max(Post.post_id).label("max_id"),
+        )
+        .where(col(Post.channel_name).in_(channel_names))
+        .group_by(Post.channel_name)
+    ).all()
     return {
-        "count": len(posts),
-        "minId": min(post_ids),
-        "maxId": max(post_ids),
-        "velocity": velocity,
+        name: {"count": count, "minId": min_id, "maxId": max_id}
+        for name, count, min_id, max_id in rows
     }
+
+
+def _fetch_recent_timestamps_by_channel(
+    session: Session,
+    channel_names: list[str],
+    *,
+    limit: int = 100,
+) -> dict[str, list[int]]:
+    rn = func.row_number().over(
+        partition_by=Post.channel_name,
+        order_by=col(Post.timestamp).desc(),
+    ).label("rn")
+    ranked = (
+        select(Post.channel_name, Post.timestamp, rn).where(
+            col(Post.channel_name).in_(channel_names),
+            Post.timestamp > 0,
+        )
+    ).subquery()
+    rows = session.exec(
+        select(ranked.c.channel_name, ranked.c.timestamp).where(ranked.c.rn <= limit)
+    ).all()
+    by_channel: dict[str, list[int]] = {}
+    for channel_name, timestamp in rows:
+        by_channel.setdefault(channel_name, []).append(timestamp)
+    for name in by_channel:
+        by_channel[name].sort()
+    return by_channel
+
+
+def compute_channel_stats(session: Session, channel_name: str) -> dict[str, Any] | None:
+    return compute_channel_stats_batch(session, [channel_name]).get(channel_name)
+
+
+def compute_channel_stats_batch(
+    session: Session, channel_names: list[str]
+) -> dict[str, dict[str, Any]]:
+    """Return stats keyed by channel name (one round-trip for the frontend)."""
+    if not channel_names:
+        return {}
+    aggregates = _fetch_channel_aggregates(session, channel_names)
+    timestamps_by_channel = _fetch_recent_timestamps_by_channel(session, channel_names)
+    out: dict[str, dict[str, Any]] = {}
+    for name, agg in aggregates.items():
+        out[name] = {
+            "count": agg["count"],
+            "minId": agg["minId"],
+            "maxId": agg["maxId"],
+            "velocity": _velocity_from_timestamps(timestamps_by_channel.get(name, [])),
+        }
+    return out
 
 
 def channel_names_for_operator(
@@ -103,18 +158,6 @@ def channel_names_for_operator(
     return {
         ch.name for ch in select_operator_channels(session, operator_id=operator_id)
     }
-
-
-def compute_channel_stats_batch(
-    session: Session, channel_names: list[str]
-) -> dict[str, dict[str, Any]]:
-    """Return stats keyed by channel name (one round-trip for the frontend)."""
-    out: dict[str, dict[str, Any]] = {}
-    for name in channel_names:
-        stats = compute_channel_stats(session, name)
-        if stats:
-            out[name] = stats
-    return out
 
 
 def apply_channel_fields(ch: Channel, body: dict[str, Any]) -> None:

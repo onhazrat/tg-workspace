@@ -128,3 +128,45 @@ def test_delete_old_logs(client: TestClient) -> None:
     )
     assert r.status_code == 200
     assert r.json()["total"] >= 1
+
+
+def test_list_channels_include_stats(client: TestClient) -> None:
+    headers = _auth(client)
+    now_ms = int(time.time() * 1000)
+    client.put(
+        f"{PREFIX}/channels/stats-list-ch",
+        json={"name": "stats-list-ch"},
+        headers=headers,
+    )
+    posts = [
+        {
+            "id": 1,
+            "channelName": "stats-list-ch",
+            "text": "first",
+            "date": "2024-01-01",
+            "timestamp": now_ms - 3_600_000,
+        },
+        {
+            "id": 2,
+            "channelName": "stats-list-ch",
+            "text": "second",
+            "date": "2024-01-02",
+            "timestamp": now_ms - 1_800_000,
+        },
+    ]
+    client.post(f"{PREFIX}/posts/bulk", json=posts, headers=headers)
+
+    r = client.get(
+        f"{PREFIX}/channels",
+        params={"includeStats": True},
+        headers=headers,
+    )
+    assert r.status_code == 200
+    row = next(c for c in r.json() if c["name"] == "stats-list-ch")
+    stats = row["stats"]
+    assert stats["count"] == 2
+    assert stats["minId"] == 1
+    assert stats["maxId"] == 2
+    assert stats["velocity"] > 0
+
+    client.delete(f"{PREFIX}/channels/stats-list-ch", headers=headers)
