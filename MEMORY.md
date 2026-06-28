@@ -1,6 +1,6 @@
 # TG Summarizer — Project Memory
 
-> Last synced: 2026-06-28 (resume backfill + partial-history palette commands)
+> Last synced: 2026-06-28 (numeric settings UX + app-shell layout)
 
 ## Purpose
 
@@ -10,9 +10,9 @@ Self-hosted Telegram channel summarizer. Migrated from browser-heavy `TG-Summari
 
 - **`backend/`** — FastAPI (`app/main.py`), SQLModel (`app/models_tg.py`), Alembic, services (`scraper.py`, `sync_orchestrator.py`, `proxy_pool.py`, …), APScheduler jobs, pluggable AI (`app/ai/`, Gemini first).
 - **`frontend/`** — React 19 + Vite + TanStack Router/Query; dual-route UI:
-  - **`/_tg/summarizer`** — full-screen TG app (`App.tsx` + `TgProviders`); **command palette** on `main`; **keyboard shortcuts dialog** (`?` + header button).
-  - **`/_layout/*`** — template admin shell (`/`, `/items`, `/admin`, `/settings`)
-- **Command palette:** `CommandPalette*.tsx`, `CommandConfirmDialog.tsx`, `PaletteKeyboardChrome.tsx`; hooks `useCommandPalette`, `useCommandRegistry`, `useCommandSearchAffinity`, `useRecentCommands`, `useJobToggles`, `usePaletteListSelection`; registry in `frontend/src/lib/commands/`; data transfer in `frontend/src/lib/data-transfer/`; channel ops in `frontend/src/lib/channels/` (`reset-sync.ts`, **`backfill-sync.ts`**, add/delete, tags).
+  - **`/_tg/summarizer`** — full-screen TG app (`App.tsx` + `TgProviders`); **command palette** on `main`; **keyboard shortcuts dialog** (`?` + header button). Main content uses **`app-shell`** width utility.
+  - **`/_layout/*`** — template admin shell (`/`, `/items`, `/admin`, `/settings`); inner outlet also **`app-shell`**.
+- **Command palette:** `CommandPalette*.tsx`, `CommandConfirmDialog.tsx`, `PaletteKeyboardChrome.tsx`; hooks `useCommandPalette`, `useCommandRegistry`, `useCommandSearchAffinity`, `useRecentCommands`, `useJobToggles`, `usePaletteListSelection`; registry in `frontend/src/lib/commands/` (**`settings-schema.ts`** — numeric two-step editors + badges); data transfer in `frontend/src/lib/data-transfer/`; channel ops in `frontend/src/lib/channels/` (`reset-sync.ts`, **`backfill-sync.ts`**, add/delete, tags).
 - **Modals (TG shell):** shadcn/Radix `Dialog` only — **`Modal.tsx` removed** (2026-06-25). Confirm flows in `ChannelGrid`, `HistoryView`, `PasteSummaryModal`, `DatabaseManagement`, `MigrationPrompt`.
 - **API clients (ADR-006):** hand-written `frontend/src/api/` (summarizer); generated `frontend/src/client/` (admin/auth). Regenerate: `bash scripts/generate-client.sh` (default `ENVIRONMENT=production`; override `ENVIRONMENT=local` for Playwright/private routes).
 - **Data layer (frontend):** `repository.ts` API-first → `cache.ts` (IndexedDB). **`db.ts` removed**.
@@ -28,6 +28,7 @@ Self-hosted Telegram channel summarizer. Migrated from browser-heavy `TG-Summari
 - **AI summary:** generate, stream, **`POST /api/v1/ai/summary/prompt`** (Copy Prompt; no LLM call)
 - **Legacy `/api/*`:** `local` only; **410 Gone in production**
 - **Channel sync:** `POST /api/v1/jobs/sync` → SSE `GET .../events` (orchestrator auto-detects initial / incremental / backfill)
+- **Settings:** `GET /api/v1/data/settings/{key}` merges env defaults for `retention`, `sync`, `translation`, `jobs` when DB row missing/partial (`_SETTING_LOADERS` in `data.py`)
 - **Runtime diagnostics:** `GET /api/v1/jobs/runtime-config`
 - OpenAPI: `/docs`, `/api/v1/openapi.json`
 
@@ -46,6 +47,7 @@ Self-hosted Telegram channel summarizer. Migrated from browser-heavy `TG-Summari
 - **Auto-follow forwarded:** Per-channel `autoFollowForwarded` only (not global).
 - **Embeddings/RAG:** Server Gemini; skip anchors; pgvector deferred ([ADR-005](docs/migration/ADR-005-vector-search.md)).
 - **Jobs:** `auto_sync`, `embeddings`, `auto_summary`, `retention`, `translation_batch`.
+- **Retention defaults:** post **90** days, log **30** days (`RETENTION_*_DEFAULT` / `VITE_RETENTION_*`); **`0` = never purge** (UI badge **Never**).
 
 ## Analysis conventions
 
@@ -55,10 +57,11 @@ Self-hosted Telegram channel summarizer. Migrated from browser-heavy `TG-Summari
 - **Auto-follow UI:** Toggle on each **ChannelCard** (rounded pill). Distinct from **Auto-Followed** badge (`discoveredVia`).
 - **Partial history UI:** Amber **Partial history** badge on `ChannelCard` when `historyCompleteToCutoff === false`; tooltip: "History does not reach retention window".
 - **Summarizer UI:** URL tabs `/summarizer?tab=` — **6 workspace tabs** (channels, posts, summary, chat, history, **settings**); settings sub-sections `?tab=settings&section=`. **Post-login redirect:** `/summarizer`. Guided tour when no channels. Summary toolbar: Generate + Copy Prompt.
-- **Command palette:** `Cmd+Shift+P` / `Ctrl+Shift+P` + header icon; settings + jobs + navigate + channel ops + data transfer + in-palette search. Keyboard UX (IDEA-007): `usePaletteListSelection`, K1–K18 E2E. **Fix Partial History (Channel)** — entity picker, `closeOnPick: false`, non-destructive backfill queue. **Fix All Partial History** — bulk backfill via `POST /api/v1/jobs/sync`. Detail: [IDEA-007](docs/ideas-log/ideas/IDEA-007-command-palette-keyboard-ux.md).
+- **Command palette:** `Cmd+Shift+P` / `Ctrl+Shift+P` + header icon; settings + jobs + navigate + channel ops + data transfer + in-palette search. Keyboard UX (IDEA-007): `usePaletteListSelection`, K1–K18 E2E. **Fix Partial History (Channel)** — entity picker, `closeOnPick: false`, non-destructive backfill queue. **Fix All Partial History** — bulk backfill via `POST /api/v1/jobs/sync`. **Numeric settings** — two-step editor (pick setting → number input) with live **current-value badges**; retention `0` shows **Never**. Detail: [IDEA-007](docs/ideas-log/ideas/IDEA-007-command-palette-keyboard-ux.md), [numeric settings plan](.cursor/plans/numeric_settings_ux.plan.md).
 - **Keyboard shortcuts reference:** `?` (non-editable contexts) + header keyboard button → dialog listing shortcuts.
 - **External AI summary flow:** Copy Prompt → pending history entry; complete via **`PasteSummaryModal`** on that item. Completed: `source: "pasted"`. Pending view has explicit paste instructions.
-- **Theme:** `theme-provider` (`vite-ui-theme`); TG app root uses `app-*` tokens + `tg-wcag-floor` class for metadata typography floor.
+- **Theme:** `theme-provider` (`vite-ui-theme`); TG app root uses `app-*` tokens + `tg-wcag-floor` class for metadata typography floor. **Layout width:** `@utility app-shell` in `index.css` — `--max-width-app` 80rem (1280px), scales to 90rem at `xl`, 100rem at `2xl`; tune via `@theme` tokens only.
+- **Numeric settings UI:** `<input type="number">` in Settings / DatabaseManagement / ChannelGrid (sliders and fixed retention day selects removed). Palette mirrors same min/max/step clamps.
 - **Initial load UX:** skeleton placeholders in `ChannelGrid` / `PostFeed` (`isInitialChannelsLoading`, `isInitialPostLoadPending`).
 - **PostCard:** long posts collapse with Show More / Collapse; action bar visible on hover **and** `focus-within`.
 - **Channel grid:** `md:2 / lg:3 / xl:4` columns; shadcn `Select` for filters/sort; filtered count “Showing X of Y”; bulk freeze/unfreeze always confirms (matches palette).
@@ -67,7 +70,7 @@ Self-hosted Telegram channel summarizer. Migrated from browser-heavy `TG-Summari
 
 ## Decisions (stable)
 
-Locked [DECISIONS.md](docs/migration/DECISIONS.md) + items through command palette (IDEA-001–007) + **UI polish audit (2026-06-25, commit `58550dd`)** + **resume backfill (2026-06-28)**:
+Locked [DECISIONS.md](docs/migration/DECISIONS.md) + items through command palette (IDEA-001–007) + **UI polish audit (2026-06-25, commit `58550dd`)** + **resume backfill (2026-06-28)** + **numeric settings UX (2026-06-28)**:
 
 1. **Single-operator (Mode A)** — Production: `API_KEY`, `TOKEN_ENCRYPTION_KEY`, strong `SECRET_KEY`, `USERS_OPEN_REGISTRATION=false`. Mode B deferred.
 2. **Auth** — JWT + optional `X-API-Key`; fail-closed on sensitive routes in non-local.
@@ -80,6 +83,8 @@ Locked [DECISIONS.md](docs/migration/DECISIONS.md) + items through command palet
 9. **UI polish — channel grid** — `md:2 / lg:3 / xl:4`; shadcn `Select`; filtered count; bulk freeze/unfreeze always confirms.
 10. **UI polish — deferred** — `SettingsView.tsx` per-section split; mobile responsive polish.
 11. **Resume backfill for partial history (2026-06-28)** — Bounded pages per job + resume across runs (not unlimited single-run scrape). Orchestrator `backfill` pass from oldest stored post; auto-sync round-robins partial channels. Palette **Fix Partial History** commands queue backfill (no post wipe). Reset & Sync remains separate destructive path.
+12. **Numeric settings UX (2026-06-28)** — Number inputs (not sliders/fixed day lists) for retention, auto-sync interval, Tor threshold, AI temperature, etc. Retention: any non-negative integer; `0` = never purge (**Never** badge). Defaults post **90** / log **30** days via env (`RETENTION_*_DEFAULT`, `VITE_RETENTION_*`). `GET /settings/{key}` merges defaults for structured keys. Palette: two-step numeric editor + current-value badges. Tests: `settings-schema.test.ts` (8), `test_settings_defaults.py` (4).
+13. **App shell layout width (2026-06-28)** — Single `app-shell` utility + `@theme` max-width tokens in `index.css` (not per-component `max-w-7xl`). Responsive: 80rem → 90rem (`xl`) → 100rem (`2xl`). Inner page wrappers (`SettingsView`, `BotManagement`, `DiagnosticsView`, `RuntimeConfigView`) no longer use `max-w-5xl` — fill shell width.
 
 ### Explicitly rejected / deferred
 
@@ -88,6 +93,8 @@ Locked [DECISIONS.md](docs/migration/DECISIONS.md) + items through command palet
 - **SettingsView.tsx refactor** — defer until next heavy settings work.
 - **Unlimited backfill in one sync job** — rejected; use per-run `SCRAPER_ITERATION_LIMIT` + multi-pass resume.
 - **Reset & Sync as default partial-history fix** — rejected; replaced by non-destructive backfill queue.
+- **Flat `max-w-screen-2xl` / Tailwind `container` for shell** — rejected in favor of custom `@theme` tokens + `app-shell` (single source of truth, responsive growth only on large screens).
+- **Sliders / fixed retention day select lists** — replaced by number inputs (2026-06-28).
 
 ## User preferences
 
@@ -104,8 +111,10 @@ Locked [DECISIONS.md](docs/migration/DECISIONS.md) + items through command palet
 - **Native dev:** `uv sync` → alembic on `app` → uvicorn :8000; `bun run dev` :5173. **`POSTGRES_DB=app`** for API.
 - **Pre-commit:** `uv run prek run --all-files`; `bun run lint` (Biome).
 - **Playwright:** `ENVIRONMENT=local bash scripts/generate-client.sh` → Docker image or local Chrome. **`frontend/tests/utils/privateApi.ts`** sets `OpenAPI.BASE` fallback chain: `VITE_API_URL` → `PLAYWRIGHT_API_URL` → `http://localhost:8000`. **`PLAYWRIGHT_CHANNEL=chrome`** when cached `chromium_headless_shell` install fails (Cursor sandbox extraction hang). Summarizer-only verify: `PLAYWRIGHT_CHANNEL=chrome bun run test tests/summarizer.spec.ts`.
-- **pytest:** `cd backend && uv run pytest tests/ -q` (`app_test`). Backfill tests: `tests/api/test_sync_jobs.py`, `tests/api/test_scheduler_jobs.py`.
+- **pytest:** `cd backend && uv run pytest tests/ -q` (`app_test`). Backfill tests: `tests/api/test_sync_jobs.py`, `tests/api/test_scheduler_jobs.py`. Settings defaults: `tests/api/test_settings_defaults.py`.
+- **Frontend unit tests:** `cd frontend && bun test src/lib/commands/settings-schema.test.ts`.
 - **Scraper tunables:** `SCRAPER_ITERATION_LIMIT=50` (default, was 15); `SCRAPER_MAX_POSTS_PER_CHANNEL=300` applies to legacy forward `scrape_channel()` only, not orchestrator.
+- **Retention tunables:** `RETENTION_POST_DAYS_DEFAULT=90`, `RETENTION_LOG_DAYS_DEFAULT=30`; mirror in `VITE_RETENTION_*` for frontend defaults.
 - **2000+ channels** — avoid Sync All; prefer auto-sync / Sync Selected; bulk reset-sync only for policy-wide destructive re-scrape.
 - **Partial history in staging** — many channels may show badge after backward-sync deploy; fix via palette backfill commands or wait for auto-sync partial pickup; expect multi-pass for busy feeds.
 - **Traefik / deploy** — see [deployment.md](deployment.md); staging needs self-hosted runner labels.
@@ -121,6 +130,7 @@ Locked [DECISIONS.md](docs/migration/DECISIONS.md) + items through command palet
 - **Playwright in Cursor agent sandbox** — browser zip extraction may hang; use Docker or system Chrome channel.
 - **Partial history + high post volume** — one sync run may not clear the badge; re-run fix command or rely on auto-sync until `historyCompleteToCutoff` is true.
 - **`autoSyncPartialBatchSize`** — sync AppSetting JSON only (not `.env`); default 1 partial channel per auto-sync tick.
+- **Wider app shell on ultrawide** — prose-heavy views may need internal column/grid constraints if line length becomes uncomfortable (not done yet).
 
 ## Out of scope / roadmap
 
@@ -129,4 +139,5 @@ Locked [DECISIONS.md](docs/migration/DECISIONS.md) + items through command palet
 - **SettingsView.tsx** component split (deferred).
 - **Mobile responsive summarizer** (explicitly out of scope per UI polish Q1).
 - **Dedicated backfill scheduler job** — deferred; auto-sync partial pickup covers v1.
+- **E2E palette test for numeric editor apply path** — optional follow-up from numeric settings plan.
 - **Ideas backlog:** IDEA-001/004/005/006/007 **implemented**; IDEA-007 manual keyboard matrix optional; [IDEA-002](docs/ideas-log/ideas/IDEA-002-tanstack-devtools.md) TanStack devtools (dev-only).
