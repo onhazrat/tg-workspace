@@ -1,4 +1,9 @@
-import { LANGUAGES, MODELS } from "@/constants"
+import {
+  AUTO_SYNC_INTERVAL_MAX_MINUTES,
+  AUTO_SYNC_INTERVAL_MIN_MINUTES,
+  LANGUAGES,
+  MODELS,
+} from "@/constants"
 import { JOB_LABELS, SERVER_JOB_IDS } from "@/hooks/useJobToggles"
 import type {
   CommandContext,
@@ -239,8 +244,8 @@ const NUMERIC_EDITOR_DEFS: NumericEditorDef[] = [
     keywords: ["auto sync", "interval", "minutes"],
     fieldId: "autoSyncInterval",
     fieldLabel: "Auto Sync Interval (minutes)",
-    min: 5,
-    max: 120,
+    min: AUTO_SYNC_INTERVAL_MIN_MINUTES,
+    max: AUTO_SYNC_INTERVAL_MAX_MINUTES,
     integer: true,
     getter: (s) => s.autoSyncInterval,
     setter: (s, v) => s.setAutoSyncInterval(v),

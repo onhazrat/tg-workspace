@@ -26,7 +26,10 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Skeleton } from "@/components/ui/skeleton"
-import { addChannelByName } from "@/lib/channels/add-channel"
+import {
+  AUTO_SYNC_INTERVAL_MAX_MINUTES,
+  AUTO_SYNC_INTERVAL_MIN_MINUTES,
+} from "@/constants"
 import { deleteChannelByRecord } from "@/lib/channels/delete-channel"
 import { useData } from "../contexts/DataContext"
 import { useScraper } from "../contexts/ScraperContext"
@@ -661,15 +664,20 @@ export const ChannelGrid: React.FC<ChannelGridProps> = () => {
                 </span>
                 <input
                   type="number"
-                  min={5}
-                  max={120}
+                  min={AUTO_SYNC_INTERVAL_MIN_MINUTES}
+                  max={AUTO_SYNC_INTERVAL_MAX_MINUTES}
                   step={1}
                   value={autoSyncInterval}
                   disabled={!autoSyncEnabled}
                   onChange={(e) => {
                     const val = Number.parseInt(e.target.value, 10)
                     if (!Number.isNaN(val)) {
-                      setAutoSyncInterval(Math.min(120, Math.max(5, val)))
+                      setAutoSyncInterval(
+                        Math.min(
+                          AUTO_SYNC_INTERVAL_MAX_MINUTES,
+                          Math.max(AUTO_SYNC_INTERVAL_MIN_MINUTES, val),
+                        ),
+                      )
                     }
                   }}
                   className="w-16 bg-app-bg border border-app-ink/20 px-2 py-1 text-[10px] font-mono focus:border-app-ink focus:outline-none disabled:opacity-50"

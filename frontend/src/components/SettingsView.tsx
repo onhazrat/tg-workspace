@@ -21,7 +21,12 @@ import type React from "react"
 import { useEffect, useState } from "react"
 import { toast } from "sonner"
 import { api } from "@/api"
-import { LANGUAGES, MODELS } from "../constants"
+import {
+  AUTO_SYNC_INTERVAL_MAX_MINUTES,
+  AUTO_SYNC_INTERVAL_MIN_MINUTES,
+  LANGUAGES,
+  MODELS,
+} from "../constants"
 import { useData } from "../contexts/DataContext"
 import { useSettings } from "../contexts/SettingsContext"
 import { JOB_LABELS, useJobToggles } from "../hooks/useJobToggles"
@@ -934,22 +939,25 @@ export const SettingsView: React.FC<{ activeSection?: string }> = ({
                       <div className="flex items-center gap-3">
                         <input
                           type="number"
-                          min={5}
-                          max={120}
+                          min={AUTO_SYNC_INTERVAL_MIN_MINUTES}
+                          max={AUTO_SYNC_INTERVAL_MAX_MINUTES}
                           step={1}
                           value={autoSyncInterval}
                           onChange={(e) => {
                             const val = Number.parseInt(e.target.value, 10)
                             if (!Number.isNaN(val)) {
                               setAutoSyncInterval(
-                                Math.min(120, Math.max(5, val)),
+                                Math.min(
+                                  AUTO_SYNC_INTERVAL_MAX_MINUTES,
+                                  Math.max(AUTO_SYNC_INTERVAL_MIN_MINUTES, val),
+                                ),
                               )
                             }
                           }}
                           className="w-20 bg-app-ink/5 border border-app-ink/10 p-2 text-[10px] font-mono focus:outline-none focus:border-app-ink/30 transition-all rounded"
                         />
                         <span className="text-[10px] opacity-60 uppercase tracking-widest font-bold">
-                          Minutes (5–120)
+                          Minutes (5 min – 1 day)
                         </span>
                       </div>
                     </motion.div>
