@@ -6,8 +6,6 @@ import type {
   CommandSettingsSlice,
 } from "@/lib/commands/types"
 
-const RETENTION_DAY_OPTIONS = [0, 7, 14, 30, 90] as const
-
 type BooleanSettingDef = {
   key: keyof CommandSettingsSlice
   label: string
@@ -201,6 +199,178 @@ function buildBooleanCommands(): CommandDef[] {
   return commands
 }
 
+function formatRetentionBadge(days: number): string {
+  return days === 0 ? "Never" : `${days}d`
+}
+
+function clampInt(value: string, min: number, max?: number): number | null {
+  const parsed = Number.parseInt(value, 10)
+  if (Number.isNaN(parsed) || parsed < min) return null
+  if (max !== undefined) return Math.min(max, parsed)
+  return parsed
+}
+
+function clampFloat(value: string, min: number, max: number): number | null {
+  const parsed = Number.parseFloat(value)
+  if (Number.isNaN(parsed)) return null
+  return Math.min(max, Math.max(min, parsed))
+}
+
+type NumericEditorDef = {
+  id: string
+  label: string
+  keywords: string[]
+  fieldId: string
+  fieldLabel: string
+  min?: number
+  max?: number
+  step?: number | "any"
+  integer?: boolean
+  advancedOnly?: boolean
+  getter: (settings: CommandSettingsSlice) => number
+  setter: (settings: CommandSettingsSlice, value: number) => void
+  formatBadge: (value: number) => string
+}
+
+const NUMERIC_EDITOR_DEFS: NumericEditorDef[] = [
+  {
+    id: "edit-auto-sync-interval",
+    label: "Edit Auto Sync Interval",
+    keywords: ["auto sync", "interval", "minutes"],
+    fieldId: "autoSyncInterval",
+    fieldLabel: "Auto Sync Interval (minutes)",
+    min: 5,
+    max: 120,
+    integer: true,
+    getter: (s) => s.autoSyncInterval,
+    setter: (s, v) => s.setAutoSyncInterval(v),
+    formatBadge: (v) => `${v}m`,
+  },
+  {
+    id: "edit-ai-temperature",
+    label: "Edit AI Temperature",
+    keywords: ["ai", "temperature", "model"],
+    fieldId: "aiTemperature",
+    fieldLabel: "AI Temperature",
+    min: 0,
+    max: 1,
+    step: "any",
+    getter: (s) => s.aiTemperature,
+    setter: (s, v) => s.setAiTemperature(v),
+    formatBadge: (v) => v.toFixed(1),
+  },
+  {
+    id: "edit-sync-concurrency",
+    label: "Edit Sync Concurrency",
+    keywords: ["sync", "concurrency", "parallel"],
+    fieldId: "syncConcurrency",
+    fieldLabel: "Sync Concurrency",
+    min: 1,
+    integer: true,
+    getter: (s) => s.syncConcurrency,
+    setter: (s, v) => s.setSyncConcurrency(v),
+    formatBadge: (v) => String(v),
+  },
+  {
+    id: "edit-proxy-default-concurrency",
+    label: "Edit Proxy Default Concurrency",
+    keywords: ["proxy", "concurrency", "network"],
+    fieldId: "proxyDefaultConcurrency",
+    fieldLabel: "Proxy Default Concurrency",
+    min: 1,
+    max: 20,
+    integer: true,
+    advancedOnly: true,
+    getter: (s) => s.proxyDefaultConcurrency,
+    setter: (s, v) => s.setProxyDefaultConcurrency(v),
+    formatBadge: (v) => String(v),
+  },
+  {
+    id: "edit-tor-control-port",
+    label: "Edit Tor Control Port",
+    keywords: ["tor", "control", "port", "network"],
+    fieldId: "torControlPort",
+    fieldLabel: "Tor Control Port",
+    min: 1,
+    integer: true,
+    advancedOnly: true,
+    getter: (s) => s.torControlPort,
+    setter: (s, v) => s.setTorControlPort(v),
+    formatBadge: (v) => String(v),
+  },
+  {
+    id: "edit-tor-rotation-threshold",
+    label: "Edit Tor Rotation Threshold",
+    keywords: ["tor", "rotation", "threshold", "network"],
+    fieldId: "torRotationThreshold",
+    fieldLabel: "Tor Rotation Threshold",
+    min: 5,
+    max: 50,
+    integer: true,
+    advancedOnly: true,
+    getter: (s) => s.torRotationThreshold,
+    setter: (s, v) => s.setTorRotationThreshold(v),
+    formatBadge: (v) => String(v),
+  },
+  {
+    id: "edit-post-retention-days",
+    label: "Edit Post Retention Days",
+    keywords: ["retention", "posts", "days"],
+    fieldId: "postRetentionDays",
+    fieldLabel: "Post Retention (days)",
+    min: 0,
+    integer: true,
+    getter: (s) => s.postRetentionDays,
+    setter: (s, v) => s.setPostRetentionDays(v),
+    formatBadge: formatRetentionBadge,
+  },
+  {
+    id: "edit-log-retention-days",
+    label: "Edit Log Retention Days",
+    keywords: ["retention", "logs", "days"],
+    fieldId: "logRetentionDays",
+    fieldLabel: "Log Retention (days)",
+    min: 0,
+    integer: true,
+    getter: (s) => s.logRetentionDays,
+    setter: (s, v) => s.setLogRetentionDays(v),
+    formatBadge: formatRetentionBadge,
+  },
+]
+
+function buildNumericEditorCommands(): CommandDef[] {
+  return NUMERIC_EDITOR_DEFS.map((def) => ({
+    id: def.id,
+    kind: "editor" as const,
+    label: def.label,
+    keywords: def.keywords,
+    group: "Settings",
+    getBadge: (ctx) => def.formatBadge(def.getter(ctx.settings)),
+    editorField: {
+      id: def.fieldId,
+      label: def.fieldLabel,
+      type: "number" as const,
+      min: def.min,
+      max: def.max,
+      step: def.step,
+      integer: def.integer,
+      advancedOnly: def.advancedOnly,
+      getValue: (ctx) => def.getter(ctx.settings),
+      apply: (ctx, value) => {
+        if (def.advancedOnly) ctx.settings.setAdvancedMode(true)
+        if (def.step === "any") {
+          const parsed = clampFloat(value, def.min ?? 0, def.max ?? 1)
+          if (parsed !== null) def.setter(ctx.settings, parsed)
+          return
+        }
+        const parsed = clampInt(value, def.min ?? 0, def.max)
+        if (parsed !== null) def.setter(ctx.settings, parsed)
+      },
+    },
+    run: () => {},
+  }))
+}
+
 function buildEnumCommands(): CommandDef[] {
   const commands: CommandDef[] = []
 
@@ -292,178 +462,30 @@ function buildEnumCommands(): CommandDef[] {
     })
   }
 
-  for (const days of RETENTION_DAY_OPTIONS) {
-    commands.push({
-      id: `set-post-retention-days-${days}`,
-      kind: "enum",
-      label: `Set Post Retention Days → ${days}`,
-      keywords: ["retention", "posts", String(days), "days"],
-      group: "Settings",
-      run: (ctx) => ctx.settings.setPostRetentionDays(days),
-    })
-    commands.push({
-      id: `set-log-retention-days-${days}`,
-      kind: "enum",
-      label: `Set Log Retention Days → ${days}`,
-      keywords: ["retention", "logs", String(days), "days"],
-      group: "Settings",
-      run: (ctx) => ctx.settings.setLogRetentionDays(days),
-    })
-  }
-
   return commands
 }
 
 function buildEditorCommands(): CommandDef[] {
   const editors: CommandDef[] = [
-    {
-      id: "edit-auto-sync-interval",
-      kind: "editor",
-      label: "Edit Auto Sync Interval",
-      keywords: ["auto sync", "interval", "minutes"],
-      group: "Settings",
-      editorField: {
-        id: "autoSyncInterval",
-        label: "Auto Sync Interval (minutes)",
-        type: "number",
-        min: 5,
-        max: 120,
-        getValue: (ctx) => ctx.settings.autoSyncInterval,
-        apply: (ctx, value) => {
-          const parsed = Number.parseInt(value, 10)
-          if (!Number.isNaN(parsed)) {
-            ctx.settings.setAutoSyncInterval(Math.min(120, Math.max(5, parsed)))
-          }
-        },
-      },
-      run: () => {},
-    },
-    {
-      id: "edit-ai-temperature",
-      kind: "editor",
-      label: "Edit AI Temperature",
-      keywords: ["ai", "temperature", "model"],
-      group: "Settings",
-      editorField: {
-        id: "aiTemperature",
-        label: "AI Temperature",
-        type: "number",
-        min: 0,
-        max: 1,
-        step: 0.1,
-        getValue: (ctx) => ctx.settings.aiTemperature,
-        apply: (ctx, value) => {
-          const parsed = Number.parseFloat(value)
-          if (!Number.isNaN(parsed)) {
-            ctx.settings.setAiTemperature(Math.min(1, Math.max(0, parsed)))
-          }
-        },
-      },
-      run: () => {},
-    },
-    {
-      id: "edit-sync-concurrency",
-      kind: "editor",
-      label: "Edit Sync Concurrency",
-      keywords: ["sync", "concurrency", "parallel"],
-      group: "Settings",
-      editorField: {
-        id: "syncConcurrency",
-        label: "Sync Concurrency",
-        type: "number",
-        min: 1,
-        getValue: (ctx) => ctx.settings.syncConcurrency,
-        apply: (ctx, value) => {
-          const parsed = Number.parseInt(value, 10)
-          if (!Number.isNaN(parsed) && parsed >= 1) {
-            ctx.settings.setSyncConcurrency(parsed)
-          }
-        },
-      },
-      run: () => {},
-    },
-    {
-      id: "edit-proxy-default-concurrency",
-      kind: "editor",
-      label: "Edit Proxy Default Concurrency",
-      keywords: ["proxy", "concurrency", "network"],
-      group: "Settings",
-      editorField: {
-        id: "proxyDefaultConcurrency",
-        label: "Proxy Default Concurrency",
-        type: "number",
-        min: 1,
-        max: 20,
-        advancedOnly: true,
-        getValue: (ctx) => ctx.settings.proxyDefaultConcurrency,
-        apply: (ctx, value) => {
-          ctx.settings.setAdvancedMode(true)
-          const parsed = Number.parseInt(value, 10)
-          if (!Number.isNaN(parsed)) {
-            ctx.settings.setProxyDefaultConcurrency(
-              Math.min(20, Math.max(1, parsed)),
-            )
-          }
-        },
-      },
-      run: () => {},
-    },
-    {
-      id: "edit-tor-control-port",
-      kind: "editor",
-      label: "Edit Tor Control Port",
-      keywords: ["tor", "control", "port", "network"],
-      group: "Settings",
-      editorField: {
-        id: "torControlPort",
-        label: "Tor Control Port",
-        type: "number",
-        min: 1,
-        advancedOnly: true,
-        getValue: (ctx) => ctx.settings.torControlPort,
-        apply: (ctx, value) => {
-          ctx.settings.setAdvancedMode(true)
-          const parsed = Number.parseInt(value, 10)
-          if (!Number.isNaN(parsed) && parsed >= 1) {
-            ctx.settings.setTorControlPort(parsed)
-          }
-        },
-      },
-      run: () => {},
-    },
-    {
-      id: "edit-tor-rotation-threshold",
-      kind: "editor",
-      label: "Edit Tor Rotation Threshold",
-      keywords: ["tor", "rotation", "threshold", "network"],
-      group: "Settings",
-      editorField: {
-        id: "torRotationThreshold",
-        label: "Tor Rotation Threshold",
-        type: "number",
-        min: 5,
-        max: 50,
-        step: 5,
-        advancedOnly: true,
-        getValue: (ctx) => ctx.settings.torRotationThreshold,
-        apply: (ctx, value) => {
-          ctx.settings.setAdvancedMode(true)
-          const parsed = Number.parseInt(value, 10)
-          if (!Number.isNaN(parsed)) {
-            ctx.settings.setTorRotationThreshold(
-              Math.min(50, Math.max(5, parsed)),
-            )
-          }
-        },
-      },
-      run: () => {},
-    },
+    ...buildNumericEditorCommands(),
     {
       id: "edit-global-start-time-value",
       kind: "editor",
       label: "Edit Default Channel Start Time Value",
       keywords: ["global start time", "sync", "retention", "days", "date"],
       group: "Settings",
+      getBadge: (ctx) => {
+        if (ctx.settings.globalStartTimeMode === "absolute") {
+          const raw = ctx.settings.globalStartTimeValue
+          if (typeof raw === "string") return raw.slice(0, 10)
+          return new Date().toISOString().slice(0, 10)
+        }
+        const days =
+          typeof ctx.settings.globalStartTimeValue === "number"
+            ? ctx.settings.globalStartTimeValue
+            : 7
+        return `${days}d`
+      },
       editorField: {
         id: "globalStartTimeValue",
         label: "Default Channel Start Time Value",
@@ -662,4 +684,4 @@ export function buildSettingCommands(): CommandDef[] {
   ]
 }
 
-export { BOOLEAN_SETTINGS, RETENTION_DAY_OPTIONS }
+export { BOOLEAN_SETTINGS, NUMERIC_EDITOR_DEFS }

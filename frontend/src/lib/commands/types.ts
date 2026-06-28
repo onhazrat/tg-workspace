@@ -61,7 +61,8 @@ export interface EditorFieldDef {
   type: "number" | "text" | "textarea" | "datetime-local" | "days"
   min?: number
   max?: number
-  step?: number
+  step?: number | "any"
+  integer?: boolean
   advancedOnly?: boolean
   getValue: (ctx: CommandContext) => string | number
   apply: (ctx: CommandContext, value: string) => void | Promise<void>
@@ -78,7 +79,7 @@ export interface CommandDef {
   getConfirmDescription?: (ctx: CommandContext, payload?: unknown) => string
   when?: (ctx: CommandContext) => boolean
   disabled?: (ctx: CommandContext) => CommandDisabledState
-  getBadge?: (ctx: CommandContext) => "ON" | "OFF" | null
+  getBadge?: (ctx: CommandContext) => string | null
   editorField?: EditorFieldDef
   entityFlow?: EntityFlowType
   /** When false, entity sub-view stays open after a pick (default: true). */

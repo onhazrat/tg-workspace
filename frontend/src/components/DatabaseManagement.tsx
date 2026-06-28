@@ -503,19 +503,22 @@ export const DatabaseManagement: React.FC = () => {
                   Post Retention
                 </span>
               </div>
-              <select
+              <input
+                type="number"
+                min={0}
+                step={1}
                 value={postRetentionDays}
-                onChange={(e) =>
-                  setPostRetentionDays(parseInt(e.target.value, 10))
-                }
+                onChange={(e) => {
+                  const val = Number.parseInt(e.target.value, 10)
+                  setPostRetentionDays(!Number.isNaN(val) && val >= 0 ? val : 0)
+                }}
                 className="w-full bg-app-bg border border-app-ink/20 p-2 text-[11px] font-mono focus:border-app-ink focus:outline-none transition-colors"
-              >
-                <option value={0}>Never Delete (Keep Forever)</option>
-                <option value={7}>Auto-delete older than 7 days</option>
-                <option value={14}>Auto-delete older than 14 days</option>
-                <option value={30}>Auto-delete older than 30 days</option>
-                <option value={90}>Auto-delete older than 90 days</option>
-              </select>
+              />
+              {postRetentionDays === 0 && (
+                <p className="text-[10px] opacity-60 italic serif">
+                  Never Delete — posts are kept forever.
+                </p>
+              )}
               <p className="text-[10px] opacity-40 italic serif">
                 Automatically delete posts older than the selected timeframe.
                 Summaries and chat history are always preserved.
@@ -529,19 +532,22 @@ export const DatabaseManagement: React.FC = () => {
                   Log Retention
                 </span>
               </div>
-              <select
+              <input
+                type="number"
+                min={0}
+                step={1}
                 value={logRetentionDays}
-                onChange={(e) =>
-                  setLogRetentionDays(parseInt(e.target.value, 10))
-                }
+                onChange={(e) => {
+                  const val = Number.parseInt(e.target.value, 10)
+                  setLogRetentionDays(!Number.isNaN(val) && val >= 0 ? val : 0)
+                }}
                 className="w-full bg-app-bg border border-app-ink/20 p-2 text-[11px] font-mono focus:border-app-ink focus:outline-none transition-colors"
-              >
-                <option value={0}>Never Delete (Keep Forever)</option>
-                <option value={7}>Auto-delete older than 7 days</option>
-                <option value={14}>Auto-delete older than 14 days</option>
-                <option value={30}>Auto-delete older than 30 days</option>
-                <option value={90}>Auto-delete older than 90 days</option>
-              </select>
+              />
+              {logRetentionDays === 0 && (
+                <p className="text-[10px] opacity-60 italic serif">
+                  Never Delete — logs are kept forever.
+                </p>
+              )}
               <p className="text-[10px] opacity-40 italic serif">
                 Automatically delete system logs (sync, network, AI) older than
                 the selected timeframe.

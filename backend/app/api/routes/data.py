@@ -6,6 +6,12 @@ from typing import Any
 from fastapi import APIRouter, Body, HTTPException, Query
 
 from app.api.deps import CurrentUser, SessionDep
+from app.jobs.settings import (
+    load_jobs_settings,
+    load_retention_settings,
+    load_sync_settings,
+    load_translation_settings,
+)
 from app.models_tg import AppSetting
 from app.schemas.data import BulkReresolveStartIdsRequest, BulkResetSyncRequest
 from app.services.bulk_channels import (
@@ -91,6 +97,13 @@ from app.services.summaries import (
     upsert_summary as upsert_summary_impl,
 )
 from app.services.sync_meta import get_sync_meta, touch_sync
+
+_SETTING_LOADERS = {
+    "jobs": load_jobs_settings,
+    "sync": load_sync_settings,
+    "retention": load_retention_settings,
+    "translation": load_translation_settings,
+}
 
 router = APIRouter(prefix="/data", tags=["data"])
 
@@ -533,6 +546,9 @@ def get_setting(
     session: SessionDep,
     _current_user: CurrentUser,
 ) -> dict[str, Any]:
+    loader = _SETTING_LOADERS.get(key)
+    if loader is not None:
+        return {"key": key, "value": loader(session)}
     return get_app_setting(session, key)
 
 

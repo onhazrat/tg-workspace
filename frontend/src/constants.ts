@@ -3,6 +3,8 @@ import { env } from "./lib/env"
 export const DEFAULT_AI_LANGUAGE = env.defaultAiLanguage
 export const DEFAULT_MODEL = env.defaultAiModel
 export const AUTO_SYNC_INTERVAL_DEFAULT = env.autoSyncIntervalDefault
+export const RETENTION_POST_DAYS_DEFAULT = env.retentionPostDaysDefault
+export const RETENTION_LOG_DAYS_DEFAULT = env.retentionLogDaysDefault
 export const THEME_DEFAULT = "dark"
 
 export const WORKSPACE_TABS = [

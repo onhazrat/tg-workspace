@@ -925,28 +925,32 @@ export const SettingsView: React.FC<{ activeSection?: string }> = ({
                       exit={{ opacity: 0, height: 0 }}
                       className="space-y-4 overflow-hidden"
                     >
-                      <div className="flex items-center justify-between opacity-60">
+                      <div className="flex items-center gap-2 opacity-60">
+                        <RefreshCw size={14} />
                         <span className="text-[10px] font-bold uppercase tracking-tight">
                           Sync Interval
                         </span>
-                        <span className="text-[10px] font-mono">
-                          {autoSyncInterval} Minutes
-                        </span>
                       </div>
-                      <input
-                        type="range"
-                        min="5"
-                        max="120"
-                        step="5"
-                        value={autoSyncInterval}
-                        onChange={(e) =>
-                          setAutoSyncInterval(parseInt(e.target.value, 10))
-                        }
-                        className="w-full accent-app-ink opacity-60 hover:opacity-100 transition-opacity cursor-pointer"
-                      />
-                      <div className="flex justify-between text-[8px] font-mono opacity-30 uppercase tracking-widest">
-                        <span>5m</span>
-                        <span>2h</span>
+                      <div className="flex items-center gap-3">
+                        <input
+                          type="number"
+                          min={5}
+                          max={120}
+                          step={1}
+                          value={autoSyncInterval}
+                          onChange={(e) => {
+                            const val = Number.parseInt(e.target.value, 10)
+                            if (!Number.isNaN(val)) {
+                              setAutoSyncInterval(
+                                Math.min(120, Math.max(5, val)),
+                              )
+                            }
+                          }}
+                          className="w-20 bg-app-ink/5 border border-app-ink/10 p-2 text-[10px] font-mono focus:outline-none focus:border-app-ink/30 transition-all rounded"
+                        />
+                        <span className="text-[10px] opacity-60 uppercase tracking-widest font-bold">
+                          Minutes (5–120)
+                        </span>
                       </div>
                     </motion.div>
                   )}
@@ -1764,21 +1768,27 @@ export const SettingsView: React.FC<{ activeSection?: string }> = ({
                                           </span>
                                         </div>
                                         <div className="flex items-center gap-3">
-                                          <span className="text-[10px] font-mono font-bold">
-                                            {torRotationThreshold}
-                                          </span>
                                           <input
-                                            type="range"
-                                            min="5"
-                                            max="50"
-                                            step="5"
+                                            type="number"
+                                            min={5}
+                                            max={50}
+                                            step={1}
                                             value={torRotationThreshold}
-                                            onChange={(e) =>
-                                              setTorRotationThreshold(
-                                                parseInt(e.target.value, 10),
+                                            onChange={(e) => {
+                                              const val = Number.parseInt(
+                                                e.target.value,
+                                                10,
                                               )
-                                            }
-                                            className="w-24 accent-app-ink"
+                                              if (!Number.isNaN(val)) {
+                                                setTorRotationThreshold(
+                                                  Math.min(
+                                                    50,
+                                                    Math.max(5, val),
+                                                  ),
+                                                )
+                                              }
+                                            }}
+                                            className="w-16 bg-app-ink/5 border border-app-ink/10 p-2 text-[10px] font-mono text-right focus:outline-none focus:border-app-ink/30"
                                           />
                                         </div>
                                       </motion.div>
@@ -1925,31 +1935,30 @@ export const SettingsView: React.FC<{ activeSection?: string }> = ({
                 )}
 
                 <div className="space-y-4">
-                  <div className="flex items-center justify-between opacity-60">
-                    <div className="flex items-center gap-2">
-                      <Thermometer size={14} />
-                      <span className="text-[10px] font-bold uppercase tracking-tight">
-                        Creativity (Temperature)
-                      </span>
-                    </div>
-                    <span className="text-[10px] font-mono">
-                      {aiTemperature.toFixed(1)}
+                  <div className="flex items-center gap-2 opacity-60">
+                    <Thermometer size={14} />
+                    <span className="text-[10px] font-bold uppercase tracking-tight">
+                      Creativity (Temperature)
                     </span>
                   </div>
-                  <input
-                    type="range"
-                    min="0"
-                    max="1"
-                    step="0.1"
-                    value={aiTemperature}
-                    onChange={(e) =>
-                      setAiTemperature(parseFloat(e.target.value))
-                    }
-                    className="w-full accent-app-ink opacity-60 hover:opacity-100 transition-opacity cursor-pointer"
-                  />
-                  <div className="flex justify-between text-[8px] font-mono opacity-30 uppercase tracking-widest">
-                    <span>Precise</span>
-                    <span>Creative</span>
+                  <div className="flex items-center gap-3">
+                    <input
+                      type="number"
+                      min={0}
+                      max={1}
+                      step="any"
+                      value={aiTemperature}
+                      onChange={(e) => {
+                        const val = Number.parseFloat(e.target.value)
+                        if (!Number.isNaN(val)) {
+                          setAiTemperature(Math.min(1, Math.max(0, val)))
+                        }
+                      }}
+                      className="w-20 bg-app-ink/5 border border-app-ink/10 p-2 text-[10px] font-mono focus:outline-none focus:border-app-ink/30 transition-all rounded"
+                    />
+                    <span className="text-[10px] opacity-60 uppercase tracking-widest font-bold">
+                      0 = precise · 1 = creative
+                    </span>
                   </div>
                 </div>
               </div>

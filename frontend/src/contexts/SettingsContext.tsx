@@ -14,6 +14,8 @@ import {
   AUTO_SYNC_INTERVAL_DEFAULT,
   DEFAULT_AI_LANGUAGE,
   DEFAULT_MODEL,
+  RETENTION_LOG_DAYS_DEFAULT,
+  RETENTION_POST_DAYS_DEFAULT,
 } from "../constants"
 import { loadNetworkSettings, saveNetworkSettings } from "../lib/repository"
 import { isRTLLanguage } from "../lib/utils"
@@ -265,17 +267,17 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({
   const [postRetentionDays, setPostRetentionDays] = useState<number>(() => {
     if (typeof window !== "undefined") {
       const saved = localStorage.getItem("postRetentionDays")
-      return saved ? parseInt(saved, 10) : 0
+      return saved ? parseInt(saved, 10) : RETENTION_POST_DAYS_DEFAULT
     }
-    return 0
+    return RETENTION_POST_DAYS_DEFAULT
   })
 
   const [logRetentionDays, setLogRetentionDays] = useState<number>(() => {
     if (typeof window !== "undefined") {
       const saved = localStorage.getItem("logRetentionDays")
-      return saved ? parseInt(saved, 10) : 0
+      return saved ? parseInt(saved, 10) : RETENTION_LOG_DAYS_DEFAULT
     }
-    return 0
+    return RETENTION_LOG_DAYS_DEFAULT
   })
 
   const [globalStartTimeMode, setGlobalStartTimeMode] =
@@ -549,7 +551,12 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({
         }
         applyAppSettings(
           { ...sync, ...legacy.sync },
-          { ...retention, ...legacy.retention },
+          {
+            postRetentionDays: RETENTION_POST_DAYS_DEFAULT,
+            logRetentionDays: RETENTION_LOG_DAYS_DEFAULT,
+            ...retention,
+            ...legacy.retention,
+          },
           { ...translation, ...legacy.translation },
         )
         if (typeof jobsStatus.embeddings?.enabled === "boolean") {

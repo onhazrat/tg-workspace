@@ -714,10 +714,11 @@ export function CommandPalette() {
   const renderBadge = (command: CommandDef) => {
     const badge = command.getBadge?.(context)
     if (!badge) return null
+    const isOnOff = badge === "ON" || badge === "OFF"
     return (
       <Badge
         variant={badge === "ON" ? "default" : "secondary"}
-        className="ml-auto text-[11px] uppercase tracking-wider"
+        className={`ml-auto text-[11px] tracking-wider${isOnOff ? " uppercase" : ""}`}
       >
         {badge}
       </Badge>
@@ -840,7 +841,13 @@ export function CommandPalette() {
                     })()}
                     min={activeEditorField?.min}
                     max={activeEditorField?.max}
-                    step={activeEditorField?.step}
+                    step={
+                      activeEditorField?.step === "any"
+                        ? "any"
+                        : activeEditorField?.integer
+                          ? 1
+                          : activeEditorField?.step
+                    }
                     value={editorValue}
                     onChange={(event) => setEditorValue(event.target.value)}
                     onKeyDown={(event) =>

@@ -659,26 +659,24 @@ export const ChannelGrid: React.FC<ChannelGridProps> = () => {
                 <span className="text-[9px] uppercase font-bold text-app-ink/50">
                   Every
                 </span>
-                <Select
-                  value={String(autoSyncInterval)}
-                  onValueChange={(value) => setAutoSyncInterval(Number(value))}
+                <input
+                  type="number"
+                  min={5}
+                  max={120}
+                  step={1}
+                  value={autoSyncInterval}
                   disabled={!autoSyncEnabled}
-                >
-                  <SelectTrigger
-                    className={`${selectTriggerClassName} min-w-[88px] disabled:opacity-50`}
-                  >
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent className="border-app-ink/15 bg-app-card text-app-ink">
-                    <SelectItem value="5">5 mins</SelectItem>
-                    <SelectItem value="15">15 mins</SelectItem>
-                    <SelectItem value="30">30 mins</SelectItem>
-                    <SelectItem value="60">1 hour</SelectItem>
-                    <SelectItem value="360">6 hours</SelectItem>
-                    <SelectItem value="720">12 hours</SelectItem>
-                    <SelectItem value="1440">24 hours</SelectItem>
-                  </SelectContent>
-                </Select>
+                  onChange={(e) => {
+                    const val = Number.parseInt(e.target.value, 10)
+                    if (!Number.isNaN(val)) {
+                      setAutoSyncInterval(Math.min(120, Math.max(5, val)))
+                    }
+                  }}
+                  className="w-16 bg-app-bg border border-app-ink/20 px-2 py-1 text-[10px] font-mono focus:border-app-ink focus:outline-none disabled:opacity-50"
+                />
+                <span className="text-[9px] uppercase font-bold text-app-ink/50">
+                  min
+                </span>
               </div>
             </div>
           </div>
