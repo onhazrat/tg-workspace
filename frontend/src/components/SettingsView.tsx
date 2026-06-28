@@ -102,6 +102,8 @@ export const SettingsView: React.FC<{ activeSection?: string }> = ({
     setShowChannelFiles,
     showChannelLinks,
     setShowChannelLinks,
+    showChannelStartId,
+    setShowChannelStartId,
     advancedMode,
     setAdvancedMode,
   } = useSettings()
@@ -621,6 +623,25 @@ export const SettingsView: React.FC<{ activeSection?: string }> = ({
                     >
                       <div
                         className={`absolute top-0.5 w-3.5 h-3.5 bg-white transition-all ${showChannelLinks ? "left-5.5" : "left-0.5"}`}
+                      />
+                    </button>
+                  </div>
+                </div>
+
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2 opacity-60">
+                      <span className="text-[10px] font-bold uppercase tracking-tight">
+                        Show Start ID (Advanced)
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setShowChannelStartId(!showChannelStartId)}
+                      className={`w-10 h-5 transition-all relative border border-app-ink/20 ${showChannelStartId ? "bg-green-500 border-green-600" : "bg-app-ink/10"}`}
+                    >
+                      <div
+                        className={`absolute top-0.5 w-3.5 h-3.5 bg-white transition-all ${showChannelStartId ? "left-5.5" : "left-0.5"}`}
                       />
                     </button>
                   </div>

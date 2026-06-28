@@ -7,6 +7,7 @@ import {
   FileText,
   HelpCircle,
   History,
+  Keyboard,
   List,
   MessageSquare,
   Moon,
@@ -16,7 +17,7 @@ import {
   Sun,
 } from "lucide-react"
 import { AnimatePresence, motion } from "motion/react"
-import { useEffect, useRef } from "react"
+import { useEffect, useRef, useState } from "react"
 import { api } from "@/api"
 import { ChannelGrid } from "./components/ChannelGrid"
 import { ChatView } from "./components/ChatView"
@@ -26,6 +27,12 @@ import { PostFeed } from "./components/PostFeed"
 import { RelativeTime } from "./components/RelativeTime"
 import { SettingsHub } from "./components/SettingsHub"
 import { SummaryView } from "./components/SummaryView"
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "./components/ui/dialog"
 import {
   Tooltip,
   TooltipContent,
@@ -75,6 +82,7 @@ export default function App() {
 
   const loadMoreRef = useRef<HTMLDivElement>(null)
   const scrollContainerRef = useRef<HTMLDivElement>(null)
+  const [shortcutsOpen, setShortcutsOpen] = useState(false)
 
   const {
     theme,
@@ -131,11 +139,52 @@ export default function App() {
     })
   }
 
+  useEffect(() => {
+    const isEditableTarget = (target: EventTarget | null) => {
+      if (!(target instanceof HTMLElement)) return false
+      if (target.isContentEditable) return true
+      const tag = target.tagName
+      return tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT"
+    }
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (
+        event.defaultPrevented ||
+        event.metaKey ||
+        event.ctrlKey ||
+        event.altKey
+      )
+        return
+      if (isEditableTarget(event.target)) return
+      if (event.key !== "?") return
+      event.preventDefault()
+      setShortcutsOpen(true)
+    }
+
+    window.addEventListener("keydown", onKeyDown)
+    return () => window.removeEventListener("keydown", onKeyDown)
+  }, [])
+
+  const commandKey =
+    typeof navigator !== "undefined" &&
+    /(Mac|iPhone|iPad|iPod)/i.test(navigator.platform)
+      ? "Cmd"
+      : "Ctrl"
+
   return (
     <div
-      className={`min-h-screen bg-app-bg text-app-ink font-sans selection:bg-app-ink selection:text-app-bg transition-colors duration-300 flex flex-col`}
+      className={`tg-wcag-floor min-h-screen bg-app-bg text-app-ink font-sans selection:bg-app-ink selection:text-app-bg transition-colors duration-300 flex flex-col`}
     >
-      <main className="flex-1 flex flex-col p-4 md:p-8 max-w-7xl mx-auto w-full">
+      <a
+        href="#main-content"
+        className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-50 focus:rounded-md focus:bg-app-card focus:px-3 focus:py-2 focus:text-xs focus:font-mono focus:uppercase focus:tracking-widest focus:text-app-ink focus:outline-none focus:ring-2 focus:ring-app-ink"
+      >
+        Skip to content
+      </a>
+      <main
+        id="main-content"
+        className="flex-1 flex flex-col p-4 md:p-8 max-w-7xl mx-auto w-full"
+      >
         {/* Offline Banner */}
         <AnimatePresence>
           {isOffline && (
@@ -253,6 +302,20 @@ export default function App() {
                 <TooltipTrigger asChild>
                   <button
                     type="button"
+                    onClick={() => setShortcutsOpen(true)}
+                    className="p-1.5 border border-app-ink border-opacity-10 hover:border-opacity-40 transition-all rounded-md"
+                  >
+                    <Keyboard size={14} />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Keyboard Shortcuts (?)</p>
+                </TooltipContent>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    type="button"
                     onClick={toggleTheme}
                     className="p-1.5 border border-app-ink border-opacity-10 hover:border-opacity-40 transition-all rounded-md"
                   >
@@ -280,6 +343,42 @@ export default function App() {
               Telegram Rate Limit Active - Retrying with exponential backoff...
             </motion.div>
           )}
+
+          <Dialog open={shortcutsOpen} onOpenChange={setShortcutsOpen}>
+            <DialogContent className="border-app-ink/20 bg-app-card p-0 text-app-ink sm:max-w-xl">
+              <DialogHeader className="border-b border-app-ink/10 p-4">
+                <DialogTitle className="text-lg font-bold tracking-tight uppercase">
+                  Keyboard Shortcuts
+                </DialogTitle>
+              </DialogHeader>
+              <div className="space-y-2 p-4 text-xs font-mono uppercase tracking-widest">
+                <div className="flex items-center justify-between rounded-md border border-app-ink/10 bg-app-muted/30 px-3 py-2">
+                  <span>Command Palette</span>
+                  <code>{commandKey}+Shift+P</code>
+                </div>
+                <div className="flex items-center justify-between rounded-md border border-app-ink/10 bg-app-muted/30 px-3 py-2">
+                  <span>Keyboard Shortcuts</span>
+                  <code>?</code>
+                </div>
+                <div className="flex items-center justify-between rounded-md border border-app-ink/10 bg-app-muted/30 px-3 py-2">
+                  <span>Run Highlighted Command</span>
+                  <code>Enter</code>
+                </div>
+                <div className="flex items-center justify-between rounded-md border border-app-ink/10 bg-app-muted/30 px-3 py-2">
+                  <span>Alternate Run Command</span>
+                  <code>{commandKey}+Enter</code>
+                </div>
+                <div className="flex items-center justify-between rounded-md border border-app-ink/10 bg-app-muted/30 px-3 py-2">
+                  <span>Back / Close Sub-View</span>
+                  <code>Esc</code>
+                </div>
+                <div className="flex items-center justify-between rounded-md border border-app-ink/10 bg-app-muted/30 px-3 py-2">
+                  <span>Parent Sub-View</span>
+                  <code>Backspace (empty)</code>
+                </div>
+              </div>
+            </DialogContent>
+          </Dialog>
 
           <div className="border border-app-ink border-opacity-20 flex flex-col bg-app-card flex-1 overflow-hidden">
             <div className="border-b border-app-ink border-opacity-10 p-4 flex flex-col gap-4 bg-app-muted shrink-0">
@@ -351,18 +450,6 @@ export default function App() {
                         {filteredPosts.length.toLocaleString()}
                       </span>
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => setActiveTab("settings")}
-                      className={`p-2 border rounded-md transition-all ml-2 ${
-                        activeTab === "settings"
-                          ? "bg-app-ink text-app-bg border-app-ink"
-                          : "border-app-ink/20 opacity-60 hover:opacity-100 hover:bg-app-ink/5"
-                      }`}
-                      title="Settings & Engine Room"
-                    >
-                      <Settings size={16} />
-                    </button>
                   </div>
                 </div>
               </div>

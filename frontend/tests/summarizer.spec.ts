@@ -110,7 +110,7 @@ test.describe("TG Summarizer", () => {
     await page.goto("/summarizer?tab=summary")
     await expect(page.locator("#tour-tab-summary")).toBeVisible()
 
-    await page.getByTitle("Settings & Engine Room").click()
+    await page.locator("#tour-tab-settings").click()
     await page
       .getByRole("button", { name: "Network & Security", exact: true })
       .click()

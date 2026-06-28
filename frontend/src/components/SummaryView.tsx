@@ -158,6 +158,7 @@ const markdownComponents = {
 }
 
 type SummaryViewProps = {}
+const TELEGRAM_MESSAGE_LIMIT = 4096
 
 export const SummaryView: React.FC<SummaryViewProps> = () => {
   const {
@@ -233,6 +234,11 @@ export const SummaryView: React.FC<SummaryViewProps> = () => {
   const [sendMetadata, setSendMetadata] = useState(true)
   const [metadataText, setMetadataText] = useState("")
   const [isEditingMetadata, setIsEditingMetadata] = useState(false)
+  const telegramBodyLength = summary?.length ?? 0
+  const telegramMetadataLength = sendMetadata ? metadataText.length : 0
+  const telegramMessageLength =
+    telegramBodyLength + telegramMetadataLength + (sendMetadata ? 2 : 0)
+  const exceedsTelegramLimit = telegramMessageLength > TELEGRAM_MESSAGE_LIMIT
 
   React.useEffect(() => {
     if (currentSummary) {
@@ -351,20 +357,20 @@ export const SummaryView: React.FC<SummaryViewProps> = () => {
                   <h3 className="text-2xl font-bold tracking-tight">
                     Awaiting External Response
                   </h3>
-                  <span className="bg-amber-500/15 text-amber-800 dark:text-amber-200 px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider">
+                  <span className="bg-amber-500/15 text-amber-800 dark:text-amber-200 px-2.5 py-1 rounded-md text-[11px] font-bold uppercase tracking-wider">
                     Prompt copied
                   </span>
                 </div>
                 <div className="flex flex-wrap gap-2">
-                  <span className="bg-app-muted/50 px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider text-app-ink/60 flex items-center gap-1.5">
+                  <span className="bg-app-muted/50 px-2.5 py-1 rounded-md text-[11px] font-bold uppercase tracking-wider text-app-ink/70 flex items-center gap-1.5">
                     <Clock size={12} />{" "}
                     <RelativeTime timestamp={currentSummary.timestamp} />
                   </span>
-                  <span className="bg-app-muted/50 px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider text-app-ink/60 flex items-center gap-1.5">
+                  <span className="bg-app-muted/50 px-2.5 py-1 rounded-md text-[11px] font-bold uppercase tracking-wider text-app-ink/70 flex items-center gap-1.5">
                     <Database size={12} />{" "}
                     {formatSummaryModelLabel(currentSummary.model)}
                   </span>
-                  <span className="bg-app-muted/50 px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider text-app-ink/60 flex items-center gap-1.5">
+                  <span className="bg-app-muted/50 px-2.5 py-1 rounded-md text-[11px] font-bold uppercase tracking-wider text-app-ink/70 flex items-center gap-1.5">
                     <Tag size={12} /> {currentSummary.language}
                   </span>
                 </div>
@@ -379,14 +385,15 @@ export const SummaryView: React.FC<SummaryViewProps> = () => {
               </button>
             </div>
 
-            <p className="text-sm text-app-ink/70 mb-4">
-              Use the prompt below in your external AI tool, then paste the
-              response here to complete this history entry.
+            <p className="text-sm text-app-ink/80 mb-4">
+              This summary is waiting for your external AI result. Run the
+              copied prompt in your AI tool, then paste the response here to
+              complete the pending history entry.
             </p>
 
             <div className="rounded-xl border border-app-ink/10 bg-app-muted/10 p-4 md:p-6">
               <div className="flex items-center justify-between mb-3">
-                <h4 className="text-[10px] font-bold uppercase tracking-widest text-app-ink/60">
+                <h4 className="text-[11px] font-bold uppercase tracking-widest text-app-ink/70">
                   Copied Prompt
                 </h4>
                 <button
@@ -400,7 +407,7 @@ export const SummaryView: React.FC<SummaryViewProps> = () => {
                     }
                   }}
                   disabled={!currentSummary.promptText}
-                  className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-app-ink/10 hover:bg-app-muted/30 text-[10px] font-bold uppercase tracking-wide disabled:opacity-50"
+                  className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-app-ink/10 hover:bg-app-muted/30 text-[11px] font-bold uppercase tracking-wide disabled:opacity-50"
                 >
                   <Copy size={12} />
                   Copy again
@@ -412,13 +419,13 @@ export const SummaryView: React.FC<SummaryViewProps> = () => {
             </div>
 
             <div className="mt-8 pt-6 border-t border-app-ink/10 flex flex-wrap gap-2">
-              <span className="bg-app-muted/30 px-2 py-1 rounded-md text-[9px] font-mono uppercase tracking-widest text-app-ink/50">
+              <span className="bg-app-muted/30 px-2 py-1 rounded-md text-[11px] font-mono uppercase tracking-widest text-app-ink/70">
                 {currentSummary.postCount ?? 0} Posts
               </span>
-              <span className="bg-app-muted/30 px-2 py-1 rounded-md text-[9px] font-mono uppercase tracking-widest text-app-ink/50">
+              <span className="bg-app-muted/30 px-2 py-1 rounded-md text-[11px] font-mono uppercase tracking-widest text-app-ink/70">
                 {currentSummary.channels.length} Channels
               </span>
-              <span className="bg-app-muted/30 px-2 py-1 rounded-md text-[9px] font-mono uppercase tracking-widest text-app-ink/50">
+              <span className="bg-app-muted/30 px-2 py-1 rounded-md text-[11px] font-mono uppercase tracking-widest text-app-ink/70">
                 Range: {new Date(currentSummary.startDate).toLocaleString()} -{" "}
                 {new Date(currentSummary.endDate).toLocaleString()}
               </span>
@@ -432,15 +439,15 @@ export const SummaryView: React.FC<SummaryViewProps> = () => {
                   Analysis Report
                 </h3>
                 <div className="flex flex-wrap gap-2">
-                  <span className="bg-app-muted/50 px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider text-app-ink/60 flex items-center gap-1.5">
+                  <span className="bg-app-muted/50 px-2.5 py-1 rounded-md text-[11px] font-bold uppercase tracking-wider text-app-ink/70 flex items-center gap-1.5">
                     <Clock size={12} />{" "}
                     <RelativeTime timestamp={displayDate.getTime()} />
                   </span>
-                  <span className="bg-app-muted/50 px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider text-app-ink/60 flex items-center gap-1.5">
+                  <span className="bg-app-muted/50 px-2.5 py-1 rounded-md text-[11px] font-bold uppercase tracking-wider text-app-ink/70 flex items-center gap-1.5">
                     <Database size={12} />{" "}
                     {formatSummaryModelLabel(currentSummary?.model)}
                   </span>
-                  <span className="bg-app-muted/50 px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider text-app-ink/60 flex items-center gap-1.5">
+                  <span className="bg-app-muted/50 px-2.5 py-1 rounded-md text-[11px] font-bold uppercase tracking-wider text-app-ink/70 flex items-center gap-1.5">
                     <Tag size={12} /> {currentSummary?.language}
                   </span>
                 </div>
@@ -451,7 +458,7 @@ export const SummaryView: React.FC<SummaryViewProps> = () => {
                     <select
                       value={selectedBotId}
                       onChange={(e) => setSelectedBotId(e.target.value)}
-                      className="bg-transparent border border-app-ink border-opacity-20 rounded-lg py-1.5 px-2 focus:outline-none focus:border-opacity-100 transition-colors text-[9px] font-mono appearance-none cursor-pointer"
+                      className="bg-transparent border border-app-ink border-opacity-20 rounded-lg py-1.5 px-2 focus:outline-none focus:border-opacity-100 transition-colors text-[11px] font-mono appearance-none cursor-pointer"
                     >
                       <option value="">Bot</option>
                       {botCredentials.map((b) => (
@@ -463,7 +470,7 @@ export const SummaryView: React.FC<SummaryViewProps> = () => {
                     <select
                       value={selectedDestId}
                       onChange={(e) => setSelectedDestId(e.target.value)}
-                      className="bg-transparent border border-app-ink border-opacity-20 rounded-lg py-1.5 px-2 focus:outline-none focus:border-opacity-100 transition-colors text-[9px] font-mono appearance-none cursor-pointer"
+                      className="bg-transparent border border-app-ink border-opacity-20 rounded-lg py-1.5 px-2 focus:outline-none focus:border-opacity-100 transition-colors text-[11px] font-mono appearance-none cursor-pointer"
                     >
                       <option value="">Dest</option>
                       {chatDestinations.map((d) => (
@@ -497,7 +504,7 @@ export const SummaryView: React.FC<SummaryViewProps> = () => {
                               )
                           }}
                           disabled={!selectedBotId || !selectedDestId}
-                          className="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-app-ink hover:text-app-bg transition-all text-[10px] uppercase font-bold tracking-wider disabled:opacity-30 disabled:cursor-not-allowed"
+                          className="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-app-ink hover:text-app-bg transition-all text-[11px] uppercase font-bold tracking-wider disabled:opacity-30 disabled:cursor-not-allowed"
                         >
                           <Send size={12} />
                           Publish
@@ -525,7 +532,7 @@ export const SummaryView: React.FC<SummaryViewProps> = () => {
                             setNoteValue(currentSummary.note || "")
                           }
                         }}
-                        className={`flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-app-ink hover:text-app-bg transition-all text-[10px] uppercase font-bold tracking-wider ${currentSummary.note ? "text-amber-600 bg-amber-500/10" : ""}`}
+                        className={`flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-app-ink hover:text-app-bg transition-all text-[11px] uppercase font-bold tracking-wider ${currentSummary.note ? "text-amber-600 bg-amber-500/10" : ""}`}
                       >
                         <StickyNote
                           size={12}
@@ -551,7 +558,7 @@ export const SummaryView: React.FC<SummaryViewProps> = () => {
                       type="button"
                       onClick={handleRerun}
                       disabled={summarizing || isRegenerating}
-                      className="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-app-ink hover:text-app-bg transition-all text-[10px] uppercase font-bold tracking-wider disabled:opacity-30 disabled:cursor-not-allowed"
+                      className="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-app-ink hover:text-app-bg transition-all text-[11px] uppercase font-bold tracking-wider disabled:opacity-30 disabled:cursor-not-allowed"
                     >
                       {summarizing || isRegenerating ? (
                         <Loader2 size={12} className="animate-spin" />
@@ -574,7 +581,7 @@ export const SummaryView: React.FC<SummaryViewProps> = () => {
                         setCopied(true)
                         setTimeout(() => setCopied(false), 2000)
                       }}
-                      className="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-app-ink hover:text-app-bg transition-all text-[10px] uppercase font-bold tracking-wider"
+                      className="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-app-ink hover:text-app-bg transition-all text-[11px] uppercase font-bold tracking-wider"
                     >
                       {copied ? <Check size={12} /> : <Copy size={12} />}
                       {copied ? "Copied" : "Copy Text"}
@@ -599,7 +606,7 @@ export const SummaryView: React.FC<SummaryViewProps> = () => {
                         a.click()
                         URL.revokeObjectURL(url)
                       }}
-                      className="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-app-ink hover:text-app-bg transition-all text-[10px] uppercase font-bold tracking-wider"
+                      className="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-app-ink hover:text-app-bg transition-all text-[11px] uppercase font-bold tracking-wider"
                     >
                       <Download size={12} />
                       Export .MD
@@ -609,6 +616,19 @@ export const SummaryView: React.FC<SummaryViewProps> = () => {
                     <p>Downloads the summary as a Markdown file.</p>
                   </TooltipContent>
                 </Tooltip>
+              </div>
+              <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] font-mono">
+                <span
+                  className={`rounded-md px-2 py-1 ${exceedsTelegramLimit ? "bg-red-500/10 text-red-600" : "bg-app-muted/40 text-app-ink/60"}`}
+                >
+                  Telegram chars: {telegramMessageLength}/
+                  {TELEGRAM_MESSAGE_LIMIT}
+                </span>
+                {exceedsTelegramLimit && (
+                  <span className="text-red-600/90">
+                    Message may exceed Telegram single-message limit.
+                  </span>
+                )}
               </div>
             </div>
             <div className="prose prose-sm md:prose-base max-w-none prose-headings:tracking-tight prose-headings:font-bold prose-p:leading-relaxed prose-p:text-app-ink/80 prose-li:text-app-ink/80 prose-li:my-1 dark:prose-invert">
@@ -649,7 +669,7 @@ export const SummaryView: React.FC<SummaryViewProps> = () => {
                       className="w-full bg-transparent border-none text-[13px] font-medium text-amber-950 placeholder:text-amber-900/40 focus:outline-none resize-none min-h-[80px] leading-relaxed"
                     />
                     <div className="flex justify-between items-center mt-3 pt-2 border-t border-amber-500/20">
-                      <span className="text-[10px] text-amber-700/60 font-medium">
+                      <span className="text-[11px] text-amber-700/80 font-medium">
                         {noteValue.length} chars
                       </span>
                       <div className="flex gap-2 items-center">
@@ -657,7 +677,7 @@ export const SummaryView: React.FC<SummaryViewProps> = () => {
                           <button
                             type="button"
                             onClick={handleDeleteNote}
-                            className="text-[10px] font-bold text-red-600/70 hover:text-red-700 transition-colors px-2 py-1.5 rounded hover:bg-red-500/10 mr-1"
+                            className="text-[11px] font-bold text-red-600/80 hover:text-red-700 transition-colors px-2 py-1.5 rounded hover:bg-red-500/10 mr-1"
                           >
                             Delete
                           </button>
@@ -665,14 +685,14 @@ export const SummaryView: React.FC<SummaryViewProps> = () => {
                         <button
                           type="button"
                           onClick={() => setIsEditingNote(false)}
-                          className="text-[10px] font-bold text-amber-800/60 hover:text-amber-900 transition-colors px-2 py-1.5 rounded hover:bg-amber-500/10"
+                          className="text-[11px] font-bold text-amber-800/80 hover:text-amber-900 transition-colors px-2 py-1.5 rounded hover:bg-amber-500/10"
                         >
                           Cancel
                         </button>
                         <button
                           type="button"
                           onClick={handleSaveNote}
-                          className="text-[10px] font-bold bg-amber-900 hover:bg-amber-950 text-amber-50 transition-colors px-3 py-1.5 rounded shadow-sm flex items-center gap-1"
+                          className="text-[11px] font-bold bg-amber-900 hover:bg-amber-950 text-amber-50 transition-colors px-3 py-1.5 rounded shadow-sm flex items-center gap-1"
                         >
                           Save Note
                         </button>
@@ -693,11 +713,11 @@ export const SummaryView: React.FC<SummaryViewProps> = () => {
                     <div className="absolute top-0 right-0 w-6 h-6 bg-gradient-to-bl from-transparent via-transparent to-[rgba(0,0,0,0.05)] rounded-bl-lg transition-all group-hover:w-8 group-hover:h-8" />
 
                     <div className="flex justify-between items-start mb-2">
-                      <span className="font-bold uppercase text-[9px] tracking-wider text-amber-800/70 flex items-center gap-1.5">
+                      <span className="font-bold uppercase text-[11px] tracking-wider text-amber-800/80 flex items-center gap-1.5">
                         <StickyNote size={12} className="text-amber-700/50" />
                         Note
                       </span>
-                      <span className="opacity-0 group-hover:opacity-100 text-[10px] font-medium text-amber-700/60 transition-opacity bg-amber-500/10 px-2 py-0.5 rounded-full">
+                      <span className="opacity-0 group-hover:opacity-100 text-[11px] font-medium text-amber-700/80 transition-opacity bg-amber-500/10 px-2 py-0.5 rounded-full">
                         Edit
                       </span>
                     </div>
@@ -712,7 +732,7 @@ export const SummaryView: React.FC<SummaryViewProps> = () => {
             {currentSummary && (
               <div className="mt-8 border-t border-app-ink/10 pt-6">
                 <div className="flex items-center justify-between mb-4">
-                  <h4 className="text-[10px] font-bold uppercase tracking-widest text-app-ink/60">
+                  <h4 className="text-[11px] font-bold uppercase tracking-widest text-app-ink/70">
                     Publish Metadata
                   </h4>
                   <label className="flex items-center gap-2 cursor-pointer">
@@ -731,7 +751,7 @@ export const SummaryView: React.FC<SummaryViewProps> = () => {
                       }}
                       className="w-3 h-3 accent-app-ink"
                     />
-                    <span className="text-[10px] uppercase font-bold text-app-ink">
+                    <span className="text-[11px] uppercase font-bold text-app-ink">
                       Include Metadata
                     </span>
                   </label>
@@ -756,7 +776,7 @@ export const SummaryView: React.FC<SummaryViewProps> = () => {
                               )
                               setIsEditingMetadata(false)
                             }}
-                            className="text-[10px] font-bold uppercase px-3 py-1.5 hover:bg-app-ink/5 rounded transition-colors"
+                            className="text-[11px] font-bold uppercase px-3 py-1.5 hover:bg-app-ink/5 rounded transition-colors"
                           >
                             Cancel
                           </button>
@@ -772,7 +792,7 @@ export const SummaryView: React.FC<SummaryViewProps> = () => {
                               setIsEditingMetadata(false)
                               toast.success("Metadata updated.")
                             }}
-                            className="text-[10px] font-bold uppercase px-3 py-1.5 bg-app-ink text-app-bg rounded transition-colors"
+                            className="text-[11px] font-bold uppercase px-3 py-1.5 bg-app-ink text-app-bg rounded transition-colors"
                           >
                             Save
                           </button>
@@ -786,7 +806,7 @@ export const SummaryView: React.FC<SummaryViewProps> = () => {
                         <pre className="text-xs font-mono whitespace-pre-wrap opacity-80 group-hover:opacity-100 transition-opacity">
                           {metadataText}
                         </pre>
-                        <div className="absolute top-0 right-0 opacity-0 group-hover:opacity-100 transition-opacity bg-app-bg/80 backdrop-blur-sm px-2 py-1 rounded text-[9px] font-bold uppercase border border-app-ink/10">
+                        <div className="absolute top-0 right-0 opacity-0 group-hover:opacity-100 transition-opacity bg-app-bg/80 backdrop-blur-sm px-2 py-1 rounded text-[11px] font-bold uppercase border border-app-ink/10">
                           Click to Edit
                         </div>
                       </div>
@@ -799,15 +819,15 @@ export const SummaryView: React.FC<SummaryViewProps> = () => {
             {currentSummary && (
               <div className="mt-12 pt-6 border-t border-app-ink/10 flex flex-col md:flex-row justify-between items-center gap-4">
                 <div className="flex items-center gap-2">
-                  <span className="bg-app-muted/30 px-2 py-1 rounded-md text-[9px] font-mono uppercase tracking-widest text-app-ink/50">
+                  <span className="bg-app-muted/30 px-2 py-1 rounded-md text-[11px] font-mono uppercase tracking-widest text-app-ink/70">
                     {currentSummary.postCount} Posts Analyzed
                   </span>
-                  <span className="bg-app-muted/30 px-2 py-1 rounded-md text-[9px] font-mono uppercase tracking-widest text-app-ink/50">
+                  <span className="bg-app-muted/30 px-2 py-1 rounded-md text-[11px] font-mono uppercase tracking-widest text-app-ink/70">
                     {currentSummary.channels.length} Channels
                   </span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <span className="bg-app-muted/30 px-2 py-1 rounded-md text-[9px] font-mono uppercase tracking-widest text-app-ink/50">
+                  <span className="bg-app-muted/30 px-2 py-1 rounded-md text-[11px] font-mono uppercase tracking-widest text-app-ink/70">
                     Range: {new Date(startDate).toLocaleString()} -{" "}
                     {new Date(endDate).toLocaleString()}
                   </span>
@@ -834,7 +854,7 @@ export const SummaryView: React.FC<SummaryViewProps> = () => {
               <div className="h-4 bg-app-muted/20 rounded-md w-4/5" />
             </div>
             <div className="flex justify-center pt-8">
-              <div className="flex items-center gap-2 text-app-ink/40">
+              <div className="flex items-center gap-2 text-app-ink/60">
                 <Loader2 size={16} className="animate-spin" />
                 <span className="text-xs font-bold uppercase tracking-widest">
                   Generating Analysis...
@@ -850,7 +870,7 @@ export const SummaryView: React.FC<SummaryViewProps> = () => {
             <h3 className="text-lg font-bold tracking-tight mb-2">
               Ready to Summarize
             </h3>
-            <p className="text-xs text-app-ink/50 max-w-[280px] mx-auto leading-relaxed">
+            <p className="text-xs text-app-ink/70 max-w-[280px] mx-auto leading-relaxed">
               Generate in-app, or use Copy Prompt to run an external AI and
               paste the response from History.
             </p>

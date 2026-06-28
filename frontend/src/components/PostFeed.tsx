@@ -5,6 +5,7 @@ import { useEffect } from "react"
 import { useScraper } from "../contexts/ScraperContext"
 import { PostCard } from "./PostCard"
 import { PostFilter } from "./PostFilter"
+import { Skeleton } from "./ui/skeleton"
 
 interface PostFeedProps {
   postSearch: string
@@ -18,7 +19,12 @@ export const PostFeed: React.FC<PostFeedProps> = ({
   setPostSearch,
   loadMoreRef,
 }) => {
-  const { filteredPosts, visiblePosts, setVisiblePosts } = useScraper()
+  const {
+    filteredPosts,
+    isInitialPostLoadPending,
+    visiblePosts,
+    setVisiblePosts,
+  } = useScraper()
 
   useEffect(() => {
     const observer = new IntersectionObserver(
@@ -64,7 +70,33 @@ export const PostFeed: React.FC<PostFeedProps> = ({
         </div>
       </div>
 
-      {filteredPosts.length > 0 ? (
+      {isInitialPostLoadPending ? (
+        <div className="space-y-4">
+          {Array.from({ length: 5 }).map((_, index) => (
+            <div
+              key={`post-skeleton-${index}`}
+              className="rounded-xl border border-app-ink/10 bg-app-card p-5"
+            >
+              <div className="mb-4 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <Skeleton className="h-8 w-8 rounded-full bg-app-ink/10" />
+                  <div className="space-y-2">
+                    <Skeleton className="h-3 w-28 bg-app-ink/10" />
+                    <Skeleton className="h-3 w-20 bg-app-ink/10" />
+                  </div>
+                </div>
+                <Skeleton className="h-6 w-20 rounded-full bg-app-ink/10" />
+              </div>
+              <div className="space-y-2">
+                <Skeleton className="h-3 w-full bg-app-ink/10" />
+                <Skeleton className="h-3 w-[92%] bg-app-ink/10" />
+                <Skeleton className="h-3 w-[85%] bg-app-ink/10" />
+                <Skeleton className="h-3 w-[70%] bg-app-ink/10" />
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : filteredPosts.length > 0 ? (
         <div className="space-y-4">
           {filteredPosts.slice(0, visiblePosts).map((post) => (
             <PostCard

@@ -71,6 +71,7 @@ export const ChannelCard: React.FC<ChannelCardProps> = ({
     showChannelVideos,
     showChannelFiles,
     showChannelLinks,
+    showChannelStartId,
   } = useSettings()
 
   const [isAddingTag, setIsAddingTag] = useState<boolean>(false)
@@ -213,7 +214,7 @@ export const ChannelCard: React.FC<ChannelCardProps> = ({
       )}
 
       {/* Hidden Hover Action Bar (Destructive Actions) */}
-      <div className="absolute top-3 right-3 flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity z-20">
+      <div className="absolute top-3 right-3 flex items-center gap-1.5 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity z-20">
         {!channel.isUnavailableOnWebView && (
           <Tooltip>
             <TooltipTrigger asChild>
@@ -373,7 +374,7 @@ export const ChannelCard: React.FC<ChannelCardProps> = ({
                   target="_blank"
                   rel="noopener noreferrer"
                   onClick={(e) => e.stopPropagation()}
-                  className="absolute -bottom-1 -right-1 w-6 h-6 bg-app-bg border border-app-ink/10 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all shadow-sm hover:bg-app-ink hover:text-app-bg"
+                  className="absolute -bottom-1 -right-1 w-6 h-6 bg-app-bg border border-app-ink/10 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-all shadow-sm hover:bg-app-ink hover:text-app-bg"
                 >
                   <ExternalLink size={10} />
                 </a>
@@ -421,7 +422,7 @@ export const ChannelCard: React.FC<ChannelCardProps> = ({
 
         {/* Metadata Badges */}
         <div className="flex flex-wrap items-center gap-2 mb-5">
-          <div className="bg-app-muted px-2.5 py-1 rounded-md text-[9px] font-bold uppercase tracking-wider text-app-ink/70 flex items-center gap-1.5 border border-app-ink/5">
+          <div className="bg-app-muted px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider text-app-ink/75 flex items-center gap-1.5 border border-app-ink/5">
             <span>{(stats?.count || 0).toLocaleString()} Posts</span>
             {inScopeCount > 0 && (
               <span className="text-app-ink/40">
@@ -432,7 +433,7 @@ export const ChannelCard: React.FC<ChannelCardProps> = ({
           {stats?.velocity !== undefined && stats.velocity > 0 && (
             <Tooltip>
               <TooltipTrigger asChild>
-                <div className="bg-app-muted px-2.5 py-1 rounded-md text-[9px] font-bold uppercase tracking-wider text-app-ink/70 flex items-center gap-1.5 border border-app-ink/5 cursor-help">
+                <div className="bg-app-muted px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider text-app-ink/75 flex items-center gap-1.5 border border-app-ink/5 cursor-help">
                   <Activity size={10} className="opacity-50" />
                   <span>
                     {stats.velocity < 1 ? "< 1" : Math.round(stats.velocity)} /
@@ -450,7 +451,7 @@ export const ChannelCard: React.FC<ChannelCardProps> = ({
           {showChannelSubscribers && channel.subscribers && (
             <Tooltip>
               <TooltipTrigger asChild>
-                <div className="bg-app-muted px-2.5 py-1 rounded-md text-[9px] font-bold uppercase tracking-wider text-app-ink/70 flex items-center gap-1.5 border border-app-ink/5 cursor-help">
+                <div className="bg-app-muted px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider text-app-ink/75 flex items-center gap-1.5 border border-app-ink/5 cursor-help">
                   <Users size={10} className="opacity-50" />
                   <span>{channel.subscribers}</span>
                 </div>
@@ -463,7 +464,7 @@ export const ChannelCard: React.FC<ChannelCardProps> = ({
           {showChannelPhotos && channel.photos && (
             <Tooltip>
               <TooltipTrigger asChild>
-                <div className="bg-app-muted px-2.5 py-1 rounded-md text-[9px] font-bold uppercase tracking-wider text-app-ink/70 flex items-center gap-1.5 border border-app-ink/5 cursor-help">
+                <div className="bg-app-muted px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider text-app-ink/75 flex items-center gap-1.5 border border-app-ink/5 cursor-help">
                   <ImageIcon size={10} className="opacity-50" />
                   <span>{channel.photos}</span>
                 </div>
@@ -476,7 +477,7 @@ export const ChannelCard: React.FC<ChannelCardProps> = ({
           {showChannelVideos && channel.videos && (
             <Tooltip>
               <TooltipTrigger asChild>
-                <div className="bg-app-muted px-2.5 py-1 rounded-md text-[9px] font-bold uppercase tracking-wider text-app-ink/70 flex items-center gap-1.5 border border-app-ink/5 cursor-help">
+                <div className="bg-app-muted px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider text-app-ink/75 flex items-center gap-1.5 border border-app-ink/5 cursor-help">
                   <Video size={10} className="opacity-50" />
                   <span>{channel.videos}</span>
                 </div>
@@ -489,7 +490,7 @@ export const ChannelCard: React.FC<ChannelCardProps> = ({
           {showChannelFiles && channel.files && (
             <Tooltip>
               <TooltipTrigger asChild>
-                <div className="bg-app-muted px-2.5 py-1 rounded-md text-[9px] font-bold uppercase tracking-wider text-app-ink/70 flex items-center gap-1.5 border border-app-ink/5 cursor-help">
+                <div className="bg-app-muted px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider text-app-ink/75 flex items-center gap-1.5 border border-app-ink/5 cursor-help">
                   <File size={10} className="opacity-50" />
                   <span>{channel.files}</span>
                 </div>
@@ -502,7 +503,7 @@ export const ChannelCard: React.FC<ChannelCardProps> = ({
           {showChannelLinks && channel.links && (
             <Tooltip>
               <TooltipTrigger asChild>
-                <div className="bg-app-muted px-2.5 py-1 rounded-md text-[9px] font-bold uppercase tracking-wider text-app-ink/70 flex items-center gap-1.5 border border-app-ink/5 cursor-help">
+                <div className="bg-app-muted px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider text-app-ink/75 flex items-center gap-1.5 border border-app-ink/5 cursor-help">
                   <LinkIcon size={10} className="opacity-50" />
                   <span>{channel.links}</span>
                 </div>
@@ -513,14 +514,14 @@ export const ChannelCard: React.FC<ChannelCardProps> = ({
             </Tooltip>
           )}
 
-          <div className="bg-app-muted px-2.5 py-1 rounded-md text-[9px] font-bold uppercase tracking-wider text-app-ink/70 flex items-center gap-1.5 border border-app-ink/5">
+          <div className="bg-app-muted px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider text-app-ink/75 flex items-center gap-1.5 border border-app-ink/5">
             <Clock size={10} className="opacity-50" />
             <RelativeTime timestamp={channel.lastUpdated} />
           </div>
           {channel.followedAt && (
             <Tooltip>
               <TooltipTrigger asChild>
-                <div className="bg-app-muted px-2.5 py-1 rounded-md text-[9px] font-bold uppercase tracking-wider text-app-ink/70 flex items-center gap-1.5 border border-app-ink/5 cursor-help">
+                <div className="bg-app-muted px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider text-app-ink/75 flex items-center gap-1.5 border border-app-ink/5 cursor-help">
                   <span>
                     Followed:{" "}
                     {new Date(channel.followedAt).toLocaleDateString()}
@@ -537,7 +538,7 @@ export const ChannelCard: React.FC<ChannelCardProps> = ({
           {channel.discoveredVia && (
             <Tooltip>
               <TooltipTrigger asChild>
-                <div className="bg-blue-500/10 px-2.5 py-1 rounded-md text-[9px] font-bold uppercase tracking-wider text-blue-600 flex items-center gap-1.5 border border-blue-500/20 cursor-help">
+                <div className="bg-blue-500/10 px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider text-blue-600 flex items-center gap-1.5 border border-blue-500/20 cursor-help">
                   <span>Auto-Followed</span>
                 </div>
               </TooltipTrigger>
@@ -559,7 +560,7 @@ export const ChannelCard: React.FC<ChannelCardProps> = ({
           {channel.tags?.map((tag) => (
             <span
               key={tag}
-              className="text-[9px] uppercase font-bold px-2 py-1 bg-app-ink/5 border border-app-ink/10 flex items-center gap-1.5 group/tag rounded-md text-app-ink/80"
+              className="text-[10px] uppercase font-bold px-2 py-1 bg-app-ink/5 border border-app-ink/10 flex items-center gap-1.5 group/tag rounded-md text-app-ink/80"
             >
               {tag}
               <button
@@ -578,7 +579,7 @@ export const ChannelCard: React.FC<ChannelCardProps> = ({
             <input
               type="text"
               placeholder="Tag..."
-              className="text-[9px] uppercase font-bold px-2 py-1 bg-app-bg border border-app-ink/20 focus:border-app-ink/40 focus:outline-none w-20 rounded-md shadow-inner"
+              className="text-[10px] uppercase font-bold px-2 py-1 bg-app-bg border border-app-ink/20 focus:border-app-ink/40 focus:outline-none w-20 rounded-md shadow-inner"
               onBlur={(e) => handleAddTag((e.target as HTMLInputElement).value)}
               onKeyDown={(e) => {
                 if (e.key === "Enter")
@@ -596,7 +597,7 @@ export const ChannelCard: React.FC<ChannelCardProps> = ({
                     e.stopPropagation()
                     setIsAddingTag(true)
                   }}
-                  className="text-[9px] uppercase font-bold px-2 py-1 border border-dashed border-app-ink/20 text-app-ink/50 hover:text-app-ink hover:border-solid hover:bg-app-ink/5 transition-all flex items-center gap-1 rounded-md"
+                  className="text-[10px] uppercase font-bold px-2 py-1 border border-dashed border-app-ink/20 text-app-ink/60 hover:text-app-ink hover:border-solid hover:bg-app-ink/5 transition-all flex items-center gap-1 rounded-md"
                 >
                   <Plus size={10} /> Add Tag
                 </button>
@@ -611,59 +612,61 @@ export const ChannelCard: React.FC<ChannelCardProps> = ({
         {/* Bottom Section: Config & Sync Action */}
         <div className="mt-auto flex items-center justify-between pt-4 border-t border-app-ink/5">
           <div className="flex items-center gap-4">
-            <div className="group/config">
-              <p className="text-[9px] uppercase text-app-ink/40 font-bold tracking-widest mb-0.5">
-                Start ID
-              </p>
-              {isEditing ? (
-                <input
-                  type="text"
-                  value={editingStartId}
-                  onChange={(e) => setEditingStartId(e.target.value)}
-                  onBlur={() => handleUpdateStartId(editingStartId)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") handleUpdateStartId(editingStartId)
-                    if (e.key === "Escape") setEditingStartId(null)
-                  }}
-                  onClick={(e) => e.stopPropagation()}
-                  className="w-16 bg-transparent text-sm font-bold leading-none focus:outline-none border-b border-app-ink/30"
-                />
-              ) : (
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <div
-                      className="flex items-center gap-1.5 cursor-pointer"
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        setEditingStartId((channel.startId ?? "").toString())
-                      }}
-                    >
-                      <p
-                        className={`text-sm font-bold leading-none group-hover/config:text-app-ink/70 transition-colors ${channel.startId == null ? "text-amber-500" : ""}`}
+            {showChannelStartId && (
+              <div className="group/config">
+                <p className="text-[10px] uppercase text-app-ink/60 font-bold tracking-widest mb-0.5">
+                  Start ID
+                </p>
+                {isEditing ? (
+                  <input
+                    type="text"
+                    value={editingStartId}
+                    onChange={(e) => setEditingStartId(e.target.value)}
+                    onBlur={() => handleUpdateStartId(editingStartId)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") handleUpdateStartId(editingStartId)
+                      if (e.key === "Escape") setEditingStartId(null)
+                    }}
+                    onClick={(e) => e.stopPropagation()}
+                    className="w-16 bg-transparent text-sm font-bold leading-none focus:outline-none border-b border-app-ink/30"
+                  />
+                ) : (
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <div
+                        className="flex items-center gap-1.5 cursor-pointer"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          setEditingStartId((channel.startId ?? "").toString())
+                        }}
                       >
+                        <p
+                          className={`text-sm font-bold leading-none group-hover/config:text-app-ink/70 transition-colors ${channel.startId == null ? "text-amber-500" : ""}`}
+                        >
+                          {channel.startId == null
+                            ? "Auto"
+                            : channel.startId.toLocaleString()}
+                        </p>
+                        <Edit2
+                          size={10}
+                          className="opacity-0 group-hover/config:opacity-40 transition-opacity"
+                        />
+                      </div>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>
                         {channel.startId == null
-                          ? "Auto"
-                          : channel.startId.toLocaleString()}
+                          ? "Start ID will be resolved automatically on next sync"
+                          : "Edit the starting post ID for syncing"}
                       </p>
-                      <Edit2
-                        size={10}
-                        className="opacity-0 group-hover/config:opacity-40 transition-opacity"
-                      />
-                    </div>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <p>
-                      {channel.startId == null
-                        ? "Start ID will be resolved automatically on next sync"
-                        : "Edit the starting post ID for syncing"}
-                    </p>
-                  </TooltipContent>
-                </Tooltip>
-              )}
-            </div>
+                    </TooltipContent>
+                  </Tooltip>
+                )}
+              </div>
+            )}
 
             <div>
-              <p className="text-[9px] uppercase text-app-ink/40 font-bold tracking-widest mb-0.5">
+              <p className="text-[10px] uppercase text-app-ink/60 font-bold tracking-widest mb-0.5">
                 Status
               </p>
               <div className="flex items-center gap-1.5">
@@ -698,7 +701,7 @@ export const ChannelCard: React.FC<ChannelCardProps> = ({
               className="group/auto-follow"
               onClick={(e) => e.stopPropagation()}
             >
-              <p className="text-[9px] uppercase text-app-ink/40 font-bold tracking-widest mb-0.5 flex items-center gap-1">
+              <p className="text-[10px] uppercase text-app-ink/60 font-bold tracking-widest mb-0.5 flex items-center gap-1">
                 <Share2 size={9} className="opacity-50" />
                 Auto-Follow
               </p>
@@ -707,14 +710,14 @@ export const ChannelCard: React.FC<ChannelCardProps> = ({
                   <button
                     type="button"
                     onClick={handleToggleAutoFollow}
-                    className={`w-10 h-5 transition-all relative border border-app-ink/20 ${
+                    className={`w-10 h-5 transition-all relative border border-app-ink/20 rounded-full ${
                       channel.autoFollowForwarded
                         ? "bg-green-500 border-green-600"
                         : "bg-app-ink/10"
                     }`}
                   >
                     <div
-                      className={`absolute top-0.5 w-3.5 h-3.5 bg-white transition-all ${
+                      className={`absolute top-0.5 w-3.5 h-3.5 bg-white transition-all rounded-full ${
                         channel.autoFollowForwarded ? "left-5.5" : "left-0.5"
                       }`}
                     />

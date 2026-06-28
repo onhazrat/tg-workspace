@@ -31,7 +31,14 @@ import {
 } from "../lib/data-transfer/download"
 import { importIndexedDBToServer } from "../lib/repository"
 import { RelativeTime } from "./RelativeTime"
-import { Modal } from "./ui/Modal"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "./ui/dialog"
 import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tg-tooltip"
 
 console.log("JSZip loaded:", JSZip)
@@ -767,33 +774,39 @@ export const DatabaseManagement: React.FC = () => {
         </p>
       </div>
 
-      {confirmModal && (
-        <Modal
-          isOpen={confirmModal.isOpen}
-          onClose={() => setConfirmModal(null)}
-          title={confirmModal.title}
-          footer={
-            <div className="flex justify-end gap-3">
-              <button
-                type="button"
-                onClick={() => setConfirmModal(null)}
-                className="px-4 py-2 border border-app-ink/20 hover:bg-app-ink/5 transition-colors text-sm font-medium"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={confirmModal.onConfirm}
-                className="px-4 py-2 bg-red-500 text-white hover:bg-red-600 transition-colors text-sm font-medium"
-              >
-                Confirm
-              </button>
-            </div>
-          }
-        >
-          <p className="text-sm opacity-80">{confirmModal.message}</p>
-        </Modal>
-      )}
+      <Dialog
+        open={Boolean(confirmModal?.isOpen)}
+        onOpenChange={(open) => {
+          if (!open) setConfirmModal(null)
+        }}
+      >
+        <DialogContent className="border-app-ink/20 bg-app-card text-app-ink sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>{confirmModal?.title}</DialogTitle>
+            <DialogDescription className="text-app-ink/80">
+              {confirmModal?.message}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <button
+              type="button"
+              onClick={() => setConfirmModal(null)}
+              className="rounded-md border border-app-ink/20 px-3 py-2 text-xs font-mono uppercase tracking-widest hover:bg-app-muted/30"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                confirmModal?.onConfirm()
+              }}
+              className="rounded-md border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs font-mono uppercase tracking-widest text-red-600 hover:bg-red-500/20"
+            >
+              Confirm
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </motion.div>
   )
 }

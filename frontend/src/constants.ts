@@ -11,6 +11,7 @@ export const WORKSPACE_TABS = [
   { id: "summary", label: "Summary", icon: "FileText" },
   { id: "chat", label: "Chat", icon: "MessageSquare" },
   { id: "history", label: "History", icon: "History" },
+  { id: "settings", label: "Settings", icon: "Settings" },
 ] as const
 
 export const SETTINGS_TABS = [

@@ -12,6 +12,7 @@ export const RelativeTime: React.FC<RelativeTimeProps> = ({
   className,
 }) => {
   const [relativeTime, setRelativeTime] = useState(getRelativeTime(timestamp))
+  const absoluteTime = timestamp ? new Date(timestamp).toLocaleString() : ""
 
   useEffect(() => {
     // Update immediately when timestamp changes
@@ -26,5 +27,9 @@ export const RelativeTime: React.FC<RelativeTimeProps> = ({
     return () => clearInterval(interval)
   }, [timestamp])
 
-  return <span className={className}>{relativeTime}</span>
+  return (
+    <span className={className} title={absoluteTime || undefined}>
+      {relativeTime}
+    </span>
+  )
 }

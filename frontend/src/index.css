@@ -173,3 +173,16 @@ body {
   color: inherit;
   font-weight: inherit;
 }
+
+/* WCAG polish: avoid tiny/dim metadata typography in summarizer workspace */
+.tg-wcag-floor .text-\[8px\],
+.tg-wcag-floor .text-\[9px\],
+.tg-wcag-floor .text-\[10px\] {
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.tg-wcag-floor .text-app-ink\/40,
+.tg-wcag-floor .text-app-ink\/50 {
+  color: color-mix(in srgb, var(--ink) 65%, transparent);
+}

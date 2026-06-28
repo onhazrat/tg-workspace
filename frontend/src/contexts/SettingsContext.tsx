@@ -109,6 +109,8 @@ interface SettingsContextType {
   setShowChannelFiles: (show: boolean) => void
   showChannelLinks: boolean
   setShowChannelLinks: (show: boolean) => void
+  showChannelStartId: boolean
+  setShowChannelStartId: (show: boolean) => void
   advancedMode: boolean
   setAdvancedMode: (advanced: boolean) => void
 }
@@ -345,6 +347,14 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({
   const [showChannelLinks, setShowChannelLinks] = useState<boolean>(() => {
     if (typeof window !== "undefined") {
       const saved = localStorage.getItem("showChannelLinks")
+      return saved !== null ? saved === "true" : false
+    }
+    return false
+  })
+
+  const [showChannelStartId, setShowChannelStartId] = useState<boolean>(() => {
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem("showChannelStartId")
       return saved !== null ? saved === "true" : false
     }
     return false
@@ -694,6 +704,10 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({
   }, [showChannelLinks])
 
   useEffect(() => {
+    localStorage.setItem("showChannelStartId", showChannelStartId.toString())
+  }, [showChannelStartId])
+
+  useEffect(() => {
     localStorage.setItem("advancedMode", advancedMode.toString())
   }, [advancedMode])
 
@@ -839,6 +853,8 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({
         setShowChannelFiles,
         showChannelLinks,
         setShowChannelLinks,
+        showChannelStartId,
+        setShowChannelStartId,
         advancedMode,
         setAdvancedMode,
       }}

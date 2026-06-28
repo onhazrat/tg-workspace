@@ -65,7 +65,7 @@ export function CommandConfirmDialog({
     >
       <div className="space-y-2">
         <h3 className="text-sm font-semibold">{command.label}</h3>
-        <p className="text-sm text-muted-foreground">{description}</p>
+        <p className="text-sm text-app-ink/60">{description}</p>
       </div>
       <div className="flex justify-end gap-2">
         <button

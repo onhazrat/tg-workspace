@@ -12,7 +12,7 @@ export function PaletteSubViewHeader({
   showBackspaceHint = true,
 }: PaletteSubViewHeaderProps) {
   return (
-    <div className="flex items-center gap-2 border-b border-app-ink/10 px-3 py-2 text-[10px] font-mono uppercase tracking-widest text-app-ink/50">
+    <div className="flex items-center gap-2 border-b border-app-ink/10 px-3 py-2 text-[11px] font-mono uppercase tracking-widest text-app-ink/70">
       <button
         type="button"
         onClick={onBack}
@@ -38,7 +38,7 @@ interface PaletteFooterHintsProps {
 
 export function PaletteFooterHints({ hints }: PaletteFooterHintsProps) {
   return (
-    <div className="border-t border-app-ink/10 px-3 py-2 text-[10px] font-mono uppercase tracking-widest text-app-ink/50">
+    <div className="border-t border-app-ink/10 px-3 py-2 text-[11px] font-mono uppercase tracking-widest text-app-ink/70">
       {hints}
     </div>
   )

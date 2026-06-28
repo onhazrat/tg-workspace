@@ -128,8 +128,8 @@ export const PostFilter: React.FC<PostFilterProps> = ({
         {/* Header Bar */}
         <div className="flex items-center justify-between px-5 py-3 border-b border-app-ink/5 bg-app-muted/30">
           <div className="flex items-center gap-2.5">
-            <Filter size={14} className="opacity-40" />
-            <h2 className="text-[10px] font-bold uppercase tracking-widest opacity-60">
+            <Filter size={14} className="text-app-ink/60" />
+            <h2 className="text-[11px] font-bold uppercase tracking-widest text-app-ink/70">
               Post Filtration
             </h2>
           </div>
@@ -141,14 +141,14 @@ export const PostFilter: React.FC<PostFilterProps> = ({
             {/* Column 1: Dates */}
             <div className="flex flex-col gap-3">
               <div className="flex items-center gap-2">
-                <Calendar size={12} className="opacity-40" />
-                <label className="text-[10px] uppercase font-bold opacity-50 tracking-widest">
+                <Calendar size={12} className="text-app-ink/60" />
+                <label className="text-[11px] uppercase font-bold text-app-ink/70 tracking-widest">
                   Time Range
                 </label>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <label className="text-[9px] uppercase font-bold opacity-40 tracking-widest">
+                  <label className="text-[11px] uppercase font-bold text-app-ink/60 tracking-widest">
                     Start Timestamp
                   </label>
                   <input
@@ -168,7 +168,7 @@ export const PostFilter: React.FC<PostFilterProps> = ({
                   />
                 </div>
                 <div className="space-y-2">
-                  <label className="text-[9px] uppercase font-bold opacity-40 tracking-widest">
+                  <label className="text-[11px] uppercase font-bold text-app-ink/60 tracking-widest">
                     End Timestamp
                   </label>
                   <input
@@ -194,8 +194,8 @@ export const PostFilter: React.FC<PostFilterProps> = ({
             {/* Column 2: Quick Range */}
             <div className="flex flex-col gap-3">
               <div className="flex items-center gap-2">
-                <Clock size={12} className="opacity-40" />
-                <label className="text-[10px] uppercase font-bold opacity-50 tracking-widest">
+                <Clock size={12} className="text-app-ink/60" />
+                <label className="text-[11px] uppercase font-bold text-app-ink/70 tracking-widest">
                   Quick Range
                 </label>
               </div>
@@ -215,7 +215,7 @@ export const PostFilter: React.FC<PostFilterProps> = ({
                     type="button"
                     key={range.label}
                     onClick={() => setQuickRange(range.hours)}
-                    className="text-[10px] uppercase font-bold px-4 py-1.5 rounded-full bg-app-muted border border-app-ink/10 hover:border-app-ink/30 hover:bg-app-ink hover:text-app-bg transition-all shadow-sm"
+                    className="text-[11px] uppercase font-bold px-4 py-1.5 rounded-full bg-app-muted border border-app-ink/10 hover:border-app-ink/30 hover:bg-app-ink hover:text-app-bg transition-all shadow-sm"
                   >
                     {range.label}
                   </button>
@@ -230,30 +230,30 @@ export const PostFilter: React.FC<PostFilterProps> = ({
             <div className="flex flex-col gap-6">
               <div className="flex flex-col gap-3">
                 <div className="flex items-center gap-2">
-                  <Search size={12} className="opacity-40" />
-                  <label className="text-[10px] uppercase font-bold opacity-50 tracking-widest">
+                  <Search size={12} className="text-app-ink/60" />
+                  <label className="text-[11px] uppercase font-bold text-app-ink/70 tracking-widest">
                     Keyword Search
                   </label>
                 </div>
                 <div className="relative w-full group">
                   <Search
                     size={14}
-                    className="absolute left-3 top-1/2 -translate-y-1/2 opacity-40 group-focus-within:opacity-100 transition-colors"
+                    className="absolute left-3 top-1/2 -translate-y-1/2 text-app-ink/50 group-focus-within:text-app-ink transition-colors"
                   />
                   <input
                     type="text"
                     placeholder="SEARCH POSTS..."
                     value={postSearch}
                     onChange={(e) => setPostSearch(e.target.value)}
-                    className="w-full bg-app-muted border border-app-ink/10 rounded-xl pl-9 pr-4 py-2 text-[11px] font-mono focus:outline-none focus:border-app-ink/30 focus:ring-4 focus:ring-app-ink/5 transition-all uppercase tracking-widest shadow-sm"
+                    className="w-full bg-app-muted border border-app-ink/10 rounded-xl pl-9 pr-4 py-2 text-[11px] font-mono focus:outline-none focus:border-app-ink/30 focus:ring-4 focus:ring-app-ink/5 transition-all placeholder:uppercase placeholder:tracking-widest shadow-sm"
                   />
                 </div>
               </div>
 
               <div className="flex flex-col gap-3">
                 <div className="flex items-center gap-2">
-                  <Filter size={12} className="opacity-40" />
-                  <label className="text-[10px] uppercase font-bold opacity-50 tracking-widest">
+                  <Filter size={12} className="text-app-ink/60" />
+                  <label className="text-[11px] uppercase font-bold text-app-ink/70 tracking-widest">
                     Post Type
                   </label>
                 </div>
@@ -271,7 +271,7 @@ export const PostFilter: React.FC<PostFilterProps> = ({
                       type="button"
                       key={type.value}
                       onClick={() => setForwardedFilter(type.value)}
-                      className={`text-[10px] uppercase font-bold px-4 py-1.5 rounded-full border transition-all shadow-sm ${
+                      className={`text-[11px] uppercase font-bold px-4 py-1.5 rounded-full border transition-all shadow-sm ${
                         forwardedFilter === type.value
                           ? "bg-app-ink text-app-bg border-app-ink"
                           : "bg-app-muted border-app-ink/10 hover:border-app-ink/30 hover:bg-app-ink/5 text-app-ink"
@@ -288,15 +288,15 @@ export const PostFilter: React.FC<PostFilterProps> = ({
             {embeddingsEnabled && (
               <div className="flex flex-col gap-3">
                 <div className="flex items-center gap-2">
-                  <Sparkles size={12} className="opacity-40 text-blue-500" />
-                  <label className="text-[10px] uppercase font-bold opacity-50 tracking-widest text-blue-500">
+                  <Sparkles size={12} className="text-blue-500/80" />
+                  <label className="text-[11px] uppercase font-bold text-blue-500/80 tracking-widest">
                     Semantic Search
                   </label>
                 </div>
                 <div className="relative w-full group">
                   <Sparkles
                     size={14}
-                    className="absolute left-3 top-1/2 -translate-y-1/2 opacity-40 group-focus-within:opacity-100 group-focus-within:text-blue-500 transition-colors text-blue-500"
+                    className="absolute left-3 top-1/2 -translate-y-1/2 text-blue-500/70 group-focus-within:text-blue-500 transition-colors"
                   />
                   <input
                     type="text"
@@ -308,7 +308,7 @@ export const PostFilter: React.FC<PostFilterProps> = ({
                         setSemanticSearchQuery(semanticInput.trim())
                       }
                     }}
-                    className="w-full bg-blue-500/5 border border-blue-500/20 rounded-xl pl-9 pr-4 py-2 text-[11px] font-mono focus:outline-none focus:border-blue-500/50 focus:ring-4 focus:ring-blue-500/10 transition-all uppercase tracking-widest shadow-sm text-blue-600 dark:text-blue-400 placeholder:text-blue-500/40"
+                    className="w-full bg-blue-500/5 border border-blue-500/20 rounded-xl pl-9 pr-4 py-2 text-[11px] font-mono focus:outline-none focus:border-blue-500/50 focus:ring-4 focus:ring-blue-500/10 transition-all placeholder:uppercase placeholder:tracking-widest shadow-sm text-blue-600 dark:text-blue-400 placeholder:text-blue-500/60"
                   />
                 </div>
 
@@ -322,7 +322,7 @@ export const PostFilter: React.FC<PostFilterProps> = ({
                       }
                       className="w-3 h-3 accent-blue-500 rounded-sm"
                     />
-                    <span className="text-[9px] uppercase font-bold tracking-wider opacity-50 group-hover:opacity-100 transition-opacity">
+                    <span className="text-[11px] uppercase font-bold tracking-wider text-app-ink/70 group-hover:text-app-ink transition-colors">
                       Ignore time range for semantic search
                     </span>
                   </label>
@@ -335,7 +335,7 @@ export const PostFilter: React.FC<PostFilterProps> = ({
                       }
                       className="w-3 h-3 accent-blue-500 rounded-sm"
                     />
-                    <span className="text-[9px] uppercase font-bold tracking-wider opacity-50 group-hover:opacity-100 transition-opacity">
+                    <span className="text-[11px] uppercase font-bold tracking-wider text-app-ink/70 group-hover:text-app-ink transition-colors">
                       Ignore selected channels for semantic search
                     </span>
                   </label>

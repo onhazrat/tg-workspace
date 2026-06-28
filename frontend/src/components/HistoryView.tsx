@@ -24,6 +24,14 @@ import { deleteSummary, saveSummary } from "../lib/repository"
 import { formatDateToLocalISO } from "../lib/utils"
 import type { Summary, TabType } from "../types"
 import { RelativeTime } from "./RelativeTime"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "./ui/dialog"
 import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tg-tooltip"
 
 const formatDuration = (start: number, end: number) => {
@@ -86,6 +94,8 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
   const [editingNoteId, setEditingNoteId] = useState<string | null>(null)
   const [noteValue, setNoteValue] = useState<string>("")
   const [visibleHistory, setVisibleHistory] = useState(20)
+  const [summaryPendingDelete, setSummaryPendingDelete] =
+    useState<Summary | null>(null)
   const observerTarget = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -175,10 +185,23 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
     starredOnly,
   ])
 
-  const handleDeleteSummary = async (id: string, e: React.MouseEvent) => {
+  const handleDeleteSummary = (id: string, e: React.MouseEvent) => {
     e.stopPropagation()
-    await deleteSummary(id)
+    const summary = summariesHistory.find((entry) => entry.id === id)
+    if (!summary) return
+    setSummaryPendingDelete(summary)
+  }
+
+  const confirmDeleteSummary = async () => {
+    if (!summaryPendingDelete) return
+    await deleteSummary(summaryPendingDelete.id)
     await loadHistory()
+    setSummaryPendingDelete(null)
+    toast.success("Summary deleted.")
+  }
+
+  const closeDeleteSummaryDialog = () => {
+    setSummaryPendingDelete(null)
   }
 
   const handleToggleAutoRegenerate = async (
@@ -275,7 +298,7 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
               <h3 className="text-xs uppercase font-bold tracking-widest leading-none">
                 Analysis History
               </h3>
-              <p className="text-[10px] font-mono opacity-50 mt-1">
+              <p className="text-[11px] font-mono text-app-ink/70 mt-1">
                 {filteredHistory.length} Records Found
               </p>
             </div>
@@ -285,10 +308,10 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
             <button
               type="button"
               onClick={() => setStarredOnly(!starredOnly)}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[10px] font-bold uppercase tracking-tight transition-all ${
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[11px] font-bold uppercase tracking-tight transition-all ${
                 starredOnly
                   ? "bg-amber-500 text-white shadow-sm"
-                  : "text-app-ink opacity-60 hover:opacity-100 hover:bg-app-ink/5"
+                  : "text-app-ink/70 hover:text-app-ink hover:bg-app-ink/5"
               }`}
             >
               <Star size={12} className={starredOnly ? "fill-white" : ""} />
@@ -300,10 +323,10 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
                 type="button"
                 key={f}
                 onClick={() => setHistoryFilter(f)}
-                className={`px-3 py-1.5 rounded-md text-[10px] font-bold uppercase tracking-tight transition-all ${
+                className={`px-3 py-1.5 rounded-md text-[11px] font-bold uppercase tracking-tight transition-all ${
                   historyFilter === f
                     ? "bg-app-card text-app-ink shadow-sm"
-                    : "text-app-ink opacity-60 hover:opacity-100 hover:bg-app-ink/5"
+                    : "text-app-ink/70 hover:text-app-ink hover:bg-app-ink/5"
                 }`}
               >
                 {f === "all" ? "All" : f === "summary" ? "Summaries" : "Chats"}
@@ -369,7 +392,7 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
             >
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 p-5 bg-app-card border border-app-ink/10 rounded-xl shadow-sm mt-1">
                 <div className="space-y-2">
-                  <label className="text-[9px] uppercase font-bold opacity-50 tracking-widest">
+                  <label className="text-[11px] uppercase font-bold text-app-ink/70 tracking-widest">
                     Model
                   </label>
                   <select
@@ -386,7 +409,7 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
                   </select>
                 </div>
                 <div className="space-y-2">
-                  <label className="text-[9px] uppercase font-bold opacity-50 tracking-widest">
+                  <label className="text-[11px] uppercase font-bold text-app-ink/70 tracking-widest">
                     Language
                   </label>
                   <select
@@ -403,7 +426,7 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
                   </select>
                 </div>
                 <div className="space-y-2">
-                  <label className="text-[9px] uppercase font-bold opacity-50 tracking-widest">
+                  <label className="text-[11px] uppercase font-bold text-app-ink/70 tracking-widest">
                     From Date
                   </label>
                   <input
@@ -426,7 +449,7 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
                   />
                 </div>
                 <div className="space-y-2">
-                  <label className="text-[9px] uppercase font-bold opacity-50 tracking-widest">
+                  <label className="text-[11px] uppercase font-bold text-app-ink/70 tracking-widest">
                     To Date
                   </label>
                   <input
@@ -451,7 +474,7 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
                 <div className="col-span-1 sm:col-span-2 lg:col-span-4 space-y-3 pt-2 border-t border-app-ink/5 mt-2">
                   <div className="flex flex-wrap items-center justify-between gap-4">
                     <div className="flex items-center gap-3">
-                      <label className="text-[9px] uppercase font-bold opacity-50 tracking-widest">
+                      <label className="text-[11px] uppercase font-bold text-app-ink/70 tracking-widest">
                         Quick Presets:
                       </label>
                       <div className="flex flex-wrap gap-2">
@@ -467,7 +490,7 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
                             type="button"
                             key={range.label}
                             onClick={() => setQuickHistoryRange(range.hours)}
-                            className="text-[10px] uppercase font-bold px-2.5 py-1 rounded-md bg-app-muted border border-app-ink/10 hover:border-app-ink/30 hover:bg-app-ink hover:text-app-bg transition-all"
+                            className="text-[11px] uppercase font-bold px-2.5 py-1 rounded-md bg-app-muted border border-app-ink/10 hover:border-app-ink/30 hover:bg-app-ink hover:text-app-bg transition-all"
                           >
                             {range.label}
                           </button>
@@ -486,7 +509,7 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
                           setStartDateFilter(null)
                           setEndDateFilter(null)
                         }}
-                        className="text-[10px] uppercase font-bold text-red-500 hover:text-red-600 hover:bg-red-500/10 px-3 py-1.5 rounded-md transition-colors"
+                        className="text-[11px] uppercase font-bold text-red-500 hover:text-red-600 hover:bg-red-500/10 px-3 py-1.5 rounded-md transition-colors"
                       >
                         Clear Filters
                       </button>
@@ -510,7 +533,7 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
               ? "No History Found"
               : "No Matching Items"}
           </h3>
-          <p className="text-[11px] opacity-60 leading-relaxed max-w-sm">
+          <p className="text-[11px] text-app-ink/70 leading-relaxed max-w-sm">
             {summariesHistory.length === 0
               ? "Your generated summaries and chat sessions will appear here."
               : "Try adjusting your search query or clearing the advanced filters."}
@@ -538,7 +561,7 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
                     </h4>
                     <div className="flex gap-1 shrink-0">
                       {isPendingSummary(s) && (
-                        <span className="px-2 py-0.5 rounded-md text-[9px] font-bold uppercase tracking-wider bg-amber-500/15 text-amber-800 dark:text-amber-200">
+                        <span className="px-2 py-0.5 rounded-md text-[11px] font-bold uppercase tracking-wider bg-amber-500/15 text-amber-800 dark:text-amber-200">
                           Awaiting response
                         </span>
                       )}
@@ -564,7 +587,7 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
                       )}
                     </div>
                   </div>
-                  <div className="flex items-center gap-2 text-[10px] font-mono opacity-50">
+                  <div className="flex items-center gap-2 text-[11px] font-mono text-app-ink/70">
                     <Clock size={10} /> <RelativeTime timestamp={s.timestamp} />
                   </div>
                 </div>
@@ -697,7 +720,7 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
                 </p>
               ) : (
                 <p
-                  className={`text-[12px] opacity-70 line-clamp-2 leading-relaxed ${s.language === "Persian" ? "font-persian text-right" : ""}`}
+                  className={`text-[12px] text-app-ink/80 line-clamp-2 leading-relaxed ${s.language === "Persian" ? "font-persian text-right" : ""}`}
                 >
                   {s.text.substring(0, 200)}...
                 </p>
@@ -731,7 +754,7 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
                     className="w-full bg-transparent border-none text-[13px] font-medium text-amber-900 placeholder:text-amber-900/40 focus:outline-none resize-none min-h-[60px] leading-relaxed custom-scrollbar"
                   />
                   <div className="flex justify-between items-center mt-3 pt-2 border-t border-amber-500/20">
-                    <span className="text-[10px] text-amber-700/60 font-medium">
+                    <span className="text-[11px] text-amber-700/80 font-medium">
                       {noteValue.length} chars
                     </span>
                     <div className="flex gap-2 items-center">
@@ -739,7 +762,7 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
                         <button
                           type="button"
                           onClick={() => handleDeleteNote(s)}
-                          className="text-[10px] font-bold text-red-600/70 hover:text-red-700 transition-colors px-3 py-1.5 rounded-lg hover:bg-red-500/10"
+                          className="text-[11px] font-bold text-red-600/80 hover:text-red-700 transition-colors px-3 py-1.5 rounded-lg hover:bg-red-500/10"
                         >
                           Delete
                         </button>
@@ -747,14 +770,14 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
                       <button
                         type="button"
                         onClick={() => setEditingNoteId(null)}
-                        className="text-[10px] font-bold text-amber-800/60 hover:text-amber-900 transition-colors px-3 py-1.5 rounded-lg hover:bg-amber-500/10"
+                        className="text-[11px] font-bold text-amber-800/80 hover:text-amber-900 transition-colors px-3 py-1.5 rounded-lg hover:bg-amber-500/10"
                       >
                         Cancel
                       </button>
                       <button
                         type="button"
                         onClick={() => handleSaveNote(s)}
-                        className="text-[10px] font-bold bg-amber-500 text-amber-950 hover:bg-amber-400 transition-colors px-4 py-1.5 rounded-lg shadow-sm"
+                        className="text-[11px] font-bold bg-amber-500 text-amber-950 hover:bg-amber-400 transition-colors px-4 py-1.5 rounded-lg shadow-sm"
                       >
                         Save Note
                       </button>
@@ -774,11 +797,11 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
                     }}
                   >
                     <div className="flex justify-between items-start mb-1.5">
-                      <span className="font-bold uppercase text-[9px] tracking-wider text-amber-700/70 flex items-center gap-1.5">
+                      <span className="font-bold uppercase text-[11px] tracking-wider text-amber-700/80 flex items-center gap-1.5">
                         <StickyNote size={12} className="text-amber-600/50" />
                         Note
                       </span>
-                      <span className="opacity-0 group-hover/note:opacity-100 text-[9px] font-bold uppercase tracking-widest text-amber-700/60 transition-opacity">
+                      <span className="opacity-0 group-hover/note:opacity-100 text-[11px] font-bold uppercase tracking-widest text-amber-700/80 transition-opacity">
                         Click to Edit
                       </span>
                     </div>
@@ -795,7 +818,7 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
                   className="mt-1 flex flex-wrap items-center gap-2 bg-blue-500/5 border border-blue-500/10 p-2 rounded-lg"
                   onClick={(e) => e.stopPropagation()}
                 >
-                  <span className="text-[9px] uppercase font-bold text-blue-600/70 flex items-center gap-1.5">
+                  <span className="text-[11px] uppercase font-bold text-blue-600/80 flex items-center gap-1.5">
                     <Send size={10} /> Publish Target:
                   </span>
                   <select
@@ -807,7 +830,7 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
                         s.publishChatId || "",
                       )
                     }
-                    className="bg-app-card border border-blue-500/20 rounded-md py-1 px-2 focus:outline-none focus:border-blue-500/50 transition-colors text-[10px] font-mono cursor-pointer text-blue-900 dark:text-blue-100"
+                    className="bg-app-card border border-blue-500/20 rounded-md py-1 px-2 focus:outline-none focus:border-blue-500/50 transition-colors text-[11px] font-mono cursor-pointer text-blue-900 dark:text-blue-100"
                   >
                     <option value="">Select Bot</option>
                     {botCredentials.map((b) => (
@@ -825,7 +848,7 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
                         e.target.value,
                       )
                     }
-                    className="bg-app-card border border-blue-500/20 rounded-md py-1 px-2 focus:outline-none focus:border-blue-500/50 transition-colors text-[10px] font-mono cursor-pointer text-blue-900 dark:text-blue-100"
+                    className="bg-app-card border border-blue-500/20 rounded-md py-1 px-2 focus:outline-none focus:border-blue-500/50 transition-colors text-[11px] font-mono cursor-pointer text-blue-900 dark:text-blue-100"
                   >
                     <option value="">Select Dest</option>
                     {chatDestinations.map((d) => (
@@ -840,19 +863,19 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
               {/* Card Footer (Metadata Badges) */}
               <div className="mt-2 pt-3 border-t border-app-ink/5 flex flex-wrap items-center justify-between gap-2">
                 <div className="flex flex-wrap gap-2">
-                  <span className="bg-app-muted px-2 py-1 rounded-md text-[9px] font-mono uppercase tracking-widest opacity-70 flex items-center gap-1.5">
+                  <span className="bg-app-muted px-2 py-1 rounded-md text-[11px] font-mono uppercase tracking-widest text-app-ink/70 flex items-center gap-1.5">
                     <MessageSquare size={10} /> {s.postCount || 0} Posts
                   </span>
-                  <span className="bg-app-muted px-2 py-1 rounded-md text-[9px] font-mono uppercase tracking-widest opacity-70">
+                  <span className="bg-app-muted px-2 py-1 rounded-md text-[11px] font-mono uppercase tracking-widest text-app-ink/70">
                     {formatDuration(s.startDate, s.endDate)}
                   </span>
-                  <span className="bg-app-muted px-2 py-1 rounded-md text-[9px] font-mono uppercase tracking-widest opacity-70">
+                  <span className="bg-app-muted px-2 py-1 rounded-md text-[11px] font-mono uppercase tracking-widest text-app-ink/70">
                     {formatSummaryModelLabel(s.model)}
                   </span>
-                  <span className="bg-app-muted px-2 py-1 rounded-md text-[9px] font-mono uppercase tracking-widest opacity-70">
+                  <span className="bg-app-muted px-2 py-1 rounded-md text-[11px] font-mono uppercase tracking-widest text-app-ink/70">
                     {s.language}
                   </span>
-                  <span className="bg-app-muted px-2 py-1 rounded-md text-[9px] font-mono uppercase tracking-widest opacity-70">
+                  <span className="bg-app-muted px-2 py-1 rounded-md text-[11px] font-mono uppercase tracking-widest text-app-ink/70">
                     {formatDateTime(s.startDate)} - {formatDateTime(s.endDate)}
                   </span>
                 </div>
@@ -865,7 +888,7 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
                       handleSelectHistorySummary(s)
                       setActiveTab("chat")
                     }}
-                    className="bg-app-ink text-app-bg px-3 py-1.5 rounded-md hover:opacity-90 transition-all flex items-center gap-1.5 text-[9px] uppercase font-bold shadow-sm"
+                    className="bg-app-ink text-app-bg px-3 py-1.5 rounded-md hover:opacity-90 transition-all flex items-center gap-1.5 text-[11px] uppercase font-bold shadow-sm"
                   >
                     <MessageSquare size={12} />
                     <span>{s.chatMessages.length} Messages</span>
@@ -876,6 +899,46 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
           ))}
         </div>
       )}
+
+      <Dialog
+        open={Boolean(summaryPendingDelete)}
+        onOpenChange={(open) => {
+          if (!open) closeDeleteSummaryDialog()
+        }}
+      >
+        <DialogContent className="border-app-ink/20 bg-app-card sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-app-ink">Delete Summary</DialogTitle>
+            <DialogDescription className="text-app-ink/70">
+              This removes the selected summary from your history permanently.
+            </DialogDescription>
+          </DialogHeader>
+          {summaryPendingDelete ? (
+            <div className="rounded-lg border border-red-500/20 bg-red-500/5 px-3 py-2 text-[11px] font-mono text-red-700 dark:text-red-300">
+              {summaryPendingDelete.channels.join(", ") || "Summary entry"} ·{" "}
+              {formatDateTime(summaryPendingDelete.timestamp)}
+            </div>
+          ) : null}
+          <DialogFooter>
+            <button
+              type="button"
+              onClick={closeDeleteSummaryDialog}
+              className="rounded-md border border-app-ink/20 px-3 py-2 text-[11px] font-mono uppercase tracking-widest text-app-ink/80 hover:bg-app-ink/5"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                void confirmDeleteSummary()
+              }}
+              className="rounded-md border border-red-500/30 bg-red-500/10 px-3 py-2 text-[11px] font-mono uppercase tracking-widest text-red-700 hover:bg-red-500/15 dark:text-red-300"
+            >
+              Delete
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Intersection Observer Target */}
       <div ref={observerTarget} className="h-10 w-full" />

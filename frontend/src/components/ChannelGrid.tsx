@@ -10,6 +10,22 @@ import { motion } from "motion/react"
 import type React from "react"
 import { useEffect, useMemo, useRef, useState } from "react"
 import { api } from "@/api"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
+import { Skeleton } from "@/components/ui/skeleton"
 import { addChannelByName } from "@/lib/channels/add-channel"
 import { deleteChannelByRecord } from "@/lib/channels/delete-channel"
 import { useData } from "../contexts/DataContext"
@@ -20,7 +36,6 @@ import { useApiStatus } from "../hooks/useApiStatus"
 import { clearChannelPosts, upsertChannel } from "../lib/repository"
 import type { Channel } from "../types"
 import { ChannelCard } from "./ChannelCard"
-import { Modal } from "./ui/Modal"
 import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tg-tooltip"
 
 type ChannelGridProps = {}
@@ -37,6 +52,7 @@ type SortOption =
 export const ChannelGrid: React.FC<ChannelGridProps> = () => {
   const {
     channels,
+    isInitialChannelsLoading,
     setChannels,
     channelStats,
     selectedChannels,
@@ -99,6 +115,9 @@ export const ChannelGrid: React.FC<ChannelGridProps> = () => {
   const [confirmResetModal, setConfirmResetModal] = useState<Channel | null>(
     null,
   )
+  const [confirmBulkFreezeAction, setConfirmBulkFreezeAction] = useState<
+    "freeze" | "unfreeze" | null
+  >(null)
   const [confirmBulkDelete, setConfirmBulkDelete] = useState(false)
 
   const filteredChannels = useMemo(() => {
@@ -209,6 +228,12 @@ export const ChannelGrid: React.FC<ChannelGridProps> = () => {
   const [confirmDeleteChannel, setConfirmDeleteChannel] =
     useState<Channel | null>(null)
 
+  const isFilteringActive =
+    selectedLanguageFilter.length > 0 || channelSearch.trim().length > 0
+
+  const selectTriggerClassName =
+    "h-7 w-auto min-w-[96px] rounded-md border-app-ink/15 bg-app-card/70 px-2 text-[10px] font-bold uppercase tracking-widest text-app-ink shadow-none focus-visible:ring-app-ink/30 data-[placeholder]:text-app-ink/50"
+
   const handleRemoveChannel = (channel: Channel) => {
     setConfirmDeleteChannel(channel)
   }
@@ -236,6 +261,16 @@ export const ChannelGrid: React.FC<ChannelGridProps> = () => {
         await upsertChannel(c)
       }
     }
+  }
+
+  const handleConfirmBulkFreezeAction = async () => {
+    if (confirmBulkFreezeAction === "freeze") {
+      await handleBulkFreeze()
+    }
+    if (confirmBulkFreezeAction === "unfreeze") {
+      await handleBulkUnfreeze()
+    }
+    setConfirmBulkFreezeAction(null)
   }
 
   const handleBulkUnfreeze = async () => {
@@ -524,26 +559,41 @@ export const ChannelGrid: React.FC<ChannelGridProps> = () => {
             </div>
 
             <div className="flex items-center gap-3 bg-app-muted/30 p-1.5 px-3 rounded-lg border border-app-ink/5 w-fit">
+              {isFilteringActive && (
+                <>
+                  <span className="text-[9px] uppercase font-bold text-app-ink/60">
+                    Showing {filteredChannels.length} of {channels.length}{" "}
+                    channels
+                  </span>
+                  <div className="h-4 w-px bg-app-ink/10" />
+                </>
+              )}
               {allLanguages.length > 0 && (
                 <>
                   <div className="flex items-center gap-2">
                     <span className="text-[9px] uppercase font-bold text-app-ink/50">
                       Lang
                     </span>
-                    <select
-                      value={selectedLanguageFilter}
-                      onChange={(e) =>
-                        setSelectedLanguageFilter(e.target.value)
+                    <Select
+                      value={selectedLanguageFilter || "__all_languages__"}
+                      onValueChange={(value) =>
+                        setSelectedLanguageFilter(
+                          value === "__all_languages__" ? "" : value,
+                        )
                       }
-                      className="bg-transparent text-[10px] font-bold text-app-ink outline-none cursor-pointer max-w-[80px] truncate"
                     >
-                      <option value="">All</option>
-                      {allLanguages.map((lang) => (
-                        <option key={lang} value={lang}>
-                          {lang}
-                        </option>
-                      ))}
-                    </select>
+                      <SelectTrigger className={selectTriggerClassName}>
+                        <SelectValue placeholder="All" />
+                      </SelectTrigger>
+                      <SelectContent className="border-app-ink/15 bg-app-card text-app-ink">
+                        <SelectItem value="__all_languages__">All</SelectItem>
+                        {allLanguages.map((lang) => (
+                          <SelectItem key={lang} value={lang}>
+                            {lang}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
                   <div className="h-4 w-px bg-app-ink/10" />
                 </>
@@ -552,21 +602,25 @@ export const ChannelGrid: React.FC<ChannelGridProps> = () => {
                 <span className="text-[9px] uppercase font-bold text-app-ink/50">
                   Sort By
                 </span>
-                <select
+                <Select
                   value={sortBy}
-                  onChange={(e) => setSortBy(e.target.value as SortOption)}
-                  className="bg-transparent text-[10px] font-bold text-app-ink outline-none cursor-pointer"
+                  onValueChange={(value) => setSortBy(value as SortOption)}
                 >
-                  <option value="last_updated">Last Updated</option>
-                  <option value="followed_at">Followed At</option>
-                  <option value="activity_rate">Activity Rate</option>
-                  <option value="total_posts">Total Posts</option>
-                  <option value="channel_id">Channel ID</option>
-                  <option value="channel_name">Channel Name</option>
-                  {showChannelSubscribers && (
-                    <option value="subscribers">Subscribers</option>
-                  )}
-                </select>
+                  <SelectTrigger className={selectTriggerClassName}>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className="border-app-ink/15 bg-app-card text-app-ink">
+                    <SelectItem value="last_updated">Last Updated</SelectItem>
+                    <SelectItem value="followed_at">Followed At</SelectItem>
+                    <SelectItem value="activity_rate">Activity Rate</SelectItem>
+                    <SelectItem value="total_posts">Total Posts</SelectItem>
+                    <SelectItem value="channel_id">Channel ID</SelectItem>
+                    <SelectItem value="channel_name">Channel Name</SelectItem>
+                    {showChannelSubscribers && (
+                      <SelectItem value="subscribers">Subscribers</SelectItem>
+                    )}
+                  </SelectContent>
+                </Select>
                 <button
                   type="button"
                   onClick={() =>
@@ -605,20 +659,26 @@ export const ChannelGrid: React.FC<ChannelGridProps> = () => {
                 <span className="text-[9px] uppercase font-bold text-app-ink/50">
                   Every
                 </span>
-                <select
-                  value={autoSyncInterval}
-                  onChange={(e) => setAutoSyncInterval(Number(e.target.value))}
+                <Select
+                  value={String(autoSyncInterval)}
+                  onValueChange={(value) => setAutoSyncInterval(Number(value))}
                   disabled={!autoSyncEnabled}
-                  className="bg-transparent text-[10px] font-bold text-app-ink outline-none disabled:opacity-50 cursor-pointer"
                 >
-                  <option value={5}>5 mins</option>
-                  <option value={15}>15 mins</option>
-                  <option value={30}>30 mins</option>
-                  <option value={60}>1 hour</option>
-                  <option value={360}>6 hours</option>
-                  <option value={720}>12 hours</option>
-                  <option value={1440}>24 hours</option>
-                </select>
+                  <SelectTrigger
+                    className={`${selectTriggerClassName} min-w-[88px] disabled:opacity-50`}
+                  >
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className="border-app-ink/15 bg-app-card text-app-ink">
+                    <SelectItem value="5">5 mins</SelectItem>
+                    <SelectItem value="15">15 mins</SelectItem>
+                    <SelectItem value="30">30 mins</SelectItem>
+                    <SelectItem value="60">1 hour</SelectItem>
+                    <SelectItem value="360">6 hours</SelectItem>
+                    <SelectItem value="720">12 hours</SelectItem>
+                    <SelectItem value="1440">24 hours</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
             </div>
           </div>
@@ -634,14 +694,14 @@ export const ChannelGrid: React.FC<ChannelGridProps> = () => {
               <div className="h-4 w-px bg-app-ink/10 mx-1" />
               <button
                 type="button"
-                onClick={handleBulkFreeze}
+                onClick={() => setConfirmBulkFreezeAction("freeze")}
                 className="px-3 py-1.5 text-[10px] uppercase font-bold rounded-md bg-blue-500/10 text-blue-500 hover:bg-blue-500/20 transition-all"
               >
                 Freeze
               </button>
               <button
                 type="button"
-                onClick={handleBulkUnfreeze}
+                onClick={() => setConfirmBulkFreezeAction("unfreeze")}
                 className="px-3 py-1.5 text-[10px] uppercase font-bold rounded-md bg-app-muted/50 text-app-ink/70 hover:bg-app-ink/10 transition-all"
               >
                 Unfreeze
@@ -694,7 +754,36 @@ export const ChannelGrid: React.FC<ChannelGridProps> = () => {
         )}
       </div>
 
-      {filteredChannels.length === 0 ? (
+      {isInitialChannelsLoading ? (
+        <div
+          className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
+          id="tour-channel-grid"
+        >
+          {Array.from({ length: 8 }).map((_, index) => (
+            <div
+              key={`channel-skeleton-${index}`}
+              className="rounded-2xl border border-app-ink/10 bg-app-card p-5"
+            >
+              <div className="mb-4 flex items-start gap-4">
+                <Skeleton className="h-14 w-14 rounded-full bg-app-ink/10" />
+                <div className="flex-1 space-y-2 pt-1">
+                  <Skeleton className="h-4 w-3/4 bg-app-ink/10" />
+                  <Skeleton className="h-3 w-1/2 bg-app-ink/10" />
+                </div>
+              </div>
+              <div className="mb-5 flex flex-wrap gap-2">
+                <Skeleton className="h-6 w-24 bg-app-ink/10" />
+                <Skeleton className="h-6 w-20 bg-app-ink/10" />
+                <Skeleton className="h-6 w-28 bg-app-ink/10" />
+              </div>
+              <div className="mt-6 flex items-center justify-between border-t border-app-ink/5 pt-4">
+                <Skeleton className="h-8 w-28 bg-app-ink/10" />
+                <Skeleton className="h-8 w-20 bg-app-ink/10" />
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : filteredChannels.length === 0 ? (
         <div
           id="tour-channel-grid"
           className="flex flex-col items-center justify-center py-20 px-4 text-center border border-dashed border-app-ink/20 rounded-2xl bg-app-muted/5"
@@ -713,7 +802,7 @@ export const ChannelGrid: React.FC<ChannelGridProps> = () => {
         </div>
       ) : (
         <div
-          className="grid grid-cols-1 md:grid-cols-2 gap-4"
+          className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
           id="tour-channel-grid"
         >
           {[...filteredChannels]
@@ -784,125 +873,175 @@ export const ChannelGrid: React.FC<ChannelGridProps> = () => {
             ))}
 
           {/* Intersection Observer Target */}
-          <div ref={observerTarget} className="h-10 w-full md:col-span-2" />
+          <div ref={observerTarget} className="col-span-full h-10 w-full" />
         </div>
       )}
 
-      {confirmResetModal && (
-        <Modal
-          isOpen={!!confirmResetModal}
-          onClose={() => setConfirmResetModal(null)}
-          title="Reset & Sync Channel"
-          footer={
-            <div className="flex justify-end gap-3">
-              <button
-                type="button"
-                onClick={() => setConfirmResetModal(null)}
-                className="px-4 py-2 border border-app-ink/20 hover:bg-app-ink/5 transition-colors text-sm font-medium"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={executeResetAndSync}
-                className="px-4 py-2 bg-red-500 text-white hover:bg-red-600 transition-colors text-sm font-medium"
-              >
-                Confirm
-              </button>
-            </div>
-          }
-        >
-          <p className="text-sm opacity-80">
-            Clear all posts for{" "}
-            <span className="font-bold">@{confirmResetModal.name}</span> and
-            re-sync from ID {confirmResetModal.startId ?? 1}?
-          </p>
-        </Modal>
-      )}
+      <Dialog
+        open={confirmResetModal !== null}
+        onOpenChange={(nextOpen) => {
+          if (!nextOpen) setConfirmResetModal(null)
+        }}
+      >
+        <DialogContent className="border-app-ink/20 bg-app-card p-0 text-app-ink sm:max-w-md">
+          <DialogHeader className="border-b border-app-ink/10 p-4">
+            <DialogTitle className="text-lg font-bold tracking-tight">
+              Reset & Sync Channel
+            </DialogTitle>
+            <DialogDescription className="text-sm text-app-ink/70">
+              {confirmResetModal
+                ? `Clear all posts for @${confirmResetModal.name} and re-sync from ID ${confirmResetModal.startId ?? 1}?`
+                : ""}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="border-t border-app-ink/10 bg-app-muted/30 p-4 sm:justify-end">
+            <button
+              type="button"
+              onClick={() => setConfirmResetModal(null)}
+              className="px-4 py-2 border border-app-ink/20 hover:bg-app-ink/5 transition-colors text-sm font-medium"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={executeResetAndSync}
+              className="px-4 py-2 bg-red-500 text-white hover:bg-red-600 transition-colors text-sm font-medium"
+            >
+              Confirm
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
-      {confirmDeleteChannel && (
-        <Modal
-          isOpen={!!confirmDeleteChannel}
-          onClose={() => setConfirmDeleteChannel(null)}
-          title="Remove Channel?"
-          footer={
-            <div className="flex items-center gap-3">
-              <button
-                type="button"
-                onClick={() => setConfirmDeleteChannel(null)}
-                className="flex-1 px-4 py-2 text-[10px] font-bold uppercase tracking-widest border border-app-ink border-opacity-10 hover:bg-app-muted/50 transition-all"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={executeDeleteChannel}
-                className="flex-1 px-4 py-2 text-[10px] font-bold uppercase tracking-widest bg-red-500 text-white hover:bg-red-600 transition-all shadow-lg shadow-red-500/20"
-              >
-                Delete Everything
-              </button>
-            </div>
-          }
-        >
-          <div className="flex items-start gap-4">
+      <Dialog
+        open={confirmDeleteChannel !== null}
+        onOpenChange={(nextOpen) => {
+          if (!nextOpen) setConfirmDeleteChannel(null)
+        }}
+      >
+        <DialogContent className="border-app-ink/20 bg-app-card p-0 text-app-ink sm:max-w-md">
+          <DialogHeader className="border-b border-app-ink/10 p-4">
+            <DialogTitle className="text-lg font-bold tracking-tight">
+              Remove Channel?
+            </DialogTitle>
+            <DialogDescription className="text-xs leading-relaxed text-app-ink/60">
+              {confirmDeleteChannel ? (
+                <>
+                  You are about to remove{" "}
+                  <span className="font-bold text-app-ink">
+                    @{confirmDeleteChannel.name}
+                  </span>
+                  . This will also permanently delete all scraped posts
+                  associated with this channel from your local database.
+                </>
+              ) : (
+                ""
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="px-4 pt-4">
             <div className="w-10 h-10 rounded-full bg-red-500/10 flex items-center justify-center shrink-0">
               <ShieldAlert className="text-red-500" size={20} />
             </div>
-            <div>
-              <p className="text-xs opacity-60 leading-relaxed">
-                You are about to remove{" "}
-                <span className="font-bold opacity-100">
-                  @{confirmDeleteChannel.name}
-                </span>
-                . This will also permanently delete all scraped posts associated
-                with this channel from your local database.
-              </p>
-            </div>
           </div>
-        </Modal>
-      )}
+          <DialogFooter className="border-t border-app-ink/10 bg-app-muted/30 p-4">
+            <button
+              type="button"
+              onClick={() => setConfirmDeleteChannel(null)}
+              className="flex-1 px-4 py-2 text-[10px] font-bold uppercase tracking-widest border border-app-ink/10 hover:bg-app-muted/50 transition-all"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={executeDeleteChannel}
+              className="flex-1 px-4 py-2 text-[10px] font-bold uppercase tracking-widest bg-red-500 text-white hover:bg-red-600 transition-all shadow-lg shadow-red-500/20"
+            >
+              Delete Everything
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
-      {confirmBulkDelete && (
-        <Modal
-          isOpen={confirmBulkDelete}
-          onClose={() => setConfirmBulkDelete(false)}
-          title="Remove Selected Channels?"
-          footer={
-            <div className="flex items-center gap-3">
-              <button
-                type="button"
-                onClick={() => setConfirmBulkDelete(false)}
-                className="flex-1 px-4 py-2 text-[10px] font-bold uppercase tracking-widest border border-app-ink border-opacity-10 hover:bg-app-muted/50 transition-all"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={executeBulkDelete}
-                className="flex-1 px-4 py-2 text-[10px] font-bold uppercase tracking-widest bg-red-500 text-white hover:bg-red-600 transition-all shadow-lg shadow-red-500/20"
-              >
-                Delete {selectedChannels.size} Channels
-              </button>
-            </div>
-          }
-        >
-          <div className="flex items-start gap-4">
+      <Dialog
+        open={confirmBulkDelete}
+        onOpenChange={(nextOpen) => setConfirmBulkDelete(nextOpen)}
+      >
+        <DialogContent className="border-app-ink/20 bg-app-card p-0 text-app-ink sm:max-w-md">
+          <DialogHeader className="border-b border-app-ink/10 p-4">
+            <DialogTitle className="text-lg font-bold tracking-tight">
+              Remove Selected Channels?
+            </DialogTitle>
+            <DialogDescription className="text-xs leading-relaxed text-app-ink/60">
+              You are about to remove{" "}
+              <span className="font-bold text-app-ink">
+                {selectedChannels.size} selected channels
+              </span>
+              . This will also permanently delete all scraped posts associated
+              with these channels from your local database.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="px-4 pt-4">
             <div className="w-10 h-10 rounded-full bg-red-500/10 flex items-center justify-center shrink-0">
               <ShieldAlert className="text-red-500" size={20} />
             </div>
-            <div>
-              <p className="text-xs opacity-60 leading-relaxed">
-                You are about to remove{" "}
-                <span className="font-bold opacity-100">
-                  {selectedChannels.size} selected channels
-                </span>
-                . This will also permanently delete all scraped posts associated
-                with these channels from your local database.
-              </p>
-            </div>
           </div>
-        </Modal>
-      )}
+          <DialogFooter className="border-t border-app-ink/10 bg-app-muted/30 p-4">
+            <button
+              type="button"
+              onClick={() => setConfirmBulkDelete(false)}
+              className="flex-1 px-4 py-2 text-[10px] font-bold uppercase tracking-widest border border-app-ink/10 hover:bg-app-muted/50 transition-all"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={executeBulkDelete}
+              className="flex-1 px-4 py-2 text-[10px] font-bold uppercase tracking-widest bg-red-500 text-white hover:bg-red-600 transition-all shadow-lg shadow-red-500/20"
+            >
+              Delete {selectedChannels.size} Channels
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={confirmBulkFreezeAction !== null}
+        onOpenChange={(nextOpen) => {
+          if (!nextOpen) setConfirmBulkFreezeAction(null)
+        }}
+      >
+        <DialogContent className="border-app-ink/20 bg-app-card p-0 text-app-ink sm:max-w-md">
+          <DialogHeader className="border-b border-app-ink/10 p-4">
+            <DialogTitle className="text-lg font-bold tracking-tight">
+              {confirmBulkFreezeAction === "freeze"
+                ? "Freeze Selected Channels?"
+                : "Unfreeze Selected Channels?"}
+            </DialogTitle>
+            <DialogDescription className="text-sm text-app-ink/70">
+              {confirmBulkFreezeAction === "freeze"
+                ? "Freeze all currently selected channels. They will be skipped during sync."
+                : "Unfreeze all currently selected channels."}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="border-t border-app-ink/10 bg-app-muted/30 p-4">
+            <button
+              type="button"
+              onClick={() => setConfirmBulkFreezeAction(null)}
+              className="rounded-md border border-app-ink/20 px-3 py-2 text-xs font-mono uppercase tracking-widest hover:bg-app-ink/5"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={handleConfirmBulkFreezeAction}
+              className="rounded-md border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs font-mono uppercase tracking-widest text-red-600 hover:bg-red-500/20"
+            >
+              Confirm
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </motion.div>
   )
 }

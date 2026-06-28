@@ -42,6 +42,7 @@ import type {
 
 interface DataContextType {
   channels: Channel[]
+  isInitialChannelsLoading: boolean
   setChannels: React.Dispatch<React.SetStateAction<Channel[]>>
   loadChannels: () => Promise<void>
 
@@ -303,10 +304,14 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({
     await queryClient.setQueryData(queryKeys.dbStats, stats)
   }, [queryClient])
 
+  const isInitialChannelsLoading =
+    channelsQuery.isPending && channels.length === 0
+
   return (
     <DataContext.Provider
       value={{
         channels,
+        isInitialChannelsLoading,
         setChannels,
         loadChannels,
         botCredentials,

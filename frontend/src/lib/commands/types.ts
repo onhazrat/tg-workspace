@@ -250,6 +250,8 @@ export interface CommandSettingsSlice {
   setShowChannelFiles: (show: boolean) => void
   showChannelLinks: boolean
   setShowChannelLinks: (show: boolean) => void
+  showChannelStartId: boolean
+  setShowChannelStartId: (show: boolean) => void
   advancedMode: boolean
   setAdvancedMode: (advanced: boolean) => void
 }

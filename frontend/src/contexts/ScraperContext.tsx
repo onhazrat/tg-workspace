@@ -44,6 +44,7 @@ interface ScraperContextType {
   scrapingChannels: Set<string>
   setScrapingChannels: React.Dispatch<React.SetStateAction<Set<string>>>
   filteredPosts: Post[]
+  isInitialPostLoadPending: boolean
   visiblePosts: number
   setVisiblePosts: React.Dispatch<React.SetStateAction<number>>
   handleFilterPosts: () => Promise<void>
@@ -129,6 +130,8 @@ export const ScraperProvider: React.FC<{ children: React.ReactNode }> = ({
     new Set(),
   )
   const [filteredPosts, setFilteredPosts] = useState<Post[]>([])
+  const [isInitialPostLoadPending, setIsInitialPostLoadPending] =
+    useState<boolean>(true)
   const [visiblePosts, setVisiblePosts] = useState(20)
   const [autoSyncPauseUntil, setAutoSyncPauseUntil] = useState<number | null>(
     null,
@@ -301,6 +304,7 @@ export const ScraperProvider: React.FC<{ children: React.ReactNode }> = ({
         setVisiblePosts(20)
       } finally {
         setIsFiltering(false)
+        setIsInitialPostLoadPending(false)
       }
     },
     [
@@ -717,6 +721,7 @@ export const ScraperProvider: React.FC<{ children: React.ReactNode }> = ({
         scrapingChannels,
         setScrapingChannels,
         filteredPosts,
+        isInitialPostLoadPending,
         visiblePosts,
         setVisiblePosts,
         handleFilterPosts,

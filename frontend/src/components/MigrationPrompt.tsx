@@ -3,7 +3,14 @@ import { useEffect, useState } from "react"
 import { toast } from "sonner"
 import { useData } from "@/contexts/DataContext"
 import { checkNeedsMigration, importIndexedDBToServer } from "@/lib/repository"
-import { Modal } from "./ui/Modal"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "./ui/dialog"
 
 const DISMISSED_KEY = "migration_prompt_dismissed"
 
@@ -50,23 +57,22 @@ export function MigrationPrompt() {
   if (!show) return null
 
   return (
-    <Modal
-      isOpen={show}
-      onClose={handleDismiss}
-      title="Migrate Local Data to Server"
-    >
-      <div className="space-y-4">
-        <p className="text-sm text-app-ink/70">
-          Your browser has Telegram Summarizer data in IndexedDB, but the
-          PostgreSQL backend is empty. Migrate now to make the server the source
-          of truth.
-        </p>
-        <div className="flex gap-3 justify-end">
+    <Dialog open={show} onOpenChange={(open) => !open && handleDismiss()}>
+      <DialogContent className="border-app-ink/20 bg-app-card text-app-ink sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle>Migrate Local Data to Server</DialogTitle>
+          <DialogDescription className="text-app-ink/70">
+            Your browser has Telegram Summarizer data in IndexedDB, but the
+            PostgreSQL backend is empty. Migrate now to make the server the
+            source of truth.
+          </DialogDescription>
+        </DialogHeader>
+        <DialogFooter>
           <button
             type="button"
             onClick={handleDismiss}
             disabled={migrating}
-            className="px-4 py-2 text-xs font-mono uppercase tracking-widest border border-app-ink/20 hover:border-app-ink/40 rounded-md"
+            className="rounded-md border border-app-ink/20 px-3 py-2 text-xs font-mono uppercase tracking-widest hover:bg-app-muted/30 disabled:opacity-50"
           >
             Later
           </button>
@@ -74,7 +80,7 @@ export function MigrationPrompt() {
             type="button"
             onClick={handleMigrate}
             disabled={migrating}
-            className="px-4 py-2 text-xs font-mono uppercase tracking-widest bg-app-ink text-app-bg rounded-md flex items-center gap-2 disabled:opacity-50"
+            className="rounded-md bg-app-ink px-3 py-2 text-xs font-mono uppercase tracking-widest text-app-bg disabled:opacity-50 flex items-center gap-2"
           >
             {migrating ? (
               <Loader2 size={14} className="animate-spin" />
@@ -83,8 +89,8 @@ export function MigrationPrompt() {
             )}
             Migrate Now
           </button>
-        </div>
-      </div>
-    </Modal>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   )
 }

@@ -61,6 +61,13 @@ const BOOLEAN_SETTINGS: BooleanSettingDef[] = [
     keywords: ["appearance", "channel", "links"],
   },
   {
+    key: "showChannelStartId",
+    label: "Show Channel Start ID",
+    getter: (s) => s.showChannelStartId,
+    setter: (s, v) => s.setShowChannelStartId(v),
+    keywords: ["appearance", "channel", "start", "id", "advanced"],
+  },
+  {
     key: "advancedMode",
     label: "Advanced Mode",
     getter: (s) => s.advancedMode,

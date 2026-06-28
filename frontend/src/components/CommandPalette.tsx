@@ -694,7 +694,7 @@ export function CommandPalette() {
     return (
       <Badge
         variant={badge === "ON" ? "default" : "secondary"}
-        className="ml-auto text-[10px] uppercase tracking-wider"
+        className="ml-auto text-[11px] uppercase tracking-wider"
       >
         {badge}
       </Badge>
@@ -705,9 +705,7 @@ export function CommandPalette() {
     const state = command.disabled?.(context)
     if (!state?.disabled || !state.reason) return null
     return (
-      <span className="ml-2 text-[10px] text-muted-foreground">
-        {state.reason}
-      </span>
+      <span className="ml-2 text-[11px] text-app-ink/60">{state.reason}</span>
     )
   }
 
@@ -921,7 +919,7 @@ export function CommandPalette() {
                       >
                         <span>@{channel.name}</span>
                         {channel.displayName ? (
-                          <span className="text-xs text-muted-foreground">
+                          <span className="text-xs text-app-ink/60">
                             {channel.displayName}
                           </span>
                         ) : null}
@@ -982,11 +980,11 @@ export function CommandPalette() {
                         <div className="flex min-w-0 flex-col gap-0.5">
                           <span className="truncate text-sm">
                             @{post.channelName}
-                            <span className="ml-2 text-xs text-muted-foreground">
+                            <span className="ml-2 text-xs text-app-ink/60">
                               {post.date}
                             </span>
                           </span>
-                          <span className="truncate text-xs text-muted-foreground">
+                          <span className="truncate text-xs text-app-ink/60">
                             {truncatePreview(post.text)}
                           </span>
                         </div>
@@ -1003,7 +1001,7 @@ export function CommandPalette() {
                           <span className="truncate text-sm">
                             {summary.channels.join(", ") || "Summary"}
                           </span>
-                          <span className="truncate text-xs text-muted-foreground">
+                          <span className="truncate text-xs text-app-ink/60">
                             {truncatePreview(
                               summary.promptText || summary.text,
                             )}
