@@ -191,6 +191,21 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
     setSelectedChannels(new Set())
   }
 
+  const handleRevertSelection = () => {
+    const selectable = filteredChannels.filter((c) => !c.isFrozen)
+    setSelectedChannels((prev) => {
+      const next = new Set(prev)
+      for (const channel of selectable) {
+        if (next.has(channel.name)) {
+          next.delete(channel.name)
+        } else {
+          next.add(channel.name)
+        }
+      }
+      return next
+    })
+  }
+
   const toggleTagSelection = (tag: string) => {
     const channelsWithTag = channels
       .filter((c) => c.tags?.includes(tag) && !c.isFrozen)
@@ -458,6 +473,21 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
                   </TooltipTrigger>
                   <TooltipContent>
                     <p>Clear Selection</p>
+                  </TooltipContent>
+                </Tooltip>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button
+                      type="button"
+                      onClick={handleRevertSelection}
+                      disabled={filteredChannels.filter((c) => !c.isFrozen).length === 0}
+                      className="px-3 py-1.5 text-[10px] uppercase font-bold rounded-md hover:bg-app-card hover:shadow-sm transition-all text-app-ink/70 hover:text-app-ink disabled:opacity-30 disabled:pointer-events-none"
+                    >
+                      Revert
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>Revert Selection</p>
                   </TooltipContent>
                 </Tooltip>
               </div>
