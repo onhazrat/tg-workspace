@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="TG Summarizer">
+  <style>
+    .bg { fill: #141414; }
+    .fg { fill: #e4e3e0; }
+    @media (prefers-color-scheme: dark) {
+      .bg { fill: #e4e3e0; }
+      .fg { fill: #141414; }
+    }
+  </style>
+  <rect class="bg" width="32" height="32" rx="7" />
+  <rect class="fg" x="8" y="9" width="16" height="2" rx="1" />
+  <rect class="fg" x="8" y="14" width="12" height="2" rx="1" />
+  <rect class="fg" x="8" y="19" width="8" height="2" rx="1" />
+  <path
+    class="fg"
+    d="M21.5 18.5 24 21l-2.5 2.5V21h-2v-2.5z"
+  />
+</svg>
