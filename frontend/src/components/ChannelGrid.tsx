@@ -8,7 +8,7 @@ import {
 } from "lucide-react"
 import { motion } from "motion/react"
 import type React from "react"
-import { useEffect, useMemo, useRef, useState } from "react"
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
 import { api } from "@/api"
 import {
   Dialog,
@@ -42,7 +42,9 @@ import type { Channel } from "../types"
 import { ChannelCard } from "./ChannelCard"
 import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tg-tooltip"
 
-type ChannelGridProps = {}
+type ChannelGridProps = {
+  scrollContainerRef: React.RefObject<HTMLDivElement | null>
+}
 
 type SortOption =
   | "activity_rate"
@@ -53,7 +55,9 @@ type SortOption =
   | "followed_at"
   | "subscribers"
 
-export const ChannelGrid: React.FC<ChannelGridProps> = () => {
+export const ChannelGrid: React.FC<ChannelGridProps> = ({
+  scrollContainerRef,
+}) => {
   const {
     channels,
     isInitialChannelsLoading,
@@ -146,27 +150,33 @@ export const ChannelGrid: React.FC<ChannelGridProps> = () => {
 
   useEffect(() => {
     setVisibleChannels(20)
-  }, [])
+  }, [channelSearch, selectedLanguageFilter, sortBy, sortDirection])
 
-  useEffect(() => {
+  useLayoutEffect(() => {
+    if (isInitialChannelsLoading) return
+
+    const scrollRoot = scrollContainerRef.current
     const target = observerTarget.current
-    if (!target) return
+    if (!scrollRoot || !target) return
 
     const observer = new IntersectionObserver(
       (entries) => {
-        if (entries[0].isIntersecting) {
-          setVisibleChannels((prev) => prev + 20)
+        if (entries[0]?.isIntersecting) {
+          setVisibleChannels((prev) =>
+            Math.min(prev + 20, filteredChannels.length),
+          )
         }
       },
-      { threshold: 0.1 },
+      { root: scrollRoot, threshold: 0.1, rootMargin: "200px" },
     )
 
     observer.observe(target)
-
-    return () => {
-      observer.unobserve(target)
-    }
-  }, [isInitialChannelsLoading, filteredChannels.length])
+    return () => observer.disconnect()
+  }, [
+    filteredChannels.length,
+    isInitialChannelsLoading,
+    scrollContainerRef,
+  ])
 
   const allTags = useMemo(() => {
     const tags = new Set<string>()
@@ -878,8 +888,9 @@ export const ChannelGrid: React.FC<ChannelGridProps> = () => {
               />
             ))}
 
-          {/* Intersection Observer Target */}
-          <div ref={observerTarget} className="col-span-full h-10 w-full" />
+          {visibleChannels < filteredChannels.length && (
+            <div ref={observerTarget} className="col-span-full h-10 w-full" />
+          )}
         </div>
       )}
 

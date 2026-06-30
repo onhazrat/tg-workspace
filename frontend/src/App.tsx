@@ -486,7 +486,7 @@ export default function App() {
                 ) : activeTab === "chat" ? (
                   <ChatView />
                 ) : activeTab === "channels" ? (
-                  <ChannelGrid />
+                  <ChannelGrid scrollContainerRef={scrollContainerRef} />
                 ) : activeTab === "summary" ? (
                   <SummaryView />
                 ) : activeTab === "settings" ? (
