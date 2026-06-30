@@ -1,6 +1,10 @@
 import type React from "react"
 import { createContext, useContext, useEffect, useRef, useState } from "react"
 import { toast } from "sonner"
+import {
+  buildFilteredPostsFromRaw,
+  formatPostsForPrompt,
+} from "../lib/posts/post-view"
 import { getPostsByDateRange, saveLLMLog, saveSummary } from "../lib/repository"
 import {
   AIServiceError,
@@ -57,6 +61,8 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
     semanticSearchRespectsTimeRange,
     semanticSearchRespectsChannels,
     handleFilterPosts,
+    forwardedFilter,
+    postViewOptions,
   } = useScraper()
   const { searchSimilarPosts } = useRAG()
 
@@ -185,33 +191,26 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
 
           // Fetch updated posts
           const selectedNames = Array.from(selectedChannels)
-          let posts = await getPostsByDateRange(
+          const rawPosts = await getPostsByDateRange(
             selectedNames,
             startDate,
             endDate,
           )
 
-          if (postSearch.trim()) {
-            const query = postSearch.toLowerCase()
-            posts = posts.filter(
-              (post) =>
-                post.text.toLowerCase().includes(query) ||
-                post.channelName.toLowerCase().includes(query),
-            )
-          }
-
-          postsToChat = posts.sort((a, b) => b.timestamp - a.timestamp)
+          postsToChat = buildFilteredPostsFromRaw(rawPosts, {
+            searchText: postSearch,
+            forwardedFilter,
+            channels,
+            view: postViewOptions,
+            startDate,
+            endDate,
+          })
 
           // Also update the UI state
           handleFilterPosts()
         }
 
-        const postsText = postsToChat
-          .map(
-            (p) =>
-              `[${p.channelName}] ID: ${p.id}\nDate: ${p.date}\nContent: ${p.text}`,
-          )
-          .join("\n\n---\n\n")
+        const postsText = formatPostsForPrompt(postsToChat)
 
         const { stream, prompt, config, systemInstruction } =
           await generateChatStream(

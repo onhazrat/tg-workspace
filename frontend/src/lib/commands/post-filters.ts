@@ -31,6 +31,9 @@ export function clearPostFilters(ctx: CommandContext): void {
   ctx.setSemanticSearchQuery("")
   ctx.setRelatedPostSearch(null)
   ctx.setForwardedFilter("all")
+  ctx.setMaxPostsPerChannel(0)
+  ctx.setMaxPostsPerChannelMode("latest")
+  ctx.setPostSortOrder("time")
 }
 
 export function applyPostDateRangeHours(

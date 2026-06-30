@@ -8,6 +8,10 @@ import {
 } from "../constants"
 import { useApiStatus } from "../hooks/useApiStatus"
 import {
+  buildFilteredPostsFromRaw,
+  formatPostsForPrompt,
+} from "../lib/posts/post-view"
+import {
   getPostsByDateRange,
   saveLLMLog,
   savePublishLog,
@@ -50,14 +54,6 @@ const extractCitedPosts = (
   }
   return cited
 }
-
-const buildPostsText = (posts: Post[]): string =>
-  posts
-    .map(
-      (p) =>
-        `[${p.channelName}] ID: ${p.id}\nDate: ${p.date}\nContent: ${p.text}`,
-    )
-    .join("\n\n---\n\n")
 
 const filterPostsForSummary = (posts: Post[], postSearch?: string): Post[] => {
   if (!postSearch?.trim()) return posts
@@ -130,6 +126,8 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({
     semanticSearchRespectsTimeRange,
     semanticSearchRespectsChannels,
     handleFilterPosts,
+    forwardedFilter,
+    postViewOptions,
   } = useScraper()
   const { setChatMessages } = useChatContext()
   const { isOffline } = useApiStatus()
@@ -173,18 +171,20 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({
 
       // Fetch updated posts
       const selectedNames = Array.from(selectedChannels)
-      let posts = await getPostsByDateRange(selectedNames, startDate, endDate)
+      const rawPosts = await getPostsByDateRange(
+        selectedNames,
+        startDate,
+        endDate,
+      )
 
-      if (postSearch.trim()) {
-        const query = postSearch.toLowerCase()
-        posts = posts.filter(
-          (post) =>
-            post.text.toLowerCase().includes(query) ||
-            post.channelName.toLowerCase().includes(query),
-        )
-      }
-
-      postsToSummarize = posts.sort((a, b) => b.timestamp - a.timestamp)
+      postsToSummarize = buildFilteredPostsFromRaw(rawPosts, {
+        searchText: postSearch,
+        forwardedFilter,
+        channels,
+        view: postViewOptions,
+        startDate,
+        endDate,
+      })
 
       // Also update the UI state
       handleFilterPosts()
@@ -202,7 +202,7 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({
     setActiveTab("summary")
 
     try {
-      const postsText = buildPostsText(postsToSummarize)
+      const postsText = formatPostsForPrompt(postsToSummarize)
 
       const startTime = Date.now()
       const { stream, prompt, config } = await generateSummaryStream(
@@ -301,7 +301,7 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({
     try {
       const prompt = await getSummaryPrompt(
         channels.map((c) => c.name),
-        buildPostsText(filteredPosts),
+        formatPostsForPrompt(filteredPosts),
         aiLanguage,
         selectedModel,
         aiTemperature,
@@ -448,7 +448,7 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({
       if (posts.length === 0) {
         fullSummaryText = `No new posts found in the selected channels between ${new Date(newStartDate).toLocaleString()} and ${new Date(newEndDate).toLocaleString()}.`
       } else {
-        const postsText = buildPostsText(posts)
+        const postsText = formatPostsForPrompt(posts)
 
         const startTime = Date.now()
         const result = await generateSummary(

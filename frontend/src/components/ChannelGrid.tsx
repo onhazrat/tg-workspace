@@ -480,7 +480,9 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
                     <button
                       type="button"
                       onClick={handleRevertSelection}
-                      disabled={filteredChannels.filter((c) => !c.isFrozen).length === 0}
+                      disabled={
+                        filteredChannels.filter((c) => !c.isFrozen).length === 0
+                      }
                       className="px-3 py-1.5 text-[10px] uppercase font-bold rounded-md hover:bg-app-card hover:shadow-sm transition-all text-app-ink/70 hover:text-app-ink disabled:opacity-30 disabled:pointer-events-none"
                     >
                       Revert

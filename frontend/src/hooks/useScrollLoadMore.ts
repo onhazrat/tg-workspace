@@ -1,9 +1,9 @@
 import {
+  type RefObject,
   useCallback,
   useEffect,
   useLayoutEffect,
   useRef,
-  type RefObject,
 } from "react"
 
 type UseScrollLoadMoreArgs = {

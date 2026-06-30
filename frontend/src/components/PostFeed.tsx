@@ -24,7 +24,21 @@ export const PostFeed: React.FC<PostFeedProps> = ({
     isInitialPostLoadPending,
     visiblePosts,
     setVisiblePosts,
+    maxPostsPerChannel,
+    maxPostsPerChannelMode,
+    postSortOrder,
   } = useScraper()
+
+  const subtitleParts = [`${filteredPosts.length} posts in range`]
+  if (maxPostsPerChannel > 0) {
+    subtitleParts.push(
+      `(max ${maxPostsPerChannel}/channel, ${maxPostsPerChannelMode})`,
+    )
+  }
+  if (postSortOrder === "channel_time") {
+    subtitleParts.push("(grouped by channel)")
+  }
+  const subtitle = subtitleParts.join(" ")
 
   useEffect(() => {
     const observer = new IntersectionObserver(
@@ -64,9 +78,7 @@ export const PostFeed: React.FC<PostFeedProps> = ({
           <h2 className="text-xs uppercase font-bold tracking-widest leading-none">
             Selected Posts
           </h2>
-          <p className="text-[10px] font-mono opacity-50 mt-1">
-            {filteredPosts.length} Posts in Range
-          </p>
+          <p className="text-[10px] font-mono opacity-50 mt-1">{subtitle}</p>
         </div>
       </div>
 

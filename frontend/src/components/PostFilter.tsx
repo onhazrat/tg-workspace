@@ -2,6 +2,7 @@ import {
   Calendar,
   Clock,
   Filter,
+  ListOrdered,
   Loader2,
   Search,
   Sparkles,
@@ -35,6 +36,12 @@ export const PostFilter: React.FC<PostFilterProps> = ({
     isFiltering,
     forwardedFilter,
     setForwardedFilter,
+    maxPostsPerChannel,
+    setMaxPostsPerChannel,
+    maxPostsPerChannelMode,
+    setMaxPostsPerChannelMode,
+    postSortOrder,
+    setPostSortOrder,
   } = useScraper()
   const { embeddingsEnabled } = useSettings()
 
@@ -281,6 +288,84 @@ export const PostFilter: React.FC<PostFilterProps> = ({
                     </button>
                   ))}
                 </div>
+              </div>
+            </div>
+
+            {/* Post limit & order */}
+            <div className="flex flex-col gap-3">
+              <div className="flex items-center gap-2">
+                <ListOrdered size={12} className="text-app-ink/60" />
+                <label className="text-[11px] uppercase font-bold text-app-ink/70 tracking-widest">
+                  Post Limit & Order
+                </label>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-3">
+                <div className="flex items-center gap-2">
+                  <input
+                    type="number"
+                    min={0}
+                    max={500}
+                    value={maxPostsPerChannel}
+                    onChange={(e) => {
+                      const parsed = Number.parseInt(e.target.value, 10)
+                      setMaxPostsPerChannel(
+                        Number.isFinite(parsed) && parsed >= 0 ? parsed : 0,
+                      )
+                    }}
+                    className="w-20 bg-app-muted text-app-ink border border-app-ink/10 rounded-xl py-2 px-3 focus:outline-none focus:border-app-ink/30 focus:ring-4 focus:ring-app-ink/5 transition-all text-[11px] font-mono"
+                  />
+                  <span className="text-[11px] uppercase font-bold tracking-widest text-app-ink/60">
+                    per channel
+                  </span>
+                  {maxPostsPerChannel === 0 && (
+                    <span className="text-[10px] uppercase font-bold tracking-widest px-2 py-0.5 rounded-full bg-app-muted border border-app-ink/10 text-app-ink/70">
+                      Unlimited
+                    </span>
+                  )}
+                </div>
+
+                <div
+                  className={`flex flex-wrap gap-2 ${maxPostsPerChannel === 0 ? "opacity-40 pointer-events-none" : ""}`}
+                >
+                  {[
+                    { label: "Latest", value: "latest" as const },
+                    { label: "Random", value: "random" as const },
+                  ].map((mode) => (
+                    <button
+                      type="button"
+                      key={mode.value}
+                      onClick={() => setMaxPostsPerChannelMode(mode.value)}
+                      className={`text-[11px] uppercase font-bold px-4 py-1.5 rounded-full border transition-all shadow-sm ${
+                        maxPostsPerChannelMode === mode.value
+                          ? "bg-app-ink text-app-bg border-app-ink"
+                          : "bg-app-muted border-app-ink/10 hover:border-app-ink/30 hover:bg-app-ink/5 text-app-ink"
+                      }`}
+                    >
+                      {mode.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="flex flex-wrap gap-2">
+                {[
+                  { label: "By Time", value: "time" as const },
+                  { label: "By Channel", value: "channel_time" as const },
+                ].map((sort) => (
+                  <button
+                    type="button"
+                    key={sort.value}
+                    onClick={() => setPostSortOrder(sort.value)}
+                    className={`text-[11px] uppercase font-bold px-4 py-1.5 rounded-full border transition-all shadow-sm ${
+                      postSortOrder === sort.value
+                        ? "bg-app-ink text-app-bg border-app-ink"
+                        : "bg-app-muted border-app-ink/10 hover:border-app-ink/30 hover:bg-app-ink/5 text-app-ink"
+                    }`}
+                  >
+                    {sort.label}
+                  </button>
+                ))}
               </div>
             </div>
 

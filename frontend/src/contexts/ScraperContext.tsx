@@ -14,6 +14,13 @@ import { useDebouncedValue } from "../hooks/useDebouncedValue"
 import { useSyncQueue } from "../hooks/useSyncQueue"
 import { detectLanguageFromPosts } from "../lib/language"
 import {
+  applyPostViewPipeline,
+  buildFilteredPostsFromRaw,
+  type MaxPostsPerChannelMode,
+  type PostSortOrder,
+  type PostViewOptions,
+} from "../lib/posts/post-view"
+import {
   getChannelStats,
   getPostsByDateRange,
   upsertChannel,
@@ -82,6 +89,15 @@ interface ScraperContextType {
       "all" | "forwarded" | "original" | "unfollowed_forwarded"
     >
   >
+  maxPostsPerChannel: number
+  setMaxPostsPerChannel: React.Dispatch<React.SetStateAction<number>>
+  maxPostsPerChannelMode: MaxPostsPerChannelMode
+  setMaxPostsPerChannelMode: React.Dispatch<
+    React.SetStateAction<MaxPostsPerChannelMode>
+  >
+  postSortOrder: PostSortOrder
+  setPostSortOrder: React.Dispatch<React.SetStateAction<PostSortOrder>>
+  postViewOptions: PostViewOptions
 }
 
 const ScraperContext = createContext<ScraperContextType | undefined>(undefined)
@@ -140,6 +156,20 @@ export const ScraperProvider: React.FC<{ children: React.ReactNode }> = ({
   const [forwardedFilter, setForwardedFilter] = useState<
     "all" | "forwarded" | "original" | "unfollowed_forwarded"
   >("all")
+  const [maxPostsPerChannel, setMaxPostsPerChannel] = useState<number>(() => {
+    const saved = localStorage.getItem("postFilter_maxPerChannel")
+    const parsed = saved ? Number.parseInt(saved, 10) : 0
+    return Number.isFinite(parsed) && parsed >= 0 ? parsed : 0
+  })
+  const [maxPostsPerChannelMode, setMaxPostsPerChannelMode] =
+    useState<MaxPostsPerChannelMode>(() => {
+      const saved = localStorage.getItem("postFilter_maxPerChannelMode")
+      return saved === "random" ? "random" : "latest"
+    })
+  const [postSortOrder, setPostSortOrder] = useState<PostSortOrder>(() => {
+    const saved = localStorage.getItem("postFilter_sortOrder")
+    return saved === "channel_time" ? "channel_time" : "time"
+  })
   const scrapingLocksRef = React.useRef<Set<string>>(new Set())
   const activeJobRef = useRef<string | null>(null)
 
@@ -148,6 +178,27 @@ export const ScraperProvider: React.FC<{ children: React.ReactNode }> = ({
     semanticSearchQuery,
     300,
   )
+
+  const postViewOptions: PostViewOptions = {
+    maxPostsPerChannel,
+    maxPostsPerChannelMode,
+    postSortOrder,
+  }
+
+  useEffect(() => {
+    localStorage.setItem(
+      "postFilter_maxPerChannel",
+      maxPostsPerChannel.toString(),
+    )
+  }, [maxPostsPerChannel])
+
+  useEffect(() => {
+    localStorage.setItem("postFilter_maxPerChannelMode", maxPostsPerChannelMode)
+  }, [maxPostsPerChannelMode])
+
+  useEffect(() => {
+    localStorage.setItem("postFilter_sortOrder", postSortOrder)
+  }, [postSortOrder])
 
   // Background language detection for existing channels
   useEffect(() => {
@@ -220,7 +271,12 @@ export const ScraperProvider: React.FC<{ children: React.ReactNode }> = ({
               )
             }
 
-            setFilteredPosts(otherPosts)
+            setFilteredPosts(
+              applyPostViewPipeline(otherPosts, postViewOptions, {
+                startDate,
+                endDate,
+              }),
+            )
             setVisiblePosts(20)
           } catch (error) {
             console.error("Related post search failed:", error)
@@ -262,7 +318,12 @@ export const ScraperProvider: React.FC<{ children: React.ReactNode }> = ({
               )
             }
 
-            setFilteredPosts(results)
+            setFilteredPosts(
+              applyPostViewPipeline(results, postViewOptions, {
+                startDate,
+                endDate,
+              }),
+            )
             setVisiblePosts(20)
           } catch (error) {
             console.error("Semantic search failed:", error)
@@ -275,32 +336,21 @@ export const ScraperProvider: React.FC<{ children: React.ReactNode }> = ({
         }
 
         const selectedNames = Array.from(selectedChannels)
-        let posts = await getPostsByDateRange(selectedNames, startDate, endDate)
+        const rawPosts = await getPostsByDateRange(
+          selectedNames,
+          startDate,
+          endDate,
+        )
+        const posts = buildFilteredPostsFromRaw(rawPosts, {
+          searchText,
+          forwardedFilter,
+          channels,
+          view: postViewOptions,
+          startDate,
+          endDate,
+        })
 
-        if (searchText.trim()) {
-          const query = searchText.toLowerCase()
-          posts = posts.filter(
-            (post) =>
-              post.text.toLowerCase().includes(query) ||
-              post.channelName.toLowerCase().includes(query),
-          )
-        }
-
-        if (forwardedFilter === "forwarded") {
-          posts = posts.filter((p) => !!p.forwardedFrom)
-        } else if (forwardedFilter === "original") {
-          posts = posts.filter((p) => !p.forwardedFrom)
-        } else if (forwardedFilter === "unfollowed_forwarded") {
-          posts = posts.filter(
-            (p) =>
-              p.forwardedFrom &&
-              !channels.some(
-                (c) => c.name.toLowerCase() === p.forwardedFrom?.toLowerCase(),
-              ),
-          )
-        }
-
-        setFilteredPosts(posts.sort((a, b) => b.timestamp - a.timestamp))
+        setFilteredPosts(posts)
         setVisiblePosts(20)
       } finally {
         setIsFiltering(false)
@@ -320,6 +370,9 @@ export const ScraperProvider: React.FC<{ children: React.ReactNode }> = ({
       searchSimilarPosts,
       forwardedFilter,
       channels,
+      maxPostsPerChannel,
+      maxPostsPerChannelMode,
+      postSortOrder,
     ],
   )
 
@@ -740,6 +793,13 @@ export const ScraperProvider: React.FC<{ children: React.ReactNode }> = ({
         addNewChannel,
         forwardedFilter,
         setForwardedFilter,
+        maxPostsPerChannel,
+        setMaxPostsPerChannel,
+        maxPostsPerChannelMode,
+        setMaxPostsPerChannelMode,
+        postSortOrder,
+        setPostSortOrder,
+        postViewOptions,
       }}
     >
       {children}

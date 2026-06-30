@@ -166,6 +166,9 @@ export interface CommandContext {
   setForwardedFilter: (
     value: "all" | "forwarded" | "original" | "unfollowed_forwarded",
   ) => void
+  setMaxPostsPerChannel: (value: number) => void
+  setMaxPostsPerChannelMode: (value: "latest" | "random") => void
+  setPostSortOrder: (value: "time" | "channel_time") => void
   filteredPosts: import("@/types").Post[]
   starredOnly: boolean
   setStarredOnly: (value: boolean) => void
