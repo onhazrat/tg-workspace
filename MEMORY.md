@@ -19,7 +19,7 @@ Self-hosted Telegram channel summarizer. Migrated from browser-heavy `TG-Summari
 - **Tunables:** `backend/app/core/config.py` + `frontend/src/lib/env.ts` (`VITE_*`); `.env.example`. Frontend-only clamps in `frontend/src/constants.ts` (e.g. auto-sync interval min/max).
 - **`TG-Summarizer/`** — Original reference; not deployed.
 - **`docs/ideas-log/`** — Backlog (`IDEA-NNN`); index [IDEAS-LOG.md](docs/ideas-log/IDEAS-LOG.md).
-- **uv workspace** + **bun** frontend. **Playwright E2E only** (~97 tests; palette K1–K18 + summarizer UI in `summarizer.spec.ts`).
+- **uv workspace** + **bun** frontend. **Playwright E2E only** (~98 tests; palette K1–K18 + summarizer UI in `summarizer.spec.ts`).
 - **CI/CD:** GitHub-hosted tests on push; self-hosted deploy via `deploy-staging.yml` / `deploy-production.yml` — [deployment.md](deployment.md).
 
 ### Key API surfaces
@@ -64,7 +64,7 @@ Self-hosted Telegram channel summarizer. Migrated from browser-heavy `TG-Summari
 - **External AI summary flow:** Copy Prompt → pending history entry; complete via **`PasteSummaryModal`** on that item. Completed: `source: "pasted"`. Pending view has explicit paste instructions.
 - **Theme:** `theme-provider` (`vite-ui-theme`); TG app root uses `app-*` tokens + `tg-wcag-floor` class for metadata typography floor. **Layout width:** `@utility app-shell` in `index.css` — `--max-width-app` 80rem (1280px), scales to 90rem at `xl`, 100rem at `2xl`; tune via `@theme` tokens only.
 - **Numeric settings UI:** `<input type="number">` in Settings / DatabaseManagement / ChannelGrid (sliders and fixed retention day selects removed). Palette mirrors same clamps via `NUMERIC_EDITOR_DEFS` in `settings-schema.ts`.
-- **Initial load UX:** skeleton placeholders in `ChannelGrid` / `PostFeed` (`isInitialChannelsLoading`, `isInitialPostLoadPending`). `ChannelGrid` infinite scroll uses `scrollContainerRef` + `useLayoutEffect` for `IntersectionObserver`.
+- **Initial load UX:** skeleton placeholders in `ChannelGrid` / `PostFeed` (`isInitialChannelsLoading`, `isInitialPostLoadPending`). **Summarizer scroll shell:** `App.tsx` uses `h-svh overflow-hidden` + `min-h-0` flex chain so `data-testid="workspace-scroll"` is the real scroll container (not window scroll). **Infinite scroll:** `useScrollLoadMore` hook (`frontend/src/hooks/useScrollLoadMore.ts`) — callback-ref sentinel + `IntersectionObserver` with `root: scrollContainerRef`; used by `ChannelGrid` (20 cards/page).
 - **PostCard:** long posts collapse with Show More / Collapse; action bar visible on hover **and** `focus-within`.
 - **Channel grid:** `md:2 / lg:3 / xl:4` columns; shadcn `Select` for filters/sort; filtered count “Showing X of Y”; bulk freeze/unfreeze always confirms (matches palette).
 - **Appearance toggles:** incl. `showChannelStartId` (default **false**) — gates Start ID field on ChannelCard.
@@ -89,6 +89,7 @@ Locked [DECISIONS.md](docs/migration/DECISIONS.md) + items through command palet
 13. **App shell layout width (2026-06-28)** — Single `app-shell` utility + `@theme` max-width tokens in `index.css`. Responsive: 80rem → 90rem (`xl`) → 100rem (`2xl`).
 14. **Auto-sync interval UI bounds (2026-06-30)** — Frontend clamps **5–1440 minutes** (1 day) via `AUTO_SYNC_INTERVAL_MIN_MINUTES` / `AUTO_SYNC_INTERVAL_MAX_MINUTES` in `constants.ts`; shared by SettingsView, ChannelGrid, palette editor. **Backend has no max** — accepts any integer via API.
 15. **Channel stats batch SQL (2026-06-30)** — `compute_channel_stats_batch` uses two batched queries (aggregates + top-100 timestamps per channel), not per-channel full post scans. Composite index on `(channel_name, timestamp DESC)`. Plan: [fix_channel_stats_perf](.cursor/plans/fix_channel_stats_perf_5abf4a1d.plan.md). Tests: `tests/services/test_channel_stats.py`.
+16. **Summarizer viewport scroll (2026-06-30)** — TG shell height-constrained (`h-svh` + `min-h-0` on flex children); workspace tab content scrolls inside `workspace-scroll`. IntersectionObserver infinite-scroll must use that element as `root`, not the viewport. Reusable hook: `useScrollLoadMore`.
 
 ### Explicitly rejected / deferred
 
@@ -107,6 +108,7 @@ Locked [DECISIONS.md](docs/migration/DECISIONS.md) + items through command palet
 - Per-user proxy URLs; tune proxy slots + `syncConcurrency` together; verify via `runtime-config`.
 - Centralize tunables in `.env` / `.env.example`.
 - **Only commit when explicitly asked**; plan files may be checkbox-updated when user requests.
+- **Frontend bug fixes** — verify with Playwright on the exact user reproduction path; add regression test when behavior is non-trivial; don't assume fixed until test + build pass.
 - **Ideas log** — deferred work in `docs/ideas-log/`; start sessions with *"Work on IDEA-NNN."*
 - **Command palette / UI polish:** use AskQuestion for product decisions; no assumptions on shortcuts, phasing, or mobile scope.
 - **Numeric settings:** integers in UI for int settings; floats allow decimals (`aiTemperature`); palette two-step editor + current-value hints like booleans.
@@ -117,6 +119,13 @@ Locked [DECISIONS.md](docs/migration/DECISIONS.md) + items through command palet
 - **Native dev:** `uv sync` → alembic on `app` → uvicorn :8000; `bun run dev` :5173. **`POSTGRES_DB=app`** for API.
 - **Pre-commit:** `uv run prek run --all-files`; `bun run lint` (Biome).
 - **Playwright:** `ENVIRONMENT=local bash scripts/generate-client.sh` → Docker image or local Chrome. **`frontend/tests/utils/privateApi.ts`** sets `OpenAPI.BASE` fallback chain: `VITE_API_URL` → `PLAYWRIGHT_API_URL` → `http://localhost:8000`. **`PLAYWRIGHT_CHANNEL=chrome`** when cached `chromium_headless_shell` install fails (Cursor sandbox extraction hang). Summarizer-only verify: `PLAYWRIGHT_CHANNEL=chrome bun run test tests/summarizer.spec.ts`.
+- **Testing frontend bug fixes (workflow):**
+  1. **Reproduce the reported path** — e.g. cold navigation to `/summarizer?tab=channels` (not tab-switch workaround). Confirm backend up (`docker compose up -d db prestart backend` or native uvicorn).
+  2. **Add or extend a Playwright test** in `frontend/tests/summarizer.spec.ts` (or relevant spec) that asserts the fixed behavior; use `data-testid` hooks (`workspace-scroll`, `channel-grid-load-more`) and API seed helpers (`seedBulkChannels` in `tests/utils/seed-channel.ts`) when data setup is needed.
+  3. **Run targeted test before claiming done:** `cd frontend && PLAYWRIGHT_CHANNEL=chrome bunx playwright test summarizer.spec.ts -g "<test name>" --project=chromium` (needs auth setup + `.env` `FIRST_SUPERUSER*`).
+  4. **Build check:** `cd frontend && bun run build` (catches missing imports / TS errors that CI deploy will hit).
+  5. **Scroll/intersection bugs:** verify `workspace-scroll` is actually scrollable (`scrollHeight > clientHeight`) and observer `root` matches that element — flex layouts without `min-h-0` cause window scroll instead.
+  6. **Staging:** deploy frontend then re-test the original URL; local pass ≠ staging until deployed.
 - **pytest:** `cd backend && uv run pytest tests/ -q` (`app_test`). Backfill: `tests/api/test_sync_jobs.py`, `tests/api/test_scheduler_jobs.py`. Settings defaults: `tests/api/test_settings_defaults.py`. Channel stats: `tests/services/test_channel_stats.py`.
 - **Frontend unit tests:** `cd frontend && bun test src/lib/commands/settings-schema.test.ts`.
 - **CI frontend build:** Docker `bun run build` runs `tsc` — missing imports (e.g. dropping `addChannelByName` when editing `ChannelGrid.tsx`) fail Playwright, test-docker-compose, and deploy workflows.
@@ -125,6 +134,7 @@ Locked [DECISIONS.md](docs/migration/DECISIONS.md) + items through command palet
 - **Auto-sync tunables:** `AUTO_SYNC_INTERVAL_MINUTES_DEFAULT=60` (backend); frontend UI max **1440** min in `constants.ts` only.
 - **2000+ channels** — avoid Sync All; prefer auto-sync / Sync Selected; bulk reset-sync only for policy-wide destructive re-scrape.
 - **Partial history in staging** — fix via palette backfill commands or wait for auto-sync partial pickup; expect multi-pass for busy feeds.
+- **Channel grid infinite scroll (fixed 2026-06-30)** — first-visit scroll failed because (a) page scrolled on window, not `workspace-scroll`, and (b) observer sentinel absent during skeleton load. Fixed via `h-svh`/`min-h-0` layout + `useScrollLoadMore`. Regression test: `channel grid loads more cards on first visit when scrolling` in `summarizer.spec.ts`.
 - **Traefik / deploy** — see [deployment.md](deployment.md); staging needs self-hosted runner labels.
 
 ## Caveats
@@ -140,6 +150,7 @@ Locked [DECISIONS.md](docs/migration/DECISIONS.md) + items through command palet
 - **`autoSyncPartialBatchSize`** — sync AppSetting JSON only (not `.env`); default 1 partial channel per auto-sync tick.
 - **Frontend vs backend numeric bounds** — auto-sync max (1440 min), Tor threshold (5–50), etc. are UI/palette clamps only; API may accept values outside UI range.
 - **Wider app shell on ultrawide** — prose-heavy views may need internal column/grid constraints if line length becomes uncomfortable (not done yet).
+- **Flex + `overflow-y-auto` scroll containers** — without `min-h-0` on flex ancestors, content expands and window scrolls; `IntersectionObserver` with a scroll-root ref will not fire on user scroll. Same pattern may affect `PostFeed` / `HistoryView` (not yet migrated to `useScrollLoadMore`).
 
 ## Out of scope / roadmap
 
