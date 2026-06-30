@@ -149,6 +149,9 @@ export const ChannelGrid: React.FC<ChannelGridProps> = () => {
   }, [])
 
   useEffect(() => {
+    const target = observerTarget.current
+    if (!target) return
+
     const observer = new IntersectionObserver(
       (entries) => {
         if (entries[0].isIntersecting) {
@@ -158,16 +161,12 @@ export const ChannelGrid: React.FC<ChannelGridProps> = () => {
       { threshold: 0.1 },
     )
 
-    if (observerTarget.current) {
-      observer.observe(observerTarget.current)
-    }
+    observer.observe(target)
 
     return () => {
-      if (observerTarget.current) {
-        observer.unobserve(observerTarget.current)
-      }
+      observer.unobserve(target)
     }
-  }, [])
+  }, [isInitialChannelsLoading, filteredChannels.length])
 
   const allTags = useMemo(() => {
     const tags = new Set<string>()
