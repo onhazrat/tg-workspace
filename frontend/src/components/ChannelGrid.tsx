@@ -8,7 +8,7 @@ import {
 } from "lucide-react"
 import { motion } from "motion/react"
 import type React from "react"
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
 import { api } from "@/api"
 import {
   Dialog,
@@ -37,6 +37,7 @@ import { useScraper } from "../contexts/ScraperContext"
 import { useSettings } from "../contexts/SettingsContext"
 import { useUI } from "../contexts/UIContext"
 import { useApiStatus } from "../hooks/useApiStatus"
+import { useScrollLoadMore } from "../hooks/useScrollLoadMore"
 import { clearChannelPosts, upsertChannel } from "../lib/repository"
 import type { Channel } from "../types"
 import { ChannelCard } from "./ChannelCard"
@@ -146,37 +147,23 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
   }, [channels, channelSearch, selectedLanguageFilter])
 
   const [visibleChannels, setVisibleChannels] = useState(20)
-  const observerTarget = useRef<HTMLDivElement>(null)
+
+  const hasMoreChannels = visibleChannels < filteredChannels.length
+
+  const loadMoreChannels = useCallback(() => {
+    setVisibleChannels((prev) => Math.min(prev + 20, filteredChannels.length))
+  }, [filteredChannels.length])
+
+  const loadMoreSentinelRef = useScrollLoadMore({
+    scrollContainerRef,
+    enabled: !isInitialChannelsLoading && filteredChannels.length > 0,
+    hasMore: hasMoreChannels,
+    onLoadMore: loadMoreChannels,
+  })
 
   useEffect(() => {
     setVisibleChannels(20)
   }, [channelSearch, selectedLanguageFilter, sortBy, sortDirection])
-
-  useLayoutEffect(() => {
-    if (isInitialChannelsLoading) return
-
-    const scrollRoot = scrollContainerRef.current
-    const target = observerTarget.current
-    if (!scrollRoot || !target) return
-
-    const observer = new IntersectionObserver(
-      (entries) => {
-        if (entries[0]?.isIntersecting) {
-          setVisibleChannels((prev) =>
-            Math.min(prev + 20, filteredChannels.length),
-          )
-        }
-      },
-      { root: scrollRoot, threshold: 0.1, rootMargin: "200px" },
-    )
-
-    observer.observe(target)
-    return () => observer.disconnect()
-  }, [
-    filteredChannels.length,
-    isInitialChannelsLoading,
-    scrollContainerRef,
-  ])
 
   const allTags = useMemo(() => {
     const tags = new Set<string>()
@@ -888,8 +875,12 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
               />
             ))}
 
-          {visibleChannels < filteredChannels.length && (
-            <div ref={observerTarget} className="col-span-full h-10 w-full" />
+          {hasMoreChannels && (
+            <div
+              ref={loadMoreSentinelRef}
+              data-testid="channel-grid-load-more"
+              className="col-span-full h-10 w-full"
+            />
           )}
         </div>
       )}

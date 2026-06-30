@@ -173,7 +173,7 @@ export default function App() {
 
   return (
     <div
-      className={`tg-wcag-floor min-h-screen bg-app-bg text-app-ink font-sans selection:bg-app-ink selection:text-app-bg transition-colors duration-300 flex flex-col`}
+      className={`tg-wcag-floor h-svh overflow-hidden bg-app-bg text-app-ink font-sans selection:bg-app-ink selection:text-app-bg transition-colors duration-300 flex flex-col`}
     >
       <a
         href="#main-content"
@@ -183,7 +183,7 @@ export default function App() {
       </a>
       <main
         id="main-content"
-        className="app-shell flex-1 flex flex-col p-4 md:p-8"
+        className="app-shell flex min-h-0 flex-1 flex-col p-4 md:p-8"
       >
         {/* Offline Banner */}
         <AnimatePresence>
@@ -247,7 +247,7 @@ export default function App() {
         </AnimatePresence>
 
         {/* Main Content Area */}
-        <div className="w-full flex-1 flex flex-col">
+        <div className="w-full flex min-h-0 flex-1 flex-col">
           <div className="flex flex-col sm:flex-row justify-between items-end mb-4 gap-4">
             <div>
               <h1 className="text-xl font-bold tracking-tighter uppercase leading-none">
@@ -380,7 +380,7 @@ export default function App() {
             </DialogContent>
           </Dialog>
 
-          <div className="border border-app-ink border-opacity-20 flex flex-col bg-app-card flex-1 overflow-hidden">
+          <div className="border border-app-ink border-opacity-20 flex min-h-0 flex-1 flex-col bg-app-card overflow-hidden">
             <div className="border-b border-app-ink border-opacity-10 p-4 flex flex-col gap-4 bg-app-muted shrink-0">
               <div className="flex justify-between items-center">
                 <div className="flex gap-4">
@@ -457,7 +457,8 @@ export default function App() {
 
             <div
               ref={scrollContainerRef}
-              className="flex-1 p-8 overflow-y-auto"
+              data-testid="workspace-scroll"
+              className="min-h-0 flex-1 overflow-y-auto p-8"
             >
               <AnimatePresence mode="wait">
                 {summarizing ? (

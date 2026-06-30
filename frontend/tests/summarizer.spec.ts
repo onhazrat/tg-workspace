@@ -3,6 +3,7 @@ import { expect, test } from "@playwright/test"
 
 import { WORKSPACE_TABS } from "../src/constants"
 import {
+  seedBulkChannels,
   seedPartialHistoryChannel,
   seedTestChannel,
 } from "./utils/seed-channel"
@@ -788,5 +789,27 @@ test.describe("command palette keyboard", () => {
     }
 
     await closePaletteKeyboard(page)
+  })
+
+  test("channel grid loads more cards on first visit when scrolling", async ({
+    page,
+  }) => {
+    const prefix = `scroll${Date.now()}`
+    await gotoSummarizer(page, "summary")
+    await seedBulkChannels(page, 25, prefix)
+
+    await page.goto("/summarizer?tab=channels")
+    await expect(page.getByTestId("command-palette-button")).toBeVisible()
+    await page.getByPlaceholder("Search channels...").fill(prefix)
+
+    const seededCards = page.locator(`[data-channel-name^="${prefix}"]`)
+    await expect(seededCards).toHaveCount(20, { timeout: 30_000 })
+
+    const scrollContainer = page.getByTestId("workspace-scroll")
+    await scrollContainer.evaluate((element) => {
+      element.scrollTop = element.scrollHeight
+    })
+
+    await expect(seededCards).toHaveCount(25, { timeout: 10_000 })
   })
 })

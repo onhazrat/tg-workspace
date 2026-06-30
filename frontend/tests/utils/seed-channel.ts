@@ -59,6 +59,44 @@ export async function seedTestChannel(
   return name
 }
 
+export async function seedBulkChannels(
+  page: Page,
+  count: number,
+  prefix: string,
+): Promise<void> {
+  await page.evaluate(
+    async ({ channelCount, channelPrefix }) => {
+      const token = localStorage.getItem("access_token")
+      if (!token) {
+        throw new Error("seedBulkChannels: missing access_token")
+      }
+
+      const headers = {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      }
+
+      await Promise.all(
+        Array.from({ length: channelCount }, (_, index) => {
+          const name = `${channelPrefix}${index}`
+          return fetch(`/api/v1/data/channels/${name}`, {
+            method: "PUT",
+            headers,
+            body: JSON.stringify({ id: name, name }),
+          }).then(async (response) => {
+            if (!response.ok) {
+              throw new Error(
+                `seedBulkChannels failed (${response.status}): ${await response.text()}`,
+              )
+            }
+          })
+        }),
+      )
+    },
+    { channelCount: count, channelPrefix: prefix },
+  )
+}
+
 export async function seedPartialHistoryChannel(
   page: Page,
   channelName?: string,

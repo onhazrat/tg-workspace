@@ -1,6 +1,6 @@
 # TG Summarizer — Project Memory
 
-> Last synced: 2026-06-28 (numeric settings UX + app-shell layout)
+> Last synced: 2026-06-30
 
 ## Purpose
 
@@ -8,7 +8,7 @@ Self-hosted Telegram channel summarizer. Migrated from browser-heavy `TG-Summari
 
 ## Architecture
 
-- **`backend/`** — FastAPI (`app/main.py`), SQLModel (`app/models_tg.py`), Alembic, services (`scraper.py`, `sync_orchestrator.py`, `proxy_pool.py`, …), APScheduler jobs, pluggable AI (`app/ai/`, Gemini first).
+- **`backend/`** — FastAPI (`app/main.py`), SQLModel (`app/models_tg.py`), Alembic, services (`scraper.py`, `sync_orchestrator.py`, `proxy_pool.py`, `channels.py`, …), APScheduler jobs, pluggable AI (`app/ai/`, Gemini first).
 - **`frontend/`** — React 19 + Vite + TanStack Router/Query; dual-route UI:
   - **`/_tg/summarizer`** — full-screen TG app (`App.tsx` + `TgProviders`); **command palette** on `main`; **keyboard shortcuts dialog** (`?` + header button). Main content uses **`app-shell`** width utility.
   - **`/_layout/*`** — template admin shell (`/`, `/items`, `/admin`, `/settings`); inner outlet also **`app-shell`**.
@@ -16,7 +16,7 @@ Self-hosted Telegram channel summarizer. Migrated from browser-heavy `TG-Summari
 - **Modals (TG shell):** shadcn/Radix `Dialog` only — **`Modal.tsx` removed** (2026-06-25). Confirm flows in `ChannelGrid`, `HistoryView`, `PasteSummaryModal`, `DatabaseManagement`, `MigrationPrompt`.
 - **API clients (ADR-006):** hand-written `frontend/src/api/` (summarizer); generated `frontend/src/client/` (admin/auth). Regenerate: `bash scripts/generate-client.sh` (default `ENVIRONMENT=production`; override `ENVIRONMENT=local` for Playwright/private routes).
 - **Data layer (frontend):** `repository.ts` API-first → `cache.ts` (IndexedDB). **`db.ts` removed**.
-- **Tunables:** `backend/app/core/config.py` + `frontend/src/lib/env.ts` (`VITE_*`); `.env.example`.
+- **Tunables:** `backend/app/core/config.py` + `frontend/src/lib/env.ts` (`VITE_*`); `.env.example`. Frontend-only clamps in `frontend/src/constants.ts` (e.g. auto-sync interval min/max).
 - **`TG-Summarizer/`** — Original reference; not deployed.
 - **`docs/ideas-log/`** — Backlog (`IDEA-NNN`); index [IDEAS-LOG.md](docs/ideas-log/IDEAS-LOG.md).
 - **uv workspace** + **bun** frontend. **Playwright E2E only** (~97 tests; palette K1–K18 + summarizer UI in `summarizer.spec.ts`).
@@ -28,6 +28,7 @@ Self-hosted Telegram channel summarizer. Migrated from browser-heavy `TG-Summari
 - **AI summary:** generate, stream, **`POST /api/v1/ai/summary/prompt`** (Copy Prompt; no LLM call)
 - **Legacy `/api/*`:** `local` only; **410 Gone in production**
 - **Channel sync:** `POST /api/v1/jobs/sync` → SSE `GET .../events` (orchestrator auto-detects initial / incremental / backfill)
+- **Channels + stats:** `GET /api/v1/data/channels?includeStats=true` — batched SQL aggregates + velocity (`channels.py`); composite index `ix_tg_posts_channel_name_timestamp`
 - **Settings:** `GET /api/v1/data/settings/{key}` merges env defaults for `retention`, `sync`, `translation`, `jobs` when DB row missing/partial (`_SETTING_LOADERS` in `data.py`)
 - **Runtime diagnostics:** `GET /api/v1/jobs/runtime-config`
 - OpenAPI: `/docs`, `/api/v1/openapi.json`
@@ -42,17 +43,18 @@ Self-hosted Telegram channel summarizer. Migrated from browser-heavy `TG-Summari
   - **`backfill`** — posts exist and `history_complete_to_cutoff === false`; after incremental head fetch, resume backward from `min(stored post_id)` until cutoff or per-run limit. Skips existing posts without stopping (unlike incremental).
 - **Coverage:** `Post.is_anchor`, `Channel.history_complete_to_cutoff`, gaps in `tg_post_sync_state`. **Partial history** = `historyCompleteToCutoff === false` (oldest stored post newer than cutoff).
 - **Per-run cap:** `SCRAPER_ITERATION_LIMIT` (default **50** pages ≈ ~750–1000 posts). High-volume channels need **multiple sync runs**; iteration budget is shared across incremental + backfill in one job.
-- **Auto-sync partial pickup:** `auto_sync.py` queues stale channels **plus** fresh partial channels (round-robin via `autoSyncPartialCursor` / `autoSyncPartialBatchSize` in sync AppSetting; default batch 1).
+- **Auto-sync partial pickup:** `auto_sync.py` queues stale channels **plus** fresh partial channels (round-robin via `autoSyncPartialCursor` / `autoSyncPartialBatchSize` in sync AppSetting; default batch 1). Staleness threshold = `autoSyncInterval` minutes (backend accepts any int; frontend clamps **5–1440**).
 - **Destructive re-scrape:** Reset & Sync / `bulk-reset-sync` still clears posts — use only when data is corrupt or policy changes; **not** the default partial-history fix.
 - **Auto-follow forwarded:** Per-channel `autoFollowForwarded` only (not global).
 - **Embeddings/RAG:** Server Gemini; skip anchors; pgvector deferred ([ADR-005](docs/migration/ADR-005-vector-search.md)).
 - **Jobs:** `auto_sync`, `embeddings`, `auto_summary`, `retention`, `translation_batch`.
-- **Retention defaults:** post **90** days, log **30** days (`RETENTION_*_DEFAULT` / `VITE_RETENTION_*`); **`0` = never purge** (UI badge **Never**).
+- **Retention defaults:** post **90** days, log **30** days (`RETENTION_*_DEFAULT` / `VITE_RETENTION_*`); **`0` = never purge** (UI badge **Never**); any non-negative integer (no preset list).
 
 ## Analysis conventions
 
 - **Channel identity:** `channel_id` / `name`; API camelCase.
 - **Timestamps:** ms since epoch.
+- **Channel stats:** `count`, `minId`, `maxId`, `velocity` (EMA on last 100 post timestamps per channel). Velocity helper: `_velocity_from_timestamps` in `channels.py`.
 - **Default Channel Start Time / sync concurrency / proxy slots:** Settings → Scraping & Sync / Network; verify via `runtime-config`.
 - **Auto-follow UI:** Toggle on each **ChannelCard** (rounded pill). Distinct from **Auto-Followed** badge (`discoveredVia`).
 - **Partial history UI:** Amber **Partial history** badge on `ChannelCard` when `historyCompleteToCutoff === false`; tooltip: "History does not reach retention window".
@@ -61,8 +63,8 @@ Self-hosted Telegram channel summarizer. Migrated from browser-heavy `TG-Summari
 - **Keyboard shortcuts reference:** `?` (non-editable contexts) + header keyboard button → dialog listing shortcuts.
 - **External AI summary flow:** Copy Prompt → pending history entry; complete via **`PasteSummaryModal`** on that item. Completed: `source: "pasted"`. Pending view has explicit paste instructions.
 - **Theme:** `theme-provider` (`vite-ui-theme`); TG app root uses `app-*` tokens + `tg-wcag-floor` class for metadata typography floor. **Layout width:** `@utility app-shell` in `index.css` — `--max-width-app` 80rem (1280px), scales to 90rem at `xl`, 100rem at `2xl`; tune via `@theme` tokens only.
-- **Numeric settings UI:** `<input type="number">` in Settings / DatabaseManagement / ChannelGrid (sliders and fixed retention day selects removed). Palette mirrors same min/max/step clamps.
-- **Initial load UX:** skeleton placeholders in `ChannelGrid` / `PostFeed` (`isInitialChannelsLoading`, `isInitialPostLoadPending`).
+- **Numeric settings UI:** `<input type="number">` in Settings / DatabaseManagement / ChannelGrid (sliders and fixed retention day selects removed). Palette mirrors same clamps via `NUMERIC_EDITOR_DEFS` in `settings-schema.ts`.
+- **Initial load UX:** skeleton placeholders in `ChannelGrid` / `PostFeed` (`isInitialChannelsLoading`, `isInitialPostLoadPending`). `ChannelGrid` infinite scroll uses `scrollContainerRef` + `useLayoutEffect` for `IntersectionObserver`.
 - **PostCard:** long posts collapse with Show More / Collapse; action bar visible on hover **and** `focus-within`.
 - **Channel grid:** `md:2 / lg:3 / xl:4` columns; shadcn `Select` for filters/sort; filtered count “Showing X of Y”; bulk freeze/unfreeze always confirms (matches palette).
 - **Appearance toggles:** incl. `showChannelStartId` (default **false**) — gates Start ID field on ChannelCard.
@@ -70,21 +72,23 @@ Self-hosted Telegram channel summarizer. Migrated from browser-heavy `TG-Summari
 
 ## Decisions (stable)
 
-Locked [DECISIONS.md](docs/migration/DECISIONS.md) + items through command palette (IDEA-001–007) + **UI polish audit (2026-06-25, commit `58550dd`)** + **resume backfill (2026-06-28)** + **numeric settings UX (2026-06-28)**:
+Locked [DECISIONS.md](docs/migration/DECISIONS.md) + items through command palette (IDEA-001–007) + **UI polish audit (2026-06-25)** + **resume backfill (2026-06-28)** + **numeric settings UX (2026-06-28)** + **channel stats perf (2026-06-30)**:
 
 1. **Single-operator (Mode A)** — Production: `API_KEY`, `TOKEN_ENCRYPTION_KEY`, strong `SECRET_KEY`, `USERS_OPEN_REGISTRATION=false`. Mode B deferred.
 2. **Auth** — JWT + optional `X-API-Key`; fail-closed on sensitive routes in non-local.
 3. **Data** — Postgres authoritative; IndexedDB cache; API-first writes.
 4. **Jobs** — APScheduler in-process; single replica ([ADR-004](docs/migration/ADR-004-job-runner.md)).
-5. **Backward scrape / per-channel auto-follow / Cloudflare DNS TLS / proxy pool (IDEA-003) / external AI paste flow / template tooling / command palette IDEA-001–007** — see [DECISIONS.md](docs/migration/DECISIONS.md) and idea detail files; keyboard UX on `main` (`e803203` then UI polish `58550dd`).
+5. **Backward scrape / per-channel auto-follow / Cloudflare DNS TLS / proxy pool (IDEA-003) / external AI paste flow / template tooling / command palette IDEA-001–007** — see [DECISIONS.md](docs/migration/DECISIONS.md) and idea detail files.
 6. **UI polish — desktop-only** — Summarizer workspace targets desktop; mobile tab overflow / responsive stats **out of scope** (Q1, 2026-06-25).
 7. **UI polish — WCAG 2.1 AA** — Card actions via `focus-within`; typography floor (`tg-wcag-floor` + component fixes); skip-nav; shadcn `Dialog` for all TG modals (`Modal.tsx` removed).
 8. **UI polish — Settings tab** — Settings is a **labeled workspace tab** (gear icon removed).
 9. **UI polish — channel grid** — `md:2 / lg:3 / xl:4`; shadcn `Select`; filtered count; bulk freeze/unfreeze always confirms.
 10. **UI polish — deferred** — `SettingsView.tsx` per-section split; mobile responsive polish.
-11. **Resume backfill for partial history (2026-06-28)** — Bounded pages per job + resume across runs (not unlimited single-run scrape). Orchestrator `backfill` pass from oldest stored post; auto-sync round-robins partial channels. Palette **Fix Partial History** commands queue backfill (no post wipe). Reset & Sync remains separate destructive path.
-12. **Numeric settings UX (2026-06-28)** — Number inputs (not sliders/fixed day lists) for retention, auto-sync interval, Tor threshold, AI temperature, etc. Retention: any non-negative integer; `0` = never purge (**Never** badge). Defaults post **90** / log **30** days via env (`RETENTION_*_DEFAULT`, `VITE_RETENTION_*`). `GET /settings/{key}` merges defaults for structured keys. Palette: two-step numeric editor + current-value badges. Tests: `settings-schema.test.ts` (8), `test_settings_defaults.py` (4).
-13. **App shell layout width (2026-06-28)** — Single `app-shell` utility + `@theme` max-width tokens in `index.css` (not per-component `max-w-7xl`). Responsive: 80rem → 90rem (`xl`) → 100rem (`2xl`). Inner page wrappers (`SettingsView`, `BotManagement`, `DiagnosticsView`, `RuntimeConfigView`) no longer use `max-w-5xl` — fill shell width.
+11. **Resume backfill for partial history (2026-06-28)** — Bounded pages per job + resume across runs. Orchestrator `backfill` pass from oldest stored post; auto-sync round-robins partial channels. Palette **Fix Partial History** commands queue backfill (no post wipe). Reset & Sync remains separate destructive path.
+12. **Numeric settings UX (2026-06-28)** — Number inputs (not sliders/fixed day lists) for retention, auto-sync interval, Tor threshold, AI temperature, etc. Retention: any non-negative integer; `0` = never purge (**Never** badge). Defaults post **90** / log **30** days via env. `GET /settings/{key}` merges defaults for structured keys. Palette: two-step numeric editor + current-value badges. Tests: `settings-schema.test.ts` (8), `test_settings_defaults.py` (4).
+13. **App shell layout width (2026-06-28)** — Single `app-shell` utility + `@theme` max-width tokens in `index.css`. Responsive: 80rem → 90rem (`xl`) → 100rem (`2xl`).
+14. **Auto-sync interval UI bounds (2026-06-30)** — Frontend clamps **5–1440 minutes** (1 day) via `AUTO_SYNC_INTERVAL_MIN_MINUTES` / `AUTO_SYNC_INTERVAL_MAX_MINUTES` in `constants.ts`; shared by SettingsView, ChannelGrid, palette editor. **Backend has no max** — accepts any integer via API.
+15. **Channel stats batch SQL (2026-06-30)** — `compute_channel_stats_batch` uses two batched queries (aggregates + top-100 timestamps per channel), not per-channel full post scans. Composite index on `(channel_name, timestamp DESC)`. Plan: [fix_channel_stats_perf](.cursor/plans/fix_channel_stats_perf_5abf4a1d.plan.md). Tests: `tests/services/test_channel_stats.py`.
 
 ### Explicitly rejected / deferred
 
@@ -93,8 +97,9 @@ Locked [DECISIONS.md](docs/migration/DECISIONS.md) + items through command palet
 - **SettingsView.tsx refactor** — defer until next heavy settings work.
 - **Unlimited backfill in one sync job** — rejected; use per-run `SCRAPER_ITERATION_LIMIT` + multi-pass resume.
 - **Reset & Sync as default partial-history fix** — rejected; replaced by non-destructive backfill queue.
-- **Flat `max-w-screen-2xl` / Tailwind `container` for shell** — rejected in favor of custom `@theme` tokens + `app-shell` (single source of truth, responsive growth only on large screens).
+- **Flat `max-w-screen-2xl` / Tailwind `container` for shell** — rejected in favor of custom `@theme` tokens + `app-shell`.
 - **Sliders / fixed retention day select lists** — replaced by number inputs (2026-06-28).
+- **120-minute auto-sync cap** — bumped to **1440 minutes (1 day)** on frontend only (2026-06-30); backend unchanged.
 
 ## User preferences
 
@@ -104,6 +109,7 @@ Locked [DECISIONS.md](docs/migration/DECISIONS.md) + items through command palet
 - **Only commit when explicitly asked**; plan files may be checkbox-updated when user requests.
 - **Ideas log** — deferred work in `docs/ideas-log/`; start sessions with *"Work on IDEA-NNN."*
 - **Command palette / UI polish:** use AskQuestion for product decisions; no assumptions on shortcuts, phasing, or mobile scope.
+- **Numeric settings:** integers in UI for int settings; floats allow decimals (`aiTemperature`); palette two-step editor + current-value hints like booleans.
 - **Rename channel in palette** — rejected.
 
 ## Environment & fixes
@@ -111,12 +117,14 @@ Locked [DECISIONS.md](docs/migration/DECISIONS.md) + items through command palet
 - **Native dev:** `uv sync` → alembic on `app` → uvicorn :8000; `bun run dev` :5173. **`POSTGRES_DB=app`** for API.
 - **Pre-commit:** `uv run prek run --all-files`; `bun run lint` (Biome).
 - **Playwright:** `ENVIRONMENT=local bash scripts/generate-client.sh` → Docker image or local Chrome. **`frontend/tests/utils/privateApi.ts`** sets `OpenAPI.BASE` fallback chain: `VITE_API_URL` → `PLAYWRIGHT_API_URL` → `http://localhost:8000`. **`PLAYWRIGHT_CHANNEL=chrome`** when cached `chromium_headless_shell` install fails (Cursor sandbox extraction hang). Summarizer-only verify: `PLAYWRIGHT_CHANNEL=chrome bun run test tests/summarizer.spec.ts`.
-- **pytest:** `cd backend && uv run pytest tests/ -q` (`app_test`). Backfill tests: `tests/api/test_sync_jobs.py`, `tests/api/test_scheduler_jobs.py`. Settings defaults: `tests/api/test_settings_defaults.py`.
+- **pytest:** `cd backend && uv run pytest tests/ -q` (`app_test`). Backfill: `tests/api/test_sync_jobs.py`, `tests/api/test_scheduler_jobs.py`. Settings defaults: `tests/api/test_settings_defaults.py`. Channel stats: `tests/services/test_channel_stats.py`.
 - **Frontend unit tests:** `cd frontend && bun test src/lib/commands/settings-schema.test.ts`.
-- **Scraper tunables:** `SCRAPER_ITERATION_LIMIT=50` (default, was 15); `SCRAPER_MAX_POSTS_PER_CHANNEL=300` applies to legacy forward `scrape_channel()` only, not orchestrator.
+- **CI frontend build:** Docker `bun run build` runs `tsc` — missing imports (e.g. dropping `addChannelByName` when editing `ChannelGrid.tsx`) fail Playwright, test-docker-compose, and deploy workflows.
+- **Scraper tunables:** `SCRAPER_ITERATION_LIMIT=50` (default); `SCRAPER_MAX_POSTS_PER_CHANNEL=300` applies to legacy forward `scrape_channel()` only, not orchestrator.
 - **Retention tunables:** `RETENTION_POST_DAYS_DEFAULT=90`, `RETENTION_LOG_DAYS_DEFAULT=30`; mirror in `VITE_RETENTION_*` for frontend defaults.
+- **Auto-sync tunables:** `AUTO_SYNC_INTERVAL_MINUTES_DEFAULT=60` (backend); frontend UI max **1440** min in `constants.ts` only.
 - **2000+ channels** — avoid Sync All; prefer auto-sync / Sync Selected; bulk reset-sync only for policy-wide destructive re-scrape.
-- **Partial history in staging** — many channels may show badge after backward-sync deploy; fix via palette backfill commands or wait for auto-sync partial pickup; expect multi-pass for busy feeds.
+- **Partial history in staging** — fix via palette backfill commands or wait for auto-sync partial pickup; expect multi-pass for busy feeds.
 - **Traefik / deploy** — see [deployment.md](deployment.md); staging needs self-hosted runner labels.
 
 ## Caveats
@@ -126,10 +134,11 @@ Locked [DECISIONS.md](docs/migration/DECISIONS.md) + items through command palet
 - **AppSetting `jobs` row** overrides env job defaults once saved.
 - **Auto-follow** can explode channel count; default off on existing channels.
 - **`SettingsView.tsx`** still ~2000 lines (refactor deferred).
-- **Deploy to Staging queued** — needs online self-hosted runner.
+- **Deploy to Staging** — needs online self-hosted runner.
 - **Playwright in Cursor agent sandbox** — browser zip extraction may hang; use Docker or system Chrome channel.
 - **Partial history + high post volume** — one sync run may not clear the badge; re-run fix command or rely on auto-sync until `historyCompleteToCutoff` is true.
 - **`autoSyncPartialBatchSize`** — sync AppSetting JSON only (not `.env`); default 1 partial channel per auto-sync tick.
+- **Frontend vs backend numeric bounds** — auto-sync max (1440 min), Tor threshold (5–50), etc. are UI/palette clamps only; API may accept values outside UI range.
 - **Wider app shell on ultrawide** — prose-heavy views may need internal column/grid constraints if line length becomes uncomfortable (not done yet).
 
 ## Out of scope / roadmap
