@@ -540,7 +540,7 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
                     type="button"
                     key={tag}
                     onClick={() => toggleTagSelection(tag)}
-                    className={`text-[9px] uppercase font-bold px-2 py-1 rounded-md transition-all flex items-center gap-1.5 ${
+                    className={`text-[9px] font-bold px-2 py-1 rounded-md transition-all flex items-center gap-1.5 ${
                       isAllSelected
                         ? "bg-app-ink text-app-bg"
                         : isPartial

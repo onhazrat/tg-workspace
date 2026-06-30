@@ -528,7 +528,7 @@ export const ChannelCard: React.FC<ChannelCardProps> = ({
           {channel.tags?.map((tag) => (
             <span
               key={tag}
-              className="text-[10px] uppercase font-bold px-2 py-1 bg-app-ink/5 border border-app-ink/10 flex items-center gap-1.5 group/tag rounded-md text-app-ink/80"
+              className="text-[10px] font-bold px-2 py-1 bg-app-ink/5 border border-app-ink/10 flex items-center gap-1.5 group/tag rounded-md text-app-ink/80"
             >
               {tag}
               <button
@@ -547,7 +547,7 @@ export const ChannelCard: React.FC<ChannelCardProps> = ({
             <input
               type="text"
               placeholder="Tag..."
-              className="text-[10px] uppercase font-bold px-2 py-1 bg-app-bg border border-app-ink/20 focus:border-app-ink/40 focus:outline-none w-20 rounded-md shadow-inner"
+              className="text-[10px] font-bold px-2 py-1 bg-app-bg border border-app-ink/20 focus:border-app-ink/40 focus:outline-none w-20 rounded-md shadow-inner"
               onBlur={(e) => handleAddTag((e.target as HTMLInputElement).value)}
               onKeyDown={(e) => {
                 if (e.key === "Enter")
