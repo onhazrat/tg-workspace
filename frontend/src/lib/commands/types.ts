@@ -184,9 +184,11 @@ export interface CommandContext {
   indexedDbTables: string[]
 }
 
+import type { Theme } from "@/components/theme-provider"
+
 export interface CommandSettingsSlice {
-  theme: "light" | "dark"
-  setTheme: (theme: "light" | "dark") => void
+  theme: Theme
+  setTheme: (theme: Theme) => void
   aiLanguage: string
   setAiLanguage: (language: string) => void
   selectedModel: string

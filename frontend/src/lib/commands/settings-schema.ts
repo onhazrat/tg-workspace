@@ -379,11 +379,13 @@ function buildNumericEditorCommands(): CommandDef[] {
 function buildEnumCommands(): CommandDef[] {
   const commands: CommandDef[] = []
 
-  for (const theme of ["light", "dark"] as const) {
+  for (const theme of ["light", "dark", "system"] as const) {
     commands.push({
       id: `set-theme-${theme}`,
       kind: "enum",
-      label: `Set Theme → ${theme === "light" ? "Light" : "Dark"}`,
+      label: `Set Theme → ${
+        theme === "light" ? "Light" : theme === "dark" ? "Dark" : "System"
+      }`,
       keywords: ["theme", theme, "appearance"],
       group: "Settings",
       run: (ctx) => ctx.settings.setTheme(theme),

@@ -7,6 +7,7 @@ import {
   Info,
   Languages,
   Layout,
+  Monitor,
   Moon,
   RefreshCw,
   RotateCw,
@@ -467,6 +468,18 @@ export const SettingsView: React.FC<{ activeSection?: string }> = ({
                       }`}
                     >
                       <Moon size={12} /> Dark
+                    </button>
+                    <button
+                      type="button"
+                      data-testid="system-mode"
+                      onClick={() => setTheme("system")}
+                      className={`px-4 py-2 text-[10px] font-bold uppercase tracking-widest transition-all flex items-center gap-2 ${
+                        theme === "system"
+                          ? "bg-app-ink text-app-bg"
+                          : "opacity-40 hover:opacity-100"
+                      }`}
+                    >
+                      <Monitor size={12} /> System
                     </button>
                   </div>
                 </div>

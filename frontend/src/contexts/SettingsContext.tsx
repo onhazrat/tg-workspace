@@ -9,7 +9,7 @@ import {
   useState,
 } from "react"
 import { api } from "@/api"
-import { useTheme } from "@/components/theme-provider"
+import { type Theme, useTheme } from "@/components/theme-provider"
 import {
   AUTO_SYNC_INTERVAL_DEFAULT,
   DEFAULT_AI_LANGUAGE,
@@ -37,8 +37,9 @@ function _normalizeProxyUrl(proxyUrl: string): string {
 }
 
 interface SettingsContextType {
-  theme: "light" | "dark"
-  setTheme: (theme: "light" | "dark") => void
+  theme: Theme
+  resolvedTheme: "light" | "dark"
+  setTheme: (theme: Theme) => void
   aiLanguage: string
   setAiLanguage: (language: string) => void
   selectedModel: string
@@ -124,18 +125,17 @@ const SettingsContext = createContext<SettingsContextType | undefined>(
 export const SettingsProvider: React.FC<{ children: ReactNode }> = ({
   children,
 }) => {
-  const { resolvedTheme, setTheme: setGlobalTheme } = useTheme()
+  const { theme, resolvedTheme, setTheme: setGlobalTheme } = useTheme()
 
   useEffect(() => {
     const legacy = localStorage.getItem("theme")
-    if (legacy === "light" || legacy === "dark") {
+    if (legacy === "light" || legacy === "dark" || legacy === "system") {
       setGlobalTheme(legacy)
       localStorage.removeItem("theme")
     }
   }, [setGlobalTheme])
 
-  const theme = resolvedTheme
-  const setTheme = (next: "light" | "dark") => setGlobalTheme(next)
+  const setTheme = (next: Theme) => setGlobalTheme(next)
 
   const [aiLanguage, setAiLanguage] = useState(() => {
     if (typeof window !== "undefined") {
@@ -787,6 +787,7 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({
     <SettingsContext.Provider
       value={{
         theme,
+        resolvedTheme,
         setTheme,
         aiLanguage,
         setAiLanguage,

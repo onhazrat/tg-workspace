@@ -170,21 +170,22 @@ test.describe("TG Summarizer", () => {
 
   test("command palette toggles theme", async ({ page }) => {
     await page.goto("/summarizer")
+    await page.evaluate(() =>
+      localStorage.setItem("vite-ui-theme", "light"),
+    )
+    await page.reload()
 
     const html = page.locator("html")
-    const initialHasDark = await html.evaluate((node) =>
-      node.classList.contains("dark"),
-    )
+    await expect(html).toHaveClass(/light/)
 
     await page.getByTestId("command-palette-button").click()
     await page.getByPlaceholder("Type a command...").fill("toggle theme")
     await page.getByRole("option", { name: "Toggle Theme" }).click()
 
+    await expect(html).toHaveClass(/dark/)
     await expect
-      .poll(async () =>
-        html.evaluate((node) => node.classList.contains("dark")),
-      )
-      .not.toBe(initialHasDark)
+      .poll(() => page.evaluate(() => localStorage.getItem("vite-ui-theme")))
+      .toBe("dark")
   })
 
   test("command palette copies all channel names", async ({ page }) => {
@@ -425,19 +426,18 @@ test.describe("command palette keyboard", () => {
 
   test("K3: toggles theme via type and Enter", async ({ page }) => {
     await page.goto("/summarizer")
-    const html = page.locator("html")
-    const initialHasDark = await html.evaluate((node) =>
-      node.classList.contains("dark"),
+    await page.evaluate(() =>
+      localStorage.setItem("vite-ui-theme", "light"),
     )
+    await page.reload()
+
+    const html = page.locator("html")
+    await expect(html).toHaveClass(/light/)
 
     await openPaletteKeyboard(page)
     await runPaletteCommand(page, "toggle theme")
 
-    await expect
-      .poll(async () =>
-        html.evaluate((node) => node.classList.contains("dark")),
-      )
-      .not.toBe(initialHasDark)
+    await expect(html).toHaveClass(/dark/)
   })
 
   test("K4: sync channel entity pick via keyboard", async ({ page }) => {

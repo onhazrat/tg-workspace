@@ -8,6 +8,13 @@ import {
 
 export type Theme = "dark" | "light" | "system"
 
+const THEME_CYCLE: Theme[] = ["light", "dark", "system"]
+
+export function getNextTheme(current: Theme): Theme {
+  const index = THEME_CYCLE.indexOf(current)
+  return THEME_CYCLE[(index + 1) % THEME_CYCLE.length] ?? "light"
+}
+
 type ThemeProviderProps = {
   children: React.ReactNode
   defaultTheme?: Theme

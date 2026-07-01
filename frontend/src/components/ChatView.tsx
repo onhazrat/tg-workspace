@@ -93,7 +93,7 @@ export const ChatView: React.FC = () => {
     selectedModel,
     setSelectedModel,
     isRTL,
-    theme,
+    resolvedTheme: theme,
     embeddingsEnabled,
   } = useSettings()
   const { setCurrentSummaryId } = useUI()

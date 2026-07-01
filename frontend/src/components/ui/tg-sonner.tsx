@@ -10,7 +10,7 @@ import { Toaster as Sonner, type ToasterProps } from "sonner"
 import { useSettings } from "@/contexts/SettingsContext"
 
 const TgToaster = ({ ...props }: ToasterProps) => {
-  const { theme = "light" } = useSettings()
+  const { resolvedTheme: theme = "light" } = useSettings()
 
   return (
     <Sonner

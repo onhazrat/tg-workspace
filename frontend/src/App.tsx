@@ -10,6 +10,7 @@ import {
   Keyboard,
   List,
   MessageSquare,
+  Monitor,
   Moon,
   Send,
   Settings,
@@ -38,6 +39,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "./components/ui/tg-tooltip"
+import { getNextTheme } from "./components/theme-provider"
 import { WORKSPACE_TABS } from "./constants"
 import { useAI } from "./contexts/AIContext"
 import { useChatContext } from "./contexts/ChatContext"
@@ -116,8 +118,24 @@ export default function App() {
   }, [isOffline, setAutoSyncPauseUntil])
 
   const toggleTheme = () => {
-    setTheme(theme === "light" ? "dark" : "light")
+    setTheme(getNextTheme(theme))
   }
+
+  const themeIcon =
+    theme === "system" ? (
+      <Monitor size={14} />
+    ) : theme === "light" ? (
+      <Moon size={14} />
+    ) : (
+      <Sun size={14} />
+    )
+
+  const themeTooltip =
+    theme === "system"
+      ? "System theme (follows OS) — click for Light"
+      : theme === "light"
+        ? "Switch to Dark Mode"
+        : "Switch to System Mode"
 
   const handleSelectHistorySummary = (s: Summary) => {
     applyHistorySummarySelection(s, {
@@ -319,15 +337,11 @@ export default function App() {
                     onClick={toggleTheme}
                     className="p-1.5 border border-app-ink border-opacity-10 hover:border-opacity-40 transition-all rounded-md"
                   >
-                    {theme === "light" ? <Moon size={14} /> : <Sun size={14} />}
+                    {themeIcon}
                   </button>
                 </TooltipTrigger>
                 <TooltipContent>
-                  <p>
-                    {theme === "light"
-                      ? "Switch to Dark Mode"
-                      : "Switch to Light Mode"}
-                  </p>
+                  <p>{themeTooltip}</p>
                 </TooltipContent>
               </Tooltip>
             </div>

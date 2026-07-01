@@ -56,7 +56,10 @@ export const SidebarAppearance = () => {
             <Moon className="mr-2 h-4 w-4" />
             Dark
           </DropdownMenuItem>
-          <DropdownMenuItem onClick={() => setTheme("system")}>
+          <DropdownMenuItem
+            data-testid="system-mode"
+            onClick={() => setTheme("system")}
+          >
             <Monitor className="mr-2 h-4 w-4" />
             System
           </DropdownMenuItem>
@@ -94,7 +97,10 @@ export const Appearance = () => {
             <Moon className="mr-2 h-4 w-4" />
             Dark
           </DropdownMenuItem>
-          <DropdownMenuItem onClick={() => setTheme("system")}>
+          <DropdownMenuItem
+            data-testid="system-mode"
+            onClick={() => setTheme("system")}
+          >
             <Monitor className="mr-2 h-4 w-4" />
             System
           </DropdownMenuItem>

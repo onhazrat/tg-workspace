@@ -219,6 +219,12 @@ test("User can switch between theme modes", async ({ page }) => {
   await page.getByTestId("theme-button").click()
   await page.getByTestId("light-mode").click()
   await expect(page.locator("html")).toHaveClass(/light/)
+
+  await page.getByTestId("theme-button").click()
+  await page.getByTestId("system-mode").click()
+  await expect
+    .poll(() => page.evaluate(() => localStorage.getItem("vite-ui-theme")))
+    .toBe("system")
 })
 
 test("Selected mode is preserved across sessions", async ({ page }) => {

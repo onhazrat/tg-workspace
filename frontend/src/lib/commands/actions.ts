@@ -1,6 +1,7 @@
 import { toast } from "sonner"
 
 import { api } from "@/api"
+import { getNextTheme } from "@/components/theme-provider"
 import { clearAllData, exportDBMetadata, getTableSizes } from "@/lib/cache"
 import type { CommandDef } from "@/lib/commands/types"
 import {
@@ -127,7 +128,7 @@ export function buildActionCommands(): CommandDef[] {
       keywords: ["theme", "dark", "light", "appearance", "mode"],
       group: "Actions",
       run: (ctx) => {
-        ctx.settings.setTheme(ctx.settings.theme === "light" ? "dark" : "light")
+        ctx.settings.setTheme(getNextTheme(ctx.settings.theme))
       },
     },
     {
