@@ -9,6 +9,10 @@ import React, {
 import { toast } from "sonner"
 import { api, type SyncJobStatus, subscribeSyncJobEvents } from "@/api"
 import { env } from "@/lib/env"
+import {
+  parseApiError,
+  unavailableChannelToastMessage,
+} from "@/lib/api-errors"
 import { useApiStatus } from "../hooks/useApiStatus"
 import { useDebouncedValue } from "../hooks/useDebouncedValue"
 import { useSyncQueue } from "../hooks/useSyncQueue"
@@ -733,6 +737,12 @@ export const ScraperProvider: React.FC<{ children: React.ReactNode }> = ({
       }
     } catch (err: unknown) {
       console.error("Failed to fetch initial channel info:", err)
+      const parsed = parseApiError(err)
+      if (parsed.isUnavailableOnWebView) {
+        isUnavailableOnWebView = true
+      } else if (parsed.message) {
+        toast.error(parsed.message)
+      }
     }
 
     const newChannel: Channel = {
@@ -747,14 +757,20 @@ export const ScraperProvider: React.FC<{ children: React.ReactNode }> = ({
       isFrozen: isUnavailableOnWebView,
       isUnavailableOnWebView,
       autoFollowForwarded: false,
+      regularSyncEnabled: !isUnavailableOnWebView,
+      dynamicSyncEnabled: false,
       discoveredVia,
     }
 
     await upsertChannel(newChannel)
     await loadChannels()
-    toast.success(`Added @${cleanName} to workspace`)
 
-    addToSyncQueue(newChannel, "Manual (Added from Forward)", () => {})
+    if (isUnavailableOnWebView) {
+      toast.warning(unavailableChannelToastMessage(cleanName), { duration: 8000 })
+    } else {
+      toast.success(`Added @${cleanName} to workspace`)
+      addToSyncQueue(newChannel, "Manual (Added from Forward)", () => {})
+    }
   }
 
   return (

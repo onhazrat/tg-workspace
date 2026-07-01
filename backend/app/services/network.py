@@ -40,6 +40,28 @@ def proxy_in_cooldown(proxy_url: str) -> bool:
     return _bad_proxies.get(proxy_url, 0) > now
 
 
+_WEB_VIEW_PATH = re.compile(r"t\.me/s/", re.IGNORECASE)
+_UNAVAILABLE_WEB_VIEW_MSG = "Channel is not available on the web view."
+
+
+def _is_telegram_web_view_url(url: str) -> bool:
+    return bool(_WEB_VIEW_PATH.search(url))
+
+
+def _validate_telegram_web_view_page(
+    *, request_url: str, final_url: str, html: str
+) -> None:
+    if _is_telegram_web_view_url(request_url) and not _is_telegram_web_view_url(
+        final_url
+    ):
+        raise ConnectionError(_UNAVAILABLE_WEB_VIEW_MSG)
+    if _is_telegram_web_view_url(request_url):
+        has_action = "tgme_page_action" in html
+        has_widgets = "tgme_widget_message_date" in html
+        if has_action and not has_widgets:
+            raise ConnectionError(_UNAVAILABLE_WEB_VIEW_MSG)
+
+
 def _build_client(proxy_url: str | None) -> httpx.AsyncClient:
     kwargs: dict[str, Any] = {
         "timeout": settings.NETWORK_FETCH_TIMEOUT_SECONDS,
@@ -65,11 +87,12 @@ async def _fetch_once(
             response = await http_client.get(url)
         response.raise_for_status()
         data = response.text if "t.me" in url else response.json()
-        if isinstance(data, str) and "t.me/s/" in url:
-            has_action = "tgme_page_action" in data
-            has_widgets = "tgme_widget_message_date" in data
-            if has_action and not has_widgets:
-                raise ConnectionError("Channel is not available on the web view.")
+        if isinstance(data, str) and _is_telegram_web_view_url(url):
+            _validate_telegram_web_view_page(
+                request_url=url,
+                final_url=str(response.url),
+                html=data,
+            )
         return data
 
     if client is not None:
@@ -255,7 +278,11 @@ async def fetch_with_retry(
                 }
             )
 
-            if i < effective_retries - 1 and (is_network or is_rate_limit):
+            if (
+                i < effective_retries - 1
+                and not is_soft_block
+                and (is_network or is_rate_limit)
+            ):
                 backoff = (2**i) * effective_initial_delay_ms + random.randint(0, 1000)
                 if is_rate_limit:
                     backoff = max(backoff, 10000)

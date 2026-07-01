@@ -2,6 +2,10 @@ import { toast } from "sonner"
 
 import { api } from "@/api"
 import type { CommandContext } from "@/lib/commands/types"
+import {
+  parseApiError,
+  unavailableChannelToastMessage,
+} from "@/lib/api-errors"
 import { saveNetworkLog, upsertChannel } from "@/lib/repository"
 import { buildActiveProxies, isNetworkRoutingActive } from "@/lib/syncSettings"
 import type { Channel, NetworkLog } from "@/types"
@@ -98,6 +102,7 @@ export async function addChannelByName(
   let videos: string | undefined
   let files: string | undefined
   let links: string | undefined
+  let isUnavailableOnWebView = false
 
   try {
     const data = (await api.channelInfo({
@@ -119,10 +124,16 @@ export async function addChannelByName(
     if (data.videos) videos = data.videos as string
     if (data.files) files = data.files as string
     if (data.links) links = data.links as string
+    if (data.isUnavailableOnWebView) {
+      isUnavailableOnWebView = true
+    }
   } catch (err: unknown) {
     console.error("Failed to fetch initial channel info:", err)
-    errorMsg =
-      err instanceof Error ? err.message : "Failed to fetch channel info"
+    const parsed = parseApiError(err)
+    errorMsg = parsed.message
+    if (parsed.isUnavailableOnWebView) {
+      isUnavailableOnWebView = true
+    }
   } finally {
     const duration = Date.now() - startTime
     const attempts = telemetryData?.attempts as
@@ -166,18 +177,27 @@ export async function addChannelByName(
     followedAt: Date.now(),
     tags: [],
     autoFollowForwarded: false,
-    regularSyncEnabled: true,
-    dynamicSyncEnabled: ctx.settings.dynamicSyncEnabledDefault,
+    regularSyncEnabled: !isUnavailableOnWebView,
+    dynamicSyncEnabled: isUnavailableOnWebView
+      ? false
+      : ctx.settings.dynamicSyncEnabledDefault,
     autoSyncIntervalMinutes: ctx.settings.regularSyncIntervalMinutes,
     dynamicSyncExpectedPosts: ctx.settings.dynamicSyncExpectedPostsDefault,
     nextRegularSyncAt: null,
     nextDynamicSyncAt: null,
+    isFrozen: isUnavailableOnWebView,
+    isUnavailableOnWebView,
   }
 
   await upsertChannel(newChannel)
   await ctx.loadChannels()
   ctx.setSelectedChannels((prev) => new Set(prev).add(channelName))
-  ctx.addToSyncQueue(newChannel, "Initial Sync", () => {})
-  toast.success(`Added @${channelName}`)
+
+  if (isUnavailableOnWebView) {
+    toast.warning(unavailableChannelToastMessage(channelName), { duration: 8000 })
+  } else {
+    ctx.addToSyncQueue(newChannel, "Initial Sync", () => {})
+    toast.success(`Added @${channelName}`)
+  }
   return { ok: true, channelName }
 }
