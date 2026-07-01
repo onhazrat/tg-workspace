@@ -13,6 +13,7 @@ Self-hosted Telegram channel summarizer. Migrated from browser-heavy `TG-Summari
   - **`/_tg/summarizer`** — full-screen TG app (`App.tsx` + `TgProviders`); **command palette** on `main`; **keyboard shortcuts dialog** (`?` + header button). Main content uses **`app-shell`** width utility.
   - **`/_layout/*`** — template admin shell (`/`, `/items`, `/admin`, `/settings`); inner outlet also **`app-shell`**.
 - **Command palette:** `CommandPalette*.tsx`, `CommandConfirmDialog.tsx`, `PaletteKeyboardChrome.tsx`; hooks `useCommandPalette`, `useCommandRegistry`, `useCommandSearchAffinity`, `useRecentCommands`, `useJobToggles`, `usePaletteListSelection`; registry in `frontend/src/lib/commands/` (**`settings-schema.ts`** — numeric two-step editors + badges); data transfer in `frontend/src/lib/data-transfer/`; channel ops in `frontend/src/lib/channels/` (`reset-sync.ts`, **`backfill-sync.ts`**, add/delete, tags).
+- **Post view pipeline:** [`frontend/src/lib/posts/post-view.ts`](frontend/src/lib/posts/post-view.ts) — cap per channel, sort order, `buildFilteredPostsFromRaw`, `formatPostsForPrompt`. Consumed by `ScraperContext`, `AIContext`, `ChatContext`.
 - **Modals (TG shell):** shadcn/Radix `Dialog` only — **`Modal.tsx` removed** (2026-06-25). Confirm flows in `ChannelGrid`, `HistoryView`, `PasteSummaryModal`, `DatabaseManagement`, `MigrationPrompt`.
 - **API clients (ADR-006):** hand-written `frontend/src/api/` (summarizer); generated `frontend/src/client/` (admin/auth). Regenerate: `bash scripts/generate-client.sh` (default `ENVIRONMENT=production`; override `ENVIRONMENT=local` for Playwright/private routes).
 - **Data layer (frontend):** `repository.ts` API-first → `cache.ts` (IndexedDB). **`db.ts` removed**.
@@ -21,6 +22,7 @@ Self-hosted Telegram channel summarizer. Migrated from browser-heavy `TG-Summari
 - **`docs/ideas-log/`** — Backlog (`IDEA-NNN`); index [IDEAS-LOG.md](docs/ideas-log/IDEAS-LOG.md).
 - **uv workspace** + **bun** frontend. **Playwright E2E only** (~98 tests; palette K1–K18 + summarizer UI in `summarizer.spec.ts`).
 - **CI/CD:** GitHub-hosted tests on push; self-hosted deploy via `deploy-staging.yml` / `deploy-production.yml` — [deployment.md](deployment.md).
+- **Static shell meta (2026-06-30):** `frontend/index.html` — description, theme-color, favicons, `site.webmanifest`. **No `og:*` / Twitter tags yet** — full share-preview plan deferred ([open_graph_meta plan](.cursor/plans/open_graph_meta_a62edbee.plan.md)).
 
 ### Key API surfaces
 
@@ -59,20 +61,22 @@ Self-hosted Telegram channel summarizer. Migrated from browser-heavy `TG-Summari
 - **Auto-follow UI:** Toggle on each **ChannelCard** (rounded pill). Distinct from **Auto-Followed** badge (`discoveredVia`).
 - **Partial history UI:** Amber **Partial history** badge on `ChannelCard` when `historyCompleteToCutoff === false`; tooltip: "History does not reach retention window".
 - **Summarizer UI:** URL tabs `/summarizer?tab=` — **6 workspace tabs** (channels, posts, summary, chat, history, **settings**); settings sub-sections `?tab=settings&section=`. **Post-login redirect:** `/summarizer`. Guided tour when no channels. Summary toolbar: Generate + Copy Prompt.
+- **Posts tab — view filters (2026-06-30):** **Post limit & order** row in `PostFilter.tsx`. **Max per channel:** `0` = **Unlimited** (label in UI); when &gt; 0, **Latest** (newest N per channel) or **Random** (seeded shuffle per channel). **Sort:** **By time** (global newest first, default) or **By channel** (groups A→Z by `channelName`, newest first within group). Persisted: `postFilter_maxPerChannel`, `postFilter_maxPerChannelMode`, `postFilter_sortOrder`. **`filteredPosts` order is canonical** for PostFeed, Copy Prompt, in-app summary stream, and standard chat — pipeline: keyword → forwarded → cap → sort. Clear via palette **Clear post filters** (resets view options to defaults). Plan: [post_view_filters](.cursor/plans/post_view_filters_42f18987.plan.md) (**complete**).
 - **Command palette:** `Cmd+Shift+P` / `Ctrl+Shift+P` + header icon; settings + jobs + navigate + channel ops + data transfer + in-palette search. Keyboard UX (IDEA-007): `usePaletteListSelection`, K1–K18 E2E. **Fix Partial History (Channel)** — entity picker, `closeOnPick: false`, non-destructive backfill queue. **Fix All Partial History** — bulk backfill via `POST /api/v1/jobs/sync`. **Numeric settings** — two-step editor (pick setting → number input) with live **current-value badges**; retention `0` shows **Never**. Detail: [IDEA-007](docs/ideas-log/ideas/IDEA-007-command-palette-keyboard-ux.md), [numeric settings plan](.cursor/plans/numeric_settings_ux.plan.md).
 - **Keyboard shortcuts reference:** `?` (non-editable contexts) + header keyboard button → dialog listing shortcuts.
-- **External AI summary flow:** Copy Prompt → pending history entry; complete via **`PasteSummaryModal`** on that item. Completed: `source: "pasted"`. Pending view has explicit paste instructions.
+- **External AI summary flow:** Copy Prompt → pending history entry; complete via **`PasteSummaryModal`** on that item. Completed: `source: "pasted"`. Pending view has explicit paste instructions. **Preferred pattern for ad-hoc AI tasks** (e.g. channel tagging): shape data in Posts tab → Copy Prompt → edit/run externally — not necessarily a new in-app AI subsystem.
+- **Channel tags:** manual per-card + bulk add/remove on selection; palette add/remove/select-by-tag. **No in-app AI auto-tagging yet.** For auto-follow cleanup: `discoveredVia` provenance, bulk tag, `cleanup_auto_follow_channels.py`.
 - **Theme:** `theme-provider` (`vite-ui-theme`); TG app root uses `app-*` tokens + `tg-wcag-floor` class for metadata typography floor. **Layout width:** `@utility app-shell` in `index.css` — `--max-width-app` 80rem (1280px), scales to 90rem at `xl`, 100rem at `2xl`; tune via `@theme` tokens only.
 - **Numeric settings UI:** `<input type="number">` in Settings / DatabaseManagement / ChannelGrid (sliders and fixed retention day selects removed). Palette mirrors same clamps via `NUMERIC_EDITOR_DEFS` in `settings-schema.ts`.
 - **Initial load UX:** skeleton placeholders in `ChannelGrid` / `PostFeed` (`isInitialChannelsLoading`, `isInitialPostLoadPending`). **Summarizer scroll shell:** `App.tsx` uses `h-svh overflow-hidden` + `min-h-0` flex chain so `data-testid="workspace-scroll"` is the real scroll container (not window scroll). **Infinite scroll:** `useScrollLoadMore` hook (`frontend/src/hooks/useScrollLoadMore.ts`) — callback-ref sentinel + `IntersectionObserver` with `root: scrollContainerRef`; used by `ChannelGrid` (20 cards/page).
 - **PostCard:** long posts collapse with Show More / Collapse; action bar visible on hover **and** `focus-within`.
-- **Channel grid:** `md:2 / lg:3 / xl:4` columns; shadcn `Select` for filters/sort; filtered count “Showing X of Y”; bulk freeze/unfreeze always confirms (matches palette).
+- **Channel grid:** `md:2 / lg:3 / xl:4` columns; shadcn `Select` for filters/sort; filtered count “Showing X of Y”; bulk freeze/unfreeze always confirms (matches palette); **Revert selection** action.
 - **Appearance toggles:** incl. `showChannelStartId` (default **false**) — gates Start ID field on ChannelCard.
 - **Telegram publish:** SummaryView warns when content exceeds **4096** chars.
 
 ## Decisions (stable)
 
-Locked [DECISIONS.md](docs/migration/DECISIONS.md) + items through command palette (IDEA-001–007) + **UI polish audit (2026-06-25)** + **resume backfill (2026-06-28)** + **numeric settings UX (2026-06-28)** + **channel stats perf (2026-06-30)**:
+Locked [DECISIONS.md](docs/migration/DECISIONS.md) + items through command palette (IDEA-001–007) + **UI polish audit (2026-06-25)** + **resume backfill (2026-06-28)** + **numeric settings UX (2026-06-28)** + **channel stats perf (2026-06-30)** + **post view filters (2026-06-30)**:
 
 1. **Single-operator (Mode A)** — Production: `API_KEY`, `TOKEN_ENCRYPTION_KEY`, strong `SECRET_KEY`, `USERS_OPEN_REGISTRATION=false`. Mode B deferred.
 2. **Auth** — JWT + optional `X-API-Key`; fail-closed on sensitive routes in non-local.
@@ -90,6 +94,7 @@ Locked [DECISIONS.md](docs/migration/DECISIONS.md) + items through command palet
 14. **Auto-sync interval UI bounds (2026-06-30)** — Frontend clamps **5–1440 minutes** (1 day) via `AUTO_SYNC_INTERVAL_MIN_MINUTES` / `AUTO_SYNC_INTERVAL_MAX_MINUTES` in `constants.ts`; shared by SettingsView, ChannelGrid, palette editor. **Backend has no max** — accepts any integer via API.
 15. **Channel stats batch SQL (2026-06-30)** — `compute_channel_stats_batch` uses two batched queries (aggregates + top-100 timestamps per channel), not per-channel full post scans. Composite index on `(channel_name, timestamp DESC)`. Plan: [fix_channel_stats_perf](.cursor/plans/fix_channel_stats_perf_5abf4a1d.plan.md). Tests: `tests/services/test_channel_stats.py`.
 16. **Summarizer viewport scroll (2026-06-30)** — TG shell height-constrained (`h-svh` + `min-h-0` on flex children); workspace tab content scrolls inside `workspace-scroll`. IntersectionObserver infinite-scroll must use that element as `root`, not the viewport. Reusable hook: `useScrollLoadMore`.
+17. **Post view filters (2026-06-30)** — Shared pure pipeline in `post-view.ts`; `ScraperContext.filteredPosts` is the single ordered list for UI + AI prompts (no client re-sort in AIContext/ChatContext). Defaults unchanged: unlimited, latest mode inactive, global time desc. Random mode uses seeded shuffle per channel (stable for same date range + limit). Pre-sync refetch uses `buildFilteredPostsFromRaw` so forwarded filter + view options apply. Tests: `post-view.test.ts` (7). Plan complete: [post_view_filters](.cursor/plans/post_view_filters_42f18987.plan.md).
 
 ### Explicitly rejected / deferred
 
@@ -101,6 +106,8 @@ Locked [DECISIONS.md](docs/migration/DECISIONS.md) + items through command palet
 - **Flat `max-w-screen-2xl` / Tailwind `container` for shell** — rejected in favor of custom `@theme` tokens + `app-shell`.
 - **Sliders / fixed retention day select lists** — replaced by number inputs (2026-06-28).
 - **120-minute auto-sync cap** — bumped to **1440 minutes (1 day)** on frontend only (2026-06-30); backend unchanged.
+- **In-app AI channel auto-tagging** — rejected for now (2026-06-30). User prefers **Posts tab filters + Copy Prompt + external AI** for bulk channel tagging; hybrid vocabulary / review-queue UX deferred. Quick organization without AI: `discoveredVia` filters, bulk tag, provenance tags.
+- **Integrated tagging platform** (vocabulary CMS, review queue, background suggest jobs) — rejected in favor of simpler external-AI workflow above.
 
 ## User preferences
 
@@ -113,6 +120,7 @@ Locked [DECISIONS.md](docs/migration/DECISIONS.md) + items through command palet
 - **Command palette / UI polish:** use AskQuestion for product decisions; no assumptions on shortcuts, phasing, or mobile scope.
 - **Numeric settings:** integers in UI for int settings; floats allow decimals (`aiTemperature`); palette two-step editor + current-value hints like booleans.
 - **Rename channel in palette** — rejected.
+- **Prefer simpler flows over new subsystems** — e.g. extend Copy Prompt + Posts filters rather than built-in AI wizards when the task is occasional (channel tagging discussed 2026-06-30).
 
 ## Environment & fixes
 
@@ -127,9 +135,9 @@ Locked [DECISIONS.md](docs/migration/DECISIONS.md) + items through command palet
   5. **Scroll/intersection bugs:** verify `workspace-scroll` is actually scrollable (`scrollHeight > clientHeight`) and observer `root` matches that element — flex layouts without `min-h-0` cause window scroll instead.
   6. **Staging:** deploy frontend then re-test the original URL; local pass ≠ staging until deployed.
 - **pytest:** `cd backend && uv run pytest tests/ -q` (`app_test`). Backfill: `tests/api/test_sync_jobs.py`, `tests/api/test_scheduler_jobs.py`. Settings defaults: `tests/api/test_settings_defaults.py`. Channel stats: `tests/services/test_channel_stats.py`.
-- **Frontend unit tests:** `cd frontend && bun test src/lib/commands/settings-schema.test.ts`.
+- **Frontend unit tests:** `cd frontend && bun test src/lib/commands/settings-schema.test.ts src/lib/posts/post-view.test.ts`.
 - **CI frontend build:** Docker `bun run build` runs `tsc` — missing imports (e.g. dropping `addChannelByName` when editing `ChannelGrid.tsx`) fail Playwright, test-docker-compose, and deploy workflows.
-- **Scraper tunables:** `SCRAPER_ITERATION_LIMIT=50` (default); `SCRAPER_MAX_POSTS_PER_CHANNEL=300` applies to legacy forward `scrape_channel()` only, not orchestrator.
+- **Scraper tunables:** `SCRAPER_ITERATION_LIMIT=50` (default); `SCRAPER_MAX_POSTS_PER_CHANNEL=300` applies to legacy forward `scrape_channel()` only, not orchestrator or Posts-tab view limit.
 - **Retention tunables:** `RETENTION_POST_DAYS_DEFAULT=90`, `RETENTION_LOG_DAYS_DEFAULT=30`; mirror in `VITE_RETENTION_*` for frontend defaults.
 - **Auto-sync tunables:** `AUTO_SYNC_INTERVAL_MINUTES_DEFAULT=60` (backend); frontend UI max **1440** min in `constants.ts` only.
 - **2000+ channels** — avoid Sync All; prefer auto-sync / Sync Selected; bulk reset-sync only for policy-wide destructive re-scrape.
@@ -149,6 +157,8 @@ Locked [DECISIONS.md](docs/migration/DECISIONS.md) + items through command palet
 - **Partial history + high post volume** — one sync run may not clear the badge; re-run fix command or rely on auto-sync until `historyCompleteToCutoff` is true.
 - **`autoSyncPartialBatchSize`** — sync AppSetting JSON only (not `.env`); default 1 partial channel per auto-sync tick.
 - **Frontend vs backend numeric bounds** — auto-sync max (1440 min), Tor threshold (5–50), etc. are UI/palette clamps only; API may accept values outside UI range.
+- **Posts-tab max-per-channel ≠ scraper `SCRAPER_MAX_POSTS_PER_CHANNEL`** — view filter is client-side on `filteredPosts` only; does not change sync behavior.
+- **RAG/history chat + auto_summary job** — do not use Posts-tab view filters; only standard date-range path + `filteredPosts` consumers are aligned.
 - **Wider app shell on ultrawide** — prose-heavy views may need internal column/grid constraints if line length becomes uncomfortable (not done yet).
 - **Flex + `overflow-y-auto` scroll containers** — without `min-h-0` on flex ancestors, content expands and window scrolls; `IntersectionObserver` with a scroll-root ref will not fire on user scroll. Same pattern may affect `PostFeed` / `HistoryView` (not yet migrated to `useScrollLoadMore`).
 
@@ -160,4 +170,6 @@ Locked [DECISIONS.md](docs/migration/DECISIONS.md) + items through command palet
 - **Mobile responsive summarizer** (explicitly out of scope per UI polish Q1).
 - **Dedicated backfill scheduler job** — deferred; auto-sync partial pickup covers v1.
 - **E2E palette test for numeric editor apply path** — optional follow-up from numeric settings plan.
+- **In-app AI channel tagging** — deferred; optional future: Paste Tags modal mirroring PasteSummaryModal.
+- **Open Graph / shareable summary links** — plan drafted ([open_graph_meta](.cursor/plans/open_graph_meta_a62edbee.plan.md)); only static description/favicons/manifest landed (2026-06-30). Phases: build-time OG tags, share-link API, crawler HTML, dynamic OG images — **not started**.
 - **Ideas backlog:** IDEA-001/004/005/006/007 **implemented**; IDEA-007 manual keyboard matrix optional; [IDEA-002](docs/ideas-log/ideas/IDEA-002-tanstack-devtools.md) TanStack devtools (dev-only).
