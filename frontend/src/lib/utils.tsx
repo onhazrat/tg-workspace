@@ -29,16 +29,17 @@ export const isRTLLanguage = (language: string) => {
 
 export const getRelativeTime = (timestamp?: number) => {
   if (!timestamp) return "Never"
-  const diff = Date.now() - timestamp
-  const seconds = Math.floor(diff / 1000)
-  const minutes = Math.floor(seconds / 60)
+  const diffMs = Date.now() - timestamp
+  const isPast = diffMs >= 0
+  const absSeconds = Math.floor(Math.abs(diffMs) / 1000)
+  const minutes = Math.floor(absSeconds / 60)
   const hours = Math.floor(minutes / 60)
   const days = Math.floor(hours / 24)
 
-  if (days > 0) return `${days}d ago`
-  if (hours > 0) return `${hours}h ago`
-  if (minutes > 0) return `${minutes}m ago`
-  return "Just now"
+  if (days > 0) return isPast ? `${days}d ago` : `in ${days}d`
+  if (hours > 0) return isPast ? `${hours}h ago` : `in ${hours}h`
+  if (minutes > 0) return isPast ? `${minutes}m ago` : `in ${minutes}m`
+  return isPast ? "Just now" : "Soon"
 }
 
 export const formatDateToLocalISO = (date: Date) => {
