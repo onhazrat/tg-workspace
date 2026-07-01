@@ -1,8 +1,11 @@
 """Tests for /api/v1/data CRUD, import/export, and date-range queries."""
 
+import time
+
 from fastapi.testclient import TestClient
 
 from app.core.config import settings
+from app.services.sync_schedule import compute_next_regular_sync_at
 
 PREFIX = f"{settings.API_V1_STR}/data"
 
@@ -48,6 +51,56 @@ def test_channels_crud_roundtrip(client: TestClient) -> None:
 
     r3 = client.delete(f"{PREFIX}/channels/ch-test", headers=headers)
     assert r3.status_code == 200
+
+
+def test_put_channel_interval_updates_next_regular_sync_at(
+    client: TestClient,
+) -> None:
+    headers = _auth(client)
+    now = int(time.time() * 1000)
+    old_deadline = now - 60_000
+    channel_id = "ch-interval-deadline"
+    try:
+        r_create = client.put(
+            f"{PREFIX}/channels/{channel_id}",
+            json={
+                "name": channel_id,
+                "autoSyncIntervalMinutes": 60,
+                "nextRegularSyncAt": old_deadline,
+            },
+            headers=headers,
+        )
+        assert r_create.status_code == 200
+
+        before = int(time.time() * 1000)
+        r_update = client.put(
+            f"{PREFIX}/channels/{channel_id}",
+            json={"name": channel_id, "autoSyncIntervalMinutes": 120},
+            headers=headers,
+        )
+        after = int(time.time() * 1000)
+        assert r_update.status_code == 200
+        data = r_update.json()
+        assert data["autoSyncIntervalMinutes"] == 120
+        assert data["nextRegularSyncAt"] is not None
+        expected_min = compute_next_regular_sync_at(before, 120)
+        expected_max = compute_next_regular_sync_at(after, 120)
+        assert expected_min <= data["nextRegularSyncAt"] <= expected_max
+
+        frozen_deadline = data["nextRegularSyncAt"]
+        r_unchanged = client.put(
+            f"{PREFIX}/channels/{channel_id}",
+            json={
+                "name": channel_id,
+                "autoSyncIntervalMinutes": 120,
+                "displayName": "Same interval",
+            },
+            headers=headers,
+        )
+        assert r_unchanged.status_code == 200
+        assert r_unchanged.json()["nextRegularSyncAt"] == frozen_deadline
+    finally:
+        client.delete(f"{PREFIX}/channels/{channel_id}", headers=headers)
 
 
 def test_posts_date_range_query(client: TestClient) -> None:

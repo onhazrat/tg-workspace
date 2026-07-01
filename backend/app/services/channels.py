@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import time
 import uuid
 from datetime import datetime
 from typing import Any
@@ -162,11 +163,37 @@ def channel_names_for_operator(
     }
 
 
+def recompute_next_regular_sync_at_on_interval_change(
+    channel: Channel,
+    *,
+    previous_interval_minutes: int,
+    now_ms: int | None = None,
+) -> None:
+    """Reset regular sync deadline when the interval changes."""
+    if channel.auto_sync_interval_minutes == previous_interval_minutes:
+        return
+    if not channel.regular_sync_enabled:
+        return
+    if now_ms is None:
+        now_ms = int(time.time() * 1000)
+    channel.next_regular_sync_at = compute_next_regular_sync_at(
+        now_ms,
+        channel.auto_sync_interval_minutes,
+    )
+
+
 def apply_channel_fields(ch: Channel, body: dict[str, Any]) -> None:
     normalized = normalize_body(body)
+    previous_interval = ch.auto_sync_interval_minutes
     for key, value in normalized.items():
         if key in Channel.model_fields and key not in ("id", "user_id"):
+            if key == "auto_sync_interval_minutes":
+                value = max(1, int(value))
             setattr(ch, key, value)
+    recompute_next_regular_sync_at_on_interval_change(
+        ch,
+        previous_interval_minutes=previous_interval,
+    )
 
 
 def list_channels(
@@ -291,7 +318,9 @@ def bulk_update_sync_settings(
         statement = statement.where(col(Channel.id).in_(channel_ids))
     channels = session.exec(statement).all()
 
+    now_ms = int(time.time() * 1000)
     for channel in channels:
+        previous_interval = channel.auto_sync_interval_minutes
         if regular_sync_enabled is not None:
             channel.regular_sync_enabled = regular_sync_enabled
         if dynamic_sync_enabled is not None:
@@ -300,6 +329,11 @@ def bulk_update_sync_settings(
             channel.auto_sync_interval_minutes = max(1, auto_sync_interval_minutes)
         if dynamic_sync_expected_posts is not None:
             channel.dynamic_sync_expected_posts = max(1, dynamic_sync_expected_posts)
+        recompute_next_regular_sync_at_on_interval_change(
+            channel,
+            previous_interval_minutes=previous_interval,
+            now_ms=now_ms,
+        )
         channel.updated_at = datetime.utcnow()
         session.add(channel)
 

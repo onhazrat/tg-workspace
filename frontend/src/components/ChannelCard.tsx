@@ -175,8 +175,7 @@ export const ChannelCard: React.FC<ChannelCardProps> = ({
       >
     >,
   ) => {
-    const updatedChannel = { ...channel, ...patch }
-    await upsertChannel(updatedChannel)
+    const updatedChannel = await upsertChannel({ ...channel, ...patch })
     setChannels((prev) =>
       prev.map((entry) => (entry.id === channel.id ? updatedChannel : entry)),
     )
