@@ -51,7 +51,7 @@ from app.services.scraper_jobs import (
 from app.services.sync_schedule import (
     apply_failure_backoff,
     compute_next_dynamic_sync_at,
-    compute_next_regular_sync_at,
+    compute_next_regular_sync_at_from_last_updated,
 )
 from app.services.sync_meta import touch_sync
 
@@ -298,8 +298,10 @@ def _create_forwarded_channel(
                 dynamic_sync_enabled=dynamic_enabled_default,
                 auto_sync_interval_minutes=max(1, regular_interval_minutes),
                 dynamic_sync_expected_posts=max(1, dynamic_expected_posts_default),
-                next_regular_sync_at=compute_next_regular_sync_at(
-                    now, max(1, regular_interval_minutes)
+                next_regular_sync_at=compute_next_regular_sync_at_from_last_updated(
+                    now,
+                    max(1, regular_interval_minutes),
+                    now,
                 ),
                 next_dynamic_sync_at=None,
                 user_id=user_id,
@@ -651,9 +653,10 @@ def _finalize_channel_success(
         channel.last_updated = now
         channel.language = detected_language
         if channel.regular_sync_enabled:
-            channel.next_regular_sync_at = compute_next_regular_sync_at(
-                now,
+            channel.next_regular_sync_at = compute_next_regular_sync_at_from_last_updated(
+                channel.last_updated,
                 channel.auto_sync_interval_minutes,
+                now,
             )
         else:
             channel.next_regular_sync_at = None

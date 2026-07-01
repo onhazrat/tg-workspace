@@ -33,9 +33,21 @@ def _is_dynamic_due(channel: Any, now_ms: int) -> bool:
     return deadline is None or now_ms >= int(deadline)
 
 
-def compute_next_regular_sync_at(now_ms: int, interval_minutes: int) -> int:
+def compute_next_regular_sync_at_from_last_updated(
+    last_updated_ms: int | None,
+    interval_minutes: int,
+    now_ms: int,
+) -> int:
+    anchor = int(now_ms) if last_updated_ms is None else int(last_updated_ms)
     safe_interval = max(1, int(interval_minutes))
-    return int(now_ms) + safe_interval * 60_000
+    return anchor + safe_interval * 60_000
+
+
+def compute_next_regular_sync_at(now_ms: int, interval_minutes: int) -> int:
+    """Compute next regular sync anchored at ``now`` (no prior last_updated)."""
+    return compute_next_regular_sync_at_from_last_updated(
+        None, interval_minutes, now_ms
+    )
 
 
 def compute_next_dynamic_sync_at(

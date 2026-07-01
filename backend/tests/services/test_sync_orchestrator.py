@@ -8,6 +8,7 @@ from app.core.db import engine
 from app.jobs.auto_sync import CHECK_SOURCE
 from app.models_tg import Channel, Post
 from app.services.scraper_jobs import SyncJobState
+from app.services.sync_schedule import compute_next_regular_sync_at_from_last_updated
 from app.services.sync_orchestrator import (
     _ChannelSyncCtx,
     _finalize_channel_error,
@@ -83,7 +84,12 @@ def test_finalize_channel_success_recomputes_deadlines() -> None:
     with Session(engine) as session:
         channel = session.get(Channel, channel_id)
         assert channel is not None
-        assert channel.next_regular_sync_at is not None
+        assert channel.last_updated is not None
+        assert channel.next_regular_sync_at == compute_next_regular_sync_at_from_last_updated(
+            channel.last_updated,
+            channel.auto_sync_interval_minutes,
+            channel.last_updated,
+        )
         assert channel.next_dynamic_sync_at is not None
         assert channel.next_dynamic_sync_at > channel.last_updated
 

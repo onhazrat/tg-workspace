@@ -8,6 +8,7 @@ from app.services.sync_schedule import (
     apply_failure_backoff,
     compute_next_dynamic_sync_at,
     compute_next_regular_sync_at,
+    compute_next_regular_sync_at_from_last_updated,
     due_reason,
     is_channel_due,
 )
@@ -29,6 +30,17 @@ class _ScheduleStub:
 def test_compute_next_regular_sync_at() -> None:
     assert compute_next_regular_sync_at(1_000, 60) == 3_601_000
     assert compute_next_regular_sync_at(1_000, 5) == 301_000
+
+
+def test_compute_next_regular_sync_at_from_last_updated() -> None:
+    assert (
+        compute_next_regular_sync_at_from_last_updated(5_000, 60, 9_000)
+        == 5_000 + 60 * 60_000
+    )
+    assert (
+        compute_next_regular_sync_at_from_last_updated(None, 30, 2_000)
+        == 2_000 + 30 * 60_000
+    )
 
 
 def test_compute_next_dynamic_sync_at() -> None:

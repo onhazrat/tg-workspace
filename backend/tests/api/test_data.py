@@ -5,7 +5,7 @@ import time
 from fastapi.testclient import TestClient
 
 from app.core.config import settings
-from app.services.sync_schedule import compute_next_regular_sync_at
+from app.services.sync_schedule import compute_next_regular_sync_at_from_last_updated
 
 PREFIX = f"{settings.API_V1_STR}/data"
 
@@ -57,8 +57,8 @@ def test_put_channel_interval_updates_next_regular_sync_at(
     client: TestClient,
 ) -> None:
     headers = _auth(client)
-    now = int(time.time() * 1000)
-    old_deadline = now - 60_000
+    last_updated = int(time.time() * 1000) - 900_000
+    old_deadline = last_updated + 60 * 60_000
     channel_id = "ch-interval-deadline"
     try:
         r_create = client.put(
@@ -66,26 +66,26 @@ def test_put_channel_interval_updates_next_regular_sync_at(
             json={
                 "name": channel_id,
                 "autoSyncIntervalMinutes": 60,
+                "lastUpdated": last_updated,
                 "nextRegularSyncAt": old_deadline,
             },
             headers=headers,
         )
         assert r_create.status_code == 200
 
-        before = int(time.time() * 1000)
         r_update = client.put(
             f"{PREFIX}/channels/{channel_id}",
             json={"name": channel_id, "autoSyncIntervalMinutes": 120},
             headers=headers,
         )
-        after = int(time.time() * 1000)
         assert r_update.status_code == 200
         data = r_update.json()
         assert data["autoSyncIntervalMinutes"] == 120
         assert data["nextRegularSyncAt"] is not None
-        expected_min = compute_next_regular_sync_at(before, 120)
-        expected_max = compute_next_regular_sync_at(after, 120)
-        assert expected_min <= data["nextRegularSyncAt"] <= expected_max
+        expected = compute_next_regular_sync_at_from_last_updated(
+            last_updated, 120, int(time.time() * 1000)
+        )
+        assert data["nextRegularSyncAt"] == expected
 
         frozen_deadline = data["nextRegularSyncAt"]
         r_unchanged = client.put(

@@ -14,7 +14,7 @@ from app.models_tg import Channel, Post
 from app.jobs.settings import load_sync_settings
 from app.services.channel_photos import delete_cached_photo
 from app.services.serialization import channel_to_camel, normalize_body
-from app.services.sync_schedule import compute_next_regular_sync_at
+from app.services.sync_schedule import compute_next_regular_sync_at_from_last_updated
 from app.services.sync_meta import touch_sync
 
 
@@ -176,9 +176,10 @@ def recompute_next_regular_sync_at_on_interval_change(
         return
     if now_ms is None:
         now_ms = int(time.time() * 1000)
-    channel.next_regular_sync_at = compute_next_regular_sync_at(
-        now_ms,
+    channel.next_regular_sync_at = compute_next_regular_sync_at_from_last_updated(
+        channel.last_updated,
         channel.auto_sync_interval_minutes,
+        now_ms,
     )
 
 
@@ -255,8 +256,10 @@ def upsert_channel(
         if extras.get("regular_sync_enabled"):
             extras.setdefault(
                 "next_regular_sync_at",
-                compute_next_regular_sync_at(
-                    now_ms, int(extras["auto_sync_interval_minutes"])
+                compute_next_regular_sync_at_from_last_updated(
+                    extras.get("last_updated"),
+                    int(extras["auto_sync_interval_minutes"]),
+                    now_ms,
                 ),
             )
         extras.setdefault("next_dynamic_sync_at", None)

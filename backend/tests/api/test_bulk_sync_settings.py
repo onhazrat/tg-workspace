@@ -5,7 +5,7 @@ import time
 from fastapi.testclient import TestClient
 
 from app.core.config import settings
-from app.services.sync_schedule import compute_next_regular_sync_at
+from app.services.sync_schedule import compute_next_regular_sync_at_from_last_updated
 
 PREFIX = f"{settings.API_V1_STR}/data"
 
@@ -101,8 +101,8 @@ def test_bulk_sync_settings_interval_updates_next_regular_sync_at(
     client: TestClient,
 ) -> None:
     headers = _auth(client)
-    now = int(time.time() * 1000)
-    old_deadline = now - 30_000
+    last_updated = int(time.time() * 1000) - 600_000
+    old_deadline = last_updated + 60 * 60_000
     channel_ids = ("bulk-int-a", "bulk-int-b")
 
     for channel_id in channel_ids:
@@ -111,26 +111,25 @@ def test_bulk_sync_settings_interval_updates_next_regular_sync_at(
             json={
                 "name": channel_id,
                 "autoSyncIntervalMinutes": 60,
+                "lastUpdated": last_updated,
                 "nextRegularSyncAt": old_deadline,
             },
             headers=headers,
         )
 
-    before = int(time.time() * 1000)
     r = client.patch(
         f"{PREFIX}/channels/bulk-sync-settings",
         json={"channelIds": None, "autoSyncIntervalMinutes": 90},
         headers=headers,
     )
-    after = int(time.time() * 1000)
     assert r.status_code == 200
     assert r.json()["updated"] >= 2
 
     listed = client.get(f"{PREFIX}/channels", headers=headers).json()
+    expected = compute_next_regular_sync_at_from_last_updated(
+        last_updated, 90, int(time.time() * 1000)
+    )
     for channel_id in channel_ids:
         row = next(item for item in listed if item["id"] == channel_id)
         assert row["autoSyncIntervalMinutes"] == 90
-        assert row["nextRegularSyncAt"] is not None
-        expected_min = compute_next_regular_sync_at(before, 90)
-        expected_max = compute_next_regular_sync_at(after, 90)
-        assert expected_min <= row["nextRegularSyncAt"] <= expected_max
+        assert row["nextRegularSyncAt"] == expected
