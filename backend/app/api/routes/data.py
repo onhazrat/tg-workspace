@@ -13,10 +13,17 @@ from app.jobs.settings import (
     load_translation_settings,
 )
 from app.models_tg import AppSetting
-from app.schemas.data import BulkReresolveStartIdsRequest, BulkResetSyncRequest
+from app.schemas.data import (
+    BulkReresolveStartIdsRequest,
+    BulkResetSyncRequest,
+    BulkSyncSettingsRequest,
+)
 from app.services.bulk_channels import (
     bulk_reresolve_start_ids,
     bulk_reset_and_queue_sync,
+)
+from app.services.channels import (
+    bulk_update_sync_settings as bulk_update_sync_settings_impl,
 )
 from app.services.channels import (
     delete_channel as delete_channel_impl,
@@ -186,6 +193,22 @@ async def bulk_reset_sync_endpoint(
         "jobId": result.job_id,
         "errors": result.errors,
     }
+
+
+@router.patch("/channels/bulk-sync-settings")
+def bulk_sync_settings_endpoint(
+    body: BulkSyncSettingsRequest,
+    session: SessionDep,
+    _current_user: CurrentUser,
+) -> dict[str, int]:
+    return bulk_update_sync_settings_impl(
+        session,
+        channel_ids=body.channel_ids,
+        regular_sync_enabled=body.regular_sync_enabled,
+        dynamic_sync_enabled=body.dynamic_sync_enabled,
+        auto_sync_interval_minutes=body.auto_sync_interval_minutes,
+        dynamic_sync_expected_posts=body.dynamic_sync_expected_posts,
+    )
 
 
 @router.delete("/channels/{channel_id}")

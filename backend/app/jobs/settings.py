@@ -32,11 +32,15 @@ def _default_jobs() -> dict[str, dict[str, Any]]:
 
 def _default_sync() -> dict[str, Any]:
     return {
-        "autoSyncEnabled": True,
-        "autoSyncInterval": settings.AUTO_SYNC_INTERVAL_MINUTES_DEFAULT,
+        "regularSyncIntervalMinutes": settings.AUTO_SYNC_INTERVAL_MINUTES_DEFAULT,
+        "dynamicSyncEnabledDefault": False,
+        "dynamicSyncExpectedPostsDefault": 15,
+        "syncFailureBackoffMinutes": 5,
         "syncConcurrency": settings.SYNC_CONCURRENCY_DEFAULT,
         "consecutiveFailures": 0,
         "autoSyncPauseUntil": None,
+        "autoSyncPartialCursor": 0,
+        "autoSyncPartialBatchSize": 1,
     }
 
 
@@ -91,7 +95,46 @@ def load_jobs_settings(session: Session) -> dict[str, Any]:
 
 
 def load_sync_settings(session: Session) -> dict[str, Any]:
-    return load_setting(session, "sync", _default_sync())
+    defaults = _default_sync()
+    row = session.get(AppSetting, "sync")
+    stored = row.value if row else None
+    merged = _merge(defaults, stored)
+
+    legacy_interval = (stored or {}).get("autoSyncInterval")
+    stored_has_regular_interval = isinstance(stored, dict) and (
+        "regularSyncIntervalMinutes" in stored
+    )
+    if (
+        not stored_has_regular_interval
+        and isinstance(legacy_interval, (int, float))
+    ):
+        merged["regularSyncIntervalMinutes"] = int(legacy_interval)
+
+    if not isinstance(merged.get("regularSyncIntervalMinutes"), int):
+        merged["regularSyncIntervalMinutes"] = settings.AUTO_SYNC_INTERVAL_MINUTES_DEFAULT
+    if merged["regularSyncIntervalMinutes"] < 1:
+        merged["regularSyncIntervalMinutes"] = 1
+
+    if not isinstance(merged.get("dynamicSyncEnabledDefault"), bool):
+        merged["dynamicSyncEnabledDefault"] = False
+    if not isinstance(merged.get("dynamicSyncExpectedPostsDefault"), int):
+        merged["dynamicSyncExpectedPostsDefault"] = 15
+    if merged["dynamicSyncExpectedPostsDefault"] < 1:
+        merged["dynamicSyncExpectedPostsDefault"] = 1
+    if not isinstance(merged.get("syncFailureBackoffMinutes"), int):
+        merged["syncFailureBackoffMinutes"] = 5
+    if merged["syncFailureBackoffMinutes"] < 1:
+        merged["syncFailureBackoffMinutes"] = 1
+
+    merged.pop("autoSyncEnabled", None)
+    merged.pop("autoSyncInterval", None)
+
+    if row and row.value != merged:
+        row.value = merged
+        row.updated_at = utc_now()
+        session.add(row)
+        session.commit()
+    return merged
 
 
 def load_retention_settings(session: Session) -> dict[str, Any]:

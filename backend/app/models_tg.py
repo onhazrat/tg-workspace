@@ -35,6 +35,12 @@ class Channel(SQLModel, table=True):
     start_time: int | None = Field(default=None, sa_column=_ms_ts(nullable=True))
     tags: list[str] = Field(default_factory=list, sa_column=Column(JSON))
     last_updated: int | None = Field(default=None, sa_column=_ms_ts(nullable=True))
+    regular_sync_enabled: bool = True
+    dynamic_sync_enabled: bool = False
+    auto_sync_interval_minutes: int = 60
+    dynamic_sync_expected_posts: int = 15
+    next_regular_sync_at: int | None = Field(default=None, sa_column=_ms_ts(nullable=True))
+    next_dynamic_sync_at: int | None = Field(default=None, sa_column=_ms_ts(nullable=True))
     is_frozen: bool = False
     is_unavailable_on_web_view: bool = False
     auto_follow_forwarded: bool = False

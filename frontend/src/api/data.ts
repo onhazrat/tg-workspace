@@ -15,6 +15,14 @@ import type {
 } from "../types"
 import { request } from "./base"
 
+export interface BulkSyncSettingsPatchBody {
+  channelIds: string[] | null
+  regularSyncEnabled?: boolean
+  dynamicSyncEnabled?: boolean
+  autoSyncIntervalMinutes?: number
+  dynamicSyncExpectedPosts?: number
+}
+
 export const dataApi = {
   syncMeta: () =>
     request<Record<string, { etag: string; updatedAt?: string }>>(
@@ -255,6 +263,15 @@ export const dataApi = {
       errors: { channelId: string; channelName: string; error: string }[]
     }>("/api/v1/data/channels/bulk-reset-sync", {
       method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  bulkSyncSettings: (body: BulkSyncSettingsPatchBody) =>
+    request<{
+      updated: number
+      errors?: { channelId: string; channelName: string; error: string }[]
+    }>("/api/v1/data/channels/bulk-sync-settings", {
+      method: "PATCH",
       body: JSON.stringify(body),
     }),
 }

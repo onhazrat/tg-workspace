@@ -31,10 +31,18 @@ from app.services.scraper_jobs import get_active_sync_job_summary
 
 def _sync_runtime_payload(sync_settings: dict[str, Any]) -> dict[str, Any]:
     return {
-        "autoSyncEnabled": bool(sync_settings.get("autoSyncEnabled", True)),
-        "autoSyncInterval": int(
-            sync_settings.get("autoSyncInterval")
+        "regularSyncIntervalMinutes": int(
+            sync_settings.get("regularSyncIntervalMinutes")
             or settings.AUTO_SYNC_INTERVAL_MINUTES_DEFAULT
+        ),
+        "dynamicSyncEnabledDefault": bool(
+            sync_settings.get("dynamicSyncEnabledDefault", False)
+        ),
+        "dynamicSyncExpectedPostsDefault": int(
+            sync_settings.get("dynamicSyncExpectedPostsDefault") or 15
+        ),
+        "syncFailureBackoffMinutes": int(
+            sync_settings.get("syncFailureBackoffMinutes") or 5
         ),
         "syncConcurrency": max(
             1,

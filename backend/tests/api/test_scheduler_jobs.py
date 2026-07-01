@@ -95,15 +95,48 @@ def test_trigger_unknown_job(client: TestClient) -> None:
 
 @patch("app.jobs.auto_sync.run_sync_job", new_callable=AsyncMock)
 @patch("app.jobs.auto_sync.create_job", new_callable=AsyncMock)
-def test_auto_sync_skips_when_disabled(
+def test_auto_sync_skips_when_no_due_channels(
     mock_create: AsyncMock,
     mock_run: AsyncMock,
 ) -> None:
+    clear_jobs_for_tests()
+    now = int(time.time() * 1000)
     with Session(engine) as session:
-        save_setting(session, "sync", {"autoSyncEnabled": False})
+        save_setting(
+            session,
+            "sync",
+            {
+                "regularSyncIntervalMinutes": 60,
+                "consecutiveFailures": 0,
+                "autoSyncPauseUntil": None,
+            },
+        )
+        operator_id = get_operator_user_id(session)
+        _freeze_channels_except(session, {"not-due-ch"})
+        existing = session.get(Channel, "not-due-ch")
+        if existing:
+            existing.user_id = operator_id
+            existing.is_frozen = False
+            existing.regular_sync_enabled = True
+            existing.dynamic_sync_enabled = False
+            existing.next_regular_sync_at = now + 60_000
+            session.add(existing)
+        else:
+            session.add(
+                Channel(
+                    id="not-due-ch",
+                    name="not-due-ch",
+                    user_id=operator_id,
+                    regular_sync_enabled=True,
+                    dynamic_sync_enabled=False,
+                    next_regular_sync_at=now + 60_000,
+                )
+            )
+        session.commit()
 
     result = asyncio.run(run_auto_sync())
     assert result["skipped"] is True
+    assert result["reason"] == "no_due_channels"
     mock_create.assert_not_awaited()
     mock_run.assert_not_awaited()
 
@@ -122,8 +155,7 @@ def test_auto_sync_triggers_stale_channels(
             session,
             "sync",
             {
-                "autoSyncEnabled": True,
-                "autoSyncInterval": 60,
+                "regularSyncIntervalMinutes": 60,
                 "consecutiveFailures": 0,
                 "autoSyncPauseUntil": None,
             },
@@ -136,17 +168,21 @@ def test_auto_sync_triggers_stale_channels(
 
         ch = session.get(Channel, "stale-ch")
         if ch:
-            ch.last_updated = now - 120 * 60 * 1000
             ch.user_id = operator_id
             ch.is_frozen = False
+            ch.regular_sync_enabled = True
+            ch.dynamic_sync_enabled = False
+            ch.next_regular_sync_at = now - 1_000
             session.add(ch)
         else:
             session.add(
                 Channel(
                     id="stale-ch",
                     name="stale-ch",
-                    last_updated=now - 120 * 60 * 1000,
                     user_id=operator_id,
+                    regular_sync_enabled=True,
+                    dynamic_sync_enabled=False,
+                    next_regular_sync_at=now - 1_000,
                 )
             )
         _freeze_channels_except(session, {"stale-ch"})
@@ -183,11 +219,9 @@ def test_auto_sync_includes_fresh_partial_history_channels(
             session,
             "sync",
             {
-                "autoSyncEnabled": True,
-                "autoSyncInterval": 60,
+                "regularSyncIntervalMinutes": 60,
                 "consecutiveFailures": 0,
                 "autoSyncPauseUntil": None,
-                "autoSyncPartialCursor": 0,
             },
         )
         operator_id = get_operator_user_id(session)
@@ -199,19 +233,23 @@ def test_auto_sync_includes_fresh_partial_history_channels(
         _freeze_channels_except(session, {"partial-ch"})
         partial = session.get(Channel, "partial-ch")
         if partial:
-            partial.last_updated = now
-            partial.history_complete_to_cutoff = False
             partial.user_id = operator_id
             partial.is_frozen = False
+            partial.history_complete_to_cutoff = False
+            partial.regular_sync_enabled = False
+            partial.dynamic_sync_enabled = False
+            partial.next_regular_sync_at = now + 60_000
             session.add(partial)
         else:
             session.add(
                 Channel(
                     id="partial-ch",
                     name="partial-ch",
-                    last_updated=now,
-                    history_complete_to_cutoff=False,
                     user_id=operator_id,
+                    regular_sync_enabled=False,
+                    dynamic_sync_enabled=False,
+                    history_complete_to_cutoff=False,
+                    next_regular_sync_at=now + 60_000,
                 )
             )
         session.commit()
@@ -223,13 +261,189 @@ def test_auto_sync_includes_fresh_partial_history_channels(
     mock_create.return_value = mock_job
 
     result = asyncio.run(run_auto_sync())
-    assert result.get("partial") == 1
+    assert result.get("partialChannels") == 1
+    assert result.get("dueChannels") == 0
     mock_create.assert_awaited_once()
     called_entries = (
         mock_create.await_args.kwargs.get("channel_entries")
         or mock_create.await_args.args[0]
     )
     assert any(name == "partial-ch" for _id, name in called_entries)
+
+
+@patch("app.jobs.auto_sync.run_sync_job", new_callable=AsyncMock)
+@patch("app.jobs.auto_sync.create_job", new_callable=AsyncMock)
+def test_auto_sync_dynamic_only_channel_due_by_velocity(
+    mock_create: AsyncMock,
+    mock_run: AsyncMock,
+) -> None:
+    clear_jobs_for_tests()
+    now = int(time.time() * 1000)
+
+    with Session(engine) as session:
+        save_setting(
+            session,
+            "sync",
+            {
+                "regularSyncIntervalMinutes": 60,
+                "consecutiveFailures": 0,
+                "autoSyncPauseUntil": None,
+            },
+        )
+        operator_id = get_operator_user_id(session)
+        _freeze_channels_except(session, {"dynamic-only-ch"})
+        dynamic_only = session.get(Channel, "dynamic-only-ch")
+        if dynamic_only:
+            dynamic_only.user_id = operator_id
+            dynamic_only.is_frozen = False
+            dynamic_only.regular_sync_enabled = False
+            dynamic_only.dynamic_sync_enabled = True
+            dynamic_only.next_dynamic_sync_at = now - 1_000
+            session.add(dynamic_only)
+        else:
+            session.add(
+                Channel(
+                    id="dynamic-only-ch",
+                    name="dynamic-only-ch",
+                    user_id=operator_id,
+                    regular_sync_enabled=False,
+                    dynamic_sync_enabled=True,
+                    next_dynamic_sync_at=now - 1_000,
+                )
+            )
+        session.add(
+            Post(
+                channel_name="dynamic-only-ch",
+                post_id=100,
+                text="p1",
+                timestamp=now - 60_000,
+            )
+        )
+        session.add(
+            Post(
+                channel_name="dynamic-only-ch",
+                post_id=101,
+                text="p2",
+                timestamp=now - 10_000,
+            )
+        )
+        session.commit()
+
+    mock_job = MagicMock()
+    mock_job.job_id = "job-dynamic-only"
+    mock_job.status = "completed"
+    mock_job.channels = {"dynamic-only-ch": MagicMock(status="success")}
+    mock_create.return_value = mock_job
+
+    result = asyncio.run(run_auto_sync())
+    assert result.get("dueDynamic") == 1
+    called_entries = (
+        mock_create.await_args.kwargs.get("channel_entries")
+        or mock_create.await_args.args[0]
+    )
+    assert any(name == "dynamic-only-ch" for _id, name in called_entries)
+
+
+@patch("app.jobs.auto_sync.run_sync_job", new_callable=AsyncMock)
+@patch("app.jobs.auto_sync.create_job", new_callable=AsyncMock)
+def test_auto_sync_skips_channels_with_both_schedules_disabled(
+    mock_create: AsyncMock,
+    mock_run: AsyncMock,
+) -> None:
+    clear_jobs_for_tests()
+    now = int(time.time() * 1000)
+
+    with Session(engine) as session:
+        save_setting(
+            session,
+            "sync",
+            {
+                "regularSyncIntervalMinutes": 60,
+                "consecutiveFailures": 0,
+                "autoSyncPauseUntil": None,
+            },
+        )
+        operator_id = get_operator_user_id(session)
+        _freeze_channels_except(session, {"disabled-both-ch"})
+        session.add(
+            Channel(
+                id="disabled-both-ch",
+                name="disabled-both-ch",
+                user_id=operator_id,
+                regular_sync_enabled=False,
+                dynamic_sync_enabled=False,
+                next_regular_sync_at=now - 1_000,
+                next_dynamic_sync_at=now - 1_000,
+            )
+        )
+        session.commit()
+
+    result = asyncio.run(run_auto_sync())
+    assert result["skipped"] is True
+    assert result["reason"] == "no_due_channels"
+    mock_create.assert_not_awaited()
+    mock_run.assert_not_awaited()
+
+
+@patch("app.jobs.auto_sync.run_sync_job", new_callable=AsyncMock)
+@patch("app.jobs.auto_sync.create_job", new_callable=AsyncMock)
+def test_auto_sync_syncs_all_due_channels_in_one_job(
+    mock_create: AsyncMock,
+    mock_run: AsyncMock,
+) -> None:
+    clear_jobs_for_tests()
+    now = int(time.time() * 1000)
+
+    with Session(engine) as session:
+        save_setting(
+            session,
+            "sync",
+            {
+                "regularSyncIntervalMinutes": 60,
+                "consecutiveFailures": 0,
+                "autoSyncPauseUntil": None,
+            },
+        )
+        operator_id = get_operator_user_id(session)
+        _freeze_channels_except(session, {"due-1", "due-2"})
+        for cid in ("due-1", "due-2"):
+            existing = session.get(Channel, cid)
+            if existing:
+                existing.user_id = operator_id
+                existing.is_frozen = False
+                existing.regular_sync_enabled = True
+                existing.dynamic_sync_enabled = False
+                existing.next_regular_sync_at = now - 1_000
+                session.add(existing)
+            else:
+                session.add(
+                    Channel(
+                        id=cid,
+                        name=cid,
+                        user_id=operator_id,
+                        regular_sync_enabled=True,
+                        dynamic_sync_enabled=False,
+                        next_regular_sync_at=now - 1_000,
+                    )
+                )
+        session.commit()
+
+    mock_job = MagicMock()
+    mock_job.job_id = "job-all-due"
+    mock_job.status = "completed"
+    mock_job.channels = {
+        "due-1": MagicMock(status="success"),
+        "due-2": MagicMock(status="success"),
+    }
+    mock_create.return_value = mock_job
+
+    result = asyncio.run(run_auto_sync())
+    assert result.get("channels") == 2
+    called_entries = (
+        mock_create.await_args.kwargs.get("channel_entries")
+        or mock_create.await_args.args[0]
+    )
+    assert sorted(name for _id, name in called_entries) == ["due-1", "due-2"]
 
 
 def test_retention_deletes_old_posts() -> None:

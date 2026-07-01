@@ -84,6 +84,9 @@ describe("addChannelByName duplicate", () => {
         torProxyUrls: "",
         torAutoRotate: false,
         torRotationThreshold: 0,
+        regularSyncIntervalMinutes: 60,
+        dynamicSyncEnabledDefault: false,
+        dynamicSyncExpectedPostsDefault: 15,
       },
     })
 

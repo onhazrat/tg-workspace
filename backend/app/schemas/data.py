@@ -18,3 +18,17 @@ class BulkResetSyncRequest(BaseModel):
     auto_follow_only: bool = Field(default=False, alias="autoFollowOnly")
 
     model_config = {"populate_by_name": True}
+
+
+class BulkSyncSettingsRequest(BaseModel):
+    channel_ids: list[str] | None = Field(default=None, alias="channelIds")
+    regular_sync_enabled: bool | None = Field(default=None, alias="regularSyncEnabled")
+    dynamic_sync_enabled: bool | None = Field(default=None, alias="dynamicSyncEnabled")
+    auto_sync_interval_minutes: int | None = Field(
+        default=None, alias="autoSyncIntervalMinutes"
+    )
+    dynamic_sync_expected_posts: int | None = Field(
+        default=None, alias="dynamicSyncExpectedPosts"
+    )
+
+    model_config = {"populate_by_name": True}

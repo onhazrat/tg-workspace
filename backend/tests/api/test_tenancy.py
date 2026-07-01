@@ -49,8 +49,7 @@ def test_auto_sync_scopes_to_operator_channels(
             session,
             "sync",
             {
-                "autoSyncEnabled": True,
-                "autoSyncInterval": 60,
+                "regularSyncIntervalMinutes": 60,
                 "consecutiveFailures": 0,
                 "autoSyncPauseUntil": None,
             },
@@ -72,6 +71,9 @@ def test_auto_sync_scopes_to_operator_channels(
                 existing.last_updated = now - 120 * 60 * 1000
                 existing.user_id = uid
                 existing.is_frozen = False
+                existing.regular_sync_enabled = True
+                existing.dynamic_sync_enabled = False
+                existing.next_regular_sync_at = now - 1_000
                 session.add(existing)
             else:
                 session.add(
@@ -80,6 +82,9 @@ def test_auto_sync_scopes_to_operator_channels(
                         name=name,
                         user_id=uid,
                         last_updated=now - 120 * 60 * 1000,
+                        regular_sync_enabled=True,
+                        dynamic_sync_enabled=False,
+                        next_regular_sync_at=now - 1_000,
                     )
                 )
         _freeze_channels_except(session, {"op-ch", "other-ch"})

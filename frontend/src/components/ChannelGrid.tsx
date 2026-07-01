@@ -91,10 +91,6 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
   }, [sortDirection])
 
   const {
-    autoSyncEnabled,
-    setAutoSyncEnabled,
-    autoSyncInterval,
-    setAutoSyncInterval,
     proxyEnabled,
     defaultProxyUrls,
     torEnabled,
@@ -103,6 +99,9 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
     torAutoRotate,
     torRotationThreshold,
     getEffectiveGlobalStartTime,
+    regularSyncIntervalMinutes,
+    dynamicSyncExpectedPostsDefault,
+    dynamicSyncEnabledDefault,
     showChannelSubscribers,
   } = useSettings()
 
@@ -128,6 +127,20 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
     "freeze" | "unfreeze" | null
   >(null)
   const [confirmBulkDelete, setConfirmBulkDelete] = useState(false)
+  const [bulkSyncIntervalMinutes, setBulkSyncIntervalMinutes] = useState(
+    regularSyncIntervalMinutes,
+  )
+  const [bulkDynamicExpectedPosts, setBulkDynamicExpectedPosts] = useState(
+    dynamicSyncExpectedPostsDefault,
+  )
+
+  useEffect(() => {
+    setBulkSyncIntervalMinutes(regularSyncIntervalMinutes)
+  }, [regularSyncIntervalMinutes])
+
+  useEffect(() => {
+    setBulkDynamicExpectedPosts(dynamicSyncExpectedPostsDefault)
+  }, [dynamicSyncExpectedPostsDefault])
 
   const filteredChannels = useMemo(() => {
     let result = channels
@@ -359,6 +372,34 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
     setConfirmResetModal(channel)
   }
 
+  const applyBulkSyncPatch = async (
+    patch: {
+      regularSyncEnabled?: boolean
+      dynamicSyncEnabled?: boolean
+      autoSyncIntervalMinutes?: number
+      dynamicSyncExpectedPosts?: number
+    },
+    applyToAll = false,
+  ) => {
+    const ids = applyToAll
+      ? null
+      : channels
+          .filter((channel) => selectedChannels.has(channel.name))
+          .map((channel) => channel.id)
+    if (!applyToAll && (!ids || ids.length === 0)) return
+    await api.bulkSyncSettings({
+      channelIds: ids,
+      ...patch,
+    })
+    const idSet = ids ? new Set(ids) : null
+    setChannels((prev) =>
+      prev.map((channel) => {
+        if (idSet && !idSet.has(channel.id)) return channel
+        return { ...channel, ...patch }
+      }),
+    )
+  }
+
   const executeResetAndSync = async () => {
     if (!confirmResetModal) return
     try {
@@ -393,6 +434,9 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
         torProxyUrls,
         torAutoRotate,
         torRotationThreshold,
+        regularSyncIntervalMinutes,
+        dynamicSyncEnabledDefault,
+        dynamicSyncExpectedPostsDefault,
       },
     })
     if (result.ok) setInlineChannelName("")
@@ -671,50 +715,6 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
                 </button>
               </div>
 
-              <div className="h-4 w-px bg-app-ink/10" />
-
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={autoSyncEnabled}
-                  onChange={(e) => setAutoSyncEnabled(e.target.checked)}
-                  className="w-3 h-3 accent-app-ink"
-                />
-                <span className="text-[10px] uppercase font-bold text-app-ink">
-                  Auto Sync
-                </span>
-              </label>
-
-              <div className="h-4 w-px bg-app-ink/10" />
-
-              <div className="flex items-center gap-2">
-                <span className="text-[9px] uppercase font-bold text-app-ink/50">
-                  Every
-                </span>
-                <input
-                  type="number"
-                  min={AUTO_SYNC_INTERVAL_MIN_MINUTES}
-                  max={AUTO_SYNC_INTERVAL_MAX_MINUTES}
-                  step={1}
-                  value={autoSyncInterval}
-                  disabled={!autoSyncEnabled}
-                  onChange={(e) => {
-                    const val = Number.parseInt(e.target.value, 10)
-                    if (!Number.isNaN(val)) {
-                      setAutoSyncInterval(
-                        Math.min(
-                          AUTO_SYNC_INTERVAL_MAX_MINUTES,
-                          Math.max(AUTO_SYNC_INTERVAL_MIN_MINUTES, val),
-                        ),
-                      )
-                    }
-                  }}
-                  className="w-16 bg-app-bg border border-app-ink/20 px-2 py-1 text-[10px] font-mono focus:border-app-ink focus:outline-none disabled:opacity-50"
-                />
-                <span className="text-[9px] uppercase font-bold text-app-ink/50">
-                  min
-                </span>
-              </div>
             </div>
           </div>
         )}
@@ -741,6 +741,103 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
               >
                 Unfreeze
               </button>
+              <div className="h-4 w-px bg-app-ink/10 mx-1" />
+              <button
+                type="button"
+                onClick={() => applyBulkSyncPatch({ regularSyncEnabled: true })}
+                className="px-3 py-1.5 text-[10px] uppercase font-bold rounded-md bg-emerald-500/10 text-emerald-600 hover:bg-emerald-500/20 transition-all"
+              >
+                Regular On
+              </button>
+              <button
+                type="button"
+                onClick={() => applyBulkSyncPatch({ regularSyncEnabled: false })}
+                className="px-3 py-1.5 text-[10px] uppercase font-bold rounded-md bg-amber-500/10 text-amber-700 hover:bg-amber-500/20 transition-all"
+              >
+                Regular Off
+              </button>
+              <button
+                type="button"
+                onClick={() =>
+                  applyBulkSyncPatch({ dynamicSyncEnabled: true })
+                }
+                className="px-3 py-1.5 text-[10px] uppercase font-bold rounded-md bg-blue-500/10 text-blue-600 hover:bg-blue-500/20 transition-all"
+              >
+                Dynamic On
+              </button>
+              <button
+                type="button"
+                onClick={() =>
+                  applyBulkSyncPatch({ dynamicSyncEnabled: false })
+                }
+                className="px-3 py-1.5 text-[10px] uppercase font-bold rounded-md bg-app-muted/50 text-app-ink/70 hover:bg-app-ink/10 transition-all"
+              >
+                Dynamic Off
+              </button>
+              <div className="flex items-center gap-2 rounded-md border border-app-ink/10 bg-app-muted/40 px-2 py-1.5">
+                <span className="text-[9px] uppercase font-bold text-app-ink/60">
+                  Interval
+                </span>
+                <input
+                  type="number"
+                  min={AUTO_SYNC_INTERVAL_MIN_MINUTES}
+                  max={AUTO_SYNC_INTERVAL_MAX_MINUTES}
+                  value={bulkSyncIntervalMinutes}
+                  onChange={(e) => {
+                    const value = Number.parseInt(e.target.value, 10)
+                    if (!Number.isNaN(value)) {
+                      setBulkSyncIntervalMinutes(
+                        Math.max(
+                          AUTO_SYNC_INTERVAL_MIN_MINUTES,
+                          Math.min(AUTO_SYNC_INTERVAL_MAX_MINUTES, value),
+                        ),
+                      )
+                    }
+                  }}
+                  className="w-14 bg-app-bg border border-app-ink/20 px-2 py-1 text-[10px] font-mono focus:border-app-ink focus:outline-none"
+                />
+                <button
+                  type="button"
+                  onClick={() =>
+                    applyBulkSyncPatch({
+                      autoSyncIntervalMinutes: bulkSyncIntervalMinutes,
+                    })
+                  }
+                  className="px-2 py-1 text-[9px] uppercase font-bold rounded bg-app-ink text-app-bg"
+                >
+                  Apply
+                </button>
+              </div>
+              <div className="flex items-center gap-2 rounded-md border border-app-ink/10 bg-app-muted/40 px-2 py-1.5">
+                <span className="text-[9px] uppercase font-bold text-app-ink/60">
+                  Expected
+                </span>
+                <input
+                  type="number"
+                  min={1}
+                  value={bulkDynamicExpectedPosts}
+                  onChange={(e) => {
+                    const value = Number.parseInt(e.target.value, 10)
+                    if (!Number.isNaN(value)) {
+                      setBulkDynamicExpectedPosts(
+                        Math.max(1, Math.min(500, value)),
+                      )
+                    }
+                  }}
+                  className="w-14 bg-app-bg border border-app-ink/20 px-2 py-1 text-[10px] font-mono focus:border-app-ink focus:outline-none"
+                />
+                <button
+                  type="button"
+                  onClick={() =>
+                    applyBulkSyncPatch({
+                      dynamicSyncExpectedPosts: bulkDynamicExpectedPosts,
+                    })
+                  }
+                  className="px-2 py-1 text-[9px] uppercase font-bold rounded bg-app-ink text-app-bg"
+                >
+                  Apply
+                </button>
+              </div>
               <div className="relative">
                 <input
                   type="text"

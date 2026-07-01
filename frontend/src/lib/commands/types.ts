@@ -193,10 +193,14 @@ export interface CommandSettingsSlice {
   setAiLanguage: (language: string) => void
   selectedModel: string
   setSelectedModel: (model: string) => void
-  autoSyncEnabled: boolean
-  setAutoSyncEnabled: (enabled: boolean) => void
-  autoSyncInterval: number
-  setAutoSyncInterval: (interval: number) => void
+  regularSyncIntervalMinutes: number
+  setRegularSyncIntervalMinutes: (interval: number) => void
+  dynamicSyncEnabledDefault: boolean
+  setDynamicSyncEnabledDefault: (enabled: boolean) => void
+  dynamicSyncExpectedPostsDefault: number
+  setDynamicSyncExpectedPostsDefault: (posts: number) => void
+  syncFailureBackoffMinutes: number
+  setSyncFailureBackoffMinutes: (minutes: number) => void
   aiTemperature: number
   setAiTemperature: (temp: number) => void
   proxyEnabled: boolean

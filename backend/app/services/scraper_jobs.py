@@ -37,6 +37,7 @@ class ChannelSyncState:
     posts_fetched: int = 0
     new_latest_id: int | None = None
     error: str | None = None
+    metadata: dict[str, Any] = field(default_factory=dict)
 
     def to_camel(self) -> dict[str, Any]:
         return {
@@ -46,6 +47,7 @@ class ChannelSyncState:
             "postsFetched": self.posts_fetched,
             "newLatestId": self.new_latest_id,
             "error": self.error,
+            "metadata": self.metadata,
         }
 
 
@@ -93,6 +95,7 @@ def _channels_from_json(data: list[dict[str, Any]]) -> dict[str, ChannelSyncStat
             posts_fetched=ch.get("postsFetched", 0),
             new_latest_id=ch.get("newLatestId"),
             error=ch.get("error"),
+            metadata=ch.get("metadata") or {},
         )
     return result
 
@@ -215,10 +218,15 @@ async def create_job(
     channel_entries: list[tuple[str, str]],
     source: str,
     user_id: str | None = None,
+    channel_meta_by_id: dict[str, dict[str, Any]] | None = None,
 ) -> SyncJobState:
     job_id = str(uuid.uuid4())
     channels = {
-        cid: ChannelSyncState(channel_id=cid, channel_name=name)
+        cid: ChannelSyncState(
+            channel_id=cid,
+            channel_name=name,
+            metadata=(channel_meta_by_id or {}).get(cid, {}),
+        )
         for cid, name in channel_entries
     }
     job = SyncJobState(

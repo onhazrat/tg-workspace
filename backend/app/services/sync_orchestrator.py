@@ -22,7 +22,7 @@ from app.jobs.settings import (
 )
 from app.models_tg import Channel, Post
 from app.services.async_db import run_db
-from app.services.channels import update_channel_coverage
+from app.services.channels import _velocity_from_timestamps, update_channel_coverage
 from app.services.language import detect_language_from_posts
 from app.services.logs import upsert_network_log, upsert_sync_log
 from app.services.network import rotate_tor_identity
@@ -48,9 +48,21 @@ from app.services.scraper_jobs import (
     persist_job,
     touch_job,
 )
+from app.services.sync_schedule import (
+    apply_failure_backoff,
+    compute_next_dynamic_sync_at,
+    compute_next_regular_sync_at,
+)
 from app.services.sync_meta import touch_sync
 
 logger = logging.getLogger(__name__)
+
+
+def _is_scheduler_auto_sync_source(source: str) -> bool:
+    # Import lazily to avoid module import cycles at startup.
+    from app.jobs.auto_sync import CHECK_SOURCE
+
+    return source == CHECK_SOURCE
 
 
 class SyncScrapeError(Exception):
@@ -259,6 +271,16 @@ def _create_forwarded_channel(
         if telemetry_url and telemetry:
             _save_network_telemetry(session, telemetry_url, telemetry, user_id=user_id)
         now = int(time.time() * 1000)
+        sync_settings = load_sync_settings(session)
+        regular_interval_minutes = int(
+            sync_settings.get("regularSyncIntervalMinutes") or 60
+        )
+        dynamic_enabled_default = bool(
+            sync_settings.get("dynamicSyncEnabledDefault", False)
+        )
+        dynamic_expected_posts_default = int(
+            sync_settings.get("dynamicSyncExpectedPostsDefault") or 15
+        )
         session.add(
             Channel(
                 id=clean,
@@ -272,6 +294,14 @@ def _create_forwarded_channel(
                 is_frozen=is_unavailable,
                 is_unavailable_on_web_view=is_unavailable,
                 discovered_via=discovered_via,
+                regular_sync_enabled=True,
+                dynamic_sync_enabled=dynamic_enabled_default,
+                auto_sync_interval_minutes=max(1, regular_interval_minutes),
+                dynamic_sync_expected_posts=max(1, dynamic_expected_posts_default),
+                next_regular_sync_at=compute_next_regular_sync_at(
+                    now, max(1, regular_interval_minutes)
+                ),
+                next_dynamic_sync_at=None,
                 user_id=user_id,
             )
         )
@@ -620,6 +650,35 @@ def _finalize_channel_success(
         now = int(time.time() * 1000)
         channel.last_updated = now
         channel.language = detected_language
+        if channel.regular_sync_enabled:
+            channel.next_regular_sync_at = compute_next_regular_sync_at(
+                now,
+                channel.auto_sync_interval_minutes,
+            )
+        else:
+            channel.next_regular_sync_at = None
+
+        if channel.dynamic_sync_enabled:
+            recent_timestamps = session.exec(
+                select(Post.timestamp)
+                .where(Post.channel_name == channel.name, Post.timestamp > 0)
+                .order_by(col(Post.timestamp).desc())
+                .limit(100)
+            ).all()
+            recent_timestamps.sort()
+            has_posts = bool(recent_timestamps)
+            velocity = _velocity_from_timestamps(recent_timestamps)
+            if not has_posts:
+                channel.next_dynamic_sync_at = None
+            elif velocity > 0:
+                channel.next_dynamic_sync_at = compute_next_dynamic_sync_at(
+                    now,
+                    channel.dynamic_sync_expected_posts,
+                    velocity,
+                )
+        else:
+            channel.next_dynamic_sync_at = None
+
         channel.updated_at = datetime.utcnow()
         session.add(channel)
         session.commit()
@@ -653,6 +712,7 @@ def _finalize_channel_scrape_error(
     total_new_posts: int,
     requests_log: list[Any],
     responses_log: list[Any],
+    due_reason: str | None,
 ) -> None:
     with Session(engine) as session:
         channel = session.get(Channel, ctx.channel_id)
@@ -662,6 +722,19 @@ def _finalize_channel_scrape_error(
         if exc.is_unavailable:
             channel.is_frozen = True
             channel.is_unavailable_on_web_view = True
+            channel.updated_at = datetime.utcnow()
+            session.add(channel)
+            session.commit()
+            touch_sync(session, "channels")
+
+        if _is_scheduler_auto_sync_source(job.source) and due_reason:
+            sync_settings = load_sync_settings(session)
+            apply_failure_backoff(
+                channel,
+                int(time.time() * 1000),
+                due_reason,
+                int(sync_settings.get("syncFailureBackoffMinutes") or 5),
+            )
             channel.updated_at = datetime.utcnow()
             session.add(channel)
             session.commit()
@@ -695,10 +768,23 @@ def _finalize_channel_error(
     total_new_posts: int,
     requests_log: list[Any],
     responses_log: list[Any],
+    due_reason: str | None,
 ) -> None:
     with Session(engine) as session:
         channel = session.get(Channel, ctx.channel_id)
         channel_name = channel.name if channel else ctx.channel_name
+        if channel and _is_scheduler_auto_sync_source(job.source) and due_reason:
+            sync_settings = load_sync_settings(session)
+            apply_failure_backoff(
+                channel,
+                int(time.time() * 1000),
+                due_reason,
+                int(sync_settings.get("syncFailureBackoffMinutes") or 5),
+            )
+            channel.updated_at = datetime.utcnow()
+            session.add(channel)
+            session.commit()
+            touch_sync(session, "channels")
         upsert_sync_log(
             session,
             {
@@ -757,6 +843,11 @@ async def sync_single_channel(
         requests_log: list[Any] = []
         responses_log: list[Any] = []
         session_seen_ids: set[int] = set()
+        due_reason = (
+            ch_state.metadata.get("dueReason")
+            if isinstance(ch_state.metadata, dict)
+            else None
+        )
 
         try:
             known_latest_id = 0
@@ -871,6 +962,7 @@ async def sync_single_channel(
                 total_new_posts=total_new_posts,
                 requests_log=requests_log,
                 responses_log=responses_log,
+                due_reason=due_reason,
             )
             ch_state.status = "failed"
             ch_state.error = str(exc)
@@ -888,6 +980,7 @@ async def sync_single_channel(
                 total_new_posts=total_new_posts,
                 requests_log=requests_log,
                 responses_log=responses_log,
+                due_reason=due_reason,
             )
             ch_state.status = "failed"
             ch_state.error = str(exc)

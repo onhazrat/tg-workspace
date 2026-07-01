@@ -25,6 +25,7 @@ import { api } from "@/api"
 import {
   AUTO_SYNC_INTERVAL_MAX_MINUTES,
   AUTO_SYNC_INTERVAL_MIN_MINUTES,
+  DYNAMIC_SYNC_EXPECTED_POSTS_DEFAULT,
   LANGUAGES,
   MODELS,
 } from "../constants"
@@ -44,10 +45,12 @@ export const SettingsView: React.FC<{ activeSection?: string }> = ({
     setAiLanguage,
     selectedModel,
     setSelectedModel,
-    autoSyncEnabled,
-    setAutoSyncEnabled,
-    autoSyncInterval,
-    setAutoSyncInterval,
+    regularSyncIntervalMinutes,
+    setRegularSyncIntervalMinutes,
+    dynamicSyncEnabledDefault,
+    setDynamicSyncEnabledDefault,
+    dynamicSyncExpectedPostsDefault,
+    setDynamicSyncExpectedPostsDefault,
     aiTemperature,
     setAiTemperature,
     proxyEnabled,
@@ -117,6 +120,7 @@ export const SettingsView: React.FC<{ activeSection?: string }> = ({
 
   const [bulkReresolveConfirm, setBulkReresolveConfirm] = useState(false)
   const [bulkReresolveLoading, setBulkReresolveLoading] = useState(false)
+  const [syncTemplateBusy, setSyncTemplateBusy] = useState(false)
   const [torStatus, setTorStatus] = useState<{
     running: boolean
     socksInUse: boolean
@@ -142,6 +146,29 @@ export const SettingsView: React.FC<{ activeSection?: string }> = ({
   const [badProxies, setBadProxies] = useState<
     { url: string; cooldownRemaining: number }[]
   >([])
+
+  const applySyncTemplateToChannels = async (
+    patch: {
+      regularSyncEnabled?: boolean
+      dynamicSyncEnabled?: boolean
+      autoSyncIntervalMinutes?: number
+      dynamicSyncExpectedPosts?: number
+    },
+    toastMessage: string,
+  ) => {
+    setSyncTemplateBusy(true)
+    try {
+      await api.bulkSyncSettings({ channelIds: null, ...patch })
+      await loadChannels()
+      toast.success(toastMessage)
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Failed to apply sync settings",
+      )
+    } finally {
+      setSyncTemplateBusy(false)
+    }
+  }
 
   const proxyLines = defaultProxyUrls
     .split(/[\n,]+/)
@@ -686,23 +713,81 @@ export const SettingsView: React.FC<{ activeSection?: string }> = ({
                     <div className="flex items-center gap-2 opacity-60">
                       <RefreshCw size={14} />
                       <span className="text-[10px] font-bold uppercase tracking-tight">
-                        Background Auto-Sync
+                        New Channel Sync Defaults
                       </span>
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => setAutoSyncEnabled(!autoSyncEnabled)}
-                      className={`w-10 h-5 transition-all relative border border-app-ink/20 ${autoSyncEnabled ? "bg-green-500 border-green-600" : "bg-app-ink/10"}`}
-                    >
-                      <div
-                        className={`absolute top-0.5 w-3.5 h-3.5 bg-white transition-all ${autoSyncEnabled ? "left-5.5" : "left-0.5"}`}
-                      />
-                    </button>
                   </div>
                   <p className="text-[10px] opacity-40 italic serif">
-                    Automatically fetch new posts from selected channels in the
-                    background.
+                    These values seed newly added channels only.
                   </p>
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                    <label className="space-y-1.5">
+                      <span className="text-[9px] uppercase font-bold tracking-widest text-app-ink/60">
+                        Regular Interval (min)
+                      </span>
+                      <input
+                        type="number"
+                        min={AUTO_SYNC_INTERVAL_MIN_MINUTES}
+                        max={AUTO_SYNC_INTERVAL_MAX_MINUTES}
+                        step={1}
+                        value={regularSyncIntervalMinutes}
+                        onChange={(e) => {
+                          const val = Number.parseInt(e.target.value, 10)
+                          if (!Number.isNaN(val)) {
+                            setRegularSyncIntervalMinutes(
+                              Math.min(
+                                AUTO_SYNC_INTERVAL_MAX_MINUTES,
+                                Math.max(AUTO_SYNC_INTERVAL_MIN_MINUTES, val),
+                              ),
+                            )
+                          }
+                        }}
+                        className="w-full bg-app-ink/5 border border-app-ink/10 p-2 text-[10px] font-mono focus:outline-none focus:border-app-ink/30 transition-all rounded"
+                      />
+                    </label>
+                    <label className="space-y-1.5">
+                      <span className="text-[9px] uppercase font-bold tracking-widest text-app-ink/60">
+                        Dynamic Expected Posts
+                      </span>
+                      <input
+                        type="number"
+                        min={1}
+                        step={1}
+                        value={dynamicSyncExpectedPostsDefault}
+                        onChange={(e) => {
+                          const val = Number.parseInt(e.target.value, 10)
+                          if (!Number.isNaN(val)) {
+                            setDynamicSyncExpectedPostsDefault(
+                              Math.max(1, Math.min(500, val)),
+                            )
+                          }
+                        }}
+                        className="w-full bg-app-ink/5 border border-app-ink/10 p-2 text-[10px] font-mono focus:outline-none focus:border-app-ink/30 transition-all rounded"
+                      />
+                    </label>
+                    <div className="space-y-1.5">
+                      <span className="text-[9px] uppercase font-bold tracking-widest text-app-ink/60">
+                        Dynamic Enabled by Default
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setDynamicSyncEnabledDefault(!dynamicSyncEnabledDefault)
+                        }
+                        className={`w-10 h-5 transition-all relative border border-app-ink/20 rounded-full ${
+                          dynamicSyncEnabledDefault
+                            ? "bg-blue-500 border-blue-600"
+                            : "bg-app-ink/10"
+                        }`}
+                      >
+                        <div
+                          className={`absolute top-0.5 w-3.5 h-3.5 bg-white transition-all rounded-full ${
+                            dynamicSyncEnabledDefault ? "left-5.5" : "left-0.5"
+                          }`}
+                        />
+                      </button>
+                    </div>
+                  </div>
                 </div>
 
                 <div className="space-y-4 pt-4 border-t border-app-ink/5">
@@ -935,47 +1020,89 @@ export const SettingsView: React.FC<{ activeSection?: string }> = ({
                   )}
                 </div>
 
-                <AnimatePresence>
-                  {autoSyncEnabled && (
-                    <motion.div
-                      initial={{ opacity: 0, height: 0 }}
-                      animate={{ opacity: 1, height: "auto" }}
-                      exit={{ opacity: 0, height: 0 }}
-                      className="space-y-4 overflow-hidden"
+                <div className="space-y-4 pt-4 border-t border-app-ink/5">
+                  <div className="flex items-center gap-2 opacity-60">
+                    <Zap size={14} />
+                    <span className="text-[10px] font-bold uppercase tracking-tight">
+                      Apply to Existing Channels
+                    </span>
+                  </div>
+                  <p className="text-[10px] opacity-40 italic serif">
+                    Use bulk PATCH to update all channel sync settings at once.
+                  </p>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      type="button"
+                      disabled={syncTemplateBusy}
+                      onClick={() =>
+                        applySyncTemplateToChannels(
+                          { regularSyncEnabled: false },
+                          "Disabled regular sync on all channels",
+                        )
+                      }
+                      className="px-3 py-1.5 text-[10px] uppercase font-bold rounded-md bg-amber-500/10 text-amber-700 hover:bg-amber-500/20 transition-all disabled:opacity-40"
                     >
-                      <div className="flex items-center gap-2 opacity-60">
-                        <RefreshCw size={14} />
-                        <span className="text-[10px] font-bold uppercase tracking-tight">
-                          Sync Interval
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-3">
-                        <input
-                          type="number"
-                          min={AUTO_SYNC_INTERVAL_MIN_MINUTES}
-                          max={AUTO_SYNC_INTERVAL_MAX_MINUTES}
-                          step={1}
-                          value={autoSyncInterval}
-                          onChange={(e) => {
-                            const val = Number.parseInt(e.target.value, 10)
-                            if (!Number.isNaN(val)) {
-                              setAutoSyncInterval(
-                                Math.min(
-                                  AUTO_SYNC_INTERVAL_MAX_MINUTES,
-                                  Math.max(AUTO_SYNC_INTERVAL_MIN_MINUTES, val),
-                                ),
-                              )
-                            }
-                          }}
-                          className="w-20 bg-app-ink/5 border border-app-ink/10 p-2 text-[10px] font-mono focus:outline-none focus:border-app-ink/30 transition-all rounded"
-                        />
-                        <span className="text-[10px] opacity-60 uppercase tracking-widest font-bold">
-                          Minutes (5 min – 1 day)
-                        </span>
-                      </div>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
+                      Disable Regular (All)
+                    </button>
+                    <button
+                      type="button"
+                      disabled={syncTemplateBusy}
+                      onClick={() =>
+                        applySyncTemplateToChannels(
+                          { regularSyncEnabled: true },
+                          "Enabled regular sync on all channels",
+                        )
+                      }
+                      className="px-3 py-1.5 text-[10px] uppercase font-bold rounded-md bg-emerald-500/10 text-emerald-700 hover:bg-emerald-500/20 transition-all disabled:opacity-40"
+                    >
+                      Enable Regular (All)
+                    </button>
+                    <button
+                      type="button"
+                      disabled={syncTemplateBusy}
+                      onClick={() =>
+                        applySyncTemplateToChannels(
+                          { dynamicSyncEnabled: true },
+                          "Enabled dynamic sync on all channels",
+                        )
+                      }
+                      className="px-3 py-1.5 text-[10px] uppercase font-bold rounded-md bg-blue-500/10 text-blue-700 hover:bg-blue-500/20 transition-all disabled:opacity-40"
+                    >
+                      Enable Dynamic (All)
+                    </button>
+                    <button
+                      type="button"
+                      disabled={syncTemplateBusy}
+                      onClick={() =>
+                        applySyncTemplateToChannels(
+                          { dynamicSyncEnabled: false },
+                          "Disabled dynamic sync on all channels",
+                        )
+                      }
+                      className="px-3 py-1.5 text-[10px] uppercase font-bold rounded-md bg-app-muted/60 text-app-ink/70 hover:bg-app-ink/10 transition-all disabled:opacity-40"
+                    >
+                      Disable Dynamic (All)
+                    </button>
+                    <button
+                      type="button"
+                      disabled={syncTemplateBusy}
+                      onClick={() =>
+                        applySyncTemplateToChannels(
+                          {
+                            autoSyncIntervalMinutes: regularSyncIntervalMinutes,
+                            dynamicSyncExpectedPosts:
+                              dynamicSyncExpectedPostsDefault ||
+                              DYNAMIC_SYNC_EXPECTED_POSTS_DEFAULT,
+                          },
+                          "Applied sync templates to all channels",
+                        )
+                      }
+                      className="px-3 py-1.5 text-[10px] uppercase font-bold rounded-md bg-app-ink text-app-bg hover:opacity-90 transition-all disabled:opacity-40"
+                    >
+                      Apply Templates to All
+                    </button>
+                  </div>
+                </div>
 
                 <div className="space-y-4 pt-6 border-t border-app-ink/5">
                   <div className="flex items-center gap-2 opacity-60 mb-2">

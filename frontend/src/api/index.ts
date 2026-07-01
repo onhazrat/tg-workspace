@@ -27,6 +27,7 @@ export {
   sseTextStream,
 } from "./base"
 export { dataApi } from "./data"
+export type { BulkSyncSettingsPatchBody } from "./data"
 export type {
   JobStatusEntry,
   RuntimeConfig,

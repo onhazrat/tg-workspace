@@ -3,8 +3,11 @@
 from __future__ import annotations
 
 from fastapi.testclient import TestClient
+from sqlmodel import Session
 
 from app.core.config import settings
+from app.core.db import engine
+from app.jobs.settings import save_setting
 
 PREFIX = f"{settings.API_V1_STR}/data"
 
@@ -37,8 +40,13 @@ def test_get_sync_settings_merges_defaults(client: TestClient) -> None:
     r = client.get(f"{PREFIX}/settings/sync", headers=headers)
     assert r.status_code == 200
     value = r.json()["value"]
-    assert value["autoSyncEnabled"] is True
-    assert value["autoSyncInterval"] == settings.AUTO_SYNC_INTERVAL_MINUTES_DEFAULT
+    assert (
+        value["regularSyncIntervalMinutes"]
+        == settings.AUTO_SYNC_INTERVAL_MINUTES_DEFAULT
+    )
+    assert value["dynamicSyncEnabledDefault"] is False
+    assert value["dynamicSyncExpectedPostsDefault"] == 15
+    assert value["syncFailureBackoffMinutes"] == 5
     assert value["syncConcurrency"] == settings.SYNC_CONCURRENCY_DEFAULT
 
 
@@ -60,3 +68,19 @@ def test_get_translation_settings_merges_defaults(client: TestClient) -> None:
     assert value["translationEnabled"] is False
     assert value["autoTranslate"] is False
     assert value["translationModel"] == settings.DEFAULT_AI_MODEL
+
+
+def test_sync_setting_migrates_legacy_auto_sync_interval(client: TestClient) -> None:
+    with Session(engine) as session:
+        save_setting(
+            session,
+            "sync",
+            {"autoSyncInterval": 42, "syncConcurrency": 3},
+        )
+    headers = _auth(client)
+    r = client.get(f"{PREFIX}/settings/sync", headers=headers)
+    assert r.status_code == 200
+    value = r.json()["value"]
+    assert value["regularSyncIntervalMinutes"] == 42
+    assert "autoSyncInterval" not in value
+    assert "autoSyncEnabled" not in value

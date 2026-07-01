@@ -35,6 +35,10 @@ export const env = {
     viteEnv?.VITE_AUTO_SYNC_INTERVAL_DEFAULT,
     60,
   ),
+  dynamicSyncExpectedPostsDefault: parseIntEnv(
+    viteEnv?.VITE_DYNAMIC_SYNC_EXPECTED_POSTS_DEFAULT,
+    15,
+  ),
   retentionPostDaysDefault: parseIntEnv(
     viteEnv?.VITE_RETENTION_POST_DAYS_DEFAULT,
     90,

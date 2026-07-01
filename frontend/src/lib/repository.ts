@@ -161,6 +161,19 @@ export async function upsertChannel(channel: Channel): Promise<Channel> {
   )
 }
 
+export async function bulkSyncChannelSettings(body: {
+  channelIds: string[] | null
+  regularSyncEnabled?: boolean
+  dynamicSyncEnabled?: boolean
+  autoSyncIntervalMinutes?: number
+  dynamicSyncExpectedPosts?: number
+}): Promise<{ updated: number }> {
+  const result = await api.bulkSyncSettings(body)
+  await refreshSyncMeta(true)
+  markResourceSynced("channels")
+  return { updated: result.updated }
+}
+
 export async function deleteChannel(id: string): Promise<void> {
   try {
     await api.deleteChannel(id)

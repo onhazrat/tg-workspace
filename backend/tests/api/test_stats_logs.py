@@ -43,14 +43,14 @@ def test_settings_round_trip(client: TestClient) -> None:
     headers = _auth(client)
     client.put(
         f"{PREFIX}/settings/sync",
-        json={"autoSyncEnabled": False, "autoSyncInterval": 45},
+        json={"regularSyncIntervalMinutes": 45, "dynamicSyncEnabledDefault": True},
         headers=headers,
     )
     r = client.get(f"{PREFIX}/settings/sync", headers=headers)
     assert r.status_code == 200
     value = r.json()["value"]
-    assert value["autoSyncEnabled"] is False
-    assert value["autoSyncInterval"] == 45
+    assert value["regularSyncIntervalMinutes"] == 45
+    assert value["dynamicSyncEnabledDefault"] is True
 
 
 def test_delete_log_by_id_and_clear(client: TestClient) -> None:

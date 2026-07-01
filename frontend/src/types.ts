@@ -45,6 +45,12 @@ export interface Channel {
   startTime?: number
   tags?: string[]
   lastUpdated?: number
+  regularSyncEnabled?: boolean
+  dynamicSyncEnabled?: boolean
+  autoSyncIntervalMinutes?: number
+  dynamicSyncExpectedPosts?: number
+  nextRegularSyncAt?: number | null
+  nextDynamicSyncAt?: number | null
   isFrozen?: boolean
   isUnavailableOnWebView?: boolean
   autoFollowForwarded?: boolean

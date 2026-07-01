@@ -3,6 +3,8 @@ import { env } from "./lib/env"
 export const DEFAULT_AI_LANGUAGE = env.defaultAiLanguage
 export const DEFAULT_MODEL = env.defaultAiModel
 export const AUTO_SYNC_INTERVAL_DEFAULT = env.autoSyncIntervalDefault
+export const DYNAMIC_SYNC_EXPECTED_POSTS_DEFAULT =
+  env.dynamicSyncExpectedPostsDefault
 export const AUTO_SYNC_INTERVAL_MIN_MINUTES = 5
 /** Max auto-sync staleness interval (24 hours). */
 export const AUTO_SYNC_INTERVAL_MAX_MINUTES = 24 * 60

@@ -10,8 +10,10 @@ from fastapi import HTTPException
 from sqlmodel import Session, col, func, select
 
 from app.models_tg import Channel, Post
+from app.jobs.settings import load_sync_settings
 from app.services.channel_photos import delete_cached_photo
 from app.services.serialization import channel_to_camel, normalize_body
+from app.services.sync_schedule import compute_next_regular_sync_at
 from app.services.sync_meta import touch_sync
 
 
@@ -197,11 +199,40 @@ def upsert_channel(
         ch.updated_at = datetime.utcnow()
     else:
         name = normalized.get("name", channel_id)
+        sync_defaults = load_sync_settings(session)
+        regular_interval_minutes = int(
+            sync_defaults.get("regularSyncIntervalMinutes") or 60
+        )
+        dynamic_enabled_default = bool(
+            sync_defaults.get("dynamicSyncEnabledDefault", False)
+        )
+        dynamic_expected_posts_default = int(
+            sync_defaults.get("dynamicSyncExpectedPostsDefault") or 15
+        )
+        now_ms = int(datetime.utcnow().timestamp() * 1000)
         extras = {
             k: v
             for k, v in normalized.items()
             if k in Channel.model_fields and k not in ("id", "name", "user_id")
         }
+        extras.setdefault("regular_sync_enabled", True)
+        extras.setdefault("dynamic_sync_enabled", dynamic_enabled_default)
+        extras.setdefault(
+            "auto_sync_interval_minutes",
+            max(1, regular_interval_minutes),
+        )
+        extras.setdefault(
+            "dynamic_sync_expected_posts",
+            max(1, dynamic_expected_posts_default),
+        )
+        if extras.get("regular_sync_enabled"):
+            extras.setdefault(
+                "next_regular_sync_at",
+                compute_next_regular_sync_at(
+                    now_ms, int(extras["auto_sync_interval_minutes"])
+                ),
+            )
+        extras.setdefault("next_dynamic_sync_at", None)
         ch = Channel(id=channel_id, name=name, user_id=user_id, **extras)
     session.add(ch)
     session.commit()
@@ -233,3 +264,45 @@ def get_channel_stats(session: Session, channel_id: str) -> dict[str, Any]:
     if not stats:
         raise HTTPException(status_code=404, detail="No posts for channel")
     return stats
+
+
+def bulk_update_sync_settings(
+    session: Session,
+    *,
+    channel_ids: list[str] | None,
+    regular_sync_enabled: bool | None,
+    dynamic_sync_enabled: bool | None,
+    auto_sync_interval_minutes: int | None,
+    dynamic_sync_expected_posts: int | None,
+) -> dict[str, int]:
+    if all(
+        value is None
+        for value in (
+            regular_sync_enabled,
+            dynamic_sync_enabled,
+            auto_sync_interval_minutes,
+            dynamic_sync_expected_posts,
+        )
+    ):
+        raise HTTPException(status_code=400, detail="No sync settings fields provided")
+
+    statement = select(Channel)
+    if channel_ids is not None:
+        statement = statement.where(col(Channel.id).in_(channel_ids))
+    channels = session.exec(statement).all()
+
+    for channel in channels:
+        if regular_sync_enabled is not None:
+            channel.regular_sync_enabled = regular_sync_enabled
+        if dynamic_sync_enabled is not None:
+            channel.dynamic_sync_enabled = dynamic_sync_enabled
+        if auto_sync_interval_minutes is not None:
+            channel.auto_sync_interval_minutes = max(1, auto_sync_interval_minutes)
+        if dynamic_sync_expected_posts is not None:
+            channel.dynamic_sync_expected_posts = max(1, dynamic_sync_expected_posts)
+        channel.updated_at = datetime.utcnow()
+        session.add(channel)
+
+    session.commit()
+    touch_sync(session, "channels")
+    return {"updated": len(channels)}

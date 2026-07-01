@@ -20,7 +20,11 @@ import {
 } from "lucide-react"
 import { motion } from "motion/react"
 import type React from "react"
-import { useState } from "react"
+import { useEffect, useState } from "react"
+import {
+  AUTO_SYNC_INTERVAL_MAX_MINUTES,
+  AUTO_SYNC_INTERVAL_MIN_MINUTES,
+} from "@/constants"
 import { useData } from "../contexts/DataContext"
 import { useScraper } from "../contexts/ScraperContext"
 import { useSettings } from "../contexts/SettingsContext"
@@ -59,6 +63,12 @@ export const ChannelCard: React.FC<ChannelCardProps> = ({
 
   const [isAddingTag, setIsAddingTag] = useState<boolean>(false)
   const [editingStartId, setEditingStartId] = useState<string | null>(null)
+  const [regularIntervalInput, setRegularIntervalInput] = useState(
+    String(channel.autoSyncIntervalMinutes ?? 60),
+  )
+  const [dynamicExpectedInput, setDynamicExpectedInput] = useState(
+    String(channel.dynamicSyncExpectedPosts ?? 15),
+  )
 
   const stats = channelStats[channel.name]
   const isScraping = scrapingChannels.has(channel.name)
@@ -70,6 +80,14 @@ export const ChannelCard: React.FC<ChannelCardProps> = ({
   )
   const isEditing = editingStartId !== null
   const isSelected = selectedChannels.has(channel.name)
+
+  useEffect(() => {
+    setRegularIntervalInput(String(channel.autoSyncIntervalMinutes ?? 60))
+  }, [channel.autoSyncIntervalMinutes])
+
+  useEffect(() => {
+    setDynamicExpectedInput(String(channel.dynamicSyncExpectedPosts ?? 15))
+  }, [channel.dynamicSyncExpectedPosts])
 
   const toggleChannelSelection = () => {
     if (channel.isFrozen) return
@@ -144,6 +162,61 @@ export const ChannelCard: React.FC<ChannelCardProps> = ({
     setChannels((prev) =>
       prev.map((c) => (c.id === channel.id ? updatedChannel : c)),
     )
+  }
+
+  const patchSyncSettings = async (
+    patch: Partial<
+      Pick<
+        Channel,
+        | "regularSyncEnabled"
+        | "dynamicSyncEnabled"
+        | "autoSyncIntervalMinutes"
+        | "dynamicSyncExpectedPosts"
+      >
+    >,
+  ) => {
+    const updatedChannel = { ...channel, ...patch }
+    await upsertChannel(updatedChannel)
+    setChannels((prev) =>
+      prev.map((entry) => (entry.id === channel.id ? updatedChannel : entry)),
+    )
+  }
+
+  const handleRegularSyncToggle = async () => {
+    await patchSyncSettings({
+      regularSyncEnabled: !(channel.regularSyncEnabled ?? true),
+    })
+  }
+
+  const handleDynamicSyncToggle = async () => {
+    await patchSyncSettings({
+      dynamicSyncEnabled: !(channel.dynamicSyncEnabled ?? false),
+    })
+  }
+
+  const commitRegularInterval = async () => {
+    const value = Number.parseInt(regularIntervalInput, 10)
+    if (Number.isNaN(value)) {
+      setRegularIntervalInput(String(channel.autoSyncIntervalMinutes ?? 60))
+      return
+    }
+    const clamped = Math.max(
+      AUTO_SYNC_INTERVAL_MIN_MINUTES,
+      Math.min(AUTO_SYNC_INTERVAL_MAX_MINUTES, value),
+    )
+    setRegularIntervalInput(String(clamped))
+    await patchSyncSettings({ autoSyncIntervalMinutes: clamped })
+  }
+
+  const commitDynamicExpectedPosts = async () => {
+    const value = Number.parseInt(dynamicExpectedInput, 10)
+    if (Number.isNaN(value)) {
+      setDynamicExpectedInput(String(channel.dynamicSyncExpectedPosts ?? 15))
+      return
+    }
+    const clamped = Math.max(1, Math.min(500, value))
+    setDynamicExpectedInput(String(clamped))
+    await patchSyncSettings({ dynamicSyncExpectedPosts: clamped })
   }
 
   return (
@@ -578,8 +651,8 @@ export const ChannelCard: React.FC<ChannelCardProps> = ({
         </div>
 
         {/* Bottom Section: Config & Sync Action */}
-        <div className="mt-auto flex items-center justify-between pt-4 border-t border-app-ink/5">
-          <div className="flex items-center gap-4">
+        <div className="mt-auto flex items-center justify-between pt-4 border-t border-app-ink/5 gap-3">
+          <div className="flex items-start gap-4 flex-wrap">
             {showChannelStartId && (
               <div className="group/config">
                 <p className="text-[10px] uppercase text-app-ink/60 font-bold tracking-widest mb-0.5">
@@ -666,6 +739,105 @@ export const ChannelCard: React.FC<ChannelCardProps> = ({
             </div>
 
             <div
+              className="group/regular-sync"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <p className="text-[10px] uppercase text-app-ink/60 font-bold tracking-widest mb-0.5">
+                Regular
+              </p>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleRegularSyncToggle}
+                  className={`w-10 h-5 transition-all relative border border-app-ink/20 rounded-full ${
+                    channel.regularSyncEnabled ?? true
+                      ? "bg-green-500 border-green-600"
+                      : "bg-app-ink/10"
+                  }`}
+                >
+                  <div
+                    className={`absolute top-0.5 w-3.5 h-3.5 bg-white transition-all rounded-full ${
+                      channel.regularSyncEnabled ?? true ? "left-5.5" : "left-0.5"
+                    }`}
+                  />
+                </button>
+                <input
+                  type="number"
+                  min={AUTO_SYNC_INTERVAL_MIN_MINUTES}
+                  max={AUTO_SYNC_INTERVAL_MAX_MINUTES}
+                  step={1}
+                  value={regularIntervalInput}
+                  onChange={(e) => setRegularIntervalInput(e.target.value)}
+                  onBlur={() => void commitRegularInterval()}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") void commitRegularInterval()
+                  }}
+                  className="w-14 bg-app-bg border border-app-ink/20 px-1.5 py-0.5 text-[10px] font-mono focus:border-app-ink focus:outline-none"
+                />
+                <span className="text-[9px] uppercase font-bold text-app-ink/50">
+                  min
+                </span>
+              </div>
+              <p className="text-[9px] text-app-ink/50 mt-1">
+                Next:{" "}
+                {channel.nextRegularSyncAt ? (
+                  <RelativeTime timestamp={channel.nextRegularSyncAt} />
+                ) : (
+                  "not scheduled"
+                )}
+              </p>
+            </div>
+
+            <div
+              className="group/dynamic-sync"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <p className="text-[10px] uppercase text-app-ink/60 font-bold tracking-widest mb-0.5">
+                Dynamic
+              </p>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleDynamicSyncToggle}
+                  className={`w-10 h-5 transition-all relative border border-app-ink/20 rounded-full ${
+                    channel.dynamicSyncEnabled
+                      ? "bg-blue-500 border-blue-600"
+                      : "bg-app-ink/10"
+                  }`}
+                >
+                  <div
+                    className={`absolute top-0.5 w-3.5 h-3.5 bg-white transition-all rounded-full ${
+                      channel.dynamicSyncEnabled ? "left-5.5" : "left-0.5"
+                    }`}
+                  />
+                </button>
+                <input
+                  type="number"
+                  min={1}
+                  step={1}
+                  value={dynamicExpectedInput}
+                  onChange={(e) => setDynamicExpectedInput(e.target.value)}
+                  onBlur={() => void commitDynamicExpectedPosts()}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") void commitDynamicExpectedPosts()
+                  }}
+                  className="w-14 bg-app-bg border border-app-ink/20 px-1.5 py-0.5 text-[10px] font-mono focus:border-app-ink focus:outline-none"
+                />
+                <span className="text-[9px] uppercase font-bold text-app-ink/50">
+                  posts
+                </span>
+              </div>
+              <p className="text-[9px] text-app-ink/50 mt-1">
+                Next:{" "}
+                {channel.nextDynamicSyncAt ? (
+                  <RelativeTime timestamp={channel.nextDynamicSyncAt} />
+                ) : (
+                  "not scheduled"
+                )}
+              </p>
+            </div>
+
+            <div
               className="group/auto-follow"
               onClick={(e) => e.stopPropagation()}
             >
@@ -724,7 +896,9 @@ export const ChannelCard: React.FC<ChannelCardProps> = ({
             </TooltipTrigger>
             <TooltipContent>
               <p>
-                {channel.isFrozen ? "Channel is frozen" : "Fetch latest posts"}
+                {channel.isFrozen
+                  ? "Channel is frozen"
+                  : "Manual sync resets auto-sync timers"}
               </p>
             </TooltipContent>
           </Tooltip>

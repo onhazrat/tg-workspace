@@ -14,6 +14,7 @@ import {
   AUTO_SYNC_INTERVAL_DEFAULT,
   DEFAULT_AI_LANGUAGE,
   DEFAULT_MODEL,
+  DYNAMIC_SYNC_EXPECTED_POSTS_DEFAULT,
   RETENTION_LOG_DAYS_DEFAULT,
   RETENTION_POST_DAYS_DEFAULT,
 } from "../constants"
@@ -44,10 +45,14 @@ interface SettingsContextType {
   setAiLanguage: (language: string) => void
   selectedModel: string
   setSelectedModel: (model: string) => void
-  autoSyncEnabled: boolean
-  setAutoSyncEnabled: (enabled: boolean) => void
-  autoSyncInterval: number
-  setAutoSyncInterval: (interval: number) => void
+  regularSyncIntervalMinutes: number
+  setRegularSyncIntervalMinutes: (interval: number) => void
+  dynamicSyncEnabledDefault: boolean
+  setDynamicSyncEnabledDefault: (enabled: boolean) => void
+  dynamicSyncExpectedPostsDefault: number
+  setDynamicSyncExpectedPostsDefault: (posts: number) => void
+  syncFailureBackoffMinutes: number
+  setSyncFailureBackoffMinutes: (minutes: number) => void
   aiTemperature: number
   setAiTemperature: (temp: number) => void
   isRTL: boolean
@@ -151,20 +156,41 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({
     return DEFAULT_MODEL
   })
 
-  const [autoSyncEnabled, setAutoSyncEnabled] = useState<boolean>(() => {
-    if (typeof window !== "undefined") {
-      return localStorage.getItem("autoSyncEnabled") === "true"
-    }
-    return false
-  })
+  const [regularSyncIntervalMinutes, setRegularSyncIntervalMinutes] =
+    useState<number>(() => {
+      if (typeof window !== "undefined") {
+        const saved = localStorage.getItem("regularSyncIntervalMinutes")
+        if (saved) return parseInt(saved, 10)
+        const legacy = localStorage.getItem("autoSyncInterval")
+        if (legacy) return parseInt(legacy, 10)
+      }
+      return AUTO_SYNC_INTERVAL_DEFAULT
+    })
 
-  const [autoSyncInterval, setAutoSyncInterval] = useState<number>(() => {
-    if (typeof window !== "undefined") {
-      const saved = localStorage.getItem("autoSyncInterval")
-      return saved ? parseInt(saved, 10) : AUTO_SYNC_INTERVAL_DEFAULT
-    }
-    return AUTO_SYNC_INTERVAL_DEFAULT
-  })
+  const [dynamicSyncEnabledDefault, setDynamicSyncEnabledDefault] =
+    useState<boolean>(() => {
+      if (typeof window !== "undefined") {
+        return localStorage.getItem("dynamicSyncEnabledDefault") === "true"
+      }
+      return false
+    })
+
+  const [dynamicSyncExpectedPostsDefault, setDynamicSyncExpectedPostsDefault] =
+    useState<number>(() => {
+      if (typeof window !== "undefined") {
+        const saved = localStorage.getItem("dynamicSyncExpectedPostsDefault")
+        if (saved) return parseInt(saved, 10)
+      }
+      return DYNAMIC_SYNC_EXPECTED_POSTS_DEFAULT
+    })
+  const [syncFailureBackoffMinutes, setSyncFailureBackoffMinutes] =
+    useState<number>(() => {
+      if (typeof window !== "undefined") {
+        const saved = localStorage.getItem("syncFailureBackoffMinutes")
+        if (saved) return parseInt(saved, 10)
+      }
+      return 5
+    })
 
   const [aiTemperature, setAiTemperature] = useState<number>(() => {
     if (typeof window !== "undefined") {
@@ -380,10 +406,16 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({
       retention: Record<string, unknown>,
       translation: Record<string, unknown>,
     ) => {
-      if (typeof sync.autoSyncEnabled === "boolean")
-        setAutoSyncEnabled(sync.autoSyncEnabled)
-      if (typeof sync.autoSyncInterval === "number")
-        setAutoSyncInterval(sync.autoSyncInterval)
+      if (typeof sync.regularSyncIntervalMinutes === "number")
+        setRegularSyncIntervalMinutes(sync.regularSyncIntervalMinutes)
+      else if (typeof sync.autoSyncInterval === "number")
+        setRegularSyncIntervalMinutes(sync.autoSyncInterval)
+      if (typeof sync.dynamicSyncEnabledDefault === "boolean")
+        setDynamicSyncEnabledDefault(sync.dynamicSyncEnabledDefault)
+      if (typeof sync.dynamicSyncExpectedPostsDefault === "number")
+        setDynamicSyncExpectedPostsDefault(sync.dynamicSyncExpectedPostsDefault)
+      if (typeof sync.syncFailureBackoffMinutes === "number")
+        setSyncFailureBackoffMinutes(sync.syncFailureBackoffMinutes)
       if (typeof sync.syncConcurrency === "number")
         setSyncConcurrency(sync.syncConcurrency)
       if (
@@ -534,13 +566,12 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({
           retention: {},
           translation: {},
         }
-        const legacyAutoSync = localStorage.getItem("autoSyncEnabled")
-        if (legacyAutoSync !== null && sync.autoSyncEnabled === undefined) {
-          legacy.sync.autoSyncEnabled = legacyAutoSync === "true"
-        }
         const legacyInterval = localStorage.getItem("autoSyncInterval")
-        if (legacyInterval !== null && sync.autoSyncInterval === undefined) {
-          legacy.sync.autoSyncInterval = parseInt(legacyInterval, 10)
+        if (
+          legacyInterval !== null &&
+          sync.regularSyncIntervalMinutes === undefined
+        ) {
+          legacy.sync.regularSyncIntervalMinutes = parseInt(legacyInterval, 10)
         }
         const legacyPostRetention = localStorage.getItem("postRetentionDays")
         if (
@@ -672,6 +703,34 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({
   }, [selectedModel])
 
   useEffect(() => {
+    localStorage.setItem(
+      "regularSyncIntervalMinutes",
+      regularSyncIntervalMinutes.toString(),
+    )
+  }, [regularSyncIntervalMinutes])
+
+  useEffect(() => {
+    localStorage.setItem(
+      "dynamicSyncEnabledDefault",
+      dynamicSyncEnabledDefault.toString(),
+    )
+  }, [dynamicSyncEnabledDefault])
+
+  useEffect(() => {
+    localStorage.setItem(
+      "dynamicSyncExpectedPostsDefault",
+      dynamicSyncExpectedPostsDefault.toString(),
+    )
+  }, [dynamicSyncExpectedPostsDefault])
+
+  useEffect(() => {
+    localStorage.setItem(
+      "syncFailureBackoffMinutes",
+      syncFailureBackoffMinutes.toString(),
+    )
+  }, [syncFailureBackoffMinutes])
+
+  useEffect(() => {
     localStorage.setItem("aiTemperature", aiTemperature.toString())
   }, [aiTemperature])
 
@@ -724,8 +783,10 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({
       return
     api
       .putSetting("sync", {
-        autoSyncEnabled,
-        autoSyncInterval,
+        regularSyncIntervalMinutes,
+        dynamicSyncEnabledDefault,
+        dynamicSyncExpectedPostsDefault,
+        syncFailureBackoffMinutes,
         syncConcurrency,
         globalStartTimeMode,
         globalStartTimeValue,
@@ -734,8 +795,10 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({
         console.warn("[Settings] Failed to sync scheduler settings:", err),
       )
   }, [
-    autoSyncEnabled,
-    autoSyncInterval,
+    regularSyncIntervalMinutes,
+    dynamicSyncEnabledDefault,
+    dynamicSyncExpectedPostsDefault,
+    syncFailureBackoffMinutes,
     syncConcurrency,
     globalStartTimeMode,
     globalStartTimeValue,
@@ -793,10 +856,14 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({
         setAiLanguage,
         selectedModel,
         setSelectedModel,
-        autoSyncEnabled,
-        setAutoSyncEnabled,
-        autoSyncInterval,
-        setAutoSyncInterval,
+        regularSyncIntervalMinutes,
+        setRegularSyncIntervalMinutes,
+        dynamicSyncEnabledDefault,
+        setDynamicSyncEnabledDefault,
+        dynamicSyncExpectedPostsDefault,
+        setDynamicSyncExpectedPostsDefault,
+        syncFailureBackoffMinutes,
+        setSyncFailureBackoffMinutes,
         aiTemperature,
         setAiTemperature,
         isRTL,

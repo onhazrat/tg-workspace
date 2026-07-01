@@ -10,8 +10,14 @@ class GlobalStartTimeSnapshot(BaseModel):
 
 
 class SyncRuntimeSettings(BaseModel):
-    auto_sync_enabled: bool = Field(..., alias="autoSyncEnabled")
-    auto_sync_interval: int = Field(..., alias="autoSyncInterval")
+    regular_sync_interval_minutes: int = Field(..., alias="regularSyncIntervalMinutes")
+    dynamic_sync_enabled_default: bool = Field(
+        ..., alias="dynamicSyncEnabledDefault"
+    )
+    dynamic_sync_expected_posts_default: int = Field(
+        ..., alias="dynamicSyncExpectedPostsDefault"
+    )
+    sync_failure_backoff_minutes: int = Field(..., alias="syncFailureBackoffMinutes")
     sync_concurrency: int = Field(..., alias="syncConcurrency")
     consecutive_failures: int = Field(..., alias="consecutiveFailures")
     auto_sync_pause_until: int | None = Field(None, alias="autoSyncPauseUntil")

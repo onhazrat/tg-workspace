@@ -16,10 +16,14 @@ function makeContext(
     setAiLanguage: () => {},
     selectedModel: "gemini-3-flash-preview",
     setSelectedModel: () => {},
-    autoSyncEnabled: true,
-    setAutoSyncEnabled: () => {},
-    autoSyncInterval: 60,
-    setAutoSyncInterval: () => {},
+    regularSyncIntervalMinutes: 60,
+    setRegularSyncIntervalMinutes: () => {},
+    dynamicSyncEnabledDefault: false,
+    setDynamicSyncEnabledDefault: () => {},
+    dynamicSyncExpectedPostsDefault: 15,
+    setDynamicSyncExpectedPostsDefault: () => {},
+    syncFailureBackoffMinutes: 5,
+    setSyncFailureBackoffMinutes: () => {},
     aiTemperature: 0.7,
     setAiTemperature: () => {},
     proxyEnabled: false,
@@ -137,9 +141,22 @@ describe("buildSettingCommands numeric editors", () => {
     )
   })
 
-  test("auto sync interval badge uses minutes suffix", () => {
-    const cmd = commands.find((c) => c.id === "edit-auto-sync-interval")
-    expect(cmd?.getBadge?.(makeContext({ autoSyncInterval: 15 }))).toBe("15m")
+  test("regular sync interval badge uses minutes suffix", () => {
+    const cmd = commands.find(
+      (c) => c.id === "edit-regular-sync-interval-minutes",
+    )
+    expect(
+      cmd?.getBadge?.(makeContext({ regularSyncIntervalMinutes: 15 })),
+    ).toBe("15m")
+  })
+
+  test("dynamic expected posts badge uses integer value", () => {
+    const cmd = commands.find(
+      (c) => c.id === "edit-dynamic-sync-expected-posts-default",
+    )
+    expect(
+      cmd?.getBadge?.(makeContext({ dynamicSyncExpectedPostsDefault: 22 })),
+    ).toBe("22")
   })
 
   test("ai temperature badge uses one decimal", () => {
@@ -147,14 +164,14 @@ describe("buildSettingCommands numeric editors", () => {
     expect(cmd?.getBadge?.(makeContext({ aiTemperature: 0.75 }))).toBe("0.8")
   })
 
+  test("bulk disable regular sync command exists", () => {
+    const command = commands.find(
+      (c) => c.id === "disable-regular-sync-all-channels",
+    )
+    expect(command).toBeDefined()
+  })
+
   test("boolean commands still expose ON/OFF badges", () => {
-    const toggle = commands.find((c) => c.id === "toggle-auto-sync")
-    expect(toggle?.getBadge?.(makeContext({ autoSyncEnabled: true }))).toBe(
-      "ON",
-    )
-    expect(toggle?.getBadge?.(makeContext({ autoSyncEnabled: false }))).toBe(
-      "OFF",
-    )
     expect(BOOLEAN_SETTINGS.length).toBeGreaterThan(0)
   })
 })

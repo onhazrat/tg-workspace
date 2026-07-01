@@ -52,6 +52,13 @@ def test_runtime_config_effective_values(client: TestClient, db: Session) -> Non
     data = r.json()
 
     assert data["sync"]["syncConcurrency"] == 5
+    assert (
+        data["sync"]["regularSyncIntervalMinutes"]
+        == settings.AUTO_SYNC_INTERVAL_MINUTES_DEFAULT
+    )
+    assert data["sync"]["dynamicSyncEnabledDefault"] is False
+    assert data["sync"]["dynamicSyncExpectedPostsDefault"] == 15
+    assert data["sync"]["syncFailureBackoffMinutes"] == 5
     assert data["retention"]["postRetentionDays"] == 30
     assert data["retention"]["logRetentionDays"] == 14
     assert (
