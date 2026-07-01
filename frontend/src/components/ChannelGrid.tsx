@@ -55,6 +55,37 @@ type SortOption =
   | "channel_name"
   | "followed_at"
   | "subscribers"
+  | "next_regular_sync"
+  | "next_dynamic_sync"
+  | "next_auto_sync"
+
+const compareNullableSyncAt = (
+  a: number | null | undefined,
+  b: number | null | undefined,
+): number => {
+  const aVal = a ?? null
+  const bVal = b ?? null
+  if (aVal === null && bVal === null) return 0
+  if (aVal === null) return 1
+  if (bVal === null) return -1
+  return aVal - bVal
+}
+
+const getNextAutoSyncAt = (channel: Channel): number | null => {
+  const deadlines: number[] = []
+  if (channel.regularSyncEnabled ?? true) {
+    if (channel.nextRegularSyncAt != null) {
+      deadlines.push(channel.nextRegularSyncAt)
+    }
+  }
+  if (channel.dynamicSyncEnabled) {
+    if (channel.nextDynamicSyncAt != null) {
+      deadlines.push(channel.nextDynamicSyncAt)
+    }
+  }
+  if (deadlines.length === 0) return null
+  return Math.min(...deadlines)
+}
 
 export const ChannelGrid: React.FC<ChannelGridProps> = ({
   scrollContainerRef,
@@ -692,6 +723,13 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
                     <SelectItem value="total_posts">Total Posts</SelectItem>
                     <SelectItem value="channel_id">Channel ID</SelectItem>
                     <SelectItem value="channel_name">Channel Name</SelectItem>
+                    <SelectItem value="next_regular_sync">
+                      Next Regular Sync
+                    </SelectItem>
+                    <SelectItem value="next_dynamic_sync">
+                      Next Dynamic Sync
+                    </SelectItem>
+                    <SelectItem value="next_auto_sync">Next Auto Sync</SelectItem>
                     {showChannelSubscribers && (
                       <SelectItem value="subscribers">Subscribers</SelectItem>
                     )}
@@ -990,6 +1028,21 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
                 const aSubs = parseSubscribers(a.subscribers)
                 const bSubs = parseSubscribers(b.subscribers)
                 comparison = aSubs - bSubs
+              } else if (sortBy === "next_regular_sync") {
+                comparison = compareNullableSyncAt(
+                  a.nextRegularSyncAt,
+                  b.nextRegularSyncAt,
+                )
+              } else if (sortBy === "next_dynamic_sync") {
+                comparison = compareNullableSyncAt(
+                  a.nextDynamicSyncAt,
+                  b.nextDynamicSyncAt,
+                )
+              } else if (sortBy === "next_auto_sync") {
+                comparison = compareNullableSyncAt(
+                  getNextAutoSyncAt(a),
+                  getNextAutoSyncAt(b),
+                )
               }
 
               return sortDirection === "asc" ? comparison : -comparison
