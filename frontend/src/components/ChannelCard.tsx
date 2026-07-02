@@ -482,7 +482,7 @@ export const ChannelCard: React.FC<ChannelCardProps> = ({
                 </div>
               </TooltipTrigger>
               <TooltipContent>
-                <p>Activity Rate (Posts per hour)</p>
+                <p>Activity Rate (Posts per hour): {stats.velocity.toFixed(3)}</p>
               </TooltipContent>
             </Tooltip>
           )}
