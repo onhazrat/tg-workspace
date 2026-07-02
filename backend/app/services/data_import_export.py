@@ -71,7 +71,7 @@ def import_data(
         normalized = normalize_body(item)
         ch = session.get(Channel, normalized.get("id", item.get("id")))
         if ch:
-            apply_channel_fields(ch, normalized)
+            apply_channel_fields(ch, normalized, session=session)
             ch.updated_at = datetime.utcnow()
         else:
             ch = Channel(

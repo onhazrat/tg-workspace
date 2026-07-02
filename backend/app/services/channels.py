@@ -14,7 +14,10 @@ from app.models_tg import Channel, Post
 from app.jobs.settings import load_sync_settings
 from app.services.channel_photos import delete_cached_photo
 from app.services.serialization import channel_to_camel, normalize_body
-from app.services.sync_schedule import compute_next_regular_sync_at_from_last_updated
+from app.services.sync_schedule import (
+    compute_next_dynamic_sync_at_from_last_updated,
+    compute_next_regular_sync_at_from_last_updated,
+)
 from app.services.sync_meta import touch_sync
 
 
@@ -183,18 +186,62 @@ def recompute_next_regular_sync_at_on_interval_change(
     )
 
 
-def apply_channel_fields(ch: Channel, body: dict[str, Any]) -> None:
+def recompute_next_dynamic_sync_at_on_expected_posts_change(
+    session: Session,
+    channel: Channel,
+    *,
+    previous_expected_posts: int,
+    now_ms: int | None = None,
+) -> None:
+    """Reset dynamic sync deadline when expected post count changes."""
+    if channel.dynamic_sync_expected_posts == previous_expected_posts:
+        return
+    if not channel.dynamic_sync_enabled:
+        return
+    if now_ms is None:
+        now_ms = int(time.time() * 1000)
+    recent_timestamps = _fetch_recent_timestamps_by_channel(
+        session, [channel.name]
+    ).get(channel.name, [])
+    has_posts = bool(recent_timestamps)
+    velocity = _velocity_from_timestamps(recent_timestamps)
+    if not has_posts:
+        channel.next_dynamic_sync_at = None
+    elif velocity > 0:
+        channel.next_dynamic_sync_at = compute_next_dynamic_sync_at_from_last_updated(
+            channel.last_updated,
+            channel.dynamic_sync_expected_posts,
+            velocity,
+            now_ms,
+        )
+
+
+def apply_channel_fields(
+    ch: Channel,
+    body: dict[str, Any],
+    *,
+    session: Session | None = None,
+) -> None:
     normalized = normalize_body(body)
     previous_interval = ch.auto_sync_interval_minutes
+    previous_expected_posts = ch.dynamic_sync_expected_posts
     for key, value in normalized.items():
         if key in Channel.model_fields and key not in ("id", "user_id"):
             if key == "auto_sync_interval_minutes":
+                value = max(1, int(value))
+            if key == "dynamic_sync_expected_posts":
                 value = max(1, int(value))
             setattr(ch, key, value)
     recompute_next_regular_sync_at_on_interval_change(
         ch,
         previous_interval_minutes=previous_interval,
     )
+    if session is not None:
+        recompute_next_dynamic_sync_at_on_expected_posts_change(
+            session,
+            ch,
+            previous_expected_posts=previous_expected_posts,
+        )
 
 
 def list_channels(
@@ -223,7 +270,7 @@ def upsert_channel(
     normalized = normalize_body(body)
     ch = session.get(Channel, channel_id)
     if ch:
-        apply_channel_fields(ch, normalized)
+        apply_channel_fields(ch, normalized, session=session)
         ch.updated_at = datetime.utcnow()
     else:
         name = normalized.get("name", channel_id)
@@ -324,6 +371,7 @@ def bulk_update_sync_settings(
     now_ms = int(time.time() * 1000)
     for channel in channels:
         previous_interval = channel.auto_sync_interval_minutes
+        previous_expected_posts = channel.dynamic_sync_expected_posts
         if regular_sync_enabled is not None:
             channel.regular_sync_enabled = regular_sync_enabled
         if dynamic_sync_enabled is not None:
@@ -335,6 +383,12 @@ def bulk_update_sync_settings(
         recompute_next_regular_sync_at_on_interval_change(
             channel,
             previous_interval_minutes=previous_interval,
+            now_ms=now_ms,
+        )
+        recompute_next_dynamic_sync_at_on_expected_posts_change(
+            session,
+            channel,
+            previous_expected_posts=previous_expected_posts,
             now_ms=now_ms,
         )
         channel.updated_at = datetime.utcnow()

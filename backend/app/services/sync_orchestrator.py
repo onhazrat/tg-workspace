@@ -50,7 +50,7 @@ from app.services.scraper_jobs import (
 )
 from app.services.sync_schedule import (
     apply_failure_backoff,
-    compute_next_dynamic_sync_at,
+    compute_next_dynamic_sync_at_from_last_updated,
     compute_next_regular_sync_at_from_last_updated,
 )
 from app.services.sync_meta import touch_sync
@@ -674,10 +674,13 @@ def _finalize_channel_success(
             if not has_posts:
                 channel.next_dynamic_sync_at = None
             elif velocity > 0:
-                channel.next_dynamic_sync_at = compute_next_dynamic_sync_at(
-                    now,
-                    channel.dynamic_sync_expected_posts,
-                    velocity,
+                channel.next_dynamic_sync_at = (
+                    compute_next_dynamic_sync_at_from_last_updated(
+                        channel.last_updated,
+                        channel.dynamic_sync_expected_posts,
+                        velocity,
+                        now,
+                    )
                 )
         else:
             channel.next_dynamic_sync_at = None

@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from app.services.sync_schedule import (
     apply_failure_backoff,
     compute_next_dynamic_sync_at,
+    compute_next_dynamic_sync_at_from_last_updated,
     compute_next_regular_sync_at,
     compute_next_regular_sync_at_from_last_updated,
     due_reason,
@@ -50,9 +51,24 @@ def test_compute_next_dynamic_sync_at() -> None:
     assert compute_next_dynamic_sync_at(2_000, 15, 7.5) == 7_202_000
 
 
+def test_compute_next_dynamic_sync_at_from_last_updated() -> None:
+    assert (
+        compute_next_dynamic_sync_at_from_last_updated(5_000, 15, 3.0, 9_000)
+        == 5_000 + 5 * 3_600_000
+    )
+    assert (
+        compute_next_dynamic_sync_at_from_last_updated(None, 15, 3.0, 2_000)
+        == 2_000 + 5 * 3_600_000
+    )
+
+
 def test_compute_next_dynamic_sync_at_zero_velocity_returns_none() -> None:
     assert compute_next_dynamic_sync_at(10_000, expected_posts=15, velocity=0.0) is None
     assert compute_next_dynamic_sync_at(0, 15, 0.0) is None
+    assert (
+        compute_next_dynamic_sync_at_from_last_updated(5_000, 15, 0.0, 9_000)
+        is None
+    )
 
 
 def test_is_channel_due_regular_or_dynamic() -> None:

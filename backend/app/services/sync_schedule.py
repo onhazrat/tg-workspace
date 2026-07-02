@@ -50,17 +50,30 @@ def compute_next_regular_sync_at(now_ms: int, interval_minutes: int) -> int:
     )
 
 
-def compute_next_dynamic_sync_at(
-    now_ms: int,
+def compute_next_dynamic_sync_at_from_last_updated(
+    last_updated_ms: int | None,
     expected_posts: int,
     velocity: float,
+    now_ms: int,
 ) -> int | None:
     safe_velocity = float(velocity or 0.0)
     if safe_velocity <= 0.0:
         return None
     safe_expected_posts = max(1, int(expected_posts))
+    anchor = int(now_ms) if last_updated_ms is None else int(last_updated_ms)
     hours = safe_expected_posts / safe_velocity
-    return int(now_ms + hours * 3_600_000)
+    return int(anchor + hours * 3_600_000)
+
+
+def compute_next_dynamic_sync_at(
+    now_ms: int,
+    expected_posts: int,
+    velocity: float,
+) -> int | None:
+    """Compute next dynamic sync anchored at ``now`` (no prior last_updated)."""
+    return compute_next_dynamic_sync_at_from_last_updated(
+        None, expected_posts, velocity, now_ms
+    )
 
 
 def due_reason(channel: Any, now_ms: int) -> str | None:

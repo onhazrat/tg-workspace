@@ -5,7 +5,11 @@ import time
 from fastapi.testclient import TestClient
 
 from app.core.config import settings
-from app.services.sync_schedule import compute_next_regular_sync_at_from_last_updated
+from app.services.channels import _velocity_from_timestamps
+from app.services.sync_schedule import (
+    compute_next_dynamic_sync_at_from_last_updated,
+    compute_next_regular_sync_at_from_last_updated,
+)
 
 PREFIX = f"{settings.API_V1_STR}/data"
 
@@ -99,6 +103,84 @@ def test_put_channel_interval_updates_next_regular_sync_at(
         )
         assert r_unchanged.status_code == 200
         assert r_unchanged.json()["nextRegularSyncAt"] == frozen_deadline
+    finally:
+        client.delete(f"{PREFIX}/channels/{channel_id}", headers=headers)
+
+
+def test_put_channel_expected_posts_updates_next_dynamic_sync_at(
+    client: TestClient,
+) -> None:
+    headers = _auth(client)
+    last_updated = int(time.time() * 1000) - 900_000
+    old_deadline = last_updated + 2 * 3_600_000
+    channel_id = "ch-dynamic-expected-deadline"
+    now_ms = int(time.time() * 1000)
+    post_timestamps = [now_ms - 3_600_000, now_ms - 1_800_000]
+    try:
+        r_create = client.put(
+            f"{PREFIX}/channels/{channel_id}",
+            json={
+                "name": channel_id,
+                "dynamicSyncEnabled": True,
+                "dynamicSyncExpectedPosts": 15,
+                "lastUpdated": last_updated,
+                "nextDynamicSyncAt": old_deadline,
+            },
+            headers=headers,
+        )
+        assert r_create.status_code == 200
+
+        r_posts = client.post(
+            f"{PREFIX}/posts/bulk",
+            json=[
+                {
+                    "id": 1,
+                    "channelName": channel_id,
+                    "text": "a",
+                    "timestamp": post_timestamps[0],
+                },
+                {
+                    "id": 2,
+                    "channelName": channel_id,
+                    "text": "b",
+                    "timestamp": post_timestamps[1],
+                },
+            ],
+            headers=headers,
+        )
+        assert r_posts.status_code == 200
+
+        r_update = client.put(
+            f"{PREFIX}/channels/{channel_id}",
+            json={"name": channel_id, "dynamicSyncExpectedPosts": 30},
+            headers=headers,
+        )
+        assert r_update.status_code == 200
+        data = r_update.json()
+        assert data["dynamicSyncExpectedPosts"] == 30
+        assert data["nextDynamicSyncAt"] is not None
+        velocity = _velocity_from_timestamps(post_timestamps)
+        assert velocity > 0
+        expected = compute_next_dynamic_sync_at_from_last_updated(
+            last_updated,
+            30,
+            velocity,
+            now_ms,
+        )
+        assert data["nextDynamicSyncAt"] == expected
+
+        frozen_deadline = data["nextDynamicSyncAt"]
+        r_unchanged = client.put(
+            f"{PREFIX}/channels/{channel_id}",
+            json={
+                "name": channel_id,
+                "dynamicSyncExpectedPosts": 30,
+                "displayName": "Same expected posts",
+            },
+            headers=headers,
+        )
+        assert r_unchanged.status_code == 200
+        assert r_unchanged.json()["nextDynamicSyncAt"] == frozen_deadline
     finally:
         client.delete(f"{PREFIX}/channels/{channel_id}", headers=headers)
 

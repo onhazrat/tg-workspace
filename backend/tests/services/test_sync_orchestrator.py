@@ -8,7 +8,10 @@ from app.core.db import engine
 from app.jobs.auto_sync import CHECK_SOURCE
 from app.models_tg import Channel, Post
 from app.services.scraper_jobs import SyncJobState
-from app.services.sync_schedule import compute_next_regular_sync_at_from_last_updated
+from app.services.sync_schedule import (
+    compute_next_dynamic_sync_at_from_last_updated,
+    compute_next_regular_sync_at_from_last_updated,
+)
 from app.services.sync_orchestrator import (
     _ChannelSyncCtx,
     _finalize_channel_error,
@@ -92,6 +95,16 @@ def test_finalize_channel_success_recomputes_deadlines() -> None:
         )
         assert channel.next_dynamic_sync_at is not None
         assert channel.next_dynamic_sync_at > channel.last_updated
+        implied_hours = (
+            channel.next_dynamic_sync_at - channel.last_updated
+        ) / 3_600_000
+        implied_velocity = channel.dynamic_sync_expected_posts / implied_hours
+        assert compute_next_dynamic_sync_at_from_last_updated(
+            channel.last_updated,
+            channel.dynamic_sync_expected_posts,
+            implied_velocity,
+            channel.last_updated,
+        ) == channel.next_dynamic_sync_at
 
 
 def test_scheduler_failure_backoff_updates_due_schedule_only() -> None:

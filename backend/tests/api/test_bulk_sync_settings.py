@@ -5,7 +5,11 @@ import time
 from fastapi.testclient import TestClient
 
 from app.core.config import settings
-from app.services.sync_schedule import compute_next_regular_sync_at_from_last_updated
+from app.services.channels import _velocity_from_timestamps
+from app.services.sync_schedule import (
+    compute_next_dynamic_sync_at_from_last_updated,
+    compute_next_regular_sync_at_from_last_updated,
+)
 
 PREFIX = f"{settings.API_V1_STR}/data"
 
@@ -133,3 +137,67 @@ def test_bulk_sync_settings_interval_updates_next_regular_sync_at(
         row = next(item for item in listed if item["id"] == channel_id)
         assert row["autoSyncIntervalMinutes"] == 90
         assert row["nextRegularSyncAt"] == expected
+
+
+def test_bulk_sync_settings_expected_posts_updates_next_dynamic_sync_at(
+    client: TestClient,
+) -> None:
+    headers = _auth(client)
+    last_updated = int(time.time() * 1000) - 600_000
+    old_deadline = last_updated + 2 * 3_600_000
+    now_ms = int(time.time() * 1000)
+    post_timestamps = [now_ms - 3_600_000, now_ms - 1_800_000]
+    channel_ids = ("bulk-dyn-a", "bulk-dyn-b")
+
+    for channel_id in channel_ids:
+        client.put(
+            f"{PREFIX}/channels/{channel_id}",
+            json={
+                "name": channel_id,
+                "dynamicSyncEnabled": True,
+                "dynamicSyncExpectedPosts": 15,
+                "lastUpdated": last_updated,
+                "nextDynamicSyncAt": old_deadline,
+            },
+            headers=headers,
+        )
+        client.post(
+            f"{PREFIX}/posts/bulk",
+            json=[
+                {
+                    "id": 1,
+                    "channelName": channel_id,
+                    "text": "a",
+                    "timestamp": post_timestamps[0],
+                },
+                {
+                    "id": 2,
+                    "channelName": channel_id,
+                    "text": "b",
+                    "timestamp": post_timestamps[1],
+                },
+            ],
+            headers=headers,
+        )
+
+    r = client.patch(
+        f"{PREFIX}/channels/bulk-sync-settings",
+        json={"channelIds": None, "dynamicSyncExpectedPosts": 40},
+        headers=headers,
+    )
+    assert r.status_code == 200
+    assert r.json()["updated"] >= 2
+
+    listed = client.get(f"{PREFIX}/channels", headers=headers).json()
+    velocity = _velocity_from_timestamps(post_timestamps)
+    assert velocity > 0
+    expected = compute_next_dynamic_sync_at_from_last_updated(
+        last_updated,
+        40,
+        velocity,
+        now_ms,
+    )
+    for channel_id in channel_ids:
+        row = next(item for item in listed if item["id"] == channel_id)
+        assert row["dynamicSyncExpectedPosts"] == 40
+        assert row["nextDynamicSyncAt"] == expected
