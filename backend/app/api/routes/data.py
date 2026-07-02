@@ -14,6 +14,7 @@ from app.jobs.settings import (
 )
 from app.models_tg import AppSetting
 from app.schemas.data import (
+    BulkChannelTagsRequest,
     BulkReresolveStartIdsRequest,
     BulkResetSyncRequest,
     BulkSyncSettingsRequest,
@@ -21,6 +22,9 @@ from app.schemas.data import (
 from app.services.bulk_channels import (
     bulk_reresolve_start_ids,
     bulk_reset_and_queue_sync,
+)
+from app.services.channels import (
+    bulk_update_channel_tags as bulk_update_channel_tags_impl,
 )
 from app.services.channels import (
     bulk_update_sync_settings as bulk_update_sync_settings_impl,
@@ -217,6 +221,22 @@ def bulk_sync_settings_endpoint(
         dynamic_sync_enabled=body.dynamic_sync_enabled,
         auto_sync_interval_minutes=body.auto_sync_interval_minutes,
         dynamic_sync_expected_posts=body.dynamic_sync_expected_posts,
+    )
+
+
+@router.patch("/channels/bulk-tags")
+def bulk_channel_tags_endpoint(
+    body: BulkChannelTagsRequest,
+    session: SessionDep,
+    current_user: CurrentUser,
+) -> dict[str, Any]:
+    return bulk_update_channel_tags_impl(
+        session,
+        updates=[
+            {"channel_id": update.channel_id, "tags": update.tags}
+            for update in body.updates
+        ],
+        operator_id=current_user.id,
     )
 
 

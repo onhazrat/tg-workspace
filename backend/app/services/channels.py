@@ -402,3 +402,44 @@ def bulk_update_sync_settings(
     session.commit()
     touch_sync(session, "channels")
     return {"updated": len(channels)}
+
+
+def bulk_update_channel_tags(
+    session: Session,
+    *,
+    updates: list[dict[str, Any]],
+    operator_id: uuid.UUID | None,
+) -> dict[str, Any]:
+    if not updates:
+        raise HTTPException(status_code=400, detail="No tag updates provided")
+
+    from app.services.operator import select_operator_channels
+
+    deduped_updates: dict[str, list[Any]] = {}
+    for update in updates:
+        channel_id = update.get("channel_id")
+        if not isinstance(channel_id, str) or not channel_id.strip():
+            raise HTTPException(status_code=400, detail="Each update requires channelId")
+        deduped_updates[channel_id] = update.get("tags", [])
+
+    operator_channels = select_operator_channels(session, operator_id=operator_id)
+    by_id = {channel.id: channel for channel in operator_channels}
+
+    missing = sorted(channel_id for channel_id in deduped_updates if channel_id not in by_id)
+    if missing:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Channels not found: {', '.join(missing)}",
+        )
+
+    updated_rows: list[dict[str, Any]] = []
+    for channel_id, raw_tags in deduped_updates.items():
+        channel = by_id[channel_id]
+        channel.tags = normalize_channel_tags(raw_tags)
+        channel.updated_at = datetime.utcnow()
+        session.add(channel)
+        updated_rows.append(channel_to_camel(channel))
+
+    session.commit()
+    touch_sync(session, "channels")
+    return {"updated": len(updated_rows), "channels": updated_rows}

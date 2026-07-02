@@ -3,6 +3,7 @@ import { createContext, useContext, useEffect, useMemo, useState } from "react"
 import { toast } from "sonner"
 import {
   applyTagSuggestions,
+  buildBulkChannelTagUpdates,
   normalizeParsedTagSuggestions,
 } from "@/lib/channels/apply-tag-suggestions"
 import { formatChannelsForPrompt } from "@/lib/channels/format-channels-for-prompt"
@@ -12,9 +13,9 @@ import {
   formatPostsForTagPrompt,
 } from "@/lib/channels/tag-prompt"
 import {
+  bulkUpdateChannelTags,
   deleteTagRun,
   listTagRuns,
-  upsertChannel,
   upsertTagRun,
 } from "@/lib/repository"
 import { generateTagStream, getTagPrompt } from "@/services/ai"
@@ -50,7 +51,7 @@ const TagContext = createContext<TagContextType | undefined>(undefined)
 export const TagProvider: React.FC<{ children: React.ReactNode }> = ({
   children,
 }) => {
-  const { channels, selectedChannels, setChannels, loadChannels } = useData()
+  const { channels, selectedChannels, setChannels } = useData()
   const { filteredPosts } = useScraper()
   const { aiLanguage, selectedModel, aiTemperature } = useSettings()
   const {
@@ -286,36 +287,49 @@ export const TagProvider: React.FC<{ children: React.ReactNode }> = ({
       return
     }
 
-    for (const updatedChannel of updatedChannels) {
-      await upsertChannel(updatedChannel)
+    const applyingToastId = toast.loading(
+      `Applying tags to ${updatedChannels.length} channel(s)...`,
+    )
+
+    try {
+      const bulkResult = await bulkUpdateChannelTags(
+        buildBulkChannelTagUpdates(updatedChannels),
+      )
+
+      const updatedById = new Map(
+        bulkResult.channels.map((channel) => [channel.id, channel]),
+      )
       setChannels((prev) =>
-        prev.map((entry) =>
-          entry.id === updatedChannel.id ? updatedChannel : entry,
-        ),
+        prev.map((entry) => updatedById.get(entry.id) ?? entry),
       )
-    }
 
-    const updatedRun: TagRun = {
-      ...activeRun,
-      status: "completed",
-      updatedAt: Date.now(),
-      applyResult: result,
-    }
-    const saved = await upsertTagRun(updatedRun)
-    setTagRuns((prev) =>
-      prev.map((entry) => (entry.id === saved.id ? saved : entry)),
-    )
-    await loadChannels()
+      const updatedRun: TagRun = {
+        ...activeRun,
+        status: "completed",
+        updatedAt: Date.now(),
+        applyResult: result,
+      }
+      const saved = await upsertTagRun(updatedRun)
+      setTagRuns((prev) =>
+        prev.map((entry) => (entry.id === saved.id ? saved : entry)),
+      )
 
-    if (activeRun.mode === "add") {
+      toast.dismiss(applyingToastId)
+      if (activeRun.mode === "add") {
+        toast.success(
+          `Added ${result.tagsAdded} tags to ${result.channelsUpdated} channels.`,
+        )
+        return
+      }
       toast.success(
-        `Added ${result.tagsAdded} tags to ${result.channelsUpdated} channels.`,
+        `Removed ${result.tagsRemoved} tags from ${result.channelsUpdated} channels.`,
       )
-      return
+    } catch (error) {
+      toast.dismiss(applyingToastId)
+      toast.error(
+        error instanceof Error ? error.message : "Failed to apply tag suggestions",
+      )
     }
-    toast.success(
-      `Removed ${result.tagsRemoved} tags from ${result.channelsUpdated} channels.`,
-    )
   }
 
   const handleDeleteRun = async (id: string) => {

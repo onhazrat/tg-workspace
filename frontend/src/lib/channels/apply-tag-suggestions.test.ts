@@ -4,6 +4,7 @@ import type { Channel } from "@/types"
 
 import {
   applyTagSuggestions,
+  buildBulkChannelTagUpdates,
   buildChannelLookup,
   filterSuggestionsToSelectedChannels,
   normalizeParsedTagSuggestions,
@@ -94,6 +95,24 @@ describe("applyTagSuggestions", () => {
     expect(updatedChannels.map((channel) => channel.name)).toEqual([
       "alpha",
       "beta",
+    ])
+  })
+})
+
+describe("buildBulkChannelTagUpdates", () => {
+  it("maps updated channels to bulk API payload", () => {
+    const channels = [
+      makeChannel("alpha", [
+        { name: "Politics", source: "ai", assignedAt: 123 },
+      ]),
+      makeChannel("beta", []),
+    ]
+    expect(buildBulkChannelTagUpdates(channels)).toEqual([
+      {
+        channelId: "alpha",
+        tags: [{ name: "Politics", source: "ai", assignedAt: 123 }],
+      },
+      { channelId: "beta", tags: [] },
     ])
   })
 })

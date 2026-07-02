@@ -175,6 +175,23 @@ export async function bulkSyncChannelSettings(body: {
   return { updated: result.updated }
 }
 
+export async function bulkUpdateChannelTags(
+  updates: { channelId: string; tags: Channel["tags"] }[],
+): Promise<{ updated: number; channels: Channel[] }> {
+  try {
+    const result = await api.bulkUpdateChannelTags({ updates })
+    for (const channel of result.channels) {
+      await cache.saveChannel(channel)
+    }
+    await refreshSyncMeta(true)
+    markResourceSynced("channels")
+    return result
+  } catch (error) {
+    onWriteFallback?.("channels", error)
+    throw error
+  }
+}
+
 export async function deleteChannel(id: string): Promise<void> {
   try {
     await api.deleteChannel(id)

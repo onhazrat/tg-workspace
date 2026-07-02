@@ -288,4 +288,15 @@ export const dataApi = {
       method: "PATCH",
       body: JSON.stringify(body),
     }),
+
+  bulkUpdateChannelTags: (body: {
+    updates: { channelId: string; tags: Channel["tags"] }[]
+  }) =>
+    request<{ updated: number; channels: Channel[] }>(
+      "/api/v1/data/channels/bulk-tags",
+      {
+        method: "PATCH",
+        body: JSON.stringify(body),
+      },
+    ),
 }

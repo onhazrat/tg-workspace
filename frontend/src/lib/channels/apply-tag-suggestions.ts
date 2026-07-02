@@ -113,3 +113,12 @@ export function applyTagSuggestions({
     updatedChannels,
   }
 }
+
+export function buildBulkChannelTagUpdates(
+  updatedChannels: Channel[],
+): { channelId: string; tags: Channel["tags"] }[] {
+  return updatedChannels.map((channel) => ({
+    channelId: channel.id,
+    tags: channel.tags ?? [],
+  }))
+}

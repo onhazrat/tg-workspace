@@ -32,3 +32,16 @@ class BulkSyncSettingsRequest(BaseModel):
     )
 
     model_config = {"populate_by_name": True}
+
+
+class BulkChannelTagUpdate(BaseModel):
+    channel_id: str = Field(alias="channelId")
+    tags: list[dict[str, object]]
+
+    model_config = {"populate_by_name": True}
+
+
+class BulkChannelTagsRequest(BaseModel):
+    updates: list[BulkChannelTagUpdate]
+
+    model_config = {"populate_by_name": True}
