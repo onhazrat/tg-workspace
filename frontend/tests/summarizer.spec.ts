@@ -112,6 +112,23 @@ test.describe("TG Summarizer", () => {
     }
   })
 
+  test("tag tab opens Tag view", async ({ page }) => {
+    await page.goto("/summarizer?tab=summary")
+    await page.locator("#tour-tab-tag").click()
+
+    await expect(page).toHaveURL(/tab=tag/)
+    await expect(page.locator("#tour-tab-tag")).toHaveClass(/border-app-ink/)
+    await expect(page.getByRole("heading", { name: "Preview" })).toBeVisible()
+  })
+
+  test("tag tab loads from ?tab=tag URL", async ({ page }) => {
+    await page.goto("/summarizer?tab=tag")
+
+    await expect(page).toHaveURL(/tab=tag/)
+    await expect(page.locator("#tour-tab-tag")).toHaveClass(/border-app-ink/)
+    await expect(page.getByRole("heading", { name: "Preview" })).toBeVisible()
+  })
+
   test("settings tab opens Engine Room with network section", async ({
     page,
   }) => {

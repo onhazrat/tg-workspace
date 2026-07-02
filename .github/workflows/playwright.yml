@@ -39,17 +39,17 @@ jobs:
               - .env
               - compose*.yml
               - .github/workflows/playwright.yml
-      - name: Treat initial push as changed
-        id: initial-push
-        if: github.event_name == 'push' && github.event.before == '0000000000000000000000000000000000000000'
+      - name: Treat push as changed
+        id: push-changed
+        if: github.event_name == 'push'
         run: echo "changed=true" >> "$GITHUB_OUTPUT"
       - name: Publish change detection result
         id: result
         env:
-          INITIAL_CHANGED: ${{ steps.initial-push.outputs.changed }}
+          PUSH_CHANGED: ${{ steps.push-changed.outputs.changed }}
           FILTER_CHANGED: ${{ steps.filter.outputs.changed }}
         run: |
-          if [ "$INITIAL_CHANGED" = "true" ]; then
+          if [ "$PUSH_CHANGED" = "true" ]; then
             echo "changed=true" >> "$GITHUB_OUTPUT"
           else
             echo "changed=$FILTER_CHANGED" >> "$GITHUB_OUTPUT"
