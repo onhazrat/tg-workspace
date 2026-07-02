@@ -33,7 +33,7 @@ class Channel(SQLModel, table=True):
     links: str | None = None
     start_id: int | None = None
     start_time: int | None = Field(default=None, sa_column=_ms_ts(nullable=True))
-    tags: list[str] = Field(default_factory=list, sa_column=Column(JSON))
+    tags: list[Any] = Field(default_factory=list, sa_column=Column(JSON))
     last_updated: int | None = Field(default=None, sa_column=_ms_ts(nullable=True))
     regular_sync_enabled: bool = True
     dynamic_sync_enabled: bool = False
@@ -104,6 +104,33 @@ class Summary(SQLModel, table=True):
     post_count: int | None = None
     timestamp: int = Field(default=0, sa_column=_ms_ts())
     extra: dict[str, Any] = Field(default_factory=dict, sa_column=Column(JSON))
+    updated_at: datetime = Field(default_factory=utc_now)
+
+
+class TagRun(SQLModel, table=True):
+    __tablename__ = "tg_tag_runs"
+
+    id: str = Field(primary_key=True)
+    user_id: uuid.UUID | None = Field(default=None, index=True)
+    status: str = "pending"
+    source: str = "generated"
+    mode: str = "add"
+    channels: list[str] = Field(default_factory=list, sa_column=Column(JSON))
+    start_date: int = Field(default=0, sa_column=_ms_ts())
+    end_date: int = Field(default=0, sa_column=_ms_ts())
+    post_count: int | None = None
+    model: str | None = None
+    prompt_text: str | None = Field(default=None, sa_column=Column(Text))
+    response_text: str | None = Field(default=None, sa_column=Column(Text))
+    all_tags_snapshot: list[str] = Field(default_factory=list, sa_column=Column(JSON))
+    channel_context_options: dict[str, Any] = Field(
+        default_factory=dict, sa_column=Column(JSON)
+    )
+    suggestions: dict[str, list[str]] = Field(default_factory=dict, sa_column=Column(JSON))
+    apply_result: dict[str, Any] = Field(default_factory=dict, sa_column=Column(JSON))
+    error: str | None = Field(default=None, sa_column=Column(Text))
+    created_at: int = Field(default=0, sa_column=_ms_ts())
+    updated_at_ms: int = Field(default=0, sa_column=_ms_ts())
     updated_at: datetime = Field(default_factory=utc_now)
 
 

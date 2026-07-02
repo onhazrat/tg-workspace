@@ -16,6 +16,7 @@ export const WORKSPACE_TABS = [
   { id: "channels", label: "Channels", icon: "Send" },
   { id: "posts", label: "Posts", icon: "List" },
   { id: "summary", label: "Summary", icon: "FileText" },
+  { id: "tag", label: "Tag", icon: "Tag" },
   { id: "chat", label: "Chat", icon: "MessageSquare" },
   { id: "history", label: "History", icon: "History" },
   { id: "settings", label: "Settings", icon: "Settings" },

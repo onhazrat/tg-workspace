@@ -7,6 +7,7 @@ import {
   backfillSyncChannel,
   bulkBackfillPartialHistoryChannels,
 } from "@/lib/channels/backfill-sync"
+import { getTagNames } from "@/lib/channels/channel-tag-model"
 import {
   addTagToChannel,
   selectChannelsByTag,
@@ -161,7 +162,7 @@ export function buildExtendedCommands(): CommandDef[] {
       group: "Channels",
       entityFlow: "remove-tag-channel",
       disabled: (ctx) =>
-        ctx.channels.every((channel) => (channel.tags?.length ?? 0) === 0)
+        ctx.channels.every((channel) => getTagNames(channel.tags).length === 0)
           ? { disabled: true, reason: "No channel tags defined" }
           : { disabled: false },
       run: () => {},

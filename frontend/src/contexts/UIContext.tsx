@@ -28,6 +28,10 @@ interface UIContextType {
   setHistorySearchQuery: React.Dispatch<React.SetStateAction<string>>
   starredOnly: boolean
   setStarredOnly: React.Dispatch<React.SetStateAction<boolean>>
+  includeChannelBioInPrompt: boolean
+  setIncludeChannelBioInPrompt: React.Dispatch<React.SetStateAction<boolean>>
+  includeChannelTagsInPrompt: boolean
+  setIncludeChannelTagsInPrompt: React.Dispatch<React.SetStateAction<boolean>>
 }
 
 const UIContext = createContext<UIContextType | undefined>(undefined)
@@ -41,6 +45,16 @@ export const UIProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [currentSummaryId, setCurrentSummaryId] = useState<string | null>(null)
   const [historySearchQuery, setHistorySearchQuery] = useState("")
   const [starredOnly, setStarredOnly] = useState(false)
+  const [includeChannelBioInPrompt, setIncludeChannelBioInPrompt] =
+    useState<boolean>(() => {
+      if (typeof window === "undefined") return false
+      return localStorage.getItem("prompt_includeChannelBio") === "true"
+    })
+  const [includeChannelTagsInPrompt, setIncludeChannelTagsInPrompt] =
+    useState<boolean>(() => {
+      if (typeof window === "undefined") return false
+      return localStorage.getItem("prompt_includeChannelTags") === "true"
+    })
 
   const [startDate, setStartDateInternal] = useState<number>(() => {
     if (typeof window !== "undefined") {
@@ -120,6 +134,20 @@ export const UIProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
     localStorage.setItem("endDateTs", endDate.toString())
   }, [startDate, endDate])
 
+  useEffect(() => {
+    localStorage.setItem(
+      "prompt_includeChannelBio",
+      String(includeChannelBioInPrompt),
+    )
+  }, [includeChannelBioInPrompt])
+
+  useEffect(() => {
+    localStorage.setItem(
+      "prompt_includeChannelTags",
+      String(includeChannelTagsInPrompt),
+    )
+  }, [includeChannelTagsInPrompt])
+
   return (
     <UIContext.Provider
       value={{
@@ -140,6 +168,10 @@ export const UIProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
         setHistorySearchQuery,
         starredOnly,
         setStarredOnly,
+        includeChannelBioInPrompt,
+        setIncludeChannelBioInPrompt,
+        includeChannelTagsInPrompt,
+        setIncludeChannelTagsInPrompt,
       }}
     >
       {children}

@@ -13,6 +13,7 @@ import { ScraperProvider } from "@/contexts/ScraperContext"
 import { SettingsProvider } from "@/contexts/SettingsContext"
 import { TranslationProvider } from "@/contexts/TranslationContext"
 import { UIProvider } from "@/contexts/UIContext"
+import { TagProvider } from "@/contexts/TagContext"
 import { useBotCredentialMigration } from "@/hooks/useBotCredentialMigration"
 import { migrateEmbeddingsData, migrateSummaryDates } from "@/lib/cache"
 import { setWriteFallbackHandler } from "@/lib/repository"
@@ -45,20 +46,22 @@ export function TgProviders({ children }: { children: ReactNode }) {
         <UIProvider>
           <RAGProvider>
             <ScraperProvider>
-              <ChatProvider>
-                <AIProvider>
-                  <CommandPaletteProvider>
-                    <TranslationProvider>
-                      <TooltipProvider delay={500} closeDelay={300}>
-                        {children}
-                        <CommandPalette />
-                        <MigrationPrompt />
-                        <TgToaster richColors closeButton />
-                      </TooltipProvider>
-                    </TranslationProvider>
-                  </CommandPaletteProvider>
-                </AIProvider>
-              </ChatProvider>
+              <TagProvider>
+                <ChatProvider>
+                  <AIProvider>
+                    <CommandPaletteProvider>
+                      <TranslationProvider>
+                        <TooltipProvider delay={500} closeDelay={300}>
+                          {children}
+                          <CommandPalette />
+                          <MigrationPrompt />
+                          <TgToaster richColors closeButton />
+                        </TooltipProvider>
+                      </TranslationProvider>
+                    </CommandPaletteProvider>
+                  </AIProvider>
+                </ChatProvider>
+              </TagProvider>
             </ScraperProvider>
           </RAGProvider>
         </UIProvider>

@@ -18,6 +18,7 @@ from app.models_tg import (
     PublishLog,
     SyncLog,
 )
+from app.services.channel_tags import normalize_channel_tags
 from app.services.channel_photos import channel_photo_api_path, has_cached_photo
 
 _CAMEL_OVERRIDES = {
@@ -121,7 +122,7 @@ def channel_to_camel(ch: Channel) -> dict[str, Any]:
         "links": ch.links,
         "startId": ch.start_id,
         "startTime": ch.start_time,
-        "tags": ch.tags,
+        "tags": normalize_channel_tags(ch.tags),
         "lastUpdated": ch.last_updated,
         "regularSyncEnabled": ch.regular_sync_enabled,
         "dynamicSyncEnabled": ch.dynamic_sync_enabled,

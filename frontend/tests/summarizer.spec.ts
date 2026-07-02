@@ -85,10 +85,14 @@ async function channelHasTag(
 
       const channels = (await response.json()) as Array<{
         name: string
-        tags?: string[]
+        tags?: Array<string | { name?: string }>
       }>
       const channel = channels.find((entry) => entry.name === name)
-      return channel?.tags?.includes(expectedTag) ?? false
+      if (!channel?.tags) return false
+      return channel.tags.some((entry) => {
+        if (typeof entry === "string") return entry === expectedTag
+        return entry?.name === expectedTag
+      })
     },
     { name: channelName, expectedTag: tag },
   )

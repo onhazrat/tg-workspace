@@ -16,6 +16,7 @@ import {
   Settings,
   Sparkles,
   Sun,
+  Tag,
 } from "lucide-react"
 import { AnimatePresence, motion } from "motion/react"
 import { useEffect, useRef, useState } from "react"
@@ -28,6 +29,7 @@ import { PostFeed } from "./components/PostFeed"
 import { RelativeTime } from "./components/RelativeTime"
 import { SettingsHub } from "./components/SettingsHub"
 import { SummaryView } from "./components/SummaryView"
+import { TagView } from "./components/TagView"
 import {
   Dialog,
   DialogContent,
@@ -410,6 +412,7 @@ export default function App() {
                         Sparkles,
                         FileText,
                         Activity,
+                        Tag,
                       }[tab.icon] || Database
 
                     return (
@@ -502,6 +505,8 @@ export default function App() {
                   <ChatView />
                 ) : activeTab === "channels" ? (
                   <ChannelGrid scrollContainerRef={scrollContainerRef} />
+                ) : activeTab === "tag" ? (
+                  <TagView />
                 ) : activeTab === "summary" ? (
                   <SummaryView />
                 ) : activeTab === "settings" ? (

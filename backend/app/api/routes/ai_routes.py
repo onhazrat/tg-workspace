@@ -5,11 +5,18 @@ from typing import Any
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 
-from app.ai.models import ChatRequest, EmbedRequest, SummaryRequest, TranslateRequest
+from app.ai.models import (
+    ChatRequest,
+    EmbedRequest,
+    SummaryRequest,
+    TagRequest,
+    TranslateRequest,
+)
 from app.ai.registry import default_model, get_provider, list_all_models
 from app.api.deps import CurrentUser
 from app.core.config import settings
 from app.prompts.summary import format_summary_prompt, rtl_instruction
+from app.prompts.tagging import format_tag_prompt
 from app.prompts.templates import CHAT_PROMPT, RAG_CHAT_PROMPT
 
 router = APIRouter(prefix="/ai", tags=["ai"])
@@ -30,6 +37,7 @@ async def api_summary(
     provider = get_provider(body.provider)
     prompt = format_summary_prompt(
         channels=body.channels,
+        channels_text=body.channels_text,
         language=body.language,
         posts_text=body.posts_text,
     )
@@ -43,6 +51,7 @@ def api_summary_prompt(
 ) -> dict[str, Any]:
     prompt = format_summary_prompt(
         channels=body.channels,
+        channels_text=body.channels_text,
         language=body.language,
         posts_text=body.posts_text,
     )
@@ -59,6 +68,7 @@ async def api_summary_stream(
     provider = get_provider(body.provider)
     prompt = format_summary_prompt(
         channels=body.channels,
+        channels_text=body.channels_text,
         language=body.language,
         posts_text=body.posts_text,
     )
@@ -83,7 +93,7 @@ async def api_chat_stream(
     provider = get_provider(body.provider)
     template = RAG_CHAT_PROMPT if body.rag_mode else CHAT_PROMPT
     system = template.format(
-        channels=", ".join(body.channels),
+        channels=(body.channels_text or "").strip() or ", ".join(body.channels),
         language=body.language,
         rtl_instruction=rtl_instruction(body.language),
         posts_text=body.posts_text,
@@ -96,6 +106,48 @@ async def api_chat_stream(
             temperature=body.temperature,
             system_instruction=system,
             history=body.history,
+        ):
+            yield f"data: {json.dumps({'text': chunk})}\n\n"
+        yield "data: [DONE]\n\n"
+
+    return StreamingResponse(event_stream(), media_type="text/event-stream")
+
+
+@router.post("/tag/prompt")
+def api_tag_prompt(body: TagRequest, _current_user: CurrentUser) -> dict[str, str]:
+    prompt = format_tag_prompt(
+        channels=body.channels,
+        channels_text=body.channels_text,
+        posts_text=body.posts_text,
+        all_tags=body.all_tags,
+        tag_mode=body.tag_mode,
+        tags_per_channel_min=body.tags_per_channel_min,
+        tags_per_channel_max=body.tags_per_channel_max,
+    )
+    return {"prompt": prompt}
+
+
+@router.post("/tag/stream")
+async def api_tag_stream(
+    body: TagRequest, _current_user: CurrentUser
+) -> StreamingResponse:
+    if not settings.GEMINI_API_KEY:
+        raise HTTPException(status_code=503, detail="GEMINI_API_KEY not configured")
+    model = body.model or default_model()
+    provider = get_provider(body.provider)
+    prompt = format_tag_prompt(
+        channels=body.channels,
+        channels_text=body.channels_text,
+        posts_text=body.posts_text,
+        all_tags=body.all_tags,
+        tag_mode=body.tag_mode,
+        tags_per_channel_min=body.tags_per_channel_min,
+        tags_per_channel_max=body.tags_per_channel_max,
+    )
+
+    async def event_stream() -> AsyncIterator[str]:
+        async for chunk in provider.stream(
+            prompt, model=model, temperature=body.temperature
         ):
             yield f"data: {json.dumps({'text': chunk})}\n\n"
         yield "data: [DONE]\n\n"

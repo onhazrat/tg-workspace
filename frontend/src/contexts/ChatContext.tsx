@@ -5,6 +5,7 @@ import {
   buildFilteredPostsFromRaw,
   formatPostsForPrompt,
 } from "../lib/posts/post-view"
+import { formatChannelsForPrompt } from "../lib/channels/format-channels-for-prompt"
 import { getPostsByDateRange, saveLLMLog, saveSummary } from "../lib/repository"
 import {
   AIServiceError,
@@ -51,6 +52,8 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
     activeTab,
     currentSummaryId,
     setCurrentSummaryId,
+    includeChannelBioInPrompt,
+    includeChannelTagsInPrompt,
   } = useUI()
   const { aiLanguage, selectedModel, aiTemperature } = useSettings()
   const {
@@ -211,10 +214,18 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
         }
 
         const postsText = formatPostsForPrompt(postsToChat)
+        const selectedChannelNames = channels
+          .filter((channel) => selectedChannels.has(channel.name))
+          .map((channel) => channel.name)
+        const channelsText = formatChannelsForPrompt(channels, selectedChannels, {
+          includeBio: includeChannelBioInPrompt,
+          includeTags: includeChannelTagsInPrompt,
+        })
 
         const { stream, prompt, config, systemInstruction } =
           await generateChatStream(
-            channels.map((c) => c.name),
+            selectedChannelNames,
+            channelsText,
             postsText,
             aiLanguage,
             selectedModel,

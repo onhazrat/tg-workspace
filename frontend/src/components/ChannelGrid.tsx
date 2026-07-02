@@ -31,6 +31,11 @@ import {
   AUTO_SYNC_INTERVAL_MIN_MINUTES,
 } from "@/constants"
 import { addChannelByName } from "@/lib/channels/add-channel"
+import {
+  addManualTag,
+  getTagNames,
+  removeTagsByName,
+} from "@/lib/channels/channel-tag-model"
 import { deleteChannelByRecord } from "@/lib/channels/delete-channel"
 import { useData } from "../contexts/DataContext"
 import { useScraper } from "../contexts/ScraperContext"
@@ -102,7 +107,13 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
     loadNetworkLogs,
   } = useData()
 
-  const { summarizing } = useUI()
+  const {
+    summarizing,
+    includeChannelBioInPrompt,
+    setIncludeChannelBioInPrompt,
+    includeChannelTagsInPrompt,
+    setIncludeChannelTagsInPrompt,
+  } = useUI()
 
   const [sortBy, setSortBy] = useState<SortOption>(() => {
     const saved = localStorage.getItem("channelGrid_sortBy")
@@ -184,7 +195,7 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
         (c) =>
           c.name.toLowerCase().includes(query) ||
           c.displayName?.toLowerCase().includes(query) ||
-          c.tags?.some((t) => t.toLowerCase().includes(query)),
+          getTagNames(c.tags).some((t) => t.toLowerCase().includes(query)),
       )
     }
     return result
@@ -212,7 +223,7 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
   const allTags = useMemo(() => {
     const tags = new Set<string>()
     channels.forEach((c) => {
-      c.tags?.forEach((t) => tags.add(t))
+      getTagNames(c.tags).forEach((t) => tags.add(t))
     })
     return Array.from(tags).sort()
   }, [channels])
@@ -252,7 +263,7 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
 
   const toggleTagSelection = (tag: string) => {
     const channelsWithTag = channels
-      .filter((c) => c.tags?.includes(tag) && !c.isFrozen)
+      .filter((c) => getTagNames(c.tags).includes(tag) && !c.isFrozen)
       .map((c) => c.name)
     const allSelected = channelsWithTag.every((name) =>
       selectedChannels.has(name),
@@ -352,8 +363,8 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
     const tag = bulkTagInput.trim()
     const updatedChannels = channels.map((c) => {
       if (selectedChannels.has(c.name)) {
-        const newTags = Array.from(new Set([...(c.tags || []), tag]))
-        return { ...c, tags: newTags }
+        const normalizedNewTags = addManualTag(c.tags, tag)
+        return { ...c, tags: normalizedNewTags }
       }
       return c
     })
@@ -371,7 +382,7 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
     const tag = bulkRemoveTagInput.trim()
     const updatedChannels = channels.map((c) => {
       if (selectedChannels.has(c.name)) {
-        const newTags = (c.tags || []).filter((t) => t !== tag)
+        const newTags = removeTagsByName(c.tags, [tag])
         return { ...c, tags: newTags }
       }
       return c
@@ -631,7 +642,7 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
             <div className="flex flex-wrap gap-2">
               {allTags.map((tag) => {
                 const channelsWithTag = channels
-                  .filter((c) => c.tags?.includes(tag))
+                  .filter((c) => getTagNames(c.tags).includes(tag))
                   .map((c) => c.name)
                 const selectedCount = channelsWithTag.filter((name) =>
                   selectedChannels.has(name),
@@ -666,6 +677,34 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
             </div>
 
             <div className="flex items-center gap-3 bg-app-muted/30 p-1.5 px-3 rounded-lg border border-app-ink/5 w-fit">
+              <div className="flex items-center gap-3">
+                <span className="text-[9px] uppercase font-bold text-app-ink/50">
+                  AI Prompt Context
+                </span>
+                <label className="flex items-center gap-1.5 text-[10px] font-semibold text-app-ink/70">
+                  <input
+                    type="checkbox"
+                    checked={includeChannelBioInPrompt}
+                    onChange={(event) =>
+                      setIncludeChannelBioInPrompt(event.target.checked)
+                    }
+                    className="h-3 w-3 accent-app-ink"
+                  />
+                  Include channel bio in prompts
+                </label>
+                <label className="flex items-center gap-1.5 text-[10px] font-semibold text-app-ink/70">
+                  <input
+                    type="checkbox"
+                    checked={includeChannelTagsInPrompt}
+                    onChange={(event) =>
+                      setIncludeChannelTagsInPrompt(event.target.checked)
+                    }
+                    className="h-3 w-3 accent-app-ink"
+                  />
+                  Include current tags in prompts
+                </label>
+              </div>
+              <div className="h-4 w-px bg-app-ink/10" />
               {isFilteringActive && (
                 <>
                   <span className="text-[9px] uppercase font-bold text-app-ink/60">
@@ -729,7 +768,9 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
                     <SelectItem value="next_dynamic_sync">
                       Next Dynamic Sync
                     </SelectItem>
-                    <SelectItem value="next_auto_sync">Next Auto Sync</SelectItem>
+                    <SelectItem value="next_auto_sync">
+                      Next Auto Sync
+                    </SelectItem>
                     {showChannelSubscribers && (
                       <SelectItem value="subscribers">Subscribers</SelectItem>
                     )}
@@ -752,7 +793,6 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
                   )}
                 </button>
               </div>
-
             </div>
           </div>
         )}
@@ -789,16 +829,16 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
               </button>
               <button
                 type="button"
-                onClick={() => applyBulkSyncPatch({ regularSyncEnabled: false })}
+                onClick={() =>
+                  applyBulkSyncPatch({ regularSyncEnabled: false })
+                }
                 className="px-3 py-1.5 text-[10px] uppercase font-bold rounded-md bg-amber-500/10 text-amber-700 hover:bg-amber-500/20 transition-all"
               >
                 Regular Off
               </button>
               <button
                 type="button"
-                onClick={() =>
-                  applyBulkSyncPatch({ dynamicSyncEnabled: true })
-                }
+                onClick={() => applyBulkSyncPatch({ dynamicSyncEnabled: true })}
                 className="px-3 py-1.5 text-[10px] uppercase font-bold rounded-md bg-blue-500/10 text-blue-600 hover:bg-blue-500/20 transition-all"
               >
                 Dynamic On

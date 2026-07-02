@@ -33,6 +33,7 @@ async function* wrapStream(
 
 export const getSummaryPrompt = async (
   channels: string[],
+  channelsText: string,
   postsText: string,
   language: string,
   model: string,
@@ -40,6 +41,7 @@ export const getSummaryPrompt = async (
 ): Promise<string> => {
   const result = await api.summaryPrompt({
     channels,
+    channelsText,
     postsText,
     language,
     model,
@@ -50,6 +52,7 @@ export const getSummaryPrompt = async (
 
 export const generateSummaryStream = async (
   channels: string[],
+  channelsText: string,
   postsText: string,
   language: string,
   model: string,
@@ -59,6 +62,7 @@ export const generateSummaryStream = async (
   try {
     const stream = api.summaryStream({
       channels,
+      channelsText,
       postsText,
       language,
       model,
@@ -76,6 +80,7 @@ export const generateSummaryStream = async (
 
 export const generateSummary = async (
   channels: string[],
+  channelsText: string,
   postsText: string,
   language: string,
   model: string,
@@ -84,6 +89,7 @@ export const generateSummary = async (
   let text = ""
   const { stream, prompt, config } = await generateSummaryStream(
     channels,
+    channelsText,
     postsText,
     language,
     model,
@@ -141,6 +147,7 @@ export const generateEmbeddings = async (
 
 export const generateChatStream = async (
   channels: string[],
+  channelsText: string,
   postsText: string,
   language: string,
   model: string,
@@ -151,6 +158,7 @@ export const generateChatStream = async (
   try {
     const stream = api.chatStream({
       channels,
+      channelsText,
       postsText,
       language,
       model,
@@ -224,4 +232,42 @@ export const translateTextBatch = async (
   if (!posts || posts.length === 0) return []
   const result = await api.translateBatch(posts, targetLanguage, model)
   return result.translations
+}
+
+export const getTagPrompt = async (body: {
+  channels: string[]
+  channelsText: string
+  postsText: string
+  allTags: string
+  tagMode: "add" | "remove"
+  language: string
+  model: string
+  temperature?: number
+}): Promise<string> => {
+  const result = await api.tagPrompt(body)
+  return result.prompt
+}
+
+export const generateTagStream = async (body: {
+  channels: string[]
+  channelsText: string
+  postsText: string
+  allTags: string
+  tagMode: "add" | "remove"
+  language: string
+  model: string
+  temperature?: number
+}): Promise<LLMStreamResult> => {
+  try {
+    const stream = api.tagStream(body)
+    return {
+      stream: wrapStream(stream),
+      prompt: `tag_mode=${body.tagMode}; channels=${body.channels.join(",")}`,
+      config: { temperature: body.temperature ?? 0.7 },
+    }
+  } catch (error: unknown) {
+    throw new AIServiceError(
+      error instanceof Error ? error.message : "Failed to generate tag stream",
+    )
+  }
 }

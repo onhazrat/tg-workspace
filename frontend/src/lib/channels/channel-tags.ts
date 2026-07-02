@@ -1,5 +1,10 @@
 import { toast } from "sonner"
 
+import {
+  addManualTag,
+  getTagNames,
+  removeTagsByName,
+} from "@/lib/channels/channel-tag-model"
 import type { CommandContext } from "@/lib/commands/types"
 import { upsertChannel } from "@/lib/repository"
 import type { Channel } from "@/types"
@@ -7,7 +12,7 @@ import type { Channel } from "@/types"
 export function collectAllChannelTags(channels: Channel[]): string[] {
   const tags = new Set<string>()
   for (const channel of channels) {
-    channel.tags?.forEach((tag) => tags.add(tag))
+    getTagNames(channel.tags).forEach((tag) => tags.add(tag))
   }
   return Array.from(tags).sort((a, b) => a.localeCompare(b))
 }
@@ -18,9 +23,10 @@ export function filterChannelsByTag(
 ): Channel[] {
   const normalized = tag.trim().toLowerCase()
   if (!normalized) return []
-  return channels.filter((channel) =>
-    channel.tags?.some((entry) => entry.toLowerCase() === normalized),
-  )
+  return channels.filter((channel) => {
+    const names = getTagNames(channel.tags)
+    return names.some((entry) => entry.toLowerCase() === normalized)
+  })
 }
 
 export async function addTagToChannel(
@@ -33,7 +39,7 @@ export async function addTagToChannel(
     toast.error("Enter a tag name")
     return
   }
-  const newTags = Array.from(new Set([...(channel.tags || []), tag]))
+  const newTags = addManualTag(channel.tags, tag)
   const updated = { ...channel, tags: newTags }
   await upsertChannel(updated)
   ctx.setChannels((prev) =>
@@ -47,7 +53,7 @@ export async function removeTagFromChannel(
   tag: string,
   ctx: CommandContext,
 ): Promise<void> {
-  const newTags = (channel.tags || []).filter((entry) => entry !== tag)
+  const newTags = removeTagsByName(channel.tags, [tag])
   const updated = { ...channel, tags: newTags }
   await upsertChannel(updated)
   ctx.setChannels((prev) =>

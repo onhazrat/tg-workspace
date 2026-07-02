@@ -103,6 +103,15 @@ from app.services.summaries import (
 from app.services.summaries import (
     upsert_summary as upsert_summary_impl,
 )
+from app.services.tag_runs import (
+    delete_tag_run as delete_tag_run_impl,
+)
+from app.services.tag_runs import (
+    list_tag_runs as list_tag_runs_impl,
+)
+from app.services.tag_runs import (
+    upsert_tag_run as upsert_tag_run_impl,
+)
 from app.services.sync_meta import get_sync_meta, touch_sync
 
 _SETTING_LOADERS = {
@@ -288,6 +297,37 @@ def delete_summary(
 ) -> dict[str, str]:
     delete_summary_impl(session, summary_id)
     touch_sync(session, "summaries")
+    return {"status": "deleted"}
+
+
+@router.get("/tag-runs")
+def list_tag_runs(
+    session: SessionDep,
+    _current_user: CurrentUser,
+) -> list[dict[str, Any]]:
+    return list_tag_runs_impl(session)
+
+
+@router.put("/tag-runs/{tag_run_id}")
+def upsert_tag_run(
+    tag_run_id: str,
+    body: dict[str, Any],
+    session: SessionDep,
+    _current_user: CurrentUser,
+) -> dict[str, Any]:
+    result = upsert_tag_run_impl(session, tag_run_id, body, user_id=_current_user.id)
+    touch_sync(session, "tag_runs")
+    return result
+
+
+@router.delete("/tag-runs/{tag_run_id}")
+def delete_tag_run(
+    tag_run_id: str,
+    session: SessionDep,
+    _current_user: CurrentUser,
+) -> dict[str, str]:
+    delete_tag_run_impl(session, tag_run_id)
+    touch_sync(session, "tag_runs")
     return {"status": "deleted"}
 
 

@@ -9,6 +9,7 @@ export const aiApi = {
 
   summaryPrompt: (body: {
     channels: string[]
+    channelsText?: string
     postsText: string
     language: string
     model?: string
@@ -21,6 +22,24 @@ export const aiApi = {
 
   summaryStream: (body: Record<string, unknown>) =>
     sseTextStream("/api/v1/ai/summary/stream", body, "text"),
+
+  tagPrompt: (body: {
+    channels: string[]
+    channelsText: string
+    postsText: string
+    allTags: string
+    tagMode: "add" | "remove"
+    language: string
+    model?: string
+    temperature?: number
+  }) =>
+    request<{ prompt: string }>("/api/v1/ai/tag/prompt", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  tagStream: (body: Record<string, unknown>) =>
+    sseTextStream("/api/v1/ai/tag/stream", body, "text"),
 
   chatStream: (body: Record<string, unknown>) =>
     sseTextStream("/api/v1/ai/chat/stream", body, "text"),

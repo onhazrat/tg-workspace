@@ -25,6 +25,11 @@ import {
   AUTO_SYNC_INTERVAL_MAX_MINUTES,
   AUTO_SYNC_INTERVAL_MIN_MINUTES,
 } from "@/constants"
+import {
+  addManualTag,
+  normalizeChannelTags,
+  removeTagsByName,
+} from "@/lib/channels/channel-tag-model"
 import { useData } from "../contexts/DataContext"
 import { useScraper } from "../contexts/ScraperContext"
 import { useSettings } from "../contexts/SettingsContext"
@@ -107,7 +112,7 @@ export const ChannelCard: React.FC<ChannelCardProps> = ({
       setIsAddingTag(false)
       return
     }
-    const newTags = Array.from(new Set([...(channel.tags || []), tag.trim()]))
+    const newTags = addManualTag(channel.tags, tag.trim())
     const updatedChannel = { ...channel, tags: newTags }
     await upsertChannel(updatedChannel)
     setChannels((prev) =>
@@ -117,7 +122,7 @@ export const ChannelCard: React.FC<ChannelCardProps> = ({
   }
 
   const handleRemoveTag = async (tagToRemove: string) => {
-    const newTags = (channel.tags || []).filter((t) => t !== tagToRemove)
+    const newTags = removeTagsByName(channel.tags, [tagToRemove])
     const updatedChannel = { ...channel, tags: newTags }
     await upsertChannel(updatedChannel)
     setChannels((prev) =>
@@ -482,7 +487,9 @@ export const ChannelCard: React.FC<ChannelCardProps> = ({
                 </div>
               </TooltipTrigger>
               <TooltipContent>
-                <p>Activity Rate (Posts per hour): {stats.velocity.toFixed(3)}</p>
+                <p>
+                  Activity Rate (Posts per hour): {stats.velocity.toFixed(3)}
+                </p>
               </TooltipContent>
             </Tooltip>
           )}
@@ -597,17 +604,20 @@ export const ChannelCard: React.FC<ChannelCardProps> = ({
 
         {/* Tags Section */}
         <div className="mb-5 flex flex-wrap gap-1.5">
-          {channel.tags?.map((tag) => (
+          {normalizeChannelTags(channel.tags).map((tag) => (
             <span
-              key={tag}
+              key={tag.name.toLowerCase()}
               className="text-[10px] font-bold px-2 py-1 bg-app-ink/5 border border-app-ink/10 flex items-center gap-1.5 group/tag rounded-md text-app-ink/80"
             >
-              {tag}
+              {tag.name}
+              {tag.source === "ai" && (
+                <span className="inline-block h-1.5 w-1.5 rounded-full bg-blue-500/80" />
+              )}
               <button
                 type="button"
                 onClick={(e) => {
                   e.stopPropagation()
-                  handleRemoveTag(tag)
+                  handleRemoveTag(tag.name)
                 }}
                 className="opacity-0 group-hover/tag:opacity-50 hover:!opacity-100 transition-opacity"
               >
@@ -749,14 +759,16 @@ export const ChannelCard: React.FC<ChannelCardProps> = ({
                   type="button"
                   onClick={handleRegularSyncToggle}
                   className={`w-10 h-5 transition-all relative border border-app-ink/20 rounded-full ${
-                    channel.regularSyncEnabled ?? true
+                    (channel.regularSyncEnabled ?? true)
                       ? "bg-green-500 border-green-600"
                       : "bg-app-ink/10"
                   }`}
                 >
                   <div
                     className={`absolute top-0.5 w-3.5 h-3.5 bg-white transition-all rounded-full ${
-                      channel.regularSyncEnabled ?? true ? "left-5.5" : "left-0.5"
+                      (channel.regularSyncEnabled ?? true)
+                        ? "left-5.5"
+                        : "left-0.5"
                     }`}
                   />
                 </button>

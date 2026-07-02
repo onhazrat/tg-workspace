@@ -1,3 +1,4 @@
+import { getTagNames } from "@/lib/channels/channel-tag-model"
 import type { Channel } from "@/types"
 
 export type ChannelSearchMode = "all" | "tag-only"
@@ -27,15 +28,15 @@ export function channelMatchesSearch(
   if (!term) return true
 
   if (mode === "tag-only") {
-    return (
-      channel.tags?.some((tag) => tag.toLowerCase().includes(term)) ?? false
+    return getTagNames(channel.tags).some((tag) =>
+      tag.toLowerCase().includes(term),
     )
   }
 
   return (
     channel.name.toLowerCase().includes(term) ||
     channel.displayName?.toLowerCase().includes(term) ||
-    (channel.tags?.some((tag) => tag.toLowerCase().includes(term)) ?? false)
+    getTagNames(channel.tags).some((tag) => tag.toLowerCase().includes(term))
   )
 }
 

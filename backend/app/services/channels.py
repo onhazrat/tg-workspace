@@ -12,6 +12,7 @@ from sqlmodel import Session, col, func, select
 
 from app.models_tg import Channel, Post
 from app.jobs.settings import load_sync_settings
+from app.services.channel_tags import normalize_channel_tags
 from app.services.channel_photos import delete_cached_photo
 from app.services.serialization import channel_to_camel, normalize_body
 from app.services.sync_schedule import (
@@ -231,6 +232,8 @@ def apply_channel_fields(
                 value = max(1, int(value))
             if key == "dynamic_sync_expected_posts":
                 value = max(1, int(value))
+            if key == "tags":
+                value = normalize_channel_tags(value)
             setattr(ch, key, value)
     recompute_next_regular_sync_at_on_interval_change(
         ch,
@@ -290,6 +293,8 @@ def upsert_channel(
             for k, v in normalized.items()
             if k in Channel.model_fields and k not in ("id", "name", "user_id")
         }
+        if "tags" in extras:
+            extras["tags"] = normalize_channel_tags(extras["tags"])
         extras.setdefault("regular_sync_enabled", True)
         extras.setdefault("dynamic_sync_enabled", dynamic_enabled_default)
         extras.setdefault(

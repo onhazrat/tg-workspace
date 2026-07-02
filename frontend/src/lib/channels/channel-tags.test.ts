@@ -10,7 +10,7 @@ const sampleChannels: Channel[] = [
   {
     id: "news",
     name: "news",
-    tags: ["Tech", "daily"],
+    tags: [{ name: "Tech", source: "manual", assignedAt: 1 }, "daily"],
     lastUpdated: 0,
     followedAt: 0,
   },

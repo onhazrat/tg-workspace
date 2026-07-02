@@ -43,7 +43,7 @@ export interface Channel {
   links?: string
   startId?: number
   startTime?: number
-  tags?: string[]
+  tags?: ChannelTag[] | string[]
   lastUpdated?: number
   regularSyncEnabled?: boolean
   dynamicSyncEnabled?: boolean
@@ -64,6 +64,14 @@ export interface Channel {
   historyCompleteToCutoff?: boolean
   anchorPostId?: number
   oldestStoredPostTimestamp?: number
+}
+
+export type TagSource = "manual" | "ai"
+
+export interface ChannelTag {
+  name: string
+  source: TagSource
+  assignedAt: number
 }
 
 export type GlobalStartTimeMode = "relative" | "absolute" | "retention"
@@ -225,10 +233,39 @@ export interface DBStats {
   storeSizes?: Record<string, number>
 }
 
+export interface TagRun {
+  id: string
+  createdAt: number
+  updatedAt: number
+  status: "pending" | "completed" | "failed"
+  source: "generated" | "pasted"
+  mode: "add" | "remove"
+  channels: string[]
+  startDate: number
+  endDate: number
+  postCount: number
+  model?: string
+  promptText?: string
+  responseText?: string
+  allTagsSnapshot?: string[]
+  channelContextOptions?: {
+    includeBio: boolean
+    includeTags: boolean
+  }
+  suggestions?: Record<string, string[]>
+  applyResult?: {
+    channelsUpdated: number
+    tagsAdded: number
+    tagsRemoved: number
+  }
+  error?: string
+}
+
 export type TabType =
   | "summary"
   | "posts"
   | "channels"
+  | "tag"
   | "history"
   | "db"
   | "chat"

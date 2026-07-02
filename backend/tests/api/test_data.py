@@ -291,6 +291,46 @@ def test_summaries_pending_prompt_extra(client: TestClient) -> None:
     client.delete(f"{PREFIX}/summaries/pending-1", headers=headers)
 
 
+def test_tag_runs_crud(client: TestClient) -> None:
+    headers = _auth(client)
+    body = {
+        "status": "pending",
+        "source": "pasted",
+        "mode": "add",
+        "channels": ["ch1", "ch2"],
+        "startDate": 1000,
+        "endDate": 2000,
+        "postCount": 12,
+        "model": "external",
+        "promptText": "tag prompt text",
+        "allTagsSnapshot": ["Politics"],
+        "channelContextOptions": {"includeBio": True, "includeTags": False},
+        "suggestions": {"ch1": ["Politics"]},
+    }
+    r = client.put(f"{PREFIX}/tag-runs/tag-run-1", json=body, headers=headers)
+    assert r.status_code == 200
+    created = r.json()
+    assert created["id"] == "tag-run-1"
+    assert created["source"] == "pasted"
+    assert created["channels"] == ["ch1", "ch2"]
+
+    r2 = client.get(f"{PREFIX}/tag-runs", headers=headers)
+    assert r2.status_code == 200
+    assert any(run["id"] == "tag-run-1" for run in r2.json())
+
+    r3 = client.put(
+        f"{PREFIX}/tag-runs/tag-run-1",
+        json={"status": "completed", "applyResult": {"channelsChanged": 1}},
+        headers=headers,
+    )
+    assert r3.status_code == 200
+    assert r3.json()["status"] == "completed"
+    assert r3.json()["applyResult"] == {"channelsChanged": 1}
+
+    r4 = client.delete(f"{PREFIX}/tag-runs/tag-run-1", headers=headers)
+    assert r4.status_code == 200
+
+
 def test_bot_credentials_export_import(client: TestClient) -> None:
     headers = _auth(client)
     r = client.put(

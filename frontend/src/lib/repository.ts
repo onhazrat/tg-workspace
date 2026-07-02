@@ -20,6 +20,7 @@ import type {
   PublishLog,
   Summary,
   SyncLog,
+  TagRun,
 } from "../types"
 import { stripToken } from "./botCredential"
 import * as cache from "./cache"
@@ -298,6 +299,22 @@ export async function deleteSummary(id: string): Promise<void> {
     onWriteFallback?.("summaries", error)
     throw error
   }
+}
+
+export async function listTagRuns(): Promise<TagRun[]> {
+  try {
+    return await api.listTagRuns()
+  } catch {
+    return []
+  }
+}
+
+export async function upsertTagRun(run: TagRun): Promise<TagRun> {
+  return api.upsertTagRun(run.id, run)
+}
+
+export async function deleteTagRun(id: string): Promise<void> {
+  await api.deleteTagRun(id)
 }
 
 // --- bot credentials ---

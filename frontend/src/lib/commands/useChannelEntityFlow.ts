@@ -1,3 +1,4 @@
+import { getTagNames } from "@/lib/channels/channel-tag-model"
 import { filterPartialHistoryChannels } from "@/lib/commands/filter-channels"
 import type { CommandContext, EntityFlowType } from "@/lib/commands/types"
 import { upsertChannel } from "@/lib/repository"
@@ -39,7 +40,9 @@ export function getEntityCandidates(
     case "refresh-metadata-channel":
       return ctx.channels
     case "remove-tag-channel":
-      return ctx.channels.filter((channel) => (channel.tags?.length ?? 0) > 0)
+      return ctx.channels.filter(
+        (channel) => getTagNames(channel.tags).length > 0,
+      )
     case "open-post":
       return []
     default:

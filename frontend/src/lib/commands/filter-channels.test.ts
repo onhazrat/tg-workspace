@@ -12,7 +12,7 @@ const sampleChannels: Channel[] = [
     id: "1",
     name: "cryptonews",
     displayName: "Crypto News Daily",
-    tags: ["crypto", "finance"],
+    tags: [{ name: "crypto", source: "manual", assignedAt: 1 }, "finance"],
   },
   {
     id: "2",

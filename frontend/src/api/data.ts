@@ -12,6 +12,7 @@ import type {
   PublishLog,
   Summary,
   SyncLog,
+  TagRun,
 } from "../types"
 import { request } from "./base"
 
@@ -71,6 +72,19 @@ export const dataApi = {
     }),
 
   listSummaries: () => request<Summary[]>("/api/v1/data/summaries"),
+
+  listTagRuns: () => request<TagRun[]>("/api/v1/data/tag-runs"),
+
+  upsertTagRun: (id: string, run: Partial<TagRun>) =>
+    request<TagRun>(`/api/v1/data/tag-runs/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(run),
+    }),
+
+  deleteTagRun: (id: string) =>
+    request<{ status: string }>(`/api/v1/data/tag-runs/${id}`, {
+      method: "DELETE",
+    }),
 
   upsertSummary: (id: string, summary: Partial<Summary>) =>
     request<Summary>(`/api/v1/data/summaries/${id}`, {

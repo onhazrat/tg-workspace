@@ -28,6 +28,7 @@ class EmbeddingResult(BaseModel):
 
 class SummaryRequest(BaseModel):
     channels: list[str]
+    channels_text: str = Field("", alias="channelsText")
     posts_text: str = Field(..., alias="postsText")
     language: str = "English"
     model: str | None = None
@@ -39,6 +40,7 @@ class SummaryRequest(BaseModel):
 
 class ChatRequest(BaseModel):
     channels: list[str] = []
+    channels_text: str = Field("", alias="channelsText")
     posts_text: str = Field("", alias="postsText")
     language: str = "English"
     model: str | None = None
@@ -62,5 +64,20 @@ class TranslateRequest(BaseModel):
     target_language: str = Field(..., alias="targetLanguage")
     model: str | None = None
     provider: str = "gemini"
+
+    model_config = {"populate_by_name": True}
+
+
+class TagRequest(BaseModel):
+    channels: list[str]
+    channels_text: str = Field("", alias="channelsText")
+    posts_text: str = Field(..., alias="postsText")
+    all_tags: str = Field("(none yet)", alias="allTags")
+    tag_mode: str = Field("add", alias="tagMode")
+    model: str | None = None
+    temperature: float = 0.7
+    provider: str = "gemini"
+    tags_per_channel_min: int | None = Field(default=None, alias="tagsPerChannelMin")
+    tags_per_channel_max: int | None = Field(default=None, alias="tagsPerChannelMax")
 
     model_config = {"populate_by_name": True}

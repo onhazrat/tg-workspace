@@ -11,6 +11,7 @@ import {
   buildFilteredPostsFromRaw,
   formatPostsForPrompt,
 } from "../lib/posts/post-view"
+import { formatChannelsForPrompt } from "../lib/channels/format-channels-for-prompt"
 import {
   getPostsByDateRange,
   saveLLMLog,
@@ -105,6 +106,8 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({
     setActiveTab,
     setSummarizing,
     setCurrentSummaryId,
+    includeChannelBioInPrompt,
+    includeChannelTagsInPrompt,
   } = useUI()
   const {
     aiLanguage,
@@ -203,10 +206,18 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({
 
     try {
       const postsText = formatPostsForPrompt(postsToSummarize)
+      const selectedChannelNames = channels
+        .filter((channel) => selectedChannels.has(channel.name))
+        .map((channel) => channel.name)
+      const channelsText = formatChannelsForPrompt(channels, selectedChannels, {
+        includeBio: includeChannelBioInPrompt,
+        includeTags: includeChannelTagsInPrompt,
+      })
 
       const startTime = Date.now()
       const { stream, prompt, config } = await generateSummaryStream(
-        channels.map((c) => c.name),
+        selectedChannelNames,
+        channelsText,
         postsText,
         aiLanguage,
         selectedModel,
@@ -300,7 +311,11 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({
 
     try {
       const prompt = await getSummaryPrompt(
-        channels.map((c) => c.name),
+        channels.filter((channel) => selectedChannels.has(channel.name)).map((c) => c.name),
+        formatChannelsForPrompt(channels, selectedChannels, {
+          includeBio: includeChannelBioInPrompt,
+          includeTags: includeChannelTagsInPrompt,
+        }),
         formatPostsForPrompt(filteredPosts),
         aiLanguage,
         selectedModel,
@@ -453,6 +468,10 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({
         const startTime = Date.now()
         const result = await generateSummary(
           s.channels,
+          formatChannelsForPrompt(channels, s.channels, {
+            includeBio: includeChannelBioInPrompt,
+            includeTags: includeChannelTagsInPrompt,
+          }),
           postsText,
           s.language,
           s.model || "gemini-3-flash-preview",

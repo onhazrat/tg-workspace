@@ -29,6 +29,24 @@ def test_summary_prompt_returns_prompt(client: TestClient) -> None:
     assert "testchannel" in data["prompt"] or "Sample post" in data["prompt"]
 
 
+def test_summary_prompt_prefers_channels_text_when_provided(client: TestClient) -> None:
+    headers = get_superuser_token_headers(client)
+    response = client.post(
+        f"{PREFIX}/ai/summary/prompt",
+        headers=headers,
+        json={
+            "channels": ["legacy_name"],
+            "channelsText": "### scoped_channel\nBio: test bio",
+            "language": "English",
+            "postsText": "Sample post content for prompt building.",
+        },
+    )
+    assert response.status_code == 200
+    prompt = response.json()["prompt"]
+    assert "### scoped_channel" in prompt
+    assert "legacy_name" not in prompt
+
+
 def test_summary_prompt_requires_auth(client: TestClient) -> None:
     response = client.post(
         f"{PREFIX}/ai/summary/prompt",

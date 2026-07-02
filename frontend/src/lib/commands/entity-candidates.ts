@@ -1,3 +1,4 @@
+import { getTagNames } from "@/lib/channels/channel-tag-model"
 import { collectAllChannelTags } from "@/lib/channels/channel-tags"
 import type { CommandContext, EntityFlowType } from "@/lib/commands/types"
 import type { Channel, Post, Summary } from "@/types"
@@ -25,12 +26,13 @@ export function getExtendedEntityCandidates(
       }))
     case "remove-tag-pick": {
       const channel = entityPayload as Channel | undefined
-      if (!channel?.tags?.length) return []
-      return channel.tags.map((tag) => ({ id: tag, label: tag }))
+      const tagNames = getTagNames(channel?.tags)
+      if (!tagNames.length) return []
+      return tagNames.map((tag) => ({ id: tag, label: tag }))
     }
     case "remove-tag-channel":
       return ctx.channels
-        .filter((channel) => (channel.tags?.length ?? 0) > 0)
+        .filter((channel) => getTagNames(channel.tags).length > 0)
         .map((channel) => ({
           id: channel.name,
           label: `@${channel.name}`,

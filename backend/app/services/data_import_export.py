@@ -22,6 +22,7 @@ from app.models_tg import (
     Summary,
     SyncLog,
 )
+from app.services.channel_tags import normalize_channel_tags
 from app.services.channels import apply_channel_fields
 from app.services.credentials import encrypt_bot_token
 from app.services.logs import (
@@ -88,7 +89,7 @@ def import_data(
                 links=normalized.get("links"),
                 start_id=normalized.get("start_id"),
                 start_time=normalized.get("start_time"),
-                tags=normalized.get("tags", []),
+                tags=normalize_channel_tags(normalized.get("tags", [])),
                 last_updated=normalized.get("last_updated"),
                 is_frozen=normalized.get("is_frozen", False),
                 is_unavailable_on_web_view=normalized.get(
