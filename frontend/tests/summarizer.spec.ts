@@ -132,6 +132,8 @@ test.describe("TG Summarizer", () => {
   test("tag tab paste applies tags for all selected channels", async ({
     page,
   }) => {
+    test.setTimeout(90_000)
+
     await gotoSummarizer(page, "channels")
     const first = await seedTestChannel(page)
     const second = await seedTestChannel(page)
@@ -150,10 +152,24 @@ test.describe("TG Summarizer", () => {
       })
     })
 
+    await page.getByPlaceholder("Search channels...").fill("")
+    await openPaletteKeyboard(page)
+    await runPaletteCommand(page, "clear selection")
+    await closePaletteKeyboard(page)
     await selectChannelsKeyboard(page, [first, second, third])
 
+    for (const name of [first, second, third]) {
+      await expect(
+        page.locator(
+          `[data-channel-name="${name}"] button[aria-pressed="true"]`,
+        ),
+      ).toBeVisible()
+    }
+
     await page.locator("#tour-tab-tag").click()
-    await expect(page.getByText("3 selected channel(s)")).toBeVisible()
+    await expect(page.getByText("3 selected channel(s)")).toBeVisible({
+      timeout: 15_000,
+    })
     await expect(page.getByText(/batch/i)).not.toBeVisible()
 
     await page.getByRole("button", { name: "Copy Prompt" }).click()

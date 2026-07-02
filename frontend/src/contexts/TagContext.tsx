@@ -6,6 +6,7 @@ import {
   buildBulkChannelTagUpdates,
   normalizeParsedTagSuggestions,
 } from "@/lib/channels/apply-tag-suggestions"
+import { tryWriteTextToClipboard } from "@/lib/data-transfer/clipboard"
 import { formatChannelsForPrompt } from "@/lib/channels/format-channels-for-prompt"
 import { parseTagResponse } from "@/lib/channels/parse-tag-response"
 import {
@@ -121,8 +122,6 @@ export const TagProvider: React.FC<{ children: React.ReactNode }> = ({
       model: selectedModel,
       temperature: aiTemperature,
     })
-    await navigator.clipboard.writeText(prompt)
-
     const run: TagRun = {
       id: crypto.randomUUID(),
       createdAt: Date.now(),
@@ -148,6 +147,7 @@ export const TagProvider: React.FC<{ children: React.ReactNode }> = ({
       ...prev.filter((entry) => entry.id !== saved.id),
     ])
     setCurrentRunId(saved.id)
+    await tryWriteTextToClipboard(prompt)
     toast.success("Tag prompt copied. Paste the AI response when ready.")
   }
 

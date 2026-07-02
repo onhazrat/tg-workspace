@@ -1,4 +1,8 @@
-export { copyTextToClipboard, joinCopyLines } from "./clipboard"
+export {
+  copyTextToClipboard,
+  joinCopyLines,
+  tryWriteTextToClipboard,
+} from "./clipboard"
 export {
   buildTimestampedFilename,
   downloadBlob,

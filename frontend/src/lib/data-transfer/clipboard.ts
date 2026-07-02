@@ -19,7 +19,7 @@ function copyTextWithExecCommand(text: string): boolean {
   return copied
 }
 
-async function writeTextToClipboard(text: string): Promise<boolean> {
+export async function tryWriteTextToClipboard(text: string): Promise<boolean> {
   if (shouldUseClipboardFallback()) {
     if (copyTextWithExecCommand(text)) return true
   }
@@ -35,7 +35,7 @@ export async function copyTextToClipboard(
   successMessage = "Copied to clipboard",
 ): Promise<boolean> {
   try {
-    const copied = await writeTextToClipboard(text)
+    const copied = await tryWriteTextToClipboard(text)
     if (!copied) {
       toast.error("Clipboard not supported in this browser")
       return false
