@@ -17,6 +17,59 @@ export function collectAllChannelTags(channels: Channel[]): string[] {
   return Array.from(tags).sort((a, b) => a.localeCompare(b))
 }
 
+type TagSelectionGroup = "fully" | "partial" | "none"
+
+function getTagSelectionGroup(
+  selectedCount: number,
+  channelCount: number,
+): TagSelectionGroup {
+  if (selectedCount > 0 && selectedCount === channelCount) return "fully"
+  if (selectedCount > 0) return "partial"
+  return "none"
+}
+
+const TAG_SELECTION_GROUP_ORDER: Record<TagSelectionGroup, number> = {
+  fully: 0,
+  partial: 1,
+  none: 2,
+}
+
+/** Sort tags for the Channels tab tag bar: group by selection state, then by channel count and selection count (desc). */
+export function sortTagsForChannelGrid(
+  tags: string[],
+  channels: Channel[],
+  selectedChannels: Set<string>,
+): string[] {
+  const stats = tags.map((tag) => {
+    const channelsWithTag = channels.filter((channel) =>
+      getTagNames(channel.tags).includes(tag),
+    )
+    const channelCount = channelsWithTag.length
+    const selectedCount = channelsWithTag.filter((channel) =>
+      selectedChannels.has(channel.name),
+    ).length
+    return {
+      tag,
+      channelCount,
+      selectedCount,
+      group: getTagSelectionGroup(selectedCount, channelCount),
+    }
+  })
+
+  return stats
+    .sort((a, b) => {
+      const groupDiff =
+        TAG_SELECTION_GROUP_ORDER[a.group] - TAG_SELECTION_GROUP_ORDER[b.group]
+      if (groupDiff !== 0) return groupDiff
+      if (b.channelCount !== a.channelCount)
+        return b.channelCount - a.channelCount
+      if (b.selectedCount !== a.selectedCount)
+        return b.selectedCount - a.selectedCount
+      return a.tag.localeCompare(b.tag)
+    })
+    .map((entry) => entry.tag)
+}
+
 export function filterChannelsByTag(
   channels: Channel[],
   tag: string,

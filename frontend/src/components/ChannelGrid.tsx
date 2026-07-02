@@ -36,6 +36,7 @@ import {
   getTagNames,
   removeTagsByName,
 } from "@/lib/channels/channel-tag-model"
+import { sortTagsForChannelGrid } from "@/lib/channels/channel-tags"
 import { deleteChannelByRecord } from "@/lib/channels/delete-channel"
 import { useData } from "../contexts/DataContext"
 import { useScraper } from "../contexts/ScraperContext"
@@ -225,8 +226,8 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
     channels.forEach((c) => {
       getTagNames(c.tags).forEach((t) => tags.add(t))
     })
-    return Array.from(tags).sort()
-  }, [channels])
+    return sortTagsForChannelGrid(Array.from(tags), channels, selectedChannels)
+  }, [channels, selectedChannels])
 
   const allLanguages = useMemo(() => {
     const langs = new Set<string>()
