@@ -20,4 +20,9 @@ describe("parseTagResponse", () => {
   it("throws for non-object payloads", () => {
     expect(() => parseTagResponse(JSON.stringify(["bad"]))).toThrow()
   })
+
+  it("parses JSON wrapped in markdown code fences", () => {
+    const parsed = parseTagResponse('```json\n{"alpha":["Politics"]}\n```')
+    expect(parsed).toEqual({ alpha: ["Politics"] })
+  })
 })

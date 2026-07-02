@@ -9,11 +9,16 @@ interface TagConfigProps {
 
 export const TagConfig: React.FC<TagConfigProps> = ({ onPasteClick }) => {
   const { selectedChannels } = useData()
-  const { mode, setMode, copyTagPrompt, generateTags, applyCurrentSuggestions, isGenerating } =
-    useTagContext()
+  const {
+    mode,
+    setMode,
+    copyTagPrompt,
+    generateTags,
+    applyCurrentSuggestions,
+    isGenerating,
+  } = useTagContext()
 
   const selectedCount = selectedChannels.size
-  const batchCount = selectedCount === 0 ? 0 : Math.ceil(selectedCount / 12)
 
   return (
     <div className="rounded-xl border border-app-ink/10 bg-app-card p-4 shadow-sm">
@@ -47,7 +52,7 @@ export const TagConfig: React.FC<TagConfigProps> = ({ onPasteClick }) => {
             </button>
           </div>
           <div className="text-xs text-app-ink/70">
-            {selectedCount} selected channel(s) - {batchCount} batch(es)
+            {selectedCount} selected channel(s)
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">

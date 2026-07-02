@@ -129,6 +129,62 @@ test.describe("TG Summarizer", () => {
     await expect(page.getByRole("heading", { name: "Preview" })).toBeVisible()
   })
 
+  test("tag tab paste applies tags for all selected channels", async ({
+    page,
+  }) => {
+    await gotoSummarizer(page, "channels")
+    const first = await seedTestChannel(page)
+    const second = await seedTestChannel(page)
+    const third = await seedTestChannel(page)
+    const tagName = `bulk${Date.now()}`
+
+    await page.route("**/api/v1/ai/tag/prompt", async (route) => {
+      if (route.request().method() !== "POST") {
+        await route.continue()
+        return
+      }
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ prompt: "tag prompt for e2e" }),
+      })
+    })
+
+    await selectChannelsKeyboard(page, [first, second, third])
+
+    await page.locator("#tour-tab-tag").click()
+    await expect(page.getByText("3 selected channel(s)")).toBeVisible()
+    await expect(page.getByText(/batch/i)).not.toBeVisible()
+
+    await page.getByRole("button", { name: "Copy Prompt" }).click()
+    await expect(
+      page.getByText(/tag prompt copied/i, { exact: false }),
+    ).toBeVisible({ timeout: 15_000 })
+
+    const pastePayload = JSON.stringify({
+      [`@${first}`]: [tagName],
+      [second]: [tagName],
+      [third]: [tagName],
+    })
+
+    await page.getByRole("button", { name: "Paste Response" }).click()
+    await page.locator("textarea").fill(pastePayload)
+    await page.getByRole("button", { name: "Save Response" }).click()
+    await expect(
+      page.getByText(/Parsed tag suggestions for 3 channel/i),
+    ).toBeVisible({ timeout: 15_000 })
+    await expect(page.getByText("(3 channels)")).toBeVisible()
+
+    await page.getByRole("button", { name: "Apply" }).click()
+    await expect(page.getByText(/Added .* tags to 3 channels/i)).toBeVisible({
+      timeout: 15_000,
+    })
+
+    for (const name of [first, second, third]) {
+      await expect.poll(() => channelHasTag(page, name, tagName)).toBe(true)
+    }
+  })
+
   test("settings tab opens Engine Room with network section", async ({
     page,
   }) => {
@@ -191,9 +247,7 @@ test.describe("TG Summarizer", () => {
 
   test("command palette toggles theme", async ({ page }) => {
     await page.goto("/summarizer")
-    await page.evaluate(() =>
-      localStorage.setItem("vite-ui-theme", "light"),
-    )
+    await page.evaluate(() => localStorage.setItem("vite-ui-theme", "light"))
     await page.reload()
 
     const html = page.locator("html")
@@ -447,9 +501,7 @@ test.describe("command palette keyboard", () => {
 
   test("K3: toggles theme via type and Enter", async ({ page }) => {
     await page.goto("/summarizer")
-    await page.evaluate(() =>
-      localStorage.setItem("vite-ui-theme", "light"),
-    )
+    await page.evaluate(() => localStorage.setItem("vite-ui-theme", "light"))
     await page.reload()
 
     const html = page.locator("html")

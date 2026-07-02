@@ -2,6 +2,7 @@ import { History, Trash2 } from "lucide-react"
 import { motion } from "motion/react"
 import type React from "react"
 import { useMemo, useState } from "react"
+import { normalizeParsedTagSuggestions } from "@/lib/channels/apply-tag-suggestions"
 import { getTagNames } from "@/lib/channels/channel-tag-model"
 import { useData } from "../contexts/DataContext"
 import { useTagContext } from "../contexts/TagContext"
@@ -24,12 +25,17 @@ export const TagView: React.FC = () => {
 
   const previewMode = selectedRun?.mode ?? mode
 
+  const normalizedSuggestions = useMemo(
+    () => normalizeParsedTagSuggestions(suggestions, channels),
+    [channels, suggestions],
+  )
+
   const rows = useMemo(() => {
     return channels
-      .filter((channel) => channel.name in suggestions)
+      .filter((channel) => channel.name in normalizedSuggestions)
       .map((channel) => {
         const currentTags = getTagNames(channel.tags)
-        const proposed = suggestions[channel.name] ?? []
+        const proposed = normalizedSuggestions[channel.name] ?? []
         const toApply =
           previewMode === "add"
             ? proposed.filter(
@@ -45,7 +51,7 @@ export const TagView: React.FC = () => {
               )
         return { channel: channel.name, currentTags, proposed, toApply }
       })
-  }, [channels, previewMode, suggestions])
+  }, [channels, normalizedSuggestions, previewMode])
 
   return (
     <motion.div
@@ -59,6 +65,11 @@ export const TagView: React.FC = () => {
       <div className="rounded-xl border border-app-ink/10 bg-app-card p-4 shadow-sm">
         <h3 className="mb-3 text-sm font-bold uppercase tracking-widest text-app-ink/70">
           Preview
+          {rows.length > 0 ? (
+            <span className="ml-2 font-normal normal-case tracking-normal text-app-ink/60">
+              ({rows.length} channel{rows.length === 1 ? "" : "s"})
+            </span>
+          ) : null}
         </h3>
         {rows.length === 0 ? (
           <p className="text-sm text-app-ink/60">
@@ -79,7 +90,9 @@ export const TagView: React.FC = () => {
                 {rows.map((row) => (
                   <tr key={row.channel} className="border-t border-app-ink/10">
                     <td className="py-2 font-mono">@{row.channel}</td>
-                    <td className="py-2">{row.currentTags.join(", ") || "—"}</td>
+                    <td className="py-2">
+                      {row.currentTags.join(", ") || "—"}
+                    </td>
                     <td className="py-2">{row.proposed.join(", ") || "—"}</td>
                     <td className="py-2">
                       {row.toApply.length === 0
@@ -122,10 +135,12 @@ export const TagView: React.FC = () => {
                   className="text-left"
                 >
                   <div className="text-xs font-bold uppercase tracking-wider text-app-ink">
-                    {run.mode === "add" ? "Add mode" : "Remove mode"} • {run.status}
+                    {run.mode === "add" ? "Add mode" : "Remove mode"} •{" "}
+                    {run.status}
                   </div>
                   <div className="text-xs text-app-ink/60">
-                    {run.channels.length} channels • {new Date(run.createdAt).toLocaleString()}
+                    {run.channels.length} channels •{" "}
+                    {new Date(run.createdAt).toLocaleString()}
                   </div>
                 </button>
                 <button

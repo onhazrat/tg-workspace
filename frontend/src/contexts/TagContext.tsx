@@ -1,6 +1,10 @@
 import type React from "react"
 import { createContext, useContext, useEffect, useMemo, useState } from "react"
 import { toast } from "sonner"
+import {
+  applyTagSuggestions,
+  normalizeParsedTagSuggestions,
+} from "@/lib/channels/apply-tag-suggestions"
 import { formatChannelsForPrompt } from "@/lib/channels/format-channels-for-prompt"
 import { parseTagResponse } from "@/lib/channels/parse-tag-response"
 import {
@@ -15,7 +19,6 @@ import {
 } from "@/lib/repository"
 import { generateTagStream, getTagPrompt } from "@/services/ai"
 import type { TagRun } from "@/types"
-import { mergeAiTags, removeAiTags } from "../lib/channels/channel-tag-model"
 import { useData } from "./DataContext"
 import { useScraper } from "./ScraperContext"
 import { useSettings } from "./SettingsContext"
@@ -34,7 +37,10 @@ interface TagContextType {
   selectedRun: TagRun | null
   copyTagPrompt: () => Promise<void>
   generateTags: () => Promise<void>
-  completePendingTagRun: (responseText: string, modelName?: string) => Promise<boolean>
+  completePendingTagRun: (
+    responseText: string,
+    modelName?: string,
+  ) => Promise<boolean>
   applyCurrentSuggestions: () => Promise<void>
   deleteRun: (id: string) => Promise<void>
 }
@@ -136,7 +142,10 @@ export const TagProvider: React.FC<{ children: React.ReactNode }> = ({
       },
     }
     const saved = await upsertTagRun(run)
-    setTagRuns((prev) => [saved, ...prev.filter((entry) => entry.id !== saved.id)])
+    setTagRuns((prev) => [
+      saved,
+      ...prev.filter((entry) => entry.id !== saved.id),
+    ])
     setCurrentRunId(saved.id)
     toast.success("Tag prompt copied. Paste the AI response when ready.")
   }
@@ -164,7 +173,10 @@ export const TagProvider: React.FC<{ children: React.ReactNode }> = ({
       for await (const chunk of stream) {
         responseText += chunk.text
       }
-      const parsed = parseTagResponse(responseText)
+      const parsed = normalizeParsedTagSuggestions(
+        parseTagResponse(responseText),
+        channels,
+      )
       setSuggestions(parsed)
 
       const run: TagRun = {
@@ -189,12 +201,17 @@ export const TagProvider: React.FC<{ children: React.ReactNode }> = ({
         },
       }
       const saved = await upsertTagRun(run)
-      setTagRuns((prev) => [saved, ...prev.filter((entry) => entry.id !== saved.id)])
+      setTagRuns((prev) => [
+        saved,
+        ...prev.filter((entry) => entry.id !== saved.id),
+      ])
       setCurrentRunId(saved.id)
       toast.success("Tag suggestions generated.")
     } catch (error) {
       console.error(error)
-      toast.error(error instanceof Error ? error.message : "Failed to generate tags")
+      toast.error(
+        error instanceof Error ? error.message : "Failed to generate tags",
+      )
     } finally {
       setIsGenerating(false)
     }
@@ -204,14 +221,23 @@ export const TagProvider: React.FC<{ children: React.ReactNode }> = ({
     responseText: string,
     modelName?: string,
   ): Promise<boolean> => {
-    const pending = selectedRun ?? tagRuns.find((run) => run.status === "pending")
+    const pending =
+      tagRuns.find((run) => run.status === "pending") ?? selectedRun
     if (!pending) {
       toast.error("No pending tag run found. Use Copy Prompt first.")
       return false
     }
 
     try {
-      const parsed = parseTagResponse(responseText)
+      const parsed = normalizeParsedTagSuggestions(
+        parseTagResponse(responseText),
+        channels,
+      )
+      if (Object.keys(parsed).length === 0) {
+        throw new Error(
+          "No channel names in the response matched your channels.",
+        )
+      }
       setSuggestions(parsed)
       const updated: TagRun = {
         ...pending,
@@ -226,11 +252,15 @@ export const TagProvider: React.FC<{ children: React.ReactNode }> = ({
         prev.map((entry) => (entry.id === saved.id ? saved : entry)),
       )
       setCurrentRunId(saved.id)
-      toast.success("Tag run completed from pasted response.")
+      toast.success(
+        `Parsed tag suggestions for ${Object.keys(parsed).length} channel(s).`,
+      )
       return true
     } catch (error) {
       toast.error(
-        error instanceof Error ? error.message : "Failed to parse pasted response",
+        error instanceof Error
+          ? error.message
+          : "Failed to parse pasted response",
       )
       return false
     }
@@ -238,30 +268,26 @@ export const TagProvider: React.FC<{ children: React.ReactNode }> = ({
 
   const applyCurrentSuggestions = async () => {
     const activeRun = selectedRun
-    if (!activeRun || !activeRun.suggestions) {
+    const suggestionSource = activeRun?.suggestions ?? suggestions
+    if (!activeRun || Object.keys(suggestionSource).length === 0) {
       toast.error("No parsed suggestions to apply.")
       return
     }
-    let channelsUpdated = 0
-    let tagsAdded = 0
-    let tagsRemoved = 0
 
-    for (const [channelName, proposedTags] of Object.entries(activeRun.suggestions)) {
-      const channel = channels.find((entry) => entry.name === channelName)
-      if (!channel) continue
-      const nextTags =
-        activeRun.mode === "add"
-          ? mergeAiTags(channel.tags, proposedTags)
-          : removeAiTags(channel.tags, proposedTags)
-      if (JSON.stringify(nextTags) === JSON.stringify(channel.tags ?? [])) continue
-      if (activeRun.mode === "add") {
-        tagsAdded += nextTags.length - (channel.tags?.length ?? 0)
-      } else {
-        tagsRemoved += (channel.tags?.length ?? 0) - nextTags.length
-      }
-      const updatedChannel = { ...channel, tags: nextTags }
+    const { result, updatedChannels } = applyTagSuggestions({
+      suggestions: suggestionSource,
+      channels,
+      mode: activeRun.mode,
+      selectedChannelNames: selectedChannelNames,
+    })
+
+    if (updatedChannels.length === 0) {
+      toast.info("No tag changes to apply for the selected channels.")
+      return
+    }
+
+    for (const updatedChannel of updatedChannels) {
       await upsertChannel(updatedChannel)
-      channelsUpdated += 1
       setChannels((prev) =>
         prev.map((entry) =>
           entry.id === updatedChannel.id ? updatedChannel : entry,
@@ -273,7 +299,7 @@ export const TagProvider: React.FC<{ children: React.ReactNode }> = ({
       ...activeRun,
       status: "completed",
       updatedAt: Date.now(),
-      applyResult: { channelsUpdated, tagsAdded, tagsRemoved },
+      applyResult: result,
     }
     const saved = await upsertTagRun(updatedRun)
     setTagRuns((prev) =>
@@ -282,10 +308,14 @@ export const TagProvider: React.FC<{ children: React.ReactNode }> = ({
     await loadChannels()
 
     if (activeRun.mode === "add") {
-      toast.success(`Added ${tagsAdded} tags to ${channelsUpdated} channels.`)
+      toast.success(
+        `Added ${result.tagsAdded} tags to ${result.channelsUpdated} channels.`,
+      )
       return
     }
-    toast.success(`Removed ${tagsRemoved} tags from ${channelsUpdated} channels.`)
+    toast.success(
+      `Removed ${result.tagsRemoved} tags from ${result.channelsUpdated} channels.`,
+    )
   }
 
   const handleDeleteRun = async (id: string) => {

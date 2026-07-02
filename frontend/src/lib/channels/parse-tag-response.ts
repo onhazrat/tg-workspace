@@ -6,8 +6,24 @@ function normalizeTagValue(raw: unknown): string | null {
   return value.length > 0 ? value : null
 }
 
+export function extractTagResponseJson(responseText: string): string {
+  const trimmed = responseText.trim()
+  if (!trimmed) {
+    throw new Error("Response text cannot be empty.")
+  }
+
+  const fenced = trimmed.match(/```(?:json)?\s*([\s\S]*?)```/i)
+  if (fenced?.[1]) return fenced[1].trim()
+
+  const start = trimmed.indexOf("{")
+  const end = trimmed.lastIndexOf("}")
+  if (start >= 0 && end > start) return trimmed.slice(start, end + 1)
+
+  return trimmed
+}
+
 export function parseTagResponse(responseText: string): ParsedTagSuggestions {
-  const parsed = JSON.parse(responseText) as unknown
+  const parsed = JSON.parse(extractTagResponseJson(responseText)) as unknown
   if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
     throw new Error("Response must be a JSON object keyed by channel name.")
   }
