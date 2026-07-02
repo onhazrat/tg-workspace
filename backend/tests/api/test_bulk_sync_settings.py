@@ -200,4 +200,5 @@ def test_bulk_sync_settings_expected_posts_updates_next_dynamic_sync_at(
     for channel_id in channel_ids:
         row = next(item for item in listed if item["id"] == channel_id)
         assert row["dynamicSyncExpectedPosts"] == 40
-        assert row["nextDynamicSyncAt"] == expected
+        # Velocity uses wall-clock recency, so allow a narrow timing drift.
+        assert abs(row["nextDynamicSyncAt"] - expected) <= 1000
