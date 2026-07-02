@@ -1,4 +1,4 @@
-SYSTEM_PROMPT = """
+SUMMARY_PROMPT = """
 You are a senior intelligence analyst and news editor.
 Your task is to analyze and synthesize a high volume of recent Telegram posts into a concise, structured briefing.
 ### CHANNELS IN SCOPE

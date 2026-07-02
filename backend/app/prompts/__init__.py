@@ -1,3 +1,3 @@
-from app.prompts.templates import CHAT_PROMPT, SYSTEM_PROMPT
+from app.prompts.templates import CHAT_PROMPT, SUMMARY_PROMPT
 
-__all__ = ["SYSTEM_PROMPT", "CHAT_PROMPT"]
+__all__ = ["SUMMARY_PROMPT", "CHAT_PROMPT"]

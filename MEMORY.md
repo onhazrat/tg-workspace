@@ -19,6 +19,7 @@ Self-hosted Telegram channel summarizer. Migrated from browser-heavy `TG-Summari
 - **Tag apply flow:** [`apply-tag-suggestions.ts`](frontend/src/lib/channels/apply-tag-suggestions.ts) — name normalization (`@`, displayName), add/remove via `mergeAiTags` / `removeAiTags`; bulk persist via **`PATCH /channels/bulk-tags`** (not sequential `upsertChannel`).
 - **Prompt channel context:** [`format-channels-for-prompt.ts`](frontend/src/lib/channels/format-channels-for-prompt.ts) — builds `{channels}` block; toggles in `UIContext` + checkboxes on **ChannelGrid**.
 - **Tag prompt builder:** [`tag-prompt.ts`](frontend/src/lib/channels/tag-prompt.ts), parser [`parse-tag-response.ts`](frontend/src/lib/channels/parse-tag-response.ts).
+- **Channel tag utilities:** [`channel-tags.ts`](frontend/src/lib/channels/channel-tags.ts) — `collectAllChannelTags` (alphabetical, for prompts/palette), `sortTagsForChannelGrid` (Channels tab tag bar order), tag filter/select helpers.
 - **Tag UI:** `TagContext`, `TagConfig`, `TagView`, `PasteTagsModal` — mirror Summary copy/generate/paste pattern.
 - **API clients (ADR-006):** hand-written `frontend/src/api/` (summarizer); generated `frontend/src/client/` (admin/auth).
 - **Data layer (frontend):** `repository.ts` API-first → `cache.ts` (IndexedDB).
@@ -57,6 +58,7 @@ Self-hosted Telegram channel summarizer. Migrated from browser-heavy `TG-Summari
 - **Tag taxonomy:** embedded in `TAG_PROMPT` template; `{all_tags}` lists existing vocabulary across all operator channels.
 - **External AI flows:** Copy Prompt → pending run → paste back (`PasteSummaryModal` / `PasteTagsModal`). Primary for ad-hoc tagging at scale.
 - **Command palette:** `Cmd+Shift+P`; tag ops via `channel-tags.ts` + `filter-channels.ts` (`tag:` / `#` prefix).
+- **Channels tab tag bar:** top of Channels tab — inline chip row in `ChannelGrid` (comment: *Tags & Auto Sync row*); `allTags` memo. Click toggles selection for all non-frozen channels with that tag; shows `(selected/total)`. Sorted by `sortTagsForChannelGrid`: **fully selected → partial → none**; within each group **channel count desc**, then **selected count desc** (re-sorts when selection changes). Not the same sort as `collectAllChannelTags` (alphabetical, used for `{all_tags}` and palette).
 
 ## Decisions (stable)
 
@@ -65,6 +67,7 @@ Self-hosted Telegram channel summarizer. Migrated from browser-heavy `TG-Summari
 3. **Dynamic channel sync v1 (2026-07-01)** — per-channel deadlines; global settings seed new channels only.
 4. **Post view filters (2026-06-30)** — shared `post-view.ts`; `filteredPosts` canonical.
 5. **Tag tab v1 (2026-07-02)** — structured tags with `source` + `assignedAt`; Tag run history in dedicated `tg_tag_runs` table; add/remove modes; bulk tag apply API for 100+ channels; channel prompt context checkboxes shared across AI tabs; **no auto-tagging scheduler**.
+6. **Channels tab tag bar sort (2026-07-02)** — selection-state grouping (fully / partial / none) with usage-based ordering inside each group; implemented in `sortTagsForChannelGrid` with unit tests.
 
 ### Explicitly rejected / deferred
 

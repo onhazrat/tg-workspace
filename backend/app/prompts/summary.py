@@ -1,4 +1,4 @@
-from app.prompts.templates import SYSTEM_PROMPT
+from app.prompts.templates import SUMMARY_PROMPT
 
 RTL_LANGUAGES = {"Persian", "Arabic", "فارسی", "العربية"}
 
@@ -20,7 +20,7 @@ def format_summary_prompt(
     posts_text: str,
 ) -> str:
     rendered_channels = (channels_text or "").strip() or ", ".join(channels)
-    return SYSTEM_PROMPT.format(
+    return SUMMARY_PROMPT.format(
         channels=rendered_channels,
         language=language,
         rtl_instruction=rtl_instruction(language),
