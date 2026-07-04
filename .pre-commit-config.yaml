@@ -13,10 +13,15 @@ repos:
         exclude: |
             (?x)^(
                 frontend/src/client/.*|
-                backend/app/email-templates/build/.*
+                backend/app/email-templates/build/.*|
+                backend/tests/fixtures/live/.*
             )$
       - id: trailing-whitespace
-        exclude: ^frontend/src/client/.*
+        exclude: |
+            (?x)^(
+                frontend/src/client/.*|
+                backend/tests/fixtures/live/.*
+            )$
   - repo: https://github.com/crate-ci/typos
     rev: bbaefadf97b0ec5fdc942684b647f1a6ab250274 # v1.46.0
     hooks:

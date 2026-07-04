@@ -1,0 +1,3 @@
+# Captured Telegram web-view HTML contains intentional class names and base64 tokens.
+[files]
+extend-exclude = ["backend/tests/fixtures/live/**"]

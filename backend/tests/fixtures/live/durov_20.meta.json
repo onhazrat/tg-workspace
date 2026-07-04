@@ -1,0 +1,82 @@
+{
+  "url": "https://t.me/s/durov?before=20",
+  "fetched_at": "2026-07-04T11:02:53.559133+00:00",
+  "status": "ok",
+  "post_ids_found": [
+    1,
+    6,
+    7,
+    8,
+    10,
+    11,
+    16
+  ],
+  "media_scan": [
+    {
+      "channel": "durov",
+      "post_id": 1,
+      "kinds": [],
+      "has_caption": true
+    },
+    {
+      "channel": "durov",
+      "post_id": 6,
+      "kinds": [
+        "photo"
+      ],
+      "has_caption": false
+    },
+    {
+      "channel": "durov",
+      "post_id": 7,
+      "kinds": [
+        "photo"
+      ],
+      "has_caption": false
+    },
+    {
+      "channel": "durov",
+      "post_id": 8,
+      "kinds": [
+        "photo"
+      ],
+      "has_caption": false
+    },
+    {
+      "channel": "durov",
+      "post_id": 10,
+      "kinds": [
+        "photo"
+      ],
+      "has_caption": false
+    },
+    {
+      "channel": "durov",
+      "post_id": 11,
+      "kinds": [
+        "photo"
+      ],
+      "has_caption": false
+    },
+    {
+      "channel": "durov",
+      "post_id": 16,
+      "kinds": [
+        "photo"
+      ],
+      "has_caption": false
+    }
+  ],
+  "telemetry": {
+    "attempts": [
+      {
+        "attempt": 1,
+        "proxyUrl": "direct",
+        "success": true,
+        "latency": 323
+      }
+    ],
+    "totalDuration": 323,
+    "success": true
+  }
+}

@@ -1,0 +1,821 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <title>Pavel Durov – Telegram</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <meta name="format-detection" content="telephone=no" />
+    <meta http-equiv="X-UA-Compatible"
+     content="IE=edge" />
+    <meta name="MobileOptimized" content="176" />
+    <meta name="HandheldFriendly" content="True" />
+
+<meta property="og:title" content="Pavel Durov">
+<meta property="og:image" content="https://cdn4.telesco.pe/file/jRNVdik_QTOG47LwofJAeTsyn3FtDuq6yGNmEshJoobtc2qXBTXemAXyjjOiMbHrQLiup61m9jmyQRUCdgvKjcQSF273F6QFNdgIBoaGcO-93v_i0R1cMPj83iqlj5lhZoIj50SN_LEE8p1zyCkYIUG2G76r9KGRSDLc8seBf6SoQiffn_l0W8L-5HQ1ysp0xaQdwrdz2nTgABs3HsU1RK9CtlfOpNQ73nYILWW6A-8FpWtG239uy-Df_T_o_G6dAi2pQA9zlgX6oOthiq9d7q1-ReHs3YlfLVeEDLZzSvrcrqGJsFkOAhNeX1bZUujcJLBYkZH8syq0lxG3M7uPUA.jpg">
+<meta property="og:site_name" content="Telegram">
+<meta property="og:description" content="Founder of Telegram.">
+
+<meta property="twitter:title" content="Pavel Durov">
+<meta property="twitter:image" content="https://cdn4.telesco.pe/file/jRNVdik_QTOG47LwofJAeTsyn3FtDuq6yGNmEshJoobtc2qXBTXemAXyjjOiMbHrQLiup61m9jmyQRUCdgvKjcQSF273F6QFNdgIBoaGcO-93v_i0R1cMPj83iqlj5lhZoIj50SN_LEE8p1zyCkYIUG2G76r9KGRSDLc8seBf6SoQiffn_l0W8L-5HQ1ysp0xaQdwrdz2nTgABs3HsU1RK9CtlfOpNQ73nYILWW6A-8FpWtG239uy-Df_T_o_G6dAi2pQA9zlgX6oOthiq9d7q1-ReHs3YlfLVeEDLZzSvrcrqGJsFkOAhNeX1bZUujcJLBYkZH8syq0lxG3M7uPUA.jpg">
+<meta property="twitter:site" content="@Telegram">
+
+<meta property="al:ios:app_store_id" content="686449807">
+<meta property="al:ios:app_name" content="Telegram Messenger">
+<meta property="al:ios:url" content="tg://resolve?domain=durov">
+
+<meta property="al:android:url" content="tg://resolve?domain=durov">
+<meta property="al:android:app_name" content="Telegram">
+<meta property="al:android:package" content="org.telegram.messenger">
+
+<meta name="twitter:card" content="summary">
+<meta name="twitter:site" content="@Telegram">
+<meta name="twitter:description" content="Founder of Telegram.
+">
+
+    <link rel="prev" href="/s/durov?before=177">
+<link rel="next" href="/s/durov?after=199">
+<link rel="canonical" href="/s/durov?before=200">
+
+    <script>window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches&&document.documentElement&&document.documentElement.classList&&document.documentElement.classList.add('theme_dark');</script>
+    <link rel="icon" type="image/svg+xml" href="//telegram.org/img/website_icon.svg?4">
+<link rel="apple-touch-icon" sizes="180x180" href="//telegram.org/img/apple-touch-icon.png">
+<link rel="icon" type="image/png" sizes="32x32" href="//telegram.org/img/favicon-32x32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="//telegram.org/img/favicon-16x16.png">
+<link rel="alternate icon" href="//telegram.org/img/favicon.ico" type="image/x-icon" />
+    <link href="//telegram.org/css/font-roboto.css?1" rel="stylesheet" type="text/css">
+    <link href="//telegram.org/css/widget-frame.css?74" rel="stylesheet" media="screen">
+    <link href="//telegram.org/css/telegram-web.css?39" rel="stylesheet" media="screen">
+    <script>TBaseUrl='/';</script>
+    <style>        .user-color-12 {
+          --user-line-gradient: repeating-linear-gradient(-45deg, #3391d4 0px, #3391d4 5px, #7dd3f0 5px, #7dd3f0 10px);
+          --user-accent-color: #3391d4;
+          --user-background: #3391d41f;
+        }        .user-color-10 {
+          --user-line-gradient: repeating-linear-gradient(-45deg, #27a910 0px, #27a910 5px, #a7dc57 5px, #a7dc57 10px);
+          --user-accent-color: #27a910;
+          --user-background: #27a9101f;
+        }        .user-color-8 {
+          --user-line-gradient: repeating-linear-gradient(-45deg, #e0802b 0px, #e0802b 5px, #fac534 5px, #fac534 10px);
+          --user-accent-color: #e0802b;
+          --user-background: #e0802b1f;
+        }        .user-color-7 {
+          --user-line-gradient: repeating-linear-gradient(-45deg, #e15052 0px, #e15052 5px, #f9ae63 5px, #f9ae63 10px);
+          --user-accent-color: #e15052;
+          --user-background: #e150521f;
+        }        .user-color-9 {
+          --user-line-gradient: repeating-linear-gradient(-45deg, #a05ff3 0px, #a05ff3 5px, #f48fff 5px, #f48fff 10px);
+          --user-accent-color: #a05ff3;
+          --user-background: #a05ff31f;
+        }        .user-color-11 {
+          --user-line-gradient: repeating-linear-gradient(-45deg, #27acce 0px, #27acce 5px, #82e8d6 5px, #82e8d6 10px);
+          --user-accent-color: #27acce;
+          --user-background: #27acce1f;
+        }        .user-color-13 {
+          --user-line-gradient: repeating-linear-gradient(-45deg, #dd4371 0px, #dd4371 5px, #ffbe9f 5px, #ffbe9f 10px);
+          --user-accent-color: #dd4371;
+          --user-background: #dd43711f;
+        }        .user-color-14 {
+          --user-line-gradient: repeating-linear-gradient(-45deg, #247bed 0px, #247bed 5px, #f04856 5px, #f04856 10px, #ffffff 10px, #ffffff 15px);
+          --user-accent-color: #247bed;
+          --user-background: #247bed1f;
+        }        .user-color-15 {
+          --user-line-gradient: repeating-linear-gradient(-45deg, #d67722 0px, #d67722 5px, #1ea011 5px, #1ea011 10px, #ffffff 10px, #ffffff 15px);
+          --user-accent-color: #d67722;
+          --user-background: #d677221f;
+        }        .user-color-16 {
+          --user-line-gradient: repeating-linear-gradient(-45deg, #179e42 0px, #179e42 5px, #e84a3f 5px, #e84a3f 10px, #ffffff 10px, #ffffff 15px);
+          --user-accent-color: #179e42;
+          --user-background: #179e421f;
+        }        .user-color-17 {
+          --user-line-gradient: repeating-linear-gradient(-45deg, #2894af 0px, #2894af 5px, #6fc456 5px, #6fc456 10px, #ffffff 10px, #ffffff 15px);
+          --user-accent-color: #2894af;
+          --user-background: #2894af1f;
+        }        .user-color-18 {
+          --user-line-gradient: repeating-linear-gradient(-45deg, #0c9ab3 0px, #0c9ab3 5px, #ffad95 5px, #ffad95 10px, #ffe6b5 10px, #ffe6b5 15px);
+          --user-accent-color: #0c9ab3;
+          --user-background: #0c9ab31f;
+        }        .user-color-19 {
+          --user-line-gradient: repeating-linear-gradient(-45deg, #7757d6 0px, #7757d6 5px, #f79610 5px, #f79610 10px, #ffde8e 10px, #ffde8e 15px);
+          --user-accent-color: #7757d6;
+          --user-background: #7757d61f;
+        }        .user-color-20 {
+          --user-line-gradient: repeating-linear-gradient(-45deg, #1585cf 0px, #1585cf 5px, #f2ab1d 5px, #f2ab1d 10px, #ffffff 10px, #ffffff 15px);
+          --user-accent-color: #1585cf;
+          --user-background: #1585cf1f;
+        }        body.dark .user-color-12, html.theme_dark .user-color-12 {
+          --user-line-gradient: repeating-linear-gradient(-45deg, #52bfff 0px, #52bfff 5px, #0b5494 5px, #0b5494 10px);
+          --user-accent-color: #52bfff;
+          --user-background: #52bfff1f;
+        }        body.dark .user-color-10, html.theme_dark .user-color-10 {
+          --user-line-gradient: repeating-linear-gradient(-45deg, #a7eb6e 0px, #a7eb6e 5px, #167e2d 5px, #167e2d 10px);
+          --user-accent-color: #a7eb6e;
+          --user-background: #a7eb6e1f;
+        }        body.dark .user-color-8, html.theme_dark .user-color-8 {
+          --user-line-gradient: repeating-linear-gradient(-45deg, #ecb04e 0px, #ecb04e 5px, #c35714 5px, #c35714 10px);
+          --user-accent-color: #ecb04e;
+          --user-background: #ecb04e1f;
+        }        body.dark .user-color-7, html.theme_dark .user-color-7 {
+          --user-line-gradient: repeating-linear-gradient(-45deg, #ff9380 0px, #ff9380 5px, #992f37 5px, #992f37 10px);
+          --user-accent-color: #ff9380;
+          --user-background: #ff93801f;
+        }        body.dark .user-color-9, html.theme_dark .user-color-9 {
+          --user-line-gradient: repeating-linear-gradient(-45deg, #c697ff 0px, #c697ff 5px, #5e31c8 5px, #5e31c8 10px);
+          --user-accent-color: #c697ff;
+          --user-background: #c697ff1f;
+        }        body.dark .user-color-11, html.theme_dark .user-color-11 {
+          --user-line-gradient: repeating-linear-gradient(-45deg, #40d8d0 0px, #40d8d0 5px, #045c7f 5px, #045c7f 10px);
+          --user-accent-color: #40d8d0;
+          --user-background: #40d8d01f;
+        }        body.dark .user-color-13, html.theme_dark .user-color-13 {
+          --user-line-gradient: repeating-linear-gradient(-45deg, #ff86a6 0px, #ff86a6 5px, #8e366e 5px, #8e366e 10px);
+          --user-accent-color: #ff86a6;
+          --user-background: #ff86a61f;
+        }        body.dark .user-color-14, html.theme_dark .user-color-14 {
+          --user-line-gradient: repeating-linear-gradient(-45deg, #3fa2fe 0px, #3fa2fe 5px, #e5424f 5px, #e5424f 10px, #ffffff 10px, #ffffff 15px);
+          --user-accent-color: #3fa2fe;
+          --user-background: #3fa2fe1f;
+        }        body.dark .user-color-15, html.theme_dark .user-color-15 {
+          --user-line-gradient: repeating-linear-gradient(-45deg, #ff905e 0px, #ff905e 5px, #32a527 5px, #32a527 10px, #ffffff 10px, #ffffff 15px);
+          --user-accent-color: #ff905e;
+          --user-background: #ff905e1f;
+        }        body.dark .user-color-16, html.theme_dark .user-color-16 {
+          --user-line-gradient: repeating-linear-gradient(-45deg, #66d364 0px, #66d364 5px, #d5444f 5px, #d5444f 10px, #ffffff 10px, #ffffff 15px);
+          --user-accent-color: #66d364;
+          --user-background: #66d3641f;
+        }        body.dark .user-color-17, html.theme_dark .user-color-17 {
+          --user-line-gradient: repeating-linear-gradient(-45deg, #22bce2 0px, #22bce2 5px, #3da240 5px, #3da240 10px, #ffffff 10px, #ffffff 15px);
+          --user-accent-color: #22bce2;
+          --user-background: #22bce21f;
+        }        body.dark .user-color-18, html.theme_dark .user-color-18 {
+          --user-line-gradient: repeating-linear-gradient(-45deg, #22bce2 0px, #22bce2 5px, #ff9778 5px, #ff9778 10px, #ffda6b 10px, #ffda6b 15px);
+          --user-accent-color: #22bce2;
+          --user-background: #22bce21f;
+        }        body.dark .user-color-19, html.theme_dark .user-color-19 {
+          --user-line-gradient: repeating-linear-gradient(-45deg, #9791ff 0px, #9791ff 5px, #f2731d 5px, #f2731d 10px, #ffdb59 10px, #ffdb59 15px);
+          --user-accent-color: #9791ff;
+          --user-background: #9791ff1f;
+        }        body.dark .user-color-20, html.theme_dark .user-color-20 {
+          --user-line-gradient: repeating-linear-gradient(-45deg, #3da6eb 0px, #3da6eb 5px, #eea51d 5px, #eea51d 10px, #ffffff 10px, #ffffff 15px);
+          --user-accent-color: #3da6eb;
+          --user-background: #3da6eb1f;
+        }.user-color-6, .user-color-4, .user-color-2, .user-color-0, .user-color-1, .user-color-3, .user-color-5,   .user-color-default {
+    --user-accent-color: var(--accent-color);
+    --user-accent-background: var(--accent-background);
+    --user-line-gradient: linear-gradient(45deg, var(--accent-color), var(--accent-color));
+  }</style>
+  </head>
+  <body class="widget_frame_base tgme_webpreview emoji_image thin_box_shadow tme_mode no_transitions">
+    <div class="tgme_background_wrap">
+      <canvas id="tgme_background" class="tgme_background" width="50" height="50" data-colors="dbddbb,6ba587,d5d88d,88b884"></canvas>
+      <div class="tgme_background_pattern"></div>
+    </div>
+    <header class="tgme_header search_collapsed">
+  <div class="tgme_container">
+    <div class="tgme_header_search">
+      <form class="tgme_header_search_form" action="/s/durov">
+        <svg class="tgme_header_search_form_icon" width="20" height="20" viewBox="0 0 20 20"><g fill="none" stroke="#7D7F81" stroke-width="1.4"><circle cx="9" cy="9" r="6"></circle><path d="M13.5,13.5 L17,17" stroke-linecap="round"></path></g></svg>
+        <input class="tgme_header_search_form_input js-header_search" placeholder="Search" name="q" autocomplete="off" value="" />
+        <a href="/s/durov" class="tgme_header_search_form_clear"><svg class="tgme_action_button_icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" width="20" height="20"><g class="icon_body" fill="none" stroke-linecap="round" stroke-linejoin="round" stroke="#000000" stroke-width="1.5"><path d="M6 14l8-8m0 8L6 6" stroke-dasharray="0,11.314" stroke-dashoffset="5.657"/><path d="M26 14l8-8m0 8l-8-8" stroke-dasharray="0.371,10.943" stroke-dashoffset="5.842"/><path d="M46 14l8-8m0 8l-8-8" stroke-dasharray="1.982,9.332" stroke-dashoffset="6.647756"/><path d="M66 14l8-8m0 8l-8-8" stroke-dasharray="5.173,6.14" stroke-dashoffset="8.243"/><path d="M86 14l8-8m0 8l-8-8" stroke-dasharray="7.866,3.448" stroke-dashoffset="9.59"/><path d="M106 14l8-8m0 8l-8-8" stroke-dasharray="9.471,1.843" stroke-dashoffset="10.392"/><path d="M126 14l8-8m0 8l-8-8" stroke-dasharray="10.417,0.896" stroke-dashoffset="10.866"/><path d="M146 14l8-8m0 8l-8-8" stroke-dasharray="10.961,0.353" stroke-dashoffset="11.137"/><path d="M166 14l8-8m0 8l-8-8" stroke-dasharray="11.234,0.08" stroke-dashoffset="11.274"/><path d="M186 14l8-8m0 8l-8-8"/></g></svg></a>
+      </form>
+    </div>
+    <div class="tgme_header_right_column">
+      <section class="tgme_right_column">
+        <div class="tgme_channel_info">
+          <div class="tgme_channel_info_header">
+            <i class="tgme_page_photo_image bgcolor2" data-content="PD"><img src="https://cdn4.telesco.pe/file/QX8-RjZDMNTqNZzZOGQgXsirK8PHalqyuOw5qTk2VbVD2o0CeMUYkQu0bq3R-IqNsITtSGJ1duV7QYLkYfE42-vgrRmYxM-QmQG3_AHiAiGAQPsXvBQ3ABh7DJeFCB-b0Jp6hn7wbLiP2gwvBGzvRzd1Z4U6Sy3tf_ry_fUr_YktYaV8xYWZZlmC_FeuYVvUdTQYFkR01MhAkdJRVnajjW2KAzC-JsRYtftFc9RQ2_IwdThephGFrah3x2mtVTe_gdUGL1152pjWj_kKU_yzklfOuBWIs1E49HGZKKakZVqK6NIvMSg_3VNB3qB7fAuJvOuivEoH5mkJCg2wvySDxg.jpg"></i>
+            <div class="tgme_channel_info_header_title_wrap">
+              <div class="tgme_channel_info_header_title"><span dir="auto">Pavel Durov</span></div>
+              <div class="tgme_channel_info_header_labels"><i class="verified-icon"> ✔</i></div>
+            </div>
+            <div class="tgme_channel_info_header_username"><a href="https://t.me/durov">@durov</a></div>
+          </div>
+          <div class="tgme_channel_info_counters"><div class="tgme_channel_info_counter"><span class="counter_value">11.9M</span> <span class="counter_type">subscribers</span></div><div class="tgme_channel_info_counter"><span class="counter_value">99</span> <span class="counter_type">photos</span></div><div class="tgme_channel_info_counter"><span class="counter_value">45</span> <span class="counter_type">videos</span></div><div class="tgme_channel_info_counter"><span class="counter_value">194</span> <span class="counter_type">links</span></div></div>
+          <div class="tgme_channel_info_description">Founder of Telegram.</div>
+          <a class="tgme_channel_download_telegram" href="//telegram.org/dl?tme=6fb80f2cd6715e06d2_2171543495674027076">
+            <svg class="tgme_channel_download_telegram_icon" width="21px" height="18px" viewBox="0 0 21 18"><g fill="none"><path fill="#ffffff" d="M0.554,7.092 L19.117,0.078 C19.737,-0.156 20.429,0.156 20.663,0.776 C20.745,0.994 20.763,1.23 20.713,1.457 L17.513,16.059 C17.351,16.799 16.62,17.268 15.88,17.105 C15.696,17.065 15.523,16.987 15.37,16.877 L8.997,12.271 C8.614,11.994 8.527,11.458 8.805,11.074 C8.835,11.033 8.869,10.994 8.905,10.958 L15.458,4.661 C15.594,4.53 15.598,4.313 15.467,4.176 C15.354,4.059 15.174,4.037 15.036,4.125 L6.104,9.795 C5.575,10.131 4.922,10.207 4.329,10.002 L0.577,8.704 C0.13,8.55 -0.107,8.061 0.047,7.614 C0.131,7.374 0.316,7.182 0.554,7.092 Z"></path></g></svg>Download Telegram
+          </a>
+          <div class="tgme_footer">
+            <div class="tgme_footer_column">
+              <h5><a href="//telegram.org/faq">About</a></h5>
+            </div>
+            <div class="tgme_footer_column">
+              <h5><a href="//telegram.org/blog">Blog</a></h5>
+            </div>
+            <div class="tgme_footer_column">
+              <h5><a href="//telegram.org/apps">Apps</a></h5>
+            </div>
+            <div class="tgme_footer_column">
+              <h5><a href="//core.telegram.org/">Platform</a></h5>
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
+    <div class="tgme_header_info">
+      <a class="tgme_channel_join_telegram" href="//telegram.org/dl?tme=6fb80f2cd6715e06d2_2171543495674027076">
+        <svg class="tgme_channel_join_telegram_icon" width="19px" height="16px" viewBox="0 0 19 16"><g fill="none"><path fill="#ffffff" d="M0.465,6.638 L17.511,0.073 C18.078,-0.145 18.714,0.137 18.932,0.704 C19.009,0.903 19.026,1.121 18.981,1.33 L16.042,15.001 C15.896,15.679 15.228,16.111 14.549,15.965 C14.375,15.928 14.211,15.854 14.068,15.748 L8.223,11.443 C7.874,11.185 7.799,10.694 8.057,10.345 C8.082,10.311 8.109,10.279 8.139,10.249 L14.191,4.322 C14.315,4.201 14.317,4.002 14.195,3.878 C14.091,3.771 13.926,3.753 13.8,3.834 L5.602,9.138 C5.112,9.456 4.502,9.528 3.952,9.333 L0.486,8.112 C0.077,7.967 -0.138,7.519 0.007,7.11 C0.083,6.893 0.25,6.721 0.465,6.638 Z"></path></g></svg>Join
+      </a>
+      <a class="tgme_header_link" href="https://t.me/durov">
+        <i class="tgme_page_photo_image bgcolor2" data-content="PD"><img src="https://cdn4.telesco.pe/file/QX8-RjZDMNTqNZzZOGQgXsirK8PHalqyuOw5qTk2VbVD2o0CeMUYkQu0bq3R-IqNsITtSGJ1duV7QYLkYfE42-vgrRmYxM-QmQG3_AHiAiGAQPsXvBQ3ABh7DJeFCB-b0Jp6hn7wbLiP2gwvBGzvRzd1Z4U6Sy3tf_ry_fUr_YktYaV8xYWZZlmC_FeuYVvUdTQYFkR01MhAkdJRVnajjW2KAzC-JsRYtftFc9RQ2_IwdThephGFrah3x2mtVTe_gdUGL1152pjWj_kKU_yzklfOuBWIs1E49HGZKKakZVqK6NIvMSg_3VNB3qB7fAuJvOuivEoH5mkJCg2wvySDxg.jpg"></i>
+        <div class="tgme_header_title_wrap">
+          <div class="tgme_header_title"><span dir="auto">Pavel Durov</span></div>
+          <div class="tgme_header_labels"><i class="verified-icon"> ✔</i></div>
+        </div>
+        <div class="tgme_header_counter">11.9M subscribers</div>
+      </a>
+    </div>
+  </div>
+</header>
+<main class="tgme_main" data-url="/durov">
+  <div class="tgme_container">
+    <section class="tgme_channel_history js-message_history">
+      <div class="tgme_widget_message_centered js-messages_more_wrap"><a href="/s/durov?before=177" class="tme_messages_more js-messages_more" data-before="177"></a></div><div class="tgme_widget_message_wrap js-widget_message_wrap"><div class="tgme_widget_message text_not_supported_wrap user-color-12 js-widget_message" data-post="durov/177" data-view="eyJjIjotMTAwNjUwMzEyMiwicCI6MTc3LCJ0IjoxNzgzMTYyOTYzLCJoIjoiNjgxYjI2ZGIxM2FlOTY3MThiIn0">
+  <div class="tgme_widget_message_user"><a href="https://t.me/durov"><i class="tgme_widget_message_user_photo bgcolor2" data-content="P"><img src="https://cdn4.telesco.pe/file/QX8-RjZDMNTqNZzZOGQgXsirK8PHalqyuOw5qTk2VbVD2o0CeMUYkQu0bq3R-IqNsITtSGJ1duV7QYLkYfE42-vgrRmYxM-QmQG3_AHiAiGAQPsXvBQ3ABh7DJeFCB-b0Jp6hn7wbLiP2gwvBGzvRzd1Z4U6Sy3tf_ry_fUr_YktYaV8xYWZZlmC_FeuYVvUdTQYFkR01MhAkdJRVnajjW2KAzC-JsRYtftFc9RQ2_IwdThephGFrah3x2mtVTe_gdUGL1152pjWj_kKU_yzklfOuBWIs1E49HGZKKakZVqK6NIvMSg_3VNB3qB7fAuJvOuivEoH5mkJCg2wvySDxg.jpg"></i></a></div>
+  <div class="tgme_widget_message_bubble">
+
+        <i class="tgme_widget_message_bubble_tail">
+      <svg class="bubble_icon" width="9px" height="20px" viewBox="0 0 9 20">
+        <g fill="none">
+          <path class="background" fill="#ffffff" d="M8,1 L9,1 L9,20 L8,20 L8,18 C7.807,15.161 7.124,12.233 5.950,9.218 C5.046,6.893 3.504,4.733 1.325,2.738 L1.325,2.738 C0.917,2.365 0.89,1.732 1.263,1.325 C1.452,1.118 1.72,1 2,1 L8,1 Z"></path>
+          <path class="border_1x" fill="#d7e3ec" d="M9,1 L2,1 C1.72,1 1.452,1.118 1.263,1.325 C0.89,1.732 0.917,2.365 1.325,2.738 C3.504,4.733 5.046,6.893 5.95,9.218 C7.124,12.233 7.807,15.161 8,18 L8,20 L9,20 L9,1 Z M2,0 L9,0 L9,20 L7,20 L7,20 L7.002,18.068 C6.816,15.333 6.156,12.504 5.018,9.58 C4.172,7.406 2.72,5.371 0.649,3.475 C-0.165,2.729 -0.221,1.464 0.525,0.649 C0.904,0.236 1.439,0 2,0 Z"></path>
+          <path class="border_2x" d="M9,1 L2,1 C1.72,1 1.452,1.118 1.263,1.325 C0.89,1.732 0.917,2.365 1.325,2.738 C3.504,4.733 5.046,6.893 5.95,9.218 C7.124,12.233 7.807,15.161 8,18 L8,20 L9,20 L9,1 Z M2,0.5 L9,0.5 L9,20 L7.5,20 L7.5,20 L7.501,18.034 C7.312,15.247 6.64,12.369 5.484,9.399 C4.609,7.15 3.112,5.052 0.987,3.106 C0.376,2.547 0.334,1.598 0.894,0.987 C1.178,0.677 1.579,0.5 2,0.5 Z"></path>
+          <path class="border_3x" d="M9,1 L2,1 C1.72,1 1.452,1.118 1.263,1.325 C0.89,1.732 0.917,2.365 1.325,2.738 C3.504,4.733 5.046,6.893 5.95,9.218 C7.124,12.233 7.807,15.161 8,18 L8,20 L9,20 L9,1 Z M2,0.667 L9,0.667 L9,20 L7.667,20 L7.667,20 L7.668,18.023 C7.477,15.218 6.802,12.324 5.64,9.338 C4.755,7.064 3.243,4.946 1.1,2.983 C0.557,2.486 0.52,1.643 1.017,1.1 C1.269,0.824 1.626,0.667 2,0.667 Z"></path>
+        </g>
+      </svg>
+    </i>
+    <div class="tgme_widget_message_author accent_color"><a class="tgme_widget_message_owner_name" href="https://t.me/durov"><span dir="auto">Pavel Durov</span></a></div>
+
+
+<div class="tgme_widget_message_text js-message_text" dir="auto"><i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/F09FA5B3.png')"><b>🥳</b></i><i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/E29CA8.png')"><b>✨</b></i> 2021 was a phenomenal year for Telegram. It became the <a href="https://t.me/durov/152" target="_blank" rel="noopener" onclick="return confirm('Open this link?\n\n'+this.href);">most downloaded app in the world</a> in January, managed to welcome<a href="https://t.me/durov/170" target="_blank" rel="noopener" onclick="return confirm('Open this link?\n\n'+this.href);"> 70 million new users</a> in just one day in October, and was declared the <a href="https://t.me/durov/173" target="_blank" rel="noopener" onclick="return confirm('Open this link?\n\n'+this.href);">fastest growing app</a> of the year in December.<br/><br/>We know we owe this growth to you – our users – so we carefully listened to your feedback and kept making Telegram better for you throughout the year. Yesterday we released our 12th major update this year, packed with the features you requested – like reactions and message translation <i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/F09F918C.png')"><b>👌</b></i><br/><br/>With each update we try to not simply add a missing feature, but instead expand its boundaries and redefine how it looks, feels and works. We hope that this approach can improve the quality of human communication and bring more efficiency, happiness and joy to the world <i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/F09F92AB.png')"><b>💫</b></i><br/><br/>The spoiler animations we just rolled out are pure magic, while the custom animated QR codes in this update make QRs sexy again. The newly added message reactions are already spectacular, but it&#39;s just the start: we are now busy finding ways to make them even more stunning <i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/F09F94A5.png')"><b>🔥</b></i><br/><br/>I&#39;m grateful for your love of Telegram and excited by what we can do for you in 2022. Thank you – and have a glorious New Year&#33; <i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/F09F8E84.png')"><b>🎄</b></i></div>
+<div class="tgme_widget_message_reactions js-message_reactions"><span class="tgme_reaction tgme_reaction_paid"><i class="icon icon-telegram-stars"></i>17</span><span class="tgme_reaction"><i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/F09F918D.png')"><b>👍</b></i>28.8K</span><span class="tgme_reaction"><i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/F09F8E89.png')"><b>🎉</b></i>15.7K</span><span class="tgme_reaction"><i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/F09F918E.png')"><b>👎</b></i>2.07K</span><span class="tgme_reaction"><i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/E29DA4.png')"><b>❤</b></i>165</span><span class="tgme_reaction"><i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/F09FA4A1.png')"><b>🤡</b></i>45</span></div><div class="tgme_widget_message_footer compact js-message_footer">
+
+  <div class="tgme_widget_message_info short js-message_info">
+    <span class="tgme_widget_message_views">2.51M</span><span class="copyonly"> views</span><span class="tgme_widget_message_meta">edited &nbsp;<a class="tgme_widget_message_date" href="https://t.me/durov/177"><time datetime="2021-12-31T16:05:15+00:00" class="time">16:05</time></a></span>
+  </div>
+</div>
+  </div>
+
+</div></div><div class="tgme_widget_message_wrap js-widget_message_wrap"><div class="tgme_widget_message text_not_supported_wrap user-color-12 js-widget_message" data-post="durov/178" data-view="eyJjIjotMTAwNjUwMzEyMiwicCI6MTc4LCJ0IjoxNzgzMTYyOTYzLCJoIjoiZjI3M2Q0NjRiODJiNjcwNDcwIn0">
+  <div class="tgme_widget_message_user"><a href="https://t.me/durov"><i class="tgme_widget_message_user_photo bgcolor2" data-content="P"><img src="https://cdn4.telesco.pe/file/QX8-RjZDMNTqNZzZOGQgXsirK8PHalqyuOw5qTk2VbVD2o0CeMUYkQu0bq3R-IqNsITtSGJ1duV7QYLkYfE42-vgrRmYxM-QmQG3_AHiAiGAQPsXvBQ3ABh7DJeFCB-b0Jp6hn7wbLiP2gwvBGzvRzd1Z4U6Sy3tf_ry_fUr_YktYaV8xYWZZlmC_FeuYVvUdTQYFkR01MhAkdJRVnajjW2KAzC-JsRYtftFc9RQ2_IwdThephGFrah3x2mtVTe_gdUGL1152pjWj_kKU_yzklfOuBWIs1E49HGZKKakZVqK6NIvMSg_3VNB3qB7fAuJvOuivEoH5mkJCg2wvySDxg.jpg"></i></a></div>
+  <div class="tgme_widget_message_bubble">
+
+        <i class="tgme_widget_message_bubble_tail">
+      <svg class="bubble_icon" width="9px" height="20px" viewBox="0 0 9 20">
+        <g fill="none">
+          <path class="background" fill="#ffffff" d="M8,1 L9,1 L9,20 L8,20 L8,18 C7.807,15.161 7.124,12.233 5.950,9.218 C5.046,6.893 3.504,4.733 1.325,2.738 L1.325,2.738 C0.917,2.365 0.89,1.732 1.263,1.325 C1.452,1.118 1.72,1 2,1 L8,1 Z"></path>
+          <path class="border_1x" fill="#d7e3ec" d="M9,1 L2,1 C1.72,1 1.452,1.118 1.263,1.325 C0.89,1.732 0.917,2.365 1.325,2.738 C3.504,4.733 5.046,6.893 5.95,9.218 C7.124,12.233 7.807,15.161 8,18 L8,20 L9,20 L9,1 Z M2,0 L9,0 L9,20 L7,20 L7,20 L7.002,18.068 C6.816,15.333 6.156,12.504 5.018,9.58 C4.172,7.406 2.72,5.371 0.649,3.475 C-0.165,2.729 -0.221,1.464 0.525,0.649 C0.904,0.236 1.439,0 2,0 Z"></path>
+          <path class="border_2x" d="M9,1 L2,1 C1.72,1 1.452,1.118 1.263,1.325 C0.89,1.732 0.917,2.365 1.325,2.738 C3.504,4.733 5.046,6.893 5.95,9.218 C7.124,12.233 7.807,15.161 8,18 L8,20 L9,20 L9,1 Z M2,0.5 L9,0.5 L9,20 L7.5,20 L7.5,20 L7.501,18.034 C7.312,15.247 6.64,12.369 5.484,9.399 C4.609,7.15 3.112,5.052 0.987,3.106 C0.376,2.547 0.334,1.598 0.894,0.987 C1.178,0.677 1.579,0.5 2,0.5 Z"></path>
+          <path class="border_3x" d="M9,1 L2,1 C1.72,1 1.452,1.118 1.263,1.325 C0.89,1.732 0.917,2.365 1.325,2.738 C3.504,4.733 5.046,6.893 5.95,9.218 C7.124,12.233 7.807,15.161 8,18 L8,20 L9,20 L9,1 Z M2,0.667 L9,0.667 L9,20 L7.667,20 L7.667,20 L7.668,18.023 C7.477,15.218 6.802,12.324 5.64,9.338 C4.755,7.064 3.243,4.946 1.1,2.983 C0.557,2.486 0.52,1.643 1.017,1.1 C1.269,0.824 1.626,0.667 2,0.667 Z"></path>
+        </g>
+      </svg>
+    </i>
+    <div class="tgme_widget_message_author accent_color"><a class="tgme_widget_message_owner_name" href="https://t.me/durov"><span dir="auto">Pavel Durov</span></a></div>
+
+
+<div class="tgme_widget_message_text js-message_text" dir="auto">Messages on WhatsApp were left open to potential attackers for years, as detailed in recent leaks about Boldend – a US cyber-warfare startup (more <a href="https://www.forbes.com/sites/thomasbrewster/2022/02/01/billionaire-facebook-investor-peter-thiel-secretly-funded-a-cyber-warfare-startup-that-hacked-whatsapp/" target="_blank" rel="noopener" onclick="return confirm('Open this link?\n\n'+this.href);">here</a>).<br/><br/>Since the creation of WhatsApp, there&#39;s hardly been a moment in which it was secure: every few months researchers uncover a new security issue in the app. I wrote about this in detail 2 years ago (read<a href="https://telegra.ph/Why-Using-WhatsApp-Is-Dangerous-01-30-4" target="_blank" rel="noopener" onclick="return confirm('Open this link?\n\n'+this.href);"> here</a> if you missed it). Nothing has changed since then. <br/><br/>It would be hard to believe that the technical team of WhatsApp is so consistently incompetent. Telegram, a far more sophisticated app, has never had security issues of such severity.</div>
+<div class="tgme_widget_message_reactions js-message_reactions"><span class="tgme_reaction tgme_reaction_paid"><i class="icon icon-telegram-stars"></i>16</span><span class="tgme_reaction"><i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/F09F918D.png')"><b>👍</b></i>25.3K</span><span class="tgme_reaction"><i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/F09F8E89.png')"><b>🎉</b></i>4.02K</span><span class="tgme_reaction"><i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/F09F918E.png')"><b>👎</b></i>2K</span><span class="tgme_reaction"><i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/E29DA4.png')"><b>❤</b></i>187</span><span class="tgme_reaction"><i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/F09FA4A1.png')"><b>🤡</b></i>48</span></div><div class="tgme_widget_message_footer compact js-message_footer">
+
+  <div class="tgme_widget_message_info short js-message_info">
+    <span class="tgme_widget_message_views">2.47M</span><span class="copyonly"> views</span><span class="tgme_widget_message_meta"><a class="tgme_widget_message_date" href="https://t.me/durov/178"><time datetime="2022-02-03T14:17:24+00:00" class="time">14:17</time></a></span>
+  </div>
+</div>
+  </div>
+
+</div></div><div class="tgme_widget_message_wrap js-widget_message_wrap"><div class="tgme_widget_message text_not_supported_wrap user-color-12 js-widget_message" data-post="durov/179" data-view="eyJjIjotMTAwNjUwMzEyMiwicCI6MTc5LCJ0IjoxNzgzMTYyOTYzLCJoIjoiODYzMmZmZGM5ZjEwZDIwZTI4In0">
+  <div class="tgme_widget_message_user"><a href="https://t.me/durov"><i class="tgme_widget_message_user_photo bgcolor2" data-content="P"><img src="https://cdn4.telesco.pe/file/QX8-RjZDMNTqNZzZOGQgXsirK8PHalqyuOw5qTk2VbVD2o0CeMUYkQu0bq3R-IqNsITtSGJ1duV7QYLkYfE42-vgrRmYxM-QmQG3_AHiAiGAQPsXvBQ3ABh7DJeFCB-b0Jp6hn7wbLiP2gwvBGzvRzd1Z4U6Sy3tf_ry_fUr_YktYaV8xYWZZlmC_FeuYVvUdTQYFkR01MhAkdJRVnajjW2KAzC-JsRYtftFc9RQ2_IwdThephGFrah3x2mtVTe_gdUGL1152pjWj_kKU_yzklfOuBWIs1E49HGZKKakZVqK6NIvMSg_3VNB3qB7fAuJvOuivEoH5mkJCg2wvySDxg.jpg"></i></a></div>
+  <div class="tgme_widget_message_bubble">
+
+        <i class="tgme_widget_message_bubble_tail">
+      <svg class="bubble_icon" width="9px" height="20px" viewBox="0 0 9 20">
+        <g fill="none">
+          <path class="background" fill="#ffffff" d="M8,1 L9,1 L9,20 L8,20 L8,18 C7.807,15.161 7.124,12.233 5.950,9.218 C5.046,6.893 3.504,4.733 1.325,2.738 L1.325,2.738 C0.917,2.365 0.89,1.732 1.263,1.325 C1.452,1.118 1.72,1 2,1 L8,1 Z"></path>
+          <path class="border_1x" fill="#d7e3ec" d="M9,1 L2,1 C1.72,1 1.452,1.118 1.263,1.325 C0.89,1.732 0.917,2.365 1.325,2.738 C3.504,4.733 5.046,6.893 5.95,9.218 C7.124,12.233 7.807,15.161 8,18 L8,20 L9,20 L9,1 Z M2,0 L9,0 L9,20 L7,20 L7,20 L7.002,18.068 C6.816,15.333 6.156,12.504 5.018,9.58 C4.172,7.406 2.72,5.371 0.649,3.475 C-0.165,2.729 -0.221,1.464 0.525,0.649 C0.904,0.236 1.439,0 2,0 Z"></path>
+          <path class="border_2x" d="M9,1 L2,1 C1.72,1 1.452,1.118 1.263,1.325 C0.89,1.732 0.917,2.365 1.325,2.738 C3.504,4.733 5.046,6.893 5.95,9.218 C7.124,12.233 7.807,15.161 8,18 L8,20 L9,20 L9,1 Z M2,0.5 L9,0.5 L9,20 L7.5,20 L7.5,20 L7.501,18.034 C7.312,15.247 6.64,12.369 5.484,9.399 C4.609,7.15 3.112,5.052 0.987,3.106 C0.376,2.547 0.334,1.598 0.894,0.987 C1.178,0.677 1.579,0.5 2,0.5 Z"></path>
+          <path class="border_3x" d="M9,1 L2,1 C1.72,1 1.452,1.118 1.263,1.325 C0.89,1.732 0.917,2.365 1.325,2.738 C3.504,4.733 5.046,6.893 5.95,9.218 C7.124,12.233 7.807,15.161 8,18 L8,20 L9,20 L9,1 Z M2,0.667 L9,0.667 L9,20 L7.667,20 L7.667,20 L7.668,18.023 C7.477,15.218 6.802,12.324 5.64,9.338 C4.755,7.064 3.243,4.946 1.1,2.983 C0.557,2.486 0.52,1.643 1.017,1.1 C1.269,0.824 1.626,0.667 2,0.667 Z"></path>
+        </g>
+      </svg>
+    </i>
+    <div class="tgme_widget_message_author accent_color"><a class="tgme_widget_message_owner_name" href="https://t.me/durov"><span dir="auto">Pavel Durov</span></a></div>
+
+
+<div class="tgme_widget_message_text js-message_text" dir="auto">If you follow my posts, you know that on my <a href="https://t.me/durov/156" target="_blank" rel="noopener" onclick="return confirm('Open this link?\n\n'+this.href);">Mom&#39;s side</a>, I trace my family line from Kyiv. Her maiden name is Ukrainian (Ivanenko), and to this day we have many relatives living in Ukraine. That&#39;s why this tragic conflict is personal <a href="https://t.me/telegram/169" target="_blank" rel="noopener" onclick="return confirm('Open this link?\n\n'+this.href);">both to me and Telegram</a>.  <br/>   <br/>Some people wondered if Telegram is somehow less secure for Ukrainians, because I once lived in Russia. Let me tell these people how my career in Russia ended.  <br/>   <br/>Nine years ago I was the CEO of VK, which was the largest social network in Russia and Ukraine. In 2013, the Russian security agency, FSB, <a href="https://m.vk.com/wall1_45621" target="_blank" rel="noopener" onclick="return confirm('Open this link?\n\n'+this.href);">demanded </a>that I provide them the private data of the Ukrainian users of VK who were protesting against a pro-Russian President.   <br/>  <br/>I refused to comply with these demands, because it would have meant a betrayal of our Ukrainian users. After that, I was fired from the company I founded and was forced to leave Russia.   <br/>  <br/>I lost my company and my home, but would do it again – without hesitation. I smile with pride when I read <a href="https://m.vk.com/wall1_45621" target="_blank" rel="noopener" onclick="return confirm('Open this link?\n\n'+this.href);">my VK post</a> from April 2014, which shows the scanned orders from the FSB and my trademark response to them – a dog in a hoodie.    <br/>  <br/>When I defied their demands, the stakes were high for me personally. I was still living in Russia, and my team and my old company were also based in that country.   <br/>  <br/>Many years have passed since then. Many things changed: I no longer live in Russia, no longer have any companies or employees there. But one thing remains the same – I stand for our users no matter what. Their right to privacy is sacred. Now – more than ever.</div>
+<div class="tgme_widget_message_reactions js-message_reactions"><span class="tgme_reaction tgme_reaction_paid"><i class="icon icon-telegram-stars"></i>50</span><span class="tgme_reaction"><i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/F09F918D.png')"><b>👍</b></i>58.4K</span><span class="tgme_reaction"><i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/F09F8E89.png')"><b>🎉</b></i>5.06K</span><span class="tgme_reaction"><i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/F09F918E.png')"><b>👎</b></i>2.45K</span><span class="tgme_reaction"><i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/E29DA4.png')"><b>❤</b></i>377</span><span class="tgme_reaction"><i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/F09FA4A1.png')"><b>🤡</b></i>108</span></div><div class="tgme_widget_message_footer compact js-message_footer">
+
+  <div class="tgme_widget_message_info short js-message_info">
+    <span class="tgme_widget_message_views">3M</span><span class="copyonly"> views</span><span class="tgme_widget_message_meta">edited &nbsp;<a class="tgme_widget_message_date" href="https://t.me/durov/179"><time datetime="2022-03-07T17:19:03+00:00" class="time">17:19</time></a></span>
+  </div>
+</div>
+  </div>
+
+</div></div><div class="tgme_widget_message_wrap js-widget_message_wrap"><div class="tgme_widget_message text_not_supported_wrap user-color-12 js-widget_message" data-post="durov/180" data-view="eyJjIjotMTAwNjUwMzEyMiwicCI6MTgwLCJ0IjoxNzgzMTYyOTYzLCJoIjoiNTYzN2ZlOTg5YzcwNGQ2MGM4In0">
+  <div class="tgme_widget_message_user"><a href="https://t.me/durov"><i class="tgme_widget_message_user_photo bgcolor2" data-content="P"><img src="https://cdn4.telesco.pe/file/QX8-RjZDMNTqNZzZOGQgXsirK8PHalqyuOw5qTk2VbVD2o0CeMUYkQu0bq3R-IqNsITtSGJ1duV7QYLkYfE42-vgrRmYxM-QmQG3_AHiAiGAQPsXvBQ3ABh7DJeFCB-b0Jp6hn7wbLiP2gwvBGzvRzd1Z4U6Sy3tf_ry_fUr_YktYaV8xYWZZlmC_FeuYVvUdTQYFkR01MhAkdJRVnajjW2KAzC-JsRYtftFc9RQ2_IwdThephGFrah3x2mtVTe_gdUGL1152pjWj_kKU_yzklfOuBWIs1E49HGZKKakZVqK6NIvMSg_3VNB3qB7fAuJvOuivEoH5mkJCg2wvySDxg.jpg"></i></a></div>
+  <div class="tgme_widget_message_bubble">
+
+        <i class="tgme_widget_message_bubble_tail">
+      <svg class="bubble_icon" width="9px" height="20px" viewBox="0 0 9 20">
+        <g fill="none">
+          <path class="background" fill="#ffffff" d="M8,1 L9,1 L9,20 L8,20 L8,18 C7.807,15.161 7.124,12.233 5.950,9.218 C5.046,6.893 3.504,4.733 1.325,2.738 L1.325,2.738 C0.917,2.365 0.89,1.732 1.263,1.325 C1.452,1.118 1.72,1 2,1 L8,1 Z"></path>
+          <path class="border_1x" fill="#d7e3ec" d="M9,1 L2,1 C1.72,1 1.452,1.118 1.263,1.325 C0.89,1.732 0.917,2.365 1.325,2.738 C3.504,4.733 5.046,6.893 5.95,9.218 C7.124,12.233 7.807,15.161 8,18 L8,20 L9,20 L9,1 Z M2,0 L9,0 L9,20 L7,20 L7,20 L7.002,18.068 C6.816,15.333 6.156,12.504 5.018,9.58 C4.172,7.406 2.72,5.371 0.649,3.475 C-0.165,2.729 -0.221,1.464 0.525,0.649 C0.904,0.236 1.439,0 2,0 Z"></path>
+          <path class="border_2x" d="M9,1 L2,1 C1.72,1 1.452,1.118 1.263,1.325 C0.89,1.732 0.917,2.365 1.325,2.738 C3.504,4.733 5.046,6.893 5.95,9.218 C7.124,12.233 7.807,15.161 8,18 L8,20 L9,20 L9,1 Z M2,0.5 L9,0.5 L9,20 L7.5,20 L7.5,20 L7.501,18.034 C7.312,15.247 6.64,12.369 5.484,9.399 C4.609,7.15 3.112,5.052 0.987,3.106 C0.376,2.547 0.334,1.598 0.894,0.987 C1.178,0.677 1.579,0.5 2,0.5 Z"></path>
+          <path class="border_3x" d="M9,1 L2,1 C1.72,1 1.452,1.118 1.263,1.325 C0.89,1.732 0.917,2.365 1.325,2.738 C3.504,4.733 5.046,6.893 5.95,9.218 C7.124,12.233 7.807,15.161 8,18 L8,20 L9,20 L9,1 Z M2,0.667 L9,0.667 L9,20 L7.667,20 L7.667,20 L7.668,18.023 C7.477,15.218 6.802,12.324 5.64,9.338 C4.755,7.064 3.243,4.946 1.1,2.983 C0.557,2.486 0.52,1.643 1.017,1.1 C1.269,0.824 1.626,0.667 2,0.667 Z"></path>
+        </g>
+      </svg>
+    </i>
+    <div class="tgme_widget_message_author accent_color"><a class="tgme_widget_message_owner_name" href="https://t.me/durov"><span dir="auto">Pavel Durov</span></a></div>
+
+
+<div class="tgme_widget_message_text js-message_text" dir="auto">It seems that we had an issue with emails going between our <a href="http://telegram.org/" target="_blank" rel="noopener">telegram.org</a> corporate addresses and the Brazilian Supreme Court. As a result of this miscommunication, the Court ruled to ban Telegram for being unresponsive.     <br/>    <br/>On behalf of our team, I apologize to the Brazilian Supreme Court for our negligence. We definitely could have done a better job.     <br/>    <br/>We complied with an earlier court decision in late February and responded with a suggestion to send future takedown requests to a dedicated email address. Unfortunately, our response must have been lost, because the Court used the old general-purpose email address in further attempts to reach us. As a result, we missed its decision in early March that contained a follow-up takedown request. Luckily, we have now found and processed it, delivering another report to the Court today.    <br/>    <br/>Because tens of millions of Brazilians rely on Telegram to communicate with family, friends and colleagues, I ask the Court to consider delaying its ruling for a few days at its discretion to allow us to remedy the situation by appointing a representative in Brazil and setting up a framework to react to future pressing issues like this in an expedited manner.     <br/>    <br/>The last 3 weeks have been unprecedented for the world and for Telegram. Our content moderation team was flooded with requests from multiple parties. However, I am certain that once a reliable channel of communication is established, we&#39;ll be able to efficiently process takedown requests for public channels that are illegal in Brazil.</div>
+<div class="tgme_widget_message_reactions js-message_reactions"><span class="tgme_reaction tgme_reaction_paid"><i class="icon icon-telegram-stars"></i>13</span><span class="tgme_reaction"><i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/F09F918D.png')"><b>👍</b></i>21.9K</span><span class="tgme_reaction"><i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/F09F918E.png')"><b>👎</b></i>4.59K</span><span class="tgme_reaction"><i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/F09F8E89.png')"><b>🎉</b></i>2.63K</span><span class="tgme_reaction"><i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/E29DA4.png')"><b>❤</b></i>169</span><span class="tgme_reaction"><i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/F09FA4A1.png')"><b>🤡</b></i>54</span></div><div class="tgme_widget_message_footer compact js-message_footer">
+
+  <div class="tgme_widget_message_info short js-message_info">
+    <span class="tgme_widget_message_views">2.54M</span><span class="copyonly"> views</span><span class="tgme_widget_message_meta"><a class="tgme_widget_message_date" href="https://t.me/durov/180"><time datetime="2022-03-18T22:20:41+00:00" class="time">22:20</time></a></span>
+  </div>
+</div>
+  </div>
+
+</div></div><div class="tgme_widget_message_wrap js-widget_message_wrap"><div class="tgme_widget_message text_not_supported_wrap user-color-12 js-widget_message" data-post="durov/181" data-view="eyJjIjotMTAwNjUwMzEyMiwicCI6MTgxLCJ0IjoxNzgzMTYyOTYzLCJoIjoiZmRkYTJlZDA0ZmMyMjliZWQwIn0">
+  <div class="tgme_widget_message_user"><a href="https://t.me/durov"><i class="tgme_widget_message_user_photo bgcolor2" data-content="P"><img src="https://cdn4.telesco.pe/file/QX8-RjZDMNTqNZzZOGQgXsirK8PHalqyuOw5qTk2VbVD2o0CeMUYkQu0bq3R-IqNsITtSGJ1duV7QYLkYfE42-vgrRmYxM-QmQG3_AHiAiGAQPsXvBQ3ABh7DJeFCB-b0Jp6hn7wbLiP2gwvBGzvRzd1Z4U6Sy3tf_ry_fUr_YktYaV8xYWZZlmC_FeuYVvUdTQYFkR01MhAkdJRVnajjW2KAzC-JsRYtftFc9RQ2_IwdThephGFrah3x2mtVTe_gdUGL1152pjWj_kKU_yzklfOuBWIs1E49HGZKKakZVqK6NIvMSg_3VNB3qB7fAuJvOuivEoH5mkJCg2wvySDxg.jpg"></i></a></div>
+  <div class="tgme_widget_message_bubble">
+
+        <i class="tgme_widget_message_bubble_tail">
+      <svg class="bubble_icon" width="9px" height="20px" viewBox="0 0 9 20">
+        <g fill="none">
+          <path class="background" fill="#ffffff" d="M8,1 L9,1 L9,20 L8,20 L8,18 C7.807,15.161 7.124,12.233 5.950,9.218 C5.046,6.893 3.504,4.733 1.325,2.738 L1.325,2.738 C0.917,2.365 0.89,1.732 1.263,1.325 C1.452,1.118 1.72,1 2,1 L8,1 Z"></path>
+          <path class="border_1x" fill="#d7e3ec" d="M9,1 L2,1 C1.72,1 1.452,1.118 1.263,1.325 C0.89,1.732 0.917,2.365 1.325,2.738 C3.504,4.733 5.046,6.893 5.95,9.218 C7.124,12.233 7.807,15.161 8,18 L8,20 L9,20 L9,1 Z M2,0 L9,0 L9,20 L7,20 L7,20 L7.002,18.068 C6.816,15.333 6.156,12.504 5.018,9.58 C4.172,7.406 2.72,5.371 0.649,3.475 C-0.165,2.729 -0.221,1.464 0.525,0.649 C0.904,0.236 1.439,0 2,0 Z"></path>
+          <path class="border_2x" d="M9,1 L2,1 C1.72,1 1.452,1.118 1.263,1.325 C0.89,1.732 0.917,2.365 1.325,2.738 C3.504,4.733 5.046,6.893 5.95,9.218 C7.124,12.233 7.807,15.161 8,18 L8,20 L9,20 L9,1 Z M2,0.5 L9,0.5 L9,20 L7.5,20 L7.5,20 L7.501,18.034 C7.312,15.247 6.64,12.369 5.484,9.399 C4.609,7.15 3.112,5.052 0.987,3.106 C0.376,2.547 0.334,1.598 0.894,0.987 C1.178,0.677 1.579,0.5 2,0.5 Z"></path>
+          <path class="border_3x" d="M9,1 L2,1 C1.72,1 1.452,1.118 1.263,1.325 C0.89,1.732 0.917,2.365 1.325,2.738 C3.504,4.733 5.046,6.893 5.95,9.218 C7.124,12.233 7.807,15.161 8,18 L8,20 L9,20 L9,1 Z M2,0.667 L9,0.667 L9,20 L7.667,20 L7.667,20 L7.668,18.023 C7.477,15.218 6.802,12.324 5.64,9.338 C4.755,7.064 3.243,4.946 1.1,2.983 C0.557,2.486 0.52,1.643 1.017,1.1 C1.269,0.824 1.626,0.667 2,0.667 Z"></path>
+        </g>
+      </svg>
+    </i>
+    <div class="tgme_widget_message_author accent_color"><a class="tgme_widget_message_owner_name" href="https://t.me/durov"><span dir="auto">Pavel Durov</span></a></div>
+
+
+<div class="tgme_widget_message_text js-message_text" dir="auto">Telegram shipped another historic update this past weekend. In addition to features that redefine the boundaries of what a messaging app can do (never before have bots been <a href="https://t.me/telegram/178" target="_blank" rel="noopener" onclick="return confirm('Open this link?\n\n'+this.href);">so powerful</a> or notification options <a href="https://t.me/telegram/175" target="_blank" rel="noopener" onclick="return confirm('Open this link?\n\n'+this.href);">so flexible</a>), we introduced half a dozen other <a href="https://telegram.org/blog/notifications-bots" target="_blank" rel="noopener" onclick="return confirm('Open this link?\n\n'+this.href);">improvements</a>. Among them is support for more languages in message<a href="https://t.me/TelegramTips/315" target="_blank" rel="noopener" onclick="return confirm('Open this link?\n\n'+this.href);"> translations</a> (to turn on the Translate button, head to Settings &gt; Languages). <br/><br/>We recognize that Telegram has become the main source of information from Ukraine, and we hope that the tools we provide can help inform more people and save more lives. To ease the work of journalists around the world, all public channel posts in Ukrainian now always offer the translate button by default.</div><a class="tgme_widget_message_link_preview" href="https://t.me/telegram/178">
+
+  <div class="link_preview_site_name accent_color" dir="auto">Telegram</div>
+  <div class="link_preview_video_player js-message_video_player" style="">
+  <i class="link_preview_video_thumb" style="background-image:url('https://cdn4.telesco.pe/file/ZE733Ta5-XtjWU6TCkah-42iUEau55lVR1dAEOmQOoIJNi_J4WIzdvQ_7QVjbjkoQjuRUcF-77gYEBBL8DYqTA2Dydcs0wPZ8o6aBYeQnWSXuBMTsMVuGcPmpUO3xzY9mGH2YQLZ14GlnuVqYnURPFT8UFOtpO76OLjYAAER8IQwuTFrjNg-qZ5Hl7yDpktkWH3AY7KVWoGb-Bd3AKLqTSxaJv7I1m7uqW69WLoLMWI5YRGPWwPAlEvq4HvHi1nqoHRjlPjl8nrLhSFy6o7NxeO-4Y0Gfl9rH2r6jHpP2QUih_LUmLFyJ2Om3_-R5YSx1pJ70kp2VK6FNrSdSLlvZA')"></i>
+  <div class="link_preview_video_wrap" style="padding-top:100%">
+    <video class="link_preview_video js-message_video" src="https://cdn4.telesco.pe/file/0fdfd2b924.mp4?token=vI6_MU77GVHBlBBDFIztuWD4w1MzvPGx9l6h7MQkcsOnh5maTpr37zjsGFmBymqOpjmGJlw2ZHiAUz60wVbInxvd7GmHsgU-wpygr-dZy47vMY1aYeumzqKLcQplnodYYDAnM-lCqY6-X-fOjAox1In98vBL4b1x0Kd0LZSHwgxH0l5Mg6Pj1JWuzRR10d2UcYhxuumVmWsP-wR3NHBEkgY1qe72gOzgbn7VERGeaK-zbf80eYBUz7RgI4b6LrYPdGgEycJxsi2vzFO_2sF3Cd3HVrvMQKWGCrzlZ5534VEBSI-wZT81FoaXEXxWQlx0UnpeARn4nFq6lIl5nWq-XA" width="100%" height="100%"></video>
+  </div>
+  <div class="message_video_play js-message_video_play"></div>
+<time class="message_video_duration js-message_video_duration">0:23</time>
+</div>
+  <div class="link_preview_title" dir="auto">Telegram News</div>
+  <div class="link_preview_description" dir="auto">Developers can create infinitely flexible interfaces for supercharged bots using JavaScript.<br/><br/>April Features: 1 • 2 • 3 •&nbsp;4 • More</div>
+</a>
+<div class="tgme_widget_message_reactions js-message_reactions"><span class="tgme_reaction tgme_reaction_paid"><i class="icon icon-telegram-stars"></i>19</span><span class="tgme_reaction"><i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/F09F918D.png')"><b>👍</b></i>13.8K</span><span class="tgme_reaction"><i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/F09F8E89.png')"><b>🎉</b></i>2.9K</span><span class="tgme_reaction"><i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/F09F918E.png')"><b>👎</b></i>1.05K</span><span class="tgme_reaction"><i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/E29DA4.png')"><b>❤</b></i>201</span><span class="tgme_reaction"><i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/F09FA4A1.png')"><b>🤡</b></i>50</span></div><div class="tgme_widget_message_footer compact js-message_footer">
+
+  <div class="tgme_widget_message_info short js-message_info">
+    <span class="tgme_widget_message_views">2.23M</span><span class="copyonly"> views</span><span class="tgme_widget_message_meta">edited &nbsp;<a class="tgme_widget_message_date" href="https://t.me/durov/181"><time datetime="2022-04-18T18:29:55+00:00" class="time">18:29</time></a></span>
+  </div>
+</div>
+  </div>
+
+</div></div><div class="tgme_widget_message_wrap js-widget_message_wrap"><div class="tgme_widget_message text_not_supported_wrap user-color-12 js-widget_message" data-post="durov/182" data-view="eyJjIjotMTAwNjUwMzEyMiwicCI6MTgyLCJ0IjoxNzgzMTYyOTYzLCJoIjoiNWI5ODFlMDRlZTc4ZWJiZTNlIn0">
+  <div class="tgme_widget_message_user"><a href="https://t.me/durov"><i class="tgme_widget_message_user_photo bgcolor2" data-content="P"><img src="https://cdn4.telesco.pe/file/QX8-RjZDMNTqNZzZOGQgXsirK8PHalqyuOw5qTk2VbVD2o0CeMUYkQu0bq3R-IqNsITtSGJ1duV7QYLkYfE42-vgrRmYxM-QmQG3_AHiAiGAQPsXvBQ3ABh7DJeFCB-b0Jp6hn7wbLiP2gwvBGzvRzd1Z4U6Sy3tf_ry_fUr_YktYaV8xYWZZlmC_FeuYVvUdTQYFkR01MhAkdJRVnajjW2KAzC-JsRYtftFc9RQ2_IwdThephGFrah3x2mtVTe_gdUGL1152pjWj_kKU_yzklfOuBWIs1E49HGZKKakZVqK6NIvMSg_3VNB3qB7fAuJvOuivEoH5mkJCg2wvySDxg.jpg"></i></a></div>
+  <div class="tgme_widget_message_bubble">
+
+        <i class="tgme_widget_message_bubble_tail">
+      <svg class="bubble_icon" width="9px" height="20px" viewBox="0 0 9 20">
+        <g fill="none">
+          <path class="background" fill="#ffffff" d="M8,1 L9,1 L9,20 L8,20 L8,18 C7.807,15.161 7.124,12.233 5.950,9.218 C5.046,6.893 3.504,4.733 1.325,2.738 L1.325,2.738 C0.917,2.365 0.89,1.732 1.263,1.325 C1.452,1.118 1.72,1 2,1 L8,1 Z"></path>
+          <path class="border_1x" fill="#d7e3ec" d="M9,1 L2,1 C1.72,1 1.452,1.118 1.263,1.325 C0.89,1.732 0.917,2.365 1.325,2.738 C3.504,4.733 5.046,6.893 5.95,9.218 C7.124,12.233 7.807,15.161 8,18 L8,20 L9,20 L9,1 Z M2,0 L9,0 L9,20 L7,20 L7,20 L7.002,18.068 C6.816,15.333 6.156,12.504 5.018,9.58 C4.172,7.406 2.72,5.371 0.649,3.475 C-0.165,2.729 -0.221,1.464 0.525,0.649 C0.904,0.236 1.439,0 2,0 Z"></path>
+          <path class="border_2x" d="M9,1 L2,1 C1.72,1 1.452,1.118 1.263,1.325 C0.89,1.732 0.917,2.365 1.325,2.738 C3.504,4.733 5.046,6.893 5.95,9.218 C7.124,12.233 7.807,15.161 8,18 L8,20 L9,20 L9,1 Z M2,0.5 L9,0.5 L9,20 L7.5,20 L7.5,20 L7.501,18.034 C7.312,15.247 6.64,12.369 5.484,9.399 C4.609,7.15 3.112,5.052 0.987,3.106 C0.376,2.547 0.334,1.598 0.894,0.987 C1.178,0.677 1.579,0.5 2,0.5 Z"></path>
+          <path class="border_3x" d="M9,1 L2,1 C1.72,1 1.452,1.118 1.263,1.325 C0.89,1.732 0.917,2.365 1.325,2.738 C3.504,4.733 5.046,6.893 5.95,9.218 C7.124,12.233 7.807,15.161 8,18 L8,20 L9,20 L9,1 Z M2,0.667 L9,0.667 L9,20 L7.667,20 L7.667,20 L7.668,18.023 C7.477,15.218 6.802,12.324 5.64,9.338 C4.755,7.064 3.243,4.946 1.1,2.983 C0.557,2.486 0.52,1.643 1.017,1.1 C1.269,0.824 1.626,0.667 2,0.667 Z"></path>
+        </g>
+      </svg>
+    </i>
+    <div class="tgme_widget_message_author accent_color"><a class="tgme_widget_message_owner_name" href="https://t.me/durov"><span dir="auto">Pavel Durov</span></a></div>
+
+
+<a class="tgme_widget_message_photo_wrap 5138900753480526318 1196493570_456239598" href="https://t.me/durov/182" style="width:800px;background-image:url('https://cdn1.telesco.pe/file/gD5KKcUDaCcG_OR18MdAenCQkvCGZvBA47C2j9cu7KrFvoaNeCIydTvI_4iUU95FIYzhwcxkRwnasVRFTdPaGeDs9Tjv6hJhxPFOft90z7X-aIC9G71ql39AMwsvcXPF9PILuyVvwXOZmIRJvSkmcTn49LViolG2Wq7EnMiRnwWkWzsd1moPeBWqTmKNBxtXSqnImFYlaH143ve7XJuK9kQdVkcX6yoZvSA3zHVlx0rg8-T9xux4AzsAzaljFjs1e-mI6PShn25po9WkFygajFWG8AEthZ3tvZ3fem_xRDMIOms3Ej2Vk5NHqTaK5DqF5XE8i8RakZXUW2GUPKrU5w.jpg')">
+  <div class="tgme_widget_message_photo" style="padding-top:88.25%"></div>
+</a><div class="tgme_widget_message_text js-message_text" dir="auto">In 2022, Telegram is again among the top 5 most downloaded apps in the world (just like in 2021). Of these top 5 most popular apps, Telegram is the only one that doesn&#39;t spend billions on marketing to buy downloads. In a way, we are the only app that is on the list purely because it is genuinely loved by the people<i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/E29DA4E2808DF09F94A5.png')"><b>❤️‍🔥</b></i></div>
+<div class="tgme_widget_message_reactions js-message_reactions"><span class="tgme_reaction tgme_reaction_paid"><i class="icon icon-telegram-stars"></i>27</span><span class="tgme_reaction"><i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/F09F8E89.png')"><b>🎉</b></i>33.5K</span><span class="tgme_reaction"><i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/F09F918D.png')"><b>👍</b></i>10.2K</span><span class="tgme_reaction"><i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/F09F918E.png')"><b>👎</b></i>990</span><span class="tgme_reaction"><i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/E29DA4.png')"><b>❤</b></i>240</span><span class="tgme_reaction"><i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/F09FA4A1.png')"><b>🤡</b></i>59</span></div><div class="tgme_widget_message_footer compact js-message_footer">
+
+  <div class="tgme_widget_message_info short js-message_info">
+    <span class="tgme_widget_message_views">2.59M</span><span class="copyonly"> views</span><span class="tgme_widget_message_meta"><a class="tgme_widget_message_date" href="https://t.me/durov/182"><time datetime="2022-04-27T18:28:17+00:00" class="time">18:28</time></a></span>
+  </div>
+</div>
+  </div>
+
+</div></div><div class="tgme_widget_message_wrap js-widget_message_wrap"><div class="tgme_widget_message text_not_supported_wrap user-color-12 js-widget_message" data-post="durov/183" data-view="eyJjIjotMTAwNjUwMzEyMiwicCI6MTgzLCJ0IjoxNzgzMTYyOTYzLCJoIjoiYjMzMGM5YTY4Y2ZiMTE2MDZkIn0">
+  <div class="tgme_widget_message_user"><a href="https://t.me/durov"><i class="tgme_widget_message_user_photo bgcolor2" data-content="P"><img src="https://cdn4.telesco.pe/file/QX8-RjZDMNTqNZzZOGQgXsirK8PHalqyuOw5qTk2VbVD2o0CeMUYkQu0bq3R-IqNsITtSGJ1duV7QYLkYfE42-vgrRmYxM-QmQG3_AHiAiGAQPsXvBQ3ABh7DJeFCB-b0Jp6hn7wbLiP2gwvBGzvRzd1Z4U6Sy3tf_ry_fUr_YktYaV8xYWZZlmC_FeuYVvUdTQYFkR01MhAkdJRVnajjW2KAzC-JsRYtftFc9RQ2_IwdThephGFrah3x2mtVTe_gdUGL1152pjWj_kKU_yzklfOuBWIs1E49HGZKKakZVqK6NIvMSg_3VNB3qB7fAuJvOuivEoH5mkJCg2wvySDxg.jpg"></i></a></div>
+  <div class="tgme_widget_message_bubble">
+
+        <i class="tgme_widget_message_bubble_tail">
+      <svg class="bubble_icon" width="9px" height="20px" viewBox="0 0 9 20">
+        <g fill="none">
+          <path class="background" fill="#ffffff" d="M8,1 L9,1 L9,20 L8,20 L8,18 C7.807,15.161 7.124,12.233 5.950,9.218 C5.046,6.893 3.504,4.733 1.325,2.738 L1.325,2.738 C0.917,2.365 0.89,1.732 1.263,1.325 C1.452,1.118 1.72,1 2,1 L8,1 Z"></path>
+          <path class="border_1x" fill="#d7e3ec" d="M9,1 L2,1 C1.72,1 1.452,1.118 1.263,1.325 C0.89,1.732 0.917,2.365 1.325,2.738 C3.504,4.733 5.046,6.893 5.95,9.218 C7.124,12.233 7.807,15.161 8,18 L8,20 L9,20 L9,1 Z M2,0 L9,0 L9,20 L7,20 L7,20 L7.002,18.068 C6.816,15.333 6.156,12.504 5.018,9.58 C4.172,7.406 2.72,5.371 0.649,3.475 C-0.165,2.729 -0.221,1.464 0.525,0.649 C0.904,0.236 1.439,0 2,0 Z"></path>
+          <path class="border_2x" d="M9,1 L2,1 C1.72,1 1.452,1.118 1.263,1.325 C0.89,1.732 0.917,2.365 1.325,2.738 C3.504,4.733 5.046,6.893 5.95,9.218 C7.124,12.233 7.807,15.161 8,18 L8,20 L9,20 L9,1 Z M2,0.5 L9,0.5 L9,20 L7.5,20 L7.5,20 L7.501,18.034 C7.312,15.247 6.64,12.369 5.484,9.399 C4.609,7.15 3.112,5.052 0.987,3.106 C0.376,2.547 0.334,1.598 0.894,0.987 C1.178,0.677 1.579,0.5 2,0.5 Z"></path>
+          <path class="border_3x" d="M9,1 L2,1 C1.72,1 1.452,1.118 1.263,1.325 C0.89,1.732 0.917,2.365 1.325,2.738 C3.504,4.733 5.046,6.893 5.95,9.218 C7.124,12.233 7.807,15.161 8,18 L8,20 L9,20 L9,1 Z M2,0.667 L9,0.667 L9,20 L7.667,20 L7.667,20 L7.668,18.023 C7.477,15.218 6.802,12.324 5.64,9.338 C4.755,7.064 3.243,4.946 1.1,2.983 C0.557,2.486 0.52,1.643 1.017,1.1 C1.269,0.824 1.626,0.667 2,0.667 Z"></path>
+        </g>
+      </svg>
+    </i>
+    <div class="tgme_widget_message_author accent_color"><a class="tgme_widget_message_owner_name" href="https://t.me/durov"><span dir="auto">Pavel Durov</span></a></div>
+
+
+<div class="tgme_widget_message_text js-message_text" dir="auto">The world is on the brink of a <a href="https://theprint.in/world/german-development-minister-says-world-may-face-worst-famine-since-ww2/947992/https://theprint.in/world/german-development-minister-says-world-may-face-worst-famine-since-ww2/947992/" target="_blank" rel="noopener" onclick="return confirm('Open this link?\n\n'+this.href);">global food crisis</a>. Hundreds of millions of people are facing starvation.  <br/> <br/>To help those in need, last month the UAE ran the successful <a href="https://www.1billionmeals.ae/en/" target="_blank" rel="noopener" onclick="return confirm('Open this link?\n\n'+this.href);">1 Billion Meals</a> initiative – a fundraising campaign aimed at providing a billion meals for the most vulnerable people in 50 countries.  <br/> <br/>Hundreds of donors participated. The founder of the campaign, <a href="https://sheikhmohammed.ae/en-us" target="_blank" rel="noopener" onclick="return confirm('Open this link?\n\n'+this.href);">Sheikh Mohammed</a>, donated 400 million meals, and I contributed a modest 12 million. Hopefully, many more people can join the initiative in the following years and we can collectively achieve the <a href="https://en.wikipedia.org/wiki/Sustainable_Development_Goal_2" target="_blank" rel="noopener" onclick="return confirm('Open this link?\n\n'+this.href);">Zero Hunger</a> goal set by the UN.</div>
+<div class="tgme_widget_message_reactions js-message_reactions"><span class="tgme_reaction tgme_reaction_paid"><i class="icon icon-telegram-stars"></i>14</span><span class="tgme_reaction"><i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/F09F918D.png')"><b>👍</b></i>18.3K</span><span class="tgme_reaction"><i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/F09F8E89.png')"><b>🎉</b></i>2.59K</span><span class="tgme_reaction"><i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/F09F918E.png')"><b>👎</b></i>1.87K</span><span class="tgme_reaction"><i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/E29DA4.png')"><b>❤</b></i>211</span><span class="tgme_reaction"><i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/F09FA4A1.png')"><b>🤡</b></i>55</span></div><div class="tgme_widget_message_footer compact js-message_footer">
+
+  <div class="tgme_widget_message_info short js-message_info">
+    <span class="tgme_widget_message_views">2.13M</span><span class="copyonly"> views</span><span class="tgme_widget_message_meta"><a class="tgme_widget_message_date" href="https://t.me/durov/183"><time datetime="2022-05-11T14:28:32+00:00" class="time">14:28</time></a></span>
+  </div>
+</div>
+  </div>
+
+</div></div><div class="tgme_widget_message_wrap js-widget_message_wrap"><div class="tgme_widget_message text_not_supported_wrap user-color-12 js-widget_message" data-post="durov/184" data-view="eyJjIjotMTAwNjUwMzEyMiwicCI6MTg0LCJ0IjoxNzgzMTYyOTYzLCJoIjoiNzE3ODU0MDYyMjI2YmZmMWJlIn0">
+  <div class="tgme_widget_message_user"><a href="https://t.me/durov"><i class="tgme_widget_message_user_photo bgcolor2" data-content="P"><img src="https://cdn4.telesco.pe/file/QX8-RjZDMNTqNZzZOGQgXsirK8PHalqyuOw5qTk2VbVD2o0CeMUYkQu0bq3R-IqNsITtSGJ1duV7QYLkYfE42-vgrRmYxM-QmQG3_AHiAiGAQPsXvBQ3ABh7DJeFCB-b0Jp6hn7wbLiP2gwvBGzvRzd1Z4U6Sy3tf_ry_fUr_YktYaV8xYWZZlmC_FeuYVvUdTQYFkR01MhAkdJRVnajjW2KAzC-JsRYtftFc9RQ2_IwdThephGFrah3x2mtVTe_gdUGL1152pjWj_kKU_yzklfOuBWIs1E49HGZKKakZVqK6NIvMSg_3VNB3qB7fAuJvOuivEoH5mkJCg2wvySDxg.jpg"></i></a></div>
+  <div class="tgme_widget_message_bubble">
+
+        <i class="tgme_widget_message_bubble_tail">
+      <svg class="bubble_icon" width="9px" height="20px" viewBox="0 0 9 20">
+        <g fill="none">
+          <path class="background" fill="#ffffff" d="M8,1 L9,1 L9,20 L8,20 L8,18 C7.807,15.161 7.124,12.233 5.950,9.218 C5.046,6.893 3.504,4.733 1.325,2.738 L1.325,2.738 C0.917,2.365 0.89,1.732 1.263,1.325 C1.452,1.118 1.72,1 2,1 L8,1 Z"></path>
+          <path class="border_1x" fill="#d7e3ec" d="M9,1 L2,1 C1.72,1 1.452,1.118 1.263,1.325 C0.89,1.732 0.917,2.365 1.325,2.738 C3.504,4.733 5.046,6.893 5.95,9.218 C7.124,12.233 7.807,15.161 8,18 L8,20 L9,20 L9,1 Z M2,0 L9,0 L9,20 L7,20 L7,20 L7.002,18.068 C6.816,15.333 6.156,12.504 5.018,9.58 C4.172,7.406 2.72,5.371 0.649,3.475 C-0.165,2.729 -0.221,1.464 0.525,0.649 C0.904,0.236 1.439,0 2,0 Z"></path>
+          <path class="border_2x" d="M9,1 L2,1 C1.72,1 1.452,1.118 1.263,1.325 C0.89,1.732 0.917,2.365 1.325,2.738 C3.504,4.733 5.046,6.893 5.95,9.218 C7.124,12.233 7.807,15.161 8,18 L8,20 L9,20 L9,1 Z M2,0.5 L9,0.5 L9,20 L7.5,20 L7.5,20 L7.501,18.034 C7.312,15.247 6.64,12.369 5.484,9.399 C4.609,7.15 3.112,5.052 0.987,3.106 C0.376,2.547 0.334,1.598 0.894,0.987 C1.178,0.677 1.579,0.5 2,0.5 Z"></path>
+          <path class="border_3x" d="M9,1 L2,1 C1.72,1 1.452,1.118 1.263,1.325 C0.89,1.732 0.917,2.365 1.325,2.738 C3.504,4.733 5.046,6.893 5.95,9.218 C7.124,12.233 7.807,15.161 8,18 L8,20 L9,20 L9,1 Z M2,0.667 L9,0.667 L9,20 L7.667,20 L7.667,20 L7.668,18.023 C7.477,15.218 6.802,12.324 5.64,9.338 C4.755,7.064 3.243,4.946 1.1,2.983 C0.557,2.486 0.52,1.643 1.017,1.1 C1.269,0.824 1.626,0.667 2,0.667 Z"></path>
+        </g>
+      </svg>
+    </i>
+    <div class="tgme_widget_message_author accent_color"><a class="tgme_widget_message_owner_name" href="https://t.me/durov"><span dir="auto">Pavel Durov</span></a></div>
+
+
+<div class="tgme_widget_message_text js-message_text" dir="auto">The media often calls me a billionaire, but, unlike most billionaires, I don&#39;t own jets, yachts, cars or houses.   <br/>  <br/>Creating things always seemed to me a more rewarding activity than engaging in consumption.</div>
+<div class="tgme_widget_message_reactions js-message_reactions"><span class="tgme_reaction tgme_reaction_paid"><i class="icon icon-telegram-stars"></i>23</span><span class="tgme_reaction"><i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/F09F918D.png')"><b>👍</b></i>37.5K</span><span class="tgme_reaction"><i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/F09F8E89.png')"><b>🎉</b></i>3.83K</span><span class="tgme_reaction"><i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/F09F918E.png')"><b>👎</b></i>1.9K</span><span class="tgme_reaction"><i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/E29DA4.png')"><b>❤</b></i>235</span><span class="tgme_reaction"><i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/F09FA4A1.png')"><b>🤡</b></i>72</span></div><div class="tgme_widget_message_footer compact js-message_footer">
+
+  <div class="tgme_widget_message_info short js-message_info">
+    <span class="tgme_widget_message_views">1.86M</span><span class="copyonly"> views</span><span class="tgme_widget_message_meta"><a class="tgme_widget_message_date" href="https://t.me/durov/184"><time datetime="2022-05-18T14:39:03+00:00" class="time">14:39</time></a></span>
+  </div>
+</div>
+  </div>
+
+</div></div><div class="tgme_widget_message_wrap js-widget_message_wrap"><div class="tgme_widget_message text_not_supported_wrap user-color-12 js-widget_message" data-post="durov/185" data-view="eyJjIjotMTAwNjUwMzEyMiwicCI6MTg1LCJ0IjoxNzgzMTYyOTYzLCJoIjoiMjgwYmI0YThhOTg0NzQ2OTNhIn0">
+  <div class="tgme_widget_message_user"><a href="https://t.me/durov"><i class="tgme_widget_message_user_photo bgcolor2" data-content="P"><img src="https://cdn4.telesco.pe/file/QX8-RjZDMNTqNZzZOGQgXsirK8PHalqyuOw5qTk2VbVD2o0CeMUYkQu0bq3R-IqNsITtSGJ1duV7QYLkYfE42-vgrRmYxM-QmQG3_AHiAiGAQPsXvBQ3ABh7DJeFCB-b0Jp6hn7wbLiP2gwvBGzvRzd1Z4U6Sy3tf_ry_fUr_YktYaV8xYWZZlmC_FeuYVvUdTQYFkR01MhAkdJRVnajjW2KAzC-JsRYtftFc9RQ2_IwdThephGFrah3x2mtVTe_gdUGL1152pjWj_kKU_yzklfOuBWIs1E49HGZKKakZVqK6NIvMSg_3VNB3qB7fAuJvOuivEoH5mkJCg2wvySDxg.jpg"></i></a></div>
+  <div class="tgme_widget_message_bubble">
+
+        <i class="tgme_widget_message_bubble_tail">
+      <svg class="bubble_icon" width="9px" height="20px" viewBox="0 0 9 20">
+        <g fill="none">
+          <path class="background" fill="#ffffff" d="M8,1 L9,1 L9,20 L8,20 L8,18 C7.807,15.161 7.124,12.233 5.950,9.218 C5.046,6.893 3.504,4.733 1.325,2.738 L1.325,2.738 C0.917,2.365 0.89,1.732 1.263,1.325 C1.452,1.118 1.72,1 2,1 L8,1 Z"></path>
+          <path class="border_1x" fill="#d7e3ec" d="M9,1 L2,1 C1.72,1 1.452,1.118 1.263,1.325 C0.89,1.732 0.917,2.365 1.325,2.738 C3.504,4.733 5.046,6.893 5.95,9.218 C7.124,12.233 7.807,15.161 8,18 L8,20 L9,20 L9,1 Z M2,0 L9,0 L9,20 L7,20 L7,20 L7.002,18.068 C6.816,15.333 6.156,12.504 5.018,9.58 C4.172,7.406 2.72,5.371 0.649,3.475 C-0.165,2.729 -0.221,1.464 0.525,0.649 C0.904,0.236 1.439,0 2,0 Z"></path>
+          <path class="border_2x" d="M9,1 L2,1 C1.72,1 1.452,1.118 1.263,1.325 C0.89,1.732 0.917,2.365 1.325,2.738 C3.504,4.733 5.046,6.893 5.95,9.218 C7.124,12.233 7.807,15.161 8,18 L8,20 L9,20 L9,1 Z M2,0.5 L9,0.5 L9,20 L7.5,20 L7.5,20 L7.501,18.034 C7.312,15.247 6.64,12.369 5.484,9.399 C4.609,7.15 3.112,5.052 0.987,3.106 C0.376,2.547 0.334,1.598 0.894,0.987 C1.178,0.677 1.579,0.5 2,0.5 Z"></path>
+          <path class="border_3x" d="M9,1 L2,1 C1.72,1 1.452,1.118 1.263,1.325 C0.89,1.732 0.917,2.365 1.325,2.738 C3.504,4.733 5.046,6.893 5.95,9.218 C7.124,12.233 7.807,15.161 8,18 L8,20 L9,20 L9,1 Z M2,0.667 L9,0.667 L9,20 L7.667,20 L7.667,20 L7.668,18.023 C7.477,15.218 6.802,12.324 5.64,9.338 C4.755,7.064 3.243,4.946 1.1,2.983 C0.557,2.486 0.52,1.643 1.017,1.1 C1.269,0.824 1.626,0.667 2,0.667 Z"></path>
+        </g>
+      </svg>
+    </i>
+    <div class="tgme_widget_message_author accent_color"><a class="tgme_widget_message_owner_name" href="https://t.me/durov"><span dir="auto">Pavel Durov</span></a></div>
+
+
+<div class="tgme_widget_message_text js-message_text" dir="auto">Since the day Telegram was launched almost 9 years ago, we&#39;ve been giving our users more features and resources than any other messaging app. A free app as powerful as Telegram was revolutionary in 2013 and is still unprecedented in 2022. To this day, our limits on chats, media and file uploads are unrivaled.<br/><br/>And yet, many have been asking us to raise the current limits even further, so we looked into ways to let you go beyond what is already crazy. The problem here is that if we were to remove all limits for everyone, our server and traffic costs would have become unmanageable, so the party would be unfortunately over for everyone.<br/><br/>After giving it some thought, we realized that the only way to let our most demanding fans get more while keeping our existing features free is to make those raised limits a paid option. That&#39;s why this month we will introduce Telegram Premium, a subscription plan that allows anyone to acquire additional features, speed and resources. It will also allow users to support Telegram and join the club that receives new features first.<br/><br/>Not to worry though: all existing features remain free, and there are plenty of new free features coming. Moreover, even users who don&#39;t subscribe to Telegram Premium will be able to enjoy some of its benefits: for example, they will be able to view extra-large documents, media and stickers sent by Premium users, or tap to add Premium reactions already pinned to a message to react in the same way.<br/><br/>While our experiments with privacy-focused ads in public one-to-many channels have been more successful than we expected, I believe that Telegram should be funded primarily by its users, not advertisers. This way our users will always remain our main priority.</div>
+<div class="tgme_widget_message_reactions js-message_reactions"><span class="tgme_reaction tgme_reaction_paid"><i class="icon icon-telegram-stars"></i>16</span><span class="tgme_reaction"><i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/F09F918D.png')"><b>👍</b></i>27.8K</span><span class="tgme_reaction"><i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/F09F918E.png')"><b>👎</b></i>18.2K</span><span class="tgme_reaction"><i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/F09F8E89.png')"><b>🎉</b></i>4.45K</span><span class="tgme_reaction"><i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/E29DA4.png')"><b>❤</b></i>209</span><span class="tgme_reaction"><i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/F09FA4A1.png')"><b>🤡</b></i>75</span></div><div class="tgme_widget_message_footer compact js-message_footer">
+
+  <div class="tgme_widget_message_info short js-message_info">
+    <span class="tgme_widget_message_views">2.19M</span><span class="copyonly"> views</span><span class="tgme_widget_message_meta"><a class="tgme_widget_message_date" href="https://t.me/durov/185"><time datetime="2022-06-10T15:40:54+00:00" class="time">15:40</time></a></span>
+  </div>
+</div>
+  </div>
+
+</div></div><div class="tgme_widget_message_wrap js-widget_message_wrap"><div class="tgme_widget_message text_not_supported_wrap user-color-12 js-widget_message" data-post="durov/186" data-view="eyJjIjotMTAwNjUwMzEyMiwicCI6MTg2LCJ0IjoxNzgzMTYyOTYzLCJoIjoiNzNmNzQzMDg0NzRjMzQzYjc1In0">
+  <div class="tgme_widget_message_user"><a href="https://t.me/durov"><i class="tgme_widget_message_user_photo bgcolor2" data-content="P"><img src="https://cdn4.telesco.pe/file/QX8-RjZDMNTqNZzZOGQgXsirK8PHalqyuOw5qTk2VbVD2o0CeMUYkQu0bq3R-IqNsITtSGJ1duV7QYLkYfE42-vgrRmYxM-QmQG3_AHiAiGAQPsXvBQ3ABh7DJeFCB-b0Jp6hn7wbLiP2gwvBGzvRzd1Z4U6Sy3tf_ry_fUr_YktYaV8xYWZZlmC_FeuYVvUdTQYFkR01MhAkdJRVnajjW2KAzC-JsRYtftFc9RQ2_IwdThephGFrah3x2mtVTe_gdUGL1152pjWj_kKU_yzklfOuBWIs1E49HGZKKakZVqK6NIvMSg_3VNB3qB7fAuJvOuivEoH5mkJCg2wvySDxg.jpg"></i></a></div>
+  <div class="tgme_widget_message_bubble">
+
+        <i class="tgme_widget_message_bubble_tail">
+      <svg class="bubble_icon" width="9px" height="20px" viewBox="0 0 9 20">
+        <g fill="none">
+          <path class="background" fill="#ffffff" d="M8,1 L9,1 L9,20 L8,20 L8,18 C7.807,15.161 7.124,12.233 5.950,9.218 C5.046,6.893 3.504,4.733 1.325,2.738 L1.325,2.738 C0.917,2.365 0.89,1.732 1.263,1.325 C1.452,1.118 1.72,1 2,1 L8,1 Z"></path>
+          <path class="border_1x" fill="#d7e3ec" d="M9,1 L2,1 C1.72,1 1.452,1.118 1.263,1.325 C0.89,1.732 0.917,2.365 1.325,2.738 C3.504,4.733 5.046,6.893 5.95,9.218 C7.124,12.233 7.807,15.161 8,18 L8,20 L9,20 L9,1 Z M2,0 L9,0 L9,20 L7,20 L7,20 L7.002,18.068 C6.816,15.333 6.156,12.504 5.018,9.58 C4.172,7.406 2.72,5.371 0.649,3.475 C-0.165,2.729 -0.221,1.464 0.525,0.649 C0.904,0.236 1.439,0 2,0 Z"></path>
+          <path class="border_2x" d="M9,1 L2,1 C1.72,1 1.452,1.118 1.263,1.325 C0.89,1.732 0.917,2.365 1.325,2.738 C3.504,4.733 5.046,6.893 5.95,9.218 C7.124,12.233 7.807,15.161 8,18 L8,20 L9,20 L9,1 Z M2,0.5 L9,0.5 L9,20 L7.5,20 L7.5,20 L7.501,18.034 C7.312,15.247 6.64,12.369 5.484,9.399 C4.609,7.15 3.112,5.052 0.987,3.106 C0.376,2.547 0.334,1.598 0.894,0.987 C1.178,0.677 1.579,0.5 2,0.5 Z"></path>
+          <path class="border_3x" d="M9,1 L2,1 C1.72,1 1.452,1.118 1.263,1.325 C0.89,1.732 0.917,2.365 1.325,2.738 C3.504,4.733 5.046,6.893 5.95,9.218 C7.124,12.233 7.807,15.161 8,18 L8,20 L9,20 L9,1 Z M2,0.667 L9,0.667 L9,20 L7.667,20 L7.667,20 L7.668,18.023 C7.477,15.218 6.802,12.324 5.64,9.338 C4.755,7.064 3.243,4.946 1.1,2.983 C0.557,2.486 0.52,1.643 1.017,1.1 C1.269,0.824 1.626,0.667 2,0.667 Z"></path>
+        </g>
+      </svg>
+    </i>
+    <div class="tgme_widget_message_author accent_color"><a class="tgme_widget_message_owner_name" href="https://t.me/durov"><span dir="auto">Pavel Durov</span></a></div>
+
+
+<div class="tgme_widget_message_text js-message_text" dir="auto"><a href="https://web.telegram.org/" target="_blank" rel="noopener" onclick="return confirm('Open this link?\n\n'+this.href);">Telegram Web</a> provides an extraordinary experience on desktops, but it also works great on mobile devices. It is prevented, however, from reaching native-app-level quality on iOS, because Apple limits web developers in terms of what they can do on iPhones and iPads. <br/><br/>In April, the developer of Telegram Web shared a 10-point list of issues in the iOS Safari browser that Apple has been unwilling to fix or improve for years (check it <a href="https://t.me/WebK_en/5" target="_blank" rel="noopener" onclick="return confirm('Open this link?\n\n'+this.href);">here</a> for technical details). Other developers have even complained that <a href="https://httptoolkit.tech/blog/safari-is-killing-the-web/" target="_blank" rel="noopener" onclick="return confirm('Open this link?\n\n'+this.href);">Apple&#39;s Safari is killing the web</a>.<br/><br/>We suspect that Apple may be intentionally crippling its web apps to force its users to download more native apps where Apple is able to charge its 30% commission (I wrote about why it is harmful <a href="https://t.me/durov/122" target="_blank" rel="noopener" onclick="return confirm('Open this link?\n\n'+this.href);">here</a>). <br/><br/>Fortunately, regulators have started to realise what is going on. This week, the Competition and Markets Authority (CMA), a UK regulator, <a href="https://www.gov.uk/government/news/cma-plans-market-investigation-into-mobile-browsers-and-cloud-gaming" target="_blank" rel="noopener" onclick="return confirm('Open this link?\n\n'+this.href);">concluded</a>:<br/><br/><pre>&quot;Apple bans alternatives to its own browser engine on its mobile devices; a restriction that is unique to Apple. The CMA is concerned this severely limits the potential for rival browsers to differentiate themselves from Safari (for example, on features such as speed and functionality) and limits Apple’s incentives to invest in its browser engine.<br/><br/>This restriction also seriously inhibits the capability of web apps – apps that run on a browser rather than having to be individually downloaded – depriving consumers and businesses of the full benefits of this innovative technology.&quot;<br/><br/></pre>I think it&#39;s an accurate summary and hope that regulatory action will follow soon. It&#39;s sad that, more than ten years after Steve Job&#39;s death, a company that once revolutionized mobile web turned into its most significant roadblock.</div>
+<div class="tgme_widget_message_reactions js-message_reactions"><span class="tgme_reaction tgme_reaction_paid"><i class="icon icon-telegram-stars"></i>18</span><span class="tgme_reaction"><i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/F09F918D.png')"><b>👍</b></i>17K</span><span class="tgme_reaction"><i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/F09F8E89.png')"><b>🎉</b></i>1.91K</span><span class="tgme_reaction"><i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/F09F918E.png')"><b>👎</b></i>1.18K</span><span class="tgme_reaction"><i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/E29DA4.png')"><b>❤</b></i>219</span><span class="tgme_reaction"><i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/F09FA4A1.png')"><b>🤡</b></i>68</span></div><div class="tgme_widget_message_footer compact js-message_footer">
+
+  <div class="tgme_widget_message_info short js-message_info">
+    <span class="tgme_widget_message_views">2.21M</span><span class="copyonly"> views</span><span class="tgme_widget_message_meta">edited &nbsp;<a class="tgme_widget_message_date" href="https://t.me/durov/186"><time datetime="2022-06-13T14:59:35+00:00" class="time">14:59</time></a></span>
+  </div>
+</div>
+  </div>
+
+</div></div><div class="tgme_widget_message_wrap js-widget_message_wrap"><div class="tgme_widget_message text_not_supported_wrap user-color-12 js-widget_message" data-post="durov/189" data-view="eyJjIjotMTAwNjUwMzEyMiwicCI6MTg5LCJ0IjoxNzgzMTYyOTYzLCJoIjoiM2Q3OGExN2IyZDI5MGZjODM4In0">
+  <div class="tgme_widget_message_user"><a href="https://t.me/durov"><i class="tgme_widget_message_user_photo bgcolor2" data-content="P"><img src="https://cdn4.telesco.pe/file/QX8-RjZDMNTqNZzZOGQgXsirK8PHalqyuOw5qTk2VbVD2o0CeMUYkQu0bq3R-IqNsITtSGJ1duV7QYLkYfE42-vgrRmYxM-QmQG3_AHiAiGAQPsXvBQ3ABh7DJeFCB-b0Jp6hn7wbLiP2gwvBGzvRzd1Z4U6Sy3tf_ry_fUr_YktYaV8xYWZZlmC_FeuYVvUdTQYFkR01MhAkdJRVnajjW2KAzC-JsRYtftFc9RQ2_IwdThephGFrah3x2mtVTe_gdUGL1152pjWj_kKU_yzklfOuBWIs1E49HGZKKakZVqK6NIvMSg_3VNB3qB7fAuJvOuivEoH5mkJCg2wvySDxg.jpg"></i></a></div>
+  <div class="tgme_widget_message_bubble">
+
+        <i class="tgme_widget_message_bubble_tail">
+      <svg class="bubble_icon" width="9px" height="20px" viewBox="0 0 9 20">
+        <g fill="none">
+          <path class="background" fill="#ffffff" d="M8,1 L9,1 L9,20 L8,20 L8,18 C7.807,15.161 7.124,12.233 5.950,9.218 C5.046,6.893 3.504,4.733 1.325,2.738 L1.325,2.738 C0.917,2.365 0.89,1.732 1.263,1.325 C1.452,1.118 1.72,1 2,1 L8,1 Z"></path>
+          <path class="border_1x" fill="#d7e3ec" d="M9,1 L2,1 C1.72,1 1.452,1.118 1.263,1.325 C0.89,1.732 0.917,2.365 1.325,2.738 C3.504,4.733 5.046,6.893 5.95,9.218 C7.124,12.233 7.807,15.161 8,18 L8,20 L9,20 L9,1 Z M2,0 L9,0 L9,20 L7,20 L7,20 L7.002,18.068 C6.816,15.333 6.156,12.504 5.018,9.58 C4.172,7.406 2.72,5.371 0.649,3.475 C-0.165,2.729 -0.221,1.464 0.525,0.649 C0.904,0.236 1.439,0 2,0 Z"></path>
+          <path class="border_2x" d="M9,1 L2,1 C1.72,1 1.452,1.118 1.263,1.325 C0.89,1.732 0.917,2.365 1.325,2.738 C3.504,4.733 5.046,6.893 5.95,9.218 C7.124,12.233 7.807,15.161 8,18 L8,20 L9,20 L9,1 Z M2,0.5 L9,0.5 L9,20 L7.5,20 L7.5,20 L7.501,18.034 C7.312,15.247 6.64,12.369 5.484,9.399 C4.609,7.15 3.112,5.052 0.987,3.106 C0.376,2.547 0.334,1.598 0.894,0.987 C1.178,0.677 1.579,0.5 2,0.5 Z"></path>
+          <path class="border_3x" d="M9,1 L2,1 C1.72,1 1.452,1.118 1.263,1.325 C0.89,1.732 0.917,2.365 1.325,2.738 C3.504,4.733 5.046,6.893 5.95,9.218 C7.124,12.233 7.807,15.161 8,18 L8,20 L9,20 L9,1 Z M2,0.667 L9,0.667 L9,20 L7.667,20 L7.667,20 L7.668,18.023 C7.477,15.218 6.802,12.324 5.64,9.338 C4.755,7.064 3.243,4.946 1.1,2.983 C0.557,2.486 0.52,1.643 1.017,1.1 C1.269,0.824 1.626,0.667 2,0.667 Z"></path>
+        </g>
+      </svg>
+    </i>
+    <div class="tgme_widget_message_author accent_color"><a class="tgme_widget_message_owner_name" href="https://t.me/durov"><span dir="auto">Pavel Durov</span></a></div>
+
+
+<div class="tgme_widget_message_text js-message_text" dir="auto">Happy Solstice&#33; <i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/E29880.png')"><b>☀️</b></i><i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/E29CA8.png')"><b>✨</b></i><br/><br/><i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/F09F8E89.png')"><b>🎉</b></i> Telegram now has over <b>700 million</b> monthly users.<br/><br/>With the latest update, we have also <a href="https://telegram.org/blog/700-million-and-premium" target="_blank" rel="noopener" onclick="return confirm('Open this link?\n\n'+this.href);">launched</a> the Premium subscription on most devices. <br/><br/>The beauty of Telegram Premium is that if just <b>2,5-3%</b> of our users sign up for this subscription, Telegram will cover its costs, supported purely by its users. This will herald a new, user-centric era in the history of social media services.<br/><br/>Thank you for loving Telegram&#33; We <i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/E29DA4.png')"><b>❤️</b></i> you back.</div>
+<div class="tgme_widget_message_reactions js-message_reactions"><span class="tgme_reaction tgme_reaction_paid"><i class="icon icon-telegram-stars"></i>12</span><span class="tgme_reaction"><i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/F09F8E89.png')"><b>🎉</b></i>23.7K</span><span class="tgme_reaction"><i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/F09F918D.png')"><b>👍</b></i>7.46K</span><span class="tgme_reaction"><i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/F09F918E.png')"><b>👎</b></i>2.17K</span><span class="tgme_reaction"><i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/E29DA4.png')"><b>❤</b></i>249</span><span class="tgme_reaction"><i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/F09FA4A1.png')"><b>🤡</b></i>72</span></div><div class="tgme_widget_message_footer compact js-message_footer">
+
+  <div class="tgme_widget_message_info short js-message_info">
+    <span class="tgme_widget_message_views">2.12M</span><span class="copyonly"> views</span><span class="tgme_widget_message_meta">edited &nbsp;<a class="tgme_widget_message_date" href="https://t.me/durov/189"><time datetime="2022-06-21T19:02:23+00:00" class="time">19:02</time></a></span>
+  </div>
+</div>
+  </div>
+
+</div></div><div class="tgme_widget_message_wrap js-widget_message_wrap"><div class="tgme_widget_message text_not_supported_wrap user-color-12 js-widget_message" data-post="durov/190" data-view="eyJjIjotMTAwNjUwMzEyMiwicCI6MTkwLCJ0IjoxNzgzMTYyOTYzLCJoIjoiNDE1MjdkOTdiZWQxNDk4ZGEyIn0">
+  <div class="tgme_widget_message_user"><a href="https://t.me/durov"><i class="tgme_widget_message_user_photo bgcolor2" data-content="P"><img src="https://cdn4.telesco.pe/file/QX8-RjZDMNTqNZzZOGQgXsirK8PHalqyuOw5qTk2VbVD2o0CeMUYkQu0bq3R-IqNsITtSGJ1duV7QYLkYfE42-vgrRmYxM-QmQG3_AHiAiGAQPsXvBQ3ABh7DJeFCB-b0Jp6hn7wbLiP2gwvBGzvRzd1Z4U6Sy3tf_ry_fUr_YktYaV8xYWZZlmC_FeuYVvUdTQYFkR01MhAkdJRVnajjW2KAzC-JsRYtftFc9RQ2_IwdThephGFrah3x2mtVTe_gdUGL1152pjWj_kKU_yzklfOuBWIs1E49HGZKKakZVqK6NIvMSg_3VNB3qB7fAuJvOuivEoH5mkJCg2wvySDxg.jpg"></i></a></div>
+  <div class="tgme_widget_message_bubble">
+
+        <i class="tgme_widget_message_bubble_tail">
+      <svg class="bubble_icon" width="9px" height="20px" viewBox="0 0 9 20">
+        <g fill="none">
+          <path class="background" fill="#ffffff" d="M8,1 L9,1 L9,20 L8,20 L8,18 C7.807,15.161 7.124,12.233 5.950,9.218 C5.046,6.893 3.504,4.733 1.325,2.738 L1.325,2.738 C0.917,2.365 0.89,1.732 1.263,1.325 C1.452,1.118 1.72,1 2,1 L8,1 Z"></path>
+          <path class="border_1x" fill="#d7e3ec" d="M9,1 L2,1 C1.72,1 1.452,1.118 1.263,1.325 C0.89,1.732 0.917,2.365 1.325,2.738 C3.504,4.733 5.046,6.893 5.95,9.218 C7.124,12.233 7.807,15.161 8,18 L8,20 L9,20 L9,1 Z M2,0 L9,0 L9,20 L7,20 L7,20 L7.002,18.068 C6.816,15.333 6.156,12.504 5.018,9.58 C4.172,7.406 2.72,5.371 0.649,3.475 C-0.165,2.729 -0.221,1.464 0.525,0.649 C0.904,0.236 1.439,0 2,0 Z"></path>
+          <path class="border_2x" d="M9,1 L2,1 C1.72,1 1.452,1.118 1.263,1.325 C0.89,1.732 0.917,2.365 1.325,2.738 C3.504,4.733 5.046,6.893 5.95,9.218 C7.124,12.233 7.807,15.161 8,18 L8,20 L9,20 L9,1 Z M2,0.5 L9,0.5 L9,20 L7.5,20 L7.5,20 L7.501,18.034 C7.312,15.247 6.64,12.369 5.484,9.399 C4.609,7.15 3.112,5.052 0.987,3.106 C0.376,2.547 0.334,1.598 0.894,0.987 C1.178,0.677 1.579,0.5 2,0.5 Z"></path>
+          <path class="border_3x" d="M9,1 L2,1 C1.72,1 1.452,1.118 1.263,1.325 C0.89,1.732 0.917,2.365 1.325,2.738 C3.504,4.733 5.046,6.893 5.95,9.218 C7.124,12.233 7.807,15.161 8,18 L8,20 L9,20 L9,1 Z M2,0.667 L9,0.667 L9,20 L7.667,20 L7.667,20 L7.668,18.023 C7.477,15.218 6.802,12.324 5.64,9.338 C4.755,7.064 3.243,4.946 1.1,2.983 C0.557,2.486 0.52,1.643 1.017,1.1 C1.269,0.824 1.626,0.667 2,0.667 Z"></path>
+        </g>
+      </svg>
+    </i>
+    <div class="tgme_widget_message_author accent_color"><a class="tgme_widget_message_owner_name" href="https://t.me/durov"><span dir="auto">Pavel Durov</span></a></div>
+
+
+<div class="tgme_widget_message_text js-message_text" dir="auto">I love my work. What could be more exciting than improving the way hundreds of millions of people communicate? Members of our team, myself included, must be some of the luckiest people alive.<br/><br/>The only thing that we find discouraging is that we&#39;re often unable to distribute the new versions of Telegram due to the obscure &quot;review process&quot; imposed on all mobile apps by the tech monopolies. <br/><br/>For example, our upcoming update – which is about to revolutionize how people express themselves in messaging – has been stuck in Apple&#39;s &quot;review&quot; for two weeks, without explanation or any feedback provided by Apple. <br/><br/>If Telegram, one of the top 10 most popular apps globally, is receiving this treatment, one can only imagine the difficulties experienced by smaller app developers. It&#39;s not just demoralizing: it causes direct financial losses to hundred of thousands of mobile apps globally. <br/><br/>This harm goes on top of the 30% tax Apple and Google take from app developers – which, according to them, is supposed to pay for the resources needed to review apps. The regulators in the EU and elsewhere are slowly starting to look into these abusive practices. But the economic damage that has already been inflicted by Apple on the tech industry won&#39;t be undone.</div>
+<div class="tgme_widget_message_reactions js-message_reactions"><span class="tgme_reaction tgme_reaction_paid"><i class="icon icon-telegram-stars"></i>34</span><span class="tgme_reaction"><i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/F09F918D.png')"><b>👍</b></i>26.6K</span><span class="tgme_reaction"><i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/F09F8E89.png')"><b>🎉</b></i>2.06K</span><span class="tgme_reaction"><i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/F09F918E.png')"><b>👎</b></i>1.32K</span><span class="tgme_reaction"><i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/E29DA4.png')"><b>❤</b></i>244</span><span class="tgme_reaction"><i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/F09FA4A1.png')"><b>🤡</b></i>72</span></div><div class="tgme_widget_message_footer compact js-message_footer">
+
+  <div class="tgme_widget_message_info short js-message_info">
+    <span class="tgme_widget_message_views">1.73M</span><span class="copyonly"> views</span><span class="tgme_widget_message_meta"><a class="tgme_widget_message_date" href="https://t.me/durov/190"><time datetime="2022-08-10T17:16:47+00:00" class="time">17:16</time></a></span>
+  </div>
+</div>
+  </div>
+
+</div></div><div class="tgme_widget_message_wrap js-widget_message_wrap"><div class="tgme_widget_message text_not_supported_wrap user-color-12 js-widget_message" data-post="durov/191" data-view="eyJjIjotMTAwNjUwMzEyMiwicCI6MTkxLCJ0IjoxNzgzMTYyOTYzLCJoIjoiZGU0NTFiODc4ZTEyYTA2NzM1In0">
+  <div class="tgme_widget_message_user"><a href="https://t.me/durov"><i class="tgme_widget_message_user_photo bgcolor2" data-content="P"><img src="https://cdn4.telesco.pe/file/QX8-RjZDMNTqNZzZOGQgXsirK8PHalqyuOw5qTk2VbVD2o0CeMUYkQu0bq3R-IqNsITtSGJ1duV7QYLkYfE42-vgrRmYxM-QmQG3_AHiAiGAQPsXvBQ3ABh7DJeFCB-b0Jp6hn7wbLiP2gwvBGzvRzd1Z4U6Sy3tf_ry_fUr_YktYaV8xYWZZlmC_FeuYVvUdTQYFkR01MhAkdJRVnajjW2KAzC-JsRYtftFc9RQ2_IwdThephGFrah3x2mtVTe_gdUGL1152pjWj_kKU_yzklfOuBWIs1E49HGZKKakZVqK6NIvMSg_3VNB3qB7fAuJvOuivEoH5mkJCg2wvySDxg.jpg"></i></a></div>
+  <div class="tgme_widget_message_bubble">
+
+        <i class="tgme_widget_message_bubble_tail">
+      <svg class="bubble_icon" width="9px" height="20px" viewBox="0 0 9 20">
+        <g fill="none">
+          <path class="background" fill="#ffffff" d="M8,1 L9,1 L9,20 L8,20 L8,18 C7.807,15.161 7.124,12.233 5.950,9.218 C5.046,6.893 3.504,4.733 1.325,2.738 L1.325,2.738 C0.917,2.365 0.89,1.732 1.263,1.325 C1.452,1.118 1.72,1 2,1 L8,1 Z"></path>
+          <path class="border_1x" fill="#d7e3ec" d="M9,1 L2,1 C1.72,1 1.452,1.118 1.263,1.325 C0.89,1.732 0.917,2.365 1.325,2.738 C3.504,4.733 5.046,6.893 5.95,9.218 C7.124,12.233 7.807,15.161 8,18 L8,20 L9,20 L9,1 Z M2,0 L9,0 L9,20 L7,20 L7,20 L7.002,18.068 C6.816,15.333 6.156,12.504 5.018,9.58 C4.172,7.406 2.72,5.371 0.649,3.475 C-0.165,2.729 -0.221,1.464 0.525,0.649 C0.904,0.236 1.439,0 2,0 Z"></path>
+          <path class="border_2x" d="M9,1 L2,1 C1.72,1 1.452,1.118 1.263,1.325 C0.89,1.732 0.917,2.365 1.325,2.738 C3.504,4.733 5.046,6.893 5.95,9.218 C7.124,12.233 7.807,15.161 8,18 L8,20 L9,20 L9,1 Z M2,0.5 L9,0.5 L9,20 L7.5,20 L7.5,20 L7.501,18.034 C7.312,15.247 6.64,12.369 5.484,9.399 C4.609,7.15 3.112,5.052 0.987,3.106 C0.376,2.547 0.334,1.598 0.894,0.987 C1.178,0.677 1.579,0.5 2,0.5 Z"></path>
+          <path class="border_3x" d="M9,1 L2,1 C1.72,1 1.452,1.118 1.263,1.325 C0.89,1.732 0.917,2.365 1.325,2.738 C3.504,4.733 5.046,6.893 5.95,9.218 C7.124,12.233 7.807,15.161 8,18 L8,20 L9,20 L9,1 Z M2,0.667 L9,0.667 L9,20 L7.667,20 L7.667,20 L7.668,18.023 C7.477,15.218 6.802,12.324 5.64,9.338 C4.755,7.064 3.243,4.946 1.1,2.983 C0.557,2.486 0.52,1.643 1.017,1.1 C1.269,0.824 1.626,0.667 2,0.667 Z"></path>
+        </g>
+      </svg>
+    </i>
+    <div class="tgme_widget_message_author accent_color"><a class="tgme_widget_message_owner_name" href="https://t.me/durov"><span dir="auto">Pavel Durov</span></a></div>
+
+
+<a class="tgme_widget_message_video_player js-message_video_player" href="https://t.me/durov/191"><i class="tgme_widget_message_video_thumb" style="background-image:url('https://cdn1.telesco.pe/file/PineEFz8dAKtZRKBQwV_z0fyyAifhZVe3mNGbmxI-U8IYkoPk19rASJ80MNoji1yV83_bnv8qj59FZogS9Yjn2fEHgngaVH79RzmOWBko6TxLg_6WbXi-zjRI2Hi7rvTLLX_pEiTYYWMUb28FnSsfnHoraahV6GbFqSBaVBjfKv_O7HnW2VHbg6OZ9BJ0qRLbEg6d79PQScBnI6qoc7FyNzXoBGqoYbJ96qF6p5kTT1r8q4CD1jUYyGLWFr32lubDQHKx4o6N58Mq2AYDKl0j-fLhlQDA6IXEHgHAosffdlwi1ILlD3kNgtiqR9Sz4PFD1JSQJuzn8VzCpghCaihaw')"></i>
+
+<div class="tgme_widget_message_video_wrap" style="width:1080px;padding-top:100%">
+  <video src="https://cdn1.telesco.pe/file/377ea22f38.mp4?token=Me7hGauK4DcGreoDPM8U2anhSQ7DiUaCBp4LS5D67hqVmZw0QTlpKfOxLKd1PpZ4JwQgxQIEioUD5J11dsPYkPqSUgJIG533RUbpbtsh1tqTiuUchC7mgH8QvA52SFGa6kiPLtPZrMmkDtZYgweZ7_CzwS2_CUjrMI8M7YcJm0AeD8hBC5Nl5M6-rQfw6M0GOwqk0DfYo02ge-a-OXU1UAFzeOvssC-Y3QpWJpIRabVMmC4_8jgMB2NgALUIG1ALto9dUsphoq6UVRHQ_xmHQpWrmRKB1DjDCj6tl7_2Opz_vimpz-1ENiXsnyigF58kS9ezfk6c--v-Dy8iW17xFw" class="tgme_widget_message_video js-message_video" width="100%" height="100%" preload muted autoplay loop playsinline></video>
+</div>
+
+<div class="message_media_not_supported_wrap">
+  <div class="message_media_not_supported">
+    <div class="message_media_not_supported_label">This media is not supported in your browser</div>
+    <span class="message_media_view_in_telegram">VIEW IN TELEGRAM</span>
+  </div>
+</div></a><div class="tgme_widget_message_text js-message_text" dir="auto">After extensive media coverage of my previous post, Apple got back to us with a demand to water down our pending Telegram update by removing Telemoji – higher quality vector-animated versions of the standard emoji. <br/><br/>This is a puzzling move on Apple&#39;s behalf, because Telemoji would have brought an entire new dimension to its static low-resolution emoji and would have significantly enriched their ecosystem. <br/><br/>But it&#39;s good for Telegram long term, as we will now make Telemoji even more unique and recognizable. Besides, we have included 10 other emoji packs in today&#39;s update – together with the ability for any user to upload their own emoji.</div>
+<div class="tgme_widget_message_reactions js-message_reactions"><span class="tgme_reaction tgme_reaction_paid"><i class="icon icon-telegram-stars"></i>14</span><span class="tgme_reaction"><i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/F09F918D.png')"><b>👍</b></i>9.04K</span><span class="tgme_reaction"><i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/F09F8E89.png')"><b>🎉</b></i>1.74K</span><span class="tgme_reaction"><i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/F09F918E.png')"><b>👎</b></i>967</span><span class="tgme_reaction"><i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/E29DA4.png')"><b>❤</b></i>260</span><span class="tgme_reaction"><i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/F09FA4A1.png')"><b>🤡</b></i>92</span></div><div class="tgme_widget_message_footer compact js-message_footer">
+
+  <div class="tgme_widget_message_info short js-message_info">
+    <span class="tgme_widget_message_views">1.87M</span><span class="copyonly"> views</span><span class="tgme_widget_message_meta"><a class="tgme_widget_message_date" href="https://t.me/durov/191"><time datetime="2022-08-12T16:14:42+00:00" class="time">16:14</time></a></span>
+  </div>
+</div>
+  </div>
+
+</div></div><div class="tgme_widget_message_wrap js-widget_message_wrap"><div class="tgme_widget_message text_not_supported_wrap user-color-12 js-widget_message" data-post="durov/192" data-view="eyJjIjotMTAwNjUwMzEyMiwicCI6MTkyLCJ0IjoxNzgzMTYyOTYzLCJoIjoiOGE4NzQ3NmVlODZhYTk4OWJmIn0">
+  <div class="tgme_widget_message_user"><a href="https://t.me/durov"><i class="tgme_widget_message_user_photo bgcolor2" data-content="P"><img src="https://cdn4.telesco.pe/file/QX8-RjZDMNTqNZzZOGQgXsirK8PHalqyuOw5qTk2VbVD2o0CeMUYkQu0bq3R-IqNsITtSGJ1duV7QYLkYfE42-vgrRmYxM-QmQG3_AHiAiGAQPsXvBQ3ABh7DJeFCB-b0Jp6hn7wbLiP2gwvBGzvRzd1Z4U6Sy3tf_ry_fUr_YktYaV8xYWZZlmC_FeuYVvUdTQYFkR01MhAkdJRVnajjW2KAzC-JsRYtftFc9RQ2_IwdThephGFrah3x2mtVTe_gdUGL1152pjWj_kKU_yzklfOuBWIs1E49HGZKKakZVqK6NIvMSg_3VNB3qB7fAuJvOuivEoH5mkJCg2wvySDxg.jpg"></i></a></div>
+  <div class="tgme_widget_message_bubble">
+
+        <i class="tgme_widget_message_bubble_tail">
+      <svg class="bubble_icon" width="9px" height="20px" viewBox="0 0 9 20">
+        <g fill="none">
+          <path class="background" fill="#ffffff" d="M8,1 L9,1 L9,20 L8,20 L8,18 C7.807,15.161 7.124,12.233 5.950,9.218 C5.046,6.893 3.504,4.733 1.325,2.738 L1.325,2.738 C0.917,2.365 0.89,1.732 1.263,1.325 C1.452,1.118 1.72,1 2,1 L8,1 Z"></path>
+          <path class="border_1x" fill="#d7e3ec" d="M9,1 L2,1 C1.72,1 1.452,1.118 1.263,1.325 C0.89,1.732 0.917,2.365 1.325,2.738 C3.504,4.733 5.046,6.893 5.95,9.218 C7.124,12.233 7.807,15.161 8,18 L8,20 L9,20 L9,1 Z M2,0 L9,0 L9,20 L7,20 L7,20 L7.002,18.068 C6.816,15.333 6.156,12.504 5.018,9.58 C4.172,7.406 2.72,5.371 0.649,3.475 C-0.165,2.729 -0.221,1.464 0.525,0.649 C0.904,0.236 1.439,0 2,0 Z"></path>
+          <path class="border_2x" d="M9,1 L2,1 C1.72,1 1.452,1.118 1.263,1.325 C0.89,1.732 0.917,2.365 1.325,2.738 C3.504,4.733 5.046,6.893 5.95,9.218 C7.124,12.233 7.807,15.161 8,18 L8,20 L9,20 L9,1 Z M2,0.5 L9,0.5 L9,20 L7.5,20 L7.5,20 L7.501,18.034 C7.312,15.247 6.64,12.369 5.484,9.399 C4.609,7.15 3.112,5.052 0.987,3.106 C0.376,2.547 0.334,1.598 0.894,0.987 C1.178,0.677 1.579,0.5 2,0.5 Z"></path>
+          <path class="border_3x" d="M9,1 L2,1 C1.72,1 1.452,1.118 1.263,1.325 C0.89,1.732 0.917,2.365 1.325,2.738 C3.504,4.733 5.046,6.893 5.95,9.218 C7.124,12.233 7.807,15.161 8,18 L8,20 L9,20 L9,1 Z M2,0.667 L9,0.667 L9,20 L7.667,20 L7.667,20 L7.668,18.023 C7.477,15.218 6.802,12.324 5.64,9.338 C4.755,7.064 3.243,4.946 1.1,2.983 C0.557,2.486 0.52,1.643 1.017,1.1 C1.269,0.824 1.626,0.667 2,0.667 Z"></path>
+        </g>
+      </svg>
+    </i>
+    <div class="tgme_widget_message_author accent_color"><a class="tgme_widget_message_owner_name" href="https://t.me/durov"><span dir="auto">Pavel Durov</span></a></div>
+
+
+<a class="tgme_widget_message_video_player js-message_video_player" href="https://t.me/durov/192"><i class="tgme_widget_message_video_thumb" style="background-image:url('https://cdn1.telesco.pe/file/SaG08zs1xzP3jxGkynNqwG4vzW41Onmg4rwzu_zpLYjAKDOQCq648AIJve-FtEeiD4uOzOOaKogKqZJp0dgCL1CeKctrLmuvDL6rTVUQ1aIKzLGflGrMm54iohmLuAQZHxfen1hdURi86FxTmu9Jrsz4GGr_UX-mHcgnZukchfEWzF1Toj-GEa5cKcvw3eOHCP3spy4VN2CIUAEyRSZU0iXuvAbcC1XNd5VnyWByHu6QV46WKgc_P8q9QhBdaRagjkdhZX1LudfDbHp-pSNYf4q28P5c44QkM1eJ5c7XY8LsrUODsW2L94yXgcyTxBXF--fPkfXDsGgP6LkDukef5w')"></i>
+
+<div class="tgme_widget_message_video_wrap" style="width:1080px;padding-top:100%">
+  <video src="https://cdn1.telesco.pe/file/e2ca7ee259.mp4?token=QdN4ogrJ_fW5w8Z7MMt579J2jtMfYhwA5oWWhp8wWHvd142R7-Xc5ZV3YKH-gTrf3sdtQ1UBaZnfTxTrF2g0d9gfLgnndV3LRi4uUtNHzA-QCxmPJkqiUmhZUmXeuDPv5TcIdtSRBs135r2N6g5WxlHdsbb_GuMuiKZ5U3EBhy2PqchP85tNdOfTtLcaQio-vpzKbb5XiZqhMcfo4Q4iBbAKVc3Dv8SWUJD7m1gxhEUP1QXxdJvVHeoRW6XKqdy2_CrzZyomYU-xB1NCdz2B8OepEmMFEQyfMNFPXKYumNknfUpucVgGJK2W3kKXgVISbNJAb0BPW1NOqKhFv9x18w" class="tgme_widget_message_video js-message_video" width="100%" height="100%" preload muted autoplay loop playsinline></video>
+</div>
+
+<div class="message_media_not_supported_wrap">
+  <div class="message_media_not_supported">
+    <div class="message_media_not_supported_label">This media is not supported in your browser</div>
+    <span class="message_media_view_in_telegram">VIEW IN TELEGRAM</span>
+  </div>
+</div></a><div class="tgme_widget_message_text js-message_text" dir="auto">It was an interesting engineering challenge to ensure that hundreds of vector-based emoji with smooth animations could simultaneously play on the screen of any mobile phone. Telegram is the first company ever to have implemented this in a mobile app.<br/><br/>Adding custom emoji to the text of any message is just the first step of the upcoming visual revolution on Telegram. In a few weeks, users will be able to add any custom emoji as a reaction to a message and display an emoji as their current status next to their name. <br/><br/>All of this will become available to Premium subscribers first, because they are the ones who make it possible for Telegram to stay free and private for everyone.</div>
+<div class="tgme_widget_message_reactions js-message_reactions"><span class="tgme_reaction tgme_reaction_paid"><i class="icon icon-telegram-stars"></i>27</span><span class="tgme_reaction"><i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/F09F918D.png')"><b>👍</b></i>13.5K</span><span class="tgme_reaction"><i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/F09F8E89.png')"><b>🎉</b></i>3.34K</span><span class="tgme_reaction"><i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/F09F918E.png')"><b>👎</b></i>1.86K</span><span class="tgme_reaction"><i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/E29DA4.png')"><b>❤</b></i>275</span><span class="tgme_reaction"><i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/F09F92A9.png')"><b>💩</b></i>100</span></div><div class="tgme_widget_message_footer compact js-message_footer">
+
+  <div class="tgme_widget_message_info short js-message_info">
+    <span class="tgme_widget_message_views">2.57M</span><span class="copyonly"> views</span><span class="tgme_widget_message_meta"><a class="tgme_widget_message_date" href="https://t.me/durov/192"><time datetime="2022-08-12T16:14:47+00:00" class="time">16:14</time></a></span>
+  </div>
+</div>
+  </div>
+
+</div></div><div class="tgme_widget_message_wrap js-widget_message_wrap"><div class="tgme_widget_message text_not_supported_wrap user-color-12 js-widget_message" data-post="durov/193" data-view="eyJjIjotMTAwNjUwMzEyMiwicCI6MTkzLCJ0IjoxNzgzMTYyOTYzLCJoIjoiOGYxZjIxN2RjMzE4ZmVmZmYyIn0">
+  <div class="tgme_widget_message_user"><a href="https://t.me/durov"><i class="tgme_widget_message_user_photo bgcolor2" data-content="P"><img src="https://cdn4.telesco.pe/file/QX8-RjZDMNTqNZzZOGQgXsirK8PHalqyuOw5qTk2VbVD2o0CeMUYkQu0bq3R-IqNsITtSGJ1duV7QYLkYfE42-vgrRmYxM-QmQG3_AHiAiGAQPsXvBQ3ABh7DJeFCB-b0Jp6hn7wbLiP2gwvBGzvRzd1Z4U6Sy3tf_ry_fUr_YktYaV8xYWZZlmC_FeuYVvUdTQYFkR01MhAkdJRVnajjW2KAzC-JsRYtftFc9RQ2_IwdThephGFrah3x2mtVTe_gdUGL1152pjWj_kKU_yzklfOuBWIs1E49HGZKKakZVqK6NIvMSg_3VNB3qB7fAuJvOuivEoH5mkJCg2wvySDxg.jpg"></i></a></div>
+  <div class="tgme_widget_message_bubble">
+
+        <i class="tgme_widget_message_bubble_tail">
+      <svg class="bubble_icon" width="9px" height="20px" viewBox="0 0 9 20">
+        <g fill="none">
+          <path class="background" fill="#ffffff" d="M8,1 L9,1 L9,20 L8,20 L8,18 C7.807,15.161 7.124,12.233 5.950,9.218 C5.046,6.893 3.504,4.733 1.325,2.738 L1.325,2.738 C0.917,2.365 0.89,1.732 1.263,1.325 C1.452,1.118 1.72,1 2,1 L8,1 Z"></path>
+          <path class="border_1x" fill="#d7e3ec" d="M9,1 L2,1 C1.72,1 1.452,1.118 1.263,1.325 C0.89,1.732 0.917,2.365 1.325,2.738 C3.504,4.733 5.046,6.893 5.95,9.218 C7.124,12.233 7.807,15.161 8,18 L8,20 L9,20 L9,1 Z M2,0 L9,0 L9,20 L7,20 L7,20 L7.002,18.068 C6.816,15.333 6.156,12.504 5.018,9.58 C4.172,7.406 2.72,5.371 0.649,3.475 C-0.165,2.729 -0.221,1.464 0.525,0.649 C0.904,0.236 1.439,0 2,0 Z"></path>
+          <path class="border_2x" d="M9,1 L2,1 C1.72,1 1.452,1.118 1.263,1.325 C0.89,1.732 0.917,2.365 1.325,2.738 C3.504,4.733 5.046,6.893 5.95,9.218 C7.124,12.233 7.807,15.161 8,18 L8,20 L9,20 L9,1 Z M2,0.5 L9,0.5 L9,20 L7.5,20 L7.5,20 L7.501,18.034 C7.312,15.247 6.64,12.369 5.484,9.399 C4.609,7.15 3.112,5.052 0.987,3.106 C0.376,2.547 0.334,1.598 0.894,0.987 C1.178,0.677 1.579,0.5 2,0.5 Z"></path>
+          <path class="border_3x" d="M9,1 L2,1 C1.72,1 1.452,1.118 1.263,1.325 C0.89,1.732 0.917,2.365 1.325,2.738 C3.504,4.733 5.046,6.893 5.95,9.218 C7.124,12.233 7.807,15.161 8,18 L8,20 L9,20 L9,1 Z M2,0.667 L9,0.667 L9,20 L7.667,20 L7.667,20 L7.668,18.023 C7.477,15.218 6.802,12.324 5.64,9.338 C4.755,7.064 3.243,4.946 1.1,2.983 C0.557,2.486 0.52,1.643 1.017,1.1 C1.269,0.824 1.626,0.667 2,0.667 Z"></path>
+        </g>
+      </svg>
+    </i>
+    <div class="tgme_widget_message_author accent_color"><a class="tgme_widget_message_owner_name" href="https://t.me/durov"><span dir="auto">Pavel Durov</span></a></div>
+
+
+<div class="media_supported_cont"><div class="tgme_widget_message_text js-message_text" dir="auto"><tg-emoji emoji-id="5402406965252989103"><i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/F09F94A5.png')"><b>🔥</b></i></tg-emoji><tg-emoji emoji-id="5402406965252989103"><i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/F09F94A5.png')"><b>🔥</b></i></tg-emoji><tg-emoji emoji-id="5402406965252989103"><i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/F09F94A5.png')"><b>🔥</b></i></tg-emoji><tg-emoji emoji-id="5402406965252989103"><i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/F09F94A5.png')"><b>🔥</b></i></tg-emoji><br/><br/><tg-emoji emoji-id="6032750852538633161"><i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/F09F939D.png')"><b>📝</b></i></tg-emoji><tg-emoji emoji-id="6030739996095286579"><i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/F09F939D.png')"><b>📝</b></i></tg-emoji><tg-emoji emoji-id="6032902623797972103"><i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/F09F939D.png')"><b>📝</b></i></tg-emoji><tg-emoji emoji-id="6032902623797972103"><i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/F09F939D.png')"><b>📝</b></i></tg-emoji><tg-emoji emoji-id="6032794729924529597"><i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/F09F939D.png')"><b>📝</b></i></tg-emoji><br/><br/><tg-emoji emoji-id="6033044984783965208"><i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/F09F939D.png')"><b>📝</b></i></tg-emoji><tg-emoji emoji-id="6030779655823297970"><i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/F09F939D.png')"><b>📝</b></i></tg-emoji><tg-emoji emoji-id="6033044984783965208"><i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/F09F939D.png')"><b>📝</b></i></tg-emoji><tg-emoji emoji-id="6030380674836335648"><i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/F09F939D.png')"><b>📝</b></i></tg-emoji><br/><br/><tg-emoji emoji-id="6032794729924529597"><i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/F09F939D.png')"><b>📝</b></i></tg-emoji><tg-emoji emoji-id="6030380674836335648"><i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/F09F939D.png')"><b>📝</b></i></tg-emoji><tg-emoji emoji-id="6030739996095286579"><i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/F09F939D.png')"><b>📝</b></i></tg-emoji><tg-emoji emoji-id="6030663373878725803"><i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/F09F939D.png')"><b>📝</b></i></tg-emoji><tg-emoji emoji-id="6032779856452782933"><i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/F09F939D.png')"><b>📝</b></i></tg-emoji><tg-emoji emoji-id="6032933036461395383"><i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/F09F9B91.png')"><b>🛑</b></i></tg-emoji><br/><br/><tg-emoji emoji-id="6032669651886935022"><i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/F09F939D.png')"><b>📝</b></i></tg-emoji><tg-emoji emoji-id="6030380674836335648"><i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/F09F939D.png')"><b>📝</b></i></tg-emoji><tg-emoji emoji-id="6033022951601736655"><i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/F09F939D.png')"><b>📝</b></i></tg-emoji><tg-emoji emoji-id="6030380674836335648"><i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/F09F939D.png')"><b>📝</b></i></tg-emoji><tg-emoji emoji-id="6032678473749761092"><i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/F09F939D.png')"><b>📝</b></i></tg-emoji><tg-emoji emoji-id="6030663373878725803"><i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/F09F939D.png')"><b>📝</b></i></tg-emoji><tg-emoji emoji-id="6030739996095286579"><i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/F09F939D.png')"><b>📝</b></i></tg-emoji><tg-emoji emoji-id="6032931765151075341"><i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/F09F939D.png')"><b>📝</b></i></tg-emoji><br/><br/><tg-emoji emoji-id="5402406965252989103"><i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/F09F94A5.png')"><b>🔥</b></i></tg-emoji><tg-emoji emoji-id="5402406965252989103"><i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/F09F94A5.png')"><b>🔥</b></i></tg-emoji><tg-emoji emoji-id="5402406965252989103"><i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/F09F94A5.png')"><b>🔥</b></i></tg-emoji><tg-emoji emoji-id="5402406965252989103"><i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/F09F94A5.png')"><b>🔥</b></i></tg-emoji><tg-emoji emoji-id="5402406965252989103"><i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/F09F94A5.png')"><b>🔥</b></i></tg-emoji></div></div><div class="media_not_supported_cont"><div class="message_media_not_supported_wrap">
+  <div class="message_media_not_supported">
+    <div class="message_media_not_supported_label">Please open Telegram to view this post</div>
+    <a href="https://t.me/durov/193" class="message_media_view_in_telegram">VIEW IN TELEGRAM</a>
+  </div>
+</div></div>
+<div class="tgme_widget_message_reactions js-message_reactions"><span class="tgme_reaction tgme_reaction_paid"><i class="icon icon-telegram-stars"></i>28</span><span class="tgme_reaction"><i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/F09F8E89.png')"><b>🎉</b></i>44.9K</span><span class="tgme_reaction"><i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/F09F918D.png')"><b>👍</b></i>10.4K</span><span class="tgme_reaction"><i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/F09F918E.png')"><b>👎</b></i>3.28K</span><span class="tgme_reaction"><i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/E29DA4.png')"><b>❤</b></i>309</span><span class="tgme_reaction"><i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/F09FA4A1.png')"><b>🤡</b></i>168</span></div><div class="tgme_widget_message_footer compact js-message_footer">
+
+  <div class="tgme_widget_message_info short js-message_info">
+    <span class="tgme_widget_message_views">3.64M</span><span class="copyonly"> views</span><span class="tgme_widget_message_meta">edited &nbsp;<a class="tgme_widget_message_date" href="https://t.me/durov/193"><time datetime="2022-08-14T16:15:22+00:00" class="time">16:15</time></a></span>
+  </div>
+</div>
+  </div>
+
+</div></div><div class="tgme_widget_message_wrap js-widget_message_wrap"><div class="tgme_widget_message text_not_supported_wrap user-color-12 js-widget_message" data-post="durov/195" data-view="eyJjIjotMTAwNjUwMzEyMiwicCI6MTk1LCJ0IjoxNzgzMTYyOTYzLCJoIjoiZWE2ZGQ3OWU1ZjVmZGE2MGQ5In0">
+  <div class="tgme_widget_message_user"><a href="https://t.me/durov"><i class="tgme_widget_message_user_photo bgcolor2" data-content="P"><img src="https://cdn4.telesco.pe/file/QX8-RjZDMNTqNZzZOGQgXsirK8PHalqyuOw5qTk2VbVD2o0CeMUYkQu0bq3R-IqNsITtSGJ1duV7QYLkYfE42-vgrRmYxM-QmQG3_AHiAiGAQPsXvBQ3ABh7DJeFCB-b0Jp6hn7wbLiP2gwvBGzvRzd1Z4U6Sy3tf_ry_fUr_YktYaV8xYWZZlmC_FeuYVvUdTQYFkR01MhAkdJRVnajjW2KAzC-JsRYtftFc9RQ2_IwdThephGFrah3x2mtVTe_gdUGL1152pjWj_kKU_yzklfOuBWIs1E49HGZKKakZVqK6NIvMSg_3VNB3qB7fAuJvOuivEoH5mkJCg2wvySDxg.jpg"></i></a></div>
+  <div class="tgme_widget_message_bubble">
+
+        <i class="tgme_widget_message_bubble_tail">
+      <svg class="bubble_icon" width="9px" height="20px" viewBox="0 0 9 20">
+        <g fill="none">
+          <path class="background" fill="#ffffff" d="M8,1 L9,1 L9,20 L8,20 L8,18 C7.807,15.161 7.124,12.233 5.950,9.218 C5.046,6.893 3.504,4.733 1.325,2.738 L1.325,2.738 C0.917,2.365 0.89,1.732 1.263,1.325 C1.452,1.118 1.72,1 2,1 L8,1 Z"></path>
+          <path class="border_1x" fill="#d7e3ec" d="M9,1 L2,1 C1.72,1 1.452,1.118 1.263,1.325 C0.89,1.732 0.917,2.365 1.325,2.738 C3.504,4.733 5.046,6.893 5.95,9.218 C7.124,12.233 7.807,15.161 8,18 L8,20 L9,20 L9,1 Z M2,0 L9,0 L9,20 L7,20 L7,20 L7.002,18.068 C6.816,15.333 6.156,12.504 5.018,9.58 C4.172,7.406 2.72,5.371 0.649,3.475 C-0.165,2.729 -0.221,1.464 0.525,0.649 C0.904,0.236 1.439,0 2,0 Z"></path>
+          <path class="border_2x" d="M9,1 L2,1 C1.72,1 1.452,1.118 1.263,1.325 C0.89,1.732 0.917,2.365 1.325,2.738 C3.504,4.733 5.046,6.893 5.95,9.218 C7.124,12.233 7.807,15.161 8,18 L8,20 L9,20 L9,1 Z M2,0.5 L9,0.5 L9,20 L7.5,20 L7.5,20 L7.501,18.034 C7.312,15.247 6.64,12.369 5.484,9.399 C4.609,7.15 3.112,5.052 0.987,3.106 C0.376,2.547 0.334,1.598 0.894,0.987 C1.178,0.677 1.579,0.5 2,0.5 Z"></path>
+          <path class="border_3x" d="M9,1 L2,1 C1.72,1 1.452,1.118 1.263,1.325 C0.89,1.732 0.917,2.365 1.325,2.738 C3.504,4.733 5.046,6.893 5.95,9.218 C7.124,12.233 7.807,15.161 8,18 L8,20 L9,20 L9,1 Z M2,0.667 L9,0.667 L9,20 L7.667,20 L7.667,20 L7.668,18.023 C7.477,15.218 6.802,12.324 5.64,9.338 C4.755,7.064 3.243,4.946 1.1,2.983 C0.557,2.486 0.52,1.643 1.017,1.1 C1.269,0.824 1.626,0.667 2,0.667 Z"></path>
+        </g>
+      </svg>
+    </i>
+    <div class="tgme_widget_message_author accent_color"><a class="tgme_widget_message_owner_name" href="https://t.me/durov"><span dir="auto">Pavel Durov</span></a></div>
+
+
+<div class="tgme_widget_message_text js-message_text" dir="auto">Until recently, 70% of all Telegram usernames had been reserved in inactive channels by cybersquatters from Iran. This created a graveyard of dead usernames that cluttered search results and prevented millions of Telegram users from selecting appropriate public addresses for their accounts, groups and channels.<br/><br/>Users who wanted to acquire these reserved usernames often received no response or ended up being scammed.<br/><br/>Fortunately, this situation has started to change. In mid-August, we withdrew all public Telegram addresses linked to channels that were empty or inactive for the last year. We will gradually reintroduce 99% of these addresses into public use, this time with algorithmic and geolocation limitations so that more users, and not just a select few, can benefit.<br/><br/>As for the highest-valued short usernames, the most efficient and fair way to distribute them seems to be by the auction I mentioned in <a href="https://t.me/durov/194" target="_blank" rel="noopener" onclick="return confirm('Open this link?\n\n'+this.href);">my previous post</a>. This way, those who acquire these catchy links will be motivated to put them to good use and bring value to our users with original content hosted at recognizable <a href="http://t.me/" target="_blank" rel="noopener">t.me</a> addresses.<br/><br/>I don&#39;t doubt that those who hoarded Telegram usernames are disappointed, but this change will benefit the vast majority of our users. I look forward to seeing how millions of great Telegram addresses will be revived and finally start serving our community. <br/><br/><b>P.S. </b>In anticipation of the things to come, today we are <a href="https://t.me/username/4" target="_blank" rel="noopener" onclick="return confirm('Open this link?\n\n'+this.href);">adding support</a> for dedicated links like <a href="http://username.t.me/" target="_blank" rel="noopener">username.t.me</a> for every username on Telegram (in addition to <a href="http://t.me/username" target="_blank" rel="noopener">t.me/username</a>). These web sites are already functional in any browser.</div>
+<div class="tgme_widget_message_reactions js-message_reactions"><span class="tgme_reaction tgme_reaction_paid"><i class="icon icon-telegram-stars"></i>69</span><span class="tgme_reaction"><i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/F09F918E.png')"><b>👎</b></i>2.42K</span><span class="tgme_reaction"><i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/F09F918D.png')"><b>👍</b></i>1.37K</span><span class="tgme_reaction"><i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/F09FA4A1.png')"><b>🤡</b></i>1.12K</span><span class="tgme_reaction"><i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/E29DA4.png')"><b>❤</b></i>508</span><span class="tgme_reaction"><i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/F09F92A9.png')"><b>💩</b></i>283</span></div><div class="tgme_widget_message_footer compact js-message_footer">
+
+  <div class="tgme_widget_message_info short js-message_info">
+    <span class="tgme_widget_message_views">3.65M</span><span class="copyonly"> views</span><span class="tgme_widget_message_meta"><a class="tgme_widget_message_date" href="https://t.me/durov/195"><time datetime="2022-08-29T14:20:39+00:00" class="time">14:20</time></a></span>
+  </div>
+</div>
+  </div>
+
+</div></div><div class="tgme_widget_message_wrap js-widget_message_wrap"><div class="tgme_widget_message text_not_supported_wrap user-color-12 js-widget_message" data-post="durov/196" data-view="eyJjIjotMTAwNjUwMzEyMiwicCI6MTk2LCJ0IjoxNzgzMTYyOTYzLCJoIjoiODgwZDQ0YjJjZTQwYTBmZTMzIn0">
+  <div class="tgme_widget_message_user"><a href="https://t.me/durov"><i class="tgme_widget_message_user_photo bgcolor2" data-content="P"><img src="https://cdn4.telesco.pe/file/QX8-RjZDMNTqNZzZOGQgXsirK8PHalqyuOw5qTk2VbVD2o0CeMUYkQu0bq3R-IqNsITtSGJ1duV7QYLkYfE42-vgrRmYxM-QmQG3_AHiAiGAQPsXvBQ3ABh7DJeFCB-b0Jp6hn7wbLiP2gwvBGzvRzd1Z4U6Sy3tf_ry_fUr_YktYaV8xYWZZlmC_FeuYVvUdTQYFkR01MhAkdJRVnajjW2KAzC-JsRYtftFc9RQ2_IwdThephGFrah3x2mtVTe_gdUGL1152pjWj_kKU_yzklfOuBWIs1E49HGZKKakZVqK6NIvMSg_3VNB3qB7fAuJvOuivEoH5mkJCg2wvySDxg.jpg"></i></a></div>
+  <div class="tgme_widget_message_bubble">
+
+        <i class="tgme_widget_message_bubble_tail">
+      <svg class="bubble_icon" width="9px" height="20px" viewBox="0 0 9 20">
+        <g fill="none">
+          <path class="background" fill="#ffffff" d="M8,1 L9,1 L9,20 L8,20 L8,18 C7.807,15.161 7.124,12.233 5.950,9.218 C5.046,6.893 3.504,4.733 1.325,2.738 L1.325,2.738 C0.917,2.365 0.89,1.732 1.263,1.325 C1.452,1.118 1.72,1 2,1 L8,1 Z"></path>
+          <path class="border_1x" fill="#d7e3ec" d="M9,1 L2,1 C1.72,1 1.452,1.118 1.263,1.325 C0.89,1.732 0.917,2.365 1.325,2.738 C3.504,4.733 5.046,6.893 5.95,9.218 C7.124,12.233 7.807,15.161 8,18 L8,20 L9,20 L9,1 Z M2,0 L9,0 L9,20 L7,20 L7,20 L7.002,18.068 C6.816,15.333 6.156,12.504 5.018,9.58 C4.172,7.406 2.72,5.371 0.649,3.475 C-0.165,2.729 -0.221,1.464 0.525,0.649 C0.904,0.236 1.439,0 2,0 Z"></path>
+          <path class="border_2x" d="M9,1 L2,1 C1.72,1 1.452,1.118 1.263,1.325 C0.89,1.732 0.917,2.365 1.325,2.738 C3.504,4.733 5.046,6.893 5.95,9.218 C7.124,12.233 7.807,15.161 8,18 L8,20 L9,20 L9,1 Z M2,0.5 L9,0.5 L9,20 L7.5,20 L7.5,20 L7.501,18.034 C7.312,15.247 6.64,12.369 5.484,9.399 C4.609,7.15 3.112,5.052 0.987,3.106 C0.376,2.547 0.334,1.598 0.894,0.987 C1.178,0.677 1.579,0.5 2,0.5 Z"></path>
+          <path class="border_3x" d="M9,1 L2,1 C1.72,1 1.452,1.118 1.263,1.325 C0.89,1.732 0.917,2.365 1.325,2.738 C3.504,4.733 5.046,6.893 5.95,9.218 C7.124,12.233 7.807,15.161 8,18 L8,20 L9,20 L9,1 Z M2,0.667 L9,0.667 L9,20 L7.667,20 L7.667,20 L7.668,18.023 C7.477,15.218 6.802,12.324 5.64,9.338 C4.755,7.064 3.243,4.946 1.1,2.983 C0.557,2.486 0.52,1.643 1.017,1.1 C1.269,0.824 1.626,0.667 2,0.667 Z"></path>
+        </g>
+      </svg>
+    </i>
+    <div class="tgme_widget_message_author accent_color"><a class="tgme_widget_message_owner_name" href="https://t.me/durov"><span dir="auto">Pavel Durov</span></a></div>
+
+
+<div class="tgme_widget_message_text js-message_text" dir="auto">Hackers could have full access (&#33;) to everything on the phones of WhatsApp users. <br/> <br/>This was possible through a security issue <a href="https://www.whatsapp.com/security/advisories/2022/" target="_blank" rel="noopener" onclick="return confirm('Open this link?\n\n'+this.href);">disclosed by WhatsApp itself</a> last week. All a hacker had to do to control your phone was send you a malicious video or start a video call with you on WhatsApp. <br/> <br/>You are probably thinking &quot;Yeah, but if I updated WhatsApp to the latest version, I am safe, right&quot;? <br/> <br/>Not really. <br/> <br/>A WhatsApp security issue exactly like this one <a href="https://www.cnbc.com/2018/10/10/whatsapp-bug-let-hackers-hijack-accounts-with-a-video-call-reports.html" target="_blank" rel="noopener" onclick="return confirm('Open this link?\n\n'+this.href);">was discovered in 2018</a>, then <a href="https://www.ft.com/content/4da1117e-756c-11e9-be7d-6d846537acab" target="_blank" rel="noopener" onclick="return confirm('Open this link?\n\n'+this.href);">another in 2019</a> and <a href="https://timesofindia.indiatimes.com/gadgets-news/whatsapp-reveals-six-security-issues-that-could-have-got-its-users-hacked/articleshow/77925426.cms" target="_blank" rel="noopener" onclick="return confirm('Open this link?\n\n'+this.href);">yet another one in 2020</a> (tap each year&#39;s link to see the corresponding vulnerability). And yes, <a href="https://telegra.ph/whatsapp-backdoor-01-16" target="_blank" rel="noopener" onclick="return confirm('Open this link?\n\n'+this.href);">in 2017</a> before that. Prior to 2016, WhatsApp didn&#39;t have encryption at all. <br/> <br/>Every year, we learn about some issue in WhatsApp that puts everything on their users&#39; devices at risk. Which means it&#39;s almost certain that a new security flaw already exists there. Such issues are hardly incidental – they are planted backdoors. If one backdoor is discovered and has to be removed, another one is added (read the post &quot;<a href="https://telegra.ph/Why-WhatsApp-Will-Never-Be-Secure-05-15" target="_blank" rel="noopener" onclick="return confirm('Open this link?\n\n'+this.href);">Why WhatsApp will never be secure</a>&quot; to understand why). <br/> <br/>It doesn&#39;t matter if you are the richest person on earth – if you have WhatsApp installed on your phone, all your data from every app on your device is accessible, as <a href="https://www.theguardian.com/technology/2020/jan/21/amazon-boss-jeff-bezoss-phone-hacked-by-saudi-crown-prince" target="_blank" rel="noopener" onclick="return confirm('Open this link?\n\n'+this.href);">Jeff Bezos found out in 2020</a>. That&#39;s why I deleted WhatsApp from my devices years ago. Having it installed creates a door to get into your phone. <br/> <br/>I&#39;m not pushing people to switch to Telegram here. With 700M+ active users and 2M+ daily signups, Telegram doesn&#39;t need additional promotion. You can use any messaging app you like, but do stay away from WhatsApp – it has now been a surveillance tool for 13 years.</div>
+<div class="tgme_widget_message_reactions js-message_reactions"><span class="tgme_reaction tgme_reaction_paid"><i class="icon icon-telegram-stars"></i>152</span><span class="tgme_reaction"><i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/F09F94A5.png')"><b>🔥</b></i>1.37K</span><span class="tgme_reaction"><i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/E29DA4.png')"><b>❤</b></i>666</span><span class="tgme_reaction"><i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/F09FA4A1.png')"><b>🤡</b></i>453</span><span class="tgme_reaction"><i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/F09F8F86.png')"><b>🏆</b></i>197</span><span class="tgme_reaction"><i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/F09F918D.png')"><b>👍</b></i>104</span></div><div class="tgme_widget_message_footer compact js-message_footer">
+
+  <div class="tgme_widget_message_info short js-message_info">
+    <span class="tgme_widget_message_views">5M</span><span class="copyonly"> views</span><span class="tgme_widget_message_meta">edited &nbsp;<a class="tgme_widget_message_date" href="https://t.me/durov/196"><time datetime="2022-10-05T21:12:17+00:00" class="time">21:12</time></a></span>
+  </div>
+</div>
+  </div>
+
+</div></div><div class="tgme_widget_message_wrap js-widget_message_wrap"><div class="tgme_widget_message text_not_supported_wrap user-color-12 js-widget_message" data-post="durov/197" data-view="eyJjIjotMTAwNjUwMzEyMiwicCI6MTk3LCJ0IjoxNzgzMTYyOTYzLCJoIjoiODgyZDBmYWMyNzM2YWZhMzExIn0">
+  <div class="tgme_widget_message_user"><a href="https://t.me/durov"><i class="tgme_widget_message_user_photo bgcolor2" data-content="P"><img src="https://cdn4.telesco.pe/file/QX8-RjZDMNTqNZzZOGQgXsirK8PHalqyuOw5qTk2VbVD2o0CeMUYkQu0bq3R-IqNsITtSGJ1duV7QYLkYfE42-vgrRmYxM-QmQG3_AHiAiGAQPsXvBQ3ABh7DJeFCB-b0Jp6hn7wbLiP2gwvBGzvRzd1Z4U6Sy3tf_ry_fUr_YktYaV8xYWZZlmC_FeuYVvUdTQYFkR01MhAkdJRVnajjW2KAzC-JsRYtftFc9RQ2_IwdThephGFrah3x2mtVTe_gdUGL1152pjWj_kKU_yzklfOuBWIs1E49HGZKKakZVqK6NIvMSg_3VNB3qB7fAuJvOuivEoH5mkJCg2wvySDxg.jpg"></i></a></div>
+  <div class="tgme_widget_message_bubble">
+
+        <i class="tgme_widget_message_bubble_tail">
+      <svg class="bubble_icon" width="9px" height="20px" viewBox="0 0 9 20">
+        <g fill="none">
+          <path class="background" fill="#ffffff" d="M8,1 L9,1 L9,20 L8,20 L8,18 C7.807,15.161 7.124,12.233 5.950,9.218 C5.046,6.893 3.504,4.733 1.325,2.738 L1.325,2.738 C0.917,2.365 0.89,1.732 1.263,1.325 C1.452,1.118 1.72,1 2,1 L8,1 Z"></path>
+          <path class="border_1x" fill="#d7e3ec" d="M9,1 L2,1 C1.72,1 1.452,1.118 1.263,1.325 C0.89,1.732 0.917,2.365 1.325,2.738 C3.504,4.733 5.046,6.893 5.95,9.218 C7.124,12.233 7.807,15.161 8,18 L8,20 L9,20 L9,1 Z M2,0 L9,0 L9,20 L7,20 L7,20 L7.002,18.068 C6.816,15.333 6.156,12.504 5.018,9.58 C4.172,7.406 2.72,5.371 0.649,3.475 C-0.165,2.729 -0.221,1.464 0.525,0.649 C0.904,0.236 1.439,0 2,0 Z"></path>
+          <path class="border_2x" d="M9,1 L2,1 C1.72,1 1.452,1.118 1.263,1.325 C0.89,1.732 0.917,2.365 1.325,2.738 C3.504,4.733 5.046,6.893 5.95,9.218 C7.124,12.233 7.807,15.161 8,18 L8,20 L9,20 L9,1 Z M2,0.5 L9,0.5 L9,20 L7.5,20 L7.5,20 L7.501,18.034 C7.312,15.247 6.64,12.369 5.484,9.399 C4.609,7.15 3.112,5.052 0.987,3.106 C0.376,2.547 0.334,1.598 0.894,0.987 C1.178,0.677 1.579,0.5 2,0.5 Z"></path>
+          <path class="border_3x" d="M9,1 L2,1 C1.72,1 1.452,1.118 1.263,1.325 C0.89,1.732 0.917,2.365 1.325,2.738 C3.504,4.733 5.046,6.893 5.95,9.218 C7.124,12.233 7.807,15.161 8,18 L8,20 L9,20 L9,1 Z M2,0.667 L9,0.667 L9,20 L7.667,20 L7.667,20 L7.668,18.023 C7.477,15.218 6.802,12.324 5.64,9.338 C4.755,7.064 3.243,4.946 1.1,2.983 C0.557,2.486 0.52,1.643 1.017,1.1 C1.269,0.824 1.626,0.667 2,0.667 Z"></path>
+        </g>
+      </svg>
+    </i>
+    <div class="tgme_widget_message_author accent_color"><a class="tgme_widget_message_owner_name" href="https://t.me/durov"><span dir="auto">Pavel Durov</span></a></div>
+
+
+<div class="media_supported_cont"><div class="tgme_widget_message_text js-message_text" dir="auto">Thanks for the birthday wishes. However, I decided to cancel turning 38 due to the uneasy times in the world <tg-emoji emoji-id="5269407573445975439"><i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/F09F98AD.png')"><b>😭</b></i></tg-emoji><br/><br/>So I am<br/><tg-emoji emoji-id="5332807088940785741"><i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/F09F94A4.png')"><b>🔤</b></i></tg-emoji><tg-emoji emoji-id="5332558333024934589"><i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/F09F94A4.png')"><b>🔤</b></i></tg-emoji><tg-emoji emoji-id="5226711050153370378"><i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/F09F94A4.png')"><b>🔤</b></i></tg-emoji><tg-emoji emoji-id="5332396623211274002"><i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/F09F94A4.png')"><b>🔤</b></i></tg-emoji><tg-emoji emoji-id="5332396623211274002"><i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/F09F94A4.png')"><b>🔤</b></i></tg-emoji><br/><tg-emoji emoji-id="5332558333024934589"><i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/F09F94A4.png')"><b>🔤</b></i></tg-emoji><tg-emoji emoji-id="5330133162561380231"><i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/F09F94A4.png')"><b>🔤</b></i></tg-emoji><tg-emoji emoji-id="5226711050153370378"><i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/F09F94A4.png')"><b>🔤</b></i></tg-emoji><tg-emoji emoji-id="5332514996804918116"><i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/F09F94A4.png')"><b>🔤</b></i></tg-emoji><tg-emoji emoji-id="5332558333024934589"><i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/F09F94A4.png')"><b>🔤</b></i></tg-emoji><tg-emoji emoji-id="5332648110726323166"><i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/F09F94A4.png')"><b>🔤</b></i></tg-emoji><br/><tg-emoji emoji-id="5332807088940785741"><i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/F09F94A4.png')"><b>🔤</b></i></tg-emoji><tg-emoji emoji-id="5332587336939084375"><i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/F09F94A4.png')"><b>🔤</b></i></tg-emoji><tg-emoji emoji-id="5332405969060109502"><i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/F09F94A4.png')"><b>🔤</b></i></tg-emoji><tg-emoji emoji-id="5332587336939084375"><i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/F09F94A4.png')"><b>🔤</b></i></tg-emoji><tg-emoji emoji-id="5228916769262935633"><i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/F09F94A4.png')"><b>🔤</b></i></tg-emoji><tg-emoji emoji-id="5472223741708606653"><i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/E29895.png')"><b>☕️</b></i></tg-emoji></div></div><div class="media_not_supported_cont"><div class="message_media_not_supported_wrap">
+  <div class="message_media_not_supported">
+    <div class="message_media_not_supported_label">Please open Telegram to view this post</div>
+    <a href="https://t.me/durov/197" class="message_media_view_in_telegram">VIEW IN TELEGRAM</a>
+  </div>
+</div></div>
+<div class="tgme_widget_message_reactions js-message_reactions"><span class="tgme_reaction tgme_reaction_paid"><i class="icon icon-telegram-stars"></i>15</span><span class="tgme_reaction"><i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/F09F94A5.png')"><b>🔥</b></i>1.65K</span><span class="tgme_reaction"><i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/E29DA4.png')"><b>❤</b></i>781</span><span class="tgme_reaction"><i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/F09FA4A1.png')"><b>🤡</b></i>557</span><span class="tgme_reaction"><i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/F09F8F86.png')"><b>🏆</b></i>233</span><span class="tgme_reaction"><i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/F09F918D.png')"><b>👍</b></i>112</span></div><div class="tgme_widget_message_footer compact js-message_footer">
+
+  <div class="tgme_widget_message_info short js-message_info">
+    <span class="tgme_widget_message_views">3.06M</span><span class="copyonly"> views</span><span class="tgme_widget_message_meta"><a class="tgme_widget_message_date" href="https://t.me/durov/197"><time datetime="2022-10-10T14:59:31+00:00" class="time">14:59</time></a></span>
+  </div>
+</div>
+  </div>
+
+</div></div><div class="tgme_widget_message_wrap js-widget_message_wrap"><div class="tgme_widget_message text_not_supported_wrap user-color-12 js-widget_message" data-post="durov/198" data-view="eyJjIjotMTAwNjUwMzEyMiwicCI6MTk4LCJ0IjoxNzgzMTYyOTYzLCJoIjoiODg0MmUwMWU0MTMzYjRhMDAxIn0">
+  <div class="tgme_widget_message_user"><a href="https://t.me/durov"><i class="tgme_widget_message_user_photo bgcolor2" data-content="P"><img src="https://cdn4.telesco.pe/file/QX8-RjZDMNTqNZzZOGQgXsirK8PHalqyuOw5qTk2VbVD2o0CeMUYkQu0bq3R-IqNsITtSGJ1duV7QYLkYfE42-vgrRmYxM-QmQG3_AHiAiGAQPsXvBQ3ABh7DJeFCB-b0Jp6hn7wbLiP2gwvBGzvRzd1Z4U6Sy3tf_ry_fUr_YktYaV8xYWZZlmC_FeuYVvUdTQYFkR01MhAkdJRVnajjW2KAzC-JsRYtftFc9RQ2_IwdThephGFrah3x2mtVTe_gdUGL1152pjWj_kKU_yzklfOuBWIs1E49HGZKKakZVqK6NIvMSg_3VNB3qB7fAuJvOuivEoH5mkJCg2wvySDxg.jpg"></i></a></div>
+  <div class="tgme_widget_message_bubble">
+
+        <i class="tgme_widget_message_bubble_tail">
+      <svg class="bubble_icon" width="9px" height="20px" viewBox="0 0 9 20">
+        <g fill="none">
+          <path class="background" fill="#ffffff" d="M8,1 L9,1 L9,20 L8,20 L8,18 C7.807,15.161 7.124,12.233 5.950,9.218 C5.046,6.893 3.504,4.733 1.325,2.738 L1.325,2.738 C0.917,2.365 0.89,1.732 1.263,1.325 C1.452,1.118 1.72,1 2,1 L8,1 Z"></path>
+          <path class="border_1x" fill="#d7e3ec" d="M9,1 L2,1 C1.72,1 1.452,1.118 1.263,1.325 C0.89,1.732 0.917,2.365 1.325,2.738 C3.504,4.733 5.046,6.893 5.95,9.218 C7.124,12.233 7.807,15.161 8,18 L8,20 L9,20 L9,1 Z M2,0 L9,0 L9,20 L7,20 L7,20 L7.002,18.068 C6.816,15.333 6.156,12.504 5.018,9.58 C4.172,7.406 2.72,5.371 0.649,3.475 C-0.165,2.729 -0.221,1.464 0.525,0.649 C0.904,0.236 1.439,0 2,0 Z"></path>
+          <path class="border_2x" d="M9,1 L2,1 C1.72,1 1.452,1.118 1.263,1.325 C0.89,1.732 0.917,2.365 1.325,2.738 C3.504,4.733 5.046,6.893 5.95,9.218 C7.124,12.233 7.807,15.161 8,18 L8,20 L9,20 L9,1 Z M2,0.5 L9,0.5 L9,20 L7.5,20 L7.5,20 L7.501,18.034 C7.312,15.247 6.64,12.369 5.484,9.399 C4.609,7.15 3.112,5.052 0.987,3.106 C0.376,2.547 0.334,1.598 0.894,0.987 C1.178,0.677 1.579,0.5 2,0.5 Z"></path>
+          <path class="border_3x" d="M9,1 L2,1 C1.72,1 1.452,1.118 1.263,1.325 C0.89,1.732 0.917,2.365 1.325,2.738 C3.504,4.733 5.046,6.893 5.95,9.218 C7.124,12.233 7.807,15.161 8,18 L8,20 L9,20 L9,1 Z M2,0.667 L9,0.667 L9,20 L7.667,20 L7.667,20 L7.668,18.023 C7.477,15.218 6.802,12.324 5.64,9.338 C4.755,7.064 3.243,4.946 1.1,2.983 C0.557,2.486 0.52,1.643 1.017,1.1 C1.269,0.824 1.626,0.667 2,0.667 Z"></path>
+        </g>
+      </svg>
+    </i>
+    <div class="tgme_widget_message_author accent_color"><a class="tgme_widget_message_owner_name" href="https://t.me/durov"><span dir="auto">Pavel Durov</span></a></div>
+
+
+<div class="tgme_widget_message_text js-message_text" dir="auto">As <a href="https://t.me/durov/194" target="_blank" rel="noopener" onclick="return confirm('Open this link?\n\n'+this.href);">promised</a>, we&#39;ve launched the ability to buy Telegram usernames on a dedicated platform – <a href="https://fragment.com/" target="_blank" rel="noopener" onclick="return confirm('Open this link?\n\n'+this.href);">Fragment</a>. Auctions for the most valuable usernames are already live, so make sure to check it out. In a few days, we will also introduce the ability for users to sell their existing usernames on Fragment. <br/>  <br/>For the first time in the history of social media, a fair, transparent market for usernames is established. Finally people will have ownership over their social media addresses, secured in the immutable ledger of a decentralized blockchain network.  <br/>  <br/>This is just the beginning, and yet an important milestone – the power has started to shift into users&#39; hands.</div>
+<div class="tgme_widget_message_reactions js-message_reactions"><span class="tgme_reaction tgme_reaction_paid"><i class="icon icon-telegram-stars"></i>25</span><span class="tgme_reaction"><i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/F09FA4A1.png')"><b>🤡</b></i>1.39K</span><span class="tgme_reaction"><i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/F09F94A5.png')"><b>🔥</b></i>848</span><span class="tgme_reaction"><i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/E29DA4.png')"><b>❤</b></i>735</span><span class="tgme_reaction"><i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/F09F8F86.png')"><b>🏆</b></i>218</span><span class="tgme_reaction"><i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/F09F918D.png')"><b>👍</b></i>118</span></div><div class="tgme_widget_message_footer compact js-message_footer">
+
+  <div class="tgme_widget_message_info short js-message_info">
+    <span class="tgme_widget_message_views">2.15M</span><span class="copyonly"> views</span><span class="tgme_widget_message_meta"><a class="tgme_widget_message_date" href="https://t.me/durov/198"><time datetime="2022-10-27T16:42:50+00:00" class="time">16:42</time></a></span>
+  </div>
+</div>
+  </div>
+
+</div></div><div class="tgme_widget_message_wrap js-widget_message_wrap"><div class="tgme_widget_message text_not_supported_wrap user-color-12 js-widget_message" data-post="durov/199" data-view="eyJjIjotMTAwNjUwMzEyMiwicCI6MTk5LCJ0IjoxNzgzMTYyOTYzLCJoIjoiZTIzN2UwZjMyNzUyZmJlODIzIn0">
+  <div class="tgme_widget_message_user"><a href="https://t.me/durov"><i class="tgme_widget_message_user_photo bgcolor2" data-content="P"><img src="https://cdn4.telesco.pe/file/QX8-RjZDMNTqNZzZOGQgXsirK8PHalqyuOw5qTk2VbVD2o0CeMUYkQu0bq3R-IqNsITtSGJ1duV7QYLkYfE42-vgrRmYxM-QmQG3_AHiAiGAQPsXvBQ3ABh7DJeFCB-b0Jp6hn7wbLiP2gwvBGzvRzd1Z4U6Sy3tf_ry_fUr_YktYaV8xYWZZlmC_FeuYVvUdTQYFkR01MhAkdJRVnajjW2KAzC-JsRYtftFc9RQ2_IwdThephGFrah3x2mtVTe_gdUGL1152pjWj_kKU_yzklfOuBWIs1E49HGZKKakZVqK6NIvMSg_3VNB3qB7fAuJvOuivEoH5mkJCg2wvySDxg.jpg"></i></a></div>
+  <div class="tgme_widget_message_bubble">
+
+        <i class="tgme_widget_message_bubble_tail">
+      <svg class="bubble_icon" width="9px" height="20px" viewBox="0 0 9 20">
+        <g fill="none">
+          <path class="background" fill="#ffffff" d="M8,1 L9,1 L9,20 L8,20 L8,18 C7.807,15.161 7.124,12.233 5.950,9.218 C5.046,6.893 3.504,4.733 1.325,2.738 L1.325,2.738 C0.917,2.365 0.89,1.732 1.263,1.325 C1.452,1.118 1.72,1 2,1 L8,1 Z"></path>
+          <path class="border_1x" fill="#d7e3ec" d="M9,1 L2,1 C1.72,1 1.452,1.118 1.263,1.325 C0.89,1.732 0.917,2.365 1.325,2.738 C3.504,4.733 5.046,6.893 5.95,9.218 C7.124,12.233 7.807,15.161 8,18 L8,20 L9,20 L9,1 Z M2,0 L9,0 L9,20 L7,20 L7,20 L7.002,18.068 C6.816,15.333 6.156,12.504 5.018,9.58 C4.172,7.406 2.72,5.371 0.649,3.475 C-0.165,2.729 -0.221,1.464 0.525,0.649 C0.904,0.236 1.439,0 2,0 Z"></path>
+          <path class="border_2x" d="M9,1 L2,1 C1.72,1 1.452,1.118 1.263,1.325 C0.89,1.732 0.917,2.365 1.325,2.738 C3.504,4.733 5.046,6.893 5.95,9.218 C7.124,12.233 7.807,15.161 8,18 L8,20 L9,20 L9,1 Z M2,0.5 L9,0.5 L9,20 L7.5,20 L7.5,20 L7.501,18.034 C7.312,15.247 6.64,12.369 5.484,9.399 C4.609,7.15 3.112,5.052 0.987,3.106 C0.376,2.547 0.334,1.598 0.894,0.987 C1.178,0.677 1.579,0.5 2,0.5 Z"></path>
+          <path class="border_3x" d="M9,1 L2,1 C1.72,1 1.452,1.118 1.263,1.325 C0.89,1.732 0.917,2.365 1.325,2.738 C3.504,4.733 5.046,6.893 5.95,9.218 C7.124,12.233 7.807,15.161 8,18 L8,20 L9,20 L9,1 Z M2,0.667 L9,0.667 L9,20 L7.667,20 L7.667,20 L7.668,18.023 C7.477,15.218 6.802,12.324 5.64,9.338 C4.755,7.064 3.243,4.946 1.1,2.983 C0.557,2.486 0.52,1.643 1.017,1.1 C1.269,0.824 1.626,0.667 2,0.667 Z"></path>
+        </g>
+      </svg>
+    </i>
+    <div class="tgme_widget_message_author accent_color"><a class="tgme_widget_message_owner_name" href="https://t.me/durov"><span dir="auto">Pavel Durov</span></a></div>
+
+
+<div class="tgme_widget_message_text js-message_text" dir="auto">Some content creators started using third-party payment bots to sell access to individual posts in their Telegram channels. This way, content creators could receive close to 100% of whatever their subscribers paid, which was great.   <br/>   <br/>Unfortunately, we received word from Apple that they were not happy with content creators monetizing their efforts without paying a 30% tax to Apple. Since Apple has complete control over its ecosystem, we had no alternative but to disable such paid posts on iOS devices.    <br/>   <br/>This is just another example of how a trillion-dollar monopoly abuses its market dominance at the expense of millions of users who are trying to monetize their own content. I hope that the regulators in the EU, India and elsewhere start taking action before Apple destroys more dreams and crushes more entrepreneurs with a tax that is higher than any government-levied VAT.  <br/>   <br/>In the meantime, we at Telegram shall work to offer creators powerful and easy-to-use tools to monetize their content – outside of Apple&#39;s <a href="https://t.me/durov/122" target="_blank" rel="noopener" onclick="return confirm('Open this link?\n\n'+this.href);">restrictive ecosystem</a>.</div><a class="tgme_widget_message_link_preview" href="https://t.me/durov/122">
+
+  <div class="link_preview_site_name accent_color" dir="auto">Telegram</div>
+
+  <div class="link_preview_title" dir="auto">Pavel Durov</div>
+  <div class="link_preview_description" dir="auto">7 Reasons Every iPhone User Should Be Worried About the App Store’s 30% Tax <br/><br/>In the last few months, many prominent app developers voiced their disapproval of the App Store policies Apple imposes on all apps. Why should that concern you if you own an iPhone?…</div>
+</a>
+<div class="tgme_widget_message_reactions js-message_reactions"><span class="tgme_reaction tgme_reaction_paid"><i class="icon icon-telegram-stars"></i>16</span><span class="tgme_reaction"><i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/F09F94A5.png')"><b>🔥</b></i>1.27K</span><span class="tgme_reaction"><i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/E29DA4.png')"><b>❤</b></i>640</span><span class="tgme_reaction"><i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/F09FA4A1.png')"><b>🤡</b></i>427</span><span class="tgme_reaction"><i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/F09F8F86.png')"><b>🏆</b></i>207</span><span class="tgme_reaction"><i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/F09F918D.png')"><b>👍</b></i>118</span></div><div class="tgme_widget_message_footer compact js-message_footer">
+
+  <div class="tgme_widget_message_info short js-message_info">
+    <span class="tgme_widget_message_views">2.11M</span><span class="copyonly"> views</span><span class="tgme_widget_message_meta">edited &nbsp;<a class="tgme_widget_message_date" href="https://t.me/durov/199"><time datetime="2022-10-28T13:26:41+00:00" class="time">13:26</time></a></span>
+  </div>
+</div>
+  </div>
+
+</div></div><div class="tgme_widget_message_centered js-messages_more_wrap"><a href="/s/durov?after=199" class="tme_messages_more js-messages_more" data-after="199"></a></div>
+    </section>
+  </div>
+</main>
+    <script src="//telegram.org/js/jquery.min.js"></script>
+    <script src="//telegram.org/js/jquery-ui.min.js"></script>
+    <script src="//telegram.org/js/tgwallpaper.min.js?3"></script>
+<script src="//telegram.org/js/tgsticker.js?32"></script>
+
+    <script src="//telegram.org/js/widget-frame.js?67"></script>
+    <script src="//telegram.org/js/telegram-web.js?14"></script>
+    <script>TWeb.init();
+</script>
+
+  </body>
+</html>
+<!-- page generated in 221.5ms -->

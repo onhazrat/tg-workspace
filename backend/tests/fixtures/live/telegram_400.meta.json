@@ -1,0 +1,201 @@
+{
+  "url": "https://t.me/s/telegram?before=400",
+  "fetched_at": "2026-07-04T11:02:53.164214+00:00",
+  "status": "ok",
+  "post_ids_found": [
+    380,
+    381,
+    382,
+    383,
+    384,
+    385,
+    386,
+    387,
+    388,
+    389,
+    390,
+    391,
+    392,
+    393,
+    394,
+    395,
+    396,
+    397,
+    398,
+    399
+  ],
+  "media_scan": [
+    {
+      "channel": "telegram",
+      "post_id": 380,
+      "kinds": [
+        "video"
+      ],
+      "has_caption": true
+    },
+    {
+      "channel": "telegram",
+      "post_id": 381,
+      "kinds": [
+        "link_preview"
+      ],
+      "has_caption": true
+    },
+    {
+      "channel": "telegram",
+      "post_id": 382,
+      "kinds": [
+        "video"
+      ],
+      "has_caption": true
+    },
+    {
+      "channel": "telegram",
+      "post_id": 383,
+      "kinds": [
+        "video"
+      ],
+      "has_caption": true
+    },
+    {
+      "channel": "telegram",
+      "post_id": 384,
+      "kinds": [
+        "video"
+      ],
+      "has_caption": true
+    },
+    {
+      "channel": "telegram",
+      "post_id": 385,
+      "kinds": [
+        "video"
+      ],
+      "has_caption": true
+    },
+    {
+      "channel": "telegram",
+      "post_id": 386,
+      "kinds": [
+        "link_preview"
+      ],
+      "has_caption": true
+    },
+    {
+      "channel": "telegram",
+      "post_id": 387,
+      "kinds": [
+        "video"
+      ],
+      "has_caption": true
+    },
+    {
+      "channel": "telegram",
+      "post_id": 388,
+      "kinds": [
+        "video"
+      ],
+      "has_caption": true
+    },
+    {
+      "channel": "telegram",
+      "post_id": 389,
+      "kinds": [
+        "video"
+      ],
+      "has_caption": true
+    },
+    {
+      "channel": "telegram",
+      "post_id": 390,
+      "kinds": [
+        "photo"
+      ],
+      "has_caption": true
+    },
+    {
+      "channel": "telegram",
+      "post_id": 391,
+      "kinds": [
+        "link_preview"
+      ],
+      "has_caption": true
+    },
+    {
+      "channel": "telegram",
+      "post_id": 392,
+      "kinds": [
+        "video"
+      ],
+      "has_caption": true
+    },
+    {
+      "channel": "telegram",
+      "post_id": 393,
+      "kinds": [
+        "video"
+      ],
+      "has_caption": true
+    },
+    {
+      "channel": "telegram",
+      "post_id": 394,
+      "kinds": [
+        "video"
+      ],
+      "has_caption": true
+    },
+    {
+      "channel": "telegram",
+      "post_id": 395,
+      "kinds": [
+        "photo"
+      ],
+      "has_caption": true
+    },
+    {
+      "channel": "telegram",
+      "post_id": 396,
+      "kinds": [
+        "link_preview"
+      ],
+      "has_caption": true
+    },
+    {
+      "channel": "telegram",
+      "post_id": 397,
+      "kinds": [
+        "video"
+      ],
+      "has_caption": true
+    },
+    {
+      "channel": "telegram",
+      "post_id": 398,
+      "kinds": [
+        "video"
+      ],
+      "has_caption": true
+    },
+    {
+      "channel": "telegram",
+      "post_id": 399,
+      "kinds": [
+        "video"
+      ],
+      "has_caption": true
+    }
+  ],
+  "telemetry": {
+    "attempts": [
+      {
+        "attempt": 1,
+        "proxyUrl": "direct",
+        "success": true,
+        "latency": 527
+      }
+    ],
+    "totalDuration": 527,
+    "success": true
+  }
+}

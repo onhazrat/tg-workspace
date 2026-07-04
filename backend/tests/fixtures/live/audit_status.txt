@@ -1,0 +1,22 @@
+Stream A1 audit run status — 2026-07-04
+
+Result: NOT RUN (database unavailable in agent environment)
+
+Blockers:
+- `docker` CLI not found — could not start `docker compose up -d db`
+- PostgreSQL on localhost:5432 refused connection (no local postgres running)
+- `.env` was created from `.env.example` for the attempt; POSTGRES_SERVER=localhost
+
+To run locally:
+  1. cp .env.example .env   # if missing
+  2. docker compose up -d db
+  3. cd backend && alembic upgrade head
+  4. (optional) sync sample channels via the app
+  5. uv run python backend/scripts/audit_post_media.py --json
+
+Expected output when DB is empty (schema present, zero posts):
+  - Global summary: total_posts=0, all counters 0
+  - Empty channel table
+  - audit_report.json written with zeroed summary
+
+Re-run after syncing channels to populate audit_report.json for Stream A2.

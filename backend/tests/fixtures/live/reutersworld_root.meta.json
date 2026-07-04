@@ -1,0 +1,21 @@
+{
+  "url": "https://t.me/s/reutersworld",
+  "fetched_at": "2026-07-04T11:02:32.028580+00:00",
+  "status": "error",
+  "post_ids_found": [],
+  "media_scan": [],
+  "telemetry": {
+    "attempts": [
+      {
+        "attempt": 1,
+        "proxyUrl": "direct",
+        "success": false,
+        "error": "Channel is not available on the web view.",
+        "latency": 521
+      }
+    ],
+    "totalDuration": 521,
+    "success": false
+  },
+  "error": "Channel is not available on the web view."
+}

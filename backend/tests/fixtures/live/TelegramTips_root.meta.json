@@ -1,0 +1,201 @@
+{
+  "url": "https://t.me/s/TelegramTips",
+  "fetched_at": "2026-07-04T11:02:45.353658+00:00",
+  "status": "ok",
+  "post_ids_found": [
+    550,
+    551,
+    552,
+    553,
+    554,
+    555,
+    556,
+    557,
+    558,
+    559,
+    560,
+    561,
+    562,
+    563,
+    564,
+    565,
+    566,
+    567,
+    568,
+    569
+  ],
+  "media_scan": [
+    {
+      "channel": "TelegramTips",
+      "post_id": 550,
+      "kinds": [
+        "video"
+      ],
+      "has_caption": true
+    },
+    {
+      "channel": "TelegramTips",
+      "post_id": 551,
+      "kinds": [
+        "video"
+      ],
+      "has_caption": true
+    },
+    {
+      "channel": "TelegramTips",
+      "post_id": 552,
+      "kinds": [
+        "video"
+      ],
+      "has_caption": true
+    },
+    {
+      "channel": "TelegramTips",
+      "post_id": 553,
+      "kinds": [
+        "video"
+      ],
+      "has_caption": true
+    },
+    {
+      "channel": "TelegramTips",
+      "post_id": 554,
+      "kinds": [
+        "video"
+      ],
+      "has_caption": true
+    },
+    {
+      "channel": "TelegramTips",
+      "post_id": 555,
+      "kinds": [
+        "video"
+      ],
+      "has_caption": true
+    },
+    {
+      "channel": "TelegramTips",
+      "post_id": 556,
+      "kinds": [
+        "video"
+      ],
+      "has_caption": true
+    },
+    {
+      "channel": "TelegramTips",
+      "post_id": 557,
+      "kinds": [
+        "video"
+      ],
+      "has_caption": true
+    },
+    {
+      "channel": "TelegramTips",
+      "post_id": 558,
+      "kinds": [
+        "video"
+      ],
+      "has_caption": true
+    },
+    {
+      "channel": "TelegramTips",
+      "post_id": 559,
+      "kinds": [
+        "video"
+      ],
+      "has_caption": true
+    },
+    {
+      "channel": "TelegramTips",
+      "post_id": 560,
+      "kinds": [
+        "video"
+      ],
+      "has_caption": true
+    },
+    {
+      "channel": "TelegramTips",
+      "post_id": 561,
+      "kinds": [
+        "video"
+      ],
+      "has_caption": true
+    },
+    {
+      "channel": "TelegramTips",
+      "post_id": 562,
+      "kinds": [
+        "video"
+      ],
+      "has_caption": true
+    },
+    {
+      "channel": "TelegramTips",
+      "post_id": 563,
+      "kinds": [
+        "video"
+      ],
+      "has_caption": true
+    },
+    {
+      "channel": "TelegramTips",
+      "post_id": 564,
+      "kinds": [
+        "video"
+      ],
+      "has_caption": true
+    },
+    {
+      "channel": "TelegramTips",
+      "post_id": 565,
+      "kinds": [
+        "video"
+      ],
+      "has_caption": true
+    },
+    {
+      "channel": "TelegramTips",
+      "post_id": 566,
+      "kinds": [
+        "video"
+      ],
+      "has_caption": true
+    },
+    {
+      "channel": "TelegramTips",
+      "post_id": 567,
+      "kinds": [
+        "video"
+      ],
+      "has_caption": true
+    },
+    {
+      "channel": "TelegramTips",
+      "post_id": 568,
+      "kinds": [
+        "video"
+      ],
+      "has_caption": true
+    },
+    {
+      "channel": "TelegramTips",
+      "post_id": 569,
+      "kinds": [
+        "video"
+      ],
+      "has_caption": true
+    }
+  ],
+  "telemetry": {
+    "attempts": [
+      {
+        "attempt": 1,
+        "proxyUrl": "direct",
+        "success": true,
+        "latency": 469
+      }
+    ],
+    "totalDuration": 469,
+    "success": true
+  }
+}

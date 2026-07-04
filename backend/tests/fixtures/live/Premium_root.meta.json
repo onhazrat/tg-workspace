@@ -1,0 +1,199 @@
+{
+  "url": "https://t.me/s/Premium",
+  "fetched_at": "2026-07-04T11:02:54.224283+00:00",
+  "status": "ok",
+  "post_ids_found": [
+    153,
+    154,
+    155,
+    156,
+    157,
+    158,
+    159,
+    160,
+    161,
+    162,
+    163,
+    164,
+    165,
+    166,
+    168,
+    169,
+    170,
+    173,
+    174,
+    175
+  ],
+  "media_scan": [
+    {
+      "channel": "premium",
+      "post_id": 153,
+      "kinds": [
+        "video"
+      ],
+      "has_caption": true
+    },
+    {
+      "channel": "premium",
+      "post_id": 154,
+      "kinds": [
+        "photo"
+      ],
+      "has_caption": true
+    },
+    {
+      "channel": "premium",
+      "post_id": 155,
+      "kinds": [
+        "video"
+      ],
+      "has_caption": true
+    },
+    {
+      "channel": "premium",
+      "post_id": 156,
+      "kinds": [
+        "video"
+      ],
+      "has_caption": true
+    },
+    {
+      "channel": "premium",
+      "post_id": 157,
+      "kinds": [
+        "video"
+      ],
+      "has_caption": true
+    },
+    {
+      "channel": "premium",
+      "post_id": 158,
+      "kinds": [
+        "video"
+      ],
+      "has_caption": true
+    },
+    {
+      "channel": "premium",
+      "post_id": 159,
+      "kinds": [
+        "video"
+      ],
+      "has_caption": true
+    },
+    {
+      "channel": "premium",
+      "post_id": 160,
+      "kinds": [
+        "video"
+      ],
+      "has_caption": true
+    },
+    {
+      "channel": "premium",
+      "post_id": 161,
+      "kinds": [
+        "video"
+      ],
+      "has_caption": true
+    },
+    {
+      "channel": "premium",
+      "post_id": 162,
+      "kinds": [
+        "video"
+      ],
+      "has_caption": true
+    },
+    {
+      "channel": "premium",
+      "post_id": 163,
+      "kinds": [
+        "video"
+      ],
+      "has_caption": true
+    },
+    {
+      "channel": "premium",
+      "post_id": 164,
+      "kinds": [
+        "video"
+      ],
+      "has_caption": true
+    },
+    {
+      "channel": "premium",
+      "post_id": 165,
+      "kinds": [
+        "video"
+      ],
+      "has_caption": true
+    },
+    {
+      "channel": "premium",
+      "post_id": 166,
+      "kinds": [
+        "video"
+      ],
+      "has_caption": true
+    },
+    {
+      "channel": "premium",
+      "post_id": 168,
+      "kinds": [],
+      "has_caption": true
+    },
+    {
+      "channel": "premium",
+      "post_id": 169,
+      "kinds": [
+        "video"
+      ],
+      "has_caption": true
+    },
+    {
+      "channel": "premium",
+      "post_id": 170,
+      "kinds": [
+        "video"
+      ],
+      "has_caption": true
+    },
+    {
+      "channel": "premium",
+      "post_id": 173,
+      "kinds": [
+        "video"
+      ],
+      "has_caption": true
+    },
+    {
+      "channel": "premium",
+      "post_id": 174,
+      "kinds": [
+        "video"
+      ],
+      "has_caption": true
+    },
+    {
+      "channel": "premium",
+      "post_id": 175,
+      "kinds": [
+        "video"
+      ],
+      "has_caption": true
+    }
+  ],
+  "telemetry": {
+    "attempts": [
+      {
+        "attempt": 1,
+        "proxyUrl": "direct",
+        "success": true,
+        "latency": 615
+      }
+    ],
+    "totalDuration": 615,
+    "success": true
+  }
+}

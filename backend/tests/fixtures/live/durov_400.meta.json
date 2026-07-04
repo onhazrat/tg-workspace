@@ -1,0 +1,175 @@
+{
+  "url": "https://t.me/s/durov?before=400",
+  "fetched_at": "2026-07-04T11:02:30.833191+00:00",
+  "status": "ok",
+  "post_ids_found": [
+    373,
+    382,
+    383,
+    384,
+    385,
+    386,
+    387,
+    388,
+    389,
+    390,
+    391,
+    392,
+    393,
+    394,
+    395,
+    396,
+    397,
+    398,
+    399
+  ],
+  "media_scan": [
+    {
+      "channel": "durov",
+      "post_id": 373,
+      "kinds": [
+        "video",
+        "grouped"
+      ],
+      "has_caption": true
+    },
+    {
+      "channel": "durov",
+      "post_id": 382,
+      "kinds": [],
+      "has_caption": true
+    },
+    {
+      "channel": "durov",
+      "post_id": 383,
+      "kinds": [
+        "link_preview"
+      ],
+      "has_caption": true
+    },
+    {
+      "channel": "durov",
+      "post_id": 384,
+      "kinds": [
+        "video"
+      ],
+      "has_caption": true
+    },
+    {
+      "channel": "durov",
+      "post_id": 385,
+      "kinds": [
+        "video"
+      ],
+      "has_caption": true
+    },
+    {
+      "channel": "durov",
+      "post_id": 386,
+      "kinds": [],
+      "has_caption": true
+    },
+    {
+      "channel": "durov",
+      "post_id": 387,
+      "kinds": [],
+      "has_caption": true
+    },
+    {
+      "channel": "durov",
+      "post_id": 388,
+      "kinds": [],
+      "has_caption": true
+    },
+    {
+      "channel": "durov",
+      "post_id": 389,
+      "kinds": [],
+      "has_caption": true
+    },
+    {
+      "channel": "durov",
+      "post_id": 390,
+      "kinds": [
+        "video"
+      ],
+      "has_caption": true
+    },
+    {
+      "channel": "durov",
+      "post_id": 391,
+      "kinds": [],
+      "has_caption": true
+    },
+    {
+      "channel": "durov",
+      "post_id": 392,
+      "kinds": [
+        "link_preview"
+      ],
+      "has_caption": true
+    },
+    {
+      "channel": "durov",
+      "post_id": 393,
+      "kinds": [],
+      "has_caption": true
+    },
+    {
+      "channel": "durov",
+      "post_id": 394,
+      "kinds": [],
+      "has_caption": true
+    },
+    {
+      "channel": "durov",
+      "post_id": 395,
+      "kinds": [
+        "video"
+      ],
+      "has_caption": true
+    },
+    {
+      "channel": "durov",
+      "post_id": 396,
+      "kinds": [
+        "video"
+      ],
+      "has_caption": true
+    },
+    {
+      "channel": "durov",
+      "post_id": 397,
+      "kinds": [],
+      "has_caption": true
+    },
+    {
+      "channel": "durov",
+      "post_id": 398,
+      "kinds": [
+        "photo"
+      ],
+      "has_caption": true
+    },
+    {
+      "channel": "durov",
+      "post_id": 399,
+      "kinds": [
+        "photo"
+      ],
+      "has_caption": true
+    }
+  ],
+  "telemetry": {
+    "attempts": [
+      {
+        "attempt": 1,
+        "proxyUrl": "direct",
+        "success": true,
+        "latency": 703
+      }
+    ],
+    "totalDuration": 703,
+    "success": true
+  }
+}
