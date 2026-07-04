@@ -92,6 +92,8 @@ services:
     networks:
       - traefik-public
       - default
+    volumes:
+      - app-media-data:/app/data
     depends_on:
       db:
         condition: service_healthy
@@ -187,6 +189,7 @@ services:
       - traefik.http.routers.${STACK_NAME?Variable not set}-frontend-http.middlewares=https-redirect
 volumes:
   app-db-data:
+  app-media-data:
 
 networks:
   traefik-public:
