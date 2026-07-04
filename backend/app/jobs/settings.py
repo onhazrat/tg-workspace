@@ -104,14 +104,13 @@ def load_sync_settings(session: Session) -> dict[str, Any]:
     stored_has_regular_interval = isinstance(stored, dict) and (
         "regularSyncIntervalMinutes" in stored
     )
-    if (
-        not stored_has_regular_interval
-        and isinstance(legacy_interval, (int, float))
-    ):
+    if not stored_has_regular_interval and isinstance(legacy_interval, (int, float)):
         merged["regularSyncIntervalMinutes"] = int(legacy_interval)
 
     if not isinstance(merged.get("regularSyncIntervalMinutes"), int):
-        merged["regularSyncIntervalMinutes"] = settings.AUTO_SYNC_INTERVAL_MINUTES_DEFAULT
+        merged["regularSyncIntervalMinutes"] = (
+            settings.AUTO_SYNC_INTERVAL_MINUTES_DEFAULT
+        )
     if merged["regularSyncIntervalMinutes"] < 1:
         merged["regularSyncIntervalMinutes"] = 1
 

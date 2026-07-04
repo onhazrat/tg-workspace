@@ -11,7 +11,7 @@ _SCRIPTS_DIR = Path(__file__).resolve().parents[2] / "scripts"
 if str(_SCRIPTS_DIR) not in sys.path:
     sys.path.insert(0, str(_SCRIPTS_DIR))
 
-from tg_test_pollution import cleanup_channel_keys, truncate_tg_tables
+from tg_test_pollution import truncate_tg_tables
 
 from app.core.db import engine
 

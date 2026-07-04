@@ -7,7 +7,7 @@ from datetime import datetime
 from typing import Any
 
 from fastapi import HTTPException
-from sqlmodel import Session, select
+from sqlmodel import Session, col, select
 
 from app.models_tg import TagRun
 from app.services.serialization import to_snake
@@ -37,7 +37,7 @@ def tag_run_to_camel(tag_run: TagRun) -> dict[str, Any]:
 
 
 def list_tag_runs(session: Session) -> list[dict[str, Any]]:
-    statement = select(TagRun).order_by(TagRun.created_at.desc())
+    statement = select(TagRun).order_by(col(TagRun.created_at).desc())
     return [tag_run_to_camel(row) for row in session.exec(statement).all()]
 
 

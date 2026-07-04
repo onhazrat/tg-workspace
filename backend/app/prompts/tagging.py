@@ -43,8 +43,12 @@ def format_tag_prompt(
 ) -> str:
     normalized_mode = normalize_tag_mode(tag_mode)
     default_min, default_max = default_tag_limits(normalized_mode)
-    min_tags = default_min if tags_per_channel_min is None else max(0, tags_per_channel_min)
-    max_tags = default_max if tags_per_channel_max is None else max(0, tags_per_channel_max)
+    min_tags = (
+        default_min if tags_per_channel_min is None else max(0, tags_per_channel_min)
+    )
+    max_tags = (
+        default_max if tags_per_channel_max is None else max(0, tags_per_channel_max)
+    )
     if max_tags < min_tags:
         min_tags, max_tags = max_tags, min_tags
 

@@ -113,9 +113,12 @@ describe("sortTagsForChannelGrid", () => {
     const tags = ["alpha", "beta", "gamma", "shared"]
     const selected = new Set(["a", "b"])
 
-    expect(
-      sortTagsForChannelGrid(tags, gridChannels, selected),
-    ).toEqual(["shared", "alpha", "beta", "gamma"])
+    expect(sortTagsForChannelGrid(tags, gridChannels, selected)).toEqual([
+      "shared",
+      "alpha",
+      "beta",
+      "gamma",
+    ])
   })
 
   it("uses selected count as tiebreaker within the same group", () => {

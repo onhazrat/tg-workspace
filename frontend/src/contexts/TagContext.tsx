@@ -6,13 +6,13 @@ import {
   buildBulkChannelTagUpdates,
   normalizeParsedTagSuggestions,
 } from "@/lib/channels/apply-tag-suggestions"
-import { tryWriteTextToClipboard } from "@/lib/data-transfer/clipboard"
 import { formatChannelsForPrompt } from "@/lib/channels/format-channels-for-prompt"
 import { parseTagResponse } from "@/lib/channels/parse-tag-response"
 import {
   formatAllTagsForPrompt,
   formatPostsForTagPrompt,
 } from "@/lib/channels/tag-prompt"
+import { tryWriteTextToClipboard } from "@/lib/data-transfer/clipboard"
 import {
   bulkUpdateChannelTags,
   deleteTagRun,
@@ -327,7 +327,9 @@ export const TagProvider: React.FC<{ children: React.ReactNode }> = ({
     } catch (error) {
       toast.dismiss(applyingToastId)
       toast.error(
-        error instanceof Error ? error.message : "Failed to apply tag suggestions",
+        error instanceof Error
+          ? error.message
+          : "Failed to apply tag suggestions",
       )
     }
   }

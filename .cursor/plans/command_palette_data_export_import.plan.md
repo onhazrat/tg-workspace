@@ -121,7 +121,7 @@ Distinct from full-DB `dbWorker` format. **Entity JSONL** — one JSON object pe
 
 1. Entity JSONL (above) — primary
 2. Full-DB JSONL `store` lines where `storeName` matches entity — best-effort for files exported from DatabaseManagement
-3. Single-line JSON array — **reject** with clear error (avoid silent mis-parse)
+3. Single-line JSON array — **reject** with clear error (avoid silent misparsing)
 
 Extensibility: `DataEntityDef` registry keyed by `entity` string; adding `embedding` later = new def + generated commands.
 

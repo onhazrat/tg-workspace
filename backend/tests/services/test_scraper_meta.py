@@ -15,9 +15,7 @@ def test_extract_channel_photo_url_from_nested_img() -> None:
     </i>
     """
     soup = BeautifulSoup(html, "html.parser")
-    assert (
-        _extract_channel_photo_url(soup) == "https://cdn.example/avatar.jpg"
-    )
+    assert _extract_channel_photo_url(soup) == "https://cdn.example/avatar.jpg"
 
 
 def test_extract_channel_photo_url_falls_back_to_og_image() -> None:

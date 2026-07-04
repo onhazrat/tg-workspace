@@ -1,11 +1,11 @@
 import type React from "react"
 import { createContext, useContext, useEffect, useRef, useState } from "react"
 import { toast } from "sonner"
+import { formatChannelsForPrompt } from "../lib/channels/format-channels-for-prompt"
 import {
   buildFilteredPostsFromRaw,
   formatPostsForPrompt,
 } from "../lib/posts/post-view"
-import { formatChannelsForPrompt } from "../lib/channels/format-channels-for-prompt"
 import { getPostsByDateRange, saveLLMLog, saveSummary } from "../lib/repository"
 import {
   AIServiceError,
@@ -217,10 +217,14 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
         const selectedChannelNames = channels
           .filter((channel) => selectedChannels.has(channel.name))
           .map((channel) => channel.name)
-        const channelsText = formatChannelsForPrompt(channels, selectedChannels, {
-          includeBio: includeChannelBioInPrompt,
-          includeTags: includeChannelTagsInPrompt,
-        })
+        const channelsText = formatChannelsForPrompt(
+          channels,
+          selectedChannels,
+          {
+            includeBio: includeChannelBioInPrompt,
+            includeTags: includeChannelTagsInPrompt,
+          },
+        )
 
         const { stream, prompt, config, systemInstruction } =
           await generateChatStream(

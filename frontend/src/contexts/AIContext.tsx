@@ -7,11 +7,11 @@ import {
   resolvePastedSummaryModel,
 } from "../constants"
 import { useApiStatus } from "../hooks/useApiStatus"
+import { formatChannelsForPrompt } from "../lib/channels/format-channels-for-prompt"
 import {
   buildFilteredPostsFromRaw,
   formatPostsForPrompt,
 } from "../lib/posts/post-view"
-import { formatChannelsForPrompt } from "../lib/channels/format-channels-for-prompt"
 import {
   getPostsByDateRange,
   saveLLMLog,
@@ -311,7 +311,9 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({
 
     try {
       const prompt = await getSummaryPrompt(
-        channels.filter((channel) => selectedChannels.has(channel.name)).map((c) => c.name),
+        channels
+          .filter((channel) => selectedChannels.has(channel.name))
+          .map((c) => c.name),
         formatChannelsForPrompt(channels, selectedChannels, {
           includeBio: includeChannelBioInPrompt,
           includeTags: includeChannelTagsInPrompt,

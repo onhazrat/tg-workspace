@@ -163,7 +163,9 @@ export const SettingsView: React.FC<{ activeSection?: string }> = ({
       toast.success(toastMessage)
     } catch (error) {
       toast.error(
-        error instanceof Error ? error.message : "Failed to apply sync settings",
+        error instanceof Error
+          ? error.message
+          : "Failed to apply sync settings",
       )
     } finally {
       setSyncTemplateBusy(false)
@@ -772,7 +774,9 @@ export const SettingsView: React.FC<{ activeSection?: string }> = ({
                       <button
                         type="button"
                         onClick={() =>
-                          setDynamicSyncEnabledDefault(!dynamicSyncEnabledDefault)
+                          setDynamicSyncEnabledDefault(
+                            !dynamicSyncEnabledDefault,
+                          )
                         }
                         className={`w-10 h-5 transition-all relative border border-app-ink/20 rounded-full ${
                           dynamicSyncEnabledDefault

@@ -68,7 +68,8 @@ export const PasteTagsModal: React.FC<PasteTagsModalProps> = ({
         <DialogHeader>
           <DialogTitle>Paste Tag Response</DialogTitle>
           <DialogDescription className="text-app-ink/70">
-            Paste JSON in this shape: {"{"}"channel_username": ["tag1", "tag2"]{"}"}.
+            Paste JSON in this shape: {"{"}"channel_username": ["tag1", "tag2"]
+            {"}"}.
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-3">

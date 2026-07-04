@@ -63,7 +63,10 @@ def _read_meta(channel_id: str) -> dict[str, Any] | None:
     if not path.is_file():
         return None
     try:
-        return json.loads(path.read_text(encoding="utf-8"))
+        parsed = json.loads(path.read_text(encoding="utf-8"))
+        if isinstance(parsed, dict):
+            return parsed
+        return None
     except (json.JSONDecodeError, OSError):
         return None
 
@@ -168,7 +171,7 @@ async def resolve_cached_photo_url(
     channel_id: str,
     photo_url: str | None,
 ) -> str:
-    if is_remote_photo_url(photo_url):
+    if photo_url is not None and is_remote_photo_url(photo_url):
         await cache_channel_photo(channel_id, photo_url)
     if has_cached_photo(channel_id):
         return channel_photo_api_path(channel_id)

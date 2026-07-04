@@ -34,6 +34,17 @@ export type BotInfoRequest = {
 } | null);
 };
 
+export type BulkChannelTagsRequest = {
+    updates: Array<BulkChannelTagUpdate>;
+};
+
+export type BulkChannelTagUpdate = {
+    channelId: string;
+    tags: Array<{
+        [key: string]: unknown;
+    }>;
+};
+
 export type BulkReresolveStartIdsRequest = {
     dryRun?: boolean;
     limit?: (number | null);
@@ -45,6 +56,14 @@ export type BulkResetSyncRequest = {
     confirm?: boolean;
     channelIds?: (Array<(string)> | null);
     autoFollowOnly?: boolean;
+};
+
+export type BulkSyncSettingsRequest = {
+    channelIds?: (Array<(string)> | null);
+    regularSyncEnabled?: (boolean | null);
+    dynamicSyncEnabled?: (boolean | null);
+    autoSyncIntervalMinutes?: (number | null);
+    dynamicSyncExpectedPosts?: (number | null);
 };
 
 export type CancelSyncJobResponse = {
@@ -76,6 +95,7 @@ export type ChatMessage = {
 
 export type ChatRequest = {
     channels?: Array<(string)>;
+    channelsText?: string;
     postsText?: string;
     language?: string;
     model?: (string | null);
@@ -181,13 +201,6 @@ export type NewPassword = {
     new_password: string;
 };
 
-export type PrivateUserCreate = {
-    email: string;
-    password: string;
-    full_name: string;
-    is_verified?: boolean;
-};
-
 export type ProxyLaneSnapshot = {
     proxyUrl: string;
     maxParallel: number;
@@ -289,6 +302,7 @@ export type StartSyncJobResponse = {
 
 export type SummaryRequest = {
     channels: Array<(string)>;
+    channelsText?: string;
     postsText: string;
     language?: string;
     model?: (string | null);
@@ -306,13 +320,28 @@ export type SyncJobStatusResponse = {
 };
 
 export type SyncRuntimeSettings = {
-    autoSyncEnabled: boolean;
-    autoSyncInterval: number;
+    regularSyncIntervalMinutes: number;
+    dynamicSyncEnabledDefault: boolean;
+    dynamicSyncExpectedPostsDefault: number;
+    syncFailureBackoffMinutes: number;
     syncConcurrency: number;
     consecutiveFailures: number;
     autoSyncPauseUntil?: (number | null);
     globalStartTimeMode?: (string | null);
     globalStartTimeValue?: (string | number | null);
+};
+
+export type TagRequest = {
+    channels: Array<(string)>;
+    channelsText?: string;
+    postsText: string;
+    allTags?: string;
+    tagMode?: string;
+    model?: (string | null);
+    temperature?: number;
+    provider?: string;
+    tagsPerChannelMin?: (number | null);
+    tagsPerChannelMax?: (number | null);
 };
 
 export type TestProxyRequest = {
@@ -429,6 +458,20 @@ export type AiApiChatStreamData = {
 
 export type AiApiChatStreamResponse = (unknown);
 
+export type AiApiTagPromptData = {
+    requestBody: TagRequest;
+};
+
+export type AiApiTagPromptResponse = ({
+    [key: string]: (string);
+});
+
+export type AiApiTagStreamData = {
+    requestBody: TagRequest;
+};
+
+export type AiApiTagStreamResponse = (unknown);
+
 export type AiApiEmbeddingsData = {
     requestBody: EmbedRequest;
 };
@@ -492,6 +535,22 @@ export type DataBulkResetSyncEndpointResponse = ({
     [key: string]: unknown;
 });
 
+export type DataBulkSyncSettingsEndpointData = {
+    requestBody: BulkSyncSettingsRequest;
+};
+
+export type DataBulkSyncSettingsEndpointResponse = ({
+    [key: string]: (number);
+});
+
+export type DataBulkChannelTagsEndpointData = {
+    requestBody: BulkChannelTagsRequest;
+};
+
+export type DataBulkChannelTagsEndpointResponse = ({
+    [key: string]: unknown;
+});
+
 export type DataGetChannelStatsData = {
     channelId: string;
 };
@@ -541,6 +600,29 @@ export type DataDeleteSummaryData = {
 };
 
 export type DataDeleteSummaryResponse = ({
+    [key: string]: (string);
+});
+
+export type DataListTagRunsResponse = (Array<{
+    [key: string]: unknown;
+}>);
+
+export type DataUpsertTagRunData = {
+    requestBody: {
+        [key: string]: unknown;
+    };
+    tagRunId: string;
+};
+
+export type DataUpsertTagRunResponse = ({
+    [key: string]: unknown;
+});
+
+export type DataDeleteTagRunData = {
+    tagRunId: string;
+};
+
+export type DataDeleteTagRunResponse = ({
     [key: string]: (string);
 });
 
@@ -841,78 +923,6 @@ export type JobsCancelSyncJobData = {
 
 export type JobsCancelSyncJobResponse = (CancelSyncJobResponse);
 
-export type LegacyLegacyTestProxyData = {
-    requestBody: TestProxyRequest;
-};
-
-export type LegacyLegacyTestProxyResponse = ({
-    [key: string]: unknown;
-});
-
-export type LegacyLegacyProxyHealthResponse = ({
-    [key: string]: unknown;
-});
-
-export type LegacyLegacyTorStatusResponse = ({
-    [key: string]: unknown;
-});
-
-export type LegacyLegacyTorIpResponse = ({
-    [key: string]: unknown;
-});
-
-export type LegacyLegacyTorRestartResponse = ({
-    [key: string]: unknown;
-});
-
-export type LegacyLegacyTorNewIdentityData = {
-    requestBody: TorNewIdentityRequest;
-};
-
-export type LegacyLegacyTorNewIdentityResponse = ({
-    [key: string]: unknown;
-});
-
-export type LegacyLegacyBotInfoData = {
-    requestBody: BotInfoRequest;
-};
-
-export type LegacyLegacyBotInfoResponse = ({
-    [key: string]: unknown;
-});
-
-export type LegacyLegacyPublishData = {
-    requestBody: PublishRequest;
-};
-
-export type LegacyLegacyPublishResponse = ({
-    [key: string]: unknown;
-});
-
-export type LegacyLegacyChannelInfoData = {
-    requestBody: ChannelInfoRequest;
-};
-
-export type LegacyLegacyChannelInfoResponse = ({
-    [key: string]: unknown;
-});
-
-export type LegacyLegacyScrapeData = {
-    requestBody: ScrapeRequest;
-};
-
-export type LegacyLegacyScrapeResponse = ({
-    [key: string]: unknown;
-});
-
-export type LegacyLegacyResolveStartTimeData = {
-    requestBody: ResolveStartTimeRequest;
-};
-
-export type LegacyLegacyResolveStartTimeResponse = ({
-    [key: string]: unknown;
-});
-
 export type LoginLoginAccessTokenData = {
     formData: Body_login_login_access_token;
 };
@@ -970,12 +980,6 @@ export type NetworkApiTorNewIdentityData = {
 export type NetworkApiTorNewIdentityResponse = ({
     [key: string]: unknown;
 });
-
-export type PrivateCreateUserData = {
-    requestBody: PrivateUserCreate;
-};
-
-export type PrivateCreateUserResponse = (UserPublic);
 
 export type RagRagStatusResponse = ({
     [key: string]: unknown;
@@ -1036,6 +1040,12 @@ export type TelegramApiPublishData = {
 export type TelegramApiPublishResponse = ({
     [key: string]: unknown;
 });
+
+export type TelegramApiChannelPhotoData = {
+    channelId: string;
+};
+
+export type TelegramApiChannelPhotoResponse = (unknown);
 
 export type TelegramApiBotFileData = {
     credentialId: string;

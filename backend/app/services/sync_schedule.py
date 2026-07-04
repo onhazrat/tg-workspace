@@ -108,6 +108,6 @@ def apply_failure_backoff(
         return
     backoff_deadline = compute_next_regular_sync_at(now_ms, backoff_minutes)
     if due_schedule_reason in ("regular", "both"):
-        setattr(channel, "next_regular_sync_at", backoff_deadline)
+        channel.next_regular_sync_at = backoff_deadline
     if due_schedule_reason in ("dynamic", "both"):
-        setattr(channel, "next_dynamic_sync_at", backoff_deadline)
+        channel.next_dynamic_sync_at = backoff_deadline

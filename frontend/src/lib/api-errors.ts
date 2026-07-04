@@ -1,5 +1,4 @@
-const UNAVAILABLE_WEB_VIEW_MESSAGE =
-  "Channel is not available on the web view."
+const UNAVAILABLE_WEB_VIEW_MESSAGE = "Channel is not available on the web view."
 
 export interface ParsedApiError {
   message: string

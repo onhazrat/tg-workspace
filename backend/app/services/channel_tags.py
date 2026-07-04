@@ -73,6 +73,10 @@ def get_tag_names(raw: Any) -> list[str]:
 def collect_all_channel_tags(channels: Iterable[dict[str, Any] | Any]) -> list[str]:
     names: set[str] = set()
     for channel in channels:
-        tags = channel.get("tags") if isinstance(channel, dict) else getattr(channel, "tags", [])
+        tags = (
+            channel.get("tags")
+            if isinstance(channel, dict)
+            else getattr(channel, "tags", [])
+        )
         names.update(get_tag_names(tags))
     return sorted(names)
