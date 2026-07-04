@@ -1047,6 +1047,13 @@ export type TelegramApiChannelPhotoData = {
 
 export type TelegramApiChannelPhotoResponse = (unknown);
 
+export type TelegramApiPostThumbData = {
+    channelName: string;
+    postId: number;
+};
+
+export type TelegramApiPostThumbResponse = (unknown);
+
 export type TelegramApiBotFileData = {
     credentialId: string;
     path: string;

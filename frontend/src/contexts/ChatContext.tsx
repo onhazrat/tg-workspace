@@ -65,6 +65,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
     semanticSearchRespectsChannels,
     handleFilterPosts,
     forwardedFilter,
+    mediaFilter,
     postViewOptions,
   } = useScraper()
   const { searchSimilarPosts } = useRAG()
@@ -203,6 +204,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
           postsToChat = buildFilteredPostsFromRaw(rawPosts, {
             searchText: postSearch,
             forwardedFilter,
+            mediaFilter,
             channels,
             view: postViewOptions,
             startDate,

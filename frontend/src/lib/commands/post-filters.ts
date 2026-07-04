@@ -1,4 +1,8 @@
 import type { CommandContext } from "@/lib/commands/types"
+import {
+  MEDIA_FILTER_OPTIONS,
+  type MediaFilterValue,
+} from "@/lib/posts/post-media"
 
 export type ForwardedFilterValue =
   | "all"
@@ -26,11 +30,14 @@ export const FORWARDED_FILTER_OPTIONS = [
   },
 ] as const
 
+export { MEDIA_FILTER_OPTIONS }
+
 export function clearPostFilters(ctx: CommandContext): void {
   ctx.setPostSearch("")
   ctx.setSemanticSearchQuery("")
   ctx.setRelatedPostSearch(null)
   ctx.setForwardedFilter("all")
+  ctx.setMediaFilter("all")
   ctx.setMaxPostsPerChannel(0)
   ctx.setMaxPostsPerChannelMode("latest")
   ctx.setPostSortOrder("time")
@@ -50,5 +57,13 @@ export function applyForwardedFilter(
   value: ForwardedFilterValue,
 ): void {
   ctx.setForwardedFilter(value)
+  void ctx.handleFilterPosts(ctx.postSearch)
+}
+
+export function applyMediaFilter(
+  ctx: CommandContext,
+  value: MediaFilterValue,
+): void {
+  ctx.setMediaFilter(value)
   void ctx.handleFilterPosts(ctx.postSearch)
 }

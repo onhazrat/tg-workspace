@@ -1,4 +1,12 @@
+import {
+  formatPostMediaHints,
+  type MediaFilterValue,
+  matchesMediaFilter,
+} from "@/lib/posts/post-media"
 import type { Channel, Post } from "@/types"
+
+export type { MediaFilterValue } from "@/lib/posts/post-media"
+export { getPostEmbeddingText } from "@/lib/posts/post-media"
 
 export type MaxPostsPerChannelMode = "latest" | "random"
 export type PostSortOrder = "time" | "channel_time"
@@ -18,6 +26,7 @@ export type ForwardedFilterValue =
 export interface BuildFilteredPostsContext {
   searchText: string
   forwardedFilter: ForwardedFilterValue
+  mediaFilter: MediaFilterValue
   channels: Channel[]
   view: PostViewOptions
   startDate: number
@@ -177,12 +186,26 @@ export function applyPostViewPipeline(
   return sortPosts(capped, view)
 }
 
+export function applyMediaFilter(
+  posts: Post[],
+  mediaFilter: MediaFilterValue,
+): Post[] {
+  if (mediaFilter === "all") return posts
+  return posts.filter((post) => matchesMediaFilter(post, mediaFilter))
+}
+
 export function formatPostsForPrompt(posts: Post[]): string {
   return posts
-    .map(
-      (p) =>
-        `[${p.channelName}] ID: ${p.id}\nDate: ${p.date}\nContent: ${p.text}`,
-    )
+    .map((post) => {
+      const mediaHints = formatPostMediaHints(post)
+      const lines = [
+        `[${post.channelName}] ID: ${post.id}`,
+        `Date: ${post.date}`,
+      ]
+      if (mediaHints) lines.push(mediaHints)
+      lines.push(`Content: ${post.text}`)
+      return lines.join("\n")
+    })
     .join("\n\n---\n\n")
 }
 
@@ -192,6 +215,7 @@ export function buildFilteredPostsFromRaw(
 ): Post[] {
   let filtered = applyKeywordFilter(posts, ctx.searchText)
   filtered = applyForwardedFilter(filtered, ctx.forwardedFilter, ctx.channels)
+  filtered = applyMediaFilter(filtered, ctx.mediaFilter)
   return applyPostViewPipeline(filtered, ctx.view, {
     startDate: ctx.startDate,
     endDate: ctx.endDate,

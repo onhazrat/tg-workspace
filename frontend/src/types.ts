@@ -1,9 +1,45 @@
+export type PostMediaKind =
+  | "photo"
+  | "video"
+  | "voice"
+  | "document"
+  | "poll"
+  | "link_preview"
+  | "grouped"
+
+export interface PostLinkPreview {
+  title?: string
+  description?: string
+  siteName?: string
+}
+
+export interface PostPollMedia {
+  question?: string
+  options?: string[]
+  [key: string]: unknown
+}
+
+/** Mirrors backend PostMedia schema (camelCase API). */
+export interface PostMedia {
+  kinds: PostMediaKind[]
+  caption?: string | null
+  durationSec?: number | null
+  thumbApiPath?: string | null
+  views?: string | null
+  reactions?: string | null
+  linkPreview?: PostLinkPreview | null
+  poll?: PostPollMedia | null
+  groupedCount?: number | null
+  isMediaOnly?: boolean
+}
+
 export interface Post {
   id: number
   channelName: string
   text: string
   date: string
   timestamp: number
+  media?: PostMedia | null
   forwardedFrom?: string
   forwardedFromName?: string
   isAnchor?: boolean

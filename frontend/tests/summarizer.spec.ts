@@ -901,4 +901,73 @@ test.describe("command palette keyboard", () => {
 
     await expect(seededCards).toHaveCount(25, { timeout: 10_000 })
   })
+
+  test("posts media filter controls persist and filter rendered cards", async ({
+    page,
+  }) => {
+    const channelName = `media${Date.now()}`
+    const now = Date.now()
+
+    await gotoSummarizer(page, "channels")
+    await seedTestChannel(page, channelName)
+
+    await page.route("**/api/v1/data/sync-meta**", async (route) => {
+      await route.fulfill({
+        json: {
+          channels: {
+            etag: "playwright-channels",
+            updatedAt: new Date().toISOString(),
+          },
+          posts: {
+            etag: "playwright-posts",
+            updatedAt: new Date().toISOString(),
+          },
+        },
+      })
+    })
+
+    await page.route("**/api/v1/data/posts**", async (route) => {
+      await route.fulfill({
+        json: [
+          {
+            id: 1,
+            channelName,
+            text: "Caption only",
+            date: new Date(now).toISOString(),
+            timestamp: now,
+          },
+          {
+            id: 2,
+            channelName,
+            text: "[photo]",
+            date: new Date(now - 1000).toISOString(),
+            timestamp: now - 1000,
+            media: {
+              kinds: ["photo"],
+              isMediaOnly: true,
+              views: "1.2K",
+              thumbApiPath: "/api/v1/telegram/post-thumb/demo/2",
+            },
+          },
+        ],
+      })
+    })
+
+    await page.evaluate(() => {
+      localStorage.removeItem("sync_etag_posts")
+    })
+
+    await selectChannelsKeyboard(page, [channelName])
+    await gotoSummarizer(page, "posts")
+
+    await expect(page.getByTestId("post-media-filter-photo")).toBeVisible()
+    await page.getByTestId("post-media-filter-photo").click()
+
+    await expect
+      .poll(() => page.evaluate(() => localStorage.getItem("postFilter_media")))
+      .toBe("photo")
+
+    await expect(page.getByTestId("post-card-media-badge-photo")).toBeVisible()
+    await expect(page.getByText("Caption only")).not.toBeVisible()
+  })
 })

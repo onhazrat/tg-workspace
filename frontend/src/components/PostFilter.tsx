@@ -12,6 +12,7 @@ import React from "react"
 import { useScraper } from "../contexts/ScraperContext"
 import { useSettings } from "../contexts/SettingsContext"
 import { useUI } from "../contexts/UIContext"
+import { MEDIA_FILTER_OPTIONS } from "../lib/posts/post-media"
 import { formatDateToLocalISO } from "../lib/utils"
 
 interface PostFilterProps {
@@ -36,6 +37,8 @@ export const PostFilter: React.FC<PostFilterProps> = ({
     isFiltering,
     forwardedFilter,
     setForwardedFilter,
+    mediaFilter,
+    setMediaFilter,
     maxPostsPerChannel,
     setMaxPostsPerChannel,
     maxPostsPerChannelMode,
@@ -280,6 +283,32 @@ export const PostFilter: React.FC<PostFilterProps> = ({
                       onClick={() => setForwardedFilter(type.value)}
                       className={`text-[11px] uppercase font-bold px-4 py-1.5 rounded-full border transition-all shadow-sm ${
                         forwardedFilter === type.value
+                          ? "bg-app-ink text-app-bg border-app-ink"
+                          : "bg-app-muted border-app-ink/10 hover:border-app-ink/30 hover:bg-app-ink/5 text-app-ink"
+                      }`}
+                    >
+                      {type.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="flex flex-col gap-3">
+                <div className="flex items-center gap-2">
+                  <Filter size={12} className="text-app-ink/60" />
+                  <label className="text-[11px] uppercase font-bold text-app-ink/70 tracking-widest">
+                    Media Content
+                  </label>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {MEDIA_FILTER_OPTIONS.map((type) => (
+                    <button
+                      type="button"
+                      key={type.value}
+                      data-testid={`post-media-filter-${type.value}`}
+                      onClick={() => setMediaFilter(type.value)}
+                      className={`text-[11px] uppercase font-bold px-4 py-1.5 rounded-full border transition-all shadow-sm ${
+                        mediaFilter === type.value
                           ? "bg-app-ink text-app-bg border-app-ink"
                           : "bg-app-muted border-app-ink/10 hover:border-app-ink/30 hover:bg-app-ink/5 text-app-ink"
                       }`}

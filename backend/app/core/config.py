@@ -163,6 +163,9 @@ class Settings(BaseSettings):
 
     # Cached channel avatar images (relative to repo root unless absolute)
     CHANNEL_PHOTO_DIR: str = "data/channel-photos"
+    # Cached post photo/video thumbnails (relative to repo root unless absolute)
+    POST_THUMB_DIR: str = "data/post-thumbs"
+    POST_THUMB_CACHE_MAX_SIZE_MB_DEFAULT: int = 2048
 
     @computed_field  # type: ignore[prop-decorator]
     @property

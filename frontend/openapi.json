@@ -1105,6 +1105,42 @@
         }
       }
     },
+    "/api/v1/telegram/post-thumb/{channel_name}/{post_id}": {
+      "get": {
+        "tags": ["telegram"],
+        "summary": "Api Post Thumb",
+        "operationId": "telegram-api_post_thumb",
+        "security": [{ "OAuth2PasswordBearer": [] }],
+        "parameters": [
+          {
+            "name": "channel_name",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "title": "Channel Name" }
+          },
+          {
+            "name": "post_id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "integer", "title": "Post Id" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": { "application/json": { "schema": {} } }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/telegram/bot-file/{credential_id}": {
       "get": {
         "tags": ["telegram"],

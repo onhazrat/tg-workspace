@@ -51,6 +51,15 @@ def _default_retention() -> dict[str, Any]:
     }
 
 
+def _default_media() -> dict[str, Any]:
+    return {
+        "thumbCacheEnabled": True,
+        "thumbCacheOnSync": True,
+        "thumbCacheOnBackfill": True,
+        "thumbCacheMaxSizeMb": settings.POST_THUMB_CACHE_MAX_SIZE_MB_DEFAULT,
+    }
+
+
 def _default_translation() -> dict[str, Any]:
     return {
         "translationEnabled": False,
@@ -138,6 +147,21 @@ def load_sync_settings(session: Session) -> dict[str, Any]:
 
 def load_retention_settings(session: Session) -> dict[str, Any]:
     return load_setting(session, "retention", _default_retention())
+
+
+def load_media_settings(session: Session) -> dict[str, Any]:
+    defaults = _default_media()
+    merged = load_setting(session, "media", defaults)
+    if not isinstance(merged.get("thumbCacheEnabled"), bool):
+        merged["thumbCacheEnabled"] = defaults["thumbCacheEnabled"]
+    if not isinstance(merged.get("thumbCacheOnSync"), bool):
+        merged["thumbCacheOnSync"] = defaults["thumbCacheOnSync"]
+    if not isinstance(merged.get("thumbCacheOnBackfill"), bool):
+        merged["thumbCacheOnBackfill"] = defaults["thumbCacheOnBackfill"]
+    max_mb = merged.get("thumbCacheMaxSizeMb")
+    if not isinstance(max_mb, int) or max_mb < 0:
+        merged["thumbCacheMaxSizeMb"] = defaults["thumbCacheMaxSizeMb"]
+    return merged
 
 
 def load_translation_settings(session: Session) -> dict[str, Any]:

@@ -25,6 +25,7 @@ from app.services.network_settings import (
     resolve_proxies_for_user,
     resolve_proxy_concurrency,
 )
+from app.services.post_thumbnails import read_cached_thumb
 from app.services.scraper import (
     get_channel_info,
     resolve_start_time_to_id,
@@ -290,6 +291,19 @@ async def api_channel_photo(
     cached = read_cached_photo(channel_id)
     if not cached:
         raise HTTPException(status_code=404, detail="Channel photo not found")
+    content, content_type = cached
+    return Response(content=content, media_type=content_type)
+
+
+@router.get("/post-thumb/{channel_name}/{post_id}")
+async def api_post_thumb(
+    channel_name: str,
+    post_id: int,
+    _current_user: CurrentUser,
+) -> Response:
+    cached = read_cached_thumb(channel_name, post_id)
+    if not cached:
+        raise HTTPException(status_code=404, detail="Post thumbnail not found")
     content, content_type = cached
     return Response(content=content, media_type=content_type)
 
