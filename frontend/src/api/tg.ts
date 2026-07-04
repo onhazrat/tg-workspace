@@ -40,4 +40,6 @@ export const tgApi = {
     requestBlob(
       `/api/v1/telegram/channel-photo/${encodeURIComponent(channelId)}`,
     ),
+
+  fetchPostThumb: (thumbApiPath: string) => requestBlob(thumbApiPath),
 }
