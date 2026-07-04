@@ -1,0 +1,165 @@
+{
+  "url": "https://t.me/s/contest",
+  "fetched_at": "2026-07-04T11:02:45.968889+00:00",
+  "status": "ok",
+  "post_ids_found": [
+    436,
+    438,
+    439,
+    440,
+    441,
+    442,
+    443,
+    444,
+    445,
+    446,
+    447,
+    448,
+    449,
+    450,
+    451,
+    452,
+    453,
+    454,
+    455,
+    456
+  ],
+  "media_scan": [
+    {
+      "channel": "contest",
+      "post_id": 436,
+      "kinds": [
+        "video"
+      ],
+      "has_caption": true
+    },
+    {
+      "channel": "contest",
+      "post_id": 438,
+      "kinds": [],
+      "has_caption": true
+    },
+    {
+      "channel": "contest",
+      "post_id": 439,
+      "kinds": [],
+      "has_caption": true
+    },
+    {
+      "channel": "contest",
+      "post_id": 440,
+      "kinds": [],
+      "has_caption": true
+    },
+    {
+      "channel": "contest",
+      "post_id": 441,
+      "kinds": [],
+      "has_caption": true
+    },
+    {
+      "channel": "contest",
+      "post_id": 442,
+      "kinds": [],
+      "has_caption": true
+    },
+    {
+      "channel": "contest",
+      "post_id": 443,
+      "kinds": [],
+      "has_caption": true
+    },
+    {
+      "channel": "contest",
+      "post_id": 444,
+      "kinds": [],
+      "has_caption": true
+    },
+    {
+      "channel": "contest",
+      "post_id": 445,
+      "kinds": [],
+      "has_caption": true
+    },
+    {
+      "channel": "contest",
+      "post_id": 446,
+      "kinds": [],
+      "has_caption": true
+    },
+    {
+      "channel": "contest",
+      "post_id": 447,
+      "kinds": [],
+      "has_caption": true
+    },
+    {
+      "channel": "contest",
+      "post_id": 448,
+      "kinds": [],
+      "has_caption": true
+    },
+    {
+      "channel": "contest",
+      "post_id": 449,
+      "kinds": [],
+      "has_caption": true
+    },
+    {
+      "channel": "contest",
+      "post_id": 450,
+      "kinds": [],
+      "has_caption": true
+    },
+    {
+      "channel": "contest",
+      "post_id": 451,
+      "kinds": [],
+      "has_caption": true
+    },
+    {
+      "channel": "contest",
+      "post_id": 452,
+      "kinds": [],
+      "has_caption": true
+    },
+    {
+      "channel": "contest",
+      "post_id": 453,
+      "kinds": [],
+      "has_caption": true
+    },
+    {
+      "channel": "contest",
+      "post_id": 454,
+      "kinds": [],
+      "has_caption": true
+    },
+    {
+      "channel": "contest",
+      "post_id": 455,
+      "kinds": [],
+      "has_caption": true
+    },
+    {
+      "channel": "contest",
+      "post_id": 456,
+      "kinds": [
+        "link_preview"
+      ],
+      "has_caption": true
+    }
+  ],
+  "telemetry": {
+    "attempts": [
+      {
+        "attempt": 1,
+        "proxyUrl": "direct",
+        "success": true,
+        "latency": 562
+      }
+    ],
+    "totalDuration": 562,
+    "success": true
+  }
+}

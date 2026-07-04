@@ -1,0 +1,201 @@
+{
+  "url": "https://t.me/s/ReutersWorldChannel",
+  "fetched_at": "2026-07-04T11:02:05.272374+00:00",
+  "status": "ok",
+  "post_ids_found": [
+    151505,
+    151506,
+    151507,
+    151508,
+    151509,
+    151510,
+    151511,
+    151513,
+    151516,
+    151517,
+    151518,
+    151519,
+    151520,
+    151521,
+    151522,
+    151523,
+    151524,
+    151525,
+    151526,
+    151527
+  ],
+  "media_scan": [
+    {
+      "channel": "ReutersWorldChannel",
+      "post_id": 151505,
+      "kinds": [
+        "photo"
+      ],
+      "has_caption": true
+    },
+    {
+      "channel": "ReutersWorldChannel",
+      "post_id": 151506,
+      "kinds": [
+        "photo"
+      ],
+      "has_caption": true
+    },
+    {
+      "channel": "ReutersWorldChannel",
+      "post_id": 151507,
+      "kinds": [
+        "photo"
+      ],
+      "has_caption": true
+    },
+    {
+      "channel": "ReutersWorldChannel",
+      "post_id": 151508,
+      "kinds": [
+        "photo"
+      ],
+      "has_caption": true
+    },
+    {
+      "channel": "ReutersWorldChannel",
+      "post_id": 151509,
+      "kinds": [
+        "photo"
+      ],
+      "has_caption": true
+    },
+    {
+      "channel": "ReutersWorldChannel",
+      "post_id": 151510,
+      "kinds": [
+        "photo"
+      ],
+      "has_caption": true
+    },
+    {
+      "channel": "ReutersWorldChannel",
+      "post_id": 151511,
+      "kinds": [
+        "photo"
+      ],
+      "has_caption": true
+    },
+    {
+      "channel": "ReutersWorldChannel",
+      "post_id": 151513,
+      "kinds": [
+        "photo"
+      ],
+      "has_caption": true
+    },
+    {
+      "channel": "ReutersWorldChannel",
+      "post_id": 151516,
+      "kinds": [
+        "photo"
+      ],
+      "has_caption": true
+    },
+    {
+      "channel": "ReutersWorldChannel",
+      "post_id": 151517,
+      "kinds": [
+        "photo"
+      ],
+      "has_caption": true
+    },
+    {
+      "channel": "ReutersWorldChannel",
+      "post_id": 151518,
+      "kinds": [
+        "photo"
+      ],
+      "has_caption": true
+    },
+    {
+      "channel": "ReutersWorldChannel",
+      "post_id": 151519,
+      "kinds": [
+        "photo"
+      ],
+      "has_caption": true
+    },
+    {
+      "channel": "ReutersWorldChannel",
+      "post_id": 151520,
+      "kinds": [
+        "photo"
+      ],
+      "has_caption": true
+    },
+    {
+      "channel": "ReutersWorldChannel",
+      "post_id": 151521,
+      "kinds": [
+        "photo"
+      ],
+      "has_caption": true
+    },
+    {
+      "channel": "ReutersWorldChannel",
+      "post_id": 151522,
+      "kinds": [
+        "photo"
+      ],
+      "has_caption": true
+    },
+    {
+      "channel": "ReutersWorldChannel",
+      "post_id": 151523,
+      "kinds": [
+        "photo"
+      ],
+      "has_caption": true
+    },
+    {
+      "channel": "ReutersWorldChannel",
+      "post_id": 151524,
+      "kinds": [
+        "photo"
+      ],
+      "has_caption": true
+    },
+    {
+      "channel": "ReutersWorldChannel",
+      "post_id": 151525,
+      "kinds": [
+        "photo"
+      ],
+      "has_caption": true
+    },
+    {
+      "channel": "ReutersWorldChannel",
+      "post_id": 151526,
+      "kinds": [
+        "photo"
+      ],
+      "has_caption": true
+    },
+    {
+      "channel": "ReutersWorldChannel",
+      "post_id": 151527,
+      "kinds": [
+        "photo"
+      ],
+      "has_caption": true
+    }
+  ],
+  "telemetry": {
+    "attempts": [
+      {
+        "attempt": 1,
+        "proxyUrl": "direct",
+        "success": true,
+        "latency": 382
+      }
+    ],
+    "totalDuration": 382,
+    "success": true
+  }
+}
