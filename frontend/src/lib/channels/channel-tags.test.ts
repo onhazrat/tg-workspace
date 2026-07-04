@@ -3,7 +3,10 @@ import { describe, expect, it } from "bun:test"
 import {
   collectAllChannelTags,
   filterChannelsByTag,
+  filterUntaggedChannels,
+  isUntaggedChannel,
   sortTagsForChannelGrid,
+  UNTAGGED_TAG_ID,
 } from "@/lib/channels/channel-tags"
 import type { Channel } from "@/types"
 
@@ -31,7 +34,26 @@ const sampleChannels: Channel[] = [
   },
 ]
 
+describe("filterUntaggedChannels", () => {
+  it("returns channels with no tags", () => {
+    expect(filterUntaggedChannels(sampleChannels).map((c) => c.name)).toEqual([
+      "empty",
+    ])
+  })
+
+  it("isUntaggedChannel is true only when tag list is empty", () => {
+    expect(isUntaggedChannel(sampleChannels[0])).toBe(false)
+    expect(isUntaggedChannel(sampleChannels[2])).toBe(true)
+  })
+})
+
 describe("filterChannelsByTag", () => {
+  it("matches UI untagged pseudo-tag", () => {
+    expect(
+      filterChannelsByTag(sampleChannels, UNTAGGED_TAG_ID).map((c) => c.name),
+    ).toEqual(["empty"])
+  })
+
   it("matches tags case-insensitively", () => {
     const matches = filterChannelsByTag(sampleChannels, "TECH")
     expect(matches.map((channel) => channel.name).sort()).toEqual([
