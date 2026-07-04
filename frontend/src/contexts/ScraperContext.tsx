@@ -14,10 +14,12 @@ import { useApiStatus } from "../hooks/useApiStatus"
 import { useDebouncedValue } from "../hooks/useDebouncedValue"
 import { useSyncQueue } from "../hooks/useSyncQueue"
 import { detectLanguageFromPosts } from "../lib/language"
+import { parseMediaFilterValue } from "../lib/posts/post-media"
 import {
   applyPostViewPipeline,
   buildFilteredPostsFromRaw,
   type MaxPostsPerChannelMode,
+  type MediaFilterValue,
   type PostSortOrder,
   type PostViewOptions,
 } from "../lib/posts/post-view"
@@ -90,6 +92,8 @@ interface ScraperContextType {
       "all" | "forwarded" | "original" | "unfollowed_forwarded"
     >
   >
+  mediaFilter: MediaFilterValue
+  setMediaFilter: React.Dispatch<React.SetStateAction<MediaFilterValue>>
   maxPostsPerChannel: number
   setMaxPostsPerChannel: React.Dispatch<React.SetStateAction<number>>
   maxPostsPerChannelMode: MaxPostsPerChannelMode
@@ -157,6 +161,10 @@ export const ScraperProvider: React.FC<{ children: React.ReactNode }> = ({
   const [forwardedFilter, setForwardedFilter] = useState<
     "all" | "forwarded" | "original" | "unfollowed_forwarded"
   >("all")
+  const [mediaFilter, setMediaFilter] = useState<MediaFilterValue>(() => {
+    if (typeof localStorage === "undefined") return "all"
+    return parseMediaFilterValue(localStorage.getItem("postFilter_media"))
+  })
   const [maxPostsPerChannel, setMaxPostsPerChannel] = useState<number>(() => {
     const saved = localStorage.getItem("postFilter_maxPerChannel")
     const parsed = saved ? Number.parseInt(saved, 10) : 0
@@ -200,6 +208,10 @@ export const ScraperProvider: React.FC<{ children: React.ReactNode }> = ({
   useEffect(() => {
     localStorage.setItem("postFilter_sortOrder", postSortOrder)
   }, [postSortOrder])
+
+  useEffect(() => {
+    localStorage.setItem("postFilter_media", mediaFilter)
+  }, [mediaFilter])
 
   // Background language detection for existing channels
   useEffect(() => {
@@ -345,6 +357,7 @@ export const ScraperProvider: React.FC<{ children: React.ReactNode }> = ({
         const posts = buildFilteredPostsFromRaw(rawPosts, {
           searchText,
           forwardedFilter,
+          mediaFilter,
           channels,
           view: postViewOptions,
           startDate,
@@ -371,6 +384,7 @@ export const ScraperProvider: React.FC<{ children: React.ReactNode }> = ({
       searchSimilarPosts,
       forwardedFilter,
       channels,
+      mediaFilter,
       maxPostsPerChannel,
       maxPostsPerChannelMode,
       postSortOrder,
@@ -808,6 +822,8 @@ export const ScraperProvider: React.FC<{ children: React.ReactNode }> = ({
         addNewChannel,
         forwardedFilter,
         setForwardedFilter,
+        mediaFilter,
+        setMediaFilter,
         maxPostsPerChannel,
         setMaxPostsPerChannel,
         maxPostsPerChannelMode,

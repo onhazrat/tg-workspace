@@ -166,6 +166,10 @@ export interface CommandContext {
   setForwardedFilter: (
     value: "all" | "forwarded" | "original" | "unfollowed_forwarded",
   ) => void
+  mediaFilter: import("@/lib/posts/post-media").MediaFilterValue
+  setMediaFilter: (
+    value: import("@/lib/posts/post-media").MediaFilterValue,
+  ) => void
   setMaxPostsPerChannel: (value: number) => void
   setMaxPostsPerChannelMode: (value: "latest" | "random") => void
   setPostSortOrder: (value: "time" | "channel_time") => void

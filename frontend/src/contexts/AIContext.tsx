@@ -130,6 +130,7 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({
     semanticSearchRespectsChannels,
     handleFilterPosts,
     forwardedFilter,
+    mediaFilter,
     postViewOptions,
   } = useScraper()
   const { setChatMessages } = useChatContext()
@@ -183,6 +184,7 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({
       postsToSummarize = buildFilteredPostsFromRaw(rawPosts, {
         searchText: postSearch,
         forwardedFilter,
+        mediaFilter,
         channels,
         view: postViewOptions,
         startDate,

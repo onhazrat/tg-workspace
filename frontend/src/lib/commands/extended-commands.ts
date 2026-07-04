@@ -23,9 +23,11 @@ import { filterPartialHistoryChannels } from "@/lib/commands/filter-channels"
 import { parseOpenPostInput } from "@/lib/commands/open-post"
 import {
   applyForwardedFilter,
+  applyMediaFilter,
   applyPostDateRangeHours,
   clearPostFilters,
   FORWARDED_FILTER_OPTIONS,
+  MEDIA_FILTER_OPTIONS,
   POST_DATE_RANGE_PRESETS,
 } from "@/lib/commands/post-filters"
 import { pickSearchPost } from "@/lib/commands/search-filters"
@@ -566,6 +568,22 @@ export function buildExtendedCommands(): CommandDef[] {
       run: async (ctx) => {
         applyForwardedFilter(ctx, option.value)
         toast.success(`Forwarded filter: ${option.label}`)
+      },
+    })
+  }
+
+  for (const option of MEDIA_FILTER_OPTIONS) {
+    if (option.value === "all") continue
+    commands.push({
+      id: `set-media-filter-${option.value}`,
+      kind: "action",
+      label: `Set Media Filter → ${option.label}`,
+      keywords: ["post", "media", "filter", option.value, option.label],
+      group: "Posts",
+      getBadge: (ctx) => (ctx.mediaFilter === option.value ? "ON" : null),
+      run: async (ctx) => {
+        applyMediaFilter(ctx, option.value)
+        toast.success(`Media filter: ${option.label}`)
       },
     })
   }

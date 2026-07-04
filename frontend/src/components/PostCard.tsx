@@ -4,11 +4,16 @@ import {
   Clock,
   Copy,
   ExternalLink,
+  Eye,
   Hash,
+  Image,
   Languages,
+  Layers,
+  Link2,
   Loader2,
   PlusCircle,
   Sparkles,
+  Video,
 } from "lucide-react"
 import type React from "react"
 import { useCallback, useEffect, useMemo, useState } from "react"
@@ -17,11 +22,28 @@ import { useData } from "../contexts/DataContext"
 import { useScraper } from "../contexts/ScraperContext"
 import { useSettings } from "../contexts/SettingsContext"
 import { useTranslation } from "../contexts/TranslationContext"
+import { getMediaKindLabel, getPostMediaKinds } from "../lib/posts/post-media"
 import { getTranslation, saveTranslation } from "../lib/repository"
 import { highlightText } from "../lib/utils"
-import type { Post } from "../types"
+import type { Post, PostMediaKind } from "../types"
 import { RelativeTime } from "./RelativeTime"
+import { Badge } from "./ui/badge"
 import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tg-tooltip"
+
+function MediaKindIcon({ kind }: { kind: PostMediaKind }) {
+  switch (kind) {
+    case "photo":
+      return <Image size={10} />
+    case "video":
+      return <Video size={10} />
+    case "link_preview":
+      return <Link2 size={10} />
+    case "grouped":
+      return <Layers size={10} />
+    default:
+      return null
+  }
+}
 
 interface PostCardProps {
   post: Post
@@ -46,6 +68,9 @@ export const PostCard: React.FC<PostCardProps> = ({ post, postSearch }) => {
 
   const activeText =
     showTranslation && translatedText ? translatedText : post.text
+  const mediaKinds = useMemo(() => getPostMediaKinds(post), [post])
+  const thumbApiPath = post.media?.thumbApiPath
+  const viewsLabel = post.media?.views
   const isLongPost = useMemo(() => {
     const lineCount = activeText.split("\n").length
     return activeText.length > 900 || lineCount > 14
@@ -282,7 +307,47 @@ export const PostCard: React.FC<PostCardProps> = ({ post, postSearch }) => {
       </div>
 
       {/* Post Body */}
-      <div className="p-5">
+      <div className="p-5 flex flex-col gap-4">
+        {(mediaKinds.length > 0 || viewsLabel || thumbApiPath) && (
+          <div className="flex flex-col gap-3">
+            {(mediaKinds.length > 0 || viewsLabel) && (
+              <div className="flex flex-wrap items-center gap-2">
+                {mediaKinds.map((kind) => (
+                  <Badge
+                    key={kind}
+                    variant="secondary"
+                    data-testid={`post-card-media-badge-${kind}`}
+                    className="gap-1 text-[10px] uppercase tracking-wider font-bold"
+                  >
+                    <MediaKindIcon kind={kind} />
+                    {getMediaKindLabel(kind)}
+                    {kind === "grouped" &&
+                    post.media?.groupedCount != null &&
+                    post.media.groupedCount > 1
+                      ? ` (${post.media.groupedCount})`
+                      : null}
+                  </Badge>
+                ))}
+                {viewsLabel ? (
+                  <span className="inline-flex items-center gap-1 text-[10px] uppercase tracking-wider font-bold text-app-ink/60">
+                    <Eye size={10} />
+                    {viewsLabel}
+                  </span>
+                ) : null}
+              </div>
+            )}
+            {thumbApiPath ? (
+              <img
+                src={thumbApiPath}
+                alt=""
+                data-testid="post-card-thumb"
+                className="max-h-48 w-full rounded-lg border border-app-ink/10 object-cover bg-app-muted"
+                loading="lazy"
+              />
+            ) : null}
+          </div>
+        )}
+
         <div className="relative">
           <p
             dir="auto"
