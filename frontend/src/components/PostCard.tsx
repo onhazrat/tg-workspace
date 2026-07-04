@@ -78,7 +78,7 @@ function PostThumbImage({ thumbApiPath }: { thumbApiPath: string }) {
       src={src}
       alt=""
       data-testid="post-card-thumb"
-      className="max-h-48 w-full rounded-lg border border-app-ink/10 object-cover bg-app-muted"
+      className="w-full max-h-80 rounded-lg border border-app-ink/10 object-contain bg-app-muted"
       loading="lazy"
       onError={() => {
         setFailed(true)
