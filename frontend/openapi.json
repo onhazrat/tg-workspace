@@ -1,6 +1,6 @@
 {
   "openapi": "3.1.0",
-  "info": { "title": "TG Summarizer", "version": "0.1.0" },
+  "info": { "title": "openapi-export", "version": "0.1.0" },
   "paths": {
     "/api/v1/login/access-token": {
       "post": {
