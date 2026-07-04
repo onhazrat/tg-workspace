@@ -121,3 +121,19 @@ def test_meta_json_post_ids_have_media_in_html() -> None:
             assert by_id[post_id]["text"] == "[photo]"
             finalize_post_media_paths(by_id[post_id], "durov")
             assert by_id[post_id]["media"]["kinds"] == ["photo"]
+
+
+def test_finalize_post_media_paths_keeps_thumb_source_for_sync_cache() -> None:
+    html = _load_fixture("durov_522.html")
+    posts, _next = _parse_posts_from_html(html, 0, set())
+    post = next(p for p in posts if p.get("id") == 522)
+    assert post.get("_thumbSourceUrl")
+
+    from app.services.scraper import _enrich_posts_with_timestamps
+
+    enriched = _enrich_posts_with_timestamps([post], "durov")
+    enriched_post = enriched[0]
+    assert enriched_post["media"]["thumbApiPath"] == (
+        "/api/v1/telegram/post-thumb/durov/522"
+    )
+    assert enriched_post.get("_thumbSourceUrl")

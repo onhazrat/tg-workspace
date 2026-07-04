@@ -122,11 +122,12 @@ def _parse_single_post(
     posts, _next = _parse_posts_from_html(html, post_id, set())
     for post in posts:
         if post.get("id") == post_id:
+            thumb_source = post.get("_thumbSourceUrl")
             finalize_post_media_paths(post, channel_name)
             return (
                 post.get("text", ""),
                 post.get("media"),
-                post.get("_thumbSourceUrl"),
+                thumb_source,
             )
 
     from bs4 import BeautifulSoup

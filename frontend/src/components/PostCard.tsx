@@ -18,6 +18,7 @@ import {
 import type React from "react"
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { toast } from "sonner"
+import { api } from "@/api"
 import { useData } from "../contexts/DataContext"
 import { useScraper } from "../contexts/ScraperContext"
 import { useSettings } from "../contexts/SettingsContext"
@@ -43,6 +44,48 @@ function MediaKindIcon({ kind }: { kind: PostMediaKind }) {
     default:
       return null
   }
+}
+
+function PostThumbImage({ thumbApiPath }: { thumbApiPath: string }) {
+  const [src, setSrc] = useState<string | null>(null)
+  const [failed, setFailed] = useState(false)
+
+  useEffect(() => {
+    let objectUrl: string | null = null
+    setFailed(false)
+    setSrc(null)
+
+    api
+      .fetchPostThumb(thumbApiPath)
+      .then((blob) => {
+        objectUrl = URL.createObjectURL(blob)
+        setSrc(objectUrl)
+      })
+      .catch(() => {
+        setFailed(true)
+        setSrc(null)
+      })
+
+    return () => {
+      if (objectUrl) URL.revokeObjectURL(objectUrl)
+    }
+  }, [thumbApiPath])
+
+  if (!src || failed) return null
+
+  return (
+    <img
+      src={src}
+      alt=""
+      data-testid="post-card-thumb"
+      className="max-h-48 w-full rounded-lg border border-app-ink/10 object-cover bg-app-muted"
+      loading="lazy"
+      onError={() => {
+        setFailed(true)
+        setSrc(null)
+      }}
+    />
+  )
 }
 
 interface PostCardProps {
@@ -337,13 +380,7 @@ export const PostCard: React.FC<PostCardProps> = ({ post, postSearch }) => {
               </div>
             )}
             {thumbApiPath ? (
-              <img
-                src={thumbApiPath}
-                alt=""
-                data-testid="post-card-thumb"
-                className="max-h-48 w-full rounded-lg border border-app-ink/10 object-cover bg-app-muted"
-                loading="lazy"
-              />
+              <PostThumbImage thumbApiPath={thumbApiPath} />
             ) : null}
           </div>
         )}

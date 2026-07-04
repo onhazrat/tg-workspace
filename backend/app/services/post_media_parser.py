@@ -231,8 +231,12 @@ def parse_widget_media(
 
 
 def finalize_post_media_paths(post: dict[str, Any], channel_name: str) -> None:
-    """Set thumb API paths after channel name is attached to a scraped post."""
-    thumb_source = post.pop("_thumbSourceUrl", None)
+    """Set thumb API paths after channel name is attached to a scraped post.
+
+    Keeps ``_thumbSourceUrl`` on the post so sync can download the thumb before
+    DB upsert strips internal scrape fields.
+    """
+    thumb_source = post.get("_thumbSourceUrl")
     media = post.get("media")
     if not isinstance(media, dict):
         return
