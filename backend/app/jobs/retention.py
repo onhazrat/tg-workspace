@@ -8,7 +8,7 @@ from typing import Any, cast
 
 from sqlmodel import Session, col, func, or_, select
 
-from app.jobs.settings import load_retention_settings
+from app.jobs.settings import load_media_settings, load_retention_settings
 from app.models_tg import (
     Channel,
     EmbeddingLog,
@@ -24,6 +24,10 @@ from app.services.operator import get_operator_user_id
 from app.services.post_sync_state import (
     prune_sync_state_below,
     prune_sync_state_for_post_ids,
+)
+from app.services.post_thumbnails import (
+    delete_cached_thumb,
+    enforce_thumb_cache_size_limit,
 )
 from app.services.sync_meta import touch_sync
 
@@ -58,6 +62,7 @@ def run_retention_cleanup(session: Session) -> dict[str, int]:
             emb = session.get(PostEmbedding, emb_id)
             if emb:
                 session.delete(emb)
+            delete_cached_thumb(post.channel_name, post.post_id)
             translations = session.exec(
                 select(PostTranslation).where(
                     PostTranslation.channel_name == post.channel_name,
@@ -92,6 +97,11 @@ def run_retention_cleanup(session: Session) -> dict[str, int]:
             touch_sync(session, "embeddings")
             touch_sync(session, "translations")
             touch_sync(session, "channels")
+
+    media_settings = load_media_settings(session)
+    max_mb = int(media_settings.get("thumbCacheMaxSizeMb") or 0)
+    if max_mb > 0:
+        enforce_thumb_cache_size_limit(max_mb)
 
     if log_days > 0:
         cutoff = (

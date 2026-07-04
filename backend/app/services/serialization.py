@@ -156,6 +156,7 @@ def post_to_camel(p: Post) -> dict[str, Any]:
         "retrievalJobId": p.retrieval_job_id,
         "retrievalPass": p.retrieval_pass,
         "retrievalSource": p.retrieval_source,
+        "media": p.media,
     }
 
 

@@ -17,6 +17,7 @@ from app.core.config import settings
 from app.core.db import engine
 from app.jobs.settings import (
     compute_scrape_cutoff_ms,
+    load_media_settings,
     load_retention_settings,
     load_sync_settings,
 )
@@ -37,6 +38,10 @@ from app.services.network_settings import (
 from app.services.post_sync_state import (
     record_gaps_from_page,
     record_gaps_to_existing_post,
+)
+from app.services.post_thumbnails import (
+    cache_post_thumb,
+    enforce_thumb_cache_size_limit,
 )
 from app.services.posts import bulk_upsert_posts_impl
 from app.services.scraper import get_channel_info, scrape_channel_page
@@ -136,6 +141,7 @@ def _posts_to_save(
                 "timestamp": ts or int(time.time() * 1000),
                 "forwardedFrom": p.get("forwardedFrom"),
                 "forwardedFromName": p.get("forwardedFromName"),
+                "media": p.get("media"),
             }
         )
     return out
@@ -380,6 +386,31 @@ class _ChannelSyncCtx:
     min_stored_post_id: int | None
     scrape_cutoff_ms: int
     effective_start_time: int
+    media_settings: dict[str, Any] = field(default_factory=dict)
+
+
+async def _cache_scraped_post_thumbs(
+    channel_name: str,
+    posts: list[dict[str, Any]],
+    media_settings: dict[str, Any],
+) -> None:
+    if not media_settings.get("thumbCacheEnabled", True):
+        return
+    if not media_settings.get("thumbCacheOnSync", True):
+        return
+
+    tasks: list[Any] = []
+    for post in posts:
+        thumb_url = post.get("_thumbSourceUrl")
+        post_id = post.get("id")
+        if thumb_url and isinstance(post_id, int):
+            tasks.append(cache_post_thumb(channel_name, post_id, thumb_url))
+    if tasks:
+        await asyncio.gather(*tasks, return_exceptions=True)
+
+    max_mb = int(media_settings.get("thumbCacheMaxSizeMb") or 2048)
+    if max_mb > 0:
+        enforce_thumb_cache_size_limit(max_mb)
 
 
 @dataclass
@@ -408,6 +439,7 @@ def _prepare_channel_sync(
         network = load_network_settings(session, effective_user_id)
         sync_settings = load_sync_settings(session)
         retention_settings = load_retention_settings(session)
+        media_settings = load_media_settings(session)
         scrape_cutoff_ms = compute_scrape_cutoff_ms(sync_settings, retention_settings)
         has_existing_posts = (
             session.exec(
@@ -448,6 +480,7 @@ def _prepare_channel_sync(
             min_stored_post_id=min_stored_post_id,
             scrape_cutoff_ms=scrape_cutoff_ms,
             effective_start_time=scrape_cutoff_ms,
+            media_settings=media_settings,
         )
 
 
@@ -888,6 +921,12 @@ async def sync_single_channel(
                 response["photoUrl"] = await resolve_cached_photo_url(
                     ctx.channel_id,
                     response.get("photoUrl") or None,
+                )
+
+                await _cache_scraped_post_thumbs(
+                    ctx.channel_name,
+                    response.get("posts") or [],
+                    ctx.media_settings,
                 )
 
                 if response.get("fullRequest"):

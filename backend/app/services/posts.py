@@ -13,6 +13,11 @@ from app.services.serialization import post_to_camel
 from app.services.sync_meta import touch_sync
 
 
+def _post_media_from_item(item: dict[str, Any]) -> dict[str, Any] | None:
+    media = item.get("media")
+    return media if isinstance(media, dict) else None
+
+
 def bulk_upsert_posts_impl(
     body: list[dict[str, Any]],
     session: Session,
@@ -39,6 +44,8 @@ def bulk_upsert_posts_impl(
             existing.forwarded_from_name = item.get("forwardedFromName") or item.get(
                 "forwarded_from_name"
             )
+            if "media" in item:
+                existing.media = _post_media_from_item(item)
             existing.updated_at = datetime.utcnow()
             session.add(existing)
         else:
@@ -68,6 +75,7 @@ def bulk_upsert_posts_impl(
                     or item.get("forwarded_from"),
                     forwarded_from_name=item.get("forwardedFromName")
                     or item.get("forwarded_from_name"),
+                    media=_post_media_from_item(item),
                     retrieved_at=now_ms,
                     retrieval_job_id=job_id,
                     retrieval_pass=pass_val,

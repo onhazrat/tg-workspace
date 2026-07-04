@@ -14,6 +14,7 @@ from bs4 import BeautifulSoup
 from app.core.config import settings
 from app.services.channel_photos import resolve_cached_photo_url
 from app.services.network import fetch_with_retry
+from app.services.post_media_parser import finalize_post_media_paths, parse_widget_media
 
 logger = logging.getLogger(__name__)
 
@@ -51,19 +52,7 @@ def _parse_posts_from_html(
         if not post_id or post_id < start_id or post_id in seen:
             continue
 
-        text_el = el.select_one(".tgme_widget_message_text")
-        if text_el:
-            for br in text_el.find_all("br"):
-                br.replace_with("\n")
-            text = text_el.get_text(strip=True)
-        else:
-            poll_el = el.select_one(".tgme_widget_message_poll_question")
-            if poll_el:
-                for br in poll_el.find_all("br"):
-                    br.replace_with("\n")
-                text = poll_el.get_text(strip=True)
-            else:
-                text = ""
+        text, media, thumb_source_url = parse_widget_media(el, post_id=post_id)
 
         time_el = el.select_one("time[datetime]")
         date = _attr_str(time_el.get("datetime") if time_el else None) or ""
@@ -81,9 +70,13 @@ def _parse_posts_from_html(
 
         post: dict[str, Any] = {
             "id": post_id,
-            "text": text or "[Media/No Text Content]",
+            "text": text,
             "date": date,
         }
+        if media:
+            post["media"] = media
+        if thumb_source_url:
+            post["_thumbSourceUrl"] = thumb_source_url
         if forwarded_from:
             post["forwardedFrom"] = forwarded_from
         if forwarded_from_name:
@@ -168,6 +161,7 @@ def _enrich_posts_with_timestamps(
 ) -> list[dict[str, Any]]:
     for post in posts:
         post["channelName"] = channel_name
+        finalize_post_media_paths(post, channel_name)
         if post.get("date"):
             try:
                 dt = datetime.fromisoformat(post["date"].replace("Z", "+00:00"))
@@ -395,6 +389,7 @@ async def scrape_channel(
 
     for p in filtered:
         p["channelName"] = channel_name
+        finalize_post_media_paths(p, channel_name)
         if p.get("date"):
             from datetime import datetime
 
