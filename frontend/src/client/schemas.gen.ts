@@ -183,6 +183,41 @@ export const BotInfoRequestSchema = {
     title: 'BotInfoRequest'
 } as const;
 
+export const BulkChannelTagUpdateSchema = {
+    properties: {
+        channelId: {
+            type: 'string',
+            title: 'Channelid'
+        },
+        tags: {
+            items: {
+                additionalProperties: true,
+                type: 'object'
+            },
+            type: 'array',
+            title: 'Tags'
+        }
+    },
+    type: 'object',
+    required: ['channelId', 'tags'],
+    title: 'BulkChannelTagUpdate'
+} as const;
+
+export const BulkChannelTagsRequestSchema = {
+    properties: {
+        updates: {
+            items: {
+                '$ref': '#/components/schemas/BulkChannelTagUpdate'
+            },
+            type: 'array',
+            title: 'Updates'
+        }
+    },
+    type: 'object',
+    required: ['updates'],
+    title: 'BulkChannelTagsRequest'
+} as const;
+
 export const BulkReresolveStartIdsRequestSchema = {
     properties: {
         dryRun: {
@@ -254,6 +289,71 @@ export const BulkResetSyncRequestSchema = {
     },
     type: 'object',
     title: 'BulkResetSyncRequest'
+} as const;
+
+export const BulkSyncSettingsRequestSchema = {
+    properties: {
+        channelIds: {
+            anyOf: [
+                {
+                    items: {
+                        type: 'string'
+                    },
+                    type: 'array'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Channelids'
+        },
+        regularSyncEnabled: {
+            anyOf: [
+                {
+                    type: 'boolean'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Regularsyncenabled'
+        },
+        dynamicSyncEnabled: {
+            anyOf: [
+                {
+                    type: 'boolean'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Dynamicsyncenabled'
+        },
+        autoSyncIntervalMinutes: {
+            anyOf: [
+                {
+                    type: 'integer'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Autosyncintervalminutes'
+        },
+        dynamicSyncExpectedPosts: {
+            anyOf: [
+                {
+                    type: 'integer'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Dynamicsyncexpectedposts'
+        }
+    },
+    type: 'object',
+    title: 'BulkSyncSettingsRequest'
 } as const;
 
 export const CancelSyncJobResponseSchema = {
@@ -385,6 +485,11 @@ export const ChatRequestSchema = {
             type: 'array',
             title: 'Channels',
             default: []
+        },
+        channelsText: {
+            type: 'string',
+            title: 'Channelstext',
+            default: ''
         },
         postsText: {
             type: 'string',
@@ -881,31 +986,6 @@ export const NewPasswordSchema = {
     title: 'NewPassword'
 } as const;
 
-export const PrivateUserCreateSchema = {
-    properties: {
-        email: {
-            type: 'string',
-            title: 'Email'
-        },
-        password: {
-            type: 'string',
-            title: 'Password'
-        },
-        full_name: {
-            type: 'string',
-            title: 'Full Name'
-        },
-        is_verified: {
-            type: 'boolean',
-            title: 'Is Verified',
-            default: false
-        }
-    },
-    type: 'object',
-    required: ['email', 'password', 'full_name'],
-    title: 'PrivateUserCreate'
-} as const;
-
 export const ProxyLaneSnapshotSchema = {
     properties: {
         proxyUrl: {
@@ -1379,6 +1459,11 @@ export const SummaryRequestSchema = {
             type: 'array',
             title: 'Channels'
         },
+        channelsText: {
+            type: 'string',
+            title: 'Channelstext',
+            default: ''
+        },
         postsText: {
             type: 'string',
             title: 'Poststext'
@@ -1459,13 +1544,21 @@ export const SyncJobStatusResponseSchema = {
 
 export const SyncRuntimeSettingsSchema = {
     properties: {
-        autoSyncEnabled: {
-            type: 'boolean',
-            title: 'Autosyncenabled'
-        },
-        autoSyncInterval: {
+        regularSyncIntervalMinutes: {
             type: 'integer',
-            title: 'Autosyncinterval'
+            title: 'Regularsyncintervalminutes'
+        },
+        dynamicSyncEnabledDefault: {
+            type: 'boolean',
+            title: 'Dynamicsyncenableddefault'
+        },
+        dynamicSyncExpectedPostsDefault: {
+            type: 'integer',
+            title: 'Dynamicsyncexpectedpostsdefault'
+        },
+        syncFailureBackoffMinutes: {
+            type: 'integer',
+            title: 'Syncfailurebackoffminutes'
         },
         syncConcurrency: {
             type: 'integer',
@@ -1516,8 +1609,85 @@ export const SyncRuntimeSettingsSchema = {
         }
     },
     type: 'object',
-    required: ['autoSyncEnabled', 'autoSyncInterval', 'syncConcurrency', 'consecutiveFailures'],
+    required: ['regularSyncIntervalMinutes', 'dynamicSyncEnabledDefault', 'dynamicSyncExpectedPostsDefault', 'syncFailureBackoffMinutes', 'syncConcurrency', 'consecutiveFailures'],
     title: 'SyncRuntimeSettings'
+} as const;
+
+export const TagRequestSchema = {
+    properties: {
+        channels: {
+            items: {
+                type: 'string'
+            },
+            type: 'array',
+            title: 'Channels'
+        },
+        channelsText: {
+            type: 'string',
+            title: 'Channelstext',
+            default: ''
+        },
+        postsText: {
+            type: 'string',
+            title: 'Poststext'
+        },
+        allTags: {
+            type: 'string',
+            title: 'Alltags',
+            default: '(none yet)'
+        },
+        tagMode: {
+            type: 'string',
+            title: 'Tagmode',
+            default: 'add'
+        },
+        model: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Model'
+        },
+        temperature: {
+            type: 'number',
+            title: 'Temperature',
+            default: 0.7
+        },
+        provider: {
+            type: 'string',
+            title: 'Provider',
+            default: 'gemini'
+        },
+        tagsPerChannelMin: {
+            anyOf: [
+                {
+                    type: 'integer'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Tagsperchannelmin'
+        },
+        tagsPerChannelMax: {
+            anyOf: [
+                {
+                    type: 'integer'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Tagsperchannelmax'
+        }
+    },
+    type: 'object',
+    required: ['channels', 'postsText'],
+    title: 'TagRequest'
 } as const;
 
 export const TestProxyRequestSchema = {

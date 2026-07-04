@@ -18,8 +18,8 @@ from app.models_tg import (
     PublishLog,
     SyncLog,
 )
-from app.services.channel_tags import normalize_channel_tags
 from app.services.channel_photos import channel_photo_api_path, has_cached_photo
+from app.services.channel_tags import normalize_channel_tags
 
 _CAMEL_OVERRIDES = {
     "display_name": "displayName",

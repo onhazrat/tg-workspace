@@ -510,7 +510,9 @@ def test_sync_backfill_completes_partial_history_in_multiple_passes(
                 "globalStartTimeValue": "2001-09-09T01:46:40+00:00",
             },
         )
-        save_setting(session, "retention", {"postRetentionDays": 0, "logRetentionDays": 0})
+        save_setting(
+            session, "retention", {"postRetentionDays": 0, "logRetentionDays": 0}
+        )
 
     client.put(
         f"{DATA}/channels/backfill-ch",
@@ -625,9 +627,7 @@ def test_sync_backfill_completes_partial_history_in_multiple_passes(
         params={"channelNames": "backfill-ch"},
         headers=headers,
     )
-    backfill_posts = [
-        p for p in posts_r.json() if p.get("retrievalPass") == "backfill"
-    ]
+    backfill_posts = [p for p in posts_r.json() if p.get("retrievalPass") == "backfill"]
     assert len(backfill_posts) >= 2
 
     with (

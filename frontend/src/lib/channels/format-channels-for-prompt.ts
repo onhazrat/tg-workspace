@@ -13,7 +13,9 @@ export function formatChannelsForPrompt(
   options: FormatChannelsForPromptOptions,
 ): string {
   const selectedSet = new Set(selectedNames)
-  const selectedChannels = channels.filter((channel) => selectedSet.has(channel.name))
+  const selectedChannels = channels.filter((channel) =>
+    selectedSet.has(channel.name),
+  )
 
   if (selectedChannels.length === 0) return ""
 

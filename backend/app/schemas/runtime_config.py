@@ -11,9 +11,7 @@ class GlobalStartTimeSnapshot(BaseModel):
 
 class SyncRuntimeSettings(BaseModel):
     regular_sync_interval_minutes: int = Field(..., alias="regularSyncIntervalMinutes")
-    dynamic_sync_enabled_default: bool = Field(
-        ..., alias="dynamicSyncEnabledDefault"
-    )
+    dynamic_sync_enabled_default: bool = Field(..., alias="dynamicSyncEnabledDefault")
     dynamic_sync_expected_posts_default: int = Field(
         ..., alias="dynamicSyncExpectedPostsDefault"
     )

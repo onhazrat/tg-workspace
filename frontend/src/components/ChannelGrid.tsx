@@ -36,7 +36,12 @@ import {
   getTagNames,
   removeTagsByName,
 } from "@/lib/channels/channel-tag-model"
-import { sortTagsForChannelGrid } from "@/lib/channels/channel-tags"
+import {
+  filterUntaggedChannels,
+  sortTagsForChannelGrid,
+  UNTAGGED_TAG_ID,
+  UNTAGGED_TAG_LABEL,
+} from "@/lib/channels/channel-tags"
 import { deleteChannelByRecord } from "@/lib/channels/delete-channel"
 import { useData } from "../contexts/DataContext"
 import { useScraper } from "../contexts/ScraperContext"
@@ -229,6 +234,19 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
     return sortTagsForChannelGrid(Array.from(tags), channels, selectedChannels)
   }, [channels, selectedChannels])
 
+  const untaggedChannelNames = useMemo(
+    () => filterUntaggedChannels(channels).map((c) => c.name),
+    [channels],
+  )
+
+  const selectableUntaggedChannelNames = useMemo(
+    () =>
+      filterUntaggedChannels(channels)
+        .filter((c) => !c.isFrozen)
+        .map((c) => c.name),
+    [channels],
+  )
+
   const allLanguages = useMemo(() => {
     const langs = new Set<string>()
     channels.forEach((c) => {
@@ -263,9 +281,12 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
   }
 
   const toggleTagSelection = (tag: string) => {
-    const channelsWithTag = channels
-      .filter((c) => getTagNames(c.tags).includes(tag) && !c.isFrozen)
-      .map((c) => c.name)
+    const channelsWithTag =
+      tag === UNTAGGED_TAG_ID
+        ? selectableUntaggedChannelNames
+        : channels
+            .filter((c) => getTagNames(c.tags).includes(tag) && !c.isFrozen)
+            .map((c) => c.name)
     const allSelected = channelsWithTag.every((name) =>
       selectedChannels.has(name),
     )
@@ -295,6 +316,16 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
       return next
     })
   }
+
+  const untaggedTagSelectedCount = untaggedChannelNames.filter((name) =>
+    selectedChannels.has(name),
+  ).length
+  const isUntaggedTagAllSelected =
+    untaggedTagSelectedCount === untaggedChannelNames.length &&
+    untaggedChannelNames.length > 0
+  const isUntaggedTagPartial =
+    untaggedTagSelectedCount > 0 &&
+    untaggedTagSelectedCount < untaggedChannelNames.length
 
   const [confirmDeleteChannel, setConfirmDeleteChannel] =
     useState<Channel | null>(null)
@@ -675,6 +706,25 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
                   </button>
                 )
               })}
+              <button
+                type="button"
+                key={UNTAGGED_TAG_ID}
+                data-testid="channel-tag-untagged"
+                onClick={() => toggleTagSelection(UNTAGGED_TAG_ID)}
+                className={`text-[9px] font-bold px-2 py-1 rounded-md transition-all flex items-center gap-1.5 ${
+                  isUntaggedTagAllSelected
+                    ? "bg-app-ink text-app-bg"
+                    : isUntaggedTagPartial
+                      ? "bg-app-ink/20 text-app-ink"
+                      : "bg-app-muted/50 text-app-ink/60 hover:bg-app-ink/10 hover:text-app-ink"
+                }`}
+              >
+                <Tag size={10} />
+                {UNTAGGED_TAG_LABEL}
+                <span className="opacity-60 text-[8px]">
+                  ({untaggedTagSelectedCount}/{untaggedChannelNames.length})
+                </span>
+              </button>
             </div>
 
             <div className="flex items-center gap-3 bg-app-muted/30 p-1.5 px-3 rounded-lg border border-app-ink/5 w-fit">

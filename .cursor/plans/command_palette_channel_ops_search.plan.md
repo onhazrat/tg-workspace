@@ -121,7 +121,7 @@ Convention: **Confirm?** = `requiresConfirmation` schema flag.
 **Proposed UX:** Root command opens `editor` mode (same stack as settings free-form). Single-line input with `@` prefix styling optional. Apply:
 
 1. Normalize handle (`trim`, strip `@`, take last path segment) — mirror ChannelGrid
-2. Call shared `addChannelByName(name, ctx)` 
+2. Call shared `addChannelByName(name, ctx)`
 3. Toast success; **stay open** on Add Channel editor to add another channel (clear input, keep palette focused)
 4. Queue initial sync via `addToSyncQueue`
 

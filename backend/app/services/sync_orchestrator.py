@@ -22,6 +22,7 @@ from app.jobs.settings import (
 )
 from app.models_tg import Channel, Post
 from app.services.async_db import run_db
+from app.services.channel_photos import resolve_cached_photo_url
 from app.services.channels import _velocity_from_timestamps, update_channel_coverage
 from app.services.language import detect_language_from_posts
 from app.services.logs import upsert_network_log, upsert_sync_log
@@ -39,7 +40,6 @@ from app.services.post_sync_state import (
 )
 from app.services.posts import bulk_upsert_posts_impl
 from app.services.scraper import get_channel_info, scrape_channel_page
-from app.services.channel_photos import resolve_cached_photo_url
 from app.services.scraper_jobs import (
     ChannelSyncState,
     SyncJobState,
@@ -48,12 +48,12 @@ from app.services.scraper_jobs import (
     persist_job,
     touch_job,
 )
+from app.services.sync_meta import touch_sync
 from app.services.sync_schedule import (
     apply_failure_backoff,
     compute_next_dynamic_sync_at_from_last_updated,
     compute_next_regular_sync_at_from_last_updated,
 )
-from app.services.sync_meta import touch_sync
 
 logger = logging.getLogger(__name__)
 
@@ -653,21 +653,25 @@ def _finalize_channel_success(
         channel.last_updated = now
         channel.language = detected_language
         if channel.regular_sync_enabled:
-            channel.next_regular_sync_at = compute_next_regular_sync_at_from_last_updated(
-                channel.last_updated,
-                channel.auto_sync_interval_minutes,
-                now,
+            channel.next_regular_sync_at = (
+                compute_next_regular_sync_at_from_last_updated(
+                    channel.last_updated,
+                    channel.auto_sync_interval_minutes,
+                    now,
+                )
             )
         else:
             channel.next_regular_sync_at = None
 
         if channel.dynamic_sync_enabled:
-            recent_timestamps = session.exec(
-                select(Post.timestamp)
-                .where(Post.channel_name == channel.name, Post.timestamp > 0)
-                .order_by(col(Post.timestamp).desc())
-                .limit(100)
-            ).all()
+            recent_timestamps = list(
+                session.exec(
+                    select(Post.timestamp)
+                    .where(Post.channel_name == channel.name, Post.timestamp > 0)
+                    .order_by(col(Post.timestamp).desc())
+                    .limit(100)
+                ).all()
+            )
             recent_timestamps.sort()
             has_posts = bool(recent_timestamps)
             velocity = _velocity_from_timestamps(recent_timestamps)

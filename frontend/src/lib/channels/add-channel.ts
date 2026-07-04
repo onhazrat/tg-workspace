@@ -1,11 +1,8 @@
 import { toast } from "sonner"
 
 import { api } from "@/api"
+import { parseApiError, unavailableChannelToastMessage } from "@/lib/api-errors"
 import type { CommandContext } from "@/lib/commands/types"
-import {
-  parseApiError,
-  unavailableChannelToastMessage,
-} from "@/lib/api-errors"
 import { saveNetworkLog, upsertChannel } from "@/lib/repository"
 import { buildActiveProxies, isNetworkRoutingActive } from "@/lib/syncSettings"
 import type { Channel, NetworkLog } from "@/types"
@@ -55,7 +52,8 @@ export function toAddChannelContext(ctx: CommandContext): AddChannelContext {
       torRotationThreshold: ctx.settings.torRotationThreshold,
       regularSyncIntervalMinutes: ctx.settings.regularSyncIntervalMinutes,
       dynamicSyncEnabledDefault: ctx.settings.dynamicSyncEnabledDefault,
-      dynamicSyncExpectedPostsDefault: ctx.settings.dynamicSyncExpectedPostsDefault,
+      dynamicSyncExpectedPostsDefault:
+        ctx.settings.dynamicSyncExpectedPostsDefault,
     },
   }
 }
@@ -194,7 +192,9 @@ export async function addChannelByName(
   ctx.setSelectedChannels((prev) => new Set(prev).add(channelName))
 
   if (isUnavailableOnWebView) {
-    toast.warning(unavailableChannelToastMessage(channelName), { duration: 8000 })
+    toast.warning(unavailableChannelToastMessage(channelName), {
+      duration: 8000,
+    })
   } else {
     ctx.addToSyncQueue(newChannel, "Initial Sync", () => {})
     toast.success(`Added @${channelName}`)

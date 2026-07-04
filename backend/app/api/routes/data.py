@@ -107,6 +107,7 @@ from app.services.summaries import (
 from app.services.summaries import (
     upsert_summary as upsert_summary_impl,
 )
+from app.services.sync_meta import get_sync_meta, touch_sync
 from app.services.tag_runs import (
     delete_tag_run as delete_tag_run_impl,
 )
@@ -116,7 +117,6 @@ from app.services.tag_runs import (
 from app.services.tag_runs import (
     upsert_tag_run as upsert_tag_run_impl,
 )
-from app.services.sync_meta import get_sync_meta, touch_sync
 
 _SETTING_LOADERS = {
     "jobs": load_jobs_settings,

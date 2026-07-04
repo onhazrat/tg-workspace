@@ -9,6 +9,22 @@ import type { CommandContext } from "@/lib/commands/types"
 import { upsertChannel } from "@/lib/repository"
 import type { Channel } from "@/types"
 
+/** UI-only tag id for the Channels tab pseudo-tag (not stored in DB). */
+export const UNTAGGED_TAG_ID = "__ui_untagged__"
+export const UNTAGGED_TAG_LABEL = "Untagged"
+
+export function isUntaggedChannel(channel: Channel): boolean {
+  return getTagNames(channel.tags).length === 0
+}
+
+export function filterUntaggedChannels(channels: Channel[]): Channel[] {
+  return channels.filter(isUntaggedChannel)
+}
+
+export function isUiUntaggedTag(tag: string): boolean {
+  return tag === UNTAGGED_TAG_ID
+}
+
 export function collectAllChannelTags(channels: Channel[]): string[] {
   const tags = new Set<string>()
   for (const channel of channels) {
@@ -74,6 +90,7 @@ export function filterChannelsByTag(
   channels: Channel[],
   tag: string,
 ): Channel[] {
+  if (isUiUntaggedTag(tag)) return filterUntaggedChannels(channels)
   const normalized = tag.trim().toLowerCase()
   if (!normalized) return []
   return channels.filter((channel) => {

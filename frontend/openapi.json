@@ -1,6 +1,6 @@
 {
   "openapi": "3.1.0",
-  "info": { "title": "TG Summarizer", "version": "0.1.0" },
+  "info": { "title": "openapi-export", "version": "0.1.0" },
   "paths": {
     "/api/v1/login/access-token": {
       "post": {
@@ -1075,6 +1075,36 @@
         "security": [{ "OAuth2PasswordBearer": [] }]
       }
     },
+    "/api/v1/telegram/channel-photo/{channel_id}": {
+      "get": {
+        "tags": ["telegram"],
+        "summary": "Api Channel Photo",
+        "operationId": "telegram-api_channel_photo",
+        "security": [{ "OAuth2PasswordBearer": [] }],
+        "parameters": [
+          {
+            "name": "channel_id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "title": "Channel Id" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": { "application/json": { "schema": {} } }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/telegram/bot-file/{credential_id}": {
       "get": {
         "tags": ["telegram"],
@@ -1248,6 +1278,74 @@
           "content": {
             "application/json": {
               "schema": { "$ref": "#/components/schemas/ChatRequest" }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": { "application/json": { "schema": {} } }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        },
+        "security": [{ "OAuth2PasswordBearer": [] }]
+      }
+    },
+    "/api/v1/ai/tag/prompt": {
+      "post": {
+        "tags": ["ai"],
+        "summary": "Api Tag Prompt",
+        "operationId": "ai-api_tag_prompt",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/TagRequest" }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": { "type": "string" },
+                  "type": "object",
+                  "title": "Response Ai-Api Tag Prompt"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        },
+        "security": [{ "OAuth2PasswordBearer": [] }]
+      }
+    },
+    "/api/v1/ai/tag/stream": {
+      "post": {
+        "tags": ["ai"],
+        "summary": "Api Tag Stream",
+        "operationId": "ai-api_tag_stream",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/TagRequest" }
             }
           },
           "required": true
@@ -1572,6 +1670,86 @@
         "security": [{ "OAuth2PasswordBearer": [] }]
       }
     },
+    "/api/v1/data/channels/bulk-sync-settings": {
+      "patch": {
+        "tags": ["data"],
+        "summary": "Bulk Sync Settings Endpoint",
+        "operationId": "data-bulk_sync_settings_endpoint",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BulkSyncSettingsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": { "type": "integer" },
+                  "type": "object",
+                  "title": "Response Data-Bulk Sync Settings Endpoint"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        },
+        "security": [{ "OAuth2PasswordBearer": [] }]
+      }
+    },
+    "/api/v1/data/channels/bulk-tags": {
+      "patch": {
+        "tags": ["data"],
+        "summary": "Bulk Channel Tags Endpoint",
+        "operationId": "data-bulk_channel_tags_endpoint",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BulkChannelTagsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Data-Bulk Channel Tags Endpoint"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        },
+        "security": [{ "OAuth2PasswordBearer": [] }]
+      }
+    },
     "/api/v1/data/channels/{channel_id}/stats": {
       "get": {
         "tags": ["data"],
@@ -1813,6 +1991,114 @@
                   "type": "object",
                   "additionalProperties": { "type": "string" },
                   "title": "Response Data-Delete Summary"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/data/tag-runs": {
+      "get": {
+        "tags": ["data"],
+        "summary": "List Tag Runs",
+        "operationId": "data-list_tag_runs",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": { "additionalProperties": true, "type": "object" },
+                  "type": "array",
+                  "title": "Response Data-List Tag Runs"
+                }
+              }
+            }
+          }
+        },
+        "security": [{ "OAuth2PasswordBearer": [] }]
+      }
+    },
+    "/api/v1/data/tag-runs/{tag_run_id}": {
+      "put": {
+        "tags": ["data"],
+        "summary": "Upsert Tag Run",
+        "operationId": "data-upsert_tag_run",
+        "security": [{ "OAuth2PasswordBearer": [] }],
+        "parameters": [
+          {
+            "name": "tag_run_id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "title": "Tag Run Id" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": true,
+                "title": "Body"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Data-Upsert Tag Run"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": ["data"],
+        "summary": "Delete Tag Run",
+        "operationId": "data-delete_tag_run",
+        "security": [{ "OAuth2PasswordBearer": [] }],
+        "parameters": [
+          {
+            "name": "tag_run_id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "title": "Tag Run Id" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": { "type": "string" },
+                  "title": "Response Data-Delete Tag Run"
                 }
               }
             }
@@ -3192,396 +3478,6 @@
           }
         }
       }
-    },
-    "/api/v1/private/users/": {
-      "post": {
-        "tags": ["private"],
-        "summary": "Create User",
-        "description": "Create a new user.",
-        "operationId": "private-create_user",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": { "$ref": "#/components/schemas/PrivateUserCreate" }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": { "$ref": "#/components/schemas/UserPublic" }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/test-proxy": {
-      "post": {
-        "tags": ["legacy"],
-        "summary": "Legacy Test Proxy",
-        "operationId": "legacy-legacy_test_proxy",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": { "$ref": "#/components/schemas/TestProxyRequest" }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "additionalProperties": true,
-                  "type": "object",
-                  "title": "Response Legacy-Legacy Test Proxy"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
-              }
-            }
-          }
-        },
-        "security": [{ "OAuth2PasswordBearer": [] }]
-      }
-    },
-    "/api/proxy-health": {
-      "get": {
-        "tags": ["legacy"],
-        "summary": "Legacy Proxy Health",
-        "operationId": "legacy-legacy_proxy_health",
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "additionalProperties": true,
-                  "type": "object",
-                  "title": "Response Legacy-Legacy Proxy Health"
-                }
-              }
-            }
-          }
-        },
-        "security": [{ "OAuth2PasswordBearer": [] }]
-      }
-    },
-    "/api/tor-status": {
-      "get": {
-        "tags": ["legacy"],
-        "summary": "Legacy Tor Status",
-        "operationId": "legacy-legacy_tor_status",
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "additionalProperties": true,
-                  "type": "object",
-                  "title": "Response Legacy-Legacy Tor Status"
-                }
-              }
-            }
-          }
-        },
-        "security": [{ "OAuth2PasswordBearer": [] }]
-      }
-    },
-    "/api/tor-ip": {
-      "get": {
-        "tags": ["legacy"],
-        "summary": "Legacy Tor Ip",
-        "operationId": "legacy-legacy_tor_ip",
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "additionalProperties": true,
-                  "type": "object",
-                  "title": "Response Legacy-Legacy Tor Ip"
-                }
-              }
-            }
-          }
-        },
-        "security": [{ "OAuth2PasswordBearer": [] }]
-      }
-    },
-    "/api/tor-restart": {
-      "post": {
-        "tags": ["legacy"],
-        "summary": "Legacy Tor Restart",
-        "operationId": "legacy-legacy_tor_restart",
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "additionalProperties": true,
-                  "type": "object",
-                  "title": "Response Legacy-Legacy Tor Restart"
-                }
-              }
-            }
-          }
-        },
-        "security": [{ "OAuth2PasswordBearer": [] }]
-      }
-    },
-    "/api/tor-new-identity": {
-      "post": {
-        "tags": ["legacy"],
-        "summary": "Legacy Tor New Identity",
-        "operationId": "legacy-legacy_tor_new_identity",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": { "$ref": "#/components/schemas/TorNewIdentityRequest" }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "additionalProperties": true,
-                  "type": "object",
-                  "title": "Response Legacy-Legacy Tor New Identity"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
-              }
-            }
-          }
-        },
-        "security": [{ "OAuth2PasswordBearer": [] }]
-      }
-    },
-    "/api/bot-info": {
-      "post": {
-        "tags": ["legacy"],
-        "summary": "Legacy Bot Info",
-        "operationId": "legacy-legacy_bot_info",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": { "$ref": "#/components/schemas/BotInfoRequest" }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "additionalProperties": true,
-                  "type": "object",
-                  "title": "Response Legacy-Legacy Bot Info"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
-              }
-            }
-          }
-        },
-        "security": [{ "OAuth2PasswordBearer": [] }]
-      }
-    },
-    "/api/publish": {
-      "post": {
-        "tags": ["legacy"],
-        "summary": "Legacy Publish",
-        "operationId": "legacy-legacy_publish",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": { "$ref": "#/components/schemas/PublishRequest" }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "additionalProperties": true,
-                  "type": "object",
-                  "title": "Response Legacy-Legacy Publish"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
-              }
-            }
-          }
-        },
-        "security": [{ "OAuth2PasswordBearer": [] }]
-      }
-    },
-    "/api/channel-info": {
-      "post": {
-        "tags": ["legacy"],
-        "summary": "Legacy Channel Info",
-        "operationId": "legacy-legacy_channel_info",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": { "$ref": "#/components/schemas/ChannelInfoRequest" }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "additionalProperties": true,
-                  "type": "object",
-                  "title": "Response Legacy-Legacy Channel Info"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
-              }
-            }
-          }
-        },
-        "security": [{ "OAuth2PasswordBearer": [] }]
-      }
-    },
-    "/api/scrape": {
-      "post": {
-        "tags": ["legacy"],
-        "summary": "Legacy Scrape",
-        "operationId": "legacy-legacy_scrape",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": { "$ref": "#/components/schemas/ScrapeRequest" }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "additionalProperties": true,
-                  "type": "object",
-                  "title": "Response Legacy-Legacy Scrape"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
-              }
-            }
-          }
-        },
-        "security": [{ "OAuth2PasswordBearer": [] }]
-      }
-    },
-    "/api/resolve-start-time": {
-      "post": {
-        "tags": ["legacy"],
-        "summary": "Legacy Resolve Start Time",
-        "operationId": "legacy-legacy_resolve_start_time",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ResolveStartTimeRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "additionalProperties": true,
-                  "type": "object",
-                  "title": "Response Legacy-Legacy Resolve Start Time"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
-              }
-            }
-          }
-        },
-        "security": [{ "OAuth2PasswordBearer": [] }]
-      }
     }
   },
   "components": {
@@ -3695,6 +3591,31 @@
         "required": ["method"],
         "title": "BotInfoRequest"
       },
+      "BulkChannelTagUpdate": {
+        "properties": {
+          "channelId": { "type": "string", "title": "Channelid" },
+          "tags": {
+            "items": { "additionalProperties": true, "type": "object" },
+            "type": "array",
+            "title": "Tags"
+          }
+        },
+        "type": "object",
+        "required": ["channelId", "tags"],
+        "title": "BulkChannelTagUpdate"
+      },
+      "BulkChannelTagsRequest": {
+        "properties": {
+          "updates": {
+            "items": { "$ref": "#/components/schemas/BulkChannelTagUpdate" },
+            "type": "array",
+            "title": "Updates"
+          }
+        },
+        "type": "object",
+        "required": ["updates"],
+        "title": "BulkChannelTagsRequest"
+      },
       "BulkReresolveStartIdsRequest": {
         "properties": {
           "dryRun": { "type": "boolean", "title": "Dryrun", "default": false },
@@ -3740,6 +3661,35 @@
         },
         "type": "object",
         "title": "BulkResetSyncRequest"
+      },
+      "BulkSyncSettingsRequest": {
+        "properties": {
+          "channelIds": {
+            "anyOf": [
+              { "items": { "type": "string" }, "type": "array" },
+              { "type": "null" }
+            ],
+            "title": "Channelids"
+          },
+          "regularSyncEnabled": {
+            "anyOf": [{ "type": "boolean" }, { "type": "null" }],
+            "title": "Regularsyncenabled"
+          },
+          "dynamicSyncEnabled": {
+            "anyOf": [{ "type": "boolean" }, { "type": "null" }],
+            "title": "Dynamicsyncenabled"
+          },
+          "autoSyncIntervalMinutes": {
+            "anyOf": [{ "type": "integer" }, { "type": "null" }],
+            "title": "Autosyncintervalminutes"
+          },
+          "dynamicSyncExpectedPosts": {
+            "anyOf": [{ "type": "integer" }, { "type": "null" }],
+            "title": "Dynamicsyncexpectedposts"
+          }
+        },
+        "type": "object",
+        "title": "BulkSyncSettingsRequest"
       },
       "CancelSyncJobResponse": {
         "properties": {
@@ -3819,6 +3769,11 @@
             "type": "array",
             "title": "Channels",
             "default": []
+          },
+          "channelsText": {
+            "type": "string",
+            "title": "Channelstext",
+            "default": ""
           },
           "postsText": {
             "type": "string",
@@ -4187,21 +4142,6 @@
         "required": ["token", "new_password"],
         "title": "NewPassword"
       },
-      "PrivateUserCreate": {
-        "properties": {
-          "email": { "type": "string", "title": "Email" },
-          "password": { "type": "string", "title": "Password" },
-          "full_name": { "type": "string", "title": "Full Name" },
-          "is_verified": {
-            "type": "boolean",
-            "title": "Is Verified",
-            "default": false
-          }
-        },
-        "type": "object",
-        "required": ["email", "password", "full_name"],
-        "title": "PrivateUserCreate"
-      },
       "ProxyLaneSnapshot": {
         "properties": {
           "proxyUrl": { "type": "string", "title": "Proxyurl" },
@@ -4514,6 +4454,11 @@
             "type": "array",
             "title": "Channels"
           },
+          "channelsText": {
+            "type": "string",
+            "title": "Channelstext",
+            "default": ""
+          },
           "postsText": { "type": "string", "title": "Poststext" },
           "language": {
             "type": "string",
@@ -4561,10 +4506,21 @@
       },
       "SyncRuntimeSettings": {
         "properties": {
-          "autoSyncEnabled": { "type": "boolean", "title": "Autosyncenabled" },
-          "autoSyncInterval": {
+          "regularSyncIntervalMinutes": {
             "type": "integer",
-            "title": "Autosyncinterval"
+            "title": "Regularsyncintervalminutes"
+          },
+          "dynamicSyncEnabledDefault": {
+            "type": "boolean",
+            "title": "Dynamicsyncenableddefault"
+          },
+          "dynamicSyncExpectedPostsDefault": {
+            "type": "integer",
+            "title": "Dynamicsyncexpectedpostsdefault"
+          },
+          "syncFailureBackoffMinutes": {
+            "type": "integer",
+            "title": "Syncfailurebackoffminutes"
           },
           "syncConcurrency": { "type": "integer", "title": "Syncconcurrency" },
           "consecutiveFailures": {
@@ -4591,12 +4547,60 @@
         },
         "type": "object",
         "required": [
-          "autoSyncEnabled",
-          "autoSyncInterval",
+          "regularSyncIntervalMinutes",
+          "dynamicSyncEnabledDefault",
+          "dynamicSyncExpectedPostsDefault",
+          "syncFailureBackoffMinutes",
           "syncConcurrency",
           "consecutiveFailures"
         ],
         "title": "SyncRuntimeSettings"
+      },
+      "TagRequest": {
+        "properties": {
+          "channels": {
+            "items": { "type": "string" },
+            "type": "array",
+            "title": "Channels"
+          },
+          "channelsText": {
+            "type": "string",
+            "title": "Channelstext",
+            "default": ""
+          },
+          "postsText": { "type": "string", "title": "Poststext" },
+          "allTags": {
+            "type": "string",
+            "title": "Alltags",
+            "default": "(none yet)"
+          },
+          "tagMode": { "type": "string", "title": "Tagmode", "default": "add" },
+          "model": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Model"
+          },
+          "temperature": {
+            "type": "number",
+            "title": "Temperature",
+            "default": 0.7
+          },
+          "provider": {
+            "type": "string",
+            "title": "Provider",
+            "default": "gemini"
+          },
+          "tagsPerChannelMin": {
+            "anyOf": [{ "type": "integer" }, { "type": "null" }],
+            "title": "Tagsperchannelmin"
+          },
+          "tagsPerChannelMax": {
+            "anyOf": [{ "type": "integer" }, { "type": "null" }],
+            "title": "Tagsperchannelmax"
+          }
+        },
+        "type": "object",
+        "required": ["channels", "postsText"],
+        "title": "TagRequest"
       },
       "TestProxyRequest": {
         "properties": { "proxyUrl": { "type": "string", "title": "Proxyurl" } },

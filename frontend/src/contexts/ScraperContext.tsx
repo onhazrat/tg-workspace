@@ -8,11 +8,8 @@ import React, {
 } from "react"
 import { toast } from "sonner"
 import { api, type SyncJobStatus, subscribeSyncJobEvents } from "@/api"
+import { parseApiError, unavailableChannelToastMessage } from "@/lib/api-errors"
 import { env } from "@/lib/env"
-import {
-  parseApiError,
-  unavailableChannelToastMessage,
-} from "@/lib/api-errors"
 import { useApiStatus } from "../hooks/useApiStatus"
 import { useDebouncedValue } from "../hooks/useDebouncedValue"
 import { useSyncQueue } from "../hooks/useSyncQueue"
@@ -766,7 +763,9 @@ export const ScraperProvider: React.FC<{ children: React.ReactNode }> = ({
     await loadChannels()
 
     if (isUnavailableOnWebView) {
-      toast.warning(unavailableChannelToastMessage(cleanName), { duration: 8000 })
+      toast.warning(unavailableChannelToastMessage(cleanName), {
+        duration: 8000,
+      })
     } else {
       toast.success(`Added @${cleanName} to workspace`)
       addToSyncQueue(newChannel, "Manual (Added from Forward)", () => {})

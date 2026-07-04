@@ -10,16 +10,16 @@ from typing import Any
 from fastapi import HTTPException
 from sqlmodel import Session, col, func, select
 
-from app.models_tg import Channel, Post
 from app.jobs.settings import load_sync_settings
-from app.services.channel_tags import normalize_channel_tags
+from app.models_tg import Channel, Post
 from app.services.channel_photos import delete_cached_photo
+from app.services.channel_tags import normalize_channel_tags
 from app.services.serialization import channel_to_camel, normalize_body
+from app.services.sync_meta import touch_sync
 from app.services.sync_schedule import (
     compute_next_dynamic_sync_at_from_last_updated,
     compute_next_regular_sync_at_from_last_updated,
 )
-from app.services.sync_meta import touch_sync
 
 
 def update_channel_coverage(
@@ -113,10 +113,14 @@ def _fetch_recent_timestamps_by_channel(
     *,
     limit: int = 100,
 ) -> dict[str, list[int]]:
-    rn = func.row_number().over(
-        partition_by=Post.channel_name,
-        order_by=col(Post.timestamp).desc(),
-    ).label("rn")
+    rn = (
+        func.row_number()
+        .over(
+            partition_by=Post.channel_name,
+            order_by=col(Post.timestamp).desc(),
+        )
+        .label("rn")
+    )
     ranked = (
         select(Post.channel_name, Post.timestamp, rn).where(
             col(Post.channel_name).in_(channel_names),
@@ -419,13 +423,17 @@ def bulk_update_channel_tags(
     for update in updates:
         channel_id = update.get("channel_id")
         if not isinstance(channel_id, str) or not channel_id.strip():
-            raise HTTPException(status_code=400, detail="Each update requires channelId")
+            raise HTTPException(
+                status_code=400, detail="Each update requires channelId"
+            )
         deduped_updates[channel_id] = update.get("tags", [])
 
     operator_channels = select_operator_channels(session, operator_id=operator_id)
     by_id = {channel.id: channel for channel in operator_channels}
 
-    missing = sorted(channel_id for channel_id in deduped_updates if channel_id not in by_id)
+    missing = sorted(
+        channel_id for channel_id in deduped_updates if channel_id not in by_id
+    )
     if missing:
         raise HTTPException(
             status_code=404,

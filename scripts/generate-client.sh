@@ -8,6 +8,10 @@ cd backend
 # Override with ENVIRONMENT=local when generating a client for Playwright/private routes.
 : "${ENVIRONMENT:=production}"
 ENVIRONMENT="${ENVIRONMENT}" \
+PROJECT_NAME=openapi-export \
+POSTGRES_SERVER=localhost \
+POSTGRES_USER=postgres \
+FIRST_SUPERUSER=admin@example.com \
 SECRET_KEY=openapi-export-secret \
 POSTGRES_PASSWORD=openapi-export-password \
 FIRST_SUPERUSER_PASSWORD=openapi-export-password \

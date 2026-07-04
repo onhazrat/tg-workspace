@@ -28,8 +28,12 @@ def _auth(client: TestClient) -> dict[str, str]:
 
 def test_bulk_sync_settings_apply_to_all(client: TestClient) -> None:
     headers = _auth(client)
-    client.put(f"{PREFIX}/channels/bulk-all-a", json={"name": "bulk-all-a"}, headers=headers)
-    client.put(f"{PREFIX}/channels/bulk-all-b", json={"name": "bulk-all-b"}, headers=headers)
+    client.put(
+        f"{PREFIX}/channels/bulk-all-a", json={"name": "bulk-all-a"}, headers=headers
+    )
+    client.put(
+        f"{PREFIX}/channels/bulk-all-b", json={"name": "bulk-all-b"}, headers=headers
+    )
 
     r = client.patch(
         f"{PREFIX}/channels/bulk-sync-settings",
@@ -53,8 +57,12 @@ def test_bulk_sync_settings_apply_to_all(client: TestClient) -> None:
 
 def test_bulk_sync_settings_apply_to_selected(client: TestClient) -> None:
     headers = _auth(client)
-    client.put(f"{PREFIX}/channels/bulk-sel-a", json={"name": "bulk-sel-a"}, headers=headers)
-    client.put(f"{PREFIX}/channels/bulk-sel-b", json={"name": "bulk-sel-b"}, headers=headers)
+    client.put(
+        f"{PREFIX}/channels/bulk-sel-a", json={"name": "bulk-sel-a"}, headers=headers
+    )
+    client.put(
+        f"{PREFIX}/channels/bulk-sel-b", json={"name": "bulk-sel-b"}, headers=headers
+    )
 
     r = client.patch(
         f"{PREFIX}/channels/bulk-sync-settings",

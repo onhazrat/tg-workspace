@@ -65,10 +65,7 @@ def test_compute_next_dynamic_sync_at_from_last_updated() -> None:
 def test_compute_next_dynamic_sync_at_zero_velocity_returns_none() -> None:
     assert compute_next_dynamic_sync_at(10_000, expected_posts=15, velocity=0.0) is None
     assert compute_next_dynamic_sync_at(0, 15, 0.0) is None
-    assert (
-        compute_next_dynamic_sync_at_from_last_updated(5_000, 15, 0.0, 9_000)
-        is None
-    )
+    assert compute_next_dynamic_sync_at_from_last_updated(5_000, 15, 0.0, 9_000) is None
 
 
 def test_is_channel_due_regular_or_dynamic() -> None:

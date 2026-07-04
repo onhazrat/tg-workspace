@@ -17,8 +17,8 @@ from app.services.channels import compute_channel_stats_batch
 from app.services.network_settings import get_network_setting_row
 from app.services.operator import get_operator_user_id, select_operator_channels
 from app.services.scraper_jobs import create_job, has_active_sync_job
-from app.services.sync_schedule import due_reason, is_channel_due
 from app.services.sync_orchestrator import run_sync_job
+from app.services.sync_schedule import due_reason, is_channel_due
 
 logger = logging.getLogger(__name__)
 
@@ -51,9 +51,7 @@ async def run_auto_sync() -> dict[str, Any]:
         owner_id = (net_row.user_id if net_row else None) or get_operator_user_id(
             session
         )
-        channels = select_operator_channels(
-            session, operator_id=owner_id
-        )
+        channels = select_operator_channels(session, operator_id=owner_id)
         stats_by_channel = compute_channel_stats_batch(
             session, [ch.name for ch in channels]
         )
@@ -160,7 +158,9 @@ async def run_auto_sync() -> dict[str, Any]:
             "dueDynamic": sum(
                 1 for reason in due_reason_by_id.values() if reason == "dynamic"
             ),
-            "dueBoth": sum(1 for reason in due_reason_by_id.values() if reason == "both"),
+            "dueBoth": sum(
+                1 for reason in due_reason_by_id.values() if reason == "both"
+            ),
             "failures": len(failures),
             "successes": len(successes),
             "status": job.status,

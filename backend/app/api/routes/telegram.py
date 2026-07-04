@@ -18,8 +18,8 @@ from app.schemas.telegram import (
     ResolveStartTimeRequest,
     ScrapeRequest,
 )
-from app.services.network import fetch_with_retry, parse_telegram_entities
 from app.services.channel_photos import read_cached_photo
+from app.services.network import fetch_with_retry, parse_telegram_entities
 from app.services.network_settings import (
     load_network_settings,
     resolve_proxies_for_user,

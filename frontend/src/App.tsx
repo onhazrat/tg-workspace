@@ -30,6 +30,7 @@ import { RelativeTime } from "./components/RelativeTime"
 import { SettingsHub } from "./components/SettingsHub"
 import { SummaryView } from "./components/SummaryView"
 import { TagView } from "./components/TagView"
+import { getNextTheme } from "./components/theme-provider"
 import {
   Dialog,
   DialogContent,
@@ -41,7 +42,6 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "./components/ui/tg-tooltip"
-import { getNextTheme } from "./components/theme-provider"
 import { WORKSPACE_TABS } from "./constants"
 import { useAI } from "./contexts/AIContext"
 import { useChatContext } from "./contexts/ChatContext"

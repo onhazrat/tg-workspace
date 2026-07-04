@@ -1,3 +1,5 @@
+import { toast } from "sonner"
+import { api } from "@/api"
 import {
   AUTO_SYNC_INTERVAL_MAX_MINUTES,
   AUTO_SYNC_INTERVAL_MIN_MINUTES,
@@ -5,13 +7,11 @@ import {
   MODELS,
 } from "@/constants"
 import { JOB_LABELS, SERVER_JOB_IDS } from "@/hooks/useJobToggles"
-import { api } from "@/api"
 import type {
   CommandContext,
   CommandDef,
   CommandSettingsSlice,
 } from "@/lib/commands/types"
-import { toast } from "sonner"
 
 type BooleanSettingDef = {
   key: keyof CommandSettingsSlice
@@ -786,7 +786,11 @@ function buildBulkSyncCommands(): CommandDef[] {
           channelIds: null,
           autoSyncIntervalMinutes: minutes,
         })
-        applyBulkSyncPatchLocally(ctx, { autoSyncIntervalMinutes: minutes }, null)
+        applyBulkSyncPatchLocally(
+          ctx,
+          { autoSyncIntervalMinutes: minutes },
+          null,
+        )
         toast.success(`Applied ${minutes}m interval to all channels`)
       },
     },
