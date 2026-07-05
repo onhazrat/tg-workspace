@@ -457,7 +457,8 @@ export const ChannelCard: React.FC<ChannelCardProps> = ({
         {showChannelBio && channel.bio && (
           <div className="mb-4">
             <p
-              className="text-[11px] leading-relaxed text-app-ink/70 line-clamp-2"
+              dir="auto"
+              className="text-[11px] leading-relaxed text-app-ink/70 line-clamp-2 whitespace-pre-wrap"
               title={channel.bio}
             >
               {channel.bio}

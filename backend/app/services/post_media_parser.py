@@ -3,13 +3,13 @@
 from __future__ import annotations
 
 import re
-from copy import copy
 from typing import Any
 
 from bs4 import Tag
 
 from app.schemas.post_media import PostMedia
 from app.services.post_thumbnails import post_thumb_api_path
+from app.services.telegram_html import extract_telegram_html_text
 
 _BACKGROUND_IMAGE_RE = re.compile(r"background-image:\s*url\(['\"]?([^'\"()]+)['\"]?\)")
 _LEGACY_MEDIA_PLACEHOLDER = "[Media/No Text Content]"
@@ -36,10 +36,7 @@ def _extract_caption(el: Tag) -> str | None:
     text_el = el.select_one(".tgme_widget_message_text")
     if not text_el:
         return None
-    text_el = copy(text_el)
-    for br in text_el.find_all("br"):
-        br.replace_with("\n")
-    text = text_el.get_text(strip=True)
+    text = extract_telegram_html_text(text_el)
     return text if text else None
 
 
@@ -192,9 +189,7 @@ def parse_widget_media(
             return caption, None, None
         poll_el = el.select_one(".tgme_widget_message_poll_question")
         if poll_el:
-            for br in poll_el.find_all("br"):
-                br.replace_with("\n")
-            poll_text = poll_el.get_text(strip=True)
+            poll_text = extract_telegram_html_text(poll_el)
             return poll_text or _LEGACY_MEDIA_PLACEHOLDER, None, None
         return _LEGACY_MEDIA_PLACEHOLDER, None, None
 

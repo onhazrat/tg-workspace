@@ -15,6 +15,7 @@ from app.core.config import settings
 from app.services.channel_photos import resolve_cached_photo_url
 from app.services.network import fetch_with_retry
 from app.services.post_media_parser import finalize_post_media_paths, parse_widget_media
+from app.services.telegram_html import extract_telegram_html_text
 
 logger = logging.getLogger(__name__)
 
@@ -121,7 +122,7 @@ def _parse_channel_meta(soup: BeautifulSoup, channel_name: str) -> dict[str, Any
     photo_url = _extract_channel_photo_url(soup)
 
     bio_el = soup.select_one(".tgme_channel_info_description")
-    bio = bio_el.get_text(strip=True) if bio_el else ""
+    bio = extract_telegram_html_text(bio_el) if bio_el else ""
 
     counters: dict[str, str] = {}
     for counter in soup.select(".tgme_channel_info_counter"):
