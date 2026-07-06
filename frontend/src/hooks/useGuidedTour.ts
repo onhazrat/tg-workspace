@@ -86,6 +86,32 @@ export const useGuidedTour = () => {
           },
         },
         {
+          element: "#tour-tab-tag",
+          onHighlightStarted: () => {
+            setActiveTab("tag")
+          },
+          popover: {
+            title: "Tag Channels",
+            description:
+              "Use AI to suggest tags for your selected channels, then preview and apply changes in bulk.",
+            side: "bottom",
+            align: "center",
+          },
+        },
+        {
+          element: "#tour-tab-discover",
+          onHighlightStarted: () => {
+            setActiveTab("discover")
+          },
+          popover: {
+            title: "Discover Forward Sources",
+            description:
+              "See which channels your sources forward from, how often, and follow new ones directly from the results.",
+            side: "bottom",
+            align: "center",
+          },
+        },
+        {
           element: "#tour-tab-chat",
           onHighlightStarted: () => {
             setActiveTab("chat")

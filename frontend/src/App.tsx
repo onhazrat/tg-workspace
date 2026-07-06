@@ -3,6 +3,7 @@ import {
   AlertCircle,
   AlertTriangle,
   Command as CommandIcon,
+  Compass,
   Database,
   FileText,
   HelpCircle,
@@ -24,6 +25,7 @@ import { api } from "@/api"
 import { ChannelGrid } from "./components/ChannelGrid"
 import { ChatView } from "./components/ChatView"
 import { useCommandPaletteContext } from "./components/CommandPaletteProvider"
+import { DiscoverView } from "./components/DiscoverView"
 import { HistoryView } from "./components/HistoryView"
 import { PostFeed } from "./components/PostFeed"
 import { RelativeTime } from "./components/RelativeTime"
@@ -413,6 +415,7 @@ export default function App() {
                         FileText,
                         Activity,
                         Tag,
+                        Compass,
                       }[tab.icon] || Database
 
                     return (
@@ -507,6 +510,8 @@ export default function App() {
                   <ChannelGrid scrollContainerRef={scrollContainerRef} />
                 ) : activeTab === "tag" ? (
                   <TagView />
+                ) : activeTab === "discover" ? (
+                  <DiscoverView />
                 ) : activeTab === "summary" ? (
                   <SummaryView />
                 ) : activeTab === "settings" ? (

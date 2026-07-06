@@ -302,6 +302,7 @@ export type TabType =
   | "posts"
   | "channels"
   | "tag"
+  | "discover"
   | "history"
   | "db"
   | "chat"

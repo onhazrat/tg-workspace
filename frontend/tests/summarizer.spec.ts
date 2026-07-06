@@ -129,6 +129,43 @@ test.describe("TG Summarizer", () => {
     await expect(page.getByRole("heading", { name: "Preview" })).toBeVisible()
   })
 
+  test("discover tab opens Discover view", async ({ page }) => {
+    await page.goto("/summarizer?tab=summary")
+    await page.locator("#tour-tab-discover").click()
+
+    await expect(page).toHaveURL(/tab=discover/)
+    await expect(page.locator("#tour-tab-discover")).toHaveClass(
+      /border-app-ink/,
+    )
+    await expect(
+      page.getByRole("heading", { name: "Forward Sources" }),
+    ).toBeVisible()
+  })
+
+  test("discover tab loads from ?tab=discover URL", async ({ page }) => {
+    await page.goto("/summarizer?tab=discover")
+
+    await expect(page).toHaveURL(/tab=discover/)
+    await expect(page.locator("#tour-tab-discover")).toHaveClass(
+      /border-app-ink/,
+    )
+    await expect(
+      page.getByRole("heading", { name: "Discovery Scope" }),
+    ).toBeVisible()
+  })
+
+  test("discover tab shows original-only empty guide", async ({ page }) => {
+    await gotoSummarizer(page, "posts")
+    await page.getByRole("button", { name: "Original Only" }).click()
+    await page.locator("#tour-tab-discover").click()
+
+    await expect(page).toHaveURL(/tab=discover/)
+    await expect(page.getByText(/forward metadata/i)).toBeVisible()
+    await expect(
+      page.getByRole("button", { name: "Show all posts" }),
+    ).toBeVisible()
+  })
+
   test("tag tab paste applies tags for all selected channels", async ({
     page,
   }) => {

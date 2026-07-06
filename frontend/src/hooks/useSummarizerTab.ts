@@ -7,6 +7,7 @@ const VALID_TABS: TabType[] = [
   "posts",
   "channels",
   "tag",
+  "discover",
   "history",
   "chat",
   "settings",
