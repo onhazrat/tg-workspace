@@ -44,10 +44,36 @@ function sortForwardedBy(
   })
 }
 
-function sortCandidates(
+export type DiscoverSortKey = "postCount" | "lastSeen" | "forwardedByCount"
+
+export const DISCOVER_SORT_OPTIONS: {
+  label: string
+  value: DiscoverSortKey
+}[] = [
+  { label: "Forwards", value: "postCount" },
+  { label: "Last seen", value: "lastSeen" },
+  { label: "Forwarded by", value: "forwardedByCount" },
+]
+
+export function sortForwardSourceCandidates(
   candidates: ForwardSourceCandidate[],
+  sortKey: DiscoverSortKey = "postCount",
 ): ForwardSourceCandidate[] {
   return [...candidates].sort((a, b) => {
+    if (sortKey === "postCount") {
+      if (b.postCount !== a.postCount) return b.postCount - a.postCount
+      if (b.forwardedByCount !== a.forwardedByCount) {
+        return b.forwardedByCount - a.forwardedByCount
+      }
+      return b.lastSeen - a.lastSeen
+    }
+
+    if (sortKey === "lastSeen") {
+      if (b.lastSeen !== a.lastSeen) return b.lastSeen - a.lastSeen
+      if (b.postCount !== a.postCount) return b.postCount - a.postCount
+      return b.forwardedByCount - a.forwardedByCount
+    }
+
     if (b.forwardedByCount !== a.forwardedByCount) {
       return b.forwardedByCount - a.forwardedByCount
     }
@@ -159,7 +185,7 @@ export function computeForwardSourceDiscovery(
     }
   }
 
-  return { candidates: sortCandidates(candidates) }
+  return { candidates: sortForwardSourceCandidates(candidates) }
 }
 
 export function countForwardPosts(filteredPosts: Post[]): number {

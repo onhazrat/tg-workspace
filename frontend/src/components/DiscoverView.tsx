@@ -1,7 +1,7 @@
 import { Compass, Plus } from "lucide-react"
 import { motion } from "motion/react"
 import type React from "react"
-import { useMemo } from "react"
+import { useMemo, useState } from "react"
 import {
   type DiscoveryQuickAction,
   FORWARDED_FILTER_LABELS,
@@ -11,6 +11,9 @@ import {
   computeForwardSourceDiscovery,
   countForwardPosts,
   countUnfollowedSources,
+  DISCOVER_SORT_OPTIONS,
+  type DiscoverSortKey,
+  sortForwardSourceCandidates,
 } from "@/lib/posts/discover-forward-sources"
 import { formatDateToLocalISO } from "@/lib/utils"
 import { useData } from "../contexts/DataContext"
@@ -32,8 +35,9 @@ export const DiscoverView: React.FC = () => {
   } = useScraper()
   const { setActiveTab, startDate, endDate } = useUI()
   const { isOffline } = useApiStatus()
+  const [sortKey, setSortKey] = useState<DiscoverSortKey>("postCount")
 
-  const { candidates, emptyReason } = useMemo(
+  const { candidates: rawCandidates, emptyReason } = useMemo(
     () =>
       computeForwardSourceDiscovery(filteredPosts, channels, {
         forwardedFilter,
@@ -47,6 +51,11 @@ export const DiscoverView: React.FC = () => {
       selectedChannels.size,
       semanticSearchQuery,
     ],
+  )
+
+  const candidates = useMemo(
+    () => sortForwardSourceCandidates(rawCandidates, sortKey),
+    [rawCandidates, sortKey],
   )
 
   const emptyState = resolveDiscoveryEmptyState(emptyReason)
@@ -133,14 +142,38 @@ export const DiscoverView: React.FC = () => {
       </section>
 
       <div className="rounded-xl border border-app-ink/10 bg-app-card p-4 shadow-sm">
-        <h3 className="mb-3 text-sm font-bold uppercase tracking-widest text-app-ink/70">
-          Forward Sources
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+          <h3 className="text-sm font-bold uppercase tracking-widest text-app-ink/70">
+            Forward Sources
+            {candidates.length > 0 ? (
+              <span className="ml-2 font-normal normal-case tracking-normal text-app-ink/60">
+                ({candidates.length} source{candidates.length === 1 ? "" : "s"})
+              </span>
+            ) : null}
+          </h3>
           {candidates.length > 0 ? (
-            <span className="ml-2 font-normal normal-case tracking-normal text-app-ink/60">
-              ({candidates.length} source{candidates.length === 1 ? "" : "s"})
-            </span>
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-[11px] font-bold uppercase tracking-widest text-app-ink/50">
+                Sort by
+              </span>
+              {DISCOVER_SORT_OPTIONS.map((option) => (
+                <button
+                  key={option.value}
+                  type="button"
+                  data-testid={`discover-sort-${option.value}`}
+                  onClick={() => setSortKey(option.value)}
+                  className={`text-[11px] uppercase font-bold px-4 py-1.5 rounded-full border transition-all shadow-sm ${
+                    sortKey === option.value
+                      ? "bg-app-ink text-app-bg border-app-ink"
+                      : "bg-app-muted border-app-ink/10 hover:border-app-ink/30 hover:bg-app-ink/5 text-app-ink"
+                  }`}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
           ) : null}
-        </h3>
+        </div>
 
         {candidates.length === 0 && emptyState ? (
           <div className="space-y-3">

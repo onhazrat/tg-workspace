@@ -1,6 +1,10 @@
 import { describe, expect, test } from "bun:test"
 
-import { computeForwardSourceDiscovery } from "@/lib/posts/discover-forward-sources"
+import {
+  computeForwardSourceDiscovery,
+  type ForwardSourceCandidate,
+  sortForwardSourceCandidates,
+} from "@/lib/posts/discover-forward-sources"
 import type { Channel, Post } from "@/types"
 
 function makePost(
@@ -267,7 +271,7 @@ describe("computeForwardSourceDiscovery", () => {
     expect(result.emptyReason).toBe("no_unfollowed_sources")
   })
 
-  test("sorts by forwardedByCount then postCount then lastSeen", () => {
+  test("default sorts by postCount then forwardedByCount then lastSeen", () => {
     const posts = [
       makePost({
         id: 1,
@@ -307,5 +311,106 @@ describe("computeForwardSourceDiscovery", () => {
     })
 
     expect(result.candidates.map((c) => c.name)).toEqual(["high", "mid", "low"])
+  })
+
+  test("postCount sort ranks total forwards above channel spread", () => {
+    const posts = [
+      ...Array.from({ length: 5 }, (_, index) =>
+        makePost({
+          id: index + 1,
+          channelName: "only",
+          timestamp: 100 + index,
+          forwardedFrom: "manyForwards",
+        }),
+      ),
+      makePost({
+        id: 10,
+        channelName: "a",
+        timestamp: 900,
+        forwardedFrom: "wideSpread",
+      }),
+      makePost({
+        id: 11,
+        channelName: "b",
+        timestamp: 800,
+        forwardedFrom: "wideSpread",
+      }),
+      makePost({
+        id: 12,
+        channelName: "c",
+        timestamp: 700,
+        forwardedFrom: "wideSpread",
+      }),
+    ]
+
+    const result = computeForwardSourceDiscovery(posts, [], {
+      forwardedFilter: "forwarded",
+      selectedChannelCount: 4,
+    })
+
+    expect(result.candidates.map((c) => c.name)).toEqual([
+      "manyForwards",
+      "wideSpread",
+    ])
+  })
+})
+
+describe("sortForwardSourceCandidates", () => {
+  const candidates: ForwardSourceCandidate[] = [
+    {
+      name: "manyForwards",
+      postCount: 5,
+      forwardedByCount: 1,
+      lastSeen: 100,
+      forwardedBy: [{ channelName: "only", count: 5 }],
+      isFollowed: false,
+      samplePost: { channelName: "only", postId: 1, timestamp: 100 },
+    },
+    {
+      name: "wideSpread",
+      postCount: 3,
+      forwardedByCount: 3,
+      lastSeen: 900,
+      forwardedBy: [
+        { channelName: "a", count: 1 },
+        { channelName: "b", count: 1 },
+        { channelName: "c", count: 1 },
+      ],
+      isFollowed: false,
+      samplePost: { channelName: "a", postId: 10, timestamp: 900 },
+    },
+    {
+      name: "stale",
+      postCount: 1,
+      forwardedByCount: 1,
+      lastSeen: 50,
+      forwardedBy: [{ channelName: "x", count: 1 }],
+      isFollowed: false,
+      samplePost: { channelName: "x", postId: 20, timestamp: 50 },
+    },
+  ]
+
+  test("postCount desc is default", () => {
+    expect(
+      sortForwardSourceCandidates(candidates).map(
+        (candidate) => candidate.name,
+      ),
+    ).toEqual(["manyForwards", "wideSpread", "stale"])
+  })
+
+  test("forwardedByCount desc breaks ties by postCount then lastSeen", () => {
+    expect(
+      sortForwardSourceCandidates(candidates, "forwardedByCount").map(
+        (candidate) => candidate.name,
+      ),
+    ).toEqual(["wideSpread", "manyForwards", "stale"])
+  })
+
+  test("lastSeen desc breaks ties by postCount then forwardedByCount", () => {
+    expect(
+      sortForwardSourceCandidates(candidates, "lastSeen").map(
+        (candidate) => candidate.name,
+      ),
+    ).toEqual(["wideSpread", "manyForwards", "stale"])
   })
 })
