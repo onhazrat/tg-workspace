@@ -625,13 +625,13 @@ def list_setting_groups(
     from app.services.operator import distinct_operator_setting_group_ids
 
     ensure_builtin_groups(session, user_id=operator_id)
-    merged = 0
     if _legacy_reserved_duplicates_exist(session, user_id=operator_id):
-        merged = consolidate_legacy_duplicate_reserved_groups(
+        consolidate_legacy_duplicate_reserved_groups(
             session, user_id=operator_id
         )
-    if session.new or session.dirty or session.deleted or merged:
-        session.commit()
+    # ensure_builtin_groups uses flush(); session.new is empty afterward, so always
+    # commit so built-in rows survive when the request-scoped session closes.
+    session.commit()
 
     groups = list(
         session.exec(
