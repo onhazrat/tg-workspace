@@ -332,18 +332,10 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
     [settingGroups],
   )
 
-  const ensureFrozenGroupId = async (): Promise<string> => {
-    const existing = settingGroups.find((group) => group.name === "Frozen")
-    if (existing) return existing.id
-    const created = await api.createSettingGroup({
-      name: "Frozen",
-      isFrozen: true,
-      regularSyncEnabled: false,
-      dynamicSyncEnabled: false,
-    })
-    setSettingGroups((prev) => [...prev, created])
-    return created.id
-  }
+  const frozenGroupId = useMemo(
+    () => settingGroups.find((group) => group.name === "Frozen")?.id ?? "",
+    [settingGroups],
+  )
 
   const applyBulkGroupAssignment = async (settingGroupId: string) => {
     if (!settingGroupId || selectedChannelIds.length === 0) return
@@ -400,7 +392,7 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
   }
 
   const handleBulkFreeze = async () => {
-    const frozenGroupId = await ensureFrozenGroupId()
+    if (!frozenGroupId) return
     await applyBulkGroupAssignment(frozenGroupId)
   }
 

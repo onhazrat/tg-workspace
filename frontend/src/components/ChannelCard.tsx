@@ -149,13 +149,7 @@ export const ChannelCard: React.FC<ChannelCardProps> = ({
     const groups = await api.listSettingGroups()
     const targetGroup = channel.isFrozen
       ? groups.find((group) => group.isDefault)
-      : (groups.find((group) => group.name === "Frozen") ??
-        (await api.createSettingGroup({
-          name: "Frozen",
-          isFrozen: true,
-          regularSyncEnabled: false,
-          dynamicSyncEnabled: false,
-        })))
+      : groups.find((group) => group.name === "Frozen")
     if (!targetGroup) return
     await api.bulkAssignSettingGroup({
       channelIds: [channel.id],

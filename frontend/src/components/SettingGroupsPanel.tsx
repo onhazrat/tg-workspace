@@ -9,6 +9,11 @@ import {
 } from "@/constants"
 import type { ChannelSettingGroup } from "@/types"
 
+const isReservedGroup = (group: ChannelSettingGroup): boolean =>
+  group.isDefault ||
+  group.name === "Frozen" ||
+  group.name === "Restricted"
+
 const emptyDraft = (): SettingGroupWriteBody => ({
   name: "",
   regularSyncEnabled: true,
@@ -113,7 +118,7 @@ export const SettingGroupsPanel: React.FC = () => {
   }
 
   const handleDelete = async () => {
-    if (!selectedId || !selectedGroup || selectedGroup.isDefault) return
+    if (!selectedId || !selectedGroup || isReservedGroup(selectedGroup)) return
     setBusy(true)
     try {
       await api.deleteSettingGroup(selectedId)
@@ -179,7 +184,7 @@ export const SettingGroupsPanel: React.FC = () => {
                   </span>
                   <input
                     value={draft.name ?? ""}
-                    disabled={selectedGroup.isDefault}
+                    disabled={isReservedGroup(selectedGroup)}
                     onChange={(e) =>
                       setDraft((prev) => ({ ...prev, name: e.target.value }))
                     }
@@ -265,7 +270,7 @@ export const SettingGroupsPanel: React.FC = () => {
                 >
                   Save group
                 </button>
-                {!selectedGroup.isDefault && (
+                {!isReservedGroup(selectedGroup) && (
                   <button
                     type="button"
                     disabled={busy}
@@ -277,7 +282,7 @@ export const SettingGroupsPanel: React.FC = () => {
                   </button>
                 )}
               </div>
-              {!selectedGroup.isDefault &&
+              {!isReservedGroup(selectedGroup) &&
                 (selectedGroup.channelCount ?? 0) > 0 && (
                   <p className="text-[10px] text-amber-700/80">
                     Move all {selectedGroup.channelCount} channel(s) to another

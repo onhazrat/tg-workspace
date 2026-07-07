@@ -100,6 +100,55 @@ def test_setting_groups_crud_and_guards(client: TestClient) -> None:
     assert deleted.status_code == 200
 
 
+def test_setting_groups_always_include_reserved_with_zero_count(
+    client: TestClient,
+) -> None:
+    headers = _auth(client)
+    listed = client.get(f"{PREFIX}/setting-groups", headers=headers)
+    assert listed.status_code == 200
+    groups = listed.json()
+    names = {group["name"] for group in groups}
+    assert "default" in names
+    assert "Restricted" in names
+    assert "Frozen" in names
+    restricted = next(group for group in groups if group["name"] == "Restricted")
+    frozen = next(group for group in groups if group["name"] == "Frozen")
+    assert restricted["channelCount"] == 0
+    assert frozen["channelCount"] == 0
+
+
+def test_setting_groups_block_reserved_names_and_deletion(
+    client: TestClient,
+) -> None:
+    headers = _auth(client)
+    listed = client.get(f"{PREFIX}/setting-groups", headers=headers).json()
+    default_group = next(group for group in listed if group["isDefault"])
+    restricted_group = next(group for group in listed if group["name"] == "Restricted")
+    frozen_group = next(group for group in listed if group["name"] == "Frozen")
+
+    for reserved_name in ("Frozen", "Restricted", "default"):
+        created = client.post(
+            f"{PREFIX}/setting-groups",
+            json={"name": reserved_name},
+            headers=headers,
+        )
+        assert created.status_code == 400
+
+    for group in (restricted_group, frozen_group):
+        deleted = client.delete(
+            f"{PREFIX}/setting-groups/{group['id']}",
+            headers=headers,
+        )
+        assert deleted.status_code == 400
+        assert "cannot be deleted" in deleted.json()["detail"].lower()
+
+    delete_default = client.delete(
+        f"{PREFIX}/setting-groups/{default_group['id']}",
+        headers=headers,
+    )
+    assert delete_default.status_code == 400
+
+
 def test_channel_put_rejects_inherited_fields(client: TestClient) -> None:
     headers = _auth(client)
     client.put(

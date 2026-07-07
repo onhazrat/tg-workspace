@@ -97,7 +97,11 @@ INHERITED_SNAKE_FIELDS = frozenset(
 )
 
 RESTRICTED_GROUP_NAME = "Restricted"
+FROZEN_GROUP_NAME = "Frozen"
 DEFAULT_GROUP_NAME = "default"
+RESERVED_GROUP_NAMES = frozenset(
+    {DEFAULT_GROUP_NAME, RESTRICTED_GROUP_NAME, FROZEN_GROUP_NAME}
+)
 
 
 def channel_is_frozen(
@@ -117,6 +121,18 @@ def default_group_id_for_user(user_id: uuid.UUID | None) -> str:
 
 def restricted_group_id_for_user(user_id: uuid.UUID | None) -> str:
     return f"restricted-{scope_key(user_id)}"
+
+
+def frozen_group_id_for_user(user_id: uuid.UUID | None) -> str:
+    return f"frozen-{scope_key(user_id)}"
+
+
+def is_reserved_group_id(group_id: str) -> bool:
+    return (
+        group_id.startswith("default-")
+        or group_id.startswith("restricted-")
+        or group_id.startswith("frozen-")
+    )
 
 
 def reject_inherited_channel_fields(body: dict[str, Any]) -> None:
@@ -201,6 +217,41 @@ def get_or_create_restricted_group(
     return group
 
 
+def get_or_create_frozen_group(
+    session: Session, *, user_id: uuid.UUID | None
+) -> ChannelSettingGroup:
+    group_id = frozen_group_id_for_user(user_id)
+    existing = session.get(ChannelSettingGroup, group_id)
+    if existing:
+        return existing
+    values = default_group_field_values(session)
+    group = ChannelSettingGroup(
+        id=group_id,
+        user_id=user_id,
+        name=FROZEN_GROUP_NAME,
+        is_default=False,
+        regular_sync_enabled=False,
+        dynamic_sync_enabled=False,
+        is_frozen=True,
+        is_unavailable_on_web_view=False,
+        auto_sync_interval_minutes=values["auto_sync_interval_minutes"],
+        dynamic_sync_expected_posts=values["dynamic_sync_expected_posts"],
+        auto_follow_forwarded=False,
+    )
+    session.add(group)
+    session.flush()
+    return group
+
+
+def ensure_reserved_groups(
+    session: Session, *, user_id: uuid.UUID | None
+) -> tuple[ChannelSettingGroup, ChannelSettingGroup, ChannelSettingGroup]:
+    default_group = ensure_default_group(session, user_id=user_id)
+    restricted_group = get_or_create_restricted_group(session, user_id=user_id)
+    frozen_group = get_or_create_frozen_group(session, user_id=user_id)
+    return default_group, restricted_group, frozen_group
+
+
 def get_group_for_channel(session: Session, channel: Channel) -> ChannelSettingGroup:
     group = session.get(ChannelSettingGroup, channel.setting_group_id)
     if not group:
@@ -263,7 +314,9 @@ def effective_channel_fields(group: ChannelSettingGroup) -> dict[str, Any]:
 
 def apply_group_fields(group: ChannelSettingGroup, body: dict[str, Any]) -> None:
     normalized = normalize_body(body)
-    if "name" in normalized and group.is_default:
+    if "name" in normalized and (
+        group.is_default or is_reserved_group_id(group.id)
+    ):
         normalized.pop("name", None)
     if "name" in normalized:
         name = str(normalized["name"]).strip()
@@ -334,10 +387,16 @@ def list_setting_groups(
 ) -> list[dict[str, Any]]:
     from app.services.operator import select_operator_channels
 
+    default_group, restricted_group, frozen_group = ensure_reserved_groups(
+        session, user_id=operator_id
+    )
+    session.commit()
+
     operator_channels = select_operator_channels(session, operator_id=operator_id)
     group_ids = {channel.setting_group_id for channel in operator_channels}
-    if not group_ids:
-        return []
+    group_ids.update(
+        {default_group.id, restricted_group.id, frozen_group.id}
+    )
 
     groups = session.exec(
         select(ChannelSettingGroup).where(col(ChannelSettingGroup.id).in_(group_ids))
@@ -360,10 +419,10 @@ def create_setting_group(
     name = str(normalized.get("name", "")).strip()
     if not name:
         raise HTTPException(status_code=400, detail="Group name is required")
-    if name.lower() == DEFAULT_GROUP_NAME:
+    if name.lower() in {reserved.lower() for reserved in RESERVED_GROUP_NAMES}:
         raise HTTPException(
             status_code=400,
-            detail="Reserved group name; use the built-in default group",
+            detail=f"Reserved group name; built-in group '{name}' already exists",
         )
 
     group_id = str(uuid.uuid4())
@@ -416,6 +475,11 @@ def delete_setting_group(session: Session, group_id: str) -> dict[str, str]:
         raise HTTPException(
             status_code=400,
             detail="The default setting group cannot be deleted",
+        )
+    if is_reserved_group_id(group_id):
+        raise HTTPException(
+            status_code=400,
+            detail=f"The built-in '{group.name}' setting group cannot be deleted",
         )
 
     channel_count = session.exec(
