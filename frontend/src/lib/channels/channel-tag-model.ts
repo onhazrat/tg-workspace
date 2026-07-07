@@ -62,6 +62,9 @@ export function addManualTag(
 ): ChannelTag[] {
   const name = normalizeTagName(rawName)
   if (!name) return normalizeChannelTags(existing)
+  if (name.toLowerCase().startsWith("group:")) {
+    return normalizeChannelTags(existing)
+  }
   const normalized = normalizeChannelTags(existing)
   if (normalized.some((tag) => tag.name.toLowerCase() === name.toLowerCase())) {
     return normalized

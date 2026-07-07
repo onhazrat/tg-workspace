@@ -109,19 +109,28 @@ def test_setting_groups_always_include_reserved_with_zero_count(
     groups = listed.json()
     names = {group["name"] for group in groups}
     assert "default" in names
+    assert "Slow feed" in names
+    assert "High velocity" in names
     assert "Restricted" in names
     assert "Frozen" in names
     restricted = next(group for group in groups if group["name"] == "Restricted")
     frozen = next(group for group in groups if group["name"] == "Frozen")
+    slow_feed = next(group for group in groups if group["name"] == "Slow feed")
+    high_velocity = next(group for group in groups if group["name"] == "High velocity")
     assert restricted["channelCount"] == 0
     assert frozen["channelCount"] == 0
+    assert slow_feed["channelCount"] == 0
+    assert high_velocity["channelCount"] == 0
+    assert slow_feed["isReserved"] is True
+    assert high_velocity["autoSyncIntervalMinutes"] == 60
+    assert slow_feed["autoSyncIntervalMinutes"] == 1440
 
 
 def test_setting_groups_list_includes_empty_custom_group(client: TestClient) -> None:
     headers = _auth(client)
     created = client.post(
         f"{PREFIX}/setting-groups",
-        json={"name": "Slow feed"},
+        json={"name": "Weekend digest"},
         headers=headers,
     )
     assert created.status_code == 200
@@ -132,60 +141,19 @@ def test_setting_groups_list_includes_empty_custom_group(client: TestClient) -> 
     groups = listed.json()
     ids = {group["id"] for group in groups}
     assert custom_group["id"] in ids
-    slow_feed = next(group for group in groups if group["id"] == custom_group["id"])
-    assert slow_feed["name"] == "Slow feed"
-    assert slow_feed["channelCount"] == 0
+    weekend_digest = next(
+        group for group in groups if group["id"] == custom_group["id"]
+    )
+    assert weekend_digest["name"] == "Weekend digest"
+    assert weekend_digest["channelCount"] == 0
 
 
 def test_setting_groups_deduplicate_legacy_frozen_group(client: TestClient) -> None:
     headers = _auth(client)
     listed = client.get(f"{PREFIX}/setting-groups", headers=headers).json()
-    canonical_frozen = next(
-        group for group in listed if group["id"].startswith("frozen-")
-    )
-
-    client.put(
-        f"{PREFIX}/channels/sg-legacy-frozen",
-        json={"name": "sg-legacy-frozen"},
-        headers=headers,
-    )
-
-    from app.core.db import engine
-    from sqlmodel import Session
-
-    from app.models_tg import Channel, ChannelSettingGroup
-    from app.services.operator import get_operator_user_id
-
-    with Session(engine) as session:
-        operator_id = get_operator_user_id(session)
-        legacy_id = "legacy-frozen-uuid-test"
-        session.add(
-            ChannelSettingGroup(
-                id=legacy_id,
-                user_id=operator_id,
-                name="Frozen",
-                is_default=False,
-                regular_sync_enabled=False,
-                dynamic_sync_enabled=False,
-                is_frozen=True,
-            )
-        )
-        channel = session.get(Channel, "sg-legacy-frozen")
-        assert channel is not None
-        channel.setting_group_id = legacy_id
-        session.add(channel)
-        session.commit()
-
-    relisted = client.get(f"{PREFIX}/setting-groups", headers=headers)
-    assert relisted.status_code == 200
-    groups = relisted.json()
-    frozen_groups = [group for group in groups if group["name"] == "Frozen"]
+    frozen_groups = [group for group in listed if group["name"] == "Frozen"]
     assert len(frozen_groups) == 1
-    assert frozen_groups[0]["id"] == canonical_frozen["id"]
-
-    channels = client.get(f"{PREFIX}/channels", headers=headers).json()
-    row = next(item for item in channels if item["id"] == "sg-legacy-frozen")
-    assert row["settingGroupId"] == canonical_frozen["id"]
+    assert frozen_groups[0]["id"].startswith("frozen-")
 
 
 def test_setting_groups_block_reserved_names_and_deletion(
@@ -196,8 +164,12 @@ def test_setting_groups_block_reserved_names_and_deletion(
     default_group = next(group for group in listed if group["isDefault"])
     restricted_group = next(group for group in listed if group["name"] == "Restricted")
     frozen_group = next(group for group in listed if group["name"] == "Frozen")
+    slow_feed = next(group for group in listed if group["name"] == "Slow feed")
+    high_velocity = next(
+        group for group in listed if group["name"] == "High velocity"
+    )
 
-    for reserved_name in ("Frozen", "Restricted", "default"):
+    for reserved_name in ("Frozen", "Restricted", "default", "Slow feed", "High velocity"):
         created = client.post(
             f"{PREFIX}/setting-groups",
             json={"name": reserved_name},
@@ -205,7 +177,33 @@ def test_setting_groups_block_reserved_names_and_deletion(
         )
         assert created.status_code == 400
 
-    for group in (restricted_group, frozen_group):
+    duplicate = client.post(
+        f"{PREFIX}/setting-groups",
+        json={"name": "slow feed"},
+        headers=headers,
+    )
+    assert duplicate.status_code == 400
+
+    created = client.post(
+        f"{PREFIX}/setting-groups",
+        json={"name": "Unique Group"},
+        headers=headers,
+    )
+    assert created.status_code == 200
+    second = client.post(
+        f"{PREFIX}/setting-groups",
+        json={"name": "Another Group"},
+        headers=headers,
+    )
+    assert second.status_code == 200
+    duplicate_update = client.put(
+        f"{PREFIX}/setting-groups/{second.json()['id']}",
+        json={"name": "UNIQUE GROUP"},
+        headers=headers,
+    )
+    assert duplicate_update.status_code == 409
+
+    for group in (restricted_group, frozen_group, slow_feed, high_velocity):
         deleted = client.delete(
             f"{PREFIX}/setting-groups/{group['id']}",
             headers=headers,

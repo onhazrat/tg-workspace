@@ -1,5 +1,6 @@
 import { getTagNames } from "@/lib/channels/channel-tag-model"
 import { collectAllChannelTags } from "@/lib/channels/channel-tags"
+import { getSettingGroupEntityCandidates } from "@/lib/commands/group-commands"
 import type { CommandContext, EntityFlowType } from "@/lib/commands/types"
 import type { Channel, Post, Summary } from "@/types"
 
@@ -37,9 +38,21 @@ export function getExtendedEntityCandidates(
           id: channel.name,
           label: `@${channel.name}`,
         }))
+    case "filter-by-setting-group":
+    case "move-to-setting-group":
+    case "open-setting-group":
+      return getSettingGroupEntityCandidates(ctx, "")
     default:
       return []
   }
+}
+
+export function isSettingGroupEntityFlow(flow: EntityFlowType): boolean {
+  return (
+    flow === "filter-by-setting-group" ||
+    flow === "move-to-setting-group" ||
+    flow === "open-setting-group"
+  )
 }
 
 export function isNonChannelEntityFlow(flow: EntityFlowType): boolean {
@@ -47,7 +60,8 @@ export function isNonChannelEntityFlow(flow: EntityFlowType): boolean {
     flow === "delete-summary" ||
     flow === "pick-post" ||
     flow === "clear-db-table" ||
-    flow === "remove-tag-pick"
+    flow === "remove-tag-pick" ||
+    isSettingGroupEntityFlow(flow)
   )
 }
 

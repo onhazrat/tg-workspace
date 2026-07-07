@@ -19,9 +19,6 @@ export interface AddChannelNetworkSettings {
   torProxyUrls: string
   torAutoRotate: boolean
   torRotationThreshold: number
-  regularSyncIntervalMinutes: number
-  dynamicSyncEnabledDefault: boolean
-  dynamicSyncExpectedPostsDefault: number
 }
 
 export interface AddChannelContext {
@@ -50,10 +47,6 @@ export function toAddChannelContext(ctx: CommandContext): AddChannelContext {
       torProxyUrls: ctx.settings.torProxyUrls,
       torAutoRotate: ctx.settings.torAutoRotate,
       torRotationThreshold: ctx.settings.torRotationThreshold,
-      regularSyncIntervalMinutes: ctx.settings.regularSyncIntervalMinutes,
-      dynamicSyncEnabledDefault: ctx.settings.dynamicSyncEnabledDefault,
-      dynamicSyncExpectedPostsDefault:
-        ctx.settings.dynamicSyncExpectedPostsDefault,
     },
   }
 }
@@ -174,16 +167,8 @@ export async function addChannelByName(
     lastUpdated: Date.now(),
     followedAt: Date.now(),
     tags: [],
-    autoFollowForwarded: false,
-    regularSyncEnabled: !isUnavailableOnWebView,
-    dynamicSyncEnabled: isUnavailableOnWebView
-      ? false
-      : ctx.settings.dynamicSyncEnabledDefault,
-    autoSyncIntervalMinutes: ctx.settings.regularSyncIntervalMinutes,
-    dynamicSyncExpectedPosts: ctx.settings.dynamicSyncExpectedPostsDefault,
     nextRegularSyncAt: null,
     nextDynamicSyncAt: null,
-    isFrozen: isUnavailableOnWebView,
     isUnavailableOnWebView,
   }
 

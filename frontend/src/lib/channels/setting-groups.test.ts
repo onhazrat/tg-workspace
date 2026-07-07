@@ -3,7 +3,10 @@ import type { ChannelSettingGroup } from "@/types"
 import {
   findFrozenReservedGroup,
   isFrozenReservedGroup,
+  isHighVelocityReservedGroup,
   isReservedSettingGroup,
+  isSlowFeedReservedGroup,
+  sortSettingGroupsForDisplay,
 } from "./setting-groups"
 
 const frozenGroup = (id: string): ChannelSettingGroup => ({
@@ -35,5 +38,29 @@ describe("setting group helpers", () => {
       frozenGroup("frozen-global"),
     ]
     expect(findFrozenReservedGroup(groups)?.id).toBe("frozen-global")
+  })
+
+  it("detects builtin preset groups and sorts them", () => {
+    const groups = [
+      { ...frozenGroup("frozen-global"), name: "Frozen" },
+      {
+        ...frozenGroup("slow-feed-global"),
+        id: "slow-feed-global",
+        name: "Slow feed",
+        isFrozen: false,
+      },
+      {
+        ...frozenGroup("default-global"),
+        id: "default-global",
+        name: "default",
+        isDefault: true,
+        isFrozen: false,
+      },
+    ]
+    expect(isSlowFeedReservedGroup(groups[1]!)).toBe(true)
+    expect(isHighVelocityReservedGroup(groups[1]!)).toBe(false)
+    expect(sortSettingGroupsForDisplay(groups).map((group) => group.name)).toEqual(
+      ["default", "Slow feed", "Frozen"],
+    )
   })
 })

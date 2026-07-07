@@ -108,6 +108,7 @@ export interface ChannelSettingGroup {
   id: string
   name: string
   isDefault: boolean
+  isReserved?: boolean
   regularSyncEnabled: boolean
   dynamicSyncEnabled: boolean
   autoSyncIntervalMinutes: number

@@ -1,6 +1,7 @@
 import {
   ArrowDown,
   ArrowUp,
+  Layers,
   RefreshCw,
   Send,
   ShieldAlert,
@@ -39,7 +40,8 @@ import {
   UNTAGGED_TAG_LABEL,
 } from "@/lib/channels/channel-tags"
 import { deleteChannelByRecord } from "@/lib/channels/delete-channel"
-import { findFrozenReservedGroup } from "@/lib/channels/setting-groups"
+import { findFrozenReservedGroup, sortSettingGroupsForDisplay } from "@/lib/channels/setting-groups"
+import { useSummarizerGroupParams } from "@/hooks/useSummarizerGroupParams"
 import { useData } from "../contexts/DataContext"
 import { useScraper } from "../contexts/ScraperContext"
 import { useSettings } from "../contexts/SettingsContext"
@@ -144,9 +146,6 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
     torAutoRotate,
     torRotationThreshold,
     getEffectiveGlobalStartTime,
-    regularSyncIntervalMinutes,
-    dynamicSyncExpectedPostsDefault,
-    dynamicSyncEnabledDefault,
     showChannelSubscribers,
   } = useSettings()
 
@@ -163,6 +162,8 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
   const [channelSearch, setChannelSearch] = useState("")
   const [selectedLanguageFilter, setSelectedLanguageFilter] =
     useState<string>("")
+  const { channelGroupFilter, setChannelGroupFilter } = useSummarizerGroupParams()
+  const selectedGroupFilter = channelGroupFilter
   const [bulkTagInput, setBulkTagInput] = useState("")
   const [bulkRemoveTagInput, setBulkRemoveTagInput] = useState("")
   const [confirmResetModal, setConfirmResetModal] = useState<Channel | null>(
@@ -185,6 +186,11 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
 
   const filteredChannels = useMemo(() => {
     let result = channels
+    if (selectedGroupFilter) {
+      result = result.filter(
+        (channel) => channel.settingGroupId === selectedGroupFilter,
+      )
+    }
     if (selectedLanguageFilter) {
       result = result.filter((c) => c.language === selectedLanguageFilter)
     }
@@ -198,7 +204,7 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
       )
     }
     return result
-  }, [channels, channelSearch, selectedLanguageFilter])
+  }, [channels, channelSearch, selectedLanguageFilter, selectedGroupFilter])
 
   const [visibleChannels, setVisibleChannels] = useState(20)
 
@@ -217,7 +223,7 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
 
   useEffect(() => {
     setVisibleChannels(20)
-  }, [channelSearch, selectedLanguageFilter, sortBy, sortDirection])
+  }, [channelSearch, selectedLanguageFilter, selectedGroupFilter, sortBy, sortDirection])
 
   const allTags = useMemo(() => {
     const tags = new Set<string>()
@@ -268,6 +274,30 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
         } else {
           next.add(channel.name)
         }
+      }
+      return next
+    })
+  }
+
+  const sortedSettingGroups = useMemo(
+    () => sortSettingGroupsForDisplay(settingGroups),
+    [settingGroups],
+  )
+
+  const toggleGroupSelection = (groupId: string) => {
+    const channelsInGroup = channels
+      .filter((channel) => channel.settingGroupId === groupId && !channel.isFrozen)
+      .map((channel) => channel.name)
+    const allSelected = channelsInGroup.every((name) =>
+      selectedChannels.has(name),
+    )
+
+    setSelectedChannels((prev) => {
+      const next = new Set(prev)
+      if (allSelected) {
+        channelsInGroup.forEach((name) => next.delete(name))
+      } else {
+        channelsInGroup.forEach((name) => next.add(name))
       }
       return next
     })
@@ -373,7 +403,9 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
     useState<Channel | null>(null)
 
   const isFilteringActive =
-    selectedLanguageFilter.length > 0 || channelSearch.trim().length > 0
+    selectedLanguageFilter.length > 0 ||
+    selectedGroupFilter.length > 0 ||
+    channelSearch.trim().length > 0
 
   const selectTriggerClassName =
     "h-7 w-auto min-w-[96px] rounded-md border-app-ink/15 bg-app-card/70 px-2 text-[10px] font-bold uppercase tracking-widest text-app-ink shadow-none focus-visible:ring-app-ink/30 data-[placeholder]:text-app-ink/50"
@@ -506,9 +538,6 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
         torProxyUrls,
         torAutoRotate,
         torRotationThreshold,
-        regularSyncIntervalMinutes,
-        dynamicSyncEnabledDefault,
-        dynamicSyncExpectedPostsDefault,
       },
     })
     if (result.ok) setInlineChannelName("")
@@ -666,9 +695,64 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
           )}
         </div>
 
-        {/* Tags & Auto Sync row */}
+        {/* Group & tag filter rows */}
         {channels.length > 0 && (
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pt-4 border-t border-app-ink/5">
+          <div className="flex flex-col gap-3 pt-4 border-t border-app-ink/5">
+            <div className="flex flex-wrap gap-2">
+              {sortedSettingGroups.map((group) => {
+                const channelsInGroup = channels.filter(
+                  (channel) => channel.settingGroupId === group.id,
+                )
+                const channelsWithGroup = channelsInGroup.map(
+                  (channel) => channel.name,
+                )
+                const selectedCount = channelsWithGroup.filter((name) =>
+                  selectedChannels.has(name),
+                ).length
+                const isAllSelected =
+                  selectedCount === channelsWithGroup.length &&
+                  channelsWithGroup.length > 0
+                const isPartial =
+                  selectedCount > 0 && selectedCount < channelsWithGroup.length
+                const isActiveFilter = selectedGroupFilter === group.id
+
+                return (
+                  <button
+                    type="button"
+                    key={group.id}
+                    data-testid={`channel-group-${group.id}`}
+                    onClick={(event) => {
+                      if (event.metaKey || event.ctrlKey) {
+                        setChannelGroupFilter(
+                          selectedGroupFilter === group.id ? "" : group.id,
+                        )
+                        return
+                      }
+                      toggleGroupSelection(group.id)
+                    }}
+                    className={`text-[9px] font-bold px-2 py-1 rounded-md transition-all flex items-center gap-1.5 ${
+                      isActiveFilter
+                        ? "ring-2 ring-indigo-500/40"
+                        : ""
+                    } ${
+                      isAllSelected
+                        ? "bg-app-ink text-app-bg"
+                        : isPartial
+                          ? "bg-app-ink/20 text-app-ink"
+                          : "bg-app-muted/50 text-app-ink/60 hover:bg-app-ink/10 hover:text-app-ink"
+                    }`}
+                  >
+                    <Layers size={10} />
+                    {group.name}
+                    <span className="opacity-60 text-[8px]">
+                      ({selectedCount}/{channelsWithGroup.length})
+                    </span>
+                  </button>
+                )
+              })}
+            </div>
+
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div className="flex flex-wrap gap-2">
               {allTags.map((tag) => {
                 const channelsWithTag = channels
@@ -844,6 +928,7 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
               </div>
             </div>
           </div>
+          </div>
         )}
 
         {/* Bulk Actions */}
@@ -881,7 +966,7 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
                     <SelectValue placeholder="Group" />
                   </SelectTrigger>
                   <SelectContent>
-                    {settingGroups.map((group) => (
+                    {sortedSettingGroups.map((group) => (
                       <SelectItem key={group.id} value={group.id}>
                         {group.name}
                         {group.isDefault ? " (default)" : ""}

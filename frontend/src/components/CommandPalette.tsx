@@ -33,6 +33,7 @@ import {
   findPostByEntityId,
   getExtendedEntityCandidates,
   isNonChannelEntityFlow,
+  isSettingGroupEntityFlow,
 } from "@/lib/commands/entity-candidates"
 import {
   getChainedEditorApply,
@@ -480,6 +481,14 @@ export function CommandPalette() {
       return
     }
 
+    if (isSettingGroupEntityFlow(flow)) {
+      const group = context.settingGroups.find((entry) => entry.id === value)
+      if (!group) return
+      await entityCommand.run(context, value)
+      await finishCommand(entityCommand)
+      return
+    }
+
     const channel = context.channels.find((entry) => entry.name === value)
     if (!channel) return
 
@@ -911,7 +920,11 @@ export function CommandPalette() {
                       : entityCommand.entityFlow === "delete-summary"
                         ? "No summaries in history."
                         : entityCommand.entityFlow === "remove-tag-pick"
-                          ? "No tags on this channel."
+                        ? "No tags on this channel."
+                        : isSettingGroupEntityFlow(
+                              entityCommand.entityFlow ?? "search-channel",
+                            )
+                          ? "No setting groups found."
                           : "No matches found."}
               </CommandEmpty>
               <CommandGroup
@@ -925,7 +938,11 @@ export function CommandPalette() {
                         ? "Posts"
                         : entityCommand.entityFlow === "clear-db-table"
                           ? "Tables"
-                          : "Tags"
+                          : isSettingGroupEntityFlow(
+                                entityCommand.entityFlow ?? "search-channel",
+                              )
+                            ? "Setting Groups"
+                            : "Tags"
                     : "Channels"
                 }
               >

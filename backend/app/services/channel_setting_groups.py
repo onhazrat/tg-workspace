@@ -11,7 +11,6 @@ from fastapi import HTTPException
 from sqlalchemy import or_
 from sqlmodel import Session, col, func, select
 
-from app.jobs.settings import load_sync_settings
 from app.models_tg import Channel, ChannelSettingGroup
 from app.services.serialization import normalize_body, to_camel, to_snake
 from app.services.sync_schedule import (
@@ -100,9 +99,36 @@ INHERITED_SNAKE_FIELDS = frozenset(
 RESTRICTED_GROUP_NAME = "Restricted"
 FROZEN_GROUP_NAME = "Frozen"
 DEFAULT_GROUP_NAME = "default"
+SLOW_FEED_GROUP_NAME = "Slow feed"
+HIGH_VELOCITY_GROUP_NAME = "High velocity"
 RESERVED_GROUP_NAMES = frozenset(
-    {DEFAULT_GROUP_NAME, RESTRICTED_GROUP_NAME, FROZEN_GROUP_NAME}
+    {
+        DEFAULT_GROUP_NAME,
+        RESTRICTED_GROUP_NAME,
+        FROZEN_GROUP_NAME,
+        SLOW_FEED_GROUP_NAME,
+        HIGH_VELOCITY_GROUP_NAME,
+    }
 )
+
+DEFAULT_GROUP_REGULAR_SYNC_ENABLED = True
+DEFAULT_GROUP_DYNAMIC_SYNC_ENABLED = False
+DEFAULT_GROUP_AUTO_SYNC_INTERVAL_MINUTES = 60
+DEFAULT_GROUP_DYNAMIC_SYNC_EXPECTED_POSTS = 15
+DEFAULT_GROUP_AUTO_FOLLOW_FORWARDED = False
+
+SLOW_FEED_AUTO_SYNC_INTERVAL_MINUTES = 1440
+SLOW_FEED_DYNAMIC_SYNC_EXPECTED_POSTS = 1
+HIGH_VELOCITY_AUTO_SYNC_INTERVAL_MINUTES = 60
+HIGH_VELOCITY_DYNAMIC_SYNC_EXPECTED_POSTS = 10
+
+BUILTIN_GROUP_SORT_ORDER = {
+    DEFAULT_GROUP_NAME.lower(): 0,
+    SLOW_FEED_GROUP_NAME.lower(): 1,
+    HIGH_VELOCITY_GROUP_NAME.lower(): 2,
+    FROZEN_GROUP_NAME.lower(): 3,
+    RESTRICTED_GROUP_NAME.lower(): 4,
+}
 
 
 def channel_is_frozen(
@@ -128,11 +154,21 @@ def frozen_group_id_for_user(user_id: uuid.UUID | None) -> str:
     return f"frozen-{scope_key(user_id)}"
 
 
+def slow_feed_group_id_for_user(user_id: uuid.UUID | None) -> str:
+    return f"slow-feed-{scope_key(user_id)}"
+
+
+def high_velocity_group_id_for_user(user_id: uuid.UUID | None) -> str:
+    return f"high-velocity-{scope_key(user_id)}"
+
+
 def is_reserved_group_id(group_id: str) -> bool:
     return (
         group_id.startswith("default-")
         or group_id.startswith("restricted-")
         or group_id.startswith("frozen-")
+        or group_id.startswith("slow-feed-")
+        or group_id.startswith("high-velocity-")
     )
 
 
@@ -215,18 +251,13 @@ def reject_inherited_channel_fields(body: dict[str, Any]) -> None:
         )
 
 
-def default_group_field_values(session: Session) -> dict[str, Any]:
-    sync_defaults = load_sync_settings(session)
+def default_group_field_values(_session: Session | None = None) -> dict[str, Any]:
     return {
-        "regular_sync_enabled": True,
-        "dynamic_sync_enabled": bool(sync_defaults.get("dynamicSyncEnabledDefault", False)),
-        "auto_sync_interval_minutes": max(
-            1, int(sync_defaults.get("regularSyncIntervalMinutes") or 60)
-        ),
-        "dynamic_sync_expected_posts": max(
-            1, int(sync_defaults.get("dynamicSyncExpectedPostsDefault") or 15)
-        ),
-        "auto_follow_forwarded": False,
+        "regular_sync_enabled": DEFAULT_GROUP_REGULAR_SYNC_ENABLED,
+        "dynamic_sync_enabled": DEFAULT_GROUP_DYNAMIC_SYNC_ENABLED,
+        "auto_sync_interval_minutes": DEFAULT_GROUP_AUTO_SYNC_INTERVAL_MINUTES,
+        "dynamic_sync_expected_posts": DEFAULT_GROUP_DYNAMIC_SYNC_EXPECTED_POSTS,
+        "auto_follow_forwarded": DEFAULT_GROUP_AUTO_FOLLOW_FORWARDED,
         "is_frozen": False,
         "is_unavailable_on_web_view": False,
     }
@@ -239,7 +270,7 @@ def ensure_default_group(
     existing = session.get(ChannelSettingGroup, group_id)
     if existing:
         return existing
-    values = default_group_field_values(session)
+    values = default_group_field_values()
     group = ChannelSettingGroup(
         id=group_id,
         user_id=user_id,
@@ -259,7 +290,7 @@ def get_or_create_restricted_group(
     existing = session.get(ChannelSettingGroup, group_id)
     if existing:
         return existing
-    values = default_group_field_values(session)
+    values = default_group_field_values()
     group = ChannelSettingGroup(
         id=group_id,
         user_id=user_id,
@@ -285,7 +316,7 @@ def get_or_create_frozen_group(
     existing = session.get(ChannelSettingGroup, group_id)
     if existing:
         return existing
-    values = default_group_field_values(session)
+    values = default_group_field_values()
     group = ChannelSettingGroup(
         id=group_id,
         user_id=user_id,
@@ -304,12 +335,85 @@ def get_or_create_frozen_group(
     return group
 
 
+def get_or_create_slow_feed_group(
+    session: Session, *, user_id: uuid.UUID | None
+) -> ChannelSettingGroup:
+    group_id = slow_feed_group_id_for_user(user_id)
+    existing = session.get(ChannelSettingGroup, group_id)
+    if existing:
+        return existing
+    group = ChannelSettingGroup(
+        id=group_id,
+        user_id=user_id,
+        name=SLOW_FEED_GROUP_NAME,
+        is_default=False,
+        regular_sync_enabled=True,
+        dynamic_sync_enabled=True,
+        auto_sync_interval_minutes=SLOW_FEED_AUTO_SYNC_INTERVAL_MINUTES,
+        dynamic_sync_expected_posts=SLOW_FEED_DYNAMIC_SYNC_EXPECTED_POSTS,
+        auto_follow_forwarded=False,
+        is_frozen=False,
+        is_unavailable_on_web_view=False,
+    )
+    session.add(group)
+    session.flush()
+    return group
+
+
+def get_or_create_high_velocity_group(
+    session: Session, *, user_id: uuid.UUID | None
+) -> ChannelSettingGroup:
+    group_id = high_velocity_group_id_for_user(user_id)
+    existing = session.get(ChannelSettingGroup, group_id)
+    if existing:
+        return existing
+    group = ChannelSettingGroup(
+        id=group_id,
+        user_id=user_id,
+        name=HIGH_VELOCITY_GROUP_NAME,
+        is_default=False,
+        regular_sync_enabled=True,
+        dynamic_sync_enabled=True,
+        auto_sync_interval_minutes=HIGH_VELOCITY_AUTO_SYNC_INTERVAL_MINUTES,
+        dynamic_sync_expected_posts=HIGH_VELOCITY_DYNAMIC_SYNC_EXPECTED_POSTS,
+        auto_follow_forwarded=False,
+        is_frozen=False,
+        is_unavailable_on_web_view=False,
+    )
+    session.add(group)
+    session.flush()
+    return group
+
+
+def ensure_builtin_groups(
+    session: Session, *, user_id: uuid.UUID | None
+) -> tuple[
+    ChannelSettingGroup,
+    ChannelSettingGroup,
+    ChannelSettingGroup,
+    ChannelSettingGroup,
+    ChannelSettingGroup,
+]:
+    default_group = ensure_default_group(session, user_id=user_id)
+    slow_feed_group = get_or_create_slow_feed_group(session, user_id=user_id)
+    high_velocity_group = get_or_create_high_velocity_group(session, user_id=user_id)
+    frozen_group = get_or_create_frozen_group(session, user_id=user_id)
+    restricted_group = get_or_create_restricted_group(session, user_id=user_id)
+    return (
+        default_group,
+        slow_feed_group,
+        high_velocity_group,
+        frozen_group,
+        restricted_group,
+    )
+
+
 def ensure_reserved_groups(
     session: Session, *, user_id: uuid.UUID | None
 ) -> tuple[ChannelSettingGroup, ChannelSettingGroup, ChannelSettingGroup]:
-    default_group = ensure_default_group(session, user_id=user_id)
-    restricted_group = get_or_create_restricted_group(session, user_id=user_id)
-    frozen_group = get_or_create_frozen_group(session, user_id=user_id)
+    default_group, _, _, frozen_group, restricted_group = ensure_builtin_groups(
+        session, user_id=user_id
+    )
     return default_group, restricted_group, frozen_group
 
 
@@ -335,6 +439,51 @@ def channel_counts_by_group(session: Session) -> dict[str, int]:
     return {group_id: count for group_id, count in rows}
 
 
+def _group_sort_key(group: ChannelSettingGroup) -> tuple[int, str]:
+    if group.is_default:
+        return (0, group.name.lower())
+    order = BUILTIN_GROUP_SORT_ORDER.get(group.name.lower(), 100)
+    return (order, group.name.lower())
+
+
+def _find_group_by_name_ci(
+    session: Session,
+    *,
+    name: str,
+    user_id: uuid.UUID | None,
+    exclude_id: str | None = None,
+) -> ChannelSettingGroup | None:
+    normalized = name.strip().lower()
+    if not normalized:
+        return None
+    groups = session.exec(
+        select(ChannelSettingGroup).where(_operator_group_scope_filter(user_id))
+    ).all()
+    for group in groups:
+        if exclude_id and group.id == exclude_id:
+            continue
+        if group.name.lower() == normalized:
+            return group
+    return None
+
+
+def _reject_duplicate_group_name(
+    session: Session,
+    *,
+    name: str,
+    user_id: uuid.UUID | None,
+    exclude_id: str | None = None,
+) -> None:
+    duplicate = _find_group_by_name_ci(
+        session, name=name, user_id=user_id, exclude_id=exclude_id
+    )
+    if duplicate:
+        raise HTTPException(
+            status_code=409,
+            detail=f"A setting group named '{duplicate.name}' already exists",
+        )
+
+
 def setting_group_to_camel(
     group: ChannelSettingGroup,
     *,
@@ -344,6 +493,7 @@ def setting_group_to_camel(
         "id": group.id,
         "name": group.name,
         "isDefault": group.is_default,
+        "isReserved": is_reserved_group_id(group.id),
         "regularSyncEnabled": group.regular_sync_enabled,
         "dynamicSyncEnabled": group.dynamic_sync_enabled,
         "autoSyncIntervalMinutes": group.auto_sync_interval_minutes,
@@ -383,6 +533,11 @@ def apply_group_fields(group: ChannelSettingGroup, body: dict[str, Any]) -> None
         name = str(normalized["name"]).strip()
         if not name:
             raise HTTPException(status_code=400, detail="Group name is required")
+        if name.lower() in {reserved.lower() for reserved in RESERVED_GROUP_NAMES}:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Reserved group name; built-in group '{name}' already exists",
+            )
         group.name = name
     for key in INHERITED_SNAKE_FIELDS:
         if key not in normalized:
@@ -448,7 +603,7 @@ def list_setting_groups(
 ) -> list[dict[str, Any]]:
     from app.services.operator import select_operator_channels
 
-    ensure_reserved_groups(session, user_id=operator_id)
+    ensure_builtin_groups(session, user_id=operator_id)
     consolidate_legacy_duplicate_reserved_groups(session, user_id=operator_id)
     session.commit()
 
@@ -471,7 +626,7 @@ def list_setting_groups(
         groups.extend(extra_groups)
 
     counts = channel_counts_by_group(session)
-    groups.sort(key=lambda group: (not group.is_default, group.name.lower()))
+    groups.sort(key=_group_sort_key)
     return [
         setting_group_to_camel(group, channel_count=counts.get(group.id, 0))
         for group in groups
@@ -493,9 +648,10 @@ def create_setting_group(
             status_code=400,
             detail=f"Reserved group name; built-in group '{name}' already exists",
         )
+    _reject_duplicate_group_name(session, name=name, user_id=user_id)
 
     group_id = str(uuid.uuid4())
-    values = default_group_field_values(session)
+    values = default_group_field_values()
     group = ChannelSettingGroup(
         id=group_id,
         user_id=user_id,
@@ -521,6 +677,16 @@ def update_setting_group(
 
     previous_interval_minutes = group.auto_sync_interval_minutes
     previous_expected_posts = group.dynamic_sync_expected_posts
+    normalized = normalize_body(body)
+    if "name" in normalized:
+        proposed_name = str(normalized["name"]).strip()
+        if proposed_name and proposed_name.lower() != group.name.lower():
+            _reject_duplicate_group_name(
+                session,
+                name=proposed_name,
+                user_id=group.user_id,
+                exclude_id=group.id,
+            )
     apply_group_fields(group, body)
     session.add(group)
     session.commit()

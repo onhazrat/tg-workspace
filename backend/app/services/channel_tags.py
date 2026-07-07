@@ -70,6 +70,17 @@ def get_tag_names(raw: Any) -> list[str]:
     return [tag["name"] for tag in normalize_channel_tags(raw)]
 
 
+def reject_reserved_virtual_group_tags(raw: Any) -> None:
+    from fastapi import HTTPException
+
+    for tag in normalize_channel_tags(raw):
+        if tag["name"].lower().startswith("group:"):
+            raise HTTPException(
+                status_code=400,
+                detail="Tags starting with 'group:' are reserved for setting groups",
+            )
+
+
 def collect_all_channel_tags(channels: Iterable[dict[str, Any] | Any]) -> list[str]:
     names: set[str] = set()
     for channel in channels:

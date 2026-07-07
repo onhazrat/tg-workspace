@@ -7,7 +7,8 @@ import {
   AUTO_SYNC_INTERVAL_MAX_MINUTES,
   AUTO_SYNC_INTERVAL_MIN_MINUTES,
 } from "@/constants"
-import { isReservedSettingGroup } from "@/lib/channels/setting-groups"
+import { isReservedSettingGroup, sortSettingGroupsForDisplay } from "@/lib/channels/setting-groups"
+import { useSummarizerGroupParams } from "@/hooks/useSummarizerGroupParams"
 import type { ChannelSettingGroup } from "@/types"
 
 const isReservedGroup = isReservedSettingGroup
@@ -24,6 +25,8 @@ const emptyDraft = (): SettingGroupWriteBody => ({
 })
 
 export const SettingGroupsPanel: React.FC = () => {
+  const { selectedSettingGroupId, setSelectedSettingGroup } =
+    useSummarizerGroupParams()
   const [groups, setGroups] = useState<ChannelSettingGroup[]>([])
   const [loading, setLoading] = useState(true)
   const [selectedId, setSelectedId] = useState<string | null>(null)
@@ -37,7 +40,7 @@ export const SettingGroupsPanel: React.FC = () => {
     setLoading(true)
     try {
       const rows = await api.listSettingGroups()
-      setGroups(rows)
+      setGroups(sortSettingGroupsForDisplay(rows))
       if (!selectedId && rows.length > 0) {
         const defaultGroup = rows.find((group) => group.isDefault) ?? rows[0]
         setSelectedId(defaultGroup.id)
@@ -56,6 +59,15 @@ export const SettingGroupsPanel: React.FC = () => {
   useEffect(() => {
     void loadGroups()
   }, [loadGroups])
+
+  useEffect(() => {
+    if (
+      selectedSettingGroupId &&
+      groups.some((group) => group.id === selectedSettingGroupId)
+    ) {
+      setSelectedId(selectedSettingGroupId)
+    }
+  }, [groups, selectedSettingGroupId])
 
   useEffect(() => {
     const selected = groups.find((group) => group.id === selectedId)
@@ -154,7 +166,10 @@ export const SettingGroupsPanel: React.FC = () => {
               <button
                 key={group.id}
                 type="button"
-                onClick={() => setSelectedId(group.id)}
+                onClick={() => {
+                  setSelectedId(group.id)
+                  setSelectedSettingGroup(group.id)
+                }}
                 className={`w-full text-left px-3 py-2 rounded-md border text-[11px] transition-all ${
                   selectedId === group.id
                     ? "border-app-ink bg-app-ink text-app-bg"

@@ -22,7 +22,7 @@ from app.services.channel_setting_groups import (
     reject_inherited_channel_fields,
     update_default_group_sync_settings,
 )
-from app.services.channel_tags import normalize_channel_tags
+from app.services.channel_tags import normalize_channel_tags, reject_reserved_virtual_group_tags
 from app.services.serialization import channel_to_camel, normalize_body
 from app.services.sync_meta import touch_sync
 from app.services.sync_schedule import (
@@ -199,6 +199,7 @@ def apply_channel_fields(
     for key, value in normalized.items():
         if key in Channel.model_fields and key not in ("id", "user_id", "setting_group_id"):
             if key == "tags":
+                reject_reserved_virtual_group_tags(value)
                 value = normalize_channel_tags(value)
             setattr(ch, key, value)
 
@@ -244,15 +245,6 @@ def upsert_channel(
             group = get_or_create_restricted_group(session, user_id=user_id)
         else:
             group = ensure_default_group(session, user_id=user_id)
-        inherited_patch = {
-            key: normalized[key]
-            for key in INHERITED_SNAKE_FIELDS
-            if key in normalized
-        }
-        if inherited_patch:
-            apply_group_fields(group, inherited_patch)
-            session.add(group)
-            session.flush()
         now_ms = int(datetime.utcnow().timestamp() * 1000)
         extras = {
             k: v
@@ -261,6 +253,7 @@ def upsert_channel(
             and k not in ("id", "name", "user_id", "setting_group_id")
         }
         if "tags" in extras:
+            reject_reserved_virtual_group_tags(extras["tags"])
             extras["tags"] = normalize_channel_tags(extras["tags"])
         if group.regular_sync_enabled:
             extras.setdefault(
@@ -384,6 +377,7 @@ def bulk_update_channel_tags(
     groups_by_id = load_groups_by_id(session)
     for channel_id, raw_tags in deduped_updates.items():
         channel = by_id[channel_id]
+        reject_reserved_virtual_group_tags(raw_tags)
         channel.tags = normalize_channel_tags(raw_tags)
         channel.updated_at = datetime.utcnow()
         session.add(channel)

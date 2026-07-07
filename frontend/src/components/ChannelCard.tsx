@@ -11,7 +11,6 @@ import {
   Plus,
   RefreshCw,
   RotateCcw,
-  Share2,
   Snowflake,
   Trash2,
   Users,
@@ -20,7 +19,8 @@ import {
 } from "lucide-react"
 import { motion } from "motion/react"
 import type React from "react"
-import { useEffect, useState } from "react"
+import { useState } from "react"
+import { toast } from "sonner"
 import { api } from "@/api"
 import {
   addManualTag,
@@ -28,6 +28,10 @@ import {
   removeTagsByName,
 } from "@/lib/channels/channel-tag-model"
 import { findFrozenReservedGroup } from "@/lib/channels/setting-groups"
+import {
+  isVirtualGroupTag,
+  toVirtualGroupTagName,
+} from "@/lib/channels/virtual-group-tags"
 import { useData } from "../contexts/DataContext"
 import { useScraper } from "../contexts/ScraperContext"
 import { useSettings } from "../contexts/SettingsContext"
@@ -71,12 +75,6 @@ export const ChannelCard: React.FC<ChannelCardProps> = ({
 
   const [isAddingTag, setIsAddingTag] = useState<boolean>(false)
   const [editingStartId, setEditingStartId] = useState<string | null>(null)
-  const [regularIntervalInput, setRegularIntervalInput] = useState(
-    String(channel.autoSyncIntervalMinutes ?? 60),
-  )
-  const [dynamicExpectedInput, setDynamicExpectedInput] = useState(
-    String(channel.dynamicSyncExpectedPosts ?? 15),
-  )
 
   const stats = channelStats[channel.name]
   const isScraping = scrapingChannels.has(channel.name)
@@ -88,14 +86,9 @@ export const ChannelCard: React.FC<ChannelCardProps> = ({
   )
   const isEditing = editingStartId !== null
   const isSelected = selectedChannels.has(channel.name)
-
-  useEffect(() => {
-    setRegularIntervalInput(String(channel.autoSyncIntervalMinutes ?? 60))
-  }, [channel.autoSyncIntervalMinutes])
-
-  useEffect(() => {
-    setDynamicExpectedInput(String(channel.dynamicSyncExpectedPosts ?? 15))
-  }, [channel.dynamicSyncExpectedPosts])
+  const virtualGroupTagName = channel.settingGroupName
+    ? toVirtualGroupTagName(channel.settingGroupName)
+    : null
 
   const toggleChannelSelection = () => {
     if (channel.isFrozen) return
@@ -112,6 +105,11 @@ export const ChannelCard: React.FC<ChannelCardProps> = ({
 
   const handleAddTag = async (tag: string) => {
     if (!tag.trim()) {
+      setIsAddingTag(false)
+      return
+    }
+    if (isVirtualGroupTag(tag)) {
+      toast.error('Tags starting with "group:" are reserved for setting groups')
       setIsAddingTag(false)
       return
     }
@@ -169,6 +167,18 @@ export const ChannelCard: React.FC<ChannelCardProps> = ({
   const inheritedSettingsHint = channel.settingGroupName
     ? `Inherited from setting group "${channel.settingGroupName}"`
     : "Inherited from channel setting group"
+  const nextSyncSummary = [
+    channel.regularSyncEnabled ?? true
+      ? channel.nextRegularSyncAt
+        ? `Regular ${new Date(channel.nextRegularSyncAt).toLocaleString()}`
+        : "Regular not scheduled"
+      : "Regular off",
+    channel.dynamicSyncEnabled
+      ? channel.nextDynamicSyncAt
+        ? `Dynamic ${new Date(channel.nextDynamicSyncAt).toLocaleString()}`
+        : "Dynamic not scheduled"
+      : "Dynamic off",
+  ].join(" · ")
 
   return (
     <div
@@ -397,11 +407,6 @@ export const ChannelCard: React.FC<ChannelCardProps> = ({
             <p className="text-[11px] opacity-50 font-mono truncate">
               @{channel.name}
             </p>
-            {channel.settingGroupName && (
-              <p className="text-[9px] uppercase tracking-widest text-app-ink/45 mt-1">
-                Group: {channel.settingGroupName}
-              </p>
-            )}
           </div>
         </div>
 
@@ -557,6 +562,14 @@ export const ChannelCard: React.FC<ChannelCardProps> = ({
 
         {/* Tags Section */}
         <div className="mb-5 flex flex-wrap gap-1.5">
+          {virtualGroupTagName && (
+            <span
+              className="text-[10px] font-bold px-2 py-1 bg-indigo-500/10 border border-indigo-500/20 text-indigo-700 rounded-md"
+              title={inheritedSettingsHint}
+            >
+              {virtualGroupTagName}
+            </span>
+          )}
           {normalizeChannelTags(channel.tags).map((tag) => (
             <span
               key={tag.name.toLowerCase()}
@@ -698,142 +711,13 @@ export const ChannelCard: React.FC<ChannelCardProps> = ({
                         : "Pending"}
                 </p>
               </div>
-            </div>
-
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <div
-                  className="group/regular-sync opacity-80"
-                  onClick={(e) => e.stopPropagation()}
-                  title={inheritedSettingsHint}
-                >
-                  <p className="text-[10px] uppercase text-app-ink/60 font-bold tracking-widest mb-0.5">
-                    Regular
-                  </p>
-                  <div className="flex items-center gap-2 pointer-events-none">
-                    <button
-                      type="button"
-                      disabled
-                      className={`w-10 h-5 transition-all relative border border-app-ink/20 rounded-full ${
-                        (channel.regularSyncEnabled ?? true)
-                          ? "bg-green-500 border-green-600"
-                          : "bg-app-ink/10"
-                      }`}
-                    >
-                      <div
-                        className={`absolute top-0.5 w-3.5 h-3.5 bg-white transition-all rounded-full ${
-                          (channel.regularSyncEnabled ?? true)
-                            ? "left-5.5"
-                            : "left-0.5"
-                        }`}
-                      />
-                    </button>
-                    <input
-                      type="number"
-                      readOnly
-                      value={regularIntervalInput}
-                      className="w-14 bg-app-bg border border-app-ink/20 px-1.5 py-0.5 text-[10px] font-mono"
-                    />
-                    <span className="text-[9px] uppercase font-bold text-app-ink/50">
-                      min
-                    </span>
-                  </div>
-                  <p className="text-[9px] text-app-ink/50 mt-1">
-                    Next:{" "}
-                    {channel.nextRegularSyncAt ? (
-                      <RelativeTime timestamp={channel.nextRegularSyncAt} />
-                    ) : (
-                      "not scheduled"
-                    )}
-                  </p>
-                </div>
-              </TooltipTrigger>
-              <TooltipContent className="max-w-[240px] text-center">
-                <p>{inheritedSettingsHint}</p>
-              </TooltipContent>
-            </Tooltip>
-
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <div
-                  className="group/dynamic-sync opacity-80"
-                  onClick={(e) => e.stopPropagation()}
-                  title={inheritedSettingsHint}
-                >
-                  <p className="text-[10px] uppercase text-app-ink/60 font-bold tracking-widest mb-0.5">
-                    Dynamic
-                  </p>
-                  <div className="flex items-center gap-2 pointer-events-none">
-                    <button
-                      type="button"
-                      disabled
-                      className={`w-10 h-5 transition-all relative border border-app-ink/20 rounded-full ${
-                        channel.dynamicSyncEnabled
-                          ? "bg-blue-500 border-blue-600"
-                          : "bg-app-ink/10"
-                      }`}
-                    >
-                      <div
-                        className={`absolute top-0.5 w-3.5 h-3.5 bg-white transition-all rounded-full ${
-                          channel.dynamicSyncEnabled ? "left-5.5" : "left-0.5"
-                        }`}
-                      />
-                    </button>
-                    <input
-                      type="number"
-                      readOnly
-                      value={dynamicExpectedInput}
-                      className="w-14 bg-app-bg border border-app-ink/20 px-1.5 py-0.5 text-[10px] font-mono"
-                    />
-                    <span className="text-[9px] uppercase font-bold text-app-ink/50">
-                      posts
-                    </span>
-                  </div>
-                  <p className="text-[9px] text-app-ink/50 mt-1">
-                    Next:{" "}
-                    {channel.nextDynamicSyncAt ? (
-                      <RelativeTime timestamp={channel.nextDynamicSyncAt} />
-                    ) : (
-                      "not scheduled"
-                    )}
-                  </p>
-                </div>
-              </TooltipTrigger>
-              <TooltipContent className="max-w-[240px] text-center">
-                <p>{inheritedSettingsHint}</p>
-              </TooltipContent>
-            </Tooltip>
-
-            <div
-              className="group/auto-follow opacity-80"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <p className="text-[10px] uppercase text-app-ink/60 font-bold tracking-widest mb-0.5 flex items-center gap-1">
-                <Share2 size={9} className="opacity-50" />
-                Auto-Follow
-              </p>
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <button
-                    type="button"
-                    disabled
-                    className={`w-10 h-5 transition-all relative border border-app-ink/20 rounded-full pointer-events-none ${
-                      channel.autoFollowForwarded
-                        ? "bg-green-500 border-green-600"
-                        : "bg-app-ink/10"
-                    }`}
-                  >
-                    <div
-                      className={`absolute top-0.5 w-3.5 h-3.5 bg-white transition-all rounded-full ${
-                        channel.autoFollowForwarded ? "left-5.5" : "left-0.5"
-                      }`}
-                    />
-                  </button>
+                  <p className="text-[9px] text-app-ink/50 mt-1 max-w-[220px] truncate cursor-help">
+                    {nextSyncSummary}
+                  </p>
                 </TooltipTrigger>
-                <TooltipContent
-                  side="bottom"
-                  className="max-w-[220px] text-center"
-                >
+                <TooltipContent className="max-w-[260px] text-center">
                   <p>{inheritedSettingsHint}</p>
                 </TooltipContent>
               </Tooltip>

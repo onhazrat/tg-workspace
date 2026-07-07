@@ -1,5 +1,6 @@
-import { useMemo } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { useCommandPaletteContext } from "@/components/CommandPaletteProvider"
+import { api } from "@/api"
 import { useAI } from "@/contexts/AIContext"
 import { useChatContext } from "@/contexts/ChatContext"
 import { useData } from "@/contexts/DataContext"
@@ -10,6 +11,7 @@ import { useApiStatus } from "@/hooks/useApiStatus"
 import { useGuidedTour } from "@/hooks/useGuidedTour"
 import { useJobToggles } from "@/hooks/useJobToggles"
 import { useSettingsSection } from "@/hooks/useSettingsSection"
+import { useSummarizerGroupParams } from "@/hooks/useSummarizerGroupParams"
 import { INDEXEDDB_STORE_NAMES } from "@/lib/cache"
 import {
   buildActionCommands,
@@ -17,10 +19,13 @@ import {
   buildChannelOpsCommands,
   buildDataTransferCommands,
   buildExtendedCommands,
+  buildGroupCommands,
   buildNavigateCommands,
   buildSettingCommands,
 } from "@/lib/commands"
 import type { CommandContext, CommandDef } from "@/lib/commands/types"
+import { sortSettingGroupsForDisplay } from "@/lib/channels/setting-groups"
+import type { ChannelSettingGroup } from "@/types"
 
 export function useCommandRegistry(): {
   commands: CommandDef[]
@@ -86,6 +91,15 @@ export function useCommandRegistry(): {
   const { startTour } = useGuidedTour()
   const jobToggles = useJobToggles()
   const palette = useCommandPaletteContext()
+  const { setChannelGroupFilter, setSelectedSettingGroup } =
+    useSummarizerGroupParams()
+  const [settingGroups, setSettingGroups] = useState<ChannelSettingGroup[]>([])
+
+  useEffect(() => {
+    void api.listSettingGroups().then((groups) => {
+      setSettingGroups(sortSettingGroupsForDisplay(groups))
+    })
+  }, [channels.length])
 
   const context = useMemo<CommandContext>(
     () => ({
@@ -222,6 +236,9 @@ export function useCommandRegistry(): {
       completePendingSummary,
       loadHistory,
       indexedDbTables: [...INDEXEDDB_STORE_NAMES],
+      settingGroups,
+      setChannelGroupFilter,
+      setSelectedSettingGroup,
     }),
     [
       addToSyncQueue,
@@ -271,6 +288,9 @@ export function useCommandRegistry(): {
       setStarredOnly,
       setSummary,
       settings,
+      settingGroups,
+      setChannelGroupFilter,
+      setSelectedSettingGroup,
       startDate,
       startTour,
       starredOnly,
@@ -283,6 +303,7 @@ export function useCommandRegistry(): {
       ...buildNavigateCommands(),
       ...buildActionCommands(),
       ...buildSettingCommands(),
+      ...buildGroupCommands(),
       ...buildChannelEntityCommands(),
       ...buildChannelOpsCommands(),
       ...buildDataTransferCommands(),

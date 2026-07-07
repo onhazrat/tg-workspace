@@ -1,10 +1,13 @@
 import { toast } from "sonner"
 
+import { toast } from "sonner"
+
 import {
   addManualTag,
   getTagNames,
   removeTagsByName,
 } from "@/lib/channels/channel-tag-model"
+import { isVirtualGroupTag } from "@/lib/channels/virtual-group-tags"
 import type { CommandContext } from "@/lib/commands/types"
 import { upsertChannel } from "@/lib/repository"
 import type { Channel } from "@/types"
@@ -107,6 +110,10 @@ export async function addTagToChannel(
   const tag = rawTag.trim()
   if (!tag) {
     toast.error("Enter a tag name")
+    return
+  }
+  if (isVirtualGroupTag(tag)) {
+    toast.error('Tags starting with "group:" are reserved for setting groups')
     return
   }
   const newTags = addManualTag(channel.tags, tag)

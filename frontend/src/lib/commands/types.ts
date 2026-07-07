@@ -49,6 +49,9 @@ export type EntityFlowType =
   | "delete-summary"
   | "pick-post"
   | "clear-db-table"
+  | "filter-by-setting-group"
+  | "move-to-setting-group"
+  | "open-setting-group"
 
 export interface CommandDisabledState {
   disabled: boolean
@@ -186,6 +189,9 @@ export interface CommandContext {
   loadHistory: () => Promise<void>
   currentSummaryId: string | null
   indexedDbTables: string[]
+  settingGroups: import("@/types").ChannelSettingGroup[]
+  setChannelGroupFilter: (groupId: string) => void
+  setSelectedSettingGroup: (groupId: string) => void
 }
 
 import type { Theme } from "@/components/theme-provider"

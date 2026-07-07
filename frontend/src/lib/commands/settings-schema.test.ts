@@ -141,34 +141,18 @@ describe("buildSettingCommands numeric editors", () => {
     )
   })
 
-  test("regular sync interval badge uses minutes suffix", () => {
-    const cmd = commands.find(
-      (c) => c.id === "edit-regular-sync-interval-minutes",
-    )
-    expect(
-      cmd?.getBadge?.(makeContext({ regularSyncIntervalMinutes: 15 })),
-    ).toBe("15m")
-  })
-
-  test("dynamic expected posts badge uses integer value", () => {
-    const cmd = commands.find(
-      (c) => c.id === "edit-dynamic-sync-expected-posts-default",
-    )
-    expect(
-      cmd?.getBadge?.(makeContext({ dynamicSyncExpectedPostsDefault: 22 })),
-    ).toBe("22")
-  })
-
   test("ai temperature badge uses one decimal", () => {
     const cmd = commands.find((c) => c.id === "edit-ai-temperature")
     expect(cmd?.getBadge?.(makeContext({ aiTemperature: 0.75 }))).toBe("0.8")
   })
 
-  test("bulk disable regular sync command exists", () => {
-    const command = commands.find(
-      (c) => c.id === "disable-regular-sync-all-channels",
-    )
-    expect(command).toBeDefined()
+  test("bulk sync template commands removed", () => {
+    expect(
+      commands.some((c) => c.id === "disable-regular-sync-all-channels"),
+    ).toBe(false)
+    expect(
+      commands.some((c) => c.id === "apply-regular-sync-interval-all-channels"),
+    ).toBe(false)
   })
 
   test("boolean commands still expose ON/OFF badges", () => {

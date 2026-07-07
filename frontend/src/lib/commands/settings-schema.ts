@@ -1,11 +1,6 @@
 import { toast } from "sonner"
 import { api } from "@/api"
-import {
-  AUTO_SYNC_INTERVAL_MAX_MINUTES,
-  AUTO_SYNC_INTERVAL_MIN_MINUTES,
-  LANGUAGES,
-  MODELS,
-} from "@/constants"
+import { LANGUAGES, MODELS } from "@/constants"
 import { JOB_LABELS, SERVER_JOB_IDS } from "@/hooks/useJobToggles"
 import type {
   CommandContext,
@@ -78,13 +73,6 @@ const BOOLEAN_SETTINGS: BooleanSettingDef[] = [
     getter: (s) => s.advancedMode,
     setter: (s, v) => s.setAdvancedMode(v),
     keywords: ["advanced", "settings"],
-  },
-  {
-    key: "dynamicSyncEnabledDefault",
-    label: "Dynamic Sync Default",
-    getter: (s) => s.dynamicSyncEnabledDefault,
-    setter: (s, v) => s.setDynamicSyncEnabledDefault(v),
-    keywords: ["sync", "dynamic", "default", "new channels"],
   },
   {
     key: "proxyEnabled",
@@ -240,31 +228,6 @@ type NumericEditorDef = {
 }
 
 const NUMERIC_EDITOR_DEFS: NumericEditorDef[] = [
-  {
-    id: "edit-regular-sync-interval-minutes",
-    label: "Edit New Channel Regular Sync Interval",
-    keywords: ["regular sync", "interval", "minutes", "new channels"],
-    fieldId: "regularSyncIntervalMinutes",
-    fieldLabel: "Regular Sync Interval (minutes)",
-    min: AUTO_SYNC_INTERVAL_MIN_MINUTES,
-    max: AUTO_SYNC_INTERVAL_MAX_MINUTES,
-    integer: true,
-    getter: (s) => s.regularSyncIntervalMinutes,
-    setter: (s, v) => s.setRegularSyncIntervalMinutes(v),
-    formatBadge: (v) => `${v}m`,
-  },
-  {
-    id: "edit-dynamic-sync-expected-posts-default",
-    label: "Edit New Channel Dynamic Expected Posts",
-    keywords: ["dynamic sync", "expected", "posts", "new channels"],
-    fieldId: "dynamicSyncExpectedPostsDefault",
-    fieldLabel: "Dynamic Expected Posts (new channels)",
-    min: 1,
-    integer: true,
-    getter: (s) => s.dynamicSyncExpectedPostsDefault,
-    setter: (s, v) => s.setDynamicSyncExpectedPostsDefault(v),
-    formatBadge: (v) => String(v),
-  },
   {
     id: "edit-ai-temperature",
     label: "Edit AI Temperature",
@@ -694,109 +657,6 @@ function buildProxyOverrideCommands(): CommandDef[] {
   ]
 }
 
-function applyBulkSyncPatchLocally(
-  ctx: CommandContext,
-  patch: {
-    regularSyncEnabled?: boolean
-    dynamicSyncEnabled?: boolean
-    autoSyncIntervalMinutes?: number
-    dynamicSyncExpectedPosts?: number
-  },
-  channelIds: Set<string> | null,
-) {
-  ctx.setChannels((prev) =>
-    prev.map((channel) => {
-      if (channelIds && !channelIds.has(channel.id)) return channel
-      return { ...channel, ...patch }
-    }),
-  )
-}
-
-function buildBulkSyncCommands(): CommandDef[] {
-  return [
-    {
-      id: "disable-regular-sync-all-channels",
-      kind: "action",
-      label: "Disable Regular Sync on All Channels",
-      keywords: ["regular sync", "disable", "all", "bulk"],
-      group: "Sync",
-      requiresConfirmation: true,
-      confirmDescription:
-        "Disable regular auto-sync for all channels? Manual sync remains available.",
-      run: async (ctx) => {
-        await api.bulkSyncSettings({
-          channelIds: null,
-          regularSyncEnabled: false,
-        })
-        applyBulkSyncPatchLocally(ctx, { regularSyncEnabled: false }, null)
-        toast.success("Regular sync disabled on all channels")
-      },
-    },
-    {
-      id: "enable-regular-sync-all-channels",
-      kind: "action",
-      label: "Enable Regular Sync on All Channels",
-      keywords: ["regular sync", "enable", "all", "bulk"],
-      group: "Sync",
-      run: async (ctx) => {
-        await api.bulkSyncSettings({
-          channelIds: null,
-          regularSyncEnabled: true,
-        })
-        applyBulkSyncPatchLocally(ctx, { regularSyncEnabled: true }, null)
-        toast.success("Regular sync enabled on all channels")
-      },
-    },
-    {
-      id: "enable-dynamic-sync-selected-channels",
-      kind: "action",
-      label: "Enable Dynamic Sync on Selected Channels",
-      keywords: ["dynamic sync", "enable", "selected", "bulk"],
-      group: "Sync",
-      disabled: (ctx) =>
-        ctx.selectedChannels.size === 0
-          ? { disabled: true, reason: "No channels selected" }
-          : { disabled: false },
-      run: async (ctx) => {
-        const selectedIds = ctx.channels
-          .filter((channel) => ctx.selectedChannels.has(channel.name))
-          .map((channel) => channel.id)
-        if (selectedIds.length === 0) return
-        await api.bulkSyncSettings({
-          channelIds: selectedIds,
-          dynamicSyncEnabled: true,
-        })
-        applyBulkSyncPatchLocally(
-          ctx,
-          { dynamicSyncEnabled: true },
-          new Set(selectedIds),
-        )
-        toast.success("Dynamic sync enabled on selected channels")
-      },
-    },
-    {
-      id: "apply-regular-sync-interval-all-channels",
-      kind: "action",
-      label: "Apply Regular Sync Interval to All Channels",
-      keywords: ["regular sync", "interval", "all", "bulk", "apply"],
-      group: "Sync",
-      run: async (ctx) => {
-        const minutes = ctx.settings.regularSyncIntervalMinutes
-        await api.bulkSyncSettings({
-          channelIds: null,
-          autoSyncIntervalMinutes: minutes,
-        })
-        applyBulkSyncPatchLocally(
-          ctx,
-          { autoSyncIntervalMinutes: minutes },
-          null,
-        )
-        toast.success(`Applied ${minutes}m interval to all channels`)
-      },
-    },
-  ]
-}
-
 export function buildSettingCommands(): CommandDef[] {
   return [
     ...buildBooleanCommands(),
@@ -805,7 +665,6 @@ export function buildSettingCommands(): CommandDef[] {
     ...buildEmbeddingsCommands(),
     ...buildJobToggleCommands(),
     ...buildProxyOverrideCommands(),
-    ...buildBulkSyncCommands(),
   ]
 }
 
