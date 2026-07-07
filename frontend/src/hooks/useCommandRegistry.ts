@@ -1,6 +1,5 @@
-import { useEffect, useMemo, useState } from "react"
+import { useMemo } from "react"
 import { useCommandPaletteContext } from "@/components/CommandPaletteProvider"
-import { api } from "@/api"
 import { useAI } from "@/contexts/AIContext"
 import { useChatContext } from "@/contexts/ChatContext"
 import { useData } from "@/contexts/DataContext"
@@ -12,6 +11,7 @@ import { useGuidedTour } from "@/hooks/useGuidedTour"
 import { useJobToggles } from "@/hooks/useJobToggles"
 import { useSettingsSection } from "@/hooks/useSettingsSection"
 import { useSummarizerGroupParams } from "@/hooks/useSummarizerGroupParams"
+import { useSettingGroupsQuery, useInvalidateSettingGroups } from "@/hooks/useSettingGroups"
 import { INDEXEDDB_STORE_NAMES } from "@/lib/cache"
 import {
   buildActionCommands,
@@ -24,8 +24,6 @@ import {
   buildSettingCommands,
 } from "@/lib/commands"
 import type { CommandContext, CommandDef } from "@/lib/commands/types"
-import { sortSettingGroupsForDisplay } from "@/lib/channels/setting-groups"
-import type { ChannelSettingGroup } from "@/types"
 
 export function useCommandRegistry(): {
   commands: CommandDef[]
@@ -93,13 +91,8 @@ export function useCommandRegistry(): {
   const palette = useCommandPaletteContext()
   const { setChannelGroupFilter, setSelectedSettingGroup } =
     useSummarizerGroupParams()
-  const [settingGroups, setSettingGroups] = useState<ChannelSettingGroup[]>([])
-
-  useEffect(() => {
-    void api.listSettingGroups().then((groups) => {
-      setSettingGroups(sortSettingGroupsForDisplay(groups))
-    })
-  }, [channels.length])
+  const { data: settingGroups = [] } = useSettingGroupsQuery()
+  const invalidateSettingGroups = useInvalidateSettingGroups()
 
   const context = useMemo<CommandContext>(
     () => ({
@@ -237,6 +230,7 @@ export function useCommandRegistry(): {
       loadHistory,
       indexedDbTables: [...INDEXEDDB_STORE_NAMES],
       settingGroups,
+      invalidateSettingGroups,
       setChannelGroupFilter,
       setSelectedSettingGroup,
     }),
@@ -289,6 +283,7 @@ export function useCommandRegistry(): {
       setSummary,
       settings,
       settingGroups,
+      invalidateSettingGroups,
       setChannelGroupFilter,
       setSelectedSettingGroup,
       startDate,

@@ -190,6 +190,7 @@ export interface CommandContext {
   currentSummaryId: string | null
   indexedDbTables: string[]
   settingGroups: import("@/types").ChannelSettingGroup[]
+  invalidateSettingGroups: () => Promise<void>
   setChannelGroupFilter: (groupId: string) => void
   setSelectedSettingGroup: (groupId: string) => void
 }

@@ -42,6 +42,10 @@ import {
 import { deleteChannelByRecord } from "@/lib/channels/delete-channel"
 import { findFrozenReservedGroup, sortSettingGroupsForDisplay } from "@/lib/channels/setting-groups"
 import { useSummarizerGroupParams } from "@/hooks/useSummarizerGroupParams"
+import {
+  useInvalidateSettingGroups,
+  useSettingGroupsQuery,
+} from "@/hooks/useSettingGroups"
 import { useData } from "../contexts/DataContext"
 import { useScraper } from "../contexts/ScraperContext"
 import { useSettings } from "../contexts/SettingsContext"
@@ -49,7 +53,7 @@ import { useUI } from "../contexts/UIContext"
 import { useApiStatus } from "../hooks/useApiStatus"
 import { useScrollLoadMore } from "../hooks/useScrollLoadMore"
 import { clearChannelPosts, upsertChannel } from "../lib/repository"
-import type { Channel, ChannelSettingGroup } from "../types"
+import type { Channel } from "../types"
 import { ChannelCard } from "./ChannelCard"
 import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tg-tooltip"
 
@@ -173,16 +177,16 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
     "freeze" | "unfreeze" | null
   >(null)
   const [confirmBulkDelete, setConfirmBulkDelete] = useState(false)
-  const [settingGroups, setSettingGroups] = useState<ChannelSettingGroup[]>([])
+  const { data: settingGroups = [] } = useSettingGroupsQuery()
+  const invalidateSettingGroups = useInvalidateSettingGroups()
   const [bulkTargetGroupId, setBulkTargetGroupId] = useState("")
 
   useEffect(() => {
-    void api.listSettingGroups().then((groups) => {
-      setSettingGroups(groups)
-      const defaultGroup = groups.find((group) => group.isDefault) ?? groups[0]
-      if (defaultGroup) setBulkTargetGroupId(defaultGroup.id)
-    })
-  }, [channels.length])
+    const defaultGroup = settingGroups.find((group) => group.isDefault) ?? settingGroups[0]
+    if (defaultGroup && !bulkTargetGroupId) {
+      setBulkTargetGroupId(defaultGroup.id)
+    }
+  }, [bulkTargetGroupId, settingGroups])
 
   const filteredChannels = useMemo(() => {
     let result = channels
@@ -397,6 +401,7 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
           : channel,
       ),
     )
+    await invalidateSettingGroups()
   }
 
   const [confirmDeleteChannel, setConfirmDeleteChannel] =

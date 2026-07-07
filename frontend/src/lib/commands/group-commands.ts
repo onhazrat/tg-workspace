@@ -77,6 +77,7 @@ export async function moveSelectedChannelsToSettingGroup(
         : channel,
     ),
   )
+  await ctx.invalidateSettingGroups()
   toast.success(
     `Moved ${channelIds.length} channel${channelIds.length === 1 ? "" : "s"} to "${group.name}"`,
   )

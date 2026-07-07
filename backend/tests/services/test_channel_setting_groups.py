@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import uuid
+from unittest.mock import patch
 
 import pytest
 from fastapi import HTTPException
@@ -190,3 +191,50 @@ def test_consolidate_legacy_duplicate_frozen_groups() -> None:
         assert frozen_names == ["Frozen"]
         assert default_group.id in {group["id"] for group in listed}
         assert canonical_frozen.id in {group["id"] for group in listed}
+
+
+def test_list_setting_groups_avoids_loading_operator_channel_rows() -> None:
+    user_id = uuid.uuid4()
+    with Session(engine) as session:
+        with patch(
+            "app.services.operator.select_operator_channels"
+        ) as mock_select_operator_channels:
+            listed = list_setting_groups(session, operator_id=user_id)
+            mock_select_operator_channels.assert_not_called()
+        assert len(listed) >= 5
+
+
+def test_list_setting_groups_includes_orphan_group_from_distinct_query() -> None:
+    from app.models_tg import ChannelSettingGroup
+
+    user_id = uuid.uuid4()
+    other_user_id = uuid.uuid4()
+    with Session(engine) as session:
+        ensure_default_group(session, user_id=user_id)
+        orphan_group = ChannelSettingGroup(
+            id=str(uuid.uuid4()),
+            user_id=other_user_id,
+            name="Other operator group",
+            is_default=False,
+            regular_sync_enabled=True,
+            dynamic_sync_enabled=False,
+            auto_sync_interval_minutes=60,
+            dynamic_sync_expected_posts=15,
+            auto_follow_forwarded=False,
+            is_frozen=False,
+            is_unavailable_on_web_view=False,
+        )
+        session.add(orphan_group)
+        session.add(
+            Channel(
+                id="orphan-channel",
+                name="orphan-channel",
+                user_id=user_id,
+                setting_group_id=orphan_group.id,
+            )
+        )
+        session.commit()
+
+        listed = list_setting_groups(session, operator_id=user_id)
+        listed_ids = {group["id"] for group in listed}
+        assert orphan_group.id in listed_ids

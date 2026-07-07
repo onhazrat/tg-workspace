@@ -598,14 +598,40 @@ def recompute_channels_for_group(
     return len(channels)
 
 
+def _legacy_reserved_duplicates_exist(
+    session: Session, *, user_id: uuid.UUID | None
+) -> bool:
+    canonical_frozen = frozen_group_id_for_user(user_id)
+    canonical_restricted = restricted_group_id_for_user(user_id)
+    duplicate = session.exec(
+        select(ChannelSettingGroup.id)
+        .where(
+            _operator_group_scope_filter(user_id),
+            or_(
+                (ChannelSettingGroup.name == FROZEN_GROUP_NAME)
+                & (ChannelSettingGroup.id != canonical_frozen),
+                (ChannelSettingGroup.name == RESTRICTED_GROUP_NAME)
+                & (ChannelSettingGroup.id != canonical_restricted),
+            ),
+        )
+        .limit(1)
+    ).first()
+    return duplicate is not None
+
+
 def list_setting_groups(
     session: Session, *, operator_id: uuid.UUID | None
 ) -> list[dict[str, Any]]:
-    from app.services.operator import select_operator_channels
+    from app.services.operator import distinct_operator_setting_group_ids
 
     ensure_builtin_groups(session, user_id=operator_id)
-    consolidate_legacy_duplicate_reserved_groups(session, user_id=operator_id)
-    session.commit()
+    merged = 0
+    if _legacy_reserved_duplicates_exist(session, user_id=operator_id):
+        merged = consolidate_legacy_duplicate_reserved_groups(
+            session, user_id=operator_id
+        )
+    if session.new or session.dirty or session.deleted or merged:
+        session.commit()
 
     groups = list(
         session.exec(
@@ -613,12 +639,9 @@ def list_setting_groups(
         ).all()
     )
     known_ids = {group.id for group in groups}
-    operator_channels = select_operator_channels(session, operator_id=operator_id)
-    orphan_ids = {
-        channel.setting_group_id
-        for channel in operator_channels
-        if channel.setting_group_id not in known_ids
-    }
+    orphan_ids = distinct_operator_setting_group_ids(
+        session, operator_id=operator_id
+    ) - known_ids
     if orphan_ids:
         extra_groups = session.exec(
             select(ChannelSettingGroup).where(col(ChannelSettingGroup.id).in_(orphan_ids))

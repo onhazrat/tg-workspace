@@ -70,6 +70,7 @@ function makeContext(
     setSelectedSettingGroup: () => {},
     setSelectedChannels: () => {},
     setChannels: () => {},
+    invalidateSettingGroups: async () => {},
     isOffline: false,
     ...overrides,
   } as CommandContext

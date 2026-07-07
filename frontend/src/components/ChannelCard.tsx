@@ -29,6 +29,10 @@ import {
 } from "@/lib/channels/channel-tag-model"
 import { findFrozenReservedGroup } from "@/lib/channels/setting-groups"
 import {
+  useInvalidateSettingGroups,
+  useSettingGroupsQuery,
+} from "@/hooks/useSettingGroups"
+import {
   isVirtualGroupTag,
   toVirtualGroupTagName,
 } from "@/lib/channels/virtual-group-tags"
@@ -72,6 +76,8 @@ export const ChannelCard: React.FC<ChannelCardProps> = ({
     showChannelLinks,
     showChannelStartId,
   } = useSettings()
+  const { data: settingGroups = [] } = useSettingGroupsQuery()
+  const invalidateSettingGroups = useInvalidateSettingGroups()
 
   const [isAddingTag, setIsAddingTag] = useState<boolean>(false)
   const [editingStartId, setEditingStartId] = useState<string | null>(null)
@@ -145,16 +151,16 @@ export const ChannelCard: React.FC<ChannelCardProps> = ({
 
   const handleToggleFreeze = async () => {
     if (channel.isUnavailableOnWebView) return
-    const groups = await api.listSettingGroups()
     const targetGroup = channel.isFrozen
-      ? groups.find((group) => group.isDefault)
-      : findFrozenReservedGroup(groups)
+      ? settingGroups.find((group) => group.isDefault)
+      : findFrozenReservedGroup(settingGroups)
     if (!targetGroup) return
     await api.bulkAssignSettingGroup({
       channelIds: [channel.id],
       settingGroupId: targetGroup.id,
     })
     await loadChannels()
+    await invalidateSettingGroups()
     if (!channel.isFrozen) {
       setSelectedChannels((prev) => {
         const next = new Set(prev)

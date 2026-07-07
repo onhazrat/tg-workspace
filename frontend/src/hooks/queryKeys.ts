@@ -3,6 +3,7 @@ import { env } from "@/lib/env"
 /** React Query keys for summarizer server state. */
 export const queryKeys = {
   channels: ["channels"] as const,
+  settingGroups: ["settingGroups"] as const,
   bots: ["bots"] as const,
   summaries: ["summaries"] as const,
   dbStats: ["dbStats"] as const,

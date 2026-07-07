@@ -1,14 +1,21 @@
 import { Layers, Plus, Trash2 } from "lucide-react"
 import type React from "react"
-import { useCallback, useEffect, useState } from "react"
+import { useEffect, useState } from "react"
 import { toast } from "sonner"
 import { api, type SettingGroupWriteBody } from "@/api"
 import {
   AUTO_SYNC_INTERVAL_MAX_MINUTES,
   AUTO_SYNC_INTERVAL_MIN_MINUTES,
 } from "@/constants"
-import { isReservedSettingGroup, sortSettingGroupsForDisplay } from "@/lib/channels/setting-groups"
+import {
+  isReservedSettingGroup,
+  resolveInitialSelectedGroupId,
+} from "@/lib/channels/setting-groups"
 import { useSummarizerGroupParams } from "@/hooks/useSummarizerGroupParams"
+import {
+  useInvalidateSettingGroups,
+  useSettingGroupsQuery,
+} from "@/hooks/useSettingGroups"
 import type { ChannelSettingGroup } from "@/types"
 
 const isReservedGroup = isReservedSettingGroup
@@ -24,11 +31,27 @@ const emptyDraft = (): SettingGroupWriteBody => ({
   isUnavailableOnWebView: false,
 })
 
+const draftFromGroup = (group: ChannelSettingGroup): SettingGroupWriteBody => ({
+  name: group.name,
+  regularSyncEnabled: group.regularSyncEnabled,
+  dynamicSyncEnabled: group.dynamicSyncEnabled,
+  autoSyncIntervalMinutes: group.autoSyncIntervalMinutes,
+  dynamicSyncExpectedPosts: group.dynamicSyncExpectedPosts,
+  autoFollowForwarded: group.autoFollowForwarded,
+  isFrozen: group.isFrozen,
+  isUnavailableOnWebView: group.isUnavailableOnWebView,
+})
+
 export const SettingGroupsPanel: React.FC = () => {
   const { selectedSettingGroupId, setSelectedSettingGroup } =
     useSummarizerGroupParams()
-  const [groups, setGroups] = useState<ChannelSettingGroup[]>([])
-  const [loading, setLoading] = useState(true)
+  const {
+    data: groups = [],
+    isLoading,
+    isError,
+    error,
+  } = useSettingGroupsQuery()
+  const invalidateSettingGroups = useInvalidateSettingGroups()
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [draft, setDraft] = useState<SettingGroupWriteBody>(emptyDraft())
   const [createDraft, setCreateDraft] = useState<SettingGroupWriteBody>(
@@ -36,55 +59,38 @@ export const SettingGroupsPanel: React.FC = () => {
   )
   const [busy, setBusy] = useState(false)
 
-  const loadGroups = useCallback(async () => {
-    setLoading(true)
-    try {
-      const rows = await api.listSettingGroups()
-      setGroups(sortSettingGroupsForDisplay(rows))
-      if (!selectedId && rows.length > 0) {
-        const defaultGroup = rows.find((group) => group.isDefault) ?? rows[0]
-        setSelectedId(defaultGroup.id)
-      }
-    } catch (error) {
-      toast.error(
-        error instanceof Error
-          ? error.message
-          : "Failed to load setting groups",
-      )
-    } finally {
-      setLoading(false)
-    }
-  }, [selectedId])
-
   useEffect(() => {
-    void loadGroups()
-  }, [loadGroups])
-
-  useEffect(() => {
-    if (
-      selectedSettingGroupId &&
-      groups.some((group) => group.id === selectedSettingGroupId)
-    ) {
-      setSelectedId(selectedSettingGroupId)
+    const nextId = resolveInitialSelectedGroupId(
+      groups,
+      selectedSettingGroupId,
+      selectedId,
+    )
+    if (nextId !== selectedId) {
+      setSelectedId(nextId)
     }
-  }, [groups, selectedSettingGroupId])
+  }, [groups, selectedId, selectedSettingGroupId])
 
   useEffect(() => {
     const selected = groups.find((group) => group.id === selectedId)
     if (!selected) return
-    setDraft({
-      name: selected.name,
-      regularSyncEnabled: selected.regularSyncEnabled,
-      dynamicSyncEnabled: selected.dynamicSyncEnabled,
-      autoSyncIntervalMinutes: selected.autoSyncIntervalMinutes,
-      dynamicSyncExpectedPosts: selected.dynamicSyncExpectedPosts,
-      autoFollowForwarded: selected.autoFollowForwarded,
-      isFrozen: selected.isFrozen,
-      isUnavailableOnWebView: selected.isUnavailableOnWebView,
-    })
+    setDraft(draftFromGroup(selected))
   }, [groups, selectedId])
 
+  useEffect(() => {
+    if (!isError) return
+    toast.error(
+      error instanceof Error ? error.message : "Failed to load setting groups",
+    )
+  }, [error, isError])
+
   const selectedGroup = groups.find((group) => group.id === selectedId)
+  const showInitialLoading = isLoading && groups.length === 0
+
+  const handleSelectGroup = (group: ChannelSettingGroup) => {
+    setSelectedId(group.id)
+    setSelectedSettingGroup(group.id)
+    setDraft(draftFromGroup(group))
+  }
 
   const handleCreate = async () => {
     if (!createDraft.name?.trim()) {
@@ -96,12 +102,13 @@ export const SettingGroupsPanel: React.FC = () => {
       const created = await api.createSettingGroup(createDraft)
       toast.success(`Created group "${created.name}"`)
       setCreateDraft(emptyDraft())
-      await loadGroups()
+      await invalidateSettingGroups()
       setSelectedId(created.id)
-    } catch (error) {
+      setSelectedSettingGroup(created.id)
+    } catch (createError) {
       toast.error(
-        error instanceof Error
-          ? error.message
+        createError instanceof Error
+          ? createError.message
           : "Failed to create setting group",
       )
     } finally {
@@ -115,11 +122,11 @@ export const SettingGroupsPanel: React.FC = () => {
     try {
       await api.updateSettingGroup(selectedId, draft)
       toast.success(`Updated group "${draft.name ?? selectedGroup.name}"`)
-      await loadGroups()
-    } catch (error) {
+      await invalidateSettingGroups()
+    } catch (saveError) {
       toast.error(
-        error instanceof Error
-          ? error.message
+        saveError instanceof Error
+          ? saveError.message
           : "Failed to update setting group",
       )
     } finally {
@@ -134,10 +141,10 @@ export const SettingGroupsPanel: React.FC = () => {
       await api.deleteSettingGroup(selectedId)
       toast.success(`Deleted group "${selectedGroup.name}"`)
       setSelectedId(null)
-      await loadGroups()
-    } catch (error) {
+      await invalidateSettingGroups()
+    } catch (deleteError) {
       toast.error(
-        error instanceof Error ? error.message : "Cannot delete group",
+        deleteError instanceof Error ? deleteError.message : "Cannot delete group",
       )
     } finally {
       setBusy(false)
@@ -157,7 +164,7 @@ export const SettingGroupsPanel: React.FC = () => {
         group. Reassign channels on the Channels tab; edit group defaults here.
       </p>
 
-      {loading ? (
+      {showInitialLoading ? (
         <p className="text-[10px] opacity-50">Loading groups…</p>
       ) : (
         <div className="grid gap-6 lg:grid-cols-[220px_minmax(0,1fr)]">
@@ -166,10 +173,7 @@ export const SettingGroupsPanel: React.FC = () => {
               <button
                 key={group.id}
                 type="button"
-                onClick={() => {
-                  setSelectedId(group.id)
-                  setSelectedSettingGroup(group.id)
-                }}
+                onClick={() => handleSelectGroup(group)}
                 className={`w-full text-left px-3 py-2 rounded-md border text-[11px] transition-all ${
                   selectedId === group.id
                     ? "border-app-ink bg-app-ink text-app-bg"

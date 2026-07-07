@@ -48,3 +48,19 @@ export const findFrozenReservedGroup = (
   groups: ChannelSettingGroup[],
 ): ChannelSettingGroup | undefined =>
   groups.find(isFrozenReservedGroup)
+
+/** Pick the panel selection from cache — URL param wins over default group. */
+export const resolveInitialSelectedGroupId = (
+  groups: ChannelSettingGroup[],
+  urlGroupId: string,
+  currentId: string | null,
+): string | null => {
+  if (groups.length === 0) return currentId
+  if (currentId && groups.some((group) => group.id === currentId)) {
+    return currentId
+  }
+  if (urlGroupId && groups.some((group) => group.id === urlGroupId)) {
+    return urlGroupId
+  }
+  return (groups.find((group) => group.isDefault) ?? groups[0]).id
+}
