@@ -40,15 +40,17 @@ def _seed_posts_and_embeddings(client: TestClient) -> None:
     from app.core.db import engine
     from app.models_tg import Channel
     from app.services.operator import get_operator_user_id
+    from tests.utils.setting_groups import add_test_channel
 
     with Session(engine) as session:
         operator_id = get_operator_user_id(session)
         ch = session.get(Channel, "rag-ch")
         if ch and operator_id:
             ch.user_id = operator_id
-            ch.is_frozen = False
             session.add(ch)
             session.commit()
+        elif operator_id:
+            add_test_channel(session, "rag-ch", user_id=operator_id)
     posts = [
         {
             "id": 1,
@@ -230,7 +232,6 @@ def test_backfill_embeddings_mocked_provider(
         ch = session.get(Channel, "backfill-ch")
         if ch and operator_id:
             ch.user_id = operator_id
-            ch.is_frozen = False
             session.add(ch)
         for emb in session.exec(
             select(PostEmbedding).where(PostEmbedding.channel_name == "backfill-ch")
@@ -360,6 +361,7 @@ def test_rag_status_scoped_to_operator_channels(client: TestClient) -> None:
 
     from app.core.db import engine
     from app.models_tg import Channel, Post
+    from tests.utils.setting_groups import add_test_channel
 
     headers = _auth(client)
     op_ch = "op-status-ch"
@@ -369,10 +371,9 @@ def test_rag_status_scoped_to_operator_channels(client: TestClient) -> None:
             existing = session.get(Channel, ch_id)
             if existing:
                 existing.name = name
-                existing.is_frozen = False
                 session.add(existing)
             else:
-                session.add(Channel(id=ch_id, name=name, is_frozen=False))
+                add_test_channel(session, ch_id, name=name)
         for post_id, channel_name, text, ts in (
             (901, op_ch, "operator post", 1000),
             (902, foreign_ch, "foreign post", 2000),

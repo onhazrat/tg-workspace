@@ -27,6 +27,24 @@ def freeze_channels_except(session: Session, keep_ids: set[str]) -> None:
     session.commit()
 
 
+def add_test_channel(
+    session: Session,
+    channel_id: str,
+    *,
+    name: str | None = None,
+    user_id: uuid.UUID | None = None,
+    **channel_fields,
+) -> Channel:
+    """Insert a channel with a valid default setting group for service tests."""
+    return upsert_sync_test_channel(
+        session,
+        channel_id=channel_id,
+        user_id=user_id,
+        name=name,
+        channel_fields=channel_fields or None,
+    )
+
+
 def upsert_sync_test_channel(
     session: Session,
     *,

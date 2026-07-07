@@ -280,7 +280,13 @@ def apply_group_fields(group: ChannelSettingGroup, body: dict[str, Any]) -> None
     group.updated_at = datetime.utcnow()
 
 
-def recompute_channels_for_group(session: Session, group_id: str) -> int:
+def recompute_channels_for_group(
+    session: Session,
+    group_id: str,
+    *,
+    previous_interval_minutes: int | None = None,
+    previous_expected_posts: int | None = None,
+) -> int:
     channels = session.exec(
         select(Channel).where(Channel.setting_group_id == group_id)
     ).all()
@@ -290,19 +296,19 @@ def recompute_channels_for_group(session: Session, group_id: str) -> int:
     if not group:
         return 0
 
-    now_ms = int(time.time() * 1000)
-    timestamps_by_channel = _fetch_recent_timestamps_by_channel(
-        session, [channel.name for channel in channels]
-    )
-    for channel in channels:
-        previous_interval = group.auto_sync_interval_minutes
+    if previous_interval_minutes is None:
+        previous_interval_minutes = group.auto_sync_interval_minutes
+    if previous_expected_posts is None:
         previous_expected_posts = group.dynamic_sync_expected_posts
+
+    now_ms = int(time.time() * 1000)
+    for channel in channels:
         if not group.regular_sync_enabled:
             channel.next_regular_sync_at = None
         else:
             recompute_next_regular_sync_at_on_interval_change(
                 channel,
-                previous_interval_minutes=previous_interval,
+                previous_interval_minutes=previous_interval_minutes,
                 now_ms=now_ms,
                 regular_sync_enabled=group.regular_sync_enabled,
                 auto_sync_interval_minutes=group.auto_sync_interval_minutes,
@@ -385,10 +391,17 @@ def update_setting_group(
     if not group:
         raise HTTPException(status_code=404, detail="Setting group not found")
 
+    previous_interval_minutes = group.auto_sync_interval_minutes
+    previous_expected_posts = group.dynamic_sync_expected_posts
     apply_group_fields(group, body)
     session.add(group)
     session.commit()
-    recompute_channels_for_group(session, group_id)
+    recompute_channels_for_group(
+        session,
+        group_id,
+        previous_interval_minutes=previous_interval_minutes,
+        previous_expected_posts=previous_expected_posts,
+    )
     session.commit()
     counts = channel_counts_by_group(session)
     session.refresh(group)
@@ -518,6 +531,8 @@ def update_default_group_sync_settings(
         raise HTTPException(status_code=400, detail="No sync settings fields provided")
 
     group = ensure_default_group(session, user_id=user_id)
+    previous_interval_minutes = group.auto_sync_interval_minutes
+    previous_expected_posts = group.dynamic_sync_expected_posts
     patch: dict[str, Any] = {}
     if regular_sync_enabled is not None:
         patch["regular_sync_enabled"] = regular_sync_enabled
@@ -530,6 +545,11 @@ def update_default_group_sync_settings(
     apply_group_fields(group, patch)
     session.add(group)
     session.commit()
-    updated = recompute_channels_for_group(session, group.id)
+    updated = recompute_channels_for_group(
+        session,
+        group.id,
+        previous_interval_minutes=previous_interval_minutes,
+        previous_expected_posts=previous_expected_posts,
+    )
     session.commit()
     return {"updated": updated}

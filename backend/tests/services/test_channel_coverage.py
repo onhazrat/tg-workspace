@@ -5,14 +5,14 @@ from __future__ import annotations
 from sqlmodel import Session, select
 
 from app.core.db import engine
-from app.models_tg import Channel, Post
+from app.models_tg import Post
 from app.services.channels import update_channel_coverage
+from tests.utils.setting_groups import add_test_channel
 
 
 def test_young_history_sets_incomplete_flag() -> None:
     with Session(engine) as session:
-        channel = Channel(id="cov-ch", name="cov-ch")
-        session.add(channel)
+        channel = add_test_channel(session, "cov-ch")
         session.add(
             Post(
                 channel_name="cov-ch",
@@ -35,8 +35,7 @@ def test_young_history_sets_incomplete_flag() -> None:
 
 def test_anchor_assigned_to_newest_post_before_cutoff() -> None:
     with Session(engine) as session:
-        channel = Channel(id="cov-ch-2", name="cov-ch-2")
-        session.add(channel)
+        channel = add_test_channel(session, "cov-ch-2")
         session.add(
             Post(
                 channel_name="cov-ch-2",

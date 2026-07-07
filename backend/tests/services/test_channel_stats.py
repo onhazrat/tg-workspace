@@ -9,12 +9,13 @@ from fastapi import HTTPException
 from sqlmodel import Session
 
 from app.core.db import engine
-from app.models_tg import Channel, Post
+from app.models_tg import Post
 from app.services.channels import (
     compute_channel_stats,
     compute_channel_stats_batch,
     get_channel_stats,
 )
+from tests.utils.setting_groups import add_test_channel
 
 
 def _hourly_timestamps(count: int) -> list[int]:
@@ -25,8 +26,8 @@ def _hourly_timestamps(count: int) -> list[int]:
 
 def test_batch_stats_count_min_max() -> None:
     with Session(engine) as session:
-        session.add(Channel(id="stats-a", name="stats-a"))
-        session.add(Channel(id="stats-b", name="stats-b"))
+        add_test_channel(session, "stats-a")
+        add_test_channel(session, "stats-b")
         session.add(
             Post(
                 channel_name="stats-a",
@@ -68,7 +69,7 @@ def test_batch_stats_count_min_max() -> None:
 def test_batch_stats_velocity() -> None:
     timestamps = _hourly_timestamps(5)
     with Session(engine) as session:
-        session.add(Channel(id="vel-ch", name="vel-ch"))
+        add_test_channel(session, "vel-ch")
         for idx, ts in enumerate(timestamps, start=1):
             session.add(
                 Post(
@@ -92,8 +93,8 @@ def test_batch_stats_velocity() -> None:
 
 def test_batch_stats_empty_channel() -> None:
     with Session(engine) as session:
-        session.add(Channel(id="empty-ch", name="empty-ch"))
-        session.add(Channel(id="has-posts", name="has-posts"))
+        add_test_channel(session, "empty-ch")
+        add_test_channel(session, "has-posts")
         session.add(
             Post(
                 channel_name="has-posts",
@@ -113,7 +114,7 @@ def test_batch_stats_empty_channel() -> None:
 def test_batch_stats_timestamp_zero_excluded() -> None:
     timestamps = _hourly_timestamps(3)
     with Session(engine) as session:
-        session.add(Channel(id="zero-ts-ch", name="zero-ts-ch"))
+        add_test_channel(session, "zero-ts-ch")
         session.add(
             Post(
                 channel_name="zero-ts-ch",
@@ -142,7 +143,7 @@ def test_batch_stats_timestamp_zero_excluded() -> None:
 def test_single_channel_stats_delegates_to_batch() -> None:
     timestamps = _hourly_timestamps(4)
     with Session(engine) as session:
-        session.add(Channel(id="delegate-ch", name="delegate-ch"))
+        add_test_channel(session, "delegate-ch")
         for idx, ts in enumerate(timestamps, start=1):
             session.add(
                 Post(
@@ -167,7 +168,7 @@ def test_single_channel_stats_delegates_to_batch() -> None:
 
 def test_get_channel_stats_no_posts_raises() -> None:
     with Session(engine) as session:
-        session.add(Channel(id="no-posts-ch", name="no-posts-ch"))
+        add_test_channel(session, "no-posts-ch")
         session.commit()
 
         try:

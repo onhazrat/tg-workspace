@@ -40,13 +40,23 @@ def test_channels_crud_roundtrip(client: TestClient) -> None:
     assert data["startId"] == 42
     assert data["autoFollowForwarded"] is False
 
-    r_update = client.put(
-        f"{PREFIX}/channels/ch-test",
-        json={"name": "ch-test", "autoFollowForwarded": True},
+    follow_group = client.post(
+        f"{PREFIX}/setting-groups",
+        json={"name": "Auto Follow", "autoFollowForwarded": True},
         headers=headers,
     )
+    assert follow_group.status_code == 200
+    group_id = follow_group.json()["id"]
+    r_assign = client.patch(
+        f"{PREFIX}/channels/bulk-setting-group",
+        json={"channelIds": ["ch-test"], "settingGroupId": group_id},
+        headers=headers,
+    )
+    assert r_assign.status_code == 200
+    r_update = client.get(f"{PREFIX}/channels", headers=headers)
     assert r_update.status_code == 200
-    assert r_update.json()["autoFollowForwarded"] is True
+    row = next(item for item in r_update.json() if item["id"] == "ch-test")
+    assert row["autoFollowForwarded"] is True
 
     r2 = client.get(f"{PREFIX}/channels", headers=headers)
     assert r2.status_code == 200
@@ -76,14 +86,19 @@ def test_put_channel_interval_updates_next_regular_sync_at(
             headers=headers,
         )
         assert r_create.status_code == 200
+        group_id = r_create.json()["settingGroupId"]
 
         r_update = client.put(
-            f"{PREFIX}/channels/{channel_id}",
-            json={"name": channel_id, "autoSyncIntervalMinutes": 120},
+            f"{PREFIX}/setting-groups/{group_id}",
+            json={"autoSyncIntervalMinutes": 120},
             headers=headers,
         )
         assert r_update.status_code == 200
-        data = r_update.json()
+        data = next(
+            item
+            for item in client.get(f"{PREFIX}/channels", headers=headers).json()
+            if item["id"] == channel_id
+        )
         assert data["autoSyncIntervalMinutes"] == 120
         assert data["nextRegularSyncAt"] is not None
         expected = compute_next_regular_sync_at_from_last_updated(
@@ -96,7 +111,6 @@ def test_put_channel_interval_updates_next_regular_sync_at(
             f"{PREFIX}/channels/{channel_id}",
             json={
                 "name": channel_id,
-                "autoSyncIntervalMinutes": 120,
                 "displayName": "Same interval",
             },
             headers=headers,
@@ -129,6 +143,7 @@ def test_put_channel_expected_posts_updates_next_dynamic_sync_at(
             headers=headers,
         )
         assert r_create.status_code == 200
+        group_id = r_create.json()["settingGroupId"]
 
         r_posts = client.post(
             f"{PREFIX}/posts/bulk",
@@ -151,12 +166,16 @@ def test_put_channel_expected_posts_updates_next_dynamic_sync_at(
         assert r_posts.status_code == 200
 
         r_update = client.put(
-            f"{PREFIX}/channels/{channel_id}",
-            json={"name": channel_id, "dynamicSyncExpectedPosts": 30},
+            f"{PREFIX}/setting-groups/{group_id}",
+            json={"dynamicSyncExpectedPosts": 30},
             headers=headers,
         )
         assert r_update.status_code == 200
-        data = r_update.json()
+        data = next(
+            item
+            for item in client.get(f"{PREFIX}/channels", headers=headers).json()
+            if item["id"] == channel_id
+        )
         assert data["dynamicSyncExpectedPosts"] == 30
         assert data["nextDynamicSyncAt"] is not None
         velocity = _velocity_from_timestamps(post_timestamps)
@@ -175,7 +194,6 @@ def test_put_channel_expected_posts_updates_next_dynamic_sync_at(
             f"{PREFIX}/channels/{channel_id}",
             json={
                 "name": channel_id,
-                "dynamicSyncExpectedPosts": 30,
                 "displayName": "Same expected posts",
             },
             headers=headers,

@@ -7,7 +7,7 @@ import time
 import uuid
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from sqlmodel import Session, select
+from sqlmodel import Session
 
 from app.core.db import engine
 from app.jobs.auto_sync import run_auto_sync
@@ -16,14 +16,11 @@ from app.models_tg import Channel
 from app.services.network_settings import get_network_setting_row
 from app.services.operator import get_operator_user_id
 from app.services.scraper_jobs import clear_jobs_for_tests
+from tests.utils.setting_groups import add_test_channel, freeze_channels_except
 
 
 def _freeze_channels_except(session: Session, keep_ids: set[str]) -> None:
-    """Isolate scheduler tests from NULL user_id channels left by other tests."""
-    for ch in session.exec(select(Channel)).all():
-        if ch.id not in keep_ids:
-            ch.is_frozen = True
-            session.add(ch)
+    freeze_channels_except(session, keep_ids)
 
 
 @patch("app.jobs.auto_sync.run_sync_job", new_callable=AsyncMock)
@@ -58,7 +55,6 @@ def test_auto_sync_scopes_to_operator_channels(
         stale_from_prior = session.get(Channel, "stale-ch")
         if stale_from_prior:
             stale_from_prior.user_id = other_user
-            stale_from_prior.is_frozen = True
             session.add(stale_from_prior)
 
         for ch_id, name, uid in (
@@ -70,22 +66,16 @@ def test_auto_sync_scopes_to_operator_channels(
                 existing.name = name
                 existing.last_updated = now - 120 * 60 * 1000
                 existing.user_id = uid
-                existing.is_frozen = False
-                existing.regular_sync_enabled = True
-                existing.dynamic_sync_enabled = False
                 existing.next_regular_sync_at = now - 1_000
                 session.add(existing)
             else:
-                session.add(
-                    Channel(
-                        id=ch_id,
-                        name=name,
-                        user_id=uid,
-                        last_updated=now - 120 * 60 * 1000,
-                        regular_sync_enabled=True,
-                        dynamic_sync_enabled=False,
-                        next_regular_sync_at=now - 1_000,
-                    )
+                add_test_channel(
+                    session,
+                    ch_id,
+                    name=name,
+                    user_id=uid,
+                    last_updated=now - 120 * 60 * 1000,
+                    next_regular_sync_at=now - 1_000,
                 )
         _freeze_channels_except(session, {"op-ch", "other-ch"})
         session.commit()

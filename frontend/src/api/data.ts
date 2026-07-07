@@ -17,6 +17,26 @@ import type {
 } from "../types"
 import { request } from "./base"
 
+const CHANNEL_INHERITED_WRITE_FIELDS = [
+  "regularSyncEnabled",
+  "dynamicSyncEnabled",
+  "autoSyncIntervalMinutes",
+  "dynamicSyncExpectedPosts",
+  "autoFollowForwarded",
+  "isFrozen",
+  "isUnavailableOnWebView",
+  "settingGroupId",
+  "settingGroupName",
+] as const satisfies readonly (keyof Channel)[]
+
+export function channelWritePayload(channel: Partial<Channel>): Partial<Channel> {
+  const payload = { ...channel }
+  for (const key of CHANNEL_INHERITED_WRITE_FIELDS) {
+    delete payload[key]
+  }
+  return payload
+}
+
 export interface BulkSyncSettingsPatchBody {
   channelIds: string[] | null
   regularSyncEnabled?: boolean
@@ -52,7 +72,7 @@ export const dataApi = {
   upsertChannel: (id: string, channel: Partial<Channel>) =>
     request<Channel>(`/api/v1/data/channels/${id}`, {
       method: "PUT",
-      body: JSON.stringify(channel),
+      body: JSON.stringify(channelWritePayload(channel)),
     }),
 
   deleteChannel: (id: string) =>

@@ -13,6 +13,8 @@ from sqlmodel import Session, col, func, select
 from app.models_tg import Channel, Post
 from app.services.channel_photos import delete_cached_photo
 from app.services.channel_setting_groups import (
+    INHERITED_SNAKE_FIELDS,
+    apply_group_fields,
     ensure_default_group,
     get_group_for_channel,
     get_or_create_restricted_group,
@@ -242,6 +244,15 @@ def upsert_channel(
             group = get_or_create_restricted_group(session, user_id=user_id)
         else:
             group = ensure_default_group(session, user_id=user_id)
+        inherited_patch = {
+            key: normalized[key]
+            for key in INHERITED_SNAKE_FIELDS
+            if key in normalized
+        }
+        if inherited_patch:
+            apply_group_fields(group, inherited_patch)
+            session.add(group)
+            session.flush()
         now_ms = int(datetime.utcnow().timestamp() * 1000)
         extras = {
             k: v
