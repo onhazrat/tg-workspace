@@ -24,6 +24,12 @@ from app.jobs.settings import (
 from app.models_tg import Channel, Post
 from app.services.async_db import run_db
 from app.services.channel_photos import resolve_cached_photo_url
+from app.services.channel_setting_groups import (
+    ensure_default_group,
+    get_group_for_channel,
+    get_or_create_restricted_group,
+    move_channel_to_restricted_group,
+)
 from app.services.channels import _velocity_from_timestamps, update_channel_coverage
 from app.services.language import detect_language_from_posts
 from app.services.logs import upsert_network_log, upsert_sync_log
@@ -277,16 +283,10 @@ def _create_forwarded_channel(
         if telemetry_url and telemetry:
             _save_network_telemetry(session, telemetry_url, telemetry, user_id=user_id)
         now = int(time.time() * 1000)
-        sync_settings = load_sync_settings(session)
-        regular_interval_minutes = int(
-            sync_settings.get("regularSyncIntervalMinutes") or 60
-        )
-        dynamic_enabled_default = bool(
-            sync_settings.get("dynamicSyncEnabledDefault", False)
-        )
-        dynamic_expected_posts_default = int(
-            sync_settings.get("dynamicSyncExpectedPostsDefault") or 15
-        )
+        if is_unavailable:
+            group = get_or_create_restricted_group(session, user_id=user_id)
+        else:
+            group = ensure_default_group(session, user_id=user_id)
         session.add(
             Channel(
                 id=clean,
@@ -297,17 +297,16 @@ def _create_forwarded_channel(
                 last_updated=now,
                 followed_at=now,
                 tags=[],
-                is_frozen=is_unavailable,
-                is_unavailable_on_web_view=is_unavailable,
+                setting_group_id=group.id,
                 discovered_via=discovered_via,
-                regular_sync_enabled=True,
-                dynamic_sync_enabled=dynamic_enabled_default,
-                auto_sync_interval_minutes=max(1, regular_interval_minutes),
-                dynamic_sync_expected_posts=max(1, dynamic_expected_posts_default),
-                next_regular_sync_at=compute_next_regular_sync_at_from_last_updated(
-                    now,
-                    max(1, regular_interval_minutes),
-                    now,
+                next_regular_sync_at=(
+                    compute_next_regular_sync_at_from_last_updated(
+                        now,
+                        group.auto_sync_interval_minutes,
+                        now,
+                    )
+                    if group.regular_sync_enabled
+                    else None
                 ),
                 next_dynamic_sync_at=None,
                 user_id=user_id,
@@ -432,7 +431,8 @@ def _prepare_channel_sync(
         channel = session.get(Channel, channel_id)
         if not channel:
             return "missing", None
-        if channel.is_frozen:
+        group = get_group_for_channel(session, channel)
+        if group.is_frozen:
             return "frozen", None
 
         effective_user_id = user_id or channel.user_id
@@ -464,7 +464,7 @@ def _prepare_channel_sync(
             display_name=channel.display_name,
             photo_url=channel.photo_url,
             language=channel.language,
-            auto_follow=bool(channel.auto_follow_forwarded),
+            auto_follow=bool(group.auto_follow_forwarded),
             proxies=resolve_proxies(network),
             proxy_concurrency=(proxy_default, proxy_overrides),
             tor_auto_rotate=bool(network.get("torAutoRotate")),
@@ -657,6 +657,7 @@ def _finalize_channel_success(
         if not channel:
             return
 
+        group = get_group_for_channel(session, channel)
         update_channel_coverage(session, channel, ctx.scrape_cutoff_ms)
 
         detected_language = channel.language or ctx.language
@@ -685,18 +686,18 @@ def _finalize_channel_success(
         now = int(time.time() * 1000)
         channel.last_updated = now
         channel.language = detected_language
-        if channel.regular_sync_enabled:
+        if group.regular_sync_enabled:
             channel.next_regular_sync_at = (
                 compute_next_regular_sync_at_from_last_updated(
                     channel.last_updated,
-                    channel.auto_sync_interval_minutes,
+                    group.auto_sync_interval_minutes,
                     now,
                 )
             )
         else:
             channel.next_regular_sync_at = None
 
-        if channel.dynamic_sync_enabled:
+        if group.dynamic_sync_enabled:
             recent_timestamps = list(
                 session.exec(
                     select(Post.timestamp)
@@ -714,7 +715,7 @@ def _finalize_channel_success(
                 channel.next_dynamic_sync_at = (
                     compute_next_dynamic_sync_at_from_last_updated(
                         channel.last_updated,
-                        channel.dynamic_sync_expected_posts,
+                        group.dynamic_sync_expected_posts,
                         velocity,
                         now,
                     )
@@ -763,10 +764,11 @@ def _finalize_channel_scrape_error(
             return
 
         if exc.is_unavailable:
-            channel.is_frozen = True
-            channel.is_unavailable_on_web_view = True
-            channel.updated_at = datetime.utcnow()
-            session.add(channel)
+            move_channel_to_restricted_group(
+                session,
+                channel,
+                user_id=user_id or channel.user_id,
+            )
             session.commit()
             touch_sync(session, "channels")
 

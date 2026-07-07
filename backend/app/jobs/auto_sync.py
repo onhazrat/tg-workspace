@@ -13,6 +13,7 @@ from app.core.config import settings
 from app.core.db import engine
 from app.jobs.settings import load_sync_settings, save_setting
 from app.models_tg import Channel
+from app.services.channel_setting_groups import load_groups_by_id
 from app.services.channels import compute_channel_stats_batch
 from app.services.network_settings import get_network_setting_row
 from app.services.operator import get_operator_user_id, select_operator_channels
@@ -52,17 +53,21 @@ async def run_auto_sync() -> dict[str, Any]:
             session
         )
         channels = select_operator_channels(session, operator_id=owner_id)
+        groups_by_id = load_groups_by_id(session)
         stats_by_channel = compute_channel_stats_batch(
             session, [ch.name for ch in channels]
         )
         due_channels: list[Channel] = []
         due_reason_by_id: dict[str, str] = {}
         for channel in channels:
+            group = groups_by_id.get(channel.setting_group_id)
+            if group is None:
+                continue
             stats = stats_by_channel.get(channel.name, {})
             schedule_view = SimpleNamespace(
-                is_frozen=channel.is_frozen,
-                regular_sync_enabled=channel.regular_sync_enabled,
-                dynamic_sync_enabled=channel.dynamic_sync_enabled,
+                is_frozen=group.is_frozen,
+                regular_sync_enabled=group.regular_sync_enabled,
+                dynamic_sync_enabled=group.dynamic_sync_enabled,
                 next_regular_sync_at=channel.next_regular_sync_at,
                 next_dynamic_sync_at=channel.next_dynamic_sync_at,
                 has_posts=int(stats.get("count") or 0) > 0,
@@ -81,7 +86,8 @@ async def run_auto_sync() -> dict[str, Any]:
             ch
             for ch in channels
             if (
-                not ch.is_frozen
+                groups_by_id.get(ch.setting_group_id) is not None
+                and not groups_by_id[ch.setting_group_id].is_frozen
                 and not ch.history_complete_to_cutoff
                 and ch.id not in due_ids
             )

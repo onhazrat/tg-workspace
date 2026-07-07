@@ -100,6 +100,24 @@ export interface Channel {
   historyCompleteToCutoff?: boolean
   anchorPostId?: number
   oldestStoredPostTimestamp?: number
+  settingGroupId?: string
+  settingGroupName?: string
+}
+
+export interface ChannelSettingGroup {
+  id: string
+  name: string
+  isDefault: boolean
+  regularSyncEnabled: boolean
+  dynamicSyncEnabled: boolean
+  autoSyncIntervalMinutes: number
+  dynamicSyncExpectedPosts: number
+  autoFollowForwarded: boolean
+  isFrozen: boolean
+  isUnavailableOnWebView: boolean
+  channelCount?: number
+  createdAt?: number
+  updatedAt?: number
 }
 
 export type TagSource = "manual" | "ai"

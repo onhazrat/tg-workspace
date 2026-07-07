@@ -26,7 +26,7 @@ export {
   sseJsonStream,
   sseTextStream,
 } from "./base"
-export type { BulkSyncSettingsPatchBody } from "./data"
+export type { BulkSyncSettingsPatchBody, SettingGroupWriteBody } from "./data"
 export { dataApi } from "./data"
 export type {
   JobStatusEntry,

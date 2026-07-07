@@ -23,6 +23,7 @@ from app.services.network_settings import (
     resolve_proxies,
     resolve_proxy_concurrency,
 )
+from app.services.channel_setting_groups import channel_is_frozen, load_groups_by_id
 from app.services.operator import get_operator_user_id, select_operator_channels
 from app.services.publish import publish_summary_text
 from app.services.scraper_jobs import create_job, has_active_sync_job
@@ -94,10 +95,15 @@ async def _sync_channels_for_summary(
     operator_channels = {
         ch.name: ch for ch in select_operator_channels(session, operator_id=operator_id)
     }
+    groups_by_id = load_groups_by_id(session)
     stale = []
     for name in channel_names:
         ch = operator_channels.get(name)
-        if ch and not ch.is_frozen and (ch.last_updated or 0) < end_ts:
+        if (
+            ch
+            and not channel_is_frozen(ch, groups_by_id)
+            and (ch.last_updated or 0) < end_ts
+        ):
             stale.append(ch)
     if not stale:
         return

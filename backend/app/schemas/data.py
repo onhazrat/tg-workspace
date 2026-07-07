@@ -45,3 +45,29 @@ class BulkChannelTagsRequest(BaseModel):
     updates: list[BulkChannelTagUpdate]
 
     model_config = {"populate_by_name": True}
+
+
+class BulkChannelSettingGroupRequest(BaseModel):
+    channel_ids: list[str] = Field(alias="channelIds")
+    setting_group_id: str = Field(alias="settingGroupId")
+
+    model_config = {"populate_by_name": True}
+
+
+class SettingGroupWriteRequest(BaseModel):
+    name: str | None = None
+    regular_sync_enabled: bool | None = Field(default=None, alias="regularSyncEnabled")
+    dynamic_sync_enabled: bool | None = Field(default=None, alias="dynamicSyncEnabled")
+    auto_sync_interval_minutes: int | None = Field(
+        default=None, alias="autoSyncIntervalMinutes"
+    )
+    dynamic_sync_expected_posts: int | None = Field(
+        default=None, alias="dynamicSyncExpectedPosts"
+    )
+    auto_follow_forwarded: bool | None = Field(default=None, alias="autoFollowForwarded")
+    is_frozen: bool | None = Field(default=None, alias="isFrozen")
+    is_unavailable_on_web_view: bool | None = Field(
+        default=None, alias="isUnavailableOnWebView"
+    )
+
+    model_config = {"populate_by_name": True}

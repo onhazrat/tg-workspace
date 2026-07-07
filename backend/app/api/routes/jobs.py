@@ -21,6 +21,7 @@ from app.schemas.sync_jobs import (
     StartSyncJobResponse,
     SyncJobStatusResponse,
 )
+from app.services.channel_setting_groups import channel_is_frozen, load_groups_by_id
 from app.services.operator import get_operator_user_id, select_operator_channels
 from app.services.runtime_config import build_runtime_config
 from app.services.scraper_jobs import (
@@ -44,15 +45,20 @@ def _resolve_channel_entries(
     operator_channels = {
         ch.id: ch for ch in select_operator_channels(session, operator_id=operator_id)
     }
+    groups_by_id = load_groups_by_id(session)
     if channel_ids:
         entries: list[tuple[str, str]] = []
         for cid in channel_ids:
             ch = operator_channels.get(cid)
-            if ch and not ch.is_frozen:
+            if ch and not channel_is_frozen(ch, groups_by_id):
                 entries.append((ch.id, ch.name))
         return entries
 
-    return [(c.id, c.name) for c in operator_channels.values() if not c.is_frozen]
+    return [
+        (c.id, c.name)
+        for c in operator_channels.values()
+        if not channel_is_frozen(c, groups_by_id)
+    ]
 
 
 @router.get("/status")

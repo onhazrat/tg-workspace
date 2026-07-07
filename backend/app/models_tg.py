@@ -17,6 +17,24 @@ def utc_now() -> datetime:
     return datetime.utcnow()
 
 
+class ChannelSettingGroup(SQLModel, table=True):
+    __tablename__ = "tg_channel_setting_groups"
+
+    id: str = Field(primary_key=True)
+    user_id: uuid.UUID | None = Field(default=None, index=True)
+    name: str
+    is_default: bool = False
+    regular_sync_enabled: bool = True
+    dynamic_sync_enabled: bool = False
+    auto_sync_interval_minutes: int = 60
+    dynamic_sync_expected_posts: int = 15
+    auto_follow_forwarded: bool = False
+    is_frozen: bool = False
+    is_unavailable_on_web_view: bool = False
+    created_at: datetime = Field(default_factory=utc_now)
+    updated_at: datetime = Field(default_factory=utc_now)
+
+
 class Channel(SQLModel, table=True):
     __tablename__ = "tg_channels"
 
@@ -35,19 +53,13 @@ class Channel(SQLModel, table=True):
     start_time: int | None = Field(default=None, sa_column=_ms_ts(nullable=True))
     tags: list[Any] = Field(default_factory=list, sa_column=Column(JSON))
     last_updated: int | None = Field(default=None, sa_column=_ms_ts(nullable=True))
-    regular_sync_enabled: bool = True
-    dynamic_sync_enabled: bool = False
-    auto_sync_interval_minutes: int = 60
-    dynamic_sync_expected_posts: int = 15
+    setting_group_id: str = Field(index=True)
     next_regular_sync_at: int | None = Field(
         default=None, sa_column=_ms_ts(nullable=True)
     )
     next_dynamic_sync_at: int | None = Field(
         default=None, sa_column=_ms_ts(nullable=True)
     )
-    is_frozen: bool = False
-    is_unavailable_on_web_view: bool = False
-    auto_follow_forwarded: bool = False
     language: str | None = None
     followed_at: int | None = Field(default=None, sa_column=_ms_ts(nullable=True))
     discovered_via: dict[str, Any] | None = Field(default=None, sa_column=Column(JSON))

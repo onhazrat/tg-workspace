@@ -1,6 +1,7 @@
 import type {
   BotCredential,
   Channel,
+  ChannelSettingGroup,
   ChannelStats,
   ChatDestination,
   EmbeddingLog,
@@ -22,6 +23,17 @@ export interface BulkSyncSettingsPatchBody {
   dynamicSyncEnabled?: boolean
   autoSyncIntervalMinutes?: number
   dynamicSyncExpectedPosts?: number
+}
+
+export interface SettingGroupWriteBody {
+  name?: string
+  regularSyncEnabled?: boolean
+  dynamicSyncEnabled?: boolean
+  autoSyncIntervalMinutes?: number
+  dynamicSyncExpectedPosts?: number
+  autoFollowForwarded?: boolean
+  isFrozen?: boolean
+  isUnavailableOnWebView?: boolean
 }
 
 export const dataApi = {
@@ -288,6 +300,38 @@ export const dataApi = {
       method: "PATCH",
       body: JSON.stringify(body),
     }),
+
+  listSettingGroups: () =>
+    request<ChannelSettingGroup[]>("/api/v1/data/setting-groups"),
+
+  createSettingGroup: (body: SettingGroupWriteBody) =>
+    request<ChannelSettingGroup>("/api/v1/data/setting-groups", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  updateSettingGroup: (id: string, body: SettingGroupWriteBody) =>
+    request<ChannelSettingGroup>(`/api/v1/data/setting-groups/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(body),
+    }),
+
+  deleteSettingGroup: (id: string) =>
+    request<{ status: string }>(`/api/v1/data/setting-groups/${id}`, {
+      method: "DELETE",
+    }),
+
+  bulkAssignSettingGroup: (body: {
+    channelIds: string[]
+    settingGroupId: string
+  }) =>
+    request<{ updated: number; settingGroupId: string }>(
+      "/api/v1/data/channels/bulk-setting-group",
+      {
+        method: "PATCH",
+        body: JSON.stringify(body),
+      },
+    ),
 
   bulkUpdateChannelTags: (body: {
     updates: { channelId: string; tags: Channel["tags"] }[]

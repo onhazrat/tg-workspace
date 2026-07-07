@@ -8,6 +8,7 @@ from typing import Any
 from app.models_tg import (
     BotCredential,
     Channel,
+    ChannelSettingGroup,
     ChatDestination,
     EmbeddingLog,
     LLMLog,
@@ -27,7 +28,8 @@ _CAMEL_OVERRIDES = {
     "start_id": "startId",
     "start_time": "startTime",
     "last_updated": "lastUpdated",
-    "regular_sync_enabled": "regularSyncEnabled",
+    "setting_group_id": "settingGroupId",
+    "setting_group_name": "settingGroupName",
     "dynamic_sync_enabled": "dynamicSyncEnabled",
     "auto_sync_interval_minutes": "autoSyncIntervalMinutes",
     "dynamic_sync_expected_posts": "dynamicSyncExpectedPosts",
@@ -105,11 +107,15 @@ def model_to_camel(row: Any, *, skip: frozenset[str] = frozenset()) -> dict[str,
     return result
 
 
-def channel_to_camel(ch: Channel) -> dict[str, Any]:
+def channel_to_camel(
+    ch: Channel, *, group: ChannelSettingGroup | None = None
+) -> dict[str, Any]:
+    from app.services.channel_setting_groups import effective_channel_fields
+
     photo_url = ch.photo_url
     if has_cached_photo(ch.id):
         photo_url = channel_photo_api_path(ch.id)
-    return {
+    row = {
         "id": ch.id,
         "name": ch.name,
         "displayName": ch.display_name,
@@ -124,15 +130,8 @@ def channel_to_camel(ch: Channel) -> dict[str, Any]:
         "startTime": ch.start_time,
         "tags": normalize_channel_tags(ch.tags),
         "lastUpdated": ch.last_updated,
-        "regularSyncEnabled": ch.regular_sync_enabled,
-        "dynamicSyncEnabled": ch.dynamic_sync_enabled,
-        "autoSyncIntervalMinutes": ch.auto_sync_interval_minutes,
-        "dynamicSyncExpectedPosts": ch.dynamic_sync_expected_posts,
         "nextRegularSyncAt": ch.next_regular_sync_at,
         "nextDynamicSyncAt": ch.next_dynamic_sync_at,
-        "isFrozen": ch.is_frozen,
-        "isUnavailableOnWebView": ch.is_unavailable_on_web_view,
-        "autoFollowForwarded": ch.auto_follow_forwarded,
         "language": ch.language,
         "followedAt": ch.followed_at,
         "discoveredVia": ch.discovered_via,
@@ -140,6 +139,9 @@ def channel_to_camel(ch: Channel) -> dict[str, Any]:
         "anchorPostId": ch.anchor_post_id,
         "oldestStoredPostTimestamp": ch.oldest_stored_post_timestamp,
     }
+    if group is not None:
+        row.update(effective_channel_fields(group))
+    return row
 
 
 def post_to_camel(p: Post) -> dict[str, Any]:

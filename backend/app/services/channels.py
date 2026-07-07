@@ -10,9 +10,16 @@ from typing import Any
 from fastapi import HTTPException
 from sqlmodel import Session, col, func, select
 
-from app.jobs.settings import load_sync_settings
 from app.models_tg import Channel, Post
 from app.services.channel_photos import delete_cached_photo
+from app.services.channel_setting_groups import (
+    ensure_default_group,
+    get_group_for_channel,
+    get_or_create_restricted_group,
+    load_groups_by_id,
+    reject_inherited_channel_fields,
+    update_default_group_sync_settings,
+)
 from app.services.channel_tags import normalize_channel_tags
 from app.services.serialization import channel_to_camel, normalize_body
 from app.services.sync_meta import touch_sync
@@ -171,96 +178,41 @@ def channel_names_for_operator(
     }
 
 
-def recompute_next_regular_sync_at_on_interval_change(
-    channel: Channel,
-    *,
-    previous_interval_minutes: int,
-    now_ms: int | None = None,
-) -> None:
-    """Reset regular sync deadline when the interval changes."""
-    if channel.auto_sync_interval_minutes == previous_interval_minutes:
-        return
-    if not channel.regular_sync_enabled:
-        return
-    if now_ms is None:
-        now_ms = int(time.time() * 1000)
-    channel.next_regular_sync_at = compute_next_regular_sync_at_from_last_updated(
-        channel.last_updated,
-        channel.auto_sync_interval_minutes,
-        now_ms,
-    )
-
-
-def recompute_next_dynamic_sync_at_on_expected_posts_change(
-    session: Session,
-    channel: Channel,
-    *,
-    previous_expected_posts: int,
-    now_ms: int | None = None,
-) -> None:
-    """Reset dynamic sync deadline when expected post count changes."""
-    if channel.dynamic_sync_expected_posts == previous_expected_posts:
-        return
-    if not channel.dynamic_sync_enabled:
-        return
-    if now_ms is None:
-        now_ms = int(time.time() * 1000)
-    recent_timestamps = _fetch_recent_timestamps_by_channel(
-        session, [channel.name]
-    ).get(channel.name, [])
-    has_posts = bool(recent_timestamps)
-    velocity = _velocity_from_timestamps(recent_timestamps)
-    if not has_posts:
-        channel.next_dynamic_sync_at = None
-    elif velocity > 0:
-        channel.next_dynamic_sync_at = compute_next_dynamic_sync_at_from_last_updated(
-            channel.last_updated,
-            channel.dynamic_sync_expected_posts,
-            velocity,
-            now_ms,
-        )
-
-
 def apply_channel_fields(
     ch: Channel,
     body: dict[str, Any],
     *,
     session: Session | None = None,
 ) -> None:
+    reject_inherited_channel_fields(body)
     normalized = normalize_body(body)
-    previous_interval = ch.auto_sync_interval_minutes
-    previous_expected_posts = ch.dynamic_sync_expected_posts
+    if "setting_group_id" in normalized:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Use PATCH /data/channels/bulk-setting-group to reassign channels "
+                "to a setting group"
+            ),
+        )
     for key, value in normalized.items():
-        if key in Channel.model_fields and key not in ("id", "user_id"):
-            if key == "auto_sync_interval_minutes":
-                value = max(1, int(value))
-            if key == "dynamic_sync_expected_posts":
-                value = max(1, int(value))
+        if key in Channel.model_fields and key not in ("id", "user_id", "setting_group_id"):
             if key == "tags":
                 value = normalize_channel_tags(value)
             setattr(ch, key, value)
-    recompute_next_regular_sync_at_on_interval_change(
-        ch,
-        previous_interval_minutes=previous_interval,
-    )
-    if session is not None:
-        recompute_next_dynamic_sync_at_on_expected_posts_change(
-            session,
-            ch,
-            previous_expected_posts=previous_expected_posts,
-        )
 
 
 def list_channels(
     session: Session, *, include_stats: bool = False
 ) -> list[dict[str, Any]]:
     channels = session.exec(select(Channel)).all()
+    groups_by_id = load_groups_by_id(session)
     stats_map: dict[str, dict[str, Any]] = {}
     if include_stats and channels:
         stats_map = compute_channel_stats_batch(session, [c.name for c in channels])
     result: list[dict[str, Any]] = []
     for ch in channels:
-        row = channel_to_camel(ch)
+        group = groups_by_id.get(ch.setting_group_id)
+        row = channel_to_camel(ch, group=group)
         if include_stats and ch.name in stats_map:
             row["stats"] = stats_map[ch.name]
         result.append(row)
@@ -277,54 +229,53 @@ def upsert_channel(
     normalized = normalize_body(body)
     ch = session.get(Channel, channel_id)
     if ch:
+        reject_inherited_channel_fields(body)
         apply_channel_fields(ch, normalized, session=session)
         ch.updated_at = datetime.utcnow()
+        group = get_group_for_channel(session, ch)
     else:
         name = normalized.get("name", channel_id)
-        sync_defaults = load_sync_settings(session)
-        regular_interval_minutes = int(
-            sync_defaults.get("regularSyncIntervalMinutes") or 60
+        is_restricted = bool(
+            normalized.get("is_unavailable_on_web_view") or normalized.get("is_frozen")
         )
-        dynamic_enabled_default = bool(
-            sync_defaults.get("dynamicSyncEnabledDefault", False)
-        )
-        dynamic_expected_posts_default = int(
-            sync_defaults.get("dynamicSyncExpectedPostsDefault") or 15
-        )
+        if is_restricted:
+            group = get_or_create_restricted_group(session, user_id=user_id)
+        else:
+            group = ensure_default_group(session, user_id=user_id)
         now_ms = int(datetime.utcnow().timestamp() * 1000)
         extras = {
             k: v
             for k, v in normalized.items()
-            if k in Channel.model_fields and k not in ("id", "name", "user_id")
+            if k in Channel.model_fields
+            and k not in ("id", "name", "user_id", "setting_group_id")
         }
         if "tags" in extras:
             extras["tags"] = normalize_channel_tags(extras["tags"])
-        extras.setdefault("regular_sync_enabled", True)
-        extras.setdefault("dynamic_sync_enabled", dynamic_enabled_default)
-        extras.setdefault(
-            "auto_sync_interval_minutes",
-            max(1, regular_interval_minutes),
-        )
-        extras.setdefault(
-            "dynamic_sync_expected_posts",
-            max(1, dynamic_expected_posts_default),
-        )
-        if extras.get("regular_sync_enabled"):
+        if group.regular_sync_enabled:
             extras.setdefault(
                 "next_regular_sync_at",
                 compute_next_regular_sync_at_from_last_updated(
                     extras.get("last_updated"),
-                    int(extras["auto_sync_interval_minutes"]),
+                    group.auto_sync_interval_minutes,
                     now_ms,
                 ),
             )
+        else:
+            extras.setdefault("next_regular_sync_at", None)
         extras.setdefault("next_dynamic_sync_at", None)
-        ch = Channel(id=channel_id, name=name, user_id=user_id, **extras)
+        ch = Channel(
+            id=channel_id,
+            name=name,
+            user_id=user_id,
+            setting_group_id=group.id,
+            **extras,
+        )
     session.add(ch)
     session.commit()
     session.refresh(ch)
     touch_sync(session, "channels")
-    return channel_to_camel(ch)
+    group = get_group_for_channel(session, ch)
+    return channel_to_camel(ch, group=group)
 
 
 def delete_channel(session: Session, channel_id: str) -> dict[str, str]:
@@ -360,52 +311,30 @@ def bulk_update_sync_settings(
     dynamic_sync_enabled: bool | None,
     auto_sync_interval_minutes: int | None,
     dynamic_sync_expected_posts: int | None,
+    operator_id: uuid.UUID | None = None,
 ) -> dict[str, int]:
-    if all(
-        value is None
-        for value in (
-            regular_sync_enabled,
-            dynamic_sync_enabled,
-            auto_sync_interval_minutes,
-            dynamic_sync_expected_posts,
-        )
-    ):
-        raise HTTPException(status_code=400, detail="No sync settings fields provided")
-
-    statement = select(Channel)
     if channel_ids is not None:
-        statement = statement.where(col(Channel.id).in_(channel_ids))
-    channels = session.exec(statement).all()
-
-    now_ms = int(time.time() * 1000)
-    for channel in channels:
-        previous_interval = channel.auto_sync_interval_minutes
-        previous_expected_posts = channel.dynamic_sync_expected_posts
-        if regular_sync_enabled is not None:
-            channel.regular_sync_enabled = regular_sync_enabled
-        if dynamic_sync_enabled is not None:
-            channel.dynamic_sync_enabled = dynamic_sync_enabled
-        if auto_sync_interval_minutes is not None:
-            channel.auto_sync_interval_minutes = max(1, auto_sync_interval_minutes)
-        if dynamic_sync_expected_posts is not None:
-            channel.dynamic_sync_expected_posts = max(1, dynamic_sync_expected_posts)
-        recompute_next_regular_sync_at_on_interval_change(
-            channel,
-            previous_interval_minutes=previous_interval,
-            now_ms=now_ms,
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Sync settings apply per setting group, not per channel. "
+                "Use PATCH /data/channels/bulk-setting-group to reassign channels, "
+                "or PATCH /data/setting-groups/{id} to update a group."
+            ),
         )
-        recompute_next_dynamic_sync_at_on_expected_posts_change(
-            session,
-            channel,
-            previous_expected_posts=previous_expected_posts,
-            now_ms=now_ms,
-        )
-        channel.updated_at = datetime.utcnow()
-        session.add(channel)
+    from app.services.operator import get_operator_user_id
 
-    session.commit()
+    owner_id = operator_id or get_operator_user_id(session)
+    result = update_default_group_sync_settings(
+        session,
+        user_id=owner_id,
+        regular_sync_enabled=regular_sync_enabled,
+        dynamic_sync_enabled=dynamic_sync_enabled,
+        auto_sync_interval_minutes=auto_sync_interval_minutes,
+        dynamic_sync_expected_posts=dynamic_sync_expected_posts,
+    )
     touch_sync(session, "channels")
-    return {"updated": len(channels)}
+    return result
 
 
 def bulk_update_channel_tags(
@@ -441,12 +370,13 @@ def bulk_update_channel_tags(
         )
 
     updated_rows: list[dict[str, Any]] = []
+    groups_by_id = load_groups_by_id(session)
     for channel_id, raw_tags in deduped_updates.items():
         channel = by_id[channel_id]
         channel.tags = normalize_channel_tags(raw_tags)
         channel.updated_at = datetime.utcnow()
         session.add(channel)
-        updated_rows.append(channel_to_camel(channel))
+        updated_rows.append(channel_to_camel(channel, group=groups_by_id.get(channel.setting_group_id)))
 
     session.commit()
     touch_sync(session, "channels")

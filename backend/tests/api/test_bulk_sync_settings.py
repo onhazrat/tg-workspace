@@ -73,6 +73,29 @@ def test_bulk_sync_settings_apply_to_selected(client: TestClient) -> None:
         },
         headers=headers,
     )
+    assert r.status_code == 400
+    assert "setting group" in r.json()["detail"].lower()
+
+
+def test_bulk_sync_settings_apply_to_selected_via_group(client: TestClient) -> None:
+    headers = _auth(client)
+    client.put(
+        f"{PREFIX}/channels/bulk-sel-a", json={"name": "bulk-sel-a"}, headers=headers
+    )
+    client.put(
+        f"{PREFIX}/channels/bulk-sel-b", json={"name": "bulk-sel-b"}, headers=headers
+    )
+
+    group = client.post(
+        f"{PREFIX}/setting-groups",
+        json={"name": "Dynamic 25", "dynamicSyncEnabled": True, "dynamicSyncExpectedPosts": 25},
+        headers=headers,
+    ).json()
+    r = client.patch(
+        f"{PREFIX}/channels/bulk-setting-group",
+        json={"channelIds": ["bulk-sel-a"], "settingGroupId": group["id"]},
+        headers=headers,
+    )
     assert r.status_code == 200
     assert r.json()["updated"] == 1
 
@@ -88,25 +111,16 @@ def test_bulk_sync_settings_partial_patch(client: TestClient) -> None:
     headers = _auth(client)
     client.put(
         f"{PREFIX}/channels/bulk-partial",
-        json={"name": "bulk-partial", "autoSyncIntervalMinutes": 30},
+        json={"name": "bulk-partial"},
         headers=headers,
     )
 
-    r = client.patch(
-        f"{PREFIX}/channels/bulk-sync-settings",
-        json={
-            "channelIds": ["bulk-partial"],
-            "regularSyncEnabled": True,
-        },
+    r = client.put(
+        f"{PREFIX}/channels/bulk-partial",
+        json={"regularSyncEnabled": True},
         headers=headers,
     )
-    assert r.status_code == 200
-    assert r.json()["updated"] == 1
-
-    listed = client.get(f"{PREFIX}/channels", headers=headers).json()
-    row = next(item for item in listed if item["id"] == "bulk-partial")
-    assert row["regularSyncEnabled"] is True
-    assert row["autoSyncIntervalMinutes"] == 30
+    assert r.status_code == 400
 
 
 def test_bulk_sync_settings_interval_updates_next_regular_sync_at(

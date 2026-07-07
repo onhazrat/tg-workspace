@@ -18,6 +18,7 @@ from app.jobs.retention import run_retention_cleanup
 from app.jobs.settings import default_job_enabled, save_setting
 from app.jobs.translation_batch import run_translation_batch
 from app.models_tg import Channel, Post, Summary
+from tests.utils.setting_groups import freeze_channels_except, upsert_sync_test_channel
 from app.services.network_settings import get_network_setting_row
 from app.services.operator import get_operator_user_id
 from app.services.scraper_jobs import clear_jobs_for_tests
@@ -26,10 +27,7 @@ PREFIX = f"{settings.API_V1_STR}/jobs"
 
 
 def _freeze_channels_except(session: Session, keep_ids: set[str]) -> None:
-    for ch in session.exec(select(Channel)).all():
-        if ch.id not in keep_ids:
-            ch.is_frozen = True
-            session.add(ch)
+    freeze_channels_except(session, keep_ids)
 
 
 def _auth(client: TestClient) -> dict[str, str]:
@@ -113,26 +111,17 @@ def test_auto_sync_skips_when_no_due_channels(
         )
         operator_id = get_operator_user_id(session)
         _freeze_channels_except(session, {"not-due-ch"})
-        existing = session.get(Channel, "not-due-ch")
-        if existing:
-            existing.user_id = operator_id
-            existing.is_frozen = False
-            existing.regular_sync_enabled = True
-            existing.dynamic_sync_enabled = False
-            existing.next_regular_sync_at = now + 60_000
-            session.add(existing)
-        else:
-            session.add(
-                Channel(
-                    id="not-due-ch",
-                    name="not-due-ch",
-                    user_id=operator_id,
-                    regular_sync_enabled=True,
-                    dynamic_sync_enabled=False,
-                    next_regular_sync_at=now + 60_000,
-                )
-            )
-        session.commit()
+        upsert_sync_test_channel(
+            session,
+            channel_id="not-due-ch",
+            user_id=operator_id,
+            group_fields={
+                "regular_sync_enabled": True,
+                "dynamic_sync_enabled": False,
+                "is_frozen": False,
+            },
+            channel_fields={"next_regular_sync_at": now + 60_000},
+        )
 
     result = asyncio.run(run_auto_sync())
     assert result["skipped"] is True
@@ -166,27 +155,18 @@ def test_auto_sync_triggers_stale_channels(
             net_row.user_id = operator_id
             session.add(net_row)
 
-        ch = session.get(Channel, "stale-ch")
-        if ch:
-            ch.user_id = operator_id
-            ch.is_frozen = False
-            ch.regular_sync_enabled = True
-            ch.dynamic_sync_enabled = False
-            ch.next_regular_sync_at = now - 1_000
-            session.add(ch)
-        else:
-            session.add(
-                Channel(
-                    id="stale-ch",
-                    name="stale-ch",
-                    user_id=operator_id,
-                    regular_sync_enabled=True,
-                    dynamic_sync_enabled=False,
-                    next_regular_sync_at=now - 1_000,
-                )
-            )
+        upsert_sync_test_channel(
+            session,
+            channel_id="stale-ch",
+            user_id=operator_id,
+            group_fields={
+                "regular_sync_enabled": True,
+                "dynamic_sync_enabled": False,
+                "is_frozen": False,
+            },
+            channel_fields={"next_regular_sync_at": now - 1_000},
+        )
         _freeze_channels_except(session, {"stale-ch"})
-        session.commit()
 
     mock_job = MagicMock()
     mock_job.job_id = "job-1"
@@ -231,28 +211,20 @@ def test_auto_sync_includes_fresh_partial_history_channels(
             session.add(net_row)
 
         _freeze_channels_except(session, {"partial-ch"})
-        partial = session.get(Channel, "partial-ch")
-        if partial:
-            partial.user_id = operator_id
-            partial.is_frozen = False
-            partial.history_complete_to_cutoff = False
-            partial.regular_sync_enabled = False
-            partial.dynamic_sync_enabled = False
-            partial.next_regular_sync_at = now + 60_000
-            session.add(partial)
-        else:
-            session.add(
-                Channel(
-                    id="partial-ch",
-                    name="partial-ch",
-                    user_id=operator_id,
-                    regular_sync_enabled=False,
-                    dynamic_sync_enabled=False,
-                    history_complete_to_cutoff=False,
-                    next_regular_sync_at=now + 60_000,
-                )
-            )
-        session.commit()
+        upsert_sync_test_channel(
+            session,
+            channel_id="partial-ch",
+            user_id=operator_id,
+            group_fields={
+                "regular_sync_enabled": False,
+                "dynamic_sync_enabled": False,
+                "is_frozen": False,
+            },
+            channel_fields={
+                "history_complete_to_cutoff": False,
+                "next_regular_sync_at": now + 60_000,
+            },
+        )
 
     mock_job = MagicMock()
     mock_job.job_id = "job-partial"
@@ -292,25 +264,17 @@ def test_auto_sync_dynamic_only_channel_due_by_velocity(
         )
         operator_id = get_operator_user_id(session)
         _freeze_channels_except(session, {"dynamic-only-ch"})
-        dynamic_only = session.get(Channel, "dynamic-only-ch")
-        if dynamic_only:
-            dynamic_only.user_id = operator_id
-            dynamic_only.is_frozen = False
-            dynamic_only.regular_sync_enabled = False
-            dynamic_only.dynamic_sync_enabled = True
-            dynamic_only.next_dynamic_sync_at = now - 1_000
-            session.add(dynamic_only)
-        else:
-            session.add(
-                Channel(
-                    id="dynamic-only-ch",
-                    name="dynamic-only-ch",
-                    user_id=operator_id,
-                    regular_sync_enabled=False,
-                    dynamic_sync_enabled=True,
-                    next_dynamic_sync_at=now - 1_000,
-                )
-            )
+        upsert_sync_test_channel(
+            session,
+            channel_id="dynamic-only-ch",
+            user_id=operator_id,
+            group_fields={
+                "regular_sync_enabled": False,
+                "dynamic_sync_enabled": True,
+                "is_frozen": False,
+            },
+            channel_fields={"next_dynamic_sync_at": now - 1_000},
+        )
         session.add(
             Post(
                 channel_name="dynamic-only-ch",
@@ -365,18 +329,20 @@ def test_auto_sync_skips_channels_with_both_schedules_disabled(
         )
         operator_id = get_operator_user_id(session)
         _freeze_channels_except(session, {"disabled-both-ch"})
-        session.add(
-            Channel(
-                id="disabled-both-ch",
-                name="disabled-both-ch",
-                user_id=operator_id,
-                regular_sync_enabled=False,
-                dynamic_sync_enabled=False,
-                next_regular_sync_at=now - 1_000,
-                next_dynamic_sync_at=now - 1_000,
-            )
+        upsert_sync_test_channel(
+            session,
+            channel_id="disabled-both-ch",
+            user_id=operator_id,
+            group_fields={
+                "regular_sync_enabled": False,
+                "dynamic_sync_enabled": False,
+                "is_frozen": False,
+            },
+            channel_fields={
+                "next_regular_sync_at": now - 1_000,
+                "next_dynamic_sync_at": now - 1_000,
+            },
         )
-        session.commit()
 
     result = asyncio.run(run_auto_sync())
     assert result["skipped"] is True
@@ -407,26 +373,17 @@ def test_auto_sync_syncs_all_due_channels_in_one_job(
         operator_id = get_operator_user_id(session)
         _freeze_channels_except(session, {"due-1", "due-2"})
         for cid in ("due-1", "due-2"):
-            existing = session.get(Channel, cid)
-            if existing:
-                existing.user_id = operator_id
-                existing.is_frozen = False
-                existing.regular_sync_enabled = True
-                existing.dynamic_sync_enabled = False
-                existing.next_regular_sync_at = now - 1_000
-                session.add(existing)
-            else:
-                session.add(
-                    Channel(
-                        id=cid,
-                        name=cid,
-                        user_id=operator_id,
-                        regular_sync_enabled=True,
-                        dynamic_sync_enabled=False,
-                        next_regular_sync_at=now - 1_000,
-                    )
-                )
-        session.commit()
+            upsert_sync_test_channel(
+                session,
+                channel_id=cid,
+                user_id=operator_id,
+                group_fields={
+                    "regular_sync_enabled": True,
+                    "dynamic_sync_enabled": False,
+                    "is_frozen": False,
+                },
+                channel_fields={"next_regular_sync_at": now - 1_000},
+            )
 
     mock_job = MagicMock()
     mock_job.job_id = "job-all-due"
@@ -501,12 +458,15 @@ def test_auto_summary_regenerates_due_summary(mock_get_provider) -> None:
         ch1 = session.get(Channel, "ch1")
         if ch1:
             ch1.user_id = operator_id
-            ch1.is_frozen = False
             ch1.last_updated = now
             session.add(ch1)
         elif operator_id:
-            session.add(
-                Channel(id="ch1", name="ch1", user_id=operator_id, last_updated=now)
+            upsert_sync_test_channel(
+                session,
+                channel_id="ch1",
+                user_id=operator_id,
+                group_fields={"is_frozen": False},
+                channel_fields={"last_updated": now},
             )
 
         for other in session.exec(select(Summary)).all():

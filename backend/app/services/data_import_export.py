@@ -11,6 +11,7 @@ from sqlmodel import Session, select
 from app.models_tg import (
     BotCredential,
     Channel,
+    ChannelSettingGroup,
     ChatDestination,
     EmbeddingLog,
     LLMLog,
@@ -21,6 +22,12 @@ from app.models_tg import (
     PublishLog,
     Summary,
     SyncLog,
+)
+from app.services.channel_setting_groups import (
+    ensure_default_group,
+    get_or_create_restricted_group,
+    load_groups_by_id,
+    setting_group_to_camel,
 )
 from app.services.channel_tags import normalize_channel_tags
 from app.services.channels import apply_channel_fields
@@ -70,13 +77,30 @@ def import_data(
 
     for item in payload.get("channels", []):
         normalized = normalize_body(item)
-        ch = session.get(Channel, normalized.get("id", item.get("id")))
+        channel_id = normalized.get("id", item.get("id"))
+        ch = session.get(Channel, channel_id)
         if ch:
-            apply_channel_fields(ch, normalized, session=session)
+            apply_channel_fields(ch, item, session=session)
             ch.updated_at = datetime.utcnow()
         else:
+            setting_group_id = normalized.get("setting_group_id")
+            group = (
+                session.get(ChannelSettingGroup, setting_group_id)
+                if setting_group_id
+                else None
+            )
+            if group is None:
+                is_restricted = bool(
+                    normalized.get("is_unavailable_on_web_view")
+                    or normalized.get("is_frozen")
+                )
+                group = (
+                    get_or_create_restricted_group(session, user_id=user_id)
+                    if is_restricted
+                    else ensure_default_group(session, user_id=user_id)
+                )
             ch = Channel(
-                id=normalized.get("id", item.get("id")),
+                id=channel_id,
                 user_id=user_id,
                 name=normalized.get("name", ""),
                 display_name=normalized.get("display_name"),
@@ -91,11 +115,7 @@ def import_data(
                 start_time=normalized.get("start_time"),
                 tags=normalize_channel_tags(normalized.get("tags", [])),
                 last_updated=normalized.get("last_updated"),
-                is_frozen=normalized.get("is_frozen", False),
-                is_unavailable_on_web_view=normalized.get(
-                    "is_unavailable_on_web_view", False
-                ),
-                auto_follow_forwarded=normalized.get("auto_follow_forwarded", False),
+                setting_group_id=group.id,
                 language=normalized.get("language"),
                 followed_at=normalized.get("followed_at"),
                 discovered_via=normalized.get("discovered_via"),
@@ -260,12 +280,20 @@ def import_data(
 
 
 def export_data(session: Session) -> dict[str, Any]:
+    groups_by_id = load_groups_by_id(session)
+    channels = session.exec(select(Channel)).all()
     return {
         "version": 2,
         "timestamp": int(datetime.utcnow().timestamp() * 1000),
         "data": {
+            "setting_groups": [
+                setting_group_to_camel(group) for group in groups_by_id.values()
+            ],
             "channels": [
-                channel_to_camel(c) for c in session.exec(select(Channel)).all()
+                channel_to_camel(
+                    channel, group=groups_by_id.get(channel.setting_group_id)
+                )
+                for channel in channels
             ],
             "posts": [post_to_camel(p) for p in session.exec(select(Post)).all()],
             "summaries": [

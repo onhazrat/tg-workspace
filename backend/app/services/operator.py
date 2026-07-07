@@ -9,7 +9,7 @@ from sqlmodel import Session, col, or_, select
 
 from app.core.config import settings
 from app.models import User
-from app.models_tg import Channel
+from app.models_tg import Channel, ChannelSettingGroup
 
 logger = logging.getLogger(__name__)
 
@@ -31,12 +31,17 @@ def select_operator_channels(
     if operator_id is None:
         operator_id = get_operator_user_id(session)
     stmt = select(Channel)
+    if unfrozen_only:
+        stmt = stmt.join(
+            ChannelSettingGroup,
+            Channel.setting_group_id == ChannelSettingGroup.id,
+        )
     if operator_id is not None:
         stmt = stmt.where(
             or_(Channel.user_id == operator_id, col(Channel.user_id).is_(None))
         )
     if unfrozen_only:
-        stmt = stmt.where(Channel.is_frozen == False)  # noqa: E712
+        stmt = stmt.where(ChannelSettingGroup.is_frozen == False)  # noqa: E712
     channels = list(session.exec(stmt).all())
 
     # Local dev: legacy rows may have user_id from a prior account (pre-Sprint-2).
@@ -54,7 +59,10 @@ def select_operator_channels(
         )
         fallback = select(Channel)
         if unfrozen_only:
-            fallback = fallback.where(Channel.is_frozen == False)  # noqa: E712
+            fallback = fallback.join(
+                ChannelSettingGroup,
+                Channel.setting_group_id == ChannelSettingGroup.id,
+            ).where(ChannelSettingGroup.is_frozen == False)  # noqa: E712
         channels = list(session.exec(fallback).all())
 
     return channels

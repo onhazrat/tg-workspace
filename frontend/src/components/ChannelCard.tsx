@@ -21,10 +21,7 @@ import {
 import { motion } from "motion/react"
 import type React from "react"
 import { useEffect, useState } from "react"
-import {
-  AUTO_SYNC_INTERVAL_MAX_MINUTES,
-  AUTO_SYNC_INTERVAL_MIN_MINUTES,
-} from "@/constants"
+import { api } from "@/api"
 import {
   addManualTag,
   normalizeChannelTags,
@@ -51,8 +48,13 @@ export const ChannelCard: React.FC<ChannelCardProps> = ({
   handleRemoveChannel,
   handleResetAndSync,
 }) => {
-  const { channelStats, selectedChannels, setSelectedChannels, setChannels } =
-    useData()
+  const {
+    channelStats,
+    selectedChannels,
+    setSelectedChannels,
+    setChannels,
+    loadChannels,
+  } = useData()
   const { scrapingChannels, syncQueue, filteredPosts, addToSyncQueue } =
     useScraper()
   const { summarizing } = useUI()
@@ -143,13 +145,24 @@ export const ChannelCard: React.FC<ChannelCardProps> = ({
   }
 
   const handleToggleFreeze = async () => {
-    const updatedChannel = { ...channel, isFrozen: !channel.isFrozen }
-    await upsertChannel(updatedChannel)
-    setChannels((prev) =>
-      prev.map((c) => (c.id === channel.id ? updatedChannel : c)),
-    )
-
-    if (updatedChannel.isFrozen) {
+    if (channel.isUnavailableOnWebView) return
+    const groups = await api.listSettingGroups()
+    const targetGroup = channel.isFrozen
+      ? groups.find((group) => group.isDefault)
+      : (groups.find((group) => group.name === "Frozen") ??
+        (await api.createSettingGroup({
+          name: "Frozen",
+          isFrozen: true,
+          regularSyncEnabled: false,
+          dynamicSyncEnabled: false,
+        })))
+    if (!targetGroup) return
+    await api.bulkAssignSettingGroup({
+      channelIds: [channel.id],
+      settingGroupId: targetGroup.id,
+    })
+    await loadChannels()
+    if (!channel.isFrozen) {
       setSelectedChannels((prev) => {
         const next = new Set(prev)
         next.delete(channel.name)
@@ -158,70 +171,9 @@ export const ChannelCard: React.FC<ChannelCardProps> = ({
     }
   }
 
-  const handleToggleAutoFollow = async () => {
-    const updatedChannel = {
-      ...channel,
-      autoFollowForwarded: !channel.autoFollowForwarded,
-    }
-    await upsertChannel(updatedChannel)
-    setChannels((prev) =>
-      prev.map((c) => (c.id === channel.id ? updatedChannel : c)),
-    )
-  }
-
-  const patchSyncSettings = async (
-    patch: Partial<
-      Pick<
-        Channel,
-        | "regularSyncEnabled"
-        | "dynamicSyncEnabled"
-        | "autoSyncIntervalMinutes"
-        | "dynamicSyncExpectedPosts"
-      >
-    >,
-  ) => {
-    const updatedChannel = await upsertChannel({ ...channel, ...patch })
-    setChannels((prev) =>
-      prev.map((entry) => (entry.id === channel.id ? updatedChannel : entry)),
-    )
-  }
-
-  const handleRegularSyncToggle = async () => {
-    await patchSyncSettings({
-      regularSyncEnabled: !(channel.regularSyncEnabled ?? true),
-    })
-  }
-
-  const handleDynamicSyncToggle = async () => {
-    await patchSyncSettings({
-      dynamicSyncEnabled: !(channel.dynamicSyncEnabled ?? false),
-    })
-  }
-
-  const commitRegularInterval = async () => {
-    const value = Number.parseInt(regularIntervalInput, 10)
-    if (Number.isNaN(value)) {
-      setRegularIntervalInput(String(channel.autoSyncIntervalMinutes ?? 60))
-      return
-    }
-    const clamped = Math.max(
-      AUTO_SYNC_INTERVAL_MIN_MINUTES,
-      Math.min(AUTO_SYNC_INTERVAL_MAX_MINUTES, value),
-    )
-    setRegularIntervalInput(String(clamped))
-    await patchSyncSettings({ autoSyncIntervalMinutes: clamped })
-  }
-
-  const commitDynamicExpectedPosts = async () => {
-    const value = Number.parseInt(dynamicExpectedInput, 10)
-    if (Number.isNaN(value)) {
-      setDynamicExpectedInput(String(channel.dynamicSyncExpectedPosts ?? 15))
-      return
-    }
-    const clamped = Math.max(1, Math.min(500, value))
-    setDynamicExpectedInput(String(clamped))
-    await patchSyncSettings({ dynamicSyncExpectedPosts: clamped })
-  }
+  const inheritedSettingsHint = channel.settingGroupName
+    ? `Inherited from setting group "${channel.settingGroupName}"`
+    : "Inherited from channel setting group"
 
   return (
     <div
@@ -450,6 +402,11 @@ export const ChannelCard: React.FC<ChannelCardProps> = ({
             <p className="text-[11px] opacity-50 font-mono truncate">
               @{channel.name}
             </p>
+            {channel.settingGroupName && (
+              <p className="text-[9px] uppercase tracking-widest text-app-ink/45 mt-1">
+                Group: {channel.settingGroupName}
+              </p>
+            )}
           </div>
         </div>
 
@@ -748,109 +705,112 @@ export const ChannelCard: React.FC<ChannelCardProps> = ({
               </div>
             </div>
 
-            <div
-              className="group/regular-sync"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <p className="text-[10px] uppercase text-app-ink/60 font-bold tracking-widest mb-0.5">
-                Regular
-              </p>
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={handleRegularSyncToggle}
-                  className={`w-10 h-5 transition-all relative border border-app-ink/20 rounded-full ${
-                    (channel.regularSyncEnabled ?? true)
-                      ? "bg-green-500 border-green-600"
-                      : "bg-app-ink/10"
-                  }`}
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <div
+                  className="group/regular-sync opacity-80"
+                  onClick={(e) => e.stopPropagation()}
+                  title={inheritedSettingsHint}
                 >
-                  <div
-                    className={`absolute top-0.5 w-3.5 h-3.5 bg-white transition-all rounded-full ${
-                      (channel.regularSyncEnabled ?? true)
-                        ? "left-5.5"
-                        : "left-0.5"
-                    }`}
-                  />
-                </button>
-                <input
-                  type="number"
-                  min={AUTO_SYNC_INTERVAL_MIN_MINUTES}
-                  max={AUTO_SYNC_INTERVAL_MAX_MINUTES}
-                  step={1}
-                  value={regularIntervalInput}
-                  onChange={(e) => setRegularIntervalInput(e.target.value)}
-                  onBlur={() => void commitRegularInterval()}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") void commitRegularInterval()
-                  }}
-                  className="w-14 bg-app-bg border border-app-ink/20 px-1.5 py-0.5 text-[10px] font-mono focus:border-app-ink focus:outline-none"
-                />
-                <span className="text-[9px] uppercase font-bold text-app-ink/50">
-                  min
-                </span>
-              </div>
-              <p className="text-[9px] text-app-ink/50 mt-1">
-                Next:{" "}
-                {channel.nextRegularSyncAt ? (
-                  <RelativeTime timestamp={channel.nextRegularSyncAt} />
-                ) : (
-                  "not scheduled"
-                )}
-              </p>
-            </div>
+                  <p className="text-[10px] uppercase text-app-ink/60 font-bold tracking-widest mb-0.5">
+                    Regular
+                  </p>
+                  <div className="flex items-center gap-2 pointer-events-none">
+                    <button
+                      type="button"
+                      disabled
+                      className={`w-10 h-5 transition-all relative border border-app-ink/20 rounded-full ${
+                        (channel.regularSyncEnabled ?? true)
+                          ? "bg-green-500 border-green-600"
+                          : "bg-app-ink/10"
+                      }`}
+                    >
+                      <div
+                        className={`absolute top-0.5 w-3.5 h-3.5 bg-white transition-all rounded-full ${
+                          (channel.regularSyncEnabled ?? true)
+                            ? "left-5.5"
+                            : "left-0.5"
+                        }`}
+                      />
+                    </button>
+                    <input
+                      type="number"
+                      readOnly
+                      value={regularIntervalInput}
+                      className="w-14 bg-app-bg border border-app-ink/20 px-1.5 py-0.5 text-[10px] font-mono"
+                    />
+                    <span className="text-[9px] uppercase font-bold text-app-ink/50">
+                      min
+                    </span>
+                  </div>
+                  <p className="text-[9px] text-app-ink/50 mt-1">
+                    Next:{" "}
+                    {channel.nextRegularSyncAt ? (
+                      <RelativeTime timestamp={channel.nextRegularSyncAt} />
+                    ) : (
+                      "not scheduled"
+                    )}
+                  </p>
+                </div>
+              </TooltipTrigger>
+              <TooltipContent className="max-w-[240px] text-center">
+                <p>{inheritedSettingsHint}</p>
+              </TooltipContent>
+            </Tooltip>
+
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <div
+                  className="group/dynamic-sync opacity-80"
+                  onClick={(e) => e.stopPropagation()}
+                  title={inheritedSettingsHint}
+                >
+                  <p className="text-[10px] uppercase text-app-ink/60 font-bold tracking-widest mb-0.5">
+                    Dynamic
+                  </p>
+                  <div className="flex items-center gap-2 pointer-events-none">
+                    <button
+                      type="button"
+                      disabled
+                      className={`w-10 h-5 transition-all relative border border-app-ink/20 rounded-full ${
+                        channel.dynamicSyncEnabled
+                          ? "bg-blue-500 border-blue-600"
+                          : "bg-app-ink/10"
+                      }`}
+                    >
+                      <div
+                        className={`absolute top-0.5 w-3.5 h-3.5 bg-white transition-all rounded-full ${
+                          channel.dynamicSyncEnabled ? "left-5.5" : "left-0.5"
+                        }`}
+                      />
+                    </button>
+                    <input
+                      type="number"
+                      readOnly
+                      value={dynamicExpectedInput}
+                      className="w-14 bg-app-bg border border-app-ink/20 px-1.5 py-0.5 text-[10px] font-mono"
+                    />
+                    <span className="text-[9px] uppercase font-bold text-app-ink/50">
+                      posts
+                    </span>
+                  </div>
+                  <p className="text-[9px] text-app-ink/50 mt-1">
+                    Next:{" "}
+                    {channel.nextDynamicSyncAt ? (
+                      <RelativeTime timestamp={channel.nextDynamicSyncAt} />
+                    ) : (
+                      "not scheduled"
+                    )}
+                  </p>
+                </div>
+              </TooltipTrigger>
+              <TooltipContent className="max-w-[240px] text-center">
+                <p>{inheritedSettingsHint}</p>
+              </TooltipContent>
+            </Tooltip>
 
             <div
-              className="group/dynamic-sync"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <p className="text-[10px] uppercase text-app-ink/60 font-bold tracking-widest mb-0.5">
-                Dynamic
-              </p>
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={handleDynamicSyncToggle}
-                  className={`w-10 h-5 transition-all relative border border-app-ink/20 rounded-full ${
-                    channel.dynamicSyncEnabled
-                      ? "bg-blue-500 border-blue-600"
-                      : "bg-app-ink/10"
-                  }`}
-                >
-                  <div
-                    className={`absolute top-0.5 w-3.5 h-3.5 bg-white transition-all rounded-full ${
-                      channel.dynamicSyncEnabled ? "left-5.5" : "left-0.5"
-                    }`}
-                  />
-                </button>
-                <input
-                  type="number"
-                  min={1}
-                  step={1}
-                  value={dynamicExpectedInput}
-                  onChange={(e) => setDynamicExpectedInput(e.target.value)}
-                  onBlur={() => void commitDynamicExpectedPosts()}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") void commitDynamicExpectedPosts()
-                  }}
-                  className="w-14 bg-app-bg border border-app-ink/20 px-1.5 py-0.5 text-[10px] font-mono focus:border-app-ink focus:outline-none"
-                />
-                <span className="text-[9px] uppercase font-bold text-app-ink/50">
-                  posts
-                </span>
-              </div>
-              <p className="text-[9px] text-app-ink/50 mt-1">
-                Next:{" "}
-                {channel.nextDynamicSyncAt ? (
-                  <RelativeTime timestamp={channel.nextDynamicSyncAt} />
-                ) : (
-                  "not scheduled"
-                )}
-              </p>
-            </div>
-
-            <div
-              className="group/auto-follow"
+              className="group/auto-follow opacity-80"
               onClick={(e) => e.stopPropagation()}
             >
               <p className="text-[10px] uppercase text-app-ink/60 font-bold tracking-widest mb-0.5 flex items-center gap-1">
@@ -861,8 +821,8 @@ export const ChannelCard: React.FC<ChannelCardProps> = ({
                 <TooltipTrigger asChild>
                   <button
                     type="button"
-                    onClick={handleToggleAutoFollow}
-                    className={`w-10 h-5 transition-all relative border border-app-ink/20 rounded-full ${
+                    disabled
+                    className={`w-10 h-5 transition-all relative border border-app-ink/20 rounded-full pointer-events-none ${
                       channel.autoFollowForwarded
                         ? "bg-green-500 border-green-600"
                         : "bg-app-ink/10"
@@ -879,10 +839,7 @@ export const ChannelCard: React.FC<ChannelCardProps> = ({
                   side="bottom"
                   className="max-w-[220px] text-center"
                 >
-                  <p>
-                    When syncing this channel, automatically follow new channels
-                    forwarded from its posts.
-                  </p>
+                  <p>{inheritedSettingsHint}</p>
                 </TooltipContent>
               </Tooltip>
             </div>

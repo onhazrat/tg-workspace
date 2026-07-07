@@ -70,6 +70,7 @@ TG_TABLES: tuple[str, ...] = (
     "tg_bot_credentials",
     "tg_chat_destinations",
     "tg_app_settings",
+    "tg_channel_setting_groups",
     "tg_channels",
 )
 

@@ -14,10 +14,12 @@ from app.jobs.settings import (
 )
 from app.models_tg import AppSetting
 from app.schemas.data import (
+    BulkChannelSettingGroupRequest,
     BulkChannelTagsRequest,
     BulkReresolveStartIdsRequest,
     BulkResetSyncRequest,
     BulkSyncSettingsRequest,
+    SettingGroupWriteRequest,
 )
 from app.services.bulk_channels import (
     bulk_reresolve_start_ids,
@@ -117,6 +119,21 @@ from app.services.tag_runs import (
 from app.services.tag_runs import (
     upsert_tag_run as upsert_tag_run_impl,
 )
+from app.services.channel_setting_groups import (
+    bulk_assign_setting_group as bulk_assign_setting_group_impl,
+)
+from app.services.channel_setting_groups import (
+    create_setting_group as create_setting_group_impl,
+)
+from app.services.channel_setting_groups import (
+    delete_setting_group as delete_setting_group_impl,
+)
+from app.services.channel_setting_groups import (
+    list_setting_groups as list_setting_groups_impl,
+)
+from app.services.channel_setting_groups import (
+    update_setting_group as update_setting_group_impl,
+)
 
 _SETTING_LOADERS = {
     "jobs": load_jobs_settings,
@@ -212,7 +229,7 @@ async def bulk_reset_sync_endpoint(
 def bulk_sync_settings_endpoint(
     body: BulkSyncSettingsRequest,
     session: SessionDep,
-    _current_user: CurrentUser,
+    current_user: CurrentUser,
 ) -> dict[str, int]:
     return bulk_update_sync_settings_impl(
         session,
@@ -221,7 +238,74 @@ def bulk_sync_settings_endpoint(
         dynamic_sync_enabled=body.dynamic_sync_enabled,
         auto_sync_interval_minutes=body.auto_sync_interval_minutes,
         dynamic_sync_expected_posts=body.dynamic_sync_expected_posts,
+        operator_id=current_user.id,
     )
+
+
+@router.get("/setting-groups")
+def list_setting_groups(
+    session: SessionDep,
+    current_user: CurrentUser,
+) -> list[dict[str, Any]]:
+    return list_setting_groups_impl(session, operator_id=current_user.id)
+
+
+@router.post("/setting-groups")
+def create_setting_group(
+    body: SettingGroupWriteRequest,
+    session: SessionDep,
+    current_user: CurrentUser,
+) -> dict[str, Any]:
+    result = create_setting_group_impl(
+        session,
+        body.model_dump(by_alias=False, exclude_none=True),
+        user_id=current_user.id,
+    )
+    touch_sync(session, "channels")
+    return result
+
+
+@router.put("/setting-groups/{group_id}")
+def update_setting_group(
+    group_id: str,
+    body: SettingGroupWriteRequest,
+    session: SessionDep,
+    _current_user: CurrentUser,
+) -> dict[str, Any]:
+    result = update_setting_group_impl(
+        session,
+        group_id,
+        body.model_dump(by_alias=False, exclude_none=True),
+    )
+    touch_sync(session, "channels")
+    return result
+
+
+@router.delete("/setting-groups/{group_id}")
+def delete_setting_group(
+    group_id: str,
+    session: SessionDep,
+    _current_user: CurrentUser,
+) -> dict[str, str]:
+    result = delete_setting_group_impl(session, group_id)
+    touch_sync(session, "channels")
+    return result
+
+
+@router.patch("/channels/bulk-setting-group")
+def bulk_assign_setting_group(
+    body: BulkChannelSettingGroupRequest,
+    session: SessionDep,
+    current_user: CurrentUser,
+) -> dict[str, Any]:
+    result = bulk_assign_setting_group_impl(
+        session,
+        channel_ids=body.channel_ids,
+        setting_group_id=body.setting_group_id,
+        operator_id=current_user.id,
+    )
+    touch_sync(session, "channels")
+    return result
 
 
 @router.patch("/channels/bulk-tags")

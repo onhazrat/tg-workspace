@@ -34,6 +34,7 @@ import { useSettings } from "../contexts/SettingsContext"
 import { JOB_LABELS, useJobToggles } from "../hooks/useJobToggles"
 import { saveNetworkLog } from "../lib/repository"
 import type { NetworkLog } from "../types"
+import { SettingGroupsPanel } from "./SettingGroupsPanel"
 
 export const SettingsView: React.FC<{ activeSection?: string }> = ({
   activeSection = "preferences",
@@ -1032,7 +1033,8 @@ export const SettingsView: React.FC<{ activeSection?: string }> = ({
                     </span>
                   </div>
                   <p className="text-[10px] opacity-40 italic serif">
-                    Use bulk PATCH to update all channel sync settings at once.
+                    Updates the built-in default setting group (all channels
+                    unless reassigned).
                   </p>
                   <div className="flex flex-wrap items-center gap-2">
                     <button
@@ -1107,6 +1109,8 @@ export const SettingsView: React.FC<{ activeSection?: string }> = ({
                     </button>
                   </div>
                 </div>
+
+                <SettingGroupsPanel />
 
                 <div className="space-y-4 pt-6 border-t border-app-ink/5">
                   <div className="flex items-center gap-2 opacity-60 mb-2">

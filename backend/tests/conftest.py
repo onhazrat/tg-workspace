@@ -35,7 +35,7 @@ from app.core.config import settings
 from app.core.db import engine, init_db
 from app.main import app
 from app.models import Item, User
-from app.models_tg import Channel
+from app.models_tg import Channel, ChannelSettingGroup
 from tests.utils.tg_cleanup import cleanup_channel_keys, truncate_all_tg_tables
 from tests.utils.user import authentication_token_from_email
 from tests.utils.utils import get_superuser_token_headers
@@ -102,22 +102,50 @@ def tg_test_channel() -> Generator:
     ) -> str:
         ch_name = name or channel_id
         with Session(engine) as session:
+            group = session.get(
+                ChannelSettingGroup, f"default-{user_id if user_id else 'global'}"
+            )
+            if group is None:
+                from app.services.channel_setting_groups import ensure_default_group
+
+                group = ensure_default_group(session, user_id=user_id)
+                session.commit()
             existing = session.get(Channel, channel_id)
             if existing:
                 existing.name = ch_name
                 existing.user_id = user_id
-                existing.is_frozen = is_frozen
+                if existing.setting_group_id != group.id and not kwargs.get(
+                    "is_frozen", False
+                ):
+                    existing.setting_group_id = group.id
                 for key, value in kwargs.items():
-                    setattr(existing, key, value)
+                    if key in Channel.model_fields and key != "setting_group_id":
+                        setattr(existing, key, value)
                 session.add(existing)
             else:
+                channel_kwargs = {
+                    k: v
+                    for k, v in kwargs.items()
+                    if k in Channel.model_fields and k != "setting_group_id"
+                }
+                if kwargs.get("is_frozen"):
+                    from app.services.channel_setting_groups import (
+                        get_or_create_restricted_group,
+                    )
+
+                    restricted = get_or_create_restricted_group(
+                        session, user_id=user_id
+                    )
+                    group_id = restricted.id
+                else:
+                    group_id = group.id
                 session.add(
                     Channel(
                         id=channel_id,
                         name=ch_name,
                         user_id=user_id,
-                        is_frozen=is_frozen,
-                        **kwargs,
+                        setting_group_id=group_id,
+                        **channel_kwargs,
                     )
                 )
             session.commit()

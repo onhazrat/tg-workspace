@@ -26,10 +26,6 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Skeleton } from "@/components/ui/skeleton"
-import {
-  AUTO_SYNC_INTERVAL_MAX_MINUTES,
-  AUTO_SYNC_INTERVAL_MIN_MINUTES,
-} from "@/constants"
 import { addChannelByName } from "@/lib/channels/add-channel"
 import {
   addManualTag,
@@ -50,7 +46,7 @@ import { useUI } from "../contexts/UIContext"
 import { useApiStatus } from "../hooks/useApiStatus"
 import { useScrollLoadMore } from "../hooks/useScrollLoadMore"
 import { clearChannelPosts, upsertChannel } from "../lib/repository"
-import type { Channel } from "../types"
+import type { Channel, ChannelSettingGroup } from "../types"
 import { ChannelCard } from "./ChannelCard"
 import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tg-tooltip"
 
@@ -175,20 +171,16 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
     "freeze" | "unfreeze" | null
   >(null)
   const [confirmBulkDelete, setConfirmBulkDelete] = useState(false)
-  const [bulkSyncIntervalMinutes, setBulkSyncIntervalMinutes] = useState(
-    regularSyncIntervalMinutes,
-  )
-  const [bulkDynamicExpectedPosts, setBulkDynamicExpectedPosts] = useState(
-    dynamicSyncExpectedPostsDefault,
-  )
+  const [settingGroups, setSettingGroups] = useState<ChannelSettingGroup[]>([])
+  const [bulkTargetGroupId, setBulkTargetGroupId] = useState("")
 
   useEffect(() => {
-    setBulkSyncIntervalMinutes(regularSyncIntervalMinutes)
-  }, [regularSyncIntervalMinutes])
-
-  useEffect(() => {
-    setBulkDynamicExpectedPosts(dynamicSyncExpectedPostsDefault)
-  }, [dynamicSyncExpectedPostsDefault])
+    void api.listSettingGroups().then((groups) => {
+      setSettingGroups(groups)
+      const defaultGroup = groups.find((group) => group.isDefault) ?? groups[0]
+      if (defaultGroup) setBulkTargetGroupId(defaultGroup.id)
+    })
+  }, [channels.length])
 
   const filteredChannels = useMemo(() => {
     let result = channels
@@ -327,6 +319,63 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
     untaggedTagSelectedCount > 0 &&
     untaggedTagSelectedCount < untaggedChannelNames.length
 
+  const selectedChannelIds = useMemo(
+    () =>
+      channels
+        .filter((channel) => selectedChannels.has(channel.name))
+        .map((channel) => channel.id),
+    [channels, selectedChannels],
+  )
+
+  const defaultGroupId = useMemo(
+    () => settingGroups.find((group) => group.isDefault)?.id ?? "",
+    [settingGroups],
+  )
+
+  const ensureFrozenGroupId = async (): Promise<string> => {
+    const existing = settingGroups.find((group) => group.name === "Frozen")
+    if (existing) return existing.id
+    const created = await api.createSettingGroup({
+      name: "Frozen",
+      isFrozen: true,
+      regularSyncEnabled: false,
+      dynamicSyncEnabled: false,
+    })
+    setSettingGroups((prev) => [...prev, created])
+    return created.id
+  }
+
+  const applyBulkGroupAssignment = async (settingGroupId: string) => {
+    if (!settingGroupId || selectedChannelIds.length === 0) return
+    await api.bulkAssignSettingGroup({
+      channelIds: selectedChannelIds,
+      settingGroupId,
+    })
+    const group = settingGroups.find((item) => item.id === settingGroupId)
+    if (!group) {
+      await loadChannels()
+      return
+    }
+    setChannels((prev) =>
+      prev.map((channel) =>
+        selectedChannelIds.includes(channel.id)
+          ? {
+              ...channel,
+              settingGroupId: group.id,
+              settingGroupName: group.name,
+              regularSyncEnabled: group.regularSyncEnabled,
+              dynamicSyncEnabled: group.dynamicSyncEnabled,
+              autoSyncIntervalMinutes: group.autoSyncIntervalMinutes,
+              dynamicSyncExpectedPosts: group.dynamicSyncExpectedPosts,
+              autoFollowForwarded: group.autoFollowForwarded,
+              isFrozen: group.isFrozen,
+              isUnavailableOnWebView: group.isUnavailableOnWebView,
+            }
+          : channel,
+      ),
+    )
+  }
+
   const [confirmDeleteChannel, setConfirmDeleteChannel] =
     useState<Channel | null>(null)
 
@@ -351,18 +400,8 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
   }
 
   const handleBulkFreeze = async () => {
-    const updatedChannels = channels.map((c) => {
-      if (selectedChannels.has(c.name) && !c.isUnavailableOnWebView) {
-        return { ...c, isFrozen: true }
-      }
-      return c
-    })
-    setChannels(updatedChannels)
-    for (const c of updatedChannels) {
-      if (selectedChannels.has(c.name) && !c.isUnavailableOnWebView) {
-        await upsertChannel(c)
-      }
-    }
+    const frozenGroupId = await ensureFrozenGroupId()
+    await applyBulkGroupAssignment(frozenGroupId)
   }
 
   const handleConfirmBulkFreezeAction = async () => {
@@ -376,18 +415,8 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
   }
 
   const handleBulkUnfreeze = async () => {
-    const updatedChannels = channels.map((c) => {
-      if (selectedChannels.has(c.name) && !c.isUnavailableOnWebView) {
-        return { ...c, isFrozen: false }
-      }
-      return c
-    })
-    setChannels(updatedChannels)
-    for (const c of updatedChannels) {
-      if (selectedChannels.has(c.name) && !c.isUnavailableOnWebView) {
-        await upsertChannel(c)
-      }
-    }
+    if (!defaultGroupId) return
+    await applyBulkGroupAssignment(defaultGroupId)
   }
 
   const handleBulkAddTag = async () => {
@@ -446,32 +475,8 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
     setConfirmResetModal(channel)
   }
 
-  const applyBulkSyncPatch = async (
-    patch: {
-      regularSyncEnabled?: boolean
-      dynamicSyncEnabled?: boolean
-      autoSyncIntervalMinutes?: number
-      dynamicSyncExpectedPosts?: number
-    },
-    applyToAll = false,
-  ) => {
-    const ids = applyToAll
-      ? null
-      : channels
-          .filter((channel) => selectedChannels.has(channel.name))
-          .map((channel) => channel.id)
-    if (!applyToAll && (!ids || ids.length === 0)) return
-    await api.bulkSyncSettings({
-      channelIds: ids,
-      ...patch,
-    })
-    const idSet = ids ? new Set(ids) : null
-    setChannels((prev) =>
-      prev.map((channel) => {
-        if (idSet && !idSet.has(channel.id)) return channel
-        return { ...channel, ...patch }
-      }),
-    )
+  const applyBulkMoveToGroup = async () => {
+    await applyBulkGroupAssignment(bulkTargetGroupId)
   }
 
   const executeResetAndSync = async () => {
@@ -871,97 +876,29 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
                 Unfreeze
               </button>
               <div className="h-4 w-px bg-app-ink/10 mx-1" />
-              <button
-                type="button"
-                onClick={() => applyBulkSyncPatch({ regularSyncEnabled: true })}
-                className="px-3 py-1.5 text-[10px] uppercase font-bold rounded-md bg-emerald-500/10 text-emerald-600 hover:bg-emerald-500/20 transition-all"
-              >
-                Regular On
-              </button>
-              <button
-                type="button"
-                onClick={() =>
-                  applyBulkSyncPatch({ regularSyncEnabled: false })
-                }
-                className="px-3 py-1.5 text-[10px] uppercase font-bold rounded-md bg-amber-500/10 text-amber-700 hover:bg-amber-500/20 transition-all"
-              >
-                Regular Off
-              </button>
-              <button
-                type="button"
-                onClick={() => applyBulkSyncPatch({ dynamicSyncEnabled: true })}
-                className="px-3 py-1.5 text-[10px] uppercase font-bold rounded-md bg-blue-500/10 text-blue-600 hover:bg-blue-500/20 transition-all"
-              >
-                Dynamic On
-              </button>
-              <button
-                type="button"
-                onClick={() =>
-                  applyBulkSyncPatch({ dynamicSyncEnabled: false })
-                }
-                className="px-3 py-1.5 text-[10px] uppercase font-bold rounded-md bg-app-muted/50 text-app-ink/70 hover:bg-app-ink/10 transition-all"
-              >
-                Dynamic Off
-              </button>
               <div className="flex items-center gap-2 rounded-md border border-app-ink/10 bg-app-muted/40 px-2 py-1.5">
                 <span className="text-[9px] uppercase font-bold text-app-ink/60">
-                  Interval
+                  Move to group
                 </span>
-                <input
-                  type="number"
-                  min={AUTO_SYNC_INTERVAL_MIN_MINUTES}
-                  max={AUTO_SYNC_INTERVAL_MAX_MINUTES}
-                  value={bulkSyncIntervalMinutes}
-                  onChange={(e) => {
-                    const value = Number.parseInt(e.target.value, 10)
-                    if (!Number.isNaN(value)) {
-                      setBulkSyncIntervalMinutes(
-                        Math.max(
-                          AUTO_SYNC_INTERVAL_MIN_MINUTES,
-                          Math.min(AUTO_SYNC_INTERVAL_MAX_MINUTES, value),
-                        ),
-                      )
-                    }
-                  }}
-                  className="w-14 bg-app-bg border border-app-ink/20 px-2 py-1 text-[10px] font-mono focus:border-app-ink focus:outline-none"
-                />
-                <button
-                  type="button"
-                  onClick={() =>
-                    applyBulkSyncPatch({
-                      autoSyncIntervalMinutes: bulkSyncIntervalMinutes,
-                    })
-                  }
-                  className="px-2 py-1 text-[9px] uppercase font-bold rounded bg-app-ink text-app-bg"
+                <Select
+                  value={bulkTargetGroupId}
+                  onValueChange={setBulkTargetGroupId}
                 >
-                  Apply
-                </button>
-              </div>
-              <div className="flex items-center gap-2 rounded-md border border-app-ink/10 bg-app-muted/40 px-2 py-1.5">
-                <span className="text-[9px] uppercase font-bold text-app-ink/60">
-                  Expected
-                </span>
-                <input
-                  type="number"
-                  min={1}
-                  value={bulkDynamicExpectedPosts}
-                  onChange={(e) => {
-                    const value = Number.parseInt(e.target.value, 10)
-                    if (!Number.isNaN(value)) {
-                      setBulkDynamicExpectedPosts(
-                        Math.max(1, Math.min(500, value)),
-                      )
-                    }
-                  }}
-                  className="w-14 bg-app-bg border border-app-ink/20 px-2 py-1 text-[10px] font-mono focus:border-app-ink focus:outline-none"
-                />
+                  <SelectTrigger className={selectTriggerClassName}>
+                    <SelectValue placeholder="Group" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {settingGroups.map((group) => (
+                      <SelectItem key={group.id} value={group.id}>
+                        {group.name}
+                        {group.isDefault ? " (default)" : ""}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
                 <button
                   type="button"
-                  onClick={() =>
-                    applyBulkSyncPatch({
-                      dynamicSyncExpectedPosts: bulkDynamicExpectedPosts,
-                    })
-                  }
+                  onClick={() => void applyBulkMoveToGroup()}
                   className="px-2 py-1 text-[9px] uppercase font-bold rounded bg-app-ink text-app-bg"
                 >
                   Apply

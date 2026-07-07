@@ -6,7 +6,8 @@ from sqlmodel import Session
 
 from app.core.db import engine
 from app.jobs.auto_sync import CHECK_SOURCE
-from app.models_tg import Channel, Post
+from app.models_tg import Channel, ChannelSettingGroup, Post
+from tests.utils.setting_groups import upsert_sync_test_channel
 from app.services.scraper_jobs import SyncJobState
 from app.services.sync_orchestrator import (
     _ChannelSyncCtx,
@@ -46,15 +47,16 @@ def test_finalize_channel_success_recomputes_deadlines() -> None:
     now_ms = 1_725_000_000_000
 
     with Session(engine) as session:
-        session.add(
-            Channel(
-                id=channel_id,
-                name=channel_id,
-                regular_sync_enabled=True,
-                dynamic_sync_enabled=True,
-                auto_sync_interval_minutes=60,
-                dynamic_sync_expected_posts=15,
-            )
+        upsert_sync_test_channel(
+            session,
+            channel_id=channel_id,
+            user_id=None,
+            group_fields={
+                "regular_sync_enabled": True,
+                "dynamic_sync_enabled": True,
+                "auto_sync_interval_minutes": 60,
+                "dynamic_sync_expected_posts": 15,
+            },
         )
         session.add(
             Post(
@@ -87,12 +89,14 @@ def test_finalize_channel_success_recomputes_deadlines() -> None:
     with Session(engine) as session:
         channel = session.get(Channel, channel_id)
         assert channel is not None
+        group = session.get(ChannelSettingGroup, channel.setting_group_id)
+        assert group is not None
         assert channel.last_updated is not None
         assert (
             channel.next_regular_sync_at
             == compute_next_regular_sync_at_from_last_updated(
                 channel.last_updated,
-                channel.auto_sync_interval_minutes,
+                group.auto_sync_interval_minutes,
                 channel.last_updated,
             )
         )
@@ -101,11 +105,11 @@ def test_finalize_channel_success_recomputes_deadlines() -> None:
         implied_hours = (
             channel.next_dynamic_sync_at - channel.last_updated
         ) / 3_600_000
-        implied_velocity = channel.dynamic_sync_expected_posts / implied_hours
+        implied_velocity = group.dynamic_sync_expected_posts / implied_hours
         assert (
             compute_next_dynamic_sync_at_from_last_updated(
                 channel.last_updated,
-                channel.dynamic_sync_expected_posts,
+                group.dynamic_sync_expected_posts,
                 implied_velocity,
                 channel.last_updated,
             )
@@ -116,17 +120,19 @@ def test_finalize_channel_success_recomputes_deadlines() -> None:
 def test_scheduler_failure_backoff_updates_due_schedule_only() -> None:
     channel_id = f"orchestrator-fail-{uuid.uuid4()}"
     with Session(engine) as session:
-        session.add(
-            Channel(
-                id=channel_id,
-                name=channel_id,
-                regular_sync_enabled=True,
-                dynamic_sync_enabled=True,
-                next_regular_sync_at=100,
-                next_dynamic_sync_at=200,
-            )
+        upsert_sync_test_channel(
+            session,
+            channel_id=channel_id,
+            user_id=None,
+            group_fields={
+                "regular_sync_enabled": True,
+                "dynamic_sync_enabled": True,
+            },
+            channel_fields={
+                "next_regular_sync_at": 100,
+                "next_dynamic_sync_at": 200,
+            },
         )
-        session.commit()
 
     _finalize_channel_error(
         _ctx(channel_id, channel_id),
@@ -150,17 +156,19 @@ def test_scheduler_failure_backoff_updates_due_schedule_only() -> None:
 def test_manual_failure_does_not_apply_backoff() -> None:
     channel_id = f"orchestrator-manual-{uuid.uuid4()}"
     with Session(engine) as session:
-        session.add(
-            Channel(
-                id=channel_id,
-                name=channel_id,
-                regular_sync_enabled=True,
-                dynamic_sync_enabled=True,
-                next_regular_sync_at=111,
-                next_dynamic_sync_at=222,
-            )
+        upsert_sync_test_channel(
+            session,
+            channel_id=channel_id,
+            user_id=None,
+            group_fields={
+                "regular_sync_enabled": True,
+                "dynamic_sync_enabled": True,
+            },
+            channel_fields={
+                "next_regular_sync_at": 111,
+                "next_dynamic_sync_at": 222,
+            },
         )
-        session.commit()
 
     _finalize_channel_error(
         _ctx(channel_id, channel_id),

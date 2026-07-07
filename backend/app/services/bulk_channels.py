@@ -11,6 +11,7 @@ from datetime import datetime
 from sqlmodel import Session, col, delete, select
 
 from app.models_tg import Channel, Post, PostEmbedding, PostTranslation
+from app.services.channel_setting_groups import channel_is_frozen, load_groups_by_id
 from app.services.operator import select_operator_channels
 from app.services.post_sync_state import clear_channel_sync_state
 from app.services.sync_meta import touch_sync
@@ -130,9 +131,10 @@ async def bulk_reset_and_queue_sync(
     )
     result = BulkResetSyncResult()
     entries: list[tuple[str, str]] = []
+    groups_by_id = load_groups_by_id(session)
 
     for channel in channels:
-        if channel.is_frozen:
+        if channel_is_frozen(channel, groups_by_id):
             result.errors.append(
                 {
                     "channelId": channel.id,
