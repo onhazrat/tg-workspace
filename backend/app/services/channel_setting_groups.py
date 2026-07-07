@@ -8,6 +8,7 @@ from datetime import datetime
 from typing import Any
 
 from fastapi import HTTPException
+from sqlalchemy import or_
 from sqlmodel import Session, col, func, select
 
 from app.jobs.settings import load_sync_settings
@@ -133,6 +134,66 @@ def is_reserved_group_id(group_id: str) -> bool:
         or group_id.startswith("restricted-")
         or group_id.startswith("frozen-")
     )
+
+
+def _operator_group_scope_filter(operator_id: uuid.UUID | None):
+    if operator_id is None:
+        return col(ChannelSettingGroup.user_id).is_(None)
+    return or_(
+        ChannelSettingGroup.user_id == operator_id,
+        col(ChannelSettingGroup.user_id).is_(None),
+    )
+
+
+def _legacy_duplicate_reserved_groups(
+    session: Session,
+    *,
+    user_id: uuid.UUID | None,
+    reserved_name: str,
+    canonical_id: str,
+) -> list[ChannelSettingGroup]:
+    return list(
+        session.exec(
+            select(ChannelSettingGroup).where(
+                ChannelSettingGroup.name == reserved_name,
+                ChannelSettingGroup.id != canonical_id,
+                ~col(ChannelSettingGroup.id).like("default-%"),
+                ~col(ChannelSettingGroup.id).like("restricted-%"),
+                ~col(ChannelSettingGroup.id).like("frozen-%"),
+                _operator_group_scope_filter(user_id),
+            )
+        ).all()
+    )
+
+
+def consolidate_legacy_duplicate_reserved_groups(
+    session: Session, *, user_id: uuid.UUID | None
+) -> int:
+    """Merge legacy user-created reserved-name groups into canonical reserved ids."""
+    merged = 0
+    for reserved_name, canonical_creator in (
+        (FROZEN_GROUP_NAME, get_or_create_frozen_group),
+        (RESTRICTED_GROUP_NAME, get_or_create_restricted_group),
+    ):
+        canonical = canonical_creator(session, user_id=user_id)
+        for legacy in _legacy_duplicate_reserved_groups(
+            session,
+            user_id=user_id,
+            reserved_name=reserved_name,
+            canonical_id=canonical.id,
+        ):
+            channels = session.exec(
+                select(Channel).where(Channel.setting_group_id == legacy.id)
+            ).all()
+            for channel in channels:
+                channel.setting_group_id = canonical.id
+                channel.updated_at = datetime.utcnow()
+                session.add(channel)
+            session.delete(legacy)
+            merged += 1
+    if merged:
+        session.flush()
+    return merged
 
 
 def reject_inherited_channel_fields(body: dict[str, Any]) -> None:
@@ -387,20 +448,28 @@ def list_setting_groups(
 ) -> list[dict[str, Any]]:
     from app.services.operator import select_operator_channels
 
-    default_group, restricted_group, frozen_group = ensure_reserved_groups(
-        session, user_id=operator_id
-    )
+    ensure_reserved_groups(session, user_id=operator_id)
+    consolidate_legacy_duplicate_reserved_groups(session, user_id=operator_id)
     session.commit()
 
-    operator_channels = select_operator_channels(session, operator_id=operator_id)
-    group_ids = {channel.setting_group_id for channel in operator_channels}
-    group_ids.update(
-        {default_group.id, restricted_group.id, frozen_group.id}
+    groups = list(
+        session.exec(
+            select(ChannelSettingGroup).where(_operator_group_scope_filter(operator_id))
+        ).all()
     )
+    known_ids = {group.id for group in groups}
+    operator_channels = select_operator_channels(session, operator_id=operator_id)
+    orphan_ids = {
+        channel.setting_group_id
+        for channel in operator_channels
+        if channel.setting_group_id not in known_ids
+    }
+    if orphan_ids:
+        extra_groups = session.exec(
+            select(ChannelSettingGroup).where(col(ChannelSettingGroup.id).in_(orphan_ids))
+        ).all()
+        groups.extend(extra_groups)
 
-    groups = session.exec(
-        select(ChannelSettingGroup).where(col(ChannelSettingGroup.id).in_(group_ids))
-    ).all()
     counts = channel_counts_by_group(session)
     groups.sort(key=lambda group: (not group.is_default, group.name.lower()))
     return [

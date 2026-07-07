@@ -7,12 +7,10 @@ import {
   AUTO_SYNC_INTERVAL_MAX_MINUTES,
   AUTO_SYNC_INTERVAL_MIN_MINUTES,
 } from "@/constants"
+import { isReservedSettingGroup } from "@/lib/channels/setting-groups"
 import type { ChannelSettingGroup } from "@/types"
 
-const isReservedGroup = (group: ChannelSettingGroup): boolean =>
-  group.isDefault ||
-  group.name === "Frozen" ||
-  group.name === "Restricted"
+const isReservedGroup = isReservedSettingGroup
 
 const emptyDraft = (): SettingGroupWriteBody => ({
   name: "",

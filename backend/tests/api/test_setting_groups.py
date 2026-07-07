@@ -117,6 +117,77 @@ def test_setting_groups_always_include_reserved_with_zero_count(
     assert frozen["channelCount"] == 0
 
 
+def test_setting_groups_list_includes_empty_custom_group(client: TestClient) -> None:
+    headers = _auth(client)
+    created = client.post(
+        f"{PREFIX}/setting-groups",
+        json={"name": "Slow feed"},
+        headers=headers,
+    )
+    assert created.status_code == 200
+    custom_group = created.json()
+
+    listed = client.get(f"{PREFIX}/setting-groups", headers=headers)
+    assert listed.status_code == 200
+    groups = listed.json()
+    ids = {group["id"] for group in groups}
+    assert custom_group["id"] in ids
+    slow_feed = next(group for group in groups if group["id"] == custom_group["id"])
+    assert slow_feed["name"] == "Slow feed"
+    assert slow_feed["channelCount"] == 0
+
+
+def test_setting_groups_deduplicate_legacy_frozen_group(client: TestClient) -> None:
+    headers = _auth(client)
+    listed = client.get(f"{PREFIX}/setting-groups", headers=headers).json()
+    canonical_frozen = next(
+        group for group in listed if group["id"].startswith("frozen-")
+    )
+
+    client.put(
+        f"{PREFIX}/channels/sg-legacy-frozen",
+        json={"name": "sg-legacy-frozen"},
+        headers=headers,
+    )
+
+    from app.core.db import engine
+    from sqlmodel import Session
+
+    from app.models_tg import Channel, ChannelSettingGroup
+    from app.services.operator import get_operator_user_id
+
+    with Session(engine) as session:
+        operator_id = get_operator_user_id(session)
+        legacy_id = "legacy-frozen-uuid-test"
+        session.add(
+            ChannelSettingGroup(
+                id=legacy_id,
+                user_id=operator_id,
+                name="Frozen",
+                is_default=False,
+                regular_sync_enabled=False,
+                dynamic_sync_enabled=False,
+                is_frozen=True,
+            )
+        )
+        channel = session.get(Channel, "sg-legacy-frozen")
+        assert channel is not None
+        channel.setting_group_id = legacy_id
+        session.add(channel)
+        session.commit()
+
+    relisted = client.get(f"{PREFIX}/setting-groups", headers=headers)
+    assert relisted.status_code == 200
+    groups = relisted.json()
+    frozen_groups = [group for group in groups if group["name"] == "Frozen"]
+    assert len(frozen_groups) == 1
+    assert frozen_groups[0]["id"] == canonical_frozen["id"]
+
+    channels = client.get(f"{PREFIX}/channels", headers=headers).json()
+    row = next(item for item in channels if item["id"] == "sg-legacy-frozen")
+    assert row["settingGroupId"] == canonical_frozen["id"]
+
+
 def test_setting_groups_block_reserved_names_and_deletion(
     client: TestClient,
 ) -> None:

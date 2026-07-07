@@ -27,6 +27,7 @@ import {
   normalizeChannelTags,
   removeTagsByName,
 } from "@/lib/channels/channel-tag-model"
+import { findFrozenReservedGroup } from "@/lib/channels/setting-groups"
 import { useData } from "../contexts/DataContext"
 import { useScraper } from "../contexts/ScraperContext"
 import { useSettings } from "../contexts/SettingsContext"
@@ -149,7 +150,7 @@ export const ChannelCard: React.FC<ChannelCardProps> = ({
     const groups = await api.listSettingGroups()
     const targetGroup = channel.isFrozen
       ? groups.find((group) => group.isDefault)
-      : groups.find((group) => group.name === "Frozen")
+      : findFrozenReservedGroup(groups)
     if (!targetGroup) return
     await api.bulkAssignSettingGroup({
       channelIds: [channel.id],

@@ -39,6 +39,7 @@ import {
   UNTAGGED_TAG_LABEL,
 } from "@/lib/channels/channel-tags"
 import { deleteChannelByRecord } from "@/lib/channels/delete-channel"
+import { findFrozenReservedGroup } from "@/lib/channels/setting-groups"
 import { useData } from "../contexts/DataContext"
 import { useScraper } from "../contexts/ScraperContext"
 import { useSettings } from "../contexts/SettingsContext"
@@ -333,7 +334,7 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
   )
 
   const frozenGroupId = useMemo(
-    () => settingGroups.find((group) => group.name === "Frozen")?.id ?? "",
+    () => findFrozenReservedGroup(settingGroups)?.id ?? "",
     [settingGroups],
   )
 
