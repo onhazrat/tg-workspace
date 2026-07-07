@@ -176,8 +176,6 @@ def test_bulk_sync_settings_expected_posts_updates_next_dynamic_sync_at(
             f"{PREFIX}/channels/{channel_id}",
             json={
                 "name": channel_id,
-                "dynamicSyncEnabled": True,
-                "dynamicSyncExpectedPosts": 15,
                 "lastUpdated": last_updated,
                 "nextDynamicSyncAt": old_deadline,
             },
@@ -204,7 +202,11 @@ def test_bulk_sync_settings_expected_posts_updates_next_dynamic_sync_at(
 
     r = client.patch(
         f"{PREFIX}/channels/bulk-sync-settings",
-        json={"channelIds": None, "dynamicSyncExpectedPosts": 40},
+        json={
+            "channelIds": None,
+            "dynamicSyncEnabled": True,
+            "dynamicSyncExpectedPosts": 40,
+        },
         headers=headers,
     )
     assert r.status_code == 200

@@ -1,7 +1,5 @@
 import { toast } from "sonner"
 
-import { toast } from "sonner"
-
 import {
   addManualTag,
   getTagNames,

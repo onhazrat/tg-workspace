@@ -414,11 +414,25 @@ def test_sync_auto_follow_enabled_creates_forwarded_channel(client: TestClient) 
     clear_jobs_for_tests()
     headers = _auth(client)
 
-    client.put(
-        f"{DATA}/channels/source-ch",
-        json={"name": "source-ch", "autoFollowForwarded": True},
+    follow_group = client.post(
+        f"{DATA}/setting-groups",
+        json={"name": "Auto Follow Sync", "autoFollowForwarded": True},
         headers=headers,
     )
+    assert follow_group.status_code == 200
+    group_id = follow_group.json()["id"]
+
+    client.put(
+        f"{DATA}/channels/source-ch",
+        json={"name": "source-ch"},
+        headers=headers,
+    )
+    assign = client.patch(
+        f"{DATA}/channels/bulk-setting-group",
+        json={"channelIds": ["source-ch"], "settingGroupId": group_id},
+        headers=headers,
+    )
+    assert assign.status_code == 200
 
     with (
         patch(
@@ -456,6 +470,7 @@ def test_sync_auto_follow_enabled_creates_forwarded_channel(client: TestClient) 
 
     client.delete(f"{DATA}/channels/fwd-target-ch", headers=headers)
     client.delete(f"{DATA}/channels/source-ch", headers=headers)
+    client.delete(f"{DATA}/setting-groups/{group_id}", headers=headers)
     clear_jobs_for_tests()
 
 

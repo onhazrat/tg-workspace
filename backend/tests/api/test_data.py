@@ -131,19 +131,34 @@ def test_put_channel_expected_posts_updates_next_dynamic_sync_at(
     now_ms = int(time.time() * 1000)
     post_timestamps = [now_ms - 3_600_000, now_ms - 1_800_000]
     try:
+        r_group = client.post(
+            f"{PREFIX}/setting-groups",
+            json={
+                "name": "Dynamic expected posts 15",
+                "dynamicSyncEnabled": True,
+                "dynamicSyncExpectedPosts": 15,
+            },
+            headers=headers,
+        )
+        assert r_group.status_code == 200
+        group_id = r_group.json()["id"]
+
         r_create = client.put(
             f"{PREFIX}/channels/{channel_id}",
             json={
                 "name": channel_id,
-                "dynamicSyncEnabled": True,
-                "dynamicSyncExpectedPosts": 15,
                 "lastUpdated": last_updated,
                 "nextDynamicSyncAt": old_deadline,
             },
             headers=headers,
         )
         assert r_create.status_code == 200
-        group_id = r_create.json()["settingGroupId"]
+        r_assign = client.patch(
+            f"{PREFIX}/channels/bulk-setting-group",
+            json={"channelIds": [channel_id], "settingGroupId": group_id},
+            headers=headers,
+        )
+        assert r_assign.status_code == 200
 
         r_posts = client.post(
             f"{PREFIX}/posts/bulk",
@@ -202,6 +217,7 @@ def test_put_channel_expected_posts_updates_next_dynamic_sync_at(
         assert r_unchanged.json()["nextDynamicSyncAt"] == frozen_deadline
     finally:
         client.delete(f"{PREFIX}/channels/{channel_id}", headers=headers)
+        client.delete(f"{PREFIX}/setting-groups/{group_id}", headers=headers)
 
 
 def test_posts_date_range_query(client: TestClient) -> None:
