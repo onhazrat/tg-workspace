@@ -11,6 +11,13 @@ export function normalizeChannelHandle(input: string): string {
   return input.trim().replace(/^@/, "").split("/").pop() || ""
 }
 
+export function findChannelByTelegramChatId(
+  channels: Channel[],
+  telegramChatId: number,
+): Channel | undefined {
+  return channels.find((channel) => channel.telegramChatId === telegramChatId)
+}
+
 export interface AddChannelNetworkSettings {
   proxyEnabled: boolean
   defaultProxyUrls: string
@@ -94,6 +101,7 @@ export async function addChannelByName(
   let files: string | undefined
   let links: string | undefined
   let isUnavailableOnWebView = false
+  let telegramChatId: number | undefined
 
   try {
     const data = (await api.channelInfo({
@@ -117,6 +125,27 @@ export async function addChannelByName(
     if (data.links) links = data.links as string
     if (data.isUnavailableOnWebView) {
       isUnavailableOnWebView = true
+    }
+    if (typeof data.telegramChatId === "number") {
+      telegramChatId = data.telegramChatId
+      // Telegram web view only exposes chat IDs when at least one message widget exists.
+      const existingChannel = findChannelByTelegramChatId(
+        ctx.channels,
+        telegramChatId,
+      )
+      if (existingChannel) {
+        toast.info(`Already following this channel as @${existingChannel.name}`)
+        ctx.setSelectedChannels((prev) =>
+          new Set(prev).add(existingChannel.name),
+        )
+        setTimeout(() => {
+          const element = document.querySelector(
+            `[data-channel-name="${existingChannel.name}"]`,
+          )
+          element?.scrollIntoView({ behavior: "smooth", block: "center" })
+        }, 0)
+        return { ok: true, channelName: existingChannel.name }
+      }
     }
   } catch (err: unknown) {
     console.error("Failed to fetch initial channel info:", err)
@@ -170,6 +199,7 @@ export async function addChannelByName(
     nextRegularSyncAt: null,
     nextDynamicSyncAt: null,
     isUnavailableOnWebView,
+    telegramChatId,
   }
 
   await upsertChannel(newChannel)

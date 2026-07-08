@@ -2,13 +2,14 @@ from __future__ import annotations
 
 import uuid
 
-from sqlmodel import Session
+from sqlmodel import Session, select
 
 from app.core.db import engine
 from app.jobs.auto_sync import CHECK_SOURCE
-from app.models_tg import Channel, ChannelSettingGroup, Post
+from app.models_tg import Channel, ChannelSettingGroup, Post, SyncLog
 from app.services.scraper_jobs import SyncJobState
 from app.services.sync_orchestrator import (
+    _apply_scrape_page,
     _ChannelSyncCtx,
     _finalize_channel_error,
     _finalize_channel_success,
@@ -186,3 +187,50 @@ def test_manual_failure_does_not_apply_backoff() -> None:
         assert channel is not None
         assert channel.next_regular_sync_at == 111
         assert channel.next_dynamic_sync_at == 222
+
+
+def test_apply_scrape_page_mismatch_freezes_channel_and_logs_failure() -> None:
+    channel_id = f"orchestrator-mismatch-{uuid.uuid4()}"
+    with Session(engine) as session:
+        channel = upsert_sync_test_channel(
+            session,
+            channel_id=channel_id,
+            user_id=None,
+            channel_fields={"telegram_chat_id": -1001},
+        )
+        channel_name = channel.name
+
+    result = _apply_scrape_page(
+        _ctx(channel_id, channel_name),
+        {
+            "fullRequest": {"url": f"https://t.me/s/{channel_name}"},
+            "posts": [],
+            "latestId": 0,
+            "telegramChatId": -1002,
+        },
+        job_id="job-mismatch",
+        job_source="Manual",
+        user_id=None,
+        session_seen_ids=set(),
+        before_id=None,
+    )
+    assert result.stop_sync is True
+    assert result.sync_failed is True
+    assert result.sync_error is not None
+    assert "mismatch" in result.sync_error.lower()
+
+    with Session(engine) as session:
+        channel = session.get(Channel, channel_id)
+        assert channel is not None
+        group = session.get(ChannelSettingGroup, channel.setting_group_id)
+        assert group is not None
+        assert group.name == "Frozen"
+        log = session.exec(
+            select(SyncLog)
+            .where(SyncLog.channel_name == channel_name)
+            .order_by(SyncLog.timestamp.desc())
+        ).first()
+        assert log is not None
+        assert log.status == "failed"
+        assert log.error is not None
+        assert "mismatch" in log.error.lower()

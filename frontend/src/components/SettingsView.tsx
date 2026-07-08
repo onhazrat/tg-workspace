@@ -92,6 +92,8 @@ export const SettingsView: React.FC<{ activeSection?: string }> = ({
     setShowChannelBio,
     showChannelSubscribers,
     setShowChannelSubscribers,
+    showChannelTelegramChatId,
+    setShowChannelTelegramChatId,
     showChannelPhotos,
     setShowChannelPhotos,
     showChannelVideos,
@@ -536,6 +538,27 @@ export const SettingsView: React.FC<{ activeSection?: string }> = ({
                     >
                       <div
                         className={`absolute top-0.5 w-3.5 h-3.5 bg-white transition-all ${showChannelBio ? "left-5.5" : "left-0.5"}`}
+                      />
+                    </button>
+                  </div>
+                </div>
+
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2 opacity-60">
+                      <span className="text-[10px] font-bold uppercase tracking-tight">
+                        Show Telegram Chat ID
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setShowChannelTelegramChatId(!showChannelTelegramChatId)
+                      }
+                      className={`w-10 h-5 transition-all relative border border-app-ink/20 ${showChannelTelegramChatId ? "bg-green-500 border-green-600" : "bg-app-ink/10"}`}
+                    >
+                      <div
+                        className={`absolute top-0.5 w-3.5 h-3.5 bg-white transition-all ${showChannelTelegramChatId ? "left-5.5" : "left-0.5"}`}
                       />
                     </button>
                   </div>

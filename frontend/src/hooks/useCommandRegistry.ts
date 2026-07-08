@@ -206,6 +206,8 @@ export function useCommandRegistry(): {
         setShowChannelBio: settings.setShowChannelBio,
         showChannelSubscribers: settings.showChannelSubscribers,
         setShowChannelSubscribers: settings.setShowChannelSubscribers,
+        showChannelTelegramChatId: settings.showChannelTelegramChatId,
+        setShowChannelTelegramChatId: settings.setShowChannelTelegramChatId,
         showChannelPhotos: settings.showChannelPhotos,
         setShowChannelPhotos: settings.setShowChannelPhotos,
         showChannelVideos: settings.showChannelVideos,

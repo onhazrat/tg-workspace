@@ -70,6 +70,7 @@ export const ChannelCard: React.FC<ChannelCardProps> = ({
   const {
     showChannelBio,
     showChannelSubscribers,
+    showChannelTelegramChatId,
     showChannelPhotos,
     showChannelVideos,
     showChannelFiles,
@@ -469,6 +470,18 @@ export const ChannelCard: React.FC<ChannelCardProps> = ({
               </TooltipTrigger>
               <TooltipContent>
                 <p>Subscribers</p>
+              </TooltipContent>
+            </Tooltip>
+          )}
+          {showChannelTelegramChatId && channel.telegramChatId != null && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <div className="bg-app-muted px-2.5 py-1 rounded-md text-[10px] font-bold tracking-wider text-app-ink/75 flex items-center gap-1.5 border border-app-ink/5 cursor-help font-mono">
+                  <span>{channel.telegramChatId}</span>
+                </div>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Telegram chat ID</p>
               </TooltipContent>
             </Tooltip>
           )}

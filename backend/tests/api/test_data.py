@@ -67,6 +67,22 @@ def test_channels_crud_roundtrip(client: TestClient) -> None:
     assert r3.status_code == 200
 
 
+def test_channel_put_rejects_server_managed_telegram_chat_id(
+    client: TestClient,
+) -> None:
+    headers = _auth(client)
+    r = client.put(
+        f"{PREFIX}/channels/ch-server-managed",
+        json={
+            "name": "ch-server-managed",
+            "telegramChatId": -1001234567890,
+        },
+        headers=headers,
+    )
+    assert r.status_code == 400
+    assert "Server-managed channel fields" in r.json()["detail"]
+
+
 def test_put_channel_interval_updates_next_regular_sync_at(
     client: TestClient,
 ) -> None:
@@ -461,6 +477,29 @@ def test_import_export_roundtrip(client: TestClient) -> None:
     client.delete(f"{PREFIX}/summaries/imp-sum", headers=headers)
     client.delete(f"{PREFIX}/bot-credentials/imp-bot", headers=headers)
     client.delete(f"{PREFIX}/chat-destinations/imp-dest", headers=headers)
+
+
+def test_import_strips_server_managed_telegram_chat_id(client: TestClient) -> None:
+    headers = _auth(client)
+    payload = {
+        "data": {
+            "channels": [
+                {
+                    "id": "imp-ch-telegram-id",
+                    "name": "imp-ch-telegram-id",
+                    "telegramChatId": -1001234567890,
+                }
+            ]
+        }
+    }
+    try:
+        r = client.post(f"{PREFIX}/import", json=payload, headers=headers)
+        assert r.status_code == 200
+        channels = client.get(f"{PREFIX}/channels", headers=headers).json()
+        imported = next(c for c in channels if c["id"] == "imp-ch-telegram-id")
+        assert "telegramChatId" not in imported or imported["telegramChatId"] is None
+    finally:
+        client.delete(f"{PREFIX}/channels/imp-ch-telegram-id", headers=headers)
 
 
 def test_data_requires_auth(client: TestClient) -> None:

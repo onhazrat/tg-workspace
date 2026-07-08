@@ -30,7 +30,7 @@ from app.services.channel_setting_groups import (
     setting_group_to_camel,
 )
 from app.services.channel_tags import normalize_channel_tags
-from app.services.channels import apply_channel_fields
+from app.services.channels import SERVER_MANAGED_CHANNEL_FIELDS, apply_channel_fields
 from app.services.credentials import encrypt_bot_token
 from app.services.logs import (
     upsert_embedding_log,
@@ -77,10 +77,12 @@ def import_data(
 
     for item in payload.get("channels", []):
         normalized = normalize_body(item)
+        for field in SERVER_MANAGED_CHANNEL_FIELDS:
+            normalized.pop(field, None)
         channel_id = normalized.get("id", item.get("id"))
         ch = session.get(Channel, channel_id)
         if ch:
-            apply_channel_fields(ch, item, session=session)
+            apply_channel_fields(ch, normalized, session=session)
             ch.updated_at = datetime.utcnow()
         else:
             setting_group_id = normalized.get("setting_group_id")

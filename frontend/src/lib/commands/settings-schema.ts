@@ -31,6 +31,13 @@ const BOOLEAN_SETTINGS: BooleanSettingDef[] = [
     keywords: ["appearance", "channel", "subscribers"],
   },
   {
+    key: "showChannelTelegramChatId",
+    label: "Show Channel Telegram Chat ID",
+    getter: (s) => s.showChannelTelegramChatId,
+    setter: (s, v) => s.setShowChannelTelegramChatId(v),
+    keywords: ["appearance", "channel", "telegram", "chat", "id"],
+  },
+  {
     key: "showChannelPhotos",
     label: "Show Channel Photos",
     getter: (s) => s.showChannelPhotos,

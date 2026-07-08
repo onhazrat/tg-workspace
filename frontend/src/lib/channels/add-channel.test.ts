@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test"
 
 import {
   addChannelByName,
+  findChannelByTelegramChatId,
   normalizeChannelHandle,
 } from "@/lib/channels/add-channel"
 import {
@@ -88,6 +89,24 @@ describe("addChannelByName duplicate", () => {
     })
 
     expect(result.ok).toBe(false)
+  })
+})
+
+describe("findChannelByTelegramChatId", () => {
+  test("returns existing channel with matching telegram chat id", () => {
+    const channels: Channel[] = [
+      { id: "1", name: "alpha", telegramChatId: -10011 },
+      { id: "2", name: "beta", telegramChatId: -10022 },
+    ]
+    const existing = findChannelByTelegramChatId(channels, -10022)
+    expect(existing?.name).toBe("beta")
+  })
+
+  test("returns undefined when no channel matches", () => {
+    const channels: Channel[] = [
+      { id: "1", name: "alpha", telegramChatId: -10011 },
+    ]
+    expect(findChannelByTelegramChatId(channels, -10099)).toBeUndefined()
   })
 })
 

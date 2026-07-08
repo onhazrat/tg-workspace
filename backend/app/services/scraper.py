@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import asyncio
+import base64
+import json
 import logging
 import math
 import re
@@ -113,6 +115,26 @@ def _extract_channel_photo_url(soup: BeautifulSoup) -> str | None:
     return None
 
 
+def _extract_telegram_chat_id(soup: BeautifulSoup) -> int | None:
+    widget = soup.select_one(".tgme_widget_message[data-view]")
+    if not widget:
+        return None
+    encoded = _attr_str(widget.get("data-view"))
+    if not encoded:
+        return None
+    try:
+        payload = base64.b64decode(encoded).decode("utf-8")
+        parsed = json.loads(payload)
+    except (ValueError, json.JSONDecodeError):
+        return None
+    if not isinstance(parsed, dict):
+        return None
+    chat_id = parsed.get("c")
+    if isinstance(chat_id, int):
+        return chat_id
+    return None
+
+
 def _parse_channel_meta(soup: BeautifulSoup, channel_name: str) -> dict[str, Any]:
     display = soup.select_one(".tgme_channel_info_header_title span")
     if not display:
@@ -141,6 +163,7 @@ def _parse_channel_meta(soup: BeautifulSoup, channel_name: str) -> dict[str, Any
                 latest_id = max(latest_id, int(m.group(1)))
 
     is_unavailable = latest_id == 0 and bool(soup.select_one(".tgme_page_action"))
+    telegram_chat_id = _extract_telegram_chat_id(soup)
 
     return {
         "channelName": channel_name,
@@ -153,6 +176,7 @@ def _parse_channel_meta(soup: BeautifulSoup, channel_name: str) -> dict[str, Any
         "files": counters.get("files") or counters.get("file"),
         "links": counters.get("links") or counters.get("link"),
         "latestId": latest_id,
+        "telegramChatId": telegram_chat_id,
         "isUnavailableOnWebView": is_unavailable,
     }
 
@@ -244,6 +268,7 @@ def _parse_scrape_channel_page(
         "videos": meta.get("videos") or "",
         "files": meta.get("files") or "",
         "links": meta.get("links") or "",
+        "telegramChatId": meta.get("telegramChatId"),
         "posts": posts,
         "latestId": latest_id,
         "nextBeforeId": next_before_id,
@@ -410,6 +435,7 @@ async def scrape_channel(
         "videos": videos,
         "files": files,
         "links": links,
+        "telegramChatId": meta.get("telegramChatId"),
         "posts": filtered,
         "latestId": latest_id,
         "telemetry": telemetry_logs,

@@ -62,6 +62,9 @@ class Channel(SQLModel, table=True):
     )
     language: str | None = None
     followed_at: int | None = Field(default=None, sa_column=_ms_ts(nullable=True))
+    telegram_chat_id: int | None = Field(
+        default=None, sa_column=Column(BigInteger, nullable=True)
+    )
     discovered_via: dict[str, Any] | None = Field(default=None, sa_column=Column(JSON))
     history_complete_to_cutoff: bool = True
     anchor_post_id: int | None = None

@@ -265,6 +265,8 @@ export interface CommandSettingsSlice {
   setShowChannelBio: (show: boolean) => void
   showChannelSubscribers: boolean
   setShowChannelSubscribers: (show: boolean) => void
+  showChannelTelegramChatId: boolean
+  setShowChannelTelegramChatId: (show: boolean) => void
   showChannelPhotos: boolean
   setShowChannelPhotos: (show: boolean) => void
   showChannelVideos: boolean

@@ -29,6 +29,8 @@ from app.services.sync_schedule import (
     compute_next_regular_sync_at_from_last_updated,
 )
 
+SERVER_MANAGED_CHANNEL_FIELDS = frozenset({"telegram_chat_id"})
+
 
 def update_channel_coverage(
     session: Session,
@@ -187,6 +189,15 @@ def apply_channel_fields(
 ) -> None:
     reject_inherited_channel_fields(body)
     normalized = normalize_body(body)
+    blocked_server_managed = sorted(
+        key for key in normalized if key in SERVER_MANAGED_CHANNEL_FIELDS
+    )
+    if blocked_server_managed:
+        blocked = ", ".join(blocked_server_managed)
+        raise HTTPException(
+            status_code=400,
+            detail=f"Server-managed channel fields cannot be updated: {blocked}",
+        )
     if "setting_group_id" in normalized:
         raise HTTPException(
             status_code=400,
@@ -254,6 +265,7 @@ def upsert_channel(
             for k, v in normalized.items()
             if k in Channel.model_fields
             and k not in ("id", "name", "user_id", "setting_group_id")
+            and k not in SERVER_MANAGED_CHANNEL_FIELDS
         }
         if "tags" in extras:
             reject_reserved_virtual_group_tags(extras["tags"])

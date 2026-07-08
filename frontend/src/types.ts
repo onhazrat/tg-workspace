@@ -92,6 +92,7 @@ export interface Channel {
   autoFollowForwarded?: boolean
   language?: string
   followedAt?: number
+  telegramChatId?: number
   discoveredVia?: {
     channelName: string
     postId: number

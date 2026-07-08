@@ -27,6 +27,7 @@ const CHANNEL_INHERITED_WRITE_FIELDS = [
   "isUnavailableOnWebView",
   "settingGroupId",
   "settingGroupName",
+  "telegramChatId",
 ] as const satisfies readonly (keyof Channel)[]
 
 export function channelWritePayload(

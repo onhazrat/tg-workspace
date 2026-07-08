@@ -76,6 +76,8 @@ function makeContext(
     setShowChannelBio: () => {},
     showChannelSubscribers: true,
     setShowChannelSubscribers: () => {},
+    showChannelTelegramChatId: false,
+    setShowChannelTelegramChatId: () => {},
     showChannelPhotos: true,
     setShowChannelPhotos: () => {},
     showChannelVideos: true,

@@ -12,6 +12,7 @@ describe("channelWritePayload", () => {
       autoSyncIntervalMinutes: 90,
       settingGroupId: "group-1",
       settingGroupName: "default",
+      telegramChatId: -1001234567890,
       displayName: "Channel A",
     })
 

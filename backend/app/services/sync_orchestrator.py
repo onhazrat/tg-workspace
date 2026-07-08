@@ -25,8 +25,10 @@ from app.models_tg import Channel, Post
 from app.services.async_db import run_db
 from app.services.channel_photos import resolve_cached_photo_url
 from app.services.channel_setting_groups import (
+    bulk_assign_setting_group,
     ensure_default_group,
     get_group_for_channel,
+    get_or_create_frozen_group,
     get_or_create_restricted_group,
     move_channel_to_restricted_group,
 )
@@ -422,6 +424,8 @@ class _PageApplyResult:
     display_name: str | None
     photo_url: str | None
     forwards: list[dict[str, Any]] = field(default_factory=list)
+    sync_failed: bool = False
+    sync_error: str | None = None
 
 
 def _prepare_channel_sync(
@@ -523,7 +527,103 @@ def _apply_scrape_page(
 
         posts = response.get("posts") or []
         latest_id = int(response.get("latestId") or 0)
+        scraped_chat_id_raw = response.get("telegramChatId")
+        scraped_chat_id = (
+            int(scraped_chat_id_raw) if isinstance(scraped_chat_id_raw, int) else None
+        )
         result.latest_id = latest_id
+
+        channel_owner_id = user_id or channel.user_id
+        if scraped_chat_id is not None:
+            if channel.telegram_chat_id is None:
+                duplicate_stmt = select(Channel).where(
+                    Channel.id != channel.id,
+                    Channel.telegram_chat_id == scraped_chat_id,
+                )
+                if channel_owner_id is None:
+                    duplicate_stmt = duplicate_stmt.where(
+                        col(Channel.user_id).is_(None)
+                    )
+                else:
+                    duplicate_stmt = duplicate_stmt.where(
+                        Channel.user_id == channel_owner_id
+                    )
+                duplicate_channel = session.exec(duplicate_stmt).first()
+                if duplicate_channel is None:
+                    channel.telegram_chat_id = scraped_chat_id
+                    session.add(channel)
+                else:
+                    freeze_group = get_or_create_frozen_group(
+                        session,
+                        user_id=channel_owner_id,
+                    )
+                    bulk_assign_setting_group(
+                        session,
+                        channel_ids=[channel.id],
+                        setting_group_id=freeze_group.id,
+                        operator_id=channel_owner_id,
+                    )
+                    conflict_error = (
+                        "Sync chat ID conflict: scraped "
+                        f"{scraped_chat_id} for @{channel.name}, already used by "
+                        f"@{duplicate_channel.name}. Channel moved to Frozen group."
+                    )
+                    upsert_sync_log(
+                        session,
+                        {
+                            "id": str(uuid.uuid4()),
+                            "channelName": channel.name,
+                            "status": "failed",
+                            "postsCount": 0,
+                            "error": conflict_error,
+                            "timestamp": int(time.time() * 1000),
+                            "source": job_source,
+                            "fullRequest": response.get("fullRequest"),
+                            "fullResponse": response,
+                        },
+                        user_id,
+                    )
+                    session.commit()
+                    touch_sync(session, "channels")
+                    touch_sync(session, "sync_logs")
+            elif channel.telegram_chat_id != scraped_chat_id:
+                freeze_group = get_or_create_frozen_group(
+                    session,
+                    user_id=channel_owner_id,
+                )
+                bulk_assign_setting_group(
+                    session,
+                    channel_ids=[channel.id],
+                    setting_group_id=freeze_group.id,
+                    operator_id=channel_owner_id,
+                )
+                mismatch_error = (
+                    "Sync chat ID mismatch: stored "
+                    f"{channel.telegram_chat_id}, scraped {scraped_chat_id} for "
+                    f"@{channel.name}. Channel moved to Frozen group."
+                )
+                upsert_sync_log(
+                    session,
+                    {
+                        "id": str(uuid.uuid4()),
+                        "channelName": channel.name,
+                        "status": "failed",
+                        "postsCount": 0,
+                        "error": mismatch_error,
+                        "timestamp": int(time.time() * 1000),
+                        "source": job_source,
+                        "fullRequest": response.get("fullRequest"),
+                        "fullResponse": response,
+                    },
+                    user_id,
+                )
+                session.commit()
+                touch_sync(session, "channels")
+                touch_sync(session, "sync_logs")
+                result.stop_sync = True
+                result.sync_failed = True
+                result.sync_error = mismatch_error
+                return result
 
         for field, attr in (
             ("displayName", "display_name"),
@@ -980,6 +1080,12 @@ async def sync_single_channel(
                     break
 
                 stop_sync = page_result.stop_sync
+                if page_result.sync_failed:
+                    ch_state.status = "failed"
+                    ch_state.error = page_result.sync_error
+                    ch_state.posts_fetched = total_new_posts
+                    await touch_job(job)
+                    return
                 if stop_sync and ctx.needs_backfill and not in_backfill:
                     in_backfill = True
                     ctx.retrieval_pass = "backfill"

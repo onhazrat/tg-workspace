@@ -109,6 +109,8 @@ interface SettingsContextType {
   setShowChannelBio: (show: boolean) => void
   showChannelSubscribers: boolean
   setShowChannelSubscribers: (show: boolean) => void
+  showChannelTelegramChatId: boolean
+  setShowChannelTelegramChatId: (show: boolean) => void
   showChannelPhotos: boolean
   setShowChannelPhotos: (show: boolean) => void
   showChannelVideos: boolean
@@ -347,6 +349,14 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({
       return true
     },
   )
+  const [showChannelTelegramChatId, setShowChannelTelegramChatId] =
+    useState<boolean>(() => {
+      if (typeof window !== "undefined") {
+        const saved = localStorage.getItem("showChannelTelegramChatId")
+        return saved !== null ? saved === "true" : false
+      }
+      return false
+    })
 
   const [showChannelPhotos, setShowChannelPhotos] = useState<boolean>(() => {
     if (typeof window !== "undefined") {
@@ -754,6 +764,13 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({
   }, [showChannelSubscribers])
 
   useEffect(() => {
+    localStorage.setItem(
+      "showChannelTelegramChatId",
+      showChannelTelegramChatId.toString(),
+    )
+  }, [showChannelTelegramChatId])
+
+  useEffect(() => {
     localStorage.setItem("showChannelPhotos", showChannelPhotos.toString())
   }, [showChannelPhotos])
 
@@ -920,6 +937,8 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({
         setShowChannelBio,
         showChannelSubscribers,
         setShowChannelSubscribers,
+        showChannelTelegramChatId,
+        setShowChannelTelegramChatId,
         showChannelPhotos,
         setShowChannelPhotos,
         showChannelVideos,
