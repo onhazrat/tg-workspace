@@ -1,0 +1,166 @@
+import type { Channel, ChannelStats } from "@/types"
+
+export type ChannelGridSortOption =
+  | "activity_rate"
+  | "total_posts"
+  | "last_updated"
+  | "channel_id"
+  | "channel_name"
+  | "followed_at"
+  | "subscribers"
+  | "next_regular_sync"
+  | "next_dynamic_sync"
+  | "next_auto_sync"
+
+export const CHANNEL_GRID_SORT_LABELS: Record<ChannelGridSortOption, string> = {
+  activity_rate: "Activity Rate",
+  total_posts: "Total Posts",
+  last_updated: "Last Updated",
+  channel_id: "Channel ID",
+  channel_name: "Channel Name",
+  followed_at: "Followed At",
+  subscribers: "Subscribers",
+  next_regular_sync: "Next Regular Sync",
+  next_dynamic_sync: "Next Dynamic Sync",
+  next_auto_sync: "Next Auto Sync",
+}
+
+const DEFAULT_SORT_BY: ChannelGridSortOption = "last_updated"
+const DEFAULT_SORT_DIRECTION: "asc" | "desc" = "desc"
+
+export function getChannelGridSortFromStorage(): {
+  sortBy: ChannelGridSortOption
+  sortDirection: "asc" | "desc"
+} {
+  const savedSortBy = localStorage.getItem("channelGrid_sortBy")
+  const savedSortDirection = localStorage.getItem("channelGrid_sortDirection")
+  const sortBy = (savedSortBy as ChannelGridSortOption) || DEFAULT_SORT_BY
+  const sortDirection =
+    (savedSortDirection as "asc" | "desc") || DEFAULT_SORT_DIRECTION
+  return { sortBy, sortDirection }
+}
+
+const compareNullableSyncAt = (
+  a: number | null | undefined,
+  b: number | null | undefined,
+): number => {
+  const aVal = a ?? null
+  const bVal = b ?? null
+  if (aVal === null && bVal === null) return 0
+  if (aVal === null) return 1
+  if (bVal === null) return -1
+  return aVal - bVal
+}
+
+const getNextAutoSyncAt = (channel: Channel): number | null => {
+  const deadlines: number[] = []
+  if (channel.regularSyncEnabled ?? true) {
+    if (channel.nextRegularSyncAt != null) {
+      deadlines.push(channel.nextRegularSyncAt)
+    }
+  }
+  if (channel.dynamicSyncEnabled) {
+    if (channel.nextDynamicSyncAt != null) {
+      deadlines.push(channel.nextDynamicSyncAt)
+    }
+  }
+  if (deadlines.length === 0) return null
+  return Math.min(...deadlines)
+}
+
+const parseSubscribers = (subStr?: string): number => {
+  if (!subStr) return 0
+  const numStr = subStr.replace(/[^0-9.]/g, "")
+  let num = parseFloat(numStr) || 0
+  if (subStr.toUpperCase().includes("K")) num *= 1000
+  if (subStr.toUpperCase().includes("M")) num *= 1000000
+  return num
+}
+
+const getSelectionTier = (
+  channel: Channel,
+  selectedChannels: Set<string>,
+): number => {
+  if (channel.isFrozen) return 3
+  if (selectedChannels.has(channel.name)) return 1
+  return 2
+}
+
+const compareBySortOption = (
+  a: Channel,
+  b: Channel,
+  channelStats: Record<string, ChannelStats>,
+  sortBy: ChannelGridSortOption,
+): number => {
+  if (sortBy === "activity_rate") {
+    const aVel = channelStats[a.name]?.velocity || 0
+    const bVel = channelStats[b.name]?.velocity || 0
+    return aVel - bVel
+  }
+  if (sortBy === "total_posts") {
+    const aCount = channelStats[a.name]?.count || 0
+    const bCount = channelStats[b.name]?.count || 0
+    return aCount - bCount
+  }
+  if (sortBy === "last_updated") {
+    return (a.lastUpdated || 0) - (b.lastUpdated || 0)
+  }
+  if (sortBy === "followed_at") {
+    return (a.followedAt || 0) - (b.followedAt || 0)
+  }
+  if (sortBy === "channel_id") {
+    return (a.startId || 0) - (b.startId || 0)
+  }
+  if (sortBy === "channel_name") {
+    const aName = a.displayName || a.name
+    const bName = b.displayName || b.name
+    return aName.localeCompare(bName)
+  }
+  if (sortBy === "subscribers") {
+    return parseSubscribers(a.subscribers) - parseSubscribers(b.subscribers)
+  }
+  if (sortBy === "next_regular_sync") {
+    return compareNullableSyncAt(a.nextRegularSyncAt, b.nextRegularSyncAt)
+  }
+  if (sortBy === "next_dynamic_sync") {
+    return compareNullableSyncAt(a.nextDynamicSyncAt, b.nextDynamicSyncAt)
+  }
+  if (sortBy === "next_auto_sync") {
+    return compareNullableSyncAt(getNextAutoSyncAt(a), getNextAutoSyncAt(b))
+  }
+  return 0
+}
+
+export type SortChannelsForGridParams = {
+  channels: Channel[]
+  channelStats: Record<string, ChannelStats>
+  selectedChannels: Set<string>
+  sortBy: ChannelGridSortOption
+  sortDirection: "asc" | "desc"
+}
+
+export function sortChannelsForGrid({
+  channels,
+  channelStats,
+  selectedChannels,
+  sortBy,
+  sortDirection,
+}: SortChannelsForGridParams): Channel[] {
+  return [...channels].sort((a, b) => {
+    const aGroup = getSelectionTier(a, selectedChannels)
+    const bGroup = getSelectionTier(b, selectedChannels)
+
+    if (aGroup !== bGroup) {
+      return aGroup - bGroup
+    }
+
+    let comparison = compareBySortOption(a, b, channelStats, sortBy)
+    if (comparison === 0) {
+      const aName = a.displayName || a.name
+      const bName = b.displayName || b.name
+      comparison = aName.localeCompare(bName)
+    }
+
+    return sortDirection === "asc" ? comparison : -comparison
+  })
+}

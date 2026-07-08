@@ -2,7 +2,7 @@ import type { Dispatch, SetStateAction } from "react"
 
 import type { JobStatusEntry } from "@/api/jobs"
 import type { SettingsSection } from "@/lib/settingsSection"
-import type { Channel, Post, Summary, TabType } from "@/types"
+import type { Channel, ChannelStats, Post, Summary, TabType } from "@/types"
 
 export type CommandKind =
   | "action"
@@ -121,6 +121,7 @@ export interface CommandContext {
   setActiveTab: (tab: TabType) => void
   setActiveSection: (section: SettingsSection) => void
   channels: Channel[]
+  channelStats: Record<string, ChannelStats>
   selectedChannels: Set<string>
   setSelectedChannels: Dispatch<SetStateAction<Set<string>>>
   setChannels: Dispatch<SetStateAction<Channel[]>>

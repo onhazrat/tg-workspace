@@ -1007,4 +1007,126 @@ test.describe("command palette keyboard", () => {
     await expect(page.getByTestId("post-card-media-badge-photo")).toBeVisible()
     await expect(page.getByText("Caption only")).not.toBeVisible()
   })
+
+  test("trim channel selection keeps first N by activity rate sort", async ({
+    page,
+  }) => {
+    test.setTimeout(90_000)
+
+    const prefix = `trimtest${Date.now()}`
+    const channelNames = Array.from(
+      { length: 5 },
+      (_, index) => `${prefix}${index}`,
+    )
+
+    await gotoSummarizer(page, "channels")
+
+    await page.evaluate(
+      async ({ names }) => {
+        const token = localStorage.getItem("access_token")
+        if (!token) {
+          throw new Error("trim test: missing access_token")
+        }
+
+        const headers = {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        }
+
+        await Promise.all(
+          names.map((name) =>
+            fetch(`/api/v1/data/channels/${name}`, {
+              method: "PUT",
+              headers,
+              body: JSON.stringify({ id: name, name }),
+            }).then(async (response) => {
+              if (!response.ok) {
+                throw new Error(
+                  `trim test seed failed (${response.status}): ${await response.text()}`,
+                )
+              }
+            }),
+          ),
+        )
+      },
+      { names: channelNames },
+    )
+
+    await page.route("**/api/v1/data/channels**", async (route) => {
+      const response = await route.fetch()
+      const body = await response.json()
+
+      const augmentChannel = (channel: {
+        name: string
+        stats?: Record<string, unknown>
+      }) => {
+        const index = channelNames.indexOf(channel.name)
+        if (index === -1) return channel
+        return {
+          ...channel,
+          stats: {
+            count: 10,
+            minId: 1,
+            maxId: 10,
+            velocity: index + 1,
+          },
+        }
+      }
+
+      const json = Array.isArray(body)
+        ? body.map(augmentChannel)
+        : augmentChannel(body)
+
+      await route.fulfill({
+        status: response.status(),
+        headers: response.headers(),
+        json,
+      })
+    })
+
+    await page.evaluate(() => {
+      localStorage.setItem("channelGrid_sortBy", "activity_rate")
+      localStorage.setItem("channelGrid_sortDirection", "asc")
+      localStorage.removeItem("sync_etag_channels")
+    })
+
+    await page.reload()
+    await expect(page.getByTestId("command-palette-button")).toBeVisible()
+
+    await page.getByPlaceholder("Search channels...").fill(prefix)
+    for (const name of channelNames) {
+      await expect(page.locator(`[data-channel-name="${name}"]`)).toBeVisible({
+        timeout: 15_000,
+      })
+    }
+
+    await page.locator("button.uppercase", { hasText: "None" }).click()
+    await page.locator("button.uppercase", { hasText: "All" }).first().click()
+    await expect(page.getByText("5 Selected")).toBeVisible()
+
+    await page.getByTestId("channel-trim-count").fill("2")
+    await page.getByTestId("channel-trim-button").click()
+
+    await expect(page.getByText("2 Selected")).toBeVisible()
+    await expect(
+      page.locator(
+        `[data-channel-name="${channelNames[0]}"] button[aria-pressed="true"]`,
+      ),
+    ).toBeVisible()
+    await expect(
+      page.locator(
+        `[data-channel-name="${channelNames[1]}"] button[aria-pressed="true"]`,
+      ),
+    ).toBeVisible()
+    await expect(
+      page.locator(
+        `[data-channel-name="${channelNames[2]}"] button[aria-pressed="true"]`,
+      ),
+    ).not.toBeVisible()
+
+    await page.getByTestId("channel-trim-count").fill("5")
+    await page.getByTestId("channel-trim-button").click()
+    await expect(page.getByText(/Already 2 or fewer selected/i)).toBeVisible()
+    await expect(page.getByText("2 Selected")).toBeVisible()
+  })
 })

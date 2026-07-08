@@ -13,6 +13,12 @@ import {
   selectChannelsByTag,
 } from "@/lib/channels/channel-tags"
 import { deleteSelectedChannels } from "@/lib/channels/delete-selected"
+import {
+  applyTrimChannelSelection,
+} from "@/lib/channels/trim-selected-channels"
+import {
+  getChannelGridSortFromStorage,
+} from "@/lib/channels/sort-channels-for-grid"
 import { refreshChannelMetadata } from "@/lib/channels/refresh-metadata"
 import {
   bulkResetSyncAllChannels,
@@ -146,6 +152,47 @@ export function buildExtendedCommands(): CommandDef[] {
       run: async (ctx) => {
         await deleteSelectedChannels(ctx)
       },
+    },
+    {
+      id: "trim-channel-selection",
+      kind: "editor",
+      label: "Trim Channel Selection to N…",
+      keywords: ["channel", "trim", "selection", "limit", "shrink", "top"],
+      group: "Channels",
+      disabled: (ctx) =>
+        ctx.selectedChannels.size === 0
+          ? { disabled: true, reason: "No channels selected" }
+          : { disabled: false },
+      editorField: {
+        id: "trimChannelCount",
+        label: "Keep first N selected channels by current sort order",
+        type: "number",
+        min: 1,
+        integer: true,
+        getValue: () => {
+          const saved = localStorage.getItem("channelGrid_trimCount")
+          return saved && Number.parseInt(saved, 10) > 0
+            ? Number.parseInt(saved, 10)
+            : ""
+        },
+        apply: (ctx, value) => {
+          const count = Number.parseInt(value, 10)
+          const { sortBy, sortDirection } = getChannelGridSortFromStorage()
+          applyTrimChannelSelection({
+            channels: ctx.channels,
+            channelStats: ctx.channelStats,
+            selectedChannels: ctx.selectedChannels,
+            sortBy,
+            sortDirection,
+            count,
+            setSelectedChannels: (next) => ctx.setSelectedChannels(next),
+          })
+          if (Number.isFinite(count) && count >= 1) {
+            localStorage.setItem("channelGrid_trimCount", String(count))
+          }
+        },
+      },
+      run: () => {},
     },
     {
       id: "add-tag-channel",

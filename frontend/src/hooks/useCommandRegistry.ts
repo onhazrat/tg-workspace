@@ -32,6 +32,7 @@ export function useCommandRegistry(): {
   const settings = useSettings()
   const {
     channels,
+    channelStats,
     selectedChannels,
     setSelectedChannels,
     setChannels,
@@ -99,6 +100,7 @@ export function useCommandRegistry(): {
       setActiveTab,
       setActiveSection,
       channels,
+      channelStats,
       selectedChannels,
       setSelectedChannels,
       setChannels,
@@ -237,6 +239,7 @@ export function useCommandRegistry(): {
     [
       addToSyncQueue,
       autoSyncPauseUntil,
+      channelStats,
       channels,
       completePendingSummary,
       copySummaryPrompt,

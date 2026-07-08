@@ -41,6 +41,11 @@ import {
 } from "@/lib/channels/channel-tags"
 import { deleteChannelByRecord } from "@/lib/channels/delete-channel"
 import { findFrozenReservedGroup, sortSettingGroupsForDisplay } from "@/lib/channels/setting-groups"
+import {
+  type ChannelGridSortOption,
+  sortChannelsForGrid,
+} from "@/lib/channels/sort-channels-for-grid"
+import { applyTrimChannelSelection } from "@/lib/channels/trim-selected-channels"
 import { useSummarizerGroupParams } from "@/hooks/useSummarizerGroupParams"
 import {
   useInvalidateSettingGroups,
@@ -59,46 +64,6 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tg-tooltip"
 
 type ChannelGridProps = {
   scrollContainerRef: React.RefObject<HTMLDivElement | null>
-}
-
-type SortOption =
-  | "activity_rate"
-  | "total_posts"
-  | "last_updated"
-  | "channel_id"
-  | "channel_name"
-  | "followed_at"
-  | "subscribers"
-  | "next_regular_sync"
-  | "next_dynamic_sync"
-  | "next_auto_sync"
-
-const compareNullableSyncAt = (
-  a: number | null | undefined,
-  b: number | null | undefined,
-): number => {
-  const aVal = a ?? null
-  const bVal = b ?? null
-  if (aVal === null && bVal === null) return 0
-  if (aVal === null) return 1
-  if (bVal === null) return -1
-  return aVal - bVal
-}
-
-const getNextAutoSyncAt = (channel: Channel): number | null => {
-  const deadlines: number[] = []
-  if (channel.regularSyncEnabled ?? true) {
-    if (channel.nextRegularSyncAt != null) {
-      deadlines.push(channel.nextRegularSyncAt)
-    }
-  }
-  if (channel.dynamicSyncEnabled) {
-    if (channel.nextDynamicSyncAt != null) {
-      deadlines.push(channel.nextDynamicSyncAt)
-    }
-  }
-  if (deadlines.length === 0) return null
-  return Math.min(...deadlines)
 }
 
 export const ChannelGrid: React.FC<ChannelGridProps> = ({
@@ -124,13 +89,16 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
     setIncludeChannelTagsInPrompt,
   } = useUI()
 
-  const [sortBy, setSortBy] = useState<SortOption>(() => {
+  const [sortBy, setSortBy] = useState<ChannelGridSortOption>(() => {
     const saved = localStorage.getItem("channelGrid_sortBy")
-    return (saved as SortOption) || "last_updated"
+    return (saved as ChannelGridSortOption) || "last_updated"
   })
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">(() => {
     const saved = localStorage.getItem("channelGrid_sortDirection")
     return (saved as "asc" | "desc") || "desc"
+  })
+  const [trimCount, setTrimCount] = useState(() => {
+    return localStorage.getItem("channelGrid_trimCount") ?? ""
   })
 
   useEffect(() => {
@@ -140,6 +108,12 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
   useEffect(() => {
     localStorage.setItem("channelGrid_sortDirection", sortDirection)
   }, [sortDirection])
+
+  useEffect(() => {
+    if (trimCount.trim()) {
+      localStorage.setItem("channelGrid_trimCount", trimCount)
+    }
+  }, [trimCount])
 
   const {
     proxyEnabled,
@@ -209,6 +183,54 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
     }
     return result
   }, [channels, channelSearch, selectedLanguageFilter, selectedGroupFilter])
+
+  const sortedFilteredChannels = useMemo(
+    () =>
+      sortChannelsForGrid({
+        channels: filteredChannels,
+        channelStats,
+        selectedChannels,
+        sortBy,
+        sortDirection,
+      }),
+    [
+      channelStats,
+      filteredChannels,
+      selectedChannels,
+      sortBy,
+      sortDirection,
+    ],
+  )
+
+  const parsedTrimCount = Number.parseInt(trimCount, 10)
+  const isTrimCountValid = Number.isFinite(parsedTrimCount) && parsedTrimCount >= 1
+  const isTrimDisabled =
+    selectedChannels.size === 0 ||
+    !isTrimCountValid ||
+    summarizing ||
+    scrapingChannels.size > 0
+
+  const handleTrimSelection = useCallback(() => {
+    if (isTrimDisabled) return
+    applyTrimChannelSelection({
+      channels,
+      channelStats,
+      selectedChannels,
+      sortBy,
+      sortDirection,
+      count: parsedTrimCount,
+      setSelectedChannels,
+    })
+  }, [
+    channelStats,
+    channels,
+    isTrimDisabled,
+    parsedTrimCount,
+    selectedChannels,
+    setSelectedChannels,
+    sortBy,
+    sortDirection,
+  ])
 
   const [visibleChannels, setVisibleChannels] = useState(20)
 
@@ -888,7 +910,9 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
                 </span>
                 <Select
                   value={sortBy}
-                  onValueChange={(value) => setSortBy(value as SortOption)}
+                  onValueChange={(value) =>
+                    setSortBy(value as ChannelGridSortOption)
+                  }
                 >
                   <SelectTrigger className={selectTriggerClassName}>
                     <SelectValue />
@@ -930,6 +954,41 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
                     <ArrowDown size={12} />
                   )}
                 </button>
+              </div>
+              <div className="h-4 w-px bg-app-ink/10" />
+              <div className="flex items-center gap-2">
+                <input
+                  type="number"
+                  min={1}
+                  value={trimCount}
+                  onChange={(event) => setTrimCount(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") handleTrimSelection()
+                  }}
+                  disabled={selectedChannels.size === 0}
+                  data-testid="channel-trim-count"
+                  className="w-14 bg-app-muted/50 border border-app-ink/10 rounded-md py-1 px-2 text-[10px] focus:outline-none focus:ring-1 focus:ring-app-ink/20 transition-all disabled:opacity-30"
+                  aria-label="Trim selection count"
+                />
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button
+                      type="button"
+                      onClick={handleTrimSelection}
+                      disabled={isTrimDisabled}
+                      data-testid="channel-trim-button"
+                      className="px-3 py-1.5 text-[10px] uppercase font-bold rounded-md bg-app-ink/10 text-app-ink hover:bg-app-ink/20 transition-all disabled:opacity-30 disabled:pointer-events-none"
+                    >
+                      Trim
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>
+                      Keep the first N selected channels by current sort order.
+                      Only shrinks selection.
+                    </p>
+                  </TooltipContent>
+                </Tooltip>
               </div>
             </div>
           </div>
@@ -1086,78 +1145,7 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
           className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
           id="tour-channel-grid"
         >
-          {[...filteredChannels]
-            .sort((a, b) => {
-              const getGroup = (c: Channel) => {
-                if (c.isFrozen) return 3
-                if (selectedChannels.has(c.name)) return 1
-                return 2
-              }
-
-              const aGroup = getGroup(a)
-              const bGroup = getGroup(b)
-
-              if (aGroup !== bGroup) {
-                return aGroup - bGroup
-              }
-
-              // If both are in the same group, sort by the chosen option
-              let comparison = 0
-              if (sortBy === "activity_rate") {
-                const aVel = channelStats[a.name]?.velocity || 0
-                const bVel = channelStats[b.name]?.velocity || 0
-                comparison = aVel - bVel
-              } else if (sortBy === "total_posts") {
-                const aCount = channelStats[a.name]?.count || 0
-                const bCount = channelStats[b.name]?.count || 0
-                comparison = aCount - bCount
-              } else if (sortBy === "last_updated") {
-                const aTime = a.lastUpdated || 0
-                const bTime = b.lastUpdated || 0
-                comparison = aTime - bTime
-              } else if (sortBy === "followed_at") {
-                const aTime = a.followedAt || 0
-                const bTime = b.followedAt || 0
-                comparison = aTime - bTime
-              } else if (sortBy === "channel_id") {
-                const aId = a.startId || 0
-                const bId = b.startId || 0
-                comparison = aId - bId
-              } else if (sortBy === "channel_name") {
-                const aName = a.displayName || a.name
-                const bName = b.displayName || b.name
-                comparison = aName.localeCompare(bName)
-              } else if (sortBy === "subscribers") {
-                const parseSubscribers = (subStr?: string) => {
-                  if (!subStr) return 0
-                  const numStr = subStr.replace(/[^0-9.]/g, "")
-                  let num = parseFloat(numStr) || 0
-                  if (subStr.toUpperCase().includes("K")) num *= 1000
-                  if (subStr.toUpperCase().includes("M")) num *= 1000000
-                  return num
-                }
-                const aSubs = parseSubscribers(a.subscribers)
-                const bSubs = parseSubscribers(b.subscribers)
-                comparison = aSubs - bSubs
-              } else if (sortBy === "next_regular_sync") {
-                comparison = compareNullableSyncAt(
-                  a.nextRegularSyncAt,
-                  b.nextRegularSyncAt,
-                )
-              } else if (sortBy === "next_dynamic_sync") {
-                comparison = compareNullableSyncAt(
-                  a.nextDynamicSyncAt,
-                  b.nextDynamicSyncAt,
-                )
-              } else if (sortBy === "next_auto_sync") {
-                comparison = compareNullableSyncAt(
-                  getNextAutoSyncAt(a),
-                  getNextAutoSyncAt(b),
-                )
-              }
-
-              return sortDirection === "asc" ? comparison : -comparison
-            })
+          {sortedFilteredChannels
             .slice(0, visibleChannels)
             .map((channel) => (
               <ChannelCard
