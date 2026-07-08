@@ -9,6 +9,7 @@
     "preview": "vite preview",
     "lint": "biome check --write --unsafe --no-errors-on-unmatched --files-ignore-unknown=true ./",
     "generate-client": "openapi-ts",
+    "test:unit": "bun test ./src/**/*.test.ts ./src/**/*.test.tsx",
     "test": "bunx playwright test",
     "test:ui": "bunx playwright test --ui"
   },

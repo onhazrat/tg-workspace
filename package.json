@@ -8,6 +8,7 @@
     "dev": "bun run --filter tg-summarizer-frontend dev",
     "build": "bun run --filter tg-summarizer-frontend build",
     "lint": "bun run --filter tg-summarizer-frontend lint",
+    "test:unit": "bun run --filter tg-summarizer-frontend test:unit",
     "test": "bun run --filter tg-summarizer-frontend test",
     "test:ui": "bun run --filter tg-summarizer-frontend test:ui",
     "generate-client": "bash scripts/generate-client.sh"
