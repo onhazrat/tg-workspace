@@ -1,29 +1,31 @@
 # TG Summarizer — Project Memory
 
-> Last synced: 2026-07-06
+> Last synced: 2026-07-08
 
 ## Purpose
 
-Self-hosted Telegram channel summarizer. Migrated from browser-heavy `TG-Summarizer/` (React + Express + IndexedDB) to a **FastAPI + React monorepo** with scraping, scheduling, AI, and PostgreSQL on the server. **Migration Phases 0–7 complete (2026-06-08).** **Dynamic channel sync v1 (2026-07-01)** — [dynamic_channel_sync plan](.cursor/plans/dynamic_channel_sync_77e7db50.plan.md). **Tag tab v1 (2026-07-02)** — [tag_tab_v1 plan](.cursor/plans/tag_tab_v1_cea80474.plan.md). **Post media v1 (2026-07-04)** — scrape/parse/store thumbnails + UI filters/prompt hints. **Discover tab v1 (2026-07-06)** — filter-aware forward-source channel discovery — [discover_tab_v1 plan](.cursor/plans/discover_tab_v1_f26ed84d.plan.md). Run commands: [README.md](README.md), [development.md](development.md).
+Self-hosted Telegram channel summarizer. Migrated from browser-heavy `TG-Summarizer/` (React + Express + IndexedDB) to a **FastAPI + React monorepo** with scraping, scheduling, AI, and PostgreSQL on the server. **Migration Phases 0–7 complete (2026-06-08).** **Dynamic channel sync v1 (2026-07-01)** — [dynamic_channel_sync plan](.cursor/plans/dynamic_channel_sync_77e7db50.plan.md). **Tag tab v1 (2026-07-02)** — [tag_tab_v1 plan](.cursor/plans/tag_tab_v1_cea80474.plan.md). **Post media v1 (2026-07-04)**. **Discover tab v1 (2026-07-06)** — [discover_tab_v1 plan](.cursor/plans/discover_tab_v1_f26ed84d.plan.md). **Channel setting groups v1 + UX v2 (2026-07-07)** — [channel_setting_groups plan](.cursor/plans/channel_setting_groups_89fcc8b4.plan.md), [setting_groups_ux_v2 plan](.cursor/plans/setting_groups_ux_v2_fb1c5766.plan.md). **Trim channel selection (2026-07-08)**. **ChannelGrid two-row control layout (2026-07-08)**. Run commands: [README.md](README.md), [development.md](development.md).
 
 ## Architecture
 
-- **`backend/`** — FastAPI (`app/main.py`), SQLModel (`app/models_tg.py`), Alembic, services (`scraper.py`, `sync_orchestrator.py`, **`sync_schedule.py`**, `channels.py`, **`channel_tags.py`**, **`tag_runs.py`**, **`post_media_parser.py`**, **`post_thumbnails.py`**, **`telegram_html.py`**, …), APScheduler jobs, pluggable AI (`app/ai/`, Gemini first). Prompts in `backend/app/prompts/` (`templates.py`, `summary.py`, **`tagging.py`**).
+- **`backend/`** — FastAPI (`app/main.py`), SQLModel (`app/models_tg.py`), Alembic, services (`scraper.py`, `sync_orchestrator.py`, **`sync_schedule.py`**, `channels.py`, **`channel_setting_groups.py`**, **`channel_tags.py`**, **`tag_runs.py`**, **`post_media_parser.py`**, **`post_thumbnails.py`**, **`telegram_html.py`**, …), APScheduler jobs, pluggable AI (`app/ai/`, Gemini first). Prompts in `backend/app/prompts/`.
 - **`frontend/`** — React 19 + Vite + TanStack Router/Query; dual-route UI:
   - **`/_tg/summarizer`** — full-screen TG app (`App.tsx` + `TgProviders`); **command palette** on `main`. Main content uses **`app-shell`** width utility.
   - **`/_layout/*`** — template admin shell (`/`, `/items`, `/admin`, `/settings`).
 - **Providers (TG shell):** `Settings → Data → UI → Scraper → Chat → AI → Tag` in [`TgProviders.tsx`](frontend/src/components/TgProviders.tsx).
-- **Command palette:** `frontend/src/lib/commands/` — registry, settings-schema, channel ops, data transfer.
+- **Command palette:** `frontend/src/lib/commands/` — registry, settings-schema, channel ops, **`group-commands.ts`**, data transfer.
 - **Post view pipeline:** [`frontend/src/lib/posts/post-view.ts`](frontend/src/lib/posts/post-view.ts) — `buildFilteredPostsFromRaw`, `formatPostsForPrompt`, **`applyMediaFilter`**. **`filteredPosts` is canonical** for Posts UI, Summary, Chat, Tag, and **Discover**.
-- **Post media (frontend):** [`post-media.ts`](frontend/src/lib/posts/post-media.ts) — `MediaFilterValue`, `matchesMediaFilter`, `formatPostMediaHints` for prompts/embeddings; PostFilter media chips.
-- **Post media (backend):** `Post.media` JSON on `tg_posts`; parsed in `post_media_parser.py`; thumbs on disk under `data/post-thumbs` (config `POST_THUMB_DIR`); served at **`GET /telegram/post-thumb/{channel}/{post_id}`** and **`GET /telegram/channel-photo/{channel_id}`** (auth required).
-- **Discover pipeline (frontend-only):** [`discover-forward-sources.ts`](frontend/src/lib/posts/discover-forward-sources.ts) — `computeForwardSourceDiscovery`, `sortForwardSourceCandidates`; [`discover-empty-state.ts`](frontend/src/lib/posts/discover-empty-state.ts) — contextual empty guides; [`DiscoverView.tsx`](frontend/src/components/DiscoverView.tsx).
-- **Channel tag model:** [`frontend/src/lib/channels/channel-tag-model.ts`](frontend/src/lib/channels/channel-tag-model.ts) + mirror [`backend/app/services/channel_tags.py`](backend/app/services/channel_tags.py). Legacy `string[]` tags normalize to `{ name, source, assignedAt }`.
-- **Tag apply flow:** [`apply-tag-suggestions.ts`](frontend/src/lib/channels/apply-tag-suggestions.ts) — name normalization (`@`, displayName), add/remove via `mergeAiTags` / `removeAiTags`; bulk persist via **`PATCH /channels/bulk-tags`** (not sequential `upsertChannel`).
-- **Prompt channel context:** [`format-channels-for-prompt.ts`](frontend/src/lib/channels/format-channels-for-prompt.ts) — builds `{channels}` block; toggles in `UIContext` + checkboxes on **ChannelGrid**.
+- **Post media (frontend):** [`post-media.ts`](frontend/src/lib/posts/post-media.ts); PostFilter media chips.
+- **Post media (backend):** `Post.media` JSON on `tg_posts`; thumbs on disk under `data/post-thumbs`; served at **`GET /telegram/post-thumb/{channel}/{post_id}`** and **`GET /telegram/channel-photo/{channel_id}`** (auth required).
+- **Discover pipeline (frontend-only):** [`discover-forward-sources.ts`](frontend/src/lib/posts/discover-forward-sources.ts), [`DiscoverView.tsx`](frontend/src/components/DiscoverView.tsx).
+- **Channel tag model:** [`channel-tag-model.ts`](frontend/src/lib/channels/channel-tag-model.ts) + mirror [`channel_tags.py`](backend/app/services/channel_tags.py). Legacy `string[]` tags normalize to `{ name, source, assignedAt }`.
+- **Setting groups:** [`channel_setting_groups.py`](backend/app/services/channel_setting_groups.py) — strict inheritance; `tg_channel_setting_groups` + `Channel.setting_group_id`. Frontend: [`SettingGroupsPanel.tsx`](frontend/src/components/SettingGroupsPanel.tsx), [`setting-groups.ts`](frontend/src/lib/channels/setting-groups.ts), shared cache [`useSettingGroups.ts`](frontend/src/hooks/useSettingGroups.ts) (React Query; group **selection is client-side**, no refetch on click). **Virtual group tags:** [`virtual-group-tags.ts`](frontend/src/lib/channels/virtual-group-tags.ts) — `group:{GroupName}` chips on cards (read-only). Channel PUT uses `channelWritePayload()` in [`data.ts`](frontend/src/api/data.ts) to strip inherited fields.
+- **Channel grid sort/trim:** [`sort-channels-for-grid.ts`](frontend/src/lib/channels/sort-channels-for-grid.ts) — shared grid comparator; [`trim-selected-channels.ts`](frontend/src/lib/channels/trim-selected-channels.ts) — shrink selection to first N by sort order.
+- **Tag apply flow:** [`apply-tag-suggestions.ts`](frontend/src/lib/channels/apply-tag-suggestions.ts); bulk persist via **`PATCH /channels/bulk-tags`**.
+- **Prompt channel context:** [`format-channels-for-prompt.ts`](frontend/src/lib/channels/format-channels-for-prompt.ts); toggles in `UIContext` + checkboxes on **ChannelGrid**.
 - **Tag prompt builder:** [`tag-prompt.ts`](frontend/src/lib/channels/tag-prompt.ts), parser [`parse-tag-response.ts`](frontend/src/lib/channels/parse-tag-response.ts).
-- **Channel tag utilities:** [`channel-tags.ts`](frontend/src/lib/channels/channel-tags.ts) — `collectAllChannelTags` (alphabetical, for prompts/palette), `sortTagsForChannelGrid` (Channels tab tag bar order), tag filter/select helpers.
-- **Tag UI:** `TagContext`, `TagConfig`, `TagView`, `PasteTagsModal` — mirror Summary copy/generate/paste pattern.
+- **Channel tag utilities:** [`channel-tags.ts`](frontend/src/lib/channels/channel-tags.ts) — `collectAllChannelTags`, `sortTagsForChannelGrid`, tag filter/select helpers.
+- **Tag UI:** `TagContext`, `TagConfig`, `TagView`, `PasteTagsModal`.
 - **API clients (ADR-006):** hand-written `frontend/src/api/` (summarizer); generated `frontend/src/client/` (admin/auth).
 - **Data layer (frontend):** `repository.ts` API-first → `cache.ts` (IndexedDB).
 - **uv** + **bun**. **Playwright E2E** in `frontend/tests/summarizer.spec.ts` (~100+ tests).
@@ -32,11 +34,10 @@ Self-hosted Telegram channel summarizer. Migrated from browser-heavy `TG-Summari
 ### Key API surfaces
 
 - Versioned: `/api/v1/telegram/*`, `/network/*`, `/ai/*`, `/data/*`, `/rag/*`, `/jobs/*`
-- **AI summary:** `POST /ai/summary`, `/summary/stream`, `/summary/prompt` — accept **`channelsText`** (formatted channel block); fallback `channels` join.
-- **AI tag:** `POST /ai/tag/prompt`, `/tag/stream` — `channelsText`, `postsText`, **`allTags`**, **`tagMode`** (`add`|`remove`).
-- **AI chat:** `/chat/stream` — accepts `channelsText`.
-- **Channels:** `GET/PUT/DELETE /data/channels/{id}`; **`PATCH /data/channels/bulk-sync-settings`**; **`PATCH /data/channels/bulk-tags`** (batch tag writes, single transaction).
-- **Tag runs:** `GET/PUT/DELETE /data/tag-runs/{id}` — persisted tag workflow history (`tg_tag_runs`).
+- **AI summary/tag/chat:** accept **`channelsText`**; tag also takes **`allTags`**, **`tagMode`**.
+- **Channels:** `GET/PUT/DELETE /data/channels/{id}`; **`PATCH /data/channels/bulk-sync-settings`**; **`PATCH /data/channels/bulk-tags`**; **`PATCH /data/channels/bulk-setting-group`**.
+- **Setting groups:** `GET/POST /data/setting-groups`; `PUT/DELETE /data/setting-groups/{id}`.
+- **Tag runs:** `GET/PUT/DELETE /data/tag-runs/{id}`.
 - **Channel sync:** `POST /jobs/sync` → SSE events.
 - **Media assets:** `GET /telegram/channel-photo/{channel_id}`, `GET /telegram/post-thumb/{channel_name}/{post_id}`.
 - OpenAPI: `/docs`, `/api/v1/openapi.json`
@@ -45,56 +46,59 @@ Self-hosted Telegram channel summarizer. Migrated from browser-heavy `TG-Summari
 
 - **Authoritative store:** PostgreSQL; IndexedDB read-through cache ([ADR-003](docs/migration/ADR-003-hybrid-sync.md)).
 - **Scrape/sync:** `sync_orchestrator.py`; passes: `initial` / `incremental` / `backfill`. **Partial history** = `historyCompleteToCutoff === false`.
-- **Per-channel auto-sync (v1):** Channel fields source of truth — `regularSyncEnabled`, `dynamicSyncEnabled`, `nextRegularSyncAt`, `nextDynamicSyncAt`. See [dynamic_channel_sync plan](.cursor/plans/dynamic_channel_sync_77e7db50.plan.md).
-- **Channel tags:** JSON on `tg_channels.tags` — structured objects; no separate category field. Import/export normalizes via `channel_tags` service.
-- **Tag runs:** `tg_tag_runs` — pending/completed runs with `promptText`, `responseText`, `suggestions`, `applyResult`, `mode`, `channelContextOptions`.
+- **Per-channel auto-sync (v1):** Channel fields source of truth — `regularSyncEnabled`, `dynamicSyncEnabled`, `nextRegularSyncAt`, `nextDynamicSyncAt`. Inherited from setting group on membership change.
+- **Setting groups:** `tg_channel_setting_groups` per operator scope; each channel has exactly one `setting_group_id`. Group update propagates inherited fields to all member channels. Built-in groups seeded per scope: `default`, **Slow feed**, **High velocity**, `Frozen`, `Restricted`.
+- **Channel tags:** JSON on `tg_channels.tags` — structured objects; no separate category field. Manual `group:` tags blocked; virtual `group:{name}` derived from membership.
+- **Tag runs:** `tg_tag_runs` — pending/completed runs with suggestions, apply result, mode.
 - **Jobs:** `auto_sync`, `embeddings`, `auto_summary`, `retention`, `translation_batch`.
-- **Discover (derived, no API):** aggregates `forwardedFrom` from `filteredPosts` + channel list; Follow reuses `addNewChannel` from `ScraperContext`.
-- **Post media:** scrape enriches posts with `media` object (`kinds`, caption, thumb path, link preview, grouped count, `isMediaOnly`). Thumbnails cached on disk; **not** in Postgres blobs. Docker deploy mounts **`app-media-data:/app/data`** so `channel-photos` + `post-thumbs` survive image rebuilds.
-- **Telegram HTML text:** [`telegram_html.extract_telegram_html_text`](backend/app/services/telegram_html.py) — preserves `<br>` newlines and inline spacing; used for post text, bios, captions (replaces naive `get_text(strip=True)`).
+- **Discover (derived, no API):** aggregates `forwardedFrom` from `filteredPosts` + channel list.
+- **Post media:** scrape enriches posts with `media` object; thumbs on disk; Docker deploy mounts **`app-media-data:/app/data`**.
+- **Telegram HTML text:** [`telegram_html.extract_telegram_html_text`](backend/app/services/telegram_html.py).
 
 ## Analysis conventions
 
 - **Channel identity:** `channel_id` / `name`; API camelCase. **Timestamps:** ms epoch.
-- **Summarizer UI:** URL tabs `/summarizer?tab=` — **8 workspace tabs:** channels, posts, summary, tag, **discover**, chat, history, settings. Settings sub-sections: `?tab=settings&section=`.
-- **Tab routing pitfall:** `tab` must appear in **both** [`useSummarizerTab.ts`](frontend/src/hooks/useSummarizerTab.ts) **and** route `VALID_TABS` in [`summarizer.tsx`](frontend/src/routes/_tg/summarizer.tsx) — route `validateSearch` runs first; missing entry silently falls back to `summary`.
-- **Posts tab filters:** `postFilter_*` in localStorage; `filteredPosts` canonical for all AI tabs and Discover. **Media filter** chips (All / Text-only / Media-only / Photo / Video / Links / Grouped) via `mediaFilter` in `ScraperContext` + `applyMediaFilter` in post-view pipeline.
-- **Channel prompt context (Channels tab):** checkboxes *Include channel bio in prompts* / *Include current tags in prompts* → `prompt_includeChannelBio`, `prompt_includeChannelTags` in localStorage via `UIContext`. Affects Summary, Chat, and Tag `{channels}` blocks.
-- **Tag tab scope:** **selected channels** + **filteredPosts** (same as Summary). User controls count via Channels tab selection — **no prompt batching UI** (removed misleading batch counter).
-- **Tag modes:** **Add** (merge AI tags, `source: "ai"`) or **Remove** (subtract listed tags only). Apply uses **all parsed channels** matching selection; normalizes `@username` / display names.
-- **Tag taxonomy:** embedded in `TAG_PROMPT` template; `{all_tags}` lists existing vocabulary across all operator channels.
-- **External AI flows:** Copy Prompt → pending run → paste back (`PasteSummaryModal` / `PasteTagsModal`). Primary for ad-hoc tagging at scale.
-- **Command palette:** `Cmd+Shift+P`; tag ops via `channel-tags.ts` + `filter-channels.ts` (`tag:` / `#` prefix).
-- **Channels tab tag bar:** top of Channels tab — inline chip row in `ChannelGrid` (comment: *Tags & Auto Sync row*); `allTags` memo. Click toggles selection for all non-frozen channels with that tag; shows `(selected/total)`. Sorted by `sortTagsForChannelGrid`: **fully selected → partial → none**; within each group **channel count desc**, then **selected count desc** (re-sorts when selection changes). Not the same sort as `collectAllChannelTags` (alphabetical, used for `{all_tags}` and palette).
-- **Discover tab scope:** same **selected channels** + **filteredPosts** as Summary/Tag. Respects post-type filter strictly:
-  - `original` → empty + guide (no forward metadata).
-  - `all` / `forwarded` → table shows **all** forward sources (followed + unfollowed); stats from **all** forward posts in scope; **Follow** only when `!isFollowed`; followed rows show **Following** badge.
-  - `unfollowed_forwarded` → table shows **unfollowed sources only**.
-  - Per row: `postCount`, `forwardedBy` breakdown, `forwardedByCount`, `lastSeen`, `displayName`.
-  - **Sort (chip buttons):** Forwards (`postCount`, default) · Last seen · Forwarded by — via `sortForwardSourceCandidates` in view.
+- **Summarizer UI:** URL tabs `/summarizer?tab=` — **8 workspace tabs:** channels, posts, summary, tag, **discover**, chat, history, settings. Settings sub-sections: `?tab=settings&section=`. Group panel deep-link: `?settingGroup={id}` via [`useSummarizerGroupParams.ts`](frontend/src/hooks/useSummarizerGroupParams.ts).
+- **Tab routing pitfall:** `tab` must appear in **both** [`useSummarizerTab.ts`](frontend/src/hooks/useSummarizerTab.ts) **and** route `VALID_TABS` in [`summarizer.tsx`](frontend/src/routes/_tg/summarizer.tsx).
+- **Posts tab filters:** `postFilter_*` in localStorage; `filteredPosts` canonical for all AI tabs and Discover.
+- **Channel prompt context:** checkboxes *Include channel bio/tags* → `UIContext` localStorage; affects Summary, Chat, Tag `{channels}` blocks.
+- **Tag tab scope:** **selected channels** + **filteredPosts**; **no prompt batching UI**.
+- **Tag modes:** **Add** or **Remove**; apply uses all parsed channels matching selection.
+- **Command palette:** `Cmd+Shift+P`; tag ops via `channel-tags.ts`; group ops via `group-commands.ts` (filter by group, move selected to group, open setting group).
+- **Channels tab tag bar:** inline chip row in `ChannelGrid`; sorted by `sortTagsForChannelGrid` (fully selected → partial → none; usage within group).
+- **Channels tab control layout (2026-07-08):** tag chips occupy their **own row**; the AI-prompt-context toggles and the filter/sort/trim controls sit on a **second row** as two self-contained pills (left: *AI Prompt Context* bio/tags checkboxes; right: *Showing X of Y* + *Lang* + *Sort By* + *Trim*), both `flex-wrap`. Prevents a large tag count from crowding the controls.
+- **Channels tab group filter chips:** row of setting-group chips; toggles `channelGroup` URL param; filters grid by `settingGroupId`. Built-in order: default → Slow feed → High velocity → Frozen → Restricted → custom (alpha).
+- **Channels tab trim:** sort toolbar `[ N ] [ Trim ]` next to Sort By + direction; shrinks global `selectedChannels` to first N in `sortChannelsForGrid` order; filter-hidden selections still ranked; `N >= selectedCount` → noop + info toast; `N < 1` invalid (use **None** to clear all); last N in `channelGrid_trimCount`.
+- **Discover tab scope:** same **selected channels** + **filteredPosts** as Summary/Tag. Sort chips: Forwards (default) · Last seen · Forwarded by.
 
 ## Decisions (stable)
 
 1. **Single-operator (Mode A)** — see [DECISIONS.md](docs/migration/DECISIONS.md).
 2. **Data** — Postgres authoritative; IndexedDB cache; API-first writes.
-3. **Dynamic channel sync v1 (2026-07-01)** — per-channel deadlines; global settings seed new channels only.
+3. **Dynamic channel sync v1 (2026-07-01)** — per-channel deadlines; global settings seed new channels only (superseded for sync fields by setting groups).
 4. **Post view filters (2026-06-30)** — shared `post-view.ts`; `filteredPosts` canonical.
-5. **Tag tab v1 (2026-07-02)** — structured tags with `source` + `assignedAt`; Tag run history in dedicated `tg_tag_runs` table; add/remove modes; bulk tag apply API for 100+ channels; channel prompt context checkboxes shared across AI tabs; **no auto-tagging scheduler**.
-6. **Channels tab tag bar sort (2026-07-02)** — selection-state grouping (fully / partial / none) with usage-based ordering inside each group; implemented in `sortTagsForChannelGrid` with unit tests.
-7. **Discover tab v1 (2026-07-06)** — frontend-only; derives from `filteredPosts` (no new API/DB). Forward-graph signal over external channel directories. Empty states explain how to change filters. Sort chips: Forwards (default `postCount`), Last seen, Forwarded by. Guided tour step after Tag tab.
-8. **Post media v1 (2026-07-04)** — `tg_posts.media` JSON column; parser + thumbnail cache on disk; UI surfaces thumbs in PostCard, media filters, prompt media hints; embedding text uses `getPostEmbeddingText`. Portrait thumb cropping + authenticated thumb URLs fixed in follow-up commits.
-9. **Telegram text extraction (2026-07-05)** — shared `extract_telegram_html_text` for scraper + post media parser; fixes collapsed bios/post line breaks from BeautifulSoup `strip=True` per fragment.
-10. **Media cache persistence (deploy)** — `compose.yml` named volume `app-media-data` → `/app/data` on backend service so redeploys do not wipe thumbs/avatars.
+5. **Tag tab v1 (2026-07-02)** — structured tags; `tg_tag_runs`; bulk tag apply API; **no auto-tagging scheduler**.
+6. **Channels tab tag bar sort (2026-07-02)** — selection-state grouping in `sortTagsForChannelGrid`.
+7. **Discover tab v1 (2026-07-06)** — frontend-only from `filteredPosts`; guided tour step after Tag.
+8. **Post media v1 (2026-07-04)** — `tg_posts.media` JSON; thumbs on disk; authenticated thumb URLs.
+9. **Telegram text extraction (2026-07-05)** — shared `extract_telegram_html_text`.
+10. **Media cache persistence (deploy)** — `compose.yml` volume `app-media-data` → `/app/data`.
+11. **Channel setting groups v1 (2026-07-07)** — strict inheritance, **no per-channel overrides** for inherited fields; each channel in exactly one group; default group editable but not deletable; non-empty custom groups cannot be deleted. Inherited: `regularSyncEnabled`, `dynamicSyncEnabled`, `autoSyncIntervalMinutes`, `dynamicSyncExpectedPosts`, `autoFollowForwarded`, `isFrozen`, `isUnavailableOnWebView`. **`language` stays per-channel** (not inherited).
+12. **Setting groups UX v2 (2026-07-07)** — built-in presets: **Slow feed** (1440m regular, dynamic on, 1 post), **High velocity** (60m, dynamic on, 10 posts); unique group names (case-insensitive per scope); removed Settings sync-defaults bulk UI; simplified `ChannelCard` (no per-channel sync toggles); virtual `group:{name}` tags on all cards; group filter chips; palette group commands (`group-commands.ts` + `channelGroup` / `settingGroup` URL params).
+13. **Setting groups performance (2026-07-07)** — `GET /setting-groups` must not load all channel ORM rows (orphan IDs via SQL DISTINCT); `list_setting_groups` must **`commit()` after `ensure_builtin_groups`** even when only `flush()` ran (gating on `session.new` alone rolls back built-ins). Frontend: shared React Query cache; stale-while-revalidate in panel.
+14. **Trim channel selection (2026-07-08)** — shrink-only; all globally selected channels ranked; reuses `sortChannelsForGrid`; shared helper + unit + Playwright tests.
+15. **ChannelGrid two-row controls (2026-07-08)** — tag chips on row 1; AI-prompt-context + filter/sort/trim pills on row 2.
 
 ### Explicitly rejected / deferred
 
 - Mode B, Celery/Redis, pgvector, mobile responsive summarizer.
-- **Prompt batching for Tag tab** — rejected (user selects channels explicitly; one prompt for full selection).
-- **Auto-tagging background job** — deferred; Tag tab is manual/copy-paste/in-app generate only.
-- **Configurable taxonomy in Settings** — deferred (hardcoded in prompt for v1).
-- **Storing prompt checkbox prefs in DB** — deferred (localStorage only; auto-summary job still uses names-only fallback).
+- **Per-channel overrides for setting-group fields** — rejected (strict inheritance).
+- **Prompt batching for Tag tab** — rejected.
+- **Auto-tagging background job** — deferred.
+- **Configurable taxonomy in Settings** — deferred.
+- **Storing prompt checkbox prefs in DB** — deferred (localStorage only).
 - Dynamic sync v1.1, Open Graph share links — see prior plans.
-- **Discover v1.1:** bulk follow, preview-before-follow card, 3-state auto-follow (off/suggest/auto), `t.me` / `@mention` extraction from post bodies, Posts-tab discovery badge/sidebar — deferred until Discover tab validated in daily use.
+- **Discover v1.1:** bulk follow, preview card, auto-follow suggest — deferred.
 
 ## User preferences
 
@@ -104,33 +108,35 @@ Self-hosted Telegram channel summarizer. Migrated from browser-heavy `TG-Summari
 - **Frontend bug fixes** — verify with Playwright; add regression test when non-trivial.
 - **Prefer simpler flows** — Copy Prompt + paste over heavy wizards.
 - **Bulk APIs for scale** — 2000+ channels; avoid N sequential HTTP round-trips.
-- **Channel discovery** — prefer filter-aware forward aggregation from existing scrape data over external directories or heavy AI recommenders.
+- **Channel discovery** — prefer filter-aware forward aggregation from existing scrape data.
 
 ## Environment & fixes
 
 - **Native dev:** `uv sync` → `alembic upgrade head` → uvicorn :8000; `bun run dev` :5173. **`POSTGRES_DB=app`**.
-- **Alembic (audited 2026-07-06):**
-  - **Code head:** `k3l4m5n6o7p8` — adds nullable `media` JSON column on `tg_posts` (after `j2k3l4m5n6o7` tag runs).
-  - **Chain:** single linear head, no branch labels; TG migrations `a1b2…` → … → `j2k3…` → `k3l4…`.
-  - **Local DB at audit:** `j2k3l4m5n6o7` (one revision behind head) — run `alembic upgrade head` before relying on `post.media` column.
-  - **Deploy:** `prestart` runs `alembic upgrade head` (production should be at `k3l4m5n6o7p8` after next deploy).
-- **Pre-commit:** `uv run prek run --all-files`; `bun run lint` (Biome). **Avoid running global lint autofix** when scoping changes — it can reformat unrelated files.
-- **Playwright local (Cursor sandbox):** bundled Chromium install may hang; use **`PLAYWRIGHT_CHANNEL=chrome`** or Docker (`docker compose run --rm playwright …`). Requires backend on :8000 + `alembic upgrade head`.
-- **Playwright CI:** `.github/workflows/playwright.yml` — **push to main always runs tests** (paths-filter bypass on push; PRs still filtered). Prior failure was git fetch in paths-filter, not test logic.
-- **E2E tag tests:** `channelHasTag` must handle structured tag objects `{ name }`, not only `string[]`.
+- **Alembic head:** `n6o7p8q9r0s1` — built-in Slow feed/High velocity groups + unique group names (after `l4m5…` setting groups, `m5n6…` reserved consolidation, `k3l4…` post media). Linear chain; run `alembic upgrade head` before relying on setting groups or `post.media`.
+- **Pre-commit:** `uv run prek run --all-files`; `bun run lint` (Biome). **Avoid global lint autofix** when scoping changes.
+- **Biome footgun (2026-07-08):** frontend code on `main` is **not** Biome-clean (files carry pre-existing formatter findings; direct pushes to main skip the PR-only auto-format). Use the **pinned** binary via **`bun run biome`** (2.3.14) — **never `npx @biomejs/biome`** (pulls a newer version → whole-file reformat). Do **not** run `biome --write` on a whole file for a scoped change; verify a change is format-neutral by diffing Biome findings against the `HEAD` version instead. Note `bun`'s global cache makes `frontend/node_modules` look empty even when deps resolve.
+- **Local dev checks for scoped frontend edits:** `bun run tsc -p tsconfig.build.json --noEmit` (fast typecheck) is the meaningful gate; Playwright E2E requires the full Docker stack and CI runs it automatically on push to main.
+- **Playwright local (Cursor sandbox):** use **`PLAYWRIGHT_CHANNEL=chrome`** or Docker. Requires backend on :8000 + `alembic upgrade head`.
+- **Playwright CI:** push to main always runs tests (paths-filter bypass on push).
+- **E2E tag tests:** `channelHasTag` must handle structured tag objects `{ name }`.
 - **GPG signing:** 1Password agent may fail in agent environments; `--no-gpg-sign` fallback if needed.
+- **Setting groups CI (2026-07-07):** after strict inheritance, channel-create tests must assign groups (or bulk-sync default group) for dynamic sync / auto-follow — inherited fields on `PUT /channels` are rejected. Duplicate `import { toast }` in `channel-tags.ts` broke Docker frontend build.
 
 ## Caveats
 
 - **Never commit `.env`** or API keys.
 - **Single scheduler instance** — no multi-replica without coordination.
-- **Tag Apply** — frontend computes final tag lists; bulk API replaces tags per channel (add/remove logic is client-side).
-- **Tag run paste** — must target pending run from Copy Prompt; parser accepts fenced JSON.
-- **2000+ channels** — use bulk APIs (`bulk-sync-settings`, `bulk-tags`); avoid Sync All.
+- **Tag Apply** — frontend computes final tag lists; bulk API replaces tags per channel.
+- **Setting group edits** — propagate to all member channels; frozen state inherited from group.
+- **Virtual `group:` tags** — display-only; cannot be manually added/removed via tag UI; excluded from `{all_tags}` / Tag tab prompts.
+- **SettingGroupsPanel** — never put `selectedId` in fetch deps (caused full refetch + loading gate on every group click).
+- **Reserved built-in groups** — `default`, Slow feed, High velocity, Frozen, Restricted: editable settings, non-deletable, always listed at 0 channels; canonical ids use prefixes (`default-`, `slow-feed-`, `high-velocity-`, `frozen-`, `restricted-`).
+- **2000+ channels** — use bulk APIs (`bulk-sync-settings`, `bulk-tags`, `bulk-setting-group`).
 - **`SettingsView.tsx`** still large (refactor deferred).
-- **Discover + semantic search** — RAG mode caps at ~50 posts; scope banner should note results are semantic-limited, not full date-range corpus.
-- **Post media migration** — code expects `tg_posts.media`; DB must be at `k3l4m5n6o7p8`. Thumbs are filesystem-only; missing volume mount on deploy loses cached images (DB rows remain).
-- **Post thumbs** — served via authenticated API; frontend must use API paths (`thumbApiPath`), not raw Telegram URLs.
+- **Discover + semantic search** — RAG mode caps at ~50 posts.
+- **Post media migration** — DB must be at `k3l4m5n6o7p8`+; thumbs are filesystem-only.
+- **Post thumbs** — authenticated API paths only (`thumbApiPath`).
 
 ## Out of scope / roadmap
 
@@ -139,3 +145,8 @@ Self-hosted Telegram channel summarizer. Migrated from browser-heavy `TG-Summari
 - `{all_tags}` in Summary/Chat prompts.
 - Dynamic sync v1.1, Open Graph, SettingsView split, mobile summarizer.
 - Discover bulk follow, preview card, dismiss persistence, auto-follow suggest mode.
+- Per-channel sync toggles on ChannelCard (removed; use setting groups).
+
+## Session log
+
+- **2026-07-08:** Memory sync — rolled setting-groups perf/CI lessons into stable sections; session log trimmed.
