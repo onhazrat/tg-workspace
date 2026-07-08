@@ -34,10 +34,7 @@ describe("setting group helpers", () => {
   })
 
   it("prefers canonical frozen group when duplicates exist", () => {
-    const groups = [
-      frozenGroup("legacy-uuid"),
-      frozenGroup("frozen-global"),
-    ]
+    const groups = [frozenGroup("legacy-uuid"), frozenGroup("frozen-global")]
     expect(findFrozenReservedGroup(groups)?.id).toBe("frozen-global")
   })
 
@@ -60,9 +57,9 @@ describe("setting group helpers", () => {
     ]
     expect(isSlowFeedReservedGroup(groups[1]!)).toBe(true)
     expect(isHighVelocityReservedGroup(groups[1]!)).toBe(false)
-    expect(sortSettingGroupsForDisplay(groups).map((group) => group.name)).toEqual(
-      ["default", "Slow feed", "Frozen"],
-    )
+    expect(
+      sortSettingGroupsForDisplay(groups).map((group) => group.name),
+    ).toEqual(["default", "Slow feed", "Frozen"])
   })
 
   it("prefers URL group id over default when nothing selected", () => {
@@ -84,9 +81,11 @@ describe("setting group helpers", () => {
     expect(resolveInitialSelectedGroupId(groups, "custom-1", null)).toBe(
       "custom-1",
     )
-    expect(resolveInitialSelectedGroupId(groups, "", null)).toBe("default-global")
-    expect(resolveInitialSelectedGroupId(groups, "custom-1", "default-global")).toBe(
+    expect(resolveInitialSelectedGroupId(groups, "", null)).toBe(
       "default-global",
     )
+    expect(
+      resolveInitialSelectedGroupId(groups, "custom-1", "default-global"),
+    ).toBe("default-global")
   })
 })

@@ -22,10 +22,7 @@ import type React from "react"
 import { useEffect, useState } from "react"
 import { toast } from "sonner"
 import { api } from "@/api"
-import {
-  LANGUAGES,
-  MODELS,
-} from "../constants"
+import { LANGUAGES, MODELS } from "../constants"
 import { useData } from "../contexts/DataContext"
 import { useSettings } from "../contexts/SettingsContext"
 import { JOB_LABELS, useJobToggles } from "../hooks/useJobToggles"

@@ -920,12 +920,12 @@ export function CommandPalette() {
                       : entityCommand.entityFlow === "delete-summary"
                         ? "No summaries in history."
                         : entityCommand.entityFlow === "remove-tag-pick"
-                        ? "No tags on this channel."
-                        : isSettingGroupEntityFlow(
-                              entityCommand.entityFlow ?? "search-channel",
-                            )
-                          ? "No setting groups found."
-                          : "No matches found."}
+                          ? "No tags on this channel."
+                          : isSettingGroupEntityFlow(
+                                entityCommand.entityFlow ?? "search-channel",
+                              )
+                            ? "No setting groups found."
+                            : "No matches found."}
               </CommandEmpty>
               <CommandGroup
                 heading={

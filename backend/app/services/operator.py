@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import logging
 import uuid
+from typing import cast
 
+from sqlalchemy.sql.elements import ColumnElement
 from sqlmodel import Session, col, or_, select
 
 from app.core.config import settings
@@ -34,7 +36,10 @@ def select_operator_channels(
     if unfrozen_only:
         stmt = stmt.join(
             ChannelSettingGroup,
-            Channel.setting_group_id == ChannelSettingGroup.id,
+            cast(
+                ColumnElement[bool],
+                Channel.setting_group_id == ChannelSettingGroup.id,
+            ),
         )
     if operator_id is not None:
         stmt = stmt.where(
@@ -61,7 +66,10 @@ def select_operator_channels(
         if unfrozen_only:
             fallback = fallback.join(
                 ChannelSettingGroup,
-                Channel.setting_group_id == ChannelSettingGroup.id,
+                cast(
+                    ColumnElement[bool],
+                    Channel.setting_group_id == ChannelSettingGroup.id,
+                ),
             ).where(ChannelSettingGroup.is_frozen == False)  # noqa: E712
         channels = list(session.exec(fallback).all())
 
@@ -78,7 +86,7 @@ def distinct_operator_setting_group_ids(
         operator_id = get_operator_user_id(session)
 
     def _distinct_ids(
-        user_filter,
+        user_filter: ColumnElement[bool] | None,
     ) -> set[str]:
         stmt = select(Channel.setting_group_id).distinct()
         if user_filter is not None:
@@ -89,7 +97,8 @@ def distinct_operator_setting_group_ids(
     user_filter = None
     if operator_id is not None:
         user_filter = or_(
-            Channel.user_id == operator_id, col(Channel.user_id).is_(None)
+            Channel.user_id == operator_id,
+            col(Channel.user_id).is_(None),
         )
 
     group_ids = _distinct_ids(user_filter)

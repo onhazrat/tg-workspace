@@ -27,6 +27,11 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Skeleton } from "@/components/ui/skeleton"
+import {
+  useInvalidateSettingGroups,
+  useSettingGroupsQuery,
+} from "@/hooks/useSettingGroups"
+import { useSummarizerGroupParams } from "@/hooks/useSummarizerGroupParams"
 import { addChannelByName } from "@/lib/channels/add-channel"
 import {
   addManualTag,
@@ -40,17 +45,15 @@ import {
   UNTAGGED_TAG_LABEL,
 } from "@/lib/channels/channel-tags"
 import { deleteChannelByRecord } from "@/lib/channels/delete-channel"
-import { findFrozenReservedGroup, sortSettingGroupsForDisplay } from "@/lib/channels/setting-groups"
+import {
+  findFrozenReservedGroup,
+  sortSettingGroupsForDisplay,
+} from "@/lib/channels/setting-groups"
 import {
   type ChannelGridSortOption,
   sortChannelsForGrid,
 } from "@/lib/channels/sort-channels-for-grid"
 import { applyTrimChannelSelection } from "@/lib/channels/trim-selected-channels"
-import { useSummarizerGroupParams } from "@/hooks/useSummarizerGroupParams"
-import {
-  useInvalidateSettingGroups,
-  useSettingGroupsQuery,
-} from "@/hooks/useSettingGroups"
 import { useData } from "../contexts/DataContext"
 import { useScraper } from "../contexts/ScraperContext"
 import { useSettings } from "../contexts/SettingsContext"
@@ -140,7 +143,8 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
   const [channelSearch, setChannelSearch] = useState("")
   const [selectedLanguageFilter, setSelectedLanguageFilter] =
     useState<string>("")
-  const { channelGroupFilter, setChannelGroupFilter } = useSummarizerGroupParams()
+  const { channelGroupFilter, setChannelGroupFilter } =
+    useSummarizerGroupParams()
   const selectedGroupFilter = channelGroupFilter
   const [bulkTagInput, setBulkTagInput] = useState("")
   const [bulkRemoveTagInput, setBulkRemoveTagInput] = useState("")
@@ -156,7 +160,8 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
   const [bulkTargetGroupId, setBulkTargetGroupId] = useState("")
 
   useEffect(() => {
-    const defaultGroup = settingGroups.find((group) => group.isDefault) ?? settingGroups[0]
+    const defaultGroup =
+      settingGroups.find((group) => group.isDefault) ?? settingGroups[0]
     if (defaultGroup && !bulkTargetGroupId) {
       setBulkTargetGroupId(defaultGroup.id)
     }
@@ -193,17 +198,12 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
         sortBy,
         sortDirection,
       }),
-    [
-      channelStats,
-      filteredChannels,
-      selectedChannels,
-      sortBy,
-      sortDirection,
-    ],
+    [channelStats, filteredChannels, selectedChannels, sortBy, sortDirection],
   )
 
   const parsedTrimCount = Number.parseInt(trimCount, 10)
-  const isTrimCountValid = Number.isFinite(parsedTrimCount) && parsedTrimCount >= 1
+  const isTrimCountValid =
+    Number.isFinite(parsedTrimCount) && parsedTrimCount >= 1
   const isTrimDisabled =
     selectedChannels.size === 0 ||
     !isTrimCountValid ||
@@ -249,7 +249,13 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
 
   useEffect(() => {
     setVisibleChannels(20)
-  }, [channelSearch, selectedLanguageFilter, selectedGroupFilter, sortBy, sortDirection])
+  }, [
+    channelSearch,
+    selectedLanguageFilter,
+    selectedGroupFilter,
+    sortBy,
+    sortDirection,
+  ])
 
   const allTags = useMemo(() => {
     const tags = new Set<string>()
@@ -312,7 +318,9 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
 
   const toggleGroupSelection = (groupId: string) => {
     const channelsInGroup = channels
-      .filter((channel) => channel.settingGroupId === groupId && !channel.isFrozen)
+      .filter(
+        (channel) => channel.settingGroupId === groupId && !channel.isFrozen,
+      )
       .map((channel) => channel.name)
     const allSelected = channelsInGroup.every((name) =>
       selectedChannels.has(name),
@@ -758,9 +766,7 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
                       toggleGroupSelection(group.id)
                     }}
                     className={`text-[9px] font-bold px-2 py-1 rounded-md transition-all flex items-center gap-1.5 ${
-                      isActiveFilter
-                        ? "ring-2 ring-indigo-500/40"
-                        : ""
+                      isActiveFilter ? "ring-2 ring-indigo-500/40" : ""
                     } ${
                       isAllSelected
                         ? "bg-app-ink text-app-bg"
@@ -779,223 +785,231 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
               })}
             </div>
 
-          <div className="flex flex-col gap-4">
-            <div className="flex flex-wrap gap-2">
-              {allTags.map((tag) => {
-                const channelsWithTag = channels
-                  .filter((c) => getTagNames(c.tags).includes(tag))
-                  .map((c) => c.name)
-                const selectedCount = channelsWithTag.filter((name) =>
-                  selectedChannels.has(name),
-                ).length
-                const isAllSelected =
-                  selectedCount === channelsWithTag.length &&
-                  channelsWithTag.length > 0
-                const isPartial =
-                  selectedCount > 0 && selectedCount < channelsWithTag.length
+            <div className="flex flex-col gap-4">
+              <div className="flex flex-wrap gap-2">
+                {allTags.map((tag) => {
+                  const channelsWithTag = channels
+                    .filter((c) => getTagNames(c.tags).includes(tag))
+                    .map((c) => c.name)
+                  const selectedCount = channelsWithTag.filter((name) =>
+                    selectedChannels.has(name),
+                  ).length
+                  const isAllSelected =
+                    selectedCount === channelsWithTag.length &&
+                    channelsWithTag.length > 0
+                  const isPartial =
+                    selectedCount > 0 && selectedCount < channelsWithTag.length
 
-                return (
-                  <button
-                    type="button"
-                    key={tag}
-                    onClick={() => toggleTagSelection(tag)}
-                    className={`text-[9px] font-bold px-2 py-1 rounded-md transition-all flex items-center gap-1.5 ${
-                      isAllSelected
-                        ? "bg-app-ink text-app-bg"
-                        : isPartial
-                          ? "bg-app-ink/20 text-app-ink"
-                          : "bg-app-muted/50 text-app-ink/60 hover:bg-app-ink/10 hover:text-app-ink"
-                    }`}
-                  >
-                    <Tag size={10} />
-                    {tag}
-                    <span className="opacity-60 text-[8px]">
-                      ({selectedCount}/{channelsWithTag.length})
-                    </span>
-                  </button>
-                )
-              })}
-              <button
-                type="button"
-                key={UNTAGGED_TAG_ID}
-                data-testid="channel-tag-untagged"
-                onClick={() => toggleTagSelection(UNTAGGED_TAG_ID)}
-                className={`text-[9px] font-bold px-2 py-1 rounded-md transition-all flex items-center gap-1.5 ${
-                  isUntaggedTagAllSelected
-                    ? "bg-app-ink text-app-bg"
-                    : isUntaggedTagPartial
-                      ? "bg-app-ink/20 text-app-ink"
-                      : "bg-app-muted/50 text-app-ink/60 hover:bg-app-ink/10 hover:text-app-ink"
-                }`}
-              >
-                <Tag size={10} />
-                {UNTAGGED_TAG_LABEL}
-                <span className="opacity-60 text-[8px]">
-                  ({untaggedTagSelectedCount}/{untaggedChannelNames.length})
-                </span>
-              </button>
-            </div>
-
-            <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3">
-              <div className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-lg border border-app-ink/5 bg-app-muted/30 px-3 py-1.5">
-                <span className="text-[9px] uppercase font-bold text-app-ink/50">
-                  AI Prompt Context
-                </span>
-                <label className="flex items-center gap-1.5 text-[10px] font-semibold text-app-ink/70">
-                  <input
-                    type="checkbox"
-                    checked={includeChannelBioInPrompt}
-                    onChange={(event) =>
-                      setIncludeChannelBioInPrompt(event.target.checked)
-                    }
-                    className="h-3 w-3 accent-app-ink"
-                  />
-                  Include channel bio in prompts
-                </label>
-                <label className="flex items-center gap-1.5 text-[10px] font-semibold text-app-ink/70">
-                  <input
-                    type="checkbox"
-                    checked={includeChannelTagsInPrompt}
-                    onChange={(event) =>
-                      setIncludeChannelTagsInPrompt(event.target.checked)
-                    }
-                    className="h-3 w-3 accent-app-ink"
-                  />
-                  Include current tags in prompts
-                </label>
-              </div>
-
-              <div className="flex flex-wrap items-center gap-3 rounded-lg border border-app-ink/5 bg-app-muted/30 px-3 py-1.5">
-                {isFilteringActive && (
-                  <>
-                    <span className="text-[9px] uppercase font-bold text-app-ink/60">
-                      Showing {filteredChannels.length} of {channels.length}{" "}
-                      channels
-                    </span>
-                    <div className="h-4 w-px bg-app-ink/10" />
-                  </>
-                )}
-                {allLanguages.length > 0 && (
-                  <>
-                    <div className="flex items-center gap-2">
-                      <span className="text-[9px] uppercase font-bold text-app-ink/50">
-                        Lang
+                  return (
+                    <button
+                      type="button"
+                      key={tag}
+                      onClick={() => toggleTagSelection(tag)}
+                      className={`text-[9px] font-bold px-2 py-1 rounded-md transition-all flex items-center gap-1.5 ${
+                        isAllSelected
+                          ? "bg-app-ink text-app-bg"
+                          : isPartial
+                            ? "bg-app-ink/20 text-app-ink"
+                            : "bg-app-muted/50 text-app-ink/60 hover:bg-app-ink/10 hover:text-app-ink"
+                      }`}
+                    >
+                      <Tag size={10} />
+                      {tag}
+                      <span className="opacity-60 text-[8px]">
+                        ({selectedCount}/{channelsWithTag.length})
                       </span>
-                      <Select
-                        value={selectedLanguageFilter || "__all_languages__"}
-                        onValueChange={(value) =>
-                          setSelectedLanguageFilter(
-                            value === "__all_languages__" ? "" : value,
-                          )
-                        }
-                      >
-                        <SelectTrigger className={selectTriggerClassName}>
-                          <SelectValue placeholder="All" />
-                        </SelectTrigger>
-                        <SelectContent className="border-app-ink/15 bg-app-card text-app-ink">
-                          <SelectItem value="__all_languages__">All</SelectItem>
-                          {allLanguages.map((lang) => (
-                            <SelectItem key={lang} value={lang}>
-                              {lang}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="h-4 w-px bg-app-ink/10" />
-                  </>
-                )}
-                <div className="flex items-center gap-2">
-                  <span className="text-[9px] uppercase font-bold text-app-ink/50">
-                    Sort By
+                    </button>
+                  )
+                })}
+                <button
+                  type="button"
+                  key={UNTAGGED_TAG_ID}
+                  data-testid="channel-tag-untagged"
+                  onClick={() => toggleTagSelection(UNTAGGED_TAG_ID)}
+                  className={`text-[9px] font-bold px-2 py-1 rounded-md transition-all flex items-center gap-1.5 ${
+                    isUntaggedTagAllSelected
+                      ? "bg-app-ink text-app-bg"
+                      : isUntaggedTagPartial
+                        ? "bg-app-ink/20 text-app-ink"
+                        : "bg-app-muted/50 text-app-ink/60 hover:bg-app-ink/10 hover:text-app-ink"
+                  }`}
+                >
+                  <Tag size={10} />
+                  {UNTAGGED_TAG_LABEL}
+                  <span className="opacity-60 text-[8px]">
+                    ({untaggedTagSelectedCount}/{untaggedChannelNames.length})
                   </span>
-                  <Select
-                    value={sortBy}
-                    onValueChange={(value) =>
-                      setSortBy(value as ChannelGridSortOption)
-                    }
-                  >
-                    <SelectTrigger className={selectTriggerClassName}>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent className="border-app-ink/15 bg-app-card text-app-ink">
-                      <SelectItem value="last_updated">Last Updated</SelectItem>
-                      <SelectItem value="followed_at">Followed At</SelectItem>
-                      <SelectItem value="activity_rate">
-                        Activity Rate
-                      </SelectItem>
-                      <SelectItem value="total_posts">Total Posts</SelectItem>
-                      <SelectItem value="channel_id">Channel ID</SelectItem>
-                      <SelectItem value="channel_name">Channel Name</SelectItem>
-                      <SelectItem value="next_regular_sync">
-                        Next Regular Sync
-                      </SelectItem>
-                      <SelectItem value="next_dynamic_sync">
-                        Next Dynamic Sync
-                      </SelectItem>
-                      <SelectItem value="next_auto_sync">
-                        Next Auto Sync
-                      </SelectItem>
-                      {showChannelSubscribers && (
-                        <SelectItem value="subscribers">Subscribers</SelectItem>
-                      )}
-                    </SelectContent>
-                  </Select>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setSortDirection((prev) =>
-                        prev === "asc" ? "desc" : "asc",
-                      )
-                    }
-                    className="p-1 hover:bg-app-ink/10 rounded-md transition-colors text-app-ink/70 hover:text-app-ink"
-                    title={`Sort ${sortDirection === "asc" ? "Ascending" : "Descending"}`}
-                  >
-                    {sortDirection === "asc" ? (
-                      <ArrowUp size={12} />
-                    ) : (
-                      <ArrowDown size={12} />
-                    )}
-                  </button>
+                </button>
+              </div>
+
+              <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3">
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-lg border border-app-ink/5 bg-app-muted/30 px-3 py-1.5">
+                  <span className="text-[9px] uppercase font-bold text-app-ink/50">
+                    AI Prompt Context
+                  </span>
+                  <label className="flex items-center gap-1.5 text-[10px] font-semibold text-app-ink/70">
+                    <input
+                      type="checkbox"
+                      checked={includeChannelBioInPrompt}
+                      onChange={(event) =>
+                        setIncludeChannelBioInPrompt(event.target.checked)
+                      }
+                      className="h-3 w-3 accent-app-ink"
+                    />
+                    Include channel bio in prompts
+                  </label>
+                  <label className="flex items-center gap-1.5 text-[10px] font-semibold text-app-ink/70">
+                    <input
+                      type="checkbox"
+                      checked={includeChannelTagsInPrompt}
+                      onChange={(event) =>
+                        setIncludeChannelTagsInPrompt(event.target.checked)
+                      }
+                      className="h-3 w-3 accent-app-ink"
+                    />
+                    Include current tags in prompts
+                  </label>
                 </div>
-                <div className="h-4 w-px bg-app-ink/10" />
-                <div className="flex items-center gap-2">
-                  <input
-                    type="number"
-                    min={1}
-                    value={trimCount}
-                    onChange={(event) => setTrimCount(event.target.value)}
-                    onKeyDown={(event) => {
-                      if (event.key === "Enter") handleTrimSelection()
-                    }}
-                    disabled={selectedChannels.size === 0}
-                    data-testid="channel-trim-count"
-                    className="w-14 bg-app-muted/50 border border-app-ink/10 rounded-md py-1 px-2 text-[10px] focus:outline-none focus:ring-1 focus:ring-app-ink/20 transition-all disabled:opacity-30"
-                    aria-label="Trim selection count"
-                  />
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <button
-                        type="button"
-                        onClick={handleTrimSelection}
-                        disabled={isTrimDisabled}
-                        data-testid="channel-trim-button"
-                        className="px-3 py-1.5 text-[10px] uppercase font-bold rounded-md bg-app-ink/10 text-app-ink hover:bg-app-ink/20 transition-all disabled:opacity-30 disabled:pointer-events-none"
-                      >
-                        Trim
-                      </button>
-                    </TooltipTrigger>
-                    <TooltipContent>
-                      <p>
-                        Keep the first N selected channels by current sort
-                        order. Only shrinks selection.
-                      </p>
-                    </TooltipContent>
-                  </Tooltip>
+
+                <div className="flex flex-wrap items-center gap-3 rounded-lg border border-app-ink/5 bg-app-muted/30 px-3 py-1.5">
+                  {isFilteringActive && (
+                    <>
+                      <span className="text-[9px] uppercase font-bold text-app-ink/60">
+                        Showing {filteredChannels.length} of {channels.length}{" "}
+                        channels
+                      </span>
+                      <div className="h-4 w-px bg-app-ink/10" />
+                    </>
+                  )}
+                  {allLanguages.length > 0 && (
+                    <>
+                      <div className="flex items-center gap-2">
+                        <span className="text-[9px] uppercase font-bold text-app-ink/50">
+                          Lang
+                        </span>
+                        <Select
+                          value={selectedLanguageFilter || "__all_languages__"}
+                          onValueChange={(value) =>
+                            setSelectedLanguageFilter(
+                              value === "__all_languages__" ? "" : value,
+                            )
+                          }
+                        >
+                          <SelectTrigger className={selectTriggerClassName}>
+                            <SelectValue placeholder="All" />
+                          </SelectTrigger>
+                          <SelectContent className="border-app-ink/15 bg-app-card text-app-ink">
+                            <SelectItem value="__all_languages__">
+                              All
+                            </SelectItem>
+                            {allLanguages.map((lang) => (
+                              <SelectItem key={lang} value={lang}>
+                                {lang}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="h-4 w-px bg-app-ink/10" />
+                    </>
+                  )}
+                  <div className="flex items-center gap-2">
+                    <span className="text-[9px] uppercase font-bold text-app-ink/50">
+                      Sort By
+                    </span>
+                    <Select
+                      value={sortBy}
+                      onValueChange={(value) =>
+                        setSortBy(value as ChannelGridSortOption)
+                      }
+                    >
+                      <SelectTrigger className={selectTriggerClassName}>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent className="border-app-ink/15 bg-app-card text-app-ink">
+                        <SelectItem value="last_updated">
+                          Last Updated
+                        </SelectItem>
+                        <SelectItem value="followed_at">Followed At</SelectItem>
+                        <SelectItem value="activity_rate">
+                          Activity Rate
+                        </SelectItem>
+                        <SelectItem value="total_posts">Total Posts</SelectItem>
+                        <SelectItem value="channel_id">Channel ID</SelectItem>
+                        <SelectItem value="channel_name">
+                          Channel Name
+                        </SelectItem>
+                        <SelectItem value="next_regular_sync">
+                          Next Regular Sync
+                        </SelectItem>
+                        <SelectItem value="next_dynamic_sync">
+                          Next Dynamic Sync
+                        </SelectItem>
+                        <SelectItem value="next_auto_sync">
+                          Next Auto Sync
+                        </SelectItem>
+                        {showChannelSubscribers && (
+                          <SelectItem value="subscribers">
+                            Subscribers
+                          </SelectItem>
+                        )}
+                      </SelectContent>
+                    </Select>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setSortDirection((prev) =>
+                          prev === "asc" ? "desc" : "asc",
+                        )
+                      }
+                      className="p-1 hover:bg-app-ink/10 rounded-md transition-colors text-app-ink/70 hover:text-app-ink"
+                      title={`Sort ${sortDirection === "asc" ? "Ascending" : "Descending"}`}
+                    >
+                      {sortDirection === "asc" ? (
+                        <ArrowUp size={12} />
+                      ) : (
+                        <ArrowDown size={12} />
+                      )}
+                    </button>
+                  </div>
+                  <div className="h-4 w-px bg-app-ink/10" />
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="number"
+                      min={1}
+                      value={trimCount}
+                      onChange={(event) => setTrimCount(event.target.value)}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter") handleTrimSelection()
+                      }}
+                      disabled={selectedChannels.size === 0}
+                      data-testid="channel-trim-count"
+                      className="w-14 bg-app-muted/50 border border-app-ink/10 rounded-md py-1 px-2 text-[10px] focus:outline-none focus:ring-1 focus:ring-app-ink/20 transition-all disabled:opacity-30"
+                      aria-label="Trim selection count"
+                    />
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <button
+                          type="button"
+                          onClick={handleTrimSelection}
+                          disabled={isTrimDisabled}
+                          data-testid="channel-trim-button"
+                          className="px-3 py-1.5 text-[10px] uppercase font-bold rounded-md bg-app-ink/10 text-app-ink hover:bg-app-ink/20 transition-all disabled:opacity-30 disabled:pointer-events-none"
+                        >
+                          Trim
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p>
+                          Keep the first N selected channels by current sort
+                          order. Only shrinks selection.
+                        </p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
           </div>
         )}
 
@@ -1149,16 +1163,14 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
           className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
           id="tour-channel-grid"
         >
-          {sortedFilteredChannels
-            .slice(0, visibleChannels)
-            .map((channel) => (
-              <ChannelCard
-                key={channel.id}
-                channel={channel}
-                handleRemoveChannel={handleRemoveChannel}
-                handleResetAndSync={handleResetAndSync}
-              />
-            ))}
+          {sortedFilteredChannels.slice(0, visibleChannels).map((channel) => (
+            <ChannelCard
+              key={channel.id}
+              channel={channel}
+              handleRemoveChannel={handleRemoveChannel}
+              handleResetAndSync={handleResetAndSync}
+            />
+          ))}
 
           {hasMoreChannels && (
             <div

@@ -25,6 +25,21 @@ from app.services.bulk_channels import (
     bulk_reresolve_start_ids,
     bulk_reset_and_queue_sync,
 )
+from app.services.channel_setting_groups import (
+    bulk_assign_setting_group as bulk_assign_setting_group_impl,
+)
+from app.services.channel_setting_groups import (
+    create_setting_group as create_setting_group_impl,
+)
+from app.services.channel_setting_groups import (
+    delete_setting_group as delete_setting_group_impl,
+)
+from app.services.channel_setting_groups import (
+    list_setting_groups as list_setting_groups_impl,
+)
+from app.services.channel_setting_groups import (
+    update_setting_group as update_setting_group_impl,
+)
 from app.services.channels import (
     bulk_update_channel_tags as bulk_update_channel_tags_impl,
 )
@@ -118,21 +133,6 @@ from app.services.tag_runs import (
 )
 from app.services.tag_runs import (
     upsert_tag_run as upsert_tag_run_impl,
-)
-from app.services.channel_setting_groups import (
-    bulk_assign_setting_group as bulk_assign_setting_group_impl,
-)
-from app.services.channel_setting_groups import (
-    create_setting_group as create_setting_group_impl,
-)
-from app.services.channel_setting_groups import (
-    delete_setting_group as delete_setting_group_impl,
-)
-from app.services.channel_setting_groups import (
-    list_setting_groups as list_setting_groups_impl,
-)
-from app.services.channel_setting_groups import (
-    update_setting_group as update_setting_group_impl,
 )
 
 _SETTING_LOADERS = {

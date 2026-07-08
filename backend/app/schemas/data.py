@@ -64,7 +64,9 @@ class SettingGroupWriteRequest(BaseModel):
     dynamic_sync_expected_posts: int | None = Field(
         default=None, alias="dynamicSyncExpectedPosts"
     )
-    auto_follow_forwarded: bool | None = Field(default=None, alias="autoFollowForwarded")
+    auto_follow_forwarded: bool | None = Field(
+        default=None, alias="autoFollowForwarded"
+    )
     is_frozen: bool | None = Field(default=None, alias="isFrozen")
     is_unavailable_on_web_view: bool | None = Field(
         default=None, alias="isUnavailableOnWebView"

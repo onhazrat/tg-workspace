@@ -7,7 +7,6 @@ from sqlmodel import Session
 from app.core.db import engine
 from app.jobs.auto_sync import CHECK_SOURCE
 from app.models_tg import Channel, ChannelSettingGroup, Post
-from tests.utils.setting_groups import upsert_sync_test_channel
 from app.services.scraper_jobs import SyncJobState
 from app.services.sync_orchestrator import (
     _ChannelSyncCtx,
@@ -18,6 +17,7 @@ from app.services.sync_schedule import (
     compute_next_dynamic_sync_at_from_last_updated,
     compute_next_regular_sync_at_from_last_updated,
 )
+from tests.utils.setting_groups import upsert_sync_test_channel
 
 
 def _ctx(channel_id: str, channel_name: str) -> _ChannelSyncCtx:

@@ -8,14 +8,14 @@ import {
   AUTO_SYNC_INTERVAL_MIN_MINUTES,
 } from "@/constants"
 import {
-  isReservedSettingGroup,
-  resolveInitialSelectedGroupId,
-} from "@/lib/channels/setting-groups"
-import { useSummarizerGroupParams } from "@/hooks/useSummarizerGroupParams"
-import {
   useInvalidateSettingGroups,
   useSettingGroupsQuery,
 } from "@/hooks/useSettingGroups"
+import { useSummarizerGroupParams } from "@/hooks/useSummarizerGroupParams"
+import {
+  isReservedSettingGroup,
+  resolveInitialSelectedGroupId,
+} from "@/lib/channels/setting-groups"
 import type { ChannelSettingGroup } from "@/types"
 
 const isReservedGroup = isReservedSettingGroup
@@ -144,7 +144,9 @@ export const SettingGroupsPanel: React.FC = () => {
       await invalidateSettingGroups()
     } catch (deleteError) {
       toast.error(
-        deleteError instanceof Error ? deleteError.message : "Cannot delete group",
+        deleteError instanceof Error
+          ? deleteError.message
+          : "Cannot delete group",
       )
     } finally {
       setBusy(false)

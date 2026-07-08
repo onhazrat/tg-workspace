@@ -9,9 +9,12 @@ import { useUI } from "@/contexts/UIContext"
 import { useApiStatus } from "@/hooks/useApiStatus"
 import { useGuidedTour } from "@/hooks/useGuidedTour"
 import { useJobToggles } from "@/hooks/useJobToggles"
+import {
+  useInvalidateSettingGroups,
+  useSettingGroupsQuery,
+} from "@/hooks/useSettingGroups"
 import { useSettingsSection } from "@/hooks/useSettingsSection"
 import { useSummarizerGroupParams } from "@/hooks/useSummarizerGroupParams"
-import { useSettingGroupsQuery, useInvalidateSettingGroups } from "@/hooks/useSettingGroups"
 import { INDEXEDDB_STORE_NAMES } from "@/lib/cache"
 import {
   buildActionCommands,

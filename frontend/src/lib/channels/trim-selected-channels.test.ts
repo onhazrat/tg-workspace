@@ -4,10 +4,7 @@ import type { Channel, ChannelStats } from "@/types"
 
 import { trimSelectedChannelsToCount } from "./trim-selected-channels"
 
-function makeChannel(
-  name: string,
-  overrides: Partial<Channel> = {},
-): Channel {
+function makeChannel(name: string, overrides: Partial<Channel> = {}): Channel {
   return {
     id: name,
     name,
@@ -30,7 +27,7 @@ const channelStats: Record<string, ChannelStats> = {
   "mid-activity": { count: 2, minId: 1, maxId: 2, velocity: 5 },
   "high-activity": { count: 3, minId: 1, maxId: 3, velocity: 10 },
   "hidden-selected": { count: 4, minId: 1, maxId: 4, velocity: 7 },
-  "unselected": { count: 5, minId: 1, maxId: 5, velocity: 20 },
+  unselected: { count: 5, minId: 1, maxId: 5, velocity: 20 },
 }
 
 const selectedChannels = new Set([

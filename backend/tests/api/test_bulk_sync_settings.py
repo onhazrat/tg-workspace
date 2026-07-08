@@ -88,7 +88,11 @@ def test_bulk_sync_settings_apply_to_selected_via_group(client: TestClient) -> N
 
     group = client.post(
         f"{PREFIX}/setting-groups",
-        json={"name": "Dynamic 25", "dynamicSyncEnabled": True, "dynamicSyncExpectedPosts": 25},
+        json={
+            "name": "Dynamic 25",
+            "dynamicSyncEnabled": True,
+            "dynamicSyncExpectedPosts": 25,
+        },
         headers=headers,
     ).json()
     r = client.patch(

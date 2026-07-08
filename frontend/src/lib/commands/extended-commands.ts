@@ -13,17 +13,13 @@ import {
   selectChannelsByTag,
 } from "@/lib/channels/channel-tags"
 import { deleteSelectedChannels } from "@/lib/channels/delete-selected"
-import {
-  applyTrimChannelSelection,
-} from "@/lib/channels/trim-selected-channels"
-import {
-  getChannelGridSortFromStorage,
-} from "@/lib/channels/sort-channels-for-grid"
 import { refreshChannelMetadata } from "@/lib/channels/refresh-metadata"
 import {
   bulkResetSyncAllChannels,
   resetAndSyncChannel,
 } from "@/lib/channels/reset-sync"
+import { getChannelGridSortFromStorage } from "@/lib/channels/sort-channels-for-grid"
+import { applyTrimChannelSelection } from "@/lib/channels/trim-selected-channels"
 import { updateChannelStartId } from "@/lib/channels/update-start-id"
 import { filterPartialHistoryChannels } from "@/lib/commands/filter-channels"
 import { parseOpenPostInput } from "@/lib/commands/open-post"

@@ -5,10 +5,11 @@ from __future__ import annotations
 import time
 import uuid
 from datetime import datetime
-from typing import Any
+from typing import Any, cast
 
 from fastapi import HTTPException
 from sqlalchemy import or_
+from sqlalchemy.sql.elements import ColumnElement
 from sqlmodel import Session, col, func, select
 
 from app.models_tg import Channel, ChannelSettingGroup
@@ -17,6 +18,7 @@ from app.services.sync_schedule import (
     compute_next_dynamic_sync_at_from_last_updated,
     compute_next_regular_sync_at_from_last_updated,
 )
+
 
 def _velocity_from_timestamps(timestamps: list[int]) -> float:
     from app.services.channels import _velocity_from_timestamps as velocity_fn
@@ -122,7 +124,7 @@ SLOW_FEED_DYNAMIC_SYNC_EXPECTED_POSTS = 1
 HIGH_VELOCITY_AUTO_SYNC_INTERVAL_MINUTES = 60
 HIGH_VELOCITY_DYNAMIC_SYNC_EXPECTED_POSTS = 10
 
-BUILTIN_GROUP_SORT_ORDER = {
+BUILTIN_GROUP_SORT_ORDER: dict[str, int] = {
     DEFAULT_GROUP_NAME.lower(): 0,
     SLOW_FEED_GROUP_NAME.lower(): 1,
     HIGH_VELOCITY_GROUP_NAME.lower(): 2,
@@ -172,11 +174,13 @@ def is_reserved_group_id(group_id: str) -> bool:
     )
 
 
-def _operator_group_scope_filter(operator_id: uuid.UUID | None):
+def _operator_group_scope_filter(
+    operator_id: uuid.UUID | None,
+) -> ColumnElement[bool]:
     if operator_id is None:
         return col(ChannelSettingGroup.user_id).is_(None)
     return or_(
-        ChannelSettingGroup.user_id == operator_id,
+        cast(ColumnElement[bool], ChannelSettingGroup.user_id == operator_id),
         col(ChannelSettingGroup.user_id).is_(None),
     )
 
@@ -428,15 +432,18 @@ def get_group_for_channel(session: Session, channel: Channel) -> ChannelSettingG
 
 
 def load_groups_by_id(session: Session) -> dict[str, ChannelSettingGroup]:
-    return {group.id: group for group in session.exec(select(ChannelSettingGroup)).all()}
+    return {
+        group.id: group for group in session.exec(select(ChannelSettingGroup)).all()
+    }
 
 
 def channel_counts_by_group(session: Session) -> dict[str, int]:
     rows = session.exec(
-        select(Channel.setting_group_id, func.count())
-        .group_by(Channel.setting_group_id)
+        select(Channel.setting_group_id, func.count()).group_by(
+            Channel.setting_group_id
+        )
     ).all()
-    return {group_id: count for group_id, count in rows}
+    return dict(rows)
 
 
 def _group_sort_key(group: ChannelSettingGroup) -> tuple[int, str]:
@@ -525,9 +532,7 @@ def effective_channel_fields(group: ChannelSettingGroup) -> dict[str, Any]:
 
 def apply_group_fields(group: ChannelSettingGroup, body: dict[str, Any]) -> None:
     normalized = normalize_body(body)
-    if "name" in normalized and (
-        group.is_default or is_reserved_group_id(group.id)
-    ):
+    if "name" in normalized and (group.is_default or is_reserved_group_id(group.id)):
         normalized.pop("name", None)
     if "name" in normalized:
         name = str(normalized["name"]).strip()
@@ -608,10 +613,16 @@ def _legacy_reserved_duplicates_exist(
         .where(
             _operator_group_scope_filter(user_id),
             or_(
-                (ChannelSettingGroup.name == FROZEN_GROUP_NAME)
-                & (ChannelSettingGroup.id != canonical_frozen),
-                (ChannelSettingGroup.name == RESTRICTED_GROUP_NAME)
-                & (ChannelSettingGroup.id != canonical_restricted),
+                cast(
+                    ColumnElement[bool],
+                    (ChannelSettingGroup.name == FROZEN_GROUP_NAME)
+                    & (ChannelSettingGroup.id != canonical_frozen),
+                ),
+                cast(
+                    ColumnElement[bool],
+                    (ChannelSettingGroup.name == RESTRICTED_GROUP_NAME)
+                    & (ChannelSettingGroup.id != canonical_restricted),
+                ),
             ),
         )
         .limit(1)
@@ -626,9 +637,7 @@ def list_setting_groups(
 
     ensure_builtin_groups(session, user_id=operator_id)
     if _legacy_reserved_duplicates_exist(session, user_id=operator_id):
-        consolidate_legacy_duplicate_reserved_groups(
-            session, user_id=operator_id
-        )
+        consolidate_legacy_duplicate_reserved_groups(session, user_id=operator_id)
     # ensure_builtin_groups uses flush(); session.new is empty afterward, so always
     # commit so built-in rows survive when the request-scoped session closes.
     session.commit()
@@ -639,12 +648,15 @@ def list_setting_groups(
         ).all()
     )
     known_ids = {group.id for group in groups}
-    orphan_ids = distinct_operator_setting_group_ids(
-        session, operator_id=operator_id
-    ) - known_ids
+    orphan_ids = (
+        distinct_operator_setting_group_ids(session, operator_id=operator_id)
+        - known_ids
+    )
     if orphan_ids:
         extra_groups = session.exec(
-            select(ChannelSettingGroup).where(col(ChannelSettingGroup.id).in_(orphan_ids))
+            select(ChannelSettingGroup).where(
+                col(ChannelSettingGroup.id).in_(orphan_ids)
+            )
         ).all()
         groups.extend(extra_groups)
 
@@ -780,7 +792,9 @@ def bulk_assign_setting_group(
         channel.id: channel
         for channel in select_operator_channels(session, operator_id=operator_id)
     }
-    missing = sorted(channel_id for channel_id in channel_ids if channel_id not in operator_channels)
+    missing = sorted(
+        channel_id for channel_id in channel_ids if channel_id not in operator_channels
+    )
     if missing:
         raise HTTPException(
             status_code=404,

@@ -23,15 +23,15 @@ import { useState } from "react"
 import { toast } from "sonner"
 import { api } from "@/api"
 import {
+  useInvalidateSettingGroups,
+  useSettingGroupsQuery,
+} from "@/hooks/useSettingGroups"
+import {
   addManualTag,
   normalizeChannelTags,
   removeTagsByName,
 } from "@/lib/channels/channel-tag-model"
 import { findFrozenReservedGroup } from "@/lib/channels/setting-groups"
-import {
-  useInvalidateSettingGroups,
-  useSettingGroupsQuery,
-} from "@/hooks/useSettingGroups"
 import {
   isVirtualGroupTag,
   toVirtualGroupTagName,
@@ -174,7 +174,7 @@ export const ChannelCard: React.FC<ChannelCardProps> = ({
     ? `Inherited from setting group "${channel.settingGroupName}"`
     : "Inherited from channel setting group"
   const nextSyncSummary = [
-    channel.regularSyncEnabled ?? true
+    (channel.regularSyncEnabled ?? true)
       ? channel.nextRegularSyncAt
         ? `Regular ${new Date(channel.nextRegularSyncAt).toLocaleString()}`
         : "Regular not scheduled"

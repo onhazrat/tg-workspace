@@ -34,6 +34,11 @@ export type BotInfoRequest = {
 } | null);
 };
 
+export type BulkChannelSettingGroupRequest = {
+    channelIds: Array<(string)>;
+    settingGroupId: string;
+};
+
 export type BulkChannelTagsRequest = {
     updates: Array<BulkChannelTagUpdate>;
 };
@@ -291,6 +296,17 @@ export type ScraperRuntimeSettings = {
     iterationLimit: number;
 };
 
+export type SettingGroupWriteRequest = {
+    name?: (string | null);
+    regularSyncEnabled?: (boolean | null);
+    dynamicSyncEnabled?: (boolean | null);
+    autoSyncIntervalMinutes?: (number | null);
+    dynamicSyncExpectedPosts?: (number | null);
+    autoFollowForwarded?: (boolean | null);
+    isFrozen?: (boolean | null);
+    isUnavailableOnWebView?: (boolean | null);
+};
+
 export type StartSyncJobRequest = {
     channelIds?: (Array<(string)> | null);
     source?: string;
@@ -541,6 +557,43 @@ export type DataBulkSyncSettingsEndpointData = {
 
 export type DataBulkSyncSettingsEndpointResponse = ({
     [key: string]: (number);
+});
+
+export type DataListSettingGroupsResponse = (Array<{
+    [key: string]: unknown;
+}>);
+
+export type DataCreateSettingGroupData = {
+    requestBody: SettingGroupWriteRequest;
+};
+
+export type DataCreateSettingGroupResponse = ({
+    [key: string]: unknown;
+});
+
+export type DataUpdateSettingGroupData = {
+    groupId: string;
+    requestBody: SettingGroupWriteRequest;
+};
+
+export type DataUpdateSettingGroupResponse = ({
+    [key: string]: unknown;
+});
+
+export type DataDeleteSettingGroupData = {
+    groupId: string;
+};
+
+export type DataDeleteSettingGroupResponse = ({
+    [key: string]: (string);
+});
+
+export type DataBulkAssignSettingGroupData = {
+    requestBody: BulkChannelSettingGroupRequest;
+};
+
+export type DataBulkAssignSettingGroupResponse = ({
+    [key: string]: unknown;
 });
 
 export type DataBulkChannelTagsEndpointData = {

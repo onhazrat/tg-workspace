@@ -57,9 +57,7 @@ const sampleChannels: Channel[] = [
   { id: "c2", name: "beta", settingGroupId: "custom-1" },
 ]
 
-function makeContext(
-  overrides: Partial<CommandContext> = {},
-): CommandContext {
+function makeContext(overrides: Partial<CommandContext> = {}): CommandContext {
   return {
     channels: sampleChannels,
     selectedChannels: new Set(["alpha"]),

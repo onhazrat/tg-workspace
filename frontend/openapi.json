@@ -1746,6 +1746,190 @@
         "security": [{ "OAuth2PasswordBearer": [] }]
       }
     },
+    "/api/v1/data/setting-groups": {
+      "get": {
+        "tags": ["data"],
+        "summary": "List Setting Groups",
+        "operationId": "data-list_setting_groups",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": { "additionalProperties": true, "type": "object" },
+                  "type": "array",
+                  "title": "Response Data-List Setting Groups"
+                }
+              }
+            }
+          }
+        },
+        "security": [{ "OAuth2PasswordBearer": [] }]
+      },
+      "post": {
+        "tags": ["data"],
+        "summary": "Create Setting Group",
+        "operationId": "data-create_setting_group",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SettingGroupWriteRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Data-Create Setting Group"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        },
+        "security": [{ "OAuth2PasswordBearer": [] }]
+      }
+    },
+    "/api/v1/data/setting-groups/{group_id}": {
+      "put": {
+        "tags": ["data"],
+        "summary": "Update Setting Group",
+        "operationId": "data-update_setting_group",
+        "security": [{ "OAuth2PasswordBearer": [] }],
+        "parameters": [
+          {
+            "name": "group_id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "title": "Group Id" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SettingGroupWriteRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Data-Update Setting Group"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": ["data"],
+        "summary": "Delete Setting Group",
+        "operationId": "data-delete_setting_group",
+        "security": [{ "OAuth2PasswordBearer": [] }],
+        "parameters": [
+          {
+            "name": "group_id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "title": "Group Id" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": { "type": "string" },
+                  "title": "Response Data-Delete Setting Group"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/data/channels/bulk-setting-group": {
+      "patch": {
+        "tags": ["data"],
+        "summary": "Bulk Assign Setting Group",
+        "operationId": "data-bulk_assign_setting_group",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BulkChannelSettingGroupRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Data-Bulk Assign Setting Group"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        },
+        "security": [{ "OAuth2PasswordBearer": [] }]
+      }
+    },
     "/api/v1/data/channels/bulk-tags": {
       "patch": {
         "tags": ["data"],
@@ -3627,6 +3811,19 @@
         "required": ["method"],
         "title": "BotInfoRequest"
       },
+      "BulkChannelSettingGroupRequest": {
+        "properties": {
+          "channelIds": {
+            "items": { "type": "string" },
+            "type": "array",
+            "title": "Channelids"
+          },
+          "settingGroupId": { "type": "string", "title": "Settinggroupid" }
+        },
+        "type": "object",
+        "required": ["channelIds", "settingGroupId"],
+        "title": "BulkChannelSettingGroupRequest"
+      },
       "BulkChannelTagUpdate": {
         "properties": {
           "channelId": { "type": "string", "title": "Channelid" },
@@ -4462,6 +4659,44 @@
         "type": "object",
         "required": ["maxPostsPerChannel", "iterationLimit"],
         "title": "ScraperRuntimeSettings"
+      },
+      "SettingGroupWriteRequest": {
+        "properties": {
+          "name": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Name"
+          },
+          "regularSyncEnabled": {
+            "anyOf": [{ "type": "boolean" }, { "type": "null" }],
+            "title": "Regularsyncenabled"
+          },
+          "dynamicSyncEnabled": {
+            "anyOf": [{ "type": "boolean" }, { "type": "null" }],
+            "title": "Dynamicsyncenabled"
+          },
+          "autoSyncIntervalMinutes": {
+            "anyOf": [{ "type": "integer" }, { "type": "null" }],
+            "title": "Autosyncintervalminutes"
+          },
+          "dynamicSyncExpectedPosts": {
+            "anyOf": [{ "type": "integer" }, { "type": "null" }],
+            "title": "Dynamicsyncexpectedposts"
+          },
+          "autoFollowForwarded": {
+            "anyOf": [{ "type": "boolean" }, { "type": "null" }],
+            "title": "Autofollowforwarded"
+          },
+          "isFrozen": {
+            "anyOf": [{ "type": "boolean" }, { "type": "null" }],
+            "title": "Isfrozen"
+          },
+          "isUnavailableOnWebView": {
+            "anyOf": [{ "type": "boolean" }, { "type": "null" }],
+            "title": "Isunavailableonwebview"
+          }
+        },
+        "type": "object",
+        "title": "SettingGroupWriteRequest"
       },
       "StartSyncJobRequest": {
         "properties": {

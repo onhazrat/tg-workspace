@@ -18,8 +18,9 @@ export const isHighVelocityReservedGroup = (
 export const isFrozenReservedGroup = (group: ChannelSettingGroup): boolean =>
   group.id.startsWith("frozen-")
 
-export const isRestrictedReservedGroup = (group: ChannelSettingGroup): boolean =>
-  group.id.startsWith("restricted-")
+export const isRestrictedReservedGroup = (
+  group: ChannelSettingGroup,
+): boolean => group.id.startsWith("restricted-")
 
 export const isReservedSettingGroup = (group: ChannelSettingGroup): boolean =>
   group.isReserved ??
@@ -37,17 +38,18 @@ export const sortSettingGroupsForDisplay = (
       return left.isDefault ? -1 : 1
     }
     const leftOrder =
-      BUILTIN_GROUP_SORT_ORDER[left.name.toLowerCase()] ?? Number.MAX_SAFE_INTEGER
+      BUILTIN_GROUP_SORT_ORDER[left.name.toLowerCase()] ??
+      Number.MAX_SAFE_INTEGER
     const rightOrder =
-      BUILTIN_GROUP_SORT_ORDER[right.name.toLowerCase()] ?? Number.MAX_SAFE_INTEGER
+      BUILTIN_GROUP_SORT_ORDER[right.name.toLowerCase()] ??
+      Number.MAX_SAFE_INTEGER
     if (leftOrder !== rightOrder) return leftOrder - rightOrder
     return left.name.localeCompare(right.name)
   })
 
 export const findFrozenReservedGroup = (
   groups: ChannelSettingGroup[],
-): ChannelSettingGroup | undefined =>
-  groups.find(isFrozenReservedGroup)
+): ChannelSettingGroup | undefined => groups.find(isFrozenReservedGroup)
 
 /** Pick the panel selection from cache — URL param wins over default group. */
 export const resolveInitialSelectedGroupId = (

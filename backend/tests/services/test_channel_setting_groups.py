@@ -19,9 +19,7 @@ from app.services.channel_setting_groups import (
     ensure_reserved_groups,
     frozen_group_id_for_user,
     get_or_create_frozen_group,
-    get_or_create_high_velocity_group,
     get_or_create_restricted_group,
-    get_or_create_slow_feed_group,
     high_velocity_group_id_for_user,
     is_reserved_group_id,
     list_setting_groups,
@@ -145,9 +143,7 @@ def test_create_setting_group_rejects_reserved_preset_names() -> None:
     with Session(engine) as session:
         for reserved_name in ("Slow feed", "High velocity"):
             with pytest.raises(HTTPException) as exc_info:
-                create_setting_group(
-                    session, {"name": reserved_name}, user_id=user_id
-                )
+                create_setting_group(session, {"name": reserved_name}, user_id=user_id)
             assert exc_info.value.status_code == 400
 
 
@@ -180,9 +176,7 @@ def test_consolidate_legacy_duplicate_frozen_groups() -> None:
         canonical_frozen = get_or_create_frozen_group(session, user_id=user_id)
         session.commit()
 
-        merged = consolidate_legacy_duplicate_reserved_groups(
-            session, user_id=user_id
-        )
+        merged = consolidate_legacy_duplicate_reserved_groups(session, user_id=user_id)
         session.commit()
 
         assert merged == 0

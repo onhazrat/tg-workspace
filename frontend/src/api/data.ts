@@ -29,7 +29,9 @@ const CHANNEL_INHERITED_WRITE_FIELDS = [
   "settingGroupName",
 ] as const satisfies readonly (keyof Channel)[]
 
-export function channelWritePayload(channel: Partial<Channel>): Partial<Channel> {
+export function channelWritePayload(
+  channel: Partial<Channel>,
+): Partial<Channel> {
   const payload = { ...channel }
   for (const key of CHANNEL_INHERITED_WRITE_FIELDS) {
     delete payload[key]

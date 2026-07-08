@@ -17,13 +17,13 @@ from app.core.config import settings
 from app.core.db import engine
 from app.models_tg import ChatDestination, Post, Summary
 from app.prompts.summary import format_summary_prompt
+from app.services.channel_setting_groups import channel_is_frozen, load_groups_by_id
 from app.services.logs import upsert_llm_log, upsert_publish_log
 from app.services.network_settings import (
     load_network_settings,
     resolve_proxies,
     resolve_proxy_concurrency,
 )
-from app.services.channel_setting_groups import channel_is_frozen, load_groups_by_id
 from app.services.operator import get_operator_user_id, select_operator_channels
 from app.services.publish import publish_summary_text
 from app.services.scraper_jobs import create_job, has_active_sync_job

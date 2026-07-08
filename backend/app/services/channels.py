@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import time
 import uuid
 from datetime import datetime
 from typing import Any
@@ -13,8 +12,6 @@ from sqlmodel import Session, col, func, select
 from app.models_tg import Channel, Post
 from app.services.channel_photos import delete_cached_photo
 from app.services.channel_setting_groups import (
-    INHERITED_SNAKE_FIELDS,
-    apply_group_fields,
     ensure_default_group,
     get_group_for_channel,
     get_or_create_restricted_group,
@@ -22,11 +19,13 @@ from app.services.channel_setting_groups import (
     reject_inherited_channel_fields,
     update_default_group_sync_settings,
 )
-from app.services.channel_tags import normalize_channel_tags, reject_reserved_virtual_group_tags
+from app.services.channel_tags import (
+    normalize_channel_tags,
+    reject_reserved_virtual_group_tags,
+)
 from app.services.serialization import channel_to_camel, normalize_body
 from app.services.sync_meta import touch_sync
 from app.services.sync_schedule import (
-    compute_next_dynamic_sync_at_from_last_updated,
     compute_next_regular_sync_at_from_last_updated,
 )
 
@@ -184,7 +183,7 @@ def apply_channel_fields(
     ch: Channel,
     body: dict[str, Any],
     *,
-    session: Session | None = None,
+    session: Session | None = None,  # noqa: ARG001
 ) -> None:
     reject_inherited_channel_fields(body)
     normalized = normalize_body(body)
@@ -197,7 +196,11 @@ def apply_channel_fields(
             ),
         )
     for key, value in normalized.items():
-        if key in Channel.model_fields and key not in ("id", "user_id", "setting_group_id"):
+        if key in Channel.model_fields and key not in (
+            "id",
+            "user_id",
+            "setting_group_id",
+        ):
             if key == "tags":
                 reject_reserved_virtual_group_tags(value)
                 value = normalize_channel_tags(value)
@@ -381,7 +384,9 @@ def bulk_update_channel_tags(
         channel.tags = normalize_channel_tags(raw_tags)
         channel.updated_at = datetime.utcnow()
         session.add(channel)
-        updated_rows.append(channel_to_camel(channel, group=groups_by_id.get(channel.setting_group_id)))
+        updated_rows.append(
+            channel_to_camel(channel, group=groups_by_id.get(channel.setting_group_id))
+        )
 
     session.commit()
     touch_sync(session, "channels")

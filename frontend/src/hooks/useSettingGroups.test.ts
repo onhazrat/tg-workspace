@@ -1,8 +1,7 @@
-import { QueryClient } from "@tanstack/react-query"
 import { describe, expect, it } from "bun:test"
-
-import { sortSettingGroupsForDisplay } from "@/lib/channels/setting-groups"
+import { QueryClient } from "@tanstack/react-query"
 import { queryKeys } from "@/hooks/queryKeys"
+import { sortSettingGroupsForDisplay } from "@/lib/channels/setting-groups"
 import type { ChannelSettingGroup } from "@/types"
 
 const mockGroups: ChannelSettingGroup[] = [

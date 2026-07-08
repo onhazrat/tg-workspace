@@ -26,7 +26,7 @@ repos:
     rev: bbaefadf97b0ec5fdc942684b647f1a6ab250274 # v1.46.0
     hooks:
       - id: typos
-        args: [--force-exclude]
+        args: [--force-exclude, --config, _typos.toml]
   - repo: local
     hooks:
       - id: local-biome-check
@@ -52,14 +52,14 @@ repos:
 
       - id: local-mypy
         name: mypy check
-        entry: uv run mypy backend/app
+        entry: bash -c 'cd backend && uv run mypy app'
         require_serial: true
         language: unsupported
         pass_filenames: false
 
       - id: local-ty
         name: ty check
-        entry: uv run ty check backend/app
+        entry: bash -c 'cd backend && uv run ty check app'
         require_serial: true
         language: unsupported
         pass_filenames: false

@@ -165,11 +165,15 @@ def test_setting_groups_block_reserved_names_and_deletion(
     restricted_group = next(group for group in listed if group["name"] == "Restricted")
     frozen_group = next(group for group in listed if group["name"] == "Frozen")
     slow_feed = next(group for group in listed if group["name"] == "Slow feed")
-    high_velocity = next(
-        group for group in listed if group["name"] == "High velocity"
-    )
+    high_velocity = next(group for group in listed if group["name"] == "High velocity")
 
-    for reserved_name in ("Frozen", "Restricted", "default", "Slow feed", "High velocity"):
+    for reserved_name in (
+        "Frozen",
+        "Restricted",
+        "default",
+        "Slow feed",
+        "High velocity",
+    ):
         created = client.post(
             f"{PREFIX}/setting-groups",
             json={"name": reserved_name},
@@ -256,7 +260,11 @@ def test_bulk_sync_settings_updates_default_group_only(client: TestClient) -> No
 
     all_channels = client.patch(
         f"{PREFIX}/channels/bulk-sync-settings",
-        json={"channelIds": None, "regularSyncEnabled": False, "autoSyncIntervalMinutes": 120},
+        json={
+            "channelIds": None,
+            "regularSyncEnabled": False,
+            "autoSyncIntervalMinutes": 120,
+        },
         headers=headers,
     )
     assert all_channels.status_code == 200

@@ -183,6 +183,25 @@ export const BotInfoRequestSchema = {
     title: 'BotInfoRequest'
 } as const;
 
+export const BulkChannelSettingGroupRequestSchema = {
+    properties: {
+        channelIds: {
+            items: {
+                type: 'string'
+            },
+            type: 'array',
+            title: 'Channelids'
+        },
+        settingGroupId: {
+            type: 'string',
+            title: 'Settinggroupid'
+        }
+    },
+    type: 'object',
+    required: ['channelIds', 'settingGroupId'],
+    title: 'BulkChannelSettingGroupRequest'
+} as const;
+
 export const BulkChannelTagUpdateSchema = {
     properties: {
         channelId: {
@@ -1410,6 +1429,101 @@ export const ScraperRuntimeSettingsSchema = {
     type: 'object',
     required: ['maxPostsPerChannel', 'iterationLimit'],
     title: 'ScraperRuntimeSettings'
+} as const;
+
+export const SettingGroupWriteRequestSchema = {
+    properties: {
+        name: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Name'
+        },
+        regularSyncEnabled: {
+            anyOf: [
+                {
+                    type: 'boolean'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Regularsyncenabled'
+        },
+        dynamicSyncEnabled: {
+            anyOf: [
+                {
+                    type: 'boolean'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Dynamicsyncenabled'
+        },
+        autoSyncIntervalMinutes: {
+            anyOf: [
+                {
+                    type: 'integer'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Autosyncintervalminutes'
+        },
+        dynamicSyncExpectedPosts: {
+            anyOf: [
+                {
+                    type: 'integer'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Dynamicsyncexpectedposts'
+        },
+        autoFollowForwarded: {
+            anyOf: [
+                {
+                    type: 'boolean'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Autofollowforwarded'
+        },
+        isFrozen: {
+            anyOf: [
+                {
+                    type: 'boolean'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Isfrozen'
+        },
+        isUnavailableOnWebView: {
+            anyOf: [
+                {
+                    type: 'boolean'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Isunavailableonwebview'
+        }
+    },
+    type: 'object',
+    title: 'SettingGroupWriteRequest'
 } as const;
 
 export const StartSyncJobRequestSchema = {

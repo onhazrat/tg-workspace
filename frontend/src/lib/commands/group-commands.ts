@@ -83,21 +83,13 @@ export async function moveSelectedChannelsToSettingGroup(
   )
 }
 
-
 export function buildGroupCommands(): CommandDef[] {
   return [
     {
       id: "filter-channels-by-setting-group",
       kind: "entity-root",
       label: "Filter Channels by Group",
-      keywords: [
-        "channel",
-        "group",
-        "filter",
-        "setting",
-        "sync",
-        "preset",
-      ],
+      keywords: ["channel", "group", "filter", "setting", "sync", "preset"],
       group: "Channels",
       entityFlow: "filter-by-setting-group",
       run: (ctx, payload) => {

@@ -1,3 +1,26 @@
-# Captured Telegram web-view HTML contains intentional class names and base64 tokens.
 [files]
-extend-exclude = ["backend/tests/fixtures/live/**"]
+extend-exclude = [
+    ".cursor/",
+    "backend/tests/fixtures/live/",
+    "img/",
+    "uv.lock",
+    "bun.lock",
+    "backend/coverage/",
+    "backend/htmlcov/",
+    "frontend/dist/",
+    "frontend/public/assets/images/",
+]
+
+[default]
+extend-ignore-re = [
+    "@[a-zA-Z0-9](?:-?[a-zA-Z0-9])*",
+    "Bump certifi ",
+]
+
+[default.extend-identifiers]
+alls = "alls"
+AIMD = "AIMD"
+
+[default.extend-words]
+alls = "alls"
+AIMD = "AIMD"

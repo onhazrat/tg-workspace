@@ -12,6 +12,8 @@ github-actions = [
 
 [tool.typos.files]
 extend-exclude = [
+    ".cursor/",
+    "backend/tests/fixtures/live/",
     "img/",
     "uv.lock",
     "bun.lock",
@@ -19,6 +21,7 @@ extend-exclude = [
     "backend/htmlcov/",
     "frontend/dist/",
     "frontend/public/assets/images/",
+    ".cursor/",
 ]
 
 [tool.typos.default]
@@ -32,6 +35,16 @@ extend-ignore-re = [
 [tool.typos.default.extend-identifiers]
 alls = "alls"
 AIMD = "AIMD"
+
+[tool.typos.default.extend-words]
+alls = "alls"
+AIMD = "AIMD"
+
+[tool.ty.terminal]
+error-on-warning = true
+
+[tool.ty.rules]
+deprecated = "ignore"
 
 [tool.mypy]
 strict = true
