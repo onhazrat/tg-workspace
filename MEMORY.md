@@ -28,8 +28,8 @@ Self-hosted Telegram channel summarizer. Migrated from browser-heavy `TG-Summari
 - **Tag UI:** `TagContext`, `TagConfig`, `TagView`, `PasteTagsModal`.
 - **API clients (ADR-006):** hand-written `frontend/src/api/` (summarizer); generated `frontend/src/client/` (admin/auth).
 - **Data layer (frontend):** `repository.ts` API-first → `cache.ts` (IndexedDB).
-- **uv** + **bun**. **Playwright E2E** in `frontend/tests/summarizer.spec.ts` (~100+ tests).
-- **CI/CD:** GitHub-hosted tests on push; self-hosted deploy — [deployment.md](deployment.md). **Migrations on deploy:** `prestart` → `alembic upgrade head`.
+- **uv** + **bun**. **Bun unit tests** (`bun:test`) in `frontend/src/**/*.test.ts(x)` — `bun run test:unit`. **Playwright E2E** in `frontend/tests/` — `bun run test` (~100+ tests).
+- **CI/CD:** GitHub-hosted tests on push; self-hosted deploy — [deployment.md](deployment.md). Workflows: `test-backend`, **`test-frontend-unit`**, `playwright`, `test-docker-compose`, `pre-commit` (PR only), `zizmor`. **Migrations on deploy:** `prestart` → `alembic upgrade head`.
 
 ### Key API surfaces
 
@@ -88,6 +88,8 @@ Self-hosted Telegram channel summarizer. Migrated from browser-heavy `TG-Summari
 13. **Setting groups performance (2026-07-07)** — `GET /setting-groups` must not load all channel ORM rows (orphan IDs via SQL DISTINCT); `list_setting_groups` must **`commit()` after `ensure_builtin_groups`** even when only `flush()` ran (gating on `session.new` alone rolls back built-ins). Frontend: shared React Query cache; stale-while-revalidate in panel.
 14. **Trim channel selection (2026-07-08)** — shrink-only; all globally selected channels ranked; reuses `sortChannelsForGrid`; shared helper + unit + Playwright tests.
 15. **ChannelGrid two-row controls (2026-07-08)** — tag chips on row 1; AI-prompt-context + filter/sort/trim pills on row 2.
+16. **Frontend unit tests in CI (2026-07-08)** — `bun run test:unit` runs `bun:test` on `frontend/src/**/*.test.ts(x)`; separate from Playwright (`bun run test`). Workflow: [`.github/workflows/test-frontend-unit.yml`](.github/workflows/test-frontend-unit.yml); path-filtered on `frontend/**`.
+17. **Prek baseline on main (2026-07-08)** — full `prek run --all-files` green; frontend Biome-formatted; OpenAPI client regen; SQLAlchemy typing fixes in `operator.py` / `channel_setting_groups.py`; [`_typos.toml`](_typos.toml) for spell-check excludes (`.cursor/`, live HTML fixtures).
 
 ### Explicitly rejected / deferred
 
@@ -114,9 +116,10 @@ Self-hosted Telegram channel summarizer. Migrated from browser-heavy `TG-Summari
 
 - **Native dev:** `uv sync` → `alembic upgrade head` → uvicorn :8000; `bun run dev` :5173. **`POSTGRES_DB=app`**.
 - **Alembic head:** `n6o7p8q9r0s1` — built-in Slow feed/High velocity groups + unique group names (after `l4m5…` setting groups, `m5n6…` reserved consolidation, `k3l4…` post media). Linear chain; run `alembic upgrade head` before relying on setting groups or `post.media`.
-- **Pre-commit:** `uv run prek run --all-files`; `bun run lint` (Biome). **Avoid global lint autofix** when scoping changes.
-- **Biome footgun (2026-07-08):** frontend code on `main` is **not** Biome-clean (files carry pre-existing formatter findings; direct pushes to main skip the PR-only auto-format). Use the **pinned** binary via **`bun run biome`** (2.3.14) — **never `npx @biomejs/biome`** (pulls a newer version → whole-file reformat). Do **not** run `biome --write` on a whole file for a scoped change; verify a change is format-neutral by diffing Biome findings against the `HEAD` version instead. Note `bun`'s global cache makes `frontend/node_modules` look empty even when deps resolve.
-- **Local dev checks for scoped frontend edits:** `bun run tsc -p tsconfig.build.json --noEmit` (fast typecheck) is the meaningful gate; Playwright E2E requires the full Docker stack and CI runs it automatically on push to main.
+- **Pre-commit (prek):** install once per clone: `cd backend && uv run prek install -f` → `.git/hooks/pre-commit`. Manual full sweep: `cd backend && uv run prek run --all-files`. **`git commit` runs prek automatically** on staged/changed files (not identical to `--all-files`; hooks with `pass_filenames: false` like mypy/ty/SDK-gen are repo-scoped). Config: [`.pre-commit-config.yaml`](.pre-commit-config.yaml); mypy/ty run from `backend/`; typos uses [`_typos.toml`](_typos.toml).
+- **Biome:** use pinned **`bun run biome`** (2.3.14 via frontend devDep) — **never `npx @biomejs/biome`** (pulls newer version → whole-file reformat). `bun run lint` runs Biome with `--write --unsafe` (auto-fix). Main is Biome-clean as of prek baseline (2026-07-08).
+- **Local dev checks for scoped frontend edits:** `bun run test:unit` (fast), `bun run tsc -p tsconfig.build.json --noEmit` (typecheck). Playwright E2E needs full Docker stack; CI runs on push to main.
+- **CI quality gaps (2026-07-08, not yet fixed):** `pre-commit` workflow runs on **PRs only** — direct pushes to `main` skip it. `deploy-staging` has no `needs:` on test jobs. `bun run lint` is fix-mode, not check-only.
 - **Playwright local (Cursor sandbox):** use **`PLAYWRIGHT_CHANNEL=chrome`** or Docker. Requires backend on :8000 + `alembic upgrade head`.
 - **Playwright CI:** push to main always runs tests (paths-filter bypass on push).
 - **E2E tag tests:** `channelHasTag` must handle structured tag objects `{ name }`.
@@ -146,7 +149,8 @@ Self-hosted Telegram channel summarizer. Migrated from browser-heavy `TG-Summari
 - Dynamic sync v1.1, Open Graph, SettingsView split, mobile summarizer.
 - Discover bulk follow, preview card, dismiss persistence, auto-follow suggest mode.
 - Per-channel sync toggles on ChannelCard (removed; use setting groups).
+- **CI hardening:** pre-commit on push to main, deploy `needs:` test jobs, split `lint` vs `lint:fix`.
 
 ## Session log
 
-- **2026-07-08:** Memory sync — rolled setting-groups perf/CI lessons into stable sections; session log trimmed.
+- **2026-07-08:** Prek hook install + full baseline cleanup (`489f8b5`); frontend unit tests wired to CI (`755c5e4`); quality-gate gap analysis documented.
