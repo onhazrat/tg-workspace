@@ -105,6 +105,9 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
   const [trimCount, setTrimCount] = useState(() => {
     return localStorage.getItem("channelGrid_trimCount") ?? ""
   })
+  const [showSortRank, setShowSortRank] = useState(() => {
+    return localStorage.getItem("channelGrid_showSortRank") === "true"
+  })
 
   useEffect(() => {
     localStorage.setItem("channelGrid_sortBy", sortBy)
@@ -119,6 +122,10 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
       localStorage.setItem("channelGrid_trimCount", trimCount)
     }
   }, [trimCount])
+
+  useEffect(() => {
+    localStorage.setItem("channelGrid_showSortRank", String(showSortRank))
+  }, [showSortRank])
 
   const {
     proxyEnabled,
@@ -217,6 +224,32 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
       sortDirection,
     ],
   )
+
+  const selectedTrimRanks = useMemo(() => {
+    const selected = channels.filter((channel) =>
+      selectedChannels.has(channel.name),
+    )
+    const sorted = sortChannelsForGrid({
+      channels: selected,
+      channelStats,
+      postsInScopeCounts,
+      selectedChannels,
+      sortBy,
+      sortDirection,
+    })
+    const ranks = new Map<string, number>()
+    sorted.forEach((channel, index) => {
+      ranks.set(channel.name, index + 1)
+    })
+    return ranks
+  }, [
+    channelStats,
+    channels,
+    postsInScopeCounts,
+    selectedChannels,
+    sortBy,
+    sortDirection,
+  ])
 
   const parsedTrimCount = Number.parseInt(trimCount, 10)
   const isTrimCountValid =
@@ -1052,6 +1085,19 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
                       </TooltipContent>
                     </Tooltip>
                   </div>
+                  <div className="h-4 w-px bg-app-ink/10" />
+                  <label className="flex items-center gap-1.5 text-[10px] font-semibold text-app-ink/70">
+                    <input
+                      type="checkbox"
+                      checked={showSortRank}
+                      onChange={(event) =>
+                        setShowSortRank(event.target.checked)
+                      }
+                      data-testid="channel-show-sort-rank"
+                      className="h-3 w-3 accent-app-ink"
+                    />
+                    Show sort rank
+                  </label>
                 </div>
               </div>
             </div>
@@ -1214,6 +1260,11 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
               channel={channel}
               handleRemoveChannel={handleRemoveChannel}
               handleResetAndSync={handleResetAndSync}
+              sortRank={
+                showSortRank && selectedChannels.has(channel.name)
+                  ? selectedTrimRanks.get(channel.name)
+                  : undefined
+              }
             />
           ))}
 

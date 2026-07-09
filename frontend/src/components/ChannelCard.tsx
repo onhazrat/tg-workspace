@@ -50,12 +50,14 @@ interface ChannelCardProps {
   channel: Channel
   handleRemoveChannel: (channel: Channel) => void
   handleResetAndSync: (channel: Channel) => void
+  sortRank?: number
 }
 
 export const ChannelCard: React.FC<ChannelCardProps> = ({
   channel,
   handleRemoveChannel,
   handleResetAndSync,
+  sortRank,
 }) => {
   const {
     channelStats,
@@ -330,6 +332,25 @@ export const ChannelCard: React.FC<ChannelCardProps> = ({
             <Clock size={10} />
             <span>#{syncQueueIndex + 1}</span>
           </div>
+        )}
+
+        {sortRank != null && (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <div
+                data-testid="channel-sort-rank"
+                className="bg-app-ink/5 text-app-ink/60 border border-app-ink/10 text-[9px] font-bold px-1.5 py-0.5 rounded-full tabular-nums shadow-sm cursor-help"
+              >
+                #{sortRank}
+              </div>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>
+                Rank {sortRank} among selected channels by current sort order
+                (Trim keeps ranks 1–N)
+              </p>
+            </TooltipContent>
+          </Tooltip>
         )}
 
         {channel.isUnavailableOnWebView && (
