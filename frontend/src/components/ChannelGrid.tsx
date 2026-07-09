@@ -51,6 +51,7 @@ import {
   sortSettingGroupsForDisplay,
 } from "@/lib/channels/setting-groups"
 import {
+  buildPostsInScopeCounts,
   type ChannelGridSortOption,
   sortChannelsForGrid,
 } from "@/lib/channels/sort-channels-for-grid"
@@ -138,6 +139,7 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
     handleScrapeSelected,
     handleScrapeAll,
     addToSyncQueue,
+    filteredPosts,
   } = useScraper()
 
   const [inlineChannelName, setInlineChannelName] = useState("")
@@ -191,16 +193,29 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
     return result
   }, [channels, channelSearch, selectedLanguageFilter, selectedGroupFilter])
 
+  const postsInScopeCounts = useMemo(
+    () => buildPostsInScopeCounts(filteredPosts),
+    [filteredPosts],
+  )
+
   const sortedFilteredChannels = useMemo(
     () =>
       sortChannelsForGrid({
         channels: filteredChannels,
         channelStats,
+        postsInScopeCounts,
         selectedChannels,
         sortBy,
         sortDirection,
       }),
-    [channelStats, filteredChannels, selectedChannels, sortBy, sortDirection],
+    [
+      channelStats,
+      filteredChannels,
+      postsInScopeCounts,
+      selectedChannels,
+      sortBy,
+      sortDirection,
+    ],
   )
 
   const parsedTrimCount = Number.parseInt(trimCount, 10)
@@ -217,6 +232,7 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
     applyTrimChannelSelection({
       channels,
       channelStats,
+      postsInScopeCounts,
       selectedChannels,
       sortBy,
       sortDirection,
@@ -228,6 +244,7 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
     channels,
     isTrimDisabled,
     parsedTrimCount,
+    postsInScopeCounts,
     selectedChannels,
     setSelectedChannels,
     sortBy,
@@ -960,6 +977,9 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
                           Activity Rate
                         </SelectItem>
                         <SelectItem value="total_posts">Total Posts</SelectItem>
+                        <SelectItem value="posts_in_scope">
+                          Posts in Scope
+                        </SelectItem>
                         <SelectItem value="channel_id">Channel ID</SelectItem>
                         <SelectItem value="channel_name">
                           Channel Name

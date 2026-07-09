@@ -18,7 +18,10 @@ import {
   bulkResetSyncAllChannels,
   resetAndSyncChannel,
 } from "@/lib/channels/reset-sync"
-import { getChannelGridSortFromStorage } from "@/lib/channels/sort-channels-for-grid"
+import {
+  buildPostsInScopeCounts,
+  getChannelGridSortFromStorage,
+} from "@/lib/channels/sort-channels-for-grid"
 import { applyTrimChannelSelection } from "@/lib/channels/trim-selected-channels"
 import { updateChannelStartId } from "@/lib/channels/update-start-id"
 import { copyChannelTelegramChatId } from "@/lib/commands/channel-telegram-chat-id-commands"
@@ -178,6 +181,7 @@ export function buildExtendedCommands(): CommandDef[] {
           applyTrimChannelSelection({
             channels: ctx.channels,
             channelStats: ctx.channelStats,
+            postsInScopeCounts: buildPostsInScopeCounts(ctx.filteredPosts),
             selectedChannels: ctx.selectedChannels,
             sortBy,
             sortDirection,

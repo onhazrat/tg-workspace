@@ -1,8 +1,9 @@
-import type { Channel, ChannelStats } from "@/types"
+import type { Channel, ChannelStats, Post } from "@/types"
 
 export type ChannelGridSortOption =
   | "activity_rate"
   | "total_posts"
+  | "posts_in_scope"
   | "last_updated"
   | "channel_id"
   | "channel_name"
@@ -15,6 +16,7 @@ export type ChannelGridSortOption =
 export const CHANNEL_GRID_SORT_LABELS: Record<ChannelGridSortOption, string> = {
   activity_rate: "Activity Rate",
   total_posts: "Total Posts",
+  posts_in_scope: "Posts in Scope",
   last_updated: "Last Updated",
   channel_id: "Channel ID",
   channel_name: "Channel Name",
@@ -86,10 +88,21 @@ const getSelectionTier = (
   return 2
 }
 
+export function buildPostsInScopeCounts(
+  filteredPosts: Post[],
+): Record<string, number> {
+  const counts: Record<string, number> = {}
+  for (const post of filteredPosts) {
+    counts[post.channelName] = (counts[post.channelName] ?? 0) + 1
+  }
+  return counts
+}
+
 const compareBySortOption = (
   a: Channel,
   b: Channel,
   channelStats: Record<string, ChannelStats>,
+  postsInScopeCounts: Record<string, number>,
   sortBy: ChannelGridSortOption,
 ): number => {
   if (sortBy === "activity_rate") {
@@ -100,6 +113,11 @@ const compareBySortOption = (
   if (sortBy === "total_posts") {
     const aCount = channelStats[a.name]?.count || 0
     const bCount = channelStats[b.name]?.count || 0
+    return aCount - bCount
+  }
+  if (sortBy === "posts_in_scope") {
+    const aCount = postsInScopeCounts[a.name] ?? 0
+    const bCount = postsInScopeCounts[b.name] ?? 0
     return aCount - bCount
   }
   if (sortBy === "last_updated") {
@@ -134,6 +152,7 @@ const compareBySortOption = (
 export type SortChannelsForGridParams = {
   channels: Channel[]
   channelStats: Record<string, ChannelStats>
+  postsInScopeCounts?: Record<string, number>
   selectedChannels: Set<string>
   sortBy: ChannelGridSortOption
   sortDirection: "asc" | "desc"
@@ -142,6 +161,7 @@ export type SortChannelsForGridParams = {
 export function sortChannelsForGrid({
   channels,
   channelStats,
+  postsInScopeCounts = {},
   selectedChannels,
   sortBy,
   sortDirection,
@@ -154,7 +174,13 @@ export function sortChannelsForGrid({
       return aGroup - bGroup
     }
 
-    let comparison = compareBySortOption(a, b, channelStats, sortBy)
+    let comparison = compareBySortOption(
+      a,
+      b,
+      channelStats,
+      postsInScopeCounts,
+      sortBy,
+    )
     if (comparison === 0) {
       const aName = a.displayName || a.name
       const bName = b.displayName || b.name

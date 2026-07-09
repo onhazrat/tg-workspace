@@ -24,6 +24,7 @@ export type TrimSelectedChannelsResult =
 export type TrimSelectedChannelsParams = {
   channels: Channel[]
   channelStats: Record<string, ChannelStats>
+  postsInScopeCounts?: Record<string, number>
   selectedChannels: Set<string>
   sortBy: ChannelGridSortOption
   sortDirection: "asc" | "desc"
@@ -33,6 +34,7 @@ export type TrimSelectedChannelsParams = {
 export function trimSelectedChannelsToCount({
   channels,
   channelStats,
+  postsInScopeCounts,
   selectedChannels,
   sortBy,
   sortDirection,
@@ -52,6 +54,7 @@ export function trimSelectedChannelsToCount({
   const sorted = sortChannelsForGrid({
     channels: candidates,
     channelStats,
+    postsInScopeCounts,
     selectedChannels,
     sortBy,
     sortDirection,
