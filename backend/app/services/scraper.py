@@ -115,6 +115,19 @@ def _extract_channel_photo_url(soup: BeautifulSoup) -> str | None:
     return None
 
 
+def _decode_widget_data_view(encoded: str) -> dict[str, Any] | None:
+    """Decode Telegram widget ``data-view`` (unpadded base64 JSON)."""
+    padded = encoded + "=" * (-len(encoded) % 4)
+    try:
+        payload = base64.b64decode(padded).decode("utf-8")
+        parsed = json.loads(payload)
+    except (ValueError, json.JSONDecodeError):
+        return None
+    if not isinstance(parsed, dict):
+        return None
+    return parsed
+
+
 def _extract_telegram_chat_id(soup: BeautifulSoup) -> int | None:
     widget = soup.select_one(".tgme_widget_message[data-view]")
     if not widget:
@@ -122,12 +135,8 @@ def _extract_telegram_chat_id(soup: BeautifulSoup) -> int | None:
     encoded = _attr_str(widget.get("data-view"))
     if not encoded:
         return None
-    try:
-        payload = base64.b64decode(encoded).decode("utf-8")
-        parsed = json.loads(payload)
-    except (ValueError, json.JSONDecodeError):
-        return None
-    if not isinstance(parsed, dict):
+    parsed = _decode_widget_data_view(encoded)
+    if not parsed:
         return None
     chat_id = parsed.get("c")
     if isinstance(chat_id, int):

@@ -181,14 +181,7 @@ def channel_names_for_operator(
     }
 
 
-def apply_channel_fields(
-    ch: Channel,
-    body: dict[str, Any],
-    *,
-    session: Session | None = None,  # noqa: ARG001
-) -> None:
-    reject_inherited_channel_fields(body)
-    normalized = normalize_body(body)
+def _reject_server_managed_channel_fields(normalized: dict[str, Any]) -> None:
     blocked_server_managed = sorted(
         key for key in normalized if key in SERVER_MANAGED_CHANNEL_FIELDS
     )
@@ -198,6 +191,17 @@ def apply_channel_fields(
             status_code=400,
             detail=f"Server-managed channel fields cannot be updated: {blocked}",
         )
+
+
+def apply_channel_fields(
+    ch: Channel,
+    body: dict[str, Any],
+    *,
+    session: Session | None = None,  # noqa: ARG001
+) -> None:
+    reject_inherited_channel_fields(body)
+    normalized = normalize_body(body)
+    _reject_server_managed_channel_fields(normalized)
     if "setting_group_id" in normalized:
         raise HTTPException(
             status_code=400,
@@ -244,6 +248,7 @@ def upsert_channel(
     user_id: uuid.UUID | None,
 ) -> dict[str, Any]:
     normalized = normalize_body(body)
+    _reject_server_managed_channel_fields(normalized)
     ch = session.get(Channel, channel_id)
     if ch:
         reject_inherited_channel_fields(body)
