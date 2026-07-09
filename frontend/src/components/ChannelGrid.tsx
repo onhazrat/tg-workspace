@@ -39,6 +39,7 @@ import {
   removeTagsByName,
 } from "@/lib/channels/channel-tag-model"
 import {
+  filterTagsBySearch,
   filterUntaggedChannels,
   sortTagsForChannelGrid,
   UNTAGGED_TAG_ID,
@@ -141,6 +142,7 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
 
   const [inlineChannelName, setInlineChannelName] = useState("")
   const [channelSearch, setChannelSearch] = useState("")
+  const [tagSearch, setTagSearch] = useState("")
   const [selectedLanguageFilter, setSelectedLanguageFilter] =
     useState<string>("")
   const { channelGroupFilter, setChannelGroupFilter } =
@@ -264,6 +266,16 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
     })
     return sortTagsForChannelGrid(Array.from(tags), channels, selectedChannels)
   }, [channels, selectedChannels])
+
+  const visibleTags = useMemo(
+    () => filterTagsBySearch(allTags, tagSearch),
+    [allTags, tagSearch],
+  )
+
+  const showUntaggedTagChip = useMemo(
+    () => filterTagsBySearch([UNTAGGED_TAG_LABEL], tagSearch).length > 0,
+    [tagSearch],
+  )
 
   const untaggedChannelNames = useMemo(
     () => filterUntaggedChannels(channels).map((c) => c.name),
@@ -588,7 +600,7 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
       {/* Unified Control Bar */}
       <div className="bg-app-card rounded-xl border border-app-ink/10 shadow-sm p-4 flex flex-col gap-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div className="flex flex-col sm:flex-row flex-1 gap-2 max-w-2xl">
+          <div className="flex flex-col sm:flex-row flex-1 gap-2 max-w-3xl">
             {/* Modern Input */}
             <div className="relative flex-1" id="tour-add-channel">
               <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -618,6 +630,17 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
                 value={channelSearch}
                 onChange={(e) => setChannelSearch(e.target.value)}
                 placeholder="Search channels..."
+                className="w-full bg-app-muted/50 border border-app-ink/10 rounded-lg py-2 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-app-ink/20 transition-all"
+              />
+            </div>
+            {/* Search Tags Input */}
+            <div className="relative flex-1">
+              <input
+                type="text"
+                value={tagSearch}
+                onChange={(e) => setTagSearch(e.target.value)}
+                placeholder="Search tags..."
+                data-testid="channel-tag-search"
                 className="w-full bg-app-muted/50 border border-app-ink/10 rounded-lg py-2 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-app-ink/20 transition-all"
               />
             </div>
@@ -787,7 +810,7 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
 
             <div className="flex flex-col gap-4">
               <div className="flex flex-wrap gap-2">
-                {allTags.map((tag) => {
+                {visibleTags.map((tag) => {
                   const channelsWithTag = channels
                     .filter((c) => getTagNames(c.tags).includes(tag))
                     .map((c) => c.name)
@@ -821,25 +844,27 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
                     </button>
                   )
                 })}
-                <button
-                  type="button"
-                  key={UNTAGGED_TAG_ID}
-                  data-testid="channel-tag-untagged"
-                  onClick={() => toggleTagSelection(UNTAGGED_TAG_ID)}
-                  className={`text-[9px] font-bold px-2 py-1 rounded-md transition-all flex items-center gap-1.5 ${
-                    isUntaggedTagAllSelected
-                      ? "bg-app-ink text-app-bg"
-                      : isUntaggedTagPartial
-                        ? "bg-app-ink/20 text-app-ink"
-                        : "bg-app-muted/50 text-app-ink/60 hover:bg-app-ink/10 hover:text-app-ink"
-                  }`}
-                >
-                  <Tag size={10} />
-                  {UNTAGGED_TAG_LABEL}
-                  <span className="opacity-60 text-[8px]">
-                    ({untaggedTagSelectedCount}/{untaggedChannelNames.length})
-                  </span>
-                </button>
+                {showUntaggedTagChip && (
+                  <button
+                    type="button"
+                    key={UNTAGGED_TAG_ID}
+                    data-testid="channel-tag-untagged"
+                    onClick={() => toggleTagSelection(UNTAGGED_TAG_ID)}
+                    className={`text-[9px] font-bold px-2 py-1 rounded-md transition-all flex items-center gap-1.5 ${
+                      isUntaggedTagAllSelected
+                        ? "bg-app-ink text-app-bg"
+                        : isUntaggedTagPartial
+                          ? "bg-app-ink/20 text-app-ink"
+                          : "bg-app-muted/50 text-app-ink/60 hover:bg-app-ink/10 hover:text-app-ink"
+                    }`}
+                  >
+                    <Tag size={10} />
+                    {UNTAGGED_TAG_LABEL}
+                    <span className="opacity-60 text-[8px]">
+                      ({untaggedTagSelectedCount}/{untaggedChannelNames.length})
+                    </span>
+                  </button>
+                )}
               </div>
 
               <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3">

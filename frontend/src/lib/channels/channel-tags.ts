@@ -34,6 +34,13 @@ export function collectAllChannelTags(channels: Channel[]): string[] {
   return Array.from(tags).sort((a, b) => a.localeCompare(b))
 }
 
+/** Case-insensitive substring filter for the Channels tab tag chip bar. */
+export function filterTagsBySearch(tags: string[], query: string): string[] {
+  const normalized = query.trim().toLowerCase()
+  if (!normalized) return tags
+  return tags.filter((tag) => tag.toLowerCase().includes(normalized))
+}
+
 type TagSelectionGroup = "fully" | "partial" | "none"
 
 function getTagSelectionGroup(

@@ -3,6 +3,7 @@ import { describe, expect, it } from "bun:test"
 import {
   collectAllChannelTags,
   filterChannelsByTag,
+  filterTagsBySearch,
   filterUntaggedChannels,
   isUntaggedChannel,
   sortTagsForChannelGrid,
@@ -74,6 +75,24 @@ describe("collectAllChannelTags", () => {
       "tech",
       "Tech",
     ])
+  })
+})
+
+describe("filterTagsBySearch", () => {
+  const tags = ["Tech", "daily", "politics", "tech-news"]
+
+  it("returns all tags when query is empty", () => {
+    expect(filterTagsBySearch(tags, "")).toEqual(tags)
+    expect(filterTagsBySearch(tags, "   ")).toEqual(tags)
+  })
+
+  it("filters tags case-insensitively by substring", () => {
+    expect(filterTagsBySearch(tags, "tech")).toEqual(["Tech", "tech-news"])
+    expect(filterTagsBySearch(tags, "DAIL")).toEqual(["daily"])
+  })
+
+  it("returns empty when nothing matches", () => {
+    expect(filterTagsBySearch(tags, "missing")).toEqual([])
   })
 })
 
