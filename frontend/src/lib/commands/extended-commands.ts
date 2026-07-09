@@ -21,6 +21,7 @@ import {
 import { getChannelGridSortFromStorage } from "@/lib/channels/sort-channels-for-grid"
 import { applyTrimChannelSelection } from "@/lib/channels/trim-selected-channels"
 import { updateChannelStartId } from "@/lib/channels/update-start-id"
+import { copyChannelTelegramChatId } from "@/lib/commands/channel-telegram-chat-id-commands"
 import { filterPartialHistoryChannels } from "@/lib/commands/filter-channels"
 import { parseOpenPostInput } from "@/lib/commands/open-post"
 import {
@@ -671,6 +672,9 @@ export async function runChainedChannelEntityPick(
       return "editor"
     case "refresh-metadata-channel":
       await refreshChannelMetadata(channel, ctx)
+      return "done"
+    case "copy-channel-telegram-chat-id":
+      await copyChannelTelegramChatId(channel)
       return "done"
     default:
       return null

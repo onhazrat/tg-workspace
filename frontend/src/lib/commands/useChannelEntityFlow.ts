@@ -1,6 +1,7 @@
 import { getTagNames } from "@/lib/channels/channel-tag-model"
 import { filterPartialHistoryChannels } from "@/lib/commands/filter-channels"
 import type { CommandContext, EntityFlowType } from "@/lib/commands/types"
+import { filterChannelsWithTelegramChatId } from "@/lib/data-transfer/entities/channel"
 import { upsertChannel } from "@/lib/repository"
 import type { Channel } from "@/types"
 
@@ -39,6 +40,8 @@ export function getEntityCandidates(
     case "edit-start-id-channel":
     case "refresh-metadata-channel":
       return ctx.channels
+    case "copy-channel-telegram-chat-id":
+      return filterChannelsWithTelegramChatId(ctx.channels)
     case "remove-tag-channel":
       return ctx.channels.filter(
         (channel) => getTagNames(channel.tags).length > 0,

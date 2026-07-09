@@ -60,6 +60,46 @@ export function channelsToCopyText(channels: Channel[]): string {
   return filterChannelsAll(channels).map(channelToCopyLine).join("\n")
 }
 
+export function filterChannelsWithTelegramChatId(
+  channels: Channel[],
+): Channel[] {
+  return filterChannelsAll(
+    channels.filter((channel) => channel.telegramChatId != null),
+  )
+}
+
+export function channelToTelegramChatIdCopyLine(channel: Channel): string {
+  return String(channel.telegramChatId)
+}
+
+export function channelsToTelegramChatIdsCopyText(channels: Channel[]): string {
+  return filterChannelsWithTelegramChatId(channels)
+    .map(channelToTelegramChatIdCopyLine)
+    .join("\n")
+}
+
+export function channelToNameAndTelegramChatIdTsvLine(
+  channel: Channel,
+): string {
+  return `${channel.name}\t${channel.telegramChatId}`
+}
+
+export function channelsToNameAndTelegramChatIdTsvText(
+  channels: Channel[],
+): string {
+  return filterChannelsWithTelegramChatId(channels)
+    .map(channelToNameAndTelegramChatIdTsvLine)
+    .join("\n")
+}
+
+export async function listChannelsWithTelegramChatIdForFilter(
+  filter: ExportFilter,
+  ctx: CommandContext,
+): Promise<Channel[]> {
+  const channels = await listChannelsForFilter(filter, ctx)
+  return filterChannelsWithTelegramChatId(channels)
+}
+
 export function filterChannelImportRecords(
   records: Channel[],
   filter: ExportFilter,

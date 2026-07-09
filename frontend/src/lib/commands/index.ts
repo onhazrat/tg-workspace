@@ -1,6 +1,7 @@
 export { buildActionCommands } from "./actions"
 export { buildChannelEntityCommands } from "./channel-entities"
 export { buildChannelOpRegistry, buildChannelOpsCommands } from "./channel-ops"
+export { buildChannelTelegramChatIdCommands } from "./channel-telegram-chat-id-commands"
 export { buildDataTransferCommands } from "./data-commands"
 export { buildExtendedCommands } from "./extended-commands"
 export { buildGroupCommands } from "./group-commands"

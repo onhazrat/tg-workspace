@@ -13,12 +13,18 @@ export {
 export {
   applyChannelFilter,
   channelsToCopyText,
+  channelsToNameAndTelegramChatIdTsvText,
+  channelsToTelegramChatIdsCopyText,
   channelToCopyLine,
+  channelToNameAndTelegramChatIdTsvLine,
+  channelToTelegramChatIdCopyLine,
   filterChannelImportRecords,
   filterChannelsAll,
   filterChannelsFrozen,
   filterChannelsSelected,
+  filterChannelsWithTelegramChatId,
   listChannelsForFilter,
+  listChannelsWithTelegramChatIdForFilter,
   upsertChannelRecords,
 } from "./entities/channel"
 export {

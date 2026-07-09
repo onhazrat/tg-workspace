@@ -20,6 +20,7 @@ import {
   buildActionCommands,
   buildChannelEntityCommands,
   buildChannelOpsCommands,
+  buildChannelTelegramChatIdCommands,
   buildDataTransferCommands,
   buildExtendedCommands,
   buildGroupCommands,
@@ -310,6 +311,7 @@ export function useCommandRegistry(): {
       ...buildChannelEntityCommands(),
       ...buildChannelOpsCommands(),
       ...buildDataTransferCommands(),
+      ...buildChannelTelegramChatIdCommands(),
       ...buildExtendedCommands(),
     ]
     return all.filter((command) => !command.when || command.when(context))

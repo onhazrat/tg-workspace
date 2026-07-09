@@ -46,6 +46,7 @@ export type EntityFlowType =
   | "remove-tag-pick"
   | "edit-start-id-channel"
   | "refresh-metadata-channel"
+  | "copy-channel-telegram-chat-id"
   | "delete-summary"
   | "pick-post"
   | "clear-db-table"
