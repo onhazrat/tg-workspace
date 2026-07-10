@@ -24,11 +24,11 @@ import { useScraper } from "../contexts/ScraperContext"
 import { useSettings } from "../contexts/SettingsContext"
 import { useUI } from "../contexts/UIContext"
 import { useApiStatus } from "../hooks/useApiStatus"
+import { replaceCitations } from "../lib/citations/replace-citations"
 import { savePublishLog, saveSummary } from "../lib/repository"
 import { formatDateToLocalISO } from "../lib/utils"
 import { publishSummary } from "../services/telegram"
 import type { PublishLog } from "../types"
-import { CitationHover } from "./CitationHover"
 import { PasteSummaryModal } from "./PasteSummaryModal"
 import { RelativeTime } from "./RelativeTime"
 import { SummaryConfig } from "./SummaryConfig"
@@ -61,14 +61,30 @@ const extractText = (children: React.ReactNode): string => {
   return ""
 }
 
+function useCitedPostResolver() {
+  const { currentSummaryId } = useUI()
+  const { summariesHistory } = useData()
+  const citedPosts =
+    summariesHistory.find((s) => s.id === currentSummaryId)?.citedPosts ?? {}
+
+  return React.useCallback(
+    (channelName: string, postId: number) =>
+      citedPosts[`${channelName}-${postId}`],
+    [citedPosts],
+  )
+}
+
+const CustomMarkdownP = ({ children, ...props }: any) => {
+  const resolvePost = useCitedPostResolver()
+
+  return <p {...props}>{replaceCitations(children, resolvePost)}</p>
+}
+
 const CustomMarkdownLi = ({ node, children, ...props }: any) => {
   const { setSemanticSearchQuery } = useScraper()
-  const { setActiveTab, currentSummaryId } = useUI()
-  const { summariesHistory } = useData()
+  const { setActiveTab } = useUI()
   const { embeddingsEnabled } = useSettings()
-
-  const currentSummary = summariesHistory.find((s) => s.id === currentSummaryId)
-  const citedPosts = currentSummary?.citedPosts || {}
+  const resolvePost = useCitedPostResolver()
 
   // Find if this li contains a nested list
   const hasNestedList = node?.children?.some(
@@ -86,45 +102,6 @@ const CustomMarkdownLi = ({ node, children, ...props }: any) => {
   // For leaf nodes, extract text carefully to avoid getting parent text
   // We only want to extract text from the leaf node itself
   const textContent = extractText(children)
-
-  const replaceCitations = (nodes: React.ReactNode): React.ReactNode => {
-    return React.Children.map(nodes, (child) => {
-      if (typeof child === "string") {
-        const parts: React.ReactNode[] = []
-        let lastIndex = 0
-        const regex = /\[([^\]]+?)\s*#(\d+)\]/g
-        let match
-        while ((match = regex.exec(child)) !== null) {
-          if (match.index > lastIndex) {
-            parts.push(child.substring(lastIndex, match.index))
-          }
-          parts.push(
-            <CitationHover
-              key={`${match.index}-${match[2]}`}
-              channelName={match[1].trim()}
-              postId={parseInt(match[2], 10)}
-              postSnapshot={
-                citedPosts[`${match[1].trim()}-${parseInt(match[2], 10)}`]
-              }
-            />,
-          )
-          lastIndex = match.index + match[0].length
-        }
-        if (lastIndex < child.length) {
-          parts.push(child.substring(lastIndex))
-        }
-        return parts.length > 0 ? parts : child
-      }
-      if (React.isValidElement(child)) {
-        const element = child as React.ReactElement<any>
-        return React.cloneElement(element, {
-          ...element.props,
-          children: replaceCitations(element.props.children),
-        } as any)
-      }
-      return child
-    })
-  }
 
   return (
     <li
@@ -148,12 +125,13 @@ const CustomMarkdownLi = ({ node, children, ...props }: any) => {
       }}
       title={embeddingsEnabled ? "Click to find related posts" : undefined}
     >
-      {replaceCitations(children)}
+      {replaceCitations(children, resolvePost)}
     </li>
   )
 }
 
 const markdownComponents = {
+  p: CustomMarkdownP,
   li: CustomMarkdownLi,
 }
 

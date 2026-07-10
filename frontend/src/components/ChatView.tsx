@@ -13,61 +13,16 @@ import {
   Zap,
 } from "lucide-react"
 import { AnimatePresence, motion } from "motion/react"
-import React, { useState } from "react"
+import type React from "react"
+import { useState } from "react"
 import ReactMarkdown from "react-markdown"
 import { LANGUAGES, MODELS } from "../constants"
 import { useChatContext } from "../contexts/ChatContext"
 import { useRAG } from "../contexts/RAGContext"
 import { useSettings } from "../contexts/SettingsContext"
 import { useUI } from "../contexts/UIContext"
-import { CitationHover } from "./CitationHover"
+import { replaceCitations } from "../lib/citations/replace-citations"
 import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tg-tooltip"
-
-const replaceCitations = (
-  nodes: React.ReactNode,
-  sources: any[] | undefined,
-): React.ReactNode => {
-  return React.Children.map(nodes, (child) => {
-    if (typeof child === "string") {
-      const parts: React.ReactNode[] = []
-      let lastIndex = 0
-      const regex = /\[([^\]]+?)\s*#(\d+)\]/g
-      let match
-      while ((match = regex.exec(child)) !== null) {
-        if (match.index > lastIndex) {
-          parts.push(child.substring(lastIndex, match.index))
-        }
-        const channelName = match[1].trim()
-        const postId = parseInt(match[2], 10)
-        const postSnapshot = sources?.find(
-          (s) => s.channelName === channelName && s.id === postId,
-        )
-
-        parts.push(
-          <CitationHover
-            key={`${match.index}-${match[2]}`}
-            channelName={channelName}
-            postId={postId}
-            postSnapshot={postSnapshot}
-          />,
-        )
-        lastIndex = match.index + match[0].length
-      }
-      if (lastIndex < child.length) {
-        parts.push(child.substring(lastIndex))
-      }
-      return parts.length > 0 ? parts : child
-    }
-    if (React.isValidElement(child)) {
-      const element = child as React.ReactElement<any>
-      return React.cloneElement(element, {
-        ...element.props,
-        children: replaceCitations(element.props.children, sources),
-      } as any)
-    }
-    return child
-  })
-}
 
 const SUGGESTED_PROMPTS_SUMMARY = [
   "Summarize the latest trends in these channels",
@@ -371,12 +326,24 @@ export const ChatView: React.FC = () => {
                     components={{
                       p: ({ node, children, ...props }) => (
                         <p {...props}>
-                          {replaceCitations(children, m.sources)}
+                          {replaceCitations(children, (channelName, postId) =>
+                            m.sources?.find(
+                              (s) =>
+                                s.channelName === channelName &&
+                                s.id === postId,
+                            ),
+                          )}
                         </p>
                       ),
                       li: ({ node, children, ...props }) => (
                         <li {...props}>
-                          {replaceCitations(children, m.sources)}
+                          {replaceCitations(children, (channelName, postId) =>
+                            m.sources?.find(
+                              (s) =>
+                                s.channelName === channelName &&
+                                s.id === postId,
+                            ),
+                          )}
                         </li>
                       ),
                     }}

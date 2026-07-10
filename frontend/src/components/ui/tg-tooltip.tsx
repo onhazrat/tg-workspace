@@ -25,29 +25,50 @@ function Tooltip({
 }
 
 function TooltipTrigger({
-  asChild: _asChild,
+  asChild,
+  children,
   ...props
 }: React.ComponentProps<typeof TooltipPrimitive.Trigger> & {
   asChild?: boolean
 }) {
-  return <TooltipPrimitive.Trigger data-slot="tooltip-trigger" {...props} />
+  if (asChild && React.isValidElement(children)) {
+    return (
+      <TooltipPrimitive.Trigger
+        data-slot="tooltip-trigger"
+        render={children}
+        {...props}
+      />
+    )
+  }
+
+  return (
+    <TooltipPrimitive.Trigger data-slot="tooltip-trigger" {...props}>
+      {children}
+    </TooltipPrimitive.Trigger>
+  )
+}
+
+type TooltipContentProps = React.ComponentProps<typeof TooltipPrimitive.Popup> & {
+  sideOffset?: number
+  side?: React.ComponentProps<typeof TooltipPrimitive.Positioner>["side"]
+  align?: React.ComponentProps<typeof TooltipPrimitive.Positioner>["align"]
 }
 
 function TooltipContent({
   className,
   sideOffset = 0,
-  side: _side,
-  align: _align,
+  side,
+  align,
   children,
   ...props
-}: React.ComponentProps<typeof TooltipPrimitive.Popup> & {
-  sideOffset?: number
-  side?: string
-  align?: string
-}) {
+}: TooltipContentProps) {
   return (
     <TooltipPrimitive.Portal>
-      <TooltipPrimitive.Positioner sideOffset={sideOffset}>
+      <TooltipPrimitive.Positioner
+        sideOffset={sideOffset}
+        side={side}
+        align={align}
+      >
         <TooltipPrimitive.Popup
           data-slot="tooltip-content"
           className={cn(

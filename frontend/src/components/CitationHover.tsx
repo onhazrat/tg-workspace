@@ -48,7 +48,7 @@ export function CitationHover({
 
   return (
     <Tooltip onOpenChange={handleOpenChange} disableHoverablePopup={false}>
-      <TooltipTrigger asChild>
+      <TooltipTrigger asChild delay={150} closeOnClick={false}>
         <span
           onClick={(e) => {
             e.preventDefault()
@@ -62,6 +62,7 @@ export function CitationHover({
       <TooltipContent
         side="top"
         align="center"
+        sideOffset={8}
         className="max-w-md !p-3 shadow-xl pointer-events-auto"
       >
         <div className="flex flex-col gap-2 w-full min-w-0">
