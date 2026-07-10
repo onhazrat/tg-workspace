@@ -54,7 +54,7 @@ export function CitationHover({
             e.preventDefault()
             e.stopPropagation()
           }}
-          className="inline-flex items-center justify-center px-1.5 py-0.5 mx-1 text-[10px] font-mono font-bold uppercase tracking-wider bg-app-ink/10 text-app-ink rounded cursor-help hover:bg-app-ink hover:text-app-bg transition-colors relative z-10"
+          className="inline-flex items-center justify-center px-1.5 py-0.5 mx-1 text-[10px] font-mono font-bold uppercase tracking-wider bg-app-ink/10 text-app-ink rounded cursor-help hover:bg-app-ink hover:text-app-bg transition-colors"
         >
           {channelName} #{postId}
         </span>

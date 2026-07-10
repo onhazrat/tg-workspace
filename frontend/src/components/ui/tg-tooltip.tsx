@@ -54,6 +54,9 @@ type TooltipContentProps = React.ComponentProps<typeof TooltipPrimitive.Popup> &
   align?: React.ComponentProps<typeof TooltipPrimitive.Positioner>["align"]
 }
 
+/** Must live on Positioner so portaled popups beat inline z-10 citation badges. */
+export const TOOLTIP_POSITIONER_Z_CLASS = "z-50"
+
 function TooltipContent({
   className,
   sideOffset = 0,
@@ -68,17 +71,18 @@ function TooltipContent({
         sideOffset={sideOffset}
         side={side}
         align={align}
+        className={TOOLTIP_POSITIONER_Z_CLASS}
       >
         <TooltipPrimitive.Popup
           data-slot="tooltip-content"
           className={cn(
-            "bg-foreground text-background animate-in fade-in-0 zoom-in-95 data-[closed]:animate-out data-[closed]:fade-out-0 data-[closed]:zoom-out-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 z-50 w-fit origin-(--transform-origin) rounded-md px-3 py-1.5 text-xs text-balance",
+            "bg-foreground text-background animate-in fade-in-0 zoom-in-95 data-[closed]:animate-out data-[closed]:fade-out-0 data-[closed]:zoom-out-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 w-fit origin-(--transform-origin) rounded-md px-3 py-1.5 text-xs text-balance",
             className,
           )}
           {...props}
         >
           {children}
-          <TooltipPrimitive.Arrow className="bg-foreground fill-foreground z-50 size-2.5 translate-y-[calc(-50%_-_2px)] rotate-45 rounded-[2px]" />
+          <TooltipPrimitive.Arrow className="bg-foreground fill-foreground size-2.5 translate-y-[calc(-50%_-_2px)] rotate-45 rounded-[2px]" />
         </TooltipPrimitive.Popup>
       </TooltipPrimitive.Positioner>
     </TooltipPrimitive.Portal>
