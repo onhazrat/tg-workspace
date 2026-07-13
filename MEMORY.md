@@ -1,10 +1,10 @@
 # TG Summarizer — Project Memory
 
-> Last synced: 2026-07-09
+> Last synced: 2026-07-13
 
 ## Purpose
 
-Self-hosted Telegram channel summarizer. Migrated from browser-heavy `TG-Summarizer/` (React + Express + IndexedDB) to a **FastAPI + React monorepo** with scraping, scheduling, AI, and PostgreSQL on the server. **Migration Phases 0–7 complete (2026-06-08).** **Dynamic channel sync v1 (2026-07-01)** — [dynamic_channel_sync plan](.cursor/plans/dynamic_channel_sync_77e7db50.plan.md). **Tag tab v1 (2026-07-02)** — [tag_tab_v1 plan](.cursor/plans/tag_tab_v1_cea80474.plan.md). **Post media v1 (2026-07-04)**. **Discover tab v1 (2026-07-06)** — [discover_tab_v1 plan](.cursor/plans/discover_tab_v1_f26ed84d.plan.md). **Channel setting groups v1 + UX v2 (2026-07-07)** — [channel_setting_groups plan](.cursor/plans/channel_setting_groups_89fcc8b4.plan.md), [setting_groups_ux_v2 plan](.cursor/plans/setting_groups_ux_v2_fb1c5766.plan.md). **Trim channel selection (2026-07-08)**. **Channel telegram chat ID v1 (2026-07-08/09)** — [channel_telegram_chat_id plan](.cursor/plans/channel_telegram_chat_id_9fdb00fd.plan.md). Run commands: [README.md](README.md), [development.md](development.md).
+Self-hosted Telegram channel summarizer. Migrated from browser-heavy `TG-Summarizer/` (React + Express + IndexedDB) to a **FastAPI + React monorepo** with scraping, scheduling, AI, and PostgreSQL on the server. **Migration Phases 0–7 complete (2026-06-08).** **Dynamic channel sync v1 (2026-07-01)** — [dynamic_channel_sync plan](.cursor/plans/dynamic_channel_sync_77e7db50.plan.md). **Tag tab v1 (2026-07-02)** — [tag_tab_v1 plan](.cursor/plans/tag_tab_v1_cea80474.plan.md). **Post media v1 (2026-07-04)**. **Discover tab v1 (2026-07-06)** — [discover_tab_v1 plan](.cursor/plans/discover_tab_v1_f26ed84d.plan.md). **Channel setting groups v1 + UX v2 (2026-07-07)** — [channel_setting_groups plan](.cursor/plans/channel_setting_groups_89fcc8b4.plan.md), [setting_groups_ux_v2 plan](.cursor/plans/setting_groups_ux_v2_fb1c5766.plan.md). **Trim channel selection (2026-07-08)**. **Channel telegram chat ID v1 (2026-07-08/09)** — [channel_telegram_chat_id plan](.cursor/plans/channel_telegram_chat_id_9fdb00fd.plan.md). **Frontend architecture refactor (2026-07-13)** — god-component decomposition + settings/data state modernization ([PR #6](https://github.com/onhazrat/tg_summarizer_migrate_to_fastapi/pull/6), merged). Run commands: [README.md](README.md), [development.md](development.md).
 
 ## Architecture
 
@@ -13,7 +13,10 @@ Self-hosted Telegram channel summarizer. Migrated from browser-heavy `TG-Summari
   - **`/_tg/summarizer`** — full-screen TG app (`App.tsx` + `TgProviders`); **command palette** on `main`. Main content uses **`app-shell`** width utility.
   - **`/_layout/*`** — template admin shell (`/`, `/items`, `/admin`, `/settings`).
 - **Providers (TG shell):** `Settings → Data → UI → Scraper → Chat → AI → Tag` in [`TgProviders.tsx`](frontend/src/components/TgProviders.tsx).
-- **Command palette:** `frontend/src/lib/commands/` — registry, settings-schema, channel ops, **`group-commands.ts`**, **`channel-telegram-chat-id-commands.ts`**, data transfer.
+- **Component decomposition (2026-07-13, PR #6):** the four largest views are thin containers over focused subcomponents + tested pure logic — `SettingsView` (75 lines) → [`components/settings/`](frontend/src/components/settings/) (Appearance/Sync/Network/Ai + shared `ToggleSwitch`); `LogsView` (273) → [`components/logs/`](frontend/src/components/logs/) + [`lib/logs/`](frontend/src/lib/logs/); `ChannelGrid` (444) → [`components/channel-grid/`](frontend/src/components/channel-grid/) + `lib/channels/`; `CommandPalette` (420) → [`components/command-palette/`](frontend/src/components/command-palette/) (per-mode views + flow hooks) + `lib/commands/palette-*`.
+- **Settings state (schema-driven, 2026-07-13):** `SettingsContext` (323 lines) is a thin provider over a zod schema — [`lib/settings/schema.ts`](frontend/src/lib/settings/schema.ts) declares ~27 localStorage-backed settings (storage key, default, legacy keys, backend section) with pure tested helpers ([`store.ts`](frontend/src/lib/settings/store.ts), `start-time.ts`, `use-network-settings.ts`). Network/Tor settings hydrate **once on mount**. **New settings go in the schema, not new `useState`.** Public `SettingsContextType` API unchanged.
+- **Server state (TanStack Query, 2026-07-13):** `DataContext` derives values directly from the query cache; its externally-used setters (`setChannels`, `setChannelStats`, `setBotCredentials`, `setChatDestinations`) are cache write-throughs via generic [`applySetStateAction.ts`](frontend/src/lib/applySetStateAction.ts). **New server state → react-query + [`queryKeys.ts`](frontend/src/hooks/queryKeys.ts), not context `useState`.**
+- **Command palette:** views/flow hooks in [`components/command-palette/`](frontend/src/components/command-palette/); commands in `frontend/src/lib/commands/` — registry, settings-schema, channel ops, **`group-commands.ts`**, **`channel-telegram-chat-id-commands.ts`**, data transfer; pure grouping/search/messages in **`palette-view-model.ts`**, **`palette-search.ts`**, **`palette-messages.ts`**.
 - **Post view pipeline:** [`frontend/src/lib/posts/post-view.ts`](frontend/src/lib/posts/post-view.ts) — `buildFilteredPostsFromRaw`, `formatPostsForPrompt`, **`applyMediaFilter`**. **`filteredPosts` is canonical** for Posts UI, Summary, Chat, Tag, and **Discover**.
 - **Post media (frontend):** [`post-media.ts`](frontend/src/lib/posts/post-media.ts); PostFilter media chips.
 - **Post media (backend):** `Post.media` JSON on `tg_posts`; thumbs on disk under `data/post-thumbs`; served at **`GET /telegram/post-thumb/{channel}/{post_id}`** and **`GET /telegram/channel-photo/{channel_id}`** (auth required).
@@ -96,6 +99,8 @@ Self-hosted Telegram channel summarizer. Migrated from browser-heavy `TG-Summari
 17. **Prek baseline on main (2026-07-08)** — full `prek run --all-files` green; frontend Biome-formatted; OpenAPI client regen; SQLAlchemy typing fixes in `operator.py` / `channel_setting_groups.py`; [`_typos.toml`](_typos.toml) for spell-check excludes (`.cursor/`, live HTML fixtures).
 18. **Channel telegram chat ID v1 (2026-07-08/09)** — nullable `telegram_chat_id` on `tg_channels` with partial unique index `(user_id, telegram_chat_id)`; **username remains primary** for scrape URLs, posts, and `Channel.id`. **Server-managed** — reject on PUT/create/import; stripped from `channelWritePayload`. **Populate** on sync/channel-info from `data-view`; **add dedup** selects existing channel when `telegramChatId` matches (no duplicate create). **Mismatch** (stored ≠ scraped) or **ID conflict** on populate → move to **Frozen** group + failed sync log. **No Bot API fallback**; **no username rename cascade** in v1. UI: optional ChannelCard badge (`showChannelTelegramChatId`, default off). Palette: copy ID commands (all/selected/frozen, TSV variants, single-channel).
 
+19. **Frontend god-component decomposition + state modernization (2026-07-13, [PR #6](https://github.com/onhazrat/tg_summarizer_migrate_to_fastapi/pull/6) merged)** — behavior-preserving split of `SettingsView` (2068→75), `LogsView` (1748→273), `ChannelGrid` (1448→444), `CommandPalette` (1138→420) into per-concern component dirs + tested `lib/` logic. `SettingsContext` (967→323) → zod schema store; `DataContext` → finished TanStack Query migration (cache write-throughs, 7 unused setters removed). ~157 new unit tests (146→303). **Public context APIs held stable — no consumer churn.** Done as 6 parallel sub-agent workstreams with disjoint file ownership. Intentional benign deltas: settings-section background polling only while mounted; zod rejects garbage localStorage/server values; optimistic channel writes reconcile immediately.
+
 ### Explicitly rejected / deferred
 
 - Mode B, Celery/Redis, pgvector, mobile responsive summarizer.
@@ -117,6 +122,8 @@ Self-hosted Telegram channel summarizer. Migrated from browser-heavy `TG-Summari
 - **Prefer simpler flows** — Copy Prompt + paste over heavy wizards.
 - **Bulk APIs for scale** — 2000+ channels; avoid N sequential HTTP round-trips.
 - **Channel discovery** — prefer filter-aware forward aggregation from existing scrape data.
+- **Large refactors** — encourages spinning up **many parallel sub-agents** with disjoint file ownership; keep shared public APIs stable so agents run concurrently in one tree; verify globally (`tsc` + `bun test src` + biome) between phases. Prioritizes **DX / code quality / maintainability** over new features. Comfortable reviewing large behavior-preserving changes uncommitted in the working tree.
+- **Signed commits** — keep 1Password SSH signing; if `op-ssh-sign` fails, **unlock 1Password and retry** rather than `--no-gpg-sign`.
 
 ## Environment & fixes
 
@@ -129,7 +136,8 @@ Self-hosted Telegram channel summarizer. Migrated from browser-heavy `TG-Summari
 - **Playwright local (Cursor sandbox):** use **`PLAYWRIGHT_CHANNEL=chrome`** or Docker. Requires backend on :8000 + `alembic upgrade head`.
 - **Playwright CI:** push to main always runs tests (paths-filter bypass on push).
 - **E2E tag tests:** `channelHasTag` must handle structured tag objects `{ name }`.
-- **GPG signing:** 1Password agent may fail in agent environments; `--no-gpg-sign` fallback if needed.
+- **GPG/SSH signing:** commits are signed via 1Password `op-ssh-sign` (`commit.gpgsign=true`, `gpg.format=ssh`). If it fails with `1Password: failed to fill whole buffer`, the app is locked — **unlock 1Password and retry** (user prefers signed commits over `--no-gpg-sign`).
+- **E2E `PrivateService` blocker (pre-existing):** `tests/utils/privateApi.ts` imports `PrivateService`, which the generated client (`src/client/`) omits when built against the **production** OpenAPI — so `items`/`admin`/`user-settings` specs fail to load. Present on `main`, unrelated to app code; regenerate the client against a local (non-prod) backend to restore it. Playwright browser download is also blocked in the Cursor sandbox (use Docker or a local `playwright install`).
 - **Setting groups CI (2026-07-07):** after strict inheritance, channel-create tests must assign groups (or bulk-sync default group) for dynamic sync / auto-follow — inherited fields on `PUT /channels` are rejected. Duplicate `import { toast }` in `channel-tags.ts` broke Docker frontend build.
 - **Telegram chat ID CI fix (2026-07-09):** `data-view` base64 is **unpadded** — decoder must pad before `b64decode`. `telegram_chat_id` must be rejected on **create** path too (not only update).
 
@@ -143,7 +151,6 @@ Self-hosted Telegram channel summarizer. Migrated from browser-heavy `TG-Summari
 - **SettingGroupsPanel** — never put `selectedId` in fetch deps (caused full refetch + loading gate on every group click).
 - **Reserved built-in groups** — `default`, Slow feed, High velocity, Frozen, Restricted: editable settings, non-deletable, always listed at 0 channels; canonical ids use prefixes (`default-`, `slow-feed-`, `high-velocity-`, `frozen-`, `restricted-`).
 - **2000+ channels** — use bulk APIs (`bulk-sync-settings`, `bulk-tags`, `bulk-setting-group`).
-- **`SettingsView.tsx`** still large (refactor deferred).
 - **Discover + semantic search** — RAG mode caps at ~50 posts.
 - **Post media migration** — DB must be at `k3l4m5n6o7p8`+; thumbs are filesystem-only.
 - **Post thumbs** — authenticated API paths only (`thumbApiPath`).
@@ -154,7 +161,7 @@ Self-hosted Telegram channel summarizer. Migrated from browser-heavy `TG-Summari
 - Auto-tagging scheduler, configurable tag taxonomy in Settings, tag-source filters in ChannelGrid.
 - Filter ChannelGrid by tag source (`manual` vs `ai`).
 - `{all_tags}` in Summary/Chat prompts.
-- Dynamic sync v1.1, Open Graph, SettingsView split, mobile summarizer.
+- Dynamic sync v1.1, Open Graph, mobile summarizer.
 - Discover bulk follow, preview card, dismiss persistence, auto-follow suggest mode.
 - Per-channel sync toggles on ChannelCard (removed; use setting groups).
 - **Telegram chat ID v1.1:** rename cascade, Bot API fallback, primary-key migration.
