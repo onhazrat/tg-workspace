@@ -5,37 +5,29 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useMemo,
   useRef,
   useState,
 } from "react"
 import { api } from "@/api"
 import { type Theme, useTheme } from "@/components/theme-provider"
 import {
-  AUTO_SYNC_INTERVAL_DEFAULT,
-  DEFAULT_AI_LANGUAGE,
-  DEFAULT_MODEL,
-  DYNAMIC_SYNC_EXPECTED_POSTS_DEFAULT,
   RETENTION_LOG_DAYS_DEFAULT,
   RETENTION_POST_DAYS_DEFAULT,
-} from "../constants"
-import { loadNetworkSettings, saveNetworkSettings } from "../lib/repository"
-import { isRTLLanguage } from "../lib/utils"
-import type { GlobalStartTimeMode, GlobalStartTimeValue } from "../types"
-
-function _normalizeProxyUrl(proxyUrl: string): string {
-  let url = proxyUrl.trim()
-  if (!url.includes("://")) {
-    if (url.includes("127.0.0.1") || url.includes("localhost")) {
-      url = `socks5h://${url}`
-    } else {
-      url = `http://${url}`
-    }
-  }
-  if (url.startsWith("socks5://")) {
-    url = url.replace("socks5://", "socks5h://")
-  }
-  return url
-}
+} from "@/constants"
+import type { AppSettings } from "@/lib/settings/schema"
+import { computeEffectiveGlobalStartTime } from "@/lib/settings/start-time"
+import {
+  buildSectionPayload,
+  createAppSettingSetters,
+  decodeServerSection,
+  loadAppSettings,
+  persistAppSettings,
+  sectionValues,
+} from "@/lib/settings/store"
+import { useNetworkSettings } from "@/lib/settings/use-network-settings"
+import { isRTLLanguage } from "@/lib/utils"
+import type { GlobalStartTimeMode, GlobalStartTimeValue } from "@/types"
 
 interface SettingsContextType {
   theme: Theme
@@ -134,6 +126,7 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({
 }) => {
   const { theme, resolvedTheme, setTheme: setGlobalTheme } = useTheme()
 
+  // One-time migration of the legacy "theme" localStorage key into the provider.
   useEffect(() => {
     const legacy = localStorage.getItem("theme")
     if (legacy === "light" || legacy === "dark" || legacy === "system") {
@@ -144,415 +137,31 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({
 
   const setTheme = (next: Theme) => setGlobalTheme(next)
 
-  const [aiLanguage, setAiLanguage] = useState(() => {
-    if (typeof window !== "undefined") {
-      return localStorage.getItem("aiLanguage") || DEFAULT_AI_LANGUAGE
-    }
-    return DEFAULT_AI_LANGUAGE
-  })
-
-  const [selectedModel, setSelectedModel] = useState(() => {
-    if (typeof window !== "undefined") {
-      return localStorage.getItem("selectedModel") || DEFAULT_MODEL
-    }
-    return DEFAULT_MODEL
-  })
-
-  const [regularSyncIntervalMinutes, setRegularSyncIntervalMinutes] =
-    useState<number>(() => {
-      if (typeof window !== "undefined") {
-        const saved = localStorage.getItem("regularSyncIntervalMinutes")
-        if (saved) return parseInt(saved, 10)
-        const legacy = localStorage.getItem("autoSyncInterval")
-        if (legacy) return parseInt(legacy, 10)
-      }
-      return AUTO_SYNC_INTERVAL_DEFAULT
-    })
-
-  const [dynamicSyncEnabledDefault, setDynamicSyncEnabledDefault] =
-    useState<boolean>(() => {
-      if (typeof window !== "undefined") {
-        return localStorage.getItem("dynamicSyncEnabledDefault") === "true"
-      }
-      return false
-    })
-
-  const [dynamicSyncExpectedPostsDefault, setDynamicSyncExpectedPostsDefault] =
-    useState<number>(() => {
-      if (typeof window !== "undefined") {
-        const saved = localStorage.getItem("dynamicSyncExpectedPostsDefault")
-        if (saved) return parseInt(saved, 10)
-      }
-      return DYNAMIC_SYNC_EXPECTED_POSTS_DEFAULT
-    })
-  const [syncFailureBackoffMinutes, setSyncFailureBackoffMinutes] =
-    useState<number>(() => {
-      if (typeof window !== "undefined") {
-        const saved = localStorage.getItem("syncFailureBackoffMinutes")
-        if (saved) return parseInt(saved, 10)
-      }
-      return 5
-    })
-
-  const [aiTemperature, setAiTemperature] = useState<number>(() => {
-    if (typeof window !== "undefined") {
-      const saved = localStorage.getItem("aiTemperature")
-      return saved ? parseFloat(saved) : 0.7
-    }
-    return 0.7
-  })
-
-  const [proxyEnabled, setProxyEnabled] = useState<boolean>(false)
-
-  const [defaultProxyUrls, setDefaultProxyUrls] = useState<string>("")
-
-  const [proxyDefaultConcurrency, setProxyDefaultConcurrency] =
-    useState<number>(1)
-
-  const [proxyConcurrencyOverrides, setProxyConcurrencyOverrides] = useState<
-    Record<string, number>
-  >({})
-
-  const [envFallbackConfigured, setEnvFallbackConfigured] =
-    useState<boolean>(false)
-
-  const [torAvailable, setTorAvailable] = useState<boolean>(false)
-
-  const [torEnabled, setTorEnabled] = useState<boolean>(false)
-
-  const [torMode, setTorMode] = useState<"auto" | "custom">("auto")
-
-  const [torProxyUrls, setTorProxyUrls] = useState<string>(
-    "socks5h://127.0.0.1:9050",
+  // All localStorage-backed settings live in one schema-driven state object.
+  const [settings, setSettings] = useState<AppSettings>(() =>
+    loadAppSettings(
+      typeof window !== "undefined" ? localStorage : { getItem: () => null },
+    ),
   )
+  // Generated once — every setter keeps a stable identity across renders.
+  const setters = useMemo(() => createAppSettingSetters(setSettings), [])
 
-  const [torRotationStrategy, setTorRotationStrategy] = useState<
-    "sequential" | "random"
-  >("sequential")
-
-  const [torControlEnabled, setTorControlEnabled] = useState<boolean>(false)
-
-  const [torControlPort, setTorControlPort] = useState<number>(9051)
-
-  const [torAutoRotate, setTorAutoRotate] = useState<boolean>(false)
-
-  const [torRotationThreshold, setTorRotationThreshold] = useState<number>(10)
-
-  const [syncConcurrency, setSyncConcurrency] = useState<number>(() => {
-    if (typeof window !== "undefined") {
-      const saved = localStorage.getItem("syncConcurrency")
-      return saved ? parseInt(saved, 10) : 3
-    }
-    return 3
-  })
-
-  const [embeddingsEnabled, setEmbeddingsEnabled] = useState<boolean>(() => {
-    if (typeof window !== "undefined") {
-      return localStorage.getItem("embeddingsEnabled") === "true"
-    }
-    return false
-  })
-
-  const [embeddingsPaused, setEmbeddingsPaused] = useState<boolean>(() => {
-    if (typeof window !== "undefined") {
-      return localStorage.getItem("embeddingsPaused") === "true"
-    }
-    return false
-  })
-
-  const [translationEnabled, setTranslationEnabled] = useState<boolean>(() => {
-    if (typeof window !== "undefined") {
-      return localStorage.getItem("translationEnabled") === "true"
-    }
-    return false
-  })
-
-  const [autoTranslate, setAutoTranslate] = useState<boolean>(() => {
-    if (typeof window !== "undefined") {
-      return localStorage.getItem("autoTranslate") === "true"
-    }
-    return false
-  })
-
-  const [translationModel, setTranslationModel] = useState<string>(() => {
-    if (typeof window !== "undefined") {
-      return localStorage.getItem("translationModel") || DEFAULT_MODEL
-    }
-    return DEFAULT_MODEL
-  })
-
-  const [translationTargetLanguage, setTranslationTargetLanguage] =
-    useState<string>(() => {
-      if (typeof window !== "undefined") {
-        return (
-          localStorage.getItem("translationTargetLanguage") ||
-          DEFAULT_AI_LANGUAGE
-        )
-      }
-      return DEFAULT_AI_LANGUAGE
-    })
-
-  const [postRetentionDays, setPostRetentionDays] = useState<number>(() => {
-    if (typeof window !== "undefined") {
-      const saved = localStorage.getItem("postRetentionDays")
-      return saved ? parseInt(saved, 10) : RETENTION_POST_DAYS_DEFAULT
-    }
-    return RETENTION_POST_DAYS_DEFAULT
-  })
-
-  const [logRetentionDays, setLogRetentionDays] = useState<number>(() => {
-    if (typeof window !== "undefined") {
-      const saved = localStorage.getItem("logRetentionDays")
-      return saved ? parseInt(saved, 10) : RETENTION_LOG_DAYS_DEFAULT
-    }
-    return RETENTION_LOG_DAYS_DEFAULT
-  })
-
-  const [globalStartTimeMode, setGlobalStartTimeMode] =
-    useState<GlobalStartTimeMode>(() => {
-      if (typeof window !== "undefined") {
-        const saved = localStorage.getItem("globalStartTimeMode")
-        return (saved as GlobalStartTimeMode) || "retention"
-      }
-      return "retention"
-    })
-
-  const [globalStartTimeValue, setGlobalStartTimeValue] =
-    useState<GlobalStartTimeValue>(() => {
-      if (typeof window !== "undefined") {
-        const saved = localStorage.getItem("globalStartTimeValue")
-        if (saved) {
-          try {
-            return JSON.parse(saved)
-          } catch (_e) {
-            return null
-          }
-        }
-      }
-      return null
-    })
-
-  const [showChannelBio, setShowChannelBio] = useState<boolean>(() => {
-    if (typeof window !== "undefined") {
-      const saved = localStorage.getItem("showChannelBio")
-      return saved !== null ? saved === "true" : true
-    }
-    return true
-  })
-
-  const [showChannelSubscribers, setShowChannelSubscribers] = useState<boolean>(
-    () => {
-      if (typeof window !== "undefined") {
-        const saved = localStorage.getItem("showChannelSubscribers")
-        return saved !== null ? saved === "true" : true
-      }
-      return true
-    },
-  )
-  const [showChannelTelegramChatId, setShowChannelTelegramChatId] =
-    useState<boolean>(() => {
-      if (typeof window !== "undefined") {
-        const saved = localStorage.getItem("showChannelTelegramChatId")
-        return saved !== null ? saved === "true" : false
-      }
-      return false
-    })
-
-  const [showChannelPhotos, setShowChannelPhotos] = useState<boolean>(() => {
-    if (typeof window !== "undefined") {
-      const saved = localStorage.getItem("showChannelPhotos")
-      return saved !== null ? saved === "true" : false
-    }
-    return false
-  })
-
-  const [showChannelVideos, setShowChannelVideos] = useState<boolean>(() => {
-    if (typeof window !== "undefined") {
-      const saved = localStorage.getItem("showChannelVideos")
-      return saved !== null ? saved === "true" : false
-    }
-    return false
-  })
-
-  const [showChannelFiles, setShowChannelFiles] = useState<boolean>(() => {
-    if (typeof window !== "undefined") {
-      const saved = localStorage.getItem("showChannelFiles")
-      return saved !== null ? saved === "true" : false
-    }
-    return false
-  })
-
-  const [showChannelLinks, setShowChannelLinks] = useState<boolean>(() => {
-    if (typeof window !== "undefined") {
-      const saved = localStorage.getItem("showChannelLinks")
-      return saved !== null ? saved === "true" : false
-    }
-    return false
-  })
-
-  const [showChannelStartId, setShowChannelStartId] = useState<boolean>(() => {
-    if (typeof window !== "undefined") {
-      const saved = localStorage.getItem("showChannelStartId")
-      return saved !== null ? saved === "true" : false
-    }
-    return false
-  })
-
-  const [advancedMode, setAdvancedMode] = useState<boolean>(() => {
-    if (typeof window !== "undefined") {
-      const saved = localStorage.getItem("advancedMode")
-      return saved !== null ? saved === "true" : false
-    }
-    return false
-  })
-
-  const networkHydrated = useRef(false)
-  const appSettingsHydrated = useRef(false)
-  const networkSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
-
-  const applyAppSettings = useCallback(
-    (
-      sync: Record<string, unknown>,
-      retention: Record<string, unknown>,
-      translation: Record<string, unknown>,
-    ) => {
-      if (typeof sync.regularSyncIntervalMinutes === "number")
-        setRegularSyncIntervalMinutes(sync.regularSyncIntervalMinutes)
-      else if (typeof sync.autoSyncInterval === "number")
-        setRegularSyncIntervalMinutes(sync.autoSyncInterval)
-      if (typeof sync.dynamicSyncEnabledDefault === "boolean")
-        setDynamicSyncEnabledDefault(sync.dynamicSyncEnabledDefault)
-      if (typeof sync.dynamicSyncExpectedPostsDefault === "number")
-        setDynamicSyncExpectedPostsDefault(sync.dynamicSyncExpectedPostsDefault)
-      if (typeof sync.syncFailureBackoffMinutes === "number")
-        setSyncFailureBackoffMinutes(sync.syncFailureBackoffMinutes)
-      if (typeof sync.syncConcurrency === "number")
-        setSyncConcurrency(sync.syncConcurrency)
-      if (
-        sync.globalStartTimeMode === "retention" ||
-        sync.globalStartTimeMode === "relative" ||
-        sync.globalStartTimeMode === "absolute"
-      ) {
-        setGlobalStartTimeMode(sync.globalStartTimeMode)
-      }
-      if (sync.globalStartTimeValue !== undefined)
-        setGlobalStartTimeValue(
-          sync.globalStartTimeValue as GlobalStartTimeValue,
-        )
-      if (typeof retention.postRetentionDays === "number")
-        setPostRetentionDays(retention.postRetentionDays)
-      if (typeof retention.logRetentionDays === "number")
-        setLogRetentionDays(retention.logRetentionDays)
-      if (typeof translation.translationEnabled === "boolean")
-        setTranslationEnabled(translation.translationEnabled)
-      if (typeof translation.autoTranslate === "boolean")
-        setAutoTranslate(translation.autoTranslate)
-      if (typeof translation.translationModel === "string")
-        setTranslationModel(translation.translationModel)
-      if (typeof translation.translationTargetLanguage === "string")
-        setTranslationTargetLanguage(translation.translationTargetLanguage)
-    },
-    [],
-  )
-
-  const applyNetworkSettings = useCallback((value: Record<string, unknown>) => {
-    if (Array.isArray(value.proxyUrls)) {
-      setDefaultProxyUrls((value.proxyUrls as string[]).join("\n"))
-    } else if (typeof value.defaultProxyUrls === "string") {
-      setDefaultProxyUrls(value.defaultProxyUrls)
-    }
-    if (typeof value.envFallbackConfigured === "boolean") {
-      setEnvFallbackConfigured(value.envFallbackConfigured)
-    }
-    if (typeof value.torAvailable === "boolean")
-      setTorAvailable(value.torAvailable)
-    if (typeof value.proxyEnabled === "boolean")
-      setProxyEnabled(value.proxyEnabled)
-    if (typeof value.proxyDefaultConcurrency === "number") {
-      setProxyDefaultConcurrency(value.proxyDefaultConcurrency)
-    }
-    if (
-      value.proxyConcurrencyOverrides &&
-      typeof value.proxyConcurrencyOverrides === "object"
-    ) {
-      setProxyConcurrencyOverrides(
-        value.proxyConcurrencyOverrides as Record<string, number>,
-      )
-    }
-    if (typeof value.torEnabled === "boolean") setTorEnabled(value.torEnabled)
-    if (value.torMode === "auto" || value.torMode === "custom")
-      setTorMode(value.torMode)
-    if (typeof value.torProxyUrls === "string")
-      setTorProxyUrls(value.torProxyUrls)
-    if (
-      value.torRotationStrategy === "sequential" ||
-      value.torRotationStrategy === "random"
-    ) {
-      setTorRotationStrategy(value.torRotationStrategy)
-    }
-    if (typeof value.torControlEnabled === "boolean")
-      setTorControlEnabled(value.torControlEnabled)
-    if (typeof value.torControlPort === "number")
-      setTorControlPort(value.torControlPort)
-    if (typeof value.torAutoRotate === "boolean")
-      setTorAutoRotate(value.torAutoRotate)
-    if (typeof value.torRotationThreshold === "number")
-      setTorRotationThreshold(value.torRotationThreshold)
-  }, [])
-
+  // Persist changed keys to localStorage (all keys on the first run).
+  const prevSettings = useRef<AppSettings | null>(null)
   useEffect(() => {
-    if (typeof window === "undefined") return
-    localStorage.removeItem("proxyUrls")
-    localStorage.removeItem("torControlPassword")
+    persistAppSettings(
+      settings,
+      localStorage,
+      prevSettings.current ?? undefined,
+    )
+    prevSettings.current = settings
+  }, [settings])
 
-    if (!localStorage.getItem("access_token")) return
+  const { network, setters: networkSetters } = useNetworkSettings()
 
-    loadNetworkSettings()
-      .then((value) => {
-        const legacy: Record<string, unknown> = {}
-        const legacyProxyEnabled = localStorage.getItem("proxyEnabled")
-        if (legacyProxyEnabled !== null && value.proxyEnabled === undefined) {
-          legacy.proxyEnabled = legacyProxyEnabled === "true"
-        }
-        const legacyTorEnabled = localStorage.getItem("torEnabled")
-        if (legacyTorEnabled !== null && value.torEnabled === undefined) {
-          legacy.torEnabled = legacyTorEnabled === "true"
-        }
-        applyNetworkSettings({ ...value, ...legacy })
-        networkHydrated.current = true
-        if (Object.keys(legacy).length > 0) {
-          const proxyUrls = defaultProxyUrls
-            .split(/[\n,]+/)
-            .map((p) => p.trim())
-            .filter(Boolean)
-          saveNetworkSettings({
-            proxyEnabled: legacy.proxyEnabled as boolean,
-            proxyUrls,
-            torEnabled: legacy.torEnabled as boolean,
-            torMode,
-            torProxyUrls,
-            torRotationStrategy,
-            torControlEnabled,
-            torControlPort,
-            torAutoRotate,
-            torRotationThreshold,
-          }).catch(console.error)
-        }
-      })
-      .catch(console.error)
-  }, [
-    applyNetworkSettings,
-    torAutoRotate,
-    torControlEnabled,
-    torControlPort,
-    torMode,
-    torProxyUrls,
-    torRotationStrategy,
-    torRotationThreshold,
-    defaultProxyUrls.split,
-    defaultProxyUrls,
-  ])
-
+  // Hydrate backend-synced sections once on mount: merge legacy localStorage
+  // values into the server payloads and write the merge back when needed.
+  const appSettingsHydrated = useRef(false)
   useEffect(() => {
     if (typeof window === "undefined") return
     if (!localStorage.getItem("access_token")) return
@@ -567,392 +176,139 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({
         const sync = syncRow.value ?? {}
         const retention = retentionRow.value ?? {}
         const translation = translationRow.value ?? {}
-        const legacy: {
-          sync: Record<string, unknown>
-          retention: Record<string, unknown>
-          translation: Record<string, unknown>
-        } = {
-          sync: {},
-          retention: {},
-          translation: {},
-        }
+        const legacySync: Record<string, unknown> = {}
+        const legacyRetention: Record<string, unknown> = {}
         const legacyInterval = localStorage.getItem("autoSyncInterval")
         if (
           legacyInterval !== null &&
           sync.regularSyncIntervalMinutes === undefined
         ) {
-          legacy.sync.regularSyncIntervalMinutes = parseInt(legacyInterval, 10)
+          legacySync.regularSyncIntervalMinutes = Number.parseInt(
+            legacyInterval,
+            10,
+          )
         }
         const legacyPostRetention = localStorage.getItem("postRetentionDays")
         if (
           legacyPostRetention !== null &&
           retention.postRetentionDays === undefined
         ) {
-          legacy.retention.postRetentionDays = parseInt(legacyPostRetention, 10)
+          legacyRetention.postRetentionDays = Number.parseInt(
+            legacyPostRetention,
+            10,
+          )
         }
-        applyAppSettings(
-          { ...sync, ...legacy.sync },
-          {
+        const updates: Partial<AppSettings> = {
+          ...decodeServerSection("sync", { ...sync, ...legacySync }),
+          ...decodeServerSection("retention", {
             postRetentionDays: RETENTION_POST_DAYS_DEFAULT,
             logRetentionDays: RETENTION_LOG_DAYS_DEFAULT,
             ...retention,
-            ...legacy.retention,
-          },
-          { ...translation, ...legacy.translation },
-        )
-        if (typeof jobsStatus.embeddings?.enabled === "boolean") {
-          setEmbeddingsEnabled(jobsStatus.embeddings.enabled)
+            ...legacyRetention,
+          }),
+          ...decodeServerSection("translation", translation),
         }
+        if (typeof jobsStatus.embeddings?.enabled === "boolean") {
+          updates.embeddingsEnabled = jobsStatus.embeddings.enabled
+        }
+        setSettings((prev) => ({ ...prev, ...updates }))
         appSettingsHydrated.current = true
         if (
-          Object.keys(legacy.sync).length > 0 ||
-          Object.keys(legacy.retention).length > 0
+          Object.keys(legacySync).length > 0 ||
+          Object.keys(legacyRetention).length > 0
         ) {
           api
-            .putSetting("sync", { ...sync, ...legacy.sync })
+            .putSetting("sync", { ...sync, ...legacySync })
             .catch(console.error)
           api
-            .putSetting("retention", { ...retention, ...legacy.retention })
+            .putSetting("retention", { ...retention, ...legacyRetention })
             .catch(console.error)
         }
       })
       .catch(console.error)
-  }, [applyAppSettings])
-
-  useEffect(() => {
-    if (!networkHydrated.current || !localStorage.getItem("access_token"))
-      return
-    if (networkSaveTimer.current) clearTimeout(networkSaveTimer.current)
-    networkSaveTimer.current = setTimeout(() => {
-      const proxyUrls = defaultProxyUrls
-        .split(/[\n,]+/)
-        .map((p) => p.trim())
-        .filter(Boolean)
-      saveNetworkSettings({
-        proxyEnabled,
-        proxyUrls,
-        proxyDefaultConcurrency,
-        proxyConcurrencyOverrides,
-        torEnabled,
-        torMode,
-        torProxyUrls,
-        torRotationStrategy,
-        torControlEnabled,
-        torControlPort,
-        torAutoRotate,
-        torRotationThreshold,
-      }).catch(console.error)
-    }, 400)
-    return () => {
-      if (networkSaveTimer.current) clearTimeout(networkSaveTimer.current)
-    }
-  }, [
-    proxyEnabled,
-    defaultProxyUrls,
-    proxyDefaultConcurrency,
-    proxyConcurrencyOverrides,
-    torEnabled,
-    torMode,
-    torProxyUrls,
-    torRotationStrategy,
-    torControlEnabled,
-    torControlPort,
-    torAutoRotate,
-    torRotationThreshold,
-  ])
-
-  const getEffectiveGlobalStartTime = useCallback(() => {
-    const now = Date.now()
-    let targetTime = now
-
-    if (globalStartTimeMode === "retention") {
-      if (postRetentionDays > 0) {
-        targetTime = now - postRetentionDays * 24 * 60 * 60 * 1000
-      } else {
-        targetTime = 0 // No retention limit
-      }
-    } else if (globalStartTimeMode === "relative") {
-      if (
-        typeof globalStartTimeValue === "number" &&
-        globalStartTimeValue > 0
-      ) {
-        targetTime = now - globalStartTimeValue * 24 * 60 * 60 * 1000
-      } else if (postRetentionDays > 0) {
-        targetTime = now - postRetentionDays * 24 * 60 * 60 * 1000
-      } else {
-        targetTime = 0
-      }
-    } else if (globalStartTimeMode === "absolute") {
-      const dateStr =
-        typeof globalStartTimeValue === "string"
-          ? globalStartTimeValue
-          : new Date().toISOString()
-      targetTime = new Date(dateStr).getTime()
-      if (Number.isNaN(targetTime)) {
-        targetTime = now
-      }
-    }
-
-    // Clamp to retention policy
-    if (postRetentionDays > 0) {
-      const minAllowedTime = now - postRetentionDays * 24 * 60 * 60 * 1000
-      if (targetTime < minAllowedTime) {
-        targetTime = minAllowedTime
-      }
-    }
-
-    return targetTime
-  }, [globalStartTimeMode, globalStartTimeValue, postRetentionDays])
-
-  useEffect(() => {
-    localStorage.setItem("aiLanguage", aiLanguage)
-  }, [aiLanguage])
-
-  useEffect(() => {
-    localStorage.setItem("selectedModel", selectedModel)
-  }, [selectedModel])
-
-  useEffect(() => {
-    localStorage.setItem(
-      "regularSyncIntervalMinutes",
-      regularSyncIntervalMinutes.toString(),
-    )
-  }, [regularSyncIntervalMinutes])
-
-  useEffect(() => {
-    localStorage.setItem(
-      "dynamicSyncEnabledDefault",
-      dynamicSyncEnabledDefault.toString(),
-    )
-  }, [dynamicSyncEnabledDefault])
-
-  useEffect(() => {
-    localStorage.setItem(
-      "dynamicSyncExpectedPostsDefault",
-      dynamicSyncExpectedPostsDefault.toString(),
-    )
-  }, [dynamicSyncExpectedPostsDefault])
-
-  useEffect(() => {
-    localStorage.setItem(
-      "syncFailureBackoffMinutes",
-      syncFailureBackoffMinutes.toString(),
-    )
-  }, [syncFailureBackoffMinutes])
-
-  useEffect(() => {
-    localStorage.setItem("aiTemperature", aiTemperature.toString())
-  }, [aiTemperature])
-
-  useEffect(() => {
-    localStorage.setItem("embeddingsEnabled", embeddingsEnabled.toString())
-  }, [embeddingsEnabled])
-
-  useEffect(() => {
-    localStorage.setItem("embeddingsPaused", embeddingsPaused.toString())
-  }, [embeddingsPaused])
-
-  useEffect(() => {
-    localStorage.setItem("showChannelBio", showChannelBio.toString())
-  }, [showChannelBio])
-
-  useEffect(() => {
-    localStorage.setItem(
-      "showChannelSubscribers",
-      showChannelSubscribers.toString(),
-    )
-  }, [showChannelSubscribers])
-
-  useEffect(() => {
-    localStorage.setItem(
-      "showChannelTelegramChatId",
-      showChannelTelegramChatId.toString(),
-    )
-  }, [showChannelTelegramChatId])
-
-  useEffect(() => {
-    localStorage.setItem("showChannelPhotos", showChannelPhotos.toString())
-  }, [showChannelPhotos])
-
-  useEffect(() => {
-    localStorage.setItem("showChannelVideos", showChannelVideos.toString())
-  }, [showChannelVideos])
-
-  useEffect(() => {
-    localStorage.setItem("showChannelFiles", showChannelFiles.toString())
-  }, [showChannelFiles])
-
-  useEffect(() => {
-    localStorage.setItem("showChannelLinks", showChannelLinks.toString())
-  }, [showChannelLinks])
-
-  useEffect(() => {
-    localStorage.setItem("showChannelStartId", showChannelStartId.toString())
-  }, [showChannelStartId])
-
-  useEffect(() => {
-    localStorage.setItem("advancedMode", advancedMode.toString())
-  }, [advancedMode])
+  }, [])
 
   // Push scheduler-related settings to Postgres for APScheduler jobs (Phase 6).
-  useEffect(() => {
-    if (!localStorage.getItem("access_token") || !appSettingsHydrated.current)
-      return
-    api
-      .putSetting("sync", {
-        regularSyncIntervalMinutes,
-        dynamicSyncEnabledDefault,
-        dynamicSyncExpectedPostsDefault,
-        syncFailureBackoffMinutes,
-        syncConcurrency,
-        globalStartTimeMode,
-        globalStartTimeValue,
-      })
-      .catch((err) =>
-        console.warn("[Settings] Failed to sync scheduler settings:", err),
-      )
-  }, [
-    regularSyncIntervalMinutes,
-    dynamicSyncEnabledDefault,
-    dynamicSyncExpectedPostsDefault,
-    syncFailureBackoffMinutes,
-    syncConcurrency,
-    globalStartTimeMode,
-    globalStartTimeValue,
-  ])
+  useEffect(
+    () => {
+      if (!localStorage.getItem("access_token") || !appSettingsHydrated.current)
+        return
+      api
+        .putSetting("sync", buildSectionPayload("sync", settings))
+        .catch((err) =>
+          console.warn("[Settings] Failed to sync scheduler settings:", err),
+        )
+    },
+    sectionValues("sync", settings),
+  )
 
-  useEffect(() => {
-    if (!localStorage.getItem("access_token") || !appSettingsHydrated.current)
-      return
-    api
-      .putSetting("retention", { postRetentionDays, logRetentionDays })
-      .catch((err) =>
-        console.warn("[Settings] Failed to sync retention settings:", err),
-      )
-  }, [postRetentionDays, logRetentionDays])
+  useEffect(
+    () => {
+      if (!localStorage.getItem("access_token") || !appSettingsHydrated.current)
+        return
+      api
+        .putSetting("retention", buildSectionPayload("retention", settings))
+        .catch((err) =>
+          console.warn("[Settings] Failed to sync retention settings:", err),
+        )
+    },
+    sectionValues("retention", settings),
+  )
 
+  useEffect(
+    () => {
+      if (!localStorage.getItem("access_token") || !appSettingsHydrated.current)
+        return
+      api
+        .putSetting("translation", buildSectionPayload("translation", settings))
+        .catch((err) =>
+          console.warn("[Settings] Failed to sync translation settings:", err),
+        )
+    },
+    sectionValues("translation", settings),
+  )
+
+  // Embeddings toggle maps onto the "embeddings" job rather than a section.
   useEffect(() => {
     if (!localStorage.getItem("access_token") || !appSettingsHydrated.current)
       return
     api
-      .updateJob("embeddings", embeddingsEnabled)
+      .updateJob("embeddings", settings.embeddingsEnabled)
       .catch((err) =>
         console.warn("[Settings] Failed to sync embeddings job:", err),
       )
-  }, [embeddingsEnabled])
+  }, [settings.embeddingsEnabled])
 
-  useEffect(() => {
-    if (!localStorage.getItem("access_token") || !appSettingsHydrated.current)
-      return
-    api
-      .putSetting("translation", {
-        translationEnabled,
-        autoTranslate,
-        translationModel,
-        translationTargetLanguage,
-      })
-      .catch((err) =>
-        console.warn("[Settings] Failed to sync translation settings:", err),
-      )
-  }, [
-    translationEnabled,
-    autoTranslate,
-    translationModel,
-    translationTargetLanguage,
-  ])
+  const getEffectiveGlobalStartTime = useCallback(
+    () =>
+      computeEffectiveGlobalStartTime(
+        settings.globalStartTimeMode,
+        settings.globalStartTimeValue,
+        settings.postRetentionDays,
+      ),
+    [
+      settings.globalStartTimeMode,
+      settings.globalStartTimeValue,
+      settings.postRetentionDays,
+    ],
+  )
 
-  const isRTL = isRTLLanguage(aiLanguage)
+  const isRTL = isRTLLanguage(settings.aiLanguage)
+
+  const value: SettingsContextType = {
+    theme,
+    resolvedTheme,
+    setTheme,
+    isRTL,
+    getEffectiveGlobalStartTime,
+    ...settings,
+    ...setters,
+    ...network,
+    ...networkSetters,
+  }
 
   return (
-    <SettingsContext.Provider
-      value={{
-        theme,
-        resolvedTheme,
-        setTheme,
-        aiLanguage,
-        setAiLanguage,
-        selectedModel,
-        setSelectedModel,
-        regularSyncIntervalMinutes,
-        setRegularSyncIntervalMinutes,
-        dynamicSyncEnabledDefault,
-        setDynamicSyncEnabledDefault,
-        dynamicSyncExpectedPostsDefault,
-        setDynamicSyncExpectedPostsDefault,
-        syncFailureBackoffMinutes,
-        setSyncFailureBackoffMinutes,
-        aiTemperature,
-        setAiTemperature,
-        isRTL,
-        proxyEnabled,
-        setProxyEnabled,
-        defaultProxyUrls,
-        setDefaultProxyUrls,
-        proxyDefaultConcurrency,
-        setProxyDefaultConcurrency,
-        proxyConcurrencyOverrides,
-        setProxyConcurrencyOverrides,
-        envFallbackConfigured,
-        torAvailable,
-        torEnabled,
-        setTorEnabled,
-        torMode,
-        setTorMode,
-        torProxyUrls,
-        setTorProxyUrls,
-        torRotationStrategy,
-        setTorRotationStrategy,
-        torControlEnabled,
-        setTorControlEnabled,
-        torControlPort,
-        setTorControlPort,
-        torAutoRotate,
-        setTorAutoRotate,
-        torRotationThreshold,
-        setTorRotationThreshold,
-        syncConcurrency,
-        setSyncConcurrency,
-        embeddingsEnabled,
-        setEmbeddingsEnabled,
-        embeddingsPaused,
-        setEmbeddingsPaused,
-        translationEnabled,
-        setTranslationEnabled,
-        autoTranslate,
-        setAutoTranslate,
-        translationModel,
-        setTranslationModel,
-        translationTargetLanguage,
-        setTranslationTargetLanguage,
-        postRetentionDays,
-        setPostRetentionDays,
-        logRetentionDays,
-        setLogRetentionDays,
-        globalStartTimeMode,
-        setGlobalStartTimeMode,
-        globalStartTimeValue,
-        setGlobalStartTimeValue,
-        getEffectiveGlobalStartTime,
-        showChannelBio,
-        setShowChannelBio,
-        showChannelSubscribers,
-        setShowChannelSubscribers,
-        showChannelTelegramChatId,
-        setShowChannelTelegramChatId,
-        showChannelPhotos,
-        setShowChannelPhotos,
-        showChannelVideos,
-        setShowChannelVideos,
-        showChannelFiles,
-        setShowChannelFiles,
-        showChannelLinks,
-        setShowChannelLinks,
-        showChannelStartId,
-        setShowChannelStartId,
-        advancedMode,
-        setAdvancedMode,
-      }}
-    >
+    <SettingsContext.Provider value={value}>
       {children}
     </SettingsContext.Provider>
   )

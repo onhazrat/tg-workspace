@@ -9,12 +9,24 @@ import {
   useState,
 } from "react"
 import { queryKeys } from "../hooks/queryKeys"
-import { useChannelsQuery, useInvalidateChannels } from "../hooks/useChannels"
-import { useLogsQuery } from "../hooks/useLogs"
+import {
+  setChannelStatsInCache,
+  setChannelsInCache,
+  useChannelsQuery,
+  useInvalidateChannels,
+} from "../hooks/useChannels"
+import {
+  useEmbeddingLogsQuery,
+  useLLMLogsQuery,
+  useNetworkLogsQuery,
+  usePublishLogsQuery,
+  useSyncLogsQuery,
+} from "../hooks/useLogs"
 import {
   useInvalidateSummaries,
   useSummariesQuery,
 } from "../hooks/useSummaries"
+import { applySetStateAction } from "../lib/applySetStateAction"
 import {
   cleanupLegacyBots,
   getDBStats,
@@ -40,6 +52,11 @@ import type {
   SyncLog,
 } from "../types"
 
+interface BotsQueryResult {
+  credentials: BotCredential[]
+  destinations: ChatDestination[]
+}
+
 interface DataContextType {
   channels: Channel[]
   isInitialChannelsLoading: boolean
@@ -59,31 +76,24 @@ interface DataContextType {
   >
 
   summariesHistory: Summary[]
-  setSummariesHistory: React.Dispatch<React.SetStateAction<Summary[]>>
   loadHistory: () => Promise<void>
 
   dbStats: DBStats | null
-  setDbStats: React.Dispatch<React.SetStateAction<DBStats | null>>
   loadDBStats: () => Promise<void>
 
   publishLogs: PublishLog[]
-  setPublishLogs: React.Dispatch<React.SetStateAction<PublishLog[]>>
   loadLogs: () => Promise<void>
 
   syncLogs: SyncLog[]
-  setSyncLogs: React.Dispatch<React.SetStateAction<SyncLog[]>>
   loadSyncLogs: () => Promise<void>
 
   llmLogs: LLMLog[]
-  setLlmLogs: React.Dispatch<React.SetStateAction<LLMLog[]>>
   loadLLMLogs: () => Promise<void>
 
   embeddingLogs: EmbeddingLog[]
-  setEmbeddingLogs: React.Dispatch<React.SetStateAction<EmbeddingLog[]>>
   loadEmbeddingLogs: () => Promise<void>
 
   networkLogs: NetworkLog[]
-  setNetworkLogs: React.Dispatch<React.SetStateAction<NetworkLog[]>>
   loadNetworkLogs: () => Promise<void>
 
   selectedChannels: Set<string>
@@ -94,6 +104,9 @@ interface DataContextType {
 }
 
 const DataContext = createContext<DataContextType | undefined>(undefined)
+
+const emptyArray: never[] = []
+const emptyChannelStats: Record<string, ChannelStats> = {}
 
 export const DataProvider: React.FC<{ children: ReactNode }> = ({
   children,
@@ -107,7 +120,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({
 
   const botsQuery = useQuery({
     queryKey: queryKeys.bots,
-    queryFn: async () => {
+    queryFn: async (): Promise<BotsQueryResult> => {
       await cleanupLegacyBots()
       const [credentials, destinations] = await Promise.all([
         listBotCredentials(),
@@ -118,28 +131,17 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({
     staleTime: 30_000,
   })
 
-  const [channels, setChannels] = useState<Channel[]>([])
-  const [channelStats, setChannelStats] = useState<
-    Record<string, ChannelStats>
-  >({})
-  const [botCredentials, setBotCredentials] = useState<BotCredential[]>([])
-  const [chatDestinations, setChatDestinations] = useState<ChatDestination[]>(
-    [],
-  )
-  const [summariesHistory, setSummariesHistory] = useState<Summary[]>([])
-  const [dbStats, setDbStats] = useState<DBStats | null>(null)
+  const dbStatsQuery = useQuery({
+    queryKey: queryKeys.dbStats,
+    queryFn: () => getDBStats(),
+    enabled: false,
+  })
 
-  const publishLogsQuery = useLogsQuery("publish", false)
-  const syncLogsQuery = useLogsQuery("sync", false)
-  const llmLogsQuery = useLogsQuery("llm", false)
-  const embeddingLogsQuery = useLogsQuery("embedding", false)
-  const networkLogsQuery = useLogsQuery("network", false)
-
-  const [publishLogs, setPublishLogs] = useState<PublishLog[]>([])
-  const [syncLogs, setSyncLogs] = useState<SyncLog[]>([])
-  const [llmLogs, setLlmLogs] = useState<LLMLog[]>([])
-  const [embeddingLogs, setEmbeddingLogs] = useState<EmbeddingLog[]>([])
-  const [networkLogs, setNetworkLogs] = useState<NetworkLog[]>([])
+  const publishLogsQuery = usePublishLogsQuery()
+  const syncLogsQuery = useSyncLogsQuery()
+  const llmLogsQuery = useLLMLogsQuery()
+  const embeddingLogsQuery = useEmbeddingLogsQuery()
+  const networkLogsQuery = useNetworkLogsQuery()
 
   const [selectedChannels, setSelectedChannels] = useState<Set<string>>(() => {
     if (typeof window !== "undefined") {
@@ -181,11 +183,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({
 
   useEffect(() => {
     if (!channelsQuery.data) return
-    const normalizedChannels = channelsQuery.data.channels
-    setChannels(normalizedChannels)
-    setChannelStats(channelsQuery.data.channelStats)
-
-    const names = normalizedChannels.map((c) => c.name)
+    const names = channelsQuery.data.channels.map((c) => c.name)
     setPrevChannelNames((prevNames) => {
       setSelectedChannels((currentSelected) => {
         const nextSelected = new Set(currentSelected)
@@ -202,39 +200,37 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({
     })
   }, [channelsQuery.data])
 
-  useEffect(() => {
-    if (botsQuery.data) {
-      setBotCredentials(botsQuery.data.credentials)
-      setChatDestinations(botsQuery.data.destinations)
-    }
-  }, [botsQuery.data])
+  const setChannels = useCallback<
+    React.Dispatch<React.SetStateAction<Channel[]>>
+  >((action) => setChannelsInCache(queryClient, action), [queryClient])
 
-  useEffect(() => {
-    if (summariesQuery.data) setSummariesHistory(summariesQuery.data)
-  }, [summariesQuery.data])
+  const setChannelStats = useCallback<
+    React.Dispatch<React.SetStateAction<Record<string, ChannelStats>>>
+  >((action) => setChannelStatsInCache(queryClient, action), [queryClient])
 
-  useEffect(() => {
-    if (publishLogsQuery.data)
-      setPublishLogs(publishLogsQuery.data as PublishLog[])
-  }, [publishLogsQuery.data])
+  const setBotCredentials = useCallback<
+    React.Dispatch<React.SetStateAction<BotCredential[]>>
+  >(
+    (action) => {
+      queryClient.setQueryData<BotsQueryResult>(queryKeys.bots, (old) => ({
+        credentials: applySetStateAction(action, old?.credentials ?? []),
+        destinations: old?.destinations ?? [],
+      }))
+    },
+    [queryClient],
+  )
 
-  useEffect(() => {
-    if (syncLogsQuery.data) setSyncLogs(syncLogsQuery.data as SyncLog[])
-  }, [syncLogsQuery.data])
-
-  useEffect(() => {
-    if (llmLogsQuery.data) setLlmLogs(llmLogsQuery.data as LLMLog[])
-  }, [llmLogsQuery.data])
-
-  useEffect(() => {
-    if (embeddingLogsQuery.data)
-      setEmbeddingLogs(embeddingLogsQuery.data as EmbeddingLog[])
-  }, [embeddingLogsQuery.data])
-
-  useEffect(() => {
-    if (networkLogsQuery.data)
-      setNetworkLogs(networkLogsQuery.data as NetworkLog[])
-  }, [networkLogsQuery.data])
+  const setChatDestinations = useCallback<
+    React.Dispatch<React.SetStateAction<ChatDestination[]>>
+  >(
+    (action) => {
+      queryClient.setQueryData<BotsQueryResult>(queryKeys.bots, (old) => ({
+        credentials: old?.credentials ?? [],
+        destinations: applySetStateAction(action, old?.destinations ?? []),
+      }))
+    },
+    [queryClient],
+  )
 
   const loadChannels = useCallback(async () => {
     await invalidateChannels()
@@ -300,9 +296,20 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({
 
   const loadDBStats = useCallback(async () => {
     const stats = await getDBStats()
-    setDbStats(stats)
-    await queryClient.setQueryData(queryKeys.dbStats, stats)
+    queryClient.setQueryData(queryKeys.dbStats, stats)
   }, [queryClient])
+
+  const channels = channelsQuery.data?.channels ?? emptyArray
+  const channelStats = channelsQuery.data?.channelStats ?? emptyChannelStats
+  const botCredentials = botsQuery.data?.credentials ?? emptyArray
+  const chatDestinations = botsQuery.data?.destinations ?? emptyArray
+  const summariesHistory = summariesQuery.data ?? emptyArray
+  const dbStats = dbStatsQuery.data ?? null
+  const publishLogs = publishLogsQuery.data ?? emptyArray
+  const syncLogs = syncLogsQuery.data ?? emptyArray
+  const llmLogs = llmLogsQuery.data ?? emptyArray
+  const embeddingLogs = embeddingLogsQuery.data ?? emptyArray
+  const networkLogs = networkLogsQuery.data ?? emptyArray
 
   const isInitialChannelsLoading =
     channelsQuery.isPending && channels.length === 0
@@ -322,25 +329,18 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({
         channelStats,
         setChannelStats,
         summariesHistory,
-        setSummariesHistory,
         loadHistory,
         dbStats,
-        setDbStats,
         loadDBStats,
         publishLogs,
-        setPublishLogs,
         loadLogs,
         syncLogs,
-        setSyncLogs,
         loadSyncLogs,
         llmLogs,
-        setLlmLogs,
         loadLLMLogs,
         embeddingLogs,
-        setEmbeddingLogs,
         loadEmbeddingLogs,
         networkLogs,
-        setNetworkLogs,
         loadNetworkLogs,
         selectedChannels,
         setSelectedChannels,
