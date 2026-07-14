@@ -25,6 +25,7 @@ import { useSettings } from "../contexts/SettingsContext"
 import { useTranslation } from "../contexts/TranslationContext"
 import { getMediaKindLabel, getPostMediaKinds } from "../lib/posts/post-media"
 import { getTranslation, saveTranslation } from "../lib/repository"
+import { telegramWebViewPostUrl } from "../lib/telegram-web"
 import { highlightText } from "../lib/utils"
 import type { Post, PostMediaKind } from "../types"
 import { RelativeTime } from "./RelativeTime"
@@ -317,7 +318,7 @@ export const PostCard: React.FC<PostCardProps> = ({ post, postSearch }) => {
                   type="button"
                   onClick={() => {
                     navigator.clipboard.writeText(
-                      `https://t.me/s/${post.channelName}/${post.id}`,
+                      telegramWebViewPostUrl(post.channelName, post.id),
                     )
                   }}
                   className="p-1.5 rounded-full text-app-ink/50 hover:text-app-ink hover:bg-app-ink/5 transition-all"
@@ -333,7 +334,7 @@ export const PostCard: React.FC<PostCardProps> = ({ post, postSearch }) => {
             <Tooltip>
               <TooltipTrigger asChild>
                 <a
-                  href={`https://t.me/s/${post.channelName}/${post.id}`}
+                  href={telegramWebViewPostUrl(post.channelName, post.id)}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="p-1.5 rounded-full text-app-ink/50 hover:text-app-ink hover:bg-app-ink/5 transition-all"

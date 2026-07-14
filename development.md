@@ -51,7 +51,7 @@ A startup error `relation "user" does not exist` means `app` exists but has no t
 
 Set `GEMINI_API_KEY` in the root `.env` for AI features.
 
-**Tunable defaults** — sync concurrency, scheduler intervals, RAG limits, network retries, job enabled defaults (`JOBS_*_ENABLED_DEFAULT`), and frontend poll intervals are documented in [`.env.example`](.env.example). Backend reads them via `app.core.config.Settings`; frontend reads `VITE_*` vars through `frontend/src/lib/env.ts` (build-time for production Docker images). On a fresh database, scheduler job enabled flags come from those env vars until persisted in the `jobs` AppSetting row (embeddings and translation batch default to off).
+**Tunable defaults** — sync concurrency, scheduler intervals, RAG limits, network retries, job enabled defaults (`JOBS_*_ENABLED_DEFAULT`), and frontend poll intervals are documented in [`.env.example`](.env.example). Backend reads them via `app.core.config.Settings`; frontend reads `VITE_*` vars from the **same root `.env`** (`frontend/vite.config.ts` sets `envDir` to the repo root) through `frontend/src/lib/env.ts` (build-time for production Docker images). On a fresh database, scheduler job enabled flags come from those env vars until persisted in the `jobs` AppSetting row (embeddings and translation batch default to off).
 
 For **bot token encryption** (Phase 2), set `TOKEN_ENCRYPTION_KEY` in `.env` to a Fernet key (generate command in `.env.example`). Required when `ENVIRONMENT` is not `local`; local dev may leave it empty and the backend uses a dev-only fallback. Staging/production without this key will fail when storing or migrating bot credentials.
 
@@ -129,7 +129,7 @@ HTML report (local): `bunx playwright show-report`
 
 ### Local registration and login
 
-**Signup** (`/signup`) is enabled when `USERS_OPEN_REGISTRATION=true` (default in `.env.example`). Leave `VITE_API_URL` empty in `.env` so the Vite dev server proxies `/api` to the backend on port 8000.
+**Signup** (`/signup`) is enabled when `USERS_OPEN_REGISTRATION=true` (default in `.env.example`). Copy [`.env.example`](.env.example) to `.env` at the **repo root** only (not under `frontend/`). Leave `VITE_API_URL` empty so the Vite dev server proxies `/api` to the backend on port 8000.
 
 **Bootstrap superuser** — on backend startup (native dev, VS Code debug, and Docker), the app ensures the first admin exists if missing. Docker Compose also runs `scripts/prestart.sh` before the process starts (same idempotent check).
 

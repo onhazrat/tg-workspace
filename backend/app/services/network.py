@@ -17,6 +17,11 @@ from stem.control import Controller
 from app.core.config import settings
 from app.services.network_settings import normalize_proxy_url
 from app.services.proxy_pool import ProxyLane
+from app.services.telegram_web import (
+    is_telegram_web_url,
+    is_telegram_web_view_url,
+    telegram_channel_post_url,
+)
 
 _bad_proxies: dict[str, float] = {}
 _tor_request_counter = 0
@@ -40,12 +45,11 @@ def proxy_in_cooldown(proxy_url: str) -> bool:
     return _bad_proxies.get(proxy_url, 0) > now
 
 
-_WEB_VIEW_PATH = re.compile(r"t\.me/s/", re.IGNORECASE)
 _UNAVAILABLE_WEB_VIEW_MSG = "Channel is not available on the web view."
 
 
 def _is_telegram_web_view_url(url: str) -> bool:
-    return bool(_WEB_VIEW_PATH.search(url))
+    return is_telegram_web_view_url(url)
 
 
 def _validate_telegram_web_view_page(
@@ -86,7 +90,7 @@ async def _fetch_once(
         else:
             response = await http_client.get(url)
         response.raise_for_status()
-        data = response.text if "t.me" in url else response.json()
+        data = response.text if is_telegram_web_url(url) else response.json()
         if isinstance(data, str) and _is_telegram_web_view_url(url):
             _validate_telegram_web_view_page(
                 request_url=url,
@@ -379,7 +383,7 @@ def parse_telegram_entities(text: str) -> tuple[str, list[dict[str, Any]]]:
                     "type": "text_link",
                     "offset": offset,
                     "length": len(inner),
-                    "url": f"https://t.me/{channel}/{post_id}",
+                    "url": telegram_channel_post_url(channel, int(post_id)),
                 }
             )
         elif match.group(10):

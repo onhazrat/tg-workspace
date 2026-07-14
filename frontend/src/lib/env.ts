@@ -11,7 +11,7 @@ function parseStringEnv(value: string | undefined, fallback: string): string {
 
 const viteEnv = typeof import.meta !== "undefined" ? import.meta.env : undefined
 
-/** Vite build-time tunables — see root `.env.example` for documentation. */
+/** Vite build-time tunables — loaded from repo root `.env` (see `.env.example`). */
 export const env = {
   syncJobTimeoutMs: parseIntEnv(
     viteEnv?.VITE_SYNC_JOB_TIMEOUT_MS,
@@ -65,5 +65,10 @@ export const env = {
   commandPaletteRecentCount: parseIntEnv(
     viteEnv?.VITE_COMMAND_PALETTE_RECENT_COUNT,
     5,
+  ),
+  /** Telegram public web-view host for channel/post links (e.g. telegram.me, t.me). */
+  telegramWebDomain: parseStringEnv(
+    viteEnv?.VITE_TELEGRAM_WEB_DOMAIN,
+    "telegram.me",
   ),
 } as const

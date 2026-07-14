@@ -1,6 +1,7 @@
 import { ExternalLink, Loader2 } from "lucide-react"
 import { useEffect, useState } from "react"
 import { getPost } from "../lib/repository"
+import { telegramWebViewPostUrl } from "../lib/telegram-web"
 import type { Post } from "../types"
 import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tg-tooltip"
 
@@ -75,7 +76,7 @@ export function CitationHover({
                 {channelName} #{postId}
               </span>
               <a
-                href={`https://t.me/s/${channelName}/${postId}`}
+                href={telegramWebViewPostUrl(channelName, postId)}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="text-blue-400 hover:text-blue-300 transition-colors shrink-0"

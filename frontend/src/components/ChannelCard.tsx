@@ -36,6 +36,7 @@ import {
   isVirtualGroupTag,
   toVirtualGroupTagName,
 } from "@/lib/channels/virtual-group-tags"
+import { telegramWebViewChannelUrl } from "@/lib/telegram-web"
 import { useData } from "../contexts/DataContext"
 import { useScraper } from "../contexts/ScraperContext"
 import { useSettings } from "../contexts/SettingsContext"
@@ -400,7 +401,7 @@ export const ChannelCard: React.FC<ChannelCardProps> = ({
             <Tooltip>
               <TooltipTrigger asChild>
                 <a
-                  href={`https://t.me/s/${channel.name}`}
+                  href={telegramWebViewChannelUrl(channel.name)}
                   target="_blank"
                   rel="noopener noreferrer"
                   onClick={(e) => e.stopPropagation()}

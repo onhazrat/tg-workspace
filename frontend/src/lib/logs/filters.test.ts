@@ -62,7 +62,7 @@ const llmLog = (overrides: Partial<LLMLog> = {}): LLMLog => ({
 
 const networkLog = (overrides: Partial<NetworkLog> = {}): NetworkLog => ({
   id: "n1",
-  url: "https://t.me/s/technews",
+  url: "https://telegram.me/s/technews",
   method: "GET",
   status: "success",
   duration: 120,

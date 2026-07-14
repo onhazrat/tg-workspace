@@ -13,6 +13,8 @@ RUN bun install
 
 COPY ./frontend /app/frontend
 ARG VITE_API_URL
+ARG VITE_TELEGRAM_WEB_DOMAIN=telegram.me
+ENV VITE_TELEGRAM_WEB_DOMAIN=$VITE_TELEGRAM_WEB_DOMAIN
 
 RUN bun run build
 

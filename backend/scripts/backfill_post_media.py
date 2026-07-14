@@ -30,6 +30,9 @@ from app.services.post_thumbnails import (
     enforce_thumb_cache_size_limit,
 )
 from app.services.scraper import _parse_posts_from_html
+from app.services.telegram_web import (
+    telegram_web_view_post_url,
+)
 
 MEDIA_ONLY_PLACEHOLDER = "[Media/No Text Content]"
 DEFAULT_CHANNELS = ("durov",)
@@ -109,7 +112,7 @@ def _exclude_unavailable_channels(session: Session, channels: list[str]) -> list
 
 
 async def _fetch_post_html(channel_name: str, post_id: int) -> str:
-    url = f"https://t.me/s/{channel_name}/{post_id}"
+    url = telegram_web_view_post_url(channel_name, post_id)
     html, _telemetry = await fetch_with_retry(url)
     if not isinstance(html, str):
         raise ValueError(f"Unexpected response type for {url}")

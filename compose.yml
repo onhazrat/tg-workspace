@@ -169,6 +169,7 @@ services:
       args:
         - VITE_API_URL=https://api.${DOMAIN?Variable not set}
         - VITE_API_KEY=${VITE_API_KEY}
+        - VITE_TELEGRAM_WEB_DOMAIN=${TELEGRAM_WEB_DOMAIN:-telegram.me}
         - NODE_ENV=production
     labels:
       - traefik.enable=true

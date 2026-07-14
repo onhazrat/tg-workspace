@@ -5,6 +5,7 @@ import { parseApiError, unavailableChannelToastMessage } from "@/lib/api-errors"
 import type { CommandContext } from "@/lib/commands/types"
 import { saveNetworkLog, upsertChannel } from "@/lib/repository"
 import { buildActiveProxies, isNetworkRoutingActive } from "@/lib/syncSettings"
+import { telegramWebViewChannelUrl } from "@/lib/telegram-web"
 import type { Channel, NetworkLog } from "@/types"
 
 export function normalizeChannelHandle(input: string): string {
@@ -163,7 +164,7 @@ export async function addChannelByName(
 
     const logEntry: NetworkLog = {
       id: crypto.randomUUID(),
-      url: `https://t.me/s/${channelName}`,
+      url: telegramWebViewChannelUrl(channelName),
       method: "GET",
       status: status === 200 ? "success" : "failed",
       statusCode: status,

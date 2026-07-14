@@ -5,6 +5,8 @@ import react from "@vitejs/plugin-react"
 import { defineConfig } from "vite"
 
 export default defineConfig({
+  // Load VITE_* from the monorepo root `.env` (same file as the backend).
+  envDir: path.resolve(__dirname, ".."),
   plugins: [
     tanstackRouter({
       target: "react",

@@ -67,6 +67,7 @@ from app.services.sync_schedule import (
     compute_next_dynamic_sync_at_from_last_updated,
     compute_next_regular_sync_at_from_last_updated,
 )
+from app.services.telegram_web import telegram_web_view_channel_url
 
 logger = logging.getLogger(__name__)
 
@@ -184,9 +185,9 @@ async def _scrape_page_with_retry(
     proxy_concurrency: tuple[int, dict[str, int]],
 ) -> dict[str, Any]:
     request_body = {
-        "url": f"https://t.me/s/{channel_name}"
+        "url": telegram_web_view_channel_url(channel_name)
         if before_id is None
-        else f"https://t.me/s/{channel_name}?before={before_id}",
+        else telegram_web_view_channel_url(channel_name, before_id=before_id),
         "beforeId": before_id,
         "knownLatestId": known_latest_id if known_latest_id > 0 else None,
     }
@@ -363,7 +364,7 @@ async def _maybe_add_forwarded_channel(
         discovered_via=discovered_via,
         user_id=user_id,
         effective_start_time=effective_start_time,
-        telemetry_url=f"https://t.me/s/{clean}",
+        telemetry_url=telegram_web_view_channel_url(clean),
         telemetry=telemetry,
     )
 

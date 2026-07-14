@@ -18,6 +18,12 @@ from app.services.channel_photos import resolve_cached_photo_url
 from app.services.network import fetch_with_retry
 from app.services.post_media_parser import finalize_post_media_paths, parse_widget_media
 from app.services.telegram_html import extract_telegram_html_text
+from app.services.telegram_web import (
+    extract_channel_name_from_href,
+    parse_telegram_web_view_url,
+    resolve_telegram_href,
+    telegram_web_view_channel_url,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -67,9 +73,7 @@ def _parse_posts_from_html(
             forwarded_from_name = fwd_el.get_text(strip=True)
             href = _attr_str(fwd_el.get("href"))
             if href:
-                m = re.search(r"t\.me/([^/]+)", href)
-                if m:
-                    forwarded_from = m.group(1)
+                forwarded_from = extract_channel_name_from_href(href)
 
         post: dict[str, Any] = {
             "id": post_id,
@@ -93,7 +97,7 @@ def _parse_posts_from_html(
     if more:
         href = _attr_str(more.get("href"))
         if href:
-            next_url = href if href.startswith("http") else f"https://t.me{href}"
+            next_url = resolve_telegram_href(href)
 
     return posts, next_url
 
@@ -221,9 +225,9 @@ async def scrape_channel_page(
 ) -> dict[str, Any]:
     """Fetch a single backward-pagination window from the Telegram web view."""
     if before_id is None:
-        url = f"https://t.me/s/{channel_name}"
+        url = telegram_web_view_channel_url(channel_name)
     else:
-        url = f"https://t.me/s/{channel_name}?before={before_id}"
+        url = telegram_web_view_channel_url(channel_name, before_id=before_id)
 
     html, telemetry = await fetch_with_retry(
         url,
@@ -294,7 +298,7 @@ async def get_channel_info(
     tor_rotation_threshold: int | None = None,
     proxy_concurrency: tuple[int, dict[str, int]] | None = None,
 ) -> dict[str, Any]:
-    url = f"https://t.me/s/{channel_name}"
+    url = telegram_web_view_channel_url(channel_name)
     html, telemetry = await fetch_with_retry(
         url,
         proxies=proxies,
@@ -323,24 +327,13 @@ async def scrape_channel(
     proxy_concurrency: tuple[int, dict[str, int]] | None = None,
 ) -> dict[str, Any]:
     telemetry_logs: list[Any] = []
-    match_after = re.search(r"t\.me/s/([^/?]+)\?after=(\d+)", url)
-    match_before = re.search(r"t\.me/s/([^/?]+)\?before=(\d+)", url)
-    match_slash = re.search(r"t\.me/s/([^/?]+)/(\d+)", url)
-
-    if match_after:
-        channel_name = match_after.group(1)
-        start_id = int(match_after.group(2)) + 1
-        is_search_mode = True
-    elif match_before:
-        channel_name = match_before.group(1)
-        start_id = 1
-        is_search_mode = True
-    elif match_slash:
-        channel_name = match_slash.group(1)
-        start_id = int(match_slash.group(2))
-        is_search_mode = False
-    else:
+    parsed = parse_telegram_web_view_url(url)
+    if not parsed:
         raise ValueError("Invalid Telegram web-view URL format")
+
+    channel_name = parsed.channel_name
+    start_id = parsed.start_id
+    is_search_mode = parsed.is_search_mode
 
     seen: set[int] = set()
     all_posts: list[dict[str, Any]] = []
@@ -365,7 +358,7 @@ async def scrape_channel(
 
     if not latest_id:
         root_html, root_telem = await fetch_with_retry(
-            f"https://t.me/s/{channel_name}",
+            telegram_web_view_channel_url(channel_name),
             proxies=proxies,
             tor_auto_rotate=tor_auto_rotate,
             tor_rotation_threshold=tor_rotation_threshold,
@@ -397,14 +390,16 @@ async def scrape_channel(
             and iterations < iteration_limit
         ):
             iterations += 1
-            target = (
-                current_next or f"https://t.me/s/{channel_name}?after={last_fetched}"
+            target = current_next or telegram_web_view_channel_url(
+                channel_name, after_id=last_fetched
             )
             next_posts, current_next = await fetch_posts(target)
             if not next_posts and not current_next:
                 if last_fetched < latest_id:
                     retry_posts, current_next = await fetch_posts(
-                        f"https://t.me/s/{channel_name}?after={last_fetched + 1}"
+                        telegram_web_view_channel_url(
+                            channel_name, after_id=last_fetched + 1
+                        )
                     )
                     if retry_posts:
                         all_posts.extend(retry_posts)
@@ -519,9 +514,9 @@ async def resolve_start_time_to_id(
 
     async def fetch_post_at_or_after(post_id: int) -> dict[str, int] | None:
         if post_id > 1:
-            url = f"https://t.me/s/{channel_name}?after={post_id - 1}"
+            url = telegram_web_view_channel_url(channel_name, after_id=post_id - 1)
         else:
-            url = f"https://t.me/s/{channel_name}?after={post_id}"
+            url = telegram_web_view_channel_url(channel_name, after_id=post_id)
         return await _fetch_post_at_url(
             url,
             pick_last=False,
@@ -532,7 +527,7 @@ async def resolve_start_time_to_id(
         )
 
     async def fetch_post_at_or_before(post_id: int) -> dict[str, int] | None:
-        url = f"https://t.me/s/{channel_name}?before={post_id + 1}"
+        url = telegram_web_view_channel_url(channel_name, before_id=post_id + 1)
         return await _fetch_post_at_url(
             url,
             pick_last=True,

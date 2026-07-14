@@ -6,7 +6,7 @@ Dev/investigation only — not wired into the sync pipeline.
 Examples:
   uv run python scripts/capture_scrape_html.py --channels durov,ReutersWorldChannel
   uv run python scripts/capture_scrape_html.py --posts durov/123
-  uv run python scripts/capture_scrape_html.py --urls 'https://t.me/s/durov?before=100'
+  uv run python scripts/capture_scrape_html.py --urls 'https://telegram.me/s/durov?before=100'
 """
 
 from __future__ import annotations
@@ -29,6 +29,10 @@ load_dotenv(_REPO_ROOT / ".env")
 
 from app.core.config import settings
 from app.services.network import fetch_with_retry
+from app.services.telegram_web import (
+    telegram_web_view_channel_url,
+    telegram_web_view_post_url,
+)
 
 DEFAULT_OUTPUT_DIR = _REPO_ROOT / "backend" / "tests" / "fixtures" / "live"
 
@@ -57,11 +61,11 @@ def _normalize_channel(name: str) -> str:
 
 
 def _channel_root_url(channel: str) -> str:
-    return f"https://t.me/s/{_normalize_channel(channel)}"
+    return telegram_web_view_channel_url(_normalize_channel(channel))
 
 
 def _post_url(channel: str, post_id: str | int) -> str:
-    return f"https://t.me/s/{_normalize_channel(channel)}/{post_id}"
+    return telegram_web_view_post_url(_normalize_channel(channel), int(post_id))
 
 
 def _attr_str(value: str | list[str] | None) -> str | None:

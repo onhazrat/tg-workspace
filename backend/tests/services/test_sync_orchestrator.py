@@ -18,6 +18,7 @@ from app.services.sync_schedule import (
     compute_next_dynamic_sync_at_from_last_updated,
     compute_next_regular_sync_at_from_last_updated,
 )
+from app.services.telegram_web import telegram_web_view_channel_url
 from tests.utils.setting_groups import upsert_sync_test_channel
 
 
@@ -203,7 +204,7 @@ def test_apply_scrape_page_mismatch_freezes_channel_and_logs_failure() -> None:
     result = _apply_scrape_page(
         _ctx(channel_id, channel_name),
         {
-            "fullRequest": {"url": f"https://t.me/s/{channel_name}"},
+            "fullRequest": {"url": telegram_web_view_channel_url(channel_name)},
             "posts": [],
             "latestId": 0,
             "telegramChatId": -1002,
