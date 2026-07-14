@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 from typing import Literal
-from urllib.parse import urljoin
+from urllib.parse import urljoin, urlparse
 
 from app.core.config import settings
 
@@ -30,20 +30,22 @@ def _domain_alternation() -> str:
     return "|".join(re.escape(domain) for domain in _all_web_domains())
 
 
+def _url_host_is_telegram_web(url: str) -> bool:
+    host = urlparse(url).hostname
+    if not host:
+        return False
+    return host.lower() in _all_web_domains()
+
+
 def is_telegram_web_view_url(url: str) -> bool:
-    pattern = re.compile(
-        rf"(?:https?://)?(?:{_domain_alternation()})/s/",
-        re.IGNORECASE,
-    )
-    return bool(pattern.search(url))
+    if not _url_host_is_telegram_web(url):
+        return False
+    path = urlparse(url).path or ""
+    return path.startswith("/s/")
 
 
 def is_telegram_web_url(url: str) -> bool:
-    pattern = re.compile(
-        rf"(?:https?://)?(?:{_domain_alternation()})/",
-        re.IGNORECASE,
-    )
-    return bool(pattern.search(url))
+    return _url_host_is_telegram_web(url)
 
 
 def resolve_telegram_href(href: str) -> str:
