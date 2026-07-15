@@ -237,6 +237,161 @@ export const BulkChannelTagsRequestSchema = {
     title: 'BulkChannelTagsRequest'
 } as const;
 
+export const BulkFollowChannelEntrySchema = {
+    properties: {
+        name: {
+            type: 'string',
+            title: 'Name'
+        },
+        discoveredVia: {
+            anyOf: [
+                {
+                    '$ref': '#/components/schemas/DiscoveredViaPayload'
+                },
+                {
+                    type: 'null'
+                }
+            ]
+        }
+    },
+    type: 'object',
+    required: ['name'],
+    title: 'BulkFollowChannelEntry'
+} as const;
+
+export const BulkFollowJobStatusResponseSchema = {
+    properties: {
+        followJobId: {
+            type: 'string',
+            title: 'Followjobid'
+        },
+        status: {
+            type: 'string',
+            title: 'Status'
+        },
+        source: {
+            type: 'string',
+            title: 'Source'
+        },
+        total: {
+            type: 'integer',
+            title: 'Total'
+        },
+        completed: {
+            type: 'integer',
+            title: 'Completed'
+        },
+        added: {
+            type: 'integer',
+            title: 'Added'
+        },
+        skipped: {
+            type: 'integer',
+            title: 'Skipped'
+        },
+        unavailable: {
+            type: 'integer',
+            title: 'Unavailable'
+        },
+        failed: {
+            type: 'integer',
+            title: 'Failed'
+        },
+        results: {
+            items: {
+                '$ref': '#/components/schemas/FollowChannelResultResponse'
+            },
+            type: 'array',
+            title: 'Results'
+        },
+        syncJobId: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Syncjobid'
+        },
+        createdAt: {
+            type: 'integer',
+            title: 'Createdat'
+        },
+        finishedAt: {
+            anyOf: [
+                {
+                    type: 'integer'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Finishedat'
+        }
+    },
+    type: 'object',
+    required: ['followJobId', 'status', 'source', 'total', 'completed', 'added', 'skipped', 'unavailable', 'failed', 'results', 'createdAt'],
+    title: 'BulkFollowJobStatusResponse'
+} as const;
+
+export const BulkFollowRequestSchema = {
+    properties: {
+        channels: {
+            items: {
+                '$ref': '#/components/schemas/BulkFollowChannelEntry'
+            },
+            type: 'array',
+            title: 'Channels'
+        },
+        proxyEnabled: {
+            type: 'boolean',
+            title: 'Proxyenabled',
+            default: false
+        },
+        proxies: {
+            anyOf: [
+                {
+                    items: {
+                        type: 'string'
+                    },
+                    type: 'array'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Proxies'
+        },
+        torAutoRotate: {
+            type: 'boolean',
+            title: 'Torautorotate',
+            default: false
+        },
+        torRotationThreshold: {
+            type: 'integer',
+            title: 'Torrotationthreshold',
+            default: 10
+        }
+    },
+    type: 'object',
+    required: ['channels'],
+    title: 'BulkFollowRequest'
+} as const;
+
+export const BulkFollowStartResponseSchema = {
+    properties: {
+        followJobId: {
+            type: 'string',
+            title: 'Followjobid'
+        }
+    },
+    type: 'object',
+    required: ['followJobId'],
+    title: 'BulkFollowStartResponse'
+} as const;
+
 export const BulkReresolveStartIdsRequestSchema = {
     properties: {
         dryRun: {
@@ -373,6 +528,22 @@ export const BulkSyncSettingsRequestSchema = {
     },
     type: 'object',
     title: 'BulkSyncSettingsRequest'
+} as const;
+
+export const CancelBulkFollowResponseSchema = {
+    properties: {
+        followJobId: {
+            type: 'string',
+            title: 'Followjobid'
+        },
+        status: {
+            type: 'string',
+            title: 'Status'
+        }
+    },
+    type: 'object',
+    required: ['followJobId', 'status'],
+    title: 'CancelBulkFollowResponse'
 } as const;
 
 export const CancelSyncJobResponseSchema = {
@@ -564,6 +735,26 @@ export const ChatRequestSchema = {
     title: 'ChatRequest'
 } as const;
 
+export const DiscoveredViaPayloadSchema = {
+    properties: {
+        channelName: {
+            type: 'string',
+            title: 'Channelname'
+        },
+        postId: {
+            type: 'integer',
+            title: 'Postid'
+        },
+        timestamp: {
+            type: 'integer',
+            title: 'Timestamp'
+        }
+    },
+    type: 'object',
+    required: ['channelName', 'postId', 'timestamp'],
+    title: 'DiscoveredViaPayload'
+} as const;
+
 export const EmbedRequestSchema = {
     properties: {
         texts: {
@@ -593,6 +784,45 @@ export const EmbedRequestSchema = {
     type: 'object',
     required: ['texts'],
     title: 'EmbedRequest'
+} as const;
+
+export const FollowChannelResultResponseSchema = {
+    properties: {
+        name: {
+            type: 'string',
+            title: 'Name'
+        },
+        status: {
+            type: 'string',
+            enum: ['pending', 'running', 'added', 'unavailable', 'skipped', 'error', 'cancelled'],
+            title: 'Status'
+        },
+        reason: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Reason'
+        },
+        error: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Error'
+        }
+    },
+    type: 'object',
+    required: ['name', 'status'],
+    title: 'FollowChannelResultResponse'
 } as const;
 
 export const GlobalStartTimeSnapshotSchema = {

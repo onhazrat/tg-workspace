@@ -28,15 +28,17 @@ from app.services.channel_setting_groups import (
     SyncOperationMode,
     bulk_assign_setting_group,
     channel_allows_sync_operation,
-    ensure_default_group,
     get_group_for_channel,
     get_or_create_frozen_group,
-    get_or_create_restricted_group,
     is_restricted_group,
     move_channel_from_restricted_to_default,
     move_channel_to_restricted_group,
 )
 from app.services.channels import _velocity_from_timestamps, update_channel_coverage
+from app.services.followed_channels import (
+    create_followed_channel,
+    normalize_channel_name,
+)
 from app.services.language import detect_language_from_posts
 from app.services.logs import upsert_network_log, upsert_sync_log
 from app.services.network import rotate_tor_identity
@@ -272,57 +274,6 @@ def _channel_name_exists(channel_name: str) -> bool:
         )
 
 
-def _create_forwarded_channel(
-    clean: str,
-    *,
-    display_name: str,
-    photo_url: str | None,
-    is_unavailable: bool,
-    discovered_via: dict[str, Any],
-    user_id: uuid.UUID | None,
-    effective_start_time: int,
-    telemetry_url: str | None,
-    telemetry: Any,
-) -> None:
-    with Session(engine) as session:
-        if session.exec(select(Channel).where(col(Channel.name) == clean)).first():
-            return
-        if telemetry_url and telemetry:
-            _save_network_telemetry(session, telemetry_url, telemetry, user_id=user_id)
-        now = int(time.time() * 1000)
-        if is_unavailable:
-            group = get_or_create_restricted_group(session, user_id=user_id)
-        else:
-            group = ensure_default_group(session, user_id=user_id)
-        session.add(
-            Channel(
-                id=clean,
-                name=clean,
-                display_name=display_name,
-                photo_url=photo_url,
-                start_time=effective_start_time,
-                last_updated=now,
-                followed_at=now,
-                tags=[],
-                setting_group_id=group.id,
-                discovered_via=discovered_via,
-                next_regular_sync_at=(
-                    compute_next_regular_sync_at_from_last_updated(
-                        now,
-                        group.auto_sync_interval_minutes,
-                        now,
-                    )
-                    if group.regular_sync_enabled
-                    else None
-                ),
-                next_dynamic_sync_at=None,
-                user_id=user_id,
-            )
-        )
-        session.commit()
-        touch_sync(session, "channels")
-
-
 async def _maybe_add_forwarded_channel(
     forwarded_name: str,
     *,
@@ -334,7 +285,7 @@ async def _maybe_add_forwarded_channel(
     effective_start_time: int,
     proxy_concurrency: tuple[int, dict[str, int]],
 ) -> None:
-    clean = forwarded_name.strip().replace("@", "").split("/")[-1]
+    clean = normalize_channel_name(forwarded_name)
     if not clean:
         return
     if await run_db(_channel_name_exists, clean):
@@ -360,7 +311,7 @@ async def _maybe_add_forwarded_channel(
         logger.warning("Auto-follow channel info failed for @%s: %s", clean, exc)
 
     await run_db(
-        _create_forwarded_channel,
+        create_followed_channel,
         clean,
         display_name=display_name,
         photo_url=photo_url,

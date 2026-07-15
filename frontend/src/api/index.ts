@@ -26,8 +26,17 @@ export {
   sseJsonStream,
   sseTextStream,
 } from "./base"
-export type { BulkSyncSettingsPatchBody, SettingGroupWriteBody } from "./data"
-export { dataApi } from "./data"
+export type {
+  BulkFollowChannelInput,
+  BulkFollowRequest,
+  BulkSyncSettingsPatchBody,
+  DiscoveredViaPayload,
+  FollowChannelResult,
+  FollowChannelResultStatus,
+  FollowJobStatus,
+  SettingGroupWriteBody,
+} from "./data"
+export { dataApi, streamFollowJobEvents } from "./data"
 export type {
   JobStatusEntry,
   RuntimeConfig,

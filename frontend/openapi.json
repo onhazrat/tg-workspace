@@ -1629,6 +1629,144 @@
         }
       }
     },
+    "/api/v1/data/channels/bulk-follow": {
+      "post": {
+        "tags": ["data"],
+        "summary": "Start Bulk Follow",
+        "operationId": "data-start_bulk_follow",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/BulkFollowRequest" }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BulkFollowStartResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        },
+        "security": [{ "OAuth2PasswordBearer": [] }]
+      }
+    },
+    "/api/v1/data/channels/bulk-follow/{follow_job_id}": {
+      "get": {
+        "tags": ["data"],
+        "summary": "Get Bulk Follow Status",
+        "operationId": "data-get_bulk_follow_status",
+        "security": [{ "OAuth2PasswordBearer": [] }],
+        "parameters": [
+          {
+            "name": "follow_job_id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "title": "Follow Job Id" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BulkFollowJobStatusResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/data/channels/bulk-follow/{follow_job_id}/events": {
+      "get": {
+        "tags": ["data"],
+        "summary": "Bulk Follow Events",
+        "operationId": "data-bulk_follow_events",
+        "security": [{ "OAuth2PasswordBearer": [] }],
+        "parameters": [
+          {
+            "name": "follow_job_id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "title": "Follow Job Id" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": { "application/json": { "schema": {} } }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/data/channels/bulk-follow/{follow_job_id}/cancel": {
+      "post": {
+        "tags": ["data"],
+        "summary": "Cancel Bulk Follow",
+        "operationId": "data-cancel_bulk_follow",
+        "security": [{ "OAuth2PasswordBearer": [] }],
+        "parameters": [
+          {
+            "name": "follow_job_id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "title": "Follow Job Id" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CancelBulkFollowResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/data/channels/bulk-reresolve-start-ids": {
       "post": {
         "tags": ["data"],
@@ -3849,6 +3987,106 @@
         "required": ["updates"],
         "title": "BulkChannelTagsRequest"
       },
+      "BulkFollowChannelEntry": {
+        "properties": {
+          "name": { "type": "string", "title": "Name" },
+          "discoveredVia": {
+            "anyOf": [
+              { "$ref": "#/components/schemas/DiscoveredViaPayload" },
+              { "type": "null" }
+            ]
+          }
+        },
+        "type": "object",
+        "required": ["name"],
+        "title": "BulkFollowChannelEntry"
+      },
+      "BulkFollowJobStatusResponse": {
+        "properties": {
+          "followJobId": { "type": "string", "title": "Followjobid" },
+          "status": { "type": "string", "title": "Status" },
+          "source": { "type": "string", "title": "Source" },
+          "total": { "type": "integer", "title": "Total" },
+          "completed": { "type": "integer", "title": "Completed" },
+          "added": { "type": "integer", "title": "Added" },
+          "skipped": { "type": "integer", "title": "Skipped" },
+          "unavailable": { "type": "integer", "title": "Unavailable" },
+          "failed": { "type": "integer", "title": "Failed" },
+          "results": {
+            "items": {
+              "$ref": "#/components/schemas/FollowChannelResultResponse"
+            },
+            "type": "array",
+            "title": "Results"
+          },
+          "syncJobId": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Syncjobid"
+          },
+          "createdAt": { "type": "integer", "title": "Createdat" },
+          "finishedAt": {
+            "anyOf": [{ "type": "integer" }, { "type": "null" }],
+            "title": "Finishedat"
+          }
+        },
+        "type": "object",
+        "required": [
+          "followJobId",
+          "status",
+          "source",
+          "total",
+          "completed",
+          "added",
+          "skipped",
+          "unavailable",
+          "failed",
+          "results",
+          "createdAt"
+        ],
+        "title": "BulkFollowJobStatusResponse"
+      },
+      "BulkFollowRequest": {
+        "properties": {
+          "channels": {
+            "items": { "$ref": "#/components/schemas/BulkFollowChannelEntry" },
+            "type": "array",
+            "title": "Channels"
+          },
+          "proxyEnabled": {
+            "type": "boolean",
+            "title": "Proxyenabled",
+            "default": false
+          },
+          "proxies": {
+            "anyOf": [
+              { "items": { "type": "string" }, "type": "array" },
+              { "type": "null" }
+            ],
+            "title": "Proxies"
+          },
+          "torAutoRotate": {
+            "type": "boolean",
+            "title": "Torautorotate",
+            "default": false
+          },
+          "torRotationThreshold": {
+            "type": "integer",
+            "title": "Torrotationthreshold",
+            "default": 10
+          }
+        },
+        "type": "object",
+        "required": ["channels"],
+        "title": "BulkFollowRequest"
+      },
+      "BulkFollowStartResponse": {
+        "properties": {
+          "followJobId": { "type": "string", "title": "Followjobid" }
+        },
+        "type": "object",
+        "required": ["followJobId"],
+        "title": "BulkFollowStartResponse"
+      },
       "BulkReresolveStartIdsRequest": {
         "properties": {
           "dryRun": { "type": "boolean", "title": "Dryrun", "default": false },
@@ -3923,6 +4161,15 @@
         },
         "type": "object",
         "title": "BulkSyncSettingsRequest"
+      },
+      "CancelBulkFollowResponse": {
+        "properties": {
+          "followJobId": { "type": "string", "title": "Followjobid" },
+          "status": { "type": "string", "title": "Status" }
+        },
+        "type": "object",
+        "required": ["followJobId", "status"],
+        "title": "CancelBulkFollowResponse"
       },
       "CancelSyncJobResponse": {
         "properties": {
@@ -4049,6 +4296,16 @@
         "required": ["message"],
         "title": "ChatRequest"
       },
+      "DiscoveredViaPayload": {
+        "properties": {
+          "channelName": { "type": "string", "title": "Channelname" },
+          "postId": { "type": "integer", "title": "Postid" },
+          "timestamp": { "type": "integer", "title": "Timestamp" }
+        },
+        "type": "object",
+        "required": ["channelName", "postId", "timestamp"],
+        "title": "DiscoveredViaPayload"
+      },
       "EmbedRequest": {
         "properties": {
           "texts": {
@@ -4069,6 +4326,35 @@
         "type": "object",
         "required": ["texts"],
         "title": "EmbedRequest"
+      },
+      "FollowChannelResultResponse": {
+        "properties": {
+          "name": { "type": "string", "title": "Name" },
+          "status": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "running",
+              "added",
+              "unavailable",
+              "skipped",
+              "error",
+              "cancelled"
+            ],
+            "title": "Status"
+          },
+          "reason": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Reason"
+          },
+          "error": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Error"
+          }
+        },
+        "type": "object",
+        "required": ["name", "status"],
+        "title": "FollowChannelResultResponse"
       },
       "GlobalStartTimeSnapshot": {
         "properties": {

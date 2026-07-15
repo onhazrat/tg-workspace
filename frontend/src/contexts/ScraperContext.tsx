@@ -7,9 +7,17 @@ import React, {
   useState,
 } from "react"
 import { toast } from "sonner"
-import { api, type SyncJobStatus, subscribeSyncJobEvents } from "@/api"
+import {
+  api,
+  type BulkFollowChannelInput,
+  type FollowJobStatus,
+  type SyncJobStatus,
+  streamFollowJobEvents,
+  subscribeSyncJobEvents,
+} from "@/api"
 import { parseApiError, unavailableChannelToastMessage } from "@/lib/api-errors"
 import { env } from "@/lib/env"
+import { createdChannelNamesFromResults } from "@/lib/posts/discover-selection"
 import { useApiStatus } from "../hooks/useApiStatus"
 import { useDebouncedValue } from "../hooks/useDebouncedValue"
 import { useSyncQueue } from "../hooks/useSyncQueue"
@@ -92,6 +100,12 @@ interface ScraperContextType {
     channelName: string,
     discoveredVia?: { channelName: string; postId: number; timestamp: number },
   ) => Promise<void>
+  followDiscoverChannels: (
+    channels: BulkFollowChannelInput[],
+    options?: {
+      onProgress?: (status: FollowJobStatus) => void
+    },
+  ) => Promise<FollowJobStatus | null>
   forwardedFilter: "all" | "forwarded" | "original" | "unfollowed_forwarded"
   setForwardedFilter: React.Dispatch<
     React.SetStateAction<
@@ -119,6 +133,7 @@ export const ScraperProvider: React.FC<{ children: React.ReactNode }> = ({
   const {
     channels,
     selectedChannels,
+    setSelectedChannels,
     setChannelStats,
     loadChannels,
     loadSyncLogs,
@@ -837,6 +852,198 @@ export const ScraperProvider: React.FC<{ children: React.ReactNode }> = ({
     }
   }
 
+  const waitFollowJob = useCallback(
+    async (
+      followJobId: string,
+      onProgress?: (status: FollowJobStatus) => void,
+    ) => {
+      const abortController = new AbortController()
+      const timeoutId = window.setTimeout(
+        () => abortController.abort(),
+        env.syncJobTimeoutMs,
+      )
+
+      try {
+        for await (const status of streamFollowJobEvents(
+          followJobId,
+          abortController.signal,
+        )) {
+          onProgress?.(status)
+          if (["completed", "failed", "cancelled"].includes(status.status)) {
+            return status
+          }
+        }
+        const finalStatus = await api.getFollowJobStatus(followJobId)
+        onProgress?.(finalStatus)
+        return finalStatus
+      } catch (err) {
+        if (abortController.signal.aborted) {
+          throw new Error("Follow job timed out")
+        }
+        console.warn(
+          "[Scraper] SSE follow progress failed, falling back to polling:",
+          err,
+        )
+        const deadline = Date.now() + env.syncJobTimeoutMs
+        while (Date.now() < deadline) {
+          const status = await api.getFollowJobStatus(followJobId)
+          onProgress?.(status)
+          if (["completed", "failed", "cancelled"].includes(status.status)) {
+            return status
+          }
+          await new Promise((resolve) =>
+            setTimeout(resolve, env.syncJobFallbackPollMs),
+          )
+        }
+        throw new Error("Follow job timed out")
+      } finally {
+        window.clearTimeout(timeoutId)
+      }
+    },
+    [],
+  )
+
+  const followDiscoverChannels = useCallback(
+    async (
+      channelsToFollow: BulkFollowChannelInput[],
+      options?: {
+        onProgress?: (status: FollowJobStatus) => void
+      },
+    ): Promise<FollowJobStatus | null> => {
+      if (isOffline) {
+        toast.warning("Server offline — cannot follow channels while offline.")
+        return null
+      }
+      if (channelsToFollow.length === 0) return null
+
+      const activeProxies = buildActiveProxies({
+        proxyEnabled,
+        defaultProxyUrls,
+        torEnabled,
+        torMode,
+        torProxyUrls,
+      })
+
+      const followingNames = channelsToFollow.map((c) => c.name)
+      setScrapingChannels((prev) => {
+        const next = new Set(prev)
+        followingNames.forEach((n) => next.add(n))
+        return next
+      })
+
+      try {
+        const { followJobId } = await api.bulkFollowChannels({
+          channels: channelsToFollow,
+          proxyEnabled: isNetworkRoutingActive({
+            proxyEnabled,
+            defaultProxyUrls,
+            torEnabled,
+            torMode,
+            torProxyUrls,
+          }),
+          proxies: activeProxies,
+          torAutoRotate,
+          torRotationThreshold,
+        })
+
+        const followStatus = await waitFollowJob(
+          followJobId,
+          options?.onProgress,
+        )
+
+        const createdNames = createdChannelNamesFromResults(
+          followStatus.results,
+        )
+        if (createdNames.length > 0) {
+          setSelectedChannels((prev) => {
+            const next = new Set(prev)
+            for (const name of createdNames) next.add(name)
+            return next
+          })
+        }
+
+        await loadChannels()
+
+        const parts: string[] = []
+        if (followStatus.added > 0) parts.push(`${followStatus.added} added`)
+        if (followStatus.unavailable > 0)
+          parts.push(`${followStatus.unavailable} unavailable`)
+        if (followStatus.skipped > 0)
+          parts.push(`${followStatus.skipped} skipped`)
+        if (followStatus.failed > 0) parts.push(`${followStatus.failed} failed`)
+        const summary =
+          parts.length > 0
+            ? `Follow finished: ${parts.join(", ")}`
+            : "Follow finished"
+
+        if (followStatus.failed > 0 && followStatus.added === 0) {
+          toast.error(summary)
+        } else if (followStatus.unavailable > 0 && followStatus.added === 0) {
+          toast.warning(summary, { duration: 8000 })
+        } else {
+          toast.success(summary)
+        }
+
+        if (followStatus.syncJobId) {
+          const channelNames = followStatus.results
+            .filter((r) => r.status === "added")
+            .map((r) => r.name)
+          setScrapingChannels(new Set(channelNames))
+          try {
+            activeJobRef.current = followStatus.syncJobId
+            const syncResult = await waitSyncJob(followStatus.syncJobId)
+            const successes = syncResult.channels.filter(
+              (ch) => ch.status === "success",
+            )
+            for (const ch of successes) {
+              const s = await getChannelStats(ch.channelId, ch.channelName)
+              if (s) {
+                setChannelStats((prev) => ({
+                  ...prev,
+                  [ch.channelName]: { ...s, latestId: ch.newLatestId },
+                }))
+              }
+            }
+            await loadChannels()
+            await loadSyncLogs()
+            await handleFilterPosts()
+          } finally {
+            activeJobRef.current = null
+          }
+        }
+
+        return followStatus
+      } catch (err) {
+        console.error("[Scraper] Discover bulk follow failed:", err)
+        toast.error(err instanceof Error ? err.message : "Bulk follow failed")
+        return null
+      } finally {
+        setScrapingChannels((prev) => {
+          const next = new Set(prev)
+          followingNames.forEach((n) => next.delete(n))
+          return next
+        })
+      }
+    },
+    [
+      isOffline,
+      proxyEnabled,
+      defaultProxyUrls,
+      torEnabled,
+      torMode,
+      torProxyUrls,
+      torAutoRotate,
+      torRotationThreshold,
+      waitFollowJob,
+      waitSyncJob,
+      setSelectedChannels,
+      loadChannels,
+      loadSyncLogs,
+      handleFilterPosts,
+      setChannelStats,
+    ],
+  )
+
   return (
     <ScraperContext.Provider
       value={{
@@ -872,6 +1079,7 @@ export const ScraperProvider: React.FC<{ children: React.ReactNode }> = ({
         consecutiveFailures,
         setConsecutiveFailures,
         addNewChannel,
+        followDiscoverChannels,
         forwardedFilter,
         setForwardedFilter,
         mediaFilter,

@@ -50,6 +50,39 @@ export type BulkChannelTagUpdate = {
     }>;
 };
 
+export type BulkFollowChannelEntry = {
+    name: string;
+    discoveredVia?: (DiscoveredViaPayload | null);
+};
+
+export type BulkFollowJobStatusResponse = {
+    followJobId: string;
+    status: string;
+    source: string;
+    total: number;
+    completed: number;
+    added: number;
+    skipped: number;
+    unavailable: number;
+    failed: number;
+    results: Array<FollowChannelResultResponse>;
+    syncJobId?: (string | null);
+    createdAt: number;
+    finishedAt?: (number | null);
+};
+
+export type BulkFollowRequest = {
+    channels: Array<BulkFollowChannelEntry>;
+    proxyEnabled?: boolean;
+    proxies?: (Array<(string)> | null);
+    torAutoRotate?: boolean;
+    torRotationThreshold?: number;
+};
+
+export type BulkFollowStartResponse = {
+    followJobId: string;
+};
+
 export type BulkReresolveStartIdsRequest = {
     dryRun?: boolean;
     limit?: (number | null);
@@ -69,6 +102,11 @@ export type BulkSyncSettingsRequest = {
     dynamicSyncEnabled?: (boolean | null);
     autoSyncIntervalMinutes?: (number | null);
     dynamicSyncExpectedPosts?: (number | null);
+};
+
+export type CancelBulkFollowResponse = {
+    followJobId: string;
+    status: string;
 };
 
 export type CancelSyncJobResponse = {
@@ -111,11 +149,26 @@ export type ChatRequest = {
     provider?: string;
 };
 
+export type DiscoveredViaPayload = {
+    channelName: string;
+    postId: number;
+    timestamp: number;
+};
+
 export type EmbedRequest = {
     texts: Array<(string)>;
     model?: (string | null);
     provider?: string;
 };
+
+export type FollowChannelResultResponse = {
+    name: string;
+    status: 'pending' | 'running' | 'added' | 'unavailable' | 'skipped' | 'error' | 'cancelled';
+    reason?: (string | null);
+    error?: (string | null);
+};
+
+export type status = 'pending' | 'running' | 'added' | 'unavailable' | 'skipped' | 'error' | 'cancelled';
 
 export type GlobalStartTimeSnapshot = {
     mode: string;
@@ -539,6 +592,30 @@ export type DataDeleteChannelData = {
 export type DataDeleteChannelResponse = ({
     [key: string]: (string);
 });
+
+export type DataStartBulkFollowData = {
+    requestBody: BulkFollowRequest;
+};
+
+export type DataStartBulkFollowResponse = (BulkFollowStartResponse);
+
+export type DataGetBulkFollowStatusData = {
+    followJobId: string;
+};
+
+export type DataGetBulkFollowStatusResponse = (BulkFollowJobStatusResponse);
+
+export type DataBulkFollowEventsData = {
+    followJobId: string;
+};
+
+export type DataBulkFollowEventsResponse = (unknown);
+
+export type DataCancelBulkFollowData = {
+    followJobId: string;
+};
+
+export type DataCancelBulkFollowResponse = (CancelBulkFollowResponse);
 
 export type DataBulkReresolveStartIdsEndpointData = {
     requestBody?: BulkReresolveStartIdsRequest;

@@ -1,6 +1,77 @@
 """Request/response schemas for TG data API routes."""
 
+from typing import Literal
+
 from pydantic import BaseModel, Field
+
+
+class DiscoveredViaPayload(BaseModel):
+    channel_name: str = Field(alias="channelName")
+    post_id: int = Field(alias="postId")
+    timestamp: int
+
+    model_config = {"populate_by_name": True}
+
+
+class BulkFollowChannelEntry(BaseModel):
+    name: str
+    discovered_via: DiscoveredViaPayload | None = Field(
+        default=None, alias="discoveredVia"
+    )
+
+    model_config = {"populate_by_name": True}
+
+
+class BulkFollowRequest(BaseModel):
+    channels: list[BulkFollowChannelEntry]
+    proxy_enabled: bool = Field(False, alias="proxyEnabled")
+    proxies: list[str] | None = None
+    tor_auto_rotate: bool = Field(False, alias="torAutoRotate")
+    tor_rotation_threshold: int = Field(10, alias="torRotationThreshold")
+
+    model_config = {"populate_by_name": True}
+
+
+class BulkFollowStartResponse(BaseModel):
+    follow_job_id: str = Field(..., alias="followJobId")
+
+    model_config = {"populate_by_name": True}
+
+
+class FollowChannelResultResponse(BaseModel):
+    name: str
+    status: Literal[
+        "pending", "running", "added", "unavailable", "skipped", "error", "cancelled"
+    ]
+    reason: str | None = None
+    error: str | None = None
+
+    model_config = {"populate_by_name": True}
+
+
+class BulkFollowJobStatusResponse(BaseModel):
+    follow_job_id: str = Field(..., alias="followJobId")
+    status: str
+    source: str
+    total: int
+    completed: int
+    added: int
+    skipped: int
+    unavailable: int
+    failed: int
+    results: list[FollowChannelResultResponse]
+    sync_job_id: str | None = Field(None, alias="syncJobId")
+    created_at: int = Field(..., alias="createdAt")
+    finished_at: int | None = Field(None, alias="finishedAt")
+
+    model_config = {"populate_by_name": True}
+
+
+class CancelBulkFollowResponse(BaseModel):
+    follow_job_id: str = Field(..., alias="followJobId")
+    status: str
+
+    model_config = {"populate_by_name": True}
 
 
 class BulkReresolveStartIdsRequest(BaseModel):

@@ -15,7 +15,58 @@ import type {
   SyncLog,
   TagRun,
 } from "../types"
-import { request } from "./base"
+import { request, sseJsonStream } from "./base"
+
+export type DiscoveredViaPayload = {
+  channelName: string
+  postId: number
+  timestamp: number
+}
+
+export type BulkFollowChannelInput = {
+  name: string
+  discoveredVia?: DiscoveredViaPayload
+}
+
+export type BulkFollowRequest = {
+  channels: BulkFollowChannelInput[]
+  proxyEnabled?: boolean
+  proxies?: string[]
+  torAutoRotate?: boolean
+  torRotationThreshold?: number
+}
+
+export type FollowChannelResultStatus =
+  | "pending"
+  | "running"
+  | "added"
+  | "unavailable"
+  | "skipped"
+  | "error"
+  | "cancelled"
+
+export type FollowChannelResult = {
+  name: string
+  status: FollowChannelResultStatus
+  reason?: string
+  error?: string
+}
+
+export type FollowJobStatus = {
+  followJobId: string
+  status: string
+  source: string
+  total: number
+  completed: number
+  added: number
+  skipped: number
+  unavailable: number
+  failed: number
+  results: FollowChannelResult[]
+  syncJobId: string | null
+  createdAt: number
+  finishedAt: number | null
+}
 
 const CHANNEL_INHERITED_WRITE_FIELDS = [
   "regularSyncEnabled",
@@ -374,4 +425,26 @@ export const dataApi = {
         body: JSON.stringify(body),
       },
     ),
+
+  bulkFollowChannels: (body: BulkFollowRequest) =>
+    request<{ followJobId: string }>("/api/v1/data/channels/bulk-follow", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  getFollowJobStatus: (followJobId: string) =>
+    request<FollowJobStatus>(
+      `/api/v1/data/channels/bulk-follow/${followJobId}`,
+    ),
+}
+
+/** Subscribe to bulk-follow job progress via SSE (full status snapshots). */
+export async function* streamFollowJobEvents(
+  followJobId: string,
+  signal?: AbortSignal,
+): AsyncGenerator<FollowJobStatus> {
+  yield* sseJsonStream<FollowJobStatus>(
+    `/api/v1/data/channels/bulk-follow/${followJobId}/events`,
+    { signal },
+  )
 }

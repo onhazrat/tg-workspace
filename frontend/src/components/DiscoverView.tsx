@@ -1,7 +1,8 @@
 import { Compass, Plus } from "lucide-react"
 import { motion } from "motion/react"
 import type React from "react"
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
+import type { FollowJobStatus } from "@/api"
 import {
   type DiscoveryQuickAction,
   FORWARDED_FILTER_LABELS,
@@ -15,6 +16,17 @@ import {
   type DiscoverSortKey,
   sortForwardSourceCandidates,
 } from "@/lib/posts/discover-forward-sources"
+import {
+  buildBulkFollowChannels,
+  headerCheckboxState,
+  isRowCheckboxChecked,
+  isRowCheckboxDisabled,
+  needsBulkFollowConfirm,
+  pruneSelectionAfterFollow,
+  toggleSelectAllUnfollowed,
+  toggleUnfollowedSelection,
+} from "@/lib/posts/discover-selection"
+import { telegramWebViewChannelUrl } from "@/lib/telegram-web"
 import { formatDateToLocalISO } from "@/lib/utils"
 import { useData } from "../contexts/DataContext"
 import { useScraper } from "../contexts/ScraperContext"
@@ -30,12 +42,20 @@ export const DiscoverView: React.FC = () => {
     setForwardedFilter,
     postSearch,
     semanticSearchQuery,
-    addNewChannel,
+    followDiscoverChannels,
     setPostSearch,
   } = useScraper()
   const { setActiveTab, startDate, endDate } = useUI()
   const { isOffline } = useApiStatus()
   const [sortKey, setSortKey] = useState<DiscoverSortKey>("postCount")
+  const [selectedForFollow, setSelectedForFollow] = useState<Set<string>>(
+    () => new Set(),
+  )
+  const [isFollowJobRunning, setIsFollowJobRunning] = useState(false)
+  const [followProgress, setFollowProgress] = useState<FollowJobStatus | null>(
+    null,
+  )
+  const headerCheckboxRef = useRef<HTMLInputElement>(null)
 
   const { candidates: rawCandidates, emptyReason } = useMemo(
     () =>
@@ -58,6 +78,13 @@ export const DiscoverView: React.FC = () => {
     [rawCandidates, sortKey],
   )
 
+  const candidatesByName = useMemo(() => {
+    const map = new Map(
+      candidates.map((row) => [row.name, { samplePost: row.samplePost }]),
+    )
+    return map
+  }, [candidates])
+
   const emptyState = resolveDiscoveryEmptyState(emptyReason)
   const forwardPostCount = useMemo(
     () => countForwardPosts(filteredPosts),
@@ -67,6 +94,25 @@ export const DiscoverView: React.FC = () => {
     () => countUnfollowedSources(candidates),
     [candidates],
   )
+
+  const headerState = useMemo(
+    () => headerCheckboxState(candidates, selectedForFollow),
+    [candidates, selectedForFollow],
+  )
+
+  useEffect(() => {
+    if (headerCheckboxRef.current) {
+      headerCheckboxRef.current.indeterminate = headerState === "indeterminate"
+    }
+  }, [headerState])
+
+  const resultStatusByName = useMemo(() => {
+    const map = new Map<string, string>()
+    for (const result of followProgress?.results ?? []) {
+      map.set(result.name, result.status)
+    }
+    return map
+  }, [followProgress])
 
   const runQuickAction = (action: DiscoveryQuickAction) => {
     if (action.type === "set_forwarded_filter") {
@@ -82,10 +128,45 @@ export const DiscoverView: React.FC = () => {
     setActiveTab("posts")
   }
 
+  const startFollow = async (names: string[]) => {
+    if (names.length === 0 || isOffline || isFollowJobRunning) return
+    if (needsBulkFollowConfirm(names.length)) {
+      const confirmed = window.confirm(
+        `Follow ${names.length} channels? This will scrape and add each selected source.`,
+      )
+      if (!confirmed) return
+    }
+
+    const payload = buildBulkFollowChannels(names, candidatesByName)
+    setIsFollowJobRunning(true)
+    setFollowProgress(null)
+    try {
+      const status = await followDiscoverChannels(payload, {
+        onProgress: setFollowProgress,
+      })
+      if (status) {
+        setSelectedForFollow((prev) =>
+          pruneSelectionAfterFollow(prev, status.results),
+        )
+        setFollowProgress(status)
+      }
+    } finally {
+      setIsFollowJobRunning(false)
+    }
+  }
+
   const handleFollow = async (name: string) => {
     const candidate = candidates.find((row) => row.name === name)
     if (!candidate || candidate.isFollowed) return
-    await addNewChannel(name, candidate.samplePost)
+    await startFollow([name])
+  }
+
+  const handleFollowSelected = async () => {
+    const names = [...selectedForFollow].filter((name) => {
+      const row = candidates.find((c) => c.name === name)
+      return row && !row.isFollowed
+    })
+    await startFollow(names)
   }
 
   return (
@@ -175,6 +256,55 @@ export const DiscoverView: React.FC = () => {
           ) : null}
         </div>
 
+        {candidates.length > 0 && selectedForFollow.size > 0 ? (
+          <div
+            className="mb-3 flex flex-wrap items-center gap-3 rounded-lg border border-blue-500/20 bg-blue-500/5 px-3 py-2"
+            data-testid="discover-bulk-bar"
+          >
+            <span className="text-xs font-bold uppercase tracking-wider text-app-ink/70">
+              {selectedForFollow.size} selected
+            </span>
+            <button
+              type="button"
+              data-testid="discover-follow-selected"
+              disabled={isOffline || isFollowJobRunning}
+              onClick={() => void handleFollowSelected()}
+              className="inline-flex items-center gap-1 rounded-full border border-blue-500/30 px-2.5 py-1 text-xs font-bold uppercase tracking-wider text-blue-600 transition-colors hover:bg-blue-500/10 disabled:cursor-not-allowed disabled:opacity-40 dark:text-blue-400"
+            >
+              <Plus size={12} />
+              Follow selected
+            </button>
+            <button
+              type="button"
+              data-testid="discover-clear-selection"
+              disabled={isFollowJobRunning}
+              onClick={() => setSelectedForFollow(new Set())}
+              className="rounded-full border border-app-ink/20 px-2.5 py-1 text-xs font-bold uppercase tracking-wider text-app-ink/60 transition-colors hover:bg-app-muted/30 disabled:opacity-40"
+            >
+              Clear
+            </button>
+            {isFollowJobRunning && followProgress ? (
+              <span
+                className="text-xs text-app-ink/60"
+                data-testid="discover-follow-progress"
+              >
+                Following… {followProgress.completed}/{followProgress.total}
+              </span>
+            ) : null}
+          </div>
+        ) : null}
+
+        {isFollowJobRunning &&
+        followProgress &&
+        selectedForFollow.size === 0 ? (
+          <div
+            className="mb-3 text-xs text-app-ink/60"
+            data-testid="discover-follow-progress"
+          >
+            Following… {followProgress.completed}/{followProgress.total}
+          </div>
+        ) : null}
+
         {candidates.length === 0 && emptyState ? (
           <div className="space-y-3">
             <p className="text-sm font-medium text-app-ink">
@@ -201,6 +331,26 @@ export const DiscoverView: React.FC = () => {
             <table className="w-full min-w-[800px] text-left text-sm">
               <thead className="text-[11px] uppercase tracking-wider text-app-ink/50">
                 <tr>
+                  <th className="w-10 pb-2">
+                    <input
+                      ref={headerCheckboxRef}
+                      type="checkbox"
+                      data-testid="discover-select-all"
+                      checked={headerState === "checked"}
+                      disabled={
+                        isOffline ||
+                        isFollowJobRunning ||
+                        unfollowedSourceCount === 0
+                      }
+                      onChange={() =>
+                        setSelectedForFollow((prev) =>
+                          toggleSelectAllUnfollowed(candidates, prev),
+                        )
+                      }
+                      className="accent-blue-600"
+                      aria-label="Select all unfollowed sources"
+                    />
+                  </th>
                   <th className="pb-2">Channel</th>
                   <th className="pb-2">Posts</th>
                   <th className="pb-2">Forwarded by</th>
@@ -209,57 +359,121 @@ export const DiscoverView: React.FC = () => {
                 </tr>
               </thead>
               <tbody>
-                {candidates.map((row) => (
-                  <tr key={row.name} className="border-t border-app-ink/10">
-                    <td className="py-2">
-                      <div className="font-mono">@{row.name}</div>
-                      {row.displayName ? (
-                        <div className="text-xs text-app-ink/60">
-                          {row.displayName}
-                        </div>
-                      ) : null}
-                    </td>
-                    <td className="py-2">{row.postCount}</td>
-                    <td className="py-2">
-                      {row.forwardedBy
-                        .map(
-                          (entry) => `@${entry.channelName} (${entry.count})`,
-                        )
-                        .join(", ")}
-                    </td>
-                    <td className="py-2">
-                      <RelativeTime timestamp={row.lastSeen} />
-                    </td>
-                    <td className="py-2">
-                      <div className="flex flex-wrap items-center gap-2">
-                        {row.isFollowed ? (
-                          <span className="rounded-full bg-app-muted/40 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-app-ink/60">
-                            Following
+                {candidates.map((row) => {
+                  const rowStatus = resultStatusByName.get(row.name)
+                  return (
+                    <tr key={row.name} className="border-t border-app-ink/10">
+                      <td className="py-2 align-middle">
+                        <input
+                          type="checkbox"
+                          data-testid={`discover-select-${row.name}`}
+                          checked={isRowCheckboxChecked(
+                            row.name,
+                            row.isFollowed,
+                            selectedForFollow,
+                          )}
+                          disabled={
+                            isOffline ||
+                            isRowCheckboxDisabled(
+                              row.isFollowed,
+                              isFollowJobRunning,
+                            )
+                          }
+                          onChange={() =>
+                            setSelectedForFollow((prev) =>
+                              toggleUnfollowedSelection(
+                                row.name,
+                                row.isFollowed,
+                                prev,
+                              ),
+                            )
+                          }
+                          className="accent-blue-600"
+                          aria-label={
+                            row.isFollowed
+                              ? `@${row.name} already followed`
+                              : `Select @${row.name} to follow`
+                          }
+                        />
+                      </td>
+                      <td className="py-2">
+                        <a
+                          href={telegramWebViewChannelUrl(row.name)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          data-testid={`discover-channel-link-${row.name}`}
+                          className="font-mono text-blue-600 underline-offset-2 hover:underline dark:text-blue-400"
+                        >
+                          @{row.name}
+                        </a>
+                        {row.displayName ? (
+                          <div className="text-xs text-app-ink/60">
+                            {row.displayName}
+                          </div>
+                        ) : null}
+                        {rowStatus &&
+                        rowStatus !== "pending" &&
+                        isFollowJobRunning ? (
+                          <div className="mt-0.5 text-[10px] uppercase tracking-wider text-app-ink/50">
+                            {rowStatus}
+                          </div>
+                        ) : null}
+                      </td>
+                      <td className="py-2">{row.postCount}</td>
+                      <td className="py-2">
+                        {row.forwardedBy.map((entry, index) => (
+                          <span key={entry.channelName}>
+                            {index > 0 ? ", " : null}
+                            <a
+                              href={telegramWebViewChannelUrl(
+                                entry.channelName,
+                              )}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              data-testid={`discover-forwarded-by-link-${entry.channelName}`}
+                              className="font-mono text-blue-600 underline-offset-2 hover:underline dark:text-blue-400"
+                            >
+                              @{entry.channelName}
+                            </a>
+                            {` (${entry.count})`}
                           </span>
-                        ) : (
+                        ))}
+                      </td>
+                      <td className="py-2">
+                        <RelativeTime timestamp={row.lastSeen} />
+                      </td>
+                      <td className="py-2">
+                        <div className="flex flex-wrap items-center gap-2">
+                          {row.isFollowed ? (
+                            <span className="rounded-full bg-app-muted/40 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-app-ink/60">
+                              Following
+                            </span>
+                          ) : (
+                            <button
+                              type="button"
+                              data-testid={`discover-follow-${row.name}`}
+                              disabled={isOffline || isFollowJobRunning}
+                              onClick={() => void handleFollow(row.name)}
+                              className="inline-flex items-center gap-1 rounded-full border border-blue-500/30 px-2.5 py-1 text-xs font-bold uppercase tracking-wider text-blue-600 transition-colors hover:bg-blue-500/10 disabled:cursor-not-allowed disabled:opacity-40 dark:text-blue-400"
+                            >
+                              <Plus size={12} />
+                              Follow
+                            </button>
+                          )}
                           <button
                             type="button"
-                            disabled={isOffline}
-                            onClick={() => void handleFollow(row.name)}
-                            className="inline-flex items-center gap-1 rounded-full border border-blue-500/30 px-2.5 py-1 text-xs font-bold uppercase tracking-wider text-blue-600 transition-colors hover:bg-blue-500/10 disabled:cursor-not-allowed disabled:opacity-40 dark:text-blue-400"
+                            onClick={() =>
+                              handleViewPosts(row.name, row.isFollowed)
+                            }
+                            className="rounded-full border border-app-ink/20 px-2.5 py-1 text-xs font-bold uppercase tracking-wider text-app-ink/70 transition-colors hover:bg-app-muted/30"
                           >
-                            <Plus size={12} />
-                            Follow
+                            View posts
                           </button>
-                        )}
-                        <button
-                          type="button"
-                          onClick={() =>
-                            handleViewPosts(row.name, row.isFollowed)
-                          }
-                          className="rounded-full border border-app-ink/20 px-2.5 py-1 text-xs font-bold uppercase tracking-wider text-app-ink/70 transition-colors hover:bg-app-muted/30"
-                        >
-                          View posts
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                        </div>
+                      </td>
+                    </tr>
+                  )
+                })}
               </tbody>
             </table>
           </div>

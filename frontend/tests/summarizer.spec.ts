@@ -103,6 +103,201 @@ async function gotoSummarizer(page: Page, tab = "summary") {
   await expect(page.getByTestId("command-palette-button")).toBeVisible()
 }
 
+type DiscoverForwardFixture = {
+  carrierName: string
+  /** Already-followed forward source (appears checked+disabled). */
+  followedSource?: string
+  /** Unfollowed forward sources shown as follow candidates. */
+  unfollowedSources: string[]
+}
+
+async function mockDiscoverForwardPosts(
+  page: Page,
+  fixture: DiscoverForwardFixture,
+) {
+  const now = Date.now()
+  const etag = `${fixture.carrierName}-${now}`
+  const posts: Array<Record<string, unknown>> = []
+  // High ids avoid collisions with auto-sync scrape upserts that overwrite id=1.
+  let postId = 900_000_000 + (now % 100_000)
+
+  if (fixture.followedSource) {
+    posts.push({
+      id: postId++,
+      channelName: fixture.carrierName,
+      text: "Forward from followed source",
+      date: new Date(now - 5_000).toISOString(),
+      timestamp: now - 5_000,
+      forwardedFrom: fixture.followedSource,
+      forwardedFromName: fixture.followedSource,
+    })
+  }
+
+  for (const source of fixture.unfollowedSources) {
+    posts.push({
+      id: postId++,
+      channelName: fixture.carrierName,
+      text: `Forward from ${source}`,
+      date: new Date(now - 10_000 - posts.length * 1000).toISOString(),
+      timestamp: now - 10_000 - posts.length * 1000,
+      forwardedFrom: source,
+      forwardedFromName: source,
+    })
+  }
+
+  await page.route("**/api/v1/data/sync-meta**", async (route) => {
+    await route.fulfill({
+      json: {
+        channels: {
+          etag: `playwright-discover-channels-${etag}`,
+          updatedAt: new Date().toISOString(),
+        },
+        posts: {
+          etag: `playwright-discover-posts-${etag}`,
+          updatedAt: new Date().toISOString(),
+        },
+      },
+    })
+  })
+
+  await page.route("**/api/v1/data/posts**", async (route) => {
+    if (route.request().method() !== "GET") {
+      await route.continue()
+      return
+    }
+    await route.fulfill({ json: posts })
+  })
+
+  await page.evaluate((ts) => {
+    localStorage.removeItem("sync_etag_posts")
+    localStorage.setItem("startDateTs", String(ts - 14 * 24 * 60 * 60 * 1000))
+    localStorage.setItem("endDateTs", String(ts + 60_000))
+    localStorage.setItem("postFilter_maxPerChannel", "0")
+  }, now)
+}
+
+function completedFollowJobStatus(followJobId: string, channelNames: string[]) {
+  return {
+    followJobId,
+    status: "completed",
+    source: "Discover bulk follow",
+    total: channelNames.length,
+    completed: channelNames.length,
+    added: channelNames.length,
+    skipped: 0,
+    unavailable: 0,
+    failed: 0,
+    results: channelNames.map((name) => ({ name, status: "added" })),
+    syncJobId: null,
+    createdAt: Date.now(),
+    finishedAt: Date.now(),
+  }
+}
+
+/** Mock bulk-follow create + SSE completion; returns POST call recorder. */
+async function mockBulkFollowJob(page: Page, followJobId = "e2e-follow-job") {
+  const postBodies: unknown[] = []
+
+  await page.route("**/api/v1/data/channels/bulk-follow/**", async (route) => {
+    const url = route.request().url()
+    if (url.includes("/events")) {
+      const jobId =
+        url.match(/bulk-follow\/([^/]+)\/events/)?.[1] ?? followJobId
+      const names =
+        (
+          postBodies[0] as { channels?: Array<{ name: string }> } | undefined
+        )?.channels?.map((c) => c.name) ?? []
+      const status = completedFollowJobStatus(jobId, names)
+      await route.fulfill({
+        status: 200,
+        contentType: "text/event-stream",
+        body: `data: ${JSON.stringify(status)}\n\ndata: [DONE]\n\n`,
+      })
+      return
+    }
+
+    if (route.request().method() === "GET") {
+      const jobId = url.match(/bulk-follow\/([^/?]+)/)?.[1] ?? followJobId
+      const names =
+        (
+          postBodies[0] as { channels?: Array<{ name: string }> } | undefined
+        )?.channels?.map((c) => c.name) ?? []
+      await route.fulfill({
+        json: completedFollowJobStatus(jobId, names),
+      })
+      return
+    }
+
+    await route.continue()
+  })
+
+  await page.route("**/api/v1/data/channels/bulk-follow", async (route) => {
+    if (route.request().method() !== "POST") {
+      await route.continue()
+      return
+    }
+    postBodies.push(route.request().postDataJSON())
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ followJobId }),
+    })
+  })
+
+  return {
+    getPostCount: () => postBodies.length,
+    getPostBodies: () => postBodies,
+  }
+}
+
+async function openDiscoverWithForwards(
+  page: Page,
+  fixture: DiscoverForwardFixture,
+) {
+  await mockDiscoverForwardPosts(page, fixture)
+
+  // Seeded channels auto-select on first load when prevChannelNames is empty.
+  // Land on channels, let that settle, then pin selection to the carrier only.
+  await gotoSummarizer(page, "channels")
+  await openPaletteKeyboard(page)
+  await runPaletteCommand(page, "clear selection")
+  await closePaletteKeyboard(page)
+  await selectChannelsKeyboard(page, [fixture.carrierName])
+
+  // Force a fresh mock pull on Discover mount (avoid IDB pollution from sync jobs).
+  await page.evaluate(() => {
+    localStorage.removeItem("sync_etag_posts")
+  })
+
+  await gotoSummarizer(page, "discover")
+  await expect(
+    page.getByRole("heading", { name: "Forward Sources" }),
+  ).toBeVisible()
+
+  const expectedSources =
+    fixture.unfollowedSources.length + (fixture.followedSource ? 1 : 0)
+  await expect(
+    page
+      .getByText(`Unique sources: ${expectedSources}`, { exact: false })
+      .first(),
+  ).toBeVisible({ timeout: 15_000 })
+
+  for (const source of fixture.unfollowedSources) {
+    await expect(
+      page.getByTestId(`discover-channel-link-${source}`),
+    ).toBeVisible({ timeout: 15_000 })
+  }
+  if (fixture.followedSource) {
+    await expect(
+      page.getByTestId(`discover-channel-link-${fixture.followedSource}`),
+    ).toBeVisible({ timeout: 15_000 })
+    // Wait until channels list marks this source as already followed (D5B).
+    await expect(
+      page.getByTestId(`discover-select-${fixture.followedSource}`),
+    ).toBeDisabled({ timeout: 15_000 })
+  }
+}
+
 test.describe("TG Summarizer", () => {
   test("summarizer shell renders workspace tabs", async ({ page }) => {
     await page.goto("/summarizer")
@@ -157,13 +352,177 @@ test.describe("TG Summarizer", () => {
   test("discover tab shows original-only empty guide", async ({ page }) => {
     await gotoSummarizer(page, "posts")
     await page.getByRole("button", { name: "Original Only" }).click()
-    await page.locator("#tour-tab-discover").click()
+    await page.locator("#workspace-tab-discover").click()
 
     await expect(page).toHaveURL(/tab=discover/)
     await expect(page.getByText(/forward metadata/i)).toBeVisible()
     await expect(
       page.getByRole("button", { name: "Show all posts" }),
     ).toBeVisible()
+  })
+
+  test("discover channel and forwarded-by links use web-view /s/ hrefs", async ({
+    page,
+  }) => {
+    test.setTimeout(90_000)
+    const stamp = Date.now()
+    const carrierName = `dscarr${stamp}`
+    const followedSource = `dsfoll${stamp}`
+    const unfollowedSource = `dsunf${stamp}`
+
+    await gotoSummarizer(page, "channels")
+    await seedTestChannel(page, carrierName)
+    await seedTestChannel(page, followedSource)
+
+    await openDiscoverWithForwards(page, {
+      carrierName,
+      followedSource,
+      unfollowedSources: [unfollowedSource],
+    })
+
+    const channelLink = page.getByTestId(
+      `discover-channel-link-${unfollowedSource}`,
+    )
+    await expect(channelLink).toHaveAttribute(
+      "href",
+      new RegExp(`/s/${unfollowedSource}`),
+    )
+    await expect(channelLink).toHaveAttribute("target", "_blank")
+
+    const followedLink = page.getByTestId(
+      `discover-channel-link-${followedSource}`,
+    )
+    await expect(followedLink).toHaveAttribute(
+      "href",
+      new RegExp(`/s/${followedSource}`),
+    )
+
+    const forwardedByLink = page
+      .getByTestId(`discover-forwarded-by-link-${carrierName}`)
+      .first()
+    await expect(forwardedByLink).toHaveAttribute(
+      "href",
+      new RegExp(`/s/${carrierName}`),
+    )
+  })
+
+  test("discover followed row checkbox is checked and disabled", async ({
+    page,
+  }) => {
+    test.setTimeout(90_000)
+    const stamp = Date.now()
+    const carrierName = `dscarr${stamp}`
+    const followedSource = `dsfoll${stamp}`
+    const unfollowedSource = `dsunf${stamp}`
+
+    await gotoSummarizer(page, "channels")
+    await seedTestChannel(page, carrierName)
+    await seedTestChannel(page, followedSource)
+
+    await openDiscoverWithForwards(page, {
+      carrierName,
+      followedSource,
+      unfollowedSources: [unfollowedSource],
+    })
+
+    const followedCheckbox = page.getByTestId(
+      `discover-select-${followedSource}`,
+    )
+    await expect(followedCheckbox).toBeChecked()
+    await expect(followedCheckbox).toBeDisabled()
+
+    const unfollowedCheckbox = page.getByTestId(
+      `discover-select-${unfollowedSource}`,
+    )
+    await expect(unfollowedCheckbox).not.toBeChecked()
+    await expect(unfollowedCheckbox).toBeEnabled()
+  })
+
+  test("discover follow selected sends one bulk-follow POST", async ({
+    page,
+  }) => {
+    test.setTimeout(90_000)
+    const stamp = Date.now()
+    const carrierName = `dscarr${stamp}`
+    const sources = [`dsunfa${stamp}`, `dsunfb${stamp}`]
+
+    await gotoSummarizer(page, "channels")
+    await seedTestChannel(page, carrierName)
+
+    const bulkFollow = await mockBulkFollowJob(page)
+    await openDiscoverWithForwards(page, {
+      carrierName,
+      unfollowedSources: sources,
+    })
+
+    for (const source of sources) {
+      await page.getByTestId(`discover-select-${source}`).click()
+    }
+    await expect(page.getByTestId("discover-bulk-bar")).toBeVisible()
+    await expect(page.getByText("2 selected")).toBeVisible()
+
+    const dialogs: string[] = []
+    page.on("dialog", (dialog) => {
+      dialogs.push(dialog.message())
+      void dialog.dismiss()
+    })
+
+    await page.getByTestId("discover-follow-selected").click()
+
+    await expect.poll(() => bulkFollow.getPostCount()).toBe(1)
+    expect(dialogs).toHaveLength(0)
+
+    const body = bulkFollow.getPostBodies()[0] as {
+      channels: Array<{ name: string }>
+    }
+    expect(body.channels.map((c) => c.name).sort()).toEqual([...sources].sort())
+
+    await expect(page.getByText(/Follow finished/i)).toBeVisible({
+      timeout: 15_000,
+    })
+  })
+
+  test("discover follow selected confirms when selection is at least 5", async ({
+    page,
+  }) => {
+    test.setTimeout(90_000)
+    const stamp = Date.now()
+    const carrierName = `dscarr${stamp}`
+    const sources = Array.from(
+      { length: 5 },
+      (_, index) => `dsunf${index}${stamp}`,
+    )
+
+    await gotoSummarizer(page, "channels")
+    await seedTestChannel(page, carrierName)
+
+    const bulkFollow = await mockBulkFollowJob(page)
+    await openDiscoverWithForwards(page, {
+      carrierName,
+      unfollowedSources: sources,
+    })
+
+    await page.getByTestId("discover-select-all").click()
+    await expect(page.getByText("5 selected")).toBeVisible()
+
+    page.once("dialog", (dialog) => {
+      expect(dialog.message()).toMatch(/Follow 5 channels/)
+      void dialog.dismiss()
+    })
+    await page.getByTestId("discover-follow-selected").click()
+    await expect.poll(() => bulkFollow.getPostCount()).toBe(0)
+
+    page.once("dialog", (dialog) => {
+      expect(dialog.message()).toMatch(/Follow 5 channels/)
+      void dialog.accept()
+    })
+    await page.getByTestId("discover-follow-selected").click()
+    await expect.poll(() => bulkFollow.getPostCount()).toBe(1)
+
+    const body = bulkFollow.getPostBodies()[0] as {
+      channels: Array<{ name: string }>
+    }
+    expect(body.channels).toHaveLength(5)
   })
 
   test("tag tab paste applies tags for all selected channels", async ({
