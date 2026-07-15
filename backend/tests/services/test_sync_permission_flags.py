@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import time
 import uuid
 from unittest.mock import AsyncMock, patch
 
@@ -22,6 +23,18 @@ from app.services.scraper_jobs import clear_jobs_for_tests
 
 PREFIX = f"{settings.API_V1_STR}/jobs"
 DATA = f"{settings.API_V1_STR}/data"
+
+
+def _wait_for_job(client: TestClient, job_id: str, headers: dict[str, str]) -> dict:
+    deadline = time.time() + 10
+    data: dict = {}
+    while time.time() < deadline:
+        status_r = client.get(f"{PREFIX}/sync/{job_id}", headers=headers)
+        data = status_r.json()
+        if data["status"] in ("completed", "failed", "cancelled"):
+            break
+        time.sleep(0.1)
+    return data
 
 
 def _auth(client: TestClient) -> dict[str, str]:
@@ -151,7 +164,7 @@ def test_sync_all_excludes_restricted_and_frozen(client: TestClient) -> None:
         )
         assert r.status_code == 200
         job_id = r.json()["jobId"]
-        status = client.get(f"{PREFIX}/sync/{job_id}", headers=headers).json()
+        status = _wait_for_job(client, job_id, headers)
         names = {ch["channelName"] for ch in status["channels"]}
         assert names == {"sync-all-default"}
 
@@ -203,7 +216,7 @@ def test_recheck_restricted_targets_unavailable_channels(client: TestClient) -> 
         )
         assert r.status_code == 200
         job_id = r.json()["jobId"]
-        status = client.get(f"{PREFIX}/sync/{job_id}", headers=headers).json()
+        status = _wait_for_job(client, job_id, headers)
         names = {ch["channelName"] for ch in status["channels"]}
         assert names == {"recheck-restricted"}
 
