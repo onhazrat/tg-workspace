@@ -5,7 +5,7 @@ from __future__ import annotations
 import time
 import uuid
 from datetime import datetime
-from typing import Any, cast
+from typing import Any, Literal, cast
 
 from fastapi import HTTPException
 from sqlalchemy import or_
@@ -18,6 +18,14 @@ from app.services.sync_schedule import (
     compute_next_dynamic_sync_at_from_last_updated,
     compute_next_regular_sync_at_from_last_updated,
 )
+
+SyncOperationMode = Literal[
+    "sync_all", "bulk", "individual", "recheck_restricted", "auto"
+]
+
+SyncPermissionCheckMode = Literal[
+    "sync_all", "bulk", "individual", "recheck_restricted"
+]
 
 
 def _velocity_from_timestamps(timestamps: list[int]) -> float:
@@ -95,6 +103,10 @@ INHERITED_SNAKE_FIELDS = frozenset(
         "auto_follow_forwarded",
         "is_frozen",
         "is_unavailable_on_web_view",
+        "include_in_sync_all",
+        "include_in_bulk_sync",
+        "allow_individual_sync",
+        "reset_sync_enabled",
     }
 )
 
@@ -264,7 +276,76 @@ def default_group_field_values(_session: Session | None = None) -> dict[str, Any
         "auto_follow_forwarded": DEFAULT_GROUP_AUTO_FOLLOW_FORWARDED,
         "is_frozen": False,
         "is_unavailable_on_web_view": False,
+        "include_in_sync_all": True,
+        "include_in_bulk_sync": True,
+        "allow_individual_sync": True,
+        "reset_sync_enabled": True,
     }
+
+
+def is_restricted_group(group: ChannelSettingGroup) -> bool:
+    return group.id.startswith("restricted-") or group.is_unavailable_on_web_view
+
+
+def channel_allows_sync_operation(
+    group: ChannelSettingGroup,
+    operation: SyncPermissionCheckMode,
+) -> bool:
+    if operation == "sync_all":
+        return group.include_in_sync_all
+    if operation in ("bulk", "recheck_restricted"):
+        return group.include_in_bulk_sync
+    return group.allow_individual_sync
+
+
+def channel_allows_reset(
+    group: ChannelSettingGroup,
+    *,
+    bulk: bool,
+) -> bool:
+    if not group.reset_sync_enabled:
+        return False
+    if bulk:
+        return group.include_in_bulk_sync
+    return True
+
+
+def move_channel_from_restricted_to_default(
+    session: Session,
+    channel: Channel,
+    *,
+    user_id: uuid.UUID | None,
+) -> ChannelSettingGroup | None:
+    group = session.get(ChannelSettingGroup, channel.setting_group_id)
+    if not group or not is_restricted_group(group):
+        return None
+    default_group = ensure_default_group(session, user_id=user_id or channel.user_id)
+    channel.setting_group_id = default_group.id
+    channel.updated_at = datetime.utcnow()
+    now_ms = int(time.time() * 1000)
+    if not default_group.regular_sync_enabled:
+        channel.next_regular_sync_at = None
+    else:
+        recompute_next_regular_sync_at_on_interval_change(
+            channel,
+            previous_interval_minutes=default_group.auto_sync_interval_minutes,
+            now_ms=now_ms,
+            regular_sync_enabled=default_group.regular_sync_enabled,
+            auto_sync_interval_minutes=default_group.auto_sync_interval_minutes,
+        )
+    if not default_group.dynamic_sync_enabled:
+        channel.next_dynamic_sync_at = None
+    else:
+        recompute_next_dynamic_sync_at_on_expected_posts_change(
+            session,
+            channel,
+            previous_expected_posts=default_group.dynamic_sync_expected_posts,
+            now_ms=now_ms,
+            dynamic_sync_enabled=default_group.dynamic_sync_enabled,
+            dynamic_sync_expected_posts=default_group.dynamic_sync_expected_posts,
+        )
+    session.add(channel)
+    return default_group
 
 
 def ensure_default_group(
@@ -304,6 +385,10 @@ def get_or_create_restricted_group(
         dynamic_sync_enabled=False,
         is_frozen=True,
         is_unavailable_on_web_view=True,
+        include_in_sync_all=False,
+        include_in_bulk_sync=True,
+        allow_individual_sync=True,
+        reset_sync_enabled=False,
         auto_sync_interval_minutes=values["auto_sync_interval_minutes"],
         dynamic_sync_expected_posts=values["dynamic_sync_expected_posts"],
         auto_follow_forwarded=False,
@@ -330,6 +415,10 @@ def get_or_create_frozen_group(
         dynamic_sync_enabled=False,
         is_frozen=True,
         is_unavailable_on_web_view=False,
+        include_in_sync_all=False,
+        include_in_bulk_sync=False,
+        allow_individual_sync=True,
+        reset_sync_enabled=True,
         auto_sync_interval_minutes=values["auto_sync_interval_minutes"],
         dynamic_sync_expected_posts=values["dynamic_sync_expected_posts"],
         auto_follow_forwarded=False,
@@ -508,6 +597,10 @@ def setting_group_to_camel(
         "autoFollowForwarded": group.auto_follow_forwarded,
         "isFrozen": group.is_frozen,
         "isUnavailableOnWebView": group.is_unavailable_on_web_view,
+        "includeInSyncAll": group.include_in_sync_all,
+        "includeInBulkSync": group.include_in_bulk_sync,
+        "allowIndividualSync": group.allow_individual_sync,
+        "resetSyncEnabled": group.reset_sync_enabled,
         "createdAt": int(group.created_at.timestamp() * 1000),
         "updatedAt": int(group.updated_at.timestamp() * 1000),
     }
@@ -527,6 +620,10 @@ def effective_channel_fields(group: ChannelSettingGroup) -> dict[str, Any]:
         "autoFollowForwarded": group.auto_follow_forwarded,
         "isFrozen": group.is_frozen,
         "isUnavailableOnWebView": group.is_unavailable_on_web_view,
+        "includeInSyncAll": group.include_in_sync_all,
+        "includeInBulkSync": group.include_in_bulk_sync,
+        "allowIndividualSync": group.allow_individual_sync,
+        "resetSyncEnabled": group.reset_sync_enabled,
     }
 
 

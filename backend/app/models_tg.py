@@ -31,6 +31,10 @@ class ChannelSettingGroup(SQLModel, table=True):
     auto_follow_forwarded: bool = False
     is_frozen: bool = False
     is_unavailable_on_web_view: bool = False
+    include_in_sync_all: bool = True
+    include_in_bulk_sync: bool = True
+    allow_individual_sync: bool = True
+    reset_sync_enabled: bool = True
     created_at: datetime = Field(default_factory=utc_now)
     updated_at: datetime = Field(default_factory=utc_now)
 

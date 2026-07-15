@@ -89,6 +89,10 @@ export interface Channel {
   nextDynamicSyncAt?: number | null
   isFrozen?: boolean
   isUnavailableOnWebView?: boolean
+  includeInSyncAll?: boolean
+  includeInBulkSync?: boolean
+  allowIndividualSync?: boolean
+  resetSyncEnabled?: boolean
   autoFollowForwarded?: boolean
   language?: string
   followedAt?: number
@@ -117,6 +121,10 @@ export interface ChannelSettingGroup {
   autoFollowForwarded: boolean
   isFrozen: boolean
   isUnavailableOnWebView: boolean
+  includeInSyncAll: boolean
+  includeInBulkSync: boolean
+  allowIndividualSync: boolean
+  resetSyncEnabled: boolean
   channelCount?: number
   createdAt?: number
   updatedAt?: number

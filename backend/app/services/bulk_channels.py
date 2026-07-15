@@ -11,7 +11,7 @@ from datetime import datetime
 from sqlmodel import Session, col, delete, select
 
 from app.models_tg import Channel, Post, PostEmbedding, PostTranslation
-from app.services.channel_setting_groups import channel_is_frozen, load_groups_by_id
+from app.services.channel_setting_groups import channel_allows_reset, load_groups_by_id
 from app.services.operator import select_operator_channels
 from app.services.post_sync_state import clear_channel_sync_state
 from app.services.sync_meta import touch_sync
@@ -132,14 +132,16 @@ async def bulk_reset_and_queue_sync(
     result = BulkResetSyncResult()
     entries: list[tuple[str, str]] = []
     groups_by_id = load_groups_by_id(session)
+    is_bulk = channel_ids is None or len(channel_ids) != 1
 
     for channel in channels:
-        if channel_is_frozen(channel, groups_by_id):
+        group = groups_by_id.get(channel.setting_group_id)
+        if group is None or not channel_allows_reset(group, bulk=is_bulk):
             result.errors.append(
                 {
                     "channelId": channel.id,
                     "channelName": channel.name,
-                    "error": "Channel is frozen",
+                    "error": "Reset & Sync not allowed for this channel's setting group",
                 }
             )
             continue
@@ -170,6 +172,7 @@ async def bulk_reset_and_queue_sync(
             channel_entries=entries,
             source=source,
             user_id=str(operator_id) if operator_id else None,
+            sync_mode="bulk" if is_bulk else "individual",
         )
         result.job_id = job.job_id
         asyncio.create_task(run_sync_job(job, operator_id))

@@ -14,6 +14,7 @@ from app.core.config import settings
 from app.core.db import engine
 from app.models_tg import SyncJob as SyncJobRow
 from app.models_tg import utc_now
+from app.services.channel_setting_groups import SyncOperationMode
 
 _channel_locks: dict[str, asyncio.Lock] = {}
 _cancel_events: dict[str, asyncio.Event] = {}
@@ -61,6 +62,7 @@ class SyncJobState:
     finished_at: int | None = None
     cancel_event: asyncio.Event = field(default_factory=asyncio.Event)
     user_id: str | None = None
+    sync_mode: SyncOperationMode = "auto"
     _update_condition: asyncio.Condition = field(
         default_factory=asyncio.Condition, repr=False
     )
@@ -219,6 +221,7 @@ async def create_job(
     source: str,
     user_id: str | None = None,
     channel_meta_by_id: dict[str, dict[str, Any]] | None = None,
+    sync_mode: SyncOperationMode = "auto",
 ) -> SyncJobState:
     job_id = str(uuid.uuid4())
     channels = {
@@ -234,6 +237,7 @@ async def create_job(
         source=source,
         channels=channels,
         user_id=user_id,
+        sync_mode=sync_mode,
         cancel_event=_get_cancel_event(job_id),
     )
     await persist_job(job)

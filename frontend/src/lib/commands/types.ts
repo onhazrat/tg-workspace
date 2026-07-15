@@ -128,11 +128,11 @@ export interface CommandContext {
   setChannels: Dispatch<SetStateAction<Channel[]>>
   handleScrapeAll: () => Promise<void>
   handleScrapeSelected: () => Promise<void>
+  handleRecheckRestricted: () => Promise<void>
   handleScrapeChannel: (
     channel: Channel,
     refresh?: boolean,
     source?: string,
-    options?: { ignoreFrozen?: boolean },
   ) => Promise<void>
   addToSyncQueue: (
     channel: Channel,

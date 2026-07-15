@@ -62,6 +62,7 @@ export function useCommandRegistry(): {
   const {
     handleScrapeAll,
     handleScrapeSelected,
+    handleRecheckRestricted,
     handleScrapeChannel,
     addToSyncQueue,
     autoSyncPauseUntil,
@@ -110,6 +111,7 @@ export function useCommandRegistry(): {
       setChannels,
       handleScrapeAll,
       handleScrapeSelected,
+      handleRecheckRestricted,
       handleScrapeChannel,
       addToSyncQueue,
       loadChannels,
@@ -259,6 +261,7 @@ export function useCommandRegistry(): {
       handleScrapeAll,
       handleScrapeChannel,
       handleScrapeSelected,
+      handleRecheckRestricted,
       historySearchQuery,
       isOffline,
       jobToggles,

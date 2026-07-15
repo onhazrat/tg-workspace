@@ -22,6 +22,10 @@ import {
   buildPostsInScopeCounts,
   getChannelGridSortFromStorage,
 } from "@/lib/channels/sort-channels-for-grid"
+import {
+  channelAllows,
+  filterChannelsForOperation,
+} from "@/lib/channels/sync-permissions"
 import { applyTrimChannelSelection } from "@/lib/channels/trim-selected-channels"
 import { updateChannelStartId } from "@/lib/channels/update-start-id"
 import { copyChannelTelegramChatId } from "@/lib/commands/channel-telegram-chat-id-commands"
@@ -89,7 +93,17 @@ export function buildExtendedCommands(): CommandDef[] {
         }
         return `Reset & sync @${channel.name}? Clears local posts and re-backfills from ID ${channel.startId ?? 1}.`
       },
-      disabled: offlineDisabled("Server offline"),
+      disabled: (ctx) => {
+        const offline = offlineDisabled("Server offline")(ctx)
+        if (offline.disabled) return offline
+        if (!ctx.channels.some((channel) => channelAllows(channel, "reset"))) {
+          return {
+            disabled: true,
+            reason: "No channels with Reset & Sync enabled",
+          }
+        }
+        return { disabled: false }
+      },
       run: async (ctx, payload) => {
         const channel =
           (payload as Channel | undefined) ??
@@ -309,7 +323,19 @@ export function buildExtendedCommands(): CommandDef[] {
       requiresConfirmation: true,
       confirmDescription:
         "Clear stored posts and re-backfill ALL channels from the latest page backward to the retention window?",
-      disabled: offlineDisabled("Server offline"),
+      disabled: (ctx) => {
+        const offline = offlineDisabled("Server offline")(ctx)
+        if (offline.disabled) return offline
+        if (
+          filterChannelsForOperation(ctx.channels, "bulk_reset").length === 0
+        ) {
+          return {
+            disabled: true,
+            reason: "No channels eligible for bulk reset",
+          }
+        }
+        return { disabled: false }
+      },
       run: async (ctx) => {
         await bulkResetSyncAllChannels(ctx)
       },

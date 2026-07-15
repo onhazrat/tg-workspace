@@ -16,8 +16,7 @@ export function getEntityCandidates(
       return ctx.channels
     case "select-channel":
       return ctx.channels.filter(
-        (channel) =>
-          !channel.isFrozen && !ctx.selectedChannels.has(channel.name),
+        (channel) => !ctx.selectedChannels.has(channel.name),
       )
     case "deselect-channel":
       return ctx.channels.filter((channel) =>
@@ -111,9 +110,7 @@ export async function runEntityChannelAction(
       return
     }
     case "sync-channel": {
-      await ctx.handleScrapeChannel(channel, true, "Manual (Palette)", {
-        ignoreFrozen: true,
-      })
+      await ctx.handleScrapeChannel(channel, true, "Manual (Palette)")
       return
     }
     default:

@@ -101,6 +101,8 @@ def test_builtin_preset_groups_have_expected_sync_values() -> None:
         _, slow_feed, high_velocity, _, _ = ensure_builtin_groups(
             session, user_id=user_id
         )
+        restricted_group = get_or_create_restricted_group(session, user_id=user_id)
+        frozen_group = get_or_create_frozen_group(session, user_id=user_id)
         session.commit()
 
         assert slow_feed.auto_sync_interval_minutes == 1440
@@ -113,6 +115,11 @@ def test_builtin_preset_groups_have_expected_sync_values() -> None:
         assert is_reserved_group_id(high_velocity.id)
         assert slow_feed_group_id_for_user(user_id) == slow_feed.id
         assert high_velocity_group_id_for_user(user_id) == high_velocity.id
+
+        assert restricted_group.include_in_sync_all is False
+        assert restricted_group.include_in_bulk_sync is True
+        assert frozen_group.include_in_bulk_sync is False
+        assert frozen_group.allow_individual_sync is True
 
 
 def test_create_setting_group_rejects_duplicate_names_case_insensitive() -> None:

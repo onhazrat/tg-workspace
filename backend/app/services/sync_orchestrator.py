@@ -25,11 +25,15 @@ from app.models_tg import Channel, Post
 from app.services.async_db import run_db
 from app.services.channel_photos import resolve_cached_photo_url
 from app.services.channel_setting_groups import (
+    SyncOperationMode,
     bulk_assign_setting_group,
+    channel_allows_sync_operation,
     ensure_default_group,
     get_group_for_channel,
     get_or_create_frozen_group,
     get_or_create_restricted_group,
+    is_restricted_group,
+    move_channel_from_restricted_to_default,
     move_channel_to_restricted_group,
 )
 from app.services.channels import _velocity_from_timestamps, update_channel_coverage
@@ -430,15 +434,25 @@ class _PageApplyResult:
 
 
 def _prepare_channel_sync(
-    channel_id: str, user_id: uuid.UUID | None
-) -> tuple[Literal["ok", "missing", "frozen"], _ChannelSyncCtx | None]:
+    channel_id: str,
+    user_id: uuid.UUID | None,
+    *,
+    sync_mode: SyncOperationMode,
+) -> tuple[Literal["ok", "missing", "denied"], _ChannelSyncCtx | None, str | None]:
     with Session(engine) as session:
         channel = session.get(Channel, channel_id)
         if not channel:
-            return "missing", None
+            return "missing", None, None
         group = get_group_for_channel(session, channel)
-        if group.is_frozen:
-            return "frozen", None
+        if sync_mode != "auto" and not channel_allows_sync_operation(
+            group,
+            sync_mode,
+        ):
+            return (
+                "denied",
+                None,
+                (f"Sync not allowed for group '{group.name}' (mode={sync_mode})"),
+            )
 
         effective_user_id = user_id or channel.user_id
         network = load_network_settings(session, effective_user_id)
@@ -463,29 +477,33 @@ def _prepare_channel_sync(
         needs_backfill = has_existing_posts and not channel.history_complete_to_cutoff
 
         proxy_default, proxy_overrides = resolve_proxy_concurrency(network)
-        return "ok", _ChannelSyncCtx(
-            channel_id=channel.id,
-            channel_name=channel.name,
-            display_name=channel.display_name,
-            photo_url=channel.photo_url,
-            language=channel.language,
-            auto_follow=bool(group.auto_follow_forwarded),
-            proxies=resolve_proxies(network),
-            proxy_concurrency=(proxy_default, proxy_overrides),
-            tor_auto_rotate=bool(network.get("torAutoRotate")),
-            tor_rotation_threshold=int(network.get("torRotationThreshold") or 10),
-            tor_control_enabled=bool(network.get("torControlEnabled")),
-            tor_control_port=int(
-                network.get("torControlPort")
-                or network.get("torControlPortDefault")
-                or settings.TOR_CONTROL_PORT
+        return (
+            "ok",
+            _ChannelSyncCtx(
+                channel_id=channel.id,
+                channel_name=channel.name,
+                display_name=channel.display_name,
+                photo_url=channel.photo_url,
+                language=channel.language,
+                auto_follow=bool(group.auto_follow_forwarded),
+                proxies=resolve_proxies(network),
+                proxy_concurrency=(proxy_default, proxy_overrides),
+                tor_auto_rotate=bool(network.get("torAutoRotate")),
+                tor_rotation_threshold=int(network.get("torRotationThreshold") or 10),
+                tor_control_enabled=bool(network.get("torControlEnabled")),
+                tor_control_port=int(
+                    network.get("torControlPort")
+                    or network.get("torControlPortDefault")
+                    or settings.TOR_CONTROL_PORT
+                ),
+                retrieval_pass="incremental" if has_existing_posts else "initial",
+                needs_backfill=needs_backfill,
+                min_stored_post_id=min_stored_post_id,
+                scrape_cutoff_ms=scrape_cutoff_ms,
+                effective_start_time=scrape_cutoff_ms,
+                media_settings=media_settings,
             ),
-            retrieval_pass="incremental" if has_existing_posts else "initial",
-            needs_backfill=needs_backfill,
-            min_stored_post_id=min_stored_post_id,
-            scrape_cutoff_ms=scrape_cutoff_ms,
-            effective_start_time=scrape_cutoff_ms,
-            media_settings=media_settings,
+            None,
         )
 
 
@@ -759,6 +777,7 @@ def _finalize_channel_success(
             return
 
         group = get_group_for_channel(session, channel)
+        was_restricted = is_restricted_group(group)
         update_channel_coverage(session, channel, ctx.scrape_cutoff_ms)
 
         detected_language = channel.language or ctx.language
@@ -826,6 +845,12 @@ def _finalize_channel_success(
 
         channel.updated_at = datetime.utcnow()
         session.add(channel)
+        if was_restricted:
+            move_channel_from_restricted_to_default(
+                session,
+                channel,
+                user_id=user_id or channel.user_id,
+            )
         session.commit()
         touch_sync(session, "channels")
 
@@ -971,16 +996,20 @@ async def sync_single_channel(
         ch_state.status = "running"
         await touch_job(job)
 
-        prep_status, ctx = await run_db(
-            _prepare_channel_sync, ch_state.channel_id, user_id
+        prep_status, ctx, deny_reason = await run_db(
+            _prepare_channel_sync,
+            ch_state.channel_id,
+            user_id,
+            sync_mode=job.sync_mode,
         )
         if prep_status == "missing":
             ch_state.status = "failed"
             ch_state.error = "Channel not found"
             await touch_job(job)
             return
-        if prep_status == "frozen" or ctx is None:
+        if prep_status == "denied" or ctx is None:
             ch_state.status = "skipped"
+            ch_state.error = deny_reason or "Sync not allowed for this channel"
             await touch_job(job)
             return
 

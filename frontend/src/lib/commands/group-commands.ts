@@ -50,6 +50,10 @@ function applyGroupFieldsToChannel(
     autoFollowForwarded: group.autoFollowForwarded,
     isFrozen: group.isFrozen,
     isUnavailableOnWebView: group.isUnavailableOnWebView,
+    includeInSyncAll: group.includeInSyncAll,
+    includeInBulkSync: group.includeInBulkSync,
+    allowIndividualSync: group.allowIndividualSync,
+    resetSyncEnabled: group.resetSyncEnabled,
   }
 }
 

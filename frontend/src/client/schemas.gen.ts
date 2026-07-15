@@ -1520,6 +1520,50 @@ export const SettingGroupWriteRequestSchema = {
                 }
             ],
             title: 'Isunavailableonwebview'
+        },
+        includeInSyncAll: {
+            anyOf: [
+                {
+                    type: 'boolean'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Includeinsyncall'
+        },
+        includeInBulkSync: {
+            anyOf: [
+                {
+                    type: 'boolean'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Includeinbulksync'
+        },
+        allowIndividualSync: {
+            anyOf: [
+                {
+                    type: 'boolean'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Allowindividualsync'
+        },
+        resetSyncEnabled: {
+            anyOf: [
+                {
+                    type: 'boolean'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Resetsyncenabled'
         }
     },
     type: 'object',
@@ -1546,6 +1590,18 @@ export const StartSyncJobRequestSchema = {
             type: 'string',
             title: 'Source',
             default: 'Manual'
+        },
+        syncMode: {
+            anyOf: [
+                {
+                    type: 'string',
+                    enum: ['sync_all', 'bulk', 'individual', 'recheck_restricted']
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Syncmode'
         }
     },
     type: 'object',

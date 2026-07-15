@@ -13,6 +13,11 @@ import { env } from "@/lib/env"
 import { useApiStatus } from "../hooks/useApiStatus"
 import { useDebouncedValue } from "../hooks/useDebouncedValue"
 import { useSyncQueue } from "../hooks/useSyncQueue"
+import {
+  channelAllows,
+  disabledReason,
+  filterChannelsForOperation,
+} from "../lib/channels/sync-permissions"
 import { detectLanguageFromPosts } from "../lib/language"
 import { parseMediaFilterValue } from "../lib/posts/post-media"
 import {
@@ -63,13 +68,14 @@ interface ScraperContextType {
     channel: Channel,
     refresh?: boolean,
     source?: string,
-    options?: { ignoreFrozen?: boolean },
   ) => Promise<void>
   handleScrapeAll: () => Promise<void>
   handleScrapeSelected: () => Promise<void>
+  handleRecheckRestricted: () => Promise<void>
   scrapeChannelsInParallel: (
     channelsToScrape: Channel[],
     source: string,
+    syncMode?: "sync_all" | "bulk" | "individual" | "recheck_restricted",
   ) => Promise<void>
   syncQueue: { channel: Channel; source: string; resolve?: () => void }[]
   isProcessingQueue: boolean
@@ -469,6 +475,11 @@ export const ScraperProvider: React.FC<{ children: React.ReactNode }> = ({
       channelNames: string[],
       source: string,
       refresh = true,
+      syncMode:
+        | "sync_all"
+        | "bulk"
+        | "individual"
+        | "recheck_restricted" = "bulk",
     ) => {
       if (isOffline) {
         toast.warning(
@@ -490,7 +501,11 @@ export const ScraperProvider: React.FC<{ children: React.ReactNode }> = ({
       try {
         let jobId: string
         try {
-          ;({ jobId } = await api.startSyncJob({ channelIds, source }))
+          ;({ jobId } = await api.startSyncJob({
+            channelIds,
+            source,
+            syncMode,
+          }))
         } catch (err) {
           const message = err instanceof Error ? err.message : String(err)
           if (message.includes("No channels to sync")) {
@@ -574,16 +589,10 @@ export const ScraperProvider: React.FC<{ children: React.ReactNode }> = ({
   )
 
   const handleScrapeChannel = useCallback(
-    async (
-      channel: Channel,
-      refresh = true,
-      source = "Manual",
-      options?: { ignoreFrozen?: boolean },
-    ) => {
-      if (channel.isFrozen && !options?.ignoreFrozen) {
-        console.log(
-          `[Scraper] Skipping sync for @${channel.name} because it is frozen.`,
-        )
+    async (channel: Channel, refresh = true, source = "Manual") => {
+      if (!channelAllows(channel, "individual")) {
+        const reason = disabledReason(channel, "individual")
+        if (reason) toast.info(reason)
         return
       }
       if (scrapingLocksRef.current.has(channel.name)) {
@@ -594,7 +603,13 @@ export const ScraperProvider: React.FC<{ children: React.ReactNode }> = ({
       }
       scrapingLocksRef.current.add(channel.name)
       try {
-        await runServerSync([channel.id], [channel.name], source, refresh)
+        await runServerSync(
+          [channel.id],
+          [channel.name],
+          source,
+          refresh,
+          "individual",
+        )
       } finally {
         scrapingLocksRef.current.delete(channel.name)
       }
@@ -620,6 +635,11 @@ export const ScraperProvider: React.FC<{ children: React.ReactNode }> = ({
   const scrapeChannelsInParallel = async (
     channelsToScrape: Channel[],
     source: string,
+    syncMode:
+      | "sync_all"
+      | "bulk"
+      | "individual"
+      | "recheck_restricted" = "bulk",
   ) => {
     if (isOffline) {
       toast.warning(
@@ -627,17 +647,17 @@ export const ScraperProvider: React.FC<{ children: React.ReactNode }> = ({
       )
       return
     }
-    const active = channelsToScrape.filter((c) => !c.isFrozen)
-    if (active.length === 0) return
+    if (channelsToScrape.length === 0) return
 
     console.log(
-      `[SyncQueue] Starting server job for ${active.length} channels from ${source}`,
+      `[SyncQueue] Starting server job for ${channelsToScrape.length} channels from ${source}`,
     )
     await runServerSync(
-      active.map((c) => c.id),
-      active.map((c) => c.name),
+      channelsToScrape.map((c) => c.id),
+      channelsToScrape.map((c) => c.name),
       source,
       true,
+      syncMode,
     )
   }
 
@@ -647,14 +667,18 @@ export const ScraperProvider: React.FC<{ children: React.ReactNode }> = ({
       return
     }
 
-    const channelsToScrape = channels.filter((c) => !c.isFrozen)
+    const channelsToScrape = filterChannelsForOperation(channels, "sync_all")
     if (channelsToScrape.length === 0) {
-      toast.info("All channels are frozen")
+      toast.info("No channels eligible for Sync All")
       return
     }
 
     try {
-      await scrapeChannelsInParallel(channelsToScrape, "Manual (Sync All)")
+      await scrapeChannelsInParallel(
+        channelsToScrape,
+        "Manual (Sync All)",
+        "sync_all",
+      )
       if (activeTab !== "channels") setActiveTab("posts")
     } catch (err: unknown) {
       console.error(err)
@@ -672,16 +696,19 @@ export const ScraperProvider: React.FC<{ children: React.ReactNode }> = ({
       return
     }
 
-    const channelsToScrape = channels.filter(
-      (c) => selectedChannels.has(c.name) && !c.isFrozen,
-    )
+    const selected = channels.filter((c) => selectedChannels.has(c.name))
+    const channelsToScrape = filterChannelsForOperation(selected, "bulk")
     if (channelsToScrape.length === 0) {
-      toast.info("Selected channels are frozen")
+      toast.info("No selected channels eligible for bulk sync")
       return
     }
 
     try {
-      await scrapeChannelsInParallel(channelsToScrape, "Manual (Sync Selected)")
+      await scrapeChannelsInParallel(
+        channelsToScrape,
+        "Manual (Sync Selected)",
+        "bulk",
+      )
       if (activeTab !== "channels") setActiveTab("posts")
     } catch (err: unknown) {
       console.error(err)
@@ -689,6 +716,30 @@ export const ScraperProvider: React.FC<{ children: React.ReactNode }> = ({
         err instanceof Error
           ? err.message
           : "An unexpected error occurred during scraping",
+      )
+    }
+  }
+
+  const handleRecheckRestricted = async () => {
+    const restricted = channels.filter((c) => c.isUnavailableOnWebView)
+    if (restricted.length === 0) {
+      toast.info("No restricted channels to recheck")
+      return
+    }
+
+    try {
+      await scrapeChannelsInParallel(
+        restricted,
+        "Manual (Recheck Restricted)",
+        "recheck_restricted",
+      )
+      if (activeTab !== "channels") setActiveTab("posts")
+    } catch (err: unknown) {
+      console.error(err)
+      toast.error(
+        err instanceof Error
+          ? err.message
+          : "An unexpected error occurred during recheck",
       )
     }
   }
@@ -811,6 +862,7 @@ export const ScraperProvider: React.FC<{ children: React.ReactNode }> = ({
         handleScrapeChannel,
         handleScrapeAll,
         handleScrapeSelected,
+        handleRecheckRestricted,
         scrapeChannelsInParallel,
         syncQueue,
         isProcessingQueue,

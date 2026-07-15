@@ -32,6 +32,7 @@ import {
   removeTagsByName,
 } from "@/lib/channels/channel-tag-model"
 import { findFrozenReservedGroup } from "@/lib/channels/setting-groups"
+import { channelAllows, disabledReason } from "@/lib/channels/sync-permissions"
 import {
   isVirtualGroupTag,
   toVirtualGroupTagName,
@@ -101,7 +102,6 @@ export const ChannelCard: React.FC<ChannelCardProps> = ({
     : null
 
   const toggleChannelSelection = () => {
-    if (channel.isFrozen) return
     setSelectedChannels((prev) => {
       const next = new Set(prev)
       if (next.has(channel.name)) {
@@ -276,10 +276,7 @@ export const ChannelCard: React.FC<ChannelCardProps> = ({
                 handleResetAndSync(channel)
               }}
               disabled={
-                isScraping ||
-                summarizing ||
-                channel.isFrozen ||
-                channel.isUnavailableOnWebView
+                isScraping || summarizing || !channelAllows(channel, "reset")
               }
               className="w-8 h-8 rounded-full bg-app-bg/90 backdrop-blur-sm border border-app-ink/10 flex items-center justify-center text-app-ink/70 hover:bg-app-ink hover:text-app-bg transition-colors shadow-sm disabled:opacity-50"
             >
@@ -287,7 +284,10 @@ export const ChannelCard: React.FC<ChannelCardProps> = ({
             </button>
           </TooltipTrigger>
           <TooltipContent>
-            <p>Reset & Sync from beginning</p>
+            <p>
+              {disabledReason(channel, "reset") ??
+                "Reset & Sync from beginning"}
+            </p>
           </TooltipContent>
         </Tooltip>
         <Tooltip>
@@ -314,12 +314,11 @@ export const ChannelCard: React.FC<ChannelCardProps> = ({
         <button
           type="button"
           onClick={toggleChannelSelection}
-          disabled={channel.isFrozen}
           aria-label={
             isSelected ? `Deselect ${channel.name}` : `Select ${channel.name}`
           }
           aria-pressed={isSelected}
-          className={`w-5 h-5 rounded-full border flex items-center justify-center transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
+          className={`w-5 h-5 rounded-full border flex items-center justify-center transition-colors ${
             isSelected
               ? "bg-app-ink border-app-ink text-app-bg"
               : "border-app-ink/20 bg-app-bg/50 text-transparent hover:border-app-ink/40"
@@ -773,21 +772,24 @@ export const ChannelCard: React.FC<ChannelCardProps> = ({
                   e.stopPropagation()
                   addToSyncQueue(channel, "Manual (Single Sync)", () => {})
                 }}
-                disabled={isScraping || summarizing || channel.isFrozen}
+                disabled={
+                  isScraping ||
+                  summarizing ||
+                  !channelAllows(channel, "individual")
+                }
                 className="h-8 px-3 text-[10px] uppercase font-bold flex items-center justify-center gap-1.5 bg-app-ink/5 hover:bg-app-ink text-app-ink hover:text-app-bg transition-all disabled:opacity-30 rounded-lg border border-app-ink/10 hover:border-app-ink"
               >
                 <RefreshCw
                   size={12}
                   className={isScraping ? "animate-spin" : ""}
                 />
-                Sync
+                {channel.isUnavailableOnWebView ? "Recheck" : "Sync"}
               </button>
             </TooltipTrigger>
             <TooltipContent>
               <p>
-                {channel.isFrozen
-                  ? "Channel is frozen"
-                  : "Manual sync resets auto-sync timers"}
+                {disabledReason(channel, "individual") ??
+                  "Manual sync resets auto-sync timers"}
               </p>
             </TooltipContent>
           </Tooltip>

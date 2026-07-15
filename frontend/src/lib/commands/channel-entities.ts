@@ -72,19 +72,15 @@ export function buildChannelEntityCommands(): CommandDef[] {
       keywords: ["channels", "select", "all"],
       group: "Channels",
       disabled: (ctx) => {
-        const selectable = ctx.channels.filter((channel) => !channel.isFrozen)
+        const selectable = ctx.channels
         if (selectable.length === 0) {
-          return { disabled: true, reason: "No selectable channels" }
+          return { disabled: true, reason: "No channels" }
         }
         return { disabled: false }
       },
       run: (ctx) => {
         ctx.setSelectedChannels(
-          new Set(
-            ctx.channels
-              .filter((channel) => !channel.isFrozen)
-              .map((channel) => channel.name),
-          ),
+          new Set(ctx.channels.map((channel) => channel.name)),
         )
       },
     },

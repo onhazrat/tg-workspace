@@ -145,9 +145,7 @@ export async function removeTagFromChannel(
 }
 
 export function selectChannelsByTag(tag: string, ctx: CommandContext): void {
-  const matching = filterChannelsByTag(ctx.channels, tag).filter(
-    (channel) => !channel.isFrozen,
-  )
+  const matching = filterChannelsByTag(ctx.channels, tag)
   if (matching.length === 0) {
     toast.info(`No channels found with tag "${tag.trim()}"`)
     return

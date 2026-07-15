@@ -60,7 +60,11 @@ export const jobsApi = {
       body: JSON.stringify({ enabled }),
     }),
 
-  startSyncJob: (body: { channelIds?: string[]; source?: string }) =>
+  startSyncJob: (body: {
+    channelIds?: string[]
+    source?: string
+    syncMode?: "sync_all" | "bulk" | "individual" | "recheck_restricted"
+  }) =>
     request<{ jobId: string }>("/api/v1/jobs/sync", {
       method: "POST",
       body: JSON.stringify(body),

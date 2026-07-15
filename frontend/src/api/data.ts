@@ -25,6 +25,10 @@ const CHANNEL_INHERITED_WRITE_FIELDS = [
   "autoFollowForwarded",
   "isFrozen",
   "isUnavailableOnWebView",
+  "includeInSyncAll",
+  "includeInBulkSync",
+  "allowIndividualSync",
+  "resetSyncEnabled",
   "settingGroupId",
   "settingGroupName",
   "telegramChatId",
@@ -57,6 +61,10 @@ export interface SettingGroupWriteBody {
   autoFollowForwarded?: boolean
   isFrozen?: boolean
   isUnavailableOnWebView?: boolean
+  includeInSyncAll?: boolean
+  includeInBulkSync?: boolean
+  allowIndividualSync?: boolean
+  resetSyncEnabled?: boolean
 }
 
 export const dataApi = {

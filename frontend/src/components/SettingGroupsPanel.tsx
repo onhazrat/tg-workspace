@@ -29,6 +29,10 @@ const emptyDraft = (): SettingGroupWriteBody => ({
   autoFollowForwarded: false,
   isFrozen: false,
   isUnavailableOnWebView: false,
+  includeInSyncAll: true,
+  includeInBulkSync: true,
+  allowIndividualSync: true,
+  resetSyncEnabled: true,
 })
 
 const draftFromGroup = (group: ChannelSettingGroup): SettingGroupWriteBody => ({
@@ -40,6 +44,10 @@ const draftFromGroup = (group: ChannelSettingGroup): SettingGroupWriteBody => ({
   autoFollowForwarded: group.autoFollowForwarded,
   isFrozen: group.isFrozen,
   isUnavailableOnWebView: group.isUnavailableOnWebView,
+  includeInSyncAll: group.includeInSyncAll,
+  includeInBulkSync: group.includeInBulkSync,
+  allowIndividualSync: group.allowIndividualSync,
+  resetSyncEnabled: group.resetSyncEnabled,
 })
 
 export const SettingGroupsPanel: React.FC = () => {
@@ -257,6 +265,41 @@ export const SettingGroupsPanel: React.FC = () => {
                     {label}
                   </label>
                 ))}
+              </div>
+
+              <div className="space-y-2">
+                <p className="text-[9px] uppercase font-bold opacity-60">
+                  Sync permissions
+                </p>
+                <div className="flex flex-wrap gap-4 text-[10px] uppercase font-bold">
+                  {(
+                    [
+                      ["includeInSyncAll", "Include in Sync All"],
+                      ["includeInBulkSync", "Include in bulk sync"],
+                      ["allowIndividualSync", "Allow individual sync"],
+                      ["resetSyncEnabled", "Reset & Sync enabled"],
+                    ] as const
+                  ).map(([key, label]) => (
+                    <label key={key} className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        checked={Boolean(draft[key])}
+                        onChange={(e) =>
+                          setDraft((prev) => ({
+                            ...prev,
+                            [key]: e.target.checked,
+                          }))
+                        }
+                      />
+                      {label}
+                    </label>
+                  ))}
+                </div>
+                <p className="text-[10px] normal-case opacity-60">
+                  Bulk sync covers Sync Selected, Fix Partial History, and bulk
+                  reset eligibility. Individual sync covers card and palette
+                  single-channel sync.
+                </p>
               </div>
 
               <label className="space-y-1 block max-w-xs">

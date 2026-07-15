@@ -34,6 +34,7 @@ export async function refreshChannelMetadata(
   let files = channel.files
   let links = channel.links
   let isUnavailableOnWebView = channel.isUnavailableOnWebView
+  const wasUnavailable = channel.isUnavailableOnWebView === true
 
   try {
     const data = (await api.channelInfo({
@@ -57,6 +58,8 @@ export async function refreshChannelMetadata(
     if (data.links) links = data.links as string
     if (data.isUnavailableOnWebView) {
       isUnavailableOnWebView = Boolean(data.isUnavailableOnWebView)
+    } else if (wasUnavailable) {
+      isUnavailableOnWebView = false
     }
     if (data.error && !data.isUnavailableOnWebView) {
       toast.error(String(data.error))
@@ -112,5 +115,22 @@ export async function refreshChannelMetadata(
   ctx.setChannels((prev) =>
     prev.map((entry) => (entry.id === channel.id ? updated : entry)),
   )
+
+  if (wasUnavailable && !isUnavailableOnWebView) {
+    const defaultGroup = ctx.settingGroups.find((group) => group.isDefault)
+    if (defaultGroup) {
+      await api.bulkAssignSettingGroup({
+        channelIds: [channel.id],
+        settingGroupId: defaultGroup.id,
+      })
+      await ctx.loadChannels()
+      await ctx.invalidateSettingGroups()
+      toast.success(
+        `@${channel.name} is available again — moved to default group`,
+      )
+      return
+    }
+  }
+
   toast.success(`Refreshed metadata for @${channel.name}`)
 }

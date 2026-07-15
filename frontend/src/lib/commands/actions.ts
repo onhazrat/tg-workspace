@@ -3,6 +3,7 @@ import { toast } from "sonner"
 import { api } from "@/api"
 import { getNextTheme } from "@/components/theme-provider"
 import { clearAllData, exportDBMetadata, getTableSizes } from "@/lib/cache"
+import { filterChannelsForOperation } from "@/lib/channels/sync-permissions"
 import type { CommandDef } from "@/lib/commands/types"
 import {
   buildTimestampedFilename,
@@ -171,12 +172,17 @@ export function buildActionCommands(): CommandDef[] {
         if (ctx.selectedChannels.size === 0) {
           return { disabled: true, reason: "No channels selected" }
         }
-        const active = ctx.channels.filter(
-          (channel) =>
-            ctx.selectedChannels.has(channel.name) && !channel.isFrozen,
+        const active = filterChannelsForOperation(
+          ctx.channels.filter((channel) =>
+            ctx.selectedChannels.has(channel.name),
+          ),
+          "bulk",
         )
         if (active.length === 0) {
-          return { disabled: true, reason: "Selected channels are frozen" }
+          return {
+            disabled: true,
+            reason: "No selected channels eligible for bulk sync",
+          }
         }
         return { disabled: false }
       },
@@ -197,14 +203,36 @@ export function buildActionCommands(): CommandDef[] {
         if (ctx.channels.length === 0) {
           return { disabled: true, reason: "No channels added" }
         }
-        const active = ctx.channels.filter((channel) => !channel.isFrozen)
+        const active = filterChannelsForOperation(ctx.channels, "sync_all")
         if (active.length === 0) {
-          return { disabled: true, reason: "All channels are frozen" }
+          return {
+            disabled: true,
+            reason: "No channels eligible for Sync All",
+          }
         }
         return { disabled: false }
       },
       run: async (ctx) => {
         await ctx.handleScrapeAll()
+      },
+    },
+    {
+      id: "recheck-restricted-channels",
+      kind: "action",
+      label: "Recheck Restricted Channels",
+      keywords: ["sync", "recheck", "restricted", "unavailable", "channels"],
+      group: "Sync",
+      disabled: (ctx) => {
+        if (ctx.isOffline) {
+          return { disabled: true, reason: "Server offline" }
+        }
+        if (!ctx.channels.some((channel) => channel.isUnavailableOnWebView)) {
+          return { disabled: true, reason: "No restricted channels" }
+        }
+        return { disabled: false }
+      },
+      run: async (ctx) => {
+        await ctx.handleRecheckRestricted()
       },
     },
     {

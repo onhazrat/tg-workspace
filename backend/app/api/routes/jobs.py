@@ -3,7 +3,7 @@ import json
 import time
 import uuid
 from collections.abc import AsyncIterator
-from typing import Any
+from typing import Any, Literal
 
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
@@ -21,7 +21,10 @@ from app.schemas.sync_jobs import (
     StartSyncJobResponse,
     SyncJobStatusResponse,
 )
-from app.services.channel_setting_groups import channel_is_frozen, load_groups_by_id
+from app.services.channel_setting_groups import (
+    channel_allows_sync_operation,
+    load_groups_by_id,
+)
 from app.services.operator import get_operator_user_id, select_operator_channels
 from app.services.runtime_config import build_runtime_config
 from app.services.scraper_jobs import (
@@ -37,28 +40,41 @@ _TERMINAL_SYNC_STATUSES = frozenset({"completed", "failed", "cancelled"})
 router = APIRouter(prefix="/jobs", tags=["jobs"])
 
 
-def _resolve_channel_entries(
+def _resolve_sync_entries(
     session: Session,
     channel_ids: list[str] | None,
     operator_id: uuid.UUID | None,
+    sync_mode: Literal["sync_all", "bulk", "individual", "recheck_restricted"],
 ) -> list[tuple[str, str]]:
     operator_channels = {
         ch.id: ch for ch in select_operator_channels(session, operator_id=operator_id)
     }
     groups_by_id = load_groups_by_id(session)
-    if channel_ids:
-        entries: list[tuple[str, str]] = []
-        for cid in channel_ids:
-            ch = operator_channels.get(cid)
-            if ch and not channel_is_frozen(ch, groups_by_id):
-                entries.append((ch.id, ch.name))
-        return entries
 
-    return [
-        (c.id, c.name)
-        for c in operator_channels.values()
-        if not channel_is_frozen(c, groups_by_id)
-    ]
+    if sync_mode == "sync_all":
+        candidates = list(operator_channels.values())
+    elif sync_mode == "recheck_restricted":
+        candidates = [
+            ch
+            for ch in operator_channels.values()
+            if groups_by_id.get(ch.setting_group_id) is not None
+            and groups_by_id[ch.setting_group_id].is_unavailable_on_web_view
+        ]
+    elif channel_ids:
+        candidates = [
+            operator_channels[cid] for cid in channel_ids if cid in operator_channels
+        ]
+    else:
+        candidates = list(operator_channels.values())
+
+    entries: list[tuple[str, str]] = []
+    for ch in candidates:
+        group = groups_by_id.get(ch.setting_group_id)
+        if group is None:
+            continue
+        if channel_allows_sync_operation(group, sync_mode):
+            entries.append((ch.id, ch.name))
+    return entries
 
 
 @router.get("/status")
@@ -106,14 +122,19 @@ async def start_sync_job(
     current_user: CurrentUser,
 ) -> StartSyncJobResponse:
     operator_id = current_user.id or get_operator_user_id(session)
-    entries = _resolve_channel_entries(session, body.channel_ids, operator_id)
+    sync_mode = body.resolved_sync_mode
+    entries = _resolve_sync_entries(session, body.channel_ids, operator_id, sync_mode)
     if not entries:
-        raise HTTPException(status_code=400, detail="No channels to sync")
+        raise HTTPException(
+            status_code=400,
+            detail=f"No channels eligible for sync (mode={sync_mode})",
+        )
 
     job = await create_job(
         channel_entries=entries,
         source=body.source,
         user_id=str(current_user.id),
+        sync_mode=sync_mode,
     )
     user_uuid = uuid.UUID(str(current_user.id))
     asyncio.create_task(run_sync_job(job, user_uuid))

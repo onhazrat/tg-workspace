@@ -305,11 +305,16 @@ export type SettingGroupWriteRequest = {
     autoFollowForwarded?: (boolean | null);
     isFrozen?: (boolean | null);
     isUnavailableOnWebView?: (boolean | null);
+    includeInSyncAll?: (boolean | null);
+    includeInBulkSync?: (boolean | null);
+    allowIndividualSync?: (boolean | null);
+    resetSyncEnabled?: (boolean | null);
 };
 
 export type StartSyncJobRequest = {
     channelIds?: (Array<(string)> | null);
     source?: string;
+    syncMode?: ('sync_all' | 'bulk' | 'individual' | 'recheck_restricted' | null);
 };
 
 export type StartSyncJobResponse = {

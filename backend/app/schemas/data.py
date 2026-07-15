@@ -71,5 +71,11 @@ class SettingGroupWriteRequest(BaseModel):
     is_unavailable_on_web_view: bool | None = Field(
         default=None, alias="isUnavailableOnWebView"
     )
+    include_in_sync_all: bool | None = Field(default=None, alias="includeInSyncAll")
+    include_in_bulk_sync: bool | None = Field(default=None, alias="includeInBulkSync")
+    allow_individual_sync: bool | None = Field(
+        default=None, alias="allowIndividualSync"
+    )
+    reset_sync_enabled: bool | None = Field(default=None, alias="resetSyncEnabled")
 
     model_config = {"populate_by_name": True}

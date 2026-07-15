@@ -231,10 +231,7 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
   )
 
   const selectableUntaggedChannelNames = useMemo(
-    () =>
-      filterUntaggedChannels(channels)
-        .filter((c) => !c.isFrozen)
-        .map((c) => c.name),
+    () => filterUntaggedChannels(channels).map((c) => c.name),
     [channels],
   )
 
@@ -244,9 +241,7 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
   )
 
   const handleSelectAll = () => {
-    setSelectedChannels(
-      new Set(filteredChannels.filter((c) => !c.isFrozen).map((c) => c.name)),
-    )
+    setSelectedChannels(new Set(filteredChannels.map((c) => c.name)))
   }
 
   const handleUnselectAll = () => {
@@ -254,10 +249,9 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
   }
 
   const handleRevertSelection = () => {
-    const selectable = filteredChannels.filter((c) => !c.isFrozen)
     setSelectedChannels((prev) => {
       const next = new Set(prev)
-      for (const channel of selectable) {
+      for (const channel of filteredChannels) {
         if (next.has(channel.name)) {
           next.delete(channel.name)
         } else {
@@ -269,9 +263,7 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
   }
 
   const toggleGroupSelection = (groupId: string) => {
-    const channelsInGroup = getChannelNamesInGroup(channels, groupId, {
-      excludeFrozen: true,
-    })
+    const channelsInGroup = getChannelNamesInGroup(channels, groupId)
     const allSelected = areAllNamesSelected(channelsInGroup, selectedChannels)
     setSelectedChannels((prev) =>
       toggleNamesInSelection(prev, channelsInGroup, allSelected),
@@ -282,7 +274,7 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
     const channelsWithTag =
       tag === UNTAGGED_TAG_ID
         ? selectableUntaggedChannelNames
-        : getChannelNamesWithTag(channels, tag, { excludeFrozen: true })
+        : getChannelNamesWithTag(channels, tag)
     const allSelected = areAllNamesSelected(channelsWithTag, selectedChannels)
     setSelectedChannels((prev) =>
       toggleNamesInSelection(prev, channelsWithTag, allSelected),
@@ -315,9 +307,7 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
           onSelectAll={handleSelectAll}
           onUnselectAll={handleUnselectAll}
           onRevertSelection={handleRevertSelection}
-          isRevertDisabled={
-            filteredChannels.filter((c) => !c.isFrozen).length === 0
-          }
+          isRevertDisabled={filteredChannels.length === 0}
           isScraping={scrapingChannels.size > 0}
           isScrapeSelectedDisabled={
             isOffline ||
