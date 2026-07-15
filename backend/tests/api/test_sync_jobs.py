@@ -357,22 +357,13 @@ def test_sync_job_persists_to_postgres(client: TestClient) -> None:
         )
         job_id = r.json()["jobId"]
 
-        deadline = time.time() + 10
-        while time.time() < deadline:
-            status_r = client.get(f"{PREFIX}/sync/{job_id}", headers=headers)
-            if status_r.json()["status"] == "completed":
-                break
-            time.sleep(0.1)
-
-        with Session(engine) as session:
-            row = session.get(SyncJob, job_id)
-            assert row is not None
-            assert row.status == "completed"
-            assert row.source == "PersistTest"
-            assert len(row.channels) == 1
-            assert row.channels[0]["channelName"] == "persist-ch"
-            assert row.channels[0]["status"] == "success"
-            assert row.finished_at is not None
+        _wait_for_job(client, job_id, headers)
+        row = _wait_for_persisted_job_row(job_id)
+        assert row.source == "PersistTest"
+        assert len(row.channels) == 1
+        assert row.channels[0]["channelName"] == "persist-ch"
+        assert row.channels[0]["status"] == "success"
+        assert row.finished_at is not None
 
         clear_active_jobs_for_tests()
         assert get_job(job_id) is not None
@@ -385,6 +376,26 @@ def test_sync_job_persists_to_postgres(client: TestClient) -> None:
 
     client.delete(f"{DATA}/channels/persist-ch", headers=headers)
     clear_jobs_for_tests()
+
+
+def _wait_for_persisted_job_row(
+    job_id: str,
+    *,
+    expected_status: str = "completed",
+    timeout_s: float = 10,
+) -> SyncJob:
+    """Poll Postgres until terminal job status is flushed (avoids in-memory/API race)."""
+    deadline = time.time() + timeout_s
+    row: SyncJob | None = None
+    while time.time() < deadline:
+        with Session(engine) as session:
+            row = session.get(SyncJob, job_id)
+            if row is not None and row.status == expected_status:
+                return row
+        time.sleep(0.05)
+    assert row is not None, f"sync job {job_id} not found in postgres"
+    assert row.status == expected_status
+    return row
 
 
 def _wait_for_job(client: TestClient, job_id: str, headers: dict[str, str]) -> dict:
