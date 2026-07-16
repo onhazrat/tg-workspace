@@ -350,9 +350,15 @@ test.describe("TG Summarizer", () => {
   })
 
   test("discover tab shows original-only empty guide", async ({ page }) => {
+    // Keep SPA state (filter is in-memory); avoid flaky tab-bar clicks under load.
+    test.setTimeout(60_000)
     await gotoSummarizer(page, "posts")
-    await page.getByRole("button", { name: "Original Only" }).click()
-    await page.locator("#workspace-tab-discover").click()
+    const originalOnly = page.getByRole("button", { name: "Original Only" })
+    await originalOnly.click()
+    await expect(originalOnly).toHaveClass(/bg-app-ink/)
+
+    await openPaletteKeyboard(page)
+    await runPaletteCommand(page, "Go to Discover")
 
     await expect(page).toHaveURL(/tab=discover/)
     await expect(page.getByText(/forward metadata/i)).toBeVisible()
