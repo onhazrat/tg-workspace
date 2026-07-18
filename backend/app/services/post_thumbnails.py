@@ -20,6 +20,7 @@ _META_SUFFIX = ".meta.json"
 _ENFORCE_MIN_INTERVAL_SECONDS = 300
 _last_enforce_lock = threading.Lock()
 _last_enforce_at = 0.0
+_thumb_dir_ready = False
 _EXT_BY_CONTENT_TYPE = {
     "image/jpeg": ".jpg",
     "image/jpg": ".jpg",
@@ -27,6 +28,14 @@ _EXT_BY_CONTENT_TYPE = {
     "image/webp": ".webp",
     "image/gif": ".gif",
 }
+_DEFAULT_EXT = ".jpg"
+# Every extension cache_post_thumb can write: the content-type map plus the
+# fallback used for unrecognised types. Checking these directly avoids a
+# directory-wide glob per lookup.
+_IMAGE_EXTS: tuple[str, ...] = (
+    _DEFAULT_EXT,
+    *sorted(set(_EXT_BY_CONTENT_TYPE.values()) - {_DEFAULT_EXT}),
+)
 
 
 def _resolve_thumb_dir() -> Path:
@@ -38,8 +47,11 @@ def _resolve_thumb_dir() -> Path:
 
 
 def _thumb_dir() -> Path:
+    global _thumb_dir_ready
     root = _resolve_thumb_dir()
-    root.mkdir(parents=True, exist_ok=True)
+    if not _thumb_dir_ready:
+        root.mkdir(parents=True, exist_ok=True)
+        _thumb_dir_ready = True
     return root
 
 
@@ -75,11 +87,16 @@ def _read_meta(channel_name: str, post_id: int) -> dict[str, Any] | None:
 
 
 def _find_image_path(channel_name: str, post_id: int) -> Path | None:
+    """Locate a cached thumb by probing known extensions.
+
+    A glob here would scandir the whole cache directory on every call, which
+    grows into the dominant sync cost once the cache holds tens of thousands
+    of files. Only _IMAGE_EXTS can ever be written, so probe those directly.
+    """
     safe = _safe_key(channel_name, post_id)
     directory = _thumb_dir()
-    for path in directory.glob(f"{safe}.*"):
-        if path.name.endswith(_META_SUFFIX):
-            continue
+    for ext in _IMAGE_EXTS:
+        path = directory / f"{safe}{ext}"
         if path.is_file():
             return path
     return None
@@ -100,7 +117,8 @@ def read_cached_thumb(channel_name: str, post_id: int) -> tuple[bytes, str] | No
 def delete_cached_thumb(channel_name: str, post_id: int) -> None:
     safe = _safe_key(channel_name, post_id)
     directory = _thumb_dir()
-    for path in directory.glob(f"{safe}.*"):
+    for suffix in (*_IMAGE_EXTS, _META_SUFFIX):
+        path = directory / f"{safe}{suffix}"
         try:
             path.unlink(missing_ok=True)
         except OSError:
@@ -220,13 +238,15 @@ async def cache_post_thumb(
     if not content:
         return has_cached_thumb(channel_name, post_id)
 
-    ext = _EXT_BY_CONTENT_TYPE.get(content_type.lower(), ".jpg")
+    ext = _EXT_BY_CONTENT_TYPE.get(content_type.lower(), _DEFAULT_EXT)
     safe = _safe_key(channel_name, post_id)
     directory = _thumb_dir()
 
-    for path in directory.glob(f"{safe}.*"):
+    for stale_ext in _IMAGE_EXTS:
+        if stale_ext == ext:
+            continue
         try:
-            path.unlink(missing_ok=True)
+            (directory / f"{safe}{stale_ext}").unlink(missing_ok=True)
         except OSError:
             pass
 
