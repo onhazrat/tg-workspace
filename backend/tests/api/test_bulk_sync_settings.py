@@ -228,5 +228,6 @@ def test_bulk_sync_settings_expected_posts_updates_next_dynamic_sync_at(
     for channel_id in channel_ids:
         row = next(item for item in listed if item["id"] == channel_id)
         assert row["dynamicSyncExpectedPosts"] == 40
-        # Velocity uses wall-clock recency, so allow a narrow timing drift.
-        assert abs(row["nextDynamicSyncAt"] - expected) <= 1000
+        # Velocity uses wall-clock recency between PATCH and assert; CI can
+        # drift a few seconds (seen ~1.1s over a 1s window).
+        assert abs(row["nextDynamicSyncAt"] - expected) <= 5_000

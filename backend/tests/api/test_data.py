@@ -217,8 +217,9 @@ def test_put_channel_expected_posts_updates_next_dynamic_sync_at(
             velocity,
             now_ms,
         )
-        # Velocity uses wall-clock recency, so allow a narrow timing drift.
-        assert abs(data["nextDynamicSyncAt"] - expected) <= 1000
+        # Velocity uses wall-clock recency between update and assert; CI can
+        # drift a few seconds past a 1s window.
+        assert abs(data["nextDynamicSyncAt"] - expected) <= 5_000
 
         frozen_deadline = data["nextDynamicSyncAt"]
         r_unchanged = client.put(
