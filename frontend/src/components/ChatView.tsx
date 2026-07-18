@@ -18,6 +18,7 @@ import { useState } from "react"
 import ReactMarkdown from "react-markdown"
 import { TgButton } from "@/components/ui/tg-button"
 import { TgIconButton } from "@/components/ui/tg-icon-button"
+import { TgFieldLabel } from "@/components/ui/tg-input"
 import { TgHeroEmptyState } from "@/components/ui/tg-segmented"
 import { LANGUAGES, MODELS } from "../constants"
 import { useChatContext } from "../contexts/ChatContext"
@@ -241,9 +242,9 @@ export const ChatView: React.FC = () => {
             }
           >
             <div className="w-full space-y-2">
-              <p className="text-[9px] font-bold uppercase tracking-widest opacity-40 mb-3 text-left pl-1">
+              <TgFieldLabel className="mb-3 text-[9px] font-sans font-bold tracking-widest opacity-40 text-left pl-1">
                 Suggested Prompts
-              </p>
+              </TgFieldLabel>
               {(chatMode === "summary"
                 ? SUGGESTED_PROMPTS_SUMMARY
                 : SUGGESTED_PROMPTS_HISTORY

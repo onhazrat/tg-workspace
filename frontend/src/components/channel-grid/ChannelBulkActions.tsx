@@ -8,8 +8,8 @@ import {
 } from "@/components/ui/select"
 import { TgButton } from "@/components/ui/tg-button"
 import { TgInput } from "@/components/ui/tg-input"
+import { selectTriggerClassName } from "@/components/ui/tg-select-trigger"
 import type { ChannelSettingGroup } from "@/types"
-import { selectTriggerClassName } from "./select-trigger-class"
 
 type ChannelBulkActionsProps = {
   selectedCount: number
@@ -52,14 +52,14 @@ export const ChannelBulkActions: React.FC<ChannelBulkActionsProps> = ({
           {selectedCount} Selected
         </span>
         <div className="h-4 w-px bg-app-ink/10 mx-1" />
-        {/* tg-ui-allow: Freeze keeps custom blue soft fill; no TgButton variant maps to blue */}
-        <button
+        <TgButton
           type="button"
+          variant="infoSoft"
+          size="sm"
           onClick={onRequestFreeze}
-          className="px-3 py-1.5 text-[10px] uppercase font-bold rounded-md bg-blue-500/10 text-blue-500 hover:bg-blue-500/20 transition-all"
         >
           Freeze
-        </button>
+        </TgButton>
         <TgButton
           type="button"
           variant="ghost"

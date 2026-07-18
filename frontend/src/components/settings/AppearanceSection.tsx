@@ -1,8 +1,9 @@
 import { Info, Layout, Monitor, Moon, Sun } from "lucide-react"
 import type React from "react"
+import { TgSegmentedControl } from "@/components/ui/tg-segmented"
 import { TgSettingsSection } from "@/components/ui/tg-settings-section"
+import { TgToggle } from "@/components/ui/tg-toggle"
 import { useSettings } from "@/contexts/SettingsContext"
-import { ToggleSwitch } from "./ToggleSwitch"
 
 export const AppearanceSection: React.FC = () => {
   const {
@@ -37,43 +38,40 @@ export const AppearanceSection: React.FC = () => {
                 Color Theme
               </span>
             </div>
-            {/* tg-ui-allow: Appearance theme toggle near-variant — denser/custom (no rounded-lg track, opacity selection) */}
-            <div className="flex gap-2 p-1 bg-app-ink/5 border border-app-ink/10 w-fit">
-              <button
-                type="button"
-                onClick={() => setTheme("light")}
-                className={`px-4 py-2 text-[10px] font-bold uppercase tracking-widest transition-all flex items-center gap-2 ${
-                  theme === "light"
-                    ? "bg-app-ink text-app-bg"
-                    : "opacity-40 hover:opacity-100"
-                }`}
-              >
-                <Sun size={12} /> Light
-              </button>
-              <button
-                type="button"
-                onClick={() => setTheme("dark")}
-                className={`px-4 py-2 text-[10px] font-bold uppercase tracking-widest transition-all flex items-center gap-2 ${
-                  theme === "dark"
-                    ? "bg-app-ink text-app-bg"
-                    : "opacity-40 hover:opacity-100"
-                }`}
-              >
-                <Moon size={12} /> Dark
-              </button>
-              <button
-                type="button"
-                data-testid="system-mode"
-                onClick={() => setTheme("system")}
-                className={`px-4 py-2 text-[10px] font-bold uppercase tracking-widest transition-all flex items-center gap-2 ${
-                  theme === "system"
-                    ? "bg-app-ink text-app-bg"
-                    : "opacity-40 hover:opacity-100"
-                }`}
-              >
-                <Monitor size={12} /> System
-              </button>
-            </div>
+            <TgSegmentedControl
+              size="dense"
+              className="w-fit"
+              aria-label="Color theme"
+              value={theme}
+              onChange={setTheme}
+              options={[
+                {
+                  value: "light",
+                  label: (
+                    <>
+                      <Sun size={12} /> Light
+                    </>
+                  ),
+                },
+                {
+                  value: "dark",
+                  label: (
+                    <>
+                      <Moon size={12} /> Dark
+                    </>
+                  ),
+                },
+                {
+                  value: "system",
+                  label: (
+                    <>
+                      <Monitor size={12} /> System
+                    </>
+                  ),
+                  "data-testid": "system-mode",
+                },
+              ]}
+            />
           </div>
         </div>
       </TgSettingsSection>
@@ -114,9 +112,10 @@ export const AppearanceSection: React.FC = () => {
                   Show Bio
                 </span>
               </div>
-              <ToggleSwitch
+              <TgToggle
                 checked={showChannelBio}
                 onClick={() => setShowChannelBio(!showChannelBio)}
+                aria-label="Show bio"
               />
             </div>
           </div>
@@ -128,11 +127,12 @@ export const AppearanceSection: React.FC = () => {
                   Show Telegram Chat ID
                 </span>
               </div>
-              <ToggleSwitch
+              <TgToggle
                 checked={showChannelTelegramChatId}
                 onClick={() =>
                   setShowChannelTelegramChatId(!showChannelTelegramChatId)
                 }
+                aria-label="Show Telegram chat ID"
               />
             </div>
           </div>
@@ -144,11 +144,12 @@ export const AppearanceSection: React.FC = () => {
                   Show Subscribers
                 </span>
               </div>
-              <ToggleSwitch
+              <TgToggle
                 checked={showChannelSubscribers}
                 onClick={() =>
                   setShowChannelSubscribers(!showChannelSubscribers)
                 }
+                aria-label="Show subscribers"
               />
             </div>
           </div>
@@ -160,9 +161,10 @@ export const AppearanceSection: React.FC = () => {
                   Show Photos Count
                 </span>
               </div>
-              <ToggleSwitch
+              <TgToggle
                 checked={showChannelPhotos}
                 onClick={() => setShowChannelPhotos(!showChannelPhotos)}
+                aria-label="Show photos count"
               />
             </div>
           </div>
@@ -174,9 +176,10 @@ export const AppearanceSection: React.FC = () => {
                   Show Videos Count
                 </span>
               </div>
-              <ToggleSwitch
+              <TgToggle
                 checked={showChannelVideos}
                 onClick={() => setShowChannelVideos(!showChannelVideos)}
+                aria-label="Show videos count"
               />
             </div>
           </div>
@@ -188,9 +191,10 @@ export const AppearanceSection: React.FC = () => {
                   Show Files Count
                 </span>
               </div>
-              <ToggleSwitch
+              <TgToggle
                 checked={showChannelFiles}
                 onClick={() => setShowChannelFiles(!showChannelFiles)}
+                aria-label="Show files count"
               />
             </div>
           </div>
@@ -202,9 +206,10 @@ export const AppearanceSection: React.FC = () => {
                   Show Links Count
                 </span>
               </div>
-              <ToggleSwitch
+              <TgToggle
                 checked={showChannelLinks}
                 onClick={() => setShowChannelLinks(!showChannelLinks)}
+                aria-label="Show links count"
               />
             </div>
           </div>
@@ -216,9 +221,10 @@ export const AppearanceSection: React.FC = () => {
                   Show Start ID (Advanced)
                 </span>
               </div>
-              <ToggleSwitch
+              <TgToggle
                 checked={showChannelStartId}
                 onClick={() => setShowChannelStartId(!showChannelStartId)}
+                aria-label="Show start ID"
               />
             </div>
           </div>

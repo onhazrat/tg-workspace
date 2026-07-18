@@ -17,6 +17,7 @@ export const TagConfig: React.FC<TagConfigProps> = ({ onPasteClick }) => {
     generateTags,
     applyCurrentSuggestions,
     isGenerating,
+    isApplying,
   } = useTagContext()
 
   const selectedCount = selectedChannels.size
@@ -91,6 +92,8 @@ export const TagConfig: React.FC<TagConfigProps> = ({ onPasteClick }) => {
             variant="secondary"
             size="md"
             onClick={() => void applyCurrentSuggestions()}
+            loading={isApplying}
+            loadingLabel="Applying…"
             className="border-emerald-500/30 bg-emerald-500/10 text-emerald-700 hover:bg-emerald-500/20"
           >
             <Tags size={13} />

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react"
 import { toast } from "sonner"
 import { api, type SettingGroupWriteBody } from "@/api"
 import { TgButton } from "@/components/ui/tg-button"
+import { TgHelpText } from "@/components/ui/tg-input"
 import {
   AUTO_SYNC_INTERVAL_MAX_MINUTES,
   AUTO_SYNC_INTERVAL_MIN_MINUTES,
@@ -170,10 +171,10 @@ export const SettingGroupsPanel: React.FC = () => {
           Channel Setting Groups
         </span>
       </div>
-      <p className="text-[10px] opacity-40 italic serif">
+      <TgHelpText>
         Sync and operational settings are inherited from each channel&apos;s
         group. Reassign channels on the Channels tab; edit group defaults here.
-      </p>
+      </TgHelpText>
 
       {showInitialLoading ? (
         <p className="text-[10px] opacity-50">Loading groups…</p>

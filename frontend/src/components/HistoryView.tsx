@@ -347,13 +347,14 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
               className="w-full bg-app-card border border-app-ink/10 rounded-xl py-2.5 pl-10 pr-10 text-[13px] focus:outline-none focus:border-app-ink/30 focus:ring-4 focus:ring-app-ink/5 transition-all shadow-sm"
             />
             {historySearchQuery && (
-              <button
-                type="button"
+              <TgIconButton
+                variant="ghost"
+                aria-label="Clear search"
                 onClick={() => setHistorySearchQuery("")}
-                className="absolute right-3 top-1/2 -translate-y-1/2 opacity-40 hover:opacity-100 transition-opacity p-1 rounded-md hover:bg-app-ink/5"
+                className="absolute right-3 top-1/2 -translate-y-1/2 opacity-40 hover:opacity-100 p-1"
               >
                 <X size={14} />
-              </button>
+              </TgIconButton>
             )}
           </div>
           <TgButton

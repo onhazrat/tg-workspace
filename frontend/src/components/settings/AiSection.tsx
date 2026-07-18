@@ -1,11 +1,11 @@
 import { Cpu, Database, Languages, RefreshCw, Thermometer } from "lucide-react"
 import { AnimatePresence, motion } from "motion/react"
 import type React from "react"
-import { TgInput, tgFieldClassName } from "@/components/ui/tg-input"
+import { TgHelpText, TgInput, tgFieldClassName } from "@/components/ui/tg-input"
 import { TgSettingsSection } from "@/components/ui/tg-settings-section"
+import { TgToggle } from "@/components/ui/tg-toggle"
 import { LANGUAGES, MODELS } from "@/constants"
 import { useSettings } from "@/contexts/SettingsContext"
-import { ToggleSwitch } from "./ToggleSwitch"
 
 export const AiSection: React.FC = () => {
   const {
@@ -52,9 +52,9 @@ export const AiSection: React.FC = () => {
                 </option>
               ))}
             </select>
-            <p className="text-[10px] opacity-40 italic serif">
+            <TgHelpText>
               Summaries and chat responses will be generated in this language.
-            </p>
+            </TgHelpText>
           </div>
 
           <div className="space-y-4">
@@ -79,9 +79,9 @@ export const AiSection: React.FC = () => {
                 </option>
               ))}
             </select>
-            <p className="text-[10px] opacity-40 italic serif">
+            <TgHelpText>
               Flash models are faster, Pro models are more detailed.
-            </p>
+            </TgHelpText>
           </div>
 
           {advancedMode && (
@@ -94,15 +94,15 @@ export const AiSection: React.FC = () => {
                       Enable Embeddings & RAG
                     </span>
                   </div>
-                  <ToggleSwitch
+                  <TgToggle
                     checked={embeddingsEnabled}
                     onClick={() => setEmbeddingsEnabled(!embeddingsEnabled)}
                   />
                 </div>
-                <p className="text-[10px] opacity-40 italic serif">
+                <TgHelpText>
                   Generate vector embeddings for posts to enable semantic search
                   and RAG chat. Warning: Takes significant disk space.
-                </p>
+                </TgHelpText>
               </div>
 
               {embeddingsEnabled && (
@@ -114,16 +114,16 @@ export const AiSection: React.FC = () => {
                         Pause Embedding Sync
                       </span>
                     </div>
-                    <ToggleSwitch
+                    <TgToggle
                       checked={embeddingsPaused}
                       onClick={() => setEmbeddingsPaused(!embeddingsPaused)}
                       tone="amber"
                     />
                   </div>
-                  <p className="text-[10px] opacity-40 italic serif">
+                  <TgHelpText>
                     Temporarily pause the background generation of embeddings to
                     save API quota or CPU usage.
-                  </p>
+                  </TgHelpText>
                 </div>
               )}
             </>
@@ -170,14 +170,14 @@ export const AiSection: React.FC = () => {
                     Enable Translation
                   </span>
                 </div>
-                <ToggleSwitch
+                <TgToggle
                   checked={translationEnabled}
                   onClick={() => setTranslationEnabled(!translationEnabled)}
                 />
               </div>
-              <p className="text-[10px] opacity-40 italic serif">
+              <TgHelpText>
                 Allow translating posts natively using Gemini.
-              </p>
+              </TgHelpText>
             </div>
 
             <AnimatePresence>
@@ -196,14 +196,14 @@ export const AiSection: React.FC = () => {
                           Auto-Translate Posts
                         </span>
                       </div>
-                      <ToggleSwitch
+                      <TgToggle
                         checked={autoTranslate}
                         onClick={() => setAutoTranslate(!autoTranslate)}
                       />
                     </div>
-                    <p className="text-[10px] opacity-40 italic serif">
+                    <TgHelpText>
                       Automatically translate posts when they are loaded.
-                    </p>
+                    </TgHelpText>
                   </div>
 
                   <div className="space-y-4">

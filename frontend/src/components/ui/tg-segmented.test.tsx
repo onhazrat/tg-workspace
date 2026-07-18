@@ -27,14 +27,35 @@ describe("TgSegmentedControl", () => {
   })
 
   test("track class is centralized", () => {
-    expect(tgSegmentedTrackVariants({ size: "md" })).toContain(
-      "flex bg-app-ink/5 p-1 rounded-lg border border-app-ink/10".replace(
-        "flex ",
-        "",
-      ) || "bg-app-ink/5",
-    )
+    const track = tgSegmentedTrackVariants({ size: "md" })
+    expect(track).toContain("bg-app-ink/5")
+    expect(track).toContain("p-1")
+    expect(track).toContain("rounded-lg")
+    expect(track).toContain("border-app-ink/10")
     expect(tgSegmentedTrackVariants()).toContain("bg-app-ink/5")
     expect(tgSegmentedTrackVariants()).toContain("border-app-ink/10")
+    expect(tgSegmentedTrackVariants({ size: "md" })).toContain("rounded-lg")
+  })
+
+  test("dense size omits rounded-lg and uses opacity selection", () => {
+    const track = tgSegmentedTrackVariants({ size: "dense" })
+    expect(track).not.toContain("rounded-lg")
+    expect(track).toContain("gap-2")
+
+    const html = renderToStaticMarkup(
+      <TgSegmentedControl
+        size="dense"
+        aria-label="Theme"
+        value="light"
+        onChange={() => {}}
+        options={[
+          { value: "light", label: "Light" },
+          { value: "dark", label: "Dark", "data-testid": "theme-dark" },
+        ]}
+      />,
+    )
+    expect(html).toContain('data-testid="theme-dark"')
+    expect(html).toContain("opacity-40")
   })
 })
 

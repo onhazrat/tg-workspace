@@ -15,6 +15,7 @@ import { useEffect, useState } from "react"
 import { api } from "@/api"
 import { listNetworkLogs } from "../lib/repository"
 import type { NetworkLog } from "../types"
+import { TgSettingsSection } from "./ui/tg-settings-section"
 import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tg-tooltip"
 
 export const NetworkTelemetry: React.FC = () => {
@@ -270,12 +271,11 @@ export const NetworkTelemetry: React.FC = () => {
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
-          {/* tg-ui-allow: Routing Distribution — icon-in-h4 header fights TgSettingsSection */}
-          <div className="bg-app-card border border-app-ink/10 p-6 shadow-sm">
-            <h4 className="text-[11px] uppercase font-bold tracking-widest mb-6 flex items-center gap-3 opacity-80">
-              <Globe size={16} className="opacity-40" />
-              Routing Distribution
-            </h4>
+          <TgSettingsSection
+            icon={Globe}
+            title="Routing Distribution"
+            titleClassName="text-[11px] opacity-80"
+          >
             <div className="space-y-6">
               <div>
                 <div className="flex justify-between items-center mb-2">
@@ -332,14 +332,14 @@ export const NetworkTelemetry: React.FC = () => {
                 </div>
               </div>
             </div>
-          </div>
+          </TgSettingsSection>
 
-          {/* tg-ui-allow: Tor Telemetry Details — icon-in-h4 header fights TgSettingsSection */}
-          <div className="bg-app-card border border-app-ink/10 p-6 shadow-sm lg:col-span-2">
-            <h4 className="text-[11px] uppercase font-bold tracking-widest mb-6 flex items-center gap-3 opacity-80">
-              <Shield size={16} className="opacity-40" />
-              Tor Network Telemetry
-            </h4>
+          <TgSettingsSection
+            icon={Shield}
+            title="Tor Network Telemetry"
+            className="lg:col-span-2"
+            titleClassName="text-[11px] opacity-80"
+          >
             <div className="grid grid-cols-2 gap-4">
               <div className="p-4 border border-app-ink/10 bg-app-muted/30">
                 <div className="text-[10px] uppercase opacity-50 tracking-widest mb-2">
@@ -392,7 +392,7 @@ export const NetworkTelemetry: React.FC = () => {
                 </div>
               </div>
             </div>
-          </div>
+          </TgSettingsSection>
         </div>
 
         {/* Proxy Health Matrix */}

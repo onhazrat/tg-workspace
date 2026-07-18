@@ -74,6 +74,8 @@ export const BotManagement: React.FC<BotManagementProps> = () => {
   const [newDestChatId, setNewDestChatId] = useState("")
   const [isAutoFetchingBot, setIsAutoFetchingBot] = useState(false)
   const [isAutoFetchingDest, setIsAutoFetchingDest] = useState(false)
+  const [isSavingBot, setIsSavingBot] = useState(false)
+  const [isSavingDest, setIsSavingDest] = useState(false)
   const [botValidation, setBotValidation] = useState<
     Record<string, { isValid: boolean; botInfo?: string; loading: boolean }>
   >({})
@@ -197,14 +199,19 @@ export const BotManagement: React.FC<BotManagementProps> = () => {
       name: nameToUse,
       token: newBotToken,
     }
-    await saveBotCredential(newBot)
-    setBotCredentials((prev) => [
-      ...prev,
-      { ...newBot, token: undefined, hasToken: true },
-    ])
-    setNewBotName("")
-    setNewBotToken("")
-    handleCheckBotToken(newBot.id)
+    setIsSavingBot(true)
+    try {
+      await saveBotCredential(newBot)
+      setBotCredentials((prev) => [
+        ...prev,
+        { ...newBot, token: undefined, hasToken: true },
+      ])
+      setNewBotName("")
+      setNewBotToken("")
+      handleCheckBotToken(newBot.id)
+    } finally {
+      setIsSavingBot(false)
+    }
   }
 
   const handleCheckBotToken = async (id: string) => {
@@ -346,12 +353,17 @@ export const BotManagement: React.FC<BotManagementProps> = () => {
       name: nameToUse,
       chatId: newDestChatId,
     }
-    await saveChatDestination(newDest)
-    setChatDestinations((prev) => [...prev, newDest])
-    setNewDestName("")
-    setNewDestChatId("")
-    // Trigger validation immediately
-    handleCheckDestination(newDest.id, newDest.chatId)
+    setIsSavingDest(true)
+    try {
+      await saveChatDestination(newDest)
+      setChatDestinations((prev) => [...prev, newDest])
+      setNewDestName("")
+      setNewDestChatId("")
+      // Trigger validation immediately
+      handleCheckDestination(newDest.id, newDest.chatId)
+    } finally {
+      setIsSavingDest(false)
+    }
   }
 
   const handleDeleteChatDestination = async (id: string) => {
@@ -519,6 +531,8 @@ export const BotManagement: React.FC<BotManagementProps> = () => {
                 variant="primary"
                 size="lg"
                 onClick={handleAddBotCredential}
+                loading={isSavingBot}
+                loadingLabel="Saving…"
                 className="w-full"
               >
                 <Plus size={14} /> Save Bot
@@ -758,6 +772,8 @@ export const BotManagement: React.FC<BotManagementProps> = () => {
                 variant="primary"
                 size="lg"
                 onClick={handleAddChatDestination}
+                loading={isSavingDest}
+                loadingLabel="Saving…"
                 className="w-full"
               >
                 <Plus size={14} /> Save Destination

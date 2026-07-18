@@ -4,12 +4,13 @@ import type * as React from "react"
 import { cn } from "@/lib/utils"
 
 const tgSegmentedTrackVariants = cva(
-  "inline-flex bg-app-ink/5 p-1 rounded-lg border border-app-ink/10",
+  "inline-flex bg-app-ink/5 p-1 border border-app-ink/10",
   {
     variants: {
       size: {
-        sm: "gap-0.5",
-        md: "gap-1",
+        sm: "gap-0.5 rounded-lg",
+        md: "gap-1 rounded-lg",
+        dense: "gap-2",
       },
     },
     defaultVariants: {
@@ -25,12 +26,25 @@ const tgSegmentedOptionVariants = cva(
       size: {
         sm: "px-2.5 py-1 text-[9px]",
         md: "px-3 py-1.5 text-[10px]",
+        dense: "px-4 py-2 text-[10px]",
       },
       selected: {
         true: "bg-app-ink text-app-bg shadow-sm",
         false: "text-app-ink/60 hover:text-app-ink hover:bg-app-ink/5",
       },
     },
+    compoundVariants: [
+      {
+        size: "dense",
+        selected: false,
+        class: "opacity-40 hover:opacity-100 hover:bg-transparent",
+      },
+      {
+        size: "dense",
+        selected: true,
+        class: "shadow-none",
+      },
+    ],
     defaultVariants: {
       size: "md",
       selected: false,
@@ -42,6 +56,7 @@ type TgSegmentedOption<T extends string> = {
   value: T
   label: React.ReactNode
   disabled?: boolean
+  "data-testid"?: string
 }
 
 type TgSegmentedControlProps<T extends string> = {
@@ -79,6 +94,7 @@ function TgSegmentedControl<T extends string>({
             disabled={option.disabled}
             aria-pressed={isSelected}
             data-selected={isSelected ? "true" : "false"}
+            data-testid={option["data-testid"]}
             className={cn(
               tgSegmentedOptionVariants({ size, selected: isSelected }),
               optionClassName,

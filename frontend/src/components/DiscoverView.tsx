@@ -61,6 +61,7 @@ export const DiscoverView: React.FC = () => {
   const [pendingFollowNames, setPendingFollowNames] = useState<string[] | null>(
     null,
   )
+  const [activeFollowNames, setActiveFollowNames] = useState<string[]>([])
   const headerCheckboxRef = useRef<HTMLInputElement>(null)
 
   const { candidates: rawCandidates, emptyReason } = useMemo(
@@ -139,6 +140,7 @@ export const DiscoverView: React.FC = () => {
 
     const payload = buildBulkFollowChannels(names, candidatesByName)
     setIsFollowJobRunning(true)
+    setActiveFollowNames(names)
     setFollowProgress(null)
     try {
       const status = await followDiscoverChannels(payload, {
@@ -152,6 +154,7 @@ export const DiscoverView: React.FC = () => {
       }
     } finally {
       setIsFollowJobRunning(false)
+      setActiveFollowNames([])
     }
   }
 
@@ -463,6 +466,8 @@ export const DiscoverView: React.FC = () => {
                               size="sm"
                               data-testid={`discover-follow-${row.name}`}
                               disabled={isOffline || isFollowJobRunning}
+                              loading={activeFollowNames.includes(row.name)}
+                              loadingLabel="Follow"
                               onClick={() => void handleFollow(row.name)}
                               className="rounded-full border-blue-500/30 text-blue-600 hover:bg-blue-500/10 dark:text-blue-400"
                             >

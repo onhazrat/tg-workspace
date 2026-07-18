@@ -83,14 +83,149 @@ test.describe("TG UI primitives", () => {
 
   test("logs clear-all uses TgConfirmDialog", async ({ page }) => {
     await openSettingsSection(page, "Diagnostics")
+
+    let nativeConfirmOpened = false
+    page.on("dialog", async (dialog) => {
+      nativeConfirmOpened = true
+      await dialog.dismiss()
+    })
+
     const clearButton = page.getByRole("button", { name: /Clear .* Logs/i })
     await expect(clearButton).toBeVisible()
     await clearButton.click()
     const dialog = page.getByRole("dialog")
     await expect(dialog).toBeVisible()
     await expect(dialog.getByText(/Clear all logs/i)).toBeVisible()
+    await expect(
+      dialog.locator('[data-slot="tg-button"]').first(),
+    ).toBeVisible()
+
     await dialog.getByRole("button", { name: "Cancel" }).click()
     await expect(dialog).not.toBeVisible()
+    expect(nativeConfirmOpened).toBe(false)
+
+    await clearButton.click()
+    await expect(page.getByRole("dialog")).toBeVisible()
+    await page
+      .getByRole("dialog")
+      .getByRole("button", { name: "Clear all" })
+      .click()
+    await expect(page.getByRole("dialog")).not.toBeVisible()
+    expect(nativeConfirmOpened).toBe(false)
+  })
+
+  test("channel delete confirm opens TgConfirmDialog and cancel is a no-op", async ({
+    page,
+  }) => {
+    await gotoSummarizer(page, "channels")
+    const channelName = await seedTestChannel(page)
+
+    let nativeConfirmOpened = false
+    page.on("dialog", async (dialog) => {
+      nativeConfirmOpened = true
+      await dialog.dismiss()
+    })
+
+    const card = page.locator(`[data-channel-name="${channelName}"]`)
+    await expect(card).toBeVisible()
+    await card.hover()
+    const deleteBtn = page.getByRole("button", { name: "Delete Channel" })
+    await expect(deleteBtn).toBeVisible()
+    await deleteBtn.click()
+
+    const dialog = page.getByRole("dialog")
+    await expect(dialog).toBeVisible()
+    await expect(dialog.getByText(/Remove Channel/i)).toBeVisible()
+    await dialog.getByRole("button", { name: "Cancel" }).click()
+    await expect(dialog).not.toBeVisible()
+    await expect(card).toBeVisible()
+    expect(nativeConfirmOpened).toBe(false)
+  })
+
+  test("sync bulk reset uses inline confirm (not a modal)", async ({
+    page,
+  }) => {
+    await openSettingsSection(page, "Scraping & Sync")
+
+    let nativeConfirmOpened = false
+    page.on("dialog", async (dialog) => {
+      nativeConfirmOpened = true
+      await dialog.dismiss()
+    })
+
+    const start = page.getByRole("button", {
+      name: /Reset & sync all channels/i,
+    })
+    await expect(start).toBeVisible()
+    await start.click()
+
+    await expect(page.getByRole("dialog")).toHaveCount(0)
+    const confirm = page.getByRole("button", {
+      name: /Confirm reset & sync/i,
+    })
+    await expect(confirm).toBeVisible()
+    await expect(confirm).toHaveAttribute("data-slot", "tg-button")
+    await expect(confirm).toHaveAttribute("data-variant", "successSoft")
+    await page.getByRole("button", { name: "Cancel" }).click()
+    await expect(confirm).not.toBeVisible()
+    expect(nativeConfirmOpened).toBe(false)
+  })
+
+  test("channel card frosted icon buttons expose hover classes", async ({
+    page,
+  }) => {
+    await gotoSummarizer(page, "channels")
+    await seedTestChannel(page)
+
+    for (const theme of ["light", "dark"] as const) {
+      await setTheme(page, theme)
+      const frosted = page
+        .locator('[data-slot="tg-icon-button"][data-variant="frosted"]')
+        .first()
+      await expect(frosted).toBeAttached()
+      const frostedClass = (await frosted.getAttribute("class")) ?? ""
+      expect(frostedClass).toContain("bg-app-bg/90")
+      expect(frostedClass).toContain("hover:bg-app-bg")
+      expect(frostedClass).toContain("focus-visible:ring-2")
+    }
+  })
+
+  test("appearance dense theme control and toggles are keyboard-focusable", async ({
+    page,
+  }) => {
+    await openSettingsSection(page, "Appearance")
+    const theme = page.locator('[data-slot="tg-segmented-control"]')
+    await expect(theme).toBeVisible()
+    const light = theme.getByRole("button", { name: /Light/i })
+    await light.focus()
+    await expect(light).toBeFocused()
+    const lightClass = (await light.getAttribute("class")) ?? ""
+    expect(lightClass).toContain("focus-visible:ring-2")
+
+    const toggle = page.locator('[data-slot="tg-toggle"]').first()
+    await expect(toggle).toBeVisible()
+    await toggle.focus()
+    await expect(toggle).toBeFocused()
+    const toggleClass = (await toggle.getAttribute("class")) ?? ""
+    expect(toggleClass).toContain("focus-visible:ring-2")
+  })
+
+  test("channels toolbar controls are tab-focusable with focus-visible rings", async ({
+    page,
+  }) => {
+    await gotoSummarizer(page, "channels")
+    await seedTestChannel(page)
+
+    const syncAll = page.getByRole("button", { name: /Sync All/i })
+    await syncAll.focus()
+    await expect(syncAll).toBeFocused()
+    expect((await syncAll.getAttribute("class")) ?? "").toContain(
+      "focus-visible:ring-2",
+    )
+
+    await page.keyboard.press("Tab")
+    const focused = page.locator(":focus")
+    await expect(focused).toBeVisible()
   })
 
   test("group filter chips and post filter chips use primitives", async ({

@@ -10,6 +10,9 @@ describe("TgButton", () => {
       "ghost",
       "danger",
       "dangerSoft",
+      "successSoft",
+      "infoSoft",
+      "link",
     ] as const) {
       const html = renderToStaticMarkup(
         <TgButton variant={variant}>Action</TgButton>,
@@ -54,5 +57,21 @@ describe("TgButton", () => {
   test("ghost includes hover background for light/dark visibility", () => {
     const classes = tgButtonVariants({ variant: "ghost" })
     expect(classes).toContain("hover:bg-app-ink/5")
+  })
+
+  test("successSoft and infoSoft mirror soft-fill recipes", () => {
+    expect(tgButtonVariants({ variant: "successSoft" })).toContain(
+      "bg-green-500/10",
+    )
+    expect(tgButtonVariants({ variant: "infoSoft" })).toContain(
+      "bg-blue-500/10",
+    )
+  })
+
+  test("link variant collapses padding for compact header actions", () => {
+    const classes = tgButtonVariants({ variant: "link", size: "sm" })
+    expect(classes).toContain("hover:underline")
+    expect(classes).toContain("h-auto")
+    expect(classes).toContain("px-0")
   })
 })

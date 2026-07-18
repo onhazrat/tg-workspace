@@ -32,6 +32,7 @@ interface TagContextType {
   mode: TagMode
   setMode: React.Dispatch<React.SetStateAction<TagMode>>
   isGenerating: boolean
+  isApplying: boolean
   tagRuns: TagRun[]
   currentRunId: string | null
   setCurrentRunId: React.Dispatch<React.SetStateAction<string | null>>
@@ -64,6 +65,7 @@ export const TagProvider: React.FC<{ children: React.ReactNode }> = ({
 
   const [mode, setMode] = useState<TagMode>("add")
   const [isGenerating, setIsGenerating] = useState(false)
+  const [isApplying, setIsApplying] = useState(false)
   const [tagRuns, setTagRuns] = useState<TagRun[]>([])
   const [currentRunId, setCurrentRunId] = useState<string | null>(null)
   const [suggestions, setSuggestions] = useState<Record<string, string[]>>({})
@@ -290,6 +292,7 @@ export const TagProvider: React.FC<{ children: React.ReactNode }> = ({
     const applyingToastId = toast.loading(
       `Applying tags to ${updatedChannels.length} channel(s)...`,
     )
+    setIsApplying(true)
 
     try {
       const bulkResult = await bulkUpdateChannelTags(
@@ -331,6 +334,8 @@ export const TagProvider: React.FC<{ children: React.ReactNode }> = ({
           ? error.message
           : "Failed to apply tag suggestions",
       )
+    } finally {
+      setIsApplying(false)
     }
   }
 
@@ -354,6 +359,7 @@ export const TagProvider: React.FC<{ children: React.ReactNode }> = ({
         mode,
         setMode,
         isGenerating,
+        isApplying,
         tagRuns,
         currentRunId,
         setCurrentRunId,

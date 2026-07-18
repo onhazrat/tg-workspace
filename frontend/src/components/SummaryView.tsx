@@ -213,6 +213,7 @@ export const SummaryView: React.FC<SummaryViewProps> = () => {
   const [sendMetadata, setSendMetadata] = useState(true)
   const [metadataText, setMetadataText] = useState("")
   const [isEditingMetadata, setIsEditingMetadata] = useState(false)
+  const [isSavingMetadata, setIsSavingMetadata] = useState(false)
   const telegramBodyLength = summary?.length ?? 0
   const telegramMetadataLength = sendMetadata ? metadataText.length : 0
   const telegramMessageLength =
@@ -780,15 +781,23 @@ export const SummaryView: React.FC<SummaryViewProps> = () => {
                             type="button"
                             variant="primary"
                             size="sm"
+                            loading={isSavingMetadata}
+                            loadingLabel="Saving…"
                             onClick={async () => {
-                              const updatedSummary = {
-                                ...currentSummary,
-                                metadataText,
+                              if (!currentSummary) return
+                              setIsSavingMetadata(true)
+                              try {
+                                const updatedSummary = {
+                                  ...currentSummary,
+                                  metadataText,
+                                }
+                                await saveSummary(updatedSummary)
+                                await loadHistory()
+                                setIsEditingMetadata(false)
+                                toast.success("Metadata updated.")
+                              } finally {
+                                setIsSavingMetadata(false)
                               }
-                              await saveSummary(updatedSummary)
-                              await loadHistory()
-                              setIsEditingMetadata(false)
-                              toast.success("Metadata updated.")
                             }}
                           >
                             Save

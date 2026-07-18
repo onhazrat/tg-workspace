@@ -14,9 +14,15 @@ import { useEffect, useState } from "react"
 import { toast } from "sonner"
 import { api } from "@/api"
 import { TgButton } from "@/components/ui/tg-button"
-import { TgFieldLabel, TgInput, TgTextarea } from "@/components/ui/tg-input"
+import {
+  TgFieldLabel,
+  TgHelpText,
+  TgInput,
+  TgTextarea,
+} from "@/components/ui/tg-input"
 import { TgSegmentedControl } from "@/components/ui/tg-segmented"
 import { TgSettingsSection } from "@/components/ui/tg-settings-section"
+import { TgToggle } from "@/components/ui/tg-toggle"
 import { useData } from "@/contexts/DataContext"
 import { useSettings } from "@/contexts/SettingsContext"
 import { saveNetworkLog } from "@/lib/repository"
@@ -27,7 +33,6 @@ import {
 } from "@/lib/settings/proxy-concurrency"
 import { parseProxyList } from "@/lib/syncSettings"
 import type { NetworkLog } from "@/types"
-import { ToggleSwitch } from "./ToggleSwitch"
 
 export const NetworkSection: React.FC = () => {
   const {
@@ -288,14 +293,14 @@ export const NetworkSection: React.FC = () => {
                       Enable Proxies
                     </span>
                   </div>
-                  <ToggleSwitch
+                  <TgToggle
                     checked={proxyEnabled}
                     onClick={() => setProxyEnabled(!proxyEnabled)}
                   />
                 </div>
-                <p className="text-[10px] opacity-40 italic serif">
+                <TgHelpText>
                   Rotate through proxy servers to avoid Telegram rate limits.
-                </p>
+                </TgHelpText>
               </div>
 
               <AnimatePresence>
@@ -313,25 +318,22 @@ export const NetworkSection: React.FC = () => {
                       <div className="flex gap-3">
                         {Object.keys(proxyTestResults).length > 0 && (
                           <TgButton
-                            // tg-ui-allow: compact link-style clear in proxy header
                             type="button"
-                            variant="ghost"
+                            variant="link"
                             size="sm"
                             onClick={clearProxyResults}
-                            className="h-auto px-0 opacity-60 hover:underline hover:bg-transparent"
+                            className="opacity-60"
                           >
                             Clear
                           </TgButton>
                         )}
                         <TgButton
-                          // tg-ui-allow: compact link-style test action in proxy header
                           type="button"
-                          variant="ghost"
+                          variant="link"
                           size="sm"
                           onClick={() => handleTestAllProxies(defaultProxyUrls)}
                           loading={isTestingAll}
                           loadingLabel="Test All"
-                          className="h-auto px-0 hover:underline hover:bg-transparent"
                         >
                           <Activity size={10} />
                           Test All
@@ -507,7 +509,7 @@ export const NetworkSection: React.FC = () => {
                       </div>
                     )}
 
-                    <p className="text-[10px] opacity-40 italic serif">
+                    <TgHelpText>
                       Your proxy list is saved to your account on the server.
                       {envFallbackConfigured && (
                         <>
@@ -518,7 +520,7 @@ export const NetworkSection: React.FC = () => {
                           env.
                         </>
                       )}
-                    </p>
+                    </TgHelpText>
                   </motion.div>
                 )}
               </AnimatePresence>
@@ -551,15 +553,15 @@ export const NetworkSection: React.FC = () => {
                       Enable TOR Proxy
                     </span>
                   </div>
-                  <ToggleSwitch
+                  <TgToggle
                     checked={torEnabled}
                     onClick={() => setTorEnabled(!torEnabled)}
                   />
                 </div>
-                <p className="text-[10px] opacity-40 italic serif">
+                <TgHelpText>
                   Use TOR to anonymize requests and bypass geographic
                   restrictions.
-                </p>
+                </TgHelpText>
               </div>
 
               <AnimatePresence>
@@ -638,27 +640,24 @@ export const NetworkSection: React.FC = () => {
                             <div className="flex gap-3">
                               {Object.keys(proxyTestResults).length > 0 && (
                                 <TgButton
-                                  // tg-ui-allow: compact link-style clear in TOR proxy header
                                   type="button"
-                                  variant="ghost"
+                                  variant="link"
                                   size="sm"
                                   onClick={clearProxyResults}
-                                  className="h-auto px-0 opacity-40 hover:underline hover:bg-transparent"
+                                  className="opacity-40"
                                 >
                                   Clear
                                 </TgButton>
                               )}
                               <TgButton
-                                // tg-ui-allow: compact link-style test action in TOR proxy header
                                 type="button"
-                                variant="ghost"
+                                variant="link"
                                 size="sm"
                                 onClick={() =>
                                   handleTestAllProxies(torProxyUrls)
                                 }
                                 loading={isTestingAll}
                                 loadingLabel="Test All"
-                                className="h-auto px-0 hover:underline hover:bg-transparent"
                               >
                                 <Activity size={10} />
                                 Test All

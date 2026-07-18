@@ -309,7 +309,7 @@ export const ChannelCard: React.FC<ChannelCardProps> = ({
             isSelected ? `Deselect ${channel.name}` : `Select ${channel.name}`
           }
           aria-pressed={isSelected}
-          className={`w-5 h-5 rounded-full border flex items-center justify-center transition-colors ${
+          className={`w-5 h-5 rounded-full border flex items-center justify-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-app-ink/30 ${
             isSelected
               ? "bg-app-ink border-app-ink text-app-bg"
               : "border-app-ink/20 bg-app-bg/50 text-transparent hover:border-app-ink/40"

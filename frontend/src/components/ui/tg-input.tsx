@@ -77,11 +77,24 @@ function TgFieldLabel({ className, ...props }: TgFieldLabelProps) {
   )
 }
 
+type TgHelpTextProps = React.ComponentProps<"p">
+
+function TgHelpText({ className, ...props }: TgHelpTextProps) {
+  return (
+    <p
+      data-slot="tg-help-text"
+      className={cn("text-[10px] opacity-40 italic serif", className)}
+      {...props}
+    />
+  )
+}
+
 export {
   TgInput,
   TgTextarea,
   TgFieldLabel,
+  TgHelpText,
   tgInputVariants,
   tgFieldClassName,
 }
-export type { TgInputProps, TgTextareaProps, TgFieldLabelProps }
+export type { TgInputProps, TgTextareaProps, TgFieldLabelProps, TgHelpTextProps }

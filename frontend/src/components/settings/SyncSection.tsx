@@ -5,7 +5,7 @@ import { useEffect, useState } from "react"
 import { toast } from "sonner"
 import { api } from "@/api"
 import { TgButton } from "@/components/ui/tg-button"
-import { TgInput } from "@/components/ui/tg-input"
+import { TgHelpText, TgInput } from "@/components/ui/tg-input"
 import { TgSegmentedControl } from "@/components/ui/tg-segmented"
 import { TgSettingsSection } from "@/components/ui/tg-settings-section"
 import { useData } from "@/contexts/DataContext"
@@ -67,10 +67,10 @@ export const SyncSection: React.FC = () => {
                 Sync Concurrency
               </span>
             </div>
-            <p className="text-[10px] opacity-40 italic serif mb-2">
+            <TgHelpText className="mb-2">
               Number of channels to sync in parallel. Higher is faster but
               riskier.
-            </p>
+            </TgHelpText>
             <div className="flex items-center gap-3">
               <TgInput
                 type="number"
@@ -101,9 +101,9 @@ export const SyncSection: React.FC = () => {
                 Default Channel Start Time
               </span>
             </div>
-            <p className="text-[10px] opacity-40 italic serif mb-4">
+            <TgHelpText className="mb-4">
               When adding a new channel, start scraping from this time.
-            </p>
+            </TgHelpText>
 
             <TgSegmentedControl
               size="sm"
@@ -209,10 +209,10 @@ export const SyncSection: React.FC = () => {
                 Bulk Re-sync
               </span>
             </div>
-            <p className="text-[10px] opacity-40 italic serif">
+            <TgHelpText>
               Clear stored posts and re-backfill all channels from the latest
               page backward to the retention window.
-            </p>
+            </TgHelpText>
             {!bulkReresolveConfirm ? (
               <TgButton
                 type="button"
@@ -226,9 +226,8 @@ export const SyncSection: React.FC = () => {
             ) : (
               <div className="flex flex-wrap items-center gap-2">
                 <TgButton
-                  // tg-ui-allow: soft-green confirm — TgButton has no green variant
                   type="button"
-                  variant="secondary"
+                  variant="successSoft"
                   size="md"
                   loading={bulkReresolveLoading}
                   loadingLabel="Running…"
@@ -256,7 +255,6 @@ export const SyncSection: React.FC = () => {
                       setBulkReresolveConfirm(false)
                     }
                   }}
-                  className="border-green-600/40 bg-green-500/10 text-app-ink hover:bg-green-500/20"
                 >
                   Confirm reset & sync
                 </TgButton>
@@ -280,9 +278,9 @@ export const SyncSection: React.FC = () => {
                 Background Jobs (Server)
               </span>
             </div>
-            <p className="text-[10px] opacity-40 italic serif mb-4">
+            <TgHelpText className="mb-4">
               APScheduler runs these jobs even when the browser is closed.
-            </p>
+            </TgHelpText>
             <div className="space-y-2">
               {Object.entries(JOB_LABELS).map(([jobId, label]) => {
                 const entry = jobStatus[jobId]

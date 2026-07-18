@@ -2,6 +2,7 @@ import { ChevronDown, Filter, Search, X } from "lucide-react"
 import { AnimatePresence, motion } from "motion/react"
 import type React from "react"
 import { TgButton } from "@/components/ui/tg-button"
+import { TgFieldLabel } from "@/components/ui/tg-input"
 import { isAnyLogFilterActive, type LogFilters } from "@/lib/logs/filters"
 import { parseDateInputValue, toDateInputValue } from "@/lib/logs/format"
 import { LOG_TAB_META, type LogTab } from "@/lib/logs/tabs"
@@ -105,9 +106,9 @@ export const LogFilterBar: React.FC<LogFilterBarProps> = ({
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 {/* Status Filter */}
                 <div className="space-y-2">
-                  <label className="text-[9px] uppercase font-bold opacity-50">
+                  <TgFieldLabel className="mb-0 text-[9px] font-sans font-bold tracking-normal opacity-50">
                     Status
-                  </label>
+                  </TgFieldLabel>
                   <div className="flex gap-2">
                     {(["all", "success", "failed"] as const).map((s) => (
                       <button
@@ -128,9 +129,9 @@ export const LogFilterBar: React.FC<LogFilterBarProps> = ({
 
                 {/* Date Range Filter */}
                 <div className="space-y-2 col-span-1 md:col-span-2">
-                  <label className="text-[9px] uppercase font-bold opacity-50">
+                  <TgFieldLabel className="mb-0 text-[9px] font-sans font-bold tracking-normal opacity-50">
                     Date Range
-                  </label>
+                  </TgFieldLabel>
                   <div className="flex items-center gap-3">
                     <input
                       type="date"
@@ -163,9 +164,9 @@ export const LogFilterBar: React.FC<LogFilterBarProps> = ({
                 {/* Tab Specific Filters */}
                 {activeTab === "llm" && (
                   <div className="space-y-2">
-                    <label className="text-[9px] uppercase font-bold opacity-50">
+                    <TgFieldLabel className="mb-0 text-[9px] font-sans font-bold tracking-normal opacity-50">
                       Model
-                    </label>
+                    </TgFieldLabel>
                     <select
                       value={filters.modelFilter}
                       onChange={(e) =>
@@ -185,9 +186,9 @@ export const LogFilterBar: React.FC<LogFilterBarProps> = ({
 
                 {activeTab === "publish" && (
                   <div className="space-y-2">
-                    <label className="text-[9px] uppercase font-bold opacity-50">
+                    <TgFieldLabel className="mb-0 text-[9px] font-sans font-bold tracking-normal opacity-50">
                       Bot
-                    </label>
+                    </TgFieldLabel>
                     <select
                       value={filters.botFilter}
                       onChange={(e) =>
@@ -207,9 +208,9 @@ export const LogFilterBar: React.FC<LogFilterBarProps> = ({
 
                 {activeTab === "sync" && (
                   <div className="space-y-2">
-                    <label className="text-[9px] uppercase font-bold opacity-50">
+                    <TgFieldLabel className="mb-0 text-[9px] font-sans font-bold tracking-normal opacity-50">
                       Channel
-                    </label>
+                    </TgFieldLabel>
                     <select
                       value={filters.channelFilter}
                       onChange={(e) =>

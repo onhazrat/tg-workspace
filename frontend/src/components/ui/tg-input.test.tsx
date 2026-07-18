@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test"
 import { renderToStaticMarkup } from "react-dom/server"
 import {
   TgFieldLabel,
+  TgHelpText,
   TgInput,
   TgTextarea,
   tgFieldClassName,
@@ -56,5 +57,15 @@ describe("TgInput", () => {
     expect(html).toContain("Notes")
     expect(html).toContain("hello")
     expect(html).toContain('data-slot="tg-textarea"')
+  })
+
+  test("TgHelpText uses shared italic helper recipe", () => {
+    const html = renderToStaticMarkup(
+      <TgHelpText>Helper copy for settings fields.</TgHelpText>,
+    )
+    expect(html).toContain('data-slot="tg-help-text"')
+    expect(html).toContain("Helper copy for settings fields.")
+    expect(html).toContain("opacity-40")
+    expect(html).toContain("italic")
   })
 })

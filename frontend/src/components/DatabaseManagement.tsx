@@ -32,6 +32,7 @@ import { importIndexedDBToServer } from "../lib/repository"
 import { RelativeTime } from "./RelativeTime"
 import { TgButton } from "./ui/tg-button"
 import { TgConfirmDialog } from "./ui/tg-confirm-dialog"
+import { TgIconButton } from "./ui/tg-icon-button"
 import { TgSettingsSection } from "./ui/tg-settings-section"
 import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tg-tooltip"
 
@@ -542,24 +543,21 @@ export const DatabaseManagement: React.FC = () => {
           </div>
         </TgSettingsSection>
 
-        {/* tg-ui-allow: Table Sizes & Queries — custom header with actions + subtitle */}
-        <div className="bg-app-card border border-app-ink/10 p-6 shadow-sm mb-8">
-          <div className="flex items-center justify-between mb-6">
-            <div className="flex items-center gap-3">
-              <Search size={18} className="opacity-40" />
-              <div className="flex flex-col">
-                <h4 className="text-[11px] uppercase font-bold tracking-widest">
-                  Table Sizes & Queries
-                </h4>
-                {tableSizesLastCalculated && (
-                  <span className="text-[9px] opacity-50 italic serif mt-0.5">
-                    Last calculated:{" "}
-                    <RelativeTime timestamp={tableSizesLastCalculated} />
-                  </span>
-                )}
-              </div>
-            </div>
-            <div className="flex items-center gap-2">
+        <TgSettingsSection
+          icon={Search}
+          title="Table Sizes & Queries"
+          className="mb-8"
+          titleClassName="text-[11px]"
+          subtitle={
+            tableSizesLastCalculated ? (
+              <>
+                Last calculated:{" "}
+                <RelativeTime timestamp={tableSizesLastCalculated} />
+              </>
+            ) : undefined
+          }
+          actions={
+            <>
               <Tooltip>
                 <TooltipTrigger asChild>
                   <TgButton
@@ -620,9 +618,9 @@ export const DatabaseManagement: React.FC = () => {
                 <HardDrive size={14} />
                 Calculate Sizes
               </TgButton>
-            </div>
-          </div>
-
+            </>
+          }
+        >
           {tableSizes && (
             <div className="space-y-6">
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -661,17 +659,18 @@ export const DatabaseManagement: React.FC = () => {
                       <div className="text-[12px] font-mono font-bold">
                         {(table.size / (1024 * 1024)).toFixed(2)} MB
                       </div>
-                      <button
-                        type="button"
+                      <TgIconButton
+                        variant="danger"
+                        aria-label={`Clear all entries in ${table.name}`}
+                        tooltip={`Clear all entries in ${table.name}`}
                         onClick={(e) => {
                           e.stopPropagation()
                           handleClearTable(table.name)
                         }}
-                        className="opacity-0 group-hover:opacity-100 p-1.5 text-red-500 hover:bg-red-500/10 rounded transition-all"
-                        title={`Clear all entries in ${table.name}`}
+                        className="opacity-0 group-hover:opacity-100"
                       >
                         <Trash2 size={14} />
-                      </button>
+                      </TgIconButton>
                     </div>
                   </div>
                 ))}
@@ -743,7 +742,7 @@ export const DatabaseManagement: React.FC = () => {
               )}
             </div>
           )}
-        </div>
+        </TgSettingsSection>
       </div>
 
       <div className="p-6 bg-app-ink/5 border border-app-ink/10">

@@ -8,14 +8,15 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { TgButton } from "@/components/ui/tg-button"
+import { TgIconButton } from "@/components/ui/tg-icon-button"
 import { TgInput } from "@/components/ui/tg-input"
+import { selectTriggerClassName } from "@/components/ui/tg-select-trigger"
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tg-tooltip"
 import type { ChannelGridSortOption } from "@/lib/channels/sort-channels-for-grid"
-import { selectTriggerClassName } from "./select-trigger-class"
 
 type ChannelGridFilterBarProps = {
   includeChannelBioInPrompt: boolean
@@ -169,19 +170,19 @@ export const ChannelGridFilterBar: React.FC<ChannelGridFilterBarProps> = ({
               )}
             </SelectContent>
           </Select>
-          {/* tg-ui-allow: icon-only sort direction toggle — Phase 1 skips icon-only buttons */}
-          <button
-            type="button"
+          <TgIconButton
+            variant="ghost"
+            aria-label={`Sort ${sortDirection === "asc" ? "Ascending" : "Descending"}`}
+            tooltip={`Sort ${sortDirection === "asc" ? "Ascending" : "Descending"}`}
             onClick={onToggleSortDirection}
-            className="p-1 hover:bg-app-ink/10 rounded-md transition-colors text-app-ink/70 hover:text-app-ink"
-            title={`Sort ${sortDirection === "asc" ? "Ascending" : "Descending"}`}
+            className="p-1 text-app-ink/70 hover:text-app-ink hover:bg-app-ink/10"
           >
             {sortDirection === "asc" ? (
               <ArrowUp size={12} />
             ) : (
               <ArrowDown size={12} />
             )}
-          </button>
+          </TgIconButton>
         </div>
         <div className="h-4 w-px bg-app-ink/10" />
         <div className="flex items-center gap-2">

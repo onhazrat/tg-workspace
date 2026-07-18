@@ -19,6 +19,11 @@ const tgButtonVariants = cva(
           "bg-red-500 text-white shadow-lg shadow-red-500/20 hover:bg-red-600 focus-visible:ring-red-500/40",
         dangerSoft:
           "border border-red-500/30 bg-red-500/10 text-red-600 hover:bg-red-500/20 focus-visible:ring-red-500/40",
+        successSoft:
+          "border border-green-600/40 bg-green-500/10 text-app-ink hover:bg-green-500/20 focus-visible:ring-green-500/40",
+        infoSoft:
+          "bg-blue-500/10 text-blue-500 hover:bg-blue-500/20 focus-visible:ring-blue-500/40",
+        link: "bg-transparent text-app-ink/70 hover:bg-transparent hover:underline focus-visible:ring-app-ink/30",
       },
       size: {
         sm: "h-8 rounded-md px-3 text-[10px] tracking-widest",
@@ -26,6 +31,12 @@ const tgButtonVariants = cva(
         lg: "rounded-md px-4 py-3 text-[10px] tracking-widest",
       },
     },
+    compoundVariants: [
+      {
+        variant: "link",
+        class: "h-auto rounded-none px-0 py-0",
+      },
+    ],
     defaultVariants: {
       variant: "primary",
       size: "md",
