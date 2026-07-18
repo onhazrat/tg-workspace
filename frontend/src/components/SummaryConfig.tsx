@@ -1,5 +1,6 @@
 import { Brain, Copy, Languages, Send, SlidersHorizontal } from "lucide-react"
 import type React from "react"
+import { useState } from "react"
 import { TgButton } from "@/components/ui/tg-button"
 import { LANGUAGES as APP_LANGUAGES, MODELS } from "../constants"
 import { useAI } from "../contexts/AIContext"
@@ -16,12 +17,23 @@ export const SummaryConfig: React.FC = () => {
     useSettings()
   const { scrapingChannels, filteredPosts } = useScraper()
   const { handleSummarize, copySummaryPrompt } = useAI()
+  const [copyingPrompt, setCopyingPrompt] = useState(false)
 
   const actionsDisabled =
     scrapingChannels.size > 0 ||
     summarizing ||
+    copyingPrompt ||
     channels.length === 0 ||
     filteredPosts.length === 0
+
+  const handleCopyPrompt = async () => {
+    setCopyingPrompt(true)
+    try {
+      await copySummaryPrompt()
+    } finally {
+      setCopyingPrompt(false)
+    }
+  }
 
   return (
     <section className="bg-app-card rounded-xl border border-app-ink/10 shadow-sm overflow-hidden mb-6">
@@ -80,8 +92,10 @@ export const SummaryConfig: React.FC = () => {
                 type="button"
                 variant="secondary"
                 size="md"
-                onClick={() => void copySummaryPrompt()}
+                onClick={() => void handleCopyPrompt()}
                 disabled={actionsDisabled}
+                loading={copyingPrompt}
+                loadingLabel="Copying…"
                 className="h-10 px-4"
               >
                 <Copy size={14} className="opacity-60" />
