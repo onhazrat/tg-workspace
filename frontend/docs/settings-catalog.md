@@ -46,16 +46,21 @@ Funnel/`@` suggestions appear while typing operators.
 
 ## TOC ids
 
-Stable for `?tab=settings&section=<id>` (legacy aliases: `sync` → `channels-sync`, `db` → `data`):
+Stable for `?tab=settings&section=<id>` (legacy aliases: `sync` → `channels-sync`, `db` → `data`, `telemetry` → `network-telemetry`):
 
 - `commonly-used` — static curated list (`COMMONLY_USED_SETTING_IDS`)
 - `appearance`, `channels-sync` (+ leaf `setting-groups`), `ai`
 - `network` (+ `proxy`, `tor`)
 - `publishing` (+ `bot-credentials`, `destinations`, `quick-message`)
 - `data` (+ `retention`, `table-sizes`, `transfer`, `query`, `danger`)
-- `tools` (+ `diagnostics`, `runtime-config`)
+- `tools` (+ `diagnostics`, `network-telemetry`, `runtime-config`)
 
-Deep-link: `?setting=<catalogId>` scrolls/highlights the row (or opens a panel target).
+Parents with children show a twistie (chevron): the twistie expands/collapses without selecting; clicking the row label selects and navigates (`?section=`). Expand state persists in `localStorage` (`settings-toc-expanded`) for the session.
+
+Deep-link: `?setting=<catalogId>` scrolls/highlights the row (or opens a panel target). Panel targets:
+- `panel-diagnostics` → system / LLM / sync / embedding logs
+- `panel-network-telemetry` → Network Telemetry alone
+- `panel-runtime-config` → Runtime Config
 
 ## Advanced Mode
 

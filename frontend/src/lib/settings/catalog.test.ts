@@ -73,6 +73,19 @@ describe("settings catalog", () => {
       expect(entry.control.sectionId).toBe("setting-groups")
     }
   })
+
+  test("diagnostics and network telemetry are separate panel targets", () => {
+    const diagnostics = getCatalogEntry("panel-diagnostics")
+    const telemetry = getCatalogEntry("panel-network-telemetry")
+    expect(diagnostics?.control.kind).toBe("panel")
+    expect(telemetry?.control.kind).toBe("panel")
+    if (diagnostics?.control.kind === "panel") {
+      expect(diagnostics.control.sectionId).toBe("diagnostics")
+    }
+    if (telemetry?.control.kind === "panel") {
+      expect(telemetry.control.sectionId).toBe("network-telemetry")
+    }
+  })
 })
 
 describe("settings search", () => {
@@ -86,6 +99,19 @@ describe("settings search", () => {
     expect(hits.length).toBeGreaterThan(0)
     const groups = new Set(hits.map((h) => h.entry.group))
     expect(groups.has("network")).toBe(true)
+  })
+
+  test("LLM logs search lands on diagnostics panel", () => {
+    const hits = searchSettings("LLM logs")
+    expect(hits.some((h) => h.entry.id === "panel-diagnostics")).toBe(true)
+    expect(hits.some((h) => h.entry.id === "panel-network-telemetry")).toBe(
+      false,
+    )
+  })
+
+  test("network telemetry search lands on telemetry panel", () => {
+    const hits = searchSettings("network telemetry")
+    expect(hits[0]?.entry.id).toBe("panel-network-telemetry")
   })
 
   test("parseSettingsQuery extracts operators", () => {
@@ -126,6 +152,7 @@ describe("settings TOC aliases", () => {
     expect(normalizeSettingsSection("db")).toBe("data")
     expect(normalizeSettingsSection("appearance")).toBe("appearance")
     expect(normalizeSettingsSection("proxy")).toBe("proxy")
+    expect(normalizeSettingsSection("telemetry")).toBe("network-telemetry")
     expect(normalizeSettingsSection("unknown")).toBe("commonly-used")
   })
 })

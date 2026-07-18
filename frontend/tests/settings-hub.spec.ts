@@ -14,10 +14,28 @@ async function openTocSection(page: Page, sectionLabel: string) {
     Proxy: "Network",
     Tor: "Network",
     Retention: "Data",
+    Diagnostics: "Tools",
+    "Network Telemetry": "Tools",
+    "Runtime Config": "Tools",
   }
   const parent = nestedParents[sectionLabel]
   if (parent) {
-    await page.getByRole("button", { name: parent, exact: true }).click()
+    const parentId = {
+      "Channels & Sync": "channels-sync",
+      Network: "network",
+      Data: "data",
+      Tools: "tools",
+    }[parent]
+    if (parentId) {
+      const twistie = page.getByTestId(`toc-twistie-${parentId}`)
+      const childVisible = page.getByRole("button", {
+        name: sectionLabel,
+        exact: true,
+      })
+      if (!(await childVisible.isVisible().catch(() => false))) {
+        await twistie.click()
+      }
+    }
   }
   await page.getByRole("button", { name: sectionLabel, exact: true }).click()
 }
@@ -93,6 +111,53 @@ test.describe("Settings Hub (VS Code-style)", () => {
     await expect(page.getByText("Data Retention").first()).toBeVisible()
     await expect(page.getByText("Post Retention").first()).toBeVisible()
     await expect(page.getByText("Log Retention").first()).toBeVisible()
+  })
+
+  test("TOC twistie expands children without selecting parent", async ({
+    page,
+  }) => {
+    await gotoSettings(page, "section=commonly-used")
+    const networkTwistie = page.getByTestId("toc-twistie-network")
+    await expect(networkTwistie).toHaveAttribute("aria-expanded", "false")
+    await expect(
+      page.getByRole("button", { name: "Proxy", exact: true }),
+    ).toHaveCount(0)
+
+    await networkTwistie.click()
+    await expect(networkTwistie).toHaveAttribute("aria-expanded", "true")
+    await expect(
+      page.getByRole("button", { name: "Proxy", exact: true }),
+    ).toBeVisible()
+    await expect(page).toHaveURL(/section=commonly-used/)
+
+    await page.getByRole("button", { name: "Proxy", exact: true }).click()
+    await expect(page).toHaveURL(/section=proxy/)
+  })
+
+  test("Diagnostics and Network Telemetry are separate searchable panels", async ({
+    page,
+  }) => {
+    await gotoSettings(page)
+    await page.getByTestId("settings-search").fill("LLM logs")
+    const results = page.getByTestId("settings-search-results")
+    await expect(results).toBeVisible({ timeout: 5_000 })
+    await results.getByText("Diagnostics", { exact: true }).first().click()
+    await expect(page).toHaveURL(/section=diagnostics/)
+    await expect(page.getByText("System Logs").first()).toBeVisible()
+    await expect(
+      page.locator('[data-setting-id="panel-network-telemetry"]'),
+    ).toHaveCount(0)
+
+    await page.getByTestId("settings-search").fill("network telemetry")
+    await expect(results).toBeVisible({ timeout: 5_000 })
+    await results
+      .getByText("Network Telemetry", { exact: true })
+      .first()
+      .click()
+    await expect(page).toHaveURL(/section=network-telemetry/)
+    await expect(
+      page.locator('[data-setting-id="panel-network-telemetry"]'),
+    ).toBeVisible()
   })
 
   test("Advanced Mode toggle is gone", async ({ page }) => {

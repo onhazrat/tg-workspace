@@ -26,18 +26,25 @@ async function gotoSummarizer(page: Page, tab = "channels") {
 async function openSettingsSection(page: Page, sectionLabel: string) {
   await gotoSummarizer(page, "settings")
   await expect(page.getByTestId("settings-search")).toBeVisible()
-  // Nested TOC leaves live under a parent — expand parent first when needed.
+  // Nested TOC leaves: expand parent via twistie when children are collapsed.
   const nestedParents: Record<string, string> = {
-    Diagnostics: "Tools",
-    "Runtime Config": "Tools",
-    Proxy: "Network",
-    Tor: "Network",
-    Retention: "Data",
-    "Setting Groups": "Channels & Sync",
+    Diagnostics: "tools",
+    "Network Telemetry": "tools",
+    "Runtime Config": "tools",
+    Proxy: "network",
+    Tor: "network",
+    Retention: "data",
+    "Setting Groups": "channels-sync",
   }
-  const parent = nestedParents[sectionLabel]
-  if (parent) {
-    await page.getByRole("button", { name: parent, exact: true }).click()
+  const parentId = nestedParents[sectionLabel]
+  if (parentId) {
+    const child = page.getByRole("button", {
+      name: sectionLabel,
+      exact: true,
+    })
+    if (!(await child.isVisible().catch(() => false))) {
+      await page.getByTestId(`toc-twistie-${parentId}`).click()
+    }
   }
   await page.getByRole("button", { name: sectionLabel, exact: true }).click()
 }
@@ -93,20 +100,30 @@ test.describe("TG UI primitives", () => {
     await expect(settingsField).toHaveValue("42")
   })
 
-  test("diagnostics segmented control switches Logs/Telemetry", async ({
+  test("diagnostics opens system logs without telemetry tabs", async ({
     page,
   }) => {
     await openSettingsSection(page, "Diagnostics")
-    const segmented = page.locator('[data-slot="tg-segmented-control"]')
-    await expect(segmented).toBeVisible()
-    await segmented.getByRole("button", { name: /Network Telemetry/i }).click()
+    await expect(page.getByText("System Logs").first()).toBeVisible()
     await expect(
-      segmented.getByRole("button", { name: /Network Telemetry/i }),
-    ).toHaveAttribute("data-selected", "true")
-    await segmented.getByRole("button", { name: /View Logs/i }).click()
+      page.locator('[data-slot="tg-segmented-control"]'),
+    ).toHaveCount(0)
     await expect(
-      segmented.getByRole("button", { name: /View Logs/i }),
-    ).toHaveAttribute("data-selected", "true")
+      page.locator('[data-setting-id="panel-diagnostics"]'),
+    ).toBeVisible()
+    await expect(
+      page.locator('[data-setting-id="panel-network-telemetry"]'),
+    ).toHaveCount(0)
+  })
+
+  test("network telemetry TOC leaf renders telemetry panel", async ({
+    page,
+  }) => {
+    await openSettingsSection(page, "Network Telemetry")
+    await expect(page).toHaveURL(/section=network-telemetry/)
+    await expect(
+      page.locator('[data-setting-id="panel-network-telemetry"]'),
+    ).toBeVisible()
   })
 
   test("logs clear-all uses TgConfirmDialog", async ({ page }) => {

@@ -706,12 +706,40 @@ export const SETTINGS_CATALOG: SettingCatalogEntry[] = [
   {
     id: "panel-diagnostics",
     label: "Diagnostics",
-    description: "Logs, network telemetry, and health checks.",
-    keywords: ["diagnostics", "logs", "telemetry", "tools"],
+    description:
+      "System logs, LLM logs, sync logs, embedding logs, publish logs, and network request logs.",
+    keywords: [
+      "diagnostics",
+      "logs",
+      "system logs",
+      "llm logs",
+      "sync logs",
+      "embedding logs",
+      "publish logs",
+      "tools",
+    ],
     group: "tools",
     source: "app",
     defaultValue: null,
     control: { kind: "panel", sectionId: "diagnostics" },
+  },
+  {
+    id: "panel-network-telemetry",
+    label: "Network Telemetry",
+    description:
+      "Live network connection telemetry, Tor status, and request health.",
+    keywords: [
+      "network telemetry",
+      "telemetry",
+      "network",
+      "connections",
+      "tor status",
+      "tools",
+    ],
+    group: "tools",
+    source: "app",
+    defaultValue: null,
+    control: { kind: "panel", sectionId: "network-telemetry" },
   },
   {
     id: "panel-runtime-config",

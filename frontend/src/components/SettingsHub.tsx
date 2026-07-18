@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useState } from "react"
 import { BotManagement } from "@/components/BotManagement"
 import { DatabaseManagement } from "@/components/DatabaseManagement"
 import { DiagnosticsView } from "@/components/DiagnosticsView"
+import { NetworkTelemetry } from "@/components/NetworkTelemetry"
 import { RuntimeConfigView } from "@/components/RuntimeConfigView"
 import { SettingGroupsPanel } from "@/components/SettingGroupsPanel"
 import { SettingsView } from "@/components/SettingsView"
@@ -97,7 +98,11 @@ export const SettingsHub: React.FC = () => {
     if (dataSections.includes(activeSettingsTab)) {
       void loadDBStats()
     }
-    if (activeSettingsTab === "diagnostics" || activeSettingsTab === "tools") {
+    if (
+      activeSettingsTab === "diagnostics" ||
+      activeSettingsTab === "tools" ||
+      activeSettingsTab === "network-telemetry"
+    ) {
       void Promise.all([
         loadLogs(),
         loadSyncLogs(),
@@ -231,6 +236,22 @@ export const SettingsHub: React.FC = () => {
           />
         )
       case "tools":
+        return (
+          <div className="space-y-10">
+            <SettingAnchor
+              settingId="panel-diagnostics"
+              highlighted={highlightId === "panel-diagnostics"}
+            >
+              <DiagnosticsView />
+            </SettingAnchor>
+            <SettingAnchor
+              settingId="panel-network-telemetry"
+              highlighted={highlightId === "panel-network-telemetry"}
+            >
+              <NetworkTelemetry />
+            </SettingAnchor>
+          </div>
+        )
       case "diagnostics":
         return (
           <SettingAnchor
@@ -238,6 +259,15 @@ export const SettingsHub: React.FC = () => {
             highlighted={highlightId === "panel-diagnostics"}
           >
             <DiagnosticsView />
+          </SettingAnchor>
+        )
+      case "network-telemetry":
+        return (
+          <SettingAnchor
+            settingId="panel-network-telemetry"
+            highlighted={highlightId === "panel-network-telemetry"}
+          >
+            <NetworkTelemetry />
           </SettingAnchor>
         )
       case "runtime-config":
@@ -271,6 +301,7 @@ export const SettingsHub: React.FC = () => {
       <div
         className={`flex-1 flex flex-col min-w-0 overflow-hidden bg-app-card transition-colors ${
           activeSettingsTab === "diagnostics" ||
+          activeSettingsTab === "network-telemetry" ||
           activeSettingsTab === "runtime-config" ||
           activeSettingsTab === "tools"
             ? "terminal-theme text-app-ink"

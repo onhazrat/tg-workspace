@@ -37,6 +37,7 @@ export type SettingsTocId =
   | "danger"
   | "tools"
   | "diagnostics"
+  | "network-telemetry"
   | "runtime-config"
 
 export interface SettingsTocNode {
@@ -94,6 +95,7 @@ export const SETTINGS_TOC: SettingsTocNode[] = [
     icon: Activity,
     children: [
       { id: "diagnostics", label: "Diagnostics", icon: Activity },
+      { id: "network-telemetry", label: "Network Telemetry", icon: Globe },
       { id: "runtime-config", label: "Runtime Config", icon: Braces },
     ],
   },
@@ -107,6 +109,7 @@ const SECTION_ALIASES: Record<string, SettingsTocId> = {
   "network-security": "network",
   "data-management": "data",
   "ai-models": "ai",
+  telemetry: "network-telemetry",
 }
 
 const ALL_TOC_IDS: SettingsTocId[] = (() => {
