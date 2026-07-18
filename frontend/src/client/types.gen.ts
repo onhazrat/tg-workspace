@@ -859,6 +859,11 @@ export type DataCreatePublishLogsResponse = ({
     [key: string]: (number);
 });
 
+export type DataListSyncLogsRouteData = {
+    limit?: number;
+    offset?: number;
+};
+
 export type DataListSyncLogsRouteResponse = (Array<{
     [key: string]: unknown;
 }>);

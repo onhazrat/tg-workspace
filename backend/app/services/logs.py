@@ -26,6 +26,10 @@ from app.services.serialization import (
 
 LogModel = TypeVar("LogModel", bound=SQLModel)
 
+# Log list endpoints are viewers, not exports: cap what one request can load.
+DEFAULT_LOG_PAGE_SIZE = 500
+MAX_LOG_PAGE_SIZE = 5000
+
 LOG_MODELS: dict[str, tuple[type[SQLModel], str]] = {
     "publish": (PublishLog, "publish_logs"),
     "sync": (SyncLog, "sync_logs"),
@@ -231,8 +235,23 @@ def list_publish_logs(session: Session) -> list[dict[str, Any]]:
     return [publish_log_to_camel(log) for log in session.exec(select(PublishLog)).all()]
 
 
-def list_sync_logs(session: Session) -> list[dict[str, Any]]:
-    return [sync_log_to_camel(log) for log in session.exec(select(SyncLog)).all()]
+def list_sync_logs(
+    session: Session, *, limit: int = DEFAULT_LOG_PAGE_SIZE, offset: int = 0
+) -> list[dict[str, Any]]:
+    """Return the newest sync logs, capped.
+
+    tg_sync_logs carries a full_request/full_response JSON payload per row and
+    grows without bound between retention sweeps. Selecting the whole table
+    materialised every payload at once, which OOM-killed the worker; keep this
+    bounded and newest-first (the order the UI displays anyway).
+    """
+    statement = (
+        select(SyncLog)
+        .order_by(col(SyncLog.timestamp).desc())
+        .offset(offset)
+        .limit(limit)
+    )
+    return [sync_log_to_camel(log) for log in session.exec(statement).all()]
 
 
 def list_llm_logs(session: Session) -> list[dict[str, Any]]:

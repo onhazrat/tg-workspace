@@ -111,7 +111,9 @@ from app.services.data_vectors import (
     upsert_translations as upsert_translations_impl,
 )
 from app.services.logs import (
+    DEFAULT_LOG_PAGE_SIZE,
     LOG_MODELS,
+    MAX_LOG_PAGE_SIZE,
     clear_logs,
     create_logs,
     delete_log_by_id,
@@ -695,8 +697,10 @@ def create_publish_logs(
 def list_sync_logs_route(
     session: SessionDep,
     _current_user: CurrentUser,
+    limit: int = Query(default=DEFAULT_LOG_PAGE_SIZE, ge=1, le=MAX_LOG_PAGE_SIZE),
+    offset: int = Query(default=0, ge=0),
 ) -> list[dict[str, Any]]:
-    return list_sync_logs(session)
+    return list_sync_logs(session, limit=limit, offset=offset)
 
 
 @router.post("/sync-logs")

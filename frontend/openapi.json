@@ -2921,37 +2921,71 @@
         "tags": ["data"],
         "summary": "List Sync Logs Route",
         "operationId": "data-list_sync_logs_route",
+        "security": [{ "OAuth2PasswordBearer": [] }],
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 5000,
+              "minimum": 1,
+              "default": 500,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "title": "Offset"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful Response",
             "content": {
               "application/json": {
                 "schema": {
-                  "items": { "additionalProperties": true, "type": "object" },
                   "type": "array",
+                  "items": { "type": "object", "additionalProperties": true },
                   "title": "Response Data-List Sync Logs Route"
                 }
               }
             }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
           }
-        },
-        "security": [{ "OAuth2PasswordBearer": [] }]
+        }
       },
       "post": {
         "tags": ["data"],
         "summary": "Create Sync Logs",
         "operationId": "data-create_sync_logs",
+        "security": [{ "OAuth2PasswordBearer": [] }],
         "requestBody": {
+          "required": true,
           "content": {
             "application/json": {
               "schema": {
-                "items": { "additionalProperties": true, "type": "object" },
                 "type": "array",
+                "items": { "type": "object", "additionalProperties": true },
                 "title": "Body"
               }
             }
-          },
-          "required": true
+          }
         },
         "responses": {
           "200": {
@@ -2959,8 +2993,8 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": { "type": "integer" },
                   "type": "object",
+                  "additionalProperties": { "type": "integer" },
                   "title": "Response Data-Create Sync Logs"
                 }
               }
@@ -2974,8 +3008,7 @@
               }
             }
           }
-        },
-        "security": [{ "OAuth2PasswordBearer": [] }]
+        }
       }
     },
     "/api/v1/data/llm-logs": {
