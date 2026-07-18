@@ -37,9 +37,8 @@ def _attr_str(value: str | list[str] | None) -> str | None:
 
 
 def _parse_posts_from_html(
-    html: str, start_id: int, seen: set[int]
+    soup: BeautifulSoup, start_id: int, seen: set[int]
 ) -> tuple[list[dict[str, Any]], str | None]:
-    soup = BeautifulSoup(html, "html.parser")
     posts: list[dict[str, Any]] = []
 
     for el in soup.select(".tgme_widget_message"):
@@ -260,7 +259,7 @@ def _parse_scrape_channel_page(
     telemetry: dict[str, Any],
 ) -> dict[str, Any]:
     soup = BeautifulSoup(html, "html.parser")
-    posts, _next_url = _parse_posts_from_html(html, 0, set())
+    posts, _next_url = _parse_posts_from_html(soup, 0, set())
     posts = _enrich_posts_with_timestamps(posts, channel_name)
 
     meta = _parse_channel_meta(soup, channel_name)
@@ -349,7 +348,9 @@ async def scrape_channel(
             proxy_concurrency=proxy_concurrency,
         )
         telemetry_logs.append(telem)
-        return _parse_posts_from_html(html, start_id, seen)
+        return _parse_posts_from_html(
+            BeautifulSoup(html, "html.parser"), start_id, seen
+        )
 
     latest_id = known_latest_id or 0
     display_name = known_display_name or ""

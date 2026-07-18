@@ -99,7 +99,9 @@ def test_parse_posts_from_html_regression_batch() -> None:
         "TelegramTips_246.html",
     ):
         html = _load_fixture(fixture_name)
-        posts, _next = _parse_posts_from_html(html, 0, set())
+        posts, _next = _parse_posts_from_html(
+            BeautifulSoup(html, "html.parser"), 0, set()
+        )
         assert posts, f"No posts parsed from {fixture_name}"
         media_posts = [p for p in posts if p.get("media")]
         assert media_posts, f"No media posts in {fixture_name}"
@@ -114,7 +116,7 @@ def test_meta_json_post_ids_have_media_in_html() -> None:
     meta_path = FIXTURES_DIR / "durov_522.meta.json"
     meta = json.loads(meta_path.read_text(encoding="utf-8"))
     html = _load_fixture("durov_522.html")
-    posts, _next = _parse_posts_from_html(html, 0, set())
+    posts, _next = _parse_posts_from_html(BeautifulSoup(html, "html.parser"), 0, set())
     by_id = {p["id"]: p for p in posts}
     for post_id in meta.get("post_ids_found", []):
         if post_id == 522:
@@ -125,7 +127,7 @@ def test_meta_json_post_ids_have_media_in_html() -> None:
 
 def test_finalize_post_media_paths_keeps_thumb_source_for_sync_cache() -> None:
     html = _load_fixture("durov_522.html")
-    posts, _next = _parse_posts_from_html(html, 0, set())
+    posts, _next = _parse_posts_from_html(BeautifulSoup(html, "html.parser"), 0, set())
     post = next(p for p in posts if p.get("id") == 522)
     assert post.get("_thumbSourceUrl")
 
