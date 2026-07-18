@@ -5,6 +5,8 @@ from __future__ import annotations
 import json
 import logging
 import re
+import threading
+import time
 from pathlib import Path
 from typing import Any, cast
 
@@ -15,6 +17,9 @@ from app.core.config import settings
 logger = logging.getLogger(__name__)
 
 _META_SUFFIX = ".meta.json"
+_ENFORCE_MIN_INTERVAL_SECONDS = 300
+_last_enforce_lock = threading.Lock()
+_last_enforce_at = 0.0
 _EXT_BY_CONTENT_TYPE = {
     "image/jpeg": ".jpg",
     "image/jpg": ".jpg",
@@ -148,6 +153,25 @@ def enforce_thumb_cache_size_limit(max_size_mb: int) -> int:
         except OSError:
             logger.warning("Failed to trim post thumb cache file %s", path)
     return freed
+
+
+def enforce_thumb_cache_size_limit_throttled(max_size_mb: int) -> int:
+    """Enforce the cache limit at most once per _ENFORCE_MIN_INTERVAL_SECONDS.
+
+    The sync loop calls this once per scraped page, but the underlying check
+    walks the whole cache directory (one stat() per file). Cache growth between
+    pages is small, so a periodic sweep bounds disk usage just as well at a
+    fraction of the CPU cost. The lock also keeps concurrent channel syncs from
+    walking and evicting at the same time.
+    """
+    global _last_enforce_at
+
+    now = time.monotonic()
+    with _last_enforce_lock:
+        if now - _last_enforce_at < _ENFORCE_MIN_INTERVAL_SECONDS:
+            return 0
+        _last_enforce_at = now
+        return enforce_thumb_cache_size_limit(max_size_mb)
 
 
 async def cache_post_thumb(

@@ -55,7 +55,7 @@ from app.services.post_sync_state import (
 )
 from app.services.post_thumbnails import (
     cache_post_thumb,
-    enforce_thumb_cache_size_limit,
+    enforce_thumb_cache_size_limit_throttled,
 )
 from app.services.posts import bulk_upsert_posts_impl
 from app.services.scraper import get_channel_info, scrape_channel_page
@@ -367,7 +367,7 @@ async def _cache_scraped_post_thumbs(
 
     max_mb = int(media_settings.get("thumbCacheMaxSizeMb") or 2048)
     if max_mb > 0:
-        enforce_thumb_cache_size_limit(max_mb)
+        await asyncio.to_thread(enforce_thumb_cache_size_limit_throttled, max_mb)
 
 
 @dataclass
