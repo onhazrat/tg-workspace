@@ -60,15 +60,17 @@ jobs:
     needs:
       - changes
     if: ${{ needs.changes.outputs.changed == 'true' }}
-    timeout-minutes: 15
+    # Full suite (~130+ tests, CI workers=1) plus docker setup exceeds 15m;
+    # two shards keep wall-clock under timeout after Settings Hub growth.
+    timeout-minutes: 30
     runs-on: ubuntu-latest
     permissions:
       contents: read
       actions: write
     strategy:
       matrix:
-        shardIndex: [1]
-        shardTotal: [1]
+        shardIndex: [1, 2]
+        shardTotal: [2]
       fail-fast: false
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -136,9 +138,15 @@ jobs:
           pattern: blob-report-*
           merge-multiple: true
       - name: Merge into HTML Report
-        run: bunx playwright merge-reports --reporter html ./all-blob-reports
         working-directory: frontend
+        run: |
+          if [ ! -d ./all-blob-reports ] || [ -z "$(ls -A ./all-blob-reports 2>/dev/null)" ]; then
+            echo "No blob reports to merge (tests likely cancelled before upload); skipping."
+            exit 0
+          fi
+          bunx playwright merge-reports --reporter html ./all-blob-reports
       - name: Upload HTML report
+        if: ${{ hashFiles('frontend/playwright-report/**') != '' }}
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
         with:
           name: html-report--attempt-${{ github.run_attempt }}
