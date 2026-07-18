@@ -1,6 +1,8 @@
 import { Cpu, Database, Languages, RefreshCw, Thermometer } from "lucide-react"
 import { AnimatePresence, motion } from "motion/react"
 import type React from "react"
+import { TgInput, tgFieldClassName } from "@/components/ui/tg-input"
+import { TgSettingsSection } from "@/components/ui/tg-settings-section"
 import { LANGUAGES, MODELS } from "@/constants"
 import { useSettings } from "@/contexts/SettingsContext"
 import { ToggleSwitch } from "./ToggleSwitch"
@@ -30,15 +32,7 @@ export const AiSection: React.FC = () => {
 
   return (
     <div className="space-y-8 lg:col-span-2">
-      {/* AI Configuration */}
-      <div className="bg-app-card border border-app-ink/10 p-6 shadow-sm">
-        <div className="flex items-center gap-3 mb-6">
-          <Cpu size={18} className="opacity-40" />
-          <h4 className="text-[11px] uppercase font-bold tracking-widest">
-            AI Engine Parameters
-          </h4>
-        </div>
-
+      <TgSettingsSection icon={Cpu} title="AI Engine Parameters">
         <div className="space-y-8">
           <div className="space-y-4">
             <div className="flex items-center gap-2 opacity-60">
@@ -50,7 +44,7 @@ export const AiSection: React.FC = () => {
             <select
               value={aiLanguage}
               onChange={(e) => setAiLanguage(e.target.value)}
-              className="w-full bg-app-ink/5 border border-app-ink/10 p-3 text-[10px] font-mono uppercase tracking-widest focus:outline-none focus:border-app-ink/30 transition-all"
+              className={tgFieldClassName}
             >
               {LANGUAGES.map((l) => (
                 <option key={l} value={l} className="bg-app-card text-app-ink">
@@ -73,7 +67,7 @@ export const AiSection: React.FC = () => {
             <select
               value={selectedModel}
               onChange={(e) => setSelectedModel(e.target.value)}
-              className="w-full bg-app-ink/5 border border-app-ink/10 p-3 text-[10px] font-mono uppercase tracking-widest focus:outline-none focus:border-app-ink/30 transition-all"
+              className={tgFieldClassName}
             >
               {MODELS.map((m) => (
                 <option
@@ -143,7 +137,7 @@ export const AiSection: React.FC = () => {
               </span>
             </div>
             <div className="flex items-center gap-3">
-              <input
+              <TgInput
                 type="number"
                 min={0}
                 max={1}
@@ -155,7 +149,7 @@ export const AiSection: React.FC = () => {
                     setAiTemperature(Math.min(1, Math.max(0, val)))
                   }
                 }}
-                className="w-20 bg-app-ink/5 border border-app-ink/10 p-2 text-[10px] font-mono focus:outline-none focus:border-app-ink/30 transition-all rounded"
+                className="w-20 p-2 normal-case tracking-normal rounded"
               />
               <span className="text-[10px] opacity-60 uppercase tracking-widest font-bold">
                 0 = precise · 1 = creative
@@ -163,18 +157,10 @@ export const AiSection: React.FC = () => {
             </div>
           </div>
         </div>
-      </div>
+      </TgSettingsSection>
 
-      {/* Translation Configuration */}
       {advancedMode && (
-        <div className="bg-app-card border border-app-ink/10 p-6 shadow-sm mt-8">
-          <div className="flex items-center gap-3 mb-6">
-            <Languages size={18} className="opacity-40" />
-            <h4 className="text-[11px] uppercase font-bold tracking-widest">
-              Translation Engine
-            </h4>
-          </div>
-
+        <TgSettingsSection icon={Languages} title="Translation Engine">
           <div className="space-y-8">
             <div className="space-y-4">
               <div className="flex items-center justify-between">
@@ -232,7 +218,7 @@ export const AiSection: React.FC = () => {
                       onChange={(e) =>
                         setTranslationTargetLanguage(e.target.value)
                       }
-                      className="w-full bg-app-ink/5 border border-app-ink/10 p-3 text-[10px] font-mono uppercase tracking-widest focus:outline-none focus:border-app-ink/30 transition-all"
+                      className={tgFieldClassName}
                     >
                       {LANGUAGES.map((l) => (
                         <option
@@ -256,7 +242,7 @@ export const AiSection: React.FC = () => {
                     <select
                       value={translationModel}
                       onChange={(e) => setTranslationModel(e.target.value)}
-                      className="w-full bg-app-ink/5 border border-app-ink/10 p-3 text-[10px] font-mono uppercase tracking-widest focus:outline-none focus:border-app-ink/30 transition-all"
+                      className={tgFieldClassName}
                     >
                       {MODELS.map((m) => (
                         <option
@@ -273,7 +259,7 @@ export const AiSection: React.FC = () => {
               )}
             </AnimatePresence>
           </div>
-        </div>
+        </TgSettingsSection>
       )}
     </div>
   )

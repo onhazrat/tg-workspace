@@ -4,6 +4,7 @@ import {
   PaletteFooterHints,
   PaletteSubViewHeader,
 } from "@/components/PaletteKeyboardChrome"
+import { TgButton } from "@/components/ui/tg-button"
 import { getEditorFooterHint } from "@/lib/commands/palette-messages"
 import {
   getEditorInputStep,
@@ -81,16 +82,18 @@ export function EditorPanel({
             />
           )}
         </div>
-        <button
+        <TgButton
           type="button"
+          variant="primary"
+          size="md"
           data-testid="command-palette-editor-apply"
-          disabled={isApplying}
+          loading={isApplying}
+          loadingLabel="Applying…"
           onClick={onApply}
-          className="inline-flex items-center gap-2 rounded-md border border-app-ink/20 bg-app-ink px-3 py-2 text-xs font-mono uppercase tracking-widest text-app-bg disabled:opacity-50"
         >
           <Check size={14} />
-          {isApplying ? "Applying…" : "Apply"}
-        </button>
+          Apply
+        </TgButton>
       </div>
       <PaletteFooterHints hints={getEditorFooterHint(isTextarea)} />
     </div>

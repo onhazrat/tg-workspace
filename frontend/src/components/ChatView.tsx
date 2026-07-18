@@ -16,6 +16,9 @@ import { AnimatePresence, motion } from "motion/react"
 import type React from "react"
 import { useState } from "react"
 import ReactMarkdown from "react-markdown"
+import { TgButton } from "@/components/ui/tg-button"
+import { TgIconButton } from "@/components/ui/tg-icon-button"
+import { TgHeroEmptyState } from "@/components/ui/tg-segmented"
 import { LANGUAGES, MODELS } from "../constants"
 import { useChatContext } from "../contexts/ChatContext"
 import { useRAG } from "../contexts/RAGContext"
@@ -179,48 +182,36 @@ export const ChatView: React.FC = () => {
             ))}
           {chatMessages.length > 0 && (
             <>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const fullHistory = chatMessages
-                        .map(
-                          (m) =>
-                            `**${m.role === "user" ? "User" : "AI Analyst"}**:\n${m.text}`,
-                        )
-                        .join("\n\n---\n\n")
-                      navigator.clipboard.writeText(fullHistory)
-                      setCopied(true)
-                      setTimeout(() => setCopied(false), 2000)
-                    }}
-                    className="p-1.5 text-app-ink/40 hover:text-app-ink hover:bg-app-ink/5 rounded-md transition-all"
-                  >
-                    {copied ? <Check size={14} /> : <Copy size={14} />}
-                  </button>
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p>Copy Chat History</p>
-                </TooltipContent>
-              </Tooltip>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setChatMessages([])
-                      setCurrentSummaryId(null)
-                      setExpandedSources({})
-                    }}
-                    className="p-1.5 text-app-ink/40 hover:text-red-500 hover:bg-red-500/10 rounded-md transition-all"
-                  >
-                    <Plus size={14} className="rotate-45" />
-                  </button>
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p>Clear Conversation</p>
-                </TooltipContent>
-              </Tooltip>
+              <TgIconButton
+                aria-label="Copy Chat History"
+                tooltip="Copy Chat History"
+                onClick={() => {
+                  const fullHistory = chatMessages
+                    .map(
+                      (m) =>
+                        `**${m.role === "user" ? "User" : "AI Analyst"}**:\n${m.text}`,
+                    )
+                    .join("\n\n---\n\n")
+                  navigator.clipboard.writeText(fullHistory)
+                  setCopied(true)
+                  setTimeout(() => setCopied(false), 2000)
+                }}
+                className="text-app-ink/40"
+              >
+                {copied ? <Check size={14} /> : <Copy size={14} />}
+              </TgIconButton>
+              <TgIconButton
+                aria-label="Clear Conversation"
+                tooltip="Clear Conversation"
+                onClick={() => {
+                  setChatMessages([])
+                  setCurrentSummaryId(null)
+                  setExpandedSources({})
+                }}
+                className="text-app-ink/40 hover:text-red-500 hover:bg-red-500/10"
+              >
+                <Plus size={14} className="rotate-45" />
+              </TgIconButton>
             </>
           )}
         </div>
@@ -229,25 +220,26 @@ export const ChatView: React.FC = () => {
       {/* Chat Feed */}
       <div className="flex-1 overflow-y-auto space-y-6 mb-4 pr-2 custom-scrollbar">
         {chatMessages.length === 0 && (
-          <div className="h-full flex flex-col items-center justify-center text-center py-10 max-w-md mx-auto">
-            <div className="w-16 h-16 bg-app-card shadow-sm rounded-2xl flex items-center justify-center mb-6 border border-app-ink/10">
-              {chatMode === "summary" ? (
+          <TgHeroEmptyState
+            className="h-full max-w-md mx-auto py-10"
+            icon={
+              chatMode === "summary" ? (
                 <FileText size={28} className="opacity-40" />
               ) : (
                 <Database size={28} className="opacity-40" />
-              )}
-            </div>
-            <h3 className="text-lg font-bold tracking-tight mb-2">
-              {chatMode === "summary"
+              )
+            }
+            title={
+              chatMode === "summary"
                 ? "Chat with Current View"
-                : "Chat with All History"}
-            </h3>
-            <p className="text-[11px] opacity-60 mb-8 leading-relaxed max-w-sm">
-              {chatMode === "summary"
+                : "Chat with All History"
+            }
+            description={
+              chatMode === "summary"
                 ? "Ask questions about the currently filtered posts. The AI will analyze the visible content to provide answers."
-                : "Ask questions across your entire saved database using semantic search. The AI will find relevant past discussions."}
-            </p>
-
+                : "Ask questions across your entire saved database using semantic search. The AI will find relevant past discussions."
+            }
+          >
             <div className="w-full space-y-2">
               <p className="text-[9px] font-bold uppercase tracking-widest opacity-40 mb-3 text-left pl-1">
                 Suggested Prompts
@@ -272,7 +264,7 @@ export const ChatView: React.FC = () => {
                 </button>
               ))}
             </div>
-          </div>
+          </TgHeroEmptyState>
         )}
 
         {chatMessages.map((m, i) => (
@@ -303,14 +295,18 @@ export const ChatView: React.FC = () => {
                     : "bg-app-card border border-app-ink/10 rounded-2xl rounded-tl-sm shadow-sm"
                 }`}
               >
-                <button
-                  type="button"
+                <TgIconButton
+                  aria-label="Copy message"
+                  tooltip="Copy message"
                   onClick={() => navigator.clipboard.writeText(m.text)}
-                  className={`absolute -top-3 ${m.role === "user" ? "-left-3 bg-app-card text-app-ink border border-app-ink/10" : "-right-3 bg-app-ink text-app-bg"} opacity-0 group-hover/bubble:opacity-100 transition-opacity p-1.5 rounded-md shadow-sm`}
-                  title="Copy message"
+                  className={`absolute -top-3 shadow-sm opacity-0 group-hover/bubble:opacity-100 ${
+                    m.role === "user"
+                      ? "-left-3 bg-app-card text-app-ink border border-app-ink/10"
+                      : "-right-3 bg-app-ink text-app-bg"
+                  }`}
                 >
                   <Copy size={12} />
-                </button>
+                </TgIconButton>
 
                 <div
                   dir={isRTL ? "rtl" : "ltr"}
@@ -443,18 +439,18 @@ export const ChatView: React.FC = () => {
           />
           <Tooltip>
             <TooltipTrigger asChild>
-              <button
+              <TgButton
                 type="button"
+                variant="primary"
+                size="md"
                 onClick={handleSendMessage}
-                disabled={isChatting || !chatInput.trim()}
-                className="bg-app-ink text-app-bg p-3 rounded-xl hover:opacity-90 transition-all disabled:opacity-20 disabled:cursor-not-allowed shrink-0 mb-0.5 mr-0.5 shadow-sm"
+                disabled={!chatInput.trim()}
+                loading={isChatting}
+                aria-label="Send Message"
+                className="size-11 shrink-0 rounded-xl p-0 mb-0.5 mr-0.5"
               >
-                {isChatting ? (
-                  <Loader2 size={18} className="animate-spin" />
-                ) : (
-                  <Send size={18} />
-                )}
-              </button>
+                {isChatting ? null : <Send size={18} />}
+              </TgButton>
             </TooltipTrigger>
             <TooltipContent>
               <p>Send Message</p>

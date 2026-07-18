@@ -10,7 +10,6 @@ import {
   Languages,
   Layers,
   Link2,
-  Loader2,
   PlusCircle,
   Sparkles,
   Video,
@@ -26,10 +25,11 @@ import { useTranslation } from "../contexts/TranslationContext"
 import { getMediaKindLabel, getPostMediaKinds } from "../lib/posts/post-media"
 import { getTranslation, saveTranslation } from "../lib/repository"
 import { telegramWebViewPostUrl } from "../lib/telegram-web"
-import { highlightText } from "../lib/utils"
+import { cn, highlightText } from "../lib/utils"
 import type { Post, PostMediaKind } from "../types"
 import { RelativeTime } from "./RelativeTime"
 import { Badge } from "./ui/badge"
+import { TgIconButton, tgIconButtonVariants } from "./ui/tg-icon-button"
 import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tg-tooltip"
 
 function MediaKindIcon({ kind }: { kind: PostMediaKind }) {
@@ -268,68 +268,49 @@ export const PostCard: React.FC<PostCardProps> = ({ post, postSearch }) => {
           <div className="absolute right-full mr-2 top-1/2 -translate-y-1/2 flex items-center gap-1 opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto group-focus-within:opacity-100 group-focus-within:pointer-events-auto transition-all duration-200 translate-x-2 group-hover:translate-x-0 group-focus-within:translate-x-0 bg-app-card/90 backdrop-blur-md p-1 rounded-full border border-app-ink/10 shadow-sm">
             {translationEnabled && (
               <>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <button
-                      type="button"
-                      onClick={handleTranslate}
-                      disabled={isTranslating}
-                      className={`p-1.5 rounded-full transition-all ${showTranslation ? "text-blue-500 bg-blue-500/10" : "text-app-ink/50 hover:text-blue-500 hover:bg-blue-500/10"}`}
-                    >
-                      {isTranslating ? (
-                        <Loader2 size={14} className="animate-spin" />
-                      ) : (
-                        <Languages size={14} />
-                      )}
-                    </button>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <p>{showTranslation ? "Show Original" : "Translate"}</p>
-                  </TooltipContent>
-                </Tooltip>
+                <TgIconButton
+                  aria-label={showTranslation ? "Show Original" : "Translate"}
+                  tooltip={showTranslation ? "Show Original" : "Translate"}
+                  onClick={handleTranslate}
+                  loading={isTranslating}
+                  className={
+                    showTranslation
+                      ? "text-blue-500 bg-blue-500/10"
+                      : "hover:text-blue-500 hover:bg-blue-500/10"
+                  }
+                >
+                  <Languages size={14} />
+                </TgIconButton>
                 <div className="w-px h-4 bg-app-ink/10 mx-0.5" />
               </>
             )}
             {embeddingsEnabled && (
               <>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setRelatedPostSearch(post)
-                        window.scrollTo({ top: 0, behavior: "smooth" })
-                      }}
-                      className="p-1.5 rounded-full text-purple-500/70 hover:text-purple-600 hover:bg-purple-500/10 transition-all"
-                    >
-                      <Sparkles size={14} />
-                    </button>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <p>Find Related Posts</p>
-                  </TooltipContent>
-                </Tooltip>
+                <TgIconButton
+                  aria-label="Find Related Posts"
+                  tooltip="Find Related Posts"
+                  onClick={() => {
+                    setRelatedPostSearch(post)
+                    window.scrollTo({ top: 0, behavior: "smooth" })
+                  }}
+                  className="text-purple-500/70 hover:text-purple-600 hover:bg-purple-500/10"
+                >
+                  <Sparkles size={14} />
+                </TgIconButton>
                 <div className="w-px h-4 bg-app-ink/10 mx-0.5" />
               </>
             )}
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <button
-                  type="button"
-                  onClick={() => {
-                    navigator.clipboard.writeText(
-                      telegramWebViewPostUrl(post.channelName, post.id),
-                    )
-                  }}
-                  className="p-1.5 rounded-full text-app-ink/50 hover:text-app-ink hover:bg-app-ink/5 transition-all"
-                >
-                  <Copy size={14} />
-                </button>
-              </TooltipTrigger>
-              <TooltipContent>
-                <p>Copy Link</p>
-              </TooltipContent>
-            </Tooltip>
+            <TgIconButton
+              aria-label="Copy Link"
+              tooltip="Copy Link"
+              onClick={() => {
+                navigator.clipboard.writeText(
+                  telegramWebViewPostUrl(post.channelName, post.id),
+                )
+              }}
+            >
+              <Copy size={14} />
+            </TgIconButton>
             <div className="w-px h-4 bg-app-ink/10 mx-0.5" />
             <Tooltip>
               <TooltipTrigger asChild>
@@ -337,7 +318,8 @@ export const PostCard: React.FC<PostCardProps> = ({ post, postSearch }) => {
                   href={telegramWebViewPostUrl(post.channelName, post.id)}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="p-1.5 rounded-full text-app-ink/50 hover:text-app-ink hover:bg-app-ink/5 transition-all"
+                  aria-label="Open in Telegram"
+                  className={cn(tgIconButtonVariants({ variant: "ghost" }))}
                 >
                   <ExternalLink size={14} />
                 </a>

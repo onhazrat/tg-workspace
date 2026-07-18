@@ -2,6 +2,7 @@ import { List, Loader2 } from "lucide-react"
 import { motion } from "motion/react"
 import type React from "react"
 import { useEffect } from "react"
+import { TgHeroEmptyState } from "@/components/ui/tg-segmented"
 import { useScraper } from "../contexts/ScraperContext"
 import { PostCard } from "./PostCard"
 import { PostFilter } from "./PostFilter"
@@ -135,18 +136,12 @@ export const PostFeed: React.FC<PostFeedProps> = ({
         </div>
       ) : (
         /* Empty State */
-        <div className="h-full flex flex-col items-center justify-center text-center py-20 max-w-md mx-auto">
-          <div className="w-16 h-16 bg-app-card shadow-sm rounded-2xl flex items-center justify-center mb-6 border border-app-ink/10">
-            <List size={28} className="opacity-40" />
-          </div>
-          <h3 className="text-lg font-bold tracking-tight mb-2">
-            No Posts in Range
-          </h3>
-          <p className="text-[11px] opacity-60 leading-relaxed max-w-sm">
-            Try adjusting your filtration parameters, clearing your search
-            query, or adding more channels to your selection.
-          </p>
-        </div>
+        <TgHeroEmptyState
+          className="h-full max-w-md mx-auto"
+          icon={<List size={28} className="opacity-40" />}
+          title="No Posts in Range"
+          description="Try adjusting your filtration parameters, clearing your search query, or adding more channels to your selection."
+        />
       )}
     </motion.div>
   )

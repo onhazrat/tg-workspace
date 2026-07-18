@@ -511,18 +511,20 @@ test.describe("TG Summarizer", () => {
     await page.getByTestId("discover-select-all").click()
     await expect(page.getByText("5 selected")).toBeVisible()
 
-    page.once("dialog", (dialog) => {
-      expect(dialog.message()).toMatch(/Follow 5 channels/)
-      void dialog.dismiss()
-    })
     await page.getByTestId("discover-follow-selected").click()
+    const confirmDialog = page.getByRole("dialog")
+    await expect(confirmDialog).toBeVisible()
+    await expect(confirmDialog.getByText(/Follow 5 channels/)).toBeVisible()
+    await confirmDialog.getByRole("button", { name: "Cancel" }).click()
+    await expect(confirmDialog).not.toBeVisible()
     await expect.poll(() => bulkFollow.getPostCount()).toBe(0)
 
-    page.once("dialog", (dialog) => {
-      expect(dialog.message()).toMatch(/Follow 5 channels/)
-      void dialog.accept()
-    })
     await page.getByTestId("discover-follow-selected").click()
+    await expect(page.getByRole("dialog")).toBeVisible()
+    await page
+      .getByRole("dialog")
+      .getByRole("button", { name: "Follow" })
+      .click()
     await expect.poll(() => bulkFollow.getPostCount()).toBe(1)
 
     const body = bulkFollow.getPostBodies()[0] as {

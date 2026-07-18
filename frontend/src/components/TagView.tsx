@@ -8,6 +8,7 @@ import { useData } from "../contexts/DataContext"
 import { useTagContext } from "../contexts/TagContext"
 import { PasteTagsModal } from "./PasteTagsModal"
 import { TagConfig } from "./TagConfig"
+import { TgIconButton } from "./ui/tg-icon-button"
 
 export const TagView: React.FC = () => {
   const { channels } = useData()
@@ -143,13 +144,14 @@ export const TagView: React.FC = () => {
                     {new Date(run.createdAt).toLocaleString()}
                   </div>
                 </button>
-                <button
-                  type="button"
+                <TgIconButton
+                  aria-label="Delete tag run"
+                  tooltip="Delete tag run"
                   onClick={() => void deleteRun(run.id)}
-                  className="rounded-md p-1 text-app-ink/50 hover:bg-app-muted/30 hover:text-red-500"
+                  className="hover:text-red-500 hover:bg-app-muted/30"
                 >
                   <Trash2 size={14} />
-                </button>
+                </TgIconButton>
               </div>
             ))}
           </div>

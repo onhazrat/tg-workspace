@@ -1,5 +1,6 @@
 import { Trash2 } from "lucide-react"
 import type React from "react"
+import { TgButton } from "@/components/ui/tg-button"
 import { LOG_TAB_META, type LogTab } from "@/lib/logs/tabs"
 
 interface LogsHeaderProps {
@@ -30,14 +31,15 @@ export const LogsHeader: React.FC<LogsHeaderProps> = ({
         </p>
       </div>
       <div className="flex items-center gap-2">
-        <button
+        <TgButton
           type="button"
+          variant="dangerSoft"
+          size="sm"
           onClick={onClearLogs}
-          className="px-3 py-1.5 border border-red-500/20 text-red-500 hover:bg-red-500 hover:text-white transition-all text-[9px] uppercase font-bold flex items-center gap-2"
         >
           <Trash2 size={12} />
           Clear {meta.label} Logs
-        </button>
+        </TgButton>
       </div>
     </div>
   )

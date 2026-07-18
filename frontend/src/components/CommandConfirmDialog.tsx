@@ -1,5 +1,6 @@
 import { type KeyboardEvent, useEffect, useRef } from "react"
 import { PaletteFooterHints } from "@/components/PaletteKeyboardChrome"
+import { TgButton } from "@/components/ui/tg-button"
 import type { CommandContext, CommandDef } from "@/lib/commands/types"
 
 interface CommandConfirmDialogProps {
@@ -68,26 +69,28 @@ export function CommandConfirmDialog({
         <p className="text-sm text-app-ink/60">{description}</p>
       </div>
       <div className="flex justify-end gap-2">
-        <button
+        <TgButton
           ref={cancelRef}
           type="button"
+          variant="secondary"
+          size="md"
           data-testid="command-palette-confirm-cancel"
           onClick={onCancel}
-          className="rounded-md border border-app-ink/20 px-3 py-2 text-xs font-mono uppercase tracking-widest focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-app-ink/30"
         >
           Cancel
-        </button>
-        <button
+        </TgButton>
+        <TgButton
           ref={confirmRef}
           type="button"
+          variant="dangerSoft"
+          size="md"
           data-testid="command-palette-confirm-confirm"
           onClick={() => {
             void onConfirm()
           }}
-          className="rounded-md border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs font-mono uppercase tracking-widest text-red-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500/40"
         >
           Confirm
-        </button>
+        </TgButton>
       </div>
       <PaletteFooterHints hints="↵ run focused · ←→ switch · esc cancel" />
     </div>

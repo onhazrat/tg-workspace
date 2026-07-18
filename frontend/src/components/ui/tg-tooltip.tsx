@@ -31,14 +31,11 @@ function TooltipTrigger({
 }: React.ComponentProps<typeof TooltipPrimitive.Trigger> & {
   asChild?: boolean
 }) {
+  // When composing over a child (asChild), do not set data-slot here —
+  // Base UI merges Trigger props onto the child and would overwrite
+  // identity slots like data-slot="tg-button".
   if (asChild && React.isValidElement(children)) {
-    return (
-      <TooltipPrimitive.Trigger
-        data-slot="tooltip-trigger"
-        render={children}
-        {...props}
-      />
-    )
+    return <TooltipPrimitive.Trigger render={children} {...props} />
   }
 
   return (

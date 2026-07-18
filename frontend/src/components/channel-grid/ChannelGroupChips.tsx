@@ -1,5 +1,6 @@
 import { Layers } from "lucide-react"
 import type React from "react"
+import { TgSelectionChip } from "@/components/ui/tg-chips"
 import {
   getChannelNamesInGroup,
   getChipSelectionState,
@@ -31,11 +32,16 @@ export const ChannelGroupChips: React.FC<ChannelGroupChipsProps> = ({
         const { selectedCount, isAllSelected, isPartial } =
           getChipSelectionState(channelsWithGroup, selectedChannels)
         const isActiveFilter = activeGroupFilter === group.id
+        const state = isAllSelected
+          ? "selected"
+          : isPartial
+            ? "partial"
+            : "idle"
 
         return (
-          <button
-            type="button"
+          <TgSelectionChip
             key={group.id}
+            state={state}
             data-testid={`channel-group-${group.id}`}
             onClick={(event) => {
               if (event.metaKey || event.ctrlKey) {
@@ -44,22 +50,14 @@ export const ChannelGroupChips: React.FC<ChannelGroupChipsProps> = ({
               }
               onToggleGroupSelection(group.id)
             }}
-            className={`text-[9px] font-bold px-2 py-1 rounded-md transition-all flex items-center gap-1.5 ${
-              isActiveFilter ? "ring-2 ring-indigo-500/40" : ""
-            } ${
-              isAllSelected
-                ? "bg-app-ink text-app-bg"
-                : isPartial
-                  ? "bg-app-ink/20 text-app-ink"
-                  : "bg-app-muted/50 text-app-ink/60 hover:bg-app-ink/10 hover:text-app-ink"
-            }`}
+            className={isActiveFilter ? "ring-2 ring-indigo-500/40" : undefined}
           >
             <Layers size={10} />
             {group.name}
             <span className="opacity-60 text-[8px]">
               ({selectedCount}/{channelsWithGroup.length})
             </span>
-          </button>
+          </TgSelectionChip>
         )
       })}
     </div>

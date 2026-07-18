@@ -1,7 +1,7 @@
 import { useQueryClient } from "@tanstack/react-query"
 import { useEffect } from "react"
 
-import { getDBStats } from "@/lib/repository"
+import { getDBStats, listPublishLogs, listSyncLogs } from "@/lib/repository"
 
 import { queryKeys } from "./queryKeys"
 
@@ -21,8 +21,16 @@ export function useLazyTabData(activeTab: string) {
 
   useEffect(() => {
     if (activeTab === "history" || activeTab === "settings") {
-      void queryClient.prefetchQuery({ queryKey: queryKeys.logs.publish })
-      void queryClient.prefetchQuery({ queryKey: queryKeys.logs.sync })
+      void queryClient.prefetchQuery({
+        queryKey: queryKeys.logs.publish,
+        queryFn: () => listPublishLogs(),
+        staleTime: 30_000,
+      })
+      void queryClient.prefetchQuery({
+        queryKey: queryKeys.logs.sync,
+        queryFn: () => listSyncLogs(),
+        staleTime: 30_000,
+      })
     }
   }, [activeTab, queryClient])
 }

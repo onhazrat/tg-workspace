@@ -16,6 +16,7 @@ import { motion } from "motion/react"
 import React, { useState } from "react"
 import ReactMarkdown from "react-markdown"
 import { toast } from "sonner"
+import { TgButton } from "@/components/ui/tg-button"
 import { buildActiveProxies } from "@/lib/syncSettings"
 import { formatSummaryModelLabel, isPendingSummary } from "../constants"
 import { generateDefaultMetadataText, useAI } from "../contexts/AIContext"
@@ -353,14 +354,16 @@ export const SummaryView: React.FC<SummaryViewProps> = () => {
                   </span>
                 </div>
               </div>
-              <button
+              <TgButton
                 type="button"
+                variant="primary"
+                size="lg"
                 onClick={() => setPasteModalOpen(true)}
-                className="flex items-center gap-2 px-5 h-11 bg-app-ink text-app-bg rounded-lg hover:opacity-90 transition-all text-xs font-bold tracking-wide shadow-sm"
+                className="h-11 px-5"
               >
                 <ClipboardPaste size={14} />
                 Paste AI Response
-              </button>
+              </TgButton>
             </div>
 
             <p className="text-sm text-app-ink/80 mb-4">
@@ -374,8 +377,10 @@ export const SummaryView: React.FC<SummaryViewProps> = () => {
                 <h4 className="text-[11px] font-bold uppercase tracking-widest text-app-ink/70">
                   Copied Prompt
                 </h4>
-                <button
+                <TgButton
                   type="button"
+                  variant="secondary"
+                  size="sm"
                   onClick={() => {
                     if (currentSummary.promptText) {
                       void navigator.clipboard.writeText(
@@ -385,11 +390,10 @@ export const SummaryView: React.FC<SummaryViewProps> = () => {
                     }
                   }}
                   disabled={!currentSummary.promptText}
-                  className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-app-ink/10 hover:bg-app-muted/30 text-[11px] font-bold uppercase tracking-wide disabled:opacity-50"
                 >
                   <Copy size={12} />
                   Copy again
-                </button>
+                </TgButton>
               </div>
               <pre className="text-xs font-mono whitespace-pre-wrap leading-relaxed text-app-ink/80 max-h-[480px] overflow-y-auto custom-scrollbar">
                 {currentSummary.promptText || "Prompt text unavailable."}
@@ -459,8 +463,10 @@ export const SummaryView: React.FC<SummaryViewProps> = () => {
                     </select>
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <button
+                        <TgButton
                           type="button"
+                          variant="ghost"
+                          size="sm"
                           onClick={() => {
                             const bot = botCredentials.find(
                               (b) => b.id === selectedBotId,
@@ -482,11 +488,10 @@ export const SummaryView: React.FC<SummaryViewProps> = () => {
                               )
                           }}
                           disabled={!selectedBotId || !selectedDestId}
-                          className="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-app-ink hover:text-app-bg transition-all text-[11px] uppercase font-bold tracking-wider disabled:opacity-30 disabled:cursor-not-allowed"
                         >
                           <Send size={12} />
                           Publish
-                        </button>
+                        </TgButton>
                       </TooltipTrigger>
                       <TooltipContent>
                         <p>
@@ -500,8 +505,10 @@ export const SummaryView: React.FC<SummaryViewProps> = () => {
                 {currentSummary && (
                   <Tooltip>
                     <TooltipTrigger asChild>
-                      <button
+                      <TgButton
                         type="button"
+                        variant="ghost"
+                        size="sm"
                         onClick={() => {
                           if (isEditingNote) {
                             setIsEditingNote(false)
@@ -510,14 +517,18 @@ export const SummaryView: React.FC<SummaryViewProps> = () => {
                             setNoteValue(currentSummary.note || "")
                           }
                         }}
-                        className={`flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-app-ink hover:text-app-bg transition-all text-[11px] uppercase font-bold tracking-wider ${currentSummary.note ? "text-amber-600 bg-amber-500/10" : ""}`}
+                        className={
+                          currentSummary.note
+                            ? "text-amber-600 bg-amber-500/10"
+                            : undefined
+                        }
                       >
                         <StickyNote
                           size={12}
                           className={isEditingNote ? "fill-current" : ""}
                         />
                         Note
-                      </button>
+                      </TgButton>
                     </TooltipTrigger>
                     <TooltipContent>
                       <p>
@@ -532,19 +543,17 @@ export const SummaryView: React.FC<SummaryViewProps> = () => {
                 )}
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <button
+                    <TgButton
                       type="button"
+                      variant="ghost"
+                      size="sm"
                       onClick={handleRerun}
-                      disabled={summarizing || isRegenerating}
-                      className="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-app-ink hover:text-app-bg transition-all text-[11px] uppercase font-bold tracking-wider disabled:opacity-30 disabled:cursor-not-allowed"
+                      loading={summarizing || isRegenerating}
+                      loadingLabel="Re-analyze Window"
                     >
-                      {summarizing || isRegenerating ? (
-                        <Loader2 size={12} className="animate-spin" />
-                      ) : (
-                        <RefreshCw size={12} />
-                      )}
+                      <RefreshCw size={12} />
                       Re-analyze Window
-                    </button>
+                    </TgButton>
                   </TooltipTrigger>
                   <TooltipContent>
                     <p>Re-analyzes the current time window.</p>
@@ -552,18 +561,19 @@ export const SummaryView: React.FC<SummaryViewProps> = () => {
                 </Tooltip>
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <button
+                    <TgButton
                       type="button"
+                      variant="ghost"
+                      size="sm"
                       onClick={() => {
                         navigator.clipboard.writeText(summary)
                         setCopied(true)
                         setTimeout(() => setCopied(false), 2000)
                       }}
-                      className="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-app-ink hover:text-app-bg transition-all text-[11px] uppercase font-bold tracking-wider"
                     >
                       {copied ? <Check size={12} /> : <Copy size={12} />}
                       {copied ? "Copied" : "Copy Text"}
-                    </button>
+                    </TgButton>
                   </TooltipTrigger>
                   <TooltipContent>
                     <p>Copies the summary text to your clipboard.</p>
@@ -571,8 +581,10 @@ export const SummaryView: React.FC<SummaryViewProps> = () => {
                 </Tooltip>
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <button
+                    <TgButton
                       type="button"
+                      variant="ghost"
+                      size="sm"
                       onClick={() => {
                         const blob = new Blob([summary], {
                           type: "text/markdown",
@@ -584,11 +596,10 @@ export const SummaryView: React.FC<SummaryViewProps> = () => {
                         a.click()
                         URL.revokeObjectURL(url)
                       }}
-                      className="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-app-ink hover:text-app-bg transition-all text-[11px] uppercase font-bold tracking-wider"
                     >
                       <Download size={12} />
                       Export .MD
-                    </button>
+                    </TgButton>
                   </TooltipTrigger>
                   <TooltipContent>
                     <p>Downloads the summary as a Markdown file.</p>
@@ -652,28 +663,34 @@ export const SummaryView: React.FC<SummaryViewProps> = () => {
                       </span>
                       <div className="flex gap-2 items-center">
                         {currentSummary.note && (
-                          <button
+                          <TgButton
                             type="button"
+                            variant="dangerSoft"
+                            size="sm"
                             onClick={handleDeleteNote}
-                            className="text-[11px] font-bold text-red-600/80 hover:text-red-700 transition-colors px-2 py-1.5 rounded hover:bg-red-500/10 mr-1"
+                            className="mr-1 border-0 bg-transparent hover:bg-red-500/10"
                           >
                             Delete
-                          </button>
+                          </TgButton>
                         )}
-                        <button
+                        <TgButton
                           type="button"
+                          variant="ghost"
+                          size="sm"
                           onClick={() => setIsEditingNote(false)}
-                          className="text-[11px] font-bold text-amber-800/80 hover:text-amber-900 transition-colors px-2 py-1.5 rounded hover:bg-amber-500/10"
+                          className="text-amber-800/80 hover:text-amber-900 hover:bg-amber-500/10"
                         >
                           Cancel
-                        </button>
-                        <button
+                        </TgButton>
+                        <TgButton
                           type="button"
+                          variant="primary"
+                          size="sm"
                           onClick={handleSaveNote}
-                          className="text-[11px] font-bold bg-amber-900 hover:bg-amber-950 text-amber-50 transition-colors px-3 py-1.5 rounded shadow-sm flex items-center gap-1"
+                          className="bg-amber-900 hover:bg-amber-950 hover:opacity-100 text-amber-50 shadow-sm"
                         >
                           Save Note
-                        </button>
+                        </TgButton>
                       </div>
                     </div>
                   </motion.div>
@@ -745,8 +762,10 @@ export const SummaryView: React.FC<SummaryViewProps> = () => {
                           className="w-full bg-transparent border border-app-ink/20 rounded p-3 text-xs font-mono focus:outline-none focus:border-app-ink/50 min-h-[120px]"
                         />
                         <div className="flex justify-end gap-2">
-                          <button
+                          <TgButton
                             type="button"
+                            variant="ghost"
+                            size="sm"
                             onClick={() => {
                               setMetadataText(
                                 currentSummary.metadataText ||
@@ -754,12 +773,13 @@ export const SummaryView: React.FC<SummaryViewProps> = () => {
                               )
                               setIsEditingMetadata(false)
                             }}
-                            className="text-[11px] font-bold uppercase px-3 py-1.5 hover:bg-app-ink/5 rounded transition-colors"
                           >
                             Cancel
-                          </button>
-                          <button
+                          </TgButton>
+                          <TgButton
                             type="button"
+                            variant="primary"
+                            size="sm"
                             onClick={async () => {
                               const updatedSummary = {
                                 ...currentSummary,
@@ -770,10 +790,9 @@ export const SummaryView: React.FC<SummaryViewProps> = () => {
                               setIsEditingMetadata(false)
                               toast.success("Metadata updated.")
                             }}
-                            className="text-[11px] font-bold uppercase px-3 py-1.5 bg-app-ink text-app-bg rounded transition-colors"
                           >
                             Save
-                          </button>
+                          </TgButton>
                         </div>
                       </div>
                     ) : (

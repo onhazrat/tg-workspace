@@ -10,6 +10,7 @@ import { LogTabBar } from "@/components/logs/LogTabBar"
 import { NetworkLogsTab } from "@/components/logs/NetworkLogsTab"
 import { PublishLogsTab } from "@/components/logs/PublishLogsTab"
 import { SyncLogsTab } from "@/components/logs/SyncLogsTab"
+import { TgConfirmDialog } from "@/components/ui/tg-confirm-dialog"
 import { useData } from "@/contexts/DataContext"
 import { useUI } from "@/contexts/UIContext"
 import {
@@ -71,6 +72,7 @@ export const LogsView: React.FC = () => {
     network: PAGE_SIZE,
     embedding: PAGE_SIZE,
   })
+  const [clearLogsConfirmOpen, setClearLogsConfirmOpen] = useState(false)
   const observerTarget = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -181,19 +183,24 @@ export const LogsView: React.FC = () => {
     toast.success(`${LOG_TAB_META[tab].label} log entry deleted.`)
   }
 
-  const handleClearLogs = async () => {
+  const handleClearLogs = () => {
+    setClearLogsConfirmOpen(true)
+  }
+
+  const confirmClearLogs = async () => {
     const { noun } = LOG_TAB_META[activeLogTab]
-    if (window.confirm(`Are you sure you want to clear all ${noun} logs?`)) {
-      await logActions[activeLogTab].clear()
-      await logActions[activeLogTab].reload()
-      toast.success(`All ${noun} logs cleared.`)
-    }
+    setClearLogsConfirmOpen(false)
+    await logActions[activeLogTab].clear()
+    await logActions[activeLogTab].reload()
+    toast.success(`All ${noun} logs cleared.`)
   }
 
   const handleViewSummary = (summaryId: string) => {
     setCurrentSummaryId(summaryId)
     setActiveTab("history")
   }
+
+  const clearLogsNoun = LOG_TAB_META[activeLogTab].noun
 
   return (
     <motion.div
@@ -268,6 +275,18 @@ export const LogsView: React.FC = () => {
         {/* Intersection Observer Target */}
         <div ref={observerTarget} className="h-10 w-full" />
       </div>
+
+      <TgConfirmDialog
+        open={clearLogsConfirmOpen}
+        onOpenChange={setClearLogsConfirmOpen}
+        title="Clear all logs?"
+        description={`Are you sure you want to clear all ${clearLogsNoun} logs?`}
+        variant="dangerSoft"
+        confirmLabel="Clear all"
+        onConfirm={() => {
+          void confirmClearLogs()
+        }}
+      />
     </motion.div>
   )
 }

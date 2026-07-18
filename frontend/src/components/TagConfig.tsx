@@ -1,5 +1,6 @@
 import { ClipboardPaste, Copy, Sparkles, Tags } from "lucide-react"
 import type React from "react"
+import { TgButton } from "@/components/ui/tg-button"
 import { useData } from "@/contexts/DataContext"
 import { useTagContext } from "@/contexts/TagContext"
 
@@ -56,39 +57,45 @@ export const TagConfig: React.FC<TagConfigProps> = ({ onPasteClick }) => {
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <button
+          <TgButton
             type="button"
+            variant="secondary"
+            size="md"
             onClick={() => void copyTagPrompt()}
-            className="flex items-center gap-2 rounded-lg border border-app-ink/15 px-3 py-2 text-xs font-bold uppercase tracking-wide hover:bg-app-muted/30"
           >
             <Copy size={13} />
             Copy Prompt
-          </button>
-          <button
+          </TgButton>
+          <TgButton
             type="button"
+            variant="primary"
+            size="md"
             onClick={() => void generateTags()}
-            disabled={isGenerating}
-            className="flex items-center gap-2 rounded-lg bg-app-ink px-3 py-2 text-xs font-bold uppercase tracking-wide text-app-bg disabled:opacity-50"
+            loading={isGenerating}
+            loadingLabel="Generating..."
           >
             <Sparkles size={13} />
-            {isGenerating ? "Generating..." : "Generate Tags"}
-          </button>
-          <button
+            Generate Tags
+          </TgButton>
+          <TgButton
             type="button"
+            variant="secondary"
+            size="md"
             onClick={onPasteClick}
-            className="flex items-center gap-2 rounded-lg border border-app-ink/15 px-3 py-2 text-xs font-bold uppercase tracking-wide hover:bg-app-muted/30"
           >
             <ClipboardPaste size={13} />
             Paste Response
-          </button>
-          <button
+          </TgButton>
+          <TgButton
             type="button"
+            variant="secondary"
+            size="md"
             onClick={() => void applyCurrentSuggestions()}
-            className="flex items-center gap-2 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-xs font-bold uppercase tracking-wide text-emerald-700 hover:bg-emerald-500/20"
+            className="border-emerald-500/30 bg-emerald-500/10 text-emerald-700 hover:bg-emerald-500/20"
           >
             <Tags size={13} />
             Apply
-          </button>
+          </TgButton>
         </div>
       </div>
     </div>

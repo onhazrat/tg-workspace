@@ -1,4 +1,4 @@
-import { Database, Loader2 } from "lucide-react"
+import { Database } from "lucide-react"
 import { useEffect, useState } from "react"
 import { toast } from "sonner"
 import { useData } from "@/contexts/DataContext"
@@ -11,6 +11,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "./ui/dialog"
+import { TgButton } from "./ui/tg-button"
 
 const DISMISSED_KEY = "migration_prompt_dismissed"
 
@@ -68,27 +69,25 @@ export function MigrationPrompt() {
           </DialogDescription>
         </DialogHeader>
         <DialogFooter>
-          <button
+          <TgButton
             type="button"
+            variant="secondary"
+            size="md"
             onClick={handleDismiss}
             disabled={migrating}
-            className="rounded-md border border-app-ink/20 px-3 py-2 text-xs font-mono uppercase tracking-widest hover:bg-app-muted/30 disabled:opacity-50"
           >
             Later
-          </button>
-          <button
+          </TgButton>
+          <TgButton
             type="button"
+            variant="primary"
+            size="md"
             onClick={handleMigrate}
-            disabled={migrating}
-            className="rounded-md bg-app-ink px-3 py-2 text-xs font-mono uppercase tracking-widest text-app-bg disabled:opacity-50 flex items-center gap-2"
+            loading={migrating}
           >
-            {migrating ? (
-              <Loader2 size={14} className="animate-spin" />
-            ) : (
-              <Database size={14} />
-            )}
+            <Database size={14} />
             Migrate Now
-          </button>
+          </TgButton>
         </DialogFooter>
       </DialogContent>
     </Dialog>

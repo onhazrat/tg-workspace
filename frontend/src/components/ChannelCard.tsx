@@ -46,6 +46,8 @@ import { upsertChannel } from "../lib/repository"
 import type { Channel } from "../types"
 import { ChannelAvatar } from "./ChannelAvatar"
 import { RelativeTime } from "./RelativeTime"
+import { TgMetaChip } from "./ui/tg-chips"
+import { TgIconButton } from "./ui/tg-icon-button"
 import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tg-tooltip"
 
 interface ChannelCardProps {
@@ -241,72 +243,61 @@ export const ChannelCard: React.FC<ChannelCardProps> = ({
       {/* Hidden Hover Action Bar (Destructive Actions) */}
       <div className="absolute top-3 right-3 flex items-center gap-1.5 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity z-20">
         {!channel.isUnavailableOnWebView && (
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation()
-                  handleToggleFreeze()
-                }}
-                className={`w-8 h-8 rounded-full bg-app-bg/90 backdrop-blur-sm border border-app-ink/10 flex items-center justify-center transition-colors shadow-sm ${
-                  channel.isFrozen
-                    ? "text-blue-500 hover:bg-blue-500 hover:text-white hover:border-blue-500"
-                    : "text-app-ink/70 hover:bg-app-ink hover:text-app-bg"
-                }`}
-              >
-                <Snowflake size={14} />
-              </button>
-            </TooltipTrigger>
-            <TooltipContent>
-              <p>
-                {channel.isFrozen
-                  ? "Unfreeze Channel"
-                  : "Freeze Channel (Stop Syncing)"}
-              </p>
-            </TooltipContent>
-          </Tooltip>
+          <TgIconButton
+            variant="frosted"
+            aria-label={
+              channel.isFrozen
+                ? "Unfreeze Channel"
+                : "Freeze Channel (Stop Syncing)"
+            }
+            tooltip={
+              channel.isFrozen
+                ? "Unfreeze Channel"
+                : "Freeze Channel (Stop Syncing)"
+            }
+            onClick={(e) => {
+              e.stopPropagation()
+              handleToggleFreeze()
+            }}
+            className={
+              channel.isFrozen
+                ? "text-blue-500 hover:bg-blue-500 hover:text-white"
+                : undefined
+            }
+          >
+            <Snowflake size={14} />
+          </TgIconButton>
         )}
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation()
-                handleResetAndSync(channel)
-              }}
-              disabled={
-                isScraping || summarizing || !channelAllows(channel, "reset")
-              }
-              className="w-8 h-8 rounded-full bg-app-bg/90 backdrop-blur-sm border border-app-ink/10 flex items-center justify-center text-app-ink/70 hover:bg-app-ink hover:text-app-bg transition-colors shadow-sm disabled:opacity-50"
-            >
-              <RotateCcw size={14} />
-            </button>
-          </TooltipTrigger>
-          <TooltipContent>
-            <p>
-              {disabledReason(channel, "reset") ??
-                "Reset & Sync from beginning"}
-            </p>
-          </TooltipContent>
-        </Tooltip>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation()
-                handleRemoveChannel(channel)
-              }}
-              className="w-8 h-8 rounded-full bg-app-bg/90 backdrop-blur-sm border border-app-ink/10 flex items-center justify-center text-red-500/70 hover:bg-red-500 hover:text-white hover:border-red-500 transition-colors shadow-sm"
-            >
-              <Trash2 size={14} />
-            </button>
-          </TooltipTrigger>
-          <TooltipContent>
-            <p>Delete Channel</p>
-          </TooltipContent>
-        </Tooltip>
+        <TgIconButton
+          variant="frosted"
+          aria-label={
+            disabledReason(channel, "reset") ?? "Reset & Sync from beginning"
+          }
+          tooltip={
+            disabledReason(channel, "reset") ?? "Reset & Sync from beginning"
+          }
+          onClick={(e) => {
+            e.stopPropagation()
+            handleResetAndSync(channel)
+          }}
+          disabled={
+            isScraping || summarizing || !channelAllows(channel, "reset")
+          }
+        >
+          <RotateCcw size={14} />
+        </TgIconButton>
+        <TgIconButton
+          variant="frosted"
+          aria-label="Delete Channel"
+          tooltip="Delete Channel"
+          onClick={(e) => {
+            e.stopPropagation()
+            handleRemoveChannel(channel)
+          }}
+          className="text-red-500/70 hover:bg-red-500 hover:text-white"
+        >
+          <Trash2 size={14} />
+        </TgIconButton>
       </div>
 
       {/* Selection Indicator & Sync Queue Badge */}
@@ -453,24 +444,27 @@ export const ChannelCard: React.FC<ChannelCardProps> = ({
 
         {/* Metadata Badges */}
         <div className="flex flex-wrap items-center gap-2 mb-5">
-          <div className="bg-app-muted px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider text-app-ink/75 flex items-center gap-1.5 border border-app-ink/5">
+          <TgMetaChip size="card" className="uppercase tracking-wider">
             <span>{(stats?.count || 0).toLocaleString()} Posts</span>
             {inScopeCount > 0 && (
               <span className="text-app-ink/40">
                 ({inScopeCount.toLocaleString()} in scope)
               </span>
             )}
-          </div>
+          </TgMetaChip>
           {stats?.velocity !== undefined && stats.velocity > 0 && (
             <Tooltip>
               <TooltipTrigger asChild>
-                <div className="bg-app-muted px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider text-app-ink/75 flex items-center gap-1.5 border border-app-ink/5 cursor-help">
+                <TgMetaChip
+                  size="card"
+                  className="uppercase tracking-wider cursor-help"
+                >
                   <Activity size={10} className="opacity-50" />
                   <span>
                     {stats.velocity < 1 ? "< 1" : Math.round(stats.velocity)} /
                     hr
                   </span>
-                </div>
+                </TgMetaChip>
               </TooltipTrigger>
               <TooltipContent>
                 <p>
@@ -484,10 +478,13 @@ export const ChannelCard: React.FC<ChannelCardProps> = ({
           {showChannelSubscribers && channel.subscribers && (
             <Tooltip>
               <TooltipTrigger asChild>
-                <div className="bg-app-muted px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider text-app-ink/75 flex items-center gap-1.5 border border-app-ink/5 cursor-help">
+                <TgMetaChip
+                  size="card"
+                  className="uppercase tracking-wider cursor-help"
+                >
                   <Users size={10} className="opacity-50" />
                   <span>{channel.subscribers}</span>
-                </div>
+                </TgMetaChip>
               </TooltipTrigger>
               <TooltipContent>
                 <p>Subscribers</p>
@@ -497,9 +494,12 @@ export const ChannelCard: React.FC<ChannelCardProps> = ({
           {showChannelTelegramChatId && channel.telegramChatId != null && (
             <Tooltip>
               <TooltipTrigger asChild>
-                <div className="bg-app-muted px-2.5 py-1 rounded-md text-[10px] font-bold tracking-wider text-app-ink/75 flex items-center gap-1.5 border border-app-ink/5 cursor-help font-mono">
+                <TgMetaChip
+                  size="card"
+                  className="tracking-wider cursor-help font-mono"
+                >
                   <span>{channel.telegramChatId}</span>
-                </div>
+                </TgMetaChip>
               </TooltipTrigger>
               <TooltipContent>
                 <p>Telegram chat ID</p>
@@ -509,10 +509,13 @@ export const ChannelCard: React.FC<ChannelCardProps> = ({
           {showChannelPhotos && channel.photos && (
             <Tooltip>
               <TooltipTrigger asChild>
-                <div className="bg-app-muted px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider text-app-ink/75 flex items-center gap-1.5 border border-app-ink/5 cursor-help">
+                <TgMetaChip
+                  size="card"
+                  className="uppercase tracking-wider cursor-help"
+                >
                   <ImageIcon size={10} className="opacity-50" />
                   <span>{channel.photos}</span>
-                </div>
+                </TgMetaChip>
               </TooltipTrigger>
               <TooltipContent>
                 <p>Photos</p>
@@ -522,10 +525,13 @@ export const ChannelCard: React.FC<ChannelCardProps> = ({
           {showChannelVideos && channel.videos && (
             <Tooltip>
               <TooltipTrigger asChild>
-                <div className="bg-app-muted px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider text-app-ink/75 flex items-center gap-1.5 border border-app-ink/5 cursor-help">
+                <TgMetaChip
+                  size="card"
+                  className="uppercase tracking-wider cursor-help"
+                >
                   <Video size={10} className="opacity-50" />
                   <span>{channel.videos}</span>
-                </div>
+                </TgMetaChip>
               </TooltipTrigger>
               <TooltipContent>
                 <p>Videos</p>
@@ -535,10 +541,13 @@ export const ChannelCard: React.FC<ChannelCardProps> = ({
           {showChannelFiles && channel.files && (
             <Tooltip>
               <TooltipTrigger asChild>
-                <div className="bg-app-muted px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider text-app-ink/75 flex items-center gap-1.5 border border-app-ink/5 cursor-help">
+                <TgMetaChip
+                  size="card"
+                  className="uppercase tracking-wider cursor-help"
+                >
                   <File size={10} className="opacity-50" />
                   <span>{channel.files}</span>
-                </div>
+                </TgMetaChip>
               </TooltipTrigger>
               <TooltipContent>
                 <p>Files</p>
@@ -548,10 +557,13 @@ export const ChannelCard: React.FC<ChannelCardProps> = ({
           {showChannelLinks && channel.links && (
             <Tooltip>
               <TooltipTrigger asChild>
-                <div className="bg-app-muted px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider text-app-ink/75 flex items-center gap-1.5 border border-app-ink/5 cursor-help">
+                <TgMetaChip
+                  size="card"
+                  className="uppercase tracking-wider cursor-help"
+                >
                   <LinkIcon size={10} className="opacity-50" />
                   <span>{channel.links}</span>
-                </div>
+                </TgMetaChip>
               </TooltipTrigger>
               <TooltipContent>
                 <p>Links</p>
@@ -559,19 +571,22 @@ export const ChannelCard: React.FC<ChannelCardProps> = ({
             </Tooltip>
           )}
 
-          <div className="bg-app-muted px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider text-app-ink/75 flex items-center gap-1.5 border border-app-ink/5">
+          <TgMetaChip size="card" className="uppercase tracking-wider">
             <Clock size={10} className="opacity-50" />
             <RelativeTime timestamp={channel.lastUpdated} />
-          </div>
+          </TgMetaChip>
           {channel.followedAt && (
             <Tooltip>
               <TooltipTrigger asChild>
-                <div className="bg-app-muted px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider text-app-ink/75 flex items-center gap-1.5 border border-app-ink/5 cursor-help">
+                <TgMetaChip
+                  size="card"
+                  className="uppercase tracking-wider cursor-help"
+                >
                   <span>
                     Followed:{" "}
                     {new Date(channel.followedAt).toLocaleDateString()}
                   </span>
-                </div>
+                </TgMetaChip>
               </TooltipTrigger>
               <TooltipContent>
                 <p>
@@ -583,9 +598,12 @@ export const ChannelCard: React.FC<ChannelCardProps> = ({
           {channel.discoveredVia && (
             <Tooltip>
               <TooltipTrigger asChild>
-                <div className="bg-blue-500/10 px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider text-blue-600 flex items-center gap-1.5 border border-blue-500/20 cursor-help">
+                <TgMetaChip
+                  size="card"
+                  className="uppercase tracking-wider cursor-help bg-blue-500/10 text-blue-600"
+                >
                   <span>Auto-Followed</span>
-                </div>
+                </TgMetaChip>
               </TooltipTrigger>
               <TooltipContent
                 side="bottom"

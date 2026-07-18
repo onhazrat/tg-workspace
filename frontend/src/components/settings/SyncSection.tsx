@@ -4,6 +4,10 @@ import type React from "react"
 import { useEffect, useState } from "react"
 import { toast } from "sonner"
 import { api } from "@/api"
+import { TgButton } from "@/components/ui/tg-button"
+import { TgInput } from "@/components/ui/tg-input"
+import { TgSegmentedControl } from "@/components/ui/tg-segmented"
+import { TgSettingsSection } from "@/components/ui/tg-settings-section"
 import { useData } from "@/contexts/DataContext"
 import { useSettings } from "@/contexts/SettingsContext"
 import { JOB_LABELS, useJobToggles } from "@/hooks/useJobToggles"
@@ -52,15 +56,7 @@ export const SyncSection: React.FC = () => {
 
   return (
     <div className="space-y-8 lg:col-span-2">
-      {/* Automation & Sync */}
-      <div className="bg-app-card border border-app-ink/10 p-6 shadow-sm">
-        <div className="flex items-center gap-3 mb-6">
-          <RefreshCw size={18} className="opacity-40" />
-          <h4 className="text-[11px] uppercase font-bold tracking-widest">
-            Automation & Sync
-          </h4>
-        </div>
-
+      <TgSettingsSection icon={RefreshCw} title="Automation & Sync">
         <div className="space-y-6">
           <SettingGroupsPanel />
 
@@ -76,7 +72,7 @@ export const SyncSection: React.FC = () => {
               riskier.
             </p>
             <div className="flex items-center gap-3">
-              <input
+              <TgInput
                 type="number"
                 min="1"
                 value={syncConcurrency}
@@ -84,7 +80,7 @@ export const SyncSection: React.FC = () => {
                   const val = parseInt(e.target.value, 10)
                   setSyncConcurrency(!Number.isNaN(val) && val >= 1 ? val : 1)
                 }}
-                className="w-20 bg-app-ink/5 border border-app-ink/10 p-2 text-[10px] font-mono focus:outline-none focus:border-app-ink/30 transition-all rounded"
+                className="w-20 p-2 normal-case tracking-normal rounded"
               />
               <span className="text-[10px] opacity-60 uppercase tracking-widest font-bold">
                 Parallel channels
@@ -109,46 +105,27 @@ export const SyncSection: React.FC = () => {
               When adding a new channel, start scraping from this time.
             </p>
 
-            <div className="flex bg-app-ink/5 p-1 rounded-lg border border-app-ink/10">
-              <button
-                type="button"
-                onClick={() => setGlobalStartTimeMode("retention")}
-                className={`flex-1 py-1.5 text-[9px] uppercase font-bold tracking-widest transition-all rounded-md ${
-                  globalStartTimeMode === "retention"
-                    ? "bg-app-ink text-app-bg shadow-sm"
-                    : "text-app-ink/40 hover:text-app-ink/60"
-                }`}
-              >
-                Match Retention
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setGlobalStartTimeMode("relative")
-                  if (typeof globalStartTimeValue !== "number") {
-                    setGlobalStartTimeValue(1)
-                  }
-                }}
-                className={`flex-1 py-1.5 text-[9px] uppercase font-bold tracking-widest transition-all rounded-md ${
-                  globalStartTimeMode === "relative"
-                    ? "bg-app-ink text-app-bg shadow-sm"
-                    : "text-app-ink/40 hover:text-app-ink/60"
-                }`}
-              >
-                Relative
-              </button>
-              <button
-                type="button"
-                onClick={() => setGlobalStartTimeMode("absolute")}
-                className={`flex-1 py-1.5 text-[9px] uppercase font-bold tracking-widest transition-all rounded-md ${
-                  globalStartTimeMode === "absolute"
-                    ? "bg-app-ink text-app-bg shadow-sm"
-                    : "text-app-ink/40 hover:text-app-ink/60"
-                }`}
-              >
-                Absolute
-              </button>
-            </div>
+            <TgSegmentedControl
+              size="sm"
+              className="w-full"
+              optionClassName="flex-1"
+              aria-label="Default channel start time"
+              value={globalStartTimeMode}
+              onChange={(mode) => {
+                setGlobalStartTimeMode(mode)
+                if (
+                  mode === "relative" &&
+                  typeof globalStartTimeValue !== "number"
+                ) {
+                  setGlobalStartTimeValue(1)
+                }
+              }}
+              options={[
+                { value: "retention", label: "Match Retention" },
+                { value: "relative", label: "Relative" },
+                { value: "absolute", label: "Absolute" },
+              ]}
+            />
 
             <AnimatePresence mode="wait">
               {globalStartTimeMode === "relative" && (
@@ -160,7 +137,7 @@ export const SyncSection: React.FC = () => {
                   className="pt-2"
                 >
                   <div className="flex items-center gap-3">
-                    <input
+                    <TgInput
                       type="number"
                       min="1"
                       value={
@@ -173,7 +150,7 @@ export const SyncSection: React.FC = () => {
                           parseInt(e.target.value, 10) || 1,
                         )
                       }
-                      className="w-20 bg-app-ink/5 border border-app-ink/10 p-2 text-[10px] font-mono focus:outline-none focus:border-app-ink/30 transition-all rounded"
+                      className="w-20 p-2 normal-case tracking-normal rounded"
                     />
                     <span className="text-[10px] opacity-60 uppercase tracking-widest font-bold">
                       Days Ago
@@ -189,7 +166,7 @@ export const SyncSection: React.FC = () => {
                   exit={{ opacity: 0, height: 0 }}
                   className="pt-2"
                 >
-                  <input
+                  <TgInput
                     type="datetime-local"
                     value={
                       typeof globalStartTimeValue === "string"
@@ -204,7 +181,7 @@ export const SyncSection: React.FC = () => {
                         }
                       }
                     }}
-                    className="w-full bg-app-ink/5 border border-app-ink/10 p-2 text-[10px] font-mono focus:outline-none focus:border-app-ink/30 transition-all rounded"
+                    className="p-2 normal-case tracking-normal rounded"
                   />
                 </motion.div>
               )}
@@ -237,19 +214,24 @@ export const SyncSection: React.FC = () => {
               page backward to the retention window.
             </p>
             {!bulkReresolveConfirm ? (
-              <button
+              <TgButton
                 type="button"
+                variant="secondary"
+                size="md"
                 onClick={() => setBulkReresolveConfirm(true)}
                 disabled={bulkReresolveLoading}
-                className="px-4 py-2 text-[10px] uppercase font-bold tracking-widest border border-app-ink/20 bg-app-ink/5 hover:bg-app-ink/10 transition-all disabled:opacity-40"
               >
                 Reset &amp; sync all channels
-              </button>
+              </TgButton>
             ) : (
               <div className="flex flex-wrap items-center gap-2">
-                <button
+                <TgButton
+                  // tg-ui-allow: soft-green confirm — TgButton has no green variant
                   type="button"
-                  disabled={bulkReresolveLoading}
+                  variant="secondary"
+                  size="md"
+                  loading={bulkReresolveLoading}
+                  loadingLabel="Running…"
                   onClick={async () => {
                     setBulkReresolveLoading(true)
                     try {
@@ -274,18 +256,19 @@ export const SyncSection: React.FC = () => {
                       setBulkReresolveConfirm(false)
                     }
                   }}
-                  className="px-4 py-2 text-[10px] uppercase font-bold tracking-widest border border-green-600/40 bg-green-500/10 hover:bg-green-500/20 transition-all disabled:opacity-40"
+                  className="border-green-600/40 bg-green-500/10 text-app-ink hover:bg-green-500/20"
                 >
-                  {bulkReresolveLoading ? "Running…" : "Confirm reset & sync"}
-                </button>
-                <button
+                  Confirm reset & sync
+                </TgButton>
+                <TgButton
                   type="button"
+                  variant="ghost"
+                  size="md"
                   disabled={bulkReresolveLoading}
                   onClick={() => setBulkReresolveConfirm(false)}
-                  className="px-3 py-2 text-[10px] uppercase font-bold tracking-widest opacity-50 hover:opacity-80"
                 >
                   Cancel
-                </button>
+                </TgButton>
               </div>
             )}
           </div>
@@ -352,14 +335,16 @@ export const SyncSection: React.FC = () => {
                           }`}
                         />
                       </button>
-                      <button
+                      <TgButton
                         type="button"
+                        variant="secondary"
+                        size="sm"
                         onClick={() => handleTriggerJob(jobId)}
-                        disabled={triggeringJob === jobId}
-                        className="px-2 py-1 text-[9px] font-mono uppercase border border-app-ink/20 hover:bg-app-ink/5 disabled:opacity-50"
+                        loading={triggeringJob === jobId}
+                        loadingLabel="…"
                       >
-                        {triggeringJob === jobId ? "…" : "Run"}
-                      </button>
+                        Run
+                      </TgButton>
                     </div>
                   </div>
                 )
@@ -367,7 +352,7 @@ export const SyncSection: React.FC = () => {
             </div>
           </div>
         </div>
-      </div>
+      </TgSettingsSection>
     </div>
   )
 }

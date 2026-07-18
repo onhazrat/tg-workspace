@@ -37,7 +37,10 @@ import type {
 } from "../types"
 import { BotAvatar } from "./BotAvatar"
 import { RelativeTime } from "./RelativeTime"
-import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tg-tooltip"
+import { TgButton } from "./ui/tg-button"
+import { TgIconButton } from "./ui/tg-icon-button"
+import { TgInput, TgTextarea, tgFieldClassName } from "./ui/tg-input"
+import { TgSettingsSection } from "./ui/tg-settings-section"
 
 type BotManagementProps = {}
 
@@ -483,15 +486,7 @@ export const BotManagement: React.FC<BotManagementProps> = () => {
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         <div className="space-y-8">
-          {/* Bot Credentials Section */}
-          <div className="bg-app-card border border-app-ink/10 p-6 shadow-sm">
-            <div className="flex items-center gap-3 mb-6">
-              <Bot size={18} className="opacity-40" />
-              <h4 className="text-[11px] uppercase font-bold tracking-widest">
-                Bot Credentials
-              </h4>
-            </div>
-
+          <TgSettingsSection icon={Bot} title="Bot Credentials">
             <p className="text-[10px] opacity-40 italic serif mb-6">
               Add your Telegram Bot tokens here to enable automated publishing
               and testing.
@@ -500,12 +495,11 @@ export const BotManagement: React.FC<BotManagementProps> = () => {
             <div className="space-y-4 mb-8">
               <div className="flex flex-col gap-3">
                 <div className="relative">
-                  <input
+                  <TgInput
                     type="password"
                     placeholder="BOT TOKEN (FROM @BOTFATHER)"
                     value={newBotToken}
                     onChange={(e) => handleBotTokenChange(e.target.value)}
-                    className="w-full bg-app-ink/5 border border-app-ink/10 p-3 text-[10px] font-mono uppercase tracking-widest focus:outline-none focus:border-app-ink/30 transition-all"
                   />
                   {isAutoFetchingBot && (
                     <div className="absolute right-3 top-1/2 -translate-y-1/2">
@@ -513,21 +507,22 @@ export const BotManagement: React.FC<BotManagementProps> = () => {
                     </div>
                   )}
                 </div>
-                <input
+                <TgInput
                   type="text"
                   placeholder="BOT NAME (AUTO-FILLED OR CUSTOM)"
                   value={newBotName}
                   onChange={(e) => setNewBotName(e.target.value)}
-                  className="w-full bg-app-ink/5 border border-app-ink/10 p-3 text-[10px] font-mono uppercase tracking-widest focus:outline-none focus:border-app-ink/30 transition-all"
                 />
               </div>
-              <button
+              <TgButton
                 type="button"
+                variant="primary"
+                size="lg"
                 onClick={handleAddBotCredential}
-                className="w-full px-4 py-3 bg-app-ink text-app-bg text-[10px] font-bold uppercase tracking-widest hover:opacity-90 transition-all flex items-center justify-center gap-2"
+                className="w-full"
               >
                 <Plus size={14} /> Save Bot
-              </button>
+              </TgButton>
             </div>
 
             <div className="space-y-2">
@@ -577,45 +572,23 @@ export const BotManagement: React.FC<BotManagementProps> = () => {
                           </div>
                         </div>
                         <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <button
-                                type="button"
-                                onClick={() => handleCheckBotToken(bot.id)}
-                                disabled={botValidation[bot.id]?.loading}
-                                className="p-2 hover:bg-app-ink/5 rounded-full transition-colors opacity-60 hover:opacity-100 disabled:opacity-20"
-                              >
-                                {botValidation[bot.id]?.loading ? (
-                                  <Loader2 size={14} className="animate-spin" />
-                                ) : (
-                                  <RefreshCw size={14} />
-                                )}
-                              </button>
-                            </TooltipTrigger>
-                            <TooltipContent>
-                              <p className="text-[9px] uppercase font-bold">
-                                Validate Token
-                              </p>
-                            </TooltipContent>
-                          </Tooltip>
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  handleDeleteBotCredential(bot.id)
-                                }
-                                className="p-2 hover:bg-red-500/10 text-red-500 rounded-full transition-colors opacity-60 hover:opacity-100"
-                              >
-                                <Trash2 size={14} />
-                              </button>
-                            </TooltipTrigger>
-                            <TooltipContent>
-                              <p className="text-[9px] uppercase font-bold">
-                                Delete Bot
-                              </p>
-                            </TooltipContent>
-                          </Tooltip>
+                          <TgIconButton
+                            aria-label="Validate Token"
+                            tooltip="Validate Token"
+                            onClick={() => handleCheckBotToken(bot.id)}
+                            loading={botValidation[bot.id]?.loading}
+                            className="rounded-full opacity-60 hover:opacity-100"
+                          >
+                            <RefreshCw size={14} />
+                          </TgIconButton>
+                          <TgIconButton
+                            aria-label="Delete Bot"
+                            tooltip="Delete Bot"
+                            onClick={() => handleDeleteBotCredential(bot.id)}
+                            className="rounded-full text-red-500 opacity-60 hover:opacity-100 hover:bg-red-500/10"
+                          >
+                            <Trash2 size={14} />
+                          </TgIconButton>
                         </div>
                       </div>
 
@@ -662,21 +635,10 @@ export const BotManagement: React.FC<BotManagementProps> = () => {
                 })
               )}
             </div>
-          </div>
+          </TgSettingsSection>
 
-          {/* Quick Message Section */}
           {botCredentials.length > 0 && chatDestinations.length > 0 && (
-            <div
-              id="quick-message-section"
-              className="bg-app-card border border-app-ink/10 p-6 shadow-sm"
-            >
-              <div className="flex items-center gap-3 mb-6">
-                <MessageSquare size={18} className="opacity-40" />
-                <h4 className="text-[11px] uppercase font-bold tracking-widest">
-                  Quick Message
-                </h4>
-              </div>
-
+            <TgSettingsSection icon={MessageSquare} title="Quick Message">
               <p className="text-[10px] opacity-40 italic serif mb-6">
                 Send an arbitrary message using a selected bot to a selected
                 destination.
@@ -687,7 +649,7 @@ export const BotManagement: React.FC<BotManagementProps> = () => {
                   <select
                     value={selectedQuickBotId}
                     onChange={(e) => setSelectedQuickBotId(e.target.value)}
-                    className="w-full bg-app-ink/5 border border-app-ink/10 p-3 text-[10px] font-mono uppercase tracking-widest focus:outline-none focus:border-app-ink/30 transition-all"
+                    className={tgFieldClassName}
                   >
                     <option value="">SELECT BOT</option>
                     {botCredentials.map((b) => (
@@ -703,7 +665,7 @@ export const BotManagement: React.FC<BotManagementProps> = () => {
                   <select
                     value={selectedQuickDestId}
                     onChange={(e) => setSelectedQuickDestId(e.target.value)}
-                    className="w-full bg-app-ink/5 border border-app-ink/10 p-3 text-[10px] font-mono uppercase tracking-widest focus:outline-none focus:border-app-ink/30 transition-all"
+                    className={tgFieldClassName}
                   >
                     <option value="">SELECT DESTINATION</option>
                     {chatDestinations.map((d) => (
@@ -717,15 +679,17 @@ export const BotManagement: React.FC<BotManagementProps> = () => {
                     ))}
                   </select>
                 </div>
-                <textarea
+                <TgTextarea
                   placeholder="TYPE YOUR MESSAGE HERE..."
                   value={quickMessage}
                   onChange={(e) => setQuickMessage(e.target.value)}
                   rows={4}
-                  className="w-full bg-app-ink/5 border border-app-ink/10 p-3 text-[10px] font-mono uppercase tracking-widest focus:outline-none focus:border-app-ink/30 transition-all resize-none"
+                  className="resize-none"
                 />
-                <button
+                <TgButton
                   type="button"
+                  variant="primary"
+                  size="lg"
                   onClick={() => {
                     const bot = botCredentials.find(
                       (b) => b.id === selectedQuickBotId,
@@ -751,25 +715,17 @@ export const BotManagement: React.FC<BotManagementProps> = () => {
                   disabled={
                     !selectedQuickBotId || !selectedQuickDestId || !quickMessage
                   }
-                  className="w-full px-4 py-3 bg-app-ink text-app-bg text-[10px] font-bold uppercase tracking-widest hover:opacity-90 transition-all flex items-center justify-center gap-2 disabled:opacity-20 disabled:cursor-not-allowed"
+                  className="w-full"
                 >
                   <Send size={14} /> Send Message
-                </button>
+                </TgButton>
               </div>
-            </div>
+            </TgSettingsSection>
           )}
         </div>
 
         <div className="space-y-8">
-          {/* Chat Destinations Section */}
-          <div className="bg-app-card border border-app-ink/10 p-6 shadow-sm">
-            <div className="flex items-center gap-3 mb-6">
-              <Send size={18} className="opacity-40" />
-              <h4 className="text-[11px] uppercase font-bold tracking-widest">
-                Chat Destinations
-              </h4>
-            </div>
-
+          <TgSettingsSection icon={Send} title="Chat Destinations">
             <p className="text-[10px] opacity-40 italic serif mb-6">
               Manage the channels, groups, or users where you want to publish
               summaries.
@@ -778,12 +734,11 @@ export const BotManagement: React.FC<BotManagementProps> = () => {
             <div className="space-y-4 mb-8">
               <div className="flex flex-col gap-3">
                 <div className="relative">
-                  <input
+                  <TgInput
                     type="text"
                     placeholder="CHAT ID (E.G., @MYCHANNEL OR -100...)"
                     value={newDestChatId}
                     onChange={(e) => handleDestChatIdChange(e.target.value)}
-                    className="w-full bg-app-ink/5 border border-app-ink/10 p-3 text-[10px] font-mono uppercase tracking-widest focus:outline-none focus:border-app-ink/30 transition-all"
                   />
                   {isAutoFetchingDest && (
                     <div className="absolute right-3 top-1/2 -translate-y-1/2">
@@ -791,21 +746,22 @@ export const BotManagement: React.FC<BotManagementProps> = () => {
                     </div>
                   )}
                 </div>
-                <input
+                <TgInput
                   type="text"
                   placeholder="DESTINATION NAME (AUTO-FILLED OR CUSTOM)"
                   value={newDestName}
                   onChange={(e) => setNewDestName(e.target.value)}
-                  className="w-full bg-app-ink/5 border border-app-ink/10 p-3 text-[10px] font-mono uppercase tracking-widest focus:outline-none focus:border-app-ink/30 transition-all"
                 />
               </div>
-              <button
+              <TgButton
                 type="button"
+                variant="primary"
+                size="lg"
                 onClick={handleAddChatDestination}
-                className="w-full px-4 py-3 bg-app-ink text-app-bg text-[10px] font-bold uppercase tracking-widest hover:opacity-90 transition-all flex items-center justify-center gap-2"
+                className="w-full"
               >
                 <Plus size={14} /> Save Destination
-              </button>
+              </TgButton>
             </div>
 
             <div className="space-y-2">
@@ -843,73 +799,43 @@ export const BotManagement: React.FC<BotManagementProps> = () => {
                         </div>
                       </div>
                       <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <button
-                              type="button"
-                              onClick={() =>
-                                handleCheckDestination(dest.id, dest.chatId)
-                              }
-                              disabled={destValidation[dest.id]?.loading}
-                              className="p-2 hover:bg-app-ink/5 rounded-full transition-colors opacity-60 hover:opacity-100 disabled:opacity-20"
-                            >
-                              {destValidation[dest.id]?.loading ? (
-                                <Loader2 size={14} className="animate-spin" />
-                              ) : (
-                                <Activity size={14} />
-                              )}
-                            </button>
-                          </TooltipTrigger>
-                          <TooltipContent>
-                            <p className="text-[9px] uppercase font-bold">
-                              Verify Destination
-                            </p>
-                          </TooltipContent>
-                        </Tooltip>
+                        <TgIconButton
+                          aria-label="Verify Destination"
+                          tooltip="Verify Destination"
+                          onClick={() =>
+                            handleCheckDestination(dest.id, dest.chatId)
+                          }
+                          loading={destValidation[dest.id]?.loading}
+                          className="rounded-full opacity-60 hover:opacity-100"
+                        >
+                          <Activity size={14} />
+                        </TgIconButton>
                         {botCredentials.length > 0 && (
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  const bot = botCredentials[0] // Use first bot for quick test
-                                  handleTestBot(
-                                    bot.id,
-                                    dest.chatId,
-                                    bot.name,
-                                    dest.name,
-                                  )
-                                }}
-                                className="p-2 hover:bg-app-ink/5 rounded-full transition-colors opacity-60 hover:opacity-100"
-                              >
-                                <RotateCcw size={14} />
-                              </button>
-                            </TooltipTrigger>
-                            <TooltipContent>
-                              <p className="text-[9px] uppercase font-bold">
-                                Test Connection
-                              </p>
-                            </TooltipContent>
-                          </Tooltip>
+                          <TgIconButton
+                            aria-label="Test Connection"
+                            tooltip="Test Connection"
+                            onClick={() => {
+                              const bot = botCredentials[0] // Use first bot for quick test
+                              handleTestBot(
+                                bot.id,
+                                dest.chatId,
+                                bot.name,
+                                dest.name,
+                              )
+                            }}
+                            className="rounded-full opacity-60 hover:opacity-100"
+                          >
+                            <RotateCcw size={14} />
+                          </TgIconButton>
                         )}
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <button
-                              type="button"
-                              onClick={() =>
-                                handleDeleteChatDestination(dest.id)
-                              }
-                              className="p-2 hover:bg-red-500/10 text-red-500 rounded-full transition-colors opacity-60 hover:opacity-100"
-                            >
-                              <Trash2 size={14} />
-                            </button>
-                          </TooltipTrigger>
-                          <TooltipContent>
-                            <p className="text-[9px] uppercase font-bold">
-                              Delete Destination
-                            </p>
-                          </TooltipContent>
-                        </Tooltip>
+                        <TgIconButton
+                          aria-label="Delete Destination"
+                          tooltip="Delete Destination"
+                          onClick={() => handleDeleteChatDestination(dest.id)}
+                          className="rounded-full text-red-500 opacity-60 hover:opacity-100 hover:bg-red-500/10"
+                        >
+                          <Trash2 size={14} />
+                        </TgIconButton>
                       </div>
                     </div>
                     {destValidation[dest.id] && (
@@ -949,7 +875,7 @@ export const BotManagement: React.FC<BotManagementProps> = () => {
                 ))
               )}
             </div>
-          </div>
+          </TgSettingsSection>
         </div>
       </div>
     </motion.div>

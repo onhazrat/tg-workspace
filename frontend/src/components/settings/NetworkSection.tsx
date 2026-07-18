@@ -13,6 +13,10 @@ import type React from "react"
 import { useEffect, useState } from "react"
 import { toast } from "sonner"
 import { api } from "@/api"
+import { TgButton } from "@/components/ui/tg-button"
+import { TgFieldLabel, TgInput, TgTextarea } from "@/components/ui/tg-input"
+import { TgSegmentedControl } from "@/components/ui/tg-segmented"
+import { TgSettingsSection } from "@/components/ui/tg-settings-section"
 import { useData } from "@/contexts/DataContext"
 import { useSettings } from "@/contexts/SettingsContext"
 import { saveNetworkLog } from "@/lib/repository"
@@ -274,14 +278,7 @@ export const NetworkSection: React.FC = () => {
       {/* Network & Proxy */}
       {advancedMode && (
         <>
-          <div className="bg-app-card border border-app-ink/10 p-6 shadow-sm">
-            <div className="flex items-center gap-3 mb-6">
-              <Globe size={18} className="opacity-40" />
-              <h4 className="text-[11px] uppercase font-bold tracking-widest">
-                Network & Proxy
-              </h4>
-            </div>
-
+          <TgSettingsSection icon={Globe} title="Network & Proxy">
             <div className="space-y-6">
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
@@ -315,34 +312,37 @@ export const NetworkSection: React.FC = () => {
                       </span>
                       <div className="flex gap-3">
                         {Object.keys(proxyTestResults).length > 0 && (
-                          <button
+                          <TgButton
+                            // tg-ui-allow: compact link-style clear in proxy header
                             type="button"
+                            variant="ghost"
+                            size="sm"
                             onClick={clearProxyResults}
-                            className="text-[9px] uppercase font-bold tracking-widest hover:underline opacity-60"
+                            className="h-auto px-0 opacity-60 hover:underline hover:bg-transparent"
                           >
                             Clear
-                          </button>
+                          </TgButton>
                         )}
-                        <button
+                        <TgButton
+                          // tg-ui-allow: compact link-style test action in proxy header
                           type="button"
+                          variant="ghost"
+                          size="sm"
                           onClick={() => handleTestAllProxies(defaultProxyUrls)}
-                          disabled={isTestingAll}
-                          className="text-[9px] uppercase font-bold tracking-widest hover:underline flex items-center gap-1 disabled:opacity-30"
+                          loading={isTestingAll}
+                          loadingLabel="Test All"
+                          className="h-auto px-0 hover:underline hover:bg-transparent"
                         >
-                          {isTestingAll ? (
-                            <RotateCw size={10} className="animate-spin" />
-                          ) : (
-                            <Activity size={10} />
-                          )}
+                          <Activity size={10} />
                           Test All
-                        </button>
+                        </TgButton>
                       </div>
                     </div>
-                    <textarea
+                    <TgTextarea
                       value={defaultProxyUrls}
                       onChange={(e) => setDefaultProxyUrls(e.target.value)}
                       placeholder="http://user:pass@host:port or socks5h://host:port (one per line)"
-                      className="w-full h-32 bg-app-ink/5 border border-app-ink/10 p-3 text-[10px] font-mono focus:outline-none focus:border-app-ink/30 transition-all resize-none"
+                      className="h-32 resize-none normal-case tracking-normal"
                     />
 
                     <div className="space-y-3 pt-2 border-t border-app-ink/5">
@@ -350,7 +350,7 @@ export const NetworkSection: React.FC = () => {
                         <span className="text-[10px] font-bold uppercase tracking-tight opacity-60">
                           Default slots per proxy
                         </span>
-                        <input
+                        <TgInput
                           type="number"
                           min={1}
                           max={20}
@@ -363,7 +363,7 @@ export const NetworkSection: React.FC = () => {
                               ),
                             )
                           }
-                          className="w-16 bg-app-ink/5 border border-app-ink/10 p-2 text-[10px] font-mono text-right focus:outline-none focus:border-app-ink/30"
+                          className="w-16 p-2 text-right normal-case tracking-normal"
                         />
                       </div>
                       {proxyLines.length > 0 && (
@@ -523,10 +523,9 @@ export const NetworkSection: React.FC = () => {
                 )}
               </AnimatePresence>
             </div>
-          </div>
+          </TgSettingsSection>
 
-          {/* TOR Network */}
-          <div className="bg-app-card border border-app-ink/10 p-6 shadow-sm">
+          <TgSettingsSection icon={Shield} title="TOR Network">
             {!torAvailable && (
               <p className="text-[10px] text-amber-700/80 italic serif mb-4">
                 Tor is disabled on this server. Set{" "}
@@ -534,21 +533,13 @@ export const NetworkSection: React.FC = () => {
                 configure the Tor sidecar to enable.
               </p>
             )}
-            <div className="flex items-center justify-between mb-6">
-              <div className="flex items-center gap-3">
-                <Shield size={18} className="opacity-40" />
-                <h4 className="text-[11px] uppercase font-bold tracking-widest">
-                  TOR Network
-                </h4>
-              </div>
-              <div className="flex items-center gap-2">
-                <div
-                  className={`w-1.5 h-1.5 rounded-full ${torStatus?.running ? "bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.5)]" : "bg-red-500"}`}
-                />
-                <span className="text-[9px] font-bold uppercase tracking-widest opacity-60">
-                  {torStatus?.running ? "Active" : "Inactive"}
-                </span>
-              </div>
+            <div className="flex items-center gap-2 mb-6">
+              <div
+                className={`w-1.5 h-1.5 rounded-full ${torStatus?.running ? "bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.5)]" : "bg-red-500"}`}
+              />
+              <span className="text-[9px] font-bold uppercase tracking-widest opacity-60">
+                {torStatus?.running ? "Active" : "Inactive"}
+              </span>
             </div>
 
             <div className="space-y-6">
@@ -612,24 +603,18 @@ export const NetworkSection: React.FC = () => {
                       <span className="text-[10px] font-bold uppercase tracking-tight opacity-60">
                         Connection Mode
                       </span>
-                      <div className="flex bg-app-ink/5 p-1 rounded-lg border border-app-ink/10">
-                        {(["auto", "custom"] as const).map((mode) => (
-                          <button
-                            type="button"
-                            key={mode}
-                            onClick={() => setTorMode(mode)}
-                            className={`flex-1 py-1.5 text-[9px] uppercase font-bold tracking-widest transition-all rounded-md ${
-                              torMode === mode
-                                ? "bg-app-ink text-app-bg shadow-sm"
-                                : "text-app-ink/40 hover:text-app-ink/60"
-                            }`}
-                          >
-                            {mode === "auto"
-                              ? "Automatic (Local)"
-                              : "Custom Cluster"}
-                          </button>
-                        ))}
-                      </div>
+                      <TgSegmentedControl
+                        size="sm"
+                        className="w-full"
+                        optionClassName="flex-1"
+                        aria-label="TOR connection mode"
+                        value={torMode}
+                        onChange={setTorMode}
+                        options={[
+                          { value: "auto", label: "Automatic (Local)" },
+                          { value: "custom", label: "Custom Cluster" },
+                        ]}
+                      />
                       <p className="text-[9px] opacity-40 italic serif">
                         {torMode === "auto"
                           ? "Uses the built-in TOR service on port 9050. Recommended for most users."
@@ -652,39 +637,39 @@ export const NetworkSection: React.FC = () => {
                             </span>
                             <div className="flex gap-3">
                               {Object.keys(proxyTestResults).length > 0 && (
-                                <button
+                                <TgButton
+                                  // tg-ui-allow: compact link-style clear in TOR proxy header
                                   type="button"
+                                  variant="ghost"
+                                  size="sm"
                                   onClick={clearProxyResults}
-                                  className="text-[9px] uppercase font-bold tracking-widest hover:underline opacity-40"
+                                  className="h-auto px-0 opacity-40 hover:underline hover:bg-transparent"
                                 >
                                   Clear
-                                </button>
+                                </TgButton>
                               )}
-                              <button
+                              <TgButton
+                                // tg-ui-allow: compact link-style test action in TOR proxy header
                                 type="button"
+                                variant="ghost"
+                                size="sm"
                                 onClick={() =>
                                   handleTestAllProxies(torProxyUrls)
                                 }
-                                disabled={isTestingAll}
-                                className="text-[9px] uppercase font-bold tracking-widest hover:underline flex items-center gap-1 disabled:opacity-30"
+                                loading={isTestingAll}
+                                loadingLabel="Test All"
+                                className="h-auto px-0 hover:underline hover:bg-transparent"
                               >
-                                {isTestingAll ? (
-                                  <RotateCw
-                                    size={10}
-                                    className="animate-spin"
-                                  />
-                                ) : (
-                                  <Activity size={10} />
-                                )}
+                                <Activity size={10} />
                                 Test All
-                              </button>
+                              </TgButton>
                             </div>
                           </div>
-                          <textarea
+                          <TgTextarea
                             value={torProxyUrls}
                             onChange={(e) => setTorProxyUrls(e.target.value)}
                             placeholder="127.0.0.1:9050"
-                            className="w-full h-24 bg-app-ink/5 border border-app-ink/10 p-4 text-[10px] font-mono focus:outline-none focus:border-app-ink/30 transition-all resize-none rounded-lg"
+                            className="h-24 p-4 resize-none rounded-lg normal-case tracking-normal"
                           />
 
                           {/* TOR Proxy Test Results */}
@@ -754,27 +739,26 @@ export const NetworkSection: React.FC = () => {
                         <span className="text-[10px] font-bold uppercase tracking-tight opacity-60">
                           Rotation Strategy
                         </span>
-                        <div
-                          className={`flex bg-app-ink/5 p-1 rounded-lg border border-app-ink/10 ${torMode === "auto" ? "opacity-30 grayscale pointer-events-none" : ""}`}
-                        >
-                          {(["sequential", "random"] as const).map(
-                            (strategy) => (
-                              <button
-                                type="button"
-                                key={strategy}
-                                disabled={torMode === "auto"}
-                                onClick={() => setTorRotationStrategy(strategy)}
-                                className={`flex-1 py-1.5 text-[9px] uppercase font-bold tracking-widest transition-all rounded-md ${
-                                  torRotationStrategy === strategy
-                                    ? "bg-app-ink text-app-bg shadow-sm"
-                                    : "text-app-ink/40 hover:text-app-ink/60"
-                                }`}
-                              >
-                                {strategy}
-                              </button>
-                            ),
-                          )}
-                        </div>
+                        <TgSegmentedControl
+                          size="sm"
+                          className={`w-full ${torMode === "auto" ? "opacity-30 grayscale" : ""}`}
+                          optionClassName="flex-1"
+                          aria-label="TOR rotation strategy"
+                          value={torRotationStrategy}
+                          onChange={setTorRotationStrategy}
+                          options={[
+                            {
+                              value: "sequential",
+                              label: "sequential",
+                              disabled: torMode === "auto",
+                            },
+                            {
+                              value: "random",
+                              label: "random",
+                              disabled: torMode === "auto",
+                            },
+                          ]}
+                        />
                       </div>
 
                       <div className="space-y-3">
@@ -782,26 +766,28 @@ export const NetworkSection: React.FC = () => {
                           Quick Actions
                         </span>
                         <div className="flex gap-2">
-                          <button
+                          <TgButton
                             type="button"
+                            variant="secondary"
+                            size="sm"
                             onClick={restartTor}
-                            className="flex-1 py-1.5 text-[9px] uppercase font-bold tracking-widest border border-app-ink/20 hover:bg-app-ink hover:text-app-bg transition-all rounded-lg flex items-center justify-center gap-2"
+                            className="flex-1"
                           >
                             <RefreshCw size={10} /> Restart
-                          </button>
-                          <button
+                          </TgButton>
+                          <TgButton
                             type="button"
+                            variant="secondary"
+                            size="sm"
                             onClick={checkTorIp}
-                            disabled={isCheckingIp || !torStatus?.running}
-                            className="flex-1 py-1.5 text-[9px] uppercase font-bold tracking-widest border border-app-ink/20 hover:bg-app-ink hover:text-app-bg transition-all rounded-lg flex items-center justify-center gap-2 disabled:opacity-30"
+                            disabled={!torStatus?.running}
+                            loading={isCheckingIp}
+                            loadingLabel="..."
+                            className="flex-1"
                           >
-                            {isCheckingIp ? (
-                              <RefreshCw size={10} className="animate-spin" />
-                            ) : (
-                              <Globe size={10} />
-                            )}
-                            {isCheckingIp ? "..." : "Check IP"}
-                          </button>
+                            <Globe size={10} />
+                            Check IP
+                          </TgButton>
                         </div>
                       </div>
                     </div>
@@ -861,11 +847,9 @@ export const NetworkSection: React.FC = () => {
                             className="space-y-4 overflow-hidden"
                           >
                             <div className="grid grid-cols-1 gap-4">
-                              <div className="space-y-2">
-                                <span className="text-[10px] font-bold uppercase tracking-tight opacity-60">
-                                  Control Port
-                                </span>
-                                <input
+                              <div>
+                                <TgFieldLabel>Control Port</TgFieldLabel>
+                                <TgInput
                                   type="number"
                                   value={torControlPort}
                                   onChange={(e) =>
@@ -873,7 +857,7 @@ export const NetworkSection: React.FC = () => {
                                       parseInt(e.target.value, 10),
                                     )
                                   }
-                                  className="w-full bg-app-ink/5 border border-app-ink/10 p-3 text-[10px] font-mono focus:outline-none focus:border-app-ink/30 transition-all rounded-lg"
+                                  className="rounded-lg normal-case tracking-normal"
                                 />
                               </div>
                               <p className="text-[9px] opacity-50 italic serif">
@@ -889,28 +873,18 @@ export const NetworkSection: React.FC = () => {
                               <p className="text-[9px] opacity-60 italic serif max-w-[200px]">
                                 Request a fresh IP from TOR when rate limited.
                               </p>
-                              <button
+                              <TgButton
                                 type="button"
+                                variant="primary"
+                                size="sm"
                                 onClick={changeTorIp}
-                                disabled={
-                                  isChangingIp || !torStatus?.controlInUse
-                                }
-                                className={`px-4 py-2 text-[9px] uppercase font-bold tracking-widest border border-app-ink/20 transition-all flex items-center gap-2 rounded-lg ${
-                                  isChangingIp || !torStatus?.controlInUse
-                                    ? "opacity-30 cursor-not-allowed"
-                                    : "bg-app-ink text-app-bg hover:opacity-90 shadow-sm"
-                                }`}
+                                disabled={!torStatus?.controlInUse}
+                                loading={isChangingIp}
+                                loadingLabel="Rotating..."
                               >
-                                {isChangingIp ? (
-                                  <RotateCw
-                                    size={10}
-                                    className="animate-spin"
-                                  />
-                                ) : (
-                                  <Shield size={10} />
-                                )}
-                                {isChangingIp ? "Rotating..." : "New Identity"}
-                              </button>
+                                <Shield size={10} />
+                                New Identity
+                              </TgButton>
                             </div>
 
                             <div className="pt-4 border-t border-app-ink/5 space-y-4">
@@ -952,7 +926,7 @@ export const NetworkSection: React.FC = () => {
                                     </span>
                                   </div>
                                   <div className="flex items-center gap-3">
-                                    <input
+                                    <TgInput
                                       type="number"
                                       min={5}
                                       max={50}
@@ -969,7 +943,7 @@ export const NetworkSection: React.FC = () => {
                                           )
                                         }
                                       }}
-                                      className="w-16 bg-app-ink/5 border border-app-ink/10 p-2 text-[10px] font-mono text-right focus:outline-none focus:border-app-ink/30"
+                                      className="w-16 p-2 text-right normal-case tracking-normal"
                                     />
                                   </div>
                                 </motion.div>
@@ -983,7 +957,7 @@ export const NetworkSection: React.FC = () => {
                 )}
               </AnimatePresence>
             </div>
-          </div>
+          </TgSettingsSection>
         </>
       )}
     </div>

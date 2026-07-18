@@ -7,6 +7,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import { TgButton } from "@/components/ui/tg-button"
+import { TgInput } from "@/components/ui/tg-input"
 import {
   Tooltip,
   TooltipContent,
@@ -167,6 +169,7 @@ export const ChannelGridFilterBar: React.FC<ChannelGridFilterBarProps> = ({
               )}
             </SelectContent>
           </Select>
+          {/* tg-ui-allow: icon-only sort direction toggle — Phase 1 skips icon-only buttons */}
           <button
             type="button"
             onClick={onToggleSortDirection}
@@ -182,8 +185,9 @@ export const ChannelGridFilterBar: React.FC<ChannelGridFilterBarProps> = ({
         </div>
         <div className="h-4 w-px bg-app-ink/10" />
         <div className="flex items-center gap-2">
-          <input
+          <TgInput
             type="number"
+            variant="muted"
             min={1}
             value={trimCount}
             onChange={(event) => onTrimCountChange(event.target.value)}
@@ -192,20 +196,22 @@ export const ChannelGridFilterBar: React.FC<ChannelGridFilterBarProps> = ({
             }}
             disabled={isTrimInputDisabled}
             data-testid="channel-trim-count"
-            className="w-14 bg-app-muted/50 border border-app-ink/10 rounded-md py-1 px-2 text-[10px] focus:outline-none focus:ring-1 focus:ring-app-ink/20 transition-all disabled:opacity-30"
+            className="w-14 rounded-md py-1 px-2 text-[10px] focus:ring-1"
             aria-label="Trim selection count"
           />
           <Tooltip>
             <TooltipTrigger asChild>
-              <button
+              <TgButton
                 type="button"
+                variant="ghost"
+                size="sm"
                 onClick={onTrimSelection}
                 disabled={isTrimDisabled}
                 data-testid="channel-trim-button"
-                className="px-3 py-1.5 text-[10px] uppercase font-bold rounded-md bg-app-ink/10 text-app-ink hover:bg-app-ink/20 transition-all disabled:opacity-30 disabled:pointer-events-none"
+                className="bg-app-ink/10 text-app-ink hover:bg-app-ink/20 hover:text-app-ink"
               >
                 Trim
-              </button>
+              </TgButton>
             </TooltipTrigger>
             <TooltipContent>
               <p>

@@ -1,7 +1,8 @@
-import { ClipboardPaste, Loader2 } from "lucide-react"
+import { ClipboardPaste } from "lucide-react"
 import type React from "react"
 import { useEffect, useState } from "react"
 import { toast } from "sonner"
+import { TgButton } from "@/components/ui/tg-button"
 import {
   Dialog,
   DialogContent,
@@ -73,14 +74,15 @@ export const PasteTagsModal: React.FC<PasteTagsModalProps> = ({
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-3">
-          <button
+          <TgButton
             type="button"
+            variant="secondary"
+            size="md"
             onClick={() => void pasteFromClipboard()}
-            className="flex items-center gap-2 rounded-lg border border-app-ink/10 px-3 py-2 text-xs font-bold tracking-wide hover:bg-app-muted/30"
           >
             <ClipboardPaste size={14} />
             Paste from clipboard
-          </button>
+          </TgButton>
           <input
             type="text"
             value={modelName}
@@ -97,22 +99,24 @@ export const PasteTagsModal: React.FC<PasteTagsModalProps> = ({
           />
         </div>
         <DialogFooter>
-          <button
+          <TgButton
             type="button"
+            variant="secondary"
+            size="md"
             onClick={onClose}
-            className="rounded-lg border border-app-ink/20 px-4 py-2 text-xs font-bold tracking-wide"
           >
             Cancel
-          </button>
-          <button
+          </TgButton>
+          <TgButton
             type="button"
+            variant="primary"
+            size="md"
             onClick={() => void handleSave()}
-            disabled={saving}
-            className="flex items-center gap-2 rounded-lg bg-app-ink px-4 py-2 text-xs font-bold tracking-wide text-app-bg disabled:opacity-50"
+            loading={saving}
+            loadingLabel="Save Response"
           >
-            {saving ? <Loader2 size={14} className="animate-spin" /> : null}
             Save Response
-          </button>
+          </TgButton>
         </DialogFooter>
       </DialogContent>
     </Dialog>

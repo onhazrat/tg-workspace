@@ -1,5 +1,7 @@
 import { RefreshCw } from "lucide-react"
 import type React from "react"
+import { TgButton } from "@/components/ui/tg-button"
+import { TgInput } from "@/components/ui/tg-input"
 import {
   Tooltip,
   TooltipContent,
@@ -54,42 +56,45 @@ export const ChannelGridToolbar: React.FC<ChannelGridToolbarProps> = ({
           <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
             <span className="text-app-ink/40 font-bold">@</span>
           </div>
-          <input
+          <TgInput
             type="text"
+            variant="muted"
             value={inlineChannelName}
             onChange={(e) => onInlineChannelNameChange(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && onAddChannel()}
             placeholder="telegram_channel"
-            className="w-full bg-app-muted/50 border border-app-ink/10 rounded-lg py-2 pl-8 pr-20 text-sm focus:outline-none focus:ring-2 focus:ring-app-ink/20 transition-all"
+            className="pl-8 pr-20"
           />
-          <button
+          <TgButton
             type="button"
+            variant="primary"
+            size="sm"
             onClick={onAddChannel}
             disabled={!inlineChannelName.trim()}
-            className="absolute inset-y-1 right-1 px-4 bg-app-ink text-app-bg text-[10px] uppercase font-bold rounded-md hover:opacity-90 transition-opacity disabled:opacity-30"
+            className="absolute inset-y-1 right-1"
           >
             Add
-          </button>
+          </TgButton>
         </div>
         {/* Search Channels Input */}
         <div className="relative flex-1">
-          <input
+          <TgInput
             type="text"
+            variant="muted"
             value={channelSearch}
             onChange={(e) => onChannelSearchChange(e.target.value)}
             placeholder="Search channels..."
-            className="w-full bg-app-muted/50 border border-app-ink/10 rounded-lg py-2 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-app-ink/20 transition-all"
           />
         </div>
         {/* Search Tags Input */}
         <div className="relative flex-1">
-          <input
+          <TgInput
             type="text"
+            variant="muted"
             value={tagSearch}
             onChange={(e) => onTagSearchChange(e.target.value)}
             placeholder="Search tags..."
             data-testid="channel-tag-search"
-            className="w-full bg-app-muted/50 border border-app-ink/10 rounded-lg py-2 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-app-ink/20 transition-all"
           />
         </div>
       </div>
@@ -100,13 +105,14 @@ export const ChannelGridToolbar: React.FC<ChannelGridToolbarProps> = ({
           <div className="flex bg-app-muted/50 p-1 rounded-lg border border-app-ink/5">
             <Tooltip>
               <TooltipTrigger asChild>
-                <button
+                <TgButton
                   type="button"
+                  variant="ghost"
+                  size="sm"
                   onClick={onSelectAll}
-                  className="px-3 py-1.5 text-[10px] uppercase font-bold rounded-md hover:bg-app-card hover:shadow-sm transition-all text-app-ink/70 hover:text-app-ink"
                 >
                   All
-                </button>
+                </TgButton>
               </TooltipTrigger>
               <TooltipContent>
                 <p>Select All</p>
@@ -114,13 +120,14 @@ export const ChannelGridToolbar: React.FC<ChannelGridToolbarProps> = ({
             </Tooltip>
             <Tooltip>
               <TooltipTrigger asChild>
-                <button
+                <TgButton
                   type="button"
+                  variant="ghost"
+                  size="sm"
                   onClick={onUnselectAll}
-                  className="px-3 py-1.5 text-[10px] uppercase font-bold rounded-md hover:bg-app-card hover:shadow-sm transition-all text-app-ink/70 hover:text-app-ink"
                 >
                   None
-                </button>
+                </TgButton>
               </TooltipTrigger>
               <TooltipContent>
                 <p>Clear Selection</p>
@@ -128,14 +135,15 @@ export const ChannelGridToolbar: React.FC<ChannelGridToolbarProps> = ({
             </Tooltip>
             <Tooltip>
               <TooltipTrigger asChild>
-                <button
+                <TgButton
                   type="button"
+                  variant="ghost"
+                  size="sm"
                   onClick={onRevertSelection}
                   disabled={isRevertDisabled}
-                  className="px-3 py-1.5 text-[10px] uppercase font-bold rounded-md hover:bg-app-card hover:shadow-sm transition-all text-app-ink/70 hover:text-app-ink disabled:opacity-30 disabled:pointer-events-none"
                 >
                   Revert
-                </button>
+                </TgButton>
               </TooltipTrigger>
               <TooltipContent>
                 <p>Revert Selection</p>
@@ -147,18 +155,18 @@ export const ChannelGridToolbar: React.FC<ChannelGridToolbarProps> = ({
 
           <Tooltip>
             <TooltipTrigger asChild>
-              <button
+              <TgButton
                 type="button"
+                variant="ghost"
+                size="sm"
                 onClick={onScrapeSelected}
                 disabled={isScrapeSelectedDisabled}
-                className="h-8 px-4 text-[10px] uppercase font-bold flex items-center gap-2 bg-app-ink/10 text-app-ink hover:bg-app-ink/20 transition-all rounded-lg disabled:opacity-30"
+                loading={isScraping}
+                className="bg-app-ink/10 text-app-ink hover:bg-app-ink/20 hover:text-app-ink"
               >
-                <RefreshCw
-                  size={12}
-                  className={isScraping ? "animate-spin" : ""}
-                />
+                <RefreshCw size={12} />
                 <span className="hidden sm:inline">Sync Selected</span>
-              </button>
+              </TgButton>
             </TooltipTrigger>
             <TooltipContent>
               <p>Sync Selected Channels</p>
@@ -167,18 +175,17 @@ export const ChannelGridToolbar: React.FC<ChannelGridToolbarProps> = ({
 
           <Tooltip>
             <TooltipTrigger asChild>
-              <button
+              <TgButton
                 type="button"
+                variant="primary"
+                size="sm"
                 onClick={onScrapeAll}
                 disabled={isScrapeAllDisabled}
-                className="h-8 px-4 text-[10px] uppercase font-bold flex items-center gap-2 bg-app-ink text-app-bg hover:opacity-90 transition-all rounded-lg shadow-sm disabled:opacity-30"
+                loading={isScraping}
               >
-                <RefreshCw
-                  size={12}
-                  className={isScraping ? "animate-spin" : ""}
-                />
+                <RefreshCw size={12} />
                 <span className="hidden sm:inline">Sync All</span>
-              </button>
+              </TgButton>
             </TooltipTrigger>
             <TooltipContent>
               <p>Sync All Channels</p>

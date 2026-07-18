@@ -1,12 +1,6 @@
-import {
-  Brain,
-  Copy,
-  Languages,
-  Loader2,
-  Send,
-  SlidersHorizontal,
-} from "lucide-react"
+import { Brain, Copy, Languages, Send, SlidersHorizontal } from "lucide-react"
 import type React from "react"
+import { TgButton } from "@/components/ui/tg-button"
 import { LANGUAGES as APP_LANGUAGES, MODELS } from "../constants"
 import { useAI } from "../contexts/AIContext"
 import { useData } from "../contexts/DataContext"
@@ -82,17 +76,17 @@ export const SummaryConfig: React.FC = () => {
 
           <Tooltip>
             <TooltipTrigger asChild>
-              <button
+              <TgButton
                 type="button"
+                variant="secondary"
+                size="md"
                 onClick={() => void copySummaryPrompt()}
                 disabled={actionsDisabled}
-                className="flex items-center gap-2 px-4 h-10 border border-app-ink/10 rounded-lg hover:bg-app-muted/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                className="h-10 px-4"
               >
                 <Copy size={14} className="opacity-60" />
-                <span className="text-xs font-bold tracking-wide">
-                  Copy Prompt
-                </span>
-              </button>
+                Copy Prompt
+              </TgButton>
             </TooltipTrigger>
             <TooltipContent>
               <p>
@@ -104,24 +98,22 @@ export const SummaryConfig: React.FC = () => {
 
           <Tooltip>
             <TooltipTrigger asChild>
-              <button
+              <TgButton
                 type="button"
+                variant="primary"
+                size="md"
                 onClick={handleSummarize}
                 disabled={actionsDisabled}
-                className="flex items-center gap-2 px-6 h-10 bg-app-ink text-app-bg rounded-lg hover:opacity-90 transition-all disabled:opacity-50 disabled:cursor-not-allowed group shadow-sm"
+                loading={summarizing}
+                loadingLabel="Generate Summary"
+                className="h-10 px-6 group"
               >
-                {summarizing ? (
-                  <Loader2 size={14} className="animate-spin" />
-                ) : (
-                  <Send
-                    size={14}
-                    className="group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform"
-                  />
-                )}
-                <span className="text-xs font-bold tracking-wide">
-                  Generate Summary
-                </span>
-              </button>
+                <Send
+                  size={14}
+                  className="group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform"
+                />
+                Generate Summary
+              </TgButton>
             </TooltipTrigger>
             <TooltipContent>
               <p>

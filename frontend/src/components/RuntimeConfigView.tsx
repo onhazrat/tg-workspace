@@ -4,6 +4,7 @@ import type React from "react"
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { api } from "@/api"
 import type { RuntimeConfig } from "@/api/jobs"
+import { TgButton } from "@/components/ui/tg-button"
 import { useCopyToClipboard } from "@/hooks/useCopyToClipboard"
 
 export const RuntimeConfigView: React.FC = () => {
@@ -63,24 +64,27 @@ export const RuntimeConfigView: React.FC = () => {
             </p>
           </div>
           <div className="flex items-center gap-2">
-            <button
+            <TgButton
               type="button"
+              variant="secondary"
+              size="sm"
               onClick={() => void copy(formattedJson)}
               disabled={!config || loading}
-              className="flex items-center gap-2 px-3 py-2 text-[10px] uppercase font-bold tracking-widest border border-app-ink/10 rounded-sm hover:bg-app-ink/5 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
             >
               {isCopied ? <Check size={12} /> : <Copy size={12} />}
               {isCopied ? "Copied" : "Copy JSON"}
-            </button>
-            <button
+            </TgButton>
+            <TgButton
               type="button"
+              variant="secondary"
+              size="sm"
               onClick={() => void loadConfig()}
-              disabled={loading}
-              className="flex items-center gap-2 px-3 py-2 text-[10px] uppercase font-bold tracking-widest border border-app-ink/10 rounded-sm hover:bg-app-ink/5 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              loading={loading}
+              loadingLabel="Refresh"
             >
-              <RefreshCw size={12} className={loading ? "animate-spin" : ""} />
+              <RefreshCw size={12} />
               Refresh
-            </button>
+            </TgButton>
           </div>
         </div>
         <div className="h-px bg-app-ink/10 w-full" />

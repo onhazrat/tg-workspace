@@ -1,5 +1,6 @@
 import { Tag } from "lucide-react"
 import type React from "react"
+import { TgSelectionChip } from "@/components/ui/tg-chips"
 import {
   getChannelNamesWithTag,
   getChipSelectionState,
@@ -36,48 +37,45 @@ export const ChannelTagChips: React.FC<ChannelTagChipsProps> = ({
         const channelsWithTag = getChannelNamesWithTag(channels, tag)
         const { selectedCount, isAllSelected, isPartial } =
           getChipSelectionState(channelsWithTag, selectedChannels)
+        const state = isAllSelected
+          ? "selected"
+          : isPartial
+            ? "partial"
+            : "idle"
 
         return (
-          <button
-            type="button"
+          <TgSelectionChip
             key={tag}
+            state={state}
             onClick={() => onToggleTag(tag)}
-            className={`text-[9px] font-bold px-2 py-1 rounded-md transition-all flex items-center gap-1.5 ${
-              isAllSelected
-                ? "bg-app-ink text-app-bg"
-                : isPartial
-                  ? "bg-app-ink/20 text-app-ink"
-                  : "bg-app-muted/50 text-app-ink/60 hover:bg-app-ink/10 hover:text-app-ink"
-            }`}
           >
             <Tag size={10} />
             {tag}
             <span className="opacity-60 text-[8px]">
               ({selectedCount}/{channelsWithTag.length})
             </span>
-          </button>
+          </TgSelectionChip>
         )
       })}
       {showUntaggedTagChip && (
-        <button
-          type="button"
+        <TgSelectionChip
           key={UNTAGGED_TAG_ID}
+          state={
+            untagged.isAllSelected
+              ? "selected"
+              : untagged.isPartial
+                ? "partial"
+                : "idle"
+          }
           data-testid="channel-tag-untagged"
           onClick={() => onToggleTag(UNTAGGED_TAG_ID)}
-          className={`text-[9px] font-bold px-2 py-1 rounded-md transition-all flex items-center gap-1.5 ${
-            untagged.isAllSelected
-              ? "bg-app-ink text-app-bg"
-              : untagged.isPartial
-                ? "bg-app-ink/20 text-app-ink"
-                : "bg-app-muted/50 text-app-ink/60 hover:bg-app-ink/10 hover:text-app-ink"
-          }`}
         >
           <Tag size={10} />
           {UNTAGGED_TAG_LABEL}
           <span className="opacity-60 text-[8px]">
             ({untagged.selectedCount}/{untaggedChannelNames.length})
           </span>
-        </button>
+        </TgSelectionChip>
       )}
     </div>
   )

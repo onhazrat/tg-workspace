@@ -9,6 +9,8 @@ import {
   X,
 } from "lucide-react"
 import React from "react"
+import { TgButton } from "@/components/ui/tg-button"
+import { TgFilterChip } from "@/components/ui/tg-chips"
 import { useScraper } from "../contexts/ScraperContext"
 import { useSettings } from "../contexts/SettingsContext"
 import { useUI } from "../contexts/UIContext"
@@ -86,13 +88,15 @@ export const PostFilter: React.FC<PostFilterProps> = ({
               </p>
             </div>
           </div>
-          <button
+          <TgButton
             type="button"
+            variant="secondary"
+            size="sm"
             onClick={() => setRelatedPostSearch(null)}
-            className="flex items-center gap-2 px-4 py-2 bg-purple-500/10 hover:bg-purple-500 hover:text-white transition-colors rounded-full text-[11px] uppercase font-bold tracking-widest text-purple-600 dark:text-purple-400"
+            className="rounded-full border-0 bg-purple-500/10 text-purple-600 hover:bg-purple-500 hover:text-white dark:text-purple-400"
           >
             <X size={14} /> Clear Search
-          </button>
+          </TgButton>
         </div>
       </section>
     )
@@ -123,13 +127,15 @@ export const PostFilter: React.FC<PostFilterProps> = ({
                 </p>
               </div>
             </div>
-            <button
+            <TgButton
               type="button"
+              variant="secondary"
+              size="sm"
               onClick={() => setSemanticSearchQuery("")}
-              className="flex items-center gap-2 px-4 py-2 bg-blue-500/10 hover:bg-blue-500 hover:text-white transition-colors rounded-full text-[11px] uppercase font-bold tracking-widest text-blue-600 dark:text-blue-400"
+              className="rounded-full border-0 bg-blue-500/10 text-blue-600 hover:bg-blue-500 hover:text-white dark:text-blue-400"
             >
               <X size={14} /> Clear Search
-            </button>
+            </TgButton>
           </div>
         </section>
       )}
@@ -221,14 +227,12 @@ export const PostFilter: React.FC<PostFilterProps> = ({
                   { label: "7d", hours: 168 },
                   { label: "14d", hours: 336 },
                 ].map((range) => (
-                  <button
-                    type="button"
+                  <TgFilterChip
                     key={range.label}
                     onClick={() => setQuickRange(range.hours)}
-                    className="text-[11px] uppercase font-bold px-4 py-1.5 rounded-full bg-app-muted border border-app-ink/10 hover:border-app-ink/30 hover:bg-app-ink hover:text-app-bg transition-all shadow-sm"
                   >
                     {range.label}
-                  </button>
+                  </TgFilterChip>
                 ))}
               </div>
             </div>
@@ -277,18 +281,13 @@ export const PostFilter: React.FC<PostFilterProps> = ({
                       value: "unfollowed_forwarded" as const,
                     },
                   ].map((type) => (
-                    <button
-                      type="button"
+                    <TgFilterChip
                       key={type.value}
+                      selected={forwardedFilter === type.value}
                       onClick={() => setForwardedFilter(type.value)}
-                      className={`text-[11px] uppercase font-bold px-4 py-1.5 rounded-full border transition-all shadow-sm ${
-                        forwardedFilter === type.value
-                          ? "bg-app-ink text-app-bg border-app-ink"
-                          : "bg-app-muted border-app-ink/10 hover:border-app-ink/30 hover:bg-app-ink/5 text-app-ink"
-                      }`}
                     >
                       {type.label}
-                    </button>
+                    </TgFilterChip>
                   ))}
                 </div>
               </div>
@@ -302,19 +301,14 @@ export const PostFilter: React.FC<PostFilterProps> = ({
                 </div>
                 <div className="flex flex-wrap gap-2">
                   {MEDIA_FILTER_OPTIONS.map((type) => (
-                    <button
-                      type="button"
+                    <TgFilterChip
                       key={type.value}
                       data-testid={`post-media-filter-${type.value}`}
+                      selected={mediaFilter === type.value}
                       onClick={() => setMediaFilter(type.value)}
-                      className={`text-[11px] uppercase font-bold px-4 py-1.5 rounded-full border transition-all shadow-sm ${
-                        mediaFilter === type.value
-                          ? "bg-app-ink text-app-bg border-app-ink"
-                          : "bg-app-muted border-app-ink/10 hover:border-app-ink/30 hover:bg-app-ink/5 text-app-ink"
-                      }`}
                     >
                       {type.label}
-                    </button>
+                    </TgFilterChip>
                   ))}
                 </div>
               </div>
@@ -361,18 +355,13 @@ export const PostFilter: React.FC<PostFilterProps> = ({
                     { label: "Latest", value: "latest" as const },
                     { label: "Random", value: "random" as const },
                   ].map((mode) => (
-                    <button
-                      type="button"
+                    <TgFilterChip
                       key={mode.value}
+                      selected={maxPostsPerChannelMode === mode.value}
                       onClick={() => setMaxPostsPerChannelMode(mode.value)}
-                      className={`text-[11px] uppercase font-bold px-4 py-1.5 rounded-full border transition-all shadow-sm ${
-                        maxPostsPerChannelMode === mode.value
-                          ? "bg-app-ink text-app-bg border-app-ink"
-                          : "bg-app-muted border-app-ink/10 hover:border-app-ink/30 hover:bg-app-ink/5 text-app-ink"
-                      }`}
                     >
                       {mode.label}
-                    </button>
+                    </TgFilterChip>
                   ))}
                 </div>
               </div>
@@ -382,18 +371,13 @@ export const PostFilter: React.FC<PostFilterProps> = ({
                   { label: "By Time", value: "time" as const },
                   { label: "By Channel", value: "channel_time" as const },
                 ].map((sort) => (
-                  <button
-                    type="button"
+                  <TgFilterChip
                     key={sort.value}
+                    selected={postSortOrder === sort.value}
                     onClick={() => setPostSortOrder(sort.value)}
-                    className={`text-[11px] uppercase font-bold px-4 py-1.5 rounded-full border transition-all shadow-sm ${
-                      postSortOrder === sort.value
-                        ? "bg-app-ink text-app-bg border-app-ink"
-                        : "bg-app-muted border-app-ink/10 hover:border-app-ink/30 hover:bg-app-ink/5 text-app-ink"
-                    }`}
                   >
                     {sort.label}
-                  </button>
+                  </TgFilterChip>
                 ))}
               </div>
             </div>

@@ -1,10 +1,6 @@
 import { Bot, CheckCircle2, ExternalLink, FileText, Send } from "lucide-react"
 import type React from "react"
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "@/components/ui/tg-tooltip"
+import { TgIconButton } from "@/components/ui/tg-icon-button"
 import type { PublishLog } from "@/types"
 import { LogCard, LogMetaItem } from "./LogCard"
 import { DeleteLogButton, ExpandToggleButton } from "./LogCardActions"
@@ -67,20 +63,14 @@ export const PublishLogsTab: React.FC<PublishLogsTabProps> = ({
                 expanded={expandedId === log.id}
                 onClick={() => onToggleExpand(log.id)}
               />
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <button
-                    type="button"
-                    onClick={() => onViewSummary(log.summaryId)}
-                    className="p-1.5 text-app-ink opacity-30 hover:opacity-100 transition-all border border-app-ink/10 hover:bg-app-ink/5"
-                  >
-                    <ExternalLink size={14} />
-                  </button>
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p>View Summary in History</p>
-                </TooltipContent>
-              </Tooltip>
+              <TgIconButton
+                variant="soft"
+                aria-label="View Summary in History"
+                tooltip="View Summary in History"
+                onClick={() => onViewSummary(log.summaryId)}
+              >
+                <ExternalLink size={14} />
+              </TgIconButton>
               <DeleteLogButton onClick={() => onDelete(log.id)} />
             </>
           }

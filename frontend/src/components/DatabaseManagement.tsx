@@ -5,7 +5,6 @@ import {
   Database,
   Download,
   HardDrive,
-  Loader2,
   Play,
   RefreshCw,
   Search,
@@ -31,14 +30,9 @@ import {
 } from "../lib/data-transfer/download"
 import { importIndexedDBToServer } from "../lib/repository"
 import { RelativeTime } from "./RelativeTime"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "./ui/dialog"
+import { TgButton } from "./ui/tg-button"
+import { TgConfirmDialog } from "./ui/tg-confirm-dialog"
+import { TgSettingsSection } from "./ui/tg-settings-section"
 import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tg-tooltip"
 
 console.log("JSZip loaded:", JSZip)
@@ -458,43 +452,35 @@ export const DatabaseManagement: React.FC = () => {
           </div>
         </div>
 
-        {/* Server Migration */}
-        <div className="bg-app-card border border-app-ink/10 p-6 shadow-sm mb-8">
-          <div className="flex items-center gap-3 mb-4">
-            <Upload size={18} className="opacity-40" />
-            <h4 className="text-[11px] uppercase font-bold tracking-widest">
-              Server Migration
-            </h4>
-          </div>
+        <TgSettingsSection
+          icon={Upload}
+          title="Server Migration"
+          className="mb-8"
+        >
           <p className="text-[10px] opacity-50 italic serif mb-4">
             One-time migration: upload your local IndexedDB data to the
             PostgreSQL backend. Run this after logging in when moving from
             browser-only to the FastAPI stack.
           </p>
-          <button
+          <TgButton
             type="button"
+            variant="secondary"
+            size="md"
             onClick={handleMigrateToServer}
-            disabled={isMigratingToServer}
-            className="px-4 py-2 text-[10px] uppercase font-bold flex items-center gap-2 border border-app-ink/20 hover:bg-app-ink hover:text-app-bg transition-colors disabled:opacity-50"
+            loading={isMigratingToServer}
+            loadingLabel="Migrate IndexedDB to Server"
           >
-            {isMigratingToServer ? (
-              <Loader2 size={14} className="animate-spin" />
-            ) : (
-              <Upload size={14} />
-            )}
+            <Upload size={14} />
             Migrate IndexedDB to Server
-          </button>
-        </div>
+          </TgButton>
+        </TgSettingsSection>
 
         {/* Data Retention */}
-        <div className="bg-app-card border border-app-ink/10 p-6 shadow-sm mb-8">
-          <div className="flex items-center gap-3 mb-6">
-            <Database size={18} className="opacity-40" />
-            <h4 className="text-[11px] uppercase font-bold tracking-widest">
-              Data Retention
-            </h4>
-          </div>
-
+        <TgSettingsSection
+          icon={Database}
+          title="Data Retention"
+          className="mb-8"
+        >
           <div className="space-y-6">
             <div className="space-y-4">
               <div className="flex items-center gap-2 opacity-60">
@@ -554,9 +540,9 @@ export const DatabaseManagement: React.FC = () => {
               </p>
             </div>
           </div>
-        </div>
+        </TgSettingsSection>
 
-        {/* Table Sizes & Queries */}
+        {/* tg-ui-allow: Table Sizes & Queries — custom header with actions + subtitle */}
         <div className="bg-app-card border border-app-ink/10 p-6 shadow-sm mb-8">
           <div className="flex items-center justify-between mb-6">
             <div className="flex items-center gap-3">
@@ -576,19 +562,18 @@ export const DatabaseManagement: React.FC = () => {
             <div className="flex items-center gap-2">
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <button
+                  <TgButton
                     type="button"
+                    variant="secondary"
+                    size="md"
                     onClick={handleExportDB}
-                    disabled={isExporting || selectedTablesForExport.size === 0}
-                    className="px-4 py-2 text-[10px] uppercase font-bold flex items-center gap-2 border border-app-ink/20 hover:bg-app-ink hover:text-app-bg transition-colors disabled:opacity-50"
+                    disabled={selectedTablesForExport.size === 0}
+                    loading={isExporting}
+                    loadingLabel="Export"
                   >
-                    {isExporting ? (
-                      <Loader2 size={14} className="animate-spin" />
-                    ) : (
-                      <Download size={14} />
-                    )}
+                    <Download size={14} />
                     Export
-                  </button>
+                  </TgButton>
                 </TooltipTrigger>
                 <TooltipContent>
                   <p className="text-[9px] uppercase font-bold">
@@ -606,18 +591,16 @@ export const DatabaseManagement: React.FC = () => {
                 />
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <button
+                    <TgButton
                       type="button"
-                      disabled={isImporting}
-                      className="px-4 py-2 text-[10px] uppercase font-bold flex items-center gap-2 border border-app-ink/20 hover:bg-app-ink hover:text-app-bg transition-colors disabled:opacity-50"
+                      variant="secondary"
+                      size="md"
+                      loading={isImporting}
+                      loadingLabel="Import"
                     >
-                      {isImporting ? (
-                        <Loader2 size={14} className="animate-spin" />
-                      ) : (
-                        <Upload size={14} />
-                      )}
+                      <Upload size={14} />
                       Import
-                    </button>
+                    </TgButton>
                   </TooltipTrigger>
                   <TooltipContent>
                     <p className="text-[9px] uppercase font-bold">
@@ -626,19 +609,17 @@ export const DatabaseManagement: React.FC = () => {
                   </TooltipContent>
                 </Tooltip>
               </div>
-              <button
+              <TgButton
                 type="button"
+                variant="secondary"
+                size="md"
                 onClick={handleCalculateSizes}
-                disabled={isCalculatingSizes}
-                className="px-4 py-2 text-[10px] uppercase font-bold flex items-center gap-2 border border-app-ink/20 hover:bg-app-ink hover:text-app-bg transition-colors disabled:opacity-50"
+                loading={isCalculatingSizes}
+                loadingLabel="Calculate Sizes"
               >
-                {isCalculatingSizes ? (
-                  <Loader2 size={14} className="animate-spin" />
-                ) : (
-                  <HardDrive size={14} />
-                )}
+                <HardDrive size={14} />
                 Calculate Sizes
-              </button>
+              </TgButton>
             </div>
           </div>
 
@@ -710,19 +691,17 @@ export const DatabaseManagement: React.FC = () => {
                       className="flex-1 bg-app-card border border-app-ink/20 px-3 py-2 text-[11px] font-mono focus:outline-none focus:border-app-ink/50"
                       onKeyDown={(e) => e.key === "Enter" && handleRunQuery()}
                     />
-                    <button
+                    <TgButton
                       type="button"
+                      variant="primary"
+                      size="md"
                       onClick={handleRunQuery}
-                      disabled={isQuerying}
-                      className="px-4 py-2 bg-app-ink text-app-bg text-[10px] uppercase font-bold flex items-center gap-2 disabled:opacity-50"
+                      loading={isQuerying}
+                      loadingLabel="Run"
                     >
-                      {isQuerying ? (
-                        <Loader2 size={14} className="animate-spin" />
-                      ) : (
-                        <Play size={14} />
-                      )}
+                      <Play size={14} />
                       Run
-                    </button>
+                    </TgButton>
                   </div>
                   <p className="text-[9px] opacity-50 italic mb-4">
                     Uses simple JS evaluation. Example:{" "}
@@ -780,39 +759,20 @@ export const DatabaseManagement: React.FC = () => {
         </p>
       </div>
 
-      <Dialog
+      <TgConfirmDialog
         open={Boolean(confirmModal?.isOpen)}
         onOpenChange={(open) => {
           if (!open) setConfirmModal(null)
         }}
-      >
-        <DialogContent className="border-app-ink/20 bg-app-card text-app-ink sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>{confirmModal?.title}</DialogTitle>
-            <DialogDescription className="text-app-ink/80">
-              {confirmModal?.message}
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <button
-              type="button"
-              onClick={() => setConfirmModal(null)}
-              className="rounded-md border border-app-ink/20 px-3 py-2 text-xs font-mono uppercase tracking-widest hover:bg-app-muted/30"
-            >
-              Cancel
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                confirmModal?.onConfirm()
-              }}
-              className="rounded-md border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs font-mono uppercase tracking-widest text-red-600 hover:bg-red-500/20"
-            >
-              Confirm
-            </button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+        title={confirmModal?.title ?? ""}
+        description={confirmModal?.message}
+        descriptionClassName="text-app-ink/80"
+        variant="dangerSoft"
+        onConfirm={() => {
+          confirmModal?.onConfirm()
+        }}
+        onCancel={() => setConfirmModal(null)}
+      />
     </motion.div>
   )
 }

@@ -3,6 +3,7 @@ import type React from "react"
 import { useEffect, useState } from "react"
 import { toast } from "sonner"
 import { api, type SettingGroupWriteBody } from "@/api"
+import { TgButton } from "@/components/ui/tg-button"
 import {
   AUTO_SYNC_INTERVAL_MAX_MINUTES,
   AUTO_SYNC_INTERVAL_MIN_MINUTES,
@@ -65,7 +66,7 @@ export const SettingGroupsPanel: React.FC = () => {
   const [createDraft, setCreateDraft] = useState<SettingGroupWriteBody>(
     emptyDraft(),
   )
-  const [busy, setBusy] = useState(false)
+  const [busy, setBusy] = useState<"save" | "delete" | "create" | null>(null)
 
   useEffect(() => {
     const nextId = resolveInitialSelectedGroupId(
@@ -105,7 +106,7 @@ export const SettingGroupsPanel: React.FC = () => {
       toast.error("Group name is required")
       return
     }
-    setBusy(true)
+    setBusy("create")
     try {
       const created = await api.createSettingGroup(createDraft)
       toast.success(`Created group "${created.name}"`)
@@ -120,13 +121,13 @@ export const SettingGroupsPanel: React.FC = () => {
           : "Failed to create setting group",
       )
     } finally {
-      setBusy(false)
+      setBusy(null)
     }
   }
 
   const handleSave = async () => {
     if (!selectedId || !selectedGroup) return
-    setBusy(true)
+    setBusy("save")
     try {
       await api.updateSettingGroup(selectedId, draft)
       toast.success(`Updated group "${draft.name ?? selectedGroup.name}"`)
@@ -138,13 +139,13 @@ export const SettingGroupsPanel: React.FC = () => {
           : "Failed to update setting group",
       )
     } finally {
-      setBusy(false)
+      setBusy(null)
     }
   }
 
   const handleDelete = async () => {
     if (!selectedId || !selectedGroup || isReservedGroup(selectedGroup)) return
-    setBusy(true)
+    setBusy("delete")
     try {
       await api.deleteSettingGroup(selectedId)
       toast.success(`Deleted group "${selectedGroup.name}"`)
@@ -157,7 +158,7 @@ export const SettingGroupsPanel: React.FC = () => {
           : "Cannot delete group",
       )
     } finally {
-      setBusy(false)
+      setBusy(null)
     }
   }
 
@@ -324,24 +325,30 @@ export const SettingGroupsPanel: React.FC = () => {
               </label>
 
               <div className="flex flex-wrap gap-2 pt-2">
-                <button
+                <TgButton
                   type="button"
-                  disabled={busy}
+                  variant="primary"
+                  size="md"
+                  loading={busy === "save"}
+                  loadingLabel="Save group"
+                  disabled={busy !== null}
                   onClick={() => void handleSave()}
-                  className="px-4 py-2 text-[10px] uppercase font-bold bg-app-ink text-app-bg rounded-md disabled:opacity-40"
                 >
                   Save group
-                </button>
+                </TgButton>
                 {!isReservedGroup(selectedGroup) && (
-                  <button
+                  <TgButton
                     type="button"
-                    disabled={busy}
+                    variant="dangerSoft"
+                    size="md"
+                    loading={busy === "delete"}
+                    loadingLabel="Delete"
+                    disabled={busy !== null}
                     onClick={() => void handleDelete()}
-                    className="px-4 py-2 text-[10px] uppercase font-bold border border-red-500/30 text-red-600 rounded-md inline-flex items-center gap-1 disabled:opacity-40"
                   >
                     <Trash2 size={12} />
                     Delete
-                  </button>
+                  </TgButton>
                 )}
               </div>
               {!isReservedGroup(selectedGroup) &&
@@ -370,14 +377,17 @@ export const SettingGroupsPanel: React.FC = () => {
             placeholder="Group name"
             className="flex-1 bg-app-bg border border-app-ink/15 px-3 py-2 text-sm"
           />
-          <button
+          <TgButton
             type="button"
-            disabled={busy}
+            variant="primary"
+            size="md"
+            loading={busy === "create"}
+            loadingLabel="Create group"
+            disabled={busy !== null}
             onClick={() => void handleCreate()}
-            className="px-4 py-2 text-[10px] uppercase font-bold bg-app-ink text-app-bg rounded-md disabled:opacity-40"
           >
             Create group
-          </button>
+          </TgButton>
         </div>
       </div>
     </div>

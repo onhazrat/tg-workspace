@@ -1,4 +1,5 @@
 import { ArrowLeft } from "lucide-react"
+import { TgButton } from "@/components/ui/tg-button"
 
 interface AssistantPanelProps {
   onBack: () => void
@@ -8,14 +9,10 @@ interface AssistantPanelProps {
 export function AssistantPanel({ onBack }: AssistantPanelProps) {
   return (
     <div className="space-y-4 p-6">
-      <button
-        type="button"
-        onClick={onBack}
-        className="inline-flex items-center gap-2 text-xs uppercase tracking-widest text-app-ink/60 hover:text-app-ink"
-      >
+      <TgButton type="button" variant="ghost" size="sm" onClick={onBack}>
         <ArrowLeft size={14} />
         Back
-      </button>
+      </TgButton>
       <p className="text-sm text-app-ink/80">
         Natural language commands — coming soon
       </p>

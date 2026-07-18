@@ -10,6 +10,7 @@
     "lint": "biome check --write --unsafe --no-errors-on-unmatched --files-ignore-unknown=true ./",
     "generate-client": "openapi-ts",
     "test:unit": "bun test src",
+    "test:tg-ui": "bash scripts/check-tg-ui-duplicates.sh",
     "test": "bunx playwright test",
     "test:ui": "bunx playwright test --ui"
   },

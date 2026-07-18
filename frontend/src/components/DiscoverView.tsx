@@ -3,6 +3,9 @@ import { motion } from "motion/react"
 import type React from "react"
 import { useEffect, useMemo, useRef, useState } from "react"
 import type { FollowJobStatus } from "@/api"
+import { TgButton } from "@/components/ui/tg-button"
+import { TgFilterChip } from "@/components/ui/tg-chips"
+import { TgConfirmDialog } from "@/components/ui/tg-confirm-dialog"
 import {
   type DiscoveryQuickAction,
   FORWARDED_FILTER_LABELS,
@@ -53,6 +56,9 @@ export const DiscoverView: React.FC = () => {
   )
   const [isFollowJobRunning, setIsFollowJobRunning] = useState(false)
   const [followProgress, setFollowProgress] = useState<FollowJobStatus | null>(
+    null,
+  )
+  const [pendingFollowNames, setPendingFollowNames] = useState<string[] | null>(
     null,
   )
   const headerCheckboxRef = useRef<HTMLInputElement>(null)
@@ -128,14 +134,8 @@ export const DiscoverView: React.FC = () => {
     setActiveTab("posts")
   }
 
-  const startFollow = async (names: string[]) => {
+  const executeFollow = async (names: string[]) => {
     if (names.length === 0 || isOffline || isFollowJobRunning) return
-    if (needsBulkFollowConfirm(names.length)) {
-      const confirmed = window.confirm(
-        `Follow ${names.length} channels? This will scrape and add each selected source.`,
-      )
-      if (!confirmed) return
-    }
 
     const payload = buildBulkFollowChannels(names, candidatesByName)
     setIsFollowJobRunning(true)
@@ -153,6 +153,15 @@ export const DiscoverView: React.FC = () => {
     } finally {
       setIsFollowJobRunning(false)
     }
+  }
+
+  const startFollow = async (names: string[]) => {
+    if (names.length === 0 || isOffline || isFollowJobRunning) return
+    if (needsBulkFollowConfirm(names.length)) {
+      setPendingFollowNames(names)
+      return
+    }
+    await executeFollow(names)
   }
 
   const handleFollow = async (name: string) => {
@@ -238,19 +247,14 @@ export const DiscoverView: React.FC = () => {
                 Sort by
               </span>
               {DISCOVER_SORT_OPTIONS.map((option) => (
-                <button
+                <TgFilterChip
                   key={option.value}
-                  type="button"
                   data-testid={`discover-sort-${option.value}`}
+                  selected={sortKey === option.value}
                   onClick={() => setSortKey(option.value)}
-                  className={`text-[11px] uppercase font-bold px-4 py-1.5 rounded-full border transition-all shadow-sm ${
-                    sortKey === option.value
-                      ? "bg-app-ink text-app-bg border-app-ink"
-                      : "bg-app-muted border-app-ink/10 hover:border-app-ink/30 hover:bg-app-ink/5 text-app-ink"
-                  }`}
                 >
                   {option.label}
-                </button>
+                </TgFilterChip>
               ))}
             </div>
           ) : null}
@@ -264,25 +268,31 @@ export const DiscoverView: React.FC = () => {
             <span className="text-xs font-bold uppercase tracking-wider text-app-ink/70">
               {selectedForFollow.size} selected
             </span>
-            <button
+            <TgButton
               type="button"
+              variant="secondary"
+              size="sm"
               data-testid="discover-follow-selected"
-              disabled={isOffline || isFollowJobRunning}
+              disabled={isOffline}
+              loading={isFollowJobRunning}
+              loadingLabel="Follow selected"
               onClick={() => void handleFollowSelected()}
-              className="inline-flex items-center gap-1 rounded-full border border-blue-500/30 px-2.5 py-1 text-xs font-bold uppercase tracking-wider text-blue-600 transition-colors hover:bg-blue-500/10 disabled:cursor-not-allowed disabled:opacity-40 dark:text-blue-400"
+              className="rounded-full border-blue-500/30 text-blue-600 hover:bg-blue-500/10 dark:text-blue-400"
             >
               <Plus size={12} />
               Follow selected
-            </button>
-            <button
+            </TgButton>
+            <TgButton
               type="button"
+              variant="secondary"
+              size="sm"
               data-testid="discover-clear-selection"
               disabled={isFollowJobRunning}
               onClick={() => setSelectedForFollow(new Set())}
-              className="rounded-full border border-app-ink/20 px-2.5 py-1 text-xs font-bold uppercase tracking-wider text-app-ink/60 transition-colors hover:bg-app-muted/30 disabled:opacity-40"
+              className="rounded-full text-app-ink/60"
             >
               Clear
-            </button>
+            </TgButton>
             {isFollowJobRunning && followProgress ? (
               <span
                 className="text-xs text-app-ink/60"
@@ -314,14 +324,12 @@ export const DiscoverView: React.FC = () => {
             {emptyState.quickActions.length > 0 ? (
               <div className="flex flex-wrap gap-2">
                 {emptyState.quickActions.map((quickAction) => (
-                  <button
+                  <TgFilterChip
                     key={quickAction.label}
-                    type="button"
                     onClick={() => runQuickAction(quickAction.action)}
-                    className="rounded-full border border-app-ink/20 px-3 py-1.5 text-xs font-bold uppercase tracking-wider text-app-ink transition-colors hover:bg-app-muted/30"
                   >
                     {quickAction.label}
-                  </button>
+                  </TgFilterChip>
                 ))}
               </div>
             ) : null}
@@ -449,26 +457,30 @@ export const DiscoverView: React.FC = () => {
                               Following
                             </span>
                           ) : (
-                            <button
+                            <TgButton
                               type="button"
+                              variant="secondary"
+                              size="sm"
                               data-testid={`discover-follow-${row.name}`}
                               disabled={isOffline || isFollowJobRunning}
                               onClick={() => void handleFollow(row.name)}
-                              className="inline-flex items-center gap-1 rounded-full border border-blue-500/30 px-2.5 py-1 text-xs font-bold uppercase tracking-wider text-blue-600 transition-colors hover:bg-blue-500/10 disabled:cursor-not-allowed disabled:opacity-40 dark:text-blue-400"
+                              className="rounded-full border-blue-500/30 text-blue-600 hover:bg-blue-500/10 dark:text-blue-400"
                             >
                               <Plus size={12} />
                               Follow
-                            </button>
+                            </TgButton>
                           )}
-                          <button
+                          <TgButton
                             type="button"
+                            variant="secondary"
+                            size="sm"
                             onClick={() =>
                               handleViewPosts(row.name, row.isFollowed)
                             }
-                            className="rounded-full border border-app-ink/20 px-2.5 py-1 text-xs font-bold uppercase tracking-wider text-app-ink/70 transition-colors hover:bg-app-muted/30"
+                            className="rounded-full text-app-ink/70"
                           >
                             View posts
-                          </button>
+                          </TgButton>
                         </div>
                       </td>
                     </tr>
@@ -479,6 +491,26 @@ export const DiscoverView: React.FC = () => {
           </div>
         )}
       </div>
+
+      <TgConfirmDialog
+        open={pendingFollowNames !== null}
+        onOpenChange={(open) => {
+          if (!open) setPendingFollowNames(null)
+        }}
+        title="Follow channels?"
+        description={
+          pendingFollowNames
+            ? `Follow ${pendingFollowNames.length} channels? This will scrape and add each selected source.`
+            : ""
+        }
+        confirmLabel="Follow"
+        onConfirm={() => {
+          const names = pendingFollowNames ?? []
+          setPendingFollowNames(null)
+          void executeFollow(names)
+        }}
+        onCancel={() => setPendingFollowNames(null)}
+      />
     </motion.div>
   )
 }

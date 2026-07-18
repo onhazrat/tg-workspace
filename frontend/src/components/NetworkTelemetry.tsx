@@ -270,7 +270,7 @@ export const NetworkTelemetry: React.FC = () => {
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
-          {/* Routing Distribution */}
+          {/* tg-ui-allow: Routing Distribution — icon-in-h4 header fights TgSettingsSection */}
           <div className="bg-app-card border border-app-ink/10 p-6 shadow-sm">
             <h4 className="text-[11px] uppercase font-bold tracking-widest mb-6 flex items-center gap-3 opacity-80">
               <Globe size={16} className="opacity-40" />
@@ -334,7 +334,7 @@ export const NetworkTelemetry: React.FC = () => {
             </div>
           </div>
 
-          {/* Tor Telemetry Details */}
+          {/* tg-ui-allow: Tor Telemetry Details — icon-in-h4 header fights TgSettingsSection */}
           <div className="bg-app-card border border-app-ink/10 p-6 shadow-sm lg:col-span-2">
             <h4 className="text-[11px] uppercase font-bold tracking-widest mb-6 flex items-center gap-3 opacity-80">
               <Shield size={16} className="opacity-40" />

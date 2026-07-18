@@ -1,6 +1,7 @@
 import { ChevronDown, Filter, Search, X } from "lucide-react"
 import { AnimatePresence, motion } from "motion/react"
 import type React from "react"
+import { TgButton } from "@/components/ui/tg-button"
 import { isAnyLogFilterActive, type LogFilters } from "@/lib/logs/filters"
 import { parseDateInputValue, toDateInputValue } from "@/lib/logs/format"
 import { LOG_TAB_META, type LogTab } from "@/lib/logs/tabs"
@@ -76,14 +77,12 @@ export const LogFilterBar: React.FC<LogFilterBarProps> = ({
             </label>
           </div>
         </div>
-        <button
+        <TgButton
           type="button"
+          variant={showFilters || filterActive ? "primary" : "secondary"}
+          size="md"
           onClick={onToggleFilters}
-          className={`px-4 flex items-center gap-2 border transition-all text-[10px] uppercase font-bold tracking-tighter ${
-            showFilters || filterActive
-              ? "bg-app-ink text-app-bg border-app-ink"
-              : "bg-app-ink/5 border-app-ink/10 hover:border-app-ink/30"
-          }`}
+          className="px-4"
         >
           <Filter size={14} />
           Filters
@@ -91,7 +90,7 @@ export const LogFilterBar: React.FC<LogFilterBarProps> = ({
             size={12}
             className={`transition-transform ${showFilters ? "rotate-180" : ""}`}
           />
-        </button>
+        </TgButton>
       </div>
 
       <AnimatePresence>
@@ -229,14 +228,16 @@ export const LogFilterBar: React.FC<LogFilterBarProps> = ({
                 )}
 
                 <div className="flex items-end md:col-start-3">
-                  <button
+                  <TgButton
                     type="button"
+                    variant="secondary"
+                    size="sm"
                     onClick={onClearAllFilters}
                     disabled={!filterActive}
-                    className="w-full py-2 border border-app-ink/10 text-[9px] uppercase font-bold tracking-widest hover:bg-app-ink hover:text-app-bg transition-all disabled:opacity-20 disabled:hover:bg-transparent disabled:hover:text-app-ink"
+                    className="w-full"
                   >
                     Clear All Filters
-                  </button>
+                  </TgButton>
                 </div>
               </div>
             </div>

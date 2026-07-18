@@ -1,5 +1,6 @@
 import { Info, Layout, Monitor, Moon, Sun } from "lucide-react"
 import type React from "react"
+import { TgSettingsSection } from "@/components/ui/tg-settings-section"
 import { useSettings } from "@/contexts/SettingsContext"
 import { ToggleSwitch } from "./ToggleSwitch"
 
@@ -27,14 +28,7 @@ export const AppearanceSection: React.FC = () => {
 
   return (
     <div className="space-y-8 lg:col-span-2">
-      <div className="bg-app-card border border-app-ink/10 p-6 shadow-sm">
-        <div className="flex items-center gap-3 mb-6">
-          <Layout size={18} className="opacity-40" />
-          <h4 className="text-[11px] uppercase font-bold tracking-widest">
-            Interface & Appearance
-          </h4>
-        </div>
-
+      <TgSettingsSection icon={Layout} title="Interface & Appearance">
         <div className="space-y-8">
           <div className="space-y-4">
             <div className="flex items-center gap-2 opacity-60">
@@ -43,6 +37,7 @@ export const AppearanceSection: React.FC = () => {
                 Color Theme
               </span>
             </div>
+            {/* tg-ui-allow: Appearance theme toggle near-variant — denser/custom (no rounded-lg track, opacity selection) */}
             <div className="flex gap-2 p-1 bg-app-ink/5 border border-app-ink/10 w-fit">
               <button
                 type="button"
@@ -81,17 +76,9 @@ export const AppearanceSection: React.FC = () => {
             </div>
           </div>
         </div>
-      </div>
+      </TgSettingsSection>
 
-      {/* System Info */}
-      <div className="bg-app-card border border-app-ink/10 p-6 shadow-sm">
-        <div className="flex items-center gap-3 mb-6">
-          <Info size={18} className="opacity-40" />
-          <h4 className="text-[11px] uppercase font-bold tracking-widest">
-            System Information
-          </h4>
-        </div>
-
+      <TgSettingsSection icon={Info} title="System Information">
         <div className="space-y-6">
           <p className="text-[10px] leading-relaxed opacity-60 italic serif">
             This dashboard is designed for high-speed monitoring and analysis of
@@ -116,16 +103,9 @@ export const AppearanceSection: React.FC = () => {
             </div>
           </div>
         </div>
-      </div>
+      </TgSettingsSection>
 
-      <div className="bg-app-card border border-app-ink/10 p-6 shadow-sm mt-8">
-        <div className="flex items-center gap-3 mb-6">
-          <Layout size={18} className="opacity-40" />
-          <h4 className="text-[11px] uppercase font-bold tracking-widest">
-            Channel Card Display
-          </h4>
-        </div>
-
+      <TgSettingsSection icon={Layout} title="Channel Card Display">
         <div className="space-y-6">
           <div className="space-y-4">
             <div className="flex items-center justify-between">
@@ -243,7 +223,7 @@ export const AppearanceSection: React.FC = () => {
             </div>
           </div>
         </div>
-      </div>
+      </TgSettingsSection>
     </div>
   )
 }

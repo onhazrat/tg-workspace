@@ -6,6 +6,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import { TgButton } from "@/components/ui/tg-button"
+import { TgInput } from "@/components/ui/tg-input"
 import type { ChannelSettingGroup } from "@/types"
 import { selectTriggerClassName } from "./select-trigger-class"
 
@@ -50,6 +52,7 @@ export const ChannelBulkActions: React.FC<ChannelBulkActionsProps> = ({
           {selectedCount} Selected
         </span>
         <div className="h-4 w-px bg-app-ink/10 mx-1" />
+        {/* tg-ui-allow: Freeze keeps custom blue soft fill; no TgButton variant maps to blue */}
         <button
           type="button"
           onClick={onRequestFreeze}
@@ -57,13 +60,14 @@ export const ChannelBulkActions: React.FC<ChannelBulkActionsProps> = ({
         >
           Freeze
         </button>
-        <button
+        <TgButton
           type="button"
+          variant="ghost"
+          size="sm"
           onClick={onRequestUnfreeze}
-          className="px-3 py-1.5 text-[10px] uppercase font-bold rounded-md bg-app-muted/50 text-app-ink/70 hover:bg-app-ink/10 transition-all"
         >
           Unfreeze
-        </button>
+        </TgButton>
         <div className="h-4 w-px bg-app-ink/10 mx-1" />
         <div className="flex items-center gap-2 rounded-md border border-app-ink/10 bg-app-muted/40 px-2 py-1.5">
           <span className="text-[9px] uppercase font-bold text-app-ink/60">
@@ -85,57 +89,66 @@ export const ChannelBulkActions: React.FC<ChannelBulkActionsProps> = ({
               ))}
             </SelectContent>
           </Select>
-          <button
+          <TgButton
             type="button"
+            variant="primary"
+            size="sm"
             onClick={onApplyMoveToGroup}
-            className="px-2 py-1 text-[9px] uppercase font-bold rounded bg-app-ink text-app-bg"
+            className="px-2 text-[9px]"
           >
             Apply
-          </button>
+          </TgButton>
         </div>
         <div className="relative">
-          <input
+          <TgInput
             type="text"
+            variant="muted"
             value={bulkTagInput}
             onChange={(e) => onBulkTagInputChange(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && onBulkAddTag()}
             placeholder="Add tag..."
-            className="w-32 bg-app-muted/50 border border-app-ink/10 rounded-md py-1.5 pl-2 pr-10 text-[10px] focus:outline-none focus:ring-1 focus:ring-app-ink/20 transition-all"
+            className="w-32 rounded-md py-1.5 pl-2 pr-10 text-[10px] focus:ring-1"
           />
-          <button
+          <TgButton
             type="button"
+            variant="primary"
+            size="sm"
             onClick={onBulkAddTag}
             disabled={!bulkTagInput.trim()}
-            className="absolute inset-y-1 right-1 px-2 bg-app-ink text-app-bg text-[8px] uppercase font-bold rounded hover:opacity-90 transition-opacity disabled:opacity-30"
+            className="absolute inset-y-1 right-1 px-2 text-[8px]"
           >
             Add
-          </button>
+          </TgButton>
         </div>
         <div className="relative">
-          <input
+          <TgInput
             type="text"
+            variant="muted"
             value={bulkRemoveTagInput}
             onChange={(e) => onBulkRemoveTagInputChange(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && onBulkRemoveTag()}
             placeholder="Remove tag..."
-            className="w-32 bg-app-muted/50 border border-app-ink/10 rounded-md py-1.5 pl-2 pr-14 text-[10px] focus:outline-none focus:ring-1 focus:ring-app-ink/20 transition-all"
+            className="w-32 rounded-md py-1.5 pl-2 pr-14 text-[10px] focus:ring-1"
           />
-          <button
+          <TgButton
             type="button"
+            variant="primary"
+            size="sm"
             onClick={onBulkRemoveTag}
             disabled={!bulkRemoveTagInput.trim()}
-            className="absolute inset-y-1 right-1 px-2 bg-app-ink text-app-bg text-[8px] uppercase font-bold rounded hover:opacity-90 transition-opacity disabled:opacity-30"
+            className="absolute inset-y-1 right-1 px-2 text-[8px]"
           >
             Remove
-          </button>
+          </TgButton>
         </div>
-        <button
+        <TgButton
           type="button"
+          variant="dangerSoft"
+          size="sm"
           onClick={onRequestDelete}
-          className="px-3 py-1.5 text-[10px] uppercase font-bold rounded-md bg-red-500/10 text-red-500 hover:bg-red-500/20 transition-all"
         >
           Delete
-        </button>
+        </TgButton>
       </div>
     </div>
   )

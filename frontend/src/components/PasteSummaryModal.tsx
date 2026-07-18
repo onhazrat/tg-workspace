@@ -1,7 +1,8 @@
-import { ClipboardPaste, Loader2 } from "lucide-react"
+import { ClipboardPaste } from "lucide-react"
 import type React from "react"
 import { useEffect, useState } from "react"
 import { toast } from "sonner"
+import { TgButton } from "@/components/ui/tg-button"
 import {
   Dialog,
   DialogContent,
@@ -88,19 +89,17 @@ export const PasteSummaryModal: React.FC<PasteSummaryModalProps> = ({
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
-          <button
+          <TgButton
             type="button"
+            variant="secondary"
+            size="md"
             onClick={() => void handlePasteFromClipboard()}
-            disabled={pasting}
-            className="flex items-center gap-2 px-3 py-2 text-xs font-bold tracking-wide border border-app-ink/10 rounded-lg hover:bg-app-muted/30 disabled:opacity-50"
+            loading={pasting}
+            loadingLabel="Paste from clipboard"
           >
-            {pasting ? (
-              <Loader2 size={14} className="animate-spin" />
-            ) : (
-              <ClipboardPaste size={14} className="opacity-60" />
-            )}
+            <ClipboardPaste size={14} className="opacity-60" />
             Paste from clipboard
-          </button>
+          </TgButton>
           <input
             type="text"
             value={modelName}
@@ -117,23 +116,26 @@ export const PasteSummaryModal: React.FC<PasteSummaryModalProps> = ({
           />
         </div>
         <DialogFooter>
-          <button
+          <TgButton
             type="button"
+            variant="secondary"
+            size="md"
             onClick={onClose}
             disabled={saving}
-            className="px-4 py-2 text-xs font-bold tracking-wide border border-app-ink/20 rounded-lg hover:bg-app-muted/30 disabled:opacity-50"
           >
             Cancel
-          </button>
-          <button
+          </TgButton>
+          <TgButton
             type="button"
+            variant="primary"
+            size="md"
             onClick={() => void handleSave()}
-            disabled={saving || !text.trim()}
-            className="px-4 py-2 text-xs font-bold tracking-wide bg-app-ink text-app-bg rounded-lg hover:opacity-90 disabled:opacity-50 flex items-center gap-2"
+            disabled={!text.trim()}
+            loading={saving}
+            loadingLabel="Save Summary"
           >
-            {saving && <Loader2 size={14} className="animate-spin" />}
             Save Summary
-          </button>
+          </TgButton>
         </DialogFooter>
       </DialogContent>
     </Dialog>

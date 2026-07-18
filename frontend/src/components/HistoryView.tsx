@@ -16,6 +16,11 @@ import { AnimatePresence, motion } from "motion/react"
 import type React from "react"
 import { useEffect, useMemo, useRef, useState } from "react"
 import { toast } from "sonner"
+import { TgButton } from "@/components/ui/tg-button"
+import { TgMetaChip } from "@/components/ui/tg-chips"
+import { TgConfirmDialog } from "@/components/ui/tg-confirm-dialog"
+import { TgIconButton } from "@/components/ui/tg-icon-button"
+import { TgHeroEmptyState } from "@/components/ui/tg-segmented"
 import { formatSummaryModelLabel, isPendingSummary } from "../constants"
 import { useData } from "../contexts/DataContext"
 import { useUI } from "../contexts/UIContext"
@@ -24,14 +29,6 @@ import { deleteSummary, saveSummary } from "../lib/repository"
 import { formatDateToLocalISO } from "../lib/utils"
 import type { Summary, TabType } from "../types"
 import { RelativeTime } from "./RelativeTime"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "./ui/dialog"
 import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tg-tooltip"
 
 const formatDuration = (start: number, end: number) => {
@@ -359,18 +356,20 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
               </button>
             )}
           </div>
-          <button
+          <TgButton
             type="button"
-            onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
-            className={`px-4 flex items-center gap-2 rounded-xl border transition-all text-[11px] uppercase font-bold tracking-tight shadow-sm ${
+            variant={
               showAdvancedFilters ||
               modelFilter !== "all" ||
               languageFilter !== "all" ||
               startDateFilter !== null ||
               endDateFilter !== null
-                ? "bg-app-ink text-app-bg border-app-ink"
-                : "bg-app-card border-app-ink/10 hover:border-app-ink/30 hover:bg-app-muted"
-            }`}
+                ? "primary"
+                : "secondary"
+            }
+            size="md"
+            onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
+            className="px-4 rounded-xl"
           >
             <Filter size={14} />
             <span>Filters</span>
@@ -378,7 +377,7 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
               size={14}
               className={`transition-transform duration-300 ${showAdvancedFilters ? "rotate-180" : ""}`}
             />
-          </button>
+          </TgButton>
         </div>
 
         {/* Advanced Filters Panel */}
@@ -501,18 +500,19 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
                       languageFilter !== "all" ||
                       startDateFilter !== null ||
                       endDateFilter !== null) && (
-                      <button
+                      <TgButton
                         type="button"
+                        variant="dangerSoft"
+                        size="sm"
                         onClick={() => {
                           setModelFilter("all")
                           setLanguageFilter("all")
                           setStartDateFilter(null)
                           setEndDateFilter(null)
                         }}
-                        className="text-[11px] uppercase font-bold text-red-500 hover:text-red-600 hover:bg-red-500/10 px-3 py-1.5 rounded-md transition-colors"
                       >
                         Clear Filters
-                      </button>
+                      </TgButton>
                     )}
                   </div>
                 </div>
@@ -524,21 +524,20 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
 
       {/* History List */}
       {filteredHistory.length === 0 ? (
-        <div className="h-full flex flex-col items-center justify-center text-center py-20 max-w-md mx-auto">
-          <div className="w-16 h-16 bg-app-card shadow-sm rounded-2xl flex items-center justify-center mb-6 border border-app-ink/10">
-            <Clock size={28} className="opacity-40" />
-          </div>
-          <h3 className="text-lg font-bold tracking-tight mb-2">
-            {summariesHistory.length === 0
+        <TgHeroEmptyState
+          className="h-full max-w-md mx-auto"
+          icon={<Clock size={28} className="opacity-40" />}
+          title={
+            summariesHistory.length === 0
               ? "No History Found"
-              : "No Matching Items"}
-          </h3>
-          <p className="text-[11px] text-app-ink/70 leading-relaxed max-w-sm">
-            {summariesHistory.length === 0
+              : "No Matching Items"
+          }
+          description={
+            summariesHistory.length === 0
               ? "Your generated summaries and chat sessions will appear here."
-              : "Try adjusting your search query or clearing the advanced filters."}
-          </p>
-        </div>
+              : "Try adjusting your search query or clearing the advanced filters."
+          }
+        />
       ) : (
         <div className="grid grid-cols-1 gap-4">
           {filteredHistory.slice(0, visibleHistory).map((s) => (
@@ -594,121 +593,123 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
 
                 {/* Action Buttons */}
                 <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity bg-app-card/80 backdrop-blur-sm p-1 rounded-lg border border-app-ink/5 shadow-sm">
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <button
-                        type="button"
-                        onClick={(e) => handleToggleStar(s, e)}
-                        className={`p-1.5 rounded-md transition-all ${s.isStarred ? "text-amber-500 bg-amber-500/10" : "text-app-ink/50 hover:text-app-ink hover:bg-app-ink/5"}`}
-                      >
-                        <Star
-                          size={14}
-                          className={s.isStarred ? "fill-amber-500" : ""}
-                        />
-                      </button>
-                    </TooltipTrigger>
-                    <TooltipContent>
-                      <p>{s.isStarred ? "Unstar Item" : "Star Item"}</p>
-                    </TooltipContent>
-                  </Tooltip>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          if (editingNoteId === s.id) {
-                            setEditingNoteId(null)
-                          } else {
-                            setEditingNoteId(s.id)
-                            setNoteValue(s.note || "")
-                          }
-                        }}
-                        className={`p-1.5 rounded-md transition-all ${s.note || editingNoteId === s.id ? "text-amber-600 bg-amber-500/10" : "text-app-ink/50 hover:text-app-ink hover:bg-app-ink/5"}`}
-                      >
-                        <StickyNote
-                          size={14}
-                          className={
-                            editingNoteId === s.id ? "fill-amber-500/20" : ""
-                          }
-                        />
-                      </button>
-                    </TooltipTrigger>
-                    <TooltipContent>
-                      <p>
-                        {editingNoteId === s.id
-                          ? "Close Note"
-                          : s.note
-                            ? "Edit Note"
-                            : "Add Note"}
-                      </p>
-                    </TooltipContent>
-                  </Tooltip>
+                  <TgIconButton
+                    aria-label={s.isStarred ? "Unstar Item" : "Star Item"}
+                    tooltip={s.isStarred ? "Unstar Item" : "Star Item"}
+                    data-active={s.isStarred || undefined}
+                    onClick={(e) => handleToggleStar(s, e)}
+                    className={
+                      s.isStarred ? "text-amber-500 bg-amber-500/10" : undefined
+                    }
+                  >
+                    <Star
+                      size={14}
+                      className={s.isStarred ? "fill-amber-500" : ""}
+                    />
+                  </TgIconButton>
+                  <TgIconButton
+                    aria-label={
+                      editingNoteId === s.id
+                        ? "Close Note"
+                        : s.note
+                          ? "Edit Note"
+                          : "Add Note"
+                    }
+                    tooltip={
+                      editingNoteId === s.id
+                        ? "Close Note"
+                        : s.note
+                          ? "Edit Note"
+                          : "Add Note"
+                    }
+                    data-active={
+                      s.note || editingNoteId === s.id ? true : undefined
+                    }
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      if (editingNoteId === s.id) {
+                        setEditingNoteId(null)
+                      } else {
+                        setEditingNoteId(s.id)
+                        setNoteValue(s.note || "")
+                      }
+                    }}
+                    className={
+                      s.note || editingNoteId === s.id
+                        ? "text-amber-600 bg-amber-500/10"
+                        : undefined
+                    }
+                  >
+                    <StickyNote
+                      size={14}
+                      className={
+                        editingNoteId === s.id ? "fill-amber-500/20" : ""
+                      }
+                    />
+                  </TgIconButton>
                   <div className="w-px h-4 bg-app-ink/10 mx-1" />
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <button
-                        type="button"
-                        onClick={(e) => handleToggleAutoRegenerate(s, e)}
-                        disabled={isPendingSummary(s)}
-                        className={`p-1.5 rounded-md transition-all ${s.autoRegenerate ? "text-green-600 bg-green-500/10" : "text-app-ink/50 hover:text-app-ink hover:bg-app-ink/5"} disabled:opacity-30 disabled:cursor-not-allowed`}
-                      >
-                        <RefreshCw
-                          size={14}
-                          className={
-                            regeneratingSummaries.has(s.id)
-                              ? "animate-spin"
-                              : ""
-                          }
-                        />
-                      </button>
-                    </TooltipTrigger>
-                    <TooltipContent>
-                      <p>
-                        {s.autoRegenerate
-                          ? "Disable Auto-Regenerate"
-                          : "Enable Auto-Regenerate"}
-                      </p>
-                    </TooltipContent>
-                  </Tooltip>
+                  <TgIconButton
+                    aria-label={
+                      s.autoRegenerate
+                        ? "Disable Auto-Regenerate"
+                        : "Enable Auto-Regenerate"
+                    }
+                    tooltip={
+                      s.autoRegenerate
+                        ? "Disable Auto-Regenerate"
+                        : "Enable Auto-Regenerate"
+                    }
+                    data-active={s.autoRegenerate || undefined}
+                    onClick={(e) => handleToggleAutoRegenerate(s, e)}
+                    disabled={isPendingSummary(s)}
+                    className={
+                      s.autoRegenerate
+                        ? "text-green-600 bg-green-500/10"
+                        : undefined
+                    }
+                  >
+                    <RefreshCw
+                      size={14}
+                      className={
+                        regeneratingSummaries.has(s.id) ? "animate-spin" : ""
+                      }
+                    />
+                  </TgIconButton>
                   {s.autoRegenerate && (
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <button
-                          type="button"
-                          onClick={(e) => handleToggleAutoPublish(s, e)}
-                          className={`p-1.5 rounded-md transition-all ${s.autoPublish ? "text-blue-600 bg-blue-500/10" : "text-app-ink/50 hover:text-app-ink hover:bg-app-ink/5"}`}
-                        >
-                          <Send size={14} />
-                        </button>
-                      </TooltipTrigger>
-                      <TooltipContent>
-                        <p>
-                          {s.autoPublish
-                            ? "Disable Auto-Publish"
-                            : "Enable Auto-Publish"}
-                        </p>
-                      </TooltipContent>
-                    </Tooltip>
+                    <TgIconButton
+                      aria-label={
+                        s.autoPublish
+                          ? "Disable Auto-Publish"
+                          : "Enable Auto-Publish"
+                      }
+                      tooltip={
+                        s.autoPublish
+                          ? "Disable Auto-Publish"
+                          : "Enable Auto-Publish"
+                      }
+                      data-active={s.autoPublish || undefined}
+                      onClick={(e) => handleToggleAutoPublish(s, e)}
+                      className={
+                        s.autoPublish
+                          ? "text-blue-600 bg-blue-500/10"
+                          : undefined
+                      }
+                    >
+                      <Send size={14} />
+                    </TgIconButton>
                   )}
                   <div className="w-px h-4 bg-app-ink/10 mx-1" />
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          handleDeleteSummary(s.id, e)
-                        }}
-                        className="p-1.5 rounded-md text-app-ink/50 hover:text-red-500 hover:bg-red-500/10 transition-all"
-                      >
-                        <Trash2 size={14} />
-                      </button>
-                    </TooltipTrigger>
-                    <TooltipContent>
-                      <p>Delete Summary</p>
-                    </TooltipContent>
-                  </Tooltip>
+                  <TgIconButton
+                    aria-label="Delete Summary"
+                    tooltip="Delete Summary"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      handleDeleteSummary(s.id, e)
+                    }}
+                    className="hover:text-red-500 hover:bg-red-500/10"
+                  >
+                    <Trash2 size={14} />
+                  </TgIconButton>
                 </div>
               </div>
 
@@ -759,28 +760,34 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
                     </span>
                     <div className="flex gap-2 items-center">
                       {s.note && (
-                        <button
+                        <TgButton
                           type="button"
+                          variant="dangerSoft"
+                          size="sm"
                           onClick={() => handleDeleteNote(s)}
-                          className="text-[11px] font-bold text-red-600/80 hover:text-red-700 transition-colors px-3 py-1.5 rounded-lg hover:bg-red-500/10"
+                          className="border-0 bg-transparent hover:bg-red-500/10"
                         >
                           Delete
-                        </button>
+                        </TgButton>
                       )}
-                      <button
+                      <TgButton
                         type="button"
+                        variant="ghost"
+                        size="sm"
                         onClick={() => setEditingNoteId(null)}
-                        className="text-[11px] font-bold text-amber-800/80 hover:text-amber-900 transition-colors px-3 py-1.5 rounded-lg hover:bg-amber-500/10"
+                        className="text-amber-800/80 hover:text-amber-900 hover:bg-amber-500/10"
                       >
                         Cancel
-                      </button>
-                      <button
+                      </TgButton>
+                      <TgButton
                         type="button"
+                        variant="primary"
+                        size="sm"
                         onClick={() => handleSaveNote(s)}
-                        className="text-[11px] font-bold bg-amber-500 text-amber-950 hover:bg-amber-400 transition-colors px-4 py-1.5 rounded-lg shadow-sm"
+                        className="bg-amber-500 text-amber-950 hover:bg-amber-400 hover:opacity-100 shadow-sm"
                       >
                         Save Note
-                      </button>
+                      </TgButton>
                     </div>
                   </div>
                 </motion.div>
@@ -863,36 +870,35 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
               {/* Card Footer (Metadata Badges) */}
               <div className="mt-2 pt-3 border-t border-app-ink/5 flex flex-wrap items-center justify-between gap-2">
                 <div className="flex flex-wrap gap-2">
-                  <span className="bg-app-muted px-2 py-1 rounded-md text-[11px] font-mono uppercase tracking-widest text-app-ink/70 flex items-center gap-1.5">
+                  <TgMetaChip size="history">
                     <MessageSquare size={10} /> {s.postCount || 0} Posts
-                  </span>
-                  <span className="bg-app-muted px-2 py-1 rounded-md text-[11px] font-mono uppercase tracking-widest text-app-ink/70">
+                  </TgMetaChip>
+                  <TgMetaChip size="history">
                     {formatDuration(s.startDate, s.endDate)}
-                  </span>
-                  <span className="bg-app-muted px-2 py-1 rounded-md text-[11px] font-mono uppercase tracking-widest text-app-ink/70">
+                  </TgMetaChip>
+                  <TgMetaChip size="history">
                     {formatSummaryModelLabel(s.model)}
-                  </span>
-                  <span className="bg-app-muted px-2 py-1 rounded-md text-[11px] font-mono uppercase tracking-widest text-app-ink/70">
-                    {s.language}
-                  </span>
-                  <span className="bg-app-muted px-2 py-1 rounded-md text-[11px] font-mono uppercase tracking-widest text-app-ink/70">
+                  </TgMetaChip>
+                  <TgMetaChip size="history">{s.language}</TgMetaChip>
+                  <TgMetaChip size="history">
                     {formatDateTime(s.startDate)} - {formatDateTime(s.endDate)}
-                  </span>
+                  </TgMetaChip>
                 </div>
 
                 {s.chatMessages && s.chatMessages.length > 0 && (
-                  <button
+                  <TgButton
                     type="button"
+                    variant="primary"
+                    size="sm"
                     onClick={(e) => {
                       e.stopPropagation()
                       handleSelectHistorySummary(s)
                       setActiveTab("chat")
                     }}
-                    className="bg-app-ink text-app-bg px-3 py-1.5 rounded-md hover:opacity-90 transition-all flex items-center gap-1.5 text-[11px] uppercase font-bold shadow-sm"
                   >
                     <MessageSquare size={12} />
                     <span>{s.chatMessages.length} Messages</span>
-                  </button>
+                  </TgButton>
                 )}
               </div>
             </div>
@@ -900,45 +906,29 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
         </div>
       )}
 
-      <Dialog
+      <TgConfirmDialog
         open={Boolean(summaryPendingDelete)}
         onOpenChange={(open) => {
           if (!open) closeDeleteSummaryDialog()
         }}
+        title="Delete Summary"
+        description="This removes the selected summary from your history permanently."
+        variant="dangerSoft"
+        confirmLabel="Delete"
+        onConfirm={() => {
+          void confirmDeleteSummary()
+        }}
+        onCancel={closeDeleteSummaryDialog}
       >
-        <DialogContent className="border-app-ink/20 bg-app-card sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle className="text-app-ink">Delete Summary</DialogTitle>
-            <DialogDescription className="text-app-ink/70">
-              This removes the selected summary from your history permanently.
-            </DialogDescription>
-          </DialogHeader>
-          {summaryPendingDelete ? (
-            <div className="rounded-lg border border-red-500/20 bg-red-500/5 px-3 py-2 text-[11px] font-mono text-red-700 dark:text-red-300">
+        {summaryPendingDelete ? (
+          <div className="px-4 pt-4">
+            <div className="rounded-lg border border-red-500/20 bg-red-500/5 px-3 py-2 font-mono text-[11px] text-red-700 dark:text-red-300">
               {summaryPendingDelete.channels.join(", ") || "Summary entry"} ·{" "}
               {formatDateTime(summaryPendingDelete.timestamp)}
             </div>
-          ) : null}
-          <DialogFooter>
-            <button
-              type="button"
-              onClick={closeDeleteSummaryDialog}
-              className="rounded-md border border-app-ink/20 px-3 py-2 text-[11px] font-mono uppercase tracking-widest text-app-ink/80 hover:bg-app-ink/5"
-            >
-              Cancel
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                void confirmDeleteSummary()
-              }}
-              className="rounded-md border border-red-500/30 bg-red-500/10 px-3 py-2 text-[11px] font-mono uppercase tracking-widest text-red-700 hover:bg-red-500/15 dark:text-red-300"
-            >
-              Delete
-            </button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          </div>
+        ) : null}
+      </TgConfirmDialog>
 
       {/* Intersection Observer Target */}
       <div ref={observerTarget} className="h-10 w-full" />

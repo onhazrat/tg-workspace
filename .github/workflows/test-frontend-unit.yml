@@ -41,3 +41,6 @@ jobs:
       - name: Run frontend unit tests
         run: bun run test:unit
         working-directory: frontend
+      - name: Check TG UI left-behind duplicates
+        run: bun run test:tg-ui
+        working-directory: frontend
