@@ -2859,37 +2859,71 @@
         "tags": ["data"],
         "summary": "List Publish Logs Route",
         "operationId": "data-list_publish_logs_route",
+        "security": [{ "OAuth2PasswordBearer": [] }],
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 5000,
+              "minimum": 1,
+              "default": 500,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "title": "Offset"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful Response",
             "content": {
               "application/json": {
                 "schema": {
-                  "items": { "additionalProperties": true, "type": "object" },
                   "type": "array",
+                  "items": { "type": "object", "additionalProperties": true },
                   "title": "Response Data-List Publish Logs Route"
                 }
               }
             }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
           }
-        },
-        "security": [{ "OAuth2PasswordBearer": [] }]
+        }
       },
       "post": {
         "tags": ["data"],
         "summary": "Create Publish Logs",
         "operationId": "data-create_publish_logs",
+        "security": [{ "OAuth2PasswordBearer": [] }],
         "requestBody": {
+          "required": true,
           "content": {
             "application/json": {
               "schema": {
-                "items": { "additionalProperties": true, "type": "object" },
                 "type": "array",
+                "items": { "type": "object", "additionalProperties": true },
                 "title": "Body"
               }
             }
-          },
-          "required": true
+          }
         },
         "responses": {
           "200": {
@@ -2897,8 +2931,8 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": { "type": "integer" },
                   "type": "object",
+                  "additionalProperties": { "type": "integer" },
                   "title": "Response Data-Create Publish Logs"
                 }
               }
@@ -2912,8 +2946,7 @@
               }
             }
           }
-        },
-        "security": [{ "OAuth2PasswordBearer": [] }]
+        }
       }
     },
     "/api/v1/data/sync-logs": {
@@ -3016,37 +3049,71 @@
         "tags": ["data"],
         "summary": "List Llm Logs Route",
         "operationId": "data-list_llm_logs_route",
+        "security": [{ "OAuth2PasswordBearer": [] }],
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 5000,
+              "minimum": 1,
+              "default": 500,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "title": "Offset"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful Response",
             "content": {
               "application/json": {
                 "schema": {
-                  "items": { "additionalProperties": true, "type": "object" },
                   "type": "array",
+                  "items": { "type": "object", "additionalProperties": true },
                   "title": "Response Data-List Llm Logs Route"
                 }
               }
             }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
           }
-        },
-        "security": [{ "OAuth2PasswordBearer": [] }]
+        }
       },
       "post": {
         "tags": ["data"],
         "summary": "Create Llm Logs",
         "operationId": "data-create_llm_logs",
+        "security": [{ "OAuth2PasswordBearer": [] }],
         "requestBody": {
+          "required": true,
           "content": {
             "application/json": {
               "schema": {
-                "items": { "additionalProperties": true, "type": "object" },
                 "type": "array",
+                "items": { "type": "object", "additionalProperties": true },
                 "title": "Body"
               }
             }
-          },
-          "required": true
+          }
         },
         "responses": {
           "200": {
@@ -3054,8 +3121,8 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": { "type": "integer" },
                   "type": "object",
+                  "additionalProperties": { "type": "integer" },
                   "title": "Response Data-Create Llm Logs"
                 }
               }
@@ -3069,8 +3136,7 @@
               }
             }
           }
-        },
-        "security": [{ "OAuth2PasswordBearer": [] }]
+        }
       }
     },
     "/api/v1/data/embedding-logs": {
@@ -3078,6 +3144,32 @@
         "tags": ["data"],
         "summary": "List Embedding Logs Route",
         "operationId": "data-list_embedding_logs_route",
+        "security": [{ "OAuth2PasswordBearer": [] }],
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 5000,
+              "minimum": 1,
+              "default": 500,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "title": "Offset"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -3085,38 +3177,46 @@
               "application/json": {
                 "schema": {
                   "anyOf": [
-                    { "additionalProperties": true, "type": "object" },
+                    { "type": "object", "additionalProperties": true },
                     {
+                      "type": "array",
                       "items": {
-                        "additionalProperties": true,
-                        "type": "object"
-                      },
-                      "type": "array"
+                        "type": "object",
+                        "additionalProperties": true
+                      }
                     }
                   ],
                   "title": "Response Data-List Embedding Logs Route"
                 }
               }
             }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
           }
-        },
-        "security": [{ "OAuth2PasswordBearer": [] }]
+        }
       },
       "post": {
         "tags": ["data"],
         "summary": "Create Embedding Logs",
         "operationId": "data-create_embedding_logs",
+        "security": [{ "OAuth2PasswordBearer": [] }],
         "requestBody": {
+          "required": true,
           "content": {
             "application/json": {
               "schema": {
-                "items": { "additionalProperties": true, "type": "object" },
                 "type": "array",
+                "items": { "type": "object", "additionalProperties": true },
                 "title": "Body"
               }
             }
-          },
-          "required": true
+          }
         },
         "responses": {
           "200": {
@@ -3124,8 +3224,8 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": { "type": "integer" },
                   "type": "object",
+                  "additionalProperties": { "type": "integer" },
                   "title": "Response Data-Create Embedding Logs"
                 }
               }
@@ -3139,8 +3239,7 @@
               }
             }
           }
-        },
-        "security": [{ "OAuth2PasswordBearer": [] }]
+        }
       }
     },
     "/api/v1/data/network-logs": {
@@ -3148,37 +3247,71 @@
         "tags": ["data"],
         "summary": "List Network Logs Route",
         "operationId": "data-list_network_logs_route",
+        "security": [{ "OAuth2PasswordBearer": [] }],
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 5000,
+              "minimum": 1,
+              "default": 500,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "title": "Offset"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful Response",
             "content": {
               "application/json": {
                 "schema": {
-                  "items": { "additionalProperties": true, "type": "object" },
                   "type": "array",
+                  "items": { "type": "object", "additionalProperties": true },
                   "title": "Response Data-List Network Logs Route"
                 }
               }
             }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
           }
-        },
-        "security": [{ "OAuth2PasswordBearer": [] }]
+        }
       },
       "post": {
         "tags": ["data"],
         "summary": "Create Network Logs",
         "operationId": "data-create_network_logs",
+        "security": [{ "OAuth2PasswordBearer": [] }],
         "requestBody": {
+          "required": true,
           "content": {
             "application/json": {
               "schema": {
-                "items": { "additionalProperties": true, "type": "object" },
                 "type": "array",
+                "items": { "type": "object", "additionalProperties": true },
                 "title": "Body"
               }
             }
-          },
-          "required": true
+          }
         },
         "responses": {
           "200": {
@@ -3186,8 +3319,8 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": { "type": "integer" },
                   "type": "object",
+                  "additionalProperties": { "type": "integer" },
                   "title": "Response Data-Create Network Logs"
                 }
               }
@@ -3201,8 +3334,7 @@
               }
             }
           }
-        },
-        "security": [{ "OAuth2PasswordBearer": [] }]
+        }
       }
     },
     "/api/v1/data/stats": {
@@ -3490,19 +3622,12 @@
       "get": {
         "tags": ["data"],
         "summary": "Export Data",
+        "description": "Full export \u2014 never truncated.\n\nStreamed rather than built in memory: the payload spans every post and log\nrow, which is far more than a worker can hold at once.",
         "operationId": "data-export_data",
         "responses": {
           "200": {
             "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "additionalProperties": true,
-                  "type": "object",
-                  "title": "Response Data-Export Data"
-                }
-              }
-            }
+            "content": { "application/json": { "schema": {} } }
           }
         },
         "security": [{ "OAuth2PasswordBearer": [] }]

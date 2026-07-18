@@ -96,8 +96,8 @@ from app.services.credentials import (
 from app.services.credentials import (
     upsert_chat_destination as upsert_chat_destination_impl,
 )
-from app.services.data_import_export import export_data as export_data_impl
 from app.services.data_import_export import import_data as import_data_impl
+from app.services.data_import_export import stream_export_data
 from app.services.data_vectors import (
     list_embeddings as list_embeddings_impl,
 )
@@ -680,8 +680,10 @@ def upsert_translations(
 def list_publish_logs_route(
     session: SessionDep,
     _current_user: CurrentUser,
+    limit: int = Query(default=DEFAULT_LOG_PAGE_SIZE, ge=1, le=MAX_LOG_PAGE_SIZE),
+    offset: int = Query(default=0, ge=0),
 ) -> list[dict[str, Any]]:
-    return list_publish_logs(session)
+    return list_publish_logs(session, limit=limit, offset=offset)
 
 
 @router.post("/publish-logs")
@@ -716,8 +718,10 @@ def create_sync_logs(
 def list_llm_logs_route(
     session: SessionDep,
     _current_user: CurrentUser,
+    limit: int = Query(default=DEFAULT_LOG_PAGE_SIZE, ge=1, le=MAX_LOG_PAGE_SIZE),
+    offset: int = Query(default=0, ge=0),
 ) -> list[dict[str, Any]]:
-    return list_llm_logs(session)
+    return list_llm_logs(session, limit=limit, offset=offset)
 
 
 @router.post("/llm-logs")
@@ -733,8 +737,10 @@ def create_llm_logs(
 def list_embedding_logs_route(
     session: SessionDep,
     _current_user: CurrentUser,
+    limit: int = Query(default=DEFAULT_LOG_PAGE_SIZE, ge=1, le=MAX_LOG_PAGE_SIZE),
+    offset: int = Query(default=0, ge=0),
 ) -> dict[str, Any] | list[dict[str, Any]]:
-    return list_embedding_logs(session)
+    return list_embedding_logs(session, limit=limit, offset=offset)
 
 
 @router.post("/embedding-logs")
@@ -750,8 +756,10 @@ def create_embedding_logs(
 def list_network_logs_route(
     session: SessionDep,
     _current_user: CurrentUser,
+    limit: int = Query(default=DEFAULT_LOG_PAGE_SIZE, ge=1, le=MAX_LOG_PAGE_SIZE),
+    offset: int = Query(default=0, ge=0),
 ) -> list[dict[str, Any]]:
-    return list_network_logs(session)
+    return list_network_logs(session, limit=limit, offset=offset)
 
 
 @router.post("/network-logs")
@@ -888,5 +896,13 @@ def import_data(
 def export_data(
     session: SessionDep,
     _current_user: CurrentUser,
-) -> dict[str, Any]:
-    return export_data_impl(session)
+) -> StreamingResponse:
+    """Full export — never truncated.
+
+    Streamed rather than built in memory: the payload spans every post and log
+    row, which is far more than a worker can hold at once.
+    """
+    return StreamingResponse(
+        stream_export_data(session),
+        media_type="application/json",
+    )

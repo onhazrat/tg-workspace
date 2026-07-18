@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+import json
 import uuid
+from collections.abc import Callable, Iterator
 from datetime import datetime
 from typing import Any
 
+from fastapi.encoders import jsonable_encoder
 from sqlmodel import Session, select
 
 from app.models_tg import (
@@ -281,57 +284,91 @@ def import_data(
     return {"imported": counts}
 
 
-def export_data(session: Session) -> dict[str, Any]:
+EXPORT_CHUNK_ROWS = 500
+
+
+def _stream_rows(
+    session: Session,
+    model: type[Any],
+    to_camel: Callable[[Any], dict[str, Any]],
+) -> Iterator[str]:
+    """Yield a table as JSON array items, one row at a time.
+
+    Exports must stay complete, so they cannot be capped like the log viewers.
+    Streaming with a server-side cursor keeps peak memory flat instead of
+    materialising every row (tg_posts alone is millions of rows) up front.
+    """
+    statement = select(model).execution_options(yield_per=EXPORT_CHUNK_ROWS)
+    result = session.exec(statement)
+    try:
+        first = True
+        for row in result:
+            yield ("" if first else ",") + json.dumps(
+                jsonable_encoder(to_camel(row)), separators=(",", ":")
+            )
+            first = False
+    finally:
+        # Release the cursor even if the client disconnects mid-export;
+        # a dangling one keeps the read transaction (and its locks) open.
+        result.close()
+
+
+def stream_export_data(session: Session) -> Iterator[str]:
+    """Serialise a full export incrementally as JSON.
+
+    Emits the same document export_data() built in memory, so clients and the
+    import path see no difference.
+    """
+    try:
+        yield from _stream_export_body(session)
+    finally:
+        # End the long read transaction so a big export cannot block DDL
+        # or hold back autovacuum for its whole duration.
+        session.rollback()
+
+
+def _stream_export_body(session: Session) -> Iterator[str]:
     groups_by_id = load_groups_by_id(session)
-    channels = session.exec(select(Channel)).all()
-    return {
-        "version": 2,
-        "timestamp": int(datetime.utcnow().timestamp() * 1000),
-        "data": {
-            "setting_groups": [
-                setting_group_to_camel(group) for group in groups_by_id.values()
+
+    yield '{"version":2,"timestamp":'
+    yield str(int(datetime.utcnow().timestamp() * 1000))
+    yield ',"data":{'
+
+    # Small tables: already bounded, emit directly.
+    yield '"setting_groups":'
+    yield json.dumps(
+        jsonable_encoder(
+            [setting_group_to_camel(g) for g in groups_by_id.values()],
+        ),
+        separators=(",", ":"),
+    )
+    yield ',"channels":'
+    yield json.dumps(
+        jsonable_encoder(
+            [
+                channel_to_camel(c, group=groups_by_id.get(c.setting_group_id))
+                for c in session.exec(select(Channel)).all()
             ],
-            "channels": [
-                channel_to_camel(
-                    channel, group=groups_by_id.get(channel.setting_group_id)
-                )
-                for channel in channels
-            ],
-            "posts": [post_to_camel(p) for p in session.exec(select(Post)).all()],
-            "summaries": [
-                summary_to_camel(s) for s in session.exec(select(Summary)).all()
-            ],
-            "bot_credentials": [
-                bot_to_camel(b) for b in session.exec(select(BotCredential)).all()
-            ],
-            "chat_destinations": [
-                chat_dest_to_camel(d)
-                for d in session.exec(select(ChatDestination)).all()
-            ],
-            "publish_logs": [
-                publish_log_to_camel(log)
-                for log in session.exec(select(PublishLog)).all()
-            ],
-            "sync_logs": [
-                sync_log_to_camel(log) for log in session.exec(select(SyncLog)).all()
-            ],
-            "llm_logs": [
-                llm_log_to_camel(log) for log in session.exec(select(LLMLog)).all()
-            ],
-            "embedding_logs": [
-                embedding_log_to_camel(log)
-                for log in session.exec(select(EmbeddingLog)).all()
-            ],
-            "network_logs": [
-                network_log_to_camel(log)
-                for log in session.exec(select(NetworkLog)).all()
-            ],
-            "embeddings": [
-                embedding_to_camel(e) for e in session.exec(select(PostEmbedding)).all()
-            ],
-            "translations": [
-                translation_to_camel(t)
-                for t in session.exec(select(PostTranslation)).all()
-            ],
-        },
-    }
+        ),
+        separators=(",", ":"),
+    )
+
+    # Large tables: stream row by row.
+    for key, model, to_camel in (
+        ("posts", Post, post_to_camel),
+        ("summaries", Summary, summary_to_camel),
+        ("bot_credentials", BotCredential, bot_to_camel),
+        ("chat_destinations", ChatDestination, chat_dest_to_camel),
+        ("publish_logs", PublishLog, publish_log_to_camel),
+        ("sync_logs", SyncLog, sync_log_to_camel),
+        ("llm_logs", LLMLog, llm_log_to_camel),
+        ("embedding_logs", EmbeddingLog, embedding_log_to_camel),
+        ("network_logs", NetworkLog, network_log_to_camel),
+        ("embeddings", PostEmbedding, embedding_to_camel),
+        ("translations", PostTranslation, translation_to_camel),
+    ):
+        yield f',"{key}":['
+        yield from _stream_rows(session, model, to_camel)
+        yield "]"
+
+    yield "}}"

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import uuid
+from collections.abc import Callable
 from datetime import datetime
 from typing import Any, TypeVar, cast
 
@@ -231,41 +232,92 @@ def delete_old_logs(
     return deleted
 
 
-def list_publish_logs(session: Session) -> list[dict[str, Any]]:
-    return [publish_log_to_camel(log) for log in session.exec(select(PublishLog)).all()]
+def _list_logs_page(
+    session: Session,
+    model: type[LogModel],
+    timestamp_col: Any,
+    to_camel: Callable[[Any], dict[str, Any]],
+    *,
+    limit: int,
+    offset: int,
+) -> list[dict[str, Any]]:
+    """Return one newest-first page of a log table.
+
+    Log rows carry request/response JSON payloads and the tables grow without
+    bound between retention sweeps, so an unfiltered select can materialise
+    gigabytes at once and OOM the worker. Every viewer endpoint goes through
+    here; full data still ships via the export path, which streams.
+
+    The ordering column is passed in rather than read off the type variable so
+    it stays statically checkable.
+    """
+    statement = select(model).order_by(timestamp_col.desc()).offset(offset).limit(limit)
+    return [to_camel(row) for row in session.exec(statement).all()]
+
+
+def list_publish_logs(
+    session: Session, *, limit: int = DEFAULT_LOG_PAGE_SIZE, offset: int = 0
+) -> list[dict[str, Any]]:
+    return _list_logs_page(
+        session,
+        PublishLog,
+        col(PublishLog.timestamp),
+        publish_log_to_camel,
+        limit=limit,
+        offset=offset,
+    )
 
 
 def list_sync_logs(
     session: Session, *, limit: int = DEFAULT_LOG_PAGE_SIZE, offset: int = 0
 ) -> list[dict[str, Any]]:
-    """Return the newest sync logs, capped.
-
-    tg_sync_logs carries a full_request/full_response JSON payload per row and
-    grows without bound between retention sweeps. Selecting the whole table
-    materialised every payload at once, which OOM-killed the worker; keep this
-    bounded and newest-first (the order the UI displays anyway).
-    """
-    statement = (
-        select(SyncLog)
-        .order_by(col(SyncLog.timestamp).desc())
-        .offset(offset)
-        .limit(limit)
+    return _list_logs_page(
+        session,
+        SyncLog,
+        col(SyncLog.timestamp),
+        sync_log_to_camel,
+        limit=limit,
+        offset=offset,
     )
-    return [sync_log_to_camel(log) for log in session.exec(statement).all()]
 
 
-def list_llm_logs(session: Session) -> list[dict[str, Any]]:
-    return [llm_log_to_camel(log) for log in session.exec(select(LLMLog)).all()]
+def list_llm_logs(
+    session: Session, *, limit: int = DEFAULT_LOG_PAGE_SIZE, offset: int = 0
+) -> list[dict[str, Any]]:
+    return _list_logs_page(
+        session,
+        LLMLog,
+        col(LLMLog.timestamp),
+        llm_log_to_camel,
+        limit=limit,
+        offset=offset,
+    )
 
 
-def list_embedding_logs(session: Session) -> list[dict[str, Any]]:
-    return [
-        embedding_log_to_camel(log) for log in session.exec(select(EmbeddingLog)).all()
-    ]
+def list_embedding_logs(
+    session: Session, *, limit: int = DEFAULT_LOG_PAGE_SIZE, offset: int = 0
+) -> list[dict[str, Any]]:
+    return _list_logs_page(
+        session,
+        EmbeddingLog,
+        col(EmbeddingLog.timestamp),
+        embedding_log_to_camel,
+        limit=limit,
+        offset=offset,
+    )
 
 
-def list_network_logs(session: Session) -> list[dict[str, Any]]:
-    return [network_log_to_camel(log) for log in session.exec(select(NetworkLog)).all()]
+def list_network_logs(
+    session: Session, *, limit: int = DEFAULT_LOG_PAGE_SIZE, offset: int = 0
+) -> list[dict[str, Any]]:
+    return _list_logs_page(
+        session,
+        NetworkLog,
+        col(NetworkLog.timestamp),
+        network_log_to_camel,
+        limit=limit,
+        offset=offset,
+    )
 
 
 def create_logs(

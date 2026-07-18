@@ -845,6 +845,11 @@ export type DataUpsertTranslationsResponse = ({
     [key: string]: (number);
 });
 
+export type DataListPublishLogsRouteData = {
+    limit?: number;
+    offset?: number;
+};
+
 export type DataListPublishLogsRouteResponse = (Array<{
     [key: string]: unknown;
 }>);
@@ -878,6 +883,11 @@ export type DataCreateSyncLogsResponse = ({
     [key: string]: (number);
 });
 
+export type DataListLlmLogsRouteData = {
+    limit?: number;
+    offset?: number;
+};
+
 export type DataListLlmLogsRouteResponse = (Array<{
     [key: string]: unknown;
 }>);
@@ -891,6 +901,11 @@ export type DataCreateLlmLogsData = {
 export type DataCreateLlmLogsResponse = ({
     [key: string]: (number);
 });
+
+export type DataListEmbeddingLogsRouteData = {
+    limit?: number;
+    offset?: number;
+};
 
 export type DataListEmbeddingLogsRouteResponse = (({
     [key: string]: unknown;
@@ -907,6 +922,11 @@ export type DataCreateEmbeddingLogsData = {
 export type DataCreateEmbeddingLogsResponse = ({
     [key: string]: (number);
 });
+
+export type DataListNetworkLogsRouteData = {
+    limit?: number;
+    offset?: number;
+};
 
 export type DataListNetworkLogsRouteResponse = (Array<{
     [key: string]: unknown;
@@ -980,9 +1000,7 @@ export type DataImportDataResponse = ({
     [key: string]: unknown;
 });
 
-export type DataExportDataResponse = ({
-    [key: string]: unknown;
-});
+export type DataExportDataResponse = (unknown);
 
 export type ItemsReadItemsData = {
     limit?: number;
