@@ -30,7 +30,9 @@ Shared components for the `/_tg/summarizer` shell live under [`src/components/ui
 
 Justified one-offs that cannot use an existing variant must include a one-line `// tg-ui-allow: <reason>` comment. The CI gate ([`scripts/check-tg-ui-duplicates.sh`](../scripts/check-tg-ui-duplicates.sh)) skips files with that comment. Prefer extending a primitive (`successSoft` / `infoSoft` / `link` / `dense`) over allowlisting.
 
-Deferred UX patterns (leave as raw until a dedicated design): SettingsHub nav, LogFilterBar density filters, Chat mode toggles, ChannelCard selection checkbox / dashed Add Tag.
+Deferred UX patterns (leave as raw until a dedicated design): LogFilterBar density filters, Chat mode toggles, ChannelCard selection checkbox / dashed Add Tag.
+
+Settings hub IA + searchable catalog: [`settings-catalog.md`](./settings-catalog.md).
 
 ## Left-behind greps
 

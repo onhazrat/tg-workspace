@@ -122,7 +122,6 @@ export const appSettingsSpec = {
   aiTemperature: floatSetting("aiTemperature", 0.7),
   embeddingsEnabled: booleanSetting("embeddingsEnabled", false),
   embeddingsPaused: booleanSetting("embeddingsPaused", false),
-  advancedMode: booleanSetting("advancedMode", false),
   showChannelBio: booleanSetting("showChannelBio", true),
   showChannelSubscribers: booleanSetting("showChannelSubscribers", true),
   showChannelTelegramChatId: booleanSetting("showChannelTelegramChatId", false),

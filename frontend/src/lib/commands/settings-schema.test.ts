@@ -3,6 +3,7 @@ import type { CommandContext } from "@/lib/commands/types"
 import {
   BOOLEAN_SETTINGS,
   buildSettingCommands,
+  LEGACY_SETTING_COMMAND_IDS,
   NUMERIC_EDITOR_DEFS,
 } from "./settings-schema"
 
@@ -88,8 +89,6 @@ function makeContext(
     setShowChannelLinks: () => {},
     showChannelStartId: false,
     setShowChannelStartId: () => {},
-    advancedMode: false,
-    setAdvancedMode: () => {},
     ...overrides,
   }
 
@@ -159,5 +158,30 @@ describe("buildSettingCommands numeric editors", () => {
 
   test("boolean commands still expose ON/OFF badges", () => {
     expect(BOOLEAN_SETTINGS.length).toBeGreaterThan(0)
+  })
+
+  test("legacy command ids are preserved (minus advancedMode)", () => {
+    const ids = new Set(commands.map((c) => c.id))
+    for (const id of LEGACY_SETTING_COMMAND_IDS) {
+      expect(ids.has(id)).toBe(true)
+    }
+    expect(ids.has("toggle-advanced-mode")).toBe(false)
+    expect(ids.has("enable-advanced-mode")).toBe(false)
+    expect(ids.has("disable-advanced-mode")).toBe(false)
+  })
+
+  test("new sync interval editors exist", () => {
+    expect(
+      commands.some((c) => c.id === "edit-regular-sync-interval-minutes"),
+    ).toBe(true)
+    expect(
+      commands.some((c) => c.id === "edit-dynamic-sync-expected-posts"),
+    ).toBe(true)
+    expect(
+      commands.some((c) => c.id === "edit-sync-failure-backoff-minutes"),
+    ).toBe(true)
+    expect(commands.some((c) => c.id === "toggle-dynamic-sync-default")).toBe(
+      true,
+    )
   })
 })

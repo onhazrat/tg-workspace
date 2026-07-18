@@ -3,14 +3,42 @@ import { expect, test } from "@playwright/test"
 
 import { seedTestChannel } from "./utils/seed-channel"
 
+const TAB_LABELS: Record<string, string> = {
+  channels: "Channels",
+  posts: "Posts",
+  summary: "Summary",
+  tag: "Tag",
+  discover: "Discover",
+  chat: "Chat",
+  history: "History",
+  settings: "Settings",
+}
+
 async function gotoSummarizer(page: Page, tab = "channels") {
   await page.goto(`/summarizer?tab=${tab}`)
-  await expect(page.locator(`#tour-tab-${tab}`)).toBeVisible()
+  const label = TAB_LABELS[tab] ?? tab
+  // Role locators are more reliable than `#nav-tab-*` under Playwright Chrome.
+  await expect(
+    page.getByRole("button", { name: label, exact: true }).first(),
+  ).toBeVisible()
 }
 
 async function openSettingsSection(page: Page, sectionLabel: string) {
   await gotoSummarizer(page, "settings")
-  await expect(page.getByText("Engine Room")).toBeVisible()
+  await expect(page.getByTestId("settings-search")).toBeVisible()
+  // Nested TOC leaves live under a parent — expand parent first when needed.
+  const nestedParents: Record<string, string> = {
+    Diagnostics: "Tools",
+    "Runtime Config": "Tools",
+    Proxy: "Network",
+    Tor: "Network",
+    Retention: "Data",
+    "Setting Groups": "Channels & Sync",
+  }
+  const parent = nestedParents[sectionLabel]
+  if (parent) {
+    await page.getByRole("button", { name: parent, exact: true }).click()
+  }
   await page.getByRole("button", { name: sectionLabel, exact: true }).click()
 }
 
@@ -57,8 +85,8 @@ test.describe("TG UI primitives", () => {
     await search.fill("alpha")
     await expect(search).toHaveValue("alpha")
 
-    // Scraping & Sync exposes TgInput without Advanced Mode / proxy gates.
-    await openSettingsSection(page, "Scraping & Sync")
+    // Channels & Sync exposes TgInput without Advanced Mode / proxy gates.
+    await openSettingsSection(page, "Channels & Sync")
     const settingsField = page.locator('[data-slot="tg-input"]').first()
     await expect(settingsField).toBeVisible()
     await settingsField.fill("42")
@@ -145,7 +173,7 @@ test.describe("TG UI primitives", () => {
   test("sync bulk reset uses inline confirm (not a modal)", async ({
     page,
   }) => {
-    await openSettingsSection(page, "Scraping & Sync")
+    await openSettingsSection(page, "Channels & Sync")
 
     let nativeConfirmOpened = false
     page.on("dialog", async (dialog) => {

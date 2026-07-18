@@ -38,15 +38,6 @@ async function pickEntityFilterKeyboard(page: Page, value: string) {
   await entityInput.press("Enter")
 }
 
-async function enableAdvancedMode(page: Page) {
-  await page.goto("/summarizer")
-  await page.evaluate(() => {
-    localStorage.setItem("advancedMode", "true")
-  })
-  await page.reload()
-  await expect(page.getByTestId("command-palette-button")).toBeVisible()
-}
-
 async function closePaletteKeyboard(page: Page) {
   const palette = page.getByTestId("command-palette")
   if (!(await palette.isVisible())) return
@@ -605,18 +596,23 @@ test.describe("TG Summarizer", () => {
     }
   })
 
-  test("settings tab opens Engine Room with network section", async ({
+  test("settings tab opens Settings hub with network section", async ({
     page,
   }) => {
     await page.goto("/summarizer?tab=summary")
-    await expect(page.locator("#tour-tab-summary")).toBeVisible()
+    // Prefer role locators: `#nav-tab-*` CSS ids are flaky under Playwright
+    // Chrome (document ID map sometimes misses React-assigned ids).
+    await expect(
+      page.getByRole("button", { name: "Summary", exact: true }).first(),
+    ).toBeVisible()
 
-    await page.locator("#tour-tab-settings").click()
     await page
-      .getByRole("button", { name: "Network & Security", exact: true })
+      .getByRole("button", { name: "Settings", exact: true })
+      .first()
       .click()
+    await page.getByRole("button", { name: "Network", exact: true }).click()
 
-    await expect(page.getByText("Engine Room")).toBeVisible()
+    await expect(page.getByTestId("settings-search")).toBeVisible()
     await expect(page).toHaveURL(/tab=settings/)
     await expect(page).toHaveURL(/section=network/)
   })
@@ -1196,7 +1192,6 @@ test.describe("command palette keyboard", () => {
   test("K15: clear indexeddb table confirm cancel via keyboard", async ({
     page,
   }) => {
-    await enableAdvancedMode(page)
     await gotoSummarizer(page, "summary")
 
     await openPaletteKeyboard(page)

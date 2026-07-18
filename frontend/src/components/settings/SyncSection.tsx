@@ -1,4 +1,4 @@
-import { Activity, Database, RefreshCw, RotateCw, Zap } from "lucide-react"
+import { Activity, Database, RefreshCw, RotateCw } from "lucide-react"
 import { AnimatePresence, motion } from "motion/react"
 import type React from "react"
 import { useEffect, useState } from "react"
@@ -11,12 +11,22 @@ import { TgSettingsSection } from "@/components/ui/tg-settings-section"
 import { useData } from "@/contexts/DataContext"
 import { useSettings } from "@/contexts/SettingsContext"
 import { JOB_LABELS, useJobToggles } from "@/hooks/useJobToggles"
-import { SettingGroupsPanel } from "../SettingGroupsPanel"
+import { getCatalogEntry } from "@/lib/settings/catalog"
+import { CatalogSettingRow } from "./CommonlyUsedSection"
+import { SettingAnchor } from "./SettingAnchor"
 
-export const SyncSection: React.FC = () => {
+const SYNC_CATALOG_IDS = [
+  "syncConcurrency",
+  "regularSyncIntervalMinutes",
+  "dynamicSyncEnabledDefault",
+  "dynamicSyncExpectedPostsDefault",
+  "syncFailureBackoffMinutes",
+] as const
+
+export const SyncSection: React.FC<{
+  highlightId?: string | null
+}> = ({ highlightId = null }) => {
   const {
-    syncConcurrency,
-    setSyncConcurrency,
     postRetentionDays,
     globalStartTimeMode,
     setGlobalStartTimeMode,
@@ -58,43 +68,24 @@ export const SyncSection: React.FC = () => {
     <div className="space-y-8 lg:col-span-2">
       <TgSettingsSection icon={RefreshCw} title="Automation & Sync">
         <div className="space-y-6">
-          <SettingGroupsPanel />
-
-          <div className="space-y-4 pt-4 border-t border-app-ink/5">
-            <div className="flex items-center gap-2 opacity-60 mb-2">
-              <Zap size={14} />
-              <span className="text-[10px] font-bold uppercase tracking-tight">
-                Sync Concurrency
-              </span>
-            </div>
-            <TgHelpText className="mb-2">
-              Number of channels to sync in parallel. Higher is faster but
-              riskier.
-            </TgHelpText>
-            <div className="flex items-center gap-3">
-              <TgInput
-                type="number"
-                min="1"
-                value={syncConcurrency}
-                onChange={(e) => {
-                  const val = parseInt(e.target.value, 10)
-                  setSyncConcurrency(!Number.isNaN(val) && val >= 1 ? val : 1)
-                }}
-                className="w-20 p-2 normal-case tracking-normal rounded"
-              />
-              <span className="text-[10px] opacity-60 uppercase tracking-widest font-bold">
-                Parallel channels
-              </span>
-            </div>
-            {syncConcurrency > 50 && (
-              <p className="text-[8px] text-amber-600/80 italic serif">
-                Values above 50 may trigger rate limits or bans. Use with
-                caution.
-              </p>
-            )}
+          <div className="space-y-1">
+            {SYNC_CATALOG_IDS.map((id) => {
+              const entry = getCatalogEntry(id)
+              return entry ? (
+                <CatalogSettingRow
+                  key={id}
+                  entry={entry}
+                  highlighted={highlightId === id}
+                />
+              ) : null
+            })}
           </div>
 
-          <div className="space-y-4 pt-4 border-t border-app-ink/5">
+          <SettingAnchor
+            settingId="globalStartTimeMode"
+            highlighted={highlightId === "globalStartTimeMode"}
+            className="space-y-4 pt-4 border-t border-app-ink/5"
+          >
             <div className="flex items-center gap-2 opacity-60 mb-2">
               <Database size={14} />
               <span className="text-[10px] font-bold uppercase tracking-tight">
@@ -136,7 +127,11 @@ export const SyncSection: React.FC = () => {
                   exit={{ opacity: 0, height: 0 }}
                   className="pt-2"
                 >
-                  <div className="flex items-center gap-3">
+                  <SettingAnchor
+                    settingId="globalStartTimeValue"
+                    highlighted={highlightId === "globalStartTimeValue"}
+                    className="flex items-center gap-3"
+                  >
                     <TgInput
                       type="number"
                       min="1"
@@ -155,7 +150,7 @@ export const SyncSection: React.FC = () => {
                     <span className="text-[10px] opacity-60 uppercase tracking-widest font-bold">
                       Days Ago
                     </span>
-                  </div>
+                  </SettingAnchor>
                 </motion.div>
               )}
               {globalStartTimeMode === "absolute" && (
@@ -166,23 +161,28 @@ export const SyncSection: React.FC = () => {
                   exit={{ opacity: 0, height: 0 }}
                   className="pt-2"
                 >
-                  <TgInput
-                    type="datetime-local"
-                    value={
-                      typeof globalStartTimeValue === "string"
-                        ? globalStartTimeValue.slice(0, 16)
-                        : new Date().toISOString().slice(0, 16)
-                    }
-                    onChange={(e) => {
-                      if (e.target.value) {
-                        const date = new Date(e.target.value)
-                        if (!Number.isNaN(date.getTime())) {
-                          setGlobalStartTimeValue(date.toISOString())
-                        }
+                  <SettingAnchor
+                    settingId="globalStartTimeValue"
+                    highlighted={highlightId === "globalStartTimeValue"}
+                  >
+                    <TgInput
+                      type="datetime-local"
+                      value={
+                        typeof globalStartTimeValue === "string"
+                          ? globalStartTimeValue.slice(0, 16)
+                          : new Date().toISOString().slice(0, 16)
                       }
-                    }}
-                    className="p-2 normal-case tracking-normal rounded"
-                  />
+                      onChange={(e) => {
+                        if (e.target.value) {
+                          const date = new Date(e.target.value)
+                          if (!Number.isNaN(date.getTime())) {
+                            setGlobalStartTimeValue(date.toISOString())
+                          }
+                        }
+                      }}
+                      className="p-2 normal-case tracking-normal rounded"
+                    />
+                  </SettingAnchor>
                 </motion.div>
               )}
             </AnimatePresence>
@@ -200,7 +200,7 @@ export const SyncSection: React.FC = () => {
                 Clamped by {postRetentionDays} days retention policy.
               </p>
             )}
-          </div>
+          </SettingAnchor>
 
           <div className="space-y-3 pt-4 border-t border-app-ink/5">
             <div className="flex items-center gap-2 opacity-60">

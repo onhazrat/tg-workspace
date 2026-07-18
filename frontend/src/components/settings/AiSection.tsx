@@ -1,13 +1,16 @@
 import { Cpu, Database, Languages, RefreshCw, Thermometer } from "lucide-react"
 import { AnimatePresence, motion } from "motion/react"
 import type React from "react"
+import { SettingAnchor } from "@/components/settings/SettingAnchor"
 import { TgHelpText, TgInput, tgFieldClassName } from "@/components/ui/tg-input"
 import { TgSettingsSection } from "@/components/ui/tg-settings-section"
 import { TgToggle } from "@/components/ui/tg-toggle"
 import { LANGUAGES, MODELS } from "@/constants"
 import { useSettings } from "@/contexts/SettingsContext"
 
-export const AiSection: React.FC = () => {
+export const AiSection: React.FC<{
+  highlightId?: string | null
+}> = ({ highlightId = null }) => {
   const {
     aiLanguage,
     setAiLanguage,
@@ -27,14 +30,17 @@ export const AiSection: React.FC = () => {
     setTranslationModel,
     translationTargetLanguage,
     setTranslationTargetLanguage,
-    advancedMode,
   } = useSettings()
 
   return (
     <div className="space-y-8 lg:col-span-2">
       <TgSettingsSection icon={Cpu} title="AI Engine Parameters">
         <div className="space-y-8">
-          <div className="space-y-4">
+          <SettingAnchor
+            settingId="aiLanguage"
+            highlighted={highlightId === "aiLanguage"}
+            className="space-y-4"
+          >
             <div className="flex items-center gap-2 opacity-60">
               <Languages size={14} />
               <span className="text-[10px] font-bold uppercase tracking-tight">
@@ -55,9 +61,13 @@ export const AiSection: React.FC = () => {
             <TgHelpText>
               Summaries and chat responses will be generated in this language.
             </TgHelpText>
-          </div>
+          </SettingAnchor>
 
-          <div className="space-y-4">
+          <SettingAnchor
+            settingId="selectedModel"
+            highlighted={highlightId === "selectedModel"}
+            className="space-y-4"
+          >
             <div className="flex items-center gap-2 opacity-60">
               <Cpu size={14} />
               <span className="text-[10px] font-bold uppercase tracking-tight">
@@ -82,54 +92,62 @@ export const AiSection: React.FC = () => {
             <TgHelpText>
               Flash models are faster, Pro models are more detailed.
             </TgHelpText>
-          </div>
+          </SettingAnchor>
 
-          {advancedMode && (
-            <>
-              <div className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2 opacity-60">
-                    <Cpu size={14} />
-                    <span className="text-[10px] font-bold uppercase tracking-tight">
-                      Enable Embeddings & RAG
-                    </span>
-                  </div>
-                  <TgToggle
-                    checked={embeddingsEnabled}
-                    onClick={() => setEmbeddingsEnabled(!embeddingsEnabled)}
-                  />
-                </div>
-                <TgHelpText>
-                  Generate vector embeddings for posts to enable semantic search
-                  and RAG chat. Warning: Takes significant disk space.
-                </TgHelpText>
+          <SettingAnchor
+            settingId="embeddingsEnabled"
+            highlighted={highlightId === "embeddingsEnabled"}
+            className="space-y-4"
+          >
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 opacity-60">
+                <Cpu size={14} />
+                <span className="text-[10px] font-bold uppercase tracking-tight">
+                  Enable Embeddings & RAG
+                </span>
               </div>
+              <TgToggle
+                checked={embeddingsEnabled}
+                onClick={() => setEmbeddingsEnabled(!embeddingsEnabled)}
+              />
+            </div>
+            <TgHelpText>
+              Generate vector embeddings for posts to enable semantic search and
+              RAG chat. Warning: Takes significant disk space.
+            </TgHelpText>
+          </SettingAnchor>
 
-              {embeddingsEnabled && (
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2 opacity-60">
-                      <Database size={14} />
-                      <span className="text-[10px] font-bold uppercase tracking-tight">
-                        Pause Embedding Sync
-                      </span>
-                    </div>
-                    <TgToggle
-                      checked={embeddingsPaused}
-                      onClick={() => setEmbeddingsPaused(!embeddingsPaused)}
-                      tone="amber"
-                    />
-                  </div>
-                  <TgHelpText>
-                    Temporarily pause the background generation of embeddings to
-                    save API quota or CPU usage.
-                  </TgHelpText>
+          {embeddingsEnabled && (
+            <SettingAnchor
+              settingId="embeddingsPaused"
+              highlighted={highlightId === "embeddingsPaused"}
+              className="space-y-4"
+            >
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2 opacity-60">
+                  <Database size={14} />
+                  <span className="text-[10px] font-bold uppercase tracking-tight">
+                    Pause Embedding Sync
+                  </span>
                 </div>
-              )}
-            </>
+                <TgToggle
+                  checked={embeddingsPaused}
+                  onClick={() => setEmbeddingsPaused(!embeddingsPaused)}
+                  tone="amber"
+                />
+              </div>
+              <TgHelpText>
+                Temporarily pause the background generation of embeddings to
+                save API quota or CPU usage.
+              </TgHelpText>
+            </SettingAnchor>
           )}
 
-          <div className="space-y-4">
+          <SettingAnchor
+            settingId="aiTemperature"
+            highlighted={highlightId === "aiTemperature"}
+            className="space-y-4"
+          >
             <div className="flex items-center gap-2 opacity-60">
               <Thermometer size={14} />
               <span className="text-[10px] font-bold uppercase tracking-tight">
@@ -155,112 +173,126 @@ export const AiSection: React.FC = () => {
                 0 = precise · 1 = creative
               </span>
             </div>
-          </div>
+          </SettingAnchor>
         </div>
       </TgSettingsSection>
 
-      {advancedMode && (
-        <TgSettingsSection icon={Languages} title="Translation Engine">
-          <div className="space-y-8">
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2 opacity-60">
-                  <Languages size={14} />
-                  <span className="text-[10px] font-bold uppercase tracking-tight">
-                    Enable Translation
-                  </span>
-                </div>
-                <TgToggle
-                  checked={translationEnabled}
-                  onClick={() => setTranslationEnabled(!translationEnabled)}
-                />
+      <TgSettingsSection icon={Languages} title="Translation Engine">
+        <div className="space-y-8">
+          <SettingAnchor
+            settingId="translationEnabled"
+            highlighted={highlightId === "translationEnabled"}
+            className="space-y-4"
+          >
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 opacity-60">
+                <Languages size={14} />
+                <span className="text-[10px] font-bold uppercase tracking-tight">
+                  Enable Translation
+                </span>
               </div>
-              <TgHelpText>
-                Allow translating posts natively using Gemini.
-              </TgHelpText>
+              <TgToggle
+                checked={translationEnabled}
+                onClick={() => setTranslationEnabled(!translationEnabled)}
+              />
             </div>
+            <TgHelpText>
+              Allow translating posts natively using Gemini.
+            </TgHelpText>
+          </SettingAnchor>
 
-            <AnimatePresence>
-              {translationEnabled && (
-                <motion.div
-                  initial={{ opacity: 0, height: 0 }}
-                  animate={{ opacity: 1, height: "auto" }}
-                  exit={{ opacity: 0, height: 0 }}
-                  className="space-y-6 overflow-hidden"
+          <AnimatePresence>
+            {translationEnabled && (
+              <motion.div
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: "auto" }}
+                exit={{ opacity: 0, height: 0 }}
+                className="space-y-6 overflow-hidden"
+              >
+                <SettingAnchor
+                  settingId="autoTranslate"
+                  highlighted={highlightId === "autoTranslate"}
+                  className="space-y-4"
                 >
-                  <div className="space-y-4">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2 opacity-60">
-                        <RefreshCw size={14} />
-                        <span className="text-[10px] font-bold uppercase tracking-tight">
-                          Auto-Translate Posts
-                        </span>
-                      </div>
-                      <TgToggle
-                        checked={autoTranslate}
-                        onClick={() => setAutoTranslate(!autoTranslate)}
-                      />
-                    </div>
-                    <TgHelpText>
-                      Automatically translate posts when they are loaded.
-                    </TgHelpText>
-                  </div>
-
-                  <div className="space-y-4">
+                  <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2 opacity-60">
-                      <Languages size={14} />
+                      <RefreshCw size={14} />
                       <span className="text-[10px] font-bold uppercase tracking-tight">
-                        Target Language
+                        Auto-Translate Posts
                       </span>
                     </div>
-                    <select
-                      value={translationTargetLanguage}
-                      onChange={(e) =>
-                        setTranslationTargetLanguage(e.target.value)
-                      }
-                      className={tgFieldClassName}
-                    >
-                      {LANGUAGES.map((l) => (
-                        <option
-                          key={l}
-                          value={l}
-                          className="bg-app-card text-app-ink"
-                        >
-                          {l.toUpperCase()}
-                        </option>
-                      ))}
-                    </select>
+                    <TgToggle
+                      checked={autoTranslate}
+                      onClick={() => setAutoTranslate(!autoTranslate)}
+                    />
                   </div>
+                  <TgHelpText>
+                    Automatically translate posts when they are loaded.
+                  </TgHelpText>
+                </SettingAnchor>
 
-                  <div className="space-y-4">
-                    <div className="flex items-center gap-2 opacity-60">
-                      <Cpu size={14} />
-                      <span className="text-[10px] font-bold uppercase tracking-tight">
-                        Translation Model
-                      </span>
-                    </div>
-                    <select
-                      value={translationModel}
-                      onChange={(e) => setTranslationModel(e.target.value)}
-                      className={tgFieldClassName}
-                    >
-                      {MODELS.map((m) => (
-                        <option
-                          key={m.id}
-                          value={m.id}
-                          className="bg-app-card text-app-ink"
-                        >
-                          {m.label.toUpperCase()}
-                        </option>
-                      ))}
-                    </select>
+                <SettingAnchor
+                  settingId="translationTargetLanguage"
+                  highlighted={highlightId === "translationTargetLanguage"}
+                  className="space-y-4"
+                >
+                  <div className="flex items-center gap-2 opacity-60">
+                    <Languages size={14} />
+                    <span className="text-[10px] font-bold uppercase tracking-tight">
+                      Target Language
+                    </span>
                   </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </div>
-        </TgSettingsSection>
-      )}
+                  <select
+                    value={translationTargetLanguage}
+                    onChange={(e) =>
+                      setTranslationTargetLanguage(e.target.value)
+                    }
+                    className={tgFieldClassName}
+                  >
+                    {LANGUAGES.map((l) => (
+                      <option
+                        key={l}
+                        value={l}
+                        className="bg-app-card text-app-ink"
+                      >
+                        {l.toUpperCase()}
+                      </option>
+                    ))}
+                  </select>
+                </SettingAnchor>
+
+                <SettingAnchor
+                  settingId="translationModel"
+                  highlighted={highlightId === "translationModel"}
+                  className="space-y-4"
+                >
+                  <div className="flex items-center gap-2 opacity-60">
+                    <Cpu size={14} />
+                    <span className="text-[10px] font-bold uppercase tracking-tight">
+                      Translation Model
+                    </span>
+                  </div>
+                  <select
+                    value={translationModel}
+                    onChange={(e) => setTranslationModel(e.target.value)}
+                    className={tgFieldClassName}
+                  >
+                    {MODELS.map((m) => (
+                      <option
+                        key={m.id}
+                        value={m.id}
+                        className="bg-app-card text-app-ink"
+                      >
+                        {m.label.toUpperCase()}
+                      </option>
+                    ))}
+                  </select>
+                </SettingAnchor>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+      </TgSettingsSection>
     </div>
   )
 }

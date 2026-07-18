@@ -1,16 +1,4 @@
-import * as JSZip from "jszip"
-import {
-  Activity,
-  AlertCircle,
-  Database,
-  Download,
-  HardDrive,
-  Play,
-  RefreshCw,
-  Search,
-  Trash2,
-  Upload,
-} from "lucide-react"
+import { Database, RefreshCw } from "lucide-react"
 import { motion } from "motion/react"
 import type React from "react"
 import { useState } from "react"
@@ -29,16 +17,28 @@ import {
   pickSaveFile,
 } from "../lib/data-transfer/download"
 import { importIndexedDBToServer } from "../lib/repository"
-import { RelativeTime } from "./RelativeTime"
-import { TgButton } from "./ui/tg-button"
-import { TgConfirmDialog } from "./ui/tg-confirm-dialog"
-import { TgIconButton } from "./ui/tg-icon-button"
-import { TgSettingsSection } from "./ui/tg-settings-section"
+import {
+  type ClearTableConfirm,
+  DangerPanel,
+} from "./settings/data/DangerPanel"
+import { QueryPanel } from "./settings/data/QueryPanel"
+import { RetentionPanel } from "./settings/data/RetentionPanel"
+import {
+  DatabaseStatsCards,
+  type TableSizeRow,
+  TableSizesPanel,
+} from "./settings/data/TableSizesPanel"
+import {
+  TransferExportImportActions,
+  TransferPanel,
+} from "./settings/data/TransferPanel"
+import { SettingAnchor } from "./settings/SettingAnchor"
 import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tg-tooltip"
 
-console.log("JSZip loaded:", JSZip)
-
-export const DatabaseManagement: React.FC = () => {
+export const DatabaseManagement: React.FC<{
+  focus?: "data" | "retention" | "table-sizes" | "transfer" | "query" | "danger"
+  highlightId?: string | null
+}> = ({ focus = "data", highlightId = null }) => {
   const { dbStats, loadDBStats, loadChannels, loadHistory } = useData()
   const {
     postRetentionDays,
@@ -50,16 +50,9 @@ export const DatabaseManagement: React.FC = () => {
   const [isExporting, setIsExporting] = useState(false)
   const [isImporting, setIsImporting] = useState(false)
   const [isMigratingToServer, setIsMigratingToServer] = useState(false)
-  const [confirmModal, setConfirmModal] = useState<{
-    isOpen: boolean
-    title: string
-    message: string
-    onConfirm: () => void
-  } | null>(null)
+  const [confirmModal, setConfirmModal] = useState<ClearTableConfirm>(null)
 
-  const [tableSizes, setTableSizes] = useState<
-    { name: string; size: number; count: number }[] | null
-  >(() => {
+  const [tableSizes, setTableSizes] = useState<TableSizeRow[] | null>(() => {
     const cached = localStorage.getItem("tableSizesCache")
     if (cached) {
       try {
@@ -83,7 +76,7 @@ export const DatabaseManagement: React.FC = () => {
     if (cached) {
       try {
         const sizes = JSON.parse(cached)
-        return new Set(sizes.map((s: any) => s.name))
+        return new Set(sizes.map((s: { name: string }) => s.name))
       } catch (_e) {
         return new Set()
       }
@@ -93,7 +86,7 @@ export const DatabaseManagement: React.FC = () => {
   const [isCalculatingSizes, setIsCalculatingSizes] = useState(false)
   const [selectedTable, setSelectedTable] = useState<string>("")
   const [query, setQuery] = useState<string>("")
-  const [queryResults, setQueryResults] = useState<any[] | null>(null)
+  const [queryResults, setQueryResults] = useState<unknown[] | null>(null)
   const [isQuerying, setIsQuerying] = useState(false)
   const [queryError, setQueryError] = useState<string | null>(null)
 
@@ -125,9 +118,9 @@ export const DatabaseManagement: React.FC = () => {
     try {
       const results = await runQuery(selectedTable, query)
       setQueryResults(results)
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Query failed:", err)
-      setQueryError(err.message)
+      setQueryError(err instanceof Error ? err.message : String(err))
       setQueryResults(null)
     } finally {
       setIsQuerying(false)
@@ -225,7 +218,7 @@ export const DatabaseManagement: React.FC = () => {
         metadata,
         selectedTables: Array.from(selectedTablesForExport),
       })
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Export error:", err)
       toast.error("Failed to start export")
       setIsExporting(false)
@@ -244,26 +237,26 @@ export const DatabaseManagement: React.FC = () => {
         { type: "module" },
       )
 
-      worker.onmessage = async (e) => {
-        if (e.data.type === "PROGRESS") {
-          toast.info(e.data.message, { id: "import-progress" })
-        } else if (e.data.type === "METADATA") {
-          const meta = e.data.data
+      worker.onmessage = async (ev) => {
+        if (ev.data.type === "PROGRESS") {
+          toast.info(ev.data.message, { id: "import-progress" })
+        } else if (ev.data.type === "METADATA") {
+          const meta = ev.data.data
           if (meta?.localStorage) {
             localStorage.clear()
             for (const [key, value] of Object.entries(meta.localStorage)) {
               localStorage.setItem(key, value as string)
             }
           }
-        } else if (e.data.type === "SUCCESS") {
-          toast.success(e.data.message, { id: "import-progress" })
+        } else if (ev.data.type === "SUCCESS") {
+          toast.success(ev.data.message, { id: "import-progress" })
           setIsImporting(false)
           worker.terminate()
           setTimeout(() => {
             window.location.reload()
           }, 1500)
-        } else if (e.data.type === "ERROR") {
-          toast.error(`Import failed: ${e.data.error}`, {
+        } else if (ev.data.type === "ERROR") {
+          toast.error(`Import failed: ${ev.data.error}`, {
             id: "import-progress",
           })
           setIsImporting(false)
@@ -272,7 +265,7 @@ export const DatabaseManagement: React.FC = () => {
       }
 
       worker.postMessage({ type: "IMPORT", file, clear: true })
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Import error:", err)
       toast.error("Failed to start import")
       setIsImporting(false)
@@ -298,6 +291,17 @@ export const DatabaseManagement: React.FC = () => {
       },
     })
   }
+
+  const showStats = focus === "data" || focus === "table-sizes"
+  const showTransfer = focus === "data" || focus === "transfer"
+  const showRetention = focus === "data" || focus === "retention"
+  const showTablesSection =
+    focus === "data" ||
+    focus === "table-sizes" ||
+    focus === "transfer" ||
+    focus === "query" ||
+    focus === "danger"
+  const showAbout = focus === "data" || focus === "table-sizes"
 
   return (
     <motion.div
@@ -332,446 +336,108 @@ export const DatabaseManagement: React.FC = () => {
           </Tooltip>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
-          <div className="border border-app-ink/10 p-6 bg-app-card shadow-sm flex flex-col justify-between">
-            <div>
-              <div className="flex items-center gap-3 mb-6 opacity-40">
-                <Database size={16} />
-                <h4 className="text-[11px] uppercase font-bold tracking-widest">
-                  Records
-                </h4>
-              </div>
-              <div className="space-y-4">
-                <div className="flex justify-between items-center">
-                  <span className="text-[10px] uppercase opacity-50 tracking-widest">
-                    Total Posts
-                  </span>
-                  <span className="font-mono font-bold text-[12px]">
-                    {dbStats?.postCount?.toLocaleString() || 0}
-                  </span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-[10px] uppercase opacity-50 tracking-widest">
-                    Channels
-                  </span>
-                  <span className="font-mono font-bold text-[12px]">
-                    {dbStats?.channelCount?.toLocaleString() || 0}
-                  </span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-[10px] uppercase opacity-50 tracking-widest">
-                    Summaries
-                  </span>
-                  <span className="font-mono font-bold text-[12px]">
-                    {dbStats?.summaryCount?.toLocaleString() || 0}
-                  </span>
-                </div>
-              </div>
-            </div>
-          </div>
+        {showStats && <DatabaseStatsCards dbStats={dbStats} />}
 
-          <div className="border border-app-ink/10 p-6 bg-app-card shadow-sm flex flex-col justify-between">
-            <div>
-              <div className="flex items-center gap-3 mb-6 opacity-40">
-                <HardDrive size={16} />
-                <h4 className="text-[11px] uppercase font-bold tracking-widest">
-                  Storage
-                </h4>
-              </div>
-              <div className="space-y-4">
-                <div className="flex justify-between items-center">
-                  <span className="text-[10px] uppercase opacity-50 tracking-widest">
-                    Used
-                  </span>
-                  <span className="font-mono font-bold text-[12px]">
-                    {dbStats?.storageEstimate?.usage
-                      ? `${(dbStats.storageEstimate.usage / (1024 * 1024)).toFixed(2)} MB`
-                      : "Unknown"}
-                  </span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-[10px] uppercase opacity-50 tracking-widest">
-                    Quota
-                  </span>
-                  <span className="font-mono font-bold text-[12px]">
-                    {dbStats?.storageEstimate?.quota
-                      ? `${(dbStats.storageEstimate.quota / (1024 * 1024 * 1024)).toFixed(2)} GB`
-                      : "Unknown"}
-                  </span>
-                </div>
-                {dbStats?.storageEstimate?.usage &&
-                  dbStats?.storageEstimate?.quota && (
-                    <div className="w-full h-1.5 bg-app-ink/5 rounded-full overflow-hidden mt-3">
-                      <div
-                        className="h-full bg-app-ink/40"
-                        style={{
-                          width: `${(dbStats.storageEstimate.usage / dbStats.storageEstimate.quota) * 100}%`,
-                        }}
-                      />
-                    </div>
-                  )}
-              </div>
-            </div>
-          </div>
-
-          <div className="border border-app-ink/10 p-6 bg-app-card shadow-sm flex flex-col justify-between">
-            <div>
-              <div className="flex items-center gap-3 mb-6 opacity-40">
-                <AlertCircle size={16} />
-                <h4 className="text-[11px] uppercase font-bold tracking-widest">
-                  Info
-                </h4>
-              </div>
-              <div className="space-y-4">
-                <div className="flex justify-between items-center">
-                  <span className="text-[10px] uppercase opacity-50 tracking-widest">
-                    DB Name
-                  </span>
-                  <span
-                    className="font-mono font-bold text-[10px] truncate max-w-[100px]"
-                    title="TelegramSummarizerDB"
-                  >
-                    TelegramSummarizerDB
-                  </span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-[10px] uppercase opacity-50 tracking-widest">
-                    Version
-                  </span>
-                  <span className="font-mono font-bold text-[12px]">2</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-[10px] uppercase opacity-50 tracking-widest">
-                    Persistence
-                  </span>
-                  <span className="font-mono font-bold text-[10px]">
-                    Persistent
-                  </span>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <TgSettingsSection
-          icon={Upload}
-          title="Server Migration"
-          className="mb-8"
-        >
-          <p className="text-[10px] opacity-50 italic serif mb-4">
-            One-time migration: upload your local IndexedDB data to the
-            PostgreSQL backend. Run this after logging in when moving from
-            browser-only to the FastAPI stack.
-          </p>
-          <TgButton
-            type="button"
-            variant="secondary"
-            size="md"
-            onClick={handleMigrateToServer}
-            loading={isMigratingToServer}
-            loadingLabel="Migrate IndexedDB to Server"
+        {showTransfer && (
+          <SettingAnchor
+            settingId="panel-transfer"
+            highlighted={highlightId === "panel-transfer"}
           >
-            <Upload size={14} />
-            Migrate IndexedDB to Server
-          </TgButton>
-        </TgSettingsSection>
+            <TransferPanel
+              isMigratingToServer={isMigratingToServer}
+              onMigrate={handleMigrateToServer}
+            />
+          </SettingAnchor>
+        )}
 
-        {/* Data Retention */}
-        <TgSettingsSection
-          icon={Database}
-          title="Data Retention"
-          className="mb-8"
-        >
-          <div className="space-y-6">
-            <div className="space-y-4">
-              <div className="flex items-center gap-2 opacity-60">
-                <Database size={14} />
-                <span className="text-[10px] font-bold uppercase tracking-tight">
-                  Post Retention
-                </span>
-              </div>
-              <input
-                type="number"
-                min={0}
-                step={1}
-                value={postRetentionDays}
-                onChange={(e) => {
-                  const val = Number.parseInt(e.target.value, 10)
-                  setPostRetentionDays(!Number.isNaN(val) && val >= 0 ? val : 0)
-                }}
-                className="w-full bg-app-bg border border-app-ink/20 p-2 text-[11px] font-mono focus:border-app-ink focus:outline-none transition-colors"
-              />
-              {postRetentionDays === 0 && (
-                <p className="text-[10px] opacity-60 italic serif">
-                  Never Delete — posts are kept forever.
-                </p>
-              )}
-              <p className="text-[10px] opacity-40 italic serif">
-                Automatically delete posts older than the selected timeframe.
-                Summaries and chat history are always preserved.
-              </p>
-            </div>
+        {showRetention && (
+          <SettingAnchor
+            settingId="panel-retention"
+            highlighted={highlightId === "panel-retention"}
+          >
+            <RetentionPanel
+              postRetentionDays={postRetentionDays}
+              logRetentionDays={logRetentionDays}
+              onPostRetentionDaysChange={setPostRetentionDays}
+              onLogRetentionDaysChange={setLogRetentionDays}
+              highlightId={highlightId}
+            />
+          </SettingAnchor>
+        )}
 
-            <div className="space-y-4">
-              <div className="flex items-center gap-2 opacity-60">
-                <Activity size={14} />
-                <span className="text-[10px] font-bold uppercase tracking-tight">
-                  Log Retention
-                </span>
-              </div>
-              <input
-                type="number"
-                min={0}
-                step={1}
-                value={logRetentionDays}
-                onChange={(e) => {
-                  const val = Number.parseInt(e.target.value, 10)
-                  setLogRetentionDays(!Number.isNaN(val) && val >= 0 ? val : 0)
-                }}
-                className="w-full bg-app-bg border border-app-ink/20 p-2 text-[11px] font-mono focus:border-app-ink focus:outline-none transition-colors"
-              />
-              {logRetentionDays === 0 && (
-                <p className="text-[10px] opacity-60 italic serif">
-                  Never Delete — logs are kept forever.
-                </p>
-              )}
-              <p className="text-[10px] opacity-40 italic serif">
-                Automatically delete system logs (sync, network, AI) older than
-                the selected timeframe.
-              </p>
-            </div>
-          </div>
-        </TgSettingsSection>
-
-        <TgSettingsSection
-          icon={Search}
-          title="Table Sizes & Queries"
-          className="mb-8"
-          titleClassName="text-[11px]"
-          subtitle={
-            tableSizesLastCalculated ? (
-              <>
-                Last calculated:{" "}
-                <RelativeTime timestamp={tableSizesLastCalculated} />
-              </>
-            ) : undefined
-          }
-          actions={
-            <>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <TgButton
-                    type="button"
-                    variant="secondary"
-                    size="md"
-                    onClick={handleExportDB}
-                    disabled={selectedTablesForExport.size === 0}
-                    loading={isExporting}
-                    loadingLabel="Export"
-                  >
-                    <Download size={14} />
-                    Export
-                  </TgButton>
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p className="text-[9px] uppercase font-bold">
-                    Export selected tables as JSONL
-                  </p>
-                </TooltipContent>
-              </Tooltip>
-              <div className="relative">
-                <input
-                  type="file"
-                  accept=".jsonl"
-                  onChange={handleImportDB}
-                  className="absolute inset-0 opacity-0 cursor-pointer"
-                  disabled={isImporting}
+        {showTablesSection && (
+          <SettingAnchor
+            settingId="panel-table-sizes"
+            highlighted={highlightId === "panel-table-sizes"}
+          >
+            <TableSizesPanel
+              tableSizes={tableSizes}
+              tableSizesLastCalculated={tableSizesLastCalculated}
+              selectedTable={selectedTable}
+              selectedTablesForExport={selectedTablesForExport}
+              isCalculatingSizes={isCalculatingSizes}
+              actions={
+                <TransferExportImportActions
+                  isExporting={isExporting}
+                  isImporting={isImporting}
+                  selectedExportCount={selectedTablesForExport.size}
+                  onExport={handleExportDB}
+                  onImport={handleImportDB}
                 />
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <TgButton
-                      type="button"
-                      variant="secondary"
-                      size="md"
-                      loading={isImporting}
-                      loadingLabel="Import"
-                    >
-                      <Upload size={14} />
-                      Import
-                    </TgButton>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <p className="text-[9px] uppercase font-bold">
-                      Import database from JSONL
-                    </p>
-                  </TooltipContent>
-                </Tooltip>
-              </div>
-              <TgButton
-                type="button"
-                variant="secondary"
-                size="md"
-                onClick={handleCalculateSizes}
-                loading={isCalculatingSizes}
-                loadingLabel="Calculate Sizes"
+              }
+              onSelectTable={setSelectedTable}
+              onToggleExportTable={(name, checked) => {
+                const next = new Set(selectedTablesForExport)
+                if (checked) next.add(name)
+                else next.delete(name)
+                setSelectedTablesForExport(next)
+              }}
+              onCalculateSizes={handleCalculateSizes}
+              onClearTable={handleClearTable}
+            >
+              <SettingAnchor
+                settingId="panel-query"
+                highlighted={highlightId === "panel-query"}
               >
-                <HardDrive size={14} />
-                Calculate Sizes
-              </TgButton>
-            </>
-          }
-        >
-          {tableSizes && (
-            <div className="space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {tableSizes.map((table) => (
-                  <div
-                    key={table.name}
-                    className={`p-4 border transition-colors cursor-pointer group relative ${selectedTable === table.name ? "border-app-ink bg-app-ink/5" : "border-app-ink/10 hover:border-app-ink/30"}`}
-                    onClick={() => setSelectedTable(table.name)}
-                  >
-                    <div className="flex justify-between items-center mb-2">
-                      <div className="flex items-center gap-2">
-                        <input
-                          type="checkbox"
-                          checked={selectedTablesForExport.has(table.name)}
-                          onChange={(e) => {
-                            e.stopPropagation()
-                            const newSet = new Set(selectedTablesForExport)
-                            if (e.target.checked) {
-                              newSet.add(table.name)
-                            } else {
-                              newSet.delete(table.name)
-                            }
-                            setSelectedTablesForExport(newSet)
-                          }}
-                          className="w-3 h-3 accent-app-ink"
-                        />
-                        <span className="text-[11px] font-bold uppercase tracking-widest">
-                          {table.name}
-                        </span>
-                      </div>
-                      <span className="text-[10px] font-mono opacity-60">
-                        {table.count.toLocaleString()} records
-                      </span>
-                    </div>
-                    <div className="flex justify-between items-center">
-                      <div className="text-[12px] font-mono font-bold">
-                        {(table.size / (1024 * 1024)).toFixed(2)} MB
-                      </div>
-                      <TgIconButton
-                        variant="danger"
-                        aria-label={`Clear all entries in ${table.name}`}
-                        tooltip={`Clear all entries in ${table.name}`}
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          handleClearTable(table.name)
-                        }}
-                        className="opacity-0 group-hover:opacity-100"
-                      >
-                        <Trash2 size={14} />
-                      </TgIconButton>
-                    </div>
-                  </div>
-                ))}
-              </div>
-
-              {selectedTable && (
-                <div className="border border-app-ink/10 p-4 bg-app-muted/30">
-                  <h5 className="text-[10px] uppercase font-bold tracking-widest mb-3 flex items-center gap-2">
-                    Query <span className="text-blue-500">{selectedTable}</span>
-                  </h5>
-                  <div className="flex gap-2 mb-2">
-                    <input
-                      type="text"
-                      value={query}
-                      onChange={(e) => setQuery(e.target.value)}
-                      placeholder="e.g. channelName === 'mychannel' (leave empty for all)"
-                      className="flex-1 bg-app-card border border-app-ink/20 px-3 py-2 text-[11px] font-mono focus:outline-none focus:border-app-ink/50"
-                      onKeyDown={(e) => e.key === "Enter" && handleRunQuery()}
-                    />
-                    <TgButton
-                      type="button"
-                      variant="primary"
-                      size="md"
-                      onClick={handleRunQuery}
-                      loading={isQuerying}
-                      loadingLabel="Run"
-                    >
-                      <Play size={14} />
-                      Run
-                    </TgButton>
-                  </div>
-                  <p className="text-[9px] opacity-50 italic mb-4">
-                    Uses simple JS evaluation. Example:{" "}
-                    <code className="bg-app-ink/10 px-1 py-0.5 rounded">
-                      id &gt; 100
-                    </code>{" "}
-                    or{" "}
-                    <code className="bg-app-ink/10 px-1 py-0.5 rounded">
-                      text.includes('crypto')
-                    </code>
-                  </p>
-
-                  {queryError && (
-                    <div className="p-3 bg-red-500/10 border border-red-500/20 text-red-500 text-[11px] font-mono mb-4">
-                      {queryError}
-                    </div>
-                  )}
-
-                  {queryResults && (
-                    <div className="border border-app-ink/10 bg-app-card overflow-hidden">
-                      <div className="p-2 bg-app-ink/5 border-b border-app-ink/10 flex justify-between items-center">
-                        <span className="text-[10px] font-bold uppercase tracking-widest">
-                          Results ({queryResults.length}
-                          {queryResults.length === 100 ? "+" : ""})
-                        </span>
-                      </div>
-                      <div className="max-h-96 overflow-auto p-4 text-[11px] font-mono whitespace-pre-wrap">
-                        {queryResults.length > 0 ? (
-                          JSON.stringify(queryResults, null, 2)
-                        ) : (
-                          <span className="opacity-50 italic">
-                            No results found.
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-          )}
-        </TgSettingsSection>
+                <QueryPanel
+                  selectedTable={selectedTable}
+                  query={query}
+                  queryResults={queryResults}
+                  queryError={queryError}
+                  isQuerying={isQuerying}
+                  onQueryChange={setQuery}
+                  onRunQuery={handleRunQuery}
+                />
+              </SettingAnchor>
+            </TableSizesPanel>
+          </SettingAnchor>
+        )}
       </div>
 
-      <div className="p-6 bg-app-ink/5 border border-app-ink/10">
-        <h3 className="text-[11px] uppercase font-bold tracking-widest mb-3">
-          About Local Storage
-        </h3>
-        <p className="text-[11px] opacity-60 leading-relaxed font-serif">
-          This application uses your browser's IndexedDB to store all channel
-          data and posts locally. No data is sent to our servers except for the
-          content you explicitly send to AI models for analysis. Exporting your
-          database regularly is recommended to prevent data loss if you clear
-          your browser cache.
-        </p>
-      </div>
+      {showAbout && (
+        <div className="p-6 bg-app-ink/5 border border-app-ink/10">
+          <h3 className="text-[11px] uppercase font-bold tracking-widest mb-3">
+            About Local Storage
+          </h3>
+          <p className="text-[11px] opacity-60 leading-relaxed font-serif">
+            This application uses your browser's IndexedDB to store all channel
+            data and posts locally. No data is sent to our servers except for
+            the content you explicitly send to AI models for analysis. Exporting
+            your database regularly is recommended to prevent data loss if you
+            clear your browser cache.
+          </p>
+        </div>
+      )}
 
-      <TgConfirmDialog
-        open={Boolean(confirmModal?.isOpen)}
-        onOpenChange={(open) => {
-          if (!open) setConfirmModal(null)
-        }}
-        title={confirmModal?.title ?? ""}
-        description={confirmModal?.message}
-        descriptionClassName="text-app-ink/80"
-        variant="dangerSoft"
-        onConfirm={() => {
-          confirmModal?.onConfirm()
-        }}
-        onCancel={() => setConfirmModal(null)}
-      />
+      <SettingAnchor
+        settingId="panel-danger"
+        highlighted={highlightId === "panel-danger"}
+      >
+        <DangerPanel
+          confirmModal={confirmModal}
+          onDismiss={() => setConfirmModal(null)}
+        />
+      </SettingAnchor>
     </motion.div>
   )
 }

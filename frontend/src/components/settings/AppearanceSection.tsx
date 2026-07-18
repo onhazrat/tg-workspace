@@ -1,11 +1,14 @@
 import { Info, Layout, Monitor, Moon, Sun } from "lucide-react"
 import type React from "react"
+import { SettingAnchor } from "@/components/settings/SettingAnchor"
 import { TgSegmentedControl } from "@/components/ui/tg-segmented"
 import { TgSettingsSection } from "@/components/ui/tg-settings-section"
 import { TgToggle } from "@/components/ui/tg-toggle"
 import { useSettings } from "@/contexts/SettingsContext"
 
-export const AppearanceSection: React.FC = () => {
+export const AppearanceSection: React.FC<{
+  highlightId?: string | null
+}> = ({ highlightId = null }) => {
   const {
     theme,
     setTheme,
@@ -31,7 +34,11 @@ export const AppearanceSection: React.FC = () => {
     <div className="space-y-8 lg:col-span-2">
       <TgSettingsSection icon={Layout} title="Interface & Appearance">
         <div className="space-y-8">
-          <div className="space-y-4">
+          <SettingAnchor
+            settingId="theme"
+            highlighted={highlightId === "theme"}
+            className="space-y-4"
+          >
             <div className="flex items-center gap-2 opacity-60">
               <Sun size={14} />
               <span className="text-[10px] font-bold uppercase tracking-tight">
@@ -72,7 +79,7 @@ export const AppearanceSection: React.FC = () => {
                 },
               ]}
             />
-          </div>
+          </SettingAnchor>
         </div>
       </TgSettingsSection>
 
@@ -105,7 +112,11 @@ export const AppearanceSection: React.FC = () => {
 
       <TgSettingsSection icon={Layout} title="Channel Card Display">
         <div className="space-y-6">
-          <div className="space-y-4">
+          <SettingAnchor
+            settingId="showChannelBio"
+            highlighted={highlightId === "showChannelBio"}
+            className="space-y-4"
+          >
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2 opacity-60">
                 <span className="text-[10px] font-bold uppercase tracking-tight">
@@ -118,9 +129,13 @@ export const AppearanceSection: React.FC = () => {
                 aria-label="Show bio"
               />
             </div>
-          </div>
+          </SettingAnchor>
 
-          <div className="space-y-4">
+          <SettingAnchor
+            settingId="showChannelTelegramChatId"
+            highlighted={highlightId === "showChannelTelegramChatId"}
+            className="space-y-4"
+          >
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2 opacity-60">
                 <span className="text-[10px] font-bold uppercase tracking-tight">
@@ -135,9 +150,13 @@ export const AppearanceSection: React.FC = () => {
                 aria-label="Show Telegram chat ID"
               />
             </div>
-          </div>
+          </SettingAnchor>
 
-          <div className="space-y-4">
+          <SettingAnchor
+            settingId="showChannelSubscribers"
+            highlighted={highlightId === "showChannelSubscribers"}
+            className="space-y-4"
+          >
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2 opacity-60">
                 <span className="text-[10px] font-bold uppercase tracking-tight">
@@ -152,9 +171,13 @@ export const AppearanceSection: React.FC = () => {
                 aria-label="Show subscribers"
               />
             </div>
-          </div>
+          </SettingAnchor>
 
-          <div className="space-y-4">
+          <SettingAnchor
+            settingId="showChannelPhotos"
+            highlighted={highlightId === "showChannelPhotos"}
+            className="space-y-4"
+          >
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2 opacity-60">
                 <span className="text-[10px] font-bold uppercase tracking-tight">
@@ -167,9 +190,13 @@ export const AppearanceSection: React.FC = () => {
                 aria-label="Show photos count"
               />
             </div>
-          </div>
+          </SettingAnchor>
 
-          <div className="space-y-4">
+          <SettingAnchor
+            settingId="showChannelVideos"
+            highlighted={highlightId === "showChannelVideos"}
+            className="space-y-4"
+          >
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2 opacity-60">
                 <span className="text-[10px] font-bold uppercase tracking-tight">
@@ -182,9 +209,13 @@ export const AppearanceSection: React.FC = () => {
                 aria-label="Show videos count"
               />
             </div>
-          </div>
+          </SettingAnchor>
 
-          <div className="space-y-4">
+          <SettingAnchor
+            settingId="showChannelFiles"
+            highlighted={highlightId === "showChannelFiles"}
+            className="space-y-4"
+          >
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2 opacity-60">
                 <span className="text-[10px] font-bold uppercase tracking-tight">
@@ -197,9 +228,13 @@ export const AppearanceSection: React.FC = () => {
                 aria-label="Show files count"
               />
             </div>
-          </div>
+          </SettingAnchor>
 
-          <div className="space-y-4">
+          <SettingAnchor
+            settingId="showChannelLinks"
+            highlighted={highlightId === "showChannelLinks"}
+            className="space-y-4"
+          >
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2 opacity-60">
                 <span className="text-[10px] font-bold uppercase tracking-tight">
@@ -212,9 +247,13 @@ export const AppearanceSection: React.FC = () => {
                 aria-label="Show links count"
               />
             </div>
-          </div>
+          </SettingAnchor>
 
-          <div className="space-y-4">
+          <SettingAnchor
+            settingId="showChannelStartId"
+            highlighted={highlightId === "showChannelStartId"}
+            className="space-y-4"
+          >
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2 opacity-60">
                 <span className="text-[10px] font-bold uppercase tracking-tight">
@@ -227,7 +266,7 @@ export const AppearanceSection: React.FC = () => {
                 aria-label="Show start ID"
               />
             </div>
-          </div>
+          </SettingAnchor>
         </div>
       </TgSettingsSection>
     </div>

@@ -24,15 +24,18 @@ export const WORKSPACE_TABS = [
 ] as const
 
 export const SETTINGS_TABS = [
+  { id: "commonly-used", label: "Commonly Used", icon: "Star" },
   { id: "appearance", label: "Appearance", icon: "Layout" },
-  { id: "sync", label: "Scraping & Sync", icon: "RefreshCw" },
+  { id: "channels-sync", label: "Channels & Sync", icon: "RefreshCw" },
   { id: "ai", label: "AI & Models", icon: "Cpu" },
-  { id: "network", label: "Network & Security", icon: "Globe" },
-  { id: "db", label: "Data Management", icon: "Database" },
+  { id: "network", label: "Network", icon: "Globe" },
   { id: "publishing", label: "Publishing", icon: "Send" },
+  { id: "data", label: "Data", icon: "Database" },
   { id: "diagnostics", label: "Diagnostics", icon: "Activity" },
   { id: "runtime-config", label: "Runtime Config", icon: "Braces" },
 ] as const
+
+/** Flat list of top-level settings destinations (legacy navigate / labels). Prefer SETTINGS_TOC. */
 
 export const MODELS = [
   { id: "gemini-3-flash-preview", label: "Gemini 3 Flash" },

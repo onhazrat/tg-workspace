@@ -148,7 +148,7 @@ describe("buildGroupCommands", () => {
       "custom-1",
     )
     expect(activeTab).toBe("settings")
-    expect(section).toBe("sync")
+    expect(section).toBe("channels-sync")
     expect(groupId).toBe("custom-1")
   })
 })

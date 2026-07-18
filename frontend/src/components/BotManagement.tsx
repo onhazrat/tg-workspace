@@ -1,15 +1,3 @@
-import {
-  Activity,
-  Bot,
-  CheckCircle2,
-  Loader2,
-  MessageSquare,
-  Plus,
-  RefreshCw,
-  RotateCcw,
-  Send,
-  Trash2,
-} from "lucide-react"
 import { motion } from "motion/react"
 import type React from "react"
 import { useState } from "react"
@@ -35,16 +23,26 @@ import type {
   NetworkLog,
   PublishLog,
 } from "../types"
-import { BotAvatar } from "./BotAvatar"
-import { RelativeTime } from "./RelativeTime"
-import { TgButton } from "./ui/tg-button"
-import { TgIconButton } from "./ui/tg-icon-button"
-import { TgInput, TgTextarea, tgFieldClassName } from "./ui/tg-input"
-import { TgSettingsSection } from "./ui/tg-settings-section"
+import {
+  BotCredentialsPanel,
+  type BotValidationState,
+} from "./settings/publishing/BotCredentialsPanel"
+import {
+  DestinationsPanel,
+  type DestValidationState,
+} from "./settings/publishing/DestinationsPanel"
+import { QuickMessagePanel } from "./settings/publishing/QuickMessagePanel"
+import { SettingAnchor } from "./settings/SettingAnchor"
 
-type BotManagementProps = {}
+type BotManagementProps = {
+  focus?: "publishing" | "bot-credentials" | "destinations" | "quick-message"
+  highlightId?: string | null
+}
 
-export const BotManagement: React.FC<BotManagementProps> = () => {
+export const BotManagement: React.FC<BotManagementProps> = ({
+  focus = "publishing",
+  highlightId = null,
+}) => {
   const {
     loadLogs,
     botCredentials,
@@ -76,9 +74,8 @@ export const BotManagement: React.FC<BotManagementProps> = () => {
   const [isAutoFetchingDest, setIsAutoFetchingDest] = useState(false)
   const [isSavingBot, setIsSavingBot] = useState(false)
   const [isSavingDest, setIsSavingDest] = useState(false)
-  const [botValidation, setBotValidation] = useState<
-    Record<string, { isValid: boolean; botInfo?: string; loading: boolean }>
-  >({})
+  const [botValidation, setBotValidation] = useState<BotValidationState>({})
+  const [destValidation, setDestValidation] = useState<DestValidationState>({})
 
   const getActiveProxies = () =>
     buildActiveProxies({
@@ -100,9 +97,11 @@ export const BotManagement: React.FC<BotManagementProps> = () => {
     const startTime = Date.now()
     let status = 0
     let errorMsg: string | undefined
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let telemetryData: any
 
     try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const data: any = await fetchBotInfoApi(
         credentialId,
         token,
@@ -116,6 +115,7 @@ export const BotManagement: React.FC<BotManagementProps> = () => {
       status = 200
       telemetryData = data.telemetry
       return data
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (error: any) {
       errorMsg = error.message
       throw error
@@ -147,7 +147,6 @@ export const BotManagement: React.FC<BotManagementProps> = () => {
 
   const handleBotTokenChange = async (token: string) => {
     setNewBotToken(token)
-    // Basic regex for Telegram bot token: digits:chars
     if (token.includes(":") && token.length > 20) {
       setIsAutoFetchingBot(true)
       try {
@@ -285,17 +284,13 @@ export const BotManagement: React.FC<BotManagementProps> = () => {
     }
   }
 
-  const [destValidation, setDestValidation] = useState<
-    Record<string, { isValid: boolean; info?: string; loading: boolean }>
-  >({})
-
   const handleCheckDestination = async (destId: string, chatId: string) => {
     if (botCredentials.length === 0) {
       toast.error("Please add a bot first to validate destinations.")
       return
     }
 
-    const bot = botCredentials[0] // Use first bot for validation
+    const bot = botCredentials[0]
     setDestValidation((prev) => ({
       ...prev,
       [destId]: { isValid: false, loading: true },
@@ -359,7 +354,6 @@ export const BotManagement: React.FC<BotManagementProps> = () => {
       setChatDestinations((prev) => [...prev, newDest])
       setNewDestName("")
       setNewDestChatId("")
-      // Trigger validation immediately
       handleCheckDestination(newDest.id, newDest.chatId)
     } finally {
       setIsSavingDest(false)
@@ -392,7 +386,6 @@ export const BotManagement: React.FC<BotManagementProps> = () => {
         torRotationThreshold,
       )
 
-      // Log the result
       const log: PublishLog = {
         id: Date.now().toString() + Math.random().toString(36).substring(2, 7),
         summaryId: `test-${Date.now()}`,
@@ -440,7 +433,6 @@ export const BotManagement: React.FC<BotManagementProps> = () => {
         torRotationThreshold,
       )
 
-      // Log the result
       const log: PublishLog = {
         id: Date.now().toString() + Math.random().toString(36).substring(2, 7),
         summaryId: `quick-${Date.now()}`,
@@ -470,6 +462,13 @@ export const BotManagement: React.FC<BotManagementProps> = () => {
     }
   }
 
+  const showCredentials = focus === "publishing" || focus === "bot-credentials"
+  const showDestinations = focus === "publishing" || focus === "destinations"
+  const showQuickMessage =
+    (focus === "publishing" || focus === "quick-message") &&
+    botCredentials.length > 0 &&
+    chatDestinations.length > 0
+
   return (
     <motion.div
       key="bots"
@@ -498,400 +497,71 @@ export const BotManagement: React.FC<BotManagementProps> = () => {
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         <div className="space-y-8">
-          <TgSettingsSection icon={Bot} title="Bot Credentials">
-            <p className="text-[10px] opacity-40 italic serif mb-6">
-              Add your Telegram Bot tokens here to enable automated publishing
-              and testing.
-            </p>
+          {showCredentials && (
+            <SettingAnchor
+              settingId="panel-bot-credentials"
+              highlighted={highlightId === "panel-bot-credentials"}
+            >
+              <BotCredentialsPanel
+                botCredentials={botCredentials}
+                publishLogs={publishLogs}
+                newBotToken={newBotToken}
+                newBotName={newBotName}
+                isAutoFetchingBot={isAutoFetchingBot}
+                isSavingBot={isSavingBot}
+                botValidation={botValidation}
+                onBotTokenChange={handleBotTokenChange}
+                onBotNameChange={setNewBotName}
+                onAddBot={handleAddBotCredential}
+                onCheckBot={handleCheckBotToken}
+                onDeleteBot={handleDeleteBotCredential}
+              />
+            </SettingAnchor>
+          )}
 
-            <div className="space-y-4 mb-8">
-              <div className="flex flex-col gap-3">
-                <div className="relative">
-                  <TgInput
-                    type="password"
-                    placeholder="BOT TOKEN (FROM @BOTFATHER)"
-                    value={newBotToken}
-                    onChange={(e) => handleBotTokenChange(e.target.value)}
-                  />
-                  {isAutoFetchingBot && (
-                    <div className="absolute right-3 top-1/2 -translate-y-1/2">
-                      <Loader2 size={12} className="animate-spin opacity-40" />
-                    </div>
-                  )}
-                </div>
-                <TgInput
-                  type="text"
-                  placeholder="BOT NAME (AUTO-FILLED OR CUSTOM)"
-                  value={newBotName}
-                  onChange={(e) => setNewBotName(e.target.value)}
-                />
-              </div>
-              <TgButton
-                type="button"
-                variant="primary"
-                size="lg"
-                onClick={handleAddBotCredential}
-                loading={isSavingBot}
-                loadingLabel="Saving…"
-                className="w-full"
-              >
-                <Plus size={14} /> Save Bot
-              </TgButton>
-            </div>
-
-            <div className="space-y-2">
-              {botCredentials.length === 0 ? (
-                <div className="text-center py-8 opacity-30 italic serif text-[10px] border border-dashed border-app-ink/10">
-                  No bot credentials saved yet.
-                </div>
-              ) : (
-                botCredentials.map((bot) => {
-                  const botStats = publishLogs.filter(
-                    (l) => l.botId === bot.id && l.status === "success",
-                  ).length
-                  return (
-                    <div
-                      key={bot.id}
-                      className="group flex flex-col p-4 border border-app-ink/10 bg-app-card hover:border-app-ink/30 transition-all gap-4"
-                    >
-                      <div className="flex justify-between items-start">
-                        <div className="flex items-start gap-4 min-w-0 flex-1">
-                          <div className="relative shrink-0 mt-0.5">
-                            <BotAvatar bot={bot} />
-                            {botValidation[bot.id]?.isValid && (
-                              <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-green-500 rounded-full border-2 border-app-card flex items-center justify-center">
-                                <CheckCircle2
-                                  size={10}
-                                  className="text-white"
-                                />
-                              </div>
-                            )}
-                          </div>
-                          <div className="min-w-0">
-                            <h3 className="text-[11px] font-bold uppercase tracking-widest truncate">
-                              {bot.name}
-                            </h3>
-                            <div className="flex items-center gap-2 mt-1">
-                              {bot.username && (
-                                <span className="text-[9px] font-mono text-blue-500">
-                                  @{bot.username}
-                                </span>
-                              )}
-                              <span className="text-[9px] font-mono opacity-40 truncate">
-                                {bot.hasToken
-                                  ? "Token stored on server"
-                                  : "No token"}
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                          <TgIconButton
-                            aria-label="Validate Token"
-                            tooltip="Validate Token"
-                            onClick={() => handleCheckBotToken(bot.id)}
-                            loading={botValidation[bot.id]?.loading}
-                            className="rounded-full opacity-60 hover:opacity-100"
-                          >
-                            <RefreshCw size={14} />
-                          </TgIconButton>
-                          <TgIconButton
-                            aria-label="Delete Bot"
-                            tooltip="Delete Bot"
-                            onClick={() => handleDeleteBotCredential(bot.id)}
-                            className="rounded-full text-red-500 opacity-60 hover:opacity-100 hover:bg-red-500/10"
-                          >
-                            <Trash2 size={14} />
-                          </TgIconButton>
-                        </div>
-                      </div>
-
-                      <div className="flex items-center justify-between pt-3 border-t border-app-ink/5">
-                        <div className="flex items-center gap-6">
-                          <div className="flex flex-col">
-                            <span className="text-[8px] font-mono uppercase tracking-widest opacity-40 mb-0.5">
-                              Status
-                            </span>
-                            <span
-                              className={`text-[10px] font-mono uppercase tracking-widest ${botValidation[bot.id]?.isValid ? "text-green-500" : botValidation[bot.id]?.isValid === false ? "text-red-500" : "opacity-40"}`}
-                            >
-                              {botValidation[bot.id]?.loading
-                                ? "Checking..."
-                                : botValidation[bot.id]?.isValid
-                                  ? "Active"
-                                  : botValidation[bot.id]?.isValid === false
-                                    ? "Invalid"
-                                    : "Unknown"}
-                            </span>
-                          </div>
-                          <div className="flex flex-col">
-                            <span className="text-[8px] font-mono uppercase tracking-widest opacity-40 mb-0.5">
-                              Messages Sent
-                            </span>
-                            <span className="text-[10px] font-bold font-mono">
-                              {botStats}
-                            </span>
-                          </div>
-                          {bot.lastValidated && (
-                            <div className="flex flex-col">
-                              <span className="text-[8px] font-mono uppercase tracking-widest opacity-40 mb-0.5">
-                                Last Validated
-                              </span>
-                              <span className="text-[10px] font-mono opacity-60">
-                                <RelativeTime timestamp={bot.lastValidated} />
-                              </span>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  )
-                })
-              )}
-            </div>
-          </TgSettingsSection>
-
-          {botCredentials.length > 0 && chatDestinations.length > 0 && (
-            <TgSettingsSection icon={MessageSquare} title="Quick Message">
-              <p className="text-[10px] opacity-40 italic serif mb-6">
-                Send an arbitrary message using a selected bot to a selected
-                destination.
-              </p>
-
-              <div className="space-y-4">
-                <div className="grid grid-cols-1 gap-3">
-                  <select
-                    value={selectedQuickBotId}
-                    onChange={(e) => setSelectedQuickBotId(e.target.value)}
-                    className={tgFieldClassName}
-                  >
-                    <option value="">SELECT BOT</option>
-                    {botCredentials.map((b) => (
-                      <option
-                        key={b.id}
-                        value={b.id}
-                        className="bg-app-card text-app-ink"
-                      >
-                        {b.name.toUpperCase()}
-                      </option>
-                    ))}
-                  </select>
-                  <select
-                    value={selectedQuickDestId}
-                    onChange={(e) => setSelectedQuickDestId(e.target.value)}
-                    className={tgFieldClassName}
-                  >
-                    <option value="">SELECT DESTINATION</option>
-                    {chatDestinations.map((d) => (
-                      <option
-                        key={d.id}
-                        value={d.id}
-                        className="bg-app-card text-app-ink"
-                      >
-                        {d.name.toUpperCase()}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <TgTextarea
-                  placeholder="TYPE YOUR MESSAGE HERE..."
-                  value={quickMessage}
-                  onChange={(e) => setQuickMessage(e.target.value)}
-                  rows={4}
-                  className="resize-none"
-                />
-                <TgButton
-                  type="button"
-                  variant="primary"
-                  size="lg"
-                  onClick={() => {
-                    const bot = botCredentials.find(
-                      (b) => b.id === selectedQuickBotId,
-                    )
-                    const dest = chatDestinations.find(
-                      (d) => d.id === selectedQuickDestId,
-                    )
-                    if (bot && dest && quickMessage) {
-                      handlePublish(
-                        bot.id,
-                        dest.chatId,
-                        bot.name,
-                        quickMessage,
-                        dest.name,
-                      )
-                      setQuickMessage("")
-                    } else {
-                      toast.error(
-                        "Please select a bot, a destination, and type a message.",
-                      )
-                    }
-                  }}
-                  disabled={
-                    !selectedQuickBotId || !selectedQuickDestId || !quickMessage
-                  }
-                  className="w-full"
-                >
-                  <Send size={14} /> Send Message
-                </TgButton>
-              </div>
-            </TgSettingsSection>
+          {showQuickMessage && (
+            <SettingAnchor
+              settingId="panel-quick-message"
+              highlighted={highlightId === "panel-quick-message"}
+            >
+              <QuickMessagePanel
+                botCredentials={botCredentials}
+                chatDestinations={chatDestinations}
+                selectedQuickBotId={selectedQuickBotId}
+                selectedQuickDestId={selectedQuickDestId}
+                quickMessage={quickMessage}
+                onSelectBot={setSelectedQuickBotId}
+                onSelectDest={setSelectedQuickDestId}
+                onMessageChange={setQuickMessage}
+                onPublish={handlePublish}
+              />
+            </SettingAnchor>
           )}
         </div>
 
         <div className="space-y-8">
-          <TgSettingsSection icon={Send} title="Chat Destinations">
-            <p className="text-[10px] opacity-40 italic serif mb-6">
-              Manage the channels, groups, or users where you want to publish
-              summaries.
-            </p>
-
-            <div className="space-y-4 mb-8">
-              <div className="flex flex-col gap-3">
-                <div className="relative">
-                  <TgInput
-                    type="text"
-                    placeholder="CHAT ID (E.G., @MYCHANNEL OR -100...)"
-                    value={newDestChatId}
-                    onChange={(e) => handleDestChatIdChange(e.target.value)}
-                  />
-                  {isAutoFetchingDest && (
-                    <div className="absolute right-3 top-1/2 -translate-y-1/2">
-                      <Loader2 size={12} className="animate-spin opacity-40" />
-                    </div>
-                  )}
-                </div>
-                <TgInput
-                  type="text"
-                  placeholder="DESTINATION NAME (AUTO-FILLED OR CUSTOM)"
-                  value={newDestName}
-                  onChange={(e) => setNewDestName(e.target.value)}
-                />
-              </div>
-              <TgButton
-                type="button"
-                variant="primary"
-                size="lg"
-                onClick={handleAddChatDestination}
-                loading={isSavingDest}
-                loadingLabel="Saving…"
-                className="w-full"
-              >
-                <Plus size={14} /> Save Destination
-              </TgButton>
-            </div>
-
-            <div className="space-y-2">
-              {chatDestinations.length === 0 ? (
-                <div className="text-center py-8 opacity-30 italic serif text-[10px] border border-dashed border-app-ink/10">
-                  No destinations saved yet.
-                </div>
-              ) : (
-                chatDestinations.map((dest) => (
-                  <div
-                    key={dest.id}
-                    className="group flex flex-col p-4 border border-app-ink/10 bg-app-card hover:border-app-ink/30 transition-all gap-4"
-                  >
-                    <div className="flex justify-between items-start">
-                      <div className="flex items-start gap-4 min-w-0 flex-1">
-                        <div className="relative shrink-0 mt-0.5">
-                          <div className="w-10 h-10 rounded-full bg-app-ink/5 border border-app-ink/10 flex items-center justify-center">
-                            <Send size={16} className="opacity-40" />
-                          </div>
-                          {destValidation[dest.id]?.isValid && (
-                            <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-green-500 rounded-full border-2 border-app-card flex items-center justify-center">
-                              <CheckCircle2 size={10} className="text-white" />
-                            </div>
-                          )}
-                        </div>
-                        <div className="min-w-0 pt-0.5">
-                          <h3 className="text-[11px] font-bold uppercase tracking-widest truncate">
-                            {dest.name}
-                          </h3>
-                          <div className="flex items-center gap-2 mt-1">
-                            <span className="text-[9px] font-mono opacity-40 truncate">
-                              {dest.chatId}
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <TgIconButton
-                          aria-label="Verify Destination"
-                          tooltip="Verify Destination"
-                          onClick={() =>
-                            handleCheckDestination(dest.id, dest.chatId)
-                          }
-                          loading={destValidation[dest.id]?.loading}
-                          className="rounded-full opacity-60 hover:opacity-100"
-                        >
-                          <Activity size={14} />
-                        </TgIconButton>
-                        {botCredentials.length > 0 && (
-                          <TgIconButton
-                            aria-label="Test Connection"
-                            tooltip="Test Connection"
-                            onClick={() => {
-                              const bot = botCredentials[0] // Use first bot for quick test
-                              handleTestBot(
-                                bot.id,
-                                dest.chatId,
-                                bot.name,
-                                dest.name,
-                              )
-                            }}
-                            className="rounded-full opacity-60 hover:opacity-100"
-                          >
-                            <RotateCcw size={14} />
-                          </TgIconButton>
-                        )}
-                        <TgIconButton
-                          aria-label="Delete Destination"
-                          tooltip="Delete Destination"
-                          onClick={() => handleDeleteChatDestination(dest.id)}
-                          className="rounded-full text-red-500 opacity-60 hover:opacity-100 hover:bg-red-500/10"
-                        >
-                          <Trash2 size={14} />
-                        </TgIconButton>
-                      </div>
-                    </div>
-                    {destValidation[dest.id] && (
-                      <div className="flex items-center justify-between pt-3 border-t border-app-ink/5">
-                        <div className="flex items-center gap-6">
-                          <div className="flex flex-col">
-                            <span className="text-[8px] font-mono uppercase tracking-widest opacity-40 mb-0.5">
-                              Status
-                            </span>
-                            <span
-                              className={`text-[10px] font-mono uppercase tracking-widest ${destValidation[dest.id]?.isValid ? "text-green-500" : destValidation[dest.id]?.isValid === false ? "text-red-500" : "opacity-40"}`}
-                            >
-                              {destValidation[dest.id]?.loading
-                                ? "Checking..."
-                                : destValidation[dest.id]?.isValid
-                                  ? "Valid"
-                                  : destValidation[dest.id]?.isValid === false
-                                    ? "Invalid"
-                                    : "Unknown"}
-                            </span>
-                          </div>
-                          <div className="flex flex-col">
-                            <span className="text-[8px] font-mono uppercase tracking-widest opacity-40 mb-0.5">
-                              Details
-                            </span>
-                            <span className="text-[10px] font-mono uppercase tracking-widest max-w-[150px] truncate">
-                              {destValidation[dest.id].info ||
-                                (destValidation[dest.id].loading
-                                  ? "Verifying..."
-                                  : "Invalid")}
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                ))
-              )}
-            </div>
-          </TgSettingsSection>
+          {showDestinations && (
+            <SettingAnchor
+              settingId="panel-destinations"
+              highlighted={highlightId === "panel-destinations"}
+            >
+              <DestinationsPanel
+                chatDestinations={chatDestinations}
+                botCredentials={botCredentials}
+                newDestChatId={newDestChatId}
+                newDestName={newDestName}
+                isAutoFetchingDest={isAutoFetchingDest}
+                isSavingDest={isSavingDest}
+                destValidation={destValidation}
+                onDestChatIdChange={handleDestChatIdChange}
+                onDestNameChange={setNewDestName}
+                onAddDestination={handleAddChatDestination}
+                onCheckDestination={handleCheckDestination}
+                onTestConnection={handleTestBot}
+                onDeleteDestination={handleDeleteChatDestination}
+              />
+            </SettingAnchor>
+          )}
         </div>
       </div>
     </motion.div>

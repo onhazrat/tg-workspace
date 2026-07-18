@@ -20,9 +20,11 @@ const VALID_TABS: TabType[] = [
 export type SummarizerSearch = {
   tab?: TabType
   section?: SettingsSection
+  /** Deep-link to a catalog setting id (scroll + highlight). */
+  setting?: string
   /** Active group filter on the Channels tab (setting group id). */
   channelGroup?: string
-  /** Selected setting group in Settings → Scraping & Sync. */
+  /** Selected setting group in Settings → Channels & Sync. */
   settingGroup?: string
 }
 
@@ -38,6 +40,9 @@ export const Route = createFileRoute("/_tg/summarizer")({
     const result: SummarizerSearch = { tab }
     if (typeof search.section === "string") {
       result.section = normalizeSettingsSection(search.section)
+    }
+    if (typeof search.setting === "string" && search.setting.trim()) {
+      result.setting = search.setting.trim()
     }
     if (typeof search.channelGroup === "string" && search.channelGroup.trim()) {
       result.channelGroup = search.channelGroup.trim()

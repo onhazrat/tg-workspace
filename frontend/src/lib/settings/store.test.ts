@@ -37,7 +37,6 @@ describe("loadAppSettings", () => {
     expect(settings.showChannelBio).toBe(true)
     expect(settings.showChannelSubscribers).toBe(true)
     expect(settings.showChannelPhotos).toBe(false)
-    expect(settings.advancedMode).toBe(false)
     expect(settings.globalStartTimeMode).toBe("retention")
     expect(settings.globalStartTimeValue).toBeNull()
     expect(settings.postRetentionDays).toBe(RETENTION_POST_DAYS_DEFAULT)
@@ -50,7 +49,6 @@ describe("loadAppSettings", () => {
         aiTemperature: "0.3",
         regularSyncIntervalMinutes: "120",
         showChannelBio: "false",
-        advancedMode: "true",
         globalStartTimeMode: "absolute",
         globalStartTimeValue: '"2024-01-01T00:00:00Z"',
       }),
@@ -59,7 +57,6 @@ describe("loadAppSettings", () => {
     expect(settings.aiTemperature).toBe(0.3)
     expect(settings.regularSyncIntervalMinutes).toBe(120)
     expect(settings.showChannelBio).toBe(false)
-    expect(settings.advancedMode).toBe(true)
     expect(settings.globalStartTimeMode).toBe("absolute")
     expect(settings.globalStartTimeValue).toBe("2024-01-01T00:00:00Z")
   })
@@ -126,7 +123,6 @@ describe("persistAppSettings", () => {
       selectedModel: "some-model",
       aiTemperature: 0.25,
       embeddingsEnabled: true,
-      advancedMode: true,
       showChannelBio: false,
       regularSyncIntervalMinutes: 90,
       dynamicSyncEnabledDefault: true,
@@ -219,9 +215,9 @@ describe("createAppSettingSetters", () => {
       state = updater(state)
     })
     setters.setAiLanguage("Persian")
-    setters.setAdvancedMode(true)
+    setters.setEmbeddingsEnabled(true)
     expect(state.aiLanguage).toBe("Persian")
-    expect(state.advancedMode).toBe(true)
+    expect(state.embeddingsEnabled).toBe(true)
     expect(state.selectedModel).toBe(DEFAULT_MODEL)
   })
 

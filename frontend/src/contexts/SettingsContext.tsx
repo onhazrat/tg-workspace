@@ -113,8 +113,6 @@ interface SettingsContextType {
   setShowChannelLinks: (show: boolean) => void
   showChannelStartId: boolean
   setShowChannelStartId: (show: boolean) => void
-  advancedMode: boolean
-  setAdvancedMode: (advanced: boolean) => void
 }
 
 const SettingsContext = createContext<SettingsContextType | undefined>(

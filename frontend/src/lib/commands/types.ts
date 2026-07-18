@@ -67,7 +67,6 @@ export interface EditorFieldDef {
   max?: number
   step?: number | "any"
   integer?: boolean
-  advancedOnly?: boolean
   getValue: (ctx: CommandContext) => string | number
   apply: (ctx: CommandContext, value: string) => void | Promise<void>
 }
@@ -278,8 +277,6 @@ export interface CommandSettingsSlice {
   setShowChannelLinks: (show: boolean) => void
   showChannelStartId: boolean
   setShowChannelStartId: (show: boolean) => void
-  advancedMode: boolean
-  setAdvancedMode: (advanced: boolean) => void
 }
 
 export interface RankedCommand {

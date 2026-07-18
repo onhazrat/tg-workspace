@@ -221,8 +221,6 @@ export function useCommandRegistry(): {
         setShowChannelLinks: settings.setShowChannelLinks,
         showChannelStartId: settings.showChannelStartId,
         setShowChannelStartId: settings.setShowChannelStartId,
-        advancedMode: settings.advancedMode,
-        setAdvancedMode: settings.setAdvancedMode,
       },
       forwardedFilter,
       setForwardedFilter,

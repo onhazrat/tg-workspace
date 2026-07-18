@@ -90,10 +90,6 @@ export function useEditorFlow({
       return
     }
 
-    if (editorCommand.editorField.advancedOnly) {
-      context.settings.setAdvancedMode(true)
-    }
-
     setIsApplying(true)
     try {
       await editorCommand.editorField.apply(context, editorValue)

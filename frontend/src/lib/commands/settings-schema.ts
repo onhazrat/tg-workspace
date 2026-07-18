@@ -1,206 +1,14 @@
-import { LANGUAGES, MODELS } from "@/constants"
 import { JOB_LABELS, SERVER_JOB_IDS } from "@/hooks/useJobToggles"
 import type {
   CommandContext,
   CommandDef,
   CommandSettingsSlice,
 } from "@/lib/commands/types"
-
-type BooleanSettingDef = {
-  key: keyof CommandSettingsSlice
-  label: string
-  getter: (settings: CommandSettingsSlice) => boolean
-  setter: (settings: CommandSettingsSlice, value: boolean) => void
-  keywords?: string[]
-  advancedOnly?: boolean
-}
-
-const BOOLEAN_SETTINGS: BooleanSettingDef[] = [
-  {
-    key: "showChannelBio",
-    label: "Show Channel Bio",
-    getter: (s) => s.showChannelBio,
-    setter: (s, v) => s.setShowChannelBio(v),
-    keywords: ["appearance", "channel", "bio"],
-  },
-  {
-    key: "showChannelSubscribers",
-    label: "Show Channel Subscribers",
-    getter: (s) => s.showChannelSubscribers,
-    setter: (s, v) => s.setShowChannelSubscribers(v),
-    keywords: ["appearance", "channel", "subscribers"],
-  },
-  {
-    key: "showChannelTelegramChatId",
-    label: "Show Channel Telegram Chat ID",
-    getter: (s) => s.showChannelTelegramChatId,
-    setter: (s, v) => s.setShowChannelTelegramChatId(v),
-    keywords: ["appearance", "channel", "telegram", "chat", "id"],
-  },
-  {
-    key: "showChannelPhotos",
-    label: "Show Channel Photos",
-    getter: (s) => s.showChannelPhotos,
-    setter: (s, v) => s.setShowChannelPhotos(v),
-    keywords: ["appearance", "channel", "photos"],
-  },
-  {
-    key: "showChannelVideos",
-    label: "Show Channel Videos",
-    getter: (s) => s.showChannelVideos,
-    setter: (s, v) => s.setShowChannelVideos(v),
-    keywords: ["appearance", "channel", "videos"],
-  },
-  {
-    key: "showChannelFiles",
-    label: "Show Channel Files",
-    getter: (s) => s.showChannelFiles,
-    setter: (s, v) => s.setShowChannelFiles(v),
-    keywords: ["appearance", "channel", "files"],
-  },
-  {
-    key: "showChannelLinks",
-    label: "Show Channel Links",
-    getter: (s) => s.showChannelLinks,
-    setter: (s, v) => s.setShowChannelLinks(v),
-    keywords: ["appearance", "channel", "links"],
-  },
-  {
-    key: "showChannelStartId",
-    label: "Show Channel Start ID",
-    getter: (s) => s.showChannelStartId,
-    setter: (s, v) => s.setShowChannelStartId(v),
-    keywords: ["appearance", "channel", "start", "id", "advanced"],
-  },
-  {
-    key: "advancedMode",
-    label: "Advanced Mode",
-    getter: (s) => s.advancedMode,
-    setter: (s, v) => s.setAdvancedMode(v),
-    keywords: ["advanced", "settings"],
-  },
-  {
-    key: "proxyEnabled",
-    label: "Proxy",
-    getter: (s) => s.proxyEnabled,
-    setter: (s, v) => s.setProxyEnabled(v),
-    keywords: ["network", "proxy"],
-    advancedOnly: true,
-  },
-  {
-    key: "torEnabled",
-    label: "Tor",
-    getter: (s) => s.torEnabled,
-    setter: (s, v) => s.setTorEnabled(v),
-    keywords: ["network", "tor"],
-    advancedOnly: true,
-  },
-  {
-    key: "torControlEnabled",
-    label: "Tor Control",
-    getter: (s) => s.torControlEnabled,
-    setter: (s, v) => s.setTorControlEnabled(v),
-    keywords: ["network", "tor", "control"],
-    advancedOnly: true,
-  },
-  {
-    key: "torAutoRotate",
-    label: "Tor Auto Rotate",
-    getter: (s) => s.torAutoRotate,
-    setter: (s, v) => s.setTorAutoRotate(v),
-    keywords: ["network", "tor", "rotate"],
-    advancedOnly: true,
-  },
-  {
-    key: "embeddingsPaused",
-    label: "Pause Embeddings",
-    getter: (s) => s.embeddingsPaused,
-    setter: (s, v) => s.setEmbeddingsPaused(v),
-    keywords: ["embeddings", "pause", "ai"],
-  },
-  {
-    key: "translationEnabled",
-    label: "Translation",
-    getter: (s) => s.translationEnabled,
-    setter: (s, v) => s.setTranslationEnabled(v),
-    keywords: ["translation", "language"],
-  },
-  {
-    key: "autoTranslate",
-    label: "Auto Translate",
-    getter: (s) => s.autoTranslate,
-    setter: (s, v) => s.setAutoTranslate(v),
-    keywords: ["translation", "auto"],
-  },
-]
+import { SETTINGS_CATALOG } from "@/lib/settings/catalog"
+import type { SettingCatalogEntry } from "@/lib/settings/catalog-types"
 
 function slugify(value: string): string {
   return value.toLowerCase().replace(/[^a-z0-9]+/g, "-")
-}
-
-function maybeEnableAdvanced(ctx: CommandContext, advancedOnly?: boolean) {
-  if (advancedOnly) ctx.settings.setAdvancedMode(true)
-}
-
-function buildBooleanCommands(): CommandDef[] {
-  const commands: CommandDef[] = []
-
-  for (const setting of BOOLEAN_SETTINGS) {
-    const slug = slugify(setting.label)
-    const baseKeywords = [
-      setting.label,
-      ...(setting.keywords ?? []),
-      "toggle",
-      "enable",
-      "disable",
-      "setting",
-    ]
-
-    commands.push(
-      {
-        id: `toggle-${slug}`,
-        kind: "boolean",
-        label: `Toggle ${setting.label}`,
-        keywords: [...baseKeywords, "toggle"],
-        group: "Settings",
-        getBadge: (ctx) => (setting.getter(ctx.settings) ? "ON" : "OFF"),
-        run: (ctx) => {
-          maybeEnableAdvanced(ctx, setting.advancedOnly)
-          setting.setter(ctx.settings, !setting.getter(ctx.settings))
-        },
-      },
-      {
-        id: `enable-${slug}`,
-        kind: "boolean",
-        label: `Enable ${setting.label}`,
-        keywords: [...baseKeywords, "enable", "on"],
-        group: "Settings",
-        getBadge: (ctx) => (setting.getter(ctx.settings) ? "ON" : "OFF"),
-        run: (ctx) => {
-          maybeEnableAdvanced(ctx, setting.advancedOnly)
-          setting.setter(ctx.settings, true)
-        },
-      },
-      {
-        id: `disable-${slug}`,
-        kind: "boolean",
-        label: `Disable ${setting.label}`,
-        keywords: [...baseKeywords, "disable", "off"],
-        group: "Settings",
-        getBadge: (ctx) => (setting.getter(ctx.settings) ? "ON" : "OFF"),
-        run: (ctx) => {
-          maybeEnableAdvanced(ctx, setting.advancedOnly)
-          setting.setter(ctx.settings, false)
-        },
-      },
-    )
-  }
-
-  return commands
-}
-
-function formatRetentionBadge(days: number): string {
-  return days === 0 ? "Never" : `${days}d`
 }
 
 function clampInt(value: string, min: number, max?: number): number | null {
@@ -216,334 +24,339 @@ function clampFloat(value: string, min: number, max: number): number | null {
   return Math.min(max, Math.max(min, parsed))
 }
 
-type NumericEditorDef = {
-  id: string
-  label: string
-  keywords: string[]
-  fieldId: string
-  fieldLabel: string
-  min?: number
-  max?: number
-  step?: number | "any"
-  integer?: boolean
-  advancedOnly?: boolean
-  getter: (settings: CommandSettingsSlice) => number
-  setter: (settings: CommandSettingsSlice, value: number) => void
-  formatBadge: (value: number) => string
+type SliceKey = keyof CommandSettingsSlice
+
+function sliceGetter(
+  key: SliceKey,
+): (settings: CommandSettingsSlice) => unknown {
+  return (settings) => settings[key]
 }
 
-const NUMERIC_EDITOR_DEFS: NumericEditorDef[] = [
-  {
-    id: "edit-ai-temperature",
-    label: "Edit AI Temperature",
-    keywords: ["ai", "temperature", "model"],
-    fieldId: "aiTemperature",
-    fieldLabel: "AI Temperature",
-    min: 0,
-    max: 1,
-    step: "any",
-    getter: (s) => s.aiTemperature,
-    setter: (s, v) => s.setAiTemperature(v),
-    formatBadge: (v) => v.toFixed(1),
-  },
-  {
-    id: "edit-sync-concurrency",
-    label: "Edit Sync Concurrency",
-    keywords: ["sync", "concurrency", "parallel"],
-    fieldId: "syncConcurrency",
-    fieldLabel: "Sync Concurrency",
-    min: 1,
-    integer: true,
-    getter: (s) => s.syncConcurrency,
-    setter: (s, v) => s.setSyncConcurrency(v),
-    formatBadge: (v) => String(v),
-  },
-  {
-    id: "edit-proxy-default-concurrency",
-    label: "Edit Proxy Default Concurrency",
-    keywords: ["proxy", "concurrency", "network"],
-    fieldId: "proxyDefaultConcurrency",
-    fieldLabel: "Proxy Default Concurrency",
-    min: 1,
-    max: 20,
-    integer: true,
-    advancedOnly: true,
-    getter: (s) => s.proxyDefaultConcurrency,
-    setter: (s, v) => s.setProxyDefaultConcurrency(v),
-    formatBadge: (v) => String(v),
-  },
-  {
-    id: "edit-tor-control-port",
-    label: "Edit Tor Control Port",
-    keywords: ["tor", "control", "port", "network"],
-    fieldId: "torControlPort",
-    fieldLabel: "Tor Control Port",
-    min: 1,
-    integer: true,
-    advancedOnly: true,
-    getter: (s) => s.torControlPort,
-    setter: (s, v) => s.setTorControlPort(v),
-    formatBadge: (v) => String(v),
-  },
-  {
-    id: "edit-tor-rotation-threshold",
-    label: "Edit Tor Rotation Threshold",
-    keywords: ["tor", "rotation", "threshold", "network"],
-    fieldId: "torRotationThreshold",
-    fieldLabel: "Tor Rotation Threshold",
-    min: 5,
-    max: 50,
-    integer: true,
-    advancedOnly: true,
-    getter: (s) => s.torRotationThreshold,
-    setter: (s, v) => s.setTorRotationThreshold(v),
-    formatBadge: (v) => String(v),
-  },
-  {
-    id: "edit-post-retention-days",
-    label: "Edit Post Retention Days",
-    keywords: ["retention", "posts", "days"],
-    fieldId: "postRetentionDays",
-    fieldLabel: "Post Retention (days)",
-    min: 0,
-    integer: true,
-    getter: (s) => s.postRetentionDays,
-    setter: (s, v) => s.setPostRetentionDays(v),
-    formatBadge: formatRetentionBadge,
-  },
-  {
-    id: "edit-log-retention-days",
-    label: "Edit Log Retention Days",
-    keywords: ["retention", "logs", "days"],
-    fieldId: "logRetentionDays",
-    fieldLabel: "Log Retention (days)",
-    min: 0,
-    integer: true,
-    getter: (s) => s.logRetentionDays,
-    setter: (s, v) => s.setLogRetentionDays(v),
-    formatBadge: formatRetentionBadge,
-  },
-]
+function booleanSetter(
+  key: SliceKey,
+): (settings: CommandSettingsSlice, value: boolean) => void {
+  return (settings, value) => {
+    const setterName =
+      `set${key.charAt(0).toUpperCase()}${key.slice(1)}` as keyof CommandSettingsSlice
+    const setter = settings[setterName]
+    if (typeof setter === "function") {
+      ;(setter as (v: boolean) => void)(value)
+    }
+  }
+}
+
+function numberSetter(
+  key: SliceKey,
+): (settings: CommandSettingsSlice, value: number) => void {
+  return (settings, value) => {
+    const setterName =
+      `set${key.charAt(0).toUpperCase()}${key.slice(1)}` as keyof CommandSettingsSlice
+    const setter = settings[setterName]
+    if (typeof setter === "function") {
+      ;(setter as (v: number) => void)(value)
+    }
+  }
+}
+
+function stringSetter(
+  key: SliceKey,
+): (settings: CommandSettingsSlice, value: string) => void {
+  return (settings, value) => {
+    const setterName =
+      `set${key.charAt(0).toUpperCase()}${key.slice(1)}` as keyof CommandSettingsSlice
+    const setter = settings[setterName]
+    if (typeof setter === "function") {
+      ;(setter as (v: string) => void)(value)
+    }
+  }
+}
+
+function entrySliceKey(entry: SettingCatalogEntry): SliceKey {
+  return (entry.sliceKey ?? entry.id) as SliceKey
+}
+
+/** @deprecated Prefer catalog — kept for tests that assert boolean defs exist. */
+export const BOOLEAN_SETTINGS = SETTINGS_CATALOG.filter(
+  (e) =>
+    e.control.kind === "boolean" &&
+    e.control.commandSlug !== "__embeddings_feature__",
+).map((e) => ({
+  key: entrySliceKey(e),
+  label: e.label,
+  keywords: e.keywords,
+}))
+
+/** @deprecated Prefer catalog — kept for tests that assert numeric editor defs. */
+export const NUMERIC_EDITOR_DEFS = SETTINGS_CATALOG.filter(
+  (e) => e.control.kind === "number" && e.editorCommandId,
+).map((e) => ({
+  id: e.editorCommandId as string,
+  label: `Edit ${e.label}`,
+  keywords: e.keywords,
+  fieldId: e.editorFieldId ?? e.id,
+  fieldLabel: e.editorFieldLabel ?? e.label,
+  min: e.control.kind === "number" ? e.control.min : undefined,
+  max: e.control.kind === "number" ? e.control.max : undefined,
+  step: e.control.kind === "number" ? e.control.step : undefined,
+  integer: e.control.kind === "number" ? e.control.integer : undefined,
+}))
+
+function buildBooleanCommands(): CommandDef[] {
+  const commands: CommandDef[] = []
+
+  for (const entry of SETTINGS_CATALOG) {
+    if (entry.control.kind !== "boolean") continue
+    if (entry.control.commandSlug === "__embeddings_feature__") continue
+
+    const slug = entry.control.commandSlug
+    const key = entrySliceKey(entry)
+    const getter = (s: CommandSettingsSlice) => Boolean(sliceGetter(key)(s))
+    const setter = booleanSetter(key)
+    const baseKeywords = [
+      entry.label,
+      ...entry.keywords,
+      "toggle",
+      "enable",
+      "disable",
+      "setting",
+    ]
+
+    commands.push(
+      {
+        id: `toggle-${slug}`,
+        kind: "boolean",
+        label: `Toggle ${entry.label}`,
+        keywords: [...baseKeywords, "toggle"],
+        group: "Settings",
+        getBadge: (ctx) => (getter(ctx.settings) ? "ON" : "OFF"),
+        run: (ctx) => setter(ctx.settings, !getter(ctx.settings)),
+      },
+      {
+        id: `enable-${slug}`,
+        kind: "boolean",
+        label: `Enable ${entry.label}`,
+        keywords: [...baseKeywords, "enable", "on"],
+        group: "Settings",
+        getBadge: (ctx) => (getter(ctx.settings) ? "ON" : "OFF"),
+        run: (ctx) => setter(ctx.settings, true),
+      },
+      {
+        id: `disable-${slug}`,
+        kind: "boolean",
+        label: `Disable ${entry.label}`,
+        keywords: [...baseKeywords, "disable", "off"],
+        group: "Settings",
+        getBadge: (ctx) => (getter(ctx.settings) ? "ON" : "OFF"),
+        run: (ctx) => setter(ctx.settings, false),
+      },
+    )
+  }
+
+  return commands
+}
 
 function buildNumericEditorCommands(): CommandDef[] {
-  return NUMERIC_EDITOR_DEFS.map((def) => ({
-    id: def.id,
-    kind: "editor" as const,
-    label: def.label,
-    keywords: def.keywords,
-    group: "Settings",
-    getBadge: (ctx) => def.formatBadge(def.getter(ctx.settings)),
-    editorField: {
-      id: def.fieldId,
-      label: def.fieldLabel,
-      type: "number" as const,
-      min: def.min,
-      max: def.max,
-      step: def.step,
-      integer: def.integer,
-      advancedOnly: def.advancedOnly,
-      getValue: (ctx) => def.getter(ctx.settings),
-      apply: (ctx, value) => {
-        if (def.advancedOnly) ctx.settings.setAdvancedMode(true)
-        if (def.step === "any") {
-          const parsed = clampFloat(value, def.min ?? 0, def.max ?? 1)
-          if (parsed !== null) def.setter(ctx.settings, parsed)
-          return
-        }
-        const parsed = clampInt(value, def.min ?? 0, def.max)
-        if (parsed !== null) def.setter(ctx.settings, parsed)
+  return SETTINGS_CATALOG.filter(
+    (e) => e.control.kind === "number" && e.editorCommandId,
+  ).map((entry) => {
+    const control = entry.control
+    if (control.kind !== "number") throw new Error("unreachable")
+    const key = entrySliceKey(entry)
+    const getter = (s: CommandSettingsSlice) => Number(sliceGetter(key)(s))
+    const setter = numberSetter(key)
+    const formatBadge = control.formatBadge ?? ((v: number) => String(v))
+
+    return {
+      id: entry.editorCommandId as string,
+      kind: "editor" as const,
+      label: `Edit ${entry.label}`,
+      keywords: entry.keywords,
+      group: "Settings",
+      getBadge: (ctx: CommandContext) => formatBadge(getter(ctx.settings)),
+      editorField: {
+        id: entry.editorFieldId ?? entry.id,
+        label: entry.editorFieldLabel ?? entry.label,
+        type: "number" as const,
+        min: control.min,
+        max: control.max,
+        step: control.step,
+        integer: control.integer,
+        getValue: (ctx: CommandContext) => getter(ctx.settings),
+        apply: (_ctx: CommandContext, value: string) => {
+          if (control.step === "any") {
+            const parsed = clampFloat(value, control.min ?? 0, control.max ?? 1)
+            if (parsed !== null) setter(_ctx.settings, parsed)
+            return
+          }
+          const parsed = clampInt(value, control.min ?? 0, control.max)
+          if (parsed !== null) setter(_ctx.settings, parsed)
+        },
       },
-    },
-    run: () => {},
-  }))
+      run: () => {},
+    }
+  })
 }
 
 function buildEnumCommands(): CommandDef[] {
   const commands: CommandDef[] = []
 
-  for (const theme of ["light", "dark", "system"] as const) {
-    commands.push({
-      id: `set-theme-${theme}`,
-      kind: "enum",
-      label: `Set Theme → ${
-        theme === "light" ? "Light" : theme === "dark" ? "Dark" : "System"
-      }`,
-      keywords: ["theme", theme, "appearance"],
-      group: "Settings",
-      run: (ctx) => ctx.settings.setTheme(theme),
-    })
+  for (const entry of SETTINGS_CATALOG) {
+    if (entry.control.kind !== "enum") continue
+    const key = entrySliceKey(entry)
+    const { commandPrefix, options } = entry.control
+
+    for (const option of options) {
+      const optionSlug = slugify(option.value)
+      commands.push({
+        id: `set-${commandPrefix}-${optionSlug}`,
+        kind: "enum",
+        label: `Set ${entry.label} → ${option.label}`,
+        keywords: [...entry.keywords, option.value, option.label],
+        group: "Settings",
+        run: (ctx) => {
+          // Theme uses setTheme; others use set{Key}
+          if (key === "theme") {
+            ctx.settings.setTheme(option.value as "light" | "dark" | "system")
+            return
+          }
+          stringSetter(key)(ctx.settings, option.value)
+        },
+      })
+    }
   }
 
-  for (const mode of ["retention", "relative", "absolute"] as const) {
-    commands.push({
-      id: `set-global-start-time-mode-${mode}`,
-      kind: "enum",
-      label: `Set Default Channel Start Time Mode → ${mode}`,
-      keywords: ["global start time", "sync", mode, "retention"],
-      group: "Settings",
-      run: (ctx) => ctx.settings.setGlobalStartTimeMode(mode),
-    })
+  // Historical label: "Set Default Channel Start Time Mode → …"
+  // Rebuild those exact labels for start-time mode.
+  const startMode = commands.filter((c) =>
+    c.id.startsWith("set-global-start-time-mode-"),
+  )
+  for (const cmd of startMode) {
+    const mode = cmd.id.replace("set-global-start-time-mode-", "")
+    cmd.label = `Set Default Channel Start Time Mode → ${mode}`
   }
 
-  for (const mode of ["auto", "custom"] as const) {
-    commands.push({
-      id: `set-tor-mode-${mode}`,
-      kind: "enum",
-      label: `Set Tor Mode → ${mode}`,
-      keywords: ["tor", "mode", mode, "network"],
-      group: "Settings",
-      run: (ctx) => {
-        ctx.settings.setAdvancedMode(true)
-        ctx.settings.setTorMode(mode)
-      },
-    })
+  // Historical: "Set Theme → Light|Dark|System" (capitalized)
+  for (const cmd of commands.filter((c) => c.id.startsWith("set-theme-"))) {
+    const theme = cmd.id.replace("set-theme-", "")
+    cmd.label = `Set Theme → ${
+      theme === "light" ? "Light" : theme === "dark" ? "Dark" : "System"
+    }`
   }
 
-  for (const strategy of ["sequential", "random"] as const) {
-    commands.push({
-      id: `set-tor-rotation-strategy-${strategy}`,
-      kind: "enum",
-      label: `Set Tor Rotation Strategy → ${strategy}`,
-      keywords: ["tor", "rotation", strategy, "network"],
-      group: "Settings",
-      run: (ctx) => {
-        ctx.settings.setAdvancedMode(true)
-        ctx.settings.setTorRotationStrategy(strategy)
-      },
-    })
-  }
-
-  for (const language of LANGUAGES) {
-    commands.push({
-      id: `set-ai-language-${slugify(language)}`,
-      kind: "enum",
-      label: `Set AI Language → ${language}`,
-      keywords: ["ai", "language", language],
-      group: "Settings",
-      run: (ctx) => ctx.settings.setAiLanguage(language),
-    })
-    commands.push({
-      id: `set-translation-target-language-${slugify(language)}`,
-      kind: "enum",
-      label: `Set Translation Target Language → ${language}`,
-      keywords: ["translation", "language", language],
-      group: "Settings",
-      run: (ctx) => ctx.settings.setTranslationTargetLanguage(language),
-    })
-  }
-
-  for (const model of MODELS) {
-    commands.push({
-      id: `set-selected-model-${slugify(model.id)}`,
-      kind: "enum",
-      label: `Set AI Model → ${model.label}`,
-      keywords: ["ai", "model", model.label, model.id],
-      group: "Settings",
-      run: (ctx) => ctx.settings.setSelectedModel(model.id),
-    })
-    commands.push({
-      id: `set-translation-model-${slugify(model.id)}`,
-      kind: "enum",
-      label: `Set Translation Model → ${model.label}`,
-      keywords: ["translation", "model", model.label, model.id],
-      group: "Settings",
-      run: (ctx) => ctx.settings.setTranslationModel(model.id),
-    })
+  // Historical: "Set AI Model → …" / "Set Translation Model → …"
+  for (const cmd of commands.filter((c) =>
+    c.id.startsWith("set-selected-model-"),
+  )) {
+    const opt = SETTINGS_CATALOG.find((e) => e.id === "selectedModel")?.control
+    if (opt?.kind === "enum") {
+      const value = cmd.id.replace("set-selected-model-", "")
+      const match = opt.options.find((o) => slugify(o.value) === value)
+      if (match) cmd.label = `Set AI Model → ${match.label}`
+    }
   }
 
   return commands
 }
 
 function buildEditorCommands(): CommandDef[] {
-  const editors: CommandDef[] = [
-    ...buildNumericEditorCommands(),
-    {
-      id: "edit-global-start-time-value",
-      kind: "editor",
-      label: "Edit Default Channel Start Time Value",
-      keywords: ["global start time", "sync", "retention", "days", "date"],
-      group: "Settings",
-      getBadge: (ctx) => {
-        if (ctx.settings.globalStartTimeMode === "absolute") {
-          const raw = ctx.settings.globalStartTimeValue
-          if (typeof raw === "string") return raw.slice(0, 10)
-          return new Date().toISOString().slice(0, 10)
-        }
-        const days =
-          typeof ctx.settings.globalStartTimeValue === "number"
-            ? ctx.settings.globalStartTimeValue
-            : 7
-        return `${days}d`
-      },
-      editorField: {
-        id: "globalStartTimeValue",
-        label: "Default Channel Start Time Value",
-        type: "days",
-        min: 1,
-        getValue: (ctx) => {
+  const editors: CommandDef[] = [...buildNumericEditorCommands()]
+
+  for (const entry of SETTINGS_CATALOG) {
+    if (entry.control.kind === "days") {
+      editors.push({
+        id: entry.control.commandId,
+        kind: "editor",
+        label: `Edit ${entry.label}`,
+        keywords: entry.keywords,
+        group: "Settings",
+        getBadge: (ctx) => {
           if (ctx.settings.globalStartTimeMode === "absolute") {
             const raw = ctx.settings.globalStartTimeValue
-            if (typeof raw === "string") return raw.slice(0, 16)
-            return new Date().toISOString().slice(0, 16)
+            if (typeof raw === "string") return raw.slice(0, 10)
+            return new Date().toISOString().slice(0, 10)
           }
           const days =
             typeof ctx.settings.globalStartTimeValue === "number"
               ? ctx.settings.globalStartTimeValue
               : 7
-          return days
+          return `${days}d`
         },
-        apply: (ctx, value) => {
-          if (ctx.settings.globalStartTimeMode === "absolute") {
-            ctx.settings.setGlobalStartTimeValue(new Date(value).toISOString())
-            return
-          }
-          const parsed = Number.parseInt(value, 10)
-          if (!Number.isNaN(parsed) && parsed > 0) {
-            ctx.settings.setGlobalStartTimeValue(parsed)
-          }
+        editorField: {
+          id: entry.control.fieldId,
+          label: entry.label,
+          type: "days",
+          min: 1,
+          getValue: (ctx) => {
+            if (ctx.settings.globalStartTimeMode === "absolute") {
+              const raw = ctx.settings.globalStartTimeValue
+              if (typeof raw === "string") return raw.slice(0, 16)
+              return new Date().toISOString().slice(0, 16)
+            }
+            const days =
+              typeof ctx.settings.globalStartTimeValue === "number"
+                ? ctx.settings.globalStartTimeValue
+                : 7
+            return days
+          },
+          apply: (ctx, value) => {
+            if (ctx.settings.globalStartTimeMode === "absolute") {
+              ctx.settings.setGlobalStartTimeValue(
+                new Date(value).toISOString(),
+              )
+              return
+            }
+            const parsed = Number.parseInt(value, 10)
+            if (!Number.isNaN(parsed) && parsed > 0) {
+              ctx.settings.setGlobalStartTimeValue(parsed)
+            }
+          },
         },
-      },
-      run: () => {},
-    },
-    {
-      id: "edit-default-proxy-urls",
-      kind: "editor",
-      label: "Edit Default Proxy URLs",
-      keywords: ["proxy", "urls", "network"],
-      group: "Settings",
-      editorField: {
-        id: "defaultProxyUrls",
-        label: "Default Proxy URLs",
-        type: "textarea",
-        advancedOnly: true,
-        getValue: (ctx) => ctx.settings.defaultProxyUrls,
-        apply: (ctx, value) => {
-          ctx.settings.setAdvancedMode(true)
-          ctx.settings.setDefaultProxyUrls(value)
+        run: () => {},
+      })
+    }
+
+    if (entry.control.kind === "textarea") {
+      const key = entrySliceKey(entry)
+      const isOverrides = entry.id === "proxyConcurrencyOverrides"
+      editors.push({
+        id: entry.control.commandId,
+        kind: "editor",
+        label: `Edit ${entry.label}`,
+        keywords: entry.keywords,
+        group: "Settings",
+        editorField: {
+          id: entry.control.fieldId,
+          label: isOverrides
+            ? "Proxy Concurrency Overrides (JSON)"
+            : entry.label,
+          type: "textarea",
+          getValue: (ctx) => {
+            if (isOverrides) {
+              return JSON.stringify(
+                ctx.settings.proxyConcurrencyOverrides,
+                null,
+                2,
+              )
+            }
+            return String(sliceGetter(key)(ctx.settings) ?? "")
+          },
+          apply: (ctx, value) => {
+            if (isOverrides) {
+              try {
+                const parsed = JSON.parse(value) as Record<string, number>
+                ctx.settings.setProxyConcurrencyOverrides(parsed)
+              } catch {
+                // ignore invalid JSON
+              }
+              return
+            }
+            stringSetter(key)(ctx.settings, value)
+          },
         },
-      },
-      run: () => {},
-    },
-    {
-      id: "edit-tor-proxy-urls",
-      kind: "editor",
-      label: "Edit Tor Proxy URLs",
-      keywords: ["tor", "proxy", "urls", "network"],
-      group: "Settings",
-      editorField: {
-        id: "torProxyUrls",
-        label: "Tor Proxy URLs",
-        type: "textarea",
-        advancedOnly: true,
-        getValue: (ctx) => ctx.settings.torProxyUrls,
-        apply: (ctx, value) => {
-          ctx.settings.setAdvancedMode(true)
-          ctx.settings.setTorProxyUrls(value)
-        },
-      },
-      run: () => {},
-    },
-  ]
+        run: () => {},
+      })
+    }
+  }
 
   return editors
 }
@@ -632,36 +445,6 @@ function buildJobToggleCommands(): CommandDef[] {
   return commands
 }
 
-function buildProxyOverrideCommands(): CommandDef[] {
-  return [
-    {
-      id: "edit-proxy-concurrency-overrides",
-      kind: "editor",
-      label: "Edit Proxy Concurrency Overrides",
-      keywords: ["proxy", "concurrency", "override", "network"],
-      group: "Settings",
-      editorField: {
-        id: "proxyConcurrencyOverrides",
-        label: "Proxy Concurrency Overrides (JSON)",
-        type: "textarea",
-        advancedOnly: true,
-        getValue: (ctx) =>
-          JSON.stringify(ctx.settings.proxyConcurrencyOverrides, null, 2),
-        apply: (ctx, value) => {
-          ctx.settings.setAdvancedMode(true)
-          try {
-            const parsed = JSON.parse(value) as Record<string, number>
-            ctx.settings.setProxyConcurrencyOverrides(parsed)
-          } catch {
-            // ignore invalid JSON
-          }
-        },
-      },
-      run: () => {},
-    },
-  ]
-}
-
 export function buildSettingCommands(): CommandDef[] {
   return [
     ...buildBooleanCommands(),
@@ -669,8 +452,118 @@ export function buildSettingCommands(): CommandDef[] {
     ...buildEditorCommands(),
     ...buildEmbeddingsCommands(),
     ...buildJobToggleCommands(),
-    ...buildProxyOverrideCommands(),
   ]
 }
 
-export { BOOLEAN_SETTINGS, NUMERIC_EDITOR_DEFS }
+/**
+ * Command ids that existed before the catalog migration, minus Advanced Mode
+ * (intentionally removed). New sync-interval editors are additive.
+ */
+export const LEGACY_SETTING_COMMAND_IDS = [
+  "disable-auto-translate",
+  "disable-embeddings-background-job",
+  "disable-embeddings-feature",
+  "disable-job-auto-summary",
+  "disable-job-auto-sync",
+  "disable-job-retention",
+  "disable-job-translation-batch",
+  "disable-pause-embeddings",
+  "disable-proxy",
+  "disable-show-channel-bio",
+  "disable-show-channel-files",
+  "disable-show-channel-links",
+  "disable-show-channel-photos",
+  "disable-show-channel-start-id",
+  "disable-show-channel-subscribers",
+  "disable-show-channel-telegram-chat-id",
+  "disable-show-channel-videos",
+  "disable-tor",
+  "disable-tor-auto-rotate",
+  "disable-tor-control",
+  "disable-translation",
+  "edit-ai-temperature",
+  "edit-default-proxy-urls",
+  "edit-global-start-time-value",
+  "edit-log-retention-days",
+  "edit-post-retention-days",
+  "edit-proxy-concurrency-overrides",
+  "edit-proxy-default-concurrency",
+  "edit-sync-concurrency",
+  "edit-tor-control-port",
+  "edit-tor-proxy-urls",
+  "edit-tor-rotation-threshold",
+  "enable-auto-translate",
+  "enable-embeddings-background-job",
+  "enable-embeddings-feature",
+  "enable-job-auto-summary",
+  "enable-job-auto-sync",
+  "enable-job-retention",
+  "enable-job-translation-batch",
+  "enable-pause-embeddings",
+  "enable-proxy",
+  "enable-show-channel-bio",
+  "enable-show-channel-files",
+  "enable-show-channel-links",
+  "enable-show-channel-photos",
+  "enable-show-channel-start-id",
+  "enable-show-channel-subscribers",
+  "enable-show-channel-telegram-chat-id",
+  "enable-show-channel-videos",
+  "enable-tor",
+  "enable-tor-auto-rotate",
+  "enable-tor-control",
+  "enable-translation",
+  "set-ai-language-arabic",
+  "set-ai-language-chinese",
+  "set-ai-language-english",
+  "set-ai-language-french",
+  "set-ai-language-german",
+  "set-ai-language-italian",
+  "set-ai-language-japanese",
+  "set-ai-language-persian",
+  "set-ai-language-portuguese",
+  "set-ai-language-russian",
+  "set-ai-language-spanish",
+  "set-global-start-time-mode-absolute",
+  "set-global-start-time-mode-relative",
+  "set-global-start-time-mode-retention",
+  "set-selected-model-gemini-3-1-flash-lite-preview",
+  "set-selected-model-gemini-3-1-pro-preview",
+  "set-selected-model-gemini-3-flash-preview",
+  "set-theme-dark",
+  "set-theme-light",
+  "set-theme-system",
+  "set-tor-mode-auto",
+  "set-tor-mode-custom",
+  "set-tor-rotation-strategy-random",
+  "set-tor-rotation-strategy-sequential",
+  "set-translation-model-gemini-3-1-flash-lite-preview",
+  "set-translation-model-gemini-3-1-pro-preview",
+  "set-translation-model-gemini-3-flash-preview",
+  "set-translation-target-language-arabic",
+  "set-translation-target-language-chinese",
+  "set-translation-target-language-english",
+  "set-translation-target-language-french",
+  "set-translation-target-language-german",
+  "set-translation-target-language-italian",
+  "set-translation-target-language-japanese",
+  "set-translation-target-language-persian",
+  "set-translation-target-language-portuguese",
+  "set-translation-target-language-russian",
+  "set-translation-target-language-spanish",
+  "toggle-auto-translate",
+  "toggle-pause-embeddings",
+  "toggle-proxy",
+  "toggle-show-channel-bio",
+  "toggle-show-channel-files",
+  "toggle-show-channel-links",
+  "toggle-show-channel-photos",
+  "toggle-show-channel-start-id",
+  "toggle-show-channel-subscribers",
+  "toggle-show-channel-telegram-chat-id",
+  "toggle-show-channel-videos",
+  "toggle-tor",
+  "toggle-tor-auto-rotate",
+  "toggle-tor-control",
+  "toggle-translation",
+] as const

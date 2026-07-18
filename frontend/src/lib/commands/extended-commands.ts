@@ -553,7 +553,6 @@ export function buildExtendedCommands(): CommandDef[] {
         if (!table) return "Clear all records in this IndexedDB table?"
         return `Clear all records in table "${table}"? This cannot be undone.`
       },
-      when: (ctx) => ctx.settings.advancedMode,
       run: async (ctx, payload) => {
         const tableName =
           (payload as string | undefined) ??
