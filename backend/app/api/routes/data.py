@@ -133,7 +133,7 @@ from app.services.operator import get_operator_user_id
 from app.services.posts import bulk_upsert_posts
 from app.services.posts import list_posts as list_posts_impl
 from app.services.settings_store import get_app_setting, put_app_setting
-from app.services.stats import get_db_stats
+from app.services.stats import clear_table, get_db_stats, get_table_sizes
 from app.services.summaries import (
     delete_summary as delete_summary_impl,
 )
@@ -162,6 +162,11 @@ _SETTING_LOADERS = {
 }
 
 _TERMINAL_FOLLOW_STATUSES = frozenset({"completed", "failed", "cancelled"})
+
+# Tables whose clear removes rows from more than one resource.
+CLEARED_SYNC_RESOURCES: dict[str, tuple[str, ...]] = {
+    "posts": ("posts", "embeddings", "translations"),
+}
 
 router = APIRouter(prefix="/data", tags=["data"])
 
@@ -777,6 +782,33 @@ def db_stats(
     _current_user: CurrentUser,
 ) -> dict[str, Any]:
     return get_db_stats(session, operator_id=_current_user.id)
+
+
+@router.get("/table-sizes")
+def table_sizes(
+    session: SessionDep,
+    _current_user: CurrentUser,
+) -> list[dict[str, Any]]:
+    return get_table_sizes(session, operator_id=_current_user.id)
+
+
+@router.delete("/tables/{name}")
+def clear_table_route(
+    name: str,
+    session: SessionDep,
+    _current_user: CurrentUser,
+) -> dict[str, Any]:
+    try:
+        deleted = clear_table(session, name, operator_id=_current_user.id)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    if deleted:
+        # Clearing posts cascades (see clear_table), so refresh the etags of
+        # the dependent resources too or their caches would serve rows the
+        # database no longer has.
+        for resource in CLEARED_SYNC_RESOURCES.get(name, (name,)):
+            touch_sync(session, resource)
+    return {"deleted": deleted}
 
 
 @router.delete("/logs")

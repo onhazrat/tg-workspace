@@ -946,6 +946,18 @@ export type DataDbStatsResponse = ({
     [key: string]: unknown;
 });
 
+export type DataTableSizesResponse = (Array<{
+    [key: string]: unknown;
+}>);
+
+export type DataClearTableRouteData = {
+    name: string;
+};
+
+export type DataClearTableRouteResponse = ({
+    [key: string]: unknown;
+});
+
 export type DataPurgeLogsData = {
     clearAll?: boolean;
     logId?: (string | null);

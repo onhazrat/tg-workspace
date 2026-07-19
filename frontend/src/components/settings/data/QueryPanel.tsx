@@ -8,6 +8,7 @@ type QueryPanelProps = {
   queryResults: unknown[] | null
   queryError: string | null
   isQuerying: boolean
+  isServerSource?: boolean
   onQueryChange: (value: string) => void
   onRunQuery: () => void
 }
@@ -18,6 +19,7 @@ export const QueryPanel: React.FC<QueryPanelProps> = ({
   queryResults,
   queryError,
   isQuerying,
+  isServerSource = false,
   onQueryChange,
   onRunQuery,
 }) => {
@@ -28,6 +30,14 @@ export const QueryPanel: React.FC<QueryPanelProps> = ({
       <h5 className="text-[10px] uppercase font-bold tracking-widest mb-3 flex items-center gap-2">
         Query <span className="text-blue-500">{selectedTable}</span>
       </h5>
+      {isServerSource && (
+        // Queries are JS expressions run over IndexedDB records, so they
+        // cannot reach Postgres. Say so rather than quietly returning local
+        // rows while the sizes above describe the backend.
+        <p className="text-[9px] uppercase tracking-widest font-bold text-amber-600 dark:text-amber-500 mb-3">
+          Queries always run against local browser data, not the backend DB
+        </p>
+      )}
       <div className="flex gap-2 mb-2">
         <input
           type="text"

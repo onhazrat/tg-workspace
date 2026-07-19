@@ -39,6 +39,141 @@ def test_db_stats_returns_counts(client: TestClient) -> None:
     client.delete(f"{PREFIX}/channels/stats-ch", headers=headers)
 
 
+def test_table_sizes_reports_every_export_section(client: TestClient) -> None:
+    headers = _auth(client)
+    client.post(
+        f"{PREFIX}/sync-logs",
+        json=[
+            {
+                "id": "table-size-log",
+                "channelName": "ch",
+                "status": "success",
+                "timestamp": int(time.time() * 1000),
+                "fullResponse": {"posts": [{"id": 1}] * 50},
+            }
+        ],
+        headers=headers,
+    )
+
+    r = client.get(f"{PREFIX}/table-sizes", headers=headers)
+    assert r.status_code == 200
+    rows = {row["name"]: row for row in r.json()}
+
+    assert set(rows) == {
+        "setting_groups",
+        "channels",
+        "posts",
+        "summaries",
+        "bot_credentials",
+        "chat_destinations",
+        "publish_logs",
+        "sync_logs",
+        "llm_logs",
+        "embedding_logs",
+        "network_logs",
+        "embeddings",
+        "translations",
+    }
+    for row in rows.values():
+        assert row["count"] >= 0
+        assert row["size"] >= 0
+
+    sync_logs = rows["sync_logs"]
+    assert sync_logs["count"] >= 1
+    # A table's physical footprint is never smaller than what a naive
+    # in-app row-count-only view would suggest is "nothing" - this is the
+    # bug being fixed, so pin down that size tracks real disk usage.
+    assert sync_logs["size"] > 0
+
+
+def test_clear_table_deletes_all_rows(client: TestClient) -> None:
+    headers = _auth(client)
+    client.post(
+        f"{PREFIX}/sync-logs",
+        json=[
+            {
+                "id": "clear-table-log",
+                "channelName": "ch",
+                "status": "success",
+                "timestamp": int(time.time() * 1000),
+            }
+        ],
+        headers=headers,
+    )
+    before = next(
+        row
+        for row in client.get(f"{PREFIX}/table-sizes", headers=headers).json()
+        if row["name"] == "sync_logs"
+    )
+    assert before["count"] >= 1
+
+    r = client.delete(f"{PREFIX}/tables/sync_logs", headers=headers)
+    assert r.status_code == 200
+    assert r.json()["deleted"] >= 1
+
+    after = next(
+        row
+        for row in client.get(f"{PREFIX}/table-sizes", headers=headers).json()
+        if row["name"] == "sync_logs"
+    )
+    assert after["count"] == 0
+
+
+def test_clear_posts_also_clears_dependent_rows(client: TestClient) -> None:
+    """Stale post_sync_state would make a later sync skip re-fetching."""
+    headers = _auth(client)
+    now_ms = int(time.time() * 1000)
+    client.put(
+        f"{PREFIX}/channels/cascade-ch",
+        json={"name": "cascade-ch"},
+        headers=headers,
+    )
+    client.post(
+        f"{PREFIX}/posts/bulk",
+        json=[
+            {
+                "id": 1,
+                "channelName": "cascade-ch",
+                "text": "hi",
+                "date": "2024-01-01",
+                "timestamp": now_ms,
+            }
+        ],
+        headers=headers,
+    )
+    client.post(
+        f"{PREFIX}/translations",
+        json=[
+            {
+                "id": "cascade-ch_1_fa",
+                "channelName": "cascade-ch",
+                "postId": 1,
+                "language": "fa",
+                "translatedText": "سلام",
+                "timestamp": now_ms,
+            }
+        ],
+        headers=headers,
+    )
+
+    assert client.delete(f"{PREFIX}/tables/posts", headers=headers).status_code == 200
+
+    sizes = {
+        row["name"]: row
+        for row in client.get(f"{PREFIX}/table-sizes", headers=headers).json()
+    }
+    assert sizes["posts"]["count"] == 0
+    assert sizes["translations"]["count"] == 0, "orphaned translations left behind"
+
+    client.delete(f"{PREFIX}/channels/cascade-ch", headers=headers)
+
+
+def test_clear_table_rejects_unknown_name(client: TestClient) -> None:
+    headers = _auth(client)
+    r = client.delete(f"{PREFIX}/tables/not_a_real_table", headers=headers)
+    assert r.status_code == 400
+
+
 def test_settings_round_trip(client: TestClient) -> None:
     headers = _auth(client)
     client.put(

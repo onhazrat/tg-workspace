@@ -3359,6 +3359,66 @@
         "security": [{ "OAuth2PasswordBearer": [] }]
       }
     },
+    "/api/v1/data/table-sizes": {
+      "get": {
+        "tags": ["data"],
+        "summary": "Table Sizes",
+        "operationId": "data-table_sizes",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": { "additionalProperties": true, "type": "object" },
+                  "type": "array",
+                  "title": "Response Data-Table Sizes"
+                }
+              }
+            }
+          }
+        },
+        "security": [{ "OAuth2PasswordBearer": [] }]
+      }
+    },
+    "/api/v1/data/tables/{name}": {
+      "delete": {
+        "tags": ["data"],
+        "summary": "Clear Table Route",
+        "operationId": "data-clear_table_route",
+        "security": [{ "OAuth2PasswordBearer": [] }],
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "title": "Name" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Data-Clear Table Route"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/data/logs": {
       "delete": {
         "tags": ["data"],

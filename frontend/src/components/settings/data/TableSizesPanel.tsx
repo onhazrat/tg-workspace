@@ -3,9 +3,11 @@ import type React from "react"
 import { RelativeTime } from "@/components/RelativeTime"
 import { TgButton } from "@/components/ui/tg-button"
 import { TgIconButton } from "@/components/ui/tg-icon-button"
+import { TgSegmentedControl } from "@/components/ui/tg-segmented"
 import { TgSettingsSection } from "@/components/ui/tg-settings-section"
 
 export type TableSizeRow = { name: string; size: number; count: number }
+export type TableSizeSource = "local" | "server"
 
 type DbStats = {
   postCount?: number
@@ -143,11 +145,13 @@ type TableSizesPanelProps = {
   selectedTable: string
   selectedTablesForExport: Set<string>
   isCalculatingSizes: boolean
+  sizeSource: TableSizeSource
   actions?: React.ReactNode
   children?: React.ReactNode
   onSelectTable: (name: string) => void
   onToggleExportTable: (name: string, checked: boolean) => void
   onCalculateSizes: () => void
+  onChangeSizeSource: (source: TableSizeSource) => void
   onClearTable: (name: string) => void
 }
 
@@ -157,11 +161,13 @@ export const TableSizesPanel: React.FC<TableSizesPanelProps> = ({
   selectedTable,
   selectedTablesForExport,
   isCalculatingSizes,
+  sizeSource,
   actions,
   children,
   onSelectTable,
   onToggleExportTable,
   onCalculateSizes,
+  onChangeSizeSource,
   onClearTable,
 }) => (
   <TgSettingsSection
@@ -193,6 +199,22 @@ export const TableSizesPanel: React.FC<TableSizesPanelProps> = ({
       </>
     }
   >
+    <div className="flex items-center gap-3 mb-6">
+      <span className="text-[10px] uppercase opacity-50 tracking-widest font-bold">
+        Data Source
+      </span>
+      <TgSegmentedControl
+        size="dense"
+        aria-label="Table size data source"
+        value={sizeSource}
+        onChange={onChangeSizeSource}
+        options={[
+          { value: "local", label: "Local (Browser)" },
+          { value: "server", label: "Backend DB" },
+        ]}
+      />
+    </div>
+
     {tableSizes && (
       <div className="space-y-6">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">

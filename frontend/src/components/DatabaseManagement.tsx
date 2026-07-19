@@ -3,6 +3,7 @@ import { motion } from "motion/react"
 import type React from "react"
 import { useState } from "react"
 import { toast } from "sonner"
+import { api } from "../api"
 import { useData } from "../contexts/DataContext"
 import { useSettings } from "../contexts/SettingsContext"
 import {
@@ -26,6 +27,7 @@ import { RetentionPanel } from "./settings/data/RetentionPanel"
 import {
   DatabaseStatsCards,
   type TableSizeRow,
+  type TableSizeSource,
   TableSizesPanel,
 } from "./settings/data/TableSizesPanel"
 import {
@@ -52,36 +54,40 @@ export const DatabaseManagement: React.FC<{
   const [isMigratingToServer, setIsMigratingToServer] = useState(false)
   const [confirmModal, setConfirmModal] = useState<ClearTableConfirm>(null)
 
-  const [tableSizes, setTableSizes] = useState<TableSizeRow[] | null>(() => {
-    const cached = localStorage.getItem("tableSizesCache")
-    if (cached) {
-      try {
-        return JSON.parse(cached)
-      } catch (_e) {
-        return null
-      }
+  // "Local" (browser IndexedDB) is the default source: it's what this panel
+  // always showed before the backend DB became a second, explicit option.
+  const [sizeSource, setSizeSource] = useState<TableSizeSource>("local")
+
+  const tableSizesCacheKey = (source: TableSizeSource) =>
+    `tableSizesCache:${source}`
+  const tableSizesLastCalculatedKey = (source: TableSizeSource) =>
+    `tableSizesLastCalculated:${source}`
+
+  const readCachedSizes = (source: TableSizeSource): TableSizeRow[] | null => {
+    const cached = localStorage.getItem(tableSizesCacheKey(source))
+    if (!cached) return null
+    try {
+      return JSON.parse(cached)
+    } catch (_e) {
+      return null
     }
-    return null
-  })
+  }
+  const readCachedLastCalculated = (source: TableSizeSource): number | null => {
+    const cached = localStorage.getItem(tableSizesLastCalculatedKey(source))
+    return cached ? parseInt(cached, 10) : null
+  }
+
+  const [tableSizes, setTableSizes] = useState<TableSizeRow[] | null>(() =>
+    readCachedSizes(sizeSource),
+  )
   const [tableSizesLastCalculated, setTableSizesLastCalculated] = useState<
     number | null
-  >(() => {
-    const cached = localStorage.getItem("tableSizesLastCalculated")
-    return cached ? parseInt(cached, 10) : null
-  })
+  >(() => readCachedLastCalculated(sizeSource))
   const [selectedTablesForExport, setSelectedTablesForExport] = useState<
     Set<string>
   >(() => {
-    const cached = localStorage.getItem("tableSizesCache")
-    if (cached) {
-      try {
-        const sizes = JSON.parse(cached)
-        return new Set(sizes.map((s: { name: string }) => s.name))
-      } catch (_e) {
-        return new Set()
-      }
-    }
-    return new Set()
+    const sizes = readCachedSizes(sizeSource)
+    return sizes ? new Set(sizes.map((s) => s.name)) : new Set()
   })
   const [isCalculatingSizes, setIsCalculatingSizes] = useState(false)
   const [selectedTable, setSelectedTable] = useState<string>("")
@@ -90,16 +96,36 @@ export const DatabaseManagement: React.FC<{
   const [isQuerying, setIsQuerying] = useState(false)
   const [queryError, setQueryError] = useState<string | null>(null)
 
+  const handleChangeSizeSource = (source: TableSizeSource) => {
+    setSizeSource(source)
+    const sizes = readCachedSizes(source)
+    setTableSizes(sizes)
+    setTableSizesLastCalculated(readCachedLastCalculated(source))
+    setSelectedTablesForExport(
+      sizes ? new Set(sizes.map((s) => s.name)) : new Set(),
+    )
+    setSelectedTable(sizes?.[0]?.name ?? "")
+  }
+
   const handleCalculateSizes = async () => {
     setIsCalculatingSizes(true)
     try {
-      const sizes = await getTableSizes()
+      const sizes =
+        sizeSource === "server"
+          ? await api.getTableSizes()
+          : await getTableSizes()
       setTableSizes(sizes)
       setSelectedTablesForExport(new Set(sizes.map((s) => s.name)))
       const now = Date.now()
       setTableSizesLastCalculated(now)
-      localStorage.setItem("tableSizesCache", JSON.stringify(sizes))
-      localStorage.setItem("tableSizesLastCalculated", now.toString())
+      localStorage.setItem(
+        tableSizesCacheKey(sizeSource),
+        JSON.stringify(sizes),
+      )
+      localStorage.setItem(
+        tableSizesLastCalculatedKey(sizeSource),
+        now.toString(),
+      )
       if (sizes.length > 0 && !selectedTable) {
         setSelectedTable(sizes[0].name)
       }
@@ -273,13 +299,18 @@ export const DatabaseManagement: React.FC<{
   }
 
   const handleClearTable = (tableName: string) => {
+    const sourceLabel = sizeSource === "server" ? "backend DB" : "local browser"
     setConfirmModal({
       isOpen: true,
       title: `Clear Table: ${tableName}`,
-      message: `Are you sure you want to delete all entries from the ${tableName} table? This cannot be undone.`,
+      message: `Are you sure you want to delete all entries from the ${tableName} table in the ${sourceLabel}? This cannot be undone.`,
       onConfirm: async () => {
         try {
-          await clearTable(tableName)
+          if (sizeSource === "server") {
+            await api.clearServerTable(tableName)
+          } else {
+            await clearTable(tableName)
+          }
           await loadDBStats()
           await handleCalculateSizes()
           setConfirmModal(null)
@@ -376,6 +407,8 @@ export const DatabaseManagement: React.FC<{
               selectedTable={selectedTable}
               selectedTablesForExport={selectedTablesForExport}
               isCalculatingSizes={isCalculatingSizes}
+              sizeSource={sizeSource}
+              onChangeSizeSource={handleChangeSizeSource}
               actions={
                 <TransferExportImportActions
                   isExporting={isExporting}
@@ -405,6 +438,7 @@ export const DatabaseManagement: React.FC<{
                   queryResults={queryResults}
                   queryError={queryError}
                   isQuerying={isQuerying}
+                  isServerSource={sizeSource === "server"}
                   onQueryChange={setQuery}
                   onRunQuery={handleRunQuery}
                 />

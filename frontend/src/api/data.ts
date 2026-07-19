@@ -244,6 +244,17 @@ export const dataApi = {
 
   getStats: () => request<Record<string, number>>("/api/v1/data/stats"),
 
+  getTableSizes: () =>
+    request<{ name: string; count: number; size: number }[]>(
+      "/api/v1/data/table-sizes",
+    ),
+
+  clearServerTable: (name: string) =>
+    request<{ deleted: number }>(
+      `/api/v1/data/tables/${encodeURIComponent(name)}`,
+      { method: "DELETE" },
+    ),
+
   deleteLogs: (params: {
     olderThanDays?: number
     type?: "publish" | "sync" | "llm" | "embedding" | "network"
