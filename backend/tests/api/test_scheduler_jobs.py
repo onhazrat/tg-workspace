@@ -17,7 +17,7 @@ from app.jobs.auto_sync import run_auto_sync
 from app.jobs.retention import run_retention_cleanup
 from app.jobs.settings import default_job_enabled, save_setting
 from app.jobs.translation_batch import run_translation_batch
-from app.models_tg import Channel, Post, Summary
+from app.models_tg import Channel, Post, Summary, SyncLog
 from app.services.network_settings import get_network_setting_row
 from app.services.operator import get_operator_user_id
 from app.services.scraper_jobs import clear_jobs_for_tests
@@ -420,6 +420,45 @@ def test_retention_deletes_old_posts() -> None:
         session.commit()
         result = run_retention_cleanup(session)
         assert result["deletedPosts"] >= 1
+
+
+def test_retention_deletes_old_logs_without_loading_them() -> None:
+    """Old log rows are bulk-deleted in SQL; the old select-all path OOM'd."""
+    now = int(time.time() * 1000)
+    old_ts = now - 10 * 24 * 60 * 60 * 1000
+    with Session(engine) as session:
+        save_setting(
+            session, "retention", {"postRetentionDays": 0, "logRetentionDays": 7}
+        )
+        operator_id = get_operator_user_id(session)
+        session.add(
+            SyncLog(
+                id="ret-old-log",
+                channel_name="c",
+                status="success",
+                timestamp=old_ts,
+                user_id=operator_id,
+                full_response={"blob": "x" * 2000},
+            )
+        )
+        session.add(
+            SyncLog(
+                id="ret-new-log",
+                channel_name="c",
+                status="success",
+                timestamp=now,
+                user_id=operator_id,
+            )
+        )
+        session.commit()
+        result = run_retention_cleanup(session)
+        assert result["deletedLogs"] >= 1
+
+    with Session(engine) as check:
+        assert check.get(SyncLog, "ret-old-log") is None, "expired log not deleted"
+        assert check.get(SyncLog, "ret-new-log") is not None, (
+            "recent log wrongly deleted"
+        )
 
 
 def test_retention_runs_at_startup_by_default() -> None:

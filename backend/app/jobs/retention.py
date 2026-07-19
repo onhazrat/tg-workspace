@@ -6,6 +6,7 @@ import logging
 from datetime import datetime
 from typing import Any, cast
 
+from sqlalchemy import delete as sa_delete
 from sqlmodel import Session, col, func, or_, select
 
 from app.jobs.settings import load_media_settings, load_retention_settings
@@ -115,18 +116,22 @@ def run_retention_cleanup(session: Session) -> dict[str, int]:
             (NetworkLog, "network_logs"),
         ):
             timestamp_col = cast(Any, model_cls).timestamp
-            log_stmt = select(model_cls).where(col(timestamp_col) < cutoff)
+            # Bulk SQL DELETE, not select-all-then-ORM-delete: log rows carry
+            # request/response JSON (tg_sync_logs full_response averages ~17KB,
+            # up to 3MB), so materialising every expired row loaded gigabytes
+            # into the worker and OOM-killed it. This deletes in the database
+            # without pulling any row into Python.
+            del_stmt = sa_delete(model_cls).where(col(timestamp_col) < cutoff)
             if operator_id is not None:
                 user_id_col = cast(Any, model_cls).user_id
-                log_stmt = log_stmt.where(
+                del_stmt = del_stmt.where(
                     or_(col(user_id_col) == operator_id, col(user_id_col).is_(None))
                 )
-            old_rows = session.exec(log_stmt).all()
-            for row in old_rows:
-                session.delete(row)
-                deleted_logs += 1
-            if old_rows:
-                session.commit()
+            result = session.execute(del_stmt)
+            session.commit()
+            deleted = cast(Any, result).rowcount or 0
+            if deleted:
+                deleted_logs += deleted
                 touch_sync(session, resource)
 
     logger.info(
