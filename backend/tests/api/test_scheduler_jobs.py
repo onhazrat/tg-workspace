@@ -422,6 +422,19 @@ def test_retention_deletes_old_posts() -> None:
         assert result["deletedPosts"] >= 1
 
 
+def test_retention_runs_at_startup_by_default() -> None:
+    kwargs = sched._retention_startup_kwargs()
+    assert "next_run_time" in kwargs, (
+        "retention must fire near boot, not just start+interval, or a "
+        "frequently-redeployed backend keeps resetting the sweep"
+    )
+
+
+def test_retention_startup_run_can_be_disabled(monkeypatch) -> None:
+    monkeypatch.setattr(settings, "RETENTION_JOB_STARTUP_DELAY_SECONDS", 0)
+    assert sched._retention_startup_kwargs() == {}
+
+
 @patch("app.jobs.translation_batch.get_provider")
 def test_translation_batch_skips_when_disabled(mock_provider) -> None:
     with Session(engine) as session:

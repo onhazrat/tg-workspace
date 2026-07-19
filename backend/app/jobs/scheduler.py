@@ -9,6 +9,7 @@ from __future__ import annotations
 import logging
 import time
 from collections.abc import Awaitable, Callable
+from datetime import datetime, timedelta
 from typing import Any
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
@@ -183,6 +184,22 @@ def set_job_enabled_flag(job_id: str, enabled: bool) -> dict[str, Any]:
     return result
 
 
+def _retention_startup_kwargs() -> dict[str, Any]:
+    """First-run timing for the retention job.
+
+    An interval job's first run is otherwise start+interval away, so on a
+    frequently-redeployed backend the sweep can be reset before it ever
+    fires. A next_run_time makes retention also run shortly after boot; the
+    delay lets startup settle first. Returns empty (interval-only) when the
+    delay is 0.
+    """
+    delay = settings.RETENTION_JOB_STARTUP_DELAY_SECONDS
+    if delay <= 0:
+        return {}
+    # Naive local time matches AsyncIOScheduler's default timezone.
+    return {"next_run_time": datetime.now() + timedelta(seconds=delay)}
+
+
 def start_scheduler() -> None:
     if scheduler.running:
         return
@@ -214,6 +231,7 @@ def start_scheduler() -> None:
         hours=settings.RETENTION_JOB_INTERVAL_HOURS,
         id="retention",
         replace_existing=True,
+        **_retention_startup_kwargs(),
     )
     scheduler.add_job(
         job_translation_batch,

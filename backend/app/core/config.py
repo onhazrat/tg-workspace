@@ -123,7 +123,12 @@ class Settings(BaseSettings):
     # Background job scheduler intervals
     EMBEDDINGS_JOB_INTERVAL_SECONDS: int = 60
     AUTO_SUMMARY_JOB_INTERVAL_SECONDS: int = 60
-    RETENTION_JOB_INTERVAL_HOURS: int = 6
+    RETENTION_JOB_INTERVAL_HOURS: int = 1
+    # An interval job's first run is otherwise start+interval away, so on a
+    # frequently-redeployed backend retention can be reset before it ever
+    # fires. This runs it shortly after boot too; the delay lets startup
+    # settle first. Set to 0 to disable the startup run.
+    RETENTION_JOB_STARTUP_DELAY_SECONDS: int = 60
     TRANSLATION_BATCH_JOB_INTERVAL_SECONDS: int = 30
 
     # Default enabled state when no jobs AppSetting row exists yet
