@@ -200,6 +200,23 @@ def _retention_startup_kwargs() -> dict[str, Any]:
     return {"next_run_time": datetime.now() + timedelta(seconds=delay)}
 
 
+def _retention_job_kwargs() -> dict[str, Any]:
+    """add_job kwargs for retention: startup timing plus misfire tolerance.
+
+    The scraping jobs block the event loop for several seconds at a time,
+    longer than APScheduler's 1s default grace, so a strict retention run is
+    dropped as a misfire (observed on staging: the startup run was "missed by
+    5s" and skipped, then deferred a full interval). Retention is a cleanup
+    sweep - running late is fine, never running is not - so let it run however
+    late, collapsing any catch-up runs into one.
+    """
+    return {
+        "misfire_grace_time": None,
+        "coalesce": True,
+        **_retention_startup_kwargs(),
+    }
+
+
 def start_scheduler() -> None:
     if scheduler.running:
         return
@@ -231,7 +248,7 @@ def start_scheduler() -> None:
         hours=settings.RETENTION_JOB_INTERVAL_HOURS,
         id="retention",
         replace_existing=True,
-        **_retention_startup_kwargs(),
+        **_retention_job_kwargs(),
     )
     scheduler.add_job(
         job_translation_batch,

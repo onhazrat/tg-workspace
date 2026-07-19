@@ -435,6 +435,14 @@ def test_retention_startup_run_can_be_disabled(monkeypatch) -> None:
     assert sched._retention_startup_kwargs() == {}
 
 
+def test_retention_job_tolerates_a_busy_event_loop() -> None:
+    # A strict grace drops the run when scraping blocks the loop past 1s,
+    # which is how the sweep silently never fired on staging.
+    kwargs = sched._retention_job_kwargs()
+    assert kwargs["misfire_grace_time"] is None
+    assert kwargs["coalesce"] is True
+
+
 @patch("app.jobs.translation_batch.get_provider")
 def test_translation_batch_skips_when_disabled(mock_provider) -> None:
     with Session(engine) as session:
