@@ -1,0 +1,51 @@
+# CI-only build cache layered on top of compose.yml + compose.override.yml.
+#
+# The Dockerfiles lean on BuildKit cache mounts (uv, bun), which are discarded
+# when the runner is torn down, so every CI build started from scratch. These
+# entries persist the layers in the GitHub Actions cache instead.
+#
+# Not part of the default compose file set: `type=gha` only resolves inside
+# Actions (it needs the runtime token), so pulling this into local dev would
+# just make builds fail. CI opts in via COMPOSE_FILE.
+#
+# Scopes are per-image. backend and prestart share one because they build the
+# same image from the same Dockerfile - a shared scope lets the second reuse
+# the first instead of racing it.
+#
+# mode is chosen per Dockerfile shape, because the Actions cache is capped at
+# 10GB per repo and these images are large (backend alone is ~2.2GB). For a
+# single-stage build the final image already contains every layer, so mode=max
+# would only add weight; multi-stage needs it or the discarded build stage
+# (bun install + node_modules) is lost and reinstalls every run.
+services:
+  # Single-stage (backend/Dockerfile).
+  prestart:
+    build:
+      cache_from:
+        - type=gha,scope=backend
+      cache_to:
+        - type=gha,mode=min,scope=backend
+
+  backend:
+    build:
+      cache_from:
+        - type=gha,scope=backend
+      cache_to:
+        - type=gha,mode=min,scope=backend
+
+  # Multi-stage (frontend/Dockerfile): bun build stage is dropped from the
+  # final nginx image, so it has to be cached explicitly.
+  frontend:
+    build:
+      cache_from:
+        - type=gha,scope=frontend
+      cache_to:
+        - type=gha,mode=max,scope=frontend
+
+  # Single-stage (frontend/Dockerfile.playwright).
+  playwright:
+    build:
+      cache_from:
+        - type=gha,scope=playwright
+      cache_to:
+        - type=gha,mode=min,scope=playwright
