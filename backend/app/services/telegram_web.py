@@ -76,6 +76,37 @@ def telegram_channel_post_url(channel_name: str, post_id: int) -> str:
     return f"{telegram_web_base_url()}/{channel_name}/{post_id}"
 
 
+# `t.me/<segment>` paths that are never a public channel handle. Keep in sync
+# with RESERVED_TELEGRAM_PATHS in frontend/src/lib/posts/telegram-handles.ts.
+RESERVED_TELEGRAM_PATHS = frozenset(
+    {
+        "addemoji",
+        "addstickers",
+        "addtheme",
+        "boost",
+        "c",
+        "iv",
+        "joinchat",
+        "login",
+        "proxy",
+        "s",
+        "setlanguage",
+        "share",
+        "socks",
+    }
+)
+
+_HANDLE_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_]{4,31}$")
+
+
+def is_channel_handle(name: str) -> bool:
+    """True when `name` can be a public channel handle (not an invite/reserved path)."""
+    clean = name.lstrip("@").strip()
+    if not _HANDLE_RE.match(clean):
+        return False
+    return clean.lower() not in RESERVED_TELEGRAM_PATHS
+
+
 def extract_channel_name_from_href(href: str) -> str | None:
     match = re.search(
         rf"(?:{_domain_alternation()})/([^/?#]+)",

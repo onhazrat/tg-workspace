@@ -97,6 +97,9 @@ class Post(SQLModel, table=True):
     retrieval_pass: str | None = None
     retrieval_source: str | None = None
     media: dict[str, Any] | None = Field(default=None, sa_column=Column(JSON))
+    # Telegram channel links found in the post body (masked hrefs the plain-text
+    # extraction discards). Shape: [{"url": str, "channel": str}]
+    links: list[Any] | None = Field(default=None, sa_column=Column(JSON))
     updated_at: datetime = Field(default_factory=utc_now)
 
 

@@ -7,6 +7,11 @@ import {
   RETENTION_LOG_DAYS_DEFAULT,
   RETENTION_POST_DAYS_DEFAULT,
 } from "@/constants"
+import type {
+  DiscoverFollowState,
+  DiscoverSortKey,
+  DiscoverySignalKind,
+} from "@/lib/posts/discover-candidates"
 import type { GlobalStartTimeMode, GlobalStartTimeValue } from "@/types"
 
 /** Backend settings sections pushed via api.putSetting(section, payload). */
@@ -86,6 +91,42 @@ const floatSetting = (
   defaultValue,
   decode: (raw) => Number.parseFloat(raw),
   encode: (value) => String(value),
+  ...options,
+})
+
+/** String-union setting stored verbatim. */
+const enumSetting = <T extends string>(
+  storageKey: string,
+  schema: z.ZodType<T>,
+  defaultValue: T,
+  options: SpecOptions = {},
+): SettingSpec<T> => ({
+  storageKey,
+  schema,
+  defaultValue,
+  decode: (raw) => raw,
+  encode: (value) => value,
+  ...options,
+})
+
+/** JSON-encoded setting for non-scalar values (arrays, records). */
+const jsonSetting = <T>(
+  storageKey: string,
+  schema: z.ZodType<T>,
+  defaultValue: T,
+  options: SpecOptions = {},
+): SettingSpec<T> => ({
+  storageKey,
+  schema,
+  defaultValue,
+  decode: (raw) => {
+    try {
+      return JSON.parse(raw)
+    } catch (_e) {
+      return undefined
+    }
+  },
+  encode: (value) => JSON.stringify(value),
   ...options,
 })
 
@@ -181,6 +222,25 @@ export const appSettingsSpec = {
     DEFAULT_AI_LANGUAGE,
     { section: "translation" },
   ),
+  // Discover tab candidate filters (local only — never mirrored to the backend).
+  discoverSignals: jsonSetting(
+    "discoverSignals",
+    z.array(z.enum(["forward", "mention", "link"])),
+    ["forward", "mention", "link"] as DiscoverySignalKind[],
+  ),
+  discoverSortKey: enumSetting<DiscoverSortKey>(
+    "discoverSortKey",
+    z.enum(["total", "forward", "mention", "link", "lastSeen", "seenInCount"]),
+    "total",
+  ),
+  // "all" preserves the historical Discover behaviour of listing followed
+  // sources too (rendered with a "Following" badge and a disabled checkbox).
+  discoverFollowState: enumSetting<DiscoverFollowState>(
+    "discoverFollowState",
+    z.enum(["all", "unfollowed", "followed"]),
+    "all",
+  ),
+  discoverMinTotal: intSetting("discoverMinTotal", 1),
 }
 
 /** State shape derived from the schema — one property per setting. */

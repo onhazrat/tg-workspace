@@ -1,8 +1,10 @@
-import type { DiscoveryEmptyReason } from "@/lib/posts/discover-forward-sources"
+import type { DiscoveryEmptyReason } from "@/lib/posts/discover-candidates"
 
 export type DiscoveryQuickAction =
   | { type: "set_forwarded_filter"; value: "all" | "forwarded" }
   | { type: "go_to_tab"; tab: "channels" | "posts" }
+  | { type: "enable_all_signals" }
+  | { type: "reset_candidate_filters" }
 
 export interface DiscoveryEmptyState {
   title: string
@@ -10,27 +12,17 @@ export interface DiscoveryEmptyState {
   quickActions: { label: string; action: DiscoveryQuickAction }[]
 }
 
-const EMPTY_STATES: Record<
-  Exclude<DiscoveryEmptyReason, "semantic_active">,
-  DiscoveryEmptyState
-> = {
-  original_only: {
-    title: "Original posts only",
-    body: "Forward-source discovery needs posts with forward metadata. Switch to all posts or forwarded-only to see which channels your sources forward from.",
+const EMPTY_STATES: Record<DiscoveryEmptyReason, DiscoveryEmptyState> = {
+  no_signals_enabled: {
+    title: "No discovery signals enabled",
+    body: "Turn on at least one of Forwards, Mentions, or Links to find candidate channels.",
     quickActions: [
-      {
-        label: "Show all posts",
-        action: { type: "set_forwarded_filter", value: "all" },
-      },
-      {
-        label: "Show forwarded only",
-        action: { type: "set_forwarded_filter", value: "forwarded" },
-      },
+      { label: "Enable all signals", action: { type: "enable_all_signals" } },
     ],
   },
   no_channels_selected: {
     title: "No channels selected",
-    body: "Select one or more channels on the Channels tab to discover forward sources in their posts.",
+    body: "Select one or more channels on the Channels tab to discover new channels from their posts.",
     quickActions: [
       {
         label: "Go to Channels",
@@ -45,23 +37,35 @@ const EMPTY_STATES: Record<
       { label: "Go to Posts", action: { type: "go_to_tab", tab: "posts" } },
     ],
   },
-  no_forwards_in_scope: {
-    title: "No forwarded posts in scope",
-    body: "Your current scope has posts, but none are forwards. Show forwarded posts to discover new channels.",
+  original_only: {
+    title: "Original posts only",
+    body: "Forward discovery needs posts with forward metadata, and the Posts tab is filtered to originals. Show all posts, or enable the Mentions and Links signals to discover from original posts too.",
     quickActions: [
       {
-        label: "Show forwarded only",
-        action: { type: "set_forwarded_filter", value: "forwarded" },
+        label: "Show all posts",
+        action: { type: "set_forwarded_filter", value: "all" },
+      },
+      { label: "Enable all signals", action: { type: "enable_all_signals" } },
+    ],
+  },
+  no_candidates: {
+    title: "No channels referenced in scope",
+    body: "These posts don't forward from, mention, or link to any other channel. Try widening the date range or enabling more discovery signals.",
+    quickActions: [
+      { label: "Enable all signals", action: { type: "enable_all_signals" } },
+      {
+        label: "Show all posts",
+        action: { type: "set_forwarded_filter", value: "all" },
       },
     ],
   },
-  no_unfollowed_sources: {
-    title: "All forward sources already followed",
-    body: "Every forward source in this scope is already in your channel list. Show all forwards to review followed sources too.",
+  no_matching_candidates: {
+    title: "No candidates match your filters",
+    body: "Channels were found, but the follow-state, minimum-count, or name filters excluded all of them.",
     quickActions: [
       {
-        label: "Show all forwards",
-        action: { type: "set_forwarded_filter", value: "forwarded" },
+        label: "Reset filters",
+        action: { type: "reset_candidate_filters" },
       },
     ],
   },
@@ -70,7 +74,7 @@ const EMPTY_STATES: Record<
 export function resolveDiscoveryEmptyState(
   reason: DiscoveryEmptyReason | undefined,
 ): DiscoveryEmptyState | null {
-  if (!reason || reason === "semantic_active") return null
+  if (!reason) return null
   return EMPTY_STATES[reason]
 }
 

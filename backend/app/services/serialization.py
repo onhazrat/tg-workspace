@@ -161,6 +161,7 @@ def post_to_camel(p: Post) -> dict[str, Any]:
         "retrievalPass": p.retrieval_pass,
         "retrievalSource": p.retrieval_source,
         "media": p.media,
+        "links": p.links,
     }
 
 

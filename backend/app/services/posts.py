@@ -18,6 +18,11 @@ def _post_media_from_item(item: dict[str, Any]) -> dict[str, Any] | None:
     return media if isinstance(media, dict) else None
 
 
+def _post_links_from_item(item: dict[str, Any]) -> list[Any] | None:
+    links = item.get("links")
+    return links if isinstance(links, list) else None
+
+
 def bulk_upsert_posts_impl(
     body: list[dict[str, Any]],
     session: Session,
@@ -46,6 +51,8 @@ def bulk_upsert_posts_impl(
             )
             if "media" in item:
                 existing.media = _post_media_from_item(item)
+            if "links" in item:
+                existing.links = _post_links_from_item(item)
             existing.updated_at = datetime.utcnow()
             session.add(existing)
         else:
@@ -76,6 +83,7 @@ def bulk_upsert_posts_impl(
                     forwarded_from_name=item.get("forwardedFromName")
                     or item.get("forwarded_from_name"),
                     media=_post_media_from_item(item),
+                    links=_post_links_from_item(item),
                     retrieved_at=now_ms,
                     retrieval_job_id=job_id,
                     retrieval_pass=pass_val,

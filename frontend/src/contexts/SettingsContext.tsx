@@ -15,6 +15,11 @@ import {
   RETENTION_LOG_DAYS_DEFAULT,
   RETENTION_POST_DAYS_DEFAULT,
 } from "@/constants"
+import type {
+  DiscoverFollowState,
+  DiscoverSortKey,
+  DiscoverySignalKind,
+} from "@/lib/posts/discover-candidates"
 import type { AppSettings } from "@/lib/settings/schema"
 import { computeEffectiveGlobalStartTime } from "@/lib/settings/start-time"
 import {
@@ -113,6 +118,14 @@ interface SettingsContextType {
   setShowChannelLinks: (show: boolean) => void
   showChannelStartId: boolean
   setShowChannelStartId: (show: boolean) => void
+  discoverSignals: DiscoverySignalKind[]
+  setDiscoverSignals: (kinds: DiscoverySignalKind[]) => void
+  discoverSortKey: DiscoverSortKey
+  setDiscoverSortKey: (key: DiscoverSortKey) => void
+  discoverFollowState: DiscoverFollowState
+  setDiscoverFollowState: (state: DiscoverFollowState) => void
+  discoverMinTotal: number
+  setDiscoverMinTotal: (minTotal: number) => void
 }
 
 const SettingsContext = createContext<SettingsContextType | undefined>(

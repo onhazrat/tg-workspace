@@ -17,6 +17,7 @@ from bs4 import BeautifulSoup
 from app.core.config import settings
 from app.services.channel_photos import resolve_cached_photo_url
 from app.services.network import fetch_with_retry
+from app.services.post_links_parser import extract_body_links
 from app.services.post_media_parser import finalize_post_media_paths, parse_widget_media
 from app.services.telegram_html import extract_telegram_html_text
 from app.services.telegram_web import (
@@ -104,6 +105,9 @@ def _parse_posts_from_html(
         }
         if media:
             post["media"] = media
+        links = extract_body_links(el)
+        if links:
+            post["links"] = links
         if thumb_source_url:
             post["_thumbSourceUrl"] = thumb_source_url
         if forwarded_from:

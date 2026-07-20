@@ -262,15 +262,13 @@ async function openDiscoverWithForwards(
 
   await gotoSummarizer(page, "discover")
   await expect(
-    page.getByRole("heading", { name: "Forward Sources" }),
+    page.getByRole("heading", { name: "Channel Candidates" }),
   ).toBeVisible()
 
   const expectedSources =
     fixture.unfollowedSources.length + (fixture.followedSource ? 1 : 0)
   await expect(
-    page
-      .getByText(`Unique sources: ${expectedSources}`, { exact: false })
-      .first(),
+    page.getByText(`Candidates: ${expectedSources}`, { exact: false }).first(),
   ).toBeVisible({ timeout: 15_000 })
 
   for (const source of fixture.unfollowedSources) {
@@ -324,7 +322,7 @@ test.describe("TG Summarizer", () => {
       /border-app-ink/,
     )
     await expect(
-      page.getByRole("heading", { name: "Forward Sources" }),
+      page.getByRole("heading", { name: "Channel Candidates" }),
     ).toBeVisible()
   })
 
@@ -340,7 +338,9 @@ test.describe("TG Summarizer", () => {
     ).toBeVisible()
   })
 
-  test("discover tab shows original-only empty guide", async ({ page }) => {
+  test("discover shows forward-only empty guide when only forwards are enabled", async ({
+    page,
+  }) => {
     // Keep SPA state (filter is in-memory); avoid flaky tab-bar clicks under load.
     test.setTimeout(60_000)
     await gotoSummarizer(page, "posts")
@@ -350,12 +350,38 @@ test.describe("TG Summarizer", () => {
 
     await openPaletteKeyboard(page)
     await runPaletteCommand(page, "Go to Discover")
-
     await expect(page).toHaveURL(/tab=discover/)
+
+    // Mentions and links stay valid on original posts, so the forward-specific
+    // guide only appears once they are switched off.
+    await page.getByTestId("discover-signal-mention").click()
+    await page.getByTestId("discover-signal-link").click()
+
     await expect(page.getByText(/forward metadata/i)).toBeVisible()
     await expect(
       page.getByRole("button", { name: "Show all posts" }),
     ).toBeVisible()
+    await expect(
+      page.getByRole("button", { name: "Enable all signals" }),
+    ).toBeVisible()
+  })
+
+  test("discover signal toggles persist and filter candidates", async ({
+    page,
+  }) => {
+    await gotoSummarizer(page, "discover")
+
+    const mentionChip = page.getByTestId("discover-signal-mention")
+    await expect(mentionChip).toHaveAttribute("aria-pressed", "true")
+    await mentionChip.click()
+    await expect(mentionChip).toHaveAttribute("aria-pressed", "false")
+
+    // Preference is schema-backed, so it survives a reload.
+    await page.reload()
+    await expect(page.getByTestId("discover-signal-mention")).toHaveAttribute(
+      "aria-pressed",
+      "false",
+    )
   })
 
   test("discover channel and forwarded-by links use web-view /s/ hrefs", async ({
@@ -395,7 +421,7 @@ test.describe("TG Summarizer", () => {
     )
 
     const forwardedByLink = page
-      .getByTestId(`discover-forwarded-by-link-${carrierName}`)
+      .getByTestId(`discover-seen-in-link-${carrierName}`)
       .first()
     await expect(forwardedByLink).toHaveAttribute(
       "href",

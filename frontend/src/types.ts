@@ -33,6 +33,12 @@ export interface PostMedia {
   isMediaOnly?: boolean
 }
 
+/** A Telegram link found in a post body. Mirrors the backend `links` JSON column. */
+export interface PostBodyLink {
+  url: string
+  channel?: string | null
+}
+
 export interface Post {
   id: number
   channelName: string
@@ -40,6 +46,7 @@ export interface Post {
   date: string
   timestamp: number
   media?: PostMedia | null
+  links?: PostBodyLink[] | null
   forwardedFrom?: string
   forwardedFromName?: string
   isAnchor?: boolean

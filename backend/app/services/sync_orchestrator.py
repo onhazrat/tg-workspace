@@ -157,6 +157,7 @@ def _posts_to_save(
                 "forwardedFrom": p.get("forwardedFrom"),
                 "forwardedFromName": p.get("forwardedFromName"),
                 "media": p.get("media"),
+                "links": p.get("links"),
             }
         )
     return out
