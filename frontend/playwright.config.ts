@@ -21,8 +21,15 @@ export default defineConfig({
   forbidOnly: !!process.env.CI,
   /* Retry on CI only */
   retries: process.env.CI ? 2 : 0,
-  /* Opt out of parallel tests on CI. */
-  workers: process.env.CI ? 1 : undefined,
+  /*
+   * Always one worker. Every spec shares a single backend, database and user
+   * account, and most setup paths fetch the unbounded channel list, so workers
+   * starve each other: parallel runs took 6.8-16.5 min and failed 1-3 specs at
+   * random (a different set each run), while the same suite passes 51/51 in
+   * 2.6 min serially. Contention was costing far more in timeout waits than
+   * parallelism ever bought.
+   */
+  workers: 1,
   /* Reporter to use. See https://playwright.dev/docs/test-reporters */
   reporter: process.env.CI ? 'blob' : 'html',
   /* Shared settings for all the projects below. See https://playwright.dev/docs/api/class-testoptions. */

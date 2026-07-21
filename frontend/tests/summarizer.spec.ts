@@ -100,6 +100,42 @@ type DiscoverForwardFixture = {
   followedSource?: string
   /** Unfollowed forward sources shown as follow candidates. */
   unfollowedSources: string[]
+  /**
+   * Original (non-forwarded) posts to include, carrying no handles or links so
+   * they yield zero candidates under any signal.
+   */
+  originalPostCount?: number
+}
+
+const DISCOVER_SIGNAL_KINDS = ["forward", "mention", "link"] as const
+type DiscoverSignalKind = (typeof DISCOVER_SIGNAL_KINDS)[number]
+
+/**
+ * Signal chips are schema-backed, so they survive reloads *and leak between
+ * specs*. Blind clicking therefore toggles whatever the previous spec left
+ * behind; set the desired state explicitly instead.
+ */
+async function setDiscoverSignal(
+  page: Page,
+  kind: DiscoverSignalKind,
+  enabled: boolean,
+) {
+  const chip = page.getByTestId(`discover-signal-${kind}`)
+  await expect(chip).toBeVisible()
+  const current = await chip.getAttribute("aria-pressed")
+  if (current !== String(enabled)) {
+    await chip.click()
+  }
+  await expect(chip).toHaveAttribute("aria-pressed", String(enabled))
+}
+
+async function setDiscoverSignals(
+  page: Page,
+  enabled: Record<DiscoverSignalKind, boolean>,
+) {
+  for (const kind of DISCOVER_SIGNAL_KINDS) {
+    await setDiscoverSignal(page, kind, enabled[kind])
+  }
 }
 
 async function mockDiscoverForwardPosts(
@@ -136,6 +172,18 @@ async function mockDiscoverForwardPosts(
     })
   }
 
+  // Text deliberately free of handles and t.me links: these posts must survive
+  // the "Original Only" filter while contributing no discovery candidates.
+  for (let i = 0; i < (fixture.originalPostCount ?? 0); i += 1) {
+    posts.push({
+      id: postId++,
+      channelName: fixture.carrierName,
+      text: `Original post number ${i} about local weather and traffic.`,
+      date: new Date(now - 20_000 - posts.length * 1000).toISOString(),
+      timestamp: now - 20_000 - posts.length * 1000,
+    })
+  }
+
   await page.route("**/api/v1/data/sync-meta**", async (route) => {
     await route.fulfill({
       json: {
@@ -164,6 +212,8 @@ async function mockDiscoverForwardPosts(
     localStorage.setItem("startDateTs", String(ts - 14 * 24 * 60 * 60 * 1000))
     localStorage.setItem("endDateTs", String(ts + 60_000))
     localStorage.setItem("postFilter_maxPerChannel", "0")
+    // Persisted across specs; a leftover media filter would empty the scope.
+    localStorage.setItem("postFilter_media", "all")
   }, now)
 }
 
@@ -241,24 +291,45 @@ async function mockBulkFollowJob(page: Page, followJobId = "e2e-follow-job") {
   }
 }
 
+/**
+ * Seeded channels auto-select on first load when prevChannelNames is empty.
+ * Land on channels, let that settle, then pin selection to the carrier only.
+ */
+async function pinSelectionToCarrier(page: Page, carrierName: string) {
+  await gotoSummarizer(page, "channels")
+  // Seeded channels auto-select once the channel list arrives, which under
+  // load lands *after* the clear+select above and silently clobbers it. The
+  // carrier then ends up unselected, posts are read from IDB filtered to other
+  // channels, and the spec fails with a "no posts in scope" far from the cause.
+  // Retry until the pin sticks rather than asserting a racy first attempt.
+  const expected = JSON.stringify([carrierName])
+  const readSelection = () =>
+    page.evaluate(() => localStorage.getItem("selectedChannels") ?? "[]")
+
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    if ((await readSelection()) === expected) break
+    await openPaletteKeyboard(page)
+    await runPaletteCommand(page, "clear selection")
+    await closePaletteKeyboard(page)
+    await selectChannelsKeyboard(page, [carrierName])
+    // Give a late-arriving auto-select a chance to show itself before retrying.
+    await page.waitForTimeout(1_000)
+  }
+
+  await expect.poll(readSelection, { timeout: 15_000 }).toBe(expected)
+
+  // Force a fresh mock pull on next mount (avoid IDB pollution from sync jobs).
+  await page.evaluate(() => {
+    localStorage.removeItem("sync_etag_posts")
+  })
+}
+
 async function openDiscoverWithForwards(
   page: Page,
   fixture: DiscoverForwardFixture,
 ) {
   await mockDiscoverForwardPosts(page, fixture)
-
-  // Seeded channels auto-select on first load when prevChannelNames is empty.
-  // Land on channels, let that settle, then pin selection to the carrier only.
-  await gotoSummarizer(page, "channels")
-  await openPaletteKeyboard(page)
-  await runPaletteCommand(page, "clear selection")
-  await closePaletteKeyboard(page)
-  await selectChannelsKeyboard(page, [fixture.carrierName])
-
-  // Force a fresh mock pull on Discover mount (avoid IDB pollution from sync jobs).
-  await page.evaluate(() => {
-    localStorage.removeItem("sync_etag_posts")
-  })
+  await pinSelectionToCarrier(page, fixture.carrierName)
 
   await gotoSummarizer(page, "discover")
   await expect(
@@ -342,7 +413,23 @@ test.describe("TG Summarizer", () => {
     page,
   }) => {
     // Keep SPA state (filter is in-memory); avoid flaky tab-bar clicks under load.
-    test.setTimeout(60_000)
+    test.setTimeout(90_000)
+
+    // The "original only" guide requires a non-empty scope of original posts.
+    // Reading that from the shared dev DB is what made this spec unreliable —
+    // it reported "no posts in scope" whenever the DB had none in range.
+    const stamp = Date.now()
+    const carrierName = `dsorig${stamp}`
+
+    await gotoSummarizer(page, "channels")
+    await seedTestChannel(page, carrierName)
+    await mockDiscoverForwardPosts(page, {
+      carrierName,
+      unfollowedSources: [],
+      originalPostCount: 3,
+    })
+    await pinSelectionToCarrier(page, carrierName)
+
     await gotoSummarizer(page, "posts")
     const originalOnly = page.getByRole("button", { name: "Original Only" })
     await originalOnly.click()
@@ -354,8 +441,11 @@ test.describe("TG Summarizer", () => {
 
     // Mentions and links stay valid on original posts, so the forward-specific
     // guide only appears once they are switched off.
-    await page.getByTestId("discover-signal-mention").click()
-    await page.getByTestId("discover-signal-link").click()
+    await setDiscoverSignals(page, {
+      forward: true,
+      mention: false,
+      link: false,
+    })
 
     await expect(page.getByText(/forward metadata/i)).toBeVisible()
     await expect(
@@ -364,6 +454,13 @@ test.describe("TG Summarizer", () => {
     await expect(
       page.getByRole("button", { name: "Enable all signals" }),
     ).toBeVisible()
+
+    // Restore, so later specs do not inherit a forward-only signal set.
+    await setDiscoverSignals(page, {
+      forward: true,
+      mention: true,
+      link: true,
+    })
   })
 
   test("discover signal toggles persist and filter candidates", async ({
@@ -371,8 +468,11 @@ test.describe("TG Summarizer", () => {
   }) => {
     await gotoSummarizer(page, "discover")
 
+    // Do not assume the starting state: the preference is schema-backed and
+    // outlives whichever spec ran before this one.
+    await setDiscoverSignal(page, "mention", true)
+
     const mentionChip = page.getByTestId("discover-signal-mention")
-    await expect(mentionChip).toHaveAttribute("aria-pressed", "true")
     await mentionChip.click()
     await expect(mentionChip).toHaveAttribute("aria-pressed", "false")
 
@@ -382,6 +482,9 @@ test.describe("TG Summarizer", () => {
       "aria-pressed",
       "false",
     )
+
+    // Restore, so this spec does not disable mentions for the rest of the run.
+    await setDiscoverSignal(page, "mention", true)
   })
 
   test("discover channel and forwarded-by links use web-view /s/ hrefs", async ({
