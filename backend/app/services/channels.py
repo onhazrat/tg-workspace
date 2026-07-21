@@ -7,6 +7,7 @@ from datetime import datetime
 from typing import Any
 
 from fastapi import HTTPException
+from sqlalchemy import delete as sa_delete
 from sqlmodel import Session, col, func, select
 
 from app.models_tg import Channel, Post
@@ -306,9 +307,10 @@ def delete_channel(session: Session, channel_id: str) -> dict[str, str]:
     ch = session.get(Channel, channel_id)
     if not ch:
         raise HTTPException(status_code=404, detail="Channel not found")
-    posts = session.exec(select(Post).where(Post.channel_name == ch.name)).all()
-    for post in posts:
-        session.delete(post)
+    # Bulk DELETE rather than loading every post to delete it one by one: a
+    # busy channel holds hundreds of thousands of rows, and materialising them
+    # to delete them is the same shape that OOM-killed the worker on staging.
+    session.execute(sa_delete(Post).where(col(Post.channel_name) == ch.name))
     session.delete(ch)
     session.commit()
     delete_cached_photo(channel_id)

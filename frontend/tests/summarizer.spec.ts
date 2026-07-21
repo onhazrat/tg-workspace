@@ -482,7 +482,12 @@ test.describe("TG Summarizer", () => {
       await page.getByTestId(`discover-select-${source}`).click()
     }
     await expect(page.getByTestId("discover-bulk-bar")).toBeVisible()
-    await expect(page.getByText("2 selected")).toBeVisible()
+    // Scoped to the bulk bar: "2 selected" also appears in the channel scope
+    // line ("Channels: 2 selected"), so an unscoped locator matches twice and
+    // fails Playwright's strict mode.
+    await expect(
+      page.getByTestId("discover-bulk-bar").getByText("2 selected"),
+    ).toBeVisible()
 
     const dialogs: string[] = []
     page.on("dialog", (dialog) => {

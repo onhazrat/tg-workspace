@@ -5,8 +5,10 @@ from __future__ import annotations
 import time
 import uuid
 from collections.abc import Iterable
+from typing import Any, cast
 
 from sqlalchemy import and_
+from sqlalchemy import delete as sa_delete
 from sqlmodel import Session, col, delete, select
 
 from app.models_tg import Post, PostSyncState
@@ -139,30 +141,23 @@ def record_gaps_to_existing_post(
 
 
 def clear_channel_sync_state(session: Session, channel_name: str) -> int:
-    rows = list(
-        session.exec(
-            select(PostSyncState).where(PostSyncState.channel_name == channel_name)
-        ).all()
+    """Bulk DELETE — one row per confirmed gap, so a long channel has many."""
+    result = session.execute(
+        sa_delete(PostSyncState).where(col(PostSyncState.channel_name) == channel_name)
     )
-    for row in rows:
-        session.delete(row)
-    return len(rows)
+    return cast(Any, result).rowcount or 0
 
 
 def prune_sync_state_below(
     session: Session, channel_name: str, min_post_id: int
 ) -> int:
-    rows = list(
-        session.exec(
-            select(PostSyncState).where(
-                PostSyncState.channel_name == channel_name,
-                PostSyncState.post_id < min_post_id,
-            )
-        ).all()
+    result = session.execute(
+        sa_delete(PostSyncState).where(
+            col(PostSyncState.channel_name) == channel_name,
+            col(PostSyncState.post_id) < min_post_id,
+        )
     )
-    for row in rows:
-        session.delete(row)
-    return len(rows)
+    return cast(Any, result).rowcount or 0
 
 
 def prune_sync_state_for_post_ids(

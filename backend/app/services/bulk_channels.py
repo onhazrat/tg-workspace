@@ -8,7 +8,7 @@ import uuid
 from dataclasses import dataclass, field
 from datetime import datetime
 
-from sqlmodel import Session, col, delete, select
+from sqlmodel import Session, col, delete, func, select
 
 from app.models_tg import Channel, Post, PostEmbedding, PostTranslation
 from app.services.channel_setting_groups import channel_allows_reset, load_groups_by_id
@@ -90,10 +90,17 @@ async def bulk_reresolve_start_ids(
 
 
 def _clear_channel_posts(session: Session, channel_name: str) -> int:
-    posts = list(
-        session.exec(select(Post).where(Post.channel_name == channel_name)).all()
+    # The deletes below were already bulk; only the count was not. Loading
+    # every post just to call len() on it defeated that, so count in SQL.
+    count = (
+        session.exec(
+            select(func.count())
+            .select_from(Post)
+            .where(col(Post.channel_name) == channel_name)
+        ).one()
+        or 0
     )
-    if not posts:
+    if not count:
         return 0
     session.exec(
         delete(PostEmbedding).where(col(PostEmbedding.channel_name) == channel_name)
@@ -102,7 +109,7 @@ def _clear_channel_posts(session: Session, channel_name: str) -> int:
         delete(PostTranslation).where(col(PostTranslation.channel_name) == channel_name)
     )
     session.exec(delete(Post).where(col(Post.channel_name) == channel_name))
-    return len(posts)
+    return int(count)
 
 
 def _reset_channel_coverage_fields(channel: Channel) -> None:
