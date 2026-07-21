@@ -7,7 +7,8 @@ from collections.abc import Callable
 from datetime import datetime
 from typing import Any, TypeVar, cast
 
-from sqlmodel import Session, SQLModel, col, select
+from sqlalchemy import delete as sa_delete
+from sqlmodel import Session, SQLModel, col, or_, select
 
 from app.models_tg import (
     EmbeddingLog,
@@ -191,14 +192,17 @@ def delete_log_by_id(session: Session, log_type: str, log_id: str) -> bool:
 
 
 def clear_logs(session: Session, log_type: str) -> int:
+    """Delete every row of one log table, returning the count.
+
+    Bulk SQL DELETE rather than select-all-then-ORM-delete: log rows carry
+    request/response payloads, so materialising the whole table to delete it
+    pulled gigabytes into the worker. Mirrors
+    `app.jobs.retention.run_retention_cleanup`.
+    """
     model, _ = LOG_MODELS[log_type]
-    rows = session.exec(select(model)).all()
-    count = len(rows)
-    for row in rows:
-        session.delete(row)
-    if count:
-        session.commit()
-    return count
+    result = session.execute(sa_delete(model))
+    session.commit()
+    return cast(Any, result).rowcount or 0
 
 
 def delete_old_logs(
@@ -217,18 +221,16 @@ def delete_old_logs(
     )
     deleted: dict[str, int] = {}
     for log_type, (model, _) in LOG_MODELS.items():
-        stmt = select(model).where(col(cast(Any, model).timestamp) < cutoff)
+        # Bulk DELETE in the database — see clear_logs above for why.
+        stmt = sa_delete(model).where(col(cast(Any, model).timestamp) < cutoff)
         if operator_id is not None and hasattr(model, "user_id"):
             user_id_col = cast(Any, model).user_id
             stmt = stmt.where(
-                (col(user_id_col) == operator_id) | col(user_id_col).is_(None)
+                or_(col(user_id_col) == operator_id, col(user_id_col).is_(None))
             )
-        rows = session.exec(stmt).all()
-        for row in rows:
-            session.delete(row)
-        if rows:
-            session.commit()
-        deleted[log_type] = len(rows)
+        result = session.execute(stmt)
+        session.commit()
+        deleted[log_type] = cast(Any, result).rowcount or 0
     return deleted
 
 

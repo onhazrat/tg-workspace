@@ -9,6 +9,8 @@ from typing import Any
 
 from fastapi import APIRouter, Body, HTTPException, Query
 from fastapi.responses import StreamingResponse
+from pydantic import BaseModel
+from pydantic import Field as PydanticField
 
 from app.api.deps import CurrentUser, SessionDep
 from app.core.config import settings
@@ -99,7 +101,11 @@ from app.services.credentials import (
 from app.services.data_import_export import import_data as import_data_impl
 from app.services.data_import_export import stream_export_data
 from app.services.data_vectors import (
-    list_embeddings as list_embeddings_impl,
+    DEFAULT_VECTOR_PAGE_SIZE,
+    MAX_VECTOR_PAGE_SIZE,
+)
+from app.services.data_vectors import (
+    get_translation as get_translation_impl,
 )
 from app.services.data_vectors import (
     list_translations as list_translations_impl,
@@ -130,8 +136,14 @@ from app.services.network_settings import (
     network_settings_payload,
 )
 from app.services.operator import get_operator_user_id
-from app.services.posts import bulk_upsert_posts
+from app.services.posts import (
+    DEFAULT_POST_PAGE_SIZE,
+    MAX_POST_LOOKUP_BATCH,
+    MAX_POST_PAGE_SIZE,
+    bulk_upsert_posts,
+)
 from app.services.posts import list_posts as list_posts_impl
+from app.services.posts import lookup_posts as lookup_posts_impl
 from app.services.settings_store import get_app_setting, put_app_setting
 from app.services.stats import clear_table, get_db_stats, get_table_sizes
 from app.services.summaries import (
@@ -145,7 +157,14 @@ from app.services.summaries import (
 )
 from app.services.sync_meta import get_sync_meta, touch_sync
 from app.services.tag_runs import (
+    DEFAULT_TAG_RUN_PAGE_SIZE,
+    MAX_TAG_RUN_PAGE_SIZE,
+)
+from app.services.tag_runs import (
     delete_tag_run as delete_tag_run_impl,
+)
+from app.services.tag_runs import (
+    get_tag_run as get_tag_run_impl,
 )
 from app.services.tag_runs import (
     list_tag_runs as list_tag_runs_impl,
@@ -497,6 +516,8 @@ def list_posts(
     channel_name: str | None = Query(None, alias="channelName"),
     start_date: int | None = Query(None, alias="startDate"),
     end_date: int | None = Query(None, alias="endDate"),
+    limit: int = Query(default=DEFAULT_POST_PAGE_SIZE, ge=1, le=MAX_POST_PAGE_SIZE),
+    offset: int = Query(default=0, ge=0),
 ) -> list[dict[str, Any]]:
     names: list[str] = []
     if channel_names:
@@ -508,6 +529,33 @@ def list_posts(
         channel_names=names or None,
         start_date=start_date,
         end_date=end_date,
+        limit=limit,
+        offset=offset,
+    )
+
+
+class PostLookupRef(BaseModel):
+    channel_name: str = PydanticField(alias="channelName")
+    post_id: int = PydanticField(alias="postId")
+
+
+class PostLookupRequest(BaseModel):
+    """Batch of `(channelName, postId)` refs to resolve.
+
+    Capped so this cannot become another way to ask for unbounded rows.
+    """
+
+    posts: list[PostLookupRef] = PydanticField(max_length=MAX_POST_LOOKUP_BATCH)
+
+
+@router.post("/posts/lookup")
+def lookup_posts_route(
+    body: PostLookupRequest,
+    session: SessionDep,
+    _current_user: CurrentUser,
+) -> list[dict[str, Any]]:
+    return lookup_posts_impl(
+        session, [(ref.channel_name, ref.post_id) for ref in body.posts]
     )
 
 
@@ -555,8 +603,23 @@ def delete_summary(
 def list_tag_runs(
     session: SessionDep,
     _current_user: CurrentUser,
+    limit: int = Query(
+        default=DEFAULT_TAG_RUN_PAGE_SIZE, ge=1, le=MAX_TAG_RUN_PAGE_SIZE
+    ),
+    offset: int = Query(default=0, ge=0),
 ) -> list[dict[str, Any]]:
-    return list_tag_runs_impl(session)
+    """List runs in the light projection — see `tag_run_to_camel_light`."""
+    return list_tag_runs_impl(session, limit=limit, offset=offset)
+
+
+@router.get("/tag-runs/{tag_run_id}")
+def get_tag_run(
+    tag_run_id: str,
+    session: SessionDep,
+    _current_user: CurrentUser,
+) -> dict[str, Any]:
+    """Full run including promptText/responseText/suggestions."""
+    return get_tag_run_impl(session, tag_run_id)
 
 
 @router.put("/tag-runs/{tag_run_id}")
@@ -647,14 +710,6 @@ def delete_chat_destination(
     return delete_chat_destination_impl(session, dest_id)
 
 
-@router.get("/embeddings")
-def list_embeddings(
-    session: SessionDep,
-    _current_user: CurrentUser,
-) -> list[dict[str, Any]]:
-    return list_embeddings_impl(session)
-
-
 @router.post("/embeddings")
 def upsert_embeddings(
     body: list[dict[str, Any]],
@@ -664,12 +719,28 @@ def upsert_embeddings(
     return upsert_embeddings_impl(session, body)
 
 
+@router.get("/translations/one")
+def get_translation(
+    session: SessionDep,
+    _current_user: CurrentUser,
+    channel_name: str = Query(alias="channelName"),
+    post_id: int = Query(alias="postId"),
+    language: str = Query(),
+) -> dict[str, Any] | None:
+    """Read a single translation. Returns null when absent."""
+    return get_translation_impl(
+        session, channel_name=channel_name, post_id=post_id, language=language
+    )
+
+
 @router.get("/translations")
 def list_translations(
     session: SessionDep,
     _current_user: CurrentUser,
+    limit: int = Query(default=DEFAULT_VECTOR_PAGE_SIZE, ge=1, le=MAX_VECTOR_PAGE_SIZE),
+    offset: int = Query(default=0, ge=0),
 ) -> list[dict[str, Any]]:
-    return list_translations_impl(session)
+    return list_translations_impl(session, limit=limit, offset=offset)
 
 
 @router.post("/translations")

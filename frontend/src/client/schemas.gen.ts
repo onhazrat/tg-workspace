@@ -1235,6 +1235,41 @@ export const NewPasswordSchema = {
     title: 'NewPassword'
 } as const;
 
+export const PostLookupRefSchema = {
+    properties: {
+        channelName: {
+            type: 'string',
+            title: 'Channelname'
+        },
+        postId: {
+            type: 'integer',
+            title: 'Postid'
+        }
+    },
+    type: 'object',
+    required: ['channelName', 'postId'],
+    title: 'PostLookupRef'
+} as const;
+
+export const PostLookupRequestSchema = {
+    properties: {
+        posts: {
+            items: {
+                '$ref': '#/components/schemas/PostLookupRef'
+            },
+            type: 'array',
+            maxItems: 200,
+            title: 'Posts'
+        }
+    },
+    type: 'object',
+    required: ['posts'],
+    title: 'PostLookupRequest',
+    description: `Batch of \`(channelName, postId)\` refs to resolve.
+
+Capped so this cannot become another way to ask for unbounded rows.`
+} as const;
+
 export const ProxyLaneSnapshotSchema = {
     properties: {
         proxyUrl: {

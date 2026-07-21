@@ -2188,6 +2188,29 @@
               "anyOf": [{ "type": "integer" }, { "type": "null" }],
               "title": "Enddate"
             }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 5000,
+              "minimum": 1,
+              "default": 500,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "title": "Offset"
+            }
           }
         ],
         "responses": {
@@ -2212,6 +2235,44 @@
             }
           }
         }
+      }
+    },
+    "/api/v1/data/posts/lookup": {
+      "post": {
+        "tags": ["data"],
+        "summary": "Lookup Posts Route",
+        "operationId": "data-lookup_posts_route",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/PostLookupRequest" }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": { "additionalProperties": true, "type": "object" },
+                  "type": "array",
+                  "title": "Response Data-Lookup Posts Route"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        },
+        "security": [{ "OAuth2PasswordBearer": [] }]
       }
     },
     "/api/v1/data/posts/bulk": {
@@ -2368,25 +2429,96 @@
       "get": {
         "tags": ["data"],
         "summary": "List Tag Runs",
+        "description": "List runs in the light projection \u2014 see `tag_run_to_camel_light`.",
         "operationId": "data-list_tag_runs",
+        "security": [{ "OAuth2PasswordBearer": [] }],
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 1000,
+              "minimum": 1,
+              "default": 100,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "title": "Offset"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful Response",
             "content": {
               "application/json": {
                 "schema": {
-                  "items": { "additionalProperties": true, "type": "object" },
                   "type": "array",
+                  "items": { "type": "object", "additionalProperties": true },
                   "title": "Response Data-List Tag Runs"
                 }
               }
             }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
           }
-        },
-        "security": [{ "OAuth2PasswordBearer": [] }]
+        }
       }
     },
     "/api/v1/data/tag-runs/{tag_run_id}": {
+      "get": {
+        "tags": ["data"],
+        "summary": "Get Tag Run",
+        "description": "Full run including promptText/responseText/suggestions.",
+        "operationId": "data-get_tag_run",
+        "security": [{ "OAuth2PasswordBearer": [] }],
+        "parameters": [
+          {
+            "name": "tag_run_id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "title": "Tag Run Id" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Data-Get Tag Run"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      },
       "put": {
         "tags": ["data"],
         "summary": "Upsert Tag Run",
@@ -2731,26 +2863,6 @@
       }
     },
     "/api/v1/data/embeddings": {
-      "get": {
-        "tags": ["data"],
-        "summary": "List Embeddings",
-        "operationId": "data-list_embeddings",
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "items": { "additionalProperties": true, "type": "object" },
-                  "type": "array",
-                  "title": "Response Data-List Embeddings"
-                }
-              }
-            }
-          }
-        },
-        "security": [{ "OAuth2PasswordBearer": [] }]
-      },
       "post": {
         "tags": ["data"],
         "summary": "Upsert Embeddings",
@@ -2792,42 +2904,129 @@
         "security": [{ "OAuth2PasswordBearer": [] }]
       }
     },
+    "/api/v1/data/translations/one": {
+      "get": {
+        "tags": ["data"],
+        "summary": "Get Translation",
+        "description": "Read a single translation. Returns null when absent.",
+        "operationId": "data-get_translation",
+        "security": [{ "OAuth2PasswordBearer": [] }],
+        "parameters": [
+          {
+            "name": "channelName",
+            "in": "query",
+            "required": true,
+            "schema": { "type": "string", "title": "Channelname" }
+          },
+          {
+            "name": "postId",
+            "in": "query",
+            "required": true,
+            "schema": { "type": "integer", "title": "Postid" }
+          },
+          {
+            "name": "language",
+            "in": "query",
+            "required": true,
+            "schema": { "type": "string", "title": "Language" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    { "type": "object", "additionalProperties": true },
+                    { "type": "null" }
+                  ],
+                  "title": "Response Data-Get Translation"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/data/translations": {
       "get": {
         "tags": ["data"],
         "summary": "List Translations",
         "operationId": "data-list_translations",
+        "security": [{ "OAuth2PasswordBearer": [] }],
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 5000,
+              "minimum": 1,
+              "default": 500,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "title": "Offset"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful Response",
             "content": {
               "application/json": {
                 "schema": {
-                  "items": { "additionalProperties": true, "type": "object" },
                   "type": "array",
+                  "items": { "type": "object", "additionalProperties": true },
                   "title": "Response Data-List Translations"
                 }
               }
             }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
           }
-        },
-        "security": [{ "OAuth2PasswordBearer": [] }]
+        }
       },
       "post": {
         "tags": ["data"],
         "summary": "Upsert Translations",
         "operationId": "data-upsert_translations",
+        "security": [{ "OAuth2PasswordBearer": [] }],
         "requestBody": {
+          "required": true,
           "content": {
             "application/json": {
               "schema": {
-                "items": { "additionalProperties": true, "type": "object" },
                 "type": "array",
+                "items": { "type": "object", "additionalProperties": true },
                 "title": "Body"
               }
             }
-          },
-          "required": true
+          }
         },
         "responses": {
           "200": {
@@ -2835,8 +3034,8 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": { "type": "integer" },
                   "type": "object",
+                  "additionalProperties": { "type": "integer" },
                   "title": "Response Data-Upsert Translations"
                 }
               }
@@ -2850,8 +3049,7 @@
               }
             }
           }
-        },
-        "security": [{ "OAuth2PasswordBearer": [] }]
+        }
       }
     },
     "/api/v1/data/publish-logs": {
@@ -4878,6 +5076,29 @@
         "type": "object",
         "required": ["token", "new_password"],
         "title": "NewPassword"
+      },
+      "PostLookupRef": {
+        "properties": {
+          "channelName": { "type": "string", "title": "Channelname" },
+          "postId": { "type": "integer", "title": "Postid" }
+        },
+        "type": "object",
+        "required": ["channelName", "postId"],
+        "title": "PostLookupRef"
+      },
+      "PostLookupRequest": {
+        "properties": {
+          "posts": {
+            "items": { "$ref": "#/components/schemas/PostLookupRef" },
+            "type": "array",
+            "maxItems": 200,
+            "title": "Posts"
+          }
+        },
+        "type": "object",
+        "required": ["posts"],
+        "title": "PostLookupRequest",
+        "description": "Batch of `(channelName, postId)` refs to resolve.\n\nCapped so this cannot become another way to ask for unbounded rows."
       },
       "ProxyLaneSnapshot": {
         "properties": {

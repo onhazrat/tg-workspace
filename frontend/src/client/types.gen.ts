@@ -259,6 +259,20 @@ export type NewPassword = {
     new_password: string;
 };
 
+export type PostLookupRef = {
+    channelName: string;
+    postId: number;
+};
+
+/**
+ * Batch of `(channelName, postId)` refs to resolve.
+ *
+ * Capped so this cannot become another way to ask for unbounded rows.
+ */
+export type PostLookupRequest = {
+    posts: Array<PostLookupRef>;
+};
+
 export type ProxyLaneSnapshot = {
     proxyUrl: string;
     maxParallel: number;
@@ -698,10 +712,20 @@ export type DataListPostsData = {
     channelName?: (string | null);
     channelNames?: (string | null);
     endDate?: (number | null);
+    limit?: number;
+    offset?: number;
     startDate?: (number | null);
 };
 
 export type DataListPostsResponse = (Array<{
+    [key: string]: unknown;
+}>);
+
+export type DataLookupPostsRouteData = {
+    requestBody: PostLookupRequest;
+};
+
+export type DataLookupPostsRouteResponse = (Array<{
     [key: string]: unknown;
 }>);
 
@@ -738,9 +762,22 @@ export type DataDeleteSummaryResponse = ({
     [key: string]: (string);
 });
 
+export type DataListTagRunsData = {
+    limit?: number;
+    offset?: number;
+};
+
 export type DataListTagRunsResponse = (Array<{
     [key: string]: unknown;
 }>);
+
+export type DataGetTagRunData = {
+    tagRunId: string;
+};
+
+export type DataGetTagRunResponse = ({
+    [key: string]: unknown;
+});
 
 export type DataUpsertTagRunData = {
     requestBody: {
@@ -817,10 +854,6 @@ export type DataDeleteChatDestinationResponse = ({
     [key: string]: (string);
 });
 
-export type DataListEmbeddingsResponse = (Array<{
-    [key: string]: unknown;
-}>);
-
 export type DataUpsertEmbeddingsData = {
     requestBody: Array<{
         [key: string]: unknown;
@@ -830,6 +863,21 @@ export type DataUpsertEmbeddingsData = {
 export type DataUpsertEmbeddingsResponse = ({
     [key: string]: (number);
 });
+
+export type DataGetTranslationData = {
+    channelName: string;
+    language: string;
+    postId: number;
+};
+
+export type DataGetTranslationResponse = (({
+    [key: string]: unknown;
+} | null));
+
+export type DataListTranslationsData = {
+    limit?: number;
+    offset?: number;
+};
 
 export type DataListTranslationsResponse = (Array<{
     [key: string]: unknown;

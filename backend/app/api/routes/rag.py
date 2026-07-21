@@ -5,6 +5,7 @@ from typing import Any
 import numpy as np
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
+from sqlalchemy import and_, or_
 from sqlmodel import col, select
 
 from app.ai.registry import get_provider
@@ -98,28 +99,54 @@ async def rag_search(
         return {"results": []}
 
     scan_cap = min(max(body.scan_limit, 1), settings.RAG_SCAN_LIMIT_MAX)
-    stmt = (
-        select(PostEmbedding)
-        .where(col(PostEmbedding.channel_name).in_(allowed_channels))
-        .limit(scan_cap)
-    )
-    embeddings = session.exec(stmt).all()
 
-    scored: list[tuple[float, PostEmbedding, Post | None]] = []
-    for emb in embeddings:
-        post = session.exec(
-            select(Post).where(
-                Post.channel_name == emb.channel_name,
-                Post.post_id == emb.post_id,
-            )
-        ).first()
-        if post:
-            if body.start_date is not None and post.timestamp < body.start_date:
-                continue
-            if body.end_date is not None and post.timestamp > body.end_date:
-                continue
-        score = _cosine(query_vec, emb.vector)
-        scored.append((score, emb, post))
+    # One query, not one per embedding: this loop previously issued a SELECT
+    # per embedding, up to RAG_SCAN_LIMIT_MAX (5000) round trips per search.
+    #
+    # The join is an outer join and the date predicate tolerates a missing
+    # post, preserving the previous behaviour where an embedding whose post
+    # row is absent is still scored and returned.
+    date_ok: list[Any] = [col(Post.post_id).is_(None)]
+    in_range: list[Any] = []
+    if body.start_date is not None:
+        in_range.append(col(Post.timestamp) >= body.start_date)
+    if body.end_date is not None:
+        in_range.append(col(Post.timestamp) <= body.end_date)
+    date_ok.append(and_(*in_range) if in_range else col(Post.post_id).isnot(None))
+
+    stmt = (
+        select(PostEmbedding, Post)
+        .join(
+            Post,
+            onclause=and_(
+                col(PostEmbedding.channel_name) == col(Post.channel_name),
+                col(PostEmbedding.post_id) == col(Post.post_id),
+            ),
+            isouter=True,
+        )
+        .where(col(PostEmbedding.channel_name).in_(allowed_channels))
+        .where(or_(*date_ok))
+        # Deterministic ordering: without it the cap below took an arbitrary
+        # DB-order subset, so identical searches could return different
+        # results. Newest-first also makes the scanned window the useful one.
+        .order_by(
+            col(Post.timestamp).desc().nullslast(),
+            col(PostEmbedding.channel_name),
+            col(PostEmbedding.post_id),
+        )
+        # One extra row is a truncation probe — cheaper than a COUNT over
+        # the whole embedding table.
+        .limit(scan_cap + 1)
+    )
+    rows = list(session.exec(stmt).all())
+
+    truncated = len(rows) > scan_cap
+    if truncated:
+        rows = rows[:scan_cap]
+
+    scored: list[tuple[float, PostEmbedding, Post | None]] = [
+        (_cosine(query_vec, emb.vector), emb, post) for emb, post in rows
+    ]
 
     scored.sort(key=lambda x: x[0], reverse=True)
     top = scored[: body.limit]
@@ -135,4 +162,6 @@ async def rag_search(
                 "post": post_to_camel(post) if post else None,
             }
         )
-    return {"results": results}
+    # Surfaced so callers can tell a thin result set from a capped scan.
+    # pgvector is the real fix; see docs/ideas-log.
+    return {"results": results, "truncated": truncated, "scanned": len(rows)}

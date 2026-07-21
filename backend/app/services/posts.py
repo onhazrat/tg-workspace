@@ -6,11 +6,16 @@ import time
 from datetime import datetime
 from typing import Any
 
+from sqlalchemy import or_
 from sqlmodel import Session, col, select
 
 from app.models_tg import Post
 from app.services.serialization import post_to_camel
 from app.services.sync_meta import touch_sync
+
+DEFAULT_POST_PAGE_SIZE = 500
+MAX_POST_PAGE_SIZE = 5000
+MAX_POST_LOOKUP_BATCH = 200
 
 
 def _post_media_from_item(item: dict[str, Any]) -> dict[str, Any] | None:
@@ -100,7 +105,20 @@ def list_posts(
     channel_names: list[str] | None = None,
     start_date: int | None = None,
     end_date: int | None = None,
+    limit: int = DEFAULT_POST_PAGE_SIZE,
+    offset: int = 0,
 ) -> list[dict[str, Any]]:
+    """Return one newest-first page of posts.
+
+    `tg_posts` holds millions of rows across hundreds of followed channels, so
+    an unbounded select here can materialise gigabytes into a worker — this was
+    the root cause of the staging incident. Full data still ships via the
+    export path, which streams.
+
+    The `timestamp DESC` ordering is required, not cosmetic: without a
+    deterministic order, offset paging silently repeats and skips rows. It is
+    served by the existing `ix_tg_posts_channel_name_timestamp` index.
+    """
     stmt = select(Post)
     if channel_names:
         stmt = stmt.where(col(Post.channel_name).in_(channel_names))
@@ -108,6 +126,33 @@ def list_posts(
         stmt = stmt.where(Post.timestamp >= start_date)
     if end_date is not None:
         stmt = stmt.where(Post.timestamp <= end_date)
+    stmt = stmt.order_by(col(Post.timestamp).desc()).offset(offset).limit(limit)
+    return [post_to_camel(p) for p in session.exec(stmt).all()]
+
+
+def lookup_posts(
+    session: Session, pairs: list[tuple[str, int]]
+) -> list[dict[str, Any]]:
+    """Fetch specific posts by their `(channel_name, post_id)` natural key.
+
+    Exists so callers that need a handful of known posts — citation hovers,
+    RAG context assembly — stop pulling a channel's entire history to find
+    one row. Unknown pairs are simply absent from the result.
+
+    Duplicate pairs are collapsed, and the batch is expected to be capped by
+    the caller (see MAX_POST_LOOKUP_BATCH).
+    """
+    unique = {(name, post_id) for name, post_id in pairs}
+    if not unique:
+        return []
+    stmt = select(Post).where(
+        or_(
+            *[
+                (col(Post.channel_name) == name) & (col(Post.post_id) == post_id)
+                for name, post_id in unique
+            ]
+        )
+    )
     return [post_to_camel(p) for p in session.exec(stmt).all()]
 
 

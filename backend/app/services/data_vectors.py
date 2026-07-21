@@ -5,19 +5,17 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 
-from sqlmodel import Session, select
+from sqlmodel import Session, col, select
 
 from app.models_tg import PostEmbedding, PostTranslation
 from app.services.serialization import (
-    embedding_to_camel,
     normalize_body,
     translation_to_camel,
 )
 from app.services.sync_meta import touch_sync
 
-
-def list_embeddings(session: Session) -> list[dict[str, Any]]:
-    return [embedding_to_camel(e) for e in session.exec(select(PostEmbedding)).all()]
+DEFAULT_VECTOR_PAGE_SIZE = 500
+MAX_VECTOR_PAGE_SIZE = 5000
 
 
 def upsert_embeddings(session: Session, body: list[dict[str, Any]]) -> dict[str, int]:
@@ -58,10 +56,43 @@ def upsert_embeddings(session: Session, body: list[dict[str, Any]]) -> dict[str,
     return {"upserted": count}
 
 
-def list_translations(session: Session) -> list[dict[str, Any]]:
-    return [
-        translation_to_camel(t) for t in session.exec(select(PostTranslation)).all()
-    ]
+def list_translations(
+    session: Session,
+    *,
+    limit: int = DEFAULT_VECTOR_PAGE_SIZE,
+    offset: int = 0,
+) -> list[dict[str, Any]]:
+    """Return one page of translations, newest first.
+
+    Ordering by `timestamp DESC` keeps offset paging from repeating or
+    skipping rows. Reading a single translation should go through
+    `get_translation` rather than paging this.
+    """
+    stmt = (
+        select(PostTranslation)
+        .order_by(col(PostTranslation.timestamp).desc(), col(PostTranslation.id))
+        .offset(offset)
+        .limit(limit)
+    )
+    return [translation_to_camel(t) for t in session.exec(stmt).all()]
+
+
+def get_translation(
+    session: Session, *, channel_name: str, post_id: int, language: str
+) -> dict[str, Any] | None:
+    """Fetch one translation by its natural key, or None.
+
+    The frontend used to download the whole translation table to read a single
+    row — made worse by every save bumping the sync etag, forcing the next read
+    to re-download everything.
+    """
+    stmt = select(PostTranslation).where(
+        col(PostTranslation.channel_name) == channel_name,
+        col(PostTranslation.post_id) == post_id,
+        col(PostTranslation.language) == language,
+    )
+    row = session.exec(stmt).first()
+    return translation_to_camel(row) if row else None
 
 
 def upsert_translations(session: Session, body: list[dict[str, Any]]) -> dict[str, int]:

@@ -269,15 +269,22 @@ def test_backfill_embeddings_mocked_provider(
     assert result["processed"] == 2
     assert result["upserted"] == 2
 
-    listed = client.get(f"{DATA}/embeddings", headers=headers).json()
-    by_id = {e["id"]: e for e in listed}
+    # Read back through the session: GET /data/embeddings was removed as dead
+    # code (unbounded, no callers), so the DB is the observation point.
+    with Session(engine) as session:
+        by_id = {
+            e.id: e
+            for e in session.exec(
+                select(PostEmbedding).where(PostEmbedding.channel_name == "backfill-ch")
+            ).all()
+        }
     assert "backfill-ch_10" in by_id
     assert "backfill-ch_11" in by_id
     emb = by_id["backfill-ch_10"]
-    assert emb["provider"] == "gemini"
-    assert emb["model"] == "test-embed"
-    assert emb["dimensions"] == 3
-    assert emb["vector"] == [0.1, 0.2, 0.3]
+    assert emb.provider == "gemini"
+    assert emb.model == "test-embed"
+    assert emb.dimensions == 3
+    assert emb.vector == [0.1, 0.2, 0.3]
 
     status = client.get(f"{PREFIX}/status", headers=headers).json()
     assert status["lastRun"] is not None
