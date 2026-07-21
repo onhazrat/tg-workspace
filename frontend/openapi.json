@@ -2387,25 +2387,105 @@
       "get": {
         "tags": ["data"],
         "summary": "List Summaries",
+        "description": "List in the light projection \u2014 see `summary_to_camel_light`.\n\n`search` matches channels/text/promptText/model/note in SQL, so prompt\nbodies stay searchable without being shipped to the client.",
         "operationId": "data-list_summaries",
+        "security": [{ "OAuth2PasswordBearer": [] }],
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 2000,
+              "minimum": 1,
+              "default": 200,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "title": "Offset"
+            }
+          },
+          {
+            "name": "search",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [{ "type": "string" }, { "type": "null" }],
+              "title": "Search"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful Response",
             "content": {
               "application/json": {
                 "schema": {
-                  "items": { "additionalProperties": true, "type": "object" },
                   "type": "array",
+                  "items": { "type": "object", "additionalProperties": true },
                   "title": "Response Data-List Summaries"
                 }
               }
             }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
           }
-        },
-        "security": [{ "OAuth2PasswordBearer": [] }]
+        }
       }
     },
     "/api/v1/data/summaries/{summary_id}": {
+      "get": {
+        "tags": ["data"],
+        "summary": "Get Summary",
+        "description": "Full summary including citedPosts/promptText/chatMessages.",
+        "operationId": "data-get_summary",
+        "security": [{ "OAuth2PasswordBearer": [] }],
+        "parameters": [
+          {
+            "name": "summary_id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "title": "Summary Id" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Data-Get Summary"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      },
       "put": {
         "tags": ["data"],
         "summary": "Upsert Summary",

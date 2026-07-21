@@ -13,7 +13,7 @@ import type {
   CommandDef,
   SearchResultsState,
 } from "@/lib/commands/types"
-import type { Post, Summary } from "@/types"
+import type { Post, SummaryListItem } from "@/types"
 
 interface UseSearchResultsFlowOptions {
   open: boolean
@@ -61,13 +61,13 @@ export function useSearchResultsFlow({
     listRef,
   })
 
-  const handlePick = (item: Post | Summary) => {
+  const handlePick = (item: Post | SummaryListItem) => {
     if (!searchResultsCommand || !searchResultsState) return
 
     if (searchResultsState.kind === "posts") {
       pickSearchPost(context, item as Post)
     } else {
-      pickSearchSummary(context, item as Summary)
+      pickSearchSummary(context, item as SummaryListItem)
     }
 
     const rootQuery = getRootQuery()

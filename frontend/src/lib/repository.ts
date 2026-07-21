@@ -19,12 +19,17 @@ import type {
   PostTranslation,
   PublishLog,
   Summary,
+  SummaryListItem,
   SyncLog,
   TagRun,
   TagRunSummary,
 } from "../types"
 import { stripToken } from "./botCredential"
 import * as cache from "./cache"
+import {
+  filterSummariesByTextQuery,
+  toSummaryListItem,
+} from "./summary-projection"
 
 let syncMeta: Record<string, { etag: string }> = {}
 let syncMetaFetchedAt = 0
@@ -399,20 +404,55 @@ export async function deleteOldPosts(days: number): Promise<number> {
 
 // --- summaries ---
 
-export async function listSummaries(): Promise<Summary[]> {
-  if (await isResourceStale("summaries")) {
-    try {
-      const remote = await api.listSummaries()
-      for (const s of remote) {
-        await cache.saveSummary(s)
+/**
+ * Metadata-only list. Use `getSummary` for citedPosts/promptText/chatMessages.
+ *
+ * `search` is passed to the server so prompt bodies stay searchable — they are
+ * ~94% of what this endpoint used to return and are no longer shipped.
+ */
+export async function listSummaries(
+  options: { search?: string } = {},
+): Promise<SummaryListItem[]> {
+  const { search } = options
+  return singleFlight(`summaries:${search ?? ""}`, async () => {
+    // A search is a server-side query, not a mirror of the whole resource:
+    // going through the etag gate would answer from an unfiltered cache.
+    if (search) {
+      try {
+        return await api.listSummaries({ search })
+      } catch {
+        const cached = await cache.getSummaries()
+        return filterSummariesByTextQuery(cached, search).map(toSummaryListItem)
       }
-      markResourceSynced("summaries")
+    }
+
+    if (await isResourceStale("summaries")) {
+      try {
+        const remote = await api.listSummaries()
+        for (const s of remote) {
+          await cache.saveSummaryListItem(s)
+        }
+        markResourceSynced("summaries")
+        return remote
+      } catch {
+        /* fall through */
+      }
+    }
+    return (await cache.getSummaries()).map(toSummaryListItem)
+  })
+}
+
+/** One summary in full, including the heavy fields. */
+export async function getSummary(id: string): Promise<Summary | undefined> {
+  return singleFlight(`summary:${id}`, async () => {
+    try {
+      const remote = await api.getSummary(id)
+      await cache.saveSummary(remote)
       return remote
     } catch {
-      /* fall through */
+      return (await cache.getSummaries()).find((s) => s.id === id)
     }
-  }
-  return cache.getSummaries()
+  })
 }
 
 export async function saveSummary(summary: Summary): Promise<Summary> {

@@ -24,12 +24,14 @@ import { TgHeroEmptyState } from "@/components/ui/tg-segmented"
 import { formatSummaryModelLabel, isPendingSummary } from "../constants"
 import { useData } from "../contexts/DataContext"
 import { useUI } from "../contexts/UIContext"
-import { filterSummariesByTextQuery } from "../lib/commands/search-filters"
+import { useSummarySearchQuery } from "../hooks/useSummaries"
 import { deleteSummary, saveSummary } from "../lib/repository"
 import { formatDateToLocalISO } from "../lib/utils"
-import type { Summary, TabType } from "../types"
+import type { SummaryListItem, TabType } from "../types"
 import { RelativeTime } from "./RelativeTime"
 import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tg-tooltip"
+
+const EMPTY_SUMMARIES: SummaryListItem[] = []
 
 const formatDuration = (start: number, end: number) => {
   const diffMs = Math.max(0, end - start)
@@ -60,7 +62,7 @@ const formatDateTime = (timestamp: number) => {
 }
 
 interface HistoryViewProps {
-  handleSelectHistorySummary: (s: Summary) => void
+  handleSelectHistorySummary: (s: SummaryListItem) => void
   setActiveTab: (tab: TabType) => void
 }
 
@@ -92,7 +94,7 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
   const [noteValue, setNoteValue] = useState<string>("")
   const [visibleHistory, setVisibleHistory] = useState(20)
   const [summaryPendingDelete, setSummaryPendingDelete] =
-    useState<Summary | null>(null)
+    useState<SummaryListItem | null>(null)
   const observerTarget = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -136,20 +138,24 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
     return Array.from(langs)
   }, [summariesHistory])
 
+  // Text search runs server-side: `promptText` is matched in SQL and is no
+  // longer shipped to the client. The facet filters below still narrow the
+  // returned rows locally.
+  const { data: searchMatches } = useSummarySearchQuery(historySearchQuery)
+  const textMatches = historySearchQuery.trim()
+    ? (searchMatches ?? EMPTY_SUMMARIES)
+    : summariesHistory
+
   const filteredHistory = useMemo(() => {
-    const textMatches = filterSummariesByTextQuery(
-      summariesHistory,
-      historySearchQuery,
-    )
     return textMatches.filter((s) => {
       // Type filter
       if (historyFilter !== "all") {
-        const hasChat = s.chatMessages && s.chatMessages.length > 0
+        const hasChat = s.chatMessageCount > 0
         if (historyFilter === "chat" && !hasChat) return false
         if (historyFilter === "summary" && hasChat) return false
       }
 
-      // Search query handled by filterSummariesByTextQuery above
+      // Search query handled by useSummarySearchQuery above
 
       // Model filter
       if (modelFilter !== "all" && s.model !== modelFilter) return false
@@ -172,9 +178,8 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
       return true
     })
   }, [
-    summariesHistory,
+    textMatches,
     historyFilter,
-    historySearchQuery,
     modelFilter,
     languageFilter,
     startDateFilter,
@@ -202,7 +207,7 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
   }
 
   const handleToggleAutoRegenerate = async (
-    s: Summary,
+    s: SummaryListItem,
     e: React.MouseEvent,
   ) => {
     e.stopPropagation()
@@ -222,7 +227,10 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
     await loadHistory()
   }
 
-  const handleToggleAutoPublish = async (s: Summary, e: React.MouseEvent) => {
+  const handleToggleAutoPublish = async (
+    s: SummaryListItem,
+    e: React.MouseEvent,
+  ) => {
     e.stopPropagation()
     const updatedSummary = { ...s, autoPublish: !s.autoPublish }
     await saveSummary(updatedSummary)
@@ -230,7 +238,7 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
   }
 
   const handleUpdatePublishConfig = async (
-    s: Summary,
+    s: SummaryListItem,
     botId: string,
     destId: string,
   ) => {
@@ -239,7 +247,7 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
     await loadHistory()
   }
 
-  const handleToggleStar = async (s: Summary, e: React.MouseEvent) => {
+  const handleToggleStar = async (s: SummaryListItem, e: React.MouseEvent) => {
     e.stopPropagation()
     const updatedSummary = { ...s, isStarred: !s.isStarred }
     await saveSummary(updatedSummary)
@@ -258,7 +266,7 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
     setEndDateFilter(end)
   }
 
-  const handleSaveNote = async (s: Summary) => {
+  const handleSaveNote = async (s: SummaryListItem) => {
     const updatedSummary = { ...s, note: noteValue }
     await saveSummary(updatedSummary)
     await loadHistory()
@@ -267,7 +275,7 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
     toast.success("Note saved.")
   }
 
-  const handleDeleteNote = async (s: Summary) => {
+  const handleDeleteNote = async (s: SummaryListItem) => {
     const updatedSummary = { ...s, note: undefined }
     await saveSummary(updatedSummary)
     await loadHistory()
@@ -886,7 +894,7 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
                   </TgMetaChip>
                 </div>
 
-                {s.chatMessages && s.chatMessages.length > 0 && (
+                {s.chatMessageCount > 0 && (
                   <TgButton
                     type="button"
                     variant="primary"
@@ -898,7 +906,7 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
                     }}
                   >
                     <MessageSquare size={12} />
-                    <span>{s.chatMessages.length} Messages</span>
+                    <span>{s.chatMessageCount} Messages</span>
                   </TgButton>
                 )}
               </div>

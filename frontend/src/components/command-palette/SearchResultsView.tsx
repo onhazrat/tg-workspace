@@ -14,12 +14,12 @@ import {
 } from "@/lib/commands/palette-messages"
 import { truncatePreview } from "@/lib/commands/search-filters"
 import type { CommandDef, SearchResultsState } from "@/lib/commands/types"
-import type { Post, Summary } from "@/types"
+import type { Post, SummaryListItem } from "@/types"
 
 interface SearchResultsViewProps {
   command: CommandDef
   state: SearchResultsState
-  results: Post[] | Summary[]
+  results: Post[] | SummaryListItem[]
   filterQuery: string
   onFilterQueryChange: (value: string) => void
   onInputKeyDown: (event: KeyboardEvent) => void
@@ -27,7 +27,7 @@ interface SearchResultsViewProps {
   onSelectedIdChange: (value: string) => void
   inputRef: RefObject<HTMLInputElement | null>
   listRef: RefObject<HTMLDivElement | null>
-  onPick: (item: Post | Summary) => void
+  onPick: (item: Post | SummaryListItem) => void
   onBack: () => void
 }
 
@@ -90,7 +90,7 @@ export function SearchResultsView({
                   </div>
                 </CommandItem>
               ))
-            : (results as Summary[]).map((summary) => (
+            : (results as SummaryListItem[]).map((summary) => (
                 <CommandItem
                   key={summary.id}
                   value={summary.id}
@@ -102,7 +102,7 @@ export function SearchResultsView({
                       {summary.channels.join(", ") || "Summary"}
                     </span>
                     <span className="truncate text-xs text-app-ink/60">
-                      {truncatePreview(summary.promptText || summary.text)}
+                      {truncatePreview(summary.promptExcerpt || summary.text)}
                     </span>
                   </div>
                 </CommandItem>

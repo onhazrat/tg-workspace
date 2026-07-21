@@ -12,6 +12,7 @@ import type {
   PostTranslation,
   PublishLog,
   Summary,
+  SummaryListItem,
   SyncLog,
   TagRun,
   TagRunSummary,
@@ -188,7 +189,27 @@ export const dataApi = {
       body: JSON.stringify(posts),
     }),
 
-  listSummaries: () => request<Summary[]>("/api/v1/data/summaries"),
+  /**
+   * List projection — metadata only. `citedPosts`, `promptText` and
+   * `chatMessages` come from `getSummary`. `search` matches prompt bodies
+   * server-side so they stay findable without being shipped.
+   */
+  listSummaries: (params?: {
+    search?: string
+    limit?: number
+    offset?: number
+  }) => {
+    const qs = new URLSearchParams()
+    if (params?.search) qs.set("search", params.search)
+    if (params?.limit != null) qs.set("limit", String(params.limit))
+    if (params?.offset != null) qs.set("offset", String(params.offset))
+    const q = qs.toString()
+    return request<SummaryListItem[]>(
+      `/api/v1/data/summaries${q ? `?${q}` : ""}`,
+    )
+  },
+
+  getSummary: (id: string) => request<Summary>(`/api/v1/data/summaries/${id}`),
 
   /**
    * List projection — carries metadata only. `promptText`, `responseText`,

@@ -48,7 +48,7 @@ import type {
   LLMLog,
   NetworkLog,
   PublishLog,
-  Summary,
+  SummaryListItem,
   SyncLog,
 } from "../types"
 
@@ -75,7 +75,7 @@ interface DataContextType {
     React.SetStateAction<Record<string, ChannelStats>>
   >
 
-  summariesHistory: Summary[]
+  summariesHistory: SummaryListItem[]
   loadHistory: () => Promise<void>
 
   dbStats: DBStats | null

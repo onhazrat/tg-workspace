@@ -198,6 +198,25 @@ export interface Summary {
   promptText?: string
 }
 
+/**
+ * What `GET /data/summaries` returns: metadata only.
+ *
+ * The heavy fields are deliberately absent. Measured on staging, `promptText`
+ * alone was ~94% of that endpoint's payload (33 MB across 31 summaries), and
+ * the list surfaces only ever rendered a message count and a short preview —
+ * so `chatMessageCount` and `promptExcerpt` stand in for them.
+ *
+ * This is a separate type rather than `Summary` with the fields left undefined
+ * so the compiler flags anything that needs the full row via `getSummary`.
+ */
+export type SummaryListItem = Omit<
+  Summary,
+  "citedPosts" | "promptText" | "chatMessages"
+> & {
+  chatMessageCount: number
+  promptExcerpt?: string
+}
+
 export interface PublishLog {
   id: string
   summaryId: string

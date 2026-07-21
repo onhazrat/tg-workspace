@@ -25,15 +25,18 @@ import { useScraper } from "../contexts/ScraperContext"
 import { useSettings } from "../contexts/SettingsContext"
 import { useUI } from "../contexts/UIContext"
 import { useApiStatus } from "../hooks/useApiStatus"
+import { useSummaryDetailQuery } from "../hooks/useSummaries"
 import { replaceCitations } from "../lib/citations/replace-citations"
 import { savePublishLog, saveSummary } from "../lib/repository"
 import { formatDateToLocalISO } from "../lib/utils"
 import { publishSummary } from "../services/telegram"
-import type { PublishLog } from "../types"
+import type { PublishLog, Summary } from "../types"
 import { PasteSummaryModal } from "./PasteSummaryModal"
 import { RelativeTime } from "./RelativeTime"
 import { SummaryConfig } from "./SummaryConfig"
 import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tg-tooltip"
+
+const EMPTY_CITED_POSTS: NonNullable<Summary["citedPosts"]> = {}
 
 const extractText = (children: React.ReactNode): string => {
   if (typeof children === "string") return children
@@ -64,9 +67,9 @@ const extractText = (children: React.ReactNode): string => {
 
 function useCitedPostResolver() {
   const { currentSummaryId } = useUI()
-  const { summariesHistory } = useData()
-  const citedPosts =
-    summariesHistory.find((s) => s.id === currentSummaryId)?.citedPosts ?? {}
+  // citedPosts is not in the list projection — fetch the row being viewed.
+  const { data: detail } = useSummaryDetailQuery(currentSummaryId)
+  const citedPosts = detail?.citedPosts ?? EMPTY_CITED_POSTS
 
   return React.useCallback(
     (channelName: string, postId: number) =>
@@ -159,6 +162,10 @@ export const SummaryView: React.FC<SummaryViewProps> = () => {
   const { startDate, endDate, currentSummaryId, summarizing } = useUI()
 
   const currentSummary = summariesHistory.find((s) => s.id === currentSummaryId)
+  // The prompt panel below needs the full promptText, which the list
+  // projection omits (it was ~94% of that payload).
+  const { data: currentSummaryDetail } = useSummaryDetailQuery(currentSummaryId)
+  const currentPromptText = currentSummaryDetail?.promptText
   const isPending = currentSummary ? isPendingSummary(currentSummary) : false
   const isRegenerating = currentSummary
     ? regeneratingSummaries.has(currentSummary.id)
@@ -383,21 +390,19 @@ export const SummaryView: React.FC<SummaryViewProps> = () => {
                   variant="secondary"
                   size="sm"
                   onClick={() => {
-                    if (currentSummary.promptText) {
-                      void navigator.clipboard.writeText(
-                        currentSummary.promptText,
-                      )
+                    if (currentPromptText) {
+                      void navigator.clipboard.writeText(currentPromptText)
                       toast.success("Prompt copied again.")
                     }
                   }}
-                  disabled={!currentSummary.promptText}
+                  disabled={!currentPromptText}
                 >
                   <Copy size={12} />
                   Copy again
                 </TgButton>
               </div>
               <pre className="text-xs font-mono whitespace-pre-wrap leading-relaxed text-app-ink/80 max-h-[480px] overflow-y-auto custom-scrollbar">
-                {currentSummary.promptText || "Prompt text unavailable."}
+                {currentPromptText ?? "Loading prompt…"}
               </pre>
             </div>
 

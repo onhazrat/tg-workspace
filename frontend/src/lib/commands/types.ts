@@ -2,7 +2,13 @@ import type { Dispatch, SetStateAction } from "react"
 
 import type { JobStatusEntry } from "@/api/jobs"
 import type { SettingsSection } from "@/lib/settingsSection"
-import type { Channel, ChannelStats, Post, Summary, TabType } from "@/types"
+import type {
+  Channel,
+  ChannelStats,
+  Post,
+  SummaryListItem,
+  TabType,
+} from "@/types"
 
 export type CommandKind =
   | "action"
@@ -25,7 +31,7 @@ export type SearchResultsKind = "posts" | "summaries"
 export interface SearchResultsState {
   kind: SearchResultsKind
   query: string
-  items: Post[] | Summary[]
+  items: Post[] | SummaryListItem[]
   totalCount?: number
 }
 
@@ -149,7 +155,7 @@ export interface CommandContext {
   jobToggles: JobToggleApi
   palette: PaletteControls
   settings: CommandSettingsSlice
-  summariesHistory: Summary[]
+  summariesHistory: SummaryListItem[]
   postDateRange?: { startDate: number; endDate: number }
   postSearch: string
   setPostSearch: (query: string) => void

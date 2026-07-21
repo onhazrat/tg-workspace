@@ -1,7 +1,7 @@
 import type { CommandContext } from "@/lib/commands/types"
-import { getPostsByDateRange } from "@/lib/repository"
+import { getPostsByDateRange, listSummaries } from "@/lib/repository"
 import { searchSimilarPostsFromQuery } from "@/services/rag"
-import type { Post, Summary } from "@/types"
+import type { Post, SummaryListItem } from "@/types"
 
 export const SEARCH_RESULTS_CAP = 50
 
@@ -15,29 +15,12 @@ export function filterPostsByTextQuery(posts: Post[], query: string): Post[] {
   )
 }
 
-export function filterSummariesByTextQuery(
-  summaries: Summary[],
-  query: string,
-): Summary[] {
-  if (!query.trim()) return summaries
-  const normalized = query.toLowerCase()
-  return summaries.filter((summary) => {
-    const matchesChannels = summary.channels.some((channel) =>
-      channel.toLowerCase().includes(normalized),
-    )
-    const matchesText = summary.text.toLowerCase().includes(normalized)
-    const matchesPrompt = summary.promptText?.toLowerCase().includes(normalized)
-    const matchesModel = summary.model?.toLowerCase().includes(normalized)
-    const matchesNote = summary.note?.toLowerCase().includes(normalized)
-    return (
-      matchesChannels ||
-      matchesText ||
-      matchesPrompt ||
-      matchesModel ||
-      matchesNote
-    )
-  })
-}
+/**
+ * Re-exported from lib/summary-projection so the repository layer can share it
+ * without depending on the command palette. It now serves the offline fallback
+ * — the online path searches in SQL.
+ */
+export { filterSummariesByTextQuery } from "@/lib/summary-projection"
 
 export async function searchPostsForPalette(
   ctx: CommandContext,
@@ -58,11 +41,19 @@ export async function searchPostsForPalette(
     .slice(0, SEARCH_RESULTS_CAP)
 }
 
-export function searchSummariesForPalette(
-  ctx: CommandContext,
+/**
+ * Summary search now runs in SQL — `promptText` is no longer shipped to the
+ * client, so matching prompt bodies has to happen where they live. Mirrors
+ * `semanticSearchPostsForPalette`, which is async for the same reason.
+ */
+export async function searchSummariesForPalette(
+  _ctx: CommandContext,
   query: string,
-): Summary[] {
-  return filterSummariesByTextQuery(ctx.summariesHistory, query)
+): Promise<SummaryListItem[]> {
+  const results = await listSummaries(
+    query.trim() ? { search: query.trim() } : {},
+  )
+  return [...results]
     .sort((left, right) => right.timestamp - left.timestamp)
     .slice(0, SEARCH_RESULTS_CAP)
 }
@@ -103,7 +94,10 @@ export function pickSearchPost(ctx: CommandContext, post: Post): void {
   })
 }
 
-export function pickSearchSummary(ctx: CommandContext, summary: Summary): void {
+export function pickSearchSummary(
+  ctx: CommandContext,
+  summary: SummaryListItem,
+): void {
   ctx.setActiveTab("history")
   ctx.setCurrentSummaryId(summary.id)
   requestAnimationFrame(() => {

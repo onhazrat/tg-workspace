@@ -54,7 +54,8 @@ import { useUI } from "./contexts/UIContext"
 import { useApiStatus } from "./hooks/useApiStatus"
 import { useGuidedTour } from "./hooks/useGuidedTour"
 import { applyHistorySummarySelection } from "./lib/commands/history-selection"
-import type { Summary, TabType } from "./types"
+import { getSummary } from "./lib/repository"
+import type { SummaryListItem, TabType } from "./types"
 
 export default function App() {
   const { isOffline } = useApiStatus()
@@ -141,8 +142,8 @@ export default function App() {
         ? "Switch to Dark Mode"
         : "Switch to System Mode"
 
-  const handleSelectHistorySummary = (s: Summary) => {
-    applyHistorySummarySelection(s, {
+  const handleSelectHistorySummary = (s: SummaryListItem) => {
+    void applyHistorySummarySelection(s, {
       setActiveTab,
       setDateRange,
       setSelectedChannels,
@@ -154,6 +155,7 @@ export default function App() {
       setSemanticSearchRespectsChannels,
       setRelatedPostSearch,
       setSummary,
+      loadDetail: getSummary,
       settings: {
         setAiLanguage,
         setSelectedModel,

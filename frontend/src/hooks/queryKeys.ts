@@ -6,6 +6,7 @@ export const queryKeys = {
   settingGroups: ["settingGroups"] as const,
   bots: ["bots"] as const,
   summaries: ["summaries"] as const,
+  summary: (id: string) => ["summary", id] as const,
   dbStats: ["dbStats"] as const,
   health: ["health"] as const,
   torStatus: ["torStatus"] as const,

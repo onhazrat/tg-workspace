@@ -750,9 +750,23 @@ export type DataBulkUpsertPostsRouteResponse = ({
     [key: string]: (number);
 });
 
+export type DataListSummariesData = {
+    limit?: number;
+    offset?: number;
+    search?: (string | null);
+};
+
 export type DataListSummariesResponse = (Array<{
     [key: string]: unknown;
 }>);
+
+export type DataGetSummaryData = {
+    summaryId: string;
+};
+
+export type DataGetSummaryResponse = ({
+    [key: string]: unknown;
+});
 
 export type DataUpsertSummaryData = {
     requestBody: {

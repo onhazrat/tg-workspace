@@ -4,7 +4,7 @@ import type {
   EditorFieldDef,
   SearchResultsState,
 } from "@/lib/commands/types"
-import type { Channel, Post, Summary } from "@/types"
+import type { Channel, Post, SummaryListItem } from "@/types"
 import {
   filterExtendedEntityCandidates,
   filterSearchResultItems,
@@ -44,7 +44,10 @@ function makePost(channelName: string, id: number, text: string): Post {
   }
 }
 
-function makeSummary(id: string, overrides: Partial<Summary> = {}): Summary {
+function makeSummary(
+  id: string,
+  overrides: Partial<SummaryListItem> = {},
+): SummaryListItem {
   return {
     id,
     text: "",
@@ -53,6 +56,7 @@ function makeSummary(id: string, overrides: Partial<Summary> = {}): Summary {
     endDate: 1,
     language: "en",
     timestamp: 1,
+    chatMessageCount: 0,
     ...overrides,
   }
 }
@@ -292,7 +296,7 @@ describe("filterSearchResultItems", () => {
     makeSummary("s2", {
       channels: ["techdigest"],
       text: "weekly digest",
-      promptText: "summarize tech",
+      promptExcerpt: "summarize tech",
       model: "gemini",
       note: "starred",
     }),
@@ -319,7 +323,7 @@ describe("filterSearchResultItems", () => {
     expect(filterSearchResultItems(postsState, "2026-01")).toEqual(posts)
   })
 
-  test("filters summaries by channels, text, prompt, model, and note", () => {
+  test("filters summaries by channels, text, prompt excerpt, model, and note", () => {
     expect(filterSearchResultItems(summariesState, "market")).toEqual([
       summaries[0],
     ])

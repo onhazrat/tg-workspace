@@ -7,14 +7,18 @@ from datetime import datetime
 from typing import Any
 
 from fastapi import HTTPException
-from sqlmodel import Session, select
+from sqlalchemy import Text, cast, or_
+from sqlmodel import Session, col, select
 
 from app.models_tg import Summary
 from app.services.serialization import to_snake
 
+DEFAULT_SUMMARY_PAGE_SIZE = 200
+MAX_SUMMARY_PAGE_SIZE = 2000
 
-def summary_to_camel(summary: Summary) -> dict[str, Any]:
-    base = {
+
+def _summary_base(summary: Summary) -> dict[str, Any]:
+    return {
         "id": summary.id,
         "text": summary.text,
         "channels": summary.channels,
@@ -25,11 +29,101 @@ def summary_to_camel(summary: Summary) -> dict[str, Any]:
         "postCount": summary.post_count,
         "timestamp": summary.timestamp,
     }
-    return {**base, **(summary.extra or {})}
 
 
-def list_summaries(session: Session) -> list[dict[str, Any]]:
-    return [summary_to_camel(s) for s in session.exec(select(Summary)).all()]
+def summary_to_camel(summary: Summary) -> dict[str, Any]:
+    return {**_summary_base(summary), **(summary.extra or {})}
+
+
+# Fields stored in `extra` that carry a whole corpus rather than metadata.
+# `citedPosts` embeds full Post objects, `promptText` a serialized post corpus,
+# `chatMessages` an entire conversation.
+HEAVY_SUMMARY_FIELDS = frozenset({"citedPosts", "promptText", "chatMessages"})
+
+# Matches truncatePreview's default in frontend/src/lib/commands/search-filters.ts.
+SUMMARY_PROMPT_EXCERPT_CHARS = 80
+
+
+def summary_to_camel_light(summary: Summary) -> dict[str, Any]:
+    """List-view projection: everything except the corpus-sized fields.
+
+    Drops only `HEAVY_SUMMARY_FIELDS` and keeps the rest of `extra` — the small
+    flags (`isStarred`, `autoPublish`, `note`, …) are what the history and
+    search list surfaces render, so an allowlist would silently lose them as
+    new flags are added.
+
+    Two derived fields stand in for dropped ones: `chatMessageCount` (HistoryView
+    only shows the count) and `promptExcerpt` (the palette only shows a
+    truncated preview).
+    """
+    extra = summary.extra or {}
+    light = {k: v for k, v in extra.items() if k not in HEAVY_SUMMARY_FIELDS}
+
+    chat_messages = extra.get("chatMessages")
+    light["chatMessageCount"] = (
+        len(chat_messages) if isinstance(chat_messages, list) else 0
+    )
+
+    prompt_text = extra.get("promptText")
+    if isinstance(prompt_text, str) and prompt_text:
+        collapsed = " ".join(prompt_text.split())
+        light["promptExcerpt"] = (
+            collapsed
+            if len(collapsed) <= SUMMARY_PROMPT_EXCERPT_CHARS
+            else collapsed[: SUMMARY_PROMPT_EXCERPT_CHARS - 1] + "…"
+        )
+
+    return {**_summary_base(summary), **light}
+
+
+def _search_clause(term: str) -> Any:
+    """Case-insensitive substring match, mirroring the previous client filter.
+
+    Fields are extracted individually rather than matching `extra::text` as a
+    blob: `extra` also holds `citedPosts`, so a blob match would hit the body
+    text of cited posts and return summaries the old client-side filter never
+    would have.
+    """
+    like = f"%{term}%"
+    extra = col(Summary.extra)
+    return or_(
+        col(Summary.text).ilike(like),
+        cast(col(Summary.channels), Text).ilike(like),
+        col(Summary.model).ilike(like),
+        extra.op("->>")("promptText").ilike(like),
+        extra.op("->>")("note").ilike(like),
+    )
+
+
+def list_summaries(
+    session: Session,
+    *,
+    limit: int = DEFAULT_SUMMARY_PAGE_SIZE,
+    offset: int = 0,
+    search: str | None = None,
+) -> list[dict[str, Any]]:
+    """Return one newest-first page of summaries in the light projection.
+
+    `search` runs in SQL so prompt bodies stay searchable without shipping
+    them: `promptText` is ~94% of what this endpoint used to return.
+    """
+    statement = select(Summary)
+    if search and search.strip():
+        statement = statement.where(_search_clause(search.strip()))
+    statement = (
+        statement.order_by(col(Summary.timestamp).desc(), col(Summary.id))
+        .offset(offset)
+        .limit(limit)
+    )
+    return [summary_to_camel_light(s) for s in session.exec(statement).all()]
+
+
+def get_summary(session: Session, summary_id: str) -> dict[str, Any]:
+    """One summary in full, including citedPosts/promptText/chatMessages."""
+    row = session.get(Summary, summary_id)
+    if row is None:
+        raise HTTPException(status_code=404, detail="Summary not found")
+    return summary_to_camel(row)
 
 
 def upsert_summary(

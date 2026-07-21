@@ -1,5 +1,5 @@
 import { isPastedSummaryModel, isPendingSummary } from "@/constants"
-import type { Summary, TabType } from "@/types"
+import type { Summary, SummaryListItem, TabType } from "@/types"
 
 export interface HistorySummarySelectionContext {
   setActiveTab: (tab: TabType) => void
@@ -15,16 +15,24 @@ export interface HistorySummarySelectionContext {
   setSemanticSearchRespectsChannels: (value: boolean) => void
   setRelatedPostSearch: (post: null) => void
   setSummary: (text: string | null) => void
+  /** Fetches the full record; the list projection omits `chatMessages`. */
+  loadDetail: (id: string) => Promise<Summary | undefined>
   settings: {
     setAiLanguage: (language: string) => void
     setSelectedModel: (model: string) => void
   }
 }
 
-export function applyHistorySummarySelection(
-  summary: Summary,
+/**
+ * `summary` may be a list row, which has no `chatMessages` — the chat restore
+ * below needs the full record, so callers pass `loadDetail` to fetch it. It is
+ * awaited only when the summary looks like a chat, so ordinary selection stays
+ * a single synchronous-feeling step.
+ */
+export async function applyHistorySummarySelection(
+  summary: SummaryListItem | Summary,
   ctx: HistorySummarySelectionContext,
-): void {
+): Promise<void> {
   ctx.setSummary(isPendingSummary(summary) ? null : summary.text)
   ctx.setDateRange(summary.startDate, summary.endDate)
   ctx.settings.setAiLanguage(summary.language)
@@ -32,7 +40,6 @@ export function applyHistorySummarySelection(
     ctx.settings.setSelectedModel(summary.model)
   }
   ctx.setSelectedChannels(new Set(summary.channels || []))
-  ctx.setChatMessages(summary.chatMessages || [])
   ctx.setCurrentSummaryId(summary.id)
   ctx.setPostSearch(summary.postSearch || "")
   ctx.setSemanticSearchQuery(summary.semanticSearchQuery || "")
@@ -44,10 +51,22 @@ export function applyHistorySummarySelection(
   )
   ctx.setRelatedPostSearch(null)
 
-  if (
-    summary.text.startsWith("Chat: ") &&
-    (!summary.chatMessages || summary.chatMessages.length > 0)
-  ) {
+  // Only a chat-shaped summary needs the heavy record; everything else avoids
+  // the extra request entirely.
+  if (!summary.text.startsWith("Chat: ")) {
+    ctx.setChatMessages([])
+    ctx.setActiveTab("summary")
+    return
+  }
+
+  const detail =
+    "chatMessages" in summary ? summary : await ctx.loadDetail(summary.id)
+  const chatMessages = detail?.chatMessages ?? []
+  ctx.setChatMessages(chatMessages)
+
+  // Preserve the original condition: a chat with an explicitly empty message
+  // list falls through to the summary tab.
+  if (!detail?.chatMessages || chatMessages.length > 0) {
     ctx.setActiveTab("chat")
     return
   }

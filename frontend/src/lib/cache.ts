@@ -11,6 +11,7 @@ import type {
   PostTranslation,
   PublishLog,
   Summary,
+  SummaryListItem,
   SyncLog,
 } from "../types"
 
@@ -504,6 +505,27 @@ export async function clearChannelPosts(channelName: string) {
 export async function saveSummary(summary: Summary) {
   const db = await initDB()
   await db.put(STORE_SUMMARIES, summary)
+}
+
+/**
+ * Merge a light list row into the cache.
+ *
+ * A plain `put` of a list row would erase any `citedPosts`/`promptText`/
+ * `chatMessages` already cached for that summary, since the list projection
+ * does not carry them — so the offline copy would silently lose its citations.
+ */
+export async function saveSummaryListItem(item: SummaryListItem) {
+  const db = await initDB()
+  const existing = await db.get(STORE_SUMMARIES, item.id)
+  const {
+    chatMessageCount: _chatMessageCount,
+    promptExcerpt: _promptExcerpt,
+    ...base
+  } = item
+  await db.put(
+    STORE_SUMMARIES,
+    existing ? { ...existing, ...base } : (base as Summary),
+  )
 }
 
 export async function getSummaries(): Promise<Summary[]> {

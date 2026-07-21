@@ -152,7 +152,14 @@ from app.services.posts import lookup_posts as lookup_posts_impl
 from app.services.settings_store import get_app_setting, put_app_setting
 from app.services.stats import clear_table, get_db_stats, get_table_sizes
 from app.services.summaries import (
+    DEFAULT_SUMMARY_PAGE_SIZE,
+    MAX_SUMMARY_PAGE_SIZE,
+)
+from app.services.summaries import (
     delete_summary as delete_summary_impl,
+)
+from app.services.summaries import (
+    get_summary as get_summary_impl,
 )
 from app.services.summaries import (
     list_summaries as list_summaries_impl,
@@ -611,8 +618,28 @@ def bulk_upsert_posts_route(
 def list_summaries(
     session: SessionDep,
     _current_user: CurrentUser,
+    limit: int = Query(
+        default=DEFAULT_SUMMARY_PAGE_SIZE, ge=1, le=MAX_SUMMARY_PAGE_SIZE
+    ),
+    offset: int = Query(default=0, ge=0),
+    search: str | None = Query(default=None),
 ) -> list[dict[str, Any]]:
-    return list_summaries_impl(session)
+    """List in the light projection — see `summary_to_camel_light`.
+
+    `search` matches channels/text/promptText/model/note in SQL, so prompt
+    bodies stay searchable without being shipped to the client.
+    """
+    return list_summaries_impl(session, limit=limit, offset=offset, search=search)
+
+
+@router.get("/summaries/{summary_id}")
+def get_summary(
+    summary_id: str,
+    session: SessionDep,
+    _current_user: CurrentUser,
+) -> dict[str, Any]:
+    """Full summary including citedPosts/promptText/chatMessages."""
+    return get_summary_impl(session, summary_id)
 
 
 @router.put("/summaries/{summary_id}")

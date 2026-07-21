@@ -29,6 +29,7 @@ import {
 import {
   detectLanguageFromPosts,
   LANGUAGE_DETECTION_LOOKBACK_MS,
+  LANGUAGE_DETECTION_SAMPLE_SIZE,
   selectChannelsForLanguageDetection,
 } from "../lib/language"
 import { parseMediaFilterValue } from "../lib/posts/post-media"
@@ -260,10 +261,14 @@ export const ScraperProvider: React.FC<{ children: React.ReactNode }> = ({
       for (const channel of channelsWithoutLanguage) {
         attempted.add(channel.name)
         try {
+          // Bounded read: detection samples at most
+          // LANGUAGE_DETECTION_SAMPLE_SIZE posts, and the endpoint returns
+          // them newest-first, so there is nothing to gain by fetching more.
           const recentPosts = await getPostsByDateRange(
             [channel.name],
             Date.now() - LANGUAGE_DETECTION_LOOKBACK_MS,
             Date.now(),
+            { limit: LANGUAGE_DETECTION_SAMPLE_SIZE },
           )
           if (recentPosts && recentPosts.length > 0) {
             recentPosts.sort((a, b) => b.id - a.id)

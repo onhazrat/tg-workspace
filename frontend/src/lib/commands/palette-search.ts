@@ -29,7 +29,7 @@ export async function buildSearchResultsState(
 
   if (command.searchResultsKind === "summaries") {
     const query = rawQuery.trim()
-    const items = searchSummariesForPalette(ctx, query)
+    const items = await searchSummariesForPalette(ctx, query)
     return { kind: "summaries", query, items, totalCount: items.length }
   }
 

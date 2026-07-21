@@ -6,7 +6,7 @@ import type {
   SearchResultsKind,
   SearchResultsState,
 } from "@/lib/commands/types"
-import type { Channel, Post, Summary } from "@/types"
+import type { Channel, Post, SummaryListItem } from "@/types"
 
 /** Non-channel entity candidate shape (summaries, posts, tags, tables, groups). */
 export interface ExtendedEntityCandidate {
@@ -132,7 +132,7 @@ export function resolveEntityPickId({
 export function filterSearchResultItems(
   state: SearchResultsState | null,
   filterQuery: string,
-): Post[] | Summary[] {
+): Post[] | SummaryListItem[] {
   if (!state) return []
   const query = filterQuery.trim().toLowerCase()
   if (!query) return state.items
@@ -145,11 +145,15 @@ export function filterSearchResultItems(
     })
   }
 
-  return (state.items as Summary[]).filter((summary) => {
+  return (state.items as SummaryListItem[]).filter((summary) => {
+    // This secondary refine matches `promptExcerpt` rather than the full
+    // prompt body, which is no longer sent to the client. The primary search
+    // that produced `state.items` still matches whole prompts server-side, so
+    // only further narrowing within an existing result set is affected.
     const haystack = [
       summary.channels.join(" "),
       summary.text,
-      summary.promptText ?? "",
+      summary.promptExcerpt ?? "",
       summary.model ?? "",
       summary.note ?? "",
     ]
@@ -161,19 +165,19 @@ export function filterSearchResultItems(
 
 /** Stable list value for a search-result row. */
 export function getSearchResultItemId(
-  item: Post | Summary,
+  item: Post | SummaryListItem,
   kind: SearchResultsKind,
 ): string {
   if (kind === "posts") {
     const post = item as Post
     return `${post.channelName}_${post.id}`
   }
-  return (item as Summary).id
+  return (item as SummaryListItem).id
 }
 
 /** Id of the search result the selection highlight should start on. */
 export function getFirstSearchResultId(
-  items: Post[] | Summary[],
+  items: Post[] | SummaryListItem[],
   kind: SearchResultsKind | undefined,
 ): string {
   if (items.length === 0) return ""
@@ -181,7 +185,7 @@ export function getFirstSearchResultId(
     const post = items[0] as Post
     return `${post.channelName}_${post.id}`
   }
-  return (items[0] as Summary).id
+  return (items[0] as SummaryListItem).id
 }
 
 /** HTML input type for the editor field, honoring the global-start-time mode. */
