@@ -9,6 +9,8 @@ export const queryKeys = {
   dbStats: ["dbStats"] as const,
   health: ["health"] as const,
   torStatus: ["torStatus"] as const,
+  tagRuns: ["tagRuns"] as const,
+  tagRun: (id: string) => ["tagRun", id] as const,
   logs: {
     publish: ["logs", "publish"] as const,
     sync: ["logs", "sync"] as const,

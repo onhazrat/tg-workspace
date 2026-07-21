@@ -721,6 +721,17 @@ export type DataListPostsResponse = (Array<{
     [key: string]: unknown;
 }>);
 
+export type DataDiscoverCandidatesData = {
+    channelNames: string;
+    endDate?: (number | null);
+    signals?: (string | null);
+    startDate?: (number | null);
+};
+
+export type DataDiscoverCandidatesResponse = ({
+    [key: string]: unknown;
+});
+
 export type DataLookupPostsRouteData = {
     requestBody: PostLookupRequest;
 };

@@ -1,5 +1,5 @@
 import { api } from "@/api"
-import { getPost } from "../lib/repository"
+import { lookupPosts } from "../lib/repository"
 import type { Post } from "../types"
 
 export interface RagSearchResult {
@@ -32,14 +32,43 @@ export async function searchSimilarPostsFromQuery(
     limit,
   })) as { results: RagSearchResult[] }
 
+  return resolveRagPosts(result.results, lookupPosts)
+}
+
+/**
+ * Turn search hits into posts, resolving any the server did not inline.
+ *
+ * The misses are collected and fetched in one batched request. This used to
+ * be a per-result `getPost`, and each of those fetched the containing
+ * channel's entire history to pick out a single row.
+ */
+export async function resolveRagPosts(
+  results: RagSearchResult[],
+  lookup: (
+    refs: { channelName: string; postId: number }[],
+  ) => Promise<Post[]> = lookupPosts,
+): Promise<Post[]> {
+  const missing = results.filter((r) => !r.post)
+  const fetched =
+    missing.length > 0
+      ? await lookup(
+          missing.map((r) => ({
+            channelName: r.channelName,
+            postId: r.postId,
+          })),
+        )
+      : []
+
+  const byKey = new Map(fetched.map((p) => [`${p.channelName}#${p.id}`, p]))
+
   const posts: Post[] = []
-  for (const r of result.results) {
+  for (const r of results) {
     if (r.post) {
       posts.push(r.post)
       continue
     }
-    const post = await getPost(r.channelName, r.postId)
-    if (post) posts.push(post)
+    const resolved = byKey.get(`${r.channelName}#${r.postId}`)
+    if (resolved) posts.push(resolved)
   }
   return posts
 }

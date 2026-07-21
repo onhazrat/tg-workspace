@@ -2237,6 +2237,72 @@
         }
       }
     },
+    "/api/v1/data/discover/candidates": {
+      "get": {
+        "tags": ["data"],
+        "summary": "Discover Candidates",
+        "description": "Aggregated discovery candidates for a channel/date scope.\n\nReturns counts only. The client previously fetched every post body in\nscope to compute this in JS.",
+        "operationId": "data-discover_candidates",
+        "security": [{ "OAuth2PasswordBearer": [] }],
+        "parameters": [
+          {
+            "name": "channelNames",
+            "in": "query",
+            "required": true,
+            "schema": { "type": "string", "title": "Channelnames" }
+          },
+          {
+            "name": "startDate",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [{ "type": "integer" }, { "type": "null" }],
+              "title": "Startdate"
+            }
+          },
+          {
+            "name": "endDate",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [{ "type": "integer" }, { "type": "null" }],
+              "title": "Enddate"
+            }
+          },
+          {
+            "name": "signals",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [{ "type": "string" }, { "type": "null" }],
+              "title": "Signals"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Data-Discover Candidates"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/data/posts/lookup": {
       "post": {
         "tags": ["data"],

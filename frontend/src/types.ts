@@ -304,6 +304,18 @@ export interface DBStats {
   storeSizes?: Record<string, number>
 }
 
+/**
+ * What `GET /data/tag-runs` returns: metadata only.
+ *
+ * The heavy fields are deliberately absent — `promptText` holds a full
+ * serialized post corpus, so listing runs with it attached re-downloaded every
+ * historical prompt. Fetch a single run to get them.
+ */
+export type TagRunSummary = Omit<
+  TagRun,
+  "promptText" | "responseText" | "allTagsSnapshot" | "suggestions"
+>
+
 export interface TagRun {
   id: string
   createdAt: number

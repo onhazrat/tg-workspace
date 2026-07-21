@@ -5,7 +5,7 @@ import json
 import time
 from collections.abc import AsyncIterator
 from datetime import datetime
-from typing import Any
+from typing import Any, cast
 
 from fastapi import APIRouter, Body, HTTPException, Query
 from fastapi.responses import StreamingResponse
@@ -115,6 +115,11 @@ from app.services.data_vectors import (
 )
 from app.services.data_vectors import (
     upsert_translations as upsert_translations_impl,
+)
+from app.services.discover import (
+    SIGNAL_KINDS,
+    SignalKind,
+    compute_discover_candidates,
 )
 from app.services.logs import (
     DEFAULT_LOG_PAGE_SIZE,
@@ -531,6 +536,40 @@ def list_posts(
         end_date=end_date,
         limit=limit,
         offset=offset,
+    )
+
+
+@router.get("/discover/candidates")
+def discover_candidates(
+    session: SessionDep,
+    _current_user: CurrentUser,
+    channel_names: str = Query(alias="channelNames"),
+    start_date: int | None = Query(None, alias="startDate"),
+    end_date: int | None = Query(None, alias="endDate"),
+    signals: str | None = Query(None),
+) -> dict[str, Any]:
+    """Aggregated discovery candidates for a channel/date scope.
+
+    Returns counts only. The client previously fetched every post body in
+    scope to compute this in JS.
+    """
+    names = [n.strip() for n in channel_names.split(",") if n.strip()]
+    kinds = (
+        {s.strip() for s in signals.split(",") if s.strip()}
+        if signals is not None
+        else None
+    )
+    unknown = kinds - set(SIGNAL_KINDS) if kinds else set()
+    if unknown:
+        raise HTTPException(
+            status_code=422, detail=f"unknown signal(s): {sorted(unknown)}"
+        )
+    return compute_discover_candidates(
+        session,
+        channel_names=names,
+        start_date=start_date,
+        end_date=end_date,
+        signals=cast("set[SignalKind] | None", kinds),
     )
 
 

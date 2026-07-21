@@ -21,6 +21,7 @@ import type {
   Summary,
   SyncLog,
   TagRun,
+  TagRunSummary,
 } from "../types"
 import { stripToken } from "./botCredential"
 import * as cache from "./cache"
@@ -90,6 +91,36 @@ async function apiWrite<T>(
     onWriteFallback?.(resource, error)
     throw error
   }
+}
+
+/**
+ * In-flight request de-duplication.
+ *
+ * Staleness is tracked as a single global etag per resource with no
+ * coordination between callers, so concurrent readers of the same resource
+ * each fired their own identical request. Posts were worst: six direct call
+ * sites and no TanStack Query coverage. Callers arriving while a request is
+ * outstanding now await that same promise.
+ *
+ * Entries are removed once settled, so this is a de-duplicator, not a cache —
+ * it never serves a stale value to a later caller.
+ */
+const inFlight = new Map<string, Promise<unknown>>()
+
+export function singleFlight<T>(key: string, fn: () => Promise<T>): Promise<T> {
+  const existing = inFlight.get(key)
+  if (existing) return existing as Promise<T>
+
+  const promise = fn().finally(() => {
+    inFlight.delete(key)
+  })
+  inFlight.set(key, promise)
+  return promise
+}
+
+/** Test seam: drop any outstanding de-dup entries. */
+export function resetInFlight(): void {
+  inFlight.clear()
 }
 
 async function listWithStaleCheck<T>(
@@ -218,43 +249,130 @@ export async function getChannelStats(
 
 // --- posts ---
 
-export async function getPostsByDateRange(
+/** Server-side cap; see MAX_POST_PAGE_SIZE in backend/app/services/posts.py. */
+const POST_PAGE_SIZE = 5000
+
+/**
+ * Safety valve on the paging loop below. At 5000 rows a page this is 5M posts
+ * — far past any legitimate view. Hitting it means a caller asked for a range
+ * it should have narrowed, so we surface that rather than spin.
+ */
+const MAX_POST_PAGES = 1000
+
+/**
+ * Fetch every post in a range, paging through the now-bounded `GET /posts`.
+ *
+ * `GET /posts` used to return the whole matching set in one unbounded
+ * response. Rather than let existing callers silently receive only the first
+ * page, this pages to exhaustion — the transfer is the same size, but the
+ * backend no longer materialises it all at once, which is what OOM-killed the
+ * worker.
+ *
+ * Callers that only need a bounded sample should pass `limit` instead of
+ * paging the whole range.
+ */
+async function fetchAllPosts(
   channelNames: string[],
   startDate: number,
   endDate: number,
 ): Promise<Post[]> {
-  if (await isResourceStale("posts")) {
-    try {
-      const remote = await api.getPosts({ channelNames, startDate, endDate })
-      await cache.savePosts(remote)
-      markResourceSynced("posts")
-      return remote
-    } catch {
-      /* fall through */
-    }
+  const all: Post[] = []
+  for (let page = 0; page < MAX_POST_PAGES; page++) {
+    const batch = await api.getPosts({
+      channelNames,
+      startDate,
+      endDate,
+      limit: POST_PAGE_SIZE,
+      offset: page * POST_PAGE_SIZE,
+    })
+    all.push(...batch)
+    if (batch.length < POST_PAGE_SIZE) return all
   }
-  return cache.getPostsByDateRange(channelNames, startDate, endDate)
+  throw new Error(
+    `getPostsByDateRange exceeded ${MAX_POST_PAGES} pages ` +
+      `(${MAX_POST_PAGES * POST_PAGE_SIZE} posts) for ` +
+      `${channelNames.length} channel(s) — narrow the date range`,
+  )
+}
+
+export async function getPostsByDateRange(
+  channelNames: string[],
+  startDate: number,
+  endDate: number,
+  options: { limit?: number } = {},
+): Promise<Post[]> {
+  const { limit } = options
+  const key = `posts:${channelNames.join(",")}:${startDate}:${endDate}:${limit ?? "all"}`
+  return singleFlight(key, async () => {
+    if (await isResourceStale("posts")) {
+      try {
+        const remote =
+          limit != null
+            ? await api.getPosts({ channelNames, startDate, endDate, limit })
+            : await fetchAllPosts(channelNames, startDate, endDate)
+        await cache.savePosts(remote)
+        // A bounded read is a sample, not the full resource — marking the
+        // resource synced off one page would suppress later full fetches.
+        if (limit == null) markResourceSynced("posts")
+        return remote
+      } catch {
+        /* fall through */
+      }
+    }
+    const cached = await cache.getPostsByDateRange(
+      channelNames,
+      startDate,
+      endDate,
+    )
+    return limit != null ? cached.slice(0, limit) : cached
+  })
 }
 
 export async function getPost(
   channelName: string,
   id: number,
 ): Promise<Post | undefined> {
-  try {
-    const posts = await api.getPosts({
-      channelNames: [channelName],
-      startDate: 0,
-      endDate: Date.now() + 86400000,
-    })
-    const match = posts.find((p) => p.id === id)
-    if (match) {
-      await cache.savePosts([match])
-      return match
-    }
-  } catch {
-    /* fall through */
-  }
+  const [match] = await lookupPosts([{ channelName, postId: id }])
+  if (match) return match
   return cache.getPost(channelName, id)
+}
+
+/** Must not exceed MAX_POST_LOOKUP_BATCH in backend/app/services/posts.py. */
+const POST_LOOKUP_BATCH = 200
+
+/**
+ * Resolve specific posts by natural key, batched into one request per 200.
+ *
+ * Replaces the previous `getPost`, which fetched a channel's entire history
+ * to return a single row — and was called in a loop by RAG context assembly
+ * and once per citation hover.
+ */
+export async function lookupPosts(
+  refs: { channelName: string; postId: number }[],
+): Promise<Post[]> {
+  if (refs.length === 0) return []
+  const key = `posts:lookup:${refs
+    .map((r) => `${r.channelName}#${r.postId}`)
+    .sort()
+    .join(",")}`
+  return singleFlight(key, async () => {
+    try {
+      const batches: Post[][] = []
+      for (let i = 0; i < refs.length; i += POST_LOOKUP_BATCH) {
+        batches.push(
+          await api.lookupPosts(refs.slice(i, i + POST_LOOKUP_BATCH)),
+        )
+      }
+      const found = batches.flat()
+      if (found.length > 0) await cache.savePosts(found)
+      return found
+    } catch {
+      const cached = await Promise.all(
+        refs.map((r) => cache.getPost(r.channelName, r.postId)),
+      )
+      return cached.filter((p): p is Post => p !== undefined)
+    }
+  })
 }
 
 export async function bulkUpsertPosts(posts: Post[]): Promise<void> {
@@ -318,12 +436,24 @@ export async function deleteSummary(id: string): Promise<void> {
   }
 }
 
-export async function listTagRuns(): Promise<TagRun[]> {
+/** Metadata-only list; use `getTagRun` for prompt/response/suggestions. */
+export async function listTagRuns(): Promise<TagRunSummary[]> {
   try {
     return await api.listTagRuns()
   } catch {
     return []
   }
+}
+
+/** One run in full, including the heavy prompt and response fields. */
+export async function getTagRun(id: string): Promise<TagRun | undefined> {
+  return singleFlight(`tagRun:${id}`, async () => {
+    try {
+      return await api.getTagRun(id)
+    } catch {
+      return undefined
+    }
+  })
 }
 
 export async function upsertTagRun(run: TagRun): Promise<TagRun> {
@@ -445,23 +575,34 @@ export async function saveEmbeddings(
   )
 }
 
+/**
+ * Read one translation.
+ *
+ * Previously a full-table download per read, gated on a resource etag — and
+ * because `saveTranslation` bumps that etag, every save forced the next read
+ * to re-download every translation in the database. Now a single-row request
+ * with the result cached locally; the cache answers when the server is
+ * unreachable.
+ */
 export async function getTranslation(
   channelName: string,
   postId: number,
   language: string,
 ): Promise<PostTranslation | undefined> {
-  if (await isResourceStale("translations")) {
+  const key = `translation:${channelName}#${postId}#${language}`
+  return singleFlight(key, async () => {
     try {
-      const remote = await api.listTranslations()
-      for (const t of remote) {
-        await cache.saveTranslation(t)
+      const remote = await api.getTranslation(channelName, postId, language)
+      if (remote) {
+        await cache.saveTranslation(remote)
+        return remote
       }
-      markResourceSynced("translations")
+      // A confirmed absence — do not fall back to a stale cached row.
+      return undefined
     } catch {
-      /* fall through */
+      return cache.getTranslation(channelName, postId, language)
     }
-  }
-  return cache.getTranslation(channelName, postId, language)
+  })
 }
 
 export async function saveTranslation(

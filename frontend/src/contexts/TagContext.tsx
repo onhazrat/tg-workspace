@@ -1,6 +1,15 @@
+import { useQuery, useQueryClient } from "@tanstack/react-query"
 import type React from "react"
-import { createContext, useContext, useEffect, useMemo, useState } from "react"
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+} from "react"
 import { toast } from "sonner"
+import { queryKeys, SUMMARIZER_STALE_TIME } from "@/hooks/queryKeys"
 import {
   applyTagSuggestions,
   buildBulkChannelTagUpdates,
@@ -16,11 +25,12 @@ import { tryWriteTextToClipboard } from "@/lib/data-transfer/clipboard"
 import {
   bulkUpdateChannelTags,
   deleteTagRun,
+  getTagRun,
   listTagRuns,
   upsertTagRun,
 } from "@/lib/repository"
 import { generateTagStream, getTagPrompt } from "@/services/ai"
-import type { TagRun } from "@/types"
+import type { TagRun, TagRunSummary } from "@/types"
 import { useData } from "./DataContext"
 import { useScraper } from "./ScraperContext"
 import { useSettings } from "./SettingsContext"
@@ -28,12 +38,15 @@ import { useUI } from "./UIContext"
 
 type TagMode = "add" | "remove"
 
+const EMPTY_RUNS: TagRunSummary[] = []
+
 interface TagContextType {
   mode: TagMode
   setMode: React.Dispatch<React.SetStateAction<TagMode>>
   isGenerating: boolean
   isApplying: boolean
-  tagRuns: TagRun[]
+  /** Metadata only — `selectedRun` carries the heavy fields. */
+  tagRuns: TagRunSummary[]
   currentRunId: string | null
   setCurrentRunId: React.Dispatch<React.SetStateAction<string | null>>
   suggestions: Record<string, string[]>
@@ -57,18 +70,42 @@ export const TagProvider: React.FC<{ children: React.ReactNode }> = ({
   const { filteredPosts } = useScraper()
   const { aiLanguage, selectedModel, aiTemperature } = useSettings()
   const {
+    activeTab,
     startDate,
     endDate,
     includeChannelBioInPrompt,
     includeChannelTagsInPrompt,
   } = useUI()
+  const queryClient = useQueryClient()
 
   const [mode, setMode] = useState<TagMode>("add")
   const [isGenerating, setIsGenerating] = useState(false)
   const [isApplying, setIsApplying] = useState(false)
-  const [tagRuns, setTagRuns] = useState<TagRun[]>([])
   const [currentRunId, setCurrentRunId] = useState<string | null>(null)
   const [suggestions, setSuggestions] = useState<Record<string, string[]>>({})
+
+  // TagProvider is mounted unconditionally, so an unguarded fetch here ran on
+  // every page load whether or not the Tag tab was ever opened.
+  const isTagTabActive = activeTab === "tag"
+
+  const { data: tagRuns = EMPTY_RUNS } = useQuery({
+    queryKey: queryKeys.tagRuns,
+    queryFn: async () => {
+      const runs = await listTagRuns()
+      return [...runs].sort((a, b) => b.createdAt - a.createdAt)
+    },
+    enabled: isTagTabActive,
+    staleTime: SUMMARIZER_STALE_TIME,
+  })
+
+  // The list carries metadata only; the selected run's heavy fields
+  // (promptText, responseText, suggestions) are fetched on demand.
+  const { data: selectedRun = null } = useQuery({
+    queryKey: queryKeys.tagRun(currentRunId ?? ""),
+    queryFn: () => getTagRun(currentRunId as string).then((r) => r ?? null),
+    enabled: isTagTabActive && !!currentRunId,
+    staleTime: SUMMARIZER_STALE_TIME,
+  })
 
   const selectedChannelNames = useMemo(
     () =>
@@ -78,21 +115,28 @@ export const TagProvider: React.FC<{ children: React.ReactNode }> = ({
     [channels, selectedChannels],
   )
 
-  const selectedRun = useMemo(
-    () => tagRuns.find((run) => run.id === currentRunId) ?? null,
-    [tagRuns, currentRunId],
+  /**
+   * Reflect a saved run into the query cache: the summary into the list, the
+   * full row into its detail entry. Writing both keeps the UI immediate
+   * without a refetch, and keeps the two views consistent.
+   */
+  const applySavedRun = useCallback(
+    (saved: TagRun) => {
+      queryClient.setQueryData<TagRunSummary[]>(
+        queryKeys.tagRuns,
+        (prev = []) => [saved, ...prev.filter((e) => e.id !== saved.id)],
+      )
+      queryClient.setQueryData(queryKeys.tagRun(saved.id), saved)
+    },
+    [queryClient],
   )
 
+  // Default the selection to the newest run once the list arrives.
   useEffect(() => {
-    void (async () => {
-      const runs = await listTagRuns()
-      const sorted = [...runs].sort((a, b) => b.createdAt - a.createdAt)
-      setTagRuns(sorted)
-      if (!currentRunId && sorted.length > 0) {
-        setCurrentRunId(sorted[0].id)
-      }
-    })()
-  }, [])
+    if (!currentRunId && tagRuns.length > 0) {
+      setCurrentRunId(tagRuns[0].id)
+    }
+  }, [tagRuns, currentRunId])
 
   useEffect(() => {
     if (selectedRun?.suggestions) setSuggestions(selectedRun.suggestions)
@@ -144,10 +188,7 @@ export const TagProvider: React.FC<{ children: React.ReactNode }> = ({
       },
     }
     const saved = await upsertTagRun(run)
-    setTagRuns((prev) => [
-      saved,
-      ...prev.filter((entry) => entry.id !== saved.id),
-    ])
+    applySavedRun(saved)
     setCurrentRunId(saved.id)
     await tryWriteTextToClipboard(prompt)
     toast.success("Tag prompt copied. Paste the AI response when ready.")
@@ -204,10 +245,7 @@ export const TagProvider: React.FC<{ children: React.ReactNode }> = ({
         },
       }
       const saved = await upsertTagRun(run)
-      setTagRuns((prev) => [
-        saved,
-        ...prev.filter((entry) => entry.id !== saved.id),
-      ])
+      applySavedRun(saved)
       setCurrentRunId(saved.id)
       toast.success("Tag suggestions generated.")
     } catch (error) {
@@ -251,9 +289,7 @@ export const TagProvider: React.FC<{ children: React.ReactNode }> = ({
         updatedAt: Date.now(),
       }
       const saved = await upsertTagRun(updated)
-      setTagRuns((prev) =>
-        prev.map((entry) => (entry.id === saved.id ? saved : entry)),
-      )
+      applySavedRun(saved)
       setCurrentRunId(saved.id)
       toast.success(
         `Parsed tag suggestions for ${Object.keys(parsed).length} channel(s).`,
@@ -313,9 +349,7 @@ export const TagProvider: React.FC<{ children: React.ReactNode }> = ({
         applyResult: result,
       }
       const saved = await upsertTagRun(updatedRun)
-      setTagRuns((prev) =>
-        prev.map((entry) => (entry.id === saved.id ? saved : entry)),
-      )
+      applySavedRun(saved)
 
       toast.dismiss(applyingToastId)
       if (activeRun.mode === "add") {
@@ -341,14 +375,13 @@ export const TagProvider: React.FC<{ children: React.ReactNode }> = ({
 
   const handleDeleteRun = async (id: string) => {
     await deleteTagRun(id)
-    setTagRuns((prev) => {
-      const next = prev.filter((entry) => entry.id !== id)
-      if (currentRunId === id) {
-        setCurrentRunId(next[0]?.id ?? null)
-      }
-      return next
-    })
+    const next = queryClient.setQueryData<TagRunSummary[]>(
+      queryKeys.tagRuns,
+      (prev = []) => prev.filter((entry) => entry.id !== id),
+    )
+    queryClient.removeQueries({ queryKey: queryKeys.tagRun(id) })
     if (currentRunId === id) {
+      setCurrentRunId(next?.[0]?.id ?? null)
       setSuggestions({})
     }
   }

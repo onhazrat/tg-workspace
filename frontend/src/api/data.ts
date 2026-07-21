@@ -14,6 +14,7 @@ import type {
   Summary,
   SyncLog,
   TagRun,
+  TagRunSummary,
 } from "../types"
 import { request, sseJsonStream } from "./base"
 
@@ -149,14 +150,36 @@ export const dataApi = {
     channelNames?: string[]
     startDate?: number
     endDate?: number
+    limit?: number
+    offset?: number
   }) => {
     const qs = new URLSearchParams()
     if (params?.channelNames?.length)
       qs.set("channelNames", params.channelNames.join(","))
     if (params?.startDate != null) qs.set("startDate", String(params.startDate))
     if (params?.endDate != null) qs.set("endDate", String(params.endDate))
+    if (params?.limit != null) qs.set("limit", String(params.limit))
+    if (params?.offset != null) qs.set("offset", String(params.offset))
     const q = qs.toString()
     return request<Post[]>(`/api/v1/data/posts${q ? `?${q}` : ""}`)
+  },
+
+  /** Resolve specific posts by natural key. Batch capped server-side at 200. */
+  lookupPosts: (refs: { channelName: string; postId: number }[]) =>
+    request<Post[]>("/api/v1/data/posts/lookup", {
+      method: "POST",
+      body: JSON.stringify({ posts: refs }),
+    }),
+
+  getTranslation: (channelName: string, postId: number, language: string) => {
+    const qs = new URLSearchParams({
+      channelName,
+      postId: String(postId),
+      language,
+    })
+    return request<PostTranslation | null>(
+      `/api/v1/data/translations/one?${qs.toString()}`,
+    )
   },
 
   bulkUpsertPosts: (posts: Post[]) =>
@@ -167,7 +190,13 @@ export const dataApi = {
 
   listSummaries: () => request<Summary[]>("/api/v1/data/summaries"),
 
-  listTagRuns: () => request<TagRun[]>("/api/v1/data/tag-runs"),
+  /**
+   * List projection — carries metadata only. `promptText`, `responseText`,
+   * `suggestions` and `allTagsSnapshot` come from `getTagRun`.
+   */
+  listTagRuns: () => request<TagRunSummary[]>("/api/v1/data/tag-runs"),
+
+  getTagRun: (id: string) => request<TagRun>(`/api/v1/data/tag-runs/${id}`),
 
   upsertTagRun: (id: string, run: Partial<TagRun>) =>
     request<TagRun>(`/api/v1/data/tag-runs/${id}`, {
