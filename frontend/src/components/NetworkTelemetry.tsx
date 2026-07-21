@@ -1,3 +1,4 @@
+import { useQuery, useQueryClient } from "@tanstack/react-query"
 import {
   Activity,
   AlertTriangle,
@@ -11,100 +12,119 @@ import {
 } from "lucide-react"
 import { motion } from "motion/react"
 import type React from "react"
-import { useEffect, useState } from "react"
+import { useCallback, useMemo } from "react"
 import { api } from "@/api"
-import { listNetworkLogs } from "../lib/repository"
+import { queryKeys } from "@/hooks/queryKeys"
+import { useNetworkLogsQuery } from "@/hooks/useLogs"
 import type { NetworkLog } from "../types"
 import { TgSettingsSection } from "./ui/tg-settings-section"
 import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tg-tooltip"
 
+const EMPTY_LOGS: NetworkLog[] = []
+const TELEMETRY_REFRESH_MS = 10000
+
 export const NetworkTelemetry: React.FC = () => {
-  const [logs, setLogs] = useState<NetworkLog[]>([])
-  const [loading, setLoading] = useState(true)
-  const [torStatus, setTorStatus] = useState<any>(null)
+  // TanStack Query de-duplicates across consumers and owns the poll timer, so
+  // this component no longer runs its own fetch loop.
+  const { data: logs = EMPTY_LOGS, isLoading: logsLoading } =
+    useNetworkLogsQuery(true, { refetchInterval: TELEMETRY_REFRESH_MS })
 
-  const loadData = async () => {
-    setLoading(true)
-    try {
-      const fetchedLogs = await listNetworkLogs()
-      setLogs(fetchedLogs.sort((a, b) => b.timestamp - a.timestamp))
+  const { data: torStatus = null } = useQuery({
+    queryKey: queryKeys.torStatus,
+    queryFn: () => api.torStatus(),
+    refetchInterval: TELEMETRY_REFRESH_MS,
+  })
 
-      try {
-        const status = await api.torStatus()
-        setTorStatus(status)
-      } catch (e) {
-        console.error("Failed to fetch Tor status", e)
-      }
-    } catch (error) {
-      console.error("Failed to load network logs", error)
-    } finally {
-      setLoading(false)
-    }
-  }
+  const loading = logsLoading
 
-  useEffect(() => {
-    loadData()
-    const interval = setInterval(loadData, 10000) // Auto-refresh every 10s
-    return () => clearInterval(interval)
-  }, [loadData])
+  const queryClient = useQueryClient()
+  const refresh = useCallback(() => {
+    queryClient.invalidateQueries({ queryKey: queryKeys.logs.network })
+    queryClient.invalidateQueries({ queryKey: queryKeys.torStatus })
+  }, [queryClient])
 
   // Calculate Stats
-  const totalRequests = logs.length
-  const successfulRequests = logs.filter((l) => l.status === "success").length
-  const successRate =
-    totalRequests > 0
-      ? ((successfulRequests / totalRequests) * 100).toFixed(1)
-      : "0.0"
+  const stats = useMemo(() => {
+    const totalRequests = logs.length
+    const successfulRequests = logs.filter((l) => l.status === "success").length
+    const successRate =
+      totalRequests > 0
+        ? ((successfulRequests / totalRequests) * 100).toFixed(1)
+        : "0.0"
 
-  const rateLimits = logs.filter((l) => l.statusCode === 429).length
+    const rateLimits = logs.filter((l) => l.statusCode === 429).length
 
-  const avgLatency =
-    totalRequests > 0
-      ? Math.round(
-          logs.reduce((acc, l) => acc + (l.duration || 0), 0) / totalRequests,
-        )
-      : 0
+    const avgLatency =
+      totalRequests > 0
+        ? Math.round(
+            logs.reduce((acc, l) => acc + (l.duration || 0), 0) / totalRequests,
+          )
+        : 0
 
-  // Routing Distribution
-  const directRequests = logs.filter(
-    (l) => !l.proxyUsed || l.proxyUsed === "direct",
-  ).length
-  const torRequests = logs.filter(
-    (l) =>
-      l.proxyUsed &&
-      (l.proxyUsed.includes("127.0.0.1") || l.proxyUsed.includes("localhost")),
-  ).length
-  const proxyRequests = totalRequests - directRequests - torRequests
+    // Routing Distribution
+    const directRequests = logs.filter(
+      (l) => !l.proxyUsed || l.proxyUsed === "direct",
+    ).length
+    const torRequests = logs.filter(
+      (l) =>
+        l.proxyUsed &&
+        (l.proxyUsed.includes("127.0.0.1") ||
+          l.proxyUsed.includes("localhost")),
+    ).length
+    const proxyRequests = totalRequests - directRequests - torRequests
 
-  // Proxy Performance Matrix
-  const proxyStats = logs.reduce((acc: any, log) => {
-    const proxy = log.proxyUsed || "direct"
-    if (!acc[proxy]) {
-      acc[proxy] = {
-        requests: 0,
-        successes: 0,
-        totalDuration: 0,
-        rateLimits: 0,
+    // Proxy Performance Matrix
+    const proxyStats = logs.reduce((acc: any, log) => {
+      const proxy = log.proxyUsed || "direct"
+      if (!acc[proxy]) {
+        acc[proxy] = {
+          requests: 0,
+          successes: 0,
+          totalDuration: 0,
+          rateLimits: 0,
+        }
       }
-    }
-    acc[proxy].requests++
-    if (log.status === "success") acc[proxy].successes++
-    if (log.statusCode === 429) acc[proxy].rateLimits++
-    acc[proxy].totalDuration += log.duration || 0
-    return acc
-  }, {})
+      acc[proxy].requests++
+      if (log.status === "success") acc[proxy].successes++
+      if (log.statusCode === 429) acc[proxy].rateLimits++
+      acc[proxy].totalDuration += log.duration || 0
+      return acc
+    }, {})
 
-  const proxyMatrix = Object.entries(proxyStats)
-    .map(([proxy, stats]: [string, any]) => ({
-      proxy,
-      requests: stats.requests,
-      successRate: ((stats.successes / stats.requests) * 100).toFixed(1),
-      avgLatency: Math.round(stats.totalDuration / stats.requests),
-      rateLimits: stats.rateLimits,
-      isTor: proxy.includes("127.0.0.1") || proxy.includes("localhost"),
-      isDirect: proxy === "direct",
-    }))
-    .sort((a, b) => b.requests - a.requests)
+    const proxyMatrix = Object.entries(proxyStats)
+      .map(([proxy, stats]: [string, any]) => ({
+        proxy,
+        requests: stats.requests,
+        successRate: ((stats.successes / stats.requests) * 100).toFixed(1),
+        avgLatency: Math.round(stats.totalDuration / stats.requests),
+        rateLimits: stats.rateLimits,
+        isTor: proxy.includes("127.0.0.1") || proxy.includes("localhost"),
+        isDirect: proxy === "direct",
+      }))
+      .sort((a, b) => b.requests - a.requests)
+
+    return {
+      totalRequests,
+      successRate,
+      rateLimits,
+      avgLatency,
+      directRequests,
+      torRequests,
+      proxyRequests,
+      proxyMatrix,
+    }
+  }, [logs])
+
+  const {
+    totalRequests,
+    successRate,
+    rateLimits,
+    avgLatency,
+    directRequests,
+    torRequests,
+    proxyRequests,
+    proxyMatrix,
+  } = stats
 
   if (loading && logs.length === 0) {
     return (
@@ -135,7 +155,7 @@ export const NetworkTelemetry: React.FC = () => {
             <TooltipTrigger asChild>
               <button
                 type="button"
-                onClick={loadData}
+                onClick={refresh}
                 className="p-2 hover:bg-app-ink/5 rounded-full transition-colors opacity-60 hover:opacity-100"
               >
                 <RefreshCw size={14} />

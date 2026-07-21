@@ -26,7 +26,11 @@ import {
   disabledReason,
   filterChannelsForOperation,
 } from "../lib/channels/sync-permissions"
-import { detectLanguageFromPosts } from "../lib/language"
+import {
+  detectLanguageFromPosts,
+  LANGUAGE_DETECTION_LOOKBACK_MS,
+  selectChannelsForLanguageDetection,
+} from "../lib/language"
 import { parseMediaFilterValue } from "../lib/posts/post-media"
 import {
   applyPostViewPipeline,
@@ -201,6 +205,7 @@ export const ScraperProvider: React.FC<{ children: React.ReactNode }> = ({
     return saved === "channel_time" ? "channel_time" : "time"
   })
   const scrapingLocksRef = React.useRef<Set<string>>(new Set())
+  const attemptedLanguageDetectionRef = React.useRef<Set<string>>(new Set())
   const activeJobRef = useRef<string | null>(null)
 
   const debouncedPostSearch = useDebouncedValue(postSearch, 300)
@@ -234,19 +239,30 @@ export const ScraperProvider: React.FC<{ children: React.ReactNode }> = ({
     localStorage.setItem("postFilter_media", mediaFilter)
   }, [mediaFilter])
 
-  // Background language detection for existing channels
+  // Background language detection for existing channels.
+  //
+  // This effect re-arms whenever `channels` changes identity — including from
+  // the `loadChannels()` it ends with. `attemptedLanguageDetectionRef` is what
+  // makes it terminate: every channel is marked before its detection runs, so
+  // channels that yield no language (short sample, or `franc` returns "und")
+  // are not rescanned for the rest of the session. Without it they stay in the
+  // "no language" set and are refetched every few seconds, forever.
   useEffect(() => {
     const detectMissingLanguages = async () => {
-      const channelsWithoutLanguage = channels.filter(
-        (c) => !c.language && !c.isUnavailableOnWebView,
+      const attempted = attemptedLanguageDetectionRef.current
+      const channelsWithoutLanguage = selectChannelsForLanguageDetection(
+        channels,
+        attempted,
       )
       if (channelsWithoutLanguage.length === 0) return
 
+      let detectedAny = false
       for (const channel of channelsWithoutLanguage) {
+        attempted.add(channel.name)
         try {
           const recentPosts = await getPostsByDateRange(
             [channel.name],
-            0,
+            Date.now() - LANGUAGE_DETECTION_LOOKBACK_MS,
             Date.now(),
           )
           if (recentPosts && recentPosts.length > 0) {
@@ -255,6 +271,7 @@ export const ScraperProvider: React.FC<{ children: React.ReactNode }> = ({
             if (lang) {
               const updatedChannel = { ...channel, language: lang }
               await upsertChannel(updatedChannel)
+              detectedAny = true
               console.log(
                 `[Background] Detected language for @${channel.name}: ${lang}`,
               )
@@ -267,12 +284,14 @@ export const ScraperProvider: React.FC<{ children: React.ReactNode }> = ({
           )
         }
       }
-      await loadChannels()
+      // Only refresh when something actually changed — an unconditional
+      // reload re-arms this effect for no reason.
+      if (detectedAny) await loadChannels()
     }
 
     const timer = setTimeout(detectMissingLanguages, 5000)
     return () => clearTimeout(timer)
-  }, [loadChannels, channels.filter, channels])
+  }, [loadChannels, channels])
 
   const handleFilterPosts = useCallback(
     async (

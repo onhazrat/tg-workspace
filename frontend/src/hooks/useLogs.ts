@@ -31,13 +31,23 @@ function sortByTimestamp<T extends { timestamp: number }>(logs: T[]): T[] {
   return [...logs].sort((a, b) => b.timestamp - a.timestamp)
 }
 
-export function useLogsQuery(type: LogType, enabled = false) {
+export type LogsQueryOptions = {
+  /** Poll interval in ms. Omit for no polling. */
+  refetchInterval?: number
+}
+
+export function useLogsQuery(
+  type: LogType,
+  enabled = false,
+  options: LogsQueryOptions = {},
+) {
   return useQuery({
     queryKey: queryKeys.logs[type],
     queryFn: async () =>
       sortByTimestamp((await fetchers[type]()) as { timestamp: number }[]),
     staleTime: SUMMARIZER_STALE_TIME,
     enabled,
+    refetchInterval: options.refetchInterval,
   })
 }
 
@@ -61,8 +71,11 @@ export function useEmbeddingLogsQuery(enabled = false) {
   >
 }
 
-export function useNetworkLogsQuery(enabled = false) {
-  return useLogsQuery("network", enabled) as ReturnType<
+export function useNetworkLogsQuery(
+  enabled = false,
+  options: LogsQueryOptions = {},
+) {
+  return useLogsQuery("network", enabled, options) as ReturnType<
     typeof useQuery<NetworkLog[]>
   >
 }

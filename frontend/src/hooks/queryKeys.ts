@@ -7,6 +7,8 @@ export const queryKeys = {
   bots: ["bots"] as const,
   summaries: ["summaries"] as const,
   dbStats: ["dbStats"] as const,
+  health: ["health"] as const,
+  torStatus: ["torStatus"] as const,
   logs: {
     publish: ["logs", "publish"] as const,
     sync: ["logs", "sync"] as const,

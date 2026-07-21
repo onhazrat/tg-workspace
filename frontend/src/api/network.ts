@@ -11,9 +11,12 @@ export const networkApi = {
     request<{ badProxies: unknown[] }>("/api/v1/network/proxy-health"),
 
   torStatus: () =>
-    request<{ running: boolean; socksInUse: boolean; controlInUse: boolean }>(
-      "/api/v1/network/tor-status",
-    ),
+    request<{
+      running: boolean
+      socksInUse: boolean
+      controlInUse: boolean
+      autoSpawned: boolean
+    }>("/api/v1/network/tor-status"),
 
   torIp: () => request<{ ip: string }>("/api/v1/network/tor-ip"),
 
