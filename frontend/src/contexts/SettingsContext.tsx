@@ -15,6 +15,7 @@ import {
   RETENTION_LOG_DAYS_DEFAULT,
   RETENTION_POST_DAYS_DEFAULT,
 } from "@/constants"
+import { useCachePrune } from "@/hooks/useCachePrune"
 import type {
   DiscoverFollowState,
   DiscoverSortKey,
@@ -289,6 +290,10 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({
         console.warn("[Settings] Failed to sync embeddings job:", err),
       )
   }, [settings.embeddingsEnabled])
+
+  // Keep the IndexedDB mirror inside the retention window; without this it
+  // grows forever, independent of the backend's own sweep.
+  useCachePrune(settings.postRetentionDays, settings.logRetentionDays)
 
   const getEffectiveGlobalStartTime = useCallback(
     () =>

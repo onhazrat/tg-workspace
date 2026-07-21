@@ -45,9 +45,24 @@ Every domain-specific route added for this app under `/data/*` **dropped** that 
 
 `backend/app/services/stats.py`'s `clear_table`/`_scoped_delete` does a bulk SQL `DELETE`, with a comment explicitly noting it's written that way *because* fetch-then-loop "repeat[s] the exact memory blowup already fixed for log viewers" (`stats.py:133-136`).
 
-But `logs.py:193-232` (`clear_logs`, `delete_old_logs`) — the retention sweep that runs on every log type, on a schedule — **does exactly the fetch-then-Python-loop thing that comment warns against**: `select(model)).all()` before deleting, for every log table, every sweep.
+> **Correction (2026-07-21).** This section originally described the *scheduled*
+> retention sweep as doing fetch-then-Python-loop deletes. That was wrong. The
+> scheduled sweep lives in `backend/app/jobs/retention.py` and was **already
+> fixed** — it uses bulk `sa_delete` with batching. The unfixed code was
+> `logs.py`'s `clear_logs` / `delete_old_logs`, which are reachable only from
+> **user-triggered API endpoints** (`data.py`), not from a schedule. Real, but
+> far lower risk than "runs hourly on its own". Both have since been converted
+> to bulk `sa_delete`.
 
-Someone already learned this lesson once and fixed it in `stats.py`. It regressed in `logs.py` because there was no shared, reusable pattern connecting the two — this is itself an argument for a shared bulk-delete helper rather than fixing each call site independently.
+`logs.py:193-232` (`clear_logs`, `delete_old_logs`) — reachable from the
+user-triggered clear/prune endpoints — **did exactly the fetch-then-Python-loop
+thing that comment warns against**: `select(model)).all()` before deleting, for
+every log table.
+
+Someone already learned this lesson once and fixed it in `stats.py`. It was not
+carried over to `logs.py` because there was no shared, reusable pattern
+connecting the two — this is itself an argument for a shared bulk-delete helper
+rather than fixing each call site independently.
 
 `channels.py:41-43` (anchor-reset) and `channels.py:309` (`delete_channel`) have the same shape, scoped to one channel at a time — lower risk since they're not global, but the same anti-pattern.
 
@@ -55,7 +70,7 @@ Someone already learned this lesson once and fixed it in `stats.py`. It regresse
 
 ## 3. Frontend fetch/sync layer: how many resources are exposed to the thundering-herd pattern
 
-`frontend/src/lib/repository.ts` gates **13 resources** through `isResourceStale`/`markResourceSynced` — a single etag per resource name (`sync_etag_<resource>` in localStorage), **not scoped by query parameters**, refreshed via one shared, throttled `refreshSyncMeta()`.
+`frontend/src/lib/repository.ts` gates **11 distinct resources** (corrected 2026-07-21 — the original count of 13 was wrong; 7 direct plus 4 via `listWithStaleCheck`) through `isResourceStale`/`markResourceSynced` — a single etag per resource name (`sync_etag_<resource>` in localStorage), **not scoped by query parameters**, refreshed via one shared, throttled `refreshSyncMeta()`.
 
 TanStack Query provides real in-flight de-duplication (shared query key ⇒ concurrent callers coalesce into one request) — but **only for callers that actually go through the query client**. Several call sites bypass it and call `repository.ts` functions directly, which defeats that protection even for otherwise-protected resources.
 
@@ -111,7 +126,7 @@ Each of those four downstream consumers is doing something a single SQL `WHERE`/
 
 ## 5. IndexedDB: the client-side mirror has no automatic pruning
 
-`deleteOldPosts(days)` and `deleteOldLogs(days)` exist in `frontend/src/lib/cache.ts:1094-1186` but are **only invoked on explicit user action** — no scheduled/background caller was found anywhere in the frontend. Everything ever synced via any `isResourceStale` fetch is written to IndexedDB and stays there indefinitely, growing independent of the backend's 90-day retention policy, until a user manually clears it.
+`deleteOldPosts(days)` and `deleteOldLogs(days)` exist in `frontend/src/lib/cache.ts:1094-1186` but had **zero callers at all** — not even an explicit user action reached them. Everything ever synced via any `isResourceStale` fetch is written to IndexedDB and stays there indefinitely, growing independent of the backend's 90-day retention policy, until a user manually clears it.
 
 This is a separate scaling dimension from everything above: even a perfectly fixed backend and a perfectly coalesced fetch layer still leaves every browser that's used this app accumulating an ever-growing local mirror with no relationship to server-side retention.
 
@@ -127,11 +142,11 @@ This is a separate scaling dimension from everything above: even a perfectly fix
 
 **Not correct, ranked by risk:**
 1. `list_posts`/`GET /posts` — no bound, root of a five-consumer fan-out (Posts tab, Discover, palette search, channel-sort counts, plus every direct `getPostsByDateRange` caller).
-2. `list_embeddings`/`GET /embeddings` — no bound, no client-side scoping at all, heavier per-row than posts.
+2. ~~`list_embeddings`/`GET /embeddings`~~ — **overstated (corrected 2026-07-21).** Unbounded on both sides, but it had **zero frontend callers**: it was dead code, and the theoretical risk never materialised. Since deleted.
 3. Translations — wrong *shape*, not just missing a limit: a single-row lookup implemented as a full-table fetch, called once per rendered card.
-4. `NetworkTelemetry.tsx`'s independent 10s poll — bypasses the one protection (TanStack Query dedup) that covers every other log type.
+4. `NetworkTelemetry.tsx`'s bespoke poll — bypassed the one protection (TanStack Query dedup) that covers every other log type. **Corrected 2026-07-21:** this was not really a 10s poll. `loadData` was not `useCallback`-wrapped and the effect depended on it, so every `setLogs` re-armed the effect — a self-sustaining refetch loop, with the `setInterval` largely irrelevant. Mitigating: it mounts on only two settings sub-tabs, and `listNetworkLogs` is etag-gated so most calls hit IndexedDB rather than the network.
 5. Channel list/search — fetched full every time, filtered in JS, duplicated independently in two UI surfaces with no backend search param to consolidate onto.
-6. `logs.py`'s retention sweep (`clear_logs`/`delete_old_logs`) — fetch-then-Python-loop delete, a regression of a fix already made once in `stats.py`.
+6. `logs.py`'s `clear_logs`/`delete_old_logs` — fetch-then-Python-loop delete. **Corrected 2026-07-21:** these are reached from **user-triggered endpoints**, not the scheduled sweep; `jobs/retention.py` was already bulk-delete correct. Lower risk than originally written, same memory shape.
 7. IndexedDB — no automatic pruning to match server retention; unbounded client-side growth over a browser profile's lifetime.
 
 No code has been changed. This document and the prior load investigation are the basis for deciding fix scope and sequencing next.

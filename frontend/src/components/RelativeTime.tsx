@@ -1,5 +1,6 @@
 import type React from "react"
 import { useEffect, useState } from "react"
+import { subscribeToTick } from "@/lib/shared-ticker"
 import { getRelativeTime } from "../lib/utils"
 
 interface RelativeTimeProps {
@@ -20,11 +21,11 @@ export const RelativeTime: React.FC<RelativeTimeProps> = ({
 
     if (!timestamp) return
 
-    const interval = setInterval(() => {
+    // One shared interval for every instance — a long feed used to schedule
+    // one timer per rendered timestamp.
+    return subscribeToTick(() => {
       setRelativeTime(getRelativeTime(timestamp))
-    }, 10000) // Update every 10 seconds for better responsiveness
-
-    return () => clearInterval(interval)
+    })
   }, [timestamp])
 
   return (

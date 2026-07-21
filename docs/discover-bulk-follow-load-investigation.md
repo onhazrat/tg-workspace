@@ -1,7 +1,13 @@
 # Bulk-follow RAM/CPU investigation on staging
 
 **Date:** 2026-07-20
-**Status:** Root-caused for RAM; CPU contributor identified. No fix implemented — findings only, pending a decision on scope.
+**Status:** Root-caused for RAM; CPU contributor identified.
+**Update (2026-07-21):** the root cause is fixed — `GET /posts` is now paginated
+(`limit`/`offset`, default 500, hard cap 5000, deterministic `timestamp DESC`)
+and its frontend callers migrated. See `docs/architecture-remediation-plan.md`
+for the full remediation and §3 there for corrections to the follow-on audit.
+**The staging re-measurement described under Methodology below has not yet been
+repeated** — that is the remaining acceptance criterion for this incident.
 **Trigger:** reported symptom — "bulk following the channels is very expensive on both RAM and CPU" on staging, observed shortly after the Discover mentions/links feature shipped.
 **Environment:** staging VM (`root@staging-vm`), 4 vCPU / 7GB RAM, Docker Compose stack (`tg-summarizer-staging-*`). Backend runs `fastapi run --workers 4 app/main.py`.
 
