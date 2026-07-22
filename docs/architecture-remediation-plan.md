@@ -612,10 +612,11 @@ pgvector for RAG; a shared paginated-list helper so the logs pattern stops being
 - [ ] `cd backend && uv run pytest tests/ -q` — green.
 - [ ] `cd frontend && bun test src && bunx tsc -p tsconfig.build.json --noEmit && bun run lint && bun run test:tg-ui` — green.
 - [ ] `cd frontend && bunx playwright test tests/summarizer.spec.ts` — green.
-- [ ] **Staging re-measurement**: repeat the py-spy method from
-      `docs/discover-bulk-follow-load-investigation.md` §Methodology during a bulk-follow and
-      confirm worker RSS stays well under the previous 3.09 GB and no long
-      idle-in-transaction connections appear.
+- [x] **Staging re-measurement** (2026-07-22): re-ran on staging against the
+      deployed fix. Peak single-worker RSS **0.89 GB** (was 3.09 GB), **zero**
+      long idle-in-transaction connections, on a table that has since grown to
+      3.15M rows. Details and caveats in
+      `docs/discover-bulk-follow-load-investigation.md` §Re-measurement.
 
 ---
 
