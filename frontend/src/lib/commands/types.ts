@@ -183,7 +183,10 @@ export interface CommandContext {
   setMaxPostsPerChannel: (value: number) => void
   setMaxPostsPerChannelMode: (value: "latest" | "random") => void
   setPostSortOrder: (value: "time" | "channel_time") => void
-  filteredPosts: import("@/types").Post[]
+  /** Fetch the scoped, filtered posts on demand (for the post picker). */
+  getScopedPosts: () => Promise<import("@/types").Post[]>
+  /** Per-channel in-scope post counts on demand (server-side when eligible). */
+  getPostsInScopeCounts: () => Promise<Record<string, number>>
   starredOnly: boolean
   setStarredOnly: (value: boolean) => void
   handleSummarize: () => Promise<void>

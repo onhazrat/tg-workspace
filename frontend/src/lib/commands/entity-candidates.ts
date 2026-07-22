@@ -15,11 +15,8 @@ export function getExtendedEntityCandidates(
         id: summary.id,
         label: formatSummaryLabel(summary),
       }))
-    case "pick-post":
-      return ctx.filteredPosts.slice(0, 100).map((post) => ({
-        id: `${post.channelName}_${post.id}`,
-        label: `@${post.channelName} #${post.id}`,
-      }))
+    // "pick-post" candidates are resolved in useEntityFlow, which fetches the
+    // scoped posts on demand rather than reading an eager array.
     case "clear-db-table":
       return (ctx.indexedDbTables ?? []).map((table) => ({
         id: table,

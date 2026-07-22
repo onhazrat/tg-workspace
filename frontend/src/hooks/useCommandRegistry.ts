@@ -1,4 +1,5 @@
-import { useMemo } from "react"
+import { useCallback, useMemo } from "react"
+import { api } from "@/api"
 import { useCommandPaletteContext } from "@/components/CommandPaletteProvider"
 import { useAI } from "@/contexts/AIContext"
 import { useChatContext } from "@/contexts/ChatContext"
@@ -16,6 +17,7 @@ import {
 import { useSettingsSection } from "@/hooks/useSettingsSection"
 import { useSummarizerGroupParams } from "@/hooks/useSummarizerGroupParams"
 import { INDEXEDDB_STORE_NAMES } from "@/lib/cache"
+import { buildPostsInScopeCounts } from "@/lib/channels/sort-channels-for-grid"
 import {
   buildActionCommands,
   buildChannelEntityCommands,
@@ -76,9 +78,11 @@ export function useCommandRegistry(): {
     handleFilterPosts,
     forwardedFilter,
     setForwardedFilter,
-    filteredPosts,
+    getScopedPosts,
+    semanticSearchQuery,
     mediaFilter,
     setMediaFilter,
+    maxPostsPerChannel,
     setMaxPostsPerChannel,
     setMaxPostsPerChannelMode,
     setPostSortOrder,
@@ -99,6 +103,42 @@ export function useCommandRegistry(): {
     useSummarizerGroupParams()
   const { data: settingGroups = [] } = useSettingGroupsQuery()
   const invalidateSettingGroups = useInvalidateSettingGroups()
+
+  // Per-channel in-scope counts on demand. Mirrors ChannelGrid: server-side
+  // when no semantic search is active and a selection exists, else derived
+  // from the scoped posts (semantic results can't be counted server-side).
+  const getPostsInScopeCounts = useCallback(async (): Promise<
+    Record<string, number>
+  > => {
+    const serverEligible =
+      !semanticSearchQuery.trim() && selectedChannels.size > 0
+    if (serverEligible) {
+      const selectedChannelNames = channels
+        .filter((channel) => selectedChannels.has(channel.name))
+        .map((channel) => channel.name)
+      return api.getPostsCounts({
+        channelNames: selectedChannelNames,
+        startDate,
+        endDate,
+        keyword: postSearch,
+        forwarded: forwardedFilter,
+        media: mediaFilter,
+        maxPerChannel: maxPostsPerChannel,
+      })
+    }
+    return buildPostsInScopeCounts(await getScopedPosts())
+  }, [
+    semanticSearchQuery,
+    selectedChannels,
+    channels,
+    startDate,
+    endDate,
+    postSearch,
+    forwardedFilter,
+    mediaFilter,
+    maxPostsPerChannel,
+    getScopedPosts,
+  ])
 
   const context = useMemo<CommandContext>(
     () => ({
@@ -229,7 +269,8 @@ export function useCommandRegistry(): {
       setMaxPostsPerChannel,
       setMaxPostsPerChannelMode,
       setPostSortOrder,
-      filteredPosts,
+      getScopedPosts,
+      getPostsInScopeCounts,
       starredOnly,
       setStarredOnly,
       handleSummarize,
@@ -251,7 +292,8 @@ export function useCommandRegistry(): {
       copySummaryPrompt,
       currentSummaryId,
       endDate,
-      filteredPosts,
+      getScopedPosts,
+      getPostsInScopeCounts,
       forwardedFilter,
       getEffectiveGlobalStartTime,
       handleFilterPosts,
