@@ -1,3 +1,4 @@
+import { useQueryClient } from "@tanstack/react-query"
 import React, {
   createContext,
   useCallback,
@@ -173,6 +174,17 @@ export const ScraperProvider: React.FC<{ children: React.ReactNode }> = ({
   } = useSettings()
   const { searchSimilarPosts } = useRAG()
   const { isOffline } = useApiStatus()
+  const queryClient = useQueryClient()
+
+  // Refetch the server-backed post views (feed, per-channel counts, Discover)
+  // after a sync adds posts — a sync changes no scope/filter, so the query keys
+  // are unchanged and only an explicit invalidation makes new posts appear.
+  // Prefixes must match queryKeys.postsFeed / postsCounts / discoverCandidates.
+  const invalidatePostViews = useCallback(() => {
+    queryClient.invalidateQueries({ queryKey: ["postsFeed"] })
+    queryClient.invalidateQueries({ queryKey: ["postsCounts"] })
+    queryClient.invalidateQueries({ queryKey: ["discoverCandidates"] })
+  }, [queryClient])
 
   const [postSearch, setPostSearch] = useState("")
   const [semanticSearchQuery, setSemanticSearchQuery] = useState("")
@@ -575,6 +587,7 @@ export const ScraperProvider: React.FC<{ children: React.ReactNode }> = ({
         if (refresh) {
           await loadSyncLogs()
           await handleFilterPosts()
+          invalidatePostViews()
         }
 
         if (failures.length > 0 && successes.length === 0) {
@@ -596,6 +609,7 @@ export const ScraperProvider: React.FC<{ children: React.ReactNode }> = ({
       loadChannels,
       loadSyncLogs,
       handleFilterPosts,
+      invalidatePostViews,
       setChannelStats,
     ],
   )
@@ -1004,6 +1018,7 @@ export const ScraperProvider: React.FC<{ children: React.ReactNode }> = ({
             await loadChannels()
             await loadSyncLogs()
             await handleFilterPosts()
+            invalidatePostViews()
           } finally {
             activeJobRef.current = null
           }
@@ -1037,6 +1052,7 @@ export const ScraperProvider: React.FC<{ children: React.ReactNode }> = ({
       loadChannels,
       loadSyncLogs,
       handleFilterPosts,
+      invalidatePostViews,
       setChannelStats,
     ],
   )
