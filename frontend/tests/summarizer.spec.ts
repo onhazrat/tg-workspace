@@ -392,6 +392,9 @@ async function openDiscoverWithForwards(
     page.getByRole("heading", { name: "Channel Candidates" }),
   ).toBeVisible()
 
+  // Discover is an action tab: generate the report before candidates appear.
+  await page.getByTestId("discover-generate-button").click()
+
   const expectedSources =
     fixture.unfollowedSources.length + (fixture.followedSource ? 1 : 0)
   await expect(
@@ -502,6 +505,9 @@ test.describe("TG Summarizer", () => {
       mention: false,
       link: false,
     })
+
+    // Discover is an action tab: generate after choosing the signal set.
+    await page.getByTestId("discover-generate-button").click()
 
     await expect(page.getByText(/forward metadata/i)).toBeVisible()
     await expect(
