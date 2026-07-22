@@ -1,15 +1,82 @@
 # Bulk-follow RAM/CPU investigation on staging
 
 **Date:** 2026-07-20
-**Status:** Root-caused for RAM; CPU contributor identified.
+**Status:** Root-caused, fixed, and **re-measured on staging (2026-07-22) —
+acceptance criterion met.** See "Re-measurement" below.
 **Update (2026-07-21):** the root cause is fixed — `GET /posts` is now paginated
 (`limit`/`offset`, default 500, hard cap 5000, deterministic `timestamp DESC`)
 and its frontend callers migrated. See `docs/architecture-remediation-plan.md`
 for the full remediation and §3 there for corrections to the follow-on audit.
-**The staging re-measurement described under Methodology below has not yet been
-repeated** — that is the remaining acceptance criterion for this incident.
 **Trigger:** reported symptom — "bulk following the channels is very expensive on both RAM and CPU" on staging, observed shortly after the Discover mentions/links feature shipped.
 **Environment:** staging VM (`root@staging-vm`), 4 vCPU / 7GB RAM, Docker Compose stack (`tg-summarizer-staging-*`). Backend runs `fastapi run --workers 4 app/main.py`.
+
+## Re-measurement (2026-07-22) — acceptance criterion
+
+Repeated on staging after the fix deployed (backend running the merged
+remediation code). This is the `docs/architecture-remediation-plan.md` §12
+final criterion: confirm worker RSS stays well under the previous 3.09 GB and
+no long idle-in-transaction connections appear.
+
+**The table grew since the incident**, so this is a harder test, not an easier
+one: **3,146,073 rows** in `tg_posts` (was 2,976,944) across **973** followed
+channels (was 962).
+
+### The root-cause request is now bounded
+
+`GET /data/posts` on the largest channel, `teteironline` (**725,751** posts):
+
+| Request | Result |
+|---|---|
+| default limit, no date bounds | **500 rows, 198 KB, 0.44 s** |
+| explicit `limit=5000` | 5000 rows, 1.98 MB |
+| `limit=99999` (above the 5000 cap) | **422 rejected** |
+
+Under the pre-fix code the first request returned *all 725,751 rows*
+(~290 MB serialized as camelCase dicts). That query shape — the incident's
+root cause — is now structurally impossible.
+
+### Under load
+
+Driven directly against `GET /data/posts` (the memory-critical path) at the
+5000-row cap, ~360 requests across the 12 largest channels with concurrency
+~24 — deliberately heavier than a real Discover session — while sampling
+per-worker RSS and `pg_stat_activity` every 0.5 s from the host:
+
+| Metric | Incident | Re-measurement |
+|---|---|---|
+| Peak **single-worker** RSS | 3.09 GB | **0.89 GB** |
+| Peak sum across 4 workers | — | 3.25 GB (≈0.8 GB each; 7.5 GB cgroup limit) |
+| Long idle-in-transaction (>30 s) | 2+ min, several | **0** |
+
+Per-worker memory is now bounded by `cap × concurrency`, independent of table
+size — which is why RSS stayed flat at ~0.9 GB no matter how hard the endpoint
+was pushed. **Both acceptance criteria met.**
+
+**Caveats, stated honestly:**
+- Load was driven through `GET /data/posts` rather than a UI bulk-follow, to
+  avoid mutating staging data. That endpoint *is* the memory-critical path, so
+  this faithfully exercises the root cause, but it is not a byte-for-byte
+  replay of the incident trigger.
+- Host load average peaked at ~16.9 on the 4-core box during the burst. That
+  reflects deliberate synthetic over-driving (concurrency ~24), **not** a
+  realistic session, and is **not** a clean before/after against the incident's
+  "load 7+". The RAM result is the meaningful one; the CPU number here is an
+  artifact of how hard the endpoint was hammered.
+
+### Sampling method
+
+Per-worker RSS peak and long idle-in-transaction count, sampled from the host
+while load ran inside the backend container (which reaches the API on
+`localhost:8000`; there is no host port mapping — traffic is routed via
+`traefik-public`):
+
+```bash
+# host-side sampler (every 0.5s): peak single-worker RSS + long idle-in-txn
+ps -eo rss,args --sort=-rss | grep -E "multiprocessing-fork|fastapi run" | grep -v grep
+docker exec tg-summarizer-staging-db-1 psql -U postgres -d app -tA -c \
+  "select count(*) from pg_stat_activity where state='idle in transaction' \
+   and xact_start < now()-interval '30 seconds';"
+```
 
 ## Methodology
 
