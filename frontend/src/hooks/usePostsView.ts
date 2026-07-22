@@ -1,5 +1,6 @@
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query"
 import { useEffect, useMemo, useState } from "react"
+import { toast } from "sonner"
 
 import { api } from "@/api"
 import type { PostFeedQuery } from "@/api/data"
@@ -109,7 +110,9 @@ export function usePostsFeed(): PostsFeed {
     maxPostsPerChannelMode,
     postSortOrder,
     semanticSearchQuery,
+    setSemanticSearchQuery,
     relatedPostSearch,
+    setRelatedPostSearch,
     getScopedPosts,
   } = useScraper()
   const { embeddingsEnabled } = useSettings()
@@ -164,13 +167,28 @@ export function usePostsFeed(): PostsFeed {
       .then((posts) => {
         if (!cancelled) setClientPosts(posts)
       })
+      .catch((error) => {
+        if (cancelled) return
+        // Preserve the old handleFilterPosts fallback: on a failed
+        // semantic/related search, toast and clear the search that triggered it.
+        const message = error instanceof Error ? error.message : "Search failed"
+        toast.error(`${message}. Falling back to normal view.`)
+        if (relatedPostSearch) setRelatedPostSearch(null)
+        else setSemanticSearchQuery("")
+      })
       .finally(() => {
         if (!cancelled) setClientLoading(false)
       })
     return () => {
       cancelled = true
     }
-  }, [semanticActive, getScopedPosts])
+  }, [
+    semanticActive,
+    getScopedPosts,
+    relatedPostSearch,
+    setRelatedPostSearch,
+    setSemanticSearchQuery,
+  ])
 
   if (semanticActive) {
     return {

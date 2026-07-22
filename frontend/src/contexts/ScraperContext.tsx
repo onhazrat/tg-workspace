@@ -68,25 +68,19 @@ interface ScraperContextType {
   >
   relatedPostSearch: Post | null
   setRelatedPostSearch: React.Dispatch<React.SetStateAction<Post | null>>
-  isFiltering: boolean
   scrapingChannels: Set<string>
   setScrapingChannels: React.Dispatch<React.SetStateAction<Set<string>>>
-  filteredPosts: Post[]
-  isInitialPostLoadPending: boolean
-  visiblePosts: number
-  setVisiblePosts: React.Dispatch<React.SetStateAction<number>>
+  /** Refresh the server-backed post views (feed / counts / Discover). */
   handleFilterPosts: () => Promise<void>
   /**
-   * Fetch the current scope's filtered posts on demand, returning the same set
-   * `filteredPosts` would hold for the same inputs — without writing state.
-   * Consumers that only need posts at action time (summary/chat/tag) should
-   * call this instead of reading the eagerly-populated `filteredPosts`.
+   * Fetch the current scope's filtered posts on demand — the set the Posts
+   * view holds for the same inputs — without writing state. Consumers that
+   * only need posts at action time (summary/chat/tag/pickers) call this.
    */
   getScopedPosts: (
     searchText?: string,
     semanticQuery?: string,
   ) => Promise<Post[]>
-  setFilteredPosts: React.Dispatch<React.SetStateAction<Post[]>>
   handleScrapeChannel: (
     channel: Channel,
     refresh?: boolean,
@@ -193,14 +187,9 @@ export const ScraperProvider: React.FC<{ children: React.ReactNode }> = ({
   const [semanticSearchRespectsChannels, setSemanticSearchRespectsChannels] =
     useState(false)
   const [relatedPostSearch, setRelatedPostSearch] = useState<Post | null>(null)
-  const [isFiltering, setIsFiltering] = useState(false)
   const [scrapingChannels, setScrapingChannels] = useState<Set<string>>(
     new Set(),
   )
-  const [filteredPosts, setFilteredPosts] = useState<Post[]>([])
-  const [isInitialPostLoadPending, setIsInitialPostLoadPending] =
-    useState<boolean>(true)
-  const [visiblePosts, setVisiblePosts] = useState(20)
   const [autoSyncPauseUntil, setAutoSyncPauseUntil] = useState<number | null>(
     null,
   )
@@ -361,65 +350,14 @@ export const ScraperProvider: React.FC<{ children: React.ReactNode }> = ({
     ],
   )
 
-  const handleFilterPosts = useCallback(
-    async (
-      searchText = debouncedPostSearch,
-      semanticQuery = debouncedSemanticSearchQuery,
-    ) => {
-      setIsFiltering(true)
-      try {
-        // Related-post and semantic branches fall back to the normal view on
-        // error (clearing the search that triggered them); the normal path
-        // lets errors propagate as before. The post selection itself lives in
-        // getScopedPosts so the eager and on-demand paths cannot drift.
-        if (embeddingsEnabled && relatedPostSearch) {
-          try {
-            const posts = await getScopedPosts(searchText, semanticQuery)
-            setFilteredPosts(posts)
-            setVisiblePosts(20)
-          } catch (error) {
-            console.error("Related post search failed:", error)
-            const message =
-              error instanceof Error
-                ? error.message
-                : "Related post search failed"
-            toast.error(`${message}. Falling back to normal view.`)
-            setRelatedPostSearch(null)
-          }
-          return
-        }
-
-        if (embeddingsEnabled && semanticQuery.trim()) {
-          try {
-            const posts = await getScopedPosts(searchText, semanticQuery)
-            setFilteredPosts(posts)
-            setVisiblePosts(20)
-          } catch (error) {
-            console.error("Semantic search failed:", error)
-            const message =
-              error instanceof Error ? error.message : "Semantic search failed"
-            toast.error(`${message}. Falling back to normal view.`)
-            setSemanticSearchQuery("")
-          }
-          return
-        }
-
-        const posts = await getScopedPosts(searchText, semanticQuery)
-        setFilteredPosts(posts)
-        setVisiblePosts(20)
-      } finally {
-        setIsFiltering(false)
-        setIsInitialPostLoadPending(false)
-      }
-    },
-    [
-      debouncedPostSearch,
-      debouncedSemanticSearchQuery,
-      getScopedPosts,
-      embeddingsEnabled,
-      relatedPostSearch,
-    ],
-  )
+  // Refresh the post views. The feed / counts / Discover are react-query
+  // backed and refetch on their own when the scope or filter state changes;
+  // callers that flip a filter and then "apply" it, and the post-sync paths,
+  // call this to force a fresh fetch. No eager array is populated any more —
+  // consumers read the server feed (usePostsFeed) or getScopedPosts on demand.
+  const handleFilterPosts = useCallback(async () => {
+    invalidatePostViews()
+  }, [invalidatePostViews])
 
   const applySyncJobStatus = useCallback(
     (status: SyncJobStatus) => {
@@ -653,10 +591,6 @@ export const ScraperProvider: React.FC<{ children: React.ReactNode }> = ({
     summarizing,
     1,
   )
-
-  useEffect(() => {
-    handleFilterPosts()
-  }, [handleFilterPosts])
 
   const scrapeChannelsInParallel = async (
     channelsToScrape: Channel[],
@@ -1070,16 +1004,10 @@ export const ScraperProvider: React.FC<{ children: React.ReactNode }> = ({
         setSemanticSearchRespectsChannels,
         relatedPostSearch,
         setRelatedPostSearch,
-        isFiltering,
         scrapingChannels,
         setScrapingChannels,
-        filteredPosts,
-        isInitialPostLoadPending,
-        visiblePosts,
-        setVisiblePosts,
         handleFilterPosts,
         getScopedPosts,
-        setFilteredPosts,
         handleScrapeChannel,
         handleScrapeAll,
         handleScrapeSelected,

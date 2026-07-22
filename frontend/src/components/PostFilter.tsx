@@ -3,7 +3,6 @@ import {
   Clock,
   Filter,
   ListOrdered,
-  Loader2,
   Search,
   Sparkles,
   X,
@@ -36,7 +35,6 @@ export const PostFilter: React.FC<PostFilterProps> = ({
     setSemanticSearchRespectsChannels,
     relatedPostSearch,
     setRelatedPostSearch,
-    isFiltering,
     forwardedFilter,
     setForwardedFilter,
     mediaFilter,
@@ -70,14 +68,10 @@ export const PostFilter: React.FC<PostFilterProps> = ({
         <div className="flex items-center justify-between px-5 py-4">
           <div className="flex items-center gap-4">
             <div className="w-10 h-10 rounded-full bg-purple-500/20 flex items-center justify-center shadow-[0_0_15px_rgba(168,85,247,0.2)]">
-              {isFiltering ? (
-                <Loader2 size={18} className="text-purple-500 animate-spin" />
-              ) : (
-                <Sparkles
-                  size={18}
-                  className="text-purple-500 drop-shadow-[0_0_8px_rgba(168,85,247,0.6)]"
-                />
-              )}
+              <Sparkles
+                size={18}
+                className="text-purple-500 drop-shadow-[0_0_8px_rgba(168,85,247,0.6)]"
+              />
             </div>
             <div>
               <h2 className="text-xs font-bold uppercase tracking-widest text-purple-600 dark:text-purple-400">
@@ -109,14 +103,10 @@ export const PostFilter: React.FC<PostFilterProps> = ({
           <div className="flex items-center justify-between px-5 py-4">
             <div className="flex items-center gap-4">
               <div className="w-10 h-10 rounded-full bg-blue-500/20 flex items-center justify-center shadow-[0_0_15px_rgba(59,130,246,0.2)]">
-                {isFiltering ? (
-                  <Loader2 size={18} className="text-blue-500 animate-spin" />
-                ) : (
-                  <Sparkles
-                    size={18}
-                    className="text-blue-500 drop-shadow-[0_0_8px_rgba(59,130,246,0.6)]"
-                  />
-                )}
+                <Sparkles
+                  size={18}
+                  className="text-blue-500 drop-shadow-[0_0_8px_rgba(59,130,246,0.6)]"
+                />
               </div>
               <div>
                 <h2 className="text-xs font-bold uppercase tracking-widest text-blue-600 dark:text-blue-400">
