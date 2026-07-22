@@ -1,4 +1,13 @@
 import type {
+  DiscoveryCandidate,
+  DiscoveryScopeCounts,
+} from "../lib/posts/discover-candidates"
+import type { MediaFilterValue } from "../lib/posts/post-media"
+import type {
+  ForwardedFilterValue,
+  MaxPostsPerChannelMode,
+} from "../lib/posts/post-view"
+import type {
   BotCredential,
   Channel,
   ChannelSettingGroup,
@@ -24,6 +33,41 @@ export type DiscoveredViaPayload = {
   postId: number
   timestamp: number
 }
+
+/**
+ * The Posts-tab view state that maps onto server-side filtering, shared by the
+ * Discover and counts endpoints. `maxPerChannel` is only sent for the `latest`
+ * cap mode — `random` is browser-only, so those callers omit it and fall back
+ * to the client computation.
+ */
+export type PostScopeQuery = {
+  channelNames?: string[]
+  startDate?: number
+  endDate?: number
+  keyword?: string
+  forwarded?: ForwardedFilterValue
+  media?: MediaFilterValue
+  maxPerChannel?: number
+}
+
+function postScopeParams(params: PostScopeQuery): URLSearchParams {
+  const qs = new URLSearchParams()
+  if (params.channelNames?.length)
+    qs.set("channelNames", params.channelNames.join(","))
+  if (params.startDate != null) qs.set("startDate", String(params.startDate))
+  if (params.endDate != null) qs.set("endDate", String(params.endDate))
+  if (params.keyword?.trim()) qs.set("keyword", params.keyword.trim())
+  if (params.forwarded && params.forwarded !== "all")
+    qs.set("forwarded", params.forwarded)
+  if (params.media && params.media !== "all") qs.set("media", params.media)
+  if (params.maxPerChannel != null && params.maxPerChannel > 0)
+    qs.set("maxPerChannel", String(params.maxPerChannel))
+  return qs
+}
+
+/** Cap modes whose per-channel selection can be reproduced server-side. */
+export const SERVER_REPRODUCIBLE_CAP_MODES: ReadonlySet<MaxPostsPerChannelMode> =
+  new Set<MaxPostsPerChannelMode>(["latest"])
 
 export type BulkFollowChannelInput = {
   name: string
@@ -171,6 +215,30 @@ export const dataApi = {
       method: "POST",
       body: JSON.stringify({ posts: refs }),
     }),
+
+  /**
+   * Server-side Discover aggregation. Mirrors `computeDiscoveryCandidates`'s
+   * output (minus the client-only `emptyReason`) over the same filtered scope:
+   * keyword / forwarded / media, then the `latest` per-channel cap. Callers
+   * keep the client path when a semantic query or a `random` cap is active —
+   * neither is reproducible server-side.
+   */
+  getDiscoverCandidates: (params: PostScopeQuery & { signals?: string[] }) => {
+    const qs = postScopeParams(params)
+    if (params.signals) qs.set("signals", params.signals.join(","))
+    return request<{
+      candidates: DiscoveryCandidate[]
+      scopeCounts: DiscoveryScopeCounts
+      /** Posts surviving the scope filters + cap; the client's `filteredPosts.length`. */
+      postsInScope: number
+    }>(`/api/v1/data/discover/candidates?${qs.toString()}`)
+  },
+
+  /** Per-channel post counts for a filtered scope (SQL GROUP BY). */
+  getPostsCounts: (params: PostScopeQuery) =>
+    request<Record<string, number>>(
+      `/api/v1/data/posts/counts?${postScopeParams(params).toString()}`,
+    ),
 
   getTranslation: (channelName: string, postId: number, language: string) => {
     const qs = new URLSearchParams({

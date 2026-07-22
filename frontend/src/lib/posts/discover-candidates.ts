@@ -78,6 +78,35 @@ export interface DiscoveryContext {
   semanticQuery?: string
 }
 
+/**
+ * The empty-state reason for a computed candidate set, from scope facts alone.
+ *
+ * Kept as a standalone function so the server-side Discover path (which has the
+ * same facts — enabled kinds, selected channels, posts-in-scope, candidate
+ * count — but not the post array) resolves the reason identically to
+ * `computeDiscoveryCandidates`. The precedence below must stay in lockstep with
+ * that function's early returns.
+ */
+export function deriveDiscoveryEmptyReason(facts: {
+  enabledKinds: ReadonlySet<DiscoverySignalKind>
+  selectedChannelCount: number
+  postsInScope: number
+  candidateCount: number
+  forwardedFilter: ForwardedFilterValue
+}): DiscoveryEmptyReason | undefined {
+  if (facts.enabledKinds.size === 0) return "no_signals_enabled"
+  if (facts.selectedChannelCount === 0) return "no_channels_selected"
+  if (facts.postsInScope === 0) return "no_posts_in_scope"
+  if (facts.candidateCount === 0) {
+    const forwardOnly =
+      facts.enabledKinds.size === 1 && facts.enabledKinds.has("forward")
+    return forwardOnly && facts.forwardedFilter === "original"
+      ? "original_only"
+      : "no_candidates"
+  }
+  return undefined
+}
+
 function emptyCounts(): SignalCounts {
   return { forward: 0, mention: 0, link: 0 }
 }

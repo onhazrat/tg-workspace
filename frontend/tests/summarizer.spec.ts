@@ -207,6 +207,62 @@ async function mockDiscoverForwardPosts(
     await route.fulfill({ json: posts })
   })
 
+  // Discover is computed server-side now, so mock its endpoint directly rather
+  // than relying on the client aggregating the mocked /posts. Built from the
+  // same fixture sources so the two stay consistent. Registered after the
+  // generic /posts route so it wins for this more specific path (Playwright
+  // evaluates handlers newest-first).
+  const emptyCounts = () => ({ forward: 0, mention: 0, link: 0 })
+  const sources: { name: string; isFollowed: boolean }[] = [
+    ...(fixture.followedSource
+      ? [{ name: fixture.followedSource, isFollowed: true }]
+      : []),
+    ...fixture.unfollowedSources.map((name) => ({ name, isFollowed: false })),
+  ]
+  const candidates = sources.map((source, index) => ({
+    name: source.name,
+    displayName: source.name,
+    counts: { forward: 1, mention: 0, link: 0 },
+    total: 1,
+    seenIn: [
+      {
+        channelName: fixture.carrierName,
+        counts: { forward: 1, mention: 0, link: 0 },
+        total: 1,
+      },
+    ],
+    seenInCount: 1,
+    lastSeen: now - index * 1000,
+    isFollowed: source.isFollowed,
+    samplePost: {
+      channelName: fixture.carrierName,
+      postId: 900_000_000 + index,
+      timestamp: now - index * 1000,
+    },
+  }))
+  const discoverResponse = {
+    candidates,
+    scopeCounts: {
+      ...emptyCounts(),
+      forwardPosts: sources.length,
+      mentionPosts: 0,
+      linkPosts: 0,
+    },
+    // Posts surviving the scope filters: forwards plus any original posts.
+    postsInScope: sources.length + (fixture.originalPostCount ?? 0),
+  }
+
+  await page.route("**/api/v1/data/discover/candidates**", async (route) => {
+    await route.fulfill({ json: discoverResponse })
+  })
+
+  await page.route("**/api/v1/data/posts/counts**", async (route) => {
+    // Per-channel scope counts; the carrier is the only channel in scope here.
+    await route.fulfill({
+      json: { [fixture.carrierName]: posts.length },
+    })
+  })
+
   await page.evaluate((ts) => {
     localStorage.removeItem("sync_etag_posts")
     localStorage.setItem("startDateTs", String(ts - 14 * 24 * 60 * 60 * 1000))

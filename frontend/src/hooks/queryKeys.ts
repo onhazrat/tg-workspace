@@ -12,6 +12,9 @@ export const queryKeys = {
   torStatus: ["torStatus"] as const,
   tagRuns: ["tagRuns"] as const,
   tagRun: (id: string) => ["tagRun", id] as const,
+  discoverCandidates: (scope: unknown) =>
+    ["discoverCandidates", scope] as const,
+  postsCounts: (scope: unknown) => ["postsCounts", scope] as const,
   logs: {
     publish: ["logs", "publish"] as const,
     sync: ["logs", "sync"] as const,
