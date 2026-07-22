@@ -1,7 +1,12 @@
 # Architecture remediation: move work from the browser back to the backend
 
 **Date:** 2026-07-21
-**Status:** Plan approved, **not started**. No code has been changed.
+**Status:** ✅ **COMPLETE (2026-07-22).** All six phases shipped and merged to `main`;
+every box in §12 re-verified by running it. T4.3 is the one task deliberately **not**
+implemented — it was closed by measurement instead (see §T4.3 and the first item of §12).
+The plan text below is kept as written for the historical record: it describes the
+problems in the present tense as they were *before* the work, so read §12 for the
+current state.
 
 > This document is written to be executed by independent agents who have
 > **no context except this file**. Everything needed — commands, conventions,
@@ -610,16 +615,64 @@ pgvector for RAG; a shared paginated-list helper so the logs pattern stops being
 
 ## 12. Global acceptance criteria
 
-- [ ] No `GET` endpoint returns unbounded rows except the deliberately-streamed
-      `GET /data/export`.
-- [ ] `grep -rn "\.all()" backend/app/services/` — every remaining hit is justified
-      (bounded by construction, or genuinely small config table). Document exceptions.
-- [ ] No frontend timer fires without a user on the relevant view.
-- [ ] Concurrent identical fetches produce one request (T3.1 test proves it).
-- [ ] Discover, per-channel counts, and prompt assembly all computed server-side.
-- [ ] `cd backend && uv run pytest tests/ -q` — green.
-- [ ] `cd frontend && bun test src && bunx tsc -p tsconfig.build.json --noEmit && bun run lint && bun run test:tg-ui` — green.
-- [ ] `cd frontend && bunx playwright test tests/summarizer.spec.ts` — green.
+Audited 2026-07-22 against the merged `main` (through PR #12). Every box below was
+re-verified by actually running the command or reading the code, not inferred from
+commit messages.
+
+- [x] No `GET` endpoint returns unbounded rows except the deliberately-streamed
+      `GET /data/export`. **Two documented exceptions** beyond the export path — both
+      fixed-size, neither growing with post volume:
+      - `GET /data/channels` — the whole channel table. **T4.3 was closed by
+        measurement, not by paging**: 780 channels ≈ 135 kB, client-cached. See §T4.3.
+      - Small config tables that are bounded by what an operator can create:
+        `GET /data/sync-meta`, `/data/setting-groups`, `/data/bot-credentials`,
+        `/data/chat-destinations`.
+
+      Everything whose row count tracks post volume is paginated: `/data/posts`,
+      `/data/posts/counts` (SQL `GROUP BY` — one row per selected channel),
+      `/data/summaries`, `/data/tag-runs`, `/data/translations`, and all five
+      `*-logs` endpoints.
+- [x] `grep -rn "\.all()" backend/app/services/` — 35 hits, all justified. Breakdown:
+      - **`LIMIT`/`OFFSET`-bounded:** `posts.py` (`list_feed`, both branches),
+        `summaries.py`, `tag_runs.py`, `data_vectors.py`, `logs.py` (`_page`),
+        `embeddings.py` (`_posts_without_embeddings_stmt(limit)`),
+        `sync_orchestrator.py:742` (`LIMIT 20`), `:779` (`LIMIT 100`),
+        `channels.py:143` (`ROW_NUMBER` ≤ limit).
+      - **Bounded by the caller's input list:** `posts.py::lookup_posts`
+        (`MAX_POST_LOOKUP_BATCH`), `post_sync_state.py:28` and
+        `sync_orchestrator.py:176` (both `IN (:post_ids)`).
+      - **One row per selected channel (`GROUP BY`):** `posts.py:275`,
+        `channels.py:114`.
+      - **Channel table (~780 rows, the T4.3 exception above):** `channels.py:229`,
+        `discover.py:156`, `posts.py:180`, `posts.py:270`, `operator.py:50,74,94`,
+        `sync_orchestrator.py:670`, `data_import_export.py:350`.
+      - **Small config tables:** `credentials.py`, `channel_setting_groups.py`,
+        `sync_meta.py`.
+      - **Bounded by a flag, not by table size:** `channels.py:44` (anchor posts for
+        one channel, `WHERE is_anchor = true`).
+- [x] No frontend timer fires without a user on the relevant view. Surviving
+      `setInterval` call sites and why each is justified:
+      - `ProxyPanel` (10s), `TorPanel` (10s), `SyncSection` (15s) — mount only while
+        their settings panel is open.
+      - `RAGContext` (`env.ragStatusPollMs`) — gated on `embeddingsEnabled`.
+      - `useCachePrune` (6h) — deliberate background retention sweep (T6.1).
+      - `lib/shared-ticker.ts` (T6.2) — one module-level interval that starts on the
+        first `RelativeTime` subscriber and stops when the last one unmounts, so a
+        500-post feed schedules one timer instead of 500.
+      - `App.tsx:127` (30s auto-sync-pause poll) — app shell, so the "relevant view"
+        is always mounted; gated on `!isOffline`. This is the one timer that is
+        global by design.
+- [x] Concurrent identical fetches produce one request — proven by three tests in
+      `frontend/src/lib/repository.test.ts`: two concurrent callers, many concurrent
+      callers, and a shared rejection that does not poison the in-flight key.
+- [x] Discover, per-channel counts, and prompt assembly all computed server-side
+      (T4.1 + T4.2 in PR #10/#11, T5.1 in PR #12).
+- [x] `cd backend && uv run pytest tests/ -q` — green: **500 passed, 1 skipped**.
+- [x] `cd frontend && bun test src && bunx tsc -p tsconfig.build.json --noEmit && bun run lint && bun run test:tg-ui` — green: **472 unit tests**, tsc clean, biome clean, tg-ui checks pass.
+- [x] `cd frontend && bunx playwright test tests/summarizer.spec.ts` — green: **51/51**,
+      run against a `:8000` backend rebuilt from this branch (see
+      `docs/e2e-playwright-guide.md` §4 — the default container is the main
+      checkout's image and will 404 on endpoints this work added).
 - [x] **Staging re-measurement** (2026-07-22): re-ran on staging against the
       deployed fix. Peak single-worker RSS **0.89 GB** (was 3.09 GB), **zero**
       long idle-in-transaction connections, on a table that has since grown to
