@@ -1,6 +1,7 @@
 import { motion } from "motion/react"
 import type React from "react"
 import { useMemo, useState } from "react"
+import { SERVER_REPRODUCIBLE_CAP_MODES } from "@/api/data"
 import { DiscoverBulkBar } from "@/components/discover/DiscoverBulkBar"
 import { DiscoverCandidateTable } from "@/components/discover/DiscoverCandidateTable"
 import { DiscoverEmptyState } from "@/components/discover/DiscoverEmptyState"
@@ -9,12 +10,16 @@ import { DiscoverScopeCard } from "@/components/discover/DiscoverScopeCard"
 import { DiscoverSortChips } from "@/components/discover/DiscoverSortChips"
 import { useDiscoverFollowJob } from "@/components/discover/useDiscoverFollowJob"
 import { TgConfirmDialog } from "@/components/ui/tg-confirm-dialog"
+import { useDebouncedValue } from "@/hooks/useDebouncedValue"
+import { useDiscoverCandidatesQuery } from "@/hooks/useDiscover"
 import {
   computeDiscoveryCandidates,
   countUnfollowedCandidates,
   DISCOVERY_SIGNAL_KINDS,
   type DiscoveryEmptyReason,
+  type DiscoveryScopeCounts,
   type DiscoverySignalKind,
+  deriveDiscoveryEmptyReason,
   filterDiscoveryCandidates,
   sortDiscoveryCandidates,
 } from "@/lib/posts/discover-candidates"
@@ -28,6 +33,12 @@ import { useSettings } from "../contexts/SettingsContext"
 import { useUI } from "../contexts/UIContext"
 import { useApiStatus } from "../hooks/useApiStatus"
 
+const EMPTY_SCOPE_COUNTS: DiscoveryScopeCounts = {
+  forwardPosts: 0,
+  mentionPosts: 0,
+  linkPosts: 0,
+}
+
 export const DiscoverView: React.FC = () => {
   const { channels, selectedChannels } = useData()
   const {
@@ -39,6 +50,8 @@ export const DiscoverView: React.FC = () => {
     followDiscoverChannels,
     setPostSearch,
     maxPostsPerChannel,
+    maxPostsPerChannelMode,
+    mediaFilter,
   } = useScraper()
   const { setActiveTab, startDate, endDate } = useUI()
   const { isOffline } = useApiStatus()
@@ -61,19 +74,62 @@ export const DiscoverView: React.FC = () => {
     [discoverSignals],
   )
 
-  const {
-    candidates: rawCandidates,
-    scopeCounts,
-    emptyReason: computeEmptyReason,
-  } = useMemo(
-    () =>
-      computeDiscoveryCandidates(filteredPosts, channels, {
-        forwardedFilter,
-        selectedChannelCount: selectedChannels.size,
-        enabledKinds,
-        semanticQuery: semanticSearchQuery,
-      }),
+  // The server reproduces Discover for the ordinary case. The client path
+  // stays for the two scopes the server cannot reproduce: an active semantic
+  // (vector) query, and the per-channel cap's browser-seeded `random` mode.
+  const serverEligible =
+    !semanticSearchQuery.trim() &&
+    (maxPostsPerChannel <= 0 ||
+      SERVER_REPRODUCIBLE_CAP_MODES.has(maxPostsPerChannelMode))
+
+  const debouncedPostSearch = useDebouncedValue(postSearch, 300)
+  const selectedChannelNames = useMemo(
+    () => [...selectedChannels].sort(),
+    [selectedChannels],
+  )
+
+  const serverParams = useMemo(
+    () => ({
+      channelNames: selectedChannelNames,
+      startDate,
+      endDate,
+      signals: discoverSignals,
+      keyword: debouncedPostSearch,
+      forwarded: forwardedFilter,
+      media: mediaFilter,
+      maxPerChannel: maxPostsPerChannel,
+    }),
     [
+      selectedChannelNames,
+      startDate,
+      endDate,
+      discoverSignals,
+      debouncedPostSearch,
+      forwardedFilter,
+      mediaFilter,
+      maxPostsPerChannel,
+    ],
+  )
+
+  const serverQueryEnabled =
+    serverEligible && selectedChannels.size > 0 && enabledKinds.size > 0
+  const serverQuery = useDiscoverCandidatesQuery(
+    serverParams,
+    serverQueryEnabled,
+  )
+
+  const clientResult = useMemo(
+    () =>
+      serverEligible
+        ? null
+        : computeDiscoveryCandidates(filteredPosts, channels, {
+            forwardedFilter,
+            selectedChannelCount: selectedChannels.size,
+            enabledKinds,
+            semanticQuery: semanticSearchQuery,
+          }),
+    [
+      serverEligible,
       filteredPosts,
       channels,
       forwardedFilter,
@@ -82,6 +138,42 @@ export const DiscoverView: React.FC = () => {
       semanticSearchQuery,
     ],
   )
+
+  const {
+    candidates: rawCandidates,
+    scopeCounts,
+    emptyReason: computeEmptyReason,
+  } = useMemo(() => {
+    if (clientResult) return clientResult
+
+    const data = serverQuery.data
+    const serverCandidates = data?.candidates ?? []
+    // While the first server page is loading, withhold the empty reason so the
+    // guide does not flash before candidates arrive.
+    const settled =
+      !serverQueryEnabled || !serverQuery.isLoading || data != null
+    return {
+      candidates: serverCandidates,
+      scopeCounts: data?.scopeCounts ?? EMPTY_SCOPE_COUNTS,
+      emptyReason: settled
+        ? deriveDiscoveryEmptyReason({
+            enabledKinds,
+            selectedChannelCount: selectedChannels.size,
+            postsInScope: data?.postsInScope ?? 0,
+            candidateCount: serverCandidates.length,
+            forwardedFilter,
+          })
+        : undefined,
+    }
+  }, [
+    clientResult,
+    serverQuery.data,
+    serverQuery.isLoading,
+    serverQueryEnabled,
+    enabledKinds,
+    selectedChannels.size,
+    forwardedFilter,
+  ])
 
   const candidates = useMemo(() => {
     const filtered = filterDiscoveryCandidates(rawCandidates, {
