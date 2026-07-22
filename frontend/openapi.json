@@ -5013,6 +5013,12 @@
             "title": "Poststext",
             "default": ""
           },
+          "scope": {
+            "anyOf": [
+              { "$ref": "#/components/schemas/PromptScopeInput" },
+              { "type": "null" }
+            ]
+          },
           "language": {
             "type": "string",
             "title": "Language",
@@ -5437,6 +5443,43 @@
         "title": "PostLookupRequest",
         "description": "Batch of `(channelName, postId)` refs to resolve.\n\nCapped so this cannot become another way to ask for unbounded rows."
       },
+      "PromptScopeInput": {
+        "properties": {
+          "startDate": {
+            "anyOf": [{ "type": "integer" }, { "type": "null" }],
+            "title": "Startdate"
+          },
+          "endDate": {
+            "anyOf": [{ "type": "integer" }, { "type": "null" }],
+            "title": "Enddate"
+          },
+          "keyword": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Keyword"
+          },
+          "forwarded": {
+            "type": "string",
+            "title": "Forwarded",
+            "default": "all"
+          },
+          "media": { "type": "string", "title": "Media", "default": "all" },
+          "maxPerChannel": {
+            "type": "integer",
+            "title": "Maxperchannel",
+            "default": 0
+          },
+          "maxPerChannelMode": {
+            "type": "string",
+            "title": "Maxperchannelmode",
+            "default": "latest"
+          },
+          "sort": { "type": "string", "title": "Sort", "default": "time" },
+          "seed": { "type": "integer", "title": "Seed", "default": 0 }
+        },
+        "type": "object",
+        "title": "PromptScopeInput",
+        "description": "A Posts-feed scope the backend resolves into the prompt's posts block,\ninstead of the client shipping a pre-built ``postsText``. Mirrors the\nfrontend feed query params."
+      },
       "ProxyLaneSnapshot": {
         "properties": {
           "proxyUrl": { "type": "string", "title": "Proxyurl" },
@@ -5822,7 +5865,17 @@
             "title": "Channelstext",
             "default": ""
           },
-          "postsText": { "type": "string", "title": "Poststext" },
+          "postsText": {
+            "type": "string",
+            "title": "Poststext",
+            "default": ""
+          },
+          "scope": {
+            "anyOf": [
+              { "$ref": "#/components/schemas/PromptScopeInput" },
+              { "type": "null" }
+            ]
+          },
           "language": {
             "type": "string",
             "title": "Language",
@@ -5844,7 +5897,7 @@
           }
         },
         "type": "object",
-        "required": ["channels", "postsText"],
+        "required": ["channels"],
         "title": "SummaryRequest"
       },
       "SyncJobStatusResponse": {
@@ -5931,7 +5984,17 @@
             "title": "Channelstext",
             "default": ""
           },
-          "postsText": { "type": "string", "title": "Poststext" },
+          "postsText": {
+            "type": "string",
+            "title": "Poststext",
+            "default": ""
+          },
+          "scope": {
+            "anyOf": [
+              { "$ref": "#/components/schemas/PromptScopeInput" },
+              { "type": "null" }
+            ]
+          },
           "allTags": {
             "type": "string",
             "title": "Alltags",
@@ -5962,7 +6025,7 @@
           }
         },
         "type": "object",
-        "required": ["channels", "postsText"],
+        "required": ["channels"],
         "title": "TagRequest"
       },
       "TestProxyRequest": {

@@ -686,6 +686,16 @@ export const ChatRequestSchema = {
             title: 'Poststext',
             default: ''
         },
+        scope: {
+            anyOf: [
+                {
+                    '$ref': '#/components/schemas/PromptScopeInput'
+                },
+                {
+                    type: 'null'
+                }
+            ]
+        },
         language: {
             type: 'string',
             title: 'Language',
@@ -1268,6 +1278,79 @@ export const PostLookupRequestSchema = {
     description: `Batch of \`(channelName, postId)\` refs to resolve.
 
 Capped so this cannot become another way to ask for unbounded rows.`
+} as const;
+
+export const PromptScopeInputSchema = {
+    properties: {
+        startDate: {
+            anyOf: [
+                {
+                    type: 'integer'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Startdate'
+        },
+        endDate: {
+            anyOf: [
+                {
+                    type: 'integer'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Enddate'
+        },
+        keyword: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Keyword'
+        },
+        forwarded: {
+            type: 'string',
+            title: 'Forwarded',
+            default: 'all'
+        },
+        media: {
+            type: 'string',
+            title: 'Media',
+            default: 'all'
+        },
+        maxPerChannel: {
+            type: 'integer',
+            title: 'Maxperchannel',
+            default: 0
+        },
+        maxPerChannelMode: {
+            type: 'string',
+            title: 'Maxperchannelmode',
+            default: 'latest'
+        },
+        sort: {
+            type: 'string',
+            title: 'Sort',
+            default: 'time'
+        },
+        seed: {
+            type: 'integer',
+            title: 'Seed',
+            default: 0
+        }
+    },
+    type: 'object',
+    title: 'PromptScopeInput',
+    description: `A Posts-feed scope the backend resolves into the prompt's posts block,
+instead of the client shipping a pre-built \`\`postsText\`\`. Mirrors the
+frontend feed query params.`
 } as const;
 
 export const ProxyLaneSnapshotSchema = {
@@ -1901,7 +1984,18 @@ export const SummaryRequestSchema = {
         },
         postsText: {
             type: 'string',
-            title: 'Poststext'
+            title: 'Poststext',
+            default: ''
+        },
+        scope: {
+            anyOf: [
+                {
+                    '$ref': '#/components/schemas/PromptScopeInput'
+                },
+                {
+                    type: 'null'
+                }
+            ]
         },
         language: {
             type: 'string',
@@ -1931,7 +2025,7 @@ export const SummaryRequestSchema = {
         }
     },
     type: 'object',
-    required: ['channels', 'postsText'],
+    required: ['channels'],
     title: 'SummaryRequest'
 } as const;
 
@@ -2064,7 +2158,18 @@ export const TagRequestSchema = {
         },
         postsText: {
             type: 'string',
-            title: 'Poststext'
+            title: 'Poststext',
+            default: ''
+        },
+        scope: {
+            anyOf: [
+                {
+                    '$ref': '#/components/schemas/PromptScopeInput'
+                },
+                {
+                    type: 'null'
+                }
+            ]
         },
         allTags: {
             type: 'string',
@@ -2121,7 +2226,7 @@ export const TagRequestSchema = {
         }
     },
     type: 'object',
-    required: ['channels', 'postsText'],
+    required: ['channels'],
     title: 'TagRequest'
 } as const;
 

@@ -1,4 +1,5 @@
 import { request, sseTextStream } from "./base"
+import type { PromptScope } from "./data"
 
 export const aiApi = {
   listModels: () =>
@@ -14,6 +15,7 @@ export const aiApi = {
     language: string
     model?: string
     temperature?: number
+    scope?: PromptScope
   }) =>
     request<{ prompt: string }>("/api/v1/ai/summary/prompt", {
       method: "POST",
@@ -32,6 +34,7 @@ export const aiApi = {
     language: string
     model?: string
     temperature?: number
+    scope?: PromptScope
   }) =>
     request<{ prompt: string }>("/api/v1/ai/tag/prompt", {
       method: "POST",

@@ -535,6 +535,14 @@ searched/filtered in JS **in two independent places**:
 channel list stays small, server-side tag-chip counts (a SQL aggregate) may be the only part
 worth doing. **Measure before rewriting both UI surfaces**, and say what you measured.
 
+**✅ CLOSED BY MEASUREMENT (2026-07-22).** Measured on the live DB: **780 channels,
+~135 kB** of row data (≈250–400 kB as JSON). `GET /data/channels` is fetched **once
+per session** and etag-cached, then searched/filtered in JS. At this size the full
+server-side rewrite (new params + consolidating two UI surfaces) is churn for no
+meaningful payoff — decided (with the user) to **skip** it and revisit only if the
+channel list grows large. `GET /data/channels` stays the documented bounded-exception
+in `docs/unbounded-query-audit.md`.
+
 ### 🚦 Phase 4 gate
 Full backend + frontend suites, plus the Discover parity check, plus
 `bunx playwright test tests/summarizer.spec.ts`.

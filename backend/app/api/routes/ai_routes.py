@@ -4,22 +4,62 @@ from typing import Any
 
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
+from sqlmodel import Session
 
 from app.ai.models import (
     ChatRequest,
     EmbedRequest,
+    PromptScopeInput,
     SummaryRequest,
     TagRequest,
     TranslateRequest,
 )
 from app.ai.registry import default_model, get_provider, list_all_models
-from app.api.deps import CurrentUser
+from app.api.deps import CurrentUser, SessionDep
 from app.core.config import settings
 from app.prompts.summary import format_summary_prompt, rtl_instruction
 from app.prompts.tagging import format_tag_prompt
 from app.prompts.templates import CHAT_PROMPT, RAG_CHAT_PROMPT
+from app.services.prompt_assembly import (
+    PromptScope,
+    assemble_posts_text,
+    assemble_tag_posts_text,
+)
 
 router = APIRouter(prefix="/ai", tags=["ai"])
+
+
+def _resolve_posts_text(
+    session: Session,
+    *,
+    channels: list[str],
+    posts_text: str,
+    scope: PromptScopeInput | None,
+    tag_format: bool = False,
+) -> str:
+    """Prompt posts block: an explicit client-built ``postsText`` wins (the
+    semantic/related path and background regeneration, which the server cannot
+    reproduce); otherwise the backend resolves the scope itself. Tag prompts use
+    the channel-grouped chronological format, summary/chat the flat one."""
+    if posts_text:
+        return posts_text
+    if scope is None:
+        return ""
+    prompt_scope = PromptScope(
+        channels=channels,
+        start_date=scope.start_date,
+        end_date=scope.end_date,
+        keyword=scope.keyword,
+        forwarded=scope.forwarded,
+        media=scope.media,
+        max_per_channel=scope.max_per_channel,
+        max_per_channel_mode=scope.max_per_channel_mode,
+        sort=scope.sort,
+        seed=scope.seed,
+    )
+    if tag_format:
+        return assemble_tag_posts_text(session, prompt_scope)
+    return assemble_posts_text(session, prompt_scope)
 
 
 @router.get("/models")
@@ -29,7 +69,7 @@ def api_list_models(_current_user: CurrentUser) -> dict[str, Any]:
 
 @router.post("/summary")
 async def api_summary(
-    body: SummaryRequest, _current_user: CurrentUser
+    body: SummaryRequest, session: SessionDep, _current_user: CurrentUser
 ) -> dict[str, Any]:
     if not settings.GEMINI_API_KEY:
         raise HTTPException(status_code=503, detail="GEMINI_API_KEY not configured")
@@ -39,7 +79,12 @@ async def api_summary(
         channels=body.channels,
         channels_text=body.channels_text,
         language=body.language,
-        posts_text=body.posts_text,
+        posts_text=_resolve_posts_text(
+            session,
+            channels=body.channels,
+            posts_text=body.posts_text,
+            scope=body.scope,
+        ),
     )
     result = await provider.complete(prompt, model=model, temperature=body.temperature)
     return result.model_dump()
@@ -47,20 +92,25 @@ async def api_summary(
 
 @router.post("/summary/prompt")
 def api_summary_prompt(
-    body: SummaryRequest, _current_user: CurrentUser
+    body: SummaryRequest, session: SessionDep, _current_user: CurrentUser
 ) -> dict[str, Any]:
     prompt = format_summary_prompt(
         channels=body.channels,
         channels_text=body.channels_text,
         language=body.language,
-        posts_text=body.posts_text,
+        posts_text=_resolve_posts_text(
+            session,
+            channels=body.channels,
+            posts_text=body.posts_text,
+            scope=body.scope,
+        ),
     )
     return {"prompt": prompt}
 
 
 @router.post("/summary/stream")
 async def api_summary_stream(
-    body: SummaryRequest, _current_user: CurrentUser
+    body: SummaryRequest, session: SessionDep, _current_user: CurrentUser
 ) -> StreamingResponse:
     if not settings.GEMINI_API_KEY:
         raise HTTPException(status_code=503, detail="GEMINI_API_KEY not configured")
@@ -70,7 +120,12 @@ async def api_summary_stream(
         channels=body.channels,
         channels_text=body.channels_text,
         language=body.language,
-        posts_text=body.posts_text,
+        posts_text=_resolve_posts_text(
+            session,
+            channels=body.channels,
+            posts_text=body.posts_text,
+            scope=body.scope,
+        ),
     )
 
     async def event_stream() -> AsyncIterator[str]:
@@ -85,7 +140,7 @@ async def api_summary_stream(
 
 @router.post("/chat/stream")
 async def api_chat_stream(
-    body: ChatRequest, _current_user: CurrentUser
+    body: ChatRequest, session: SessionDep, _current_user: CurrentUser
 ) -> StreamingResponse:
     if not settings.GEMINI_API_KEY:
         raise HTTPException(status_code=503, detail="GEMINI_API_KEY not configured")
@@ -96,7 +151,12 @@ async def api_chat_stream(
         channels=(body.channels_text or "").strip() or ", ".join(body.channels),
         language=body.language,
         rtl_instruction=rtl_instruction(body.language),
-        posts_text=body.posts_text,
+        posts_text=_resolve_posts_text(
+            session,
+            channels=body.channels,
+            posts_text=body.posts_text,
+            scope=body.scope,
+        ),
     )
 
     async def event_stream() -> AsyncIterator[str]:
@@ -114,11 +174,19 @@ async def api_chat_stream(
 
 
 @router.post("/tag/prompt")
-def api_tag_prompt(body: TagRequest, _current_user: CurrentUser) -> dict[str, str]:
+def api_tag_prompt(
+    body: TagRequest, session: SessionDep, _current_user: CurrentUser
+) -> dict[str, str]:
     prompt = format_tag_prompt(
         channels=body.channels,
         channels_text=body.channels_text,
-        posts_text=body.posts_text,
+        posts_text=_resolve_posts_text(
+            session,
+            channels=body.channels,
+            posts_text=body.posts_text,
+            scope=body.scope,
+            tag_format=True,
+        ),
         all_tags=body.all_tags,
         tag_mode=body.tag_mode,
         tags_per_channel_min=body.tags_per_channel_min,
@@ -129,7 +197,7 @@ def api_tag_prompt(body: TagRequest, _current_user: CurrentUser) -> dict[str, st
 
 @router.post("/tag/stream")
 async def api_tag_stream(
-    body: TagRequest, _current_user: CurrentUser
+    body: TagRequest, session: SessionDep, _current_user: CurrentUser
 ) -> StreamingResponse:
     if not settings.GEMINI_API_KEY:
         raise HTTPException(status_code=503, detail="GEMINI_API_KEY not configured")
@@ -138,7 +206,13 @@ async def api_tag_stream(
     prompt = format_tag_prompt(
         channels=body.channels,
         channels_text=body.channels_text,
-        posts_text=body.posts_text,
+        posts_text=_resolve_posts_text(
+            session,
+            channels=body.channels,
+            posts_text=body.posts_text,
+            scope=body.scope,
+            tag_format=True,
+        ),
         all_tags=body.all_tags,
         tag_mode=body.tag_mode,
         tags_per_channel_min=body.tags_per_channel_min,

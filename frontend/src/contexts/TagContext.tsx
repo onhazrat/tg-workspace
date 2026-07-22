@@ -9,6 +9,7 @@ import {
   useState,
 } from "react"
 import { toast } from "sonner"
+import { api } from "@/api"
 import { queryKeys, SUMMARIZER_STALE_TIME } from "@/hooks/queryKeys"
 import {
   applyTagSuggestions,
@@ -67,7 +68,7 @@ export const TagProvider: React.FC<{ children: React.ReactNode }> = ({
   children,
 }) => {
   const { channels, selectedChannels, setChannels } = useData()
-  const { getScopedPosts } = useScraper()
+  const { getPromptPostsInput } = useScraper()
   const { aiLanguage, selectedModel, aiTemperature } = useSettings()
   const {
     activeTab,
@@ -147,12 +148,32 @@ export const TagProvider: React.FC<{ children: React.ReactNode }> = ({
       includeBio: includeChannelBioInPrompt,
       includeTags: includeChannelTagsInPrompt,
     })
-    // Fetch the scoped posts on demand at tag time — the same set the Posts
-    // view holds for the current selection/filters.
-    const posts = await getScopedPosts()
-    const postsText = formatPostsForTagPrompt(posts, selectedChannels)
     const allTags = formatAllTagsForPrompt(channels)
-    return { channelsText, postsText, allTags, postCount: posts.length }
+    // Server-eligible → send the scope (backend assembles the tag posts block);
+    // semantic/related → client-built postsText with the tag formatter.
+    const input = await getPromptPostsInput()
+    if (input.scope) {
+      const counts = await api.getPostsCounts({
+        channelNames: selectedChannelNames,
+        ...input.scope,
+      })
+      const postCount = Object.values(counts).reduce((sum, n) => sum + n, 0)
+      return {
+        channelsText,
+        postsText: "",
+        allTags,
+        postCount,
+        scope: input.scope,
+      }
+    }
+    const postsText = formatPostsForTagPrompt(input.posts, selectedChannels)
+    return {
+      channelsText,
+      postsText,
+      allTags,
+      postCount: input.posts.length,
+      scope: undefined,
+    }
   }
 
   const copyTagPrompt = async () => {
@@ -160,7 +181,7 @@ export const TagProvider: React.FC<{ children: React.ReactNode }> = ({
       toast.error("Select at least one channel first.")
       return
     }
-    const { channelsText, postsText, allTags, postCount } =
+    const { channelsText, postsText, allTags, postCount, scope } =
       await buildPromptParts()
     const prompt = await getTagPrompt({
       channels: selectedChannelNames,
@@ -171,6 +192,7 @@ export const TagProvider: React.FC<{ children: React.ReactNode }> = ({
       language: aiLanguage,
       model: selectedModel,
       temperature: aiTemperature,
+      scope,
     })
     const run: TagRun = {
       id: crypto.randomUUID(),
@@ -203,7 +225,7 @@ export const TagProvider: React.FC<{ children: React.ReactNode }> = ({
       toast.error("Select at least one channel first.")
       return
     }
-    const { channelsText, postsText, allTags, postCount } =
+    const { channelsText, postsText, allTags, postCount, scope } =
       await buildPromptParts()
     setIsGenerating(true)
     try {
@@ -217,6 +239,7 @@ export const TagProvider: React.FC<{ children: React.ReactNode }> = ({
         language: aiLanguage,
         model: selectedModel,
         temperature: aiTemperature,
+        scope,
       })
 
       for await (const chunk of stream) {

@@ -1,4 +1,5 @@
 import { api } from "@/api"
+import type { PromptScope } from "@/api/data"
 import { saveEmbeddingLog } from "../lib/repository"
 import type { EmbeddingLog } from "../types"
 
@@ -38,6 +39,7 @@ export const getSummaryPrompt = async (
   language: string,
   model: string,
   temperature: number = 0.7,
+  scope?: PromptScope,
 ): Promise<string> => {
   const result = await api.summaryPrompt({
     channels,
@@ -46,6 +48,7 @@ export const getSummaryPrompt = async (
     language,
     model,
     temperature,
+    scope,
   })
   return result.prompt
 }
@@ -57,6 +60,7 @@ export const generateSummaryStream = async (
   language: string,
   model: string,
   temperature: number = 0.7,
+  scope?: PromptScope,
 ): Promise<LLMStreamResult> => {
   const prompt = `channels=${channels.join(",")}`
   try {
@@ -67,6 +71,7 @@ export const generateSummaryStream = async (
       language,
       model,
       temperature,
+      scope,
     })
     return { stream: wrapStream(stream), prompt, config: { temperature } }
   } catch (error: unknown) {
@@ -154,6 +159,7 @@ export const generateChatStream = async (
   history: { role: "user" | "model"; text: string }[],
   userMessage: string,
   temperature: number = 0.7,
+  scope?: PromptScope,
 ): Promise<LLMStreamResult> => {
   try {
     const stream = api.chatStream({
@@ -166,6 +172,7 @@ export const generateChatStream = async (
       message: userMessage,
       temperature,
       ragMode: false,
+      scope,
     })
     return {
       stream: wrapStream(stream),
@@ -243,6 +250,7 @@ export const getTagPrompt = async (body: {
   language: string
   model: string
   temperature?: number
+  scope?: PromptScope
 }): Promise<string> => {
   const result = await api.tagPrompt(body)
   return result.prompt
@@ -257,6 +265,7 @@ export const generateTagStream = async (body: {
   language: string
   model: string
   temperature?: number
+  scope?: PromptScope
 }): Promise<LLMStreamResult> => {
   try {
     const stream = api.tagStream(body)

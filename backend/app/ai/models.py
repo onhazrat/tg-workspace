@@ -6,6 +6,24 @@ class ChatMessage(BaseModel):
     text: str
 
 
+class PromptScopeInput(BaseModel):
+    """A Posts-feed scope the backend resolves into the prompt's posts block,
+    instead of the client shipping a pre-built ``postsText``. Mirrors the
+    frontend feed query params."""
+
+    start_date: int | None = Field(None, alias="startDate")
+    end_date: int | None = Field(None, alias="endDate")
+    keyword: str | None = None
+    forwarded: str = "all"
+    media: str = "all"
+    max_per_channel: int = Field(0, alias="maxPerChannel")
+    max_per_channel_mode: str = Field("latest", alias="maxPerChannelMode")
+    sort: str = "time"
+    seed: int = 0
+
+    model_config = {"populate_by_name": True}
+
+
 class ModelInfo(BaseModel):
     id: str
     label: str
@@ -29,7 +47,11 @@ class EmbeddingResult(BaseModel):
 class SummaryRequest(BaseModel):
     channels: list[str]
     channels_text: str = Field("", alias="channelsText")
-    posts_text: str = Field(..., alias="postsText")
+    # Either the client ships a pre-built postsText (the semantic/related path
+    # and generateBackgroundSummary, which the server cannot reproduce), or it
+    # sends a `scope` the backend resolves + assembles itself.
+    posts_text: str = Field("", alias="postsText")
+    scope: PromptScopeInput | None = None
     language: str = "English"
     model: str | None = None
     temperature: float = 0.7
@@ -42,6 +64,7 @@ class ChatRequest(BaseModel):
     channels: list[str] = []
     channels_text: str = Field("", alias="channelsText")
     posts_text: str = Field("", alias="postsText")
+    scope: PromptScopeInput | None = None
     language: str = "English"
     model: str | None = None
     temperature: float = 0.7
@@ -71,7 +94,8 @@ class TranslateRequest(BaseModel):
 class TagRequest(BaseModel):
     channels: list[str]
     channels_text: str = Field("", alias="channelsText")
-    posts_text: str = Field(..., alias="postsText")
+    posts_text: str = Field("", alias="postsText")
+    scope: PromptScopeInput | None = None
     all_tags: str = Field("(none yet)", alias="allTags")
     tag_mode: str = Field("add", alias="tagMode")
     model: str | None = None
