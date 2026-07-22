@@ -1,6 +1,8 @@
 import type React from "react"
 import { createContext, useContext, useState } from "react"
 import { toast } from "sonner"
+import { api } from "@/api"
+import type { PromptScope } from "@/api/data"
 import {
   formatSummaryModelLabel,
   isPendingSummary,
@@ -140,7 +142,7 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({
     semanticSearchRespectsTimeRange,
     semanticSearchRespectsChannels,
     handleFilterPosts,
-    getScopedPosts,
+    getPromptPostsInput,
   } = useScraper()
   const { setChatMessages } = useChatContext()
   const { isOffline } = useApiStatus()
@@ -184,11 +186,33 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({
       handleFilterPosts()
     }
 
-    // Fetch the scoped posts on demand at summary time — the same set the
-    // Posts view holds, refreshed after any pre-summary sync above.
-    const postsToSummarize = await getScopedPosts()
+    const selectedChannelNames = channels
+      .filter((channel) => selectedChannels.has(channel.name))
+      .map((channel) => channel.name)
 
-    if (postsToSummarize.length === 0) {
+    // Server-eligible → send the scope (the backend assembles the posts block,
+    // no posts cross the wire); semantic/related → client-built postsText. Get
+    // the post count + emptiness accordingly; the scope path looks citations up
+    // after streaming, since it never holds the posts locally.
+    const input = await getPromptPostsInput()
+    let postsText = ""
+    let scope: PromptScope | undefined
+    let postCount: number
+    let citationPool: Post[] = []
+    if (input.scope) {
+      scope = input.scope
+      const counts = await api.getPostsCounts({
+        channelNames: selectedChannelNames,
+        ...input.scope,
+      })
+      postCount = Object.values(counts).reduce((sum, n) => sum + n, 0)
+    } else {
+      citationPool = input.posts
+      postsText = formatPostsForPrompt(input.posts)
+      postCount = input.posts.length
+    }
+
+    if (postCount === 0) {
       toast.error(
         "No posts found in the selected date range. Try scraping first.",
       )
@@ -200,10 +224,6 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({
     setActiveTab("summary")
 
     try {
-      const postsText = formatPostsForPrompt(postsToSummarize)
-      const selectedChannelNames = channels
-        .filter((channel) => selectedChannels.has(channel.name))
-        .map((channel) => channel.name)
       const channelsText = formatChannelsForPrompt(channels, selectedChannels, {
         includeBio: includeChannelBioInPrompt,
         includeTags: includeChannelTagsInPrompt,
@@ -217,6 +237,7 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({
         aiLanguage,
         selectedModel,
         aiTemperature,
+        scope,
       )
 
       let fullSummaryText = ""
@@ -255,7 +276,13 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({
       if (fullSummaryText) {
         const newId = Date.now().toString()
 
-        const citedPosts = extractCitedPosts(fullSummaryText, postsToSummarize)
+        // Scope path never held the posts, so resolve the cited ones by lookup.
+        const citedPosts = scope
+          ? extractCitedPosts(
+              fullSummaryText,
+              await lookupPosts(parseCitationRefs(fullSummaryText)),
+            )
+          : extractCitedPosts(fullSummaryText, citationPool)
 
         const newSummary: Summary = {
           id: newId,
@@ -265,7 +292,7 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({
           endDate,
           language: aiLanguage,
           model: selectedModel,
-          postCount: postsToSummarize.length,
+          postCount,
           timestamp: Date.now(),
           sendMetadata: true,
           postSearch: postSearch || undefined,
@@ -299,8 +326,25 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({
     }
 
     try {
-      const posts = await getScopedPosts()
-      if (posts.length === 0) {
+      const selectedChannelNames = channels
+        .filter((channel) => selectedChannels.has(channel.name))
+        .map((c) => c.name)
+      const input = await getPromptPostsInput()
+      let postsText = ""
+      let scope: PromptScope | undefined
+      let postCount: number
+      if (input.scope) {
+        scope = input.scope
+        const counts = await api.getPostsCounts({
+          channelNames: selectedChannelNames,
+          ...input.scope,
+        })
+        postCount = Object.values(counts).reduce((sum, n) => sum + n, 0)
+      } else {
+        postsText = formatPostsForPrompt(input.posts)
+        postCount = input.posts.length
+      }
+      if (postCount === 0) {
         toast.error(
           "No posts found in the selected date range. Try scraping first.",
         )
@@ -308,17 +352,16 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({
       }
 
       const prompt = await getSummaryPrompt(
-        channels
-          .filter((channel) => selectedChannels.has(channel.name))
-          .map((c) => c.name),
+        selectedChannelNames,
         formatChannelsForPrompt(channels, selectedChannels, {
           includeBio: includeChannelBioInPrompt,
           includeTags: includeChannelTagsInPrompt,
         }),
-        formatPostsForPrompt(posts),
+        postsText,
         aiLanguage,
         selectedModel,
         aiTemperature,
+        scope,
       )
       await navigator.clipboard.writeText(prompt)
 
@@ -331,7 +374,7 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({
         endDate,
         language: aiLanguage,
         model: selectedModel,
-        postCount: posts.length,
+        postCount,
         timestamp: Date.now(),
         sendMetadata: true,
         postSearch: postSearch || undefined,

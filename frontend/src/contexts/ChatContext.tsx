@@ -1,6 +1,8 @@
 import type React from "react"
 import { createContext, useContext, useEffect, useRef, useState } from "react"
 import { toast } from "sonner"
+import { api } from "@/api"
+import type { PromptScope } from "@/api/data"
 import { formatChannelsForPrompt } from "../lib/channels/format-channels-for-prompt"
 import { formatPostsForPrompt } from "../lib/posts/post-view"
 import { saveLLMLog, saveSummary } from "../lib/repository"
@@ -9,7 +11,7 @@ import {
   chatWithHistoryStream,
   generateChatStream,
 } from "../services/ai"
-import type { ChatMessage, LLMLog, Post, Summary } from "../types"
+import type { ChatMessage, LLMLog, Summary } from "../types"
 import { useData } from "./DataContext"
 import { useRAG } from "./RAGContext"
 import { useScraper } from "./ScraperContext"
@@ -60,7 +62,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
     semanticSearchRespectsTimeRange,
     semanticSearchRespectsChannels,
     handleFilterPosts,
-    getScopedPosts,
+    getPromptPostsInput,
   } = useScraper()
   const { searchSimilarPosts } = useRAG()
 
@@ -104,9 +106,9 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
       let configUsed: any = null
       let systemInstructionUsed = ""
       let similarPostsUsed: any[] | undefined
-      // Scoped posts fed to the summary-chat prompt; stays empty in history
-      // (RAG) mode, which uses similarPostsUsed instead.
-      let postsToChat: Post[] = []
+      // Post count for the summary-chat entry; history (RAG) mode uses
+      // similarPostsUsed instead.
+      let summaryChatPostCount = 0
 
       // Add user message and placeholder for AI
       const initialMessages: { role: "user" | "model"; text: string }[] = [
@@ -192,14 +194,28 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
           handleFilterPosts()
         }
 
-        // Fetch the scoped posts on demand at chat time — the same set the
-        // Posts view holds, refreshed after any pre-chat sync above.
-        postsToChat = await getScopedPosts()
-
-        const postsText = formatPostsForPrompt(postsToChat)
+        // Server-eligible → send the scope (backend assembles); semantic/related
+        // → client-built postsText. Refreshed after any pre-chat sync above.
         const selectedChannelNames = channels
           .filter((channel) => selectedChannels.has(channel.name))
           .map((channel) => channel.name)
+        const input = await getPromptPostsInput()
+        let postsText = ""
+        let scope: PromptScope | undefined
+        if (input.scope) {
+          scope = input.scope
+          const counts = await api.getPostsCounts({
+            channelNames: selectedChannelNames,
+            ...input.scope,
+          })
+          summaryChatPostCount = Object.values(counts).reduce(
+            (sum, n) => sum + n,
+            0,
+          )
+        } else {
+          postsText = formatPostsForPrompt(input.posts)
+          summaryChatPostCount = input.posts.length
+        }
         const channelsText = formatChannelsForPrompt(
           channels,
           selectedChannels,
@@ -219,6 +235,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
             chatMessages,
             userMessage,
             aiTemperature,
+            scope,
           )
 
         promptUsed = prompt
@@ -301,7 +318,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
           postCount:
             chatMode === "history"
               ? (similarPostsUsed?.length ?? 0)
-              : postsToChat.length,
+              : summaryChatPostCount,
           timestamp: Date.now(),
           chatMessages: finalMessages,
           postSearch: postSearch || undefined,

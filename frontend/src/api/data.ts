@@ -63,6 +63,16 @@ export type PostFeedQuery = PostScopeQuery & {
   offset?: number
 }
 
+/**
+ * A scope an AI endpoint resolves into its posts block server-side. The
+ * `channels` list travels at the request top level, so it is omitted here; the
+ * AI paths assemble every matching post, so paging is omitted too.
+ */
+export type PromptScope = Omit<
+  PostFeedQuery,
+  "channelNames" | "limit" | "offset"
+>
+
 function postScopeParams(params: PostScopeQuery): URLSearchParams {
   const qs = new URLSearchParams()
   if (params.channelNames?.length)

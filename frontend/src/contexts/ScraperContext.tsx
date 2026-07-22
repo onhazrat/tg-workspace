@@ -16,6 +16,7 @@ import {
   streamFollowJobEvents,
   subscribeSyncJobEvents,
 } from "@/api"
+import type { PromptScope } from "@/api/data"
 import { parseApiError, unavailableChannelToastMessage } from "@/lib/api-errors"
 import { env } from "@/lib/env"
 import { createdChannelNamesFromResults } from "@/lib/posts/discover-selection"
@@ -81,6 +82,14 @@ interface ScraperContextType {
     searchText?: string,
     semanticQuery?: string,
   ) => Promise<Post[]>
+  /**
+   * The posts input for an AI endpoint: a server-side `scope` (backend
+   * assembles), or client-fetched `posts` for the semantic/related path.
+   */
+  getPromptPostsInput: () => Promise<
+    | { posts: Post[]; scope?: undefined }
+    | { posts?: undefined; scope: PromptScope }
+  >
   handleScrapeChannel: (
     channel: Channel,
     refresh?: boolean,
@@ -349,6 +358,49 @@ export const ScraperProvider: React.FC<{ children: React.ReactNode }> = ({
       postSortOrder,
     ],
   )
+
+  // What to feed an AI endpoint's posts block: a server-side `scope` the
+  // backend assembles itself (the ordinary path — no posts cross the wire), or
+  // client-fetched `posts` for the semantic/related search the server cannot
+  // reproduce (the caller formats those with its own formatter). Mirrors the
+  // Discover/feed server-eligible split.
+  const getPromptPostsInput = useCallback(async (): Promise<
+    | { posts: Post[]; scope?: undefined }
+    | { posts?: undefined; scope: PromptScope }
+  > => {
+    const semanticActive =
+      embeddingsEnabled &&
+      (!!relatedPostSearch || !!debouncedSemanticSearchQuery.trim())
+    if (semanticActive) {
+      return { posts: await getScopedPosts() }
+    }
+    return {
+      scope: {
+        startDate,
+        endDate,
+        keyword: debouncedPostSearch,
+        forwarded: forwardedFilter,
+        media: mediaFilter,
+        maxPerChannel: maxPostsPerChannel,
+        maxPerChannelMode: maxPostsPerChannelMode,
+        sort: postSortOrder,
+        seed: 0,
+      },
+    }
+  }, [
+    embeddingsEnabled,
+    relatedPostSearch,
+    debouncedSemanticSearchQuery,
+    getScopedPosts,
+    startDate,
+    endDate,
+    debouncedPostSearch,
+    forwardedFilter,
+    mediaFilter,
+    maxPostsPerChannel,
+    maxPostsPerChannelMode,
+    postSortOrder,
+  ])
 
   // Refresh the post views. The feed / counts / Discover are react-query
   // backed and refetch on their own when the scope or filter state changes;
@@ -1008,6 +1060,7 @@ export const ScraperProvider: React.FC<{ children: React.ReactNode }> = ({
         setScrapingChannels,
         handleFilterPosts,
         getScopedPosts,
+        getPromptPostsInput,
         handleScrapeChannel,
         handleScrapeAll,
         handleScrapeSelected,
