@@ -2,17 +2,14 @@ import type React from "react"
 import { createContext, useContext, useEffect, useRef, useState } from "react"
 import { toast } from "sonner"
 import { formatChannelsForPrompt } from "../lib/channels/format-channels-for-prompt"
-import {
-  buildFilteredPostsFromRaw,
-  formatPostsForPrompt,
-} from "../lib/posts/post-view"
-import { getPostsByDateRange, saveLLMLog, saveSummary } from "../lib/repository"
+import { formatPostsForPrompt } from "../lib/posts/post-view"
+import { saveLLMLog, saveSummary } from "../lib/repository"
 import {
   AIServiceError,
   chatWithHistoryStream,
   generateChatStream,
 } from "../services/ai"
-import type { ChatMessage, LLMLog, Summary } from "../types"
+import type { ChatMessage, LLMLog, Post, Summary } from "../types"
 import { useData } from "./DataContext"
 import { useRAG } from "./RAGContext"
 import { useScraper } from "./ScraperContext"
@@ -57,16 +54,13 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
   } = useUI()
   const { aiLanguage, selectedModel, aiTemperature } = useSettings()
   const {
-    filteredPosts,
     scrapeChannelsInParallel,
     postSearch,
     semanticSearchQuery,
     semanticSearchRespectsTimeRange,
     semanticSearchRespectsChannels,
     handleFilterPosts,
-    forwardedFilter,
-    mediaFilter,
-    postViewOptions,
+    getScopedPosts,
   } = useScraper()
   const { searchSimilarPosts } = useRAG()
 
@@ -110,6 +104,9 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
       let configUsed: any = null
       let systemInstructionUsed = ""
       let similarPostsUsed: any[] | undefined
+      // Scoped posts fed to the summary-chat prompt; stays empty in history
+      // (RAG) mode, which uses similarPostsUsed instead.
+      let postsToChat: Post[] = []
 
       // Add user message and placeholder for AI
       const initialMessages: { role: "user" | "model"; text: string }[] = [
@@ -185,35 +182,19 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
             (!c.lastUpdated || c.lastUpdated < targetTs - 60000), // 1 minute buffer
         )
 
-        let postsToChat = filteredPosts
-
         if (channelsToSync.length > 0) {
           toast.info(
             `Syncing ${channelsToSync.length} channels to ensure up-to-date data...`,
           )
           await scrapeChannelsInParallel(channelsToSync, "Pre-Chat Sync")
 
-          // Fetch updated posts
-          const selectedNames = Array.from(selectedChannels)
-          const rawPosts = await getPostsByDateRange(
-            selectedNames,
-            startDate,
-            endDate,
-          )
-
-          postsToChat = buildFilteredPostsFromRaw(rawPosts, {
-            searchText: postSearch,
-            forwardedFilter,
-            mediaFilter,
-            channels,
-            view: postViewOptions,
-            startDate,
-            endDate,
-          })
-
-          // Also update the UI state
+          // Refresh the eager Posts-tab list so the UI reflects the sync.
           handleFilterPosts()
         }
+
+        // Fetch the scoped posts on demand at chat time — the same set the
+        // Posts view holds, refreshed after any pre-chat sync above.
+        postsToChat = await getScopedPosts()
 
         const postsText = formatPostsForPrompt(postsToChat)
         const selectedChannelNames = channels
@@ -317,7 +298,10 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
           endDate,
           language: aiLanguage,
           model: selectedModel,
-          postCount: filteredPosts.length,
+          postCount:
+            chatMode === "history"
+              ? (similarPostsUsed?.length ?? 0)
+              : postsToChat.length,
           timestamp: Date.now(),
           chatMessages: finalMessages,
           postSearch: postSearch || undefined,
