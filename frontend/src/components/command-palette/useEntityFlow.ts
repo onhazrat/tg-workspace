@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { usePaletteListSelection } from "@/hooks/usePaletteListSelection"
 import { removeTagFromChannel } from "@/lib/channels/channel-tags"
 import {
@@ -22,7 +22,7 @@ import {
   getEntityCandidates,
   runEntityChannelAction,
 } from "@/lib/commands/useChannelEntityFlow"
-import type { Channel } from "@/types"
+import type { Channel, Post } from "@/types"
 
 interface EntityPaletteControls {
   entityCommand: CommandDef | null
@@ -65,12 +65,38 @@ export function useEntityFlow({
 }: UseEntityFlowOptions) {
   const { entityCommand } = palette
   const [entityQuery, setEntityQuery] = useState("")
+  // The post picker's pool, fetched on demand when the pick-post flow opens —
+  // the first 100 scoped posts, rather than an eagerly-populated array.
+  const [pickPostPool, setPickPostPool] = useState<Post[]>([])
   const inputRef = useRef<HTMLInputElement>(null)
   const listRef = useRef<HTMLDivElement>(null)
+
+  const isPickPostFlow = entityCommand?.entityFlow === "pick-post"
+
+  useEffect(() => {
+    if (!isPickPostFlow) {
+      setPickPostPool([])
+      return
+    }
+    let cancelled = false
+    context.getScopedPosts().then((posts) => {
+      if (!cancelled) setPickPostPool(posts.slice(0, 100))
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [isPickPostFlow, context.getScopedPosts])
 
   const candidates = useMemo(() => {
     if (!entityCommand?.entityFlow) return []
     const flow = entityCommand.entityFlow
+    if (flow === "pick-post") {
+      const items = pickPostPool.map((post) => ({
+        id: `${post.channelName}_${post.id}`,
+        label: `@${post.channelName} #${post.id}`,
+      }))
+      return filterExtendedEntityCandidates(items, entityQuery)
+    }
     if (isNonChannelEntityFlow(flow)) {
       const items = getExtendedEntityCandidates(
         flow,
@@ -81,7 +107,7 @@ export function useEntityFlow({
     }
     const pool = getEntityCandidates(flow, context)
     return filterChannelsByQuery(pool, entityQuery)
-  }, [context, entityCommand, entityQuery, palette.entityPayload])
+  }, [context, entityCommand, entityQuery, palette.entityPayload, pickPostPool])
 
   const firstEntityId = useMemo(
     () =>
@@ -149,7 +175,7 @@ export function useEntityFlow({
     }
 
     if (flow === "pick-post") {
-      const post = findPostByEntityId(context.filteredPosts, value)
+      const post = findPostByEntityId(pickPostPool, value)
       if (!post) return
       await entityCommand.run(context, post)
       const rootQuery = palette.getRootQuery()

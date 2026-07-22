@@ -52,6 +52,8 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tg-tooltip"
 
 interface ChannelCardProps {
   channel: Channel
+  /** In-scope post count for this channel, from the shared counts query. */
+  inScopeCount: number
   handleRemoveChannel: (channel: Channel) => void
   handleResetAndSync: (channel: Channel) => void
   sortRank?: number
@@ -59,6 +61,7 @@ interface ChannelCardProps {
 
 export const ChannelCard: React.FC<ChannelCardProps> = ({
   channel,
+  inScopeCount,
   handleRemoveChannel,
   handleResetAndSync,
   sortRank,
@@ -70,8 +73,7 @@ export const ChannelCard: React.FC<ChannelCardProps> = ({
     setChannels,
     loadChannels,
   } = useData()
-  const { scrapingChannels, syncQueue, filteredPosts, addToSyncQueue } =
-    useScraper()
+  const { scrapingChannels, syncQueue, addToSyncQueue } = useScraper()
   const { summarizing } = useUI()
   const {
     showChannelBio,
@@ -91,9 +93,6 @@ export const ChannelCard: React.FC<ChannelCardProps> = ({
 
   const stats = channelStats[channel.name]
   const isScraping = scrapingChannels.has(channel.name)
-  const inScopeCount = filteredPosts.filter(
-    (p) => p.channelName === channel.name,
-  ).length
   const syncQueueIndex = syncQueue.findIndex(
     (item) => item.channel.id === channel.id,
   )

@@ -10,8 +10,7 @@ import { ChannelGroupChips } from "@/components/channel-grid/ChannelGroupChips"
 import { ChannelTagChips } from "@/components/channel-grid/ChannelTagChips"
 import { useChannelGridActions } from "@/components/channel-grid/useChannelGridActions"
 import { useChannelGridSortState } from "@/components/channel-grid/useChannelGridSortState"
-import { useDebouncedValue } from "@/hooks/useDebouncedValue"
-import { usePostsCountsQuery } from "@/hooks/useDiscover"
+import { useScopedPostCounts } from "@/hooks/usePostsView"
 import { useSummarizerGroupParams } from "@/hooks/useSummarizerGroupParams"
 import {
   areAllNamesSelected,
@@ -31,10 +30,7 @@ import {
   filterChannelsForGrid,
 } from "@/lib/channels/filter-channels-for-grid"
 import { buildSelectedTrimRanks } from "@/lib/channels/selected-trim-ranks"
-import {
-  buildPostsInScopeCounts,
-  sortChannelsForGrid,
-} from "@/lib/channels/sort-channels-for-grid"
+import { sortChannelsForGrid } from "@/lib/channels/sort-channels-for-grid"
 import { applyTrimChannelSelection } from "@/lib/channels/trim-selected-channels"
 import { useData } from "../contexts/DataContext"
 import { useScraper } from "../contexts/ScraperContext"
@@ -64,8 +60,6 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
     setIncludeChannelBioInPrompt,
     includeChannelTagsInPrompt,
     setIncludeChannelTagsInPrompt,
-    startDate,
-    endDate,
   } = useUI()
 
   const {
@@ -83,17 +77,8 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
 
   const { isOffline } = useApiStatus()
 
-  const {
-    scrapingChannels,
-    handleScrapeSelected,
-    handleScrapeAll,
-    filteredPosts,
-    forwardedFilter,
-    mediaFilter,
-    maxPostsPerChannel,
-    semanticSearchQuery,
-    postSearch,
-  } = useScraper()
+  const { scrapingChannels, handleScrapeSelected, handleScrapeAll } =
+    useScraper()
 
   const [channelSearch, setChannelSearch] = useState("")
   const [tagSearch, setTagSearch] = useState("")
@@ -116,34 +101,8 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
     [channels, channelSearch, selectedLanguageFilter, selectedGroupFilter],
   )
 
-  // Counts come from SQL unless a semantic query is active — the server cannot
-  // reproduce vector search, so that case keeps the client tally over the
-  // (semantic) filteredPosts. The per-channel cap's random vs latest mode does
-  // not matter here: both clamp to the same number.
-  const debouncedPostSearch = useDebouncedValue(postSearch, 300)
-  const selectedChannelNames = useMemo(
-    () => [...selectedChannels].sort(),
-    [selectedChannels],
-  )
-  const countsServerEligible =
-    !semanticSearchQuery.trim() && selectedChannels.size > 0
-  const countsQuery = usePostsCountsQuery(
-    {
-      channelNames: selectedChannelNames,
-      startDate,
-      endDate,
-      keyword: debouncedPostSearch,
-      forwarded: forwardedFilter,
-      media: mediaFilter,
-      maxPerChannel: maxPostsPerChannel,
-    },
-    countsServerEligible,
-  )
-
-  const postsInScopeCounts = useMemo(() => {
-    if (countsServerEligible) return countsQuery.data ?? {}
-    return buildPostsInScopeCounts(filteredPosts)
-  }, [countsServerEligible, countsQuery.data, filteredPosts])
+  // Per-channel in-scope counts (SQL GROUP BY, client fallback for semantic).
+  const postsInScopeCounts = useScopedPostCounts()
 
   const sortedFilteredChannels = useMemo(
     () =>
@@ -441,6 +400,7 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
         showSortRank={showSortRank}
         selectedChannels={selectedChannels}
         selectedTrimRanks={selectedTrimRanks}
+        postsInScopeCounts={postsInScopeCounts}
         onRemoveChannel={actions.handleRemoveChannel}
         onResetAndSync={actions.handleResetAndSync}
         hasMore={hasMoreChannels}

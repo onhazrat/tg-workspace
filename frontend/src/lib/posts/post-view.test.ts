@@ -168,6 +168,38 @@ describe("post-view pipeline", () => {
     expect(text).toContain("Content: Post 1 from alpha")
   })
 
+  // Byte-identical golden reference for the assembled prompt body. This is the
+  // exact string the summary/chat/tag paths feed to the model today; the
+  // deferred server-side prompt assembly (parent plan T5.1) must reproduce it
+  // verbatim. Update only with an intentional prompt-format change.
+  test("formatPostsForPrompt is byte-identical to the golden reference", () => {
+    const posts = [
+      makePost("alpha", 1, 1704067200000, { text: "First post body" }),
+      makePost("durov", 522, 1704067200000, {
+        text: "[photo]",
+        media: {
+          kinds: ["photo"],
+          views: "2.23M",
+          isMediaOnly: true,
+          thumbApiPath: "/api/v1/telegram/post-thumb/durov/522",
+        },
+      }),
+    ]
+    const expected = [
+      `[alpha] ID: 1`,
+      `Date: ${posts[0].date}`,
+      `Content: First post body`,
+      ``,
+      `---`,
+      ``,
+      `[durov] ID: 522`,
+      `Date: ${posts[1].date}`,
+      `Media: photo | Views: 2.23M`,
+      `Content: [photo]`,
+    ].join("\n")
+    expect(formatPostsForPrompt(posts)).toBe(expected)
+  })
+
   test("formatPostsForPrompt includes media hints when present", () => {
     const posts = [
       makePost("durov", 522, 100, {

@@ -6,6 +6,7 @@ import type { MediaFilterValue } from "../lib/posts/post-media"
 import type {
   ForwardedFilterValue,
   MaxPostsPerChannelMode,
+  PostSortOrder,
 } from "../lib/posts/post-view"
 import type {
   BotCredential,
@@ -48,6 +49,18 @@ export type PostScopeQuery = {
   forwarded?: ForwardedFilterValue
   media?: MediaFilterValue
   maxPerChannel?: number
+}
+
+/**
+ * A single page of the Posts feed: the scope filters plus the per-channel cap
+ * mode + seed (both used server-side for `random`), the sort order, and paging.
+ */
+export type PostFeedQuery = PostScopeQuery & {
+  maxPerChannelMode?: MaxPostsPerChannelMode
+  sort?: PostSortOrder
+  seed?: number
+  limit?: number
+  offset?: number
 }
 
 function postScopeParams(params: PostScopeQuery): URLSearchParams {
@@ -207,6 +220,34 @@ export const dataApi = {
     if (params?.offset != null) qs.set("offset", String(params.offset))
     const q = qs.toString()
     return request<Post[]>(`/api/v1/data/posts${q ? `?${q}` : ""}`)
+  },
+
+  /**
+   * One page of the server-side Posts feed. The backend applies the
+   * keyword/forwarded/media filters, the per-channel cap (`latest` or a
+   * deterministic seeded `random`), and the sort — so the browser fetches only
+   * `limit` rows per page instead of a channel's whole history.
+   */
+  getPostsFeed: (params: PostFeedQuery) => {
+    const qs = new URLSearchParams()
+    if (params.channelNames?.length)
+      qs.set("channelNames", params.channelNames.join(","))
+    if (params.startDate != null) qs.set("startDate", String(params.startDate))
+    if (params.endDate != null) qs.set("endDate", String(params.endDate))
+    if (params.keyword?.trim()) qs.set("keyword", params.keyword.trim())
+    if (params.forwarded && params.forwarded !== "all")
+      qs.set("forwarded", params.forwarded)
+    if (params.media && params.media !== "all") qs.set("media", params.media)
+    if (params.maxPerChannel != null && params.maxPerChannel > 0) {
+      qs.set("maxPerChannel", String(params.maxPerChannel))
+      if (params.maxPerChannelMode)
+        qs.set("maxPerChannelMode", params.maxPerChannelMode)
+      if (params.seed != null) qs.set("seed", String(params.seed))
+    }
+    if (params.sort) qs.set("sort", params.sort)
+    if (params.limit != null) qs.set("limit", String(params.limit))
+    if (params.offset != null) qs.set("offset", String(params.offset))
+    return request<Post[]>(`/api/v1/data/posts?${qs.toString()}`)
   },
 
   /** Resolve specific posts by natural key. Batch capped server-side at 200. */

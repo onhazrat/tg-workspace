@@ -18,10 +18,7 @@ import {
   bulkResetSyncAllChannels,
   resetAndSyncChannel,
 } from "@/lib/channels/reset-sync"
-import {
-  buildPostsInScopeCounts,
-  getChannelGridSortFromStorage,
-} from "@/lib/channels/sort-channels-for-grid"
+import { getChannelGridSortFromStorage } from "@/lib/channels/sort-channels-for-grid"
 import {
   channelAllows,
   filterChannelsForOperation,
@@ -189,13 +186,13 @@ export function buildExtendedCommands(): CommandDef[] {
             ? Number.parseInt(saved, 10)
             : ""
         },
-        apply: (ctx, value) => {
+        apply: async (ctx, value) => {
           const count = Number.parseInt(value, 10)
           const { sortBy, sortDirection } = getChannelGridSortFromStorage()
           applyTrimChannelSelection({
             channels: ctx.channels,
             channelStats: ctx.channelStats,
-            postsInScopeCounts: buildPostsInScopeCounts(ctx.filteredPosts),
+            postsInScopeCounts: await ctx.getPostsInScopeCounts(),
             selectedChannels: ctx.selectedChannels,
             sortBy,
             sortDirection,

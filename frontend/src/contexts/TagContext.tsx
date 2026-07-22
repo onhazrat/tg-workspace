@@ -67,7 +67,7 @@ export const TagProvider: React.FC<{ children: React.ReactNode }> = ({
   children,
 }) => {
   const { channels, selectedChannels, setChannels } = useData()
-  const { filteredPosts } = useScraper()
+  const { getScopedPosts } = useScraper()
   const { aiLanguage, selectedModel, aiTemperature } = useSettings()
   const {
     activeTab,
@@ -142,14 +142,17 @@ export const TagProvider: React.FC<{ children: React.ReactNode }> = ({
     if (selectedRun?.suggestions) setSuggestions(selectedRun.suggestions)
   }, [selectedRun])
 
-  const buildPromptParts = () => {
+  const buildPromptParts = async () => {
     const channelsText = formatChannelsForPrompt(channels, selectedChannels, {
       includeBio: includeChannelBioInPrompt,
       includeTags: includeChannelTagsInPrompt,
     })
-    const postsText = formatPostsForTagPrompt(filteredPosts, selectedChannels)
+    // Fetch the scoped posts on demand at tag time — the same set the Posts
+    // view holds for the current selection/filters.
+    const posts = await getScopedPosts()
+    const postsText = formatPostsForTagPrompt(posts, selectedChannels)
     const allTags = formatAllTagsForPrompt(channels)
-    return { channelsText, postsText, allTags }
+    return { channelsText, postsText, allTags, postCount: posts.length }
   }
 
   const copyTagPrompt = async () => {
@@ -157,7 +160,8 @@ export const TagProvider: React.FC<{ children: React.ReactNode }> = ({
       toast.error("Select at least one channel first.")
       return
     }
-    const { channelsText, postsText, allTags } = buildPromptParts()
+    const { channelsText, postsText, allTags, postCount } =
+      await buildPromptParts()
     const prompt = await getTagPrompt({
       channels: selectedChannelNames,
       channelsText,
@@ -178,7 +182,7 @@ export const TagProvider: React.FC<{ children: React.ReactNode }> = ({
       channels: selectedChannelNames,
       startDate,
       endDate,
-      postCount: filteredPosts.length,
+      postCount,
       model: selectedModel,
       promptText: prompt,
       allTagsSnapshot: allTags === "(none yet)" ? [] : allTags.split(", "),
@@ -199,7 +203,8 @@ export const TagProvider: React.FC<{ children: React.ReactNode }> = ({
       toast.error("Select at least one channel first.")
       return
     }
-    const { channelsText, postsText, allTags } = buildPromptParts()
+    const { channelsText, postsText, allTags, postCount } =
+      await buildPromptParts()
     setIsGenerating(true)
     try {
       let responseText = ""
@@ -233,7 +238,7 @@ export const TagProvider: React.FC<{ children: React.ReactNode }> = ({
         channels: selectedChannelNames,
         startDate,
         endDate,
-        postCount: filteredPosts.length,
+        postCount,
         model: selectedModel,
         promptText: prompt,
         responseText,

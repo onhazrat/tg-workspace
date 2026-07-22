@@ -3,6 +3,7 @@ import { motion } from "motion/react"
 import type React from "react"
 import { useEffect } from "react"
 import { TgHeroEmptyState } from "@/components/ui/tg-segmented"
+import { usePostsFeed, useScopedPostCounts } from "@/hooks/usePostsView"
 import { useScraper } from "../contexts/ScraperContext"
 import { PostCard } from "./PostCard"
 import { PostFilter } from "./PostFilter"
@@ -20,17 +21,14 @@ export const PostFeed: React.FC<PostFeedProps> = ({
   setPostSearch,
   loadMoreRef,
 }) => {
-  const {
-    filteredPosts,
-    isInitialPostLoadPending,
-    visiblePosts,
-    setVisiblePosts,
-    maxPostsPerChannel,
-    maxPostsPerChannelMode,
-    postSortOrder,
-  } = useScraper()
+  const { maxPostsPerChannel, maxPostsPerChannelMode, postSortOrder } =
+    useScraper()
+  const { posts, isInitialLoading, hasMore, loadMore, isLoadingMore } =
+    usePostsFeed()
+  const counts = useScopedPostCounts()
+  const totalInScope = Object.values(counts).reduce((sum, n) => sum + n, 0)
 
-  const subtitleParts = [`${filteredPosts.length} posts in range`]
+  const subtitleParts = [`${totalInScope} posts in range`]
   if (maxPostsPerChannel > 0) {
     subtitleParts.push(
       `(max ${maxPostsPerChannel}/channel, ${maxPostsPerChannelMode})`,
@@ -45,7 +43,7 @@ export const PostFeed: React.FC<PostFeedProps> = ({
     const observer = new IntersectionObserver(
       (entries) => {
         if (entries[0].isIntersecting) {
-          setVisiblePosts((prev) => prev + 20)
+          loadMore()
         }
       },
       { threshold: 0.1 },
@@ -60,7 +58,7 @@ export const PostFeed: React.FC<PostFeedProps> = ({
         observer.unobserve(loadMoreRef.current)
       }
     }
-  }, [loadMoreRef, setVisiblePosts])
+  }, [loadMoreRef, loadMore])
 
   return (
     <motion.div
@@ -83,7 +81,7 @@ export const PostFeed: React.FC<PostFeedProps> = ({
         </div>
       </div>
 
-      {isInitialPostLoadPending ? (
+      {isInitialLoading ? (
         <div className="space-y-4">
           {Array.from({ length: 5 }).map((_, index) => (
             <div
@@ -109,9 +107,9 @@ export const PostFeed: React.FC<PostFeedProps> = ({
             </div>
           ))}
         </div>
-      ) : filteredPosts.length > 0 ? (
+      ) : posts.length > 0 ? (
         <div className="space-y-4">
-          {filteredPosts.slice(0, visiblePosts).map((post) => (
+          {posts.map((post) => (
             <PostCard
               key={`${post.channelName}-${post.id}`}
               post={post}
@@ -120,7 +118,7 @@ export const PostFeed: React.FC<PostFeedProps> = ({
           ))}
 
           {/* Load More Indicator */}
-          {filteredPosts.length > visiblePosts && (
+          {(hasMore || isLoadingMore) && (
             <div
               ref={loadMoreRef}
               className="h-32 flex flex-col items-center justify-center gap-4 opacity-60"

@@ -2150,6 +2150,7 @@
       "get": {
         "tags": ["data"],
         "summary": "List Posts",
+        "description": "One page of posts for a channel/date scope.\n\nWith no filters, no cap and ``sort=time`` this is the newest-first page the\nexport/lookup fallbacks and language detection rely on. The Posts feed also\npasses keyword/forwarded/media filters, a per-channel cap, a sort order and\n``offset`` so the whole view is assembled server-side instead of paging a\nchannel's history into the browser.",
         "operationId": "data-list_posts",
         "security": [{ "OAuth2PasswordBearer": [] }],
         "parameters": [
@@ -2211,6 +2212,64 @@
               "default": 0,
               "title": "Offset"
             }
+          },
+          {
+            "name": "keyword",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [{ "type": "string" }, { "type": "null" }],
+              "title": "Keyword"
+            }
+          },
+          {
+            "name": "forwarded",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "all",
+              "title": "Forwarded"
+            }
+          },
+          {
+            "name": "media",
+            "in": "query",
+            "required": false,
+            "schema": { "type": "string", "default": "all", "title": "Media" }
+          },
+          {
+            "name": "maxPerChannel",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "title": "Maxperchannel"
+            }
+          },
+          {
+            "name": "maxPerChannelMode",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "latest",
+              "title": "Maxperchannelmode"
+            }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "required": false,
+            "schema": { "type": "string", "default": "time", "title": "Sort" }
+          },
+          {
+            "name": "seed",
+            "in": "query",
+            "required": false,
+            "schema": { "type": "integer", "default": 0, "title": "Seed" }
           }
         ],
         "responses": {

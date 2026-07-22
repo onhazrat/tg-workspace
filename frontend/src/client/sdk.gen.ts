@@ -517,6 +517,13 @@ export class DataService {
     
     /**
      * List Posts
+     * One page of posts for a channel/date scope.
+     *
+     * With no filters, no cap and ``sort=time`` this is the newest-first page the
+     * export/lookup fallbacks and language detection rely on. The Posts feed also
+     * passes keyword/forwarded/media filters, a per-channel cap, a sort order and
+     * ``offset`` so the whole view is assembled server-side instead of paging a
+     * channel's history into the browser.
      * @param data The data for the request.
      * @param data.channelNames
      * @param data.channelName
@@ -524,6 +531,13 @@ export class DataService {
      * @param data.endDate
      * @param data.limit
      * @param data.offset
+     * @param data.keyword
+     * @param data.forwarded
+     * @param data.media
+     * @param data.maxPerChannel
+     * @param data.maxPerChannelMode
+     * @param data.sort
+     * @param data.seed
      * @returns unknown Successful Response
      * @throws ApiError
      */
@@ -537,7 +551,14 @@ export class DataService {
                 startDate: data.startDate,
                 endDate: data.endDate,
                 limit: data.limit,
-                offset: data.offset
+                offset: data.offset,
+                keyword: data.keyword,
+                forwarded: data.forwarded,
+                media: data.media,
+                maxPerChannel: data.maxPerChannel,
+                maxPerChannelMode: data.maxPerChannelMode,
+                sort: data.sort,
+                seed: data.seed
             },
             errors: {
                 422: 'Validation Error'

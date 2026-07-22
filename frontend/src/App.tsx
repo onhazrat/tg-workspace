@@ -53,6 +53,7 @@ import { useSettings } from "./contexts/SettingsContext"
 import { useUI } from "./contexts/UIContext"
 import { useApiStatus } from "./hooks/useApiStatus"
 import { useGuidedTour } from "./hooks/useGuidedTour"
+import { useScopedPostCounts } from "./hooks/usePostsView"
 import { applyHistorySummarySelection } from "./lib/commands/history-selection"
 import { getSummary } from "./lib/repository"
 import type { SummaryListItem, TabType } from "./types"
@@ -78,10 +79,15 @@ export default function App() {
     setSemanticSearchRespectsTimeRange,
     setSemanticSearchRespectsChannels,
     setRelatedPostSearch,
-    filteredPosts,
     autoSyncPauseUntil,
     setAutoSyncPauseUntil,
   } = useScraper()
+
+  const postsInScopeCounts = useScopedPostCounts()
+  const postsInScopeTotal = Object.values(postsInScopeCounts).reduce(
+    (sum, n) => sum + n,
+    0,
+  )
 
   const { setChatMessages } = useChatContext()
 
@@ -469,7 +475,7 @@ export default function App() {
                         Posts in Scope
                       </span>
                       <span className="text-xs font-medium tracking-tighter text-app-ink leading-none font-mono">
-                        {filteredPosts.length.toLocaleString()}
+                        {postsInScopeTotal.toLocaleString()}
                       </span>
                     </div>
                   </div>

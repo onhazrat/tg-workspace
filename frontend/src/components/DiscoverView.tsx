@@ -1,6 +1,7 @@
+import { Sparkles } from "lucide-react"
 import { motion } from "motion/react"
 import type React from "react"
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { SERVER_REPRODUCIBLE_CAP_MODES } from "@/api/data"
 import { DiscoverBulkBar } from "@/components/discover/DiscoverBulkBar"
 import { DiscoverCandidateTable } from "@/components/discover/DiscoverCandidateTable"
@@ -9,6 +10,7 @@ import { DiscoverFilterBar } from "@/components/discover/DiscoverFilterBar"
 import { DiscoverScopeCard } from "@/components/discover/DiscoverScopeCard"
 import { DiscoverSortChips } from "@/components/discover/DiscoverSortChips"
 import { useDiscoverFollowJob } from "@/components/discover/useDiscoverFollowJob"
+import { TgButton } from "@/components/ui/tg-button"
 import { TgConfirmDialog } from "@/components/ui/tg-confirm-dialog"
 import { useDebouncedValue } from "@/hooks/useDebouncedValue"
 import { useDiscoverCandidatesQuery } from "@/hooks/useDiscover"
@@ -32,6 +34,7 @@ import { useScraper } from "../contexts/ScraperContext"
 import { useSettings } from "../contexts/SettingsContext"
 import { useUI } from "../contexts/UIContext"
 import { useApiStatus } from "../hooks/useApiStatus"
+import type { Post } from "../types"
 
 const EMPTY_SCOPE_COUNTS: DiscoveryScopeCounts = {
   forwardPosts: 0,
@@ -42,7 +45,7 @@ const EMPTY_SCOPE_COUNTS: DiscoveryScopeCounts = {
 export const DiscoverView: React.FC = () => {
   const { channels, selectedChannels } = useData()
   const {
-    filteredPosts,
+    getScopedPosts,
     forwardedFilter,
     setForwardedFilter,
     postSearch,
@@ -68,6 +71,13 @@ export const DiscoverView: React.FC = () => {
 
   // Ephemeral: a name filter is a per-visit refinement, not a durable preference.
   const [nameQuery, setNameQuery] = useState("")
+
+  // Discover is an action tab: nothing is computed until the user asks for a
+  // report, and changing the scope returns to the "Generate" prompt. This keeps
+  // opening the tab (or changing channels) from doing any work.
+  const [generated, setGenerated] = useState(false)
+  // Posts for the client fallback (semantic / random cap), fetched on generate.
+  const [clientPosts, setClientPosts] = useState<Post[]>([])
 
   const enabledKinds = useMemo(
     () => new Set<DiscoverySignalKind>(discoverSignals),
@@ -111,8 +121,32 @@ export const DiscoverView: React.FC = () => {
     ],
   )
 
+  // Return to the "Generate" prompt whenever the scope that defines a report
+  // changes, so a shown report is never silently stale for a different scope.
+  const scopeSignature = useMemo(
+    () =>
+      JSON.stringify(serverParams) +
+      semanticSearchQuery +
+      maxPostsPerChannelMode,
+    [serverParams, semanticSearchQuery, maxPostsPerChannelMode],
+  )
+  useEffect(() => {
+    setGenerated(false)
+    setClientPosts([])
+  }, [scopeSignature])
+
+  const handleGenerate = async () => {
+    setGenerated(true)
+    if (!serverEligible) {
+      setClientPosts(await getScopedPosts())
+    }
+  }
+
   const serverQueryEnabled =
-    serverEligible && selectedChannels.size > 0 && enabledKinds.size > 0
+    generated &&
+    serverEligible &&
+    selectedChannels.size > 0 &&
+    enabledKinds.size > 0
   const serverQuery = useDiscoverCandidatesQuery(
     serverParams,
     serverQueryEnabled,
@@ -120,9 +154,9 @@ export const DiscoverView: React.FC = () => {
 
   const clientResult = useMemo(
     () =>
-      serverEligible
+      serverEligible || !generated
         ? null
-        : computeDiscoveryCandidates(filteredPosts, channels, {
+        : computeDiscoveryCandidates(clientPosts, channels, {
             forwardedFilter,
             selectedChannelCount: selectedChannels.size,
             enabledKinds,
@@ -130,7 +164,8 @@ export const DiscoverView: React.FC = () => {
           }),
     [
       serverEligible,
-      filteredPosts,
+      generated,
+      clientPosts,
       channels,
       forwardedFilter,
       selectedChannels.size,
@@ -315,7 +350,32 @@ export const DiscoverView: React.FC = () => {
           </div>
         ) : null}
 
-        {candidates.length === 0 && emptyState ? (
+        {!generated ? (
+          <div
+            className="flex flex-col items-center gap-4 py-12 text-center"
+            data-testid="discover-generate-prompt"
+          >
+            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-app-muted border border-app-ink/10">
+              <Sparkles size={22} className="opacity-60" />
+            </div>
+            <div className="max-w-md">
+              <p className="text-sm font-semibold">Discover new channels</p>
+              <p className="mt-1 text-xs text-app-ink/60">
+                Generate a report of channels your selection forwards from,
+                mentions, or links to over the current time range.
+              </p>
+            </div>
+            <TgButton
+              variant="primary"
+              onClick={() => void handleGenerate()}
+              disabled={isOffline}
+              data-testid="discover-generate-button"
+            >
+              <Sparkles size={15} />
+              Generate Discovery Report
+            </TgButton>
+          </div>
+        ) : candidates.length === 0 && emptyState ? (
           <DiscoverEmptyState
             state={emptyState}
             onQuickAction={runQuickAction}

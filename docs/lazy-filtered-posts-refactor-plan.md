@@ -1,8 +1,19 @@
 # Make `filteredPosts` lazy — refactor plan
 
 **Date:** 2026-07-22
-**Status:** Not started. Prerequisites (server-side Discover + counts) are done —
-see PR #10 / branch `phase4-server-side-discover`.
+**Status:** ✅ DONE on branch `lazy-filtered-posts`. The eager `filteredPosts`
+state + effect are removed (grep-clean); a full `filteredPosts` context read no
+longer exists. Verified: backend 489 tests + mypy/ty/ruff, frontend 472 unit +
+tsc + biome, and 51/51 Playwright e2e against a from-branch backend.
+
+> **Scope note:** partway through, the user expanded steps 6–7 beyond this
+> client-only plan into a **server-side feed** (see the
+> `postfeed-serverside-feed-decisions` memory). PostFeed now pages
+> `GET /data/posts` (server applies keyword/forwarded/media filters, per-channel
+> cap incl. a deterministic backend `random`, and `time`/`channel_time` sort);
+> Discover became an action tab (Generate button); the count displays read
+> `/data/posts/counts`. AI/Chat/Tag/command paths (steps 2–5) fetch on demand via
+> `getScopedPosts`. Prompt building stayed client-side (T5.1 still deferred).
 
 > Written to be executed by an agent with **no context except this file** plus
 > `docs/architecture-remediation-plan.md` (the parent plan) and

@@ -13,6 +13,8 @@ type ChannelGridBodyProps = {
   showSortRank: boolean
   selectedChannels: Set<string>
   selectedTrimRanks: Map<string, number>
+  /** Per-channel in-scope post counts, shared from one query in ChannelGrid. */
+  postsInScopeCounts: Record<string, number>
   onRemoveChannel: (channel: Channel) => void
   onResetAndSync: (channel: Channel) => void
   hasMore: boolean
@@ -29,6 +31,7 @@ export const ChannelGridBody: React.FC<ChannelGridBodyProps> = ({
   showSortRank,
   selectedChannels,
   selectedTrimRanks,
+  postsInScopeCounts,
   onRemoveChannel,
   onResetAndSync,
   hasMore,
@@ -97,6 +100,7 @@ export const ChannelGridBody: React.FC<ChannelGridBodyProps> = ({
         <ChannelCard
           key={channel.id}
           channel={channel}
+          inScopeCount={postsInScopeCounts[channel.name] ?? 0}
           handleRemoveChannel={onRemoveChannel}
           handleResetAndSync={onResetAndSync}
           sortRank={

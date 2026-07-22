@@ -8,12 +8,10 @@ import {
 } from "../constants"
 import { useApiStatus } from "../hooks/useApiStatus"
 import { formatChannelsForPrompt } from "../lib/channels/format-channels-for-prompt"
-import {
-  buildFilteredPostsFromRaw,
-  formatPostsForPrompt,
-} from "../lib/posts/post-view"
+import { formatPostsForPrompt } from "../lib/posts/post-view"
 import {
   getPostsByDateRange,
+  lookupPosts,
   saveLLMLog,
   savePublishLog,
   saveSummary,
@@ -56,14 +54,28 @@ const extractCitedPosts = (
   return cited
 }
 
-const filterPostsForSummary = (posts: Post[], postSearch?: string): Post[] => {
-  if (!postSearch?.trim()) return posts
-  const query = postSearch.toLowerCase()
-  return posts.filter(
-    (post) =>
-      post.text.toLowerCase().includes(query) ||
-      post.channelName.toLowerCase().includes(query),
-  )
+/**
+ * Extract the distinct `[channelName #id]` citation references from a summary
+ * body, so only the cited posts need to be looked up (rather than refetching a
+ * channel's whole history). Mirrors the pattern `extractCitedPosts` matches.
+ */
+const parseCitationRefs = (
+  text: string,
+): { channelName: string; postId: number }[] => {
+  const refs: { channelName: string; postId: number }[] = []
+  const seen = new Set<string>()
+  const regex = /\[([^\]]+?)\s*#(\d+)\]/g
+  let match
+  while ((match = regex.exec(text)) !== null) {
+    const channelName = match[1].trim()
+    const postId = parseInt(match[2], 10)
+    const key = `${channelName}-${postId}`
+    if (!seen.has(key)) {
+      seen.add(key)
+      refs.push({ channelName, postId })
+    }
+  }
+  return refs
 }
 
 export const generateDefaultMetadataText = (s: Summary): string => {
@@ -122,16 +134,13 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({
     torRotationThreshold,
   } = useSettings()
   const {
-    filteredPosts,
     scrapeChannelsInParallel,
     postSearch,
     semanticSearchQuery,
     semanticSearchRespectsTimeRange,
     semanticSearchRespectsChannels,
     handleFilterPosts,
-    forwardedFilter,
-    mediaFilter,
-    postViewOptions,
+    getScopedPosts,
   } = useScraper()
   const { setChatMessages } = useChatContext()
   const { isOffline } = useApiStatus()
@@ -165,35 +174,19 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({
         (!c.lastUpdated || c.lastUpdated < targetTs - 60000), // 1 minute buffer
     )
 
-    let postsToSummarize = filteredPosts
-
     if (channelsToSync.length > 0) {
       toast.info(
         `Syncing ${channelsToSync.length} channels to ensure up-to-date data...`,
       )
       await scrapeChannelsInParallel(channelsToSync, "Pre-Summary Sync")
 
-      // Fetch updated posts
-      const selectedNames = Array.from(selectedChannels)
-      const rawPosts = await getPostsByDateRange(
-        selectedNames,
-        startDate,
-        endDate,
-      )
-
-      postsToSummarize = buildFilteredPostsFromRaw(rawPosts, {
-        searchText: postSearch,
-        forwardedFilter,
-        mediaFilter,
-        channels,
-        view: postViewOptions,
-        startDate,
-        endDate,
-      })
-
-      // Also update the UI state
+      // Refresh the eager Posts-tab list so the UI reflects the sync.
       handleFilterPosts()
     }
+
+    // Fetch the scoped posts on demand at summary time — the same set the
+    // Posts view holds, refreshed after any pre-summary sync above.
+    const postsToSummarize = await getScopedPosts()
 
     if (postsToSummarize.length === 0) {
       toast.error(
@@ -272,7 +265,7 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({
           endDate,
           language: aiLanguage,
           model: selectedModel,
-          postCount: filteredPosts.length,
+          postCount: postsToSummarize.length,
           timestamp: Date.now(),
           sendMetadata: true,
           postSearch: postSearch || undefined,
@@ -304,14 +297,16 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({
       toast.warning("Server offline — cannot build summary prompt.")
       return
     }
-    if (filteredPosts.length === 0) {
-      toast.error(
-        "No posts found in the selected date range. Try scraping first.",
-      )
-      return
-    }
 
     try {
+      const posts = await getScopedPosts()
+      if (posts.length === 0) {
+        toast.error(
+          "No posts found in the selected date range. Try scraping first.",
+        )
+        return
+      }
+
       const prompt = await getSummaryPrompt(
         channels
           .filter((channel) => selectedChannels.has(channel.name))
@@ -320,7 +315,7 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({
           includeBio: includeChannelBioInPrompt,
           includeTags: includeChannelTagsInPrompt,
         }),
-        formatPostsForPrompt(filteredPosts),
+        formatPostsForPrompt(posts),
         aiLanguage,
         selectedModel,
         aiTemperature,
@@ -336,7 +331,7 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({
         endDate,
         language: aiLanguage,
         model: selectedModel,
-        postCount: filteredPosts.length,
+        postCount: posts.length,
         timestamp: Date.now(),
         sendMetadata: true,
         postSearch: postSearch || undefined,
@@ -384,12 +379,10 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({
     }
 
     try {
-      let posts = await getPostsByDateRange(
-        pending.channels,
-        pending.startDate,
-        pending.endDate,
-      )
-      posts = filterPostsForSummary(posts, pending.postSearch)
+      // Only the posts the pasted response actually cites need resolving —
+      // look those up by natural key instead of refetching the whole range.
+      const citedRefs = parseCitationRefs(trimmed)
+      const posts = await lookupPosts(citedRefs)
       const citedPosts = extractCitedPosts(trimmed, posts)
 
       const completedSummary: Summary = {

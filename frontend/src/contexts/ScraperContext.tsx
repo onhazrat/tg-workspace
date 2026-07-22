@@ -1,3 +1,4 @@
+import { useQueryClient } from "@tanstack/react-query"
 import React, {
   createContext,
   useCallback,
@@ -33,14 +34,13 @@ import {
   selectChannelsForLanguageDetection,
 } from "../lib/language"
 import { parseMediaFilterValue } from "../lib/posts/post-media"
-import {
-  applyPostViewPipeline,
-  buildFilteredPostsFromRaw,
-  type MaxPostsPerChannelMode,
-  type MediaFilterValue,
-  type PostSortOrder,
-  type PostViewOptions,
+import type {
+  MaxPostsPerChannelMode,
+  MediaFilterValue,
+  PostSortOrder,
+  PostViewOptions,
 } from "../lib/posts/post-view"
+import { computeScopedPosts } from "../lib/posts/scoped-posts"
 import {
   getChannelStats,
   getPostsByDateRange,
@@ -68,15 +68,19 @@ interface ScraperContextType {
   >
   relatedPostSearch: Post | null
   setRelatedPostSearch: React.Dispatch<React.SetStateAction<Post | null>>
-  isFiltering: boolean
   scrapingChannels: Set<string>
   setScrapingChannels: React.Dispatch<React.SetStateAction<Set<string>>>
-  filteredPosts: Post[]
-  isInitialPostLoadPending: boolean
-  visiblePosts: number
-  setVisiblePosts: React.Dispatch<React.SetStateAction<number>>
+  /** Refresh the server-backed post views (feed / counts / Discover). */
   handleFilterPosts: () => Promise<void>
-  setFilteredPosts: React.Dispatch<React.SetStateAction<Post[]>>
+  /**
+   * Fetch the current scope's filtered posts on demand — the set the Posts
+   * view holds for the same inputs — without writing state. Consumers that
+   * only need posts at action time (summary/chat/tag/pickers) call this.
+   */
+  getScopedPosts: (
+    searchText?: string,
+    semanticQuery?: string,
+  ) => Promise<Post[]>
   handleScrapeChannel: (
     channel: Channel,
     refresh?: boolean,
@@ -164,6 +168,17 @@ export const ScraperProvider: React.FC<{ children: React.ReactNode }> = ({
   } = useSettings()
   const { searchSimilarPosts } = useRAG()
   const { isOffline } = useApiStatus()
+  const queryClient = useQueryClient()
+
+  // Refetch the server-backed post views (feed, per-channel counts, Discover)
+  // after a sync adds posts — a sync changes no scope/filter, so the query keys
+  // are unchanged and only an explicit invalidation makes new posts appear.
+  // Prefixes must match queryKeys.postsFeed / postsCounts / discoverCandidates.
+  const invalidatePostViews = useCallback(() => {
+    queryClient.invalidateQueries({ queryKey: ["postsFeed"] })
+    queryClient.invalidateQueries({ queryKey: ["postsCounts"] })
+    queryClient.invalidateQueries({ queryKey: ["discoverCandidates"] })
+  }, [queryClient])
 
   const [postSearch, setPostSearch] = useState("")
   const [semanticSearchQuery, setSemanticSearchQuery] = useState("")
@@ -172,14 +187,9 @@ export const ScraperProvider: React.FC<{ children: React.ReactNode }> = ({
   const [semanticSearchRespectsChannels, setSemanticSearchRespectsChannels] =
     useState(false)
   const [relatedPostSearch, setRelatedPostSearch] = useState<Post | null>(null)
-  const [isFiltering, setIsFiltering] = useState(false)
   const [scrapingChannels, setScrapingChannels] = useState<Set<string>>(
     new Set(),
   )
-  const [filteredPosts, setFilteredPosts] = useState<Post[]>([])
-  const [isInitialPostLoadPending, setIsInitialPostLoadPending] =
-    useState<boolean>(true)
-  const [visiblePosts, setVisiblePosts] = useState(20)
   const [autoSyncPauseUntil, setAutoSyncPauseUntil] = useState<number | null>(
     null,
   )
@@ -298,124 +308,28 @@ export const ScraperProvider: React.FC<{ children: React.ReactNode }> = ({
     return () => clearTimeout(timer)
   }, [loadChannels, channels])
 
-  const handleFilterPosts = useCallback(
+  const getScopedPosts = useCallback(
     async (
       searchText = debouncedPostSearch,
       semanticQuery = debouncedSemanticSearchQuery,
-    ) => {
-      setIsFiltering(true)
-      try {
-        if (embeddingsEnabled && relatedPostSearch) {
-          try {
-            const results = await searchSimilarPosts(relatedPostSearch.text, 50)
-            let otherPosts = results.filter(
-              (p) =>
-                p.id !== relatedPostSearch.id ||
-                p.channelName !== relatedPostSearch.channelName,
-            )
-
-            if (forwardedFilter === "forwarded") {
-              otherPosts = otherPosts.filter((p) => !!p.forwardedFrom)
-            } else if (forwardedFilter === "original") {
-              otherPosts = otherPosts.filter((p) => !p.forwardedFrom)
-            } else if (forwardedFilter === "unfollowed_forwarded") {
-              otherPosts = otherPosts.filter(
-                (p) =>
-                  p.forwardedFrom &&
-                  !channels.some(
-                    (c) =>
-                      c.name.toLowerCase() === p.forwardedFrom?.toLowerCase(),
-                  ),
-              )
-            }
-
-            setFilteredPosts(
-              applyPostViewPipeline(otherPosts, postViewOptions, {
-                startDate,
-                endDate,
-              }),
-            )
-            setVisiblePosts(20)
-          } catch (error) {
-            console.error("Related post search failed:", error)
-            const message =
-              error instanceof Error
-                ? error.message
-                : "Related post search failed"
-            toast.error(`${message}. Falling back to normal view.`)
-            setRelatedPostSearch(null)
-          }
-          return
-        }
-
-        if (embeddingsEnabled && semanticQuery.trim()) {
-          try {
-            let results = await searchSimilarPosts(semanticQuery, 50, {
-              startDate: semanticSearchRespectsTimeRange
-                ? startDate
-                : undefined,
-              endDate: semanticSearchRespectsTimeRange ? endDate : undefined,
-              channels:
-                semanticSearchRespectsChannels && selectedChannels.size > 0
-                  ? Array.from(selectedChannels)
-                  : undefined,
-            })
-
-            if (forwardedFilter === "forwarded") {
-              results = results.filter((p) => !!p.forwardedFrom)
-            } else if (forwardedFilter === "original") {
-              results = results.filter((p) => !p.forwardedFrom)
-            } else if (forwardedFilter === "unfollowed_forwarded") {
-              results = results.filter(
-                (p) =>
-                  p.forwardedFrom &&
-                  !channels.some(
-                    (c) =>
-                      c.name.toLowerCase() === p.forwardedFrom?.toLowerCase(),
-                  ),
-              )
-            }
-
-            setFilteredPosts(
-              applyPostViewPipeline(results, postViewOptions, {
-                startDate,
-                endDate,
-              }),
-            )
-            setVisiblePosts(20)
-          } catch (error) {
-            console.error("Semantic search failed:", error)
-            const message =
-              error instanceof Error ? error.message : "Semantic search failed"
-            toast.error(`${message}. Falling back to normal view.`)
-            setSemanticSearchQuery("")
-          }
-          return
-        }
-
-        const selectedNames = Array.from(selectedChannels)
-        const rawPosts = await getPostsByDateRange(
-          selectedNames,
-          startDate,
-          endDate,
-        )
-        const posts = buildFilteredPostsFromRaw(rawPosts, {
-          searchText,
-          forwardedFilter,
-          mediaFilter,
-          channels,
-          view: postViewOptions,
-          startDate,
-          endDate,
-        })
-
-        setFilteredPosts(posts)
-        setVisiblePosts(20)
-      } finally {
-        setIsFiltering(false)
-        setIsInitialPostLoadPending(false)
-      }
-    },
+    ): Promise<Post[]> =>
+      computeScopedPosts({
+        searchText,
+        semanticQuery,
+        relatedPostSearch,
+        embeddingsEnabled,
+        selectedChannels: Array.from(selectedChannels),
+        startDate,
+        endDate,
+        forwardedFilter,
+        mediaFilter,
+        channels,
+        postViewOptions,
+        semanticSearchRespectsTimeRange,
+        semanticSearchRespectsChannels,
+        searchSimilarPosts,
+        getPostsByDateRange,
+      }),
     [
       startDate,
       endDate,
@@ -435,6 +349,15 @@ export const ScraperProvider: React.FC<{ children: React.ReactNode }> = ({
       postSortOrder,
     ],
   )
+
+  // Refresh the post views. The feed / counts / Discover are react-query
+  // backed and refetch on their own when the scope or filter state changes;
+  // callers that flip a filter and then "apply" it, and the post-sync paths,
+  // call this to force a fresh fetch. No eager array is populated any more —
+  // consumers read the server feed (usePostsFeed) or getScopedPosts on demand.
+  const handleFilterPosts = useCallback(async () => {
+    invalidatePostViews()
+  }, [invalidatePostViews])
 
   const applySyncJobStatus = useCallback(
     (status: SyncJobStatus) => {
@@ -602,6 +525,7 @@ export const ScraperProvider: React.FC<{ children: React.ReactNode }> = ({
         if (refresh) {
           await loadSyncLogs()
           await handleFilterPosts()
+          invalidatePostViews()
         }
 
         if (failures.length > 0 && successes.length === 0) {
@@ -623,6 +547,7 @@ export const ScraperProvider: React.FC<{ children: React.ReactNode }> = ({
       loadChannels,
       loadSyncLogs,
       handleFilterPosts,
+      invalidatePostViews,
       setChannelStats,
     ],
   )
@@ -666,10 +591,6 @@ export const ScraperProvider: React.FC<{ children: React.ReactNode }> = ({
     summarizing,
     1,
   )
-
-  useEffect(() => {
-    handleFilterPosts()
-  }, [handleFilterPosts])
 
   const scrapeChannelsInParallel = async (
     channelsToScrape: Channel[],
@@ -1031,6 +952,7 @@ export const ScraperProvider: React.FC<{ children: React.ReactNode }> = ({
             await loadChannels()
             await loadSyncLogs()
             await handleFilterPosts()
+            invalidatePostViews()
           } finally {
             activeJobRef.current = null
           }
@@ -1064,6 +986,7 @@ export const ScraperProvider: React.FC<{ children: React.ReactNode }> = ({
       loadChannels,
       loadSyncLogs,
       handleFilterPosts,
+      invalidatePostViews,
       setChannelStats,
     ],
   )
@@ -1081,15 +1004,10 @@ export const ScraperProvider: React.FC<{ children: React.ReactNode }> = ({
         setSemanticSearchRespectsChannels,
         relatedPostSearch,
         setRelatedPostSearch,
-        isFiltering,
         scrapingChannels,
         setScrapingChannels,
-        filteredPosts,
-        isInitialPostLoadPending,
-        visiblePosts,
-        setVisiblePosts,
         handleFilterPosts,
-        setFilteredPosts,
+        getScopedPosts,
         handleScrapeChannel,
         handleScrapeAll,
         handleScrapeSelected,
