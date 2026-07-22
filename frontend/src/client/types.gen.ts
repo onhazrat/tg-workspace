@@ -712,8 +712,15 @@ export type DataListPostsData = {
     channelName?: (string | null);
     channelNames?: (string | null);
     endDate?: (number | null);
+    forwarded?: string;
+    keyword?: (string | null);
     limit?: number;
+    maxPerChannel?: number;
+    maxPerChannelMode?: string;
+    media?: string;
     offset?: number;
+    seed?: number;
+    sort?: string;
     startDate?: (number | null);
 };
 

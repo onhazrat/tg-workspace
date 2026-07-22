@@ -148,12 +148,14 @@ from app.services.post_filters import (
 )
 from app.services.posts import (
     DEFAULT_POST_PAGE_SIZE,
+    FEED_CAP_MODES,
+    FEED_SORTS,
     MAX_POST_LOOKUP_BATCH,
     MAX_POST_PAGE_SIZE,
     bulk_upsert_posts,
 )
 from app.services.posts import count_posts_in_scope as count_posts_in_scope_impl
-from app.services.posts import list_posts as list_posts_impl
+from app.services.posts import list_feed as list_feed_impl
 from app.services.posts import lookup_posts as lookup_posts_impl
 from app.services.settings_store import get_app_setting, put_app_setting
 from app.services.stats import clear_table, get_db_stats, get_table_sizes
@@ -536,17 +538,43 @@ def list_posts(
     end_date: int | None = Query(None, alias="endDate"),
     limit: int = Query(default=DEFAULT_POST_PAGE_SIZE, ge=1, le=MAX_POST_PAGE_SIZE),
     offset: int = Query(default=0, ge=0),
+    keyword: str | None = Query(None),
+    forwarded: str = Query("all"),
+    media: str = Query("all"),
+    max_per_channel: int = Query(0, alias="maxPerChannel", ge=0),
+    max_per_channel_mode: str = Query("latest", alias="maxPerChannelMode"),
+    sort: str = Query("time"),
+    seed: int = Query(0),
 ) -> list[dict[str, Any]]:
+    """One page of posts for a channel/date scope.
+
+    With no filters, no cap and ``sort=time`` this is the newest-first page the
+    export/lookup fallbacks and language detection rely on. The Posts feed also
+    passes keyword/forwarded/media filters, a per-channel cap, a sort order and
+    ``offset`` so the whole view is assembled server-side instead of paging a
+    channel's history into the browser.
+    """
     names: list[str] = []
     if channel_names:
         names = [n.strip() for n in channel_names.split(",") if n.strip()]
     elif channel_name:
         names = [channel_name]
-    return list_posts_impl(
+    if sort not in FEED_SORTS:
+        raise HTTPException(status_code=422, detail=f"unknown sort: {sort}")
+    if max_per_channel_mode not in FEED_CAP_MODES:
+        raise HTTPException(
+            status_code=422, detail=f"unknown maxPerChannelMode: {max_per_channel_mode}"
+        )
+    return list_feed_impl(
         session,
         channel_names=names or None,
         start_date=start_date,
         end_date=end_date,
+        filters=_parse_post_filters(keyword, forwarded, media),
+        max_per_channel=max_per_channel,
+        max_per_channel_mode=max_per_channel_mode,
+        sort=sort,
+        seed=seed,
         limit=limit,
         offset=offset,
     )

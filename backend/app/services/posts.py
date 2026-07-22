@@ -6,7 +6,8 @@ import time
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import func, or_
+from sqlalchemy import func, literal, or_
+from sqlalchemy.orm import aliased
 from sqlmodel import Session, col, select
 
 from app.models_tg import Channel, Post
@@ -17,6 +18,9 @@ from app.services.sync_meta import touch_sync
 DEFAULT_POST_PAGE_SIZE = 500
 MAX_POST_PAGE_SIZE = 5000
 MAX_POST_LOOKUP_BATCH = 200
+
+FEED_SORTS: frozenset[str] = frozenset({"time", "channel_time"})
+FEED_CAP_MODES: frozenset[str] = frozenset({"latest", "random"})
 
 
 def _post_media_from_item(item: dict[str, Any]) -> dict[str, Any] | None:
@@ -100,34 +104,106 @@ def bulk_upsert_posts_impl(
     return count
 
 
-def list_posts(
+def _random_cap_order(seed: int) -> Any:
+    """A deterministic pseudo-random ordering for the ``random`` per-channel cap.
+
+    Seeded by the scope (channel, post, and a caller-supplied ``seed``) so the
+    *same* posts are chosen across pages — offset paging over a per-request
+    reshuffle (``ORDER BY random()``) would repeat and skip rows. It does not
+    reproduce the old client-side mulberry32 shuffle; the user only requires a
+    stable random selection, not byte-parity with the previous frontend cap.
+    """
+    return func.md5(
+        func.concat(
+            col(Post.channel_name),
+            literal(":"),
+            col(Post.post_id),
+            literal(f":{seed}"),
+        )
+    )
+
+
+def _feed_order_by(sort: str, entity: Any) -> list[Any]:
+    """Deterministic ORDER BY for the feed, with a stable tiebreak for paging.
+
+    ``time`` is global newest-first; ``channel_time`` groups by channel then
+    newest-first. ``(channel_name, post_id)`` is unique, so adding it as a
+    tiebreak makes offset paging stable even when timestamps collide.
+    """
+    timestamp = entity.timestamp
+    channel_name = entity.channel_name
+    post_id = entity.post_id
+    if sort == "channel_time":
+        return [channel_name.asc(), timestamp.desc(), post_id.desc()]
+    return [timestamp.desc(), channel_name.asc(), post_id.desc()]
+
+
+def list_feed(
     session: Session,
     *,
     channel_names: list[str] | None = None,
     start_date: int | None = None,
     end_date: int | None = None,
+    filters: PostFilters | None = None,
+    max_per_channel: int = 0,
+    max_per_channel_mode: str = "latest",
+    sort: str = "time",
+    seed: int = 0,
     limit: int = DEFAULT_POST_PAGE_SIZE,
     offset: int = 0,
 ) -> list[dict[str, Any]]:
-    """Return one newest-first page of posts.
+    """One page of the Posts feed, filtered / capped / sorted entirely in SQL.
 
-    `tg_posts` holds millions of rows across hundreds of followed channels, so
-    an unbounded select here can materialise gigabytes into a worker — this was
-    the root cause of the staging incident. Full data still ships via the
-    export path, which streams.
+    Replaces the frontend's eager ``filteredPosts`` for the Posts tab: rather
+    than paging a channel's whole history into the browser and filtering there,
+    the keyword / forwarded / media filters, the per-channel cap, and the sort
+    all run server-side and only ``limit`` rows are returned. With no filters,
+    no cap, and ``sort="time"`` this is a newest-first page.
 
-    The `timestamp DESC` ordering is required, not cosmetic: without a
-    deterministic order, offset paging silently repeats and skips rows. It is
-    served by the existing `ix_tg_posts_channel_name_timestamp` index.
+    The read stays bounded: ``tg_posts`` holds millions of rows across hundreds
+    of channels, and an unbounded select here materialised gigabytes into a
+    worker — the root cause of the staging incident. The ``ORDER BY`` always
+    ends in ``(channel_name, post_id)`` so offset paging is deterministic (a
+    non-deterministic order silently repeats and skips rows across pages).
     """
-    stmt = select(Post)
+    base = select(Post)
     if channel_names:
-        stmt = stmt.where(col(Post.channel_name).in_(channel_names))
+        base = base.where(col(Post.channel_name).in_(channel_names))
     if start_date is not None:
-        stmt = stmt.where(Post.timestamp >= start_date)
+        base = base.where(Post.timestamp >= start_date)
     if end_date is not None:
-        stmt = stmt.where(Post.timestamp <= end_date)
-    stmt = stmt.order_by(col(Post.timestamp).desc()).offset(offset).limit(limit)
+        base = base.where(Post.timestamp <= end_date)
+    if filters is not None:
+        followed: frozenset[str] | None = None
+        if filters.forwarded == "unfollowed_forwarded":
+            followed = frozenset(
+                name.lower() for name in session.exec(select(Channel.name)).all()
+            )
+        base = apply_post_filters(base, filters, followed_names=followed)
+
+    if max_per_channel > 0:
+        cap_order = (
+            _random_cap_order(seed)
+            if max_per_channel_mode == "random"
+            else col(Post.timestamp).desc()
+        )
+        row_number = (
+            func.row_number()
+            .over(partition_by=col(Post.channel_name), order_by=cap_order)
+            .label("rn")
+        )
+        ranked = base.add_columns(row_number).subquery()
+        capped = aliased(Post, ranked)
+        stmt = (
+            select(capped)
+            .where(ranked.c.rn <= max_per_channel)
+            .order_by(*_feed_order_by(sort, capped))
+            .offset(offset)
+            .limit(limit)
+        )
+        return [post_to_camel(p) for p in session.exec(stmt).all()]
+
+    stmt = base.order_by(*_feed_order_by(sort, Post)).offset(offset).limit(limit)
     return [post_to_camel(p) for p in session.exec(stmt).all()]
 
 
