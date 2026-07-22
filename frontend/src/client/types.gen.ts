@@ -140,6 +140,7 @@ export type ChatRequest = {
     channels?: Array<(string)>;
     channelsText?: string;
     postsText?: string;
+    scope?: (PromptScopeInput | null);
     language?: string;
     model?: (string | null);
     temperature?: number;
@@ -273,6 +274,23 @@ export type PostLookupRequest = {
     posts: Array<PostLookupRef>;
 };
 
+/**
+ * A Posts-feed scope the backend resolves into the prompt's posts block,
+ * instead of the client shipping a pre-built ``postsText``. Mirrors the
+ * frontend feed query params.
+ */
+export type PromptScopeInput = {
+    startDate?: (number | null);
+    endDate?: (number | null);
+    keyword?: (string | null);
+    forwarded?: string;
+    media?: string;
+    maxPerChannel?: number;
+    maxPerChannelMode?: string;
+    sort?: string;
+    seed?: number;
+};
+
 export type ProxyLaneSnapshot = {
     proxyUrl: string;
     maxParallel: number;
@@ -391,7 +409,8 @@ export type StartSyncJobResponse = {
 export type SummaryRequest = {
     channels: Array<(string)>;
     channelsText?: string;
-    postsText: string;
+    postsText?: string;
+    scope?: (PromptScopeInput | null);
     language?: string;
     model?: (string | null);
     temperature?: number;
@@ -422,7 +441,8 @@ export type SyncRuntimeSettings = {
 export type TagRequest = {
     channels: Array<(string)>;
     channelsText?: string;
-    postsText: string;
+    postsText?: string;
+    scope?: (PromptScopeInput | null);
     allTags?: string;
     tagMode?: string;
     model?: (string | null);
