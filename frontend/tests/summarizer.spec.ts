@@ -1521,31 +1521,38 @@ test.describe("command palette keyboard", () => {
       })
     })
 
+    const mediaPosts = [
+      {
+        id: 1,
+        channelName,
+        text: "Caption only",
+        date: new Date(now).toISOString(),
+        timestamp: now,
+      },
+      {
+        id: 2,
+        channelName,
+        text: "[photo]",
+        date: new Date(now - 1000).toISOString(),
+        timestamp: now - 1000,
+        media: {
+          kinds: ["photo"],
+          isMediaOnly: true,
+          views: "1.2K",
+          thumbApiPath: "/api/v1/telegram/post-thumb/demo/2",
+        },
+      },
+    ]
+    // The feed filters server-side now, so honour the `media` query param the
+    // client sends (the real backend does the same) rather than returning the
+    // full set regardless.
     await page.route("**/api/v1/data/posts**", async (route) => {
-      await route.fulfill({
-        json: [
-          {
-            id: 1,
-            channelName,
-            text: "Caption only",
-            date: new Date(now).toISOString(),
-            timestamp: now,
-          },
-          {
-            id: 2,
-            channelName,
-            text: "[photo]",
-            date: new Date(now - 1000).toISOString(),
-            timestamp: now - 1000,
-            media: {
-              kinds: ["photo"],
-              isMediaOnly: true,
-              views: "1.2K",
-              thumbApiPath: "/api/v1/telegram/post-thumb/demo/2",
-            },
-          },
-        ],
-      })
+      const media = new URL(route.request().url()).searchParams.get("media")
+      const json =
+        media === "photo" || media === "media_only"
+          ? mediaPosts.filter((post) => post.media?.kinds?.includes("photo"))
+          : mediaPosts
+      await route.fulfill({ json })
     })
 
     await page.evaluate(() => {
