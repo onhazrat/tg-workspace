@@ -7,7 +7,11 @@ byte-identical to the golden reference"). If one side changes, both fail.
 
 from __future__ import annotations
 
-from app.prompts.posts import estimate_tokens, format_posts_for_prompt
+from app.prompts.posts import (
+    estimate_tokens,
+    format_posts_for_prompt,
+    format_posts_for_tag_prompt,
+)
 
 
 def test_matches_frontend_golden_reference() -> None:
@@ -85,3 +89,49 @@ def test_empty_posts_is_empty_string() -> None:
 
 def test_estimate_tokens_is_chars_over_four() -> None:
     assert estimate_tokens("x" * 40) == 10
+
+
+def test_tag_prompt_grouped_chronological_matches_frontend() -> None:
+    # Mirrors frontend formatPostsForTagPrompt (tag-prompt.ts): grouped by
+    # channel in first-seen order, oldest-first within a channel, date derived
+    # from the timestamp, newlines flattened, text trimmed.
+    posts = [
+        {
+            "channelName": "alpha",
+            "id": 1,
+            "timestamp": 1704153600000,
+            "text": "line1\nline2",
+        },
+        {
+            "channelName": "beta",
+            "id": 2,
+            "timestamp": 1704240000000,
+            "text": "  spaced  ",
+        },
+        {"channelName": "alpha", "id": 3, "timestamp": 1704067200000, "text": "older"},
+    ]
+    expected = "\n\n".join(
+        [
+            "\n".join(
+                [
+                    "### alpha",
+                    "Posts (chronological):",
+                    "- [ID 3 | 2024-01-01] older",
+                    "- [ID 1 | 2024-01-02] line1 line2",
+                ]
+            ),
+            "\n".join(
+                [
+                    "### beta",
+                    "Posts (chronological):",
+                    "- [ID 2 | 2024-01-03] spaced",
+                ]
+            ),
+        ]
+    )
+    assert format_posts_for_tag_prompt(posts, ["alpha", "beta"]) == expected
+
+
+def test_tag_prompt_skips_unselected_channels() -> None:
+    posts = [{"channelName": "x", "id": 1, "timestamp": 1704067200000, "text": "hi"}]
+    assert format_posts_for_tag_prompt(posts, ["other"]) == ""

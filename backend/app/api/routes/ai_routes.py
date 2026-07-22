@@ -20,7 +20,11 @@ from app.core.config import settings
 from app.prompts.summary import format_summary_prompt, rtl_instruction
 from app.prompts.tagging import format_tag_prompt
 from app.prompts.templates import CHAT_PROMPT, RAG_CHAT_PROMPT
-from app.services.prompt_assembly import PromptScope, assemble_posts_text
+from app.services.prompt_assembly import (
+    PromptScope,
+    assemble_posts_text,
+    assemble_tag_posts_text,
+)
 
 router = APIRouter(prefix="/ai", tags=["ai"])
 
@@ -31,29 +35,31 @@ def _resolve_posts_text(
     channels: list[str],
     posts_text: str,
     scope: PromptScopeInput | None,
+    tag_format: bool = False,
 ) -> str:
     """Prompt posts block: an explicit client-built ``postsText`` wins (the
     semantic/related path and background regeneration, which the server cannot
-    reproduce); otherwise the backend resolves the scope itself."""
+    reproduce); otherwise the backend resolves the scope itself. Tag prompts use
+    the channel-grouped chronological format, summary/chat the flat one."""
     if posts_text:
         return posts_text
     if scope is None:
         return ""
-    return assemble_posts_text(
-        session,
-        PromptScope(
-            channels=channels,
-            start_date=scope.start_date,
-            end_date=scope.end_date,
-            keyword=scope.keyword,
-            forwarded=scope.forwarded,
-            media=scope.media,
-            max_per_channel=scope.max_per_channel,
-            max_per_channel_mode=scope.max_per_channel_mode,
-            sort=scope.sort,
-            seed=scope.seed,
-        ),
+    prompt_scope = PromptScope(
+        channels=channels,
+        start_date=scope.start_date,
+        end_date=scope.end_date,
+        keyword=scope.keyword,
+        forwarded=scope.forwarded,
+        media=scope.media,
+        max_per_channel=scope.max_per_channel,
+        max_per_channel_mode=scope.max_per_channel_mode,
+        sort=scope.sort,
+        seed=scope.seed,
     )
+    if tag_format:
+        return assemble_tag_posts_text(session, prompt_scope)
+    return assemble_posts_text(session, prompt_scope)
 
 
 @router.get("/models")
@@ -179,6 +185,7 @@ def api_tag_prompt(
             channels=body.channels,
             posts_text=body.posts_text,
             scope=body.scope,
+            tag_format=True,
         ),
         all_tags=body.all_tags,
         tag_mode=body.tag_mode,
@@ -204,6 +211,7 @@ async def api_tag_stream(
             channels=body.channels,
             posts_text=body.posts_text,
             scope=body.scope,
+            tag_format=True,
         ),
         all_tags=body.all_tags,
         tag_mode=body.tag_mode,

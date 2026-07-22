@@ -9,6 +9,7 @@ change here must be mirrored there, and vice-versa; the parity is covered by
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from typing import Any
 
 # A single prompt is capped so an oversized selection is refused with a clear
@@ -86,3 +87,42 @@ def format_posts_for_prompt(posts: list[dict[str, Any]]) -> str:
         lines.append(f"Content: {post['text']}")
         blocks.append("\n".join(lines))
     return "\n\n---\n\n".join(blocks)
+
+
+def _tag_prompt_date(timestamp_ms: int) -> str:
+    """`YYYY-MM-DD` in UTC — matches JS `new Date(ms).toISOString().slice(0, 10)`."""
+    return datetime.fromtimestamp(timestamp_ms / 1000, tz=timezone.utc).strftime(
+        "%Y-%m-%d"
+    )
+
+
+def format_posts_for_tag_prompt(
+    posts: list[dict[str, Any]], selected_names: list[str]
+) -> str:
+    """Channel-grouped, chronological posts block for the tag prompt.
+
+    Byte-identical to the frontend `formatPostsForTagPrompt`
+    (``frontend/src/lib/channels/tag-prompt.ts``): posts are grouped by channel
+    in first-seen order, each channel's posts sorted oldest-first, and the date
+    is derived from the post timestamp (not the ``date`` field).
+    """
+    selected = set(selected_names)
+    grouped: dict[str, list[dict[str, Any]]] = {}
+    for post in posts:
+        name = post["channelName"]
+        if name not in selected:
+            continue
+        grouped.setdefault(name, []).append(post)
+
+    sections: list[str] = []
+    for channel_name, channel_posts in grouped.items():
+        ordered = sorted(channel_posts, key=lambda p: p["timestamp"])
+        lines = [f"### {channel_name}", "Posts (chronological):"]
+        lines.extend(
+            f"- [ID {post['id']} | {_tag_prompt_date(post['timestamp'])}] "
+            f"{post['text'].replace(chr(10), ' ').strip()}"
+            for post in ordered
+        )
+        sections.append("\n".join(lines))
+
+    return "\n\n".join(sections)

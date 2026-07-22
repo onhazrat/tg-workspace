@@ -19,6 +19,7 @@ from app.prompts.posts import (
     MAX_PROMPT_TOKENS,
     estimate_tokens,
     format_posts_for_prompt,
+    format_posts_for_tag_prompt,
 )
 from app.services.post_filters import FORWARDED_FILTERS, MEDIA_FILTERS, PostFilters
 from app.services.posts import (
@@ -28,10 +29,12 @@ from app.services.posts import (
     list_feed,
 )
 
-# Upper bound on how many posts one prompt assembles. Bounds the fetch (so a
-# huge scope never materialises a giant result) and, like the token cap, is
-# surfaced as a clear error rather than a silent truncation.
-MAX_PROMPT_POSTS = 5000
+# Upper bound on how many posts one prompt assembles. The token budget is the
+# real user-facing limit; this is a generous fetch-safety bound so a pathological
+# scope never materialises a giant result. Like the token cap, exceeding it is a
+# clear error, never a silent truncation. The AI paths assemble *all* posts in
+# scope (not a page) up to these limits — pagination is display-only.
+MAX_PROMPT_POSTS = 10_000
 
 
 @dataclass(frozen=True)
@@ -50,11 +53,12 @@ class PromptScope:
     seed: int = 0
 
 
-def assemble_posts_text(session: Session, scope: PromptScope) -> str:
-    """Fetch + format the scoped posts, refusing an over-budget selection.
+def _fetch_scoped_posts(session: Session, scope: PromptScope) -> list[dict[str, Any]]:
+    """All posts in scope (not a page), refusing a selection past the post cap.
 
-    Raises ``413`` with a clear, actionable message (post count or token
-    estimate) instead of silently dropping the user's selected posts.
+    The AI paths summarise/tag *every* matching post, so this deliberately does
+    not paginate — it fetches up to ``MAX_PROMPT_POSTS`` and refuses anything
+    larger with a clear ``413`` rather than silently truncating.
     """
     if scope.forwarded not in FORWARDED_FILTERS:
         raise HTTPException(422, detail=f"unknown forwarded: {scope.forwarded}")
@@ -92,7 +96,7 @@ def assemble_posts_text(session: Session, scope: PromptScope) -> str:
             ),
         )
 
-    posts = list_feed(
+    return list_feed(
         session,
         channel_names=channel_names,
         start_date=scope.start_date,
@@ -105,9 +109,10 @@ def assemble_posts_text(session: Session, scope: PromptScope) -> str:
         limit=MAX_PROMPT_POSTS,
         offset=0,
     )
-    posts_text = format_posts_for_prompt(posts)
 
-    tokens = estimate_tokens(posts_text)
+
+def _enforce_token_budget(text: str) -> str:
+    tokens = estimate_tokens(text)
     if tokens > MAX_PROMPT_TOKENS:
         raise HTTPException(
             status_code=413,
@@ -117,4 +122,17 @@ def assemble_posts_text(session: Session, scope: PromptScope) -> str:
                 "the channel selection or date range, or set a per-channel cap."
             ),
         )
-    return posts_text
+    return text
+
+
+def assemble_posts_text(session: Session, scope: PromptScope) -> str:
+    """Summary/chat posts block for a scope — all matching posts, budget-checked."""
+    return _enforce_token_budget(
+        format_posts_for_prompt(_fetch_scoped_posts(session, scope))
+    )
+
+
+def assemble_tag_posts_text(session: Session, scope: PromptScope) -> str:
+    """Tag posts block (channel-grouped, chronological) for a scope."""
+    posts = _fetch_scoped_posts(session, scope)
+    return _enforce_token_budget(format_posts_for_tag_prompt(posts, scope.channels))
