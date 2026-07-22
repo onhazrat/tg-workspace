@@ -724,12 +724,30 @@ export type DataListPostsResponse = (Array<{
 export type DataDiscoverCandidatesData = {
     channelNames: string;
     endDate?: (number | null);
+    forwarded?: string;
+    keyword?: (string | null);
+    maxPerChannel?: number;
+    media?: string;
     signals?: (string | null);
     startDate?: (number | null);
 };
 
 export type DataDiscoverCandidatesResponse = ({
     [key: string]: unknown;
+});
+
+export type DataPostsCountsData = {
+    channelNames?: (string | null);
+    endDate?: (number | null);
+    forwarded?: string;
+    keyword?: (string | null);
+    maxPerChannel?: number;
+    media?: string;
+    startDate?: (number | null);
+};
+
+export type DataPostsCountsResponse = ({
+    [key: string]: (number);
 });
 
 export type DataLookupPostsRouteData = {

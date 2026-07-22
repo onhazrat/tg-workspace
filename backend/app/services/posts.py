@@ -6,10 +6,11 @@ import time
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import or_
+from sqlalchemy import func, or_
 from sqlmodel import Session, col, select
 
-from app.models_tg import Post
+from app.models_tg import Channel, Post
+from app.services.post_filters import PostFilters, apply_post_filters
 from app.services.serialization import post_to_camel
 from app.services.sync_meta import touch_sync
 
@@ -154,6 +155,48 @@ def lookup_posts(
         )
     )
     return [post_to_camel(p) for p in session.exec(stmt).all()]
+
+
+def count_posts_in_scope(
+    session: Session,
+    *,
+    channel_names: list[str] | None = None,
+    start_date: int | None = None,
+    end_date: int | None = None,
+    filters: PostFilters | None = None,
+    max_per_channel: int = 0,
+) -> dict[str, int]:
+    """Per-channel post counts for a filtered scope, as a `GROUP BY` in SQL.
+
+    Replaces the frontend's `buildPostsInScopeCounts`, which tallied the fully
+    fetched, client-filtered post array. Applies the same keyword / forwarded /
+    media filters as Discover so the two agree.
+
+    `max_per_channel` clamps each channel's count to the cap. The cap's
+    `random` and `latest` modes select *different* posts but the same *number*
+    per channel, so a count is mode-independent and needs no client fallback.
+    """
+    count_expr: Any = func.count()
+    if max_per_channel > 0:
+        count_expr = func.least(count_expr, max_per_channel)
+
+    stmt = select(col(Post.channel_name), count_expr)
+    if channel_names:
+        stmt = stmt.where(col(Post.channel_name).in_(channel_names))
+    if start_date is not None:
+        stmt = stmt.where(Post.timestamp >= start_date)
+    if end_date is not None:
+        stmt = stmt.where(Post.timestamp <= end_date)
+    if filters is not None:
+        followed: frozenset[str] | None = None
+        if filters.forwarded == "unfollowed_forwarded":
+            followed = frozenset(
+                name.lower() for name in session.exec(select(Channel.name)).all()
+            )
+        stmt = apply_post_filters(stmt, filters, followed_names=followed)
+    stmt = stmt.group_by(col(Post.channel_name))
+
+    return dict(session.exec(stmt).all())
 
 
 def bulk_upsert_posts(session: Session, body: list[dict[str, Any]]) -> dict[str, int]:

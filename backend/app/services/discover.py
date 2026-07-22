@@ -24,6 +24,7 @@ from typing import Any, Literal
 from sqlmodel import Session, col, select
 
 from app.models_tg import Channel, Post
+from app.services.post_filters import PostFilters, apply_post_filters
 from app.services.post_links_parser import channel_from_telegram_url
 from app.services.telegram_web import _all_web_domains, is_channel_handle
 
@@ -131,32 +132,58 @@ def compute_discover_candidates(
     start_date: int | None = None,
     end_date: int | None = None,
     signals: set[SignalKind] | None = None,
+    filters: PostFilters | None = None,
+    max_per_channel: int = 0,
 ) -> dict[str, Any]:
     """Aggregate discovery candidates for a channel/date scope.
 
     Returns the same shape the frontend computed: candidates sorted by total
     descending, plus post-level `scopeCounts` which always report every kind
     regardless of which signals are enabled.
+
+    `filters` and `max_per_channel` reproduce the Posts-tab view the frontend
+    aggregated over (`buildFilteredPostsFromRaw`): keyword / forwarded / media,
+    then the `latest` per-channel cap. The cap's `random` mode is browser-only,
+    so callers pass `max_per_channel=0` and keep the client path when it is
+    active (see phase-4 scope decision).
     """
     enabled = signals if signals is not None else set(SIGNAL_KINDS)
 
     scope_counts = {"forwardPosts": 0, "mentionPosts": 0, "linkPosts": 0}
     if not channel_names or not enabled:
-        return {"candidates": [], "scopeCounts": scope_counts}
+        return {"candidates": [], "scopeCounts": scope_counts, "postsInScope": 0}
+
+    followed = {name.lower() for name in session.exec(select(Channel.name)).all()}
 
     stmt = select(Post).where(col(Post.channel_name).in_(channel_names))
     if start_date is not None:
         stmt = stmt.where(Post.timestamp >= start_date)
     if end_date is not None:
         stmt = stmt.where(Post.timestamp <= end_date)
-
-    followed = {name.lower() for name in session.exec(select(Channel.name)).all()}
+    if filters is not None:
+        stmt = apply_post_filters(stmt, filters, followed_names=frozenset(followed))
+    # Order by (channel, timestamp desc) so the latest-cap can be applied while
+    # streaming; this ordering is served by ix_tg_posts_channel_name_timestamp.
+    stmt = stmt.order_by(col(Post.channel_name), col(Post.timestamp).desc())
 
     by_source: dict[str, _Accumulator] = {}
+    seen_per_channel: dict[str, int] = {}
+    posts_in_scope = 0
 
     # Stream in batches: the whole point is to avoid materialising every post
     # body at once, which is what this endpoint replaces on the client side.
     for post in session.exec(stmt.execution_options(yield_per=1000)):
+        if max_per_channel > 0:
+            seen = seen_per_channel.get(post.channel_name, 0)
+            if seen >= max_per_channel:
+                continue
+            seen_per_channel[post.channel_name] = seen + 1
+
+        # Every post that survives the filters and cap — the client's
+        # `filteredPosts.length`, used to tell "empty scope" from "posts exist
+        # but reference nothing".
+        posts_in_scope += 1
+
         all_refs = post_references(post)
         if not all_refs:
             continue
@@ -220,7 +247,11 @@ def compute_discover_candidates(
         )
     )
 
-    return {"candidates": candidates, "scopeCounts": scope_counts}
+    return {
+        "candidates": candidates,
+        "scopeCounts": scope_counts,
+        "postsInScope": posts_in_scope,
+    }
 
 
 def _to_candidate(

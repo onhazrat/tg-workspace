@@ -141,12 +141,18 @@ from app.services.network_settings import (
     network_settings_payload,
 )
 from app.services.operator import get_operator_user_id
+from app.services.post_filters import (
+    FORWARDED_FILTERS,
+    MEDIA_FILTERS,
+    PostFilters,
+)
 from app.services.posts import (
     DEFAULT_POST_PAGE_SIZE,
     MAX_POST_LOOKUP_BATCH,
     MAX_POST_PAGE_SIZE,
     bulk_upsert_posts,
 )
+from app.services.posts import count_posts_in_scope as count_posts_in_scope_impl
 from app.services.posts import list_posts as list_posts_impl
 from app.services.posts import lookup_posts as lookup_posts_impl
 from app.services.settings_store import get_app_setting, put_app_setting
@@ -546,6 +552,23 @@ def list_posts(
     )
 
 
+def _parse_post_filters(keyword: str | None, forwarded: str, media: str) -> PostFilters:
+    """Validate the shared Posts-tab filter query params into a PostFilters.
+
+    Rejecting unknown enum values with 422 mirrors how the frontend can only
+    ever send its own filter constants.
+    """
+    if forwarded not in FORWARDED_FILTERS:
+        raise HTTPException(status_code=422, detail=f"unknown forwarded: {forwarded}")
+    if media not in MEDIA_FILTERS:
+        raise HTTPException(status_code=422, detail=f"unknown media: {media}")
+    return PostFilters(
+        keyword=keyword,
+        forwarded=cast("Any", forwarded),
+        media=cast("Any", media),
+    )
+
+
 @router.get("/discover/candidates")
 def discover_candidates(
     session: SessionDep,
@@ -554,11 +577,17 @@ def discover_candidates(
     start_date: int | None = Query(None, alias="startDate"),
     end_date: int | None = Query(None, alias="endDate"),
     signals: str | None = Query(None),
+    keyword: str | None = Query(None),
+    forwarded: str = Query("all"),
+    media: str = Query("all"),
+    max_per_channel: int = Query(0, alias="maxPerChannel", ge=0),
 ) -> dict[str, Any]:
     """Aggregated discovery candidates for a channel/date scope.
 
     Returns counts only. The client previously fetched every post body in
-    scope to compute this in JS.
+    scope to compute this in JS. The keyword/forwarded/media/maxPerChannel
+    params reproduce the Posts-tab view the client aggregated over; the caller
+    keeps the client path when a semantic query or a `random` cap is active.
     """
     names = [n.strip() for n in channel_names.split(",") if n.strip()]
     kinds = (
@@ -577,6 +606,40 @@ def discover_candidates(
         start_date=start_date,
         end_date=end_date,
         signals=cast("set[SignalKind] | None", kinds),
+        filters=_parse_post_filters(keyword, forwarded, media),
+        max_per_channel=max_per_channel,
+    )
+
+
+@router.get("/posts/counts")
+def posts_counts(
+    session: SessionDep,
+    _current_user: CurrentUser,
+    channel_names: str | None = Query(None, alias="channelNames"),
+    start_date: int | None = Query(None, alias="startDate"),
+    end_date: int | None = Query(None, alias="endDate"),
+    keyword: str | None = Query(None),
+    forwarded: str = Query("all"),
+    media: str = Query("all"),
+    max_per_channel: int = Query(0, alias="maxPerChannel", ge=0),
+) -> dict[str, int]:
+    """Per-channel post counts for a filtered scope, computed as a SQL GROUP BY.
+
+    Replaces the client's `buildPostsInScopeCounts`, which counted the fully
+    fetched, client-filtered post array.
+    """
+    names = (
+        [n.strip() for n in channel_names.split(",") if n.strip()]
+        if channel_names
+        else None
+    )
+    return count_posts_in_scope_impl(
+        session,
+        channel_names=names,
+        start_date=start_date,
+        end_date=end_date,
+        filters=_parse_post_filters(keyword, forwarded, media),
+        max_per_channel=max_per_channel,
     )
 
 
