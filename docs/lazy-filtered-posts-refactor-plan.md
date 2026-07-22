@@ -1,10 +1,13 @@
 # Make `filteredPosts` lazy — refactor plan
 
 **Date:** 2026-07-22
-**Status:** ✅ DONE on branch `lazy-filtered-posts`. The eager `filteredPosts`
-state + effect are removed (grep-clean); a full `filteredPosts` context read no
-longer exists. Verified: backend 489 tests + mypy/ty/ruff, frontend 472 unit +
-tsc + biome, and 51/51 Playwright e2e against a from-branch backend.
+**Status:** ✅ DONE — all 7 increments shipped, merged to `main` in PR #11. The
+eager `filteredPosts` state + effect are removed; a full `filteredPosts` context
+read no longer exists. (Re-verified 2026-07-22: the only surviving matches are
+local parameter names in pure helpers — `discover-candidates.ts`,
+`sort-channels-for-grid.ts` — and doc comments, not context state.) Verified:
+backend 489 tests + mypy/ty/ruff, frontend 472 unit + tsc + biome, and 51/51
+Playwright e2e against a from-branch backend.
 
 > **Scope note:** partway through, the user expanded steps 6–7 beyond this
 > client-only plan into a **server-side feed** (see the
@@ -13,7 +16,17 @@ tsc + biome, and 51/51 Playwright e2e against a from-branch backend.
 > cap incl. a deterministic backend `random`, and `time`/`channel_time` sort);
 > Discover became an action tab (Generate button); the count displays read
 > `/data/posts/counts`. AI/Chat/Tag/command paths (steps 2–5) fetch on demand via
-> `getScopedPosts`. Prompt building stayed client-side (T5.1 still deferred).
+> `getScopedPosts`.
+
+> **Superseded on 2026-07-22 by T5.1 (PR #12).** This plan was written while
+> parent-plan T5.1 was still deferred, so §5 below says prompt building stays
+> client-side. **That is no longer true.** Summary/chat/tag now send a `scope`
+> and the backend assembles the posts block (`format_posts_for_prompt` /
+> `format_posts_for_tag_prompt`, ported byte-identical with golden tests on both
+> sides), so post arrays no longer cross the wire for those paths. The client
+> path survives only where T5.1 deliberately kept it: semantic/related search
+> and `generateBackgroundSummary`, which pass an explicit `postsText` that still
+> wins over `scope`. Read §5 as history, not as current guidance.
 
 > Written to be executed by an agent with **no context except this file** plus
 > `docs/architecture-remediation-plan.md` (the parent plan) and
@@ -143,6 +156,12 @@ Do these in order; each is a commit/PR on its own and leaves the app working.
 ---
 
 ## 5. Interaction with the deferred T5.1
+
+> ⚠️ **Historical — T5.1 has since landed (PR #12).** This section describes the
+> sequencing constraint as it stood while T5.1 was deferred. The "when T5.1 is
+> eventually done" sentence below has now happened: prompt assembly is
+> server-side for summary/chat/tag. Kept to explain *why* the two changes were
+> deliberately staged apart.
 
 Parent plan **T5.1 (server-side prompt assembly) is deferred.** This refactor
 is deliberately *narrower*: it fetches the same posts on demand and keeps
