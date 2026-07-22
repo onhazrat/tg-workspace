@@ -8,6 +8,7 @@ import { useData } from "../contexts/DataContext"
 import { useScraper } from "../contexts/ScraperContext"
 import { useSettings } from "../contexts/SettingsContext"
 import { useUI } from "../contexts/UIContext"
+import { useScopedPostCounts } from "../hooks/usePostsView"
 import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tg-tooltip"
 
 export const SummaryConfig: React.FC = () => {
@@ -15,16 +16,19 @@ export const SummaryConfig: React.FC = () => {
   const { summarizing } = useUI()
   const { selectedModel, setSelectedModel, aiLanguage, setAiLanguage } =
     useSettings()
-  const { scrapingChannels, filteredPosts } = useScraper()
+  const { scrapingChannels } = useScraper()
   const { handleSummarize, copySummaryPrompt } = useAI()
   const [copyingPrompt, setCopyingPrompt] = useState(false)
+
+  const postsInScopeCounts = useScopedPostCounts()
+  const hasPostsInScope = Object.values(postsInScopeCounts).some((n) => n > 0)
 
   const actionsDisabled =
     scrapingChannels.size > 0 ||
     summarizing ||
     copyingPrompt ||
     channels.length === 0 ||
-    filteredPosts.length === 0
+    !hasPostsInScope
 
   const handleCopyPrompt = async () => {
     setCopyingPrompt(true)
