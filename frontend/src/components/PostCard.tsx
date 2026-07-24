@@ -23,8 +23,12 @@ import { useScraper } from "../contexts/ScraperContext"
 import { useSettings } from "../contexts/SettingsContext"
 import { useTranslation } from "../contexts/TranslationContext"
 import { getMediaKindLabel, getPostMediaKinds } from "../lib/posts/post-media"
+import { renderPostText } from "../lib/posts/render-post-text"
 import { getTranslation, saveTranslation } from "../lib/repository"
-import { telegramWebViewPostUrl } from "../lib/telegram-web"
+import {
+  telegramWebViewChannelUrl,
+  telegramWebViewPostUrl,
+} from "../lib/telegram-web"
 import { cn, highlightText } from "../lib/utils"
 import type { Post, PostMediaKind } from "../types"
 import { RelativeTime } from "./RelativeTime"
@@ -216,9 +220,15 @@ export const PostCard: React.FC<PostCardProps> = ({ post, postSearch }) => {
             {post.channelName.charAt(0)}
           </div>
           <div className="flex flex-col">
-            <span className="text-[13px] font-bold uppercase tracking-tight">
+            <a
+              href={telegramWebViewChannelUrl(post.channelName)}
+              target="_blank"
+              rel="noopener noreferrer"
+              data-testid={`post-channel-link-${post.channelName}`}
+              className="text-[13px] font-bold uppercase tracking-tight underline-offset-2 hover:underline w-fit"
+            >
               @{highlightText(post.channelName, postSearch)}
-            </span>
+            </a>
             <div className="flex items-center gap-2">
               <span className="text-[11px] font-mono text-app-ink/60 flex items-center gap-1">
                 <Hash size={10} /> {post.id}
@@ -375,7 +385,7 @@ export const PostCard: React.FC<PostCardProps> = ({ post, postSearch }) => {
               isLongPost && !isExpanded ? "max-h-64 overflow-hidden" : ""
             }`}
           >
-            {highlightText(activeText, postSearch)}
+            {renderPostText(activeText, postSearch)}
           </p>
           {isLongPost && !isExpanded ? (
             <div className="pointer-events-none absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-app-card to-transparent" />
