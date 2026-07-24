@@ -107,7 +107,7 @@ export const ChannelBulkActions: React.FC<ChannelBulkActionsProps> = ({
             onChange={(e) => onBulkTagInputChange(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && onBulkAddTag()}
             placeholder="Add tag..."
-            className="w-32 rounded-md py-1.5 pl-2 pr-10 text-[10px] focus:ring-1"
+            className="h-8 w-36 rounded-md py-0 pl-2.5 pr-16 text-[10px] focus:ring-1"
           />
           <TgButton
             type="button"
@@ -115,7 +115,7 @@ export const ChannelBulkActions: React.FC<ChannelBulkActionsProps> = ({
             size="sm"
             onClick={onBulkAddTag}
             disabled={!bulkTagInput.trim()}
-            className="absolute inset-y-1 right-1 px-2 text-[8px]"
+            className="absolute inset-y-1 right-1 h-auto min-w-[3.25rem] px-2 text-[8px] tracking-normal"
           >
             Add
           </TgButton>
@@ -128,7 +128,7 @@ export const ChannelBulkActions: React.FC<ChannelBulkActionsProps> = ({
             onChange={(e) => onBulkRemoveTagInputChange(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && onBulkRemoveTag()}
             placeholder="Remove tag..."
-            className="w-32 rounded-md py-1.5 pl-2 pr-14 text-[10px] focus:ring-1"
+            className="h-8 w-36 rounded-md py-0 pl-2.5 pr-16 text-[10px] focus:ring-1"
           />
           <TgButton
             type="button"
@@ -136,7 +136,7 @@ export const ChannelBulkActions: React.FC<ChannelBulkActionsProps> = ({
             size="sm"
             onClick={onBulkRemoveTag}
             disabled={!bulkRemoveTagInput.trim()}
-            className="absolute inset-y-1 right-1 px-2 text-[8px]"
+            className="absolute inset-y-1 right-1 h-auto min-w-[3.25rem] px-2 text-[8px] tracking-normal"
           >
             Remove
           </TgButton>
