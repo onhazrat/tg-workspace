@@ -230,9 +230,15 @@ export const PostCard: React.FC<PostCardProps> = ({ post, postSearch }) => {
               @{highlightText(post.channelName, postSearch)}
             </a>
             <div className="flex items-center gap-2">
-              <span className="text-[11px] font-mono text-app-ink/60 flex items-center gap-1">
+              <a
+                href={telegramWebViewPostUrl(post.channelName, post.id)}
+                target="_blank"
+                rel="noopener noreferrer"
+                data-testid={`post-id-link-${post.channelName}-${post.id}`}
+                className="text-[11px] font-mono text-app-ink/60 flex items-center gap-1 underline-offset-2 hover:underline hover:text-app-ink/80"
+              >
                 <Hash size={10} /> {post.id}
-              </span>
+              </a>
               {post.forwardedFrom && (
                 <span className="text-[11px] font-mono text-app-ink/60 flex items-center gap-1 border-l border-app-ink/10 pl-2">
                   Forwarded from:
