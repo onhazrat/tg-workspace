@@ -153,7 +153,10 @@ def compute_discover_candidates(
     if not channel_names or not enabled:
         return {"candidates": [], "scopeCounts": scope_counts, "postsInScope": 0}
 
-    followed = {name.lower() for name in session.exec(select(Channel.name)).all()}
+    followed = {
+        name.lower()  # ty: ignore[unresolved-attribute]
+        for name in session.exec(select(Channel.name)).all()
+    }
 
     stmt = select(Post).where(col(Post.channel_name).in_(channel_names))
     if start_date is not None:

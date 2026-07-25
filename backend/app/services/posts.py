@@ -176,7 +176,8 @@ def list_feed(
         followed: frozenset[str] | None = None
         if filters.forwarded == "unfollowed_forwarded":
             followed = frozenset(
-                name.lower() for name in session.exec(select(Channel.name)).all()
+                name.lower()  # ty: ignore[unresolved-attribute]
+                for name in session.exec(select(Channel.name)).all()
             )
         base = apply_post_filters(base, filters, followed_names=followed)
 
@@ -266,7 +267,8 @@ def count_posts_in_scope(
         followed: frozenset[str] | None = None
         if filters.forwarded == "unfollowed_forwarded":
             followed = frozenset(
-                name.lower() for name in session.exec(select(Channel.name)).all()
+                name.lower()  # ty: ignore[unresolved-attribute]
+                for name in session.exec(select(Channel.name)).all()
             )
         stmt = apply_post_filters(stmt, filters, followed_names=followed)
     stmt = stmt.group_by(col(Post.channel_name))

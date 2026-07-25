@@ -109,7 +109,7 @@ def _fetch_channel_aggregates(
         .where(col(Post.channel_name).in_(channel_names))
         .group_by(Post.channel_name)
     ).all()
-    return {
+    return {  # ty: ignore[invalid-return-type]
         name: {"count": count, "minId": min_id, "maxId": max_id}
         for name, count, min_id, max_id in rows
     }

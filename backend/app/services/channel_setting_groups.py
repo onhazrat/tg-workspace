@@ -531,7 +531,7 @@ def channel_counts_by_group(session: Session) -> dict[str, int]:
             Channel.setting_group_id
         )
     ).all()
-    return dict(rows)
+    return dict(rows)  # ty: ignore[invalid-return-type]
 
 
 def _group_sort_key(group: ChannelSettingGroup) -> tuple[int, str]:
