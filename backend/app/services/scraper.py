@@ -151,7 +151,7 @@ def _decode_widget_data_view(encoded: str) -> dict[str, Any] | None:
     try:
         payload = base64.b64decode(padded).decode("utf-8")
         parsed = json.loads(payload)
-    except (ValueError, json.JSONDecodeError):
+    except ValueError, json.JSONDecodeError:
         return None
     if not isinstance(parsed, dict):
         return None

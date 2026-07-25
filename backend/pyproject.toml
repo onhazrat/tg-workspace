@@ -4,23 +4,23 @@ version = "0.1.0"
 description = ""
 requires-python = ">=3.14,<4.0"
 dependencies = [
-    "fastapi[standard]<1.0.0,>=0.114.2",
+    "fastapi[standard]>=0.139.0,<1.0.0",
     "python-multipart<1.0.0,>=0.0.27",
     "email-validator<3.0.0.0,>=2.1.0.post1",
-    "tenacity<9.0.0,>=8.2.3",
+    "tenacity<10.0.0,>=8.2.3",
     "pydantic>2.0",
-    "emails<1.0,>=0.6",
+    "emails>=1.1.2,<2.0",
     "jinja2<4.0.0,>=3.1.4",
     "alembic<2.0.0,>=1.12.1",
     "httpx[socks]<1.0.0,>=0.25.1",
     "psycopg[binary]<4.0.0,>=3.1.13",
-    "sqlmodel<1.0.0,>=0.0.21",
+    "sqlmodel>=0.0.39,<1.0.0",
     "pydantic-settings<3.0.0,>=2.2.1",
-    "sentry-sdk[fastapi]>=2.0.0,<3.0.0",
-    "pyjwt<3.0.0,>=2.8.0",
+    "sentry-sdk[fastapi]>=2.63.0,<3.0.0",
+    "pyjwt<3.0.0,>=2.13.0",
     "pwdlib[argon2,bcrypt]>=0.3.0",
     "beautifulsoup4>=4.12.0",
-    "lxml>=5.0.0",
+    "lxml>=6.1.0",
     "google-genai>=1.0.0",
     "apscheduler>=3.11.3,<4.0.0",
     "numpy>=1.26.0",
@@ -33,9 +33,13 @@ dependencies = [
 [dependency-groups]
 dev = [
     "python-dotenv>=1.0.0,<2.0.0",
-    "pytest<8.0.0,>=7.4.3",
-    "mypy<2.0.0,>=1.8.0",
-    "ty>=0.0.25",
+    "pytest<10.0.0,>=9.0.3",
+    "mypy<3.0.0,>=1.8.0",
+    # Upper bound matches the template's locked ty (0.0.54). ty is pre-1.0 and
+    # 0.0.63 reports 7 diagnostics on sqlmodel scalar selects
+    # (`session.exec(select(Model.col)).all()`) that mypy --strict does not.
+    # Lift once those sites are annotated; tracked separately.
+    "ty>=0.0.25,<0.0.55",
     "ruff<1.0.0,>=0.2.2",
     "prek>=0.2.24,<1.0.0",
     "coverage<8.0.0,>=7.4.3",
