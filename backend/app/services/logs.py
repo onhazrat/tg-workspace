@@ -5,7 +5,7 @@ from __future__ import annotations
 import uuid
 from collections.abc import Callable
 from datetime import datetime
-from typing import Any, TypeVar, cast
+from typing import Any, cast
 
 from sqlalchemy import delete as sa_delete
 from sqlmodel import Session, SQLModel, col, or_, select
@@ -25,8 +25,6 @@ from app.services.serialization import (
     publish_log_to_camel,
     sync_log_to_camel,
 )
-
-LogModel = TypeVar("LogModel", bound=SQLModel)
 
 # Log list endpoints are viewers, not exports: cap what one request can load.
 DEFAULT_LOG_PAGE_SIZE = 500
@@ -234,7 +232,7 @@ def delete_old_logs(
     return deleted
 
 
-def _list_logs_page(
+def _list_logs_page[LogModel: SQLModel](
     session: Session,
     model: type[LogModel],
     timestamp_col: Any,

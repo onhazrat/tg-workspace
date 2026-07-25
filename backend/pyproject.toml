@@ -2,7 +2,7 @@
 name = "app"
 version = "0.1.0"
 description = ""
-requires-python = ">=3.10,<4.0"
+requires-python = ">=3.14,<4.0"
 dependencies = [
     "fastapi[standard]<1.0.0,>=0.114.2",
     "python-multipart<1.0.0,>=0.0.27",
@@ -22,7 +22,7 @@ dependencies = [
     "beautifulsoup4>=4.12.0",
     "lxml>=5.0.0",
     "google-genai>=1.0.0",
-    "apscheduler>=3.10.0",
+    "apscheduler>=3.11.3,<4.0.0",
     "numpy>=1.26.0",
     "cryptography>=42.0.0",
     "stem>=1.8.0",
@@ -62,7 +62,7 @@ ignore_missing_imports = true
 disable_error_code = ["import-untyped"]
 
 [tool.ruff]
-target-version = "py310"
+target-version = "py314"
 exclude = ["alembic"]
 
 [tool.ruff.lint]

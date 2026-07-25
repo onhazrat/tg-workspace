@@ -16,7 +16,7 @@ import asyncio
 import json
 import re
 import sys
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 from urllib.parse import parse_qs, urlparse
@@ -158,7 +158,7 @@ def _write_sidecar(
     html_path.write_text(html if isinstance(html, str) else "", encoding="utf-8")
     meta = {
         "url": url,
-        "fetched_at": datetime.now(timezone.utc).isoformat(),
+        "fetched_at": datetime.now(UTC).isoformat(),
         "status": status,
         "post_ids_found": _extract_post_ids(html) if html else [],
         "media_scan": _scan_media_in_html(html) if html else [],

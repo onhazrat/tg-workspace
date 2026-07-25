@@ -13,7 +13,7 @@ class StartSyncJobRequest(BaseModel):
     model_config = {"populate_by_name": True}
 
     @model_validator(mode="after")
-    def default_sync_mode(self) -> "StartSyncJobRequest":
+    def default_sync_mode(self) -> StartSyncJobRequest:
         if self.sync_mode is None:
             self.sync_mode = "bulk" if self.channel_ids else "sync_all"
         return self
