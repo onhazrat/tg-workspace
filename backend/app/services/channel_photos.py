@@ -67,7 +67,7 @@ def _read_meta(channel_id: str) -> dict[str, Any] | None:
         if isinstance(parsed, dict):
             return parsed
         return None
-    except (json.JSONDecodeError, OSError):
+    except json.JSONDecodeError, OSError:
         return None
 
 
