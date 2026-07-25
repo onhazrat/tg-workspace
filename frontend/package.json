@@ -48,7 +48,7 @@
     "idb": "^8.0.3",
     "jszip": "^3.10.1",
     "langs": "^2.0.0",
-    "lucide-react": "^0.546.0",
+    "lucide-react": "^1.17.0",
     "motion": "^12.23.24",
     "next-themes": "^0.4.6",
     "radix-ui": "^1.6.0",
