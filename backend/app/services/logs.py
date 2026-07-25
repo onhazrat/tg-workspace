@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import uuid
 from collections.abc import Callable
-from datetime import datetime
 from typing import Any, cast
 
 from sqlalchemy import delete as sa_delete
@@ -16,6 +15,7 @@ from app.models_tg import (
     NetworkLog,
     PublishLog,
     SyncLog,
+    utc_now,
 )
 from app.services.serialization import (
     embedding_log_to_camel,
@@ -62,7 +62,7 @@ def upsert_publish_log(
     if existing:
         for k, v in fields.items():
             setattr(existing, k, v)
-        existing.updated_at = datetime.utcnow()
+        existing.updated_at = utc_now()
         session.add(existing)
     else:
         session.add(PublishLog(id=log_id, **cast(Any, fields)))
@@ -89,7 +89,7 @@ def upsert_sync_log(
     if existing:
         for k, v in fields.items():
             setattr(existing, k, v)
-        existing.updated_at = datetime.utcnow()
+        existing.updated_at = utc_now()
         session.add(existing)
     else:
         session.add(SyncLog(id=log_id, **cast(Any, fields)))
@@ -120,7 +120,7 @@ def upsert_llm_log(
     if existing:
         for k, v in fields.items():
             setattr(existing, k, v)
-        existing.updated_at = datetime.utcnow()
+        existing.updated_at = utc_now()
         session.add(existing)
     else:
         session.add(LLMLog(id=log_id, **cast(Any, fields)))
@@ -144,7 +144,7 @@ def upsert_embedding_log(
     if existing:
         for k, v in fields.items():
             setattr(existing, k, v)
-        existing.updated_at = datetime.utcnow()
+        existing.updated_at = utc_now()
         session.add(existing)
     else:
         session.add(EmbeddingLog(id=log_id, **cast(Any, fields)))
@@ -173,7 +173,7 @@ def upsert_network_log(
     if existing:
         for k, v in fields.items():
             setattr(existing, k, v)
-        existing.updated_at = datetime.utcnow()
+        existing.updated_at = utc_now()
         session.add(existing)
     else:
         session.add(NetworkLog(id=log_id, **cast(Any, fields)))
@@ -213,10 +213,7 @@ def delete_old_logs(
 
     if operator_id is None:
         operator_id = get_operator_user_id(session)
-    cutoff = (
-        int(datetime.utcnow().timestamp() * 1000)
-        - older_than_days * 24 * 60 * 60 * 1000
-    )
+    cutoff = int(utc_now().timestamp() * 1000) - older_than_days * 24 * 60 * 60 * 1000
     deleted: dict[str, int] = {}
     for log_type, (model, _) in LOG_MODELS.items():
         # Bulk DELETE in the database — see clear_logs above for why.

@@ -15,7 +15,7 @@ from sqlmodel import Session, col, or_, select
 from app.ai.registry import default_model, get_provider
 from app.core.config import settings
 from app.core.db import engine
-from app.models_tg import ChatDestination, Post, Summary
+from app.models_tg import ChatDestination, Post, Summary, utc_now
 from app.prompts.summary import format_summary_prompt
 from app.services.channel_setting_groups import channel_is_frozen, load_groups_by_id
 from app.services.logs import upsert_llm_log, upsert_publish_log
@@ -213,7 +213,7 @@ async def _regenerate_one(session: Session, summary: Summary) -> str | None:
     session.add(new_summary)
 
     summary.extra = {**extra, "autoRegenerate": False}
-    summary.updated_at = datetime.utcnow()
+    summary.updated_at = utc_now()
     session.add(summary)
     session.commit()
     touch_sync(session, "summaries")

@@ -3,14 +3,13 @@
 from __future__ import annotations
 
 import time
-from datetime import datetime
 from typing import Any
 
 from sqlalchemy import func, literal, or_
 from sqlalchemy.orm import aliased
 from sqlmodel import Session, col, select
 
-from app.models_tg import Channel, Post
+from app.models_tg import Channel, Post, utc_now
 from app.services.post_filters import PostFilters, apply_post_filters
 from app.services.serialization import post_to_camel
 from app.services.sync_meta import touch_sync
@@ -63,7 +62,7 @@ def bulk_upsert_posts_impl(
                 existing.media = _post_media_from_item(item)
             if "links" in item:
                 existing.links = _post_links_from_item(item)
-            existing.updated_at = datetime.utcnow()
+            existing.updated_at = utc_now()
             session.add(existing)
         else:
             job_id = (

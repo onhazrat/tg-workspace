@@ -49,13 +49,13 @@ if config_module.settings.POSTGRES_DB != _test_db:
 
 
 @pytest.fixture(scope="session", autouse=True)
-def _assert_test_database() -> Generator[None, None, None]:
+def _assert_test_database() -> Generator[None]:
     """Fail fast if pytest is pointed at the dev database."""
     yield
 
 
 @pytest.fixture(scope="session", autouse=True)
-def _apply_alembic_migrations() -> Generator[None, None, None]:
+def _apply_alembic_migrations() -> Generator[None]:
     """Ensure test database schema matches latest Alembic revision."""
     from alembic import command
     from alembic.config import Config
@@ -66,7 +66,7 @@ def _apply_alembic_migrations() -> Generator[None, None, None]:
 
 
 @pytest.fixture(scope="session", autouse=True)
-def db() -> Generator[Session | None, None, None]:
+def db() -> Generator[Session | None]:
     try:
         with Session(engine) as session:
             init_db(session)
@@ -81,7 +81,7 @@ def db() -> Generator[Session | None, None, None]:
 
 
 @pytest.fixture(autouse=True)
-def _clean_tg_tables_after_test() -> Generator[None, None, None]:
+def _clean_tg_tables_after_test() -> Generator[None]:
     """Truncate TG tables after each test so suites cannot pollute each other."""
     yield
     truncate_all_tg_tables()
@@ -161,7 +161,7 @@ def tg_test_channel() -> Generator:
 
 
 @pytest.fixture(scope="module")
-def client() -> Generator[TestClient, None, None]:
+def client() -> Generator[TestClient]:
     with TestClient(app) as c:
         yield c
 

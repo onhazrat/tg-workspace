@@ -3,14 +3,13 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime
 from typing import Any
 
 from fastapi import HTTPException
 from sqlalchemy import Text, cast, or_
 from sqlmodel import Session, col, select
 
-from app.models_tg import Summary
+from app.models_tg import Summary, utc_now
 from app.services.serialization import to_snake
 
 DEFAULT_SUMMARY_PAGE_SIZE = 200
@@ -176,7 +175,7 @@ def upsert_summary(
         for key in extra_removals:
             merged_extra.pop(key, None)
         summary.extra = merged_extra
-        summary.updated_at = datetime.utcnow()
+        summary.updated_at = utc_now()
     else:
         summary = Summary(
             id=summary_id,

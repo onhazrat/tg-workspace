@@ -6,11 +6,10 @@ import asyncio
 import logging
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime
 
 from sqlmodel import Session, col, delete, func, select
 
-from app.models_tg import Channel, Post, PostEmbedding, PostTranslation
+from app.models_tg import Channel, Post, PostEmbedding, PostTranslation, utc_now
 from app.services.channel_setting_groups import channel_allows_reset, load_groups_by_id
 from app.services.operator import select_operator_channels
 from app.services.post_sync_state import clear_channel_sync_state
@@ -116,7 +115,7 @@ def _reset_channel_coverage_fields(channel: Channel) -> None:
     channel.anchor_post_id = None
     channel.oldest_stored_post_timestamp = None
     channel.history_complete_to_cutoff = True
-    channel.updated_at = datetime.utcnow()
+    channel.updated_at = utc_now()
 
 
 async def bulk_reset_and_queue_sync(

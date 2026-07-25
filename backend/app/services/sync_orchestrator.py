@@ -21,7 +21,7 @@ from app.jobs.settings import (
     load_retention_settings,
     load_sync_settings,
 )
-from app.models_tg import Channel, Post
+from app.models_tg import Channel, Post, utc_now
 from app.services.async_db import run_db
 from app.services.channel_photos import resolve_cached_photo_url
 from app.services.channel_setting_groups import (
@@ -795,7 +795,7 @@ def _finalize_channel_success(
         else:
             channel.next_dynamic_sync_at = None
 
-        channel.updated_at = datetime.utcnow()
+        channel.updated_at = utc_now()
         session.add(channel)
         if was_restricted:
             move_channel_from_restricted_to_default(
@@ -858,7 +858,7 @@ def _finalize_channel_scrape_error(
                 due_reason,
                 int(sync_settings.get("syncFailureBackoffMinutes") or 5),
             )
-            channel.updated_at = datetime.utcnow()
+            channel.updated_at = utc_now()
             session.add(channel)
             session.commit()
             touch_sync(session, "channels")
@@ -904,7 +904,7 @@ def _finalize_channel_error(
                 due_reason,
                 int(sync_settings.get("syncFailureBackoffMinutes") or 5),
             )
-            channel.updated_at = datetime.utcnow()
+            channel.updated_at = utc_now()
             session.add(channel)
             session.commit()
             touch_sync(session, "channels")

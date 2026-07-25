@@ -9,7 +9,7 @@ from fastapi import HTTPException
 from sqlmodel import Session
 
 from app.core.db import engine
-from app.models_tg import Post
+from app.models_tg import Post, utc_now
 from app.services.channels import (
     compute_channel_stats,
     compute_channel_stats_batch,
@@ -19,7 +19,7 @@ from tests.utils.setting_groups import add_test_channel
 
 
 def _hourly_timestamps(count: int) -> list[int]:
-    now_ms = int(datetime.utcnow().timestamp() * 1000)
+    now_ms = int(utc_now().timestamp() * 1000)
     start = now_ms - count * 3_600_000
     return [start + i * 3_600_000 for i in range(count)]
 
@@ -82,8 +82,7 @@ def test_batch_stats_velocity() -> None:
         session.commit()
 
         fixed_now = datetime(2026, 6, 28, 12, 0, 0)
-        with patch("app.services.channels.datetime") as mock_dt:
-            mock_dt.utcnow.return_value = fixed_now
+        with patch("app.services.channels.utc_now", return_value=fixed_now):
             batch = compute_channel_stats_batch(session, ["vel-ch"])["vel-ch"]
             single = compute_channel_stats(session, "vel-ch")
 
@@ -156,8 +155,7 @@ def test_single_channel_stats_delegates_to_batch() -> None:
         session.commit()
 
         fixed_now = datetime(2026, 6, 28, 12, 0, 0)
-        with patch("app.services.channels.datetime") as mock_dt:
-            mock_dt.utcnow.return_value = fixed_now
+        with patch("app.services.channels.utc_now", return_value=fixed_now):
             batch_entry = compute_channel_stats_batch(session, ["delegate-ch"])[
                 "delegate-ch"
             ]
