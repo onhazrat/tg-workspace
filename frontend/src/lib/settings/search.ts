@@ -184,8 +184,8 @@ export function searchSettings(
 // Re-export types used by consumers from catalog barrel
 export type {
   ParsedSettingsQuery,
+  SettingCatalogEntry,
   SettingsFeatureGroup,
   SettingsSearchHit,
   SettingsSearchProvider,
-  SettingCatalogEntry,
 }
