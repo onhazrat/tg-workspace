@@ -10,6 +10,7 @@
 | Document | Description |
 |----------|-------------|
 | [staging-ui-ux-audit.md](staging-ui-ux-audit.md) | UI/UX walkthrough of the staging summarizer dashboard (2026-07-25) — open findings, IDs, root causes, suggested order |
+| [migration/PYTHON-314-TEMPLATE-RESYNC.md](migration/PYTHON-314-TEMPLATE-RESYNC.md) | Python 3.14 upgrade + upstream template re-sync (2026-07-26) — what shipped, divergences kept on purpose, and the gotchas (PEP 758, PEP 649, naive `utc_now()`) |
 
 ## Also at repo root
 
