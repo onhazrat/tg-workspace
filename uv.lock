@@ -12,7 +12,10 @@ members = [
 ]
 
 [manifest.dependency-groups]
-dev = [{ name = "zizmor", specifier = ">=1.23.1" }]
+dev = [
+    { name = "prek", specifier = ">=0.4.8,<1.0.0" },
+    { name = "zizmor", specifier = ">=1.25.2" },
+]
 github-actions = [{ name = "smokeshow", specifier = ">=0.5.0" }]
 
 [[package]]
@@ -94,7 +97,6 @@ dependencies = [
 dev = [
     { name = "coverage" },
     { name = "mypy" },
-    { name = "prek" },
     { name = "pytest" },
     { name = "python-dotenv" },
     { name = "ruff" },
@@ -133,7 +135,6 @@ requires-dist = [
 dev = [
     { name = "coverage", specifier = ">=7.4.3,<8.0.0" },
     { name = "mypy", specifier = ">=1.8.0,<3.0.0" },
-    { name = "prek", specifier = ">=0.2.24,<1.0.0" },
     { name = "pytest", specifier = ">=9.0.3,<10.0.0" },
     { name = "python-dotenv", specifier = ">=1.0.0,<2.0.0" },
     { name = "ruff", specifier = ">=0.2.2,<1.0.0" },

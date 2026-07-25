@@ -41,7 +41,6 @@ dev = [
     # Lift once those sites are annotated; tracked separately.
     "ty>=0.0.25,<0.0.55",
     "ruff<1.0.0,>=0.2.2",
-    "prek>=0.2.24,<1.0.0",
     "coverage<8.0.0,>=7.4.3",
 ]
 
@@ -112,3 +111,6 @@ error-on-warning = true
 
 [tool.ty.rules]
 deprecated = "ignore"
+
+[tool.fastapi]
+entrypoint = "app.main:app"
