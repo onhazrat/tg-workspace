@@ -72,7 +72,7 @@ describe("buildSearchResultsState", () => {
 
     expect(state?.kind).toBe("summaries")
     expect(state?.query).toBe("market")
-    expect((state?.items as SummaryListItem[]).map((i) => i.id)).toEqual(["s1"])
+    expect((state!.items as SummaryListItem[]).map((i) => i.id)).toEqual(["s1"])
     expect(state?.totalCount).toBe(1)
   })
 
@@ -87,7 +87,7 @@ describe("buildSearchResultsState", () => {
     const state = await buildSearchResultsState(command, ctx, "   ")
 
     expect(state?.query).toBe("")
-    expect((state?.items as SummaryListItem[]).map((i) => i.id)).toEqual([
+    expect((state!.items as SummaryListItem[]).map((i) => i.id)).toEqual([
       "s2",
       "s1",
     ])

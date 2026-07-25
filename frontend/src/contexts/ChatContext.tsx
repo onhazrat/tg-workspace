@@ -155,7 +155,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
 
           promptUsed = prompt
           configUsed = config
-          systemInstructionUsed = systemInstruction ?? "" ?? ""
+          systemInstructionUsed = systemInstruction ?? ""
 
           for await (const chunk of stream) {
             const chunkText = chunk.text || ""
