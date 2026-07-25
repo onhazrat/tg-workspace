@@ -2,13 +2,12 @@
 
 from __future__ import annotations
 
-from datetime import datetime
 from typing import Any
 from uuid import UUID
 
 from sqlmodel import Session
 
-from app.models_tg import AppSetting
+from app.models_tg import AppSetting, utc_now
 
 
 def get_app_setting(session: Session, key: str) -> dict[str, Any]:
@@ -29,7 +28,7 @@ def put_app_setting(
     merged = {**(row.value if row else {}), **body}
     if row:
         row.value = merged
-        row.updated_at = datetime.utcnow()
+        row.updated_at = utc_now()
     else:
         row = AppSetting(key=key, value=merged, user_id=user_id)
     session.add(row)

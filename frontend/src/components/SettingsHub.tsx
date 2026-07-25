@@ -361,7 +361,7 @@ export const SettingsHub: React.FC = () => {
           className="flex-1 p-8 overflow-y-auto"
           data-testid={
             isSearching
-              ? "settings-search-results"
+              ? "settings-section-search"
               : `settings-section-${activeSettingsTab}`
           }
         >

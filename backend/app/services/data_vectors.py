@@ -2,12 +2,11 @@
 
 from __future__ import annotations
 
-from datetime import datetime
 from typing import Any
 
 from sqlmodel import Session, col, select
 
-from app.models_tg import PostEmbedding, PostTranslation
+from app.models_tg import PostEmbedding, PostTranslation, utc_now
 from app.services.serialization import (
     normalize_body,
     translation_to_camel,
@@ -34,7 +33,7 @@ def upsert_embeddings(session: Session, body: list[dict[str, Any]]) -> dict[str,
             existing.provider = normalized.get("provider", existing.provider)
             existing.model = normalized.get("model", existing.model)
             existing.dimensions = normalized.get("dimensions", existing.dimensions)
-            existing.updated_at = datetime.utcnow()
+            existing.updated_at = utc_now()
             session.add(existing)
         else:
             session.add(
@@ -106,7 +105,7 @@ def upsert_translations(session: Session, body: list[dict[str, Any]]) -> dict[st
                 "translated_text", existing.translated_text
             )
             existing.timestamp = normalized.get("timestamp", existing.timestamp)
-            existing.updated_at = datetime.utcnow()
+            existing.updated_at = utc_now()
             session.add(existing)
         else:
             session.add(

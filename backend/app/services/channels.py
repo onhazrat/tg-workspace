@@ -3,14 +3,13 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime
 from typing import Any
 
 from fastapi import HTTPException
 from sqlalchemy import delete as sa_delete
 from sqlmodel import Session, col, func, select
 
-from app.models_tg import Channel, Post
+from app.models_tg import Channel, Post, utc_now
 from app.services.channel_photos import delete_cached_photo
 from app.services.channel_setting_groups import (
     ensure_default_group,
@@ -43,7 +42,7 @@ def update_channel_coverage(
         select(Post).where(Post.channel_name == channel.name, Post.is_anchor == True)  # noqa: E712
     ).all():
         anchor.is_anchor = False
-        anchor.updated_at = datetime.utcnow()
+        anchor.updated_at = utc_now()
         session.add(anchor)
 
     channel.anchor_post_id = None
@@ -72,11 +71,11 @@ def update_channel_coverage(
 
     if anchor_post and scrape_cutoff_ms > 0:
         anchor_post.is_anchor = True
-        anchor_post.updated_at = datetime.utcnow()
+        anchor_post.updated_at = utc_now()
         session.add(anchor_post)
         channel.anchor_post_id = anchor_post.post_id
 
-    channel.updated_at = datetime.utcnow()
+    channel.updated_at = utc_now()
     session.add(channel)
 
 
@@ -89,9 +88,7 @@ def _velocity_from_timestamps(timestamps: list[int]) -> float:
         for i in range(2, len(recent)):
             diff = (recent[i] - recent[i - 1]) / (1000 * 60 * 60)
             ema_diff = alpha * diff + (1 - alpha) * ema_diff
-        time_since_last = (datetime.utcnow().timestamp() * 1000 - recent[-1]) / (
-            1000 * 60 * 60
-        )
+        time_since_last = (utc_now().timestamp() * 1000 - recent[-1]) / (1000 * 60 * 60)
         if time_since_last > ema_diff:
             ema_diff = alpha * time_since_last + (1 - alpha) * ema_diff
         if ema_diff > 0:
@@ -112,7 +109,7 @@ def _fetch_channel_aggregates(
         .where(col(Post.channel_name).in_(channel_names))
         .group_by(Post.channel_name)
     ).all()
-    return {
+    return {  # ty: ignore[invalid-return-type]
         name: {"count": count, "minId": min_id, "maxId": max_id}
         for name, count, min_id, max_id in rows
     }
@@ -254,7 +251,7 @@ def upsert_channel(
     if ch:
         reject_inherited_channel_fields(body)
         apply_channel_fields(ch, normalized, session=session)
-        ch.updated_at = datetime.utcnow()
+        ch.updated_at = utc_now()
         group = get_group_for_channel(session, ch)
     else:
         name = normalized.get("name", channel_id)
@@ -265,7 +262,7 @@ def upsert_channel(
             group = get_or_create_restricted_group(session, user_id=user_id)
         else:
             group = ensure_default_group(session, user_id=user_id)
-        now_ms = int(datetime.utcnow().timestamp() * 1000)
+        now_ms = int(utc_now().timestamp() * 1000)
         extras = {
             k: v
             for k, v in normalized.items()
@@ -401,7 +398,7 @@ def bulk_update_channel_tags(
         channel = by_id[channel_id]
         reject_reserved_virtual_group_tags(raw_tags)
         channel.tags = normalize_channel_tags(raw_tags)
-        channel.updated_at = datetime.utcnow()
+        channel.updated_at = utc_now()
         session.add(channel)
         updated_rows.append(
             channel_to_camel(channel, group=groups_by_id.get(channel.setting_group_id))

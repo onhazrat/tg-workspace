@@ -6,6 +6,8 @@ Documentation for migrating the browser-first TG-Summarizer app to the FastAPI +
 
 **Complete (2026-06-08):** Phases **0–7** in [IMPLEMENTATION-PLAN.md](./IMPLEMENTATION-PLAN.md) are done (including Phase 4.5). Critical-path work (0 → 1 → 4 → 4.5 → 6) and parallel phases (2, 3, 5, 7) are shipped.
 
+**Template re-sync (2026-07-26):** the project is back in step with upstream — Python 3.14, upstream dependency floors and tooling. See [PYTHON-314-TEMPLATE-RESYNC.md](./PYTHON-314-TEMPLATE-RESYNC.md).
+
 ## Start here
 
 | Document | Description |
@@ -25,6 +27,7 @@ Documentation for migrating the browser-first TG-Summarizer app to the FastAPI +
 | [MIGRATION-RISKS.md](./MIGRATION-RISKS.md) | Risk register and mitigations |
 | [SPIKE-NOTES.md](./SPIKE-NOTES.md) | Phase 0.3 spike results (scrape, Gemini SSE, Tor) |
 | [TEMPLATE-STUDY.md](./TEMPLATE-STUDY.md) | FastAPI template adoption notes |
+| [PYTHON-314-TEMPLATE-RESYNC.md](./PYTHON-314-TEMPLATE-RESYNC.md) | Python 3.14 upgrade + re-sync with upstream template (2026-07-26) — preserved divergences, PEP 758/649 consequences, how to diff against upstream |
 
 ## Architectural decision records
 

@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import time
 import uuid
-from datetime import datetime
 from typing import Any
 from uuid import UUID
 
@@ -14,7 +13,7 @@ from sqlmodel.sql.expression import SelectOfScalar
 
 from app.ai.registry import get_provider
 from app.core.config import settings
-from app.models_tg import EmbeddingLog, Post, PostEmbedding, SyncMeta
+from app.models_tg import EmbeddingLog, Post, PostEmbedding, SyncMeta, utc_now
 
 _last_backfill_run_ms: int | None = None
 
@@ -28,7 +27,7 @@ def _touch_sync(session: Session, resource: str) -> None:
     etag = str(uuid.uuid4())
     if meta:
         meta.etag = etag
-        meta.updated_at = datetime.utcnow()
+        meta.updated_at = utc_now()
         session.add(meta)
     else:
         session.add(SyncMeta(resource=resource, etag=etag))
@@ -158,7 +157,7 @@ async def backfill_embeddings(
                     existing.provider = result.provider
                     existing.model = result.model
                     existing.dimensions = result.dimensions
-                    existing.updated_at = datetime.utcnow()
+                    existing.updated_at = utc_now()
                     session.add(existing)
                 else:
                     session.add(

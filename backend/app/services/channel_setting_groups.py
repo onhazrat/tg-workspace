@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import time
 import uuid
-from datetime import datetime
 from typing import Any, Literal, cast
 
 from fastapi import HTTPException
@@ -12,7 +11,7 @@ from sqlalchemy import or_
 from sqlalchemy.sql.elements import ColumnElement
 from sqlmodel import Session, col, func, select
 
-from app.models_tg import Channel, ChannelSettingGroup
+from app.models_tg import Channel, ChannelSettingGroup, utc_now
 from app.services.serialization import normalize_body, to_camel, to_snake
 from app.services.sync_schedule import (
     compute_next_dynamic_sync_at_from_last_updated,
@@ -239,7 +238,7 @@ def consolidate_legacy_duplicate_reserved_groups(
             ).all()
             for channel in channels:
                 channel.setting_group_id = canonical.id
-                channel.updated_at = datetime.utcnow()
+                channel.updated_at = utc_now()
                 session.add(channel)
             session.delete(legacy)
             merged += 1
@@ -321,7 +320,7 @@ def move_channel_from_restricted_to_default(
         return None
     default_group = ensure_default_group(session, user_id=user_id or channel.user_id)
     channel.setting_group_id = default_group.id
-    channel.updated_at = datetime.utcnow()
+    channel.updated_at = utc_now()
     now_ms = int(time.time() * 1000)
     if not default_group.regular_sync_enabled:
         channel.next_regular_sync_at = None
@@ -532,7 +531,7 @@ def channel_counts_by_group(session: Session) -> dict[str, int]:
             Channel.setting_group_id
         )
     ).all()
-    return dict(rows)
+    return dict(rows)  # ty: ignore[invalid-return-type]
 
 
 def _group_sort_key(group: ChannelSettingGroup) -> tuple[int, str]:
@@ -648,7 +647,7 @@ def apply_group_fields(group: ChannelSettingGroup, body: dict[str, Any]) -> None
         if key in ("auto_sync_interval_minutes", "dynamic_sync_expected_posts"):
             value = max(1, int(value))
         setattr(group, key, value)
-    group.updated_at = datetime.utcnow()
+    group.updated_at = utc_now()
 
 
 def recompute_channels_for_group(
@@ -695,7 +694,7 @@ def recompute_channels_for_group(
                 dynamic_sync_enabled=group.dynamic_sync_enabled,
                 dynamic_sync_expected_posts=group.dynamic_sync_expected_posts,
             )
-        channel.updated_at = datetime.utcnow()
+        channel.updated_at = utc_now()
         session.add(channel)
     return len(channels)
 
@@ -923,7 +922,7 @@ def bulk_assign_setting_group(
                 dynamic_sync_enabled=group.dynamic_sync_enabled,
                 dynamic_sync_expected_posts=group.dynamic_sync_expected_posts,
             )
-        channel.updated_at = datetime.utcnow()
+        channel.updated_at = utc_now()
         session.add(channel)
 
     session.commit()
@@ -938,7 +937,7 @@ def move_channel_to_restricted_group(
 ) -> ChannelSettingGroup:
     group = get_or_create_restricted_group(session, user_id=user_id or channel.user_id)
     channel.setting_group_id = group.id
-    channel.updated_at = datetime.utcnow()
+    channel.updated_at = utc_now()
     session.add(channel)
     return group
 

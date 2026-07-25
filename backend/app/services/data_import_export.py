@@ -5,7 +5,6 @@ from __future__ import annotations
 import json
 import uuid
 from collections.abc import Callable, Iterator
-from datetime import datetime
 from typing import Any
 
 from fastapi.encoders import jsonable_encoder
@@ -25,6 +24,7 @@ from app.models_tg import (
     PublishLog,
     Summary,
     SyncLog,
+    utc_now,
 )
 from app.services.channel_setting_groups import (
     ensure_default_group,
@@ -86,7 +86,7 @@ def import_data(
         ch = session.get(Channel, channel_id)
         if ch:
             apply_channel_fields(ch, normalized, session=session)
-            ch.updated_at = datetime.utcnow()
+            ch.updated_at = utc_now()
         else:
             setting_group_id = normalized.get("setting_group_id")
             group = (
@@ -163,7 +163,7 @@ def import_data(
             summary.extra = {
                 k: v for k, v in item.items() if k not in known_fields and k != "id"
             }
-            summary.updated_at = datetime.utcnow()
+            summary.updated_at = utc_now()
         else:
             summary = Summary(
                 id=sid,
@@ -195,7 +195,7 @@ def import_data(
             bot.username = normalized.get("username", bot.username)
             bot.photo_url = normalized.get("photo_url", bot.photo_url)
             bot.last_validated = normalized.get("last_validated", bot.last_validated)
-            bot.updated_at = datetime.utcnow()
+            bot.updated_at = utc_now()
         else:
             if not encrypted:
                 continue
@@ -219,7 +219,7 @@ def import_data(
         if dest:
             dest.name = normalized.get("name", dest.name)
             dest.chat_id = normalized.get("chat_id", dest.chat_id)
-            dest.updated_at = datetime.utcnow()
+            dest.updated_at = utc_now()
         else:
             dest = ChatDestination(
                 id=did,
@@ -331,7 +331,7 @@ def _stream_export_body(session: Session) -> Iterator[str]:
     groups_by_id = load_groups_by_id(session)
 
     yield '{"version":2,"timestamp":'
-    yield str(int(datetime.utcnow().timestamp() * 1000))
+    yield str(int(utc_now().timestamp() * 1000))
     yield ',"data":{'
 
     # Small tables: already bounded, emit directly.

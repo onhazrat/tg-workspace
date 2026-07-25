@@ -3,14 +3,13 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime
 from typing import Any
 
 from fastapi import HTTPException
 from sqlmodel import Session, select
 
 from app.core.secrets import encrypt_token, is_encrypted
-from app.models_tg import BotCredential, ChatDestination
+from app.models_tg import BotCredential, ChatDestination, utc_now
 from app.services.serialization import bot_to_camel, chat_dest_to_camel, normalize_body
 from app.services.sync_meta import touch_sync
 
@@ -45,7 +44,7 @@ def upsert_bot_credential(
         bot.username = normalized.get("username", bot.username)
         bot.photo_url = normalized.get("photo_url", bot.photo_url)
         bot.last_validated = normalized.get("last_validated", bot.last_validated)
-        bot.updated_at = datetime.utcnow()
+        bot.updated_at = utc_now()
     else:
         if not encrypted:
             raise HTTPException(
@@ -97,7 +96,7 @@ def migrate_bot_credentials(
             bot.username = normalized.get("username", bot.username)
             bot.photo_url = normalized.get("photo_url", bot.photo_url)
             bot.last_validated = normalized.get("last_validated", bot.last_validated)
-            bot.updated_at = datetime.utcnow()
+            bot.updated_at = utc_now()
         else:
             bot = BotCredential(
                 id=bid,
@@ -131,7 +130,7 @@ def upsert_chat_destination(
     if dest:
         dest.name = normalized.get("name", dest.name)
         dest.chat_id = normalized.get("chat_id", dest.chat_id)
-        dest.updated_at = datetime.utcnow()
+        dest.updated_at = utc_now()
     else:
         dest = ChatDestination(
             id=dest_id,

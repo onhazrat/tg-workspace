@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime
 from typing import Any, cast
 
 from sqlalchemy import delete as sa_delete
@@ -20,6 +19,7 @@ from app.models_tg import (
     PostTranslation,
     PublishLog,
     SyncLog,
+    utc_now,
 )
 from app.services.operator import get_operator_user_id
 from app.services.post_sync_state import (
@@ -52,9 +52,7 @@ def run_retention_cleanup(session: Session) -> dict[str, int]:
     # ~17KB/row, up to 3MB) and the cheapest to clear, so do them before the
     # slower per-post work in case the latter is interrupted.
     if log_days > 0:
-        cutoff = (
-            int(datetime.utcnow().timestamp() * 1000) - log_days * 24 * 60 * 60 * 1000
-        )
+        cutoff = int(utc_now().timestamp() * 1000) - log_days * 24 * 60 * 60 * 1000
         for model_cls, resource in (
             (PublishLog, "publish_logs"),
             (SyncLog, "sync_logs"),
@@ -80,9 +78,7 @@ def run_retention_cleanup(session: Session) -> dict[str, int]:
                 touch_sync(session, resource)
 
     if post_days > 0:
-        cutoff = (
-            int(datetime.utcnow().timestamp() * 1000) - post_days * 24 * 60 * 60 * 1000
-        )
+        cutoff = int(utc_now().timestamp() * 1000) - post_days * 24 * 60 * 60 * 1000
         affected_channels: set[str] = set()
         # Page through the backlog: select a bounded batch, delete it and its
         # dependents in bulk, commit, repeat. Memory stays flat regardless of

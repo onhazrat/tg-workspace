@@ -4,7 +4,6 @@ import asyncio
 import json
 import time
 from collections.abc import AsyncIterator
-from datetime import datetime
 from typing import Any, cast
 
 from fastapi import APIRouter, Body, HTTPException, Query
@@ -20,7 +19,7 @@ from app.jobs.settings import (
     load_sync_settings,
     load_translation_settings,
 )
-from app.models_tg import AppSetting
+from app.models_tg import AppSetting, utc_now
 from app.schemas.data import (
     BulkChannelSettingGroupRequest,
     BulkChannelTagsRequest,
@@ -1107,7 +1106,7 @@ def put_network_settings(
     if row:
         row.value = merged
         row.user_id = _current_user.id
-        row.updated_at = datetime.utcnow()
+        row.updated_at = utc_now()
     else:
         row = AppSetting(key="network", value=merged, user_id=_current_user.id)
     session.add(row)

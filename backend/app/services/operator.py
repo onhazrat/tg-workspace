@@ -92,7 +92,9 @@ def distinct_operator_setting_group_ids(
         if user_filter is not None:
             stmt = stmt.where(user_filter)
         rows = session.exec(stmt).all()
-        return {group_id for group_id in rows if group_id}
+        return {  # ty: ignore[invalid-return-type]
+            group_id for group_id in rows if group_id
+        }
 
     user_filter = None
     if operator_id is not None:

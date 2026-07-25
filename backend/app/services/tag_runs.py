@@ -3,13 +3,12 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime
 from typing import Any
 
 from fastapi import HTTPException
 from sqlmodel import Session, col, select
 
-from app.models_tg import TagRun
+from app.models_tg import TagRun, utc_now
 from app.services.serialization import to_snake
 
 DEFAULT_TAG_RUN_PAGE_SIZE = 100
@@ -123,7 +122,7 @@ def upsert_tag_run(
         "updated_at_ms",
         "updatedAt",
     }
-    now_ms = int(datetime.utcnow().timestamp() * 1000)
+    now_ms = int(utc_now().timestamp() * 1000)
     tag_run = session.get(TagRun, tag_run_id)
     if tag_run:
         for key, value in body.items():
@@ -131,7 +130,7 @@ def upsert_tag_run(
             if snake in known:
                 setattr(tag_run, snake, value)
         tag_run.updated_at_ms = now_ms
-        tag_run.updated_at = datetime.utcnow()
+        tag_run.updated_at = utc_now()
     else:
         tag_run = TagRun(
             id=tag_run_id,

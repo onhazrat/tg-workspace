@@ -1,7 +1,7 @@
 """TG Summarizer domain models."""
 
 import uuid
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 
 from sqlalchemy import JSON, BigInteger, Column, Text, UniqueConstraint
@@ -14,7 +14,13 @@ def _ms_ts(*, nullable: bool = False) -> Column[int]:
 
 
 def utc_now() -> datetime:
-    return datetime.utcnow()
+    """Naive UTC "now", matching the TIMESTAMP WITHOUT TIME ZONE columns below.
+
+    The tg_* tables store naive timestamps, so this deliberately drops tzinfo
+    rather than returning an aware datetime. Equivalent to the deprecated
+    datetime.utcnow() it replaces, but without the DeprecationWarning.
+    """
+    return datetime.now(UTC).replace(tzinfo=None)
 
 
 class ChannelSettingGroup(SQLModel, table=True):

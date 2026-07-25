@@ -5,7 +5,6 @@ from __future__ import annotations
 import logging
 import time
 import uuid
-from datetime import datetime
 from typing import Any
 
 from sqlmodel import Session, col, select
@@ -14,7 +13,7 @@ from app.ai.registry import default_model, get_provider
 from app.core.config import settings
 from app.core.db import engine
 from app.jobs.settings import load_translation_settings
-from app.models_tg import Post, PostTranslation
+from app.models_tg import Post, PostTranslation, utc_now
 from app.services.channels import channel_names_for_operator
 from app.services.operator import get_operator_user_id
 from app.services.sync_meta import touch_sync
@@ -106,7 +105,7 @@ async def run_translation_batch() -> dict[str, Any]:
             if existing:
                 existing.translated_text = translated
                 existing.timestamp = now
-                existing.updated_at = datetime.utcnow()
+                existing.updated_at = utc_now()
                 session.add(existing)
             else:
                 session.add(

@@ -8,19 +8,18 @@ shape the scheduled retention sweep was already fixed for.
 from __future__ import annotations
 
 import uuid
-from datetime import datetime
 
 from sqlmodel import Session, select
 
 from app.core.db import engine
-from app.models_tg import SyncLog
+from app.models_tg import SyncLog, utc_now
 from app.services.logs import clear_logs, delete_old_logs
 
 DAY_MS = 24 * 60 * 60 * 1000
 
 
 def _now_ms() -> int:
-    return int(datetime.utcnow().timestamp() * 1000)
+    return int(utc_now().timestamp() * 1000)
 
 
 def _seed(rows: list[tuple[str, int, uuid.UUID | None]]) -> None:

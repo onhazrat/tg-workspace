@@ -3,12 +3,11 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime
 from typing import Any
 
 from sqlmodel import Session, select
 
-from app.models_tg import SyncMeta
+from app.models_tg import SyncMeta, utc_now
 
 
 def touch_sync(session: Session, resource: str) -> None:
@@ -16,7 +15,7 @@ def touch_sync(session: Session, resource: str) -> None:
     etag = str(uuid.uuid4())
     if meta:
         meta.etag = etag
-        meta.updated_at = datetime.utcnow()
+        meta.updated_at = utc_now()
         session.add(meta)
     else:
         session.add(SyncMeta(resource=resource, etag=etag))
