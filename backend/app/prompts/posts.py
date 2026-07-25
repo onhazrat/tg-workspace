@@ -9,7 +9,7 @@ change here must be mirrored there, and vice-versa; the parity is covered by
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 # A single prompt is capped so an oversized selection is refused with a clear
@@ -91,9 +91,7 @@ def format_posts_for_prompt(posts: list[dict[str, Any]]) -> str:
 
 def _tag_prompt_date(timestamp_ms: int) -> str:
     """`YYYY-MM-DD` in UTC — matches JS `new Date(ms).toISOString().slice(0, 10)`."""
-    return datetime.fromtimestamp(timestamp_ms / 1000, tz=timezone.utc).strftime(
-        "%Y-%m-%d"
-    )
+    return datetime.fromtimestamp(timestamp_ms / 1000, tz=UTC).strftime("%Y-%m-%d")
 
 
 def format_posts_for_tag_prompt(

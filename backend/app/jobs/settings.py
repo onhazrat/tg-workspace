@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import time
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from sqlmodel import Session
@@ -193,9 +193,7 @@ def compute_effective_global_start_time_ms(
                 now - post_retention_days * day_ms if post_retention_days > 0 else 0
             )
     elif mode == "absolute":
-        date_str = (
-            value if isinstance(value, str) else datetime.now(timezone.utc).isoformat()
-        )
+        date_str = value if isinstance(value, str) else datetime.now(UTC).isoformat()
         try:
             parsed = datetime.fromisoformat(date_str.replace("Z", "+00:00"))
             target_time = int(parsed.timestamp() * 1000)

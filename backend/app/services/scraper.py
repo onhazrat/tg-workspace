@@ -9,7 +9,7 @@ import json
 import logging
 import math
 import re
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from bs4 import BeautifulSoup
@@ -532,7 +532,7 @@ async def resolve_start_time_to_id(
 
     logger.info(
         "Resolving start time %s for @%s...",
-        datetime.fromtimestamp(target_time_ms / 1000, tz=timezone.utc).isoformat(),
+        datetime.fromtimestamp(target_time_ms / 1000, tz=UTC).isoformat(),
         channel_name,
     )
 
@@ -606,9 +606,9 @@ async def resolve_start_time_to_id(
     logger.info(
         "Bounds found: Low[%s] = %s, High[%s] = %s",
         low_id,
-        datetime.fromtimestamp(low_time / 1000, tz=timezone.utc).isoformat(),
+        datetime.fromtimestamp(low_time / 1000, tz=UTC).isoformat(),
         high_id,
-        datetime.fromtimestamp(high_time / 1000, tz=timezone.utc).isoformat(),
+        datetime.fromtimestamp(high_time / 1000, tz=UTC).isoformat(),
     )
 
     iterations = 0
@@ -651,9 +651,7 @@ async def resolve_start_time_to_id(
         logger.info(
             "Guessed Post: ID %s, Time %s",
             guess_post["id"],
-            datetime.fromtimestamp(
-                guess_post["time"] / 1000, tz=timezone.utc
-            ).isoformat(),
+            datetime.fromtimestamp(guess_post["time"] / 1000, tz=UTC).isoformat(),
         )
 
         if guess_post["time"] == target_time_ms:

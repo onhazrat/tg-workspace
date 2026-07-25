@@ -30,7 +30,7 @@ class BotInfoRequest(ProxyConfig):
     params: dict[str, Any] | None = None
 
     @model_validator(mode="after")
-    def require_credential_or_token(self) -> "BotInfoRequest":
+    def require_credential_or_token(self) -> BotInfoRequest:
         if not self.credential_id and not self.token:
             raise ValueError("credentialId or token is required")
         return self
@@ -44,7 +44,7 @@ class PublishRequest(ProxyConfig):
     metadata_text: str | None = Field(None, alias="metadataText")
 
     @model_validator(mode="after")
-    def require_credential_or_token(self) -> "PublishRequest":
+    def require_credential_or_token(self) -> PublishRequest:
         if not self.credential_id and not self.token:
             raise ValueError("credentialId or token is required")
         return self
