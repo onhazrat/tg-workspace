@@ -1,11 +1,7 @@
 import { useEffect, useState } from "react"
 
-import { api } from "@/api"
+import { getChannelPhotoSrc } from "@/lib/channels/channel-photo-cache"
 import type { Channel } from "@/types"
-
-function isCachedPhotoUrl(photoUrl?: string): boolean {
-  return Boolean(photoUrl?.includes("/telegram/channel-photo/"))
-}
 
 export function ChannelAvatar({
   channel,
@@ -24,36 +20,24 @@ export function ChannelAvatar({
     (channel.displayName || channel.name)[0]?.toUpperCase() ?? "?"
 
   useEffect(() => {
-    let objectUrl: string | null = null
+    let active = true
     setFailed(false)
 
-    if (!channel.photoUrl) {
-      setSrc(null)
-      return
-    }
+    // Resolution (and any object URL) is owned by the shared cache, so avatars
+    // for the same channel share one fetch and object URLs are not revoked here.
+    getChannelPhotoSrc(channel.id, channel.photoUrl)
+      .then((resolved) => {
+        if (active) setSrc(resolved)
+      })
+      .catch(() => {
+        if (!active) return
+        setSrc(null)
+        setFailed(true)
+      })
 
-    if (isCachedPhotoUrl(channel.photoUrl)) {
-      api
-        .fetchChannelPhoto(channel.id)
-        .then((blob) => {
-          objectUrl = URL.createObjectURL(blob)
-          setSrc(objectUrl)
-        })
-        .catch(() => {
-          setSrc(null)
-          setFailed(true)
-        })
-      return () => {
-        if (objectUrl) URL.revokeObjectURL(objectUrl)
-      }
+    return () => {
+      active = false
     }
-
-    if (channel.photoUrl.startsWith("http")) {
-      setSrc(channel.photoUrl)
-      return
-    }
-
-    setSrc(null)
   }, [channel.id, channel.photoUrl])
 
   if (src && !failed) {

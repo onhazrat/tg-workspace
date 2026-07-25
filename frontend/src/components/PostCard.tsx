@@ -31,6 +31,7 @@ import {
 } from "../lib/telegram-web"
 import { cn, highlightText } from "../lib/utils"
 import type { Post, PostMediaKind } from "../types"
+import { ChannelAvatar } from "./ChannelAvatar"
 import { RelativeTime } from "./RelativeTime"
 import { Badge } from "./ui/badge"
 import { TgIconButton, tgIconButtonVariants } from "./ui/tg-icon-button"
@@ -116,6 +117,13 @@ export const PostCard: React.FC<PostCardProps> = ({ post, postSearch }) => {
 
   const activeText =
     showTranslation && translatedText ? translatedText : post.text
+  const channel = useMemo(
+    () =>
+      channels.find(
+        (c) => c.name.toLowerCase() === post.channelName.toLowerCase(),
+      ),
+    [channels, post.channelName],
+  )
   const mediaKinds = useMemo(() => getPostMediaKinds(post), [post])
   const thumbApiPath = post.media?.thumbApiPath
   const viewsLabel = post.media?.views
@@ -216,9 +224,17 @@ export const PostCard: React.FC<PostCardProps> = ({ post, postSearch }) => {
       {/* Post Header */}
       <div className="flex items-center justify-between px-5 py-3 bg-app-muted/30 border-b border-app-ink/5 relative">
         <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-app-ink/10 to-app-ink/5 flex items-center justify-center text-[12px] font-bold uppercase text-app-ink/70 border border-app-ink/10 shadow-sm">
-            {post.channelName.charAt(0)}
-          </div>
+          {channel ? (
+            <ChannelAvatar
+              channel={channel}
+              className="w-8 h-8 border border-app-ink/10 shadow-sm shrink-0"
+              textClassName="text-[12px]"
+            />
+          ) : (
+            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-app-ink/10 to-app-ink/5 flex items-center justify-center text-[12px] font-bold uppercase text-app-ink/70 border border-app-ink/10 shadow-sm shrink-0">
+              {post.channelName.charAt(0)}
+            </div>
+          )}
           <div className="flex flex-col">
             <a
               href={telegramWebViewChannelUrl(post.channelName)}
