@@ -483,9 +483,13 @@ export default function App() {
               </div>
             </div>
 
+            {/* `data-tab` is derived from the `?tab=` param, so it always
+                reports the tab the URL resolved to — including when an unknown
+                value falls through to the PostFeed default below. */}
             <div
               ref={scrollContainerRef}
               data-testid="workspace-scroll"
+              data-tab={activeTab}
               className="min-h-0 flex-1 overflow-y-auto p-8"
             >
               <AnimatePresence mode="wait">

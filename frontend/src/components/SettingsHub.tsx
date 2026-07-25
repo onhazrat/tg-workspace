@@ -353,7 +353,20 @@ export const SettingsHub: React.FC = () => {
           ) : null}
         </div>
 
-        <div className="flex-1 p-8 overflow-y-auto">{renderContent()}</div>
+        {/* Derived from the `?section=` param, never hand-typed, so it cannot
+            drift out of sync with the route. Inspect this attribute to see which
+            section the URL actually resolved to; React DevTools names the
+            component that rendered inside it. */}
+        <div
+          className="flex-1 p-8 overflow-y-auto"
+          data-testid={
+            isSearching
+              ? "settings-search-results"
+              : `settings-section-${activeSettingsTab}`
+          }
+        >
+          {renderContent()}
+        </div>
       </div>
     </div>
   )
