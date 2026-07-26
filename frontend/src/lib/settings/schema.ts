@@ -4,6 +4,8 @@ import {
   DEFAULT_AI_LANGUAGE,
   DEFAULT_MODEL,
   DYNAMIC_SYNC_EXPECTED_POSTS_DEFAULT,
+  LANGUAGES,
+  MODELS,
   RETENTION_LOG_DAYS_DEFAULT,
   RETENTION_POST_DAYS_DEFAULT,
 } from "@/constants"
@@ -39,20 +41,6 @@ interface SpecOptions {
   serverLegacyKeys?: readonly string[]
   section?: BackendSection
 }
-
-const stringSetting = (
-  storageKey: string,
-  defaultValue: string,
-  options: SpecOptions = {},
-): SettingSpec<string> => ({
-  storageKey,
-  // min(1) mirrors the historical `localStorage.getItem(key) || default` fallback
-  schema: z.string().min(1),
-  defaultValue,
-  decode: (raw) => raw,
-  encode: (value) => value,
-  ...options,
-})
 
 const booleanSetting = (
   storageKey: string,
@@ -109,6 +97,32 @@ const enumSetting = <T extends string>(
   ...options,
 })
 
+/**
+ * String setting restricted to a runtime-derived option list (model ids, language
+ * names). `enumSetting` needs a literal tuple, which these lists are not, so
+ * membership is checked with a refinement instead.
+ *
+ * The point is the rejection: `loadSetting` falls back to `defaultValue` when the
+ * schema rejects, so a value that is no longer offered — a model id persisted
+ * before the model list changed — resolves to the default instead of surviving as
+ * a value that matches no control option and renders as nothing selected.
+ */
+const oneOfSetting = (
+  storageKey: string,
+  allowedValues: readonly string[],
+  defaultValue: string,
+  options: SpecOptions = {},
+): SettingSpec<string> => ({
+  storageKey,
+  schema: z.string().refine((value) => allowedValues.includes(value)),
+  defaultValue,
+  decode: (raw) => raw,
+  encode: (value) => value,
+  ...options,
+})
+
+const MODEL_IDS = MODELS.map((model) => model.id)
+
 /** JSON-encoded setting for non-scalar values (arrays, records). */
 const jsonSetting = <T>(
   storageKey: string,
@@ -158,8 +172,8 @@ const globalStartTimeValueSetting: SettingSpec<GlobalStartTimeValue> = {
 // effect; the store now persists EVERY key on change (benign unification — the
 // backend-synced keys still hydrate from the server, localStorage is a fallback).
 export const appSettingsSpec = {
-  aiLanguage: stringSetting("aiLanguage", DEFAULT_AI_LANGUAGE),
-  selectedModel: stringSetting("selectedModel", DEFAULT_MODEL),
+  aiLanguage: oneOfSetting("aiLanguage", LANGUAGES, DEFAULT_AI_LANGUAGE),
+  selectedModel: oneOfSetting("selectedModel", MODEL_IDS, DEFAULT_MODEL),
   aiTemperature: floatSetting("aiTemperature", 0.7),
   embeddingsEnabled: booleanSetting("embeddingsEnabled", false),
   embeddingsPaused: booleanSetting("embeddingsPaused", false),
@@ -214,11 +228,12 @@ export const appSettingsSpec = {
   autoTranslate: booleanSetting("autoTranslate", false, {
     section: "translation",
   }),
-  translationModel: stringSetting("translationModel", DEFAULT_MODEL, {
+  translationModel: oneOfSetting("translationModel", MODEL_IDS, DEFAULT_MODEL, {
     section: "translation",
   }),
-  translationTargetLanguage: stringSetting(
+  translationTargetLanguage: oneOfSetting(
     "translationTargetLanguage",
+    LANGUAGES,
     DEFAULT_AI_LANGUAGE,
     { section: "translation" },
   ),

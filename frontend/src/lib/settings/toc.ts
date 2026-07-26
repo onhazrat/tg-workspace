@@ -12,7 +12,6 @@ import {
   Send,
   Shield,
   Star,
-  Trash2,
   Upload,
 } from "lucide-react"
 
@@ -34,7 +33,6 @@ export type SettingsTocId =
   | "table-sizes"
   | "transfer"
   | "query"
-  | "danger"
   | "tools"
   | "diagnostics"
   | "network-telemetry"
@@ -86,7 +84,6 @@ export const SETTINGS_TOC: SettingsTocNode[] = [
       { id: "table-sizes", label: "Table Sizes", icon: Layers },
       { id: "transfer", label: "Transfer", icon: Upload },
       { id: "query", label: "Query", icon: Braces },
-      { id: "danger", label: "Danger Zone", icon: Trash2 },
     ],
   },
   {

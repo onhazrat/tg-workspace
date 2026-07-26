@@ -659,17 +659,6 @@ export const SETTINGS_CATALOG: SettingCatalogEntry[] = [
     defaultValue: null,
     control: { kind: "panel", sectionId: "query" },
   },
-  {
-    id: "panel-danger",
-    label: "Danger Zone",
-    description: "Clear tables and destructive data actions.",
-    keywords: ["danger", "clear", "delete", "data"],
-    group: "data",
-    source: "app",
-    defaultValue: null,
-    control: { kind: "panel", sectionId: "danger" },
-  },
-
   // --- Publishing panels ---
   {
     id: "panel-bot-credentials",

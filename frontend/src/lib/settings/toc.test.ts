@@ -18,6 +18,14 @@ describe("settings TOC", () => {
     expect(VALID_SETTINGS_SECTIONS).toContain("network-telemetry")
   })
 
+  // The TOC used to advertise a "danger" section that had no panel behind it —
+  // selecting it rendered Table Sizes. It was removed rather than built, so a
+  // bookmarked ?section=danger must degrade instead of resolving to the wrong page.
+  test("no longer offers the never-built danger section", () => {
+    expect(VALID_SETTINGS_SECTIONS).not.toContain("danger")
+    expect(normalizeSettingsSection("danger")).toBe("commonly-used")
+  })
+
   test("maps all legacy aliases", () => {
     expect(normalizeSettingsSection("sync")).toBe("channels-sync")
     expect(normalizeSettingsSection("scraping-sync")).toBe("channels-sync")

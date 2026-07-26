@@ -97,14 +97,8 @@ export default function App() {
   const scrollContainerRef = useRef<HTMLDivElement>(null)
   const [shortcutsOpen, setShortcutsOpen] = useState(false)
 
-  const {
-    theme,
-    setTheme,
-    setAiLanguage,
-    setSelectedModel,
-    proxyEnabled,
-    torEnabled,
-  } = useSettings()
+  const { theme, setTheme, setAiLanguage, proxyEnabled, torEnabled } =
+    useSettings()
 
   const { startTour } = useGuidedTour()
   const { setOpen: setCommandPaletteOpen } = useCommandPaletteContext()
@@ -164,7 +158,6 @@ export default function App() {
       loadDetail: getSummary,
       settings: {
         setAiLanguage,
-        setSelectedModel,
       },
     })
   }

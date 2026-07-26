@@ -108,6 +108,45 @@ describe("invalid stored values", () => {
     ).toBeNull()
   })
 
+  // A stale model id — one persisted before the model list changed — used to pass
+  // validation (the spec was a bare non-empty string), restore as-is, match no
+  // option in the segmented control, and render as nothing selected.
+  it("falls back to the default for a model id no longer offered", () => {
+    expect(
+      loadSetting(
+        "selectedModel",
+        readerFromRecord({ selectedModel: "gemini-2.5-flash" }),
+      ),
+    ).toBe(DEFAULT_MODEL)
+    expect(
+      loadSetting(
+        "translationModel",
+        readerFromRecord({ translationModel: "gemini-1.5-pro" }),
+      ),
+    ).toBe(DEFAULT_MODEL)
+  })
+
+  it("keeps a model id that is still offered", () => {
+    expect(
+      loadSetting(
+        "selectedModel",
+        readerFromRecord({ selectedModel: "gemini-3.1-pro-preview" }),
+      ),
+    ).toBe("gemini-3.1-pro-preview")
+  })
+
+  it("falls back to the default for a language outside the option list", () => {
+    expect(
+      loadSetting("aiLanguage", readerFromRecord({ aiLanguage: "Klingon" })),
+    ).toBe(DEFAULT_AI_LANGUAGE)
+    expect(
+      loadSetting(
+        "translationTargetLanguage",
+        readerFromRecord({ translationTargetLanguage: "Klingon" }),
+      ),
+    ).toBe(DEFAULT_AI_LANGUAGE)
+  })
+
   it("treats empty strings as missing for string settings", () => {
     expect(
       loadSetting("aiLanguage", readerFromRecord({ aiLanguage: "" })),
@@ -120,7 +159,9 @@ describe("persistAppSettings", () => {
     const custom: AppSettings = {
       ...loadAppSettings(readerFromRecord({})),
       aiLanguage: "Persian",
-      selectedModel: "some-model",
+      // Must be a real option id: `selectedModel` is membership-validated, so an
+      // arbitrary string would be rejected on read and never round-trip.
+      selectedModel: "gemini-3.1-pro-preview",
       aiTemperature: 0.25,
       embeddingsEnabled: true,
       showChannelBio: false,
