@@ -5,6 +5,7 @@ import { TgButton } from "@/components/ui/tg-button"
 import { TgIconButton } from "@/components/ui/tg-icon-button"
 import { TgSegmentedControl } from "@/components/ui/tg-segmented"
 import { TgSettingsSection } from "@/components/ui/tg-settings-section"
+import { isStaleCalculation } from "@/lib/data-freshness"
 
 export type TableSizeRow = { name: string; size: number; count: number }
 export type TableSizeSource = "local" | "server"
@@ -24,8 +25,13 @@ export const DatabaseStatsCards: React.FC<{ dbStats: DbStats }> = ({
       <div>
         <div className="flex items-center gap-3 mb-6 opacity-40">
           <Database size={16} />
+          {/* These three cards read three different sources — server counts,
+              browser quota, browser schema — and are not governed by the DATA
+              SOURCE toggle below, which selects how per-table sizes are computed.
+              Unlabelled, they read as the table's numbers disagreeing with
+              themselves. `getDBStats` merges remote counts over a local base. */}
           <h4 className="text-[11px] uppercase font-bold tracking-widest">
-            Records
+            Records · Server
           </h4>
         </div>
         <div className="space-y-4">
@@ -62,7 +68,7 @@ export const DatabaseStatsCards: React.FC<{ dbStats: DbStats }> = ({
         <div className="flex items-center gap-3 mb-6 opacity-40">
           <HardDrive size={16} />
           <h4 className="text-[11px] uppercase font-bold tracking-widest">
-            Storage
+            Storage · Browser
           </h4>
         </div>
         <div className="space-y-4">
@@ -106,7 +112,7 @@ export const DatabaseStatsCards: React.FC<{ dbStats: DbStats }> = ({
         <div className="flex items-center gap-3 mb-6 opacity-40">
           <AlertCircle size={16} />
           <h4 className="text-[11px] uppercase font-bold tracking-widest">
-            Info
+            Info · Browser Cache
           </h4>
         </div>
         <div className="space-y-4">
@@ -177,9 +183,21 @@ export const TableSizesPanel: React.FC<TableSizesPanelProps> = ({
     titleClassName="text-[11px]"
     subtitle={
       tableSizesLastCalculated ? (
-        <>
+        <span
+          className={
+            isStaleCalculation(tableSizesLastCalculated)
+              ? "text-amber-600 dark:text-amber-400"
+              : undefined
+          }
+          data-testid="table-sizes-last-calculated"
+        >
           Last calculated: <RelativeTime timestamp={tableSizesLastCalculated} />
-        </>
+          {/* Cached figures are shown until recalculated; without this they read
+              as current no matter how old they are. */}
+          {isStaleCalculation(tableSizesLastCalculated)
+            ? " — recalculate for current figures"
+            : null}
+        </span>
       ) : undefined
     }
     actions={

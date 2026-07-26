@@ -17,9 +17,6 @@ export interface HistorySummarySelectionContext {
   setSummary: (text: string | null) => void
   /** Fetches the full record; the list projection omits `chatMessages`. */
   loadDetail: (id: string) => Promise<Summary | undefined>
-  settings: {
-    setAiLanguage: (language: string) => void
-  }
 }
 
 /**
@@ -32,14 +29,14 @@ export async function applyHistorySummarySelection(
   summary: SummaryListItem | Summary,
   ctx: HistorySummarySelectionContext,
 ): Promise<void> {
+  // Opening a saved report restores the *view*, never the user's generation
+  // settings. Neither the model nor the language is written back: the model
+  // selector and the language selector both mean "for the next generation", and
+  // a read must not rewrite them. `SummaryView` renders the record's own model
+  // (`formatSummaryModelLabel`) and its own direction (`reportDirection`) from
+  // the record itself, so nothing global needs to change for it to display right.
   ctx.setSummary(isPendingSummary(summary) ? null : summary.text)
   ctx.setDateRange(summary.startDate, summary.endDate)
-  // `setAiLanguage` stays: it drives the direction and font the loaded report is
-  // rendered with. `setSelectedModel` deliberately does not — the model selector
-  // means "model for the next generation", and opening a saved report must not
-  // silently rewrite it. The report's own model is rendered from the record, via
-  // `formatSummaryModelLabel(currentSummary.model)` in `SummaryView`.
-  ctx.settings.setAiLanguage(summary.language)
   ctx.setSelectedChannels(new Set(summary.channels || []))
   ctx.setCurrentSummaryId(summary.id)
   ctx.setPostSearch(summary.postSearch || "")

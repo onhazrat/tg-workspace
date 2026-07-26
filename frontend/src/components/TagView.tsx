@@ -4,6 +4,8 @@ import type React from "react"
 import { useMemo, useState } from "react"
 import { normalizeParsedTagSuggestions } from "@/lib/channels/apply-tag-suggestions"
 import { getTagNames } from "@/lib/channels/channel-tag-model"
+import { tagPreviewScopeNote } from "@/lib/channels/tag-preview-scope"
+import { countOf } from "@/lib/plural"
 import { useData } from "../contexts/DataContext"
 import { useTagContext } from "../contexts/TagContext"
 import { PasteTagsModal } from "./PasteTagsModal"
@@ -11,7 +13,7 @@ import { TagConfig } from "./TagConfig"
 import { TgIconButton } from "./ui/tg-icon-button"
 
 export const TagView: React.FC = () => {
-  const { channels } = useData()
+  const { channels, selectedChannels } = useData()
   const {
     mode,
     suggestions,
@@ -54,6 +56,11 @@ export const TagView: React.FC = () => {
       })
   }, [channels, normalizedSuggestions, previewMode])
 
+  const previewScopeNote = tagPreviewScopeNote(
+    rows.length,
+    selectedChannels.size,
+  )
+
   return (
     <motion.div
       key="tag"
@@ -64,14 +71,28 @@ export const TagView: React.FC = () => {
       <TagConfig onPasteClick={() => setPasteOpen(true)} />
 
       <div className="rounded-xl border border-app-ink/10 bg-app-card p-4 shadow-sm">
-        <h3 className="mb-3 text-sm font-bold uppercase tracking-widest text-app-ink/70">
-          Preview
-          {rows.length > 0 ? (
-            <span className="ml-2 font-normal normal-case tracking-normal text-app-ink/60">
-              ({rows.length} channel{rows.length === 1 ? "" : "s"})
-            </span>
+        <div className="mb-3">
+          <h3 className="text-sm font-bold uppercase tracking-widest text-app-ink/70">
+            Preview
+            {rows.length > 0 ? (
+              <span className="ml-2 font-normal normal-case tracking-normal text-app-ink/60">
+                ({countOf(rows.length, "channel")} with suggestions)
+              </span>
+            ) : null}
+          </h3>
+          {/* The preview counts channels the suggestions cover; the header above
+              counts channels currently selected. They are different sets, and
+              two bare numbers read as a contradiction — say so when they diverge,
+              e.g. after changing the selection following a run. */}
+          {previewScopeNote ? (
+            <p
+              className="mt-1 text-xs text-app-ink/50"
+              data-testid="tag-preview-scope-note"
+            >
+              {previewScopeNote}
+            </p>
           ) : null}
-        </h3>
+        </div>
         {rows.length === 0 ? (
           <p className="text-sm text-app-ink/60">
             Generate or paste tag suggestions to preview changes.

@@ -2,6 +2,7 @@ import { Send } from "lucide-react"
 import type React from "react"
 import { ChannelCard } from "@/components/ChannelCard"
 import { Skeleton } from "@/components/ui/skeleton"
+import { channelGridCountLabel } from "@/lib/channels/grid-count-label"
 import type { Channel } from "@/types"
 
 type ChannelGridBodyProps = {
@@ -91,6 +92,12 @@ export const ChannelGridBody: React.FC<ChannelGridBodyProps> = ({
     )
   }
 
+  const countLabel = channelGridCountLabel({
+    shown: Math.min(visibleCount, channels.length),
+    filtered: filteredChannelCount,
+    total: totalChannelCount,
+  })
+
   return (
     <div
       className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
@@ -117,6 +124,15 @@ export const ChannelGridBody: React.FC<ChannelGridBodyProps> = ({
           data-testid="channel-grid-load-more"
           className="col-span-full h-10 w-full"
         />
+      )}
+
+      {countLabel && (
+        <p
+          data-testid="channel-grid-count"
+          className="col-span-full text-center text-[11px] font-mono uppercase tracking-widest text-app-ink/40"
+        >
+          {countLabel}
+        </p>
       )}
     </div>
   )

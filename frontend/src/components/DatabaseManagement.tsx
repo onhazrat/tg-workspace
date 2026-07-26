@@ -347,7 +347,7 @@ export const DatabaseManagement: React.FC<{
               <Database size={14} className="opacity-40" /> Database Management
             </h3>
             <p className="text-[10px] italic serif opacity-50 mt-1">
-              Monitor storage usage and manage your local data.
+              Monitor storage usage and manage server and cached data.
             </p>
           </div>
           <Tooltip>
@@ -450,14 +450,14 @@ export const DatabaseManagement: React.FC<{
       {showAbout && (
         <div className="p-6 bg-app-ink/5 border border-app-ink/10">
           <h3 className="text-[11px] uppercase font-bold tracking-widest mb-3">
-            About Local Storage
+            About Storage
           </h3>
           <p className="text-[11px] opacity-60 leading-relaxed font-serif">
-            This application uses your browser's IndexedDB to store all channel
-            data and posts locally. No data is sent to our servers except for
-            the content you explicitly send to AI models for analysis. Exporting
-            your database regularly is recommended to prevent data loss if you
-            clear your browser cache.
+            Channels, posts and summaries live in this deployment's PostgreSQL
+            database, which is the source of truth. Your browser also keeps a
+            local IndexedDB cache so the app stays readable while the server is
+            unreachable — clearing it loses nothing that has already synced.
+            Back up the server database; the browser cache is not a backup.
           </p>
         </div>
       )}

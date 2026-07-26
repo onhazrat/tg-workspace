@@ -54,6 +54,7 @@ import { useUI } from "./contexts/UIContext"
 import { useApiStatus } from "./hooks/useApiStatus"
 import { useGuidedTour } from "./hooks/useGuidedTour"
 import { useScopedPostCounts } from "./hooks/usePostsView"
+import { APP_VERSION } from "./lib/app-version"
 import { applyHistorySummarySelection } from "./lib/commands/history-selection"
 import { getSummary } from "./lib/repository"
 import type { SummaryListItem, TabType } from "./types"
@@ -97,8 +98,7 @@ export default function App() {
   const scrollContainerRef = useRef<HTMLDivElement>(null)
   const [shortcutsOpen, setShortcutsOpen] = useState(false)
 
-  const { theme, setTheme, setAiLanguage, proxyEnabled, torEnabled } =
-    useSettings()
+  const { theme, setTheme, proxyEnabled, torEnabled } = useSettings()
 
   const { startTour } = useGuidedTour()
   const { setOpen: setCommandPaletteOpen } = useCommandPaletteContext()
@@ -156,9 +156,6 @@ export default function App() {
       setRelatedPostSearch,
       setSummary,
       loadDetail: getSummary,
-      settings: {
-        setAiLanguage,
-      },
     })
   }
 
@@ -277,7 +274,7 @@ export default function App() {
                 Telegram Summarizer
               </h1>
               <p className="text-[11px] text-app-ink/50 font-mono mt-1">
-                Technical Scraper & AI Analyst v1.0
+                Technical Scraper & AI Analyst v{APP_VERSION}
               </p>
             </div>
             <div className="flex items-center gap-4">

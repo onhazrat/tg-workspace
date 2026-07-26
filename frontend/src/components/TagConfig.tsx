@@ -3,6 +3,7 @@ import type React from "react"
 import { TgButton } from "@/components/ui/tg-button"
 import { useData } from "@/contexts/DataContext"
 import { useTagContext } from "@/contexts/TagContext"
+import { countOf } from "@/lib/plural"
 
 interface TagConfigProps {
   onPasteClick: () => void
@@ -54,7 +55,7 @@ export const TagConfig: React.FC<TagConfigProps> = ({ onPasteClick }) => {
             </button>
           </div>
           <div className="text-xs text-app-ink/70">
-            {selectedCount} selected channel(s)
+            {countOf(selectedCount, "channel")} selected
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">

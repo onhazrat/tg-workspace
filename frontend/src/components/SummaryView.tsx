@@ -27,6 +27,7 @@ import { useUI } from "../contexts/UIContext"
 import { useApiStatus } from "../hooks/useApiStatus"
 import { useSummaryDetailQuery } from "../hooks/useSummaries"
 import { replaceCitations } from "../lib/citations/replace-citations"
+import { reportDirection } from "../lib/report-direction"
 import { savePublishLog, saveSummary } from "../lib/repository"
 import { formatDateToLocalISO } from "../lib/utils"
 import { publishSummary } from "../services/telegram"
@@ -203,7 +204,6 @@ export const SummaryView: React.FC<SummaryViewProps> = () => {
   }
   const {
     aiLanguage,
-    isRTL,
     proxyEnabled,
     defaultProxyUrls,
     torEnabled,
@@ -212,6 +212,10 @@ export const SummaryView: React.FC<SummaryViewProps> = () => {
     torAutoRotate,
     torRotationThreshold,
   } = useSettings()
+
+  // Read from the loaded record, so a saved report renders in its own language
+  // without having to overwrite the user's setting for the next generation.
+  const bodyDirection = reportDirection(currentSummary?.language, aiLanguage)
 
   const [selectedBotId, setSelectedBotId] = useState<string>("")
   const [selectedDestId, setSelectedDestId] = useState<string>("")
@@ -332,10 +336,10 @@ export const SummaryView: React.FC<SummaryViewProps> = () => {
     >
       <SummaryConfig />
 
-      <div
-        dir={isRTL ? "rtl" : "ltr"}
-        className={`relative border border-app-ink/10 bg-app-card rounded-xl p-8 md:p-12 shadow-sm ${isRTL ? "text-right" : ""} ${aiLanguage === "Persian" ? "font-persian leading-loose" : isRTL ? "font-serif leading-loose" : ""}`}
-      >
+      {/* The card is chrome and stays LTR. Direction is applied to the generated
+          body below — when it lived here, English chrome inherited RTL from a
+          Persian report and rendered its trailing period on the wrong side. */}
+      <div className="relative border border-app-ink/10 bg-app-card rounded-xl p-8 md:p-12 shadow-sm">
         {isPending && currentSummary ? (
           <>
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8 border-b border-app-ink/10 pb-6">
@@ -626,7 +630,10 @@ export const SummaryView: React.FC<SummaryViewProps> = () => {
                 )}
               </div>
             </div>
-            <div className="prose prose-sm md:prose-base max-w-none prose-headings:tracking-tight prose-headings:font-bold prose-p:leading-relaxed prose-p:text-app-ink/80 prose-li:text-app-ink/80 prose-li:my-1 dark:prose-invert">
+            <div
+              dir={bodyDirection.dir}
+              className={`prose prose-sm md:prose-base max-w-none prose-headings:tracking-tight prose-headings:font-bold prose-p:leading-relaxed prose-p:text-app-ink/80 prose-li:text-app-ink/80 prose-li:my-1 dark:prose-invert ${bodyDirection.className}`}
+            >
               <ReactMarkdown components={markdownComponents}>
                 {summary}
               </ReactMarkdown>

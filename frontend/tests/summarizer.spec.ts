@@ -758,7 +758,7 @@ test.describe("TG Summarizer", () => {
     }
 
     await page.locator("#tour-tab-tag").click()
-    await expect(page.getByText("3 selected channel(s)")).toBeVisible({
+    await expect(page.getByText("3 channels selected")).toBeVisible({
       timeout: 15_000,
     })
     await expect(page.getByText(/batch/i)).not.toBeVisible()
@@ -780,7 +780,9 @@ test.describe("TG Summarizer", () => {
     await expect(
       page.getByText(/Parsed tag suggestions for 3 channel/i),
     ).toBeVisible({ timeout: 15_000 })
-    await expect(page.getByText("(3 channels)")).toBeVisible()
+    await expect(page.getByText("(3 channels with suggestions)")).toBeVisible()
+    // Selection and preview agree here, so no divergence note is warranted.
+    await expect(page.getByTestId("tag-preview-scope-note")).not.toBeVisible()
 
     await page.getByRole("button", { name: "Apply" }).click()
     await expect(page.getByText(/Added .* tags to 3 channels/i)).toBeVisible({
@@ -1488,6 +1490,13 @@ test.describe("command palette keyboard", () => {
 
     const seededCards = page.locator(`[data-channel-name^="${prefix}"]`)
     await expect(seededCards).toHaveCount(20, { timeout: 30_000 })
+
+    // The grid must say it is showing a slice. Without this the user cannot tell
+    // 20 rendered cards from 20 existing channels. Both the filtered and
+    // unfiltered labels open with this phrase.
+    await expect(page.getByTestId("channel-grid-count")).toContainText(
+      "Showing 20 of 25 channels",
+    )
 
     const scrollContainer = page.getByTestId("workspace-scroll")
     await scrollContainer.evaluate((element) => {

@@ -34,6 +34,10 @@ import {
 import { findFrozenReservedGroup } from "@/lib/channels/setting-groups"
 import { channelAllows, disabledReason } from "@/lib/channels/sync-permissions"
 import {
+  syncScheduleDetail,
+  syncScheduleSummary,
+} from "@/lib/channels/sync-schedule-summary"
+import {
   isVirtualGroupTag,
   toVirtualGroupTagName,
 } from "@/lib/channels/virtual-group-tags"
@@ -178,18 +182,9 @@ export const ChannelCard: React.FC<ChannelCardProps> = ({
   const inheritedSettingsHint = channel.settingGroupName
     ? `Inherited from setting group "${channel.settingGroupName}"`
     : "Inherited from channel setting group"
-  const nextSyncSummary = [
-    (channel.regularSyncEnabled ?? true)
-      ? channel.nextRegularSyncAt
-        ? `Regular ${new Date(channel.nextRegularSyncAt).toLocaleString()}`
-        : "Regular not scheduled"
-      : "Regular off",
-    channel.dynamicSyncEnabled
-      ? channel.nextDynamicSyncAt
-        ? `Dynamic ${new Date(channel.nextDynamicSyncAt).toLocaleString()}`
-        : "Dynamic not scheduled"
-      : "Dynamic off",
-  ].join(" · ")
+  const channelTitle = channel.displayName || channel.name
+  const nextSyncSummary = syncScheduleSummary(channel)
+  const nextSyncDetail = syncScheduleDetail(channel)
 
   return (
     <div
@@ -406,8 +401,15 @@ export const ChannelCard: React.FC<ChannelCardProps> = ({
           </div>
 
           <div className="flex-1 min-w-0 pt-1">
-            <h4 className="font-bold text-lg leading-tight truncate mb-1 text-app-ink flex items-center gap-2">
-              {channel.displayName || channel.name}
+            {/* `truncate` must sit on the text's own element. This <h4> is a flex
+                container, which makes a bare text child an *anonymous* flex item —
+                `text-overflow: ellipsis` does not apply to those, so the title
+                clipped mid-glyph with no ellipsis. `min-w-0` lets the span shrink
+                below its content width instead of pushing the badge out. */}
+            <h4 className="font-bold text-lg leading-tight mb-1 text-app-ink flex items-center gap-2 min-w-0">
+              <span className="truncate min-w-0" title={channelTitle}>
+                {channelTitle}
+              </span>
               {channel.isFrozen && (
                 <Tooltip>
                   <TooltipTrigger asChild>
@@ -775,7 +777,11 @@ export const ChannelCard: React.FC<ChannelCardProps> = ({
                   </p>
                 </TooltipTrigger>
                 <TooltipContent className="max-w-[260px] text-center">
-                  <p>{inheritedSettingsHint}</p>
+                  {/* The card face shows relative times; the exact schedule only
+                      fits here. It used to be missing entirely — this tooltip
+                      showed the inherited-group hint and nothing about sync. */}
+                  <p>{nextSyncDetail}</p>
+                  <p className="mt-1 opacity-70">{inheritedSettingsHint}</p>
                 </TooltipContent>
               </Tooltip>
             </div>

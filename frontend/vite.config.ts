@@ -1,3 +1,4 @@
+import { createRequire } from "node:module"
 import path from "node:path"
 import tailwindcss from "@tailwindcss/vite"
 import { tanstackRouter } from "@tanstack/router-plugin/vite"
@@ -6,6 +7,13 @@ import { defineConfig, loadEnv } from "vite"
 
 // Load VITE_* from the monorepo root `.env` (same file as the backend).
 const envDir = path.resolve(__dirname, "..")
+
+// Single source of truth for the version shown in the UI. It used to be typed
+// by hand in two places, which disagreed with each other and with package.json
+// (`v1.0` in the header, `2.5.0-stable` in Settings, `1.0.0` here).
+const { version: appVersion } = createRequire(import.meta.url)(
+  "./package.json",
+) as { version: string }
 
 export default defineConfig(({ mode }) => {
   // Prefix "" loads every key (not just VITE_*), and process.env wins over the
@@ -22,6 +30,9 @@ export default defineConfig(({ mode }) => {
 
   return {
     envDir,
+    define: {
+      __APP_VERSION__: JSON.stringify(appVersion),
+    },
     plugins: [
       tanstackRouter({
         target: "react",

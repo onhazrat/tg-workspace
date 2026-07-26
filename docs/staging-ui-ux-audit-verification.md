@@ -246,6 +246,41 @@ production build succeeds, and **61/61 e2e** pass (`summarizer.spec.ts` +
 > Note: `settings-hub.spec.ts` now passes in full. The two duplicate-`data-testid`
 > failures previously recorded as pre-existing were fixed by `522e410`.
 
+## 2c. Batch 2 — shipped 2026-07-26
+
+| ID | What changed |
+|---|---|
+| A5 | New `lib/markdown.ts` (`stripMarkdown` / `markdownPreview`), used at `HistoryView.tsx`. Word-boundary clipping and a real `…`. |
+| A4 | New `lib/report-direction.ts`. `dir` moved off the report card and onto the generated body only, so English chrome no longer inherits RTL. |
+| A6 (rest) | With direction now derived from the record, `history-selection.ts` no longer calls `setAiLanguage` either. **Opening a saved report now writes nothing global**, and the `settings` key is gone from the selection context entirely. |
+| A7 | `truncate` moved onto the title's own `<span>`; `min-w-0` added. The sync line switched to relative times via `lib/channels/sync-schedule-summary.ts`, and its tooltip now shows the schedule instead of unrelated text. |
+| C1 | `lib/channels/grid-count-label.ts` renders "Showing 20 of 25 channels" in the grid footer. |
+| C2 | The three header cards are relabelled for the source each actually reads. Stale table sizes are now flagged (`lib/data-freshness.ts`). |
+| C3 | Preview reads "(N channels with suggestions)"; a note explains the gap when it diverges from the selection. `channel(s)` retired via `lib/plural.ts`. |
+| D1 | Copy in `AppearanceSection.tsx` and `DatabaseManagement.tsx` rewritten: PostgreSQL is the source of truth, IndexedDB an offline cache. |
+| D2 | Version injected from `package.json` via Vite `define` (`__APP_VERSION__` → `lib/app-version.ts`), used in both places. |
+
+**Corrections found while implementing:**
+
+*C2 is not "the cards ignore the toggle".* `repository.ts:843` `getDBStats()` **merges** server record counts over a local base, so the header showed server counts beside browser storage figures — a hybrid matching neither column below. The three cards read three different sources and the toggle governs a fourth thing (per-table size computation). Labelling each card is the truthful fix; making them "obey the toggle" would have been wrong.
+
+*C3 is not one number rendered twice.* `selectedChannels.size` and the preview's `rows.length` count genuinely different sets — channels selected now, versus channels the generated suggestions cover. They legitimately diverge after the selection changes post-run. Deriving both from one source, as the audit suggested, would have destroyed real information; naming each and explaining the gap is correct.
+
+*A7's status line was not a truncation bug.* The `truncate` there works — it is a real block. The defect was content too long to ever fit (two full `toLocaleString()` timestamps in 220px) with a tooltip that showed something else entirely.
+
+**Regression coverage.** Every fix has a test, and each guard is itself tested against the original defect so it cannot pass vacuously:
+
+- `markdown.test.ts` (13) — including the exact `**🔴 Executive Summary**` strings from the audit.
+- `css-invariants.test.ts` (4) — sweeps every `.tsx` for `truncate`/`line-clamp` on a flex container, the A7 class of bug, and asserts the detector fires on the original class list while ignoring `flex-1`.
+- `history-selection.test.ts` (4) — asserts a selection writes nothing global, plus a source guard against reintroducing `setSelectedModel`/`setAiLanguage`.
+- `report-direction.test.ts` (4), `sync-schedule-summary.test.ts` (5), `grid-count-label.test.ts` (7), `tag-preview-scope.test.ts` (5), `data-freshness.test.ts` (5), `plural.test.ts` (5).
+- `app-copy.test.ts` (3) — sweeps components for the "all data is stored in your browser" claims and for hardcoded versions; verified to catch all three original strings.
+
+Verified: biome clean, `tsc --noEmit` clean, **552/552** unit tests (was 498), production build succeeds with the version correctly substituted, **61/61 e2e** pass.
+
+> Two e2e assertions were updated, not worked around: they asserted the old
+> `3 selected channel(s)` and `(3 channels)` strings that C3/D5 deliberately changed.
+
 ## 3. Fix plan
 
 Batches are independently shippable and ordered by risk retired per unit of work.

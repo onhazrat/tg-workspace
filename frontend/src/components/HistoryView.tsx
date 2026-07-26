@@ -25,6 +25,7 @@ import { formatSummaryModelLabel, isPendingSummary } from "../constants"
 import { useData } from "../contexts/DataContext"
 import { useUI } from "../contexts/UIContext"
 import { useSummarySearchQuery } from "../hooks/useSummaries"
+import { markdownPreview } from "../lib/markdown"
 import { deleteSummary, saveSummary } from "../lib/repository"
 import { formatDateToLocalISO } from "../lib/utils"
 import type { SummaryListItem, TabType } from "../types"
@@ -732,7 +733,7 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
                 <p
                   className={`text-[12px] text-app-ink/80 line-clamp-2 leading-relaxed ${s.language === "Persian" ? "font-persian text-right" : ""}`}
                 >
-                  {s.text.substring(0, 200)}...
+                  {markdownPreview(s.text)}
                 </p>
               )}
 
