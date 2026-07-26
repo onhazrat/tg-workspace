@@ -19,7 +19,8 @@ type ChannelGridBodyProps = {
   onRemoveChannel: (channel: Channel) => void
   onResetAndSync: (channel: Channel) => void
   hasMore: boolean
-  loadMoreSentinelRef: (node: HTMLDivElement | null) => void
+  /** Loads the next page; called when the last virtual row comes into range. */
+  onLoadMore: () => void
   /** The workspace scroll container the grid is windowed against. */
   scrollContainerRef: React.RefObject<HTMLDivElement | null>
 }
@@ -38,7 +39,7 @@ export const ChannelGridBody: React.FC<ChannelGridBodyProps> = ({
   onRemoveChannel,
   onResetAndSync,
   hasMore,
-  loadMoreSentinelRef,
+  onLoadMore,
   scrollContainerRef,
 }) => {
   if (isLoading) {
@@ -112,14 +113,16 @@ export const ChannelGridBody: React.FC<ChannelGridBodyProps> = ({
         selectedTrimRanks={selectedTrimRanks}
         onRemoveChannel={onRemoveChannel}
         onResetAndSync={onResetAndSync}
+        hasMore={hasMore}
+        onLoadMore={onLoadMore}
       />
 
+      {/* Kept as a position marker for tests and as the visual end-of-list
+          spacer. It no longer drives loading — the virtualizer does, because an
+          observer on this element stopped firing once the grid above it took an
+          explicit, changing height. */}
       {hasMore && (
-        <div
-          ref={loadMoreSentinelRef}
-          data-testid="channel-grid-load-more"
-          className="h-10 w-full"
-        />
+        <div data-testid="channel-grid-load-more" className="h-10 w-full" />
       )}
 
       {countLabel && (

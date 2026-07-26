@@ -29,6 +29,10 @@ type VirtualizedChannelGridProps = {
   selectedTrimRanks: Map<string, number>
   onRemoveChannel: (channel: Channel) => void
   onResetAndSync: (channel: Channel) => void
+  /** Whether more channels exist beyond the ones passed in. */
+  hasMore: boolean
+  /** Called when the last virtual row comes into range. */
+  onLoadMore: () => void
 }
 
 /** Matches the `gap-4` the grid used. */
@@ -54,6 +58,8 @@ export const VirtualizedChannelGrid: React.FC<VirtualizedChannelGridProps> = ({
   selectedTrimRanks,
   onRemoveChannel,
   onResetAndSync,
+  hasMore,
+  onLoadMore,
 }) => {
   const gridRef = useRef<HTMLDivElement>(null)
   const [lanes, setLanes] = useState(() =>
@@ -107,6 +113,30 @@ export const VirtualizedChannelGrid: React.FC<VirtualizedChannelGridProps> = ({
   }, [lanes])
 
   const virtualRows = virtualizer.getVirtualItems()
+
+  /**
+   * Load-more is driven by the virtualizer's own last rendered row, not by an
+   * IntersectionObserver on a sentinel below the grid.
+   *
+   * The sentinel approach broke when this grid was virtualized: the grid carries
+   * an explicit height from `getTotalSize()` that changes as rows are measured,
+   * and against that the observer stopped firing — it did not even deliver its
+   * initial callback, leaving the grid stuck on the first 20 of ~1,150 channels.
+   * The virtualizer already knows which rows it is showing, so asking it is both
+   * simpler and immune to the surrounding geometry.
+   *
+   * The trigger is the last *visible* row (`virtualizer.range`), not the last
+   * rendered one. Rendered rows include the overscan, which by design already
+   * reaches past the end of a short list — keying on that would fetch the next
+   * page the instant the previous one arrived and walk the whole account in one
+   * go. `range` tracks what the user can actually see.
+   */
+  const lastVisibleRow = virtualizer.range?.endIndex ?? -1
+  // biome-ignore lint/correctness/useExhaustiveDependencies: onLoadMore's identity changes every render; the row index is the real trigger
+  useEffect(() => {
+    if (!hasMore || rowCount === 0) return
+    if (lastVisibleRow >= rowCount - 1) onLoadMore()
+  }, [lastVisibleRow, rowCount, hasMore])
 
   return (
     <div

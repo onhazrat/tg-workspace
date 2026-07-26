@@ -1506,6 +1506,65 @@ test.describe("command palette keyboard", () => {
     await expect(seededCards).toHaveCount(25, { timeout: 10_000 })
   })
 
+  /**
+   * Regression guard for a defect that shipped past the test above.
+   *
+   * That test seeds 25 channels and asserts a *single* load (20 → 25). Twenty-five
+   * cards fit entirely inside the virtualizer's overscan, so it never exercises
+   * windowing, and one load never exercises the second. Both holes were real: the
+   * grid shipped stuck on the first 20 of ~1,150 channels, and this suite stayed
+   * green.
+   *
+   * Seeding 70 forces genuine windowing and three consecutive loads.
+   */
+  test("channel grid keeps loading past the first page when virtualized", async ({
+    page,
+  }) => {
+    test.setTimeout(180_000)
+    const prefix = `deep${Date.now()}`
+    await gotoSummarizer(page, "summary")
+    await seedBulkChannels(page, 70, prefix)
+
+    await page.goto("/summarizer?tab=channels")
+    await expect(page.getByTestId("command-palette-button")).toBeVisible()
+    await page.getByPlaceholder("Search channels...").fill(prefix)
+
+    const countLabel = page.getByTestId("channel-grid-count")
+    await expect(countLabel).toContainText("Showing 20 of 70 channels", {
+      timeout: 30_000,
+    })
+
+    const scrollContainer = page.getByTestId("workspace-scroll")
+    const scrollToEnd = async () => {
+      await scrollContainer.evaluate((el) => {
+        el.scrollTop = el.scrollHeight
+      })
+    }
+
+    // Each pass must advance the loaded count, not just the scroll position.
+    await scrollToEnd()
+    await expect(countLabel).toContainText("Showing 40 of 70 channels", {
+      timeout: 15_000,
+    })
+
+    await scrollToEnd()
+    await expect(countLabel).toContainText("Showing 60 of 70 channels", {
+      timeout: 15_000,
+    })
+
+    await scrollToEnd()
+    await expect(countLabel).toContainText("70 channels", { timeout: 15_000 })
+
+    // And windowing must actually be doing its job at that size: with 70 loaded,
+    // the DOM must hold materially fewer than all of them.
+    const cardsInDom = await page
+      .locator("[data-channel-name]")
+      .count()
+      .catch(() => -1)
+    expect(cardsInDom).toBeGreaterThan(0)
+    expect(cardsInDom).toBeLessThan(70)
+  })
+
   test("posts media filter controls persist and filter rendered cards", async ({
     page,
   }) => {

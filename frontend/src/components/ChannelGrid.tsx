@@ -37,7 +37,6 @@ import { useScraper } from "../contexts/ScraperContext"
 import { useSettings } from "../contexts/SettingsContext"
 import { useUI } from "../contexts/UIContext"
 import { useApiStatus } from "../hooks/useApiStatus"
-import { useScrollLoadMore } from "../hooks/useScrollLoadMore"
 
 type ChannelGridProps = {
   scrollContainerRef: React.RefObject<HTMLDivElement | null>
@@ -184,13 +183,6 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
   const loadMoreChannels = useCallback(() => {
     setVisibleChannels((prev) => Math.min(prev + 20, filteredChannels.length))
   }, [filteredChannels.length])
-
-  const loadMoreSentinelRef = useScrollLoadMore({
-    scrollContainerRef,
-    enabled: !isInitialChannelsLoading && filteredChannels.length > 0,
-    hasMore: hasMoreChannels,
-    onLoadMore: loadMoreChannels,
-  })
 
   useEffect(() => {
     setVisibleChannels(20)
@@ -404,7 +396,7 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
         onRemoveChannel={actions.handleRemoveChannel}
         onResetAndSync={actions.handleResetAndSync}
         hasMore={hasMoreChannels}
-        loadMoreSentinelRef={loadMoreSentinelRef}
+        onLoadMore={loadMoreChannels}
         scrollContainerRef={scrollContainerRef}
       />
 
