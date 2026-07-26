@@ -1,4 +1,4 @@
-import { isPastedSummaryModel, isPendingSummary } from "@/constants"
+import { isPendingSummary } from "@/constants"
 import type { Summary, SummaryListItem, TabType } from "@/types"
 
 export interface HistorySummarySelectionContext {
@@ -19,7 +19,6 @@ export interface HistorySummarySelectionContext {
   loadDetail: (id: string) => Promise<Summary | undefined>
   settings: {
     setAiLanguage: (language: string) => void
-    setSelectedModel: (model: string) => void
   }
 }
 
@@ -35,10 +34,12 @@ export async function applyHistorySummarySelection(
 ): Promise<void> {
   ctx.setSummary(isPendingSummary(summary) ? null : summary.text)
   ctx.setDateRange(summary.startDate, summary.endDate)
+  // `setAiLanguage` stays: it drives the direction and font the loaded report is
+  // rendered with. `setSelectedModel` deliberately does not — the model selector
+  // means "model for the next generation", and opening a saved report must not
+  // silently rewrite it. The report's own model is rendered from the record, via
+  // `formatSummaryModelLabel(currentSummary.model)` in `SummaryView`.
   ctx.settings.setAiLanguage(summary.language)
-  if (summary.model && !isPastedSummaryModel(summary.model)) {
-    ctx.settings.setSelectedModel(summary.model)
-  }
   ctx.setSelectedChannels(new Set(summary.channels || []))
   ctx.setCurrentSummaryId(summary.id)
   ctx.setPostSearch(summary.postSearch || "")

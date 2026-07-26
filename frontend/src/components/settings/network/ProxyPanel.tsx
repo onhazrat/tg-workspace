@@ -1,6 +1,8 @@
 import {
   Activity,
   CheckCircle2,
+  Eye,
+  EyeOff,
   Globe,
   RotateCw,
   Shield,
@@ -16,6 +18,11 @@ import { TgHelpText, TgInput, TgTextarea } from "@/components/ui/tg-input"
 import { TgSettingsSection } from "@/components/ui/tg-settings-section"
 import { TgToggle } from "@/components/ui/tg-toggle"
 import { useSettings } from "@/contexts/SettingsContext"
+import {
+  hasProxyCredentials,
+  maskProxyList,
+  maskProxyUrl,
+} from "@/lib/network/maskProxyUrl"
 import {
   effectiveProxyCapacity,
   normalizeProxyUrl,
@@ -50,7 +57,18 @@ export const ProxyPanel: React.FC<{
     { url: string; cooldownRemaining: number }[]
   >([])
 
+  // Credentials are hidden until explicitly revealed. While hidden the textarea is
+  // read-only and shows a masked projection, so there is no code path that can
+  // write `***` back into the setting — the masked text is never an input value.
+  const [revealCredentials, setRevealCredentials] = useState(false)
+  const listHasCredentials = hasProxyCredentials(defaultProxyUrls)
+  const credentialsHidden = listHasCredentials && !revealCredentials
+
   const proxyLines = parseProxyList(defaultProxyUrls)
+
+  /** Proxy URL as it should be shown — masked unless the user revealed them. */
+  const displayProxyUrl = (url: string): string =>
+    revealCredentials ? url : maskProxyUrl(url)
 
   const slotsForProxyUrl = (url: string): number =>
     slotsForProxy(url, proxyConcurrencyOverrides, proxyDefaultConcurrency)
@@ -121,6 +139,26 @@ export const ProxyPanel: React.FC<{
                     Proxy List (HTTP/SOCKS5)
                   </span>
                   <div className="flex gap-3">
+                    {listHasCredentials && (
+                      <TgButton
+                        type="button"
+                        variant="link"
+                        size="sm"
+                        onClick={() => setRevealCredentials((prev) => !prev)}
+                        aria-label={
+                          revealCredentials
+                            ? "Hide proxy credentials"
+                            : "Reveal proxy credentials to edit"
+                        }
+                      >
+                        {revealCredentials ? (
+                          <EyeOff size={10} />
+                        ) : (
+                          <Eye size={10} />
+                        )}
+                        {revealCredentials ? "Hide" : "Reveal"}
+                      </TgButton>
+                    )}
                     {Object.keys(proxyTestResults).length > 0 && (
                       <TgButton
                         type="button"
@@ -146,11 +184,27 @@ export const ProxyPanel: React.FC<{
                   </div>
                 </div>
                 <TgTextarea
-                  value={defaultProxyUrls}
+                  value={
+                    credentialsHidden
+                      ? maskProxyList(defaultProxyUrls)
+                      : defaultProxyUrls
+                  }
                   onChange={(e) => setDefaultProxyUrls(e.target.value)}
+                  // Read-only while masked: the displayed value is a projection,
+                  // not the setting, so editing it would persist `***`.
+                  readOnly={credentialsHidden}
+                  onBlur={() => setRevealCredentials(false)}
                   placeholder="http://user:pass@host:port or socks5h://host:port (one per line)"
-                  className="h-32 resize-none normal-case tracking-normal"
+                  className={`h-32 resize-none normal-case tracking-normal ${
+                    credentialsHidden ? "cursor-not-allowed" : ""
+                  }`}
                 />
+                {credentialsHidden && (
+                  <TgHelpText>
+                    Credentials are hidden. Choose <strong>Reveal</strong> to
+                    edit the list.
+                  </TgHelpText>
+                )}
               </SettingAnchor>
 
               <div className="space-y-3 pt-2 border-t border-app-ink/5">
@@ -194,7 +248,7 @@ export const ProxyPanel: React.FC<{
                           className="flex items-center justify-between gap-3 text-[9px] bg-app-ink/5 p-2 border border-app-ink/5 rounded"
                         >
                           <span className="font-mono truncate flex-1 opacity-60">
-                            {url}
+                            {displayProxyUrl(url)}
                           </span>
                           <input
                             type="number"
@@ -246,7 +300,7 @@ export const ProxyPanel: React.FC<{
                             className="flex items-center justify-between text-[9px] bg-app-ink/5 p-2 border border-app-ink/5 rounded"
                           >
                             <span className="font-mono truncate max-w-[150px] opacity-60">
-                              {url}
+                              {displayProxyUrl(url)}
                             </span>
                             <div className="flex items-center gap-2">
                               {res.testing ? (

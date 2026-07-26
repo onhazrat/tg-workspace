@@ -1,6 +1,14 @@
 # Staging UI/UX Audit — Summarizer Dashboard
 
-**Status:** Open — no fixes applied yet. This is a findings document only.
+**Status:** Partly fixed. **A1, A3, A6 and A8 are done** (Batch 1); D8 was fixed
+independently by `03b71ed`. Everything else is open.
+
+> **Read `docs/staging-ui-ux-audit-verification.md` before acting on anything below.**
+> All 37 findings were re-verified against `acdf1ca` on 2026-07-26. Seven had to be
+> amended — four were overstated or already fixed, and **three had the wrong root
+> cause** (A4, A6, A7), so their "Suggested fix" here points at the wrong place.
+> B1's stated blocker ("needs an architecture decision") is also resolved:
+> `docs/migration/DECISIONS.md` §5 already rules on it.
 **Audited:** 2026-07-25
 **Target:** `https://dashboard.staging.tgs.onhazrat.ir/summarizer` (staging), API at `https://api.staging.tgs.onhazrat.ir`
 **Method:** Manual walkthrough in Chrome at 1440×900, dark + light themes. Every top-level tab and all 15 Settings sections were opened. Console and network traffic captured on a cold load.

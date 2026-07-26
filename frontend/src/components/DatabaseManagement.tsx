@@ -38,7 +38,7 @@ import { SettingAnchor } from "./settings/SettingAnchor"
 import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tg-tooltip"
 
 export const DatabaseManagement: React.FC<{
-  focus?: "data" | "retention" | "table-sizes" | "transfer" | "query" | "danger"
+  focus?: "data" | "retention" | "table-sizes" | "transfer" | "query"
   highlightId?: string | null
 }> = ({ focus = "data", highlightId = null }) => {
   const { dbStats, loadDBStats, loadChannels, loadHistory } = useData()
@@ -330,8 +330,7 @@ export const DatabaseManagement: React.FC<{
     focus === "data" ||
     focus === "table-sizes" ||
     focus === "transfer" ||
-    focus === "query" ||
-    focus === "danger"
+    focus === "query"
   const showAbout = focus === "data" || focus === "table-sizes"
 
   return (
@@ -463,15 +462,13 @@ export const DatabaseManagement: React.FC<{
         </div>
       )}
 
-      <SettingAnchor
-        settingId="panel-danger"
-        highlighted={highlightId === "panel-danger"}
-      >
-        <DangerPanel
-          confirmModal={confirmModal}
-          onDismiss={() => setConfirmModal(null)}
-        />
-      </SettingAnchor>
+      {/* Not a section — this is the confirmation dialog for the per-table clear
+          buttons, and renders nothing until one is triggered. It carries no
+          settings anchor because nothing can deep-link to a dialog. */}
+      <DangerPanel
+        confirmModal={confirmModal}
+        onDismiss={() => setConfirmModal(null)}
+      />
     </motion.div>
   )
 }

@@ -93,7 +93,6 @@ export const SettingsHub: React.FC = () => {
       "table-sizes",
       "transfer",
       "query",
-      "danger",
     ]
     if (dataSections.includes(activeSettingsTab)) {
       void loadDBStats()
@@ -228,7 +227,6 @@ export const SettingsHub: React.FC = () => {
       case "table-sizes":
       case "transfer":
       case "query":
-      case "danger":
         return (
           <DatabaseManagement
             focus={activeSettingsTab}
