@@ -1,9 +1,10 @@
+import hashlib
 import logging
 import uuid
 from typing import Any
 
 import httpx
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.responses import Response
 from sqlmodel import Session
 
@@ -283,29 +284,62 @@ async def api_publish(
         raise HTTPException(status_code=500, detail="Publish request failed") from exc
 
 
+def _image_response(
+    request: Request,
+    content: bytes,
+    content_type: str,
+) -> Response:
+    """Serve a cached image with validators, so repeat views are cheap.
+
+    The Channels tab issues one of these per visible channel, and before this the
+    responses carried no caching headers at all — every reload re-downloaded every
+    avatar. Channel photos change rarely, so:
+
+    * `ETag` lets the browser revalidate and take a bodiless 304.
+    * `max-age` skips the request entirely for a while.
+    * `private` because the route is authenticated; this must never be held by a
+      shared cache that could serve it to another user.
+    """
+    etag = f'"{hashlib.sha256(content).hexdigest()[:32]}"'
+    headers = {
+        "Cache-Control": (f"private, max-age={settings.CHANNEL_IMAGE_MAX_AGE_SECONDS}"),
+        "ETag": etag,
+    }
+
+    # `If-None-Match` may carry several validators, and a proxy may have made ours
+    # weak (`W/"..."`) in transit.
+    provided = request.headers.get("if-none-match", "")
+    if any(tag.strip().removeprefix("W/") == etag for tag in provided.split(",")):
+        return Response(status_code=304, headers=headers)
+
+    return Response(content=content, media_type=content_type, headers=headers)
+
+
 @router.get("/channel-photo/{channel_id}")
 async def api_channel_photo(
     channel_id: str,
+    request: Request,
     _current_user: CurrentUser,
 ) -> Response:
     cached = read_cached_photo(channel_id)
     if not cached:
         raise HTTPException(status_code=404, detail="Channel photo not found")
     content, content_type = cached
-    return Response(content=content, media_type=content_type)
+    return _image_response(request, content, content_type)
 
 
 @router.get("/post-thumb/{channel_name}/{post_id}")
 async def api_post_thumb(
     channel_name: str,
     post_id: int,
+    request: Request,
     _current_user: CurrentUser,
 ) -> Response:
     cached = read_cached_thumb(channel_name, post_id)
     if not cached:
         raise HTTPException(status_code=404, detail="Post thumbnail not found")
     content, content_type = cached
-    return Response(content=content, media_type=content_type)
+    return _image_response(request, content, content_type)
 
 
 @router.get("/bot-file/{credential_id}")

@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react"
 
 import { deleteOldLogs, deleteOldPosts } from "@/lib/cache"
+import { logger } from "@/lib/logger"
 
 /** Wait for the app to settle before touching IndexedDB. */
 const PRUNE_START_DELAY_MS = 30_000
@@ -30,9 +31,14 @@ export function useCachePrune(
 
   useEffect(() => {
     let cancelled = false
+    // A prune walks the whole post store. On a large mirror that can outlast the
+    // interval, and a second concurrent pass would re-scan the same rows while
+    // the first is still deleting. Skipping is safe: the next tick catches up.
+    let running = false
 
     const prune = async () => {
-      if (cancelled) return
+      if (cancelled || running) return
+      running = true
       const { postRetentionDays: posts, logRetentionDays: logs } =
         daysRef.current
       try {
@@ -40,7 +46,9 @@ export function useCachePrune(
         if (logs > 0) await deleteOldLogs(logs)
       } catch (error) {
         // Pruning is housekeeping — never surface it to the user.
-        console.error("[Cache] Prune failed", error)
+        logger.error("[Cache] Prune failed", error)
+      } finally {
+        running = false
       }
     }
 

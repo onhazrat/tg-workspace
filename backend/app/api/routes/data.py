@@ -638,35 +638,51 @@ def discover_candidates(
     )
 
 
-@router.get("/posts/counts")
+class PostScopeRequest(BaseModel):
+    """A post scope carried in a request body rather than a query string.
+
+    The channel selection can run to the full account — over a thousand handles —
+    which as `?channelNames=a,b,c,...` produced URLs long enough to hit proxy and
+    server header limits. A body has no such ceiling.
+    """
+
+    channel_names: list[str] | None = PydanticField(None, alias="channelNames")
+    start_date: int | None = PydanticField(None, alias="startDate")
+    end_date: int | None = PydanticField(None, alias="endDate")
+    keyword: str | None = None
+    forwarded: str = "all"
+    media: str = "all"
+    max_per_channel: int = PydanticField(0, alias="maxPerChannel", ge=0)
+
+    def cleaned_channel_names(self) -> list[str] | None:
+        """Non-empty, trimmed handles — matching the old comma-split behaviour."""
+        if self.channel_names is None:
+            return None
+        names = [n.strip() for n in self.channel_names if n.strip()]
+        return names or None
+
+
+@router.post("/posts/counts")
 def posts_counts(
+    body: PostScopeRequest,
     session: SessionDep,
     _current_user: CurrentUser,
-    channel_names: str | None = Query(None, alias="channelNames"),
-    start_date: int | None = Query(None, alias="startDate"),
-    end_date: int | None = Query(None, alias="endDate"),
-    keyword: str | None = Query(None),
-    forwarded: str = Query("all"),
-    media: str = Query("all"),
-    max_per_channel: int = Query(0, alias="maxPerChannel", ge=0),
 ) -> dict[str, int]:
     """Per-channel post counts for a filtered scope, computed as a SQL GROUP BY.
 
     Replaces the client's `buildPostsInScopeCounts`, which counted the fully
     fetched, client-filtered post array.
+
+    POST rather than GET because the scope carries the channel selection: this is
+    a read expressed as a POST purely so the selection travels in the body.
     """
-    names = (
-        [n.strip() for n in channel_names.split(",") if n.strip()]
-        if channel_names
-        else None
-    )
     return count_posts_in_scope_impl(
         session,
-        channel_names=names,
-        start_date=start_date,
-        end_date=end_date,
-        filters=_parse_post_filters(keyword, forwarded, media),
-        max_per_channel=max_per_channel,
+        channel_names=body.cleaned_channel_names(),
+        start_date=body.start_date,
+        end_date=body.end_date,
+        filters=_parse_post_filters(body.keyword, body.forwarded, body.media),
+        max_per_channel=body.max_per_channel,
     )
 
 

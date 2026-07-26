@@ -275,6 +275,23 @@ export type PostLookupRequest = {
 };
 
 /**
+ * A post scope carried in a request body rather than a query string.
+ *
+ * The channel selection can run to the full account — over a thousand handles —
+ * which as `?channelNames=a,b,c,...` produced URLs long enough to hit proxy and
+ * server header limits. A body has no such ceiling.
+ */
+export type PostScopeRequest = {
+    channelNames?: (Array<(string)> | null);
+    startDate?: (number | null);
+    endDate?: (number | null);
+    keyword?: (string | null);
+    forwarded?: string;
+    media?: string;
+    maxPerChannel?: number;
+};
+
+/**
  * A Posts-feed scope the backend resolves into the prompt's posts block,
  * instead of the client shipping a pre-built ``postsText``. Mirrors the
  * frontend feed query params.
@@ -764,13 +781,7 @@ export type DataDiscoverCandidatesResponse = ({
 });
 
 export type DataPostsCountsData = {
-    channelNames?: (string | null);
-    endDate?: (number | null);
-    forwarded?: string;
-    keyword?: (string | null);
-    maxPerChannel?: number;
-    media?: string;
-    startDate?: (number | null);
+    requestBody: PostScopeRequest;
 };
 
 export type DataPostsCountsResponse = ({

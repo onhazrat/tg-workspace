@@ -1,6 +1,6 @@
 import { Send } from "lucide-react"
 import type React from "react"
-import { ChannelCard } from "@/components/ChannelCard"
+import { VirtualizedChannelGrid } from "@/components/channel-grid/VirtualizedChannelGrid"
 import { Skeleton } from "@/components/ui/skeleton"
 import { channelGridCountLabel } from "@/lib/channels/grid-count-label"
 import type { Channel } from "@/types"
@@ -20,6 +20,8 @@ type ChannelGridBodyProps = {
   onResetAndSync: (channel: Channel) => void
   hasMore: boolean
   loadMoreSentinelRef: (node: HTMLDivElement | null) => void
+  /** The workspace scroll container the grid is windowed against. */
+  scrollContainerRef: React.RefObject<HTMLDivElement | null>
 }
 
 /** Grid body: loading skeletons, empty state, or the ChannelCard grid with infinite-scroll sentinel. */
@@ -37,6 +39,7 @@ export const ChannelGridBody: React.FC<ChannelGridBodyProps> = ({
   onResetAndSync,
   hasMore,
   loadMoreSentinelRef,
+  scrollContainerRef,
 }) => {
   if (isLoading) {
     return (
@@ -99,41 +102,34 @@ export const ChannelGridBody: React.FC<ChannelGridBodyProps> = ({
   })
 
   return (
-    <div
-      className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
-      id="tour-channel-grid"
-    >
-      {channels.slice(0, visibleCount).map((channel) => (
-        <ChannelCard
-          key={channel.id}
-          channel={channel}
-          inScopeCount={postsInScopeCounts[channel.name] ?? 0}
-          handleRemoveChannel={onRemoveChannel}
-          handleResetAndSync={onResetAndSync}
-          sortRank={
-            showSortRank && selectedChannels.has(channel.name)
-              ? selectedTrimRanks.get(channel.name)
-              : undefined
-          }
-        />
-      ))}
+    <>
+      <VirtualizedChannelGrid
+        channels={channels.slice(0, visibleCount)}
+        scrollContainerRef={scrollContainerRef}
+        postsInScopeCounts={postsInScopeCounts}
+        showSortRank={showSortRank}
+        selectedChannels={selectedChannels}
+        selectedTrimRanks={selectedTrimRanks}
+        onRemoveChannel={onRemoveChannel}
+        onResetAndSync={onResetAndSync}
+      />
 
       {hasMore && (
         <div
           ref={loadMoreSentinelRef}
           data-testid="channel-grid-load-more"
-          className="col-span-full h-10 w-full"
+          className="h-10 w-full"
         />
       )}
 
       {countLabel && (
         <p
           data-testid="channel-grid-count"
-          className="col-span-full text-center text-[11px] font-mono uppercase tracking-widest text-app-ink/40"
+          className="mt-2 text-center text-[11px] font-mono uppercase tracking-widest text-app-ink/40"
         >
           {countLabel}
         </p>
       )}
-    </div>
+    </>
   )
 }

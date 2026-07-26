@@ -281,6 +281,75 @@ Verified: biome clean, `tsc --noEmit` clean, **552/552** unit tests (was 498), p
 > Two e2e assertions were updated, not worked around: they asserted the old
 > `3 selected channel(s)` and `(3 channels)` strings that C3/D5 deliberately changed.
 
+## 2d. Batch 3 — shipped 2026-07-27
+
+| ID | What changed |
+|---|---|
+| B4 | New `lib/logger.ts`; the 18 `console.log` calls now go through `logger.debug`, which folds away outside dev. Verified in the built bundle: `debug:(...e)=>{}` and **zero** `console.debug` calls survive. |
+| B5 | `/data/posts/counts` is now `POST` with a JSON body (`PostScopeRequest` / `postScopeBody`). Committed client regenerated. |
+| B3 | Channel photos and post thumbnails now return `ETag` + `Cache-Control: private, max-age=3600` and honour `If-None-Match` with a 304. |
+| B1 | The channel-list mirror write moved off the critical path (`lib/channels/mirror-hydration.ts` + new bulk `cache.saveChannels`). Retention pass gained an in-flight guard. |
+| B2 | Channels grid windowed with `@tanstack/react-virtual`. Initial DOM: **20 cards / 1,442 nodes → 9 cards / 654 nodes**. |
+
+### B1's stated cause was wrong
+
+The audit reports "**~30 second** client-side IndexedDB init on every page load," reading this from the console gap between `[DB] Initializing database...` and the retention lines 30 seconds later. That gap is not init: `useCachePrune` has always had `PRUNE_START_DELAY_MS = 30_000`, so the prune is *deliberately* deferred by exactly 30 seconds. `initDB` is also memoised behind a module-level `dbPromise`, so it runs once per page.
+
+The real cost is elsewhere, and it is worse. `repository.ts` `listChannelsWithStats()` did:
+
+```ts
+for (const row of rows) { …; await cache.saveChannel(channel) }
+```
+
+One awaited IndexedDB transaction **per channel, serially**, sitting in front of the data the Channels tab renders — ~1,070 round-trips on a real account. That is the long skeleton phase. It now splits the response, hands the render data back immediately, and writes the mirror in one bulk transaction at idle.
+
+Two further audit claims did not hold. The "second run" of the retention pass cannot be React StrictMode: StrictMode's double-invoke is dev-only and the audit measured a production staging bundle. And deleting rows older than *N* days is inherently idempotent, so a repeat pass is wasted work, not data loss. The genuine gap — two prunes overlapping if one outlives the interval — is now guarded.
+
+### B2 landed — but only after a false negative worth recording
+
+Initial DOM falls from **20 cards / 1,442 nodes** to **9 cards / 654 nodes**, with
+`@tanstack/react-virtual` handling responsive lanes (ResizeObserver +
+`gridLanesForWidth`), dynamic row measurement, and `scrollMargin` for the external
+shared `workspace-scroll` container.
+
+**It was reverted once on bad evidence, then restored.** The first e2e run showed 17
+of 61 failing and the change was pulled. The tell that something was wrong: after
+reverting virtualization *completely*, the suite got **worse** (23 failing). A revert
+cannot do that.
+
+The cause was environmental. The backend container had been started before the B5
+route change and never rebuilt, so it still served `GET /posts/counts` and answered
+the new `POST` with **405**. Every counts call failed, channel cards failed to
+render, and the damage surfaced as failures in the palette, tag-chain, trim and
+grid-scroll tests — exactly the profile you would expect from broken windowing.
+After `docker compose up -d --build backend`, virtualization passes **61/61**.
+
+Two lessons, both cheap to apply next time:
+
+* **Rebuild the backend container after touching a route.** `docker compose up -d`
+  alone does not rebuild, and a stale API produces failures that look like frontend
+  regressions.
+* **A revert that makes things worse means the experiment was invalid,** not that the
+  reverted code was doubly bad. That signal is what exposed this.
+
+One genuine bug did surface during the work: the first implementation hung the page
+under scroll, from a `useEffect` keyed on the `virtualizer` object — a fresh
+reference every render, so each render re-measured and each measure re-rendered.
+Typecheck and unit tests were clean throughout; only a browser caught it. It is now
+keyed on `lanes`, with a comment saying why.
+
+`overscan` is deliberately 6 rows rather than the default 2: beyond smoothing
+scrolling, it keeps a workable number of cards mounted for anything that locates
+them by `[data-channel-name]` without scrolling first.
+
+### B5 fixed one route; two siblings share the defect
+
+The audit flagged `/posts/counts` because that is what a cold Channels load happens to issue. The same unbounded query string is built by `getPosts`, `getPostsFeed` (the hot Posts-feed path) and `getDiscoverCandidates`, hitting `GET /data/posts` and `GET /data/discover/candidates`. All three carry the full selection and would fail identically at ~1,070 channels.
+
+They are **not** fixed here: converting `GET /posts` — a resource listing used by the feed, exports and repository batching — to POST changes three client methods plus the generated client, and deserves its own PR and e2e pass rather than being folded into a performance batch. `postScopeBody` and `PostScopeRequest` now exist as the shared pattern, so it is mechanical work.
+
+Verified: biome clean, `tsc --noEmit` clean, **571/571** frontend unit tests (was 552), **514** backend tests, mypy/ruff clean, **61/61 e2e** — the last run made against a freshly rebuilt backend.
+
 ## 3. Fix plan
 
 Batches are independently shippable and ordered by risk retired per unit of work.

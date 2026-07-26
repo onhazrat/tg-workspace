@@ -19,6 +19,7 @@ import {
 import type { PromptScope } from "@/api/data"
 import { parseApiError, unavailableChannelToastMessage } from "@/lib/api-errors"
 import { env } from "@/lib/env"
+import { logger } from "@/lib/logger"
 import { createdChannelNamesFromResults } from "@/lib/posts/discover-selection"
 import { useApiStatus } from "../hooks/useApiStatus"
 import { useDebouncedValue } from "../hooks/useDebouncedValue"
@@ -296,7 +297,7 @@ export const ScraperProvider: React.FC<{ children: React.ReactNode }> = ({
               const updatedChannel = { ...channel, language: lang }
               await upsertChannel(updatedChannel)
               detectedAny = true
-              console.log(
+              logger.debug(
                 `[Background] Detected language for @${channel.name}: ${lang}`,
               )
             }
@@ -503,7 +504,7 @@ export const ScraperProvider: React.FC<{ children: React.ReactNode }> = ({
       }
       if (channelIds.length === 0) return
 
-      console.log(
+      logger.debug(
         `[Scraper] Starting server sync for ${channelIds.length} channel(s) from ${source}`,
       )
       setScrapingChannels((prev) => {
@@ -612,7 +613,7 @@ export const ScraperProvider: React.FC<{ children: React.ReactNode }> = ({
         return
       }
       if (scrapingLocksRef.current.has(channel.name)) {
-        console.log(
+        logger.debug(
           `[Scraper] Sync already in progress for @${channel.name}. Skipping duplicate request.`,
         )
         return
@@ -661,7 +662,7 @@ export const ScraperProvider: React.FC<{ children: React.ReactNode }> = ({
     }
     if (channelsToScrape.length === 0) return
 
-    console.log(
+    logger.debug(
       `[SyncQueue] Starting server job for ${channelsToScrape.length} channels from ${source}`,
     )
     await runServerSync(

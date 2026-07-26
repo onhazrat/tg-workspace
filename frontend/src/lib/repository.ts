@@ -4,6 +4,7 @@
  */
 
 import { api } from "@/api"
+import { hydrateChannelMirror } from "@/lib/channels/mirror-hydration"
 import { env } from "@/lib/env"
 import type {
   BotCredential,
@@ -159,22 +160,33 @@ export async function listChannelsWithStats(): Promise<{
   channels: Channel[]
   stats: Record<string, ChannelStats>
 }> {
-  const persist = async (rows: (Channel & { stats?: ChannelStats })[]) => {
+  /**
+   * Split the server response into what the UI renders and what the offline
+   * mirror stores, then hand the render data back **without waiting for the
+   * write**.
+   *
+   * This used to `await cache.saveChannel(...)` per channel inside the loop —
+   * one IndexedDB transaction each, serially, in front of the data the Channels
+   * tab needs. At ~1,070 channels that is what produced the long skeleton phase.
+   * The mirror is still written (ADR/DECISIONS §5 keeps it as the offline read
+   * cache), just in one transaction, in the background.
+   */
+  const persist = (rows: (Channel & { stats?: ChannelStats })[]) => {
     const channels: Channel[] = []
     const stats: Record<string, ChannelStats> = {}
     for (const row of rows) {
       const { stats: channelStats, ...channel } = row
       channels.push(channel)
       if (channelStats) stats[channel.name] = channelStats
-      await cache.saveChannel(channel)
     }
+    void hydrateChannelMirror(channels)
     return { channels, stats }
   }
 
   if (await isResourceStale("channels")) {
     try {
       const remote = await api.listChannels({ includeStats: true })
-      const result = await persist(remote)
+      const result = persist(remote)
       markResourceSynced("channels")
       return result
     } catch {

@@ -1280,6 +1280,81 @@ export const PostLookupRequestSchema = {
 Capped so this cannot become another way to ask for unbounded rows.`
 } as const;
 
+export const PostScopeRequestSchema = {
+    properties: {
+        channelNames: {
+            anyOf: [
+                {
+                    items: {
+                        type: 'string'
+                    },
+                    type: 'array'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Channelnames'
+        },
+        startDate: {
+            anyOf: [
+                {
+                    type: 'integer'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Startdate'
+        },
+        endDate: {
+            anyOf: [
+                {
+                    type: 'integer'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Enddate'
+        },
+        keyword: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Keyword'
+        },
+        forwarded: {
+            type: 'string',
+            title: 'Forwarded',
+            default: 'all'
+        },
+        media: {
+            type: 'string',
+            title: 'Media',
+            default: 'all'
+        },
+        maxPerChannel: {
+            type: 'integer',
+            minimum: 0,
+            title: 'Maxperchannel',
+            default: 0
+        }
+    },
+    type: 'object',
+    title: 'PostScopeRequest',
+    description: `A post scope carried in a request body rather than a query string.
+
+The channel selection can run to the full account — over a thousand handles —
+which as \`?channelNames=a,b,c,...\` produced URLs long enough to hit proxy and
+server header limits. A body has no such ceiling.`
+} as const;
+
 export const PromptScopeInputSchema = {
     properties: {
         startDate: {

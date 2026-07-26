@@ -88,6 +88,26 @@ function postScopeParams(params: PostScopeQuery): URLSearchParams {
   return qs
 }
 
+/**
+ * The same scope as `postScopeParams`, shaped for a JSON request body.
+ *
+ * Omits defaults exactly as the query-string builder does, so an endpoint reading
+ * this body sees the same scope it would have parsed from the URL.
+ */
+export function postScopeBody(params: PostScopeQuery): Record<string, unknown> {
+  const body: Record<string, unknown> = {}
+  if (params.channelNames?.length) body.channelNames = params.channelNames
+  if (params.startDate != null) body.startDate = params.startDate
+  if (params.endDate != null) body.endDate = params.endDate
+  if (params.keyword?.trim()) body.keyword = params.keyword.trim()
+  if (params.forwarded && params.forwarded !== "all")
+    body.forwarded = params.forwarded
+  if (params.media && params.media !== "all") body.media = params.media
+  if (params.maxPerChannel != null && params.maxPerChannel > 0)
+    body.maxPerChannel = params.maxPerChannel
+  return body
+}
+
 /** Cap modes whose per-channel selection can be reproduced server-side. */
 export const SERVER_REPRODUCIBLE_CAP_MODES: ReadonlySet<MaxPostsPerChannelMode> =
   new Set<MaxPostsPerChannelMode>(["latest"])
@@ -285,11 +305,19 @@ export const dataApi = {
     }>(`/api/v1/data/discover/candidates?${qs.toString()}`)
   },
 
-  /** Per-channel post counts for a filtered scope (SQL GROUP BY). */
+  /**
+   * Per-channel post counts for a filtered scope (SQL GROUP BY).
+   *
+   * POSTed rather than GETed: the scope carries the channel selection, which can
+   * be the whole account. As a query string that reached ~700 chars at 43
+   * channels and would have run to roughly 13 KB at the ~1,070 channels a real
+   * account holds — past what proxies and servers accept in a request line.
+   */
   getPostsCounts: (params: PostScopeQuery) =>
-    request<Record<string, number>>(
-      `/api/v1/data/posts/counts?${postScopeParams(params).toString()}`,
-    ),
+    request<Record<string, number>>("/api/v1/data/posts/counts", {
+      method: "POST",
+      body: JSON.stringify(postScopeBody(params)),
+    }),
 
   getTranslation: (channelName: string, postId: number, language: string) => {
     const qs = new URLSearchParams({

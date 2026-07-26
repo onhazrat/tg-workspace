@@ -405,6 +405,7 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
         onResetAndSync={actions.handleResetAndSync}
         hasMore={hasMoreChannels}
         loadMoreSentinelRef={loadMoreSentinelRef}
+        scrollContainerRef={scrollContainerRef}
       />
 
       <ChannelGridDialogs

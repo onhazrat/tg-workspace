@@ -1,7 +1,7 @@
 # Staging UI/UX Audit — Summarizer Dashboard
 
-**Status:** Partly fixed. **A1, A3, A4, A5, A6, A7, A8, C1, C2, C3, D1 and D2 are done**
-(Batches 1-2); D8 was fixed independently by `03b71ed`. Everything else is open.
+**Status:** Partly fixed. **A1, A3-A8, B1-B5, C1, C2, C3, D1 and D2 are done**
+(Batches 1-3); D8 was fixed independently by `03b71ed`. Everything else is open.
 
 > **Read `docs/staging-ui-ux-audit-verification.md` before acting on anything below.**
 > All 37 findings were re-verified against `acdf1ca` on 2026-07-26. Seven had to be

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react"
+import { logger } from "../lib/logger"
 import type { Channel, SyncQueueItem } from "../types"
 
 export function useSyncQueue(
@@ -11,7 +12,7 @@ export function useSyncQueue(
 
   const addToSyncQueue = useCallback(
     (channel: Channel, source: string, onComplete?: () => void) => {
-      console.log(
+      logger.debug(
         `[SyncQueue] ${new Date().toLocaleTimeString()} - Adding channel @${channel.name} to queue. Source: ${source}`,
       )
       setSyncQueue((prev) => {
@@ -72,14 +73,14 @@ export function useSyncQueue(
 
       // Process items in parallel
       nextItems.forEach(async (nextItem) => {
-        console.log(
+        logger.debug(
           `[SyncQueue] ${new Date().toLocaleTimeString()} - Processing @${nextItem.channel.name} from queue (Source: ${nextItem.source})`,
         )
 
         try {
-          console.log(`[SyncQueue] Processing @${nextItem.channel.name}...`)
+          logger.debug(`[SyncQueue] Processing @${nextItem.channel.name}...`)
           await processItem(nextItem.channel, nextItem.source)
-          console.log(
+          logger.debug(
             `[SyncQueue] Finished processing @${nextItem.channel.name}.`,
           )
           nextItem.onComplete?.()

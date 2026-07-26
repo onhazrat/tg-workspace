@@ -14,6 +14,7 @@ import type {
   SummaryListItem,
   SyncLog,
 } from "../types"
+import { logger } from "./logger"
 
 const DB_NAME = "TelegramSummarizerDB"
 const STORE_POSTS = "posts"
@@ -52,10 +53,10 @@ export function initDB(): Promise<IDBPDatabase> {
   if (dbPromise) return dbPromise
 
   dbPromise = (async () => {
-    console.log("[DB] Initializing database...")
+    logger.debug("[DB] Initializing database...")
     return openDB(DB_NAME, DB_VERSION, {
       upgrade(db, oldVersion, newVersion, transaction) {
-        console.log(
+        logger.debug(
           `[DB] Upgrading database from version ${oldVersion} to ${newVersion}`,
         )
         if (oldVersion < 1) {
@@ -225,7 +226,7 @@ export async function migrateEmbeddingsData() {
 
   try {
     const db = await initDB()
-    console.log("[DB] Starting embeddings migration...")
+    logger.debug("[DB] Starting embeddings migration...")
     const tx = db.transaction([STORE_POSTS, STORE_EMBEDDINGS], "readwrite")
     const postStore = tx.objectStore(STORE_POSTS)
     const embeddingStore = tx.objectStore(STORE_EMBEDDINGS)
@@ -265,7 +266,7 @@ export async function migrateEmbeddingsData() {
 
     await tx.done
     localStorage.setItem("embeddings_migrated_v1", "true")
-    console.log(
+    logger.debug(
       `[DB] Embeddings migration complete. Migrated ${migratedCount} embeddings.`,
     )
   } catch (error) {
@@ -279,7 +280,7 @@ export async function migrateSummaryDates() {
 
   try {
     const db = await initDB()
-    console.log("[DB] Starting summary dates migration...")
+    logger.debug("[DB] Starting summary dates migration...")
     const tx = db.transaction(STORE_SUMMARIES, "readwrite")
     const store = tx.objectStore(STORE_SUMMARIES)
 
@@ -307,7 +308,7 @@ export async function migrateSummaryDates() {
     }
 
     await tx.done
-    console.log(
+    logger.debug(
       `[DB] Summary dates migration complete. Migrated ${migratedCount} summaries.`,
     )
     localStorage.setItem("summary_dates_migrated_v1", "true")
@@ -400,6 +401,23 @@ export async function getPostsByDateRange(
 export async function saveChannel(channel: Channel) {
   const db = await initDB()
   await db.put(STORE_CHANNELS, channel)
+}
+
+/**
+ * Write many channels in one transaction.
+ *
+ * Mirroring the channel list used to `await saveChannel(...)` in a loop — one
+ * IndexedDB transaction per channel, serially. At the ~1,070 channels a real
+ * account holds that is 1,070 round-trips, and it sat in front of the data the
+ * Channels tab renders. Same shape as `savePosts`.
+ */
+export async function saveChannels(channels: Channel[]) {
+  if (!channels.length) return
+  const db = await initDB()
+  const tx = db.transaction(STORE_CHANNELS, "readwrite")
+  const store = tx.objectStore(STORE_CHANNELS)
+  await Promise.all(channels.map((channel) => store.put(channel)))
+  await tx.done
 }
 
 export async function deleteChannel(id: string) {
@@ -962,10 +980,10 @@ export async function clearPublishLogs() {
 }
 
 export async function saveSyncLog(log: SyncLog) {
-  console.log(`[DB] Saving sync log:`, log)
+  logger.debug(`[DB] Saving sync log:`, log)
   const db = await initDB()
   await db.put(STORE_SYNC_LOGS, log)
-  console.log(`[DB] Sync log saved successfully.`)
+  logger.debug(`[DB] Sync log saved successfully.`)
 }
 
 export async function getSyncLogs(): Promise<SyncLog[]> {
@@ -1159,7 +1177,7 @@ export async function deleteOldPosts(days: number): Promise<number> {
   }
 
   await tx.done
-  console.log(`[DB] Deleted ${deletedCount} posts older than ${days} days.`)
+  logger.debug(`[DB] Deleted ${deletedCount} posts older than ${days} days.`)
   return deletedCount
 }
 
@@ -1203,6 +1221,6 @@ export async function deleteOldLogs(days: number): Promise<number> {
   }
 
   await tx.done
-  console.log(`[DB] Deleted ${deletedCount} logs older than ${days} days.`)
+  logger.debug(`[DB] Deleted ${deletedCount} logs older than ${days} days.`)
   return deletedCount
 }

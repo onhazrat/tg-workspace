@@ -612,30 +612,20 @@ export class DataService {
      *
      * Replaces the client's `buildPostsInScopeCounts`, which counted the fully
      * fetched, client-filtered post array.
+     *
+     * POST rather than GET because the scope carries the channel selection: this is
+     * a read expressed as a POST purely so the selection travels in the body.
      * @param data The data for the request.
-     * @param data.channelNames
-     * @param data.startDate
-     * @param data.endDate
-     * @param data.keyword
-     * @param data.forwarded
-     * @param data.media
-     * @param data.maxPerChannel
+     * @param data.requestBody
      * @returns number Successful Response
      * @throws ApiError
      */
-    public static postsCounts(data: DataPostsCountsData = {}): CancelablePromise<DataPostsCountsResponse> {
+    public static postsCounts(data: DataPostsCountsData): CancelablePromise<DataPostsCountsResponse> {
         return __request(OpenAPI, {
-            method: 'GET',
+            method: 'POST',
             url: '/api/v1/data/posts/counts',
-            query: {
-                channelNames: data.channelNames,
-                startDate: data.startDate,
-                endDate: data.endDate,
-                keyword: data.keyword,
-                forwarded: data.forwarded,
-                media: data.media,
-                maxPerChannel: data.maxPerChannel
-            },
+            body: data.requestBody,
+            mediaType: 'application/json',
             errors: {
                 422: 'Validation Error'
             }

@@ -172,6 +172,10 @@ class Settings(BaseSettings):
     # Cached post photo/video thumbnails (relative to repo root unless absolute)
     POST_THUMB_DIR: str = "data/post-thumbs"
     POST_THUMB_CACHE_MAX_SIZE_MB_DEFAULT: int = 2048
+    # How long a browser may reuse a cached avatar or thumbnail without asking.
+    # These change rarely, and the responses also carry an ETag, so a stale one
+    # costs a bodiless 304 rather than a re-download. One hour.
+    CHANNEL_IMAGE_MAX_AGE_SECONDS: int = 3600
 
     @computed_field  # type: ignore[prop-decorator]
     @property
