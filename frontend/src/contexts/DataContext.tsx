@@ -84,6 +84,15 @@ interface DataContextType {
   publishLogs: PublishLog[]
   loadLogs: () => Promise<void>
 
+  /** First-load flags per log panel; see `logsLoading` below. */
+  logsLoading: {
+    publish: boolean
+    sync: boolean
+    llm: boolean
+    embedding: boolean
+    network: boolean
+  }
+
   syncLogs: SyncLog[]
   loadSyncLogs: () => Promise<void>
 
@@ -314,11 +323,33 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({
   const isInitialChannelsLoading =
     channelsQuery.isPending && channels.length === 0
 
+  /**
+   * First-load flags for the log panels.
+   *
+   * Each tab rendered `logs.length === 0 ? <LogEmptyState/> : …`, which cannot
+   * tell "still fetching" from "genuinely nothing" — so while the query was in
+   * flight every panel asserted "No LLM logs found". That is not a missing
+   * spinner, it is a false statement, and it is what made the Diagnostics
+   * section look broken on open.
+   *
+   * `isPending && length === 0` matches `isInitialChannelsLoading` above: a
+   * background refetch with data already on screen is not a loading state, so
+   * the list does not flicker back to a skeleton every time it revalidates.
+   */
+  const logsLoading = {
+    publish: publishLogsQuery.isPending && publishLogs.length === 0,
+    sync: syncLogsQuery.isPending && syncLogs.length === 0,
+    llm: llmLogsQuery.isPending && llmLogs.length === 0,
+    embedding: embeddingLogsQuery.isPending && embeddingLogs.length === 0,
+    network: networkLogsQuery.isPending && networkLogs.length === 0,
+  }
+
   return (
     <DataContext.Provider
       value={{
         channels,
         isInitialChannelsLoading,
+        logsLoading,
         setChannels,
         loadChannels,
         botCredentials,

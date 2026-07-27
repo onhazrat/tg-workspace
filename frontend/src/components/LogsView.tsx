@@ -57,6 +57,7 @@ export const LogsView: React.FC = () => {
     loadNetworkLogs,
     embeddingLogs,
     loadEmbeddingLogs,
+    logsLoading,
   } = useData()
   const { setActiveTab, setCurrentSummaryId } = useUI()
   const [activeLogTab, setActiveLogTab] = useState<LogTab>("publish")
@@ -232,6 +233,7 @@ export const LogsView: React.FC = () => {
         {activeLogTab === "publish" ? (
           <PublishLogsTab
             logs={filteredPublishLogs}
+            isLoading={logsLoading.publish}
             visibleCount={visibleByTab.publish}
             expandedId={expandedByTab.publish}
             onToggleExpand={handleToggleExpand("publish")}
@@ -241,6 +243,7 @@ export const LogsView: React.FC = () => {
         ) : activeLogTab === "sync" ? (
           <SyncLogsTab
             logs={filteredSyncLogs}
+            isLoading={logsLoading.sync}
             visibleCount={visibleByTab.sync}
             expandedId={expandedByTab.sync}
             onToggleExpand={handleToggleExpand("sync")}
@@ -249,6 +252,7 @@ export const LogsView: React.FC = () => {
         ) : activeLogTab === "llm" ? (
           <LlmLogsTab
             logs={filteredLlmLogs}
+            isLoading={logsLoading.llm}
             visibleCount={visibleByTab.llm}
             expandedId={expandedByTab.llm}
             onToggleExpand={handleToggleExpand("llm")}
@@ -257,6 +261,7 @@ export const LogsView: React.FC = () => {
         ) : activeLogTab === "network" ? (
           <NetworkLogsTab
             logs={filteredNetworkLogs}
+            isLoading={logsLoading.network}
             visibleCount={visibleByTab.network}
             expandedId={expandedByTab.network}
             onToggleExpand={handleToggleExpand("network")}
@@ -265,6 +270,7 @@ export const LogsView: React.FC = () => {
         ) : (
           <EmbeddingLogsTab
             logs={filteredEmbeddingLogs}
+            isLoading={logsLoading.embedding}
             visibleCount={visibleByTab.embedding}
             expandedId={expandedByTab.embedding}
             onToggleExpand={handleToggleExpand("embedding")}

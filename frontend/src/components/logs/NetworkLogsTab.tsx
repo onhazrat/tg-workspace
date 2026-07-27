@@ -10,9 +10,12 @@ import {
   LogErrorBlock,
 } from "./LogDetailBlocks"
 import { LogEmptyState } from "./LogEmptyState"
+import { LogsSkeleton } from "./LogsSkeleton"
 
 interface NetworkLogsTabProps {
   logs: NetworkLog[]
+  /** First load in flight — distinct from having no logs. */
+  isLoading: boolean
   visibleCount: number
   expandedId: string | null
   onToggleExpand: (id: string) => void
@@ -21,11 +24,16 @@ interface NetworkLogsTabProps {
 
 export const NetworkLogsTab: React.FC<NetworkLogsTabProps> = ({
   logs,
+  isLoading,
   visibleCount,
   expandedId,
   onToggleExpand,
   onDelete,
 }) => {
+  if (isLoading) {
+    return <LogsSkeleton />
+  }
+
   if (logs.length === 0) {
     return <LogEmptyState message="No network logs found" />
   }

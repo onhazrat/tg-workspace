@@ -9,9 +9,12 @@ import {
   RequestResponsePanels,
 } from "./LogDetailBlocks"
 import { LogEmptyState } from "./LogEmptyState"
+import { LogsSkeleton } from "./LogsSkeleton"
 
 interface SyncLogsTabProps {
   logs: SyncLog[]
+  /** First load in flight — distinct from having no logs. */
+  isLoading: boolean
   visibleCount: number
   expandedId: string | null
   onToggleExpand: (id: string) => void
@@ -20,11 +23,16 @@ interface SyncLogsTabProps {
 
 export const SyncLogsTab: React.FC<SyncLogsTabProps> = ({
   logs,
+  isLoading,
   visibleCount,
   expandedId,
   onToggleExpand,
   onDelete,
 }) => {
+  if (isLoading) {
+    return <LogsSkeleton />
+  }
+
   if (logs.length === 0) {
     return <LogEmptyState message="No sync logs found" />
   }

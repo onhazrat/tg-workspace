@@ -684,6 +684,80 @@ Verified: biome clean, `tsc --noEmit` clean, **606 unit tests** (was 600),
 > worked around — three locating workspace tabs by `role: button`, and one
 > asserting the old `System Logs` heading.
 
+## 2j. A2 — shipped 2026-07-27
+
+### The audit's stated cause was wrong
+
+The audit blames `SettingsHub.tsx:88-120`: *"Five log queries must all resolve
+before anything paints."* They do not. That `Promise.all` is `void`ed — it is
+fire-and-forget refetch triggering and gates no render at all.
+
+The real defect is one level down. Every log tab renders:
+
+```tsx
+if (logs.length === 0) return <LogEmptyState message="No LLM logs found" />
+```
+
+and the logs come from react-query via `DataContext`, where
+`llmLogs = llmLogsQuery.data ?? emptyArray`. While a query is in flight the array
+is empty, so the panel is **indistinguishable from a panel with no logs** — and it
+does not go blank, it confidently states *"No LLM logs found"*. That is not a
+missing spinner; it is the UI asserting something false, then quietly replacing it.
+
+### Fix
+
+`DataContext` now exposes a `logsLoading` flag per panel, computed as
+`isPending && length === 0` — matching the existing `isInitialChannelsLoading`
+convention. A background refetch with data already on screen is deliberately *not*
+a loading state, so lists do not flicker back to skeletons on every revalidation.
+
+Each tab checks it before the empty state and renders `LogsSkeleton` instead.
+
+## 2k. Correction — the C7 flakiness diagnosis in PR #31 was wrong
+
+PR #31's commit message states that C7's scroll reset made the e2e suite flaky,
+supported by this comparison:
+
+| Variant | Result |
+|---|---|
+| `main` | 75/75 |
+| + C7 (`useEffect`) | 74/75, ×3 |
+| − C7 | 75/75 |
+| + guarded C7 | 75/75, ×2 |
+
+**That comparison was confounded and the conclusion does not hold.**
+
+`seedTestChannel` **appends** on every e2e run — roughly 136 channels per full
+suite — and never resets. `main` was measured early in the session against a small
+database and `+C7` later against a much larger one, so DB growth tracked the
+variable under test. By the end of the day `tg_channels` held **2,152 rows**, and
+the suite failed on tests that no working-tree change could affect: `channel card
+frosted icon buttons expose hover classes` failed on clean `main`, with C7 removed,
+and with A2 absent.
+
+After truncating the `tg_*` tables, both arms measured from zero:
+
+| Variant | Fresh-DB result |
+|---|---|
+| clean `main` | **75/75** |
+| `main` + A2 | **75/75** |
+
+**What stands:** the C7 guard (`if (container.scrollTop !== 0)`) is still correct
+on its own terms — an unconditional write does force a layout read/write on every
+tab render — and nothing shipped in #31 is harmful. **What does not stand:** the
+claim that removing it fixed a measured regression. It was not measured against a
+controlled baseline.
+
+**The lesson is the same one B2 taught, in a new disguise.** There, a stale backend
+container made a revert look like it made things worse. Here, a growing database
+made a branch look worse than `main`. In both cases the environment drifted between
+measurements while only the code was believed to have changed. Before trusting any
+e2e A/B: check `select count(*) from tg_channels`, reset, and re-measure *both*
+arms after the reset.
+
+Verified: biome clean (3 warnings, all pre-existing), `tsc --noEmit` clean,
+**612 unit tests**, **75/75 e2e on a truncated database**.
+
 ## 3. Fix plan
 
 Batches are independently shippable and ordered by risk retired per unit of work.

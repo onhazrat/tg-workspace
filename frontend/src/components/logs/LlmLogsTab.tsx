@@ -10,9 +10,12 @@ import {
   TextDetailBlock,
 } from "./LogDetailBlocks"
 import { LogEmptyState } from "./LogEmptyState"
+import { LogsSkeleton } from "./LogsSkeleton"
 
 interface LlmLogsTabProps {
   logs: LLMLog[]
+  /** First load in flight — distinct from having no logs. */
+  isLoading: boolean
   visibleCount: number
   expandedId: string | null
   onToggleExpand: (id: string) => void
@@ -21,11 +24,16 @@ interface LlmLogsTabProps {
 
 export const LlmLogsTab: React.FC<LlmLogsTabProps> = ({
   logs,
+  isLoading,
   visibleCount,
   expandedId,
   onToggleExpand,
   onDelete,
 }) => {
+  if (isLoading) {
+    return <LogsSkeleton />
+  }
+
   if (logs.length === 0) {
     return <LogEmptyState message="No LLM logs found" />
   }

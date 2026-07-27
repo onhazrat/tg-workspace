@@ -9,9 +9,12 @@ import {
   TextDetailBlock,
 } from "./LogDetailBlocks"
 import { LogEmptyState } from "./LogEmptyState"
+import { LogsSkeleton } from "./LogsSkeleton"
 
 interface EmbeddingLogsTabProps {
   logs: EmbeddingLog[]
+  /** First load in flight — distinct from having no logs. */
+  isLoading: boolean
   visibleCount: number
   expandedId: string | null
   onToggleExpand: (id: string) => void
@@ -20,11 +23,16 @@ interface EmbeddingLogsTabProps {
 
 export const EmbeddingLogsTab: React.FC<EmbeddingLogsTabProps> = ({
   logs,
+  isLoading,
   visibleCount,
   expandedId,
   onToggleExpand,
   onDelete,
 }) => {
+  if (isLoading) {
+    return <LogsSkeleton />
+  }
+
   if (logs.length === 0) {
     return <LogEmptyState message="No embedding logs found" />
   }
