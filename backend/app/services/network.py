@@ -85,6 +85,7 @@ async def _fetch_once(
     client: httpx.AsyncClient | None = None,
     method: str = "GET",
     json_body: dict[str, Any] | None = None,
+    binary: bool = False,
 ) -> Any:
     async def _request(http_client: httpx.AsyncClient) -> Any:
         if method == "POST":
@@ -92,6 +93,11 @@ async def _fetch_once(
         else:
             response = await http_client.get(url)
         response.raise_for_status()
+        if binary:
+            content_type = (
+                response.headers.get("content-type", "").split(";")[0].strip()
+            )
+            return response.content, content_type
         data = response.text if is_telegram_web_url(url) else response.json()
         if isinstance(data, str) and is_telegram_web_view_url(url):
             _validate_telegram_web_view_page(
@@ -165,7 +171,15 @@ async def fetch_with_retry(
     tor_control_port: int | None = None,
     method: str = "GET",
     json_body: dict[str, Any] | None = None,
+    binary: bool = False,
 ) -> tuple[Any, dict[str, Any]]:
+    """Fetch with proxy-lane retries and telemetry.
+
+    With ``binary=True`` the payload is ``(bytes, content_type)`` instead of
+    decoded text/JSON — used for media that must travel the same proxy or Tor
+    lane as the page fetches, so scraping over Tor does not leak the real
+    egress IP to Telegram's CDN.
+    """
     global _tor_request_counter
     effective_retries = (
         retries if retries is not None else settings.NETWORK_FETCH_RETRIES
@@ -214,9 +228,12 @@ async def fetch_with_retry(
                         client=pool_client,
                         method=method,
                         json_body=json_body,
+                        binary=binary,
                     )
             else:
-                data = await _fetch_once(url, None, method=method, json_body=json_body)
+                data = await _fetch_once(
+                    url, None, method=method, json_body=json_body, binary=binary
+                )
 
             if proxy_url:
                 _bad_proxies.pop(proxy_url, None)

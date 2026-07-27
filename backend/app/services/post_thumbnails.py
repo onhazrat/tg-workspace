@@ -4,15 +4,16 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import re
 import threading
 import time
+from contextlib import suppress
 from pathlib import Path
 from typing import Any, cast
 
-import httpx
-
 from app.core.config import settings
+from app.services.network import fetch_with_retry
 
 logger = logging.getLogger(__name__)
 
@@ -20,7 +21,7 @@ _META_SUFFIX = ".meta.json"
 _ENFORCE_MIN_INTERVAL_SECONDS = 300
 _last_enforce_lock = threading.Lock()
 _last_enforce_at = 0.0
-_thumb_dir_ready = False
+_thumb_dirs_ready: set[Path] = set()
 _EXT_BY_CONTENT_TYPE = {
     "image/jpeg": ".jpg",
     "image/jpg": ".jpg",
@@ -29,6 +30,15 @@ _EXT_BY_CONTENT_TYPE = {
     "image/gif": ".gif",
 }
 _DEFAULT_EXT = ".jpg"
+_CONTENT_TYPE_BY_EXT = {
+    ".jpg": "image/jpeg",
+    ".png": "image/png",
+    ".webp": "image/webp",
+    ".gif": "image/gif",
+}
+# Telegram thumbnails are small; anything larger is not one, and reading it
+# into memory unbounded is how a sync run turns into an OOM.
+_MAX_THUMB_BYTES = 8 * 1024 * 1024
 # Every extension cache_post_thumb can write: the content-type map plus the
 # fallback used for unrecognised types. Checking these directly avoids a
 # directory-wide glob per lookup.
@@ -47,11 +57,16 @@ def _resolve_thumb_dir() -> Path:
 
 
 def _thumb_dir() -> Path:
-    global _thumb_dir_ready
+    """Resolve the cache directory, creating it once per distinct path.
+
+    Keyed by path rather than a single flag: a bare bool skipped the mkdir
+    forever once any directory had been created, so a reconfigured or
+    externally removed directory was never recreated.
+    """
     root = _resolve_thumb_dir()
-    if not _thumb_dir_ready:
+    if root not in _thumb_dirs_ready:
         root.mkdir(parents=True, exist_ok=True)
-        _thumb_dir_ready = True
+        _thumb_dirs_ready.add(root)
     return root
 
 
@@ -82,7 +97,7 @@ def _read_meta(channel_name: str, post_id: int) -> dict[str, Any] | None:
         return None
     try:
         return cast(dict[str, Any], json.loads(path.read_text(encoding="utf-8")))
-    except json.JSONDecodeError, OSError:
+    except json.JSONDecodeError, OSError, UnicodeDecodeError:
         return None
 
 
@@ -107,7 +122,9 @@ def read_cached_thumb(channel_name: str, post_id: int) -> tuple[bytes, str] | No
     if not image_path:
         return None
     meta = _read_meta(channel_name, post_id)
-    content_type = (meta or {}).get("contentType", "image/jpeg")
+    content_type = (meta or {}).get("contentType") or _CONTENT_TYPE_BY_EXT.get(
+        image_path.suffix.lower(), "image/jpeg"
+    )
     try:
         return image_path.read_bytes(), content_type
     except OSError:
@@ -192,12 +209,33 @@ def enforce_thumb_cache_size_limit_throttled(max_size_mb: int) -> int:
         return enforce_thumb_cache_size_limit(max_size_mb)
 
 
+def _write_atomic(path: Path, data: bytes) -> None:
+    """Write via a temp file in the same directory, then rename.
+
+    A direct write lets a concurrent `read_cached_thumb` observe a partial
+    file, and leaves a truncated one behind if the disk fills mid-write.
+    `os.replace` is atomic within a filesystem.
+    """
+    tmp = path.with_name(f"{path.name}.{os.getpid()}.tmp")
+    try:
+        tmp.write_bytes(data)
+        os.replace(tmp, path)
+    except OSError:
+        with suppress(OSError):
+            tmp.unlink(missing_ok=True)
+        raise
+
+
 async def cache_post_thumb(
     channel_name: str,
     post_id: int,
     source_url: str,
     *,
     force: bool = False,
+    proxies: list[str] | None = None,
+    proxy_concurrency: tuple[int, dict[str, int]] | None = None,
+    tor_auto_rotate: bool = False,
+    tor_rotation_threshold: int | None = None,
 ) -> bool:
     if not is_remote_thumb_url(source_url):
         return has_cached_thumb(channel_name, post_id)
@@ -212,19 +250,19 @@ async def cache_post_thumb(
             return True
 
     try:
-        async with httpx.AsyncClient(
-            timeout=settings.NETWORK_FETCH_TIMEOUT_SECONDS,
-            follow_redirects=True,
-        ) as client:
-            response = await client.get(
-                source_url,
-                headers={"User-Agent": "Mozilla/5.0 (compatible; TGSummarizer/1.0)"},
-            )
-            response.raise_for_status()
-            content = response.content
-            content_type = (
-                response.headers.get("content-type", "image/jpeg").split(";")[0].strip()
-            )
+        # Through the shared lane pool, not a bare client: page fetches and the
+        # media they reference must leave from the same egress, or scraping over
+        # Tor still hands Telegram's CDN the real IP.
+        payload, _telemetry = await fetch_with_retry(
+            source_url,
+            proxies=proxies or None,
+            proxy_concurrency=proxy_concurrency,
+            tor_auto_rotate=tor_auto_rotate,
+            tor_rotation_threshold=tor_rotation_threshold,
+            binary=True,
+        )
+        content, raw_content_type = payload
+        content_type = raw_content_type or "image/jpeg"
     except Exception as exc:  # noqa: BLE001
         logger.warning(
             "Failed to download post thumb for %s/%s from %s: %s",
@@ -238,6 +276,16 @@ async def cache_post_thumb(
     if not content:
         return has_cached_thumb(channel_name, post_id)
 
+    if len(content) > _MAX_THUMB_BYTES:
+        logger.warning(
+            "Skipping oversized post thumb for %s/%s (%d bytes) from %s",
+            channel_name,
+            post_id,
+            len(content),
+            source_url,
+        )
+        return has_cached_thumb(channel_name, post_id)
+
     ext = _EXT_BY_CONTENT_TYPE.get(content_type.lower(), _DEFAULT_EXT)
     safe = _safe_key(channel_name, post_id)
     directory = _thumb_dir()
@@ -245,15 +293,22 @@ async def cache_post_thumb(
     for stale_ext in _IMAGE_EXTS:
         if stale_ext == ext:
             continue
-        try:
+        with suppress(OSError):
             (directory / f"{safe}{stale_ext}").unlink(missing_ok=True)
-        except OSError:
-            pass
 
-    image_path = directory / f"{safe}{ext}"
-    image_path.write_bytes(content)
-    _meta_path(channel_name, post_id).write_text(
-        json.dumps({"sourceUrl": source_url, "contentType": content_type}),
-        encoding="utf-8",
-    )
+    # Callers gather these with return_exceptions=True, so an unguarded write
+    # failure (full disk, read-only mount) vanished with no log line at all.
+    try:
+        _write_atomic(directory / f"{safe}{ext}", content)
+        _write_atomic(
+            _meta_path(channel_name, post_id),
+            json.dumps({"sourceUrl": source_url, "contentType": content_type}).encode(
+                "utf-8"
+            ),
+        )
+    except OSError as exc:
+        logger.warning(
+            "Failed to write post thumb for %s/%s: %s", channel_name, post_id, exc
+        )
+        return has_cached_thumb(channel_name, post_id)
     return True

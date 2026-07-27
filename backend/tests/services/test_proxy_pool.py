@@ -182,6 +182,7 @@ def test_fetch_with_retry_respects_pool_concurrency(monkeypatch) -> None:
         client: httpx.AsyncClient | None = None,
         method: str = "GET",
         json_body: dict | None = None,
+        binary: bool = False,
     ) -> str:
         nonlocal peak
         assert proxy_url is not None
