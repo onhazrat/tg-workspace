@@ -1,4 +1,11 @@
-import { Brain, Copy, Languages, Send, SlidersHorizontal } from "lucide-react"
+import {
+  Brain,
+  ChevronDown,
+  Copy,
+  Languages,
+  Send,
+  SlidersHorizontal,
+} from "lucide-react"
 import type React from "react"
 import { useState } from "react"
 import { TgButton } from "@/components/ui/tg-button"
@@ -62,6 +69,19 @@ export const SummaryConfig: React.FC = () => {
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
+          {/*
+           * The chevrons are not decoration.
+           *
+           * These are native `<select>`s styled as chips, and `appearance:
+           * none` strips the platform's own dropdown arrow. With no
+           * replacement they rendered identically to the static labels beside
+           * them — nothing said they could be opened. Measured on staging:
+           * `appearance: none`, `background-image: none`, `padding-right: 0`,
+           * so there was provably no affordance of any kind.
+           *
+           * `pointer-events-none` on the icon keeps the click falling through
+           * to the select underneath it.
+           */}
           <div className="flex items-center bg-app-muted/20 border border-app-ink/10 rounded-lg px-3 h-10 gap-2 hover:bg-app-muted/30 transition-colors">
             <Brain size={14} className="text-app-ink/50" />
             <select
@@ -76,6 +96,11 @@ export const SummaryConfig: React.FC = () => {
                 </option>
               ))}
             </select>
+            <ChevronDown
+              size={12}
+              aria-hidden="true"
+              className="text-app-ink/40 pointer-events-none shrink-0"
+            />
           </div>
 
           <div className="flex items-center bg-app-muted/20 border border-app-ink/10 rounded-lg px-3 h-10 gap-2 hover:bg-app-muted/30 transition-colors">
@@ -92,6 +117,11 @@ export const SummaryConfig: React.FC = () => {
                 </option>
               ))}
             </select>
+            <ChevronDown
+              size={12}
+              aria-hidden="true"
+              className="text-app-ink/40 pointer-events-none shrink-0"
+            />
           </div>
 
           <Tooltip>

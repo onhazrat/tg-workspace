@@ -21,7 +21,7 @@ import {
   Tag,
 } from "lucide-react"
 import { AnimatePresence, motion } from "motion/react"
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useLayoutEffect, useRef, useState } from "react"
 import { api } from "@/api"
 import { ChannelGrid } from "./components/ChannelGrid"
 import { ChatView } from "./components/ChatView"
@@ -57,6 +57,11 @@ import { useGuidedTour } from "./hooks/useGuidedTour"
 import { useScopedPostCounts } from "./hooks/usePostsView"
 import { APP_VERSION } from "./lib/app-version"
 import { applyHistorySummarySelection } from "./lib/commands/history-selection"
+import {
+  isEmptyScope,
+  type RestoredScope,
+  restoredScopeNotice,
+} from "./lib/history/restored-scope-notice"
 import { getSummary } from "./lib/repository"
 import type { SummaryListItem, TabType } from "./types"
 
@@ -143,7 +148,19 @@ export default function App() {
         ? "Switch to Dark Mode"
         : "Switch to System Mode"
 
+  /**
+   * Set when a saved report replaces the working scope, so the change can be
+   * stated instead of just happening. Cleared on dismiss, and replaced whenever
+   * another report is opened.
+   */
+  const [restoredScope, setRestoredScope] = useState<RestoredScope | null>(null)
+
   const handleSelectHistorySummary = (s: SummaryListItem) => {
+    setRestoredScope({
+      channelCount: s.channels?.length ?? 0,
+      startDate: s.startDate,
+      endDate: s.endDate,
+    })
     void applyHistorySummarySelection(s, {
       setActiveTab,
       setDateRange,
@@ -186,6 +203,32 @@ export default function App() {
     return () => window.removeEventListener("keydown", onKeyDown)
   }, [])
 
+  /**
+   * Each tab starts at the top.
+   *
+   * The workspace shares one scroll container across every tab, so the offset
+   * survived a switch: scrolling deep into Posts and moving to Summary landed
+   * you partway down a shorter view — sometimes past its end, on an apparently
+   * blank screen. Keyed on `activeTab` so it fires on `?tab=` changes however
+   * they happen: the nav links, the command palette, a pasted URL, or opening a
+   * history record.
+   *
+   * `useLayoutEffect`, not `useEffect`: an effect runs *after* paint, so the new
+   * tab rendered at the old offset and then jumped. Besides the visible flicker
+   * that made the e2e suite flaky — content shifting under assertions that had
+   * already begun — two runs failed on two different tests while the same suite
+   * was green on `main`. A layout effect puts the container at the top before
+   * the first paint of the new tab, so nothing moves afterwards.
+   */
+  useLayoutEffect(() => {
+    const container = scrollContainerRef.current
+    // Guarded so this is a genuine no-op when already at the top. An
+    // unconditional write still forces a layout read/write on every tab render,
+    // which cascades through the virtualized channel grid — that alone made the
+    // e2e suite flaky on tabs that were never scrolled in the first place.
+    if (container && container.scrollTop !== 0) container.scrollTop = 0
+  }, [activeTab])
+
   const commandKey =
     typeof navigator !== "undefined" &&
     /(Mac|iPhone|iPad|iPod)/i.test(navigator.platform)
@@ -223,6 +266,47 @@ export default function App() {
                 Showing cached data. Sync, summary, and publish actions are
                 disabled.
               </span>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/*
+         * Restored-scope banner (C8).
+         *
+         * Opening a saved report replaces the channel selection and the date
+         * range — correctly, since a report only means anything beside the
+         * posts it came from. But it used to happen in silence, so the "Posts
+         * in Scope" counter and every scoped view changed underneath the user
+         * with no explanation. This states the change; it does not undo it.
+         */}
+        <AnimatePresence>
+          {restoredScope && (
+            <motion.div
+              initial={{ height: 0, opacity: 0, marginBottom: 0 }}
+              animate={{ height: "auto", opacity: 1, marginBottom: 16 }}
+              exit={{ height: 0, opacity: 0, marginBottom: 0 }}
+              data-testid="restored-scope-banner"
+              className="bg-blue-500/10 border border-blue-500/20 text-blue-700 dark:text-blue-400 px-4 py-3 flex items-center justify-between gap-3 text-xs rounded-md overflow-hidden"
+            >
+              <div className="flex items-center gap-3">
+                <History className="w-4 h-4 shrink-0" />
+                <span>
+                  <strong className="uppercase tracking-wider">
+                    Loaded from history.
+                  </strong>{" "}
+                  {isEmptyScope(restoredScope)
+                    ? "This report was saved without any channels, so the selection is now empty."
+                    : restoredScopeNotice(restoredScope)}
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setRestoredScope(null)}
+                aria-label="Dismiss scope notice"
+                className="shrink-0 uppercase tracking-widest font-bold opacity-60 hover:opacity-100 focus-visible:opacity-100 transition-opacity"
+              >
+                Dismiss
+              </button>
             </motion.div>
           )}
         </AnimatePresence>

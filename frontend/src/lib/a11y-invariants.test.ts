@@ -82,6 +82,23 @@ describe("header accessibility", () => {
     expect(claimsTabRole).toBe(false)
   })
 
+  /**
+   * C7 resets the shared workspace scroll container on every `?tab=` change.
+   *
+   * The guard is not a micro-optimisation. Writing `scrollTop` unconditionally
+   * forces a layout read/write on every tab render, and that alone cascaded
+   * through the virtualized channel grid badly enough to make the e2e suite
+   * flaky — three runs failed on three *different* tests while the same suite
+   * was green on `main`, including on tabs that were never scrolled, where the
+   * write was already a no-op. Comparing first keeps it genuinely inert.
+   */
+  it("resets tab scroll without forcing a layout write every render", () => {
+    expect(code).toContain("container.scrollTop !== 0")
+    // A layout effect, so the new tab paints at the top instead of jumping
+    // after paint.
+    expect(code).toContain("useLayoutEffect")
+  })
+
   it("strips comments without stripping code", () => {
     // Guards the guard: this check exists because the tab bar's own comment
     // names `role="tab"` while explaining why it is not used.
