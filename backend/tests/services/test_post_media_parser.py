@@ -10,23 +10,20 @@ from bs4 import BeautifulSoup
 
 from app.services.post_media_parser import finalize_post_media_paths, parse_widget_media
 from app.services.scraper import _parse_posts_from_html
-
-FIXTURES_DIR = Path(__file__).resolve().parents[1] / "fixtures" / "live"
-
-
-def _load_fixture(name: str) -> str:
-    return (FIXTURES_DIR / name).read_text(encoding="utf-8")
-
-
-def _widget_by_post_id(html: str, post_id: int):
-    soup = BeautifulSoup(html, "html.parser")
-    for el in soup.select(".tgme_widget_message"):
-        data_post = el.get("data-post")
-        if isinstance(data_post, list):
-            data_post = data_post[0] if data_post else None
-        if data_post and str(data_post).endswith(f"/{post_id}"):
-            return el
-    pytest.fail(f"Widget for post {post_id} not found")
+from tests.utils.tg_html import LIVE_FIXTURES_DIR as FIXTURES_DIR
+from tests.utils.tg_html import (
+    body_html,
+    live_fixture_paths,
+    message_widget,
+    reply_widget,
+    widgets,
+)
+from tests.utils.tg_html import (
+    load_live_fixture as _load_fixture,
+)
+from tests.utils.tg_html import (
+    widget_by_post_id as _widget_by_post_id,
+)
 
 
 def test_photo_only_post_durov_522() -> None:
@@ -139,3 +136,150 @@ def test_finalize_post_media_paths_keeps_thumb_source_for_sync_cache() -> None:
         "/api/v1/telegram/post-thumb/durov/522"
     )
     assert enriched_post.get("_thumbSourceUrl")
+
+
+# --- Reply handling -------------------------------------------------------
+# Telegram reuses `tgme_widget_message_text` for the reply quote and the body,
+# with the quote first in DOM order. These pin that the body wins.
+
+REPLY_POSTS = (
+    (444, "🚨 Last Call", "ContestBot is now ready"),
+    (450, "4th PLACE", "🏆 Design Contest 2025: Results"),
+    (454, "Hairy Goose", "🏆 Contest for Artists: Results"),
+)
+
+
+@pytest.mark.parametrize(("post_id", "body_start", "quote_start"), REPLY_POSTS)
+def test_reply_post_text_is_the_body_not_the_quote(
+    post_id: int, body_start: str, quote_start: str
+) -> None:
+    el = _widget_by_post_id(_load_fixture("contest_root.html"), post_id)
+    text, _media, _thumb = parse_widget_media(el)
+    assert text.startswith(body_start)
+    assert quote_start not in text
+
+
+def test_reply_thumb_is_never_treated_as_post_media() -> None:
+    el = reply_widget(
+        parent_id=443,
+        thumb_url="https://cdn4.telesco.pe/file/parent-thumb.jpg",
+        body="a text-only reply",
+    )
+    text, media, thumb_source = parse_widget_media(el)
+    assert text == "a text-only reply"
+    assert media is None
+    assert thumb_source is None
+
+
+def test_reply_quote_alone_does_not_become_the_caption() -> None:
+    el = reply_widget(parent_id=1, quote="parent text", body="actual body")
+    text, _media, _thumb = parse_widget_media(el)
+    assert text == "actual body"
+
+
+# --- Link previews must not lend their media to the post ------------------
+
+
+def test_link_preview_video_is_not_the_posts_own_video() -> None:
+    el = _widget_by_post_id(_load_fixture("durov_200.html"), 181)
+    _text, media, _thumb = parse_widget_media(el)
+    assert media is not None
+    assert media["kinds"] == ["link_preview"]
+    assert media.get("durationSec") is None
+
+
+def test_link_preview_image_is_cached_as_a_thumbnail() -> None:
+    el = _widget_by_post_id(_load_fixture("durov_512.html"), 504)
+    _text, _media, thumb_source = parse_widget_media(el)
+    assert thumb_source is not None
+    assert thumb_source.startswith("https://")
+
+
+# --- Album kinds ----------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("fixture", "post_id"), (("durov_400.html", 373), ("TelegramTips_246.html", 244))
+)
+def test_video_only_album_is_not_tagged_photo(fixture: str, post_id: int) -> None:
+    el = _widget_by_post_id(_load_fixture(fixture), post_id)
+    _text, media, _thumb = parse_widget_media(el)
+    assert media is not None
+    assert "grouped" in media["kinds"]
+    assert "video" in media["kinds"]
+    assert "photo" not in media["kinds"]
+
+
+def test_photo_album_is_still_detected() -> None:
+    el = _widget_by_post_id(_load_fixture("durov_512.html"), 510)
+    _text, media, _thumb = parse_widget_media(el)
+    assert media is not None
+    assert "grouped" in media["kinds"]
+    assert "photo" in media["kinds"]
+
+
+# --- Previously invisible posts -------------------------------------------
+
+
+def test_sticker_post_is_detected() -> None:
+    el = _widget_by_post_id(_load_fixture("durov_50.html"), 41)
+    text, media, _thumb = parse_widget_media(el)
+    assert media is not None
+    assert media["kinds"] == ["sticker"]
+    assert text == "[sticker]"
+
+
+def test_views_survive_on_a_post_with_no_media_kinds() -> None:
+    el = message_widget(
+        body_html("plain text post")
+        + '<span class="tgme_widget_message_views">1.2K</span>'
+    )
+    text, media, _thumb = parse_widget_media(el)
+    assert text == "plain text post"
+    assert media is not None
+    assert media["kinds"] == []
+    assert media["views"] == "1.2K"
+    # `kinds: []` keeps the post `text_only` for both filter implementations.
+    assert media["isMediaOnly"] is False
+
+
+def test_no_media_object_when_there_is_nothing_to_record() -> None:
+    el = message_widget(body_html("plain text post"))
+    _text, media, _thumb = parse_widget_media(el)
+    assert media is None
+
+
+# --- Corpus-wide invariants ------------------------------------------------
+# These run over every captured page, so a future selector change that
+# reintroduces one of the fixed defects fails here even without a targeted test.
+
+
+@pytest.mark.parametrize("fixture", live_fixture_paths(), ids=lambda p: p.name)
+def test_corpus_invariants(fixture: Path) -> None:
+    for el in widgets(fixture.read_text(encoding="utf-8")):
+        text, media, _thumb = parse_widget_media(el)
+        kinds = media["kinds"] if media else []
+        post = el.get("data-post") or fixture.name
+
+        reply = el.select_one("a.tgme_widget_message_reply")
+        if reply is not None:
+            quote = reply.select_one(".js-message_reply_text")
+            if quote is not None and quote.get_text(strip=True):
+                assert text.strip() != quote.get_text(strip=False).strip(), (
+                    f"{post}: post text is the replied-to post's quote"
+                )
+
+        if "photo" in kinds:
+            grouped = el.select_one(".tgme_widget_message_grouped_wrap")
+            if grouped is not None:
+                assert grouped.select(".tgme_widget_message_photo_wrap"), (
+                    f"{post}: album tagged photo but holds no photo items"
+                )
+
+        if media and media.get("durationSec") is not None:
+            assert "video" in kinds, f"{post}: duration without a video kind"
+
+        if media is None:
+            assert not el.select_one(".tgme_widget_message_views"), (
+                f"{post}: views counter dropped"
+            )

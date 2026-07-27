@@ -29,7 +29,7 @@ from app.services.post_thumbnails import (
     cache_post_thumb,
     enforce_thumb_cache_size_limit,
 )
-from app.services.scraper import _parse_posts_from_html
+from app.services.scraper import _parse_posts_from_html, make_soup
 from app.services.telegram_web import (
     telegram_web_view_post_url,
 )
@@ -122,7 +122,8 @@ async def _fetch_post_html(channel_name: str, post_id: int) -> str:
 def _parse_single_post(
     html: str, channel_name: str, post_id: int
 ) -> tuple[str, dict[str, Any] | None, str | None]:
-    posts, _next = _parse_posts_from_html(html, post_id, set())
+    soup = make_soup(html)
+    posts, _next = _parse_posts_from_html(soup, post_id, set())
     for post in posts:
         if post.get("id") == post_id:
             thumb_source = post.get("_thumbSourceUrl")
@@ -133,9 +134,6 @@ def _parse_single_post(
                 thumb_source,
             )
 
-    from bs4 import BeautifulSoup
-
-    soup = BeautifulSoup(html, "html.parser")
     for el in soup.select(".tgme_widget_message"):
         data_post = el.get("data-post")
         if isinstance(data_post, list):

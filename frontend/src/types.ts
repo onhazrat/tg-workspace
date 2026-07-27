@@ -2,8 +2,10 @@ export type PostMediaKind =
   | "photo"
   | "video"
   | "voice"
+  | "audio"
   | "document"
   | "poll"
+  | "sticker"
   | "link_preview"
   | "grouped"
 
@@ -39,6 +41,17 @@ export interface PostBodyLink {
   channel?: string | null
 }
 
+/**
+ * The post a post replies to. Mirrors the backend `reply_to` JSON column.
+ * `text` is Telegram's truncated excerpt of the parent, not its full body.
+ */
+export interface PostReplyRef {
+  channel?: string | null
+  authorName?: string | null
+  text?: string | null
+  url?: string | null
+}
+
 export interface Post {
   id: number
   channelName: string
@@ -47,6 +60,8 @@ export interface Post {
   timestamp: number
   media?: PostMedia | null
   links?: PostBodyLink[] | null
+  replyToPostId?: number | null
+  replyTo?: PostReplyRef | null
   forwardedFrom?: string
   forwardedFromName?: string
   isAnchor?: boolean

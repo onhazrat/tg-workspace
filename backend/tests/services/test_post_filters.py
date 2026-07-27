@@ -71,11 +71,17 @@ def test_media_text_only_vs_media_only_kinds() -> None:
         _add(session, 2, text="empty kinds", media={"kinds": []})
         _add(session, 3, text="a photo caption", media={"kinds": ["photo"]})
         _add(session, 4, text="a video caption", media={"kinds": ["video"]})
+        # A text post whose only media payload is engagement stats: the parser
+        # emits `kinds: []` so that it stays text_only.
+        _add(session, 5, text="text with views", media={"kinds": [], "views": "1.2K"})
+        # Stickers are real media and must leave text_only.
+        _add(session, 6, text="[sticker]", media={"kinds": ["sticker"]})
         session.commit()
-        assert _ids(session, PostFilters(media="text_only")) == {1, 2}
+        assert _ids(session, PostFilters(media="text_only")) == {1, 2, 5}
+        assert _ids(session, PostFilters(media="media_only")) == {6}
         assert _ids(session, PostFilters(media="photo")) == {3}
         assert _ids(session, PostFilters(media="video")) == {4}
-        assert _ids(session, PostFilters(media="all")) == {1, 2, 3, 4}
+        assert _ids(session, PostFilters(media="all")) == {1, 2, 3, 4, 5, 6}
 
 
 def test_media_only_three_ways() -> None:

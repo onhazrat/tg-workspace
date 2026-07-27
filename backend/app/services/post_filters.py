@@ -59,7 +59,9 @@ MEDIA_FILTERS: frozenset[str] = frozenset(
 # Mirrors MEDIA_ONLY_TEXT_RE in frontend/src/lib/posts/post-media.ts, as a
 # POSIX pattern for `~*`. The frontend tests `post.text.trim()` against
 # /^\[(?:photo|video|voice|document|poll|photo album)\]/i.
-_MEDIA_ONLY_TEXT_RE = r"^\[(photo|video|voice|document|poll|photo album)\]"
+_MEDIA_ONLY_TEXT_RE = (
+    r"^\[(photo|video|voice|audio|document|poll|sticker|photo album)\]"
+)
 
 # Frontend sentinel: text set to this exact string means "media, no caption".
 _MEDIA_PLACEHOLDER_TEXT = "[Media/No Text Content]"

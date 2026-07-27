@@ -16,6 +16,7 @@ from urllib.parse import urlparse
 
 from bs4 import Tag
 
+from app.services.telegram_html import message_body_element
 from app.services.telegram_web import (
     is_channel_handle,
     is_telegram_web_url,
@@ -52,7 +53,7 @@ def extract_body_links(el: Tag) -> list[dict[str, Any]]:
     Only Telegram-hosted links are kept — external URLs cannot yield a channel
     and would bloat the stored column.
     """
-    text_el = el.select_one(".tgme_widget_message_text")
+    text_el = message_body_element(el)
     if text_el is None:
         return []
 

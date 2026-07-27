@@ -3,6 +3,7 @@ import {
   ChevronUp,
   Clock,
   Copy,
+  CornerUpLeft,
   ExternalLink,
   Eye,
   Hash,
@@ -10,8 +11,10 @@ import {
   Languages,
   Layers,
   Link2,
+  Music,
   PlusCircle,
   Sparkles,
+  Sticker,
   Video,
 } from "lucide-react"
 import type React from "react"
@@ -47,6 +50,10 @@ function MediaKindIcon({ kind }: { kind: PostMediaKind }) {
       return <Link2 size={10} />
     case "grouped":
       return <Layers size={10} />
+    case "audio":
+      return <Music size={10} />
+    case "sticker":
+      return <Sticker size={10} />
     default:
       return null
   }
@@ -263,6 +270,30 @@ export const PostCard: React.FC<PostCardProps> = ({ post, postSearch }) => {
               >
                 <Hash size={10} /> {post.id}
               </a>
+              {post.replyToPostId != null && (
+                <span
+                  data-testid={`post-reply-badge-${post.channelName}-${post.id}`}
+                  className="text-[11px] font-mono text-app-ink/60 flex items-center gap-1 border-l border-app-ink/10 pl-2"
+                  title={post.replyTo?.text ?? undefined}
+                >
+                  <CornerUpLeft size={10} />
+                  <a
+                    href={
+                      post.replyTo?.url ??
+                      telegramWebViewPostUrl(
+                        post.channelName,
+                        post.replyToPostId,
+                      )
+                    }
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={(e) => e.stopPropagation()}
+                    className="underline-offset-2 hover:underline hover:text-app-ink/80"
+                  >
+                    {post.replyToPostId}
+                  </a>
+                </span>
+              )}
               {post.forwardedFrom && (
                 <span className="text-[11px] font-mono text-app-ink/60 flex items-center gap-1 border-l border-app-ink/10 pl-2">
                   Forwarded from:

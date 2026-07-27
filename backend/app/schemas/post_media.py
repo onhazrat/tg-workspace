@@ -10,8 +10,10 @@ MediaKind = Literal[
     "photo",
     "video",
     "voice",
+    "audio",
     "document",
     "poll",
+    "sticker",
     "link_preview",
     "grouped",
 ]

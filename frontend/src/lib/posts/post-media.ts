@@ -22,8 +22,9 @@ export const MEDIA_FILTER_OPTIONS: {
   { label: "Grouped", value: "grouped" },
 ]
 
+// Keep in sync with _MEDIA_ONLY_TEXT_RE in backend/app/services/post_filters.py.
 const MEDIA_ONLY_TEXT_RE =
-  /^\[(?:photo|video|voice|document|poll|photo album)\]/i
+  /^\[(?:photo|video|voice|audio|document|poll|sticker|photo album)\]/i
 
 export function getPostMediaKinds(post: Post): PostMediaKind[] {
   return post.media?.kinds ?? []
@@ -123,10 +124,14 @@ export function getMediaKindLabel(kind: PostMediaKind): string {
       return "Video"
     case "voice":
       return "Voice"
+    case "audio":
+      return "Audio"
     case "document":
       return "Document"
     case "poll":
       return "Poll"
+    case "sticker":
+      return "Sticker"
     case "link_preview":
       return "Link"
     case "grouped":

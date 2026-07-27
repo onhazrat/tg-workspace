@@ -19,9 +19,11 @@ from app.services.channel_photos import resolve_cached_photo_url
 from app.services.network import fetch_with_retry
 from app.services.post_links_parser import extract_body_links
 from app.services.post_media_parser import finalize_post_media_paths, parse_widget_media
+from app.services.post_reply_parser import extract_reply
 from app.services.telegram_html import extract_telegram_html_text
 from app.services.telegram_web import (
     extract_channel_name_from_href,
+    is_channel_handle,
     parse_telegram_web_view_url,
     resolve_telegram_href,
     telegram_web_view_channel_url,
@@ -96,7 +98,14 @@ def _parse_posts_from_html(
             forwarded_from_name = fwd_el.get_text(strip=True)
             href = _attr_str(fwd_el.get("href"))
             if href:
-                forwarded_from = extract_channel_name_from_href(href)
+                candidate = extract_channel_name_from_href(href)
+                # A forward from a private channel or invite link yields a
+                # reserved path ("c", "joinchat"), never a followable handle.
+                # Storing it would seed phantom auto-follow candidates.
+                if candidate and is_channel_handle(candidate):
+                    forwarded_from = candidate
+
+        reply_to_post_id, reply_to = extract_reply(el)
 
         post: dict[str, Any] = {
             "id": post_id,
@@ -114,6 +123,10 @@ def _parse_posts_from_html(
             post["forwardedFrom"] = forwarded_from
         if forwarded_from_name:
             post["forwardedFromName"] = forwarded_from_name
+        if reply_to_post_id is not None:
+            post["replyToPostId"] = reply_to_post_id
+        if reply_to:
+            post["replyTo"] = reply_to
 
         posts.append(post)
         seen.add(post_id)
@@ -381,6 +394,9 @@ async def scrape_channel(
     display_name = known_display_name or ""
     photo_url = known_photo_url or ""
     bio = subscribers = photos = videos = files = links = ""
+    # Stays empty when the caller supplied a known latest id: the channel meta
+    # page is never fetched on that path, so there is no chat id to report.
+    meta: dict[str, Any] = {}
 
     if not latest_id:
         root_html, root_telem = await fetch_with_retry(

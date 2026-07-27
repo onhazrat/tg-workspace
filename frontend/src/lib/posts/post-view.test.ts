@@ -297,4 +297,41 @@ describe("post-view pipeline", () => {
     })
     expect(textOnly.map((p) => p.id)).toEqual([1])
   })
+
+  // Mirrors test_media_text_only_vs_media_only_kinds in
+  // backend/tests/services/test_post_filters.py — the two filter
+  // implementations must agree on these.
+  test("stats-only media keeps a post text_only, stickers do not", () => {
+    const posts = [
+      makePost("alpha", 1, 100, { text: "Plain text" }),
+      makePost("alpha", 2, 200, {
+        text: "Text with views",
+        media: { kinds: [], views: "1.2K" },
+      }),
+      makePost("alpha", 3, 300, {
+        text: "[sticker]",
+        media: { kinds: ["sticker"] },
+      }),
+    ]
+
+    const filterBy = (mediaFilter: "text_only" | "media_only") =>
+      buildFilteredPostsFromRaw(posts, {
+        searchText: "",
+        forwardedFilter: "all",
+        mediaFilter,
+        channels: [],
+        view: {
+          maxPostsPerChannel: 0,
+          maxPostsPerChannelMode: "latest",
+          postSortOrder: "time",
+        },
+        startDate: 0,
+        endDate: 9999,
+      })
+        .map((p) => p.id)
+        .sort()
+
+    expect(filterBy("text_only")).toEqual([1, 2])
+    expect(filterBy("media_only")).toEqual([3])
+  })
 })

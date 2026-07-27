@@ -108,14 +108,21 @@ def is_channel_handle(name: str) -> bool:
 
 
 def extract_channel_name_from_href(href: str) -> str | None:
-    match = re.search(
-        rf"(?:{_domain_alternation()})/([^/?#]+)",
-        href,
-        re.IGNORECASE,
-    )
-    if not match:
+    """First path segment of a Telegram-hosted href, if it has one.
+
+    The host is matched against the configured web domains rather than searched
+    for anywhere in the string, so `https://evil.example.com/t.me/foo` does not
+    read as a Telegram link. The result is a raw segment and may still be a
+    reserved path — callers that need a followable handle must additionally
+    apply `is_channel_handle`.
+    """
+    url = href if href.startswith("http") else f"https://{href.lstrip('/')}"
+    if not _url_host_is_telegram_web(url):
         return None
-    channel = match.group(1)
+    segments = [seg for seg in (urlparse(url).path or "").split("/") if seg]
+    if not segments:
+        return None
+    channel = segments[0]
     if channel == "s":
         return None
     return channel

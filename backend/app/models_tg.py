@@ -106,6 +106,11 @@ class Post(SQLModel, table=True):
     # Telegram channel links found in the post body (masked hrefs the plain-text
     # extraction discards). Shape: [{"url": str, "channel": str}]
     links: list[Any] | None = Field(default=None, sa_column=Column(JSON))
+    # The post this one replies to. `reply_to["text"]` is Telegram's truncated
+    # excerpt of the parent, not its full body.
+    # Shape: {"channel": str, "authorName": str, "text": str, "url": str}
+    reply_to_post_id: int | None = Field(default=None, index=True)
+    reply_to: dict[str, Any] | None = Field(default=None, sa_column=Column(JSON))
     updated_at: datetime = Field(default_factory=utc_now)
 
 

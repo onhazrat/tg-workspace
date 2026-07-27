@@ -12,6 +12,7 @@ from bs4 import BeautifulSoup
 from app.services.post_links_parser import channel_from_telegram_url, extract_body_links
 from app.services.scraper import scrape_channel_page
 from app.services.telegram_web import is_channel_handle
+from tests.utils.tg_html import load_live_fixture, reply_widget, widget_by_post_id
 
 FIXTURES_DIR = Path(__file__).resolve().parents[1] / "fixtures" / "live"
 
@@ -136,3 +137,37 @@ def test_links_survive_scrape_channel_page() -> None:
     assert post["links"] == [
         {"url": "https://t.me/masked_chan", "channel": "masked_chan"}
     ]
+
+
+# The reply quote is a sibling `.tgme_widget_message_text`, rendered first.
+# Mining links from it would attribute the parent post's links to this one.
+
+
+def test_links_come_from_the_body_not_the_reply_quote() -> None:
+    el = reply_widget(
+        parent_id=1,
+        quote='<a href="https://t.me/quoted_chan">quoted</a>',
+        body='<a href="https://t.me/body_chan">body</a>',
+    )
+    assert extract_body_links(el) == [
+        {"url": "https://t.me/body_chan", "channel": "body_chan"}
+    ]
+
+
+def test_reply_with_no_body_links_yields_nothing() -> None:
+    el = reply_widget(
+        parent_id=1,
+        quote='<a href="https://t.me/quoted_chan">quoted</a>',
+        body="no links here",
+    )
+    assert extract_body_links(el) == []
+
+
+def test_live_reply_posts_recover_their_body_links() -> None:
+    """These returned [] while the reply quote shadowed the body."""
+    html = load_live_fixture("contest_root.html")
+    links_450 = extract_body_links(widget_by_post_id(html, 450))
+    links_454 = extract_body_links(widget_by_post_id(html, 454))
+    assert len(links_450) >= 19
+    assert len(links_454) >= 27
+    assert "tg_node" in {link["channel"] for link in links_450}

@@ -9,7 +9,7 @@ from bs4 import Tag
 
 from app.schemas.post_media import PostMedia
 from app.services.post_thumbnails import post_thumb_api_path
-from app.services.telegram_html import extract_telegram_html_text
+from app.services.telegram_html import extract_telegram_html_text, message_body_element
 
 _BACKGROUND_IMAGE_RE = re.compile(r"background-image:\s*url\(['\"]?([^'\"()]+)['\"]?\)")
 _LEGACY_MEDIA_PLACEHOLDER = "[Media/No Text Content]"
@@ -33,41 +33,62 @@ def _extract_background_url(style: str | None) -> str | None:
 
 
 def _extract_caption(el: Tag) -> str | None:
-    text_el = el.select_one(".tgme_widget_message_text")
+    text_el = message_body_element(el)
     if not text_el:
         return None
     text = extract_telegram_html_text(text_el)
     return text if text else None
 
 
+# A link preview renders its own player as `link_preview_video_player
+# js-message_video_player` — that video belongs to the *linked* post, not this
+# one, so it must not become a `video` kind (nor contribute a duration).
+_VIDEO_PLAYER_SELECTOR = (
+    ".tgme_widget_message_video_player:not(.link_preview_video_player), "
+    ".js-message_video_player:not(.link_preview_video_player), "
+    ".tgme_widget_message_roundvideo, .tgme_widget_message_roundvideo_player"
+)
+
+
 def _detect_kinds(el: Tag) -> list[str]:
     kinds: list[str] = []
     if el.select_one(".tgme_widget_message_grouped_wrap"):
         kinds.append("grouped")
-    if el.select_one(
-        ".tgme_widget_message_photo_wrap, .js-message_photo, .grouped_media_wrap"
-    ):
+    # `.grouped_media_wrap` is the generic album *item* wrapper, not a photo
+    # marker — genuine photos carry `tgme_widget_message_photo_wrap` on the same
+    # node, while video-only albums would otherwise be mislabelled as photos.
+    if el.select_one(".tgme_widget_message_photo_wrap, .js-message_photo"):
         if "photo" not in kinds:
             kinds.append("photo")
-    if el.select_one(".tgme_widget_message_video_player, .js-message_video_player"):
+    if el.select_one(_VIDEO_PLAYER_SELECTOR):
         kinds.append("video")
     if el.select_one(".tgme_widget_message_voice"):
         kinds.append("voice")
+    if el.select_one(".tgme_widget_message_audio, .tgme_widget_message_audio_player"):
+        kinds.append("audio")
     if el.select_one(".tgme_widget_message_document"):
         kinds.append("document")
     if el.select_one(".tgme_widget_message_poll_question"):
         kinds.append("poll")
+    if el.select_one(".tgme_widget_message_sticker_wrap, .tgme_widget_message_sticker"):
+        kinds.append("sticker")
     if el.select_one(".tgme_widget_message_link_preview"):
         kinds.append("link_preview")
     return kinds
 
 
 def _extract_thumb_source_url(el: Tag) -> str | None:
+    # Order is priority: real message media first, link-preview imagery last, so
+    # a post that has both is represented by its own media. Reply thumbs use
+    # `i.tgme_widget_message_reply_thumb` and must never match here — they show
+    # the *replied-to* post.
     for selector in (
         ".tgme_widget_message_photo_wrap[style*='background-image']",
         ".grouped_media_wrap[style*='background-image']",
         ".tgme_widget_message_video_thumb[style*='background-image']",
-        "i.tgme_widget_message_video_thumb[style*='background-image']",
+        ".link_preview_image[style*='background-image']",
+        ".link_preview_right_image[style*='background-image']",
+        ".link_preview_video_thumb[style*='background-image']",
     ):
         node = el.select_one(selector)
         if not node:
@@ -79,9 +100,13 @@ def _extract_thumb_source_url(el: Tag) -> str | None:
 
 
 def _parse_duration_seconds(el: Tag) -> int | None:
-    dur_el = el.select_one(
-        ".message_video_duration, .js-message_video_duration, "
-        ".tgme_widget_message_video_duration"
+    # Scoped to the post's own player: an unscoped lookup picks up the duration
+    # rendered inside a link preview, which belongs to the linked post.
+    player = el.select_one(_VIDEO_PLAYER_SELECTOR)
+    dur_el = (
+        player.select_one(".message_video_duration, .js-message_video_duration")
+        if player
+        else None
     )
     if not dur_el:
         return None
@@ -162,15 +187,27 @@ def synthesize_media_only_text(
         return "[photo]"
     if "voice" in kinds:
         return "[voice]"
+    if "audio" in kinds:
+        return "[audio]"
     if "document" in kinds:
         return "[document]"
     if "poll" in kinds:
         return "[poll]"
+    if "sticker" in kinds:
+        return "[sticker]"
     if "link_preview" in kinds:
         return "[link]"
     if grouped_count and grouped_count > 1:
         return "[photo album]"
     return "[media]"
+
+
+def _no_media_text(el: Tag) -> str:
+    """Fallback text for a widget with no detected media kinds and no caption."""
+    poll_el = el.select_one(".tgme_widget_message_poll_question")
+    if poll_el:
+        return extract_telegram_html_text(poll_el) or _LEGACY_MEDIA_PLACEHOLDER
+    return _LEGACY_MEDIA_PLACEHOLDER
 
 
 def parse_widget_media(
@@ -182,22 +219,31 @@ def parse_widget_media(
     """Return synthesized text, media dict (camelCase keys), and thumb source URL."""
     kinds = _detect_kinds(el)
     caption = _extract_caption(el)
+    views = _extract_views(el)
+    reactions = _extract_reactions(el)
     thumb_source_url = _extract_thumb_source_url(el) if kinds else None
 
     if not kinds:
-        if caption:
-            return caption, None, None
-        poll_el = el.select_one(".tgme_widget_message_poll_question")
-        if poll_el:
-            poll_text = extract_telegram_html_text(poll_el)
-            return poll_text or _LEGACY_MEDIA_PLACEHOLDER, None, None
-        return _LEGACY_MEDIA_PLACEHOLDER, None, None
+        text = caption or _no_media_text(el)
+        if not (views or reactions):
+            return text, None, None
+        # Engagement counters exist on plain-text posts too, and were previously
+        # dropped by this early return. `kinds: []` keeps such a post `text_only`
+        # for both filter implementations (they test the length of `kinds`).
+        stats = PostMedia.model_validate(
+            {
+                "kinds": [],
+                "caption": caption,
+                "views": views,
+                "reactions": reactions,
+                "isMediaOnly": False,
+            }
+        )
+        return text, stats.to_storage_dict(), None
 
     grouped_count = _extract_grouped_count(el)
     duration_sec = _parse_duration_seconds(el)
     link_preview = _extract_link_preview(el)
-    views = _extract_views(el)
-    reactions = _extract_reactions(el)
 
     is_media_only = not caption
     text = (
