@@ -107,6 +107,13 @@ def post_references(post: Post) -> dict[str, set[SignalKind]]:
         add(handle, "mention")
     for handle in extract_post_link_channels(post):
         add(handle, "link")
+    # A reply to a post in another channel is a t.me link like any other, so it
+    # counts as a "link" signal rather than needing a new SignalKind. Replies
+    # within the same channel — the common case — drop out via `add`'s
+    # self-reference guard.
+    reply_channel = (post.reply_to or {}).get("channel")
+    if isinstance(reply_channel, str) and is_channel_handle(reply_channel):
+        add(normalize_handle(reply_channel), "link")
 
     return refs
 

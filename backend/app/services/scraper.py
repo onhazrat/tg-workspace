@@ -361,7 +361,13 @@ async def scrape_channel(
     telemetry_logs: list[Any] = []
     parsed = parse_telegram_web_view_url(url)
     if not parsed:
-        raise ValueError("Invalid Telegram web-view URL format")
+        # A bare `t.me/s/<channel>` is deliberately rejected: this entrypoint
+        # needs a start id to bound its pagination. Say so, rather than leaving
+        # the caller to guess which part of their URL was wrong.
+        raise ValueError(
+            "Invalid Telegram web-view URL: expected "
+            "t.me/s/<channel>/<postId>, ?after=<postId> or ?before=<postId>"
+        )
 
     channel_name = parsed.channel_name
     start_id = parsed.start_id

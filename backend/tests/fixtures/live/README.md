@@ -19,12 +19,27 @@ Each capture writes `{channel}_{root|beforeId|postId}.html` plus a sidecar `{sam
 | video          | Yes (198 posts)  | `durov_512:512`, `TelegramTips_root`          |
 | link_preview   | Yes (49 posts)   | `durov_512:504`, `TelegramTips_246:226`       |
 | grouped        | Yes (6 posts)    | `durov_512:510`, `TelegramTips_246:244`       |
+| sticker        | Yes (1 post)     | `durov_50:41`                                 |
 | voice          | **No**           | Gap-fill attempted — not rendered in web view |
 | document       | **No**           | Gap-fill attempted — not rendered in web view |
 | poll           | **No**           | Gap-fill attempted — not rendered in web view |
+| audio          | **No**           | Not seen; same web-view limitation as voice   |
+| roundvideo     | **No**           | Not seen; folded into the `video` kind        |
 | video-only     | **No**           | All captured videos have captions             |
 
-**Parser gap today:** `_parse_posts_from_html` reads `.tgme_widget_message_text` (or poll question) only. Media-only photo posts become `[Media/No Text Content]` (18/332 media posts = 5.4% in this set). No `media` metadata is extracted.
+**The uncoverable kinds are pinned synthetically.** Telegram's web view does not
+render voice, document, poll, audio or round-video posts, so no capture can
+cover them — `tests/services/test_post_media_parser.py` asserts their selector
+strings against hand-written markup instead. Those tests stop a refactor from
+dropping a kind; they are **not** evidence that the selectors still match live
+Telegram. Revisit if the web view ever starts rendering these.
+
+Two related notes for anyone extending the parser:
+
+- `tgme_widget_message_text` is used for **both** the post body and the reply
+  quote, quote first. Always go through `telegram_html.message_body_element`.
+- A link preview renders its own `js-message_video_player` and duration; those
+  belong to the *linked* post. `durov_200:181` is the canonical example.
 
 ## Fixture catalog
 
@@ -91,13 +106,17 @@ Use these when writing `test_post_media_parser.py` cases:
 | ------ | -------- | ----- |
 | Photo thumb | `.tgme_widget_message_photo_wrap` → `style` `background-image` | CDN URL; cache at scrape time |
 | Video | `.tgme_widget_message_video_player` | Duration span often empty on embed |
-| Voice | `.tgme_widget_message_voice` | Not seen in this fixture set |
-| Document | `.tgme_widget_message_document` | Not seen in this fixture set |
-| Poll | `.tgme_widget_message_poll_question`, `.tgme_widget_message_poll_option` | Not seen in this fixture set |
+| Voice | `.tgme_widget_message_voice` | Not seen in this fixture set; synthetic test only |
+| Audio | `.tgme_widget_message_audio`, `.tgme_widget_message_audio_player` | Not seen in this fixture set; synthetic test only |
+| Document | `.tgme_widget_message_document` | Not seen in this fixture set; synthetic test only |
+| Poll | `.tgme_widget_message_poll_question`, `.tgme_widget_message_poll_option` | Not seen in this fixture set; the question is used as the post text |
+| Sticker | `.tgme_widget_message_sticker_wrap`, `.tgme_widget_message_sticker` | `durov_50:41` |
+| Round video | `.tgme_widget_message_roundvideo{,_player}` | Reported as the `video` kind |
+| Reply quote | `a.tgme_widget_message_reply` → `.js-message_reply_text` | `contest_root:444/450/454`; never the post's own text |
 | Link preview | `.tgme_widget_message_link_preview`, `.link_preview_title` | |
 | Grouped | `.tgme_widget_message_grouped_wrap`, `.tgme_widget_message_grouped_layer` | Count layers for `grouped_count` |
-| Views | `.tgme_widget_message_views` | Display string e.g. `2.23M` |
-| Reactions | `.tgme_widget_message_reactions` | Emoji summary string |
+| Views | `.tgme_widget_message_views` | Display string e.g. `2.23M`; also parsed to `viewsCount` |
+| Reactions | `span.tgme_reaction` inside `.tgme_widget_message_reactions` | Per chip: count plus `i.emoji b`, or `tg-emoji[emoji-id]` for custom emoji, or `.tgme_reaction_paid` for stars. The flattened text cannot be split reliably |
 
 ## Related files
 
