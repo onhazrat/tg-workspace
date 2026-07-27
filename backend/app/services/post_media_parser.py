@@ -9,18 +9,14 @@ from bs4 import Tag
 
 from app.schemas.post_media import PostMedia
 from app.services.post_thumbnails import post_thumb_api_path
-from app.services.telegram_html import extract_telegram_html_text, message_body_element
+from app.services.telegram_html import (
+    attr_str,
+    extract_telegram_html_text,
+    message_body_element,
+)
 
 _BACKGROUND_IMAGE_RE = re.compile(r"background-image:\s*url\(['\"]?([^'\"()]+)['\"]?\)")
 _LEGACY_MEDIA_PLACEHOLDER = "[Media/No Text Content]"
-
-
-def _attr_str(value: str | list[str] | None) -> str | None:
-    if value is None:
-        return None
-    if isinstance(value, list):
-        return value[0] if value else None
-    return value
 
 
 def _extract_background_url(style: str | None) -> str | None:
@@ -93,7 +89,7 @@ def _extract_thumb_source_url(el: Tag) -> str | None:
         node = el.select_one(selector)
         if not node:
             continue
-        url = _extract_background_url(_attr_str(node.get("style")))
+        url = _extract_background_url(attr_str(node.get("style")))
         if url and url.startswith("http"):
             return url
     return None
@@ -174,13 +170,15 @@ def _extract_reactions(el: Tag) -> str | None:
     return reactions if reactions else None
 
 
-def synthesize_media_only_text(
-    kinds: list[str], *, grouped_count: int | None = None
-) -> str:
+def synthesize_media_only_text(kinds: list[str]) -> str:
+    """Stand-in text for a media post with no caption.
+
+    `grouped_count` used to be a parameter with a `> 1` fallback at the end, but
+    a non-None count implies a grouped wrap, which implies `"grouped" in kinds`
+    and returns on the first branch — it was unreachable.
+    """
     if "grouped" in kinds:
         return "[photo album]"
-    if kinds == ["video"]:
-        return "[video]"
     if "video" in kinds and "photo" not in kinds:
         return "[video]"
     if "photo" in kinds:
@@ -197,8 +195,6 @@ def synthesize_media_only_text(
         return "[sticker]"
     if "link_preview" in kinds:
         return "[link]"
-    if grouped_count and grouped_count > 1:
-        return "[photo album]"
     return "[media]"
 
 
@@ -246,11 +242,7 @@ def parse_widget_media(
     link_preview = _extract_link_preview(el)
 
     is_media_only = not caption
-    text = (
-        caption
-        if caption
-        else synthesize_media_only_text(kinds, grouped_count=grouped_count)
-    )
+    text = caption if caption else synthesize_media_only_text(kinds)
 
     media = PostMedia.model_validate(
         {
