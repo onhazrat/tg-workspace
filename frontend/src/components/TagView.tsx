@@ -4,6 +4,11 @@ import type React from "react"
 import { useMemo, useState } from "react"
 import { normalizeParsedTagSuggestions } from "@/lib/channels/apply-tag-suggestions"
 import { getTagNames } from "@/lib/channels/channel-tag-model"
+import {
+  partitionPreviewRows,
+  proposedTagState,
+  unchangedToggleLabel,
+} from "@/lib/channels/tag-preview-rows"
 import { tagPreviewScopeNote } from "@/lib/channels/tag-preview-scope"
 import { countOf } from "@/lib/plural"
 import { useData } from "../contexts/DataContext"
@@ -56,6 +61,21 @@ export const TagView: React.FC = () => {
       })
   }, [channels, normalizedSuggestions, previewMode])
 
+  const [showUnchanged, setShowUnchanged] = useState(false)
+
+  /**
+   * Changed rows first, unchanged behind a toggle.
+   *
+   * Both halves stay in `rows` — the counts above the table describe the whole
+   * run, and hiding a row must not change what the run covers.
+   */
+  const { changed: changedPreviewRows, unchanged: unchangedPreviewRows } =
+    useMemo(() => partitionPreviewRows(rows), [rows])
+
+  const visiblePreviewRows = showUnchanged
+    ? [...changedPreviewRows, ...unchangedPreviewRows]
+    : changedPreviewRows
+
   const previewScopeNote = tagPreviewScopeNote(
     rows.length,
     selectedChannels.size,
@@ -98,38 +118,91 @@ export const TagView: React.FC = () => {
             Generate or paste tag suggestions to preview changes.
           </p>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[700px] text-left text-sm">
-              <thead className="text-[11px] uppercase tracking-wider text-app-ink/50">
-                <tr>
-                  <th className="pb-2">Channel</th>
-                  <th className="pb-2">Current Tags</th>
-                  <th className="pb-2">Proposed</th>
-                  <th className="pb-2">Action</th>
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((row) => (
-                  <tr key={row.channel} className="border-t border-app-ink/10">
-                    <td className="py-2 font-mono">@{row.channel}</td>
-                    <td className="py-2">
-                      {row.currentTags.join(", ") || "—"}
-                    </td>
-                    <td className="py-2">{row.proposed.join(", ") || "—"}</td>
-                    <td className="py-2">
-                      {row.toApply.length === 0
-                        ? "No changes"
-                        : row.toApply
+          <>
+            {/* Changed rows first and unchanged hidden by default: an unchanged
+                run rendered every selected channel with "No changes", burying
+                the one or two rows that mattered in ~50 that did not. */}
+            <div className="max-h-[28rem] overflow-auto">
+              <table className="w-full min-w-[700px] text-left text-sm">
+                <thead className="sticky top-0 z-10 bg-app-card text-[11px] uppercase tracking-wider text-app-ink/50">
+                  <tr>
+                    <th className="pb-2">Channel</th>
+                    <th className="pb-2">Current Tags</th>
+                    <th className="pb-2">Proposed</th>
+                    <th className="pb-2">Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {visiblePreviewRows.map((row) => (
+                    <tr
+                      key={row.channel}
+                      data-changed={row.toApply.length > 0}
+                      className="border-t border-app-ink/10"
+                    >
+                      <td className="py-2 font-mono">@{row.channel}</td>
+                      <td className="py-2">
+                        {row.currentTags.join(", ") || "—"}
+                      </td>
+                      <td className="py-2">
+                        {row.proposed.length === 0
+                          ? "—"
+                          : row.proposed.map((tag, index) => {
+                              const state = proposedTagState(
+                                tag,
+                                row.currentTags,
+                                previewMode,
+                              )
+                              return (
+                                <span key={tag}>
+                                  {index > 0 ? ", " : null}
+                                  <span
+                                    data-tag-state={state}
+                                    className={
+                                      state === "adding"
+                                        ? "text-green-600 dark:text-green-400 font-medium"
+                                        : state === "removing"
+                                          ? "text-red-600 dark:text-red-400 font-medium line-through"
+                                          : "text-app-ink/40"
+                                    }
+                                  >
+                                    {tag}
+                                  </span>
+                                </span>
+                              )
+                            })}
+                      </td>
+                      <td className="py-2">
+                        {row.toApply.length === 0 ? (
+                          <span className="text-app-ink/40">No changes</span>
+                        ) : (
+                          row.toApply
                             .map((tag) =>
                               previewMode === "add" ? `+${tag}` : `-${tag}`,
                             )
-                            .join(", ")}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                            .join(", ")
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {unchangedPreviewRows.length > 0 ? (
+              <button
+                type="button"
+                data-testid="tag-preview-unchanged-toggle"
+                onClick={() => setShowUnchanged((shown) => !shown)}
+                aria-expanded={showUnchanged}
+                className="mt-3 text-[11px] font-bold uppercase tracking-widest text-app-ink/50 hover:text-app-ink/80 focus-visible:text-app-ink/80 transition-colors"
+              >
+                {unchangedToggleLabel(
+                  unchangedPreviewRows.length,
+                  showUnchanged,
+                )}
+              </button>
+            ) : null}
+          </>
         )}
       </div>
 

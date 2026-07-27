@@ -758,6 +758,49 @@ arms after the reset.
 Verified: biome clean (3 warnings, all pre-existing), `tsc --noEmit` clean,
 **612 unit tests**, **75/75 e2e on a truncated database**.
 
+## 2l. C10 — shipped 2026-07-27
+
+| Sub-claim | Fix |
+|---|---|
+| No diff highlighting | Each proposed tag is coloured by `proposedTagState` — green for a tag being added, red and struck through for one being removed, dimmed for a no-op. |
+| No "changes only" view | Rows are partitioned; only changed rows render by default, with a `Show 47 unchanged channels` toggle. |
+| Header scrolls away | `sticky top-0` on `<thead>` inside a `max-h-[28rem]` scroll box. |
+
+**The highlight and the action are computed the same way.** `toApply` upstream
+compares tags case-insensitively, so `proposedTagState` does too — a highlight
+that classified differently from the action would colour rows the run will not
+touch. A test pins the two against the same input.
+
+Both halves of the partition stay in `rows`: the counts above the table describe
+the whole run, and hiding a row must not change what the run reports.
+
+Tag History (expandable detail, undo) is untouched — it is a separate feature,
+not a defect, and is left out of this fix.
+
+### Verification, stated precisely
+
+biome clean, `tsc --noEmit` clean, **624 unit tests** (was 612).
+
+**e2e could not be brought to green on either arm**, so no e2e claim is made for
+C10. A paired comparison from a truncated database, backend restarted, run
+back-to-back:
+
+| Arm | Result |
+|---|---|
+| `main`, C10 stashed | 73/75 |
+| `main` + C10 | 73/75 (also 74/75, 72/75 across runs) |
+
+The same tests fail on both — `discover shows forward-only empty guide` and the
+two channel-card hover tests — none of which touch `TagView`. C10 is therefore
+indistinguishable from `main` and does not regress the suite, but the suite itself
+is currently unreliable on this machine for reasons **not** explained by the
+database growth described in §2k: truncating the `tg_*` tables and restarting the
+backend container both failed to restore the 75/75 that the same suite produced
+repeatedly earlier in the session.
+
+That degradation is unexplained and worth its own investigation before the next
+e2e-dependent change is trusted.
+
 ## 3. Fix plan
 
 Batches are independently shippable and ordered by risk retired per unit of work.
