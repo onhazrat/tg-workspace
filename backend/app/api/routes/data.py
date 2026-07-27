@@ -527,117 +527,6 @@ def get_channel_stats(
     return get_channel_stats_impl(session, channel_id)
 
 
-@router.get("/posts")
-def list_posts(
-    session: SessionDep,
-    _current_user: CurrentUser,
-    channel_names: str | None = Query(None, alias="channelNames"),
-    channel_name: str | None = Query(None, alias="channelName"),
-    start_date: int | None = Query(None, alias="startDate"),
-    end_date: int | None = Query(None, alias="endDate"),
-    limit: int = Query(default=DEFAULT_POST_PAGE_SIZE, ge=1, le=MAX_POST_PAGE_SIZE),
-    offset: int = Query(default=0, ge=0),
-    keyword: str | None = Query(None),
-    forwarded: str = Query("all"),
-    media: str = Query("all"),
-    max_per_channel: int = Query(0, alias="maxPerChannel", ge=0),
-    max_per_channel_mode: str = Query("latest", alias="maxPerChannelMode"),
-    sort: str = Query("time"),
-    seed: int = Query(0),
-) -> list[dict[str, Any]]:
-    """One page of posts for a channel/date scope.
-
-    With no filters, no cap and ``sort=time`` this is the newest-first page the
-    export/lookup fallbacks and language detection rely on. The Posts feed also
-    passes keyword/forwarded/media filters, a per-channel cap, a sort order and
-    ``offset`` so the whole view is assembled server-side instead of paging a
-    channel's history into the browser.
-    """
-    names: list[str] = []
-    if channel_names:
-        names = [n.strip() for n in channel_names.split(",") if n.strip()]
-    elif channel_name:
-        names = [channel_name]
-    if sort not in FEED_SORTS:
-        raise HTTPException(status_code=422, detail=f"unknown sort: {sort}")
-    if max_per_channel_mode not in FEED_CAP_MODES:
-        raise HTTPException(
-            status_code=422, detail=f"unknown maxPerChannelMode: {max_per_channel_mode}"
-        )
-    return list_feed_impl(
-        session,
-        channel_names=names or None,
-        start_date=start_date,
-        end_date=end_date,
-        filters=_parse_post_filters(keyword, forwarded, media),
-        max_per_channel=max_per_channel,
-        max_per_channel_mode=max_per_channel_mode,
-        sort=sort,
-        seed=seed,
-        limit=limit,
-        offset=offset,
-    )
-
-
-def _parse_post_filters(keyword: str | None, forwarded: str, media: str) -> PostFilters:
-    """Validate the shared Posts-tab filter query params into a PostFilters.
-
-    Rejecting unknown enum values with 422 mirrors how the frontend can only
-    ever send its own filter constants.
-    """
-    if forwarded not in FORWARDED_FILTERS:
-        raise HTTPException(status_code=422, detail=f"unknown forwarded: {forwarded}")
-    if media not in MEDIA_FILTERS:
-        raise HTTPException(status_code=422, detail=f"unknown media: {media}")
-    return PostFilters(
-        keyword=keyword,
-        forwarded=cast("Any", forwarded),
-        media=cast("Any", media),
-    )
-
-
-@router.get("/discover/candidates")
-def discover_candidates(
-    session: SessionDep,
-    _current_user: CurrentUser,
-    channel_names: str = Query(alias="channelNames"),
-    start_date: int | None = Query(None, alias="startDate"),
-    end_date: int | None = Query(None, alias="endDate"),
-    signals: str | None = Query(None),
-    keyword: str | None = Query(None),
-    forwarded: str = Query("all"),
-    media: str = Query("all"),
-    max_per_channel: int = Query(0, alias="maxPerChannel", ge=0),
-) -> dict[str, Any]:
-    """Aggregated discovery candidates for a channel/date scope.
-
-    Returns counts only. The client previously fetched every post body in
-    scope to compute this in JS. The keyword/forwarded/media/maxPerChannel
-    params reproduce the Posts-tab view the client aggregated over; the caller
-    keeps the client path when a semantic query or a `random` cap is active.
-    """
-    names = [n.strip() for n in channel_names.split(",") if n.strip()]
-    kinds = (
-        {s.strip() for s in signals.split(",") if s.strip()}
-        if signals is not None
-        else None
-    )
-    unknown = kinds - set(SIGNAL_KINDS) if kinds else set()
-    if unknown:
-        raise HTTPException(
-            status_code=422, detail=f"unknown signal(s): {sorted(unknown)}"
-        )
-    return compute_discover_candidates(
-        session,
-        channel_names=names,
-        start_date=start_date,
-        end_date=end_date,
-        signals=cast("set[SignalKind] | None", kinds),
-        filters=_parse_post_filters(keyword, forwarded, media),
-        max_per_channel=max_per_channel,
-    )
-
-
 class PostScopeRequest(BaseModel):
     """A post scope carried in a request body rather than a query string.
 
@@ -660,6 +549,141 @@ class PostScopeRequest(BaseModel):
             return None
         names = [n.strip() for n in self.channel_names if n.strip()]
         return names or None
+
+
+class PostFeedRequest(PostScopeRequest):
+    """`PostScopeRequest` plus the feed's paging, cap mode and sort.
+
+    `limit`/`offset` keep the same bounds the query params enforced, so an
+    out-of-range page is still a 422 rather than an unbounded read.
+    """
+
+    channel_name: str | None = PydanticField(None, alias="channelName")
+    limit: int = PydanticField(DEFAULT_POST_PAGE_SIZE, ge=1, le=MAX_POST_PAGE_SIZE)
+    offset: int = PydanticField(0, ge=0)
+    max_per_channel_mode: str = PydanticField("latest", alias="maxPerChannelMode")
+    sort: str = "time"
+    seed: int = 0
+
+    def resolved_channel_names(self) -> list[str] | None:
+        """`channelNames` wins; `channelName` is the single-channel shorthand.
+
+        Mirrors the old `if channel_names: ... elif channel_name: ...`, including
+        that an empty `channelNames` falls through to the singular form.
+        """
+        names = self.cleaned_channel_names()
+        if names:
+            return names
+        if self.channel_name and self.channel_name.strip():
+            return [self.channel_name.strip()]
+        return None
+
+
+class DiscoverCandidatesRequest(PostScopeRequest):
+    """`PostScopeRequest` plus the signal-kind filter.
+
+    `channelNames` is re-declared as required: the discovery aggregate is always
+    asked about an explicit selection, and the query-string version required it
+    too.
+    """
+
+    channel_names: list[str] = PydanticField(alias="channelNames")
+    signals: list[str] | None = None
+
+
+@router.post("/posts")
+def list_posts(
+    body: PostFeedRequest,
+    session: SessionDep,
+    _current_user: CurrentUser,
+) -> list[dict[str, Any]]:
+    """One page of posts for a channel/date scope.
+
+    With no filters, no cap and ``sort=time`` this is the newest-first page the
+    export/lookup fallbacks and language detection rely on. The Posts feed also
+    passes keyword/forwarded/media filters, a per-channel cap, a sort order and
+    ``offset`` so the whole view is assembled server-side instead of paging a
+    channel's history into the browser.
+
+    POST rather than GET because the scope carries the channel selection, which
+    can be the entire account — see `PostScopeRequest`. This is a read expressed
+    as a POST purely so the selection travels in the body.
+    """
+    if body.sort not in FEED_SORTS:
+        raise HTTPException(status_code=422, detail=f"unknown sort: {body.sort}")
+    if body.max_per_channel_mode not in FEED_CAP_MODES:
+        raise HTTPException(
+            status_code=422,
+            detail=f"unknown maxPerChannelMode: {body.max_per_channel_mode}",
+        )
+    return list_feed_impl(
+        session,
+        channel_names=body.resolved_channel_names(),
+        start_date=body.start_date,
+        end_date=body.end_date,
+        filters=_parse_post_filters(body.keyword, body.forwarded, body.media),
+        max_per_channel=body.max_per_channel,
+        max_per_channel_mode=body.max_per_channel_mode,
+        sort=body.sort,
+        seed=body.seed,
+        limit=body.limit,
+        offset=body.offset,
+    )
+
+
+def _parse_post_filters(keyword: str | None, forwarded: str, media: str) -> PostFilters:
+    """Validate the shared Posts-tab filter query params into a PostFilters.
+
+    Rejecting unknown enum values with 422 mirrors how the frontend can only
+    ever send its own filter constants.
+    """
+    if forwarded not in FORWARDED_FILTERS:
+        raise HTTPException(status_code=422, detail=f"unknown forwarded: {forwarded}")
+    if media not in MEDIA_FILTERS:
+        raise HTTPException(status_code=422, detail=f"unknown media: {media}")
+    return PostFilters(
+        keyword=keyword,
+        forwarded=cast("Any", forwarded),
+        media=cast("Any", media),
+    )
+
+
+@router.post("/discover/candidates")
+def discover_candidates(
+    body: DiscoverCandidatesRequest,
+    session: SessionDep,
+    _current_user: CurrentUser,
+) -> dict[str, Any]:
+    """Aggregated discovery candidates for a channel/date scope.
+
+    Returns counts only. The client previously fetched every post body in
+    scope to compute this in JS. The keyword/forwarded/media/maxPerChannel
+    params reproduce the Posts-tab view the client aggregated over; the caller
+    keeps the client path when a semantic query or a `random` cap is active.
+
+    POST rather than GET for the same reason as `/posts` — the channel selection
+    travels in the body so it cannot overflow the request line.
+    """
+    names = [n.strip() for n in body.channel_names if n.strip()]
+    kinds = (
+        {s.strip() for s in body.signals if s.strip()}
+        if body.signals is not None
+        else None
+    )
+    unknown = kinds - set(SIGNAL_KINDS) if kinds else set()
+    if unknown:
+        raise HTTPException(
+            status_code=422, detail=f"unknown signal(s): {sorted(unknown)}"
+        )
+    return compute_discover_candidates(
+        session,
+        channel_names=names,
+        start_date=body.start_date,
+        end_date=body.end_date,
+        signals=cast("set[SignalKind] | None", kinds),
+        filters=_parse_post_filters(body.keyword, body.forwarded, body.media),
+        max_per_channel=body.max_per_channel,
+    )
 
 
 @router.post("/posts/counts")

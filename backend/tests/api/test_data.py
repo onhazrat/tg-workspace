@@ -270,9 +270,9 @@ def test_posts_date_range_query(client: TestClient) -> None:
     r = client.post(f"{PREFIX}/posts/bulk", json=posts, headers=headers)
     assert r.status_code == 200
 
-    r2 = client.get(
+    r2 = client.post(
         f"{PREFIX}/posts",
-        params={"channelNames": "range-ch", "startDate": 1500, "endDate": 2500},
+        json={"channelNames": ["range-ch"], "startDate": 1500, "endDate": 2500},
         headers=headers,
     )
     assert r2.status_code == 200

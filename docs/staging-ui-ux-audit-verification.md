@@ -348,6 +348,8 @@ The audit flagged `/posts/counts` because that is what a cold Channels load happ
 
 They are **not** fixed here: converting `GET /posts` — a resource listing used by the feed, exports and repository batching — to POST changes three client methods plus the generated client, and deserves its own PR and e2e pass rather than being folded into a performance batch. `postScopeBody` and `PostScopeRequest` now exist as the shared pattern, so it is mechanical work.
 
+> **Done 2026-07-27.** Both siblings are now POST — see §2f.
+
 Verified: biome clean, `tsc --noEmit` clean, **571/571** frontend unit tests (was 552), **514** backend tests, mypy/ruff clean, **61/61 e2e** — the last run made against a freshly rebuilt backend.
 
 ## 2e. Batch 0 — browser pass, partial (2026-07-27)
@@ -430,6 +432,57 @@ to match the real invariant rather than the two sites being suppressed, and a
 guard-the-guard test pins that the narrowing still catches the original defect.
 
 Verified: biome clean, `tsc --noEmit` clean, **585/585** unit tests (was 571).
+
+## 2f. B5 siblings — shipped 2026-07-27
+
+`GET /data/posts` and `GET /data/discover/candidates` are now `POST`, closing the
+long-URL defect B5 fixed for `/posts/counts` only. `/posts` is the hot Posts-feed
+path, so of the three it is the one a real account hits first.
+
+Two new body models extend `PostScopeRequest` rather than restating it:
+`PostFeedRequest` (paging, cap mode, sort) and `DiscoverCandidatesRequest`
+(signal kinds, with `channelNames` re-declared as required to preserve the query
+param's contract). The `limit`/`offset` bounds move onto the model, so an
+out-of-range page is still a 422 rather than an unbounded read.
+
+**`postScopeParams` is deleted, not left unused.** It was the query-string builder
+this change exists to remove; leaving it in place would have left the next caller
+a working way to reintroduce the bug. Same reasoning as `stringSetting` in Batch 1.
+
+### Why this shipped three times
+
+Each of the three endpoints built `?channelNames=a,b,c,...` independently, and
+each works perfectly against the handful of channels a dev environment holds. The
+failure only appears at the ~1,070 a real account has, where the string reaches
+roughly 13 KB. Nothing in types, lint or review distinguishes the two cases.
+
+So the regression guard is a **source sweep**, not another endpoint test:
+`api/post-scope-transport.test.ts` fails if any module under `src/api/` puts a
+channel selection into a URL, in any of the shapes it can take
+(`qs.set`/`append`, or interpolated into a template URL), and separately asserts
+all three endpoints are still POSTed. Verified by reintroducing the defect — it
+fails and names the exact line.
+
+Comments are exempt (the docblock explaining the bad shape quotes it verbatim),
+and that exemption has its own test proving it does not also blind the sweep to
+real code.
+
+### Verification
+
+- Backend: **524 passed** (was 514) — including `test_post_scope_body.py`, which
+  sends a 1,200-handle selection whose query-string equivalent exceeds 10 KB, and
+  asserts both routes now answer a GET with **405** so the old shape cannot
+  quietly return.
+- The full suite caught **four call sites I had missed** in `test_data.py` and
+  `test_sync_jobs.py` — a reminder that converting a route means finding every
+  caller, not just the ones in the module you are editing.
+- Frontend: **591 unit tests** (was 585), biome clean, `tsc --noEmit` clean.
+- **62/62 e2e**, against a backend rebuilt for the route change and verified to
+  be serving POST before the run — the check Batch 3 learned the hard way.
+
+Two e2e mocks needed updating rather than working around: one gated on
+`method() !== "GET"`, the other read `media` from `searchParams`. Both now match
+on the path and read the request body.
 
 ## 3. Fix plan
 

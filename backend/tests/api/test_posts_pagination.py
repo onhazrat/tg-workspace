@@ -1,9 +1,12 @@
-"""GET /data/posts must stay bounded.
+"""POST /data/posts must stay bounded.
 
 tg_posts holds millions of rows across hundreds of followed channels. The
 endpoint had no LIMIT and only optional date bounds, so a bulk follow drove
 worker RSS to 3.09 GB on staging and left connections idle-in-transaction for
 minutes. See docs/discover-bulk-follow-load-investigation.md.
+
+The route is a POST so the channel selection travels in the body rather than
+the request line; the bounds asserted here are unchanged by that move.
 """
 
 from __future__ import annotations
@@ -28,6 +31,14 @@ def _auth(client: TestClient) -> dict[str, str]:
         },
     )
     return {"Authorization": f"Bearer {login.json()['access_token']}"}
+
+
+def _feed(
+    client: TestClient, headers: dict[str, str], **scope: object
+) -> list[dict[str, object]]:
+    response = client.post(f"{PREFIX}/posts", json=scope, headers=headers)
+    assert response.status_code == 200, response.text
+    return list(response.json())
 
 
 def _seed(
@@ -58,7 +69,7 @@ def test_returns_newest_first(client: TestClient) -> None:
     base = int(time.time() * 1000)
     _seed(client, headers, 5, base)
 
-    body = client.get(f"{PREFIX}/posts?channelName={CHANNEL}", headers=headers).json()
+    body = _feed(client, headers, channelName=CHANNEL)
 
     timestamps = [row["timestamp"] for row in body]
     assert timestamps == sorted(timestamps, reverse=True), "not newest-first"
@@ -68,9 +79,7 @@ def test_limit_caps_returned_rows(client: TestClient) -> None:
     headers = _auth(client)
     _seed(client, headers, 12, int(time.time() * 1000))
 
-    body = client.get(
-        f"{PREFIX}/posts?channelName={CHANNEL}&limit=3", headers=headers
-    ).json()
+    body = _feed(client, headers, channelName=CHANNEL, limit=3)
     assert len(body) == 3
 
 
@@ -79,12 +88,8 @@ def test_offset_pages_through_without_repeats(client: TestClient) -> None:
     headers = _auth(client)
     _seed(client, headers, 6, int(time.time() * 1000))
 
-    first = client.get(
-        f"{PREFIX}/posts?channelName={CHANNEL}&limit=2&offset=0", headers=headers
-    ).json()
-    second = client.get(
-        f"{PREFIX}/posts?channelName={CHANNEL}&limit=2&offset=2", headers=headers
-    ).json()
+    first = _feed(client, headers, channelName=CHANNEL, limit=2, offset=0)
+    second = _feed(client, headers, channelName=CHANNEL, limit=2, offset=2)
 
     assert len(first) == 2
     assert len(second) == 2
@@ -97,10 +102,7 @@ def test_paging_covers_every_row_exactly_once(client: TestClient) -> None:
 
     seen: list[int] = []
     for offset in range(0, 8, 2):
-        page = client.get(
-            f"{PREFIX}/posts?channelName={CHANNEL}&limit=2&offset={offset}",
-            headers=headers,
-        ).json()
+        page = _feed(client, headers, channelName=CHANNEL, limit=2, offset=offset)
         seen.extend(row["id"] for row in page)
 
     assert sorted(seen) == list(range(7))
@@ -111,10 +113,9 @@ def test_date_bounds_still_apply(client: TestClient) -> None:
     base = int(time.time() * 1000)
     _seed(client, headers, 10, base)
 
-    body = client.get(
-        f"{PREFIX}/posts?channelName={CHANNEL}&startDate={base + 3}&endDate={base + 5}",
-        headers=headers,
-    ).json()
+    body = _feed(
+        client, headers, channelName=CHANNEL, startDate=base + 3, endDate=base + 5
+    )
 
     assert sorted(row["id"] for row in body) == [3, 4, 5]
 
@@ -122,21 +123,29 @@ def test_date_bounds_still_apply(client: TestClient) -> None:
 def test_response_is_a_bare_list(client: TestClient) -> None:
     """The frontend consumes Post[]; keep the shape unchanged."""
     headers = _auth(client)
-    body = client.get(f"{PREFIX}/posts", headers=headers).json()
+    body = _feed(client, headers)
     assert isinstance(body, list)
 
 
 def test_default_limit_applies_without_params(client: TestClient) -> None:
     headers = _auth(client)
-    body = client.get(f"{PREFIX}/posts", headers=headers).json()
+    body = _feed(client, headers)
     assert len(body) <= DEFAULT_POST_PAGE_SIZE
 
 
 def test_limit_is_bounded(client: TestClient) -> None:
     """An unbounded limit would reintroduce the incident."""
     headers = _auth(client)
-    over = client.get(f"{PREFIX}/posts?limit={MAX_POST_PAGE_SIZE + 1}", headers=headers)
+    over = client.post(
+        f"{PREFIX}/posts", json={"limit": MAX_POST_PAGE_SIZE + 1}, headers=headers
+    )
     assert over.status_code == 422
 
-    assert client.get(f"{PREFIX}/posts?limit=0", headers=headers).status_code == 422
-    assert client.get(f"{PREFIX}/posts?offset=-1", headers=headers).status_code == 422
+    assert (
+        client.post(f"{PREFIX}/posts", json={"limit": 0}, headers=headers).status_code
+        == 422
+    )
+    assert (
+        client.post(f"{PREFIX}/posts", json={"offset": -1}, headers=headers).status_code
+        == 422
+    )

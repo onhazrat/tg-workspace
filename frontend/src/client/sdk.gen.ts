@@ -524,42 +524,21 @@ export class DataService {
      * passes keyword/forwarded/media filters, a per-channel cap, a sort order and
      * ``offset`` so the whole view is assembled server-side instead of paging a
      * channel's history into the browser.
+     *
+     * POST rather than GET because the scope carries the channel selection, which
+     * can be the entire account — see `PostScopeRequest`. This is a read expressed
+     * as a POST purely so the selection travels in the body.
      * @param data The data for the request.
-     * @param data.channelNames
-     * @param data.channelName
-     * @param data.startDate
-     * @param data.endDate
-     * @param data.limit
-     * @param data.offset
-     * @param data.keyword
-     * @param data.forwarded
-     * @param data.media
-     * @param data.maxPerChannel
-     * @param data.maxPerChannelMode
-     * @param data.sort
-     * @param data.seed
+     * @param data.requestBody
      * @returns unknown Successful Response
      * @throws ApiError
      */
-    public static listPosts(data: DataListPostsData = {}): CancelablePromise<DataListPostsResponse> {
+    public static listPosts(data: DataListPostsData): CancelablePromise<DataListPostsResponse> {
         return __request(OpenAPI, {
-            method: 'GET',
+            method: 'POST',
             url: '/api/v1/data/posts',
-            query: {
-                channelNames: data.channelNames,
-                channelName: data.channelName,
-                startDate: data.startDate,
-                endDate: data.endDate,
-                limit: data.limit,
-                offset: data.offset,
-                keyword: data.keyword,
-                forwarded: data.forwarded,
-                media: data.media,
-                maxPerChannel: data.maxPerChannel,
-                maxPerChannelMode: data.maxPerChannelMode,
-                sort: data.sort,
-                seed: data.seed
-            },
+            body: data.requestBody,
+            mediaType: 'application/json',
             errors: {
                 422: 'Validation Error'
             }
@@ -574,32 +553,20 @@ export class DataService {
      * scope to compute this in JS. The keyword/forwarded/media/maxPerChannel
      * params reproduce the Posts-tab view the client aggregated over; the caller
      * keeps the client path when a semantic query or a `random` cap is active.
+     *
+     * POST rather than GET for the same reason as `/posts` — the channel selection
+     * travels in the body so it cannot overflow the request line.
      * @param data The data for the request.
-     * @param data.channelNames
-     * @param data.startDate
-     * @param data.endDate
-     * @param data.signals
-     * @param data.keyword
-     * @param data.forwarded
-     * @param data.media
-     * @param data.maxPerChannel
+     * @param data.requestBody
      * @returns unknown Successful Response
      * @throws ApiError
      */
     public static discoverCandidates(data: DataDiscoverCandidatesData): CancelablePromise<DataDiscoverCandidatesResponse> {
         return __request(OpenAPI, {
-            method: 'GET',
+            method: 'POST',
             url: '/api/v1/data/discover/candidates',
-            query: {
-                channelNames: data.channelNames,
-                startDate: data.startDate,
-                endDate: data.endDate,
-                signals: data.signals,
-                keyword: data.keyword,
-                forwarded: data.forwarded,
-                media: data.media,
-                maxPerChannel: data.maxPerChannel
-            },
+            body: data.requestBody,
+            mediaType: 'application/json',
             errors: {
                 422: 'Validation Error'
             }

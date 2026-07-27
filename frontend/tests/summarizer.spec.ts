@@ -200,7 +200,11 @@ async function mockDiscoverForwardPosts(
   })
 
   await page.route("**/api/v1/data/posts**", async (route) => {
-    if (route.request().method() !== "GET") {
+    // The feed and the plain listing are both POST now (the channel selection
+    // travels in the body), so match on the path instead of the method: the
+    // sibling POSTs under /posts/ have their own handlers registered later,
+    // which win because Playwright evaluates newest-first.
+    if (new URL(route.request().url()).pathname !== "/api/v1/data/posts") {
       await route.continue()
       return
     }
@@ -1615,7 +1619,10 @@ test.describe("command palette keyboard", () => {
     // client sends (the real backend does the same) rather than returning the
     // full set regardless.
     await page.route("**/api/v1/data/posts**", async (route) => {
-      const media = new URL(route.request().url()).searchParams.get("media")
+      // `media` moved from the query string into the request body along with
+      // the rest of the scope.
+      const body = route.request().postDataJSON() as { media?: string } | null
+      const media = body?.media
       const json =
         media === "photo" || media === "media_only"
           ? mediaPosts.filter((post) => post.media?.kinds?.includes("photo"))

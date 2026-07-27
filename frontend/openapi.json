@@ -2147,139 +2147,27 @@
       }
     },
     "/api/v1/data/posts": {
-      "get": {
+      "post": {
         "tags": ["data"],
         "summary": "List Posts",
-        "description": "One page of posts for a channel/date scope.\n\nWith no filters, no cap and ``sort=time`` this is the newest-first page the\nexport/lookup fallbacks and language detection rely on. The Posts feed also\npasses keyword/forwarded/media filters, a per-channel cap, a sort order and\n``offset`` so the whole view is assembled server-side instead of paging a\nchannel's history into the browser.",
+        "description": "One page of posts for a channel/date scope.\n\nWith no filters, no cap and ``sort=time`` this is the newest-first page the\nexport/lookup fallbacks and language detection rely on. The Posts feed also\npasses keyword/forwarded/media filters, a per-channel cap, a sort order and\n``offset`` so the whole view is assembled server-side instead of paging a\nchannel's history into the browser.\n\nPOST rather than GET because the scope carries the channel selection, which\ncan be the entire account \u2014 see `PostScopeRequest`. This is a read expressed\nas a POST purely so the selection travels in the body.",
         "operationId": "data-list_posts",
-        "security": [{ "OAuth2PasswordBearer": [] }],
-        "parameters": [
-          {
-            "name": "channelNames",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [{ "type": "string" }, { "type": "null" }],
-              "title": "Channelnames"
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/PostFeedRequest" }
             }
           },
-          {
-            "name": "channelName",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [{ "type": "string" }, { "type": "null" }],
-              "title": "Channelname"
-            }
-          },
-          {
-            "name": "startDate",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [{ "type": "integer" }, { "type": "null" }],
-              "title": "Startdate"
-            }
-          },
-          {
-            "name": "endDate",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [{ "type": "integer" }, { "type": "null" }],
-              "title": "Enddate"
-            }
-          },
-          {
-            "name": "limit",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "maximum": 5000,
-              "minimum": 1,
-              "default": 500,
-              "title": "Limit"
-            }
-          },
-          {
-            "name": "offset",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "minimum": 0,
-              "default": 0,
-              "title": "Offset"
-            }
-          },
-          {
-            "name": "keyword",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [{ "type": "string" }, { "type": "null" }],
-              "title": "Keyword"
-            }
-          },
-          {
-            "name": "forwarded",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "string",
-              "default": "all",
-              "title": "Forwarded"
-            }
-          },
-          {
-            "name": "media",
-            "in": "query",
-            "required": false,
-            "schema": { "type": "string", "default": "all", "title": "Media" }
-          },
-          {
-            "name": "maxPerChannel",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "minimum": 0,
-              "default": 0,
-              "title": "Maxperchannel"
-            }
-          },
-          {
-            "name": "maxPerChannelMode",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "string",
-              "default": "latest",
-              "title": "Maxperchannelmode"
-            }
-          },
-          {
-            "name": "sort",
-            "in": "query",
-            "required": false,
-            "schema": { "type": "string", "default": "time", "title": "Sort" }
-          },
-          {
-            "name": "seed",
-            "in": "query",
-            "required": false,
-            "schema": { "type": "integer", "default": 0, "title": "Seed" }
-          }
-        ],
+          "required": true
+        },
         "responses": {
           "200": {
             "description": "Successful Response",
             "content": {
               "application/json": {
                 "schema": {
+                  "items": { "additionalProperties": true, "type": "object" },
                   "type": "array",
-                  "items": { "type": "object", "additionalProperties": true },
                   "title": "Response Data-List Posts"
                 }
               }
@@ -2293,95 +2181,34 @@
               }
             }
           }
-        }
+        },
+        "security": [{ "OAuth2PasswordBearer": [] }]
       }
     },
     "/api/v1/data/discover/candidates": {
-      "get": {
+      "post": {
         "tags": ["data"],
         "summary": "Discover Candidates",
-        "description": "Aggregated discovery candidates for a channel/date scope.\n\nReturns counts only. The client previously fetched every post body in\nscope to compute this in JS. The keyword/forwarded/media/maxPerChannel\nparams reproduce the Posts-tab view the client aggregated over; the caller\nkeeps the client path when a semantic query or a `random` cap is active.",
+        "description": "Aggregated discovery candidates for a channel/date scope.\n\nReturns counts only. The client previously fetched every post body in\nscope to compute this in JS. The keyword/forwarded/media/maxPerChannel\nparams reproduce the Posts-tab view the client aggregated over; the caller\nkeeps the client path when a semantic query or a `random` cap is active.\n\nPOST rather than GET for the same reason as `/posts` \u2014 the channel selection\ntravels in the body so it cannot overflow the request line.",
         "operationId": "data-discover_candidates",
-        "security": [{ "OAuth2PasswordBearer": [] }],
-        "parameters": [
-          {
-            "name": "channelNames",
-            "in": "query",
-            "required": true,
-            "schema": { "type": "string", "title": "Channelnames" }
-          },
-          {
-            "name": "startDate",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [{ "type": "integer" }, { "type": "null" }],
-              "title": "Startdate"
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DiscoverCandidatesRequest"
+              }
             }
           },
-          {
-            "name": "endDate",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [{ "type": "integer" }, { "type": "null" }],
-              "title": "Enddate"
-            }
-          },
-          {
-            "name": "signals",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [{ "type": "string" }, { "type": "null" }],
-              "title": "Signals"
-            }
-          },
-          {
-            "name": "keyword",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [{ "type": "string" }, { "type": "null" }],
-              "title": "Keyword"
-            }
-          },
-          {
-            "name": "forwarded",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "string",
-              "default": "all",
-              "title": "Forwarded"
-            }
-          },
-          {
-            "name": "media",
-            "in": "query",
-            "required": false,
-            "schema": { "type": "string", "default": "all", "title": "Media" }
-          },
-          {
-            "name": "maxPerChannel",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "minimum": 0,
-              "default": 0,
-              "title": "Maxperchannel"
-            }
-          }
-        ],
+          "required": true
+        },
         "responses": {
           "200": {
             "description": "Successful Response",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
                   "additionalProperties": true,
+                  "type": "object",
                   "title": "Response Data-Discover Candidates"
                 }
               }
@@ -2395,7 +2222,8 @@
               }
             }
           }
-        }
+        },
+        "security": [{ "OAuth2PasswordBearer": [] }]
       }
     },
     "/api/v1/data/posts/counts": {
@@ -4998,6 +4826,50 @@
         "required": ["message"],
         "title": "ChatRequest"
       },
+      "DiscoverCandidatesRequest": {
+        "properties": {
+          "channelNames": {
+            "items": { "type": "string" },
+            "type": "array",
+            "title": "Channelnames"
+          },
+          "startDate": {
+            "anyOf": [{ "type": "integer" }, { "type": "null" }],
+            "title": "Startdate"
+          },
+          "endDate": {
+            "anyOf": [{ "type": "integer" }, { "type": "null" }],
+            "title": "Enddate"
+          },
+          "keyword": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Keyword"
+          },
+          "forwarded": {
+            "type": "string",
+            "title": "Forwarded",
+            "default": "all"
+          },
+          "media": { "type": "string", "title": "Media", "default": "all" },
+          "maxPerChannel": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Maxperchannel",
+            "default": 0
+          },
+          "signals": {
+            "anyOf": [
+              { "items": { "type": "string" }, "type": "array" },
+              { "type": "null" }
+            ],
+            "title": "Signals"
+          }
+        },
+        "type": "object",
+        "required": ["channelNames"],
+        "title": "DiscoverCandidatesRequest",
+        "description": "`PostScopeRequest` plus the signal-kind filter.\n\n`channelNames` is re-declared as required: the discovery aggregate is always\nasked about an explicit selection, and the query-string version required it\ntoo."
+      },
       "DiscoveredViaPayload": {
         "properties": {
           "channelName": { "type": "string", "title": "Channelname" },
@@ -5362,6 +5234,68 @@
         "type": "object",
         "required": ["token", "new_password"],
         "title": "NewPassword"
+      },
+      "PostFeedRequest": {
+        "properties": {
+          "channelNames": {
+            "anyOf": [
+              { "items": { "type": "string" }, "type": "array" },
+              { "type": "null" }
+            ],
+            "title": "Channelnames"
+          },
+          "startDate": {
+            "anyOf": [{ "type": "integer" }, { "type": "null" }],
+            "title": "Startdate"
+          },
+          "endDate": {
+            "anyOf": [{ "type": "integer" }, { "type": "null" }],
+            "title": "Enddate"
+          },
+          "keyword": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Keyword"
+          },
+          "forwarded": {
+            "type": "string",
+            "title": "Forwarded",
+            "default": "all"
+          },
+          "media": { "type": "string", "title": "Media", "default": "all" },
+          "maxPerChannel": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Maxperchannel",
+            "default": 0
+          },
+          "channelName": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Channelname"
+          },
+          "limit": {
+            "type": "integer",
+            "maximum": 5000.0,
+            "minimum": 1.0,
+            "title": "Limit",
+            "default": 500
+          },
+          "offset": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Offset",
+            "default": 0
+          },
+          "maxPerChannelMode": {
+            "type": "string",
+            "title": "Maxperchannelmode",
+            "default": "latest"
+          },
+          "sort": { "type": "string", "title": "Sort", "default": "time" },
+          "seed": { "type": "integer", "title": "Seed", "default": 0 }
+        },
+        "type": "object",
+        "title": "PostFeedRequest",
+        "description": "`PostScopeRequest` plus the feed's paging, cap mode and sort.\n\n`limit`/`offset` keep the same bounds the query params enforced, so an\nout-of-range page is still a 422 rather than an unbounded read."
       },
       "PostLookupRef": {
         "properties": {

@@ -1,14 +1,19 @@
-"""GET /data/posts as the server-side Posts feed.
+"""POST /data/posts as the server-side Posts feed.
 
 Beyond bounded paging (see test_posts_pagination.py), the feed assembles the
 whole Posts-tab view server-side: keyword/forwarded/media filters, a per-channel
 cap (latest or a deterministic random), and a sort order. This replaces the
 browser's eager `filteredPosts`.
+
+It is a POST because the scope carries the channel selection, which can be the
+whole account — see `PostScopeRequest`. See test_post_scope_body.py for the
+long-selection case that motivated it.
 """
 
 from __future__ import annotations
 
 import time
+from typing import Any
 
 from fastapi.testclient import TestClient
 
@@ -26,6 +31,14 @@ def _auth(client: TestClient) -> dict[str, str]:
         },
     )
     return {"Authorization": f"Bearer {login.json()['access_token']}"}
+
+
+def _feed(
+    client: TestClient, headers: dict[str, str], **scope: Any
+) -> list[dict[str, Any]]:
+    response = client.post(f"{PREFIX}/posts", json=scope, headers=headers)
+    assert response.status_code == 200, response.text
+    return list(response.json())
 
 
 def _bulk(client: TestClient, headers: dict[str, str], posts: list[dict]) -> None:
@@ -71,9 +84,7 @@ def test_keyword_filters_server_side(client: TestClient) -> None:
         ],
     )
 
-    body = client.get(
-        f"{PREFIX}/posts?channelName=kw&keyword=bitcoin", headers=headers
-    ).json()
+    body = _feed(client, headers, channelName="kw", keyword="bitcoin")
 
     assert [row["id"] for row in body] == [1]
 
@@ -96,9 +107,7 @@ def test_forwarded_filter_server_side(client: TestClient) -> None:
         ],
     )
 
-    body = client.get(
-        f"{PREFIX}/posts?channelName=fwd&forwarded=forwarded", headers=headers
-    ).json()
+    body = _feed(client, headers, channelName="fwd", forwarded="forwarded")
 
     assert [row["id"] for row in body] == [2]
 
@@ -109,10 +118,7 @@ def test_latest_cap_keeps_newest_n_per_channel(client: TestClient) -> None:
     _seed_channel(client, headers, "feed_a", 5, base)
     _seed_channel(client, headers, "feed_b", 5, base + 100)
 
-    body = client.get(
-        f"{PREFIX}/posts?channelNames=feed_a,feed_b&maxPerChannel=2",
-        headers=headers,
-    ).json()
+    body = _feed(client, headers, channelNames=["feed_a", "feed_b"], maxPerChannel=2)
 
     by_channel: dict[str, list[int]] = {}
     for row in body:
@@ -127,9 +133,14 @@ def test_random_cap_is_deterministic_for_a_seed(client: TestClient) -> None:
     base = int(time.time() * 1000)
     _seed_channel(client, headers, "rnd", 10, base)
 
-    url = f"{PREFIX}/posts?channelName=rnd&maxPerChannel=3&maxPerChannelMode=random&seed=7"
-    first = client.get(url, headers=headers).json()
-    second = client.get(url, headers=headers).json()
+    scope: dict[str, Any] = {
+        "channelName": "rnd",
+        "maxPerChannel": 3,
+        "maxPerChannelMode": "random",
+        "seed": 7,
+    }
+    first = _feed(client, headers, **scope)
+    second = _feed(client, headers, **scope)
 
     assert len(first) == 3
     # Same seed -> same posts, so offset paging over it is stable.
@@ -141,12 +152,14 @@ def test_random_cap_pages_without_repeats(client: TestClient) -> None:
     base = int(time.time() * 1000)
     _seed_channel(client, headers, "rndp", 10, base)
 
-    common = (
-        f"{PREFIX}/posts?channelName=rndp&maxPerChannel=6"
-        "&maxPerChannelMode=random&seed=3"
-    )
-    page1 = client.get(f"{common}&limit=3&offset=0", headers=headers).json()
-    page2 = client.get(f"{common}&limit=3&offset=3", headers=headers).json()
+    common: dict[str, Any] = {
+        "channelName": "rndp",
+        "maxPerChannel": 6,
+        "maxPerChannelMode": "random",
+        "seed": 3,
+    }
+    page1 = _feed(client, headers, **common, limit=3, offset=0)
+    page2 = _feed(client, headers, **common, limit=3, offset=3)
 
     assert len(page1) == 3
     assert len(page2) == 3
@@ -168,10 +181,9 @@ def test_channel_time_sort_groups_by_channel(client: TestClient) -> None:
         ],
     )
 
-    body = client.get(
-        f"{PREFIX}/posts?channelNames=feed_a,feed_b&sort=channel_time",
-        headers=headers,
-    ).json()
+    body = _feed(
+        client, headers, channelNames=["feed_a", "feed_b"], sort="channel_time"
+    )
 
     names = [row["channelName"] for row in body]
     # All of one channel's posts come before the other's (grouped, not interleaved).
@@ -181,11 +193,58 @@ def test_channel_time_sort_groups_by_channel(client: TestClient) -> None:
 def test_invalid_sort_and_mode_are_422(client: TestClient) -> None:
     headers = _auth(client)
     assert (
-        client.get(f"{PREFIX}/posts?sort=nonsense", headers=headers).status_code == 422
+        client.post(
+            f"{PREFIX}/posts", json={"sort": "nonsense"}, headers=headers
+        ).status_code
+        == 422
     )
     assert (
-        client.get(
-            f"{PREFIX}/posts?maxPerChannelMode=nonsense", headers=headers
+        client.post(
+            f"{PREFIX}/posts",
+            json={"maxPerChannelMode": "nonsense"},
+            headers=headers,
         ).status_code
+        == 422
+    )
+
+
+def test_channel_names_wins_over_singular_channel_name(client: TestClient) -> None:
+    """`channelNames` takes precedence, and an empty one falls through.
+
+    This mirrors the `if channel_names: ... elif channel_name: ...` the query
+    string version had, which is easy to lose when moving to a model.
+    """
+    headers = _auth(client)
+    base = int(time.time() * 1000)
+    _seed_channel(client, headers, "plural", 2, base)
+    _seed_channel(client, headers, "singular", 2, base + 100)
+
+    both = _feed(client, headers, channelNames=["plural"], channelName="singular")
+    assert {row["channelName"] for row in both} == {"plural"}
+
+    # Empty list is not a selection, so the singular form still applies.
+    fallback = _feed(client, headers, channelNames=[], channelName="singular")
+    assert {row["channelName"] for row in fallback} == {"singular"}
+
+
+def test_limit_bounds_are_still_enforced(client: TestClient) -> None:
+    """The body must keep the ge/le guards the query params had.
+
+    Without them a caller could ask for an unbounded page, which is the failure
+    mode the bounded feed exists to prevent.
+    """
+    headers = _auth(client)
+    assert (
+        client.post(f"{PREFIX}/posts", json={"limit": 0}, headers=headers).status_code
+        == 422
+    )
+    assert (
+        client.post(
+            f"{PREFIX}/posts", json={"limit": 10_000_000}, headers=headers
+        ).status_code
+        == 422
+    )
+    assert (
+        client.post(f"{PREFIX}/posts", json={"offset": -1}, headers=headers).status_code
         == 422
     )

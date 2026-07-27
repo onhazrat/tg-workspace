@@ -150,6 +150,24 @@ export type ChatRequest = {
     provider?: string;
 };
 
+/**
+ * `PostScopeRequest` plus the signal-kind filter.
+ *
+ * `channelNames` is re-declared as required: the discovery aggregate is always
+ * asked about an explicit selection, and the query-string version required it
+ * too.
+ */
+export type DiscoverCandidatesRequest = {
+    channelNames: Array<(string)>;
+    startDate?: (number | null);
+    endDate?: (number | null);
+    keyword?: (string | null);
+    forwarded?: string;
+    media?: string;
+    maxPerChannel?: number;
+    signals?: (Array<(string)> | null);
+};
+
 export type DiscoveredViaPayload = {
     channelName: string;
     postId: number;
@@ -258,6 +276,28 @@ export type NetworkRuntimeSettings = {
 export type NewPassword = {
     token: string;
     new_password: string;
+};
+
+/**
+ * `PostScopeRequest` plus the feed's paging, cap mode and sort.
+ *
+ * `limit`/`offset` keep the same bounds the query params enforced, so an
+ * out-of-range page is still a 422 rather than an unbounded read.
+ */
+export type PostFeedRequest = {
+    channelNames?: (Array<(string)> | null);
+    startDate?: (number | null);
+    endDate?: (number | null);
+    keyword?: (string | null);
+    forwarded?: string;
+    media?: string;
+    maxPerChannel?: number;
+    channelName?: (string | null);
+    limit?: number;
+    offset?: number;
+    maxPerChannelMode?: string;
+    sort?: string;
+    seed?: number;
 };
 
 export type PostLookupRef = {
@@ -746,19 +786,7 @@ export type DataGetChannelStatsResponse = ({
 });
 
 export type DataListPostsData = {
-    channelName?: (string | null);
-    channelNames?: (string | null);
-    endDate?: (number | null);
-    forwarded?: string;
-    keyword?: (string | null);
-    limit?: number;
-    maxPerChannel?: number;
-    maxPerChannelMode?: string;
-    media?: string;
-    offset?: number;
-    seed?: number;
-    sort?: string;
-    startDate?: (number | null);
+    requestBody: PostFeedRequest;
 };
 
 export type DataListPostsResponse = (Array<{
@@ -766,14 +794,7 @@ export type DataListPostsResponse = (Array<{
 }>);
 
 export type DataDiscoverCandidatesData = {
-    channelNames: string;
-    endDate?: (number | null);
-    forwarded?: string;
-    keyword?: (string | null);
-    maxPerChannel?: number;
-    media?: string;
-    signals?: (string | null);
-    startDate?: (number | null);
+    requestBody: DiscoverCandidatesRequest;
 };
 
 export type DataDiscoverCandidatesResponse = ({

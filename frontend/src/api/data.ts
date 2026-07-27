@@ -73,26 +73,16 @@ export type PromptScope = Omit<
   "channelNames" | "limit" | "offset"
 >
 
-function postScopeParams(params: PostScopeQuery): URLSearchParams {
-  const qs = new URLSearchParams()
-  if (params.channelNames?.length)
-    qs.set("channelNames", params.channelNames.join(","))
-  if (params.startDate != null) qs.set("startDate", String(params.startDate))
-  if (params.endDate != null) qs.set("endDate", String(params.endDate))
-  if (params.keyword?.trim()) qs.set("keyword", params.keyword.trim())
-  if (params.forwarded && params.forwarded !== "all")
-    qs.set("forwarded", params.forwarded)
-  if (params.media && params.media !== "all") qs.set("media", params.media)
-  if (params.maxPerChannel != null && params.maxPerChannel > 0)
-    qs.set("maxPerChannel", String(params.maxPerChannel))
-  return qs
-}
-
 /**
- * The same scope as `postScopeParams`, shaped for a JSON request body.
+ * A post scope shaped for a JSON request body.
  *
- * Omits defaults exactly as the query-string builder does, so an endpoint reading
- * this body sees the same scope it would have parsed from the URL.
+ * There is deliberately no query-string counterpart. Every endpoint taking a
+ * post scope is a POST, because the scope carries the channel selection: at the
+ * ~1,070 channels a real account holds, `?channelNames=a,b,c,...` runs to
+ * roughly 13 KB and overflows what proxies and servers accept in a request line.
+ *
+ * Defaults are omitted rather than sent explicitly, so the body stays as small
+ * as the scope actually is.
  */
 export function postScopeBody(params: PostScopeQuery): Record<string, unknown> {
   const body: Record<string, unknown> = {}
@@ -241,15 +231,16 @@ export const dataApi = {
     limit?: number
     offset?: number
   }) => {
-    const qs = new URLSearchParams()
-    if (params?.channelNames?.length)
-      qs.set("channelNames", params.channelNames.join(","))
-    if (params?.startDate != null) qs.set("startDate", String(params.startDate))
-    if (params?.endDate != null) qs.set("endDate", String(params.endDate))
-    if (params?.limit != null) qs.set("limit", String(params.limit))
-    if (params?.offset != null) qs.set("offset", String(params.offset))
-    const q = qs.toString()
-    return request<Post[]>(`/api/v1/data/posts${q ? `?${q}` : ""}`)
+    const body: Record<string, unknown> = {}
+    if (params?.channelNames?.length) body.channelNames = params.channelNames
+    if (params?.startDate != null) body.startDate = params.startDate
+    if (params?.endDate != null) body.endDate = params.endDate
+    if (params?.limit != null) body.limit = params.limit
+    if (params?.offset != null) body.offset = params.offset
+    return request<Post[]>("/api/v1/data/posts", {
+      method: "POST",
+      body: JSON.stringify(body),
+    })
   },
 
   /**
@@ -259,25 +250,21 @@ export const dataApi = {
    * `limit` rows per page instead of a channel's whole history.
    */
   getPostsFeed: (params: PostFeedQuery) => {
-    const qs = new URLSearchParams()
-    if (params.channelNames?.length)
-      qs.set("channelNames", params.channelNames.join(","))
-    if (params.startDate != null) qs.set("startDate", String(params.startDate))
-    if (params.endDate != null) qs.set("endDate", String(params.endDate))
-    if (params.keyword?.trim()) qs.set("keyword", params.keyword.trim())
-    if (params.forwarded && params.forwarded !== "all")
-      qs.set("forwarded", params.forwarded)
-    if (params.media && params.media !== "all") qs.set("media", params.media)
+    const body = postScopeBody(params)
+    // The cap mode and seed only mean anything alongside a cap, so they follow
+    // it — exactly as the query-string builder gated them.
     if (params.maxPerChannel != null && params.maxPerChannel > 0) {
-      qs.set("maxPerChannel", String(params.maxPerChannel))
       if (params.maxPerChannelMode)
-        qs.set("maxPerChannelMode", params.maxPerChannelMode)
-      if (params.seed != null) qs.set("seed", String(params.seed))
+        body.maxPerChannelMode = params.maxPerChannelMode
+      if (params.seed != null) body.seed = params.seed
     }
-    if (params.sort) qs.set("sort", params.sort)
-    if (params.limit != null) qs.set("limit", String(params.limit))
-    if (params.offset != null) qs.set("offset", String(params.offset))
-    return request<Post[]>(`/api/v1/data/posts?${qs.toString()}`)
+    if (params.sort) body.sort = params.sort
+    if (params.limit != null) body.limit = params.limit
+    if (params.offset != null) body.offset = params.offset
+    return request<Post[]>("/api/v1/data/posts", {
+      method: "POST",
+      body: JSON.stringify(body),
+    })
   },
 
   /** Resolve specific posts by natural key. Batch capped server-side at 200. */
@@ -295,14 +282,20 @@ export const dataApi = {
    * neither is reproducible server-side.
    */
   getDiscoverCandidates: (params: PostScopeQuery & { signals?: string[] }) => {
-    const qs = postScopeParams(params)
-    if (params.signals) qs.set("signals", params.signals.join(","))
+    const body = postScopeBody(params)
+    // `channelNames` is required server-side here, so send it even when empty
+    // rather than letting `postScopeBody`'s omit-empty rule drop it into a 422.
+    body.channelNames = params.channelNames ?? []
+    if (params.signals) body.signals = params.signals
     return request<{
       candidates: DiscoveryCandidate[]
       scopeCounts: DiscoveryScopeCounts
       /** Posts surviving the scope filters + cap; the client's `filteredPosts.length`. */
       postsInScope: number
-    }>(`/api/v1/data/discover/candidates?${qs.toString()}`)
+    }>("/api/v1/data/discover/candidates", {
+      method: "POST",
+      body: JSON.stringify(body),
+    })
   },
 
   /**

@@ -745,6 +745,89 @@ export const ChatRequestSchema = {
     title: 'ChatRequest'
 } as const;
 
+export const DiscoverCandidatesRequestSchema = {
+    properties: {
+        channelNames: {
+            items: {
+                type: 'string'
+            },
+            type: 'array',
+            title: 'Channelnames'
+        },
+        startDate: {
+            anyOf: [
+                {
+                    type: 'integer'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Startdate'
+        },
+        endDate: {
+            anyOf: [
+                {
+                    type: 'integer'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Enddate'
+        },
+        keyword: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Keyword'
+        },
+        forwarded: {
+            type: 'string',
+            title: 'Forwarded',
+            default: 'all'
+        },
+        media: {
+            type: 'string',
+            title: 'Media',
+            default: 'all'
+        },
+        maxPerChannel: {
+            type: 'integer',
+            minimum: 0,
+            title: 'Maxperchannel',
+            default: 0
+        },
+        signals: {
+            anyOf: [
+                {
+                    items: {
+                        type: 'string'
+                    },
+                    type: 'array'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Signals'
+        }
+    },
+    type: 'object',
+    required: ['channelNames'],
+    title: 'DiscoverCandidatesRequest',
+    description: `\`PostScopeRequest\` plus the signal-kind filter.
+
+\`channelNames\` is re-declared as required: the discovery aggregate is always
+asked about an explicit selection, and the query-string version required it
+too.`
+} as const;
+
 export const DiscoveredViaPayloadSchema = {
     properties: {
         channelName: {
@@ -1243,6 +1326,119 @@ export const NewPasswordSchema = {
     type: 'object',
     required: ['token', 'new_password'],
     title: 'NewPassword'
+} as const;
+
+export const PostFeedRequestSchema = {
+    properties: {
+        channelNames: {
+            anyOf: [
+                {
+                    items: {
+                        type: 'string'
+                    },
+                    type: 'array'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Channelnames'
+        },
+        startDate: {
+            anyOf: [
+                {
+                    type: 'integer'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Startdate'
+        },
+        endDate: {
+            anyOf: [
+                {
+                    type: 'integer'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Enddate'
+        },
+        keyword: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Keyword'
+        },
+        forwarded: {
+            type: 'string',
+            title: 'Forwarded',
+            default: 'all'
+        },
+        media: {
+            type: 'string',
+            title: 'Media',
+            default: 'all'
+        },
+        maxPerChannel: {
+            type: 'integer',
+            minimum: 0,
+            title: 'Maxperchannel',
+            default: 0
+        },
+        channelName: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Channelname'
+        },
+        limit: {
+            type: 'integer',
+            maximum: 5000,
+            minimum: 1,
+            title: 'Limit',
+            default: 500
+        },
+        offset: {
+            type: 'integer',
+            minimum: 0,
+            title: 'Offset',
+            default: 0
+        },
+        maxPerChannelMode: {
+            type: 'string',
+            title: 'Maxperchannelmode',
+            default: 'latest'
+        },
+        sort: {
+            type: 'string',
+            title: 'Sort',
+            default: 'time'
+        },
+        seed: {
+            type: 'integer',
+            title: 'Seed',
+            default: 0
+        }
+    },
+    type: 'object',
+    title: 'PostFeedRequest',
+    description: `\`PostScopeRequest\` plus the feed's paging, cap mode and sort.
+
+\`limit\`/\`offset\` keep the same bounds the query params enforced, so an
+out-of-range page is still a 422 rather than an unbounded read.`
 } as const;
 
 export const PostLookupRefSchema = {

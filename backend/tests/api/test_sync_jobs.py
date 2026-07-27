@@ -117,9 +117,9 @@ def test_start_sync_job_and_poll_status(client: TestClient) -> None:
         assert final_status["channels"][0]["status"] == "success"
         assert final_status["channels"][0]["postsFetched"] == 2
 
-    posts_r = client.get(
+    posts_r = client.post(
         f"{DATA}/posts",
-        params={"channelNames": "sync-test-ch"},
+        json={"channelNames": ["sync-test-ch"]},
         headers=headers,
     )
     assert posts_r.status_code == 200
@@ -305,9 +305,9 @@ def test_sync_incremental_stops_at_existing_post(client: TestClient) -> None:
         assert data["status"] == "completed"
         assert data["channels"][0]["postsFetched"] == 1
 
-    posts_r = client.get(
+    posts_r = client.post(
         f"{DATA}/posts",
-        params={"channelNames": "incr-ch"},
+        json={"channelNames": ["incr-ch"]},
         headers=headers,
     )
     ids = {p["id"] for p in posts_r.json()}
@@ -648,9 +648,9 @@ def test_sync_backfill_completes_partial_history_in_multiple_passes(
     ch = next(c for c in channels_r.json() if c["name"] == "backfill-ch")
     assert ch["historyCompleteToCutoff"] is False
 
-    posts_r = client.get(
+    posts_r = client.post(
         f"{DATA}/posts",
-        params={"channelNames": "backfill-ch"},
+        json={"channelNames": ["backfill-ch"]},
         headers=headers,
     )
     backfill_posts = [p for p in posts_r.json() if p.get("retrievalPass") == "backfill"]

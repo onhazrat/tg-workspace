@@ -94,7 +94,7 @@ export interface PostsFeed {
 
 /**
  * The Posts-tab feed. For the normal path it pages the server feed
- * (`GET /data/posts` with filters + cap + sort) via an infinite query — only
+ * (`POST /data/posts` with filters + cap + sort) via an infinite query — only
  * `FEED_PAGE_SIZE` rows per page, more on scroll. When a semantic/related
  * search is active it keeps the client RAG path (≤50, no pagination), per the
  * agreed design. The query key encodes the scope + filters, so any change
