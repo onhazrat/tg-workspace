@@ -1,3 +1,4 @@
+import { Link } from "@tanstack/react-router"
 import {
   Activity,
   AlertCircle,
@@ -293,6 +294,7 @@ export default function App() {
                     type="button"
                     id="command-palette-button"
                     data-testid="command-palette-button"
+                    aria-label="Command palette"
                     onClick={() => setCommandPaletteOpen(true)}
                     className="p-1.5 border border-app-ink border-opacity-10 hover:border-opacity-40 transition-all rounded-md"
                   >
@@ -308,6 +310,7 @@ export default function App() {
                   <button
                     type="button"
                     id="tour-help-button"
+                    aria-label="Replay guided tour"
                     onClick={startTour}
                     className="p-1.5 border border-app-ink border-opacity-10 hover:border-opacity-40 transition-all rounded-md"
                   >
@@ -322,6 +325,7 @@ export default function App() {
                 <TooltipTrigger asChild>
                   <button
                     type="button"
+                    aria-label="Keyboard shortcuts"
                     onClick={() => setShortcutsOpen(true)}
                     className="p-1.5 border border-app-ink border-opacity-10 hover:border-opacity-40 transition-all rounded-md"
                   >
@@ -336,6 +340,7 @@ export default function App() {
                 <TooltipTrigger asChild>
                   <button
                     type="button"
+                    aria-label={themeTooltip}
                     onClick={toggleTheme}
                     className="p-1.5 border border-app-ink border-opacity-10 hover:border-opacity-40 transition-all rounded-md"
                   >
@@ -367,31 +372,58 @@ export default function App() {
                   Keyboard Shortcuts
                 </DialogTitle>
               </DialogHeader>
-              <div className="space-y-2 p-4 text-xs font-mono uppercase tracking-widest">
-                <div className="flex items-center justify-between rounded-md border border-app-ink/10 bg-app-muted/30 px-3 py-2">
-                  <span>Command Palette</span>
-                  <code>{commandKey}+Shift+P</code>
-                </div>
-                <div className="flex items-center justify-between rounded-md border border-app-ink/10 bg-app-muted/30 px-3 py-2">
-                  <span>Keyboard Shortcuts</span>
-                  <code>?</code>
-                </div>
-                <div className="flex items-center justify-between rounded-md border border-app-ink/10 bg-app-muted/30 px-3 py-2">
-                  <span>Run Highlighted Command</span>
-                  <code>Enter</code>
-                </div>
-                <div className="flex items-center justify-between rounded-md border border-app-ink/10 bg-app-muted/30 px-3 py-2">
-                  <span>Alternate Run Command</span>
-                  <code>{commandKey}+Enter</code>
-                </div>
-                <div className="flex items-center justify-between rounded-md border border-app-ink/10 bg-app-muted/30 px-3 py-2">
-                  <span>Back / Close Sub-View</span>
-                  <code>Esc</code>
-                </div>
-                <div className="flex items-center justify-between rounded-md border border-app-ink/10 bg-app-muted/30 px-3 py-2">
-                  <span>Parent Sub-View</span>
-                  <code>Backspace (empty)</code>
-                </div>
+              {/*
+               * Grouped because four of these are not global.
+               *
+               * `Enter`, `{cmd}+Enter`, `Esc` and `Backspace` are handled by the
+               * command palette and do nothing anywhere else, but the flat list
+               * presented all six alike — so "Run Highlighted Command / Enter"
+               * read as an app-wide binding that silently did nothing.
+               *
+               * Only two shortcuts are genuinely global: the palette
+               * (`useCommandPalette`) and this dialog (`App`). The list is
+               * short because the app is, not because the list is incomplete.
+               */}
+              <div className="space-y-4 p-4 text-xs font-mono uppercase tracking-widest">
+                {[
+                  {
+                    heading: "Anywhere",
+                    bindings: [
+                      {
+                        label: "Command Palette",
+                        keys: `${commandKey}+Shift+P`,
+                      },
+                      { label: "Keyboard Shortcuts", keys: "?" },
+                    ],
+                  },
+                  {
+                    heading: "In the command palette",
+                    bindings: [
+                      { label: "Run Highlighted Command", keys: "Enter" },
+                      {
+                        label: "Alternate Run Command",
+                        keys: `${commandKey}+Enter`,
+                      },
+                      { label: "Back / Close Sub-View", keys: "Esc" },
+                      { label: "Parent Sub-View", keys: "Backspace (empty)" },
+                    ],
+                  },
+                ].map((group) => (
+                  <section key={group.heading} className="space-y-2">
+                    <h3 className="text-[10px] text-app-ink/50">
+                      {group.heading}
+                    </h3>
+                    {group.bindings.map((binding) => (
+                      <div
+                        key={binding.label}
+                        className="flex items-center justify-between rounded-md border border-app-ink/10 bg-app-muted/30 px-3 py-2"
+                      >
+                        <span>{binding.label}</span>
+                        <code>{binding.keys}</code>
+                      </div>
+                    ))}
+                  </section>
+                ))}
               </div>
             </DialogContent>
           </Dialog>
@@ -399,7 +431,26 @@ export default function App() {
           <div className="border border-app-ink border-opacity-20 flex min-h-0 flex-1 flex-col bg-app-card overflow-hidden">
             <div className="border-b border-app-ink border-opacity-10 p-4 flex flex-col gap-4 bg-app-muted shrink-0">
               <div className="flex justify-between items-center">
-                <div className="flex gap-4">
+                {/*
+                 * Real links, not buttons with click handlers.
+                 *
+                 * These are URL-addressable views — `setActiveTab` already did
+                 * nothing but navigate to `?tab=` — so as `<button onClick>`
+                 * they were unreachable by the things links give you free:
+                 * middle-click, open-in-new-tab, "copy link address", and an
+                 * announced destination.
+                 *
+                 * `aria-current="page"` rather than `role="tab"`: the ARIA tab
+                 * pattern obliges a roving tabindex and arrow-key navigation,
+                 * and claiming the role without implementing those leaves
+                 * assistive-tech users worse off than plain links, because the
+                 * keys they are told to use would do nothing. A `<nav>` of
+                 * links marking the current one is honest about what this is.
+                 *
+                 * `replace` preserves the previous behaviour — tab switches
+                 * did not stack history entries, and still do not.
+                 */}
+                <nav aria-label="Workspace sections" className="flex gap-4">
                   {WORKSPACE_TABS.map((tab) => {
                     const Icon =
                       {
@@ -416,23 +467,27 @@ export default function App() {
                         Compass,
                       }[tab.icon] || Database
 
+                    const isActive = activeTab === tab.id
+
                     return (
-                      <button
-                        type="button"
+                      <Link
                         key={tab.id}
                         id={`tour-tab-${tab.id}`}
-                        onClick={() => setActiveTab(tab.id as TabType)}
+                        to="/summarizer"
+                        search={(prev) => ({ ...prev, tab: tab.id as TabType })}
+                        replace
+                        aria-current={isActive ? "page" : undefined}
                         className={`text-xs font-mono uppercase tracking-widest flex items-center gap-2 pb-1 border-b-2 transition-all ${
-                          activeTab === tab.id
+                          isActive
                             ? "border-app-ink opacity-100"
                             : "border-transparent opacity-40"
                         }`}
                       >
                         <Icon size={14} /> {tab.label}
-                      </button>
+                      </Link>
                     )
                   })}
-                </div>
+                </nav>
                 <div className="flex items-center gap-6">
                   <div className="flex items-center gap-6">
                     <div className="flex flex-col items-end">

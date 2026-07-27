@@ -804,12 +804,15 @@ test.describe("TG Summarizer", () => {
     await page.goto("/summarizer?tab=summary")
     // Prefer role locators: `#nav-tab-*` CSS ids are flaky under Playwright
     // Chrome (document ID map sometimes misses React-assigned ids).
+    //
+    // The workspace tabs are `link`, not `button`: they navigate to `?tab=`, so
+    // they are real anchors now. The settings sidebar below is still buttons.
     await expect(
-      page.getByRole("button", { name: "Summary", exact: true }).first(),
+      page.getByRole("link", { name: "Summary", exact: true }).first(),
     ).toBeVisible()
 
     await page
-      .getByRole("button", { name: "Settings", exact: true })
+      .getByRole("link", { name: "Settings", exact: true })
       .first()
       .click()
     await page.getByRole("button", { name: "Network", exact: true }).click()

@@ -19,8 +19,13 @@ export const LogsHeader: React.FC<LogsHeaderProps> = ({
     <div className="flex justify-between items-end">
       <div className="text-left">
         <div className="flex items-baseline gap-3">
+          {/*
+           * Matches the nav entry that leads here (`toc.ts` — "Diagnostics").
+           * Navigating to "Diagnostics" and arriving at a panel titled "System
+           * Logs" reads as having landed somewhere else.
+           */}
           <h3 className="text-sm uppercase font-bold tracking-widest">
-            System Logs
+            Diagnostics
           </h3>
           <span className="text-[10px] font-mono opacity-40">
             [{recordCount} RECORDS]

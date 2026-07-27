@@ -50,7 +50,10 @@ export const CommonlyUsedSection: React.FC<{
 }> = ({ highlightId }) => {
   const entries = commonlyUsedEntries()
   return (
-    <div className="space-y-2 max-w-2xl">
+    // `max-w-2xl` (672px) left most of a 1440px settings pane empty while the
+    // rows inside it wrapped. Wider, but still measured — settings rows are
+    // label/control pairs, and a full-bleed column puts them absurdly far apart.
+    <div className="space-y-2 max-w-4xl">
       <div className="mb-6">
         <h3 className="text-sm uppercase font-bold tracking-widest">
           Commonly Used

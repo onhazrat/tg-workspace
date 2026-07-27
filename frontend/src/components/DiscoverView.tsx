@@ -316,6 +316,12 @@ export const DiscoverView: React.FC = () => {
           ) : null}
         </div>
 
+        {/*
+         * Only the *result* filters are gated. Signals configures the run — it
+         * feeds the request and changing it invalidates a generated report — so
+         * it stays on screen; gating the whole bar hid the one control you need
+         * before generating. See `DiscoverFilterBar`'s `showResultFilters`.
+         */}
         <DiscoverFilterBar
           signals={discoverSignals}
           onToggleSignal={toggleSignal}
@@ -325,6 +331,7 @@ export const DiscoverView: React.FC = () => {
           onMinTotalChange={setDiscoverMinTotal}
           nameQuery={nameQuery}
           onNameQueryChange={setNameQuery}
+          showResultFilters={generated}
         />
 
         {candidates.length > 0 && follow.selectedForFollow.size > 0 ? (

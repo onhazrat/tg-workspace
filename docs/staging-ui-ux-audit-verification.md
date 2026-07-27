@@ -606,6 +606,84 @@ under a third of the 489px wall it replaces. Plus the sub-pixel tolerance and th
 Verified: biome clean, `tsc --noEmit` clean, **600 unit tests** (was 591),
 **62/62 e2e**.
 
+## 2i. Batch 5 — accessibility and polish, shipped 2026-07-27
+
+| ID | What changed |
+|---|---|
+| E1 | `aria-label` on all four header icon buttons. The theme one uses `themeTooltip`, which already names the current mode and the next, so the name cannot go stale as the control cycles. |
+| E2 | The workspace tabs are `<Link>`s in a `<nav aria-label="Workspace sections">`, with `aria-current="page"`. |
+| E7 | The shortcuts dialog is grouped into **Anywhere** and **In the command palette** — see the correction below. |
+| C11 | Only the *result* filters are gated on `generated`; Signals stays — see the correction below. |
+| D5 | The Diagnostics panel heading now says "Diagnostics", matching the nav entry that leads there. |
+| D6 | "Analysis Configuration — setup your summary parameters" → "Summary — model and language for the next run". Two selectors is not a configuration surface, and the real scope lives on other tabs. |
+| D7 | The per-channel limit renders blank with an `Unlimited` placeholder instead of `0`, and the redundant `Unlimited` chip beside it is gone. `0` meant "no limit" but read as "zero posts". |
+| C6 | Settings column `max-w-2xl` → `max-w-4xl`. |
+
+### E7 was filed as an incomplete list; the list was accurate
+
+The audit says the dialog "lists only 6 bindings… no tab navigation (1-8), no `/`
+to focus search, no sync shortcut". **Those shortcuts do not exist.** The app
+registers exactly two global handlers — `⌘⇧P` (`useCommandPalette`) and `?`
+(`App`) — and nothing else. Adding them to the list would have documented
+keys that do nothing.
+
+The real defect was different: four of the six (`Enter`, `⌘+Enter`, `Esc`,
+`Backspace`) are handled *inside the command palette* and do nothing elsewhere,
+yet the flat list presented all six alike. They are now grouped under
+**Anywhere** and **In the command palette**.
+
+Implementing the missing shortcuts is a **feature request**, not a bug fix, and
+is left open.
+
+### C11 was one control too many
+
+Gating the whole filter bar on `generated` — what the audit suggested, and what
+was tried first — broke two e2e tests, and the failure was correct. The bar holds
+two different kinds of control:
+
+* **Signals** is an *input to the run*. It feeds `serverParams`, and changing it
+  invalidates a generated report through `scopeSignature`. Hiding it removed the
+  one control you need *before* generating.
+* **Show / Min hits / Filter by name** narrow candidates that already exist.
+  Before a run these were genuinely inert, which is the real finding.
+
+`DiscoverFilterBar` now takes `showResultFilters`, and only the latter three are
+gated.
+
+### C9 deliberately untouched
+
+The theme control exists in three places: the header, `AppearanceSection`, and
+`CommonlyUsedSection`. But `CommonlyUsedSection` is by design "a curated set of
+frequently adjusted settings" — duplication is its whole purpose, so removing
+theme from it is a product judgement, not a defect fix. Left for a decision
+rather than resolved unilaterally.
+
+### Regression coverage
+
+`a11y-invariants.test.ts` (6) asserts every icon-only header button is named,
+that the theme button's name tracks its state, that tabs navigate by link rather
+than click handler, and that the nav landmark is labelled.
+
+It also guards a trap in the *fix*: `role="tab"` obliges a roving tabindex and
+arrow-key navigation, so claiming the role without implementing it leaves
+assistive-tech users worse off than plain links — the keys they are told to press
+would do nothing. The test fails if the role appears without the key handling,
+which is why `aria-current` was chosen over the ARIA tab pattern.
+
+That check needed a comment-stripper, because the tab bar's own comment names
+`role="tab"` while explaining why it is not used — the third time in this audit
+that a sweep has flagged prose quoting the thing it forbids. The stripper has its
+own test proving it does not also blind the sweep to real code.
+
+Verified: biome clean, `tsc --noEmit` clean, **606 unit tests** (was 600),
+**75/75 e2e**.
+
+> The e2e scope is now three specs, not two: `tg-ui-primitives.spec.ts` was
+> pulled in because the tab change touched its shared `gotoSummarizer` helper,
+> and it stays in the run from here. Four assertions were updated rather than
+> worked around — three locating workspace tabs by `role: button`, and one
+> asserting the old `System Logs` heading.
+
 ## 3. Fix plan
 
 Batches are independently shippable and ordered by risk retired per unit of work.

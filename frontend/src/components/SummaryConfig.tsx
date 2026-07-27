@@ -48,11 +48,15 @@ export const SummaryConfig: React.FC = () => {
             <SlidersHorizontal size={18} className="opacity-60" />
           </div>
           <div>
-            <h2 className="text-sm font-bold tracking-tight">
-              Analysis Configuration
-            </h2>
+            {/*
+             * Named for what it is. "Analysis Configuration — setup your
+             * summary parameters" promises a configuration surface; the row
+             * holds exactly two selectors, model and language, and the actual
+             * scope (channels, dates, filters) is set on other tabs entirely.
+             */}
+            <h2 className="text-sm font-bold tracking-tight">Summary</h2>
             <p className="text-[10px] text-app-ink/50 uppercase tracking-wider font-medium mt-0.5">
-              Setup your summary parameters
+              Model and language for the next run
             </p>
           </div>
         </div>

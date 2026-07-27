@@ -315,11 +315,21 @@ export const PostFilter: React.FC<PostFilterProps> = ({
 
               <div className="flex flex-wrap items-center gap-3">
                 <div className="flex items-center gap-2">
+                  {/*
+                   * Blank, not `0`, when there is no cap.
+                   *
+                   * `0` here means "no limit", but it reads as "zero posts" —
+                   * and it sat next to an `Unlimited` chip, so the control
+                   * showed a number and a word that flatly contradict each
+                   * other. An empty field with an `Unlimited` placeholder says
+                   * the same thing once.
+                   */}
                   <input
                     type="number"
                     min={0}
                     max={500}
-                    value={maxPostsPerChannel}
+                    placeholder="Unlimited"
+                    value={maxPostsPerChannel === 0 ? "" : maxPostsPerChannel}
                     onChange={(e) => {
                       const parsed = Number.parseInt(e.target.value, 10)
                       setMaxPostsPerChannel(
@@ -331,11 +341,6 @@ export const PostFilter: React.FC<PostFilterProps> = ({
                   <span className="text-[11px] uppercase font-bold tracking-widest text-app-ink/60">
                     per channel
                   </span>
-                  {maxPostsPerChannel === 0 && (
-                    <span className="text-[10px] uppercase font-bold tracking-widest px-2 py-0.5 rounded-full bg-app-muted border border-app-ink/10 text-app-ink/70">
-                      Unlimited
-                    </span>
-                  )}
                 </div>
 
                 <div

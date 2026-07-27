@@ -1,0 +1,96 @@
+import { describe, expect, it } from "bun:test"
+import { readFileSync } from "node:fs"
+import { join } from "node:path"
+
+/**
+ * Source-level guards for the two header defects the staging pass confirmed.
+ *
+ * **E1** — the four header icon buttons had tooltips but no accessible name. A
+ * tooltip is not a name: asked to find the command-palette button, an
+ * accessibility-tree query returned *"several unnamed buttons (ref_7…ref_10) —
+ * their purposes are not specified"*, then guessed the wrong one. That is what a
+ * screen-reader user gets.
+ *
+ * **E2** — the workspace tabs were `<button onClick={() => setActiveTab(…)}>`,
+ * even though `setActiveTab` did nothing but navigate to `?tab=`. As buttons
+ * they lost everything a link gives free: middle-click, open-in-new-tab, copy
+ * link address, and an announced destination.
+ */
+
+const APP = join(import.meta.dir, "..", "App.tsx")
+
+/** The four icon-only controls in the header, by the icon each renders. */
+const HEADER_ICON_BUTTONS = [
+  "CommandIcon",
+  "HelpCircle",
+  "Keyboard",
+  "themeIcon",
+]
+
+/**
+ * Comments legitimately name the thing they forbid — the tab bar carries a note
+ * explaining why it uses `aria-current` *rather than* `role="tab"`, which would
+ * otherwise trip the check below. Only code counts.
+ */
+function stripComments(source: string): string {
+  return source.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "")
+}
+
+describe("header accessibility", () => {
+  const source = readFileSync(APP, "utf8")
+  const code = stripComments(source)
+
+  it("names every icon-only header button", () => {
+    // One `aria-label` per icon-only button. Without a text child there is
+    // nothing else for an accessible name to come from.
+    const labels = source.match(/aria-label=/g) ?? []
+    expect(labels.length).toBeGreaterThanOrEqual(HEADER_ICON_BUTTONS.length)
+  })
+
+  it("keeps the theme button's name in step with its state", () => {
+    // The theme control cycles system -> light -> dark, so a fixed label would
+    // go stale. It reuses the tooltip text, which already names both the current
+    // mode and the next one.
+    expect(source).toContain("aria-label={themeTooltip}")
+  })
+
+  it("navigates tabs with links, not click handlers", () => {
+    expect(source).not.toContain("onClick={() => setActiveTab(tab.id")
+    expect(source).toContain('to="/summarizer"')
+    expect(source).toContain('aria-current={isActive ? "page" : undefined}')
+  })
+
+  it("groups the tab links in a named nav landmark", () => {
+    expect(source).toContain('<nav aria-label="Workspace sections"')
+  })
+
+  /**
+   * `role="tab"` obliges a roving tabindex and arrow-key navigation. Claiming it
+   * without implementing those is worse than plain links, because the keys
+   * assistive tech tells the user to press would do nothing. If someone adds the
+   * role later, this fails and points at the obligation that comes with it.
+   */
+  it("does not claim the ARIA tab pattern without implementing it", () => {
+    const claimsTabRole =
+      code.includes('role="tab"') || code.includes('role="tablist"')
+    const implementsRovingFocus =
+      code.includes("ArrowRight") || code.includes("ArrowLeft")
+    if (claimsTabRole) {
+      expect(implementsRovingFocus).toBe(true)
+    }
+    // Today it claims neither, which is the state this asserts is coherent.
+    expect(claimsTabRole).toBe(false)
+  })
+
+  it("strips comments without stripping code", () => {
+    // Guards the guard: this check exists because the tab bar's own comment
+    // names `role="tab"` while explaining why it is not used.
+    expect(stripComments('/* role="tab" is wrong here */')).not.toContain(
+      'role="tab"',
+    )
+    expect(stripComments('  // role="tablist" too')).not.toContain("tablist")
+    expect(stripComments('<nav aria-label="Workspace sections"')).toContain(
+      "aria-label",
+    )
+  })
+})

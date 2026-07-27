@@ -20,6 +20,17 @@ interface DiscoverFilterBarProps {
   onMinTotalChange: (minTotal: number) => void
   nameQuery: string
   onNameQueryChange: (query: string) => void
+  /**
+   * Whether a report exists to filter.
+   *
+   * This bar holds two different kinds of control, which is what made C11 look
+   * like one problem. **Signals** is an input to the run — it feeds the request
+   * and changing it invalidates a generated report — so it belongs on screen
+   * before generating. **Show / Min hits / Filter by name** narrow candidates
+   * that already exist, and before a run they were controls that could not
+   * change anything.
+   */
+  showResultFilters: boolean
 }
 
 export const DiscoverFilterBar: React.FC<DiscoverFilterBarProps> = ({
@@ -31,6 +42,7 @@ export const DiscoverFilterBar: React.FC<DiscoverFilterBarProps> = ({
   onMinTotalChange,
   nameQuery,
   onNameQueryChange,
+  showResultFilters,
 }) => (
   <div
     className="mb-4 flex flex-wrap items-center gap-x-6 gap-y-3"
@@ -52,48 +64,52 @@ export const DiscoverFilterBar: React.FC<DiscoverFilterBarProps> = ({
       ))}
     </div>
 
-    <div className="flex items-center gap-2">
-      <span className="text-[11px] font-bold uppercase tracking-widest text-app-ink/50">
-        Show
-      </span>
-      <TgSegmentedControl
-        size="sm"
-        aria-label="Filter candidates by follow state"
-        value={followState}
-        onChange={onFollowStateChange}
-        options={DISCOVER_FOLLOW_STATE_OPTIONS.map((option) => ({
-          ...option,
-          "data-testid": `discover-follow-state-${option.value}`,
-        }))}
-      />
-    </div>
+    {showResultFilters ? (
+      <>
+        <div className="flex items-center gap-2">
+          <span className="text-[11px] font-bold uppercase tracking-widest text-app-ink/50">
+            Show
+          </span>
+          <TgSegmentedControl
+            size="sm"
+            aria-label="Filter candidates by follow state"
+            value={followState}
+            onChange={onFollowStateChange}
+            options={DISCOVER_FOLLOW_STATE_OPTIONS.map((option) => ({
+              ...option,
+              "data-testid": `discover-follow-state-${option.value}`,
+            }))}
+          />
+        </div>
 
-    <div className="flex items-center gap-2">
-      <span className="text-[11px] font-bold uppercase tracking-widest text-app-ink/50">
-        Min hits
-      </span>
-      <TgSegmentedControl
-        size="sm"
-        aria-label="Minimum total references"
-        value={String(minTotal)}
-        onChange={(value) => onMinTotalChange(Number.parseInt(value, 10))}
-        options={DISCOVER_MIN_TOTAL_OPTIONS.map((option) => ({
-          label: option.label,
-          value: String(option.value),
-          "data-testid": `discover-min-total-${option.value}`,
-        }))}
-      />
-    </div>
+        <div className="flex items-center gap-2">
+          <span className="text-[11px] font-bold uppercase tracking-widest text-app-ink/50">
+            Min hits
+          </span>
+          <TgSegmentedControl
+            size="sm"
+            aria-label="Minimum total references"
+            value={String(minTotal)}
+            onChange={(value) => onMinTotalChange(Number.parseInt(value, 10))}
+            options={DISCOVER_MIN_TOTAL_OPTIONS.map((option) => ({
+              label: option.label,
+              value: String(option.value),
+              "data-testid": `discover-min-total-${option.value}`,
+            }))}
+          />
+        </div>
 
-    <TgInput
-      variant="muted"
-      type="search"
-      value={nameQuery}
-      onChange={(event) => onNameQueryChange(event.target.value)}
-      placeholder="Filter by name…"
-      aria-label="Filter candidates by name"
-      data-testid="discover-name-filter"
-      className="w-44"
-    />
+        <TgInput
+          variant="muted"
+          type="search"
+          value={nameQuery}
+          onChange={(event) => onNameQueryChange(event.target.value)}
+          placeholder="Filter by name…"
+          aria-label="Filter candidates by name"
+          data-testid="discover-name-filter"
+          className="w-44"
+        />
+      </>
+    ) : null}
   </div>
 )

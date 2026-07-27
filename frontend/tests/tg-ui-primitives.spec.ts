@@ -18,8 +18,10 @@ async function gotoSummarizer(page: Page, tab = "channels") {
   await page.goto(`/summarizer?tab=${tab}`)
   const label = TAB_LABELS[tab] ?? tab
   // Role locators are more reliable than `#nav-tab-*` under Playwright Chrome.
+  // `link`, not `button`: the workspace tabs navigate to `?tab=`, so they are
+  // real anchors.
   await expect(
-    page.getByRole("button", { name: label, exact: true }).first(),
+    page.getByRole("link", { name: label, exact: true }).first(),
   ).toBeVisible()
 }
 
@@ -100,11 +102,12 @@ test.describe("TG UI primitives", () => {
     await expect(settingsField).toHaveValue("42")
   })
 
-  test("diagnostics opens system logs without telemetry tabs", async ({
-    page,
-  }) => {
+  test("diagnostics panel opens without telemetry tabs", async ({ page }) => {
     await openSettingsSection(page, "Diagnostics")
-    await expect(page.getByText("System Logs").first()).toBeVisible()
+    // The panel heading matches the nav entry that leads here — it used to read
+    // "System Logs", which made navigating to "Diagnostics" look like it had
+    // landed somewhere else (D5).
+    await expect(page.getByText("Diagnostics").first()).toBeVisible()
     await expect(
       page.locator('[data-slot="tg-segmented-control"]'),
     ).toHaveCount(0)
@@ -284,7 +287,8 @@ test.describe("TG UI primitives", () => {
     await expect(selectionChip).toBeVisible()
     // Do not click group chips here — toggling a large group can stall the UI.
 
-    await page.getByRole("button", { name: "Posts" }).click()
+    // Workspace tabs navigate to `?tab=`, so they are links, not buttons.
+    await page.getByRole("link", { name: "Posts" }).click()
     // Quick-range chips have no selected prop; use a post-type chip that does.
     const filterChip = page.getByRole("button", { name: "Original Only" })
     await expect(filterChip).toHaveAttribute("data-slot", "tg-filter-chip")
