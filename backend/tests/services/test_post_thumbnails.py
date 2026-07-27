@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 import asyncio
-from unittest.mock import AsyncMock, MagicMock, patch
+from typing import Any
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
@@ -15,26 +16,16 @@ def isolated_thumb_dir(tmp_path, monkeypatch):
     monkeypatch.setattr(post_thumbnails.settings, "POST_THUMB_DIR", str(tmp_path))
 
 
-def _mock_http_client() -> MagicMock:
-    mock_client_cls = MagicMock()
-    mock_client = AsyncMock()
-    mock_client.__aenter__.return_value = mock_client
-    mock_client.__aexit__.return_value = None
-    mock_response = MagicMock()
-    mock_response.raise_for_status = MagicMock()
-    mock_response.content = b"fake-thumb-bytes"
-    mock_response.headers = {"content-type": "image/jpeg"}
-    mock_client.get = AsyncMock(return_value=mock_response)
-    mock_client_cls.return_value = mock_client
-    return mock_client_cls
+def _mock_fetch(
+    content: bytes = b"fake-thumb-bytes", content_type: str = "image/jpeg"
+) -> AsyncMock:
+    """Stand in for `fetch_with_retry(..., binary=True)`."""
+    return AsyncMock(return_value=((content, content_type), {"success": True}))
 
 
 def test_cache_and_read_post_thumb() -> None:
     async def _run() -> None:
-        with patch(
-            "app.services.post_thumbnails.httpx.AsyncClient",
-            _mock_http_client(),
-        ):
+        with patch("app.services.post_thumbnails.fetch_with_retry", _mock_fetch()):
             cached = await post_thumbnails.cache_post_thumb(
                 "durov",
                 522,
@@ -57,6 +48,113 @@ def test_cache_and_read_post_thumb() -> None:
     asyncio.run(_run())
 
 
+def test_download_travels_the_configured_proxy_lane() -> None:
+    """Thumbnails must not egress directly while pages go through Tor."""
+    fetch = _mock_fetch()
+
+    async def _run() -> None:
+        with patch("app.services.post_thumbnails.fetch_with_retry", fetch):
+            await post_thumbnails.cache_post_thumb(
+                "durov",
+                1,
+                "https://cdn.example/thumb.jpg",
+                proxies=["socks5://127.0.0.1:9050"],
+                proxy_concurrency=(2, {}),
+                tor_auto_rotate=True,
+                tor_rotation_threshold=10,
+            )
+
+    asyncio.run(_run())
+    kwargs = fetch.await_args.kwargs
+    assert kwargs["proxies"] == ["socks5://127.0.0.1:9050"]
+    assert kwargs["proxy_concurrency"] == (2, {})
+    assert kwargs["tor_auto_rotate"] is True
+    assert kwargs["binary"] is True
+
+
+def test_oversized_download_is_not_written() -> None:
+    oversized = b"x" * (post_thumbnails._MAX_THUMB_BYTES + 1)
+
+    async def _run() -> None:
+        with patch(
+            "app.services.post_thumbnails.fetch_with_retry", _mock_fetch(oversized)
+        ):
+            cached = await post_thumbnails.cache_post_thumb(
+                "durov", 7, "https://cdn.example/huge.jpg"
+            )
+            assert cached is False
+
+    asyncio.run(_run())
+    assert not post_thumbnails.has_cached_thumb("durov", 7)
+
+
+def test_write_failure_is_reported_not_raised() -> None:
+    """Callers gather with return_exceptions=True, so this must not escape."""
+
+    async def _run() -> None:
+        with (
+            patch("app.services.post_thumbnails.fetch_with_retry", _mock_fetch()),
+            patch(
+                "app.services.post_thumbnails._write_atomic",
+                side_effect=OSError("No space left on device"),
+            ),
+        ):
+            cached = await post_thumbnails.cache_post_thumb(
+                "durov", 8, "https://cdn.example/thumb.jpg"
+            )
+            assert cached is False
+
+    asyncio.run(_run())
+
+
+def test_download_failure_keeps_any_existing_thumb() -> None:
+    async def _run() -> None:
+        with patch("app.services.post_thumbnails.fetch_with_retry", _mock_fetch()):
+            await post_thumbnails.cache_post_thumb(
+                "durov", 9, "https://cdn.example/a.jpg"
+            )
+        failing: Any = AsyncMock(side_effect=ConnectionError("boom"))
+        with patch("app.services.post_thumbnails.fetch_with_retry", failing):
+            cached = await post_thumbnails.cache_post_thumb(
+                "durov", 9, "https://cdn.example/b.jpg", force=True
+            )
+            assert cached is True
+
+    asyncio.run(_run())
+
+
+def test_no_temp_files_left_behind() -> None:
+    async def _run() -> None:
+        with patch("app.services.post_thumbnails.fetch_with_retry", _mock_fetch()):
+            await post_thumbnails.cache_post_thumb(
+                "durov", 10, "https://cdn.example/thumb.jpg"
+            )
+
+    asyncio.run(_run())
+    leftovers = list(post_thumbnails._thumb_dir().glob("*.tmp"))
+    assert leftovers == []
+
+
+def test_content_type_falls_back_to_the_file_extension() -> None:
+    """A missing or unreadable meta file must not mislabel a png as jpeg."""
+
+    async def _run() -> None:
+        with patch(
+            "app.services.post_thumbnails.fetch_with_retry",
+            _mock_fetch(b"png-bytes", "image/png"),
+        ):
+            await post_thumbnails.cache_post_thumb(
+                "durov", 11, "https://cdn.example/thumb.png"
+            )
+
+    asyncio.run(_run())
+    post_thumbnails._meta_path("durov", 11).unlink()
+
+    payload = post_thumbnails.read_cached_thumb("durov", 11)
+    assert payload is not None
+    assert payload[1] == "image/png"
+
+
 def test_enforce_thumb_cache_size_limit(tmp_path, monkeypatch) -> None:
     monkeypatch.setattr(post_thumbnails.settings, "POST_THUMB_DIR", str(tmp_path))
     safe = post_thumbnails._safe_key("durov", 1)
@@ -72,10 +170,7 @@ def test_enforce_thumb_cache_size_limit(tmp_path, monkeypatch) -> None:
 
 def test_delete_cached_thumb_removes_files() -> None:
     async def _run() -> None:
-        with patch(
-            "app.services.post_thumbnails.httpx.AsyncClient",
-            _mock_http_client(),
-        ):
+        with patch("app.services.post_thumbnails.fetch_with_retry", _mock_fetch()):
             await post_thumbnails.cache_post_thumb(
                 "channel",
                 99,

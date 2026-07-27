@@ -12,6 +12,7 @@ from fastapi.testclient import TestClient
 from app.core.config import settings
 from app.main import app
 from app.services.scraper import resolve_start_time_to_id
+from app.services.telegram_web import TelegramWebViewUnavailable
 
 client = TestClient(app)
 
@@ -199,7 +200,9 @@ def test_resolve_unavailable_channel_raises() -> None:
 
     async def run() -> None:
         with patch("app.services.scraper.get_channel_info", channel_info):
-            with pytest.raises(ValueError, match="not available on the web view"):
+            with pytest.raises(
+                TelegramWebViewUnavailable, match="not available on the web view"
+            ):
                 await resolve_start_time_to_id("testchannel", 3_000)
 
     asyncio.run(run())

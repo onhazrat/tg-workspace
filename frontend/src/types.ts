@@ -21,14 +21,28 @@ export interface PostPollMedia {
   [key: string]: unknown
 }
 
+/** One reaction chip. Mirrors the backend ReactionCount schema. */
+export interface PostReactionCount {
+  /** Absent for the paid-stars chip and for custom (premium) emoji. */
+  emoji?: string | null
+  customEmojiId?: string | null
+  count: number
+  isPaid?: boolean | null
+}
+
 /** Mirrors backend PostMedia schema (camelCase API). */
 export interface PostMedia {
   kinds: PostMediaKind[]
   caption?: string | null
   durationSec?: number | null
   thumbApiPath?: string | null
+  /** Telegram's display string, e.g. "16.4M". Use viewsCount to compare. */
   views?: string | null
+  viewsCount?: number | null
+  /** Flattened display string; per-chip counts live in reactionCounts. */
   reactions?: string | null
+  reactionCounts?: PostReactionCount[] | null
+  reactionsCount?: number | null
   linkPreview?: PostLinkPreview | null
   poll?: PostPollMedia | null
   groupedCount?: number | null

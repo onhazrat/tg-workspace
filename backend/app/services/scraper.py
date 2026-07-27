@@ -20,8 +20,9 @@ from app.services.network import fetch_with_retry
 from app.services.post_links_parser import extract_body_links
 from app.services.post_media_parser import finalize_post_media_paths, parse_widget_media
 from app.services.post_reply_parser import extract_reply
-from app.services.telegram_html import extract_telegram_html_text
+from app.services.telegram_html import attr_str, extract_telegram_html_text
 from app.services.telegram_web import (
+    TelegramWebViewUnavailable,
     extract_channel_name_from_href,
     is_channel_handle,
     parse_telegram_web_view_url,
@@ -54,21 +55,13 @@ def make_soup(html: str) -> BeautifulSoup:
     return BeautifulSoup(html, HTML_PARSER)
 
 
-def _attr_str(value: str | list[str] | None) -> str | None:
-    if value is None:
-        return None
-    if isinstance(value, list):
-        return value[0] if value else None
-    return value
-
-
 def _parse_posts_from_html(
     soup: BeautifulSoup, start_id: int, seen: set[int]
 ) -> tuple[list[dict[str, Any]], str | None]:
     posts: list[dict[str, Any]] = []
 
     for el in soup.select(".tgme_widget_message"):
-        data_post = _attr_str(el.get("data-post"))
+        data_post = attr_str(el.get("data-post"))
         post_id: int | None = None
         if data_post:
             parts = data_post.split("/")
@@ -77,7 +70,7 @@ def _parse_posts_from_html(
 
         if not post_id:
             date_link = el.select_one(".tgme_widget_message_date")
-            href = _attr_str(date_link.get("href") if date_link else None)
+            href = attr_str(date_link.get("href") if date_link else None)
             if href:
                 m = re.search(r"/(\d+)$", href)
                 if m:
@@ -89,14 +82,14 @@ def _parse_posts_from_html(
         text, media, thumb_source_url = parse_widget_media(el, post_id=post_id)
 
         time_el = el.select_one("time[datetime]")
-        date = _attr_str(time_el.get("datetime") if time_el else None) or ""
+        date = attr_str(time_el.get("datetime") if time_el else None) or ""
 
         forwarded_from: str | None = None
         forwarded_from_name: str | None = None
         fwd_el = el.select_one(".tgme_widget_message_forwarded_from_name")
         if fwd_el:
             forwarded_from_name = fwd_el.get_text(strip=True)
-            href = _attr_str(fwd_el.get("href"))
+            href = attr_str(fwd_el.get("href"))
             if href:
                 candidate = extract_channel_name_from_href(href)
                 # A forward from a private channel or invite link yields a
@@ -134,7 +127,7 @@ def _parse_posts_from_html(
     more = soup.select_one(".tgme_messages_more")
     next_url = None
     if more:
-        href = _attr_str(more.get("href"))
+        href = attr_str(more.get("href"))
         if href:
             next_url = resolve_telegram_href(href)
 
@@ -149,12 +142,12 @@ def _extract_channel_photo_url(soup: BeautifulSoup) -> str | None:
     ):
         photo_el = soup.select_one(selector)
         if photo_el:
-            src = _attr_str(photo_el.get("src"))
+            src = attr_str(photo_el.get("src"))
             if src:
                 return src
     og_image = soup.select_one("meta[property='og:image']")
     if og_image:
-        return _attr_str(og_image.get("content"))
+        return attr_str(og_image.get("content"))
     return None
 
 
@@ -175,7 +168,7 @@ def _extract_telegram_chat_id(soup: BeautifulSoup) -> int | None:
     widget = soup.select_one(".tgme_widget_message[data-view]")
     if not widget:
         return None
-    encoded = _attr_str(widget.get("data-view"))
+    encoded = attr_str(widget.get("data-view"))
     if not encoded:
         return None
     parsed = _decode_widget_data_view(encoded)
@@ -208,7 +201,7 @@ def _parse_channel_meta(soup: BeautifulSoup, channel_name: str) -> dict[str, Any
     latest_id = 0
     for el in soup.select(".tgme_widget_message"):
         date_link = el.select_one(".tgme_widget_message_date")
-        href = _attr_str(date_link.get("href") if date_link else None)
+        href = attr_str(date_link.get("href") if date_link else None)
         if href:
             m = re.search(r"/(\d+)$", href)
             if m:
@@ -368,7 +361,13 @@ async def scrape_channel(
     telemetry_logs: list[Any] = []
     parsed = parse_telegram_web_view_url(url)
     if not parsed:
-        raise ValueError("Invalid Telegram web-view URL format")
+        # A bare `t.me/s/<channel>` is deliberately rejected: this entrypoint
+        # needs a start id to bound its pagination. Say so, rather than leaving
+        # the caller to guess which part of their URL was wrong.
+        raise ValueError(
+            "Invalid Telegram web-view URL: expected "
+            "t.me/s/<channel>/<postId>, ?after=<postId> or ?before=<postId>"
+        )
 
     channel_name = parsed.channel_name
     start_id = parsed.start_id
@@ -457,17 +456,7 @@ async def scrape_channel(
         key=lambda p: p["id"],
     )[:max_posts]
 
-    for p in filtered:
-        p["channelName"] = channel_name
-        finalize_post_media_paths(p, channel_name)
-        if p.get("date"):
-            from datetime import datetime
-
-            try:
-                dt = datetime.fromisoformat(p["date"].replace("Z", "+00:00"))
-                p["timestamp"] = int(dt.timestamp() * 1000)
-            except ValueError:
-                p["timestamp"] = 0
+    _enrich_posts_with_timestamps(filtered, channel_name)
 
     return {
         "channelName": channel_name,
@@ -508,14 +497,19 @@ async def _fetch_post_at_url(
     tor_auto_rotate: bool = False,
     tor_rotation_threshold: int = 10,
     proxy_concurrency: tuple[int, dict[str, int]] | None = None,
+    known_latest_id: int | None = None,
 ) -> dict[str, int] | None:
     try:
+        # `known_latest_id` suppresses `scrape_channel`'s channel-page fetch.
+        # These URLs are always search mode, where `latest_id` is never used for
+        # pagination — without it every probe cost a second request.
         res = await scrape_channel(
             url,
             proxies=proxies,
             tor_auto_rotate=tor_auto_rotate,
             tor_rotation_threshold=tor_rotation_threshold,
             proxy_concurrency=proxy_concurrency,
+            known_latest_id=known_latest_id,
         )
         posts = res.get("posts") or []
         if not posts:
@@ -552,6 +546,10 @@ async def resolve_start_time_to_id(
         channel_name,
     )
 
+    # Set from `info` below, before either closure is ever called. Read at call
+    # time so each probe can skip re-deriving a latest id we already know.
+    known_latest_id: int | None = None
+
     async def fetch_post_at_or_after(post_id: int) -> dict[str, int] | None:
         if post_id > 1:
             url = telegram_web_view_channel_url(channel_name, after_id=post_id - 1)
@@ -564,6 +562,7 @@ async def resolve_start_time_to_id(
             tor_auto_rotate=tor_auto_rotate,
             tor_rotation_threshold=tor_rotation_threshold,
             proxy_concurrency=proxy_concurrency,
+            known_latest_id=known_latest_id,
         )
 
     async def fetch_post_at_or_before(post_id: int) -> dict[str, int] | None:
@@ -575,6 +574,7 @@ async def resolve_start_time_to_id(
             tor_auto_rotate=tor_auto_rotate,
             tor_rotation_threshold=tor_rotation_threshold,
             proxy_concurrency=proxy_concurrency,
+            known_latest_id=known_latest_id,
         )
 
     info = await get_channel_info(
@@ -585,13 +585,14 @@ async def resolve_start_time_to_id(
         proxy_concurrency=proxy_concurrency,
     )
     if info.get("isUnavailableOnWebView"):
-        raise ValueError("Channel is not available on the web view.")
+        raise TelegramWebViewUnavailable()
 
     latest_id = info.get("latestId")
     if not latest_id:
         raise ValueError("Could not determine latest ID for channel")
 
     high_id = int(latest_id)
+    known_latest_id = high_id
     high_time = int(datetime.now().timestamp() * 1000)
     high_post = await fetch_post_at_or_before(high_id)
     if high_post:

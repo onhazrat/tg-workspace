@@ -8,7 +8,11 @@ from pathlib import Path
 import pytest
 from bs4 import BeautifulSoup
 
-from app.services.post_media_parser import finalize_post_media_paths, parse_widget_media
+from app.services.post_media_parser import (
+    finalize_post_media_paths,
+    parse_abbreviated_count,
+    parse_widget_media,
+)
 from app.services.scraper import _parse_posts_from_html
 from tests.utils.tg_html import LIVE_FIXTURES_DIR as FIXTURES_DIR
 from tests.utils.tg_html import (
@@ -283,3 +287,127 @@ def test_corpus_invariants(fixture: Path) -> None:
             assert not el.select_one(".tgme_widget_message_views"), (
                 f"{post}: views counter dropped"
             )
+
+
+# --- Numeric engagement counters ------------------------------------------
+# `views` / `reactions` remain display strings; these are the sortable forms.
+
+
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    (
+        ("315", 315),
+        ("1.68K", 1_680),
+        ("9.74K", 9_740),
+        # 16.4 * 1_000_000 is 16399999.999... as a binary float.
+        ("16.4M", 16_400_000),
+        ("1,234", 1_234),
+        ("5B", 5_000_000_000),
+        ("", None),
+        ("not a number", None),
+        (None, None),
+    ),
+)
+def test_parse_abbreviated_count(text: str | None, expected: int | None) -> None:
+    assert parse_abbreviated_count(text) == expected
+
+
+def test_views_are_also_stored_numerically() -> None:
+    el = _widget_by_post_id(_load_fixture("Premium_root.html"), 153)
+    _text, media, _thumb = parse_widget_media(el)
+    assert media is not None
+    assert media["views"] == "16.4M"
+    assert media["viewsCount"] == 16_400_000
+
+
+def test_reaction_chips_are_split_per_emoji() -> None:
+    """The flattened string cannot say which count belongs to which emoji."""
+    el = _widget_by_post_id(_load_fixture("durov_20.html"), 6)
+    _text, media, _thumb = parse_widget_media(el)
+    assert media is not None
+    chips = media["reactionCounts"]
+    # The leading count is an emoji-less paid-stars chip, not 👍's.
+    assert chips[0] == {"count": 1_680, "isPaid": True}
+    assert {"emoji": "👍", "count": 25_100} in chips
+    assert {"emoji": "👎", "count": 383} in chips
+    assert media["reactionsCount"] == sum(chip["count"] for chip in chips)
+
+
+def test_custom_emoji_reactions_keep_their_id() -> None:
+    """Premium emoji have no character in the markup, only an id."""
+    el = _widget_by_post_id(_load_fixture("durov_512.html"), 512)
+    _text, media, _thumb = parse_widget_media(el)
+    assert media is not None
+    custom = [c for c in media["reactionCounts"] if "customEmojiId" in c]
+    assert custom
+    assert all("emoji" not in chip for chip in custom)
+    assert {"customEmojiId": "5465587407350942612", "count": 48_900} in custom
+
+
+def test_posts_without_reactions_have_no_reaction_fields() -> None:
+    el = _widget_by_post_id(_load_fixture("ReutersWorldChannel_151505.html"), 151505)
+    _text, media, _thumb = parse_widget_media(el)
+    assert media is not None
+    assert "reactionCounts" not in media
+    assert "reactionsCount" not in media
+
+
+# --- Selector contract for kinds absent from the fixture corpus ------------
+# SYNTHETIC markup. The live corpus has no voice/document/poll/audio/roundvideo
+# post — `tests/fixtures/live/README.md` records that Telegram's web view does
+# not render them, so no capture can cover these. These cases pin the selector
+# strings so a future refactor cannot silently drop a kind; they are NOT
+# evidence that the markup matches today's Telegram.
+
+
+@pytest.mark.parametrize(
+    ("inner_html", "expected_kind", "expected_text"),
+    (
+        ('<div class="tgme_widget_message_voice"></div>', "voice", "[voice]"),
+        ('<div class="tgme_widget_message_document"></div>', "document", "[document]"),
+        ('<div class="tgme_widget_message_audio"></div>', "audio", "[audio]"),
+        (
+            '<div class="tgme_widget_message_audio_player"></div>',
+            "audio",
+            "[audio]",
+        ),
+        (
+            '<div class="tgme_widget_message_sticker_wrap"></div>',
+            "sticker",
+            "[sticker]",
+        ),
+        ('<i class="tgme_widget_message_sticker"></i>', "sticker", "[sticker]"),
+    ),
+)
+def test_media_kind_selectors(
+    inner_html: str, expected_kind: str, expected_text: str
+) -> None:
+    text, media, _thumb = parse_widget_media(message_widget(inner_html))
+    assert media is not None
+    assert media["kinds"] == [expected_kind]
+    assert text == expected_text
+
+
+@pytest.mark.parametrize(
+    "inner_html",
+    (
+        '<div class="tgme_widget_message_roundvideo"></div>',
+        '<div class="tgme_widget_message_roundvideo_player"></div>',
+    ),
+)
+def test_video_notes_count_as_video(inner_html: str) -> None:
+    """A round video *is* a video; it does not warrant its own kind."""
+    text, media, _thumb = parse_widget_media(message_widget(inner_html))
+    assert media is not None
+    assert media["kinds"] == ["video"]
+    assert text == "[video]"
+
+
+def test_poll_question_becomes_the_text() -> None:
+    el = message_widget(
+        '<div class="tgme_widget_message_poll_question">Which one?</div>'
+    )
+    text, media, _thumb = parse_widget_media(el)
+    assert media is not None
+    assert media["kinds"] == ["poll"]
+    assert text == "Which one?"

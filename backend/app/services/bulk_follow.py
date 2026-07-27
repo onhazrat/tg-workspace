@@ -28,7 +28,10 @@ from app.services.network_settings import (
     resolve_proxy_concurrency,
 )
 from app.services.scraper import get_channel_info
-from app.services.telegram_web import telegram_web_view_channel_url
+from app.services.telegram_web import (
+    TelegramWebViewUnavailable,
+    telegram_web_view_channel_url,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -280,7 +283,7 @@ async def _process_one_channel(
         telemetry = info.get("telemetry")
     except Exception as exc:  # noqa: BLE001
         msg = str(exc)
-        if "not available on the web view" in msg.lower():
+        if isinstance(exc, TelegramWebViewUnavailable):
             is_unavailable = True
         else:
             result.status = "error"

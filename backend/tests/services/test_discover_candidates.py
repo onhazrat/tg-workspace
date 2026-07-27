@@ -29,6 +29,7 @@ def _post(
     forwarded_from: str | None = None,
     forwarded_from_name: str | None = None,
     links: list[dict[str, Any]] | None = None,
+    reply_to: dict[str, Any] | None = None,
 ) -> Post:
     return Post(
         channel_name=channel_name,
@@ -38,6 +39,7 @@ def _post(
         forwarded_from=forwarded_from,
         forwarded_from_name=forwarded_from_name,
         links=links,
+        reply_to=reply_to,
     )
 
 
@@ -330,3 +332,52 @@ def test_reserved_paths_are_not_candidates() -> None:
 def test_invite_links_are_excluded() -> None:
     result = _run([_post(1, "carrier", 1000, text="https://t.me/joinchat/XYZabc123")])
     assert result["candidates"] == []
+
+
+# --- replies as a discovery signal ----------------------------------------
+
+
+def test_cross_channel_reply_counts_as_a_link() -> None:
+    """Replying into another channel is a t.me reference like any other."""
+    post = _post(
+        1,
+        "carrier",
+        1_000,
+        text="no links in the body",
+        reply_to={"channel": "otherchannel", "url": "https://t.me/otherchannel/5"},
+    )
+    refs = post_references(post)
+    assert refs == {"otherchannel": {"link"}}
+
+
+def test_same_channel_reply_is_not_a_candidate() -> None:
+    """The common case: a thread inside one channel discovers nothing."""
+    post = _post(
+        1,
+        "carrier",
+        1_000,
+        reply_to={"channel": "carrier", "url": "https://t.me/carrier/5"},
+    )
+    assert post_references(post) == {}
+
+
+def test_reply_without_a_resolvable_channel_is_ignored() -> None:
+    """Private (`/c/…`) parents store no channel, and must not invent one."""
+    post = _post(1, "carrier", 1_000, reply_to={"url": "https://t.me/c/123/5"})
+    assert post_references(post) == {}
+
+
+def test_reply_channel_reaches_the_aggregated_candidates() -> None:
+    result = _run(
+        [
+            _post(
+                1,
+                "carrier",
+                1_000,
+                text="body",
+                reply_to={"channel": "replytarget"},
+            )
+        ]
+    )
+    names = {c["name"].lower() for c in result["candidates"]}
+    assert "replytarget" in names

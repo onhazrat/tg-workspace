@@ -73,7 +73,10 @@ from app.services.sync_schedule import (
     compute_next_dynamic_sync_at_from_last_updated,
     compute_next_regular_sync_at_from_last_updated,
 )
-from app.services.telegram_web import telegram_web_view_channel_url
+from app.services.telegram_web import (
+    TelegramWebViewUnavailable,
+    telegram_web_view_channel_url,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -222,10 +225,8 @@ async def _scrape_page_with_retry(
                 isinstance(exc, httpx.HTTPStatusError)
                 and exc.response.status_code == 429
             )
-            is_network = isinstance(
-                exc, (httpx.HTTPError, ConnectionError, OSError)
-            ) or ("not available on the web view" in str(exc))
-            is_unavailable = "not available on the web view" in str(exc)
+            is_network = isinstance(exc, (httpx.HTTPError, ConnectionError, OSError))
+            is_unavailable = isinstance(exc, TelegramWebViewUnavailable)
 
             if is_unavailable:
                 raise SyncScrapeError(
@@ -353,6 +354,11 @@ async def _cache_scraped_post_thumbs(
     channel_name: str,
     posts: list[dict[str, Any]],
     media_settings: dict[str, Any],
+    *,
+    proxies: list[str] | None = None,
+    proxy_concurrency: tuple[int, dict[str, int]] | None = None,
+    tor_auto_rotate: bool = False,
+    tor_rotation_threshold: int | None = None,
 ) -> None:
     if not media_settings.get("thumbCacheEnabled", True):
         return
@@ -364,7 +370,18 @@ async def _cache_scraped_post_thumbs(
         thumb_url = post.get("_thumbSourceUrl")
         post_id = post.get("id")
         if thumb_url and isinstance(post_id, int):
-            tasks.append(cache_post_thumb(channel_name, post_id, thumb_url))
+            # Same proxy lane as the page fetch that produced this URL.
+            tasks.append(
+                cache_post_thumb(
+                    channel_name,
+                    post_id,
+                    thumb_url,
+                    proxies=proxies,
+                    proxy_concurrency=proxy_concurrency,
+                    tor_auto_rotate=tor_auto_rotate,
+                    tor_rotation_threshold=tor_rotation_threshold,
+                )
+            )
     if tasks:
         await asyncio.gather(*tasks, return_exceptions=True)
 
@@ -1013,6 +1030,10 @@ async def sync_single_channel(
                     ctx.channel_name,
                     response.get("posts") or [],
                     ctx.media_settings,
+                    proxies=ctx.proxies,
+                    proxy_concurrency=ctx.proxy_concurrency,
+                    tor_auto_rotate=ctx.tor_auto_rotate,
+                    tor_rotation_threshold=ctx.tor_rotation_threshold,
                 )
 
                 if response.get("fullRequest"):

@@ -16,20 +16,12 @@ from urllib.parse import urlparse
 
 from bs4 import Tag
 
-from app.services.telegram_html import message_body_element
+from app.services.telegram_html import attr_str, message_body_element
 from app.services.telegram_web import (
     is_channel_handle,
     is_telegram_web_url,
     resolve_telegram_href,
 )
-
-
-def _attr_str(value: str | list[str] | None) -> str | None:
-    if value is None:
-        return None
-    if isinstance(value, list):
-        return value[0] if value else None
-    return value
 
 
 def channel_from_telegram_url(url: str) -> str | None:
@@ -61,7 +53,7 @@ def extract_body_links(el: Tag) -> list[dict[str, Any]]:
     seen: set[str] = set()
 
     for anchor in text_el.find_all("a", href=True):
-        href = _attr_str(anchor.get("href"))
+        href = attr_str(anchor.get("href"))
         if not href:
             continue
         url = resolve_telegram_href(href)

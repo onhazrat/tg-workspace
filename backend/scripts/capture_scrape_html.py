@@ -29,6 +29,7 @@ load_dotenv(_REPO_ROOT / ".env")
 
 from app.core.config import settings
 from app.services.network import fetch_with_retry
+from app.services.telegram_html import attr_str
 from app.services.telegram_web import (
     telegram_web_view_channel_url,
     telegram_web_view_post_url,
@@ -68,19 +69,11 @@ def _post_url(channel: str, post_id: str | int) -> str:
     return telegram_web_view_post_url(_normalize_channel(channel), int(post_id))
 
 
-def _attr_str(value: str | list[str] | None) -> str | None:
-    if value is None:
-        return None
-    if isinstance(value, list):
-        return value[0] if value else None
-    return value
-
-
 def _extract_post_ids(html: str) -> list[int]:
     soup = BeautifulSoup(html, "html.parser")
     ids: set[int] = set()
     for el in soup.select(".tgme_widget_message"):
-        data_post = _attr_str(el.get("data-post"))
+        data_post = attr_str(el.get("data-post"))
         post_id: int | None = None
         if data_post:
             tail = data_post.rsplit("/", 1)[-1]
@@ -88,7 +81,7 @@ def _extract_post_ids(html: str) -> list[int]:
                 post_id = int(tail)
         if post_id is None:
             date_link = el.select_one(".tgme_widget_message_date")
-            href = _attr_str(date_link.get("href") if date_link else None)
+            href = attr_str(date_link.get("href") if date_link else None)
             if href:
                 match = re.search(r"/(\d+)$", href)
                 if match:
@@ -101,7 +94,7 @@ def _extract_post_ids(html: str) -> list[int]:
 def _classify_message(el: Any) -> dict[str, Any]:
     kinds = [kind for kind, sel in _MEDIA_SELECTORS.items() if el.select_one(sel)]
     has_caption = bool(el.select_one(".tgme_widget_message_text"))
-    data_post = _attr_str(el.get("data-post")) or ""
+    data_post = attr_str(el.get("data-post")) or ""
     channel, _, post_id_str = data_post.partition("/")
     post_id = int(post_id_str) if post_id_str.isdigit() else None
     return {

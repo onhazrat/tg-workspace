@@ -3,24 +3,21 @@
 from __future__ import annotations
 
 import re
+from copy import copy
 from typing import Any
 
 from bs4 import Tag
 
 from app.schemas.post_media import PostMedia
 from app.services.post_thumbnails import post_thumb_api_path
-from app.services.telegram_html import extract_telegram_html_text, message_body_element
+from app.services.telegram_html import (
+    attr_str,
+    extract_telegram_html_text,
+    message_body_element,
+)
 
 _BACKGROUND_IMAGE_RE = re.compile(r"background-image:\s*url\(['\"]?([^'\"()]+)['\"]?\)")
 _LEGACY_MEDIA_PLACEHOLDER = "[Media/No Text Content]"
-
-
-def _attr_str(value: str | list[str] | None) -> str | None:
-    if value is None:
-        return None
-    if isinstance(value, list):
-        return value[0] if value else None
-    return value
 
 
 def _extract_background_url(style: str | None) -> str | None:
@@ -93,7 +90,7 @@ def _extract_thumb_source_url(el: Tag) -> str | None:
         node = el.select_one(selector)
         if not node:
             continue
-        url = _extract_background_url(_attr_str(node.get("style")))
+        url = _extract_background_url(attr_str(node.get("style")))
         if url and url.startswith("http"):
             return url
     return None
@@ -158,6 +155,31 @@ def _extract_link_preview(el: Tag) -> dict[str, str] | None:
     return data or None
 
 
+_COUNT_MULTIPLIERS = {"k": 1_000, "m": 1_000_000, "b": 1_000_000_000}
+_COUNT_RE = re.compile(r"^([\d.,]+)\s*([kmb])?$", re.IGNORECASE)
+
+
+def parse_abbreviated_count(text: str | None) -> int | None:
+    """Turn Telegram's abbreviated counter text into an integer.
+
+    Telegram renders view and reaction counts as `"315"`, `"9.74K"`, `"16.4M"`.
+    Returns None for anything unrecognised rather than guessing.
+    """
+    if not text:
+        return None
+    match = _COUNT_RE.match(text.strip().replace(" ", "").replace(" ", ""))
+    if not match:
+        return None
+    digits, suffix = match.group(1), match.group(2)
+    try:
+        value = float(digits.replace(",", ""))
+    except ValueError:
+        return None
+    # round, not int: 16.4 * 1_000_000 is 16399999.999... in binary float, and
+    # truncating turns "16.4M" into 16,399,999.
+    return round(value * _COUNT_MULTIPLIERS.get((suffix or "").lower(), 1))
+
+
 def _extract_views(el: Tag) -> str | None:
     views_el = el.select_one(".tgme_widget_message_views")
     if not views_el:
@@ -174,13 +196,57 @@ def _extract_reactions(el: Tag) -> str | None:
     return reactions if reactions else None
 
 
-def synthesize_media_only_text(
-    kinds: list[str], *, grouped_count: int | None = None
-) -> str:
+def _extract_reaction_counts(el: Tag) -> list[dict[str, Any]] | None:
+    """Per-chip reaction counts.
+
+    The flattened `reactions` string is ambiguous: the leading number belongs to
+    an emoji-less paid-stars chip, so which count goes with which emoji cannot be
+    recovered from it. Read the chips directly instead.
+    """
+    reactions_el = el.select_one(".tgme_widget_message_reactions")
+    if not reactions_el:
+        return None
+
+    out: list[dict[str, Any]] = []
+    for chip in reactions_el.select(".tgme_reaction"):
+        emoji_el = chip.select_one("i.emoji b")
+        custom_emoji_el = chip.select_one("tg-emoji[emoji-id]")
+
+        # Strip the glyph markup so what remains is only the count.
+        stripped = copy(chip)
+        for node in stripped.select("i.emoji, i.icon, tg-emoji"):
+            node.decompose()
+        count = parse_abbreviated_count(stripped.get_text(strip=True))
+        if count is None:
+            continue
+
+        entry: dict[str, Any] = {"count": count}
+        emoji = emoji_el.get_text(strip=True) if emoji_el else None
+        if emoji:
+            entry["emoji"] = emoji
+        elif custom_emoji_el is not None:
+            # A custom (premium) emoji has no character in the markup at all,
+            # only its id — without this the chip would be unidentifiable.
+            custom_id = attr_str(custom_emoji_el.get("emoji-id"))
+            if custom_id:
+                entry["customEmojiId"] = custom_id
+        raw_classes = chip.get("class")
+        classes = raw_classes if isinstance(raw_classes, list) else [raw_classes or ""]
+        if "tgme_reaction_paid" in classes:
+            entry["isPaid"] = True
+        out.append(entry)
+    return out or None
+
+
+def synthesize_media_only_text(kinds: list[str]) -> str:
+    """Stand-in text for a media post with no caption.
+
+    `grouped_count` used to be a parameter with a `> 1` fallback at the end, but
+    a non-None count implies a grouped wrap, which implies `"grouped" in kinds`
+    and returns on the first branch — it was unreachable.
+    """
     if "grouped" in kinds:
         return "[photo album]"
-    if kinds == ["video"]:
-        return "[video]"
     if "video" in kinds and "photo" not in kinds:
         return "[video]"
     if "photo" in kinds:
@@ -197,17 +263,21 @@ def synthesize_media_only_text(
         return "[sticker]"
     if "link_preview" in kinds:
         return "[link]"
-    if grouped_count and grouped_count > 1:
-        return "[photo album]"
     return "[media]"
 
 
-def _no_media_text(el: Tag) -> str:
-    """Fallback text for a widget with no detected media kinds and no caption."""
+def _extract_poll_question(el: Tag) -> str | None:
+    """The poll question, which stands in for a caption on poll posts.
+
+    This used to be read only on the no-kinds path, which a poll can never take
+    — `.tgme_widget_message_poll_question` is exactly what makes `poll` a
+    detected kind — so the question was always discarded and the post stored as
+    `[poll]`.
+    """
     poll_el = el.select_one(".tgme_widget_message_poll_question")
-    if poll_el:
-        return extract_telegram_html_text(poll_el) or _LEGACY_MEDIA_PLACEHOLDER
-    return _LEGACY_MEDIA_PLACEHOLDER
+    if poll_el is None:
+        return None
+    return extract_telegram_html_text(poll_el) or None
 
 
 def parse_widget_media(
@@ -218,13 +288,19 @@ def parse_widget_media(
 ) -> tuple[str, dict[str, Any] | None, str | None]:
     """Return synthesized text, media dict (camelCase keys), and thumb source URL."""
     kinds = _detect_kinds(el)
-    caption = _extract_caption(el)
+    # A poll question is real text content, so it stands in for a missing
+    # caption rather than being replaced by a "[poll]" placeholder.
+    caption = _extract_caption(el) or _extract_poll_question(el)
     views = _extract_views(el)
     reactions = _extract_reactions(el)
+    reaction_counts = _extract_reaction_counts(el)
+    reactions_count = (
+        sum(item["count"] for item in reaction_counts) if reaction_counts else None
+    )
     thumb_source_url = _extract_thumb_source_url(el) if kinds else None
 
     if not kinds:
-        text = caption or _no_media_text(el)
+        text = caption or _LEGACY_MEDIA_PLACEHOLDER
         if not (views or reactions):
             return text, None, None
         # Engagement counters exist on plain-text posts too, and were previously
@@ -235,7 +311,10 @@ def parse_widget_media(
                 "kinds": [],
                 "caption": caption,
                 "views": views,
+                "viewsCount": parse_abbreviated_count(views),
                 "reactions": reactions,
+                "reactionCounts": reaction_counts,
+                "reactionsCount": reactions_count,
                 "isMediaOnly": False,
             }
         )
@@ -246,11 +325,7 @@ def parse_widget_media(
     link_preview = _extract_link_preview(el)
 
     is_media_only = not caption
-    text = (
-        caption
-        if caption
-        else synthesize_media_only_text(kinds, grouped_count=grouped_count)
-    )
+    text = caption if caption else synthesize_media_only_text(kinds)
 
     media = PostMedia.model_validate(
         {
@@ -258,7 +333,10 @@ def parse_widget_media(
             "caption": caption,
             "durationSec": duration_sec,
             "views": views,
+            "viewsCount": parse_abbreviated_count(views),
             "reactions": reactions,
+            "reactionCounts": reaction_counts,
+            "reactionsCount": reactions_count,
             "linkPreview": link_preview,
             "groupedCount": grouped_count,
             "isMediaOnly": is_media_only,
