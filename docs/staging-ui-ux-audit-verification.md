@@ -801,6 +801,82 @@ repeatedly earlier in the session.
 That degradation is unexplained and worth its own investigation before the next
 e2e-dependent change is trusted.
 
+## 2n. E5, C9, E4-touch — shipped and decided 2026-07-27
+
+### E5 — the tour popover is theme-aware
+
+`useGuidedTour` imports `driver.js/dist/driver.css`, which ships a fixed light
+palette, so the tour rendered a white card with black text on top of the dark app.
+
+Overrides added to `index.css`, driven by the **same** custom properties as the
+rest of the app (`--card-bg`, `--ink`, `--line-color`) rather than a hard-coded
+second dark theme — so the tour follows whichever palette is active, including the
+third one defined further up, and cannot drift from the app.
+
+Verified in a real browser on the local dev server, in both directions:
+
+| Theme | `--card-bg` | popover background | text | arrow |
+|---|---|---|---|---|
+| dark | `#1a1a1a` | `rgb(26,26,26)` | `rgb(228,227,224)` | `rgb(26,26,26)` |
+| light | `#ffffff` | `rgb(255,255,255)` | `rgb(20,20,20)` | `rgb(255,255,255)` |
+
+The arrow matters on its own: it is a CSS triangle coloured through
+`border-*-color`, so each of the four sides needs the popover background or a
+white spike is left pointing at the highlighted element.
+
+**Not fixed:** the audit's positioning complaints. Steps already declare explicit
+`side`/`align`, and C4's tag-wall collapse (489px → 92px) removed most of what
+step 1's popover was overlapping. Re-measuring that needs a tour run on a deployed
+build, which was not done.
+
+### C9 — closed as working-as-intended, and the dark default already holds
+
+Decision: keep all three theme controls. `CommonlyUsedSection` is explicitly "a
+curated set of frequently adjusted settings", so duplicating a setting there is its
+purpose, not a defect. The tooltip fix from an earlier batch stands.
+
+The related request — that first-time visitors get dark — is **already true**, and
+was verified rather than assumed. `main.tsx` passes `defaultTheme="dark"`, theme is
+deliberately absent from the settings schema (so nothing competes with it), and
+`theme-provider` writes to `localStorage` **only** on an explicit `setTheme`, never
+on mount. Confirmed live: with no stored preference the provider resolves to
+`dark` and `<html>` carries `class="dark"`.
+
+One caveat: `SettingsContext` migrates a legacy `"theme"` localStorage key. That
+affects returning users who still have it, not first-time visitors.
+
+### E4 touch fallback — closed, not deferred
+
+Decision: the app is desktop-only, so the seven hover-revealed controls stay as
+they are. The keyboard half was fixed in §2e; no `@media (hover: none)` handling
+will be added. Recorded here so it is not re-raised as an open finding.
+
+### Still unverified, by decision
+
+Mobile/responsive, the light theme beyond the checks above, and the six
+never-reviewed Settings sections (Tor, Destinations, Quick Message, Retention,
+Transfer, Query). `resize_window` reports success while `window.innerWidth` never
+changes, so no narrow viewport was reachable. Nothing in these areas is *known* to
+be broken; they are simply unexamined.
+
+### A flaky test, partially diagnosed
+
+`tg-ui-primitives.spec.ts:63` (`primary and ghost buttons expose hover/focus
+classes`) fails intermittently — in isolation it passes, in the file it fails
+maybe half the time, at 0, 6, 148 and 154 channels alike. So the warm-database
+rule in §2m does **not** explain this one.
+
+What is established: the locator is `getByRole("button", { name: /Sync All/i })`,
+and that button's label is `<span className="hidden sm:inline">Sync All</span>` —
+it has no accessible name until the toolbar renders, which waits on the channels
+query. `setTheme` calls `page.reload()`, discarding that data, and the assertion
+that follows allows only 5s.
+
+An attempted fix — waiting for `[data-channel-name]` inside `setTheme` — **did not
+work** and was reverted: two of three runs still failed, and the 15s wait simply
+timed out, doubling the run. So the card is genuinely absent after that reload, for
+a reason not yet identified. Left open rather than papered over.
+
 ## 3. Fix plan
 
 Batches are independently shippable and ordered by risk retired per unit of work.

@@ -193,3 +193,82 @@ body {
 .tg-wcag-floor .text-app-ink\/50 {
   color: color-mix(in srgb, var(--ink) 65%, transparent);
 }
+
+/* ---------------------------------------------------------------------------
+ * Guided tour (driver.js)
+ *
+ * `driver.js/dist/driver.css` ships a fixed light palette, so the tour rendered
+ * a white card with black text on top of the dark app — the popover looked like
+ * it belonged to a different product (audit E5).
+ *
+ * Everything below is driven by the same custom properties as the rest of the
+ * app (`--card-bg`, `--ink`, `--line-color`), so the tour follows whichever
+ * theme is active — including the third palette defined further up — instead of
+ * hard-coding a second dark theme that would drift from the first.
+ * ------------------------------------------------------------------------- */
+
+.driver-popover {
+  background-color: var(--card-bg);
+  color: var(--ink);
+  border: 1px solid var(--line-color);
+  border-radius: 0.75rem;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
+}
+
+.driver-popover-title,
+.driver-popover-description {
+  color: var(--ink);
+}
+
+.driver-popover-description {
+  color: color-mix(in srgb, var(--ink) 75%, transparent);
+}
+
+.driver-popover-progress-text {
+  color: color-mix(in srgb, var(--ink) 55%, transparent);
+}
+
+.driver-popover-close-btn {
+  color: color-mix(in srgb, var(--ink) 55%, transparent);
+}
+
+.driver-popover-close-btn:hover,
+.driver-popover-close-btn:focus-visible {
+  color: var(--ink);
+}
+
+.driver-popover-navigation-btns button {
+  background-color: color-mix(in srgb, var(--ink) 8%, transparent);
+  color: var(--ink);
+  border: 1px solid var(--line-color);
+  text-shadow: none;
+  border-radius: 0.5rem;
+}
+
+.driver-popover-navigation-btns button:hover {
+  background-color: color-mix(in srgb, var(--ink) 16%, transparent);
+}
+
+.driver-popover-navigation-btns button:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+}
+
+/* The arrow is a CSS triangle coloured with border-*-color, so each side needs
+   the popover's background on the edge that faces the card. Missing any one of
+   these leaves a white spike pointing at the highlighted element. */
+.driver-popover-arrow-side-top {
+  border-top-color: var(--card-bg);
+}
+
+.driver-popover-arrow-side-bottom {
+  border-bottom-color: var(--card-bg);
+}
+
+.driver-popover-arrow-side-left {
+  border-left-color: var(--card-bg);
+}
+
+.driver-popover-arrow-side-right {
+  border-right-color: var(--card-bg);
+}
