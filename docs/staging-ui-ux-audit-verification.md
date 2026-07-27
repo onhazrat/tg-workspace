@@ -484,6 +484,128 @@ Two e2e mocks needed updating rather than working around: one gated on
 `method() !== "GET"`, the other read `media` from `searchParams`. Both now match
 on the path and read the request body.
 
+## 2g. Batch 0 — browser pass on staging (2026-07-27)
+
+Run at 1200×853 against `dashboard.staging.tgs.onhazrat.ir`, on the build containing
+PRs #23–#28. Five findings settled, two audit claims corrected, one finding upgraded.
+
+| ID | Result |
+|---|---|
+| C4 | **CONFIRMED, and worse than filed.** 85 tag chips form a **489px** wall; the first channel card sits at **y=1040 in an 853px viewport** — *no channel is visible above the fold at all*. It scales with account size: 357px at 43 active channels earlier in the day, 489px at 59. The audit's "~300px" was measured on a smaller account. |
+| C5 | **CONFIRMED, with numbers.** `PostCard.tsx:87` — `w-full max-h-80 … object-contain`. The `<img>` box is forced to full card width with a fixed 320px height cap; `object-contain` then letterboxes the picture inside it and the remainder paints `bg-app-muted`. Measured over 10 loaded images in a 1413px box: 800×427 → 600px drawn (**58%** wasted); 640×800 → 256px (**82%**); 180×320 → 180px (**87%**). Waste scales with how portrait the image is. |
+| A2 | **CONFIRMED.** Switching to Diagnostics renders the previous panel's content as barely-legible ghost text with no skeleton and no spinner. |
+| E3 | **CONFIRMED conclusively.** Both Summary chips are native `<select>` with `appearance: none`, `background-image: none`, `padding-right: 0px` — the OS arrow is stripped and nothing replaces it, so there is provably zero dropdown affordance. |
+| E5 | **CONFIRMED**, with one sub-claim corrected — see below. |
+| E6 | **CONFIRMED**, with the audit's open question resolved — see below. |
+| E1 | **Upgraded PARTIAL → CONFIRMED at runtime**, see below. |
+
+Verified working live: **D2** (`v1.0.0` from `package.json`), **A3** (the model chip reads
+`Gemini 3 Flash` as selected rather than blank).
+
+### E6 — the header ⌘ button is not broken
+
+The audit flagged "clicking the header ⌘ button did not open it in my session… **verify
+this**, it may have been a double-toggle in my interaction rather than a bug." It was.
+The button opens the palette reliably. That half of E6 is closed as not-a-defect.
+
+The two visual claims stand: the palette sits at **27% down the viewport** (top 214px of
+797, 370px tall) — mid-page, not near the top — and its items are `Geist Variable` 14px
+with `text-transform: none` and normal tracking, against chrome like `Posts in Scope` /
+`Last Sync` at `ui-monospace` 11px uppercase with 1.1px tracking.
+
+### E5 — three of four claims hold; the anchor claim does not
+
+Confirmed in a single frame: the popover renders a **white card with black text inside the
+dark app**, reads **"1 of 10"**, and **force-navigated from `?tab=summary` to
+`?tab=channels`**.
+
+**Corrected:** the audit says step 1 "anchors its arrow to the tag-filter area, not the
+input it describes." Measured, the popover is at x=87 against the input's x=82 — aligned
+within 5px — and sits 50px below it. It *is* anchored to the input. What is true is that
+the 50px gap lands the card on top of the tag-chip wall, which is what makes the anchor
+look wrong. The fix is the overlap, not the anchor.
+
+### E1 — confirmed at runtime, and stronger than a source reading
+
+Asked to locate the header's command-palette button, the accessibility-tree query returned:
+*"several unnamed buttons (ref_7, ref_8, ref_9, ref_10)… their purposes are not
+specified."* A later query for the help button returned `ref_7` — *"(no name provided)"* —
+which is actually the palette button.
+
+So an automated consumer of the a11y tree cannot tell these four controls apart, and
+guesses wrong. That is exactly what a screen-reader user gets. Tooltips do not help,
+because a tooltip is not an accessible name.
+
+### Still not covered
+
+**Mobile/responsive** could not be tested: `resize_window` reports success but
+`window.innerWidth` never changes, so no narrow viewport could be reached from here.
+Also outstanding: the light theme, and the six never-reviewed Settings sections (Tor,
+Destinations, Quick Message, Retention, Transfer, Query). **E4**'s touch behaviour is
+likewise unverifiable without a coarse pointer — see the open question in §2e.
+
+### Two measurement traps worth recording
+
+*Screenshot pixels are not CSS pixels.* At `innerWidth: 1680` the screenshots came back
+1409px wide (scale 1.192). A click using coordinates read off one of those screenshots
+landed in the wrong place and silently did nothing. Driving by element `ref` — or
+confirming `innerWidth` equals the screenshot width — avoids it.
+
+*A contrast probe reported ratios of 3.6 billion to 1.* The Summary tab looked washed out
+in screenshots, so it was checked for a contrast defect. Body text measured **14.94:1** —
+perfectly fine — and the absurd figures came from the probe's own luminance function
+choking on `oklab()` and `color(srgb …)` values. The dimness was a JPEG artifact. No
+finding was filed.
+
+## 2h. C4 + C5 — shipped 2026-07-27
+
+Both were confirmed by measurement in §2g, and both had a single-cause fix.
+
+### C5 — the media box was the problem, not the image
+
+`PostCard.tsx:87` was `w-full max-h-80 … object-contain`. `w-full` forces the
+`<img>` box to the full card width, `max-h-80` caps its height, and
+`object-contain` then fits the picture inside that box preserving aspect ratio —
+so everything left over painted `bg-app-muted`.
+
+Now `max-w-full max-h-80 mx-auto`, with `object-contain` dropped as unnecessary:
+the box takes the picture's own aspect, so there is no leftover to paint. Drawn
+size is unchanged; the dead band is gone.
+
+### C4 — the tag wall is collapsed to ~3 rows
+
+`ChannelTagChips` now clips to `COLLAPSED_TAG_WALL_MAX_PX` (92px) with a
+`Show all 85 tags` / `Show fewer` toggle.
+
+The cap is a **height**, not a chip count: chip width follows the tag name, so
+"first N chips" does not bound the height, and the height is the defect. Whether
+the toggle appears is **measured** (`scrollHeight` vs `clientHeight`, with a 1px
+tolerance for sub-pixel layout) rather than guessed from the count — and only
+while collapsed, since expanding makes the two equal and would hide the control
+that collapses it again.
+
+**Known limitation:** a selected tag can sit in the hidden overflow, where its
+selected state is not visible. Sorting active chips into the first rows would fix
+it but reorders the list under the user; left as a follow-up rather than decided
+here.
+
+### Regression coverage
+
+`css-invariants.test.ts` gains a **media-sizing sweep** — any `className`
+combining `w-full`, `object-contain` and a `max-h-*` fails it. Verified by
+reintroducing the defect: it fails and names `PostCard.tsx` with the exact class
+list. It deliberately does not flag `object-cover` (fills the box, never a dead
+band), `max-h-80 object-contain` (no forced width), or `w-full object-contain`
+(no height cap) — none of which orphan space.
+
+`tag-chip-collapse.test.ts` (6) pins the cap against the measurements that
+motivated it: under 150px, above 50px, under a fifth of the 853px viewport, and
+under a third of the 489px wall it replaces. Plus the sub-pixel tolerance and the
+`1 tag` singular.
+
+Verified: biome clean, `tsc --noEmit` clean, **600 unit tests** (was 591),
+**62/62 e2e**.
+
 ## 3. Fix plan
 
 Batches are independently shippable and ordered by risk retired per unit of work.

@@ -101,6 +101,72 @@ describe("CSS invariants", () => {
 })
 
 /**
+ * Source-level guard for the letterbox trap on media.
+ *
+ * `w-full` forces an `<img>` box to the container width; a fixed `max-h-*` caps
+ * its height; `object-contain` then fits the picture inside that box preserving
+ * aspect ratio. Whatever is left over is the element's own background.
+ *
+ * On the post feed that leftover was enormous, because the box was a full card
+ * wide and the photos are not: measured on staging, an 800x427 photo drew 600px
+ * inside a 1413px box (813px of dead band, 58% of the row) and a 180x320 one
+ * drew 180px (1233px, 87%). The remedy is to let the box take the picture's own
+ * aspect — `max-w-full` with `max-h-*` — so there is no leftover at all.
+ */
+
+const FULL_WIDTH = /(?:^|\s)w-full(?:\s|$)/
+const CONTAIN = /(?:^|\s)object-contain(?:\s|$)/
+const CAPPED_HEIGHT = /(?:^|\s)max-h-\S+/
+
+function letterboxesMedia(classes: string): boolean {
+  return (
+    FULL_WIDTH.test(classes) &&
+    CONTAIN.test(classes) &&
+    CAPPED_HEIGHT.test(classes)
+  )
+}
+
+describe("media sizing invariants", () => {
+  it("detects the combination it is meant to catch", () => {
+    // Verbatim, the class list that shipped the C5 defect.
+    expect(
+      letterboxesMedia(
+        "w-full max-h-80 rounded-lg border border-app-ink/10 object-contain bg-app-muted",
+      ),
+    ).toBe(true)
+  })
+
+  it("does not flag the shapes that are actually correct", () => {
+    // The fix: intrinsic aspect, centred, no forced width.
+    expect(
+      letterboxesMedia(
+        "max-w-full max-h-80 mx-auto rounded-lg border border-app-ink/10 bg-app-muted",
+      ),
+    ).toBe(false)
+    // `object-contain` is fine when the box is not also forced full-width.
+    expect(letterboxesMedia("max-h-80 object-contain")).toBe(false)
+    // A full-width box with no height cap fits its content; nothing is orphaned.
+    expect(letterboxesMedia("w-full object-contain")).toBe(false)
+    // `object-cover` fills the box, so there is never a dead band.
+    expect(letterboxesMedia("w-full max-h-80 object-cover")).toBe(false)
+  })
+
+  it("never letterboxes an image inside a forced full-width box", () => {
+    const offenders: string[] = []
+    for (const file of tsxFiles(SRC)) {
+      const source = readFileSync(file, "utf8")
+      for (const literal of classNameLiterals(source)) {
+        const staticClasses = literal.replace(/\$\{[^}]*\}/g, " ")
+        if (letterboxesMedia(staticClasses)) {
+          offenders.push(`${file.slice(SRC.length + 1)}: "${literal.trim()}"`)
+        }
+      }
+    }
+    expect(offenders).toEqual([])
+  })
+})
+
+/**
  * Source-level guard for hover-revealed controls that vanish under keyboard focus.
  *
  * The pattern is `opacity-0` plus `group-hover:opacity-100`: an action cluster that
