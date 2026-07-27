@@ -32,6 +32,7 @@ from app.services.scraper import (
     resolve_start_time_to_id,
     scrape_channel,
 )
+from app.services.telegram_web import TelegramWebViewUnavailable
 
 router = APIRouter(prefix="/telegram", tags=["telegram"])
 logger = logging.getLogger(__name__)
@@ -119,15 +120,14 @@ async def api_scrape(body: ScrapeRequest, _current_user: CurrentUser) -> dict[st
             tor_rotation_threshold=body.tor_rotation_threshold,
             proxy_concurrency=_resolve_proxy_concurrency(body),
         )
+    except TelegramWebViewUnavailable as exc:
+        raise HTTPException(
+            status_code=400,
+            detail={"error": str(exc), "isUnavailableOnWebView": True},
+        ) from exc
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:  # noqa: BLE001
-        msg = str(exc)
-        if "not available on the web view" in msg:
-            raise HTTPException(
-                status_code=400,
-                detail={"error": msg, "isUnavailableOnWebView": True},
-            ) from exc
         if isinstance(exc, httpx.HTTPStatusError):
             if exc.response.status_code == 429:
                 raise HTTPException(
@@ -153,13 +153,12 @@ async def api_channel_info(
             tor_rotation_threshold=body.tor_rotation_threshold,
             proxy_concurrency=_resolve_proxy_concurrency(body),
         )
+    except TelegramWebViewUnavailable as exc:
+        raise HTTPException(
+            status_code=400,
+            detail={"error": str(exc), "isUnavailableOnWebView": True},
+        ) from exc
     except Exception as exc:  # noqa: BLE001
-        msg = str(exc)
-        if "not available on the web view" in msg:
-            raise HTTPException(
-                status_code=400,
-                detail={"error": msg, "isUnavailableOnWebView": True},
-            ) from exc
         logger.exception("Failed to fetch channel info")
         raise HTTPException(
             status_code=500, detail="Failed to fetch channel info"
@@ -180,14 +179,13 @@ async def api_resolve_start_time(
             proxy_concurrency=_resolve_proxy_concurrency(body),
         )
         return {"startId": start_id}
+    except TelegramWebViewUnavailable as exc:
+        raise HTTPException(
+            status_code=400,
+            detail={"error": str(exc), "isUnavailableOnWebView": True},
+        ) from exc
     except ValueError as exc:
-        msg = str(exc)
-        if "not available on the web view" in msg:
-            raise HTTPException(
-                status_code=400,
-                detail={"error": msg, "isUnavailableOnWebView": True},
-            ) from exc
-        raise HTTPException(status_code=400, detail=msg) from exc
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:  # noqa: BLE001
         logger.exception("Failed to resolve start time")
         raise HTTPException(

@@ -22,6 +22,7 @@ from app.services.post_media_parser import finalize_post_media_paths, parse_widg
 from app.services.post_reply_parser import extract_reply
 from app.services.telegram_html import extract_telegram_html_text
 from app.services.telegram_web import (
+    TelegramWebViewUnavailable,
     extract_channel_name_from_href,
     is_channel_handle,
     parse_telegram_web_view_url,
@@ -585,7 +586,7 @@ async def resolve_start_time_to_id(
         proxy_concurrency=proxy_concurrency,
     )
     if info.get("isUnavailableOnWebView"):
-        raise ValueError("Channel is not available on the web view.")
+        raise TelegramWebViewUnavailable()
 
     latest_id = info.get("latestId")
     if not latest_id:

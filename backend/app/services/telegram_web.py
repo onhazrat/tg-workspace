@@ -4,12 +4,28 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
-from typing import Literal
 from urllib.parse import urljoin, urlparse
 
 from app.core.config import settings
 
 _LEGACY_TELEGRAM_WEB_DOMAINS = ("t.me", "telegram.me")
+
+# Kept verbatim: it is the `detail.error` string the frontend shows for a
+# soft-blocked channel. Raise `TelegramWebViewUnavailable` rather than matching
+# on it — the text is a UI contract, not a control-flow one.
+UNAVAILABLE_WEB_VIEW_MESSAGE = "Channel is not available on the web view."
+
+
+class TelegramWebViewUnavailable(ConnectionError):
+    """The channel exists but Telegram will not serve its public web view.
+
+    A `ConnectionError` subclass so existing network-error handling keeps
+    treating it as one, while `isinstance` lets callers distinguish a soft
+    block (never worth retrying, and reported as 400) from a transport failure.
+    """
+
+    def __init__(self, message: str = UNAVAILABLE_WEB_VIEW_MESSAGE) -> None:
+        super().__init__(message)
 
 
 def telegram_web_domain() -> str:
@@ -51,6 +67,10 @@ def is_telegram_web_url(url: str) -> bool:
 def resolve_telegram_href(href: str) -> str:
     if href.startswith("http"):
         return href
+    # Protocol-relative (`//telegram.org/img/x.png`) is already absolute; joining
+    # it onto the base would invent `https://t.me/telegram.org/img/x.png`.
+    if href.startswith("//"):
+        return f"https:{href}"
     return urljoin(f"{telegram_web_base_url()}/", href.lstrip("/"))
 
 
@@ -131,7 +151,6 @@ def extract_channel_name_from_href(href: str) -> str | None:
 @dataclass(frozen=True)
 class ParsedTelegramWebViewUrl:
     channel_name: str
-    mode: Literal["after", "before", "single"]
     start_id: int
     is_search_mode: bool
 
@@ -145,7 +164,6 @@ def parse_telegram_web_view_url(url: str) -> ParsedTelegramWebViewUrl | None:
         start_id = int(match_after.group(2)) + 1
         return ParsedTelegramWebViewUrl(
             channel_name=match_after.group(1),
-            mode="after",
             start_id=start_id,
             is_search_mode=True,
         )
@@ -156,7 +174,6 @@ def parse_telegram_web_view_url(url: str) -> ParsedTelegramWebViewUrl | None:
     if match_before:
         return ParsedTelegramWebViewUrl(
             channel_name=match_before.group(1),
-            mode="before",
             start_id=1,
             is_search_mode=True,
         )
@@ -165,7 +182,6 @@ def parse_telegram_web_view_url(url: str) -> ParsedTelegramWebViewUrl | None:
     if match_slash:
         return ParsedTelegramWebViewUrl(
             channel_name=match_slash.group(1),
-            mode="single",
             start_id=int(match_slash.group(2)),
             is_search_mode=False,
         )

@@ -73,7 +73,10 @@ from app.services.sync_schedule import (
     compute_next_dynamic_sync_at_from_last_updated,
     compute_next_regular_sync_at_from_last_updated,
 )
-from app.services.telegram_web import telegram_web_view_channel_url
+from app.services.telegram_web import (
+    TelegramWebViewUnavailable,
+    telegram_web_view_channel_url,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -222,10 +225,8 @@ async def _scrape_page_with_retry(
                 isinstance(exc, httpx.HTTPStatusError)
                 and exc.response.status_code == 429
             )
-            is_network = isinstance(
-                exc, (httpx.HTTPError, ConnectionError, OSError)
-            ) or ("not available on the web view" in str(exc))
-            is_unavailable = "not available on the web view" in str(exc)
+            is_network = isinstance(exc, (httpx.HTTPError, ConnectionError, OSError))
+            is_unavailable = isinstance(exc, TelegramWebViewUnavailable)
 
             if is_unavailable:
                 raise SyncScrapeError(

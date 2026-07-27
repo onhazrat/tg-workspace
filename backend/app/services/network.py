@@ -18,18 +18,27 @@ from app.core.config import settings
 from app.services.network_settings import normalize_proxy_url
 from app.services.proxy_pool import ProxyLane
 from app.services.telegram_web import (
+    TelegramWebViewUnavailable,
     is_telegram_web_url,
     is_telegram_web_view_url,
     telegram_channel_post_url,
 )
 
 _bad_proxies: dict[str, float] = {}
+_tor_counter_lock = asyncio.Lock()
 _tor_request_counter = 0
 _is_rotating_tor = False
 
 
+def _prune_expired_cooldowns(now_ms: float) -> None:
+    """Expired entries were only filtered on read, so the dict grew forever."""
+    for url in [u for u, until in _bad_proxies.items() if until <= now_ms]:
+        _bad_proxies.pop(url, None)
+
+
 def get_bad_proxies() -> list[dict[str, Any]]:
     now = time.time() * 1000
+    _prune_expired_cooldowns(now)
     return [
         {
             "url": url,
@@ -45,25 +54,18 @@ def proxy_in_cooldown(proxy_url: str) -> bool:
     return _bad_proxies.get(proxy_url, 0) > now
 
 
-_UNAVAILABLE_WEB_VIEW_MSG = "Channel is not available on the web view."
-
-
-def _is_telegram_web_view_url(url: str) -> bool:
-    return is_telegram_web_view_url(url)
-
-
 def _validate_telegram_web_view_page(
     *, request_url: str, final_url: str, html: str
 ) -> None:
-    if _is_telegram_web_view_url(request_url) and not _is_telegram_web_view_url(
+    if is_telegram_web_view_url(request_url) and not is_telegram_web_view_url(
         final_url
     ):
-        raise ConnectionError(_UNAVAILABLE_WEB_VIEW_MSG)
-    if _is_telegram_web_view_url(request_url):
+        raise TelegramWebViewUnavailable()
+    if is_telegram_web_view_url(request_url):
         has_action = "tgme_page_action" in html
         has_widgets = "tgme_widget_message_date" in html
         if has_action and not has_widgets:
-            raise ConnectionError(_UNAVAILABLE_WEB_VIEW_MSG)
+            raise TelegramWebViewUnavailable()
 
 
 def _build_client(proxy_url: str | None) -> httpx.AsyncClient:
@@ -91,7 +93,7 @@ async def _fetch_once(
             response = await http_client.get(url)
         response.raise_for_status()
         data = response.text if is_telegram_web_url(url) else response.json()
-        if isinstance(data, str) and _is_telegram_web_view_url(url):
+        if isinstance(data, str) and is_telegram_web_view_url(url):
             _validate_telegram_web_view_page(
                 request_url=url,
                 final_url=str(response.url),
@@ -132,36 +134,13 @@ async def rotate_tor_identity(
         _is_rotating_tor = False
 
 
-def _pick_random_proxy(
-    proxies: list[str],
-    tried: set[str],
-    *,
-    now_ms: float,
-) -> str:
-    available = [
-        p for p in proxies if p not in tried and _bad_proxies.get(p, 0) <= now_ms
-    ]
-    pool = (
-        available or [p for p in proxies if _bad_proxies.get(p, 0) <= now_ms] or proxies
-    )
-    return random.choice(pool)
-
-
 @asynccontextmanager
 async def _proxy_acquire(
     proxies: list[str],
     tried: set[str],
     *,
     proxy_concurrency: tuple[int, dict[str, int]] | None,
-    bypass_pool: bool,
-) -> AsyncIterator[str | ProxyLane]:
-    if bypass_pool:
-        now_ms = time.time() * 1000
-        proxy_url = _pick_random_proxy(proxies, tried, now_ms=now_ms)
-        tried.add(proxy_url)
-        yield proxy_url
-        return
-
+) -> AsyncIterator[ProxyLane]:
     from app.services.proxy_pool import ProxyPoolExhausted, ensure_pool_configured
 
     default_slots, overrides = proxy_concurrency if proxy_concurrency else (1, {})
@@ -181,7 +160,6 @@ async def fetch_with_retry(
     initial_delay_ms: int | None = None,
     proxies: list[str] | None = None,
     proxy_concurrency: tuple[int, dict[str, int]] | None = None,
-    bypass_pool: bool = False,
     tor_auto_rotate: bool = False,
     tor_rotation_threshold: int | None = None,
     tor_control_port: int | None = None,
@@ -216,20 +194,19 @@ async def fetch_with_retry(
                     proxies,
                     tried,
                     proxy_concurrency=proxy_concurrency,
-                    bypass_pool=bypass_pool,
-                ) as acquired:
-                    if isinstance(acquired, ProxyLane):
-                        proxy_url = acquired.url
-                        pool_client = acquired.client
-                    else:
-                        proxy_url = acquired
-                        pool_client = None
+                ) as lane:
+                    proxy_url = lane.url
+                    pool_client = lane.client
                     is_local_tor = proxy_url and (
                         "127.0.0.1" in proxy_url or "localhost" in proxy_url
                     )
                     if is_local_tor and tor_auto_rotate:
-                        _tor_request_counter += 1
-                        if _tor_request_counter >= effective_tor_rotation_threshold:
+                        async with _tor_counter_lock:
+                            _tor_request_counter += 1
+                            due = (
+                                _tor_request_counter >= effective_tor_rotation_threshold
+                            )
+                        if due:
                             await rotate_tor_identity(tor_control_port)
                     data = await _fetch_once(
                         url,
@@ -257,7 +234,7 @@ async def fetch_with_retry(
             return data, telemetry
 
         except Exception as exc:  # noqa: BLE001
-            is_soft_block = "not available on the web view" in str(exc)
+            is_soft_block = isinstance(exc, TelegramWebViewUnavailable)
             is_network = (
                 isinstance(exc, (httpx.HTTPError, ConnectionError, OSError))
                 or is_soft_block
@@ -268,9 +245,9 @@ async def fetch_with_retry(
             )
 
             if proxy_url and is_network and not is_soft_block:
-                _bad_proxies[proxy_url] = (
-                    time.time() * 1000 + settings.NETWORK_PROXY_COOLDOWN_MS
-                )
+                now_ms = time.time() * 1000
+                _prune_expired_cooldowns(now_ms)
+                _bad_proxies[proxy_url] = now_ms + settings.NETWORK_PROXY_COOLDOWN_MS
 
             telemetry["attempts"].append(
                 {
