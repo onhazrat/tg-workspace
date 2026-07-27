@@ -1,5 +1,29 @@
 import { expect, type Page } from "@playwright/test"
 
+/**
+ * These helpers **append** — they never reset the database.
+ *
+ * A full 3-spec run adds roughly 136 channels, and the suite is only reliable
+ * against a small *warm* database. Both extremes fail, and both look like code
+ * regressions in unrelated tests (channel-card hover, discover guides):
+ *
+ * - ~2,000+ channels: the grid and scoped-count queries get slow enough to time out.
+ * - **0 channels, immediately after `TRUNCATE`**: planner statistics are reset and
+ *   the query cache is cold, so the first channel-grid load overruns the 5s
+ *   `toBeAttached` timeout and no card exists when a test looks for one.
+ *
+ * So truncating is not a reset. Truncate, then warm up with **one spec**
+ * (`tg-ui-primitives.spec.ts` leaves 6 channels) and judge the run after that —
+ * not the full suite, which adds ~136 in a pass and overshoots straight into the
+ * range that caused the original problem. Target roughly 5–50 channels
+ * (`select count(*) from tg_channels`). Never treat a post-truncate run as a
+ * baseline, and never compare two branches measured at different database sizes.
+ *
+ * This accounts for most of the flakiness but not all of it:
+ * `tg-ui-primitives.spec.ts:63` fails at 0, 6, 148 and 154 channels alike and is
+ * tracked separately.
+ */
+
 export async function seedTestChannel(
   page: Page,
   channelName?: string,

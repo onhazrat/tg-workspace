@@ -777,29 +777,79 @@ the whole run, and hiding a row must not change what the run reports.
 Tag History (expandable detail, undo) is untouched — it is a separate feature,
 not a defect, and is left out of this fix.
 
-### Verification, stated precisely
+### Verification
 
-biome clean, `tsc --noEmit` clean, **624 unit tests** (was 612).
+biome clean, `tsc --noEmit` clean, **624 unit tests** (was 612), **75/75 e2e**.
 
-**e2e could not be brought to green on either arm**, so no e2e claim is made for
-C10. A paired comparison from a truncated database, backend restarted, run
-back-to-back:
+> The e2e figure was added after §2m resolved why the suite was failing. The
+> original text here said no e2e claim could be made, on the strength of a paired
+> `main` vs C10 comparison that returned 73/75 on both arms. That comparison was
+> sound as far as it went — the arms were identical, so C10 never regressed
+> anything — but both were depressed by a cause outside the code.
 
-| Arm | Result |
+## 2m. The e2e suite needs a small *warm* database
+
+Investigated 2026-07-27. Nothing was found wrong with the application: most of the
+failures were an artefact of how the database was being reset between runs.
+
+> **This explains most of it, not all of it.** `tg-ui-primitives.spec.ts:63` fails
+> at 0, 6, 148 and 154 channels alike, so the rule below does not cover that one —
+> see the end of §2n for what is actually known about it. The sections were written
+> in that order; this caveat was added when §2n disproved the stronger claim.
+
+### What was happening
+
+`seedTestChannel` appends and never resets — roughly 136 channels per full 3-spec
+run. Both extremes of that growth curve break the suite:
+
+| `tg_channels` | `tg-ui-primitives.spec.ts` |
 |---|---|
-| `main`, C10 stashed | 73/75 |
-| `main` + C10 | 73/75 (also 74/75, 72/75 across runs) |
+| 2,152 (accumulated over ~12 runs) | unrelated tests fail |
+| **0 (just truncated)** | **1–2 fail** |
+| 6–12 (warm) | **14/14** |
 
-The same tests fail on both — `discover shows forward-only empty guide` and the
-two channel-card hover tests — none of which touch `TagView`. C10 is therefore
-indistinguishable from `main` and does not regress the suite, but the suite itself
-is currently unreliable on this machine for reasons **not** explained by the
-database growth described in §2k: truncating the `tg_*` tables and restarting the
-backend container both failed to restore the 75/75 that the same suite produced
-repeatedly earlier in the session.
+and the full 3-spec suite returns **75/75** at 12 channels.
 
-That degradation is unexplained and worth its own investigation before the next
-e2e-dependent change is trusted.
+Reproduced A/B with identical code: truncate → 1 failed; immediately re-run
+without truncating → 14/14.
+
+### Why an empty database fails
+
+The failing assertion is `toBeAttached()` on
+`[data-slot="tg-icon-button"][data-variant="frosted"]`. Two of the three frosted
+buttons on a channel card render unconditionally, so failing to find one means **no
+card rendered at all** — not a styling problem.
+
+`TRUNCATE` resets planner statistics and empties the query cache, so the first
+channel-grid load afterwards is slow enough to exceed the 5s timeout. `seedTestChannel`
+itself is not the race: it polls the API, reloads, and waits on `[data-channel-name]`
+with a 15s timeout before returning.
+
+### Correction to §2k
+
+§2k concluded that database *growth* confounded the C7 comparison. That still
+holds — `main` was measured early against a warm DB and `+C7` later against a much
+larger one. But §2k then treated **truncating as the fix**, and it is not: an
+emptied database is just as unreliable as an overgrown one, in the opposite
+direction.
+
+So the mid-session instability that made C10 look unverifiable was **self-inflicted**.
+Every "clean baseline" run in §2l was taken immediately after a truncate, which is
+precisely the worst state to measure in. Both arms were equally handicapped, so the
+comparison remained valid for deciding C10 was safe — but the absolute numbers were
+meaningless, and the conclusion that "the suite is unreliable on this machine for
+unexplained reasons" was wrong.
+
+### How to reset properly
+
+Truncate, then warm up with **one spec** — `tg-ui-primitives.spec.ts` leaves 6
+channels — and judge the run after that. Do **not** warm up with the full suite:
+that adds ~136 in a single pass and overshoots straight past the useful range into
+the territory that caused the original problem.
+
+Target roughly 5–50 channels (`select count(*) from tg_channels`). Never treat a
+post-truncate run as a baseline, and never compare two branches measured at
+different database sizes. Local compose stack only — never against staging.
 
 ## 2n. E5, C9, E4-touch — shipped and decided 2026-07-27
 
