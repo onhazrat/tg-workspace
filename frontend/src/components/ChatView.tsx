@@ -300,7 +300,7 @@ export const ChatView: React.FC = () => {
                   aria-label="Copy message"
                   tooltip="Copy message"
                   onClick={() => navigator.clipboard.writeText(m.text)}
-                  className={`absolute -top-3 shadow-sm opacity-0 group-hover/bubble:opacity-100 ${
+                  className={`absolute -top-3 shadow-sm opacity-0 group-hover/bubble:opacity-100 focus-visible:opacity-100 ${
                     m.role === "user"
                       ? "-left-3 bg-app-card text-app-ink border border-app-ink/10"
                       : "-right-3 bg-app-ink text-app-bg"

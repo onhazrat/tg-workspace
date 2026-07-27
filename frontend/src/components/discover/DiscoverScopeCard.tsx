@@ -1,8 +1,9 @@
 import { Compass } from "lucide-react"
 import type React from "react"
+import { formatDateRange } from "@/lib/format-date-range"
+import { countOf } from "@/lib/plural"
 import type { DiscoveryScopeCounts } from "@/lib/posts/discover-candidates"
 import { FORWARDED_FILTER_LABELS } from "@/lib/posts/discover-empty-state"
-import { formatDateToLocalISO } from "@/lib/utils"
 
 interface DiscoverScopeCardProps {
   selectedChannelCount: number
@@ -43,8 +44,7 @@ export const DiscoverScopeCard: React.FC<DiscoverScopeCardProps> = ({
       </p>
       <p>
         <span className="text-app-ink/50">Date range:</span>{" "}
-        {formatDateToLocalISO(new Date(startDate))} –{" "}
-        {formatDateToLocalISO(new Date(endDate))}
+        {formatDateRange(new Date(startDate), new Date(endDate))}
       </p>
       <p>
         <span className="text-app-ink/50">Post filter:</span>{" "}
@@ -56,8 +56,9 @@ export const DiscoverScopeCard: React.FC<DiscoverScopeCardProps> = ({
       </p>
       <p data-testid="discover-scope-signal-posts">
         <span className="text-app-ink/50">Posts with signals:</span>{" "}
-        {scopeCounts.forwardPosts} fwd · {scopeCounts.mentionPosts} men ·{" "}
-        {scopeCounts.linkPosts} link
+        {countOf(scopeCounts.forwardPosts, "forward")} ·{" "}
+        {countOf(scopeCounts.mentionPosts, "mention")} ·{" "}
+        {countOf(scopeCounts.linkPosts, "link")}
       </p>
       <p>
         <span className="text-app-ink/50">Candidates:</span> {candidateCount}

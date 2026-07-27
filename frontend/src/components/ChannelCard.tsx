@@ -644,7 +644,7 @@ export const ChannelCard: React.FC<ChannelCardProps> = ({
                   e.stopPropagation()
                   handleRemoveTag(tag.name)
                 }}
-                className="opacity-0 group-hover/tag:opacity-50 hover:!opacity-100 transition-opacity"
+                className="opacity-0 group-hover/tag:opacity-50 hover:!opacity-100 focus-visible:!opacity-100 transition-opacity"
               >
                 <X size={10} />
               </button>

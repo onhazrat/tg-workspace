@@ -273,7 +273,7 @@ export const TableSizesPanel: React.FC<TableSizesPanelProps> = ({
                     e.stopPropagation()
                     onClearTable(table.name)
                   }}
-                  className="opacity-0 group-hover:opacity-100"
+                  className="opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
                 >
                   <Trash2 size={14} />
                 </TgIconButton>

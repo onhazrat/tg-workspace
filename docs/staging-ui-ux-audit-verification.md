@@ -350,6 +350,87 @@ They are **not** fixed here: converting `GET /posts` — a resource listing used
 
 Verified: biome clean, `tsc --noEmit` clean, **571/571** frontend unit tests (was 552), **514** backend tests, mypy/ruff clean, **61/61 e2e** — the last run made against a freshly rebuilt backend.
 
+## 2e. Batch 0 — browser pass, partial (2026-07-27)
+
+The Chrome extension disconnected partway through, so this pass is **incomplete**.
+What it did establish is that **6 of the 12 `RUNTIME` findings never needed a browser
+at all** — they were filed that way because the audit named a symptom rather than a
+mechanism, and the mechanism is in the source.
+
+### Settled without a browser
+
+| ID | Result |
+|---|---|
+| C8 | **BROKEN, mechanism confirmed.** `history-selection.ts` still calls `setSelectedChannels` and `setDateRange`. That *is* the "POSTS IN SCOPE changed" effect, and it is intended — opening a record restores its scope. The defect is that it happens with no acknowledgement on screen, so the fix is the banner, not the mutation. Batch 4. |
+| C10 | **BROKEN, all four sub-claims confirmed.** `TagView.tsx:103` — `<thead>` carries no `sticky`; there is no changes-only filter; no diff highlighting (the only `text-red` in the file is a delete button's hover state, `:172`); history rows have a lone `Trash2` at `:174` and no expand. |
+| D4 | **CONFIRMED, and fixed here.** Both halves. |
+| E4 | **CONFIRMED, worse than filed, and fixed here.** See below. |
+| C4 | **CONFIRMED on staging** before the disconnect — 85 tag chips, a 357px wall, first card at y=823. Worse than the audit's ~65 chips / ~300px. |
+| D3 | **CONFIRMED on staging** — `English`, `arb`, `pes`, `Persian` all on one screen. |
+
+### Still needs a browser
+
+**A2** (transition ghosting — the 5-query gate at `SettingsHub.tsx:89-122` is confirmed
+statically, the ghosting is not), **C5** (Posts horizontal space at 1440px), **E3** (chip
+select affordance), **E5** (onboarding tour), **E6** (command palette), plus the audit's
+own §6 gaps: mobile/responsive, light theme beyond Channels, and the six never-reviewed
+Settings sections (Tor, Destinations, Quick Message, Retention, Transfer, Query).
+
+### E4 was filed as a preference and is actually an a11y defect
+
+The audit called it "hover-only card actions" and pointed at `ChannelCard` and
+`PostCard`. Those two are the ones that are **already correct** — both pair
+`group-hover:` with `group-focus-within:`. Seven *other* sites do not:
+
+`ChannelCard` tag removal · `HistoryView` star · `ChatView` copy · `TableSizesPanel`
+clear · `BotCredentialsPanel` validate · `DestinationsPanel` verify · `Items/columns` copy.
+
+Each is a real `<button>`, so it stays in the tab order, rendered at `opacity: 0`.
+A keyboard user tabs onto it and the focus ring vanishes — the control is reachable
+and invisible at the same time. That is not a hover preference, and the correct form
+was already in the codebase two files away.
+
+Fixed in both shapes the code uses: `group-focus-within:opacity-100` where `opacity-0`
+sits on a wrapper around the buttons, `focus-visible:opacity-100` where it sits on the
+button itself.
+
+Not addressed, and worth a decision later: there is **no `@media (hover)` or
+`pointer: coarse` fallback anywhere in the app**, so on touch these controls still
+depend on a hover state that never fires. Focus does not rescue that case.
+
+### D4's file pointer was stale
+
+The audit points at `DiscoverView.tsx`; the code moved to
+`components/discover/DiscoverScopeCard.tsx` (`:45-48` and `:57-61`). The defect is real.
+
+The date half had a precise root cause worth recording: the card called
+`formatDateToLocalISO`, which exists to produce `YYYY-MM-DDTHH:mm` because that is the
+only value `<input type="datetime-local">` accepts. It is the right helper for a form
+field and the wrong one for a sentence. New `lib/format-date-range.ts` handles prose
+(collapsing the day when a range stays inside one), and the input formatter is now
+pinned by a test so "humanising" it cannot silently break every date picker.
+
+### Regression coverage
+
+- `css-invariants.test.ts` gains a **focus-reveal sweep** (4 tests) over every `.tsx`,
+  with a documented allowlist for the 4 genuinely decorative hover-reveals. Verified
+  by reintroducing the `HistoryView` defect: the sweep fails and names the exact file
+  and class list.
+- `format-date-range.test.ts` (7) — including an assertion that the output never
+  contains `T` or `\d{4}-\d{2}-\d{2}`, and that the locale parameter actually changes
+  the rendering rather than being decorative.
+- `app-copy.test.ts` gains 2 sweeps — signal abbreviations, and
+  `formatDateToLocalISO`-in-prose.
+
+The second of those found two sites I had not: `LogFilterBar.tsx:35` and
+`SummaryView.tsx:605`. Both are **false positives** — one feeds an input `max=` via a
+variable, the other builds a download filename — and both discard the time with
+`.split("T")[0]`, so no machine timestamp reaches a user. The predicate was narrowed
+to match the real invariant rather than the two sites being suppressed, and a
+guard-the-guard test pins that the narrowing still catches the original defect.
+
+Verified: biome clean, `tsc --noEmit` clean, **585/585** unit tests (was 571).
+
 ## 3. Fix plan
 
 Batches are independently shippable and ordered by risk retired per unit of work.

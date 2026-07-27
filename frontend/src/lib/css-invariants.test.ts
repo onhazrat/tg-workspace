@@ -99,3 +99,125 @@ describe("CSS invariants", () => {
     expect(tsxFiles(SRC).length).toBeGreaterThan(50)
   })
 })
+
+/**
+ * Source-level guard for hover-revealed controls that vanish under keyboard focus.
+ *
+ * The pattern is `opacity-0` plus `group-hover:opacity-100`: an action cluster that
+ * fades in when the pointer enters the card. It is fine for a mouse and broken for
+ * a keyboard — the button is still in the tab order, so focus lands on something
+ * rendered at `opacity: 0`. The user tabs and the focus ring simply disappears.
+ *
+ * Seven interactive sites shipped this way (channel-card tag removal, history star,
+ * chat copy, table clear, bot/destination verify, item copy). Two others —
+ * `ChannelCard` and `PostCard`'s main clusters — already paired the hover with
+ * `group-focus-within`, which is what makes this a real invariant rather than a
+ * style preference: the correct form was already in the codebase.
+ *
+ * Reveal-on-focus takes one of two shapes, depending on where `opacity-0` sits:
+ *   - on a wrapper around the buttons -> `group-focus-within:opacity-100`
+ *   - on the button itself            -> `focus-visible:opacity-100`
+ */
+
+const HIDDEN = /(?:^|\s)opacity-0(?:\s|$)/
+const HOVER_REVEAL = /(?:^|\s)group-hover(?:\/[\w-]+)?:opacity-/
+const FOCUS_REVEAL =
+  /(?:^|\s)(?:group-focus-within(?:\/[\w-]+)?|focus-visible|focus):!?opacity-/
+
+function hoverRevealWithoutFocus(classes: string): boolean {
+  return (
+    HIDDEN.test(classes) &&
+    HOVER_REVEAL.test(classes) &&
+    !FOCUS_REVEAL.test(classes)
+  )
+}
+
+/**
+ * Hover-revealed elements that hold no focusable control, so there is no focus
+ * state to reveal. Each is a passive label or decoration; adding a focus variant
+ * would be cargo-culted noise. Listed verbatim so that adding a button to one of
+ * these later trips the sweep rather than slipping through.
+ */
+const DECORATIVE_HOVER_REVEALS = [
+  // HistoryView — "edited" note badge on a summary row.
+  "opacity-0 group-hover/note:opacity-100 text-[11px] font-bold uppercase tracking-widest text-amber-700/80 transition-opacity",
+  // SummaryView — truncation warning pill.
+  "opacity-0 group-hover:opacity-100 text-[11px] font-medium text-amber-700/80 transition-opacity bg-amber-500/10 px-2 py-0.5 rounded-full",
+  // SummaryView — section-anchor hint overlay.
+  "absolute top-0 right-0 opacity-0 group-hover:opacity-100 transition-opacity bg-app-bg/80 backdrop-blur-sm px-2 py-1 rounded text-[11px] font-bold uppercase border border-app-ink/10",
+  // ChannelCard — chevron hint on the config row; the row itself is the control.
+  "opacity-0 group-hover/config:opacity-40 transition-opacity",
+]
+
+describe("focus-reveal invariants", () => {
+  it("detects the combination it is meant to catch", () => {
+    // Verbatim, the class lists that shipped the E4 defect.
+    expect(
+      hoverRevealWithoutFocus(
+        "flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity",
+      ),
+    ).toBe(true)
+    expect(hoverRevealWithoutFocus("opacity-0 group-hover:opacity-100")).toBe(
+      true,
+    )
+    expect(
+      hoverRevealWithoutFocus(
+        "opacity-0 group-hover/tag:opacity-50 hover:!opacity-100 transition-opacity",
+      ),
+    ).toBe(true)
+  })
+
+  it("accepts both correct shapes", () => {
+    // Wrapper around buttons.
+    expect(
+      hoverRevealWithoutFocus(
+        "opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity",
+      ),
+    ).toBe(false)
+    // Named group, matching named focus variant.
+    expect(
+      hoverRevealWithoutFocus(
+        "opacity-0 group-hover/bubble:opacity-100 focus-visible:opacity-100",
+      ),
+    ).toBe(false)
+    // The button itself, with an important-flagged reveal.
+    expect(
+      hoverRevealWithoutFocus(
+        "opacity-0 group-hover/tag:opacity-50 hover:!opacity-100 focus-visible:!opacity-100 transition-opacity",
+      ),
+    ).toBe(false)
+    // `hover:` alone is not a focus reveal — this must still be caught.
+    expect(
+      hoverRevealWithoutFocus("opacity-0 group-hover:opacity-100 hover:block"),
+    ).toBe(true)
+  })
+
+  it("never hides a focusable control behind hover alone", () => {
+    const offenders: string[] = []
+
+    for (const file of tsxFiles(SRC)) {
+      const source = readFileSync(file, "utf8")
+      for (const literal of classNameLiterals(source)) {
+        const staticClasses = literal.replace(/\$\{[^}]*\}/g, " ")
+        if (!hoverRevealWithoutFocus(staticClasses)) continue
+        if (DECORATIVE_HOVER_REVEALS.includes(literal.trim())) continue
+        offenders.push(`${file.slice(SRC.length + 1)}: "${literal.trim()}"`)
+      }
+    }
+
+    expect(offenders).toEqual([])
+  })
+
+  it("keeps the decorative allowlist honest", () => {
+    // Every allowlisted string must still exist in the source and must still be
+    // the shape it claims to be. A stale entry would silently widen the sweep.
+    const allSource = tsxFiles(SRC)
+      .map((file) => readFileSync(file, "utf8"))
+      .join("\n")
+
+    for (const entry of DECORATIVE_HOVER_REVEALS) {
+      expect(hoverRevealWithoutFocus(entry)).toBe(true)
+      expect(allSource).toContain(entry)
+    }
+  })
+})

@@ -17,7 +17,7 @@ function CopyId({ id }: { id: string }) {
       <Button
         variant="ghost"
         size="icon"
-        className="size-6 opacity-0 group-hover:opacity-100 transition-opacity"
+        className="size-6 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 transition-opacity"
         onClick={() => copy(id)}
       >
         {isCopied ? (

@@ -602,7 +602,7 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
                 </div>
 
                 {/* Action Buttons */}
-                <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity bg-app-card/80 backdrop-blur-sm p-1 rounded-lg border border-app-ink/5 shadow-sm">
+                <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity bg-app-card/80 backdrop-blur-sm p-1 rounded-lg border border-app-ink/5 shadow-sm">
                   <TgIconButton
                     aria-label={s.isStarred ? "Unstar Item" : "Star Item"}
                     tooltip={s.isStarred ? "Unstar Item" : "Star Item"}

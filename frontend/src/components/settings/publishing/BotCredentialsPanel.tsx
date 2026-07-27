@@ -131,7 +131,7 @@ export const BotCredentialsPanel: React.FC<BotCredentialsPanelProps> = ({
                     </div>
                   </div>
                 </div>
-                <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity">
                   <TgIconButton
                     aria-label="Validate Token"
                     tooltip="Validate Token"
