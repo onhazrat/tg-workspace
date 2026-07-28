@@ -115,6 +115,7 @@ def _reset_channel_coverage_fields(channel: Channel) -> None:
     channel.anchor_post_id = None
     channel.oldest_stored_post_timestamp = None
     channel.history_complete_to_cutoff = True
+    channel.history_reached_channel_start = False
     channel.updated_at = utc_now()
 
 

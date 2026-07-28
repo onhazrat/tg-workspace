@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import uuid
+from typing import Any
 
 from sqlmodel import Session, select
 
@@ -61,7 +62,7 @@ def upsert_sync_test_channel(
         session.add(default_group)
 
     channel = session.get(Channel, channel_id)
-    payload = {
+    payload: dict[str, Any] = {
         "id": channel_id,
         "name": name or channel_id,
         "user_id": user_id,

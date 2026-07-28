@@ -139,6 +139,8 @@ export interface Channel {
     timestamp: number
   }
   historyCompleteToCutoff?: boolean
+  /** Backward sync has walked back to the channel's first post. */
+  historyReachedChannelStart?: boolean
   anchorPostId?: number
   oldestStoredPostTimestamp?: number
   settingGroupId?: string

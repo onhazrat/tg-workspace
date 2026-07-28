@@ -679,3 +679,101 @@ def test_sync_backfill_completes_partial_history_in_multiple_passes(
 
     client.delete(f"{DATA}/channels/backfill-ch", headers=headers)
     clear_jobs_for_tests()
+
+
+def test_sync_marks_channel_younger_than_cutoff_complete(client: TestClient) -> None:
+    """A channel with no post older than the cutoff is complete, not partial.
+
+    Its whole history is newer than the retention window, so `oldest_ts <
+    cutoff` can never hold. Running the backward walk off the channel's first
+    post is what proves coverage; without it the channel would stay flagged
+    "Partial history" and be re-backfilled by auto-sync forever.
+    """
+    clear_jobs_for_tests()
+    headers = _auth(client)
+
+    with Session(engine) as session:
+        from app.jobs.settings import save_setting
+
+        save_setting(
+            session,
+            "sync",
+            {
+                "globalStartTimeMode": "absolute",
+                "globalStartTimeValue": "2001-09-09T01:46:40+00:00",
+            },
+        )
+        save_setting(
+            session, "retention", {"postRetentionDays": 0, "logRetentionDays": 0}
+        )
+
+    client.put(
+        f"{DATA}/channels/young-ch",
+        json={"name": "young-ch", "displayName": "Young"},
+        headers=headers,
+    )
+
+    # Every post sits well after the 2001 cutoff, and the channel has only
+    # three of them: page 3 walks off the beginning and returns nothing.
+    async def mock_scrape(
+        channel_name: str,
+        *,
+        before_id: int | None = None,
+        **_: object,
+    ) -> dict:
+        if before_id is None:
+            return _mock_page_response(
+                channel_name,
+                [
+                    {
+                        "id": 3,
+                        "text": "newest",
+                        "date": "2033-09-09T01:46:40+00:00",
+                        "timestamp": 2_100_000_000_000,
+                    },
+                    {
+                        "id": 2,
+                        "text": "middle",
+                        "date": "2033-05-18T03:33:20+00:00",
+                        "timestamp": 2_000_000_000_000,
+                    },
+                ],
+                next_before_id=2,
+            )
+        if before_id == 2:
+            return _mock_page_response(
+                channel_name,
+                [
+                    {
+                        "id": 1,
+                        "text": "first post ever",
+                        "date": "2033-01-01T00:00:00+00:00",
+                        "timestamp": 1_900_000_000_000,
+                    }
+                ],
+                next_before_id=1,
+            )
+        return _mock_page_response(channel_name, [], next_before_id=None)
+
+    with patch(
+        "app.services.sync_orchestrator.scrape_channel_page",
+        new_callable=AsyncMock,
+        side_effect=mock_scrape,
+    ):
+        r = client.post(
+            f"{PREFIX}/sync",
+            json={"channelIds": ["young-ch"], "source": "Test"},
+            headers=headers,
+        )
+        data = _wait_for_job(client, r.json()["jobId"], headers)
+        assert data["status"] == "completed"
+
+    channels_r = client.get(f"{DATA}/channels", headers=headers)
+    ch = next(c for c in channels_r.json() if c["name"] == "young-ch")
+    assert ch["historyReachedChannelStart"] is True
+    assert ch["historyCompleteToCutoff"] is True
+    # No post predates the cutoff, so there is nothing for retention to anchor.
+    assert ch["anchorPostId"] is None
+
+    client.delete(f"{DATA}/channels/young-ch", headers=headers)
+    clear_jobs_for_tests()
