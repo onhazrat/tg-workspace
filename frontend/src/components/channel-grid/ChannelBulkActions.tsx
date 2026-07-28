@@ -1,4 +1,12 @@
+import { Minus, Plus } from "lucide-react"
 import type React from "react"
+import {
+  controlGroupClassName,
+  controlGroupItemClassName,
+  controlGroupLabelClassName,
+  controlRowItemClassName,
+  controlSeparatorClassName,
+} from "@/components/channel-grid/control-styles"
 import {
   Select,
   SelectContent,
@@ -7,6 +15,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { TgButton } from "@/components/ui/tg-button"
+import { TgIconButton } from "@/components/ui/tg-icon-button"
 import { TgInput } from "@/components/ui/tg-input"
 import { selectTriggerClassName } from "@/components/ui/tg-select-trigger"
 import type { ChannelSettingGroup } from "@/types"
@@ -28,6 +37,16 @@ type ChannelBulkActionsProps = {
   onRequestDelete: () => void
 }
 
+/**
+ * The two tag fields are identical twins, so they share one field/button spec.
+ * They sit on the group pill's muted fill, so they take the same card surface as
+ * the select next to them rather than fading into it.
+ */
+const bulkTagInputClassName = `${controlGroupItemClassName} w-40 rounded-md border-app-ink/15 bg-app-card/70 py-0 pl-2.5 pr-8 text-[10px] focus:ring-1`
+
+const bulkTagButtonClassName =
+  "absolute inset-y-0.5 right-0.5 h-auto w-6 rounded p-0 text-app-ink/60 hover:bg-app-ink/10 hover:text-app-ink"
+
 /** Bulk action bar shown when channels are selected: freeze, move to group, tag edits, delete. */
 export const ChannelBulkActions: React.FC<ChannelBulkActionsProps> = ({
   selectedCount,
@@ -46,17 +65,18 @@ export const ChannelBulkActions: React.FC<ChannelBulkActionsProps> = ({
   onRequestDelete,
 }) => {
   return (
-    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pt-4 border-t border-app-ink/5">
-      <div className="flex items-center gap-2 flex-wrap">
-        <span className="text-[10px] uppercase font-bold text-app-ink/70">
+    <div className="flex flex-col gap-3 border-t border-app-ink/5 pt-4 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="whitespace-nowrap text-[10px] font-bold uppercase text-app-ink/70">
           {selectedCount} Selected
         </span>
-        <div className="h-4 w-px bg-app-ink/10 mx-1" />
+        <div className={controlSeparatorClassName} />
         <TgButton
           type="button"
           variant="infoSoft"
           size="sm"
           onClick={onRequestFreeze}
+          className={`${controlRowItemClassName} px-3`}
         >
           Freeze
         </TgButton>
@@ -65,19 +85,18 @@ export const ChannelBulkActions: React.FC<ChannelBulkActionsProps> = ({
           variant="ghost"
           size="sm"
           onClick={onRequestUnfreeze}
+          className={`${controlRowItemClassName} px-3`}
         >
           Unfreeze
         </TgButton>
-        <div className="h-4 w-px bg-app-ink/10 mx-1" />
-        <div className="flex items-center gap-2 rounded-md border border-app-ink/10 bg-app-muted/40 px-2 py-1.5">
-          <span className="text-[9px] uppercase font-bold text-app-ink/60">
-            Move to group
-          </span>
+        <div className={controlSeparatorClassName} />
+        <div className={controlGroupClassName}>
+          <span className={controlGroupLabelClassName}>Move to group</span>
           <Select
             value={bulkTargetGroupId}
             onValueChange={onBulkTargetGroupIdChange}
           >
-            <SelectTrigger className={selectTriggerClassName}>
+            <SelectTrigger size="sm" className={selectTriggerClassName}>
               <SelectValue placeholder="Group" />
             </SelectTrigger>
             <SelectContent>
@@ -94,58 +113,67 @@ export const ChannelBulkActions: React.FC<ChannelBulkActionsProps> = ({
             variant="primary"
             size="sm"
             onClick={onApplyMoveToGroup}
-            className="px-2 text-[9px]"
+            className={`${controlGroupItemClassName} px-2.5 text-[9px]`}
           >
             Apply
           </TgButton>
         </div>
-        <div className="relative">
-          <TgInput
-            type="text"
-            variant="muted"
-            value={bulkTagInput}
-            onChange={(e) => onBulkTagInputChange(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && onBulkAddTag()}
-            placeholder="Add tag..."
-            className="h-8 w-36 rounded-md py-0 pl-2.5 pr-16 text-[10px] focus:ring-1"
-          />
-          <TgButton
-            type="button"
-            variant="primary"
-            size="sm"
-            onClick={onBulkAddTag}
-            disabled={!bulkTagInput.trim()}
-            className="absolute inset-y-1 right-1 h-auto min-w-[3.25rem] px-2 text-[8px] tracking-normal"
-          >
-            Add
-          </TgButton>
+        <div className={controlGroupClassName}>
+          <span className={controlGroupLabelClassName}>Tags</span>
+          <div className="relative">
+            <TgInput
+              type="text"
+              variant="muted"
+              value={bulkTagInput}
+              onChange={(e) => onBulkTagInputChange(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && onBulkAddTag()}
+              placeholder="Add tag..."
+              aria-label="Add tag to selected channels"
+              data-testid="bulk-add-tag-input"
+              className={bulkTagInputClassName}
+            />
+            <TgIconButton
+              aria-label="Add tag to selected channels"
+              tooltip="Add this tag to every selected channel"
+              onClick={onBulkAddTag}
+              disabled={!bulkTagInput.trim()}
+              data-testid="bulk-add-tag-button"
+              className={bulkTagButtonClassName}
+            >
+              <Plus size={12} />
+            </TgIconButton>
+          </div>
+          <div className="relative">
+            <TgInput
+              type="text"
+              variant="muted"
+              value={bulkRemoveTagInput}
+              onChange={(e) => onBulkRemoveTagInputChange(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && onBulkRemoveTag()}
+              placeholder="Remove tag..."
+              aria-label="Remove tag from selected channels"
+              data-testid="bulk-remove-tag-input"
+              className={bulkTagInputClassName}
+            />
+            <TgIconButton
+              aria-label="Remove tag from selected channels"
+              tooltip="Remove this tag from every selected channel"
+              onClick={onBulkRemoveTag}
+              disabled={!bulkRemoveTagInput.trim()}
+              data-testid="bulk-remove-tag-button"
+              className={bulkTagButtonClassName}
+            >
+              <Minus size={12} />
+            </TgIconButton>
+          </div>
         </div>
-        <div className="relative">
-          <TgInput
-            type="text"
-            variant="muted"
-            value={bulkRemoveTagInput}
-            onChange={(e) => onBulkRemoveTagInputChange(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && onBulkRemoveTag()}
-            placeholder="Remove tag..."
-            className="h-8 w-36 rounded-md py-0 pl-2.5 pr-16 text-[10px] focus:ring-1"
-          />
-          <TgButton
-            type="button"
-            variant="primary"
-            size="sm"
-            onClick={onBulkRemoveTag}
-            disabled={!bulkRemoveTagInput.trim()}
-            className="absolute inset-y-1 right-1 h-auto min-w-[3.25rem] px-2 text-[8px] tracking-normal"
-          >
-            Remove
-          </TgButton>
-        </div>
+        <div className={controlSeparatorClassName} />
         <TgButton
           type="button"
           variant="dangerSoft"
           size="sm"
           onClick={onRequestDelete}
+          className={`${controlRowItemClassName} px-3`}
         >
           Delete
         </TgButton>
