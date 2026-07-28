@@ -47,7 +47,7 @@ const bulkTagInputClassName = `${controlGroupItemClassName} w-40 rounded-md bord
 const bulkTagButtonClassName =
   "absolute inset-y-0.5 right-0.5 h-auto w-6 rounded p-0 text-app-ink/60 hover:bg-app-ink/10 hover:text-app-ink"
 
-/** Bulk action bar shown when channels are selected: freeze, move to group, tag edits, delete. */
+/** Bulk action bar shown when channels are selected: freeze/unfreeze/delete, move to group, tag edits. */
 export const ChannelBulkActions: React.FC<ChannelBulkActionsProps> = ({
   selectedCount,
   onRequestFreeze,
@@ -88,6 +88,15 @@ export const ChannelBulkActions: React.FC<ChannelBulkActionsProps> = ({
           className={`${controlRowItemClassName} px-3`}
         >
           Unfreeze
+        </TgButton>
+        <TgButton
+          type="button"
+          variant="dangerSoft"
+          size="sm"
+          onClick={onRequestDelete}
+          className={`${controlRowItemClassName} px-3`}
+        >
+          Delete
         </TgButton>
         <div className={controlSeparatorClassName} />
         <div className={controlGroupClassName}>
@@ -167,16 +176,6 @@ export const ChannelBulkActions: React.FC<ChannelBulkActionsProps> = ({
             </TgIconButton>
           </div>
         </div>
-        <div className={controlSeparatorClassName} />
-        <TgButton
-          type="button"
-          variant="dangerSoft"
-          size="sm"
-          onClick={onRequestDelete}
-          className={`${controlRowItemClassName} px-3`}
-        >
-          Delete
-        </TgButton>
       </div>
     </div>
   )
