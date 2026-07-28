@@ -285,6 +285,9 @@ test.describe("TG UI primitives", () => {
       .locator('[data-slot="tg-selection-chip"]')
       .first()
     await expect(selectionChip).toBeVisible()
+    // Selection chips carry user-authored tag/group names, so they must render
+    // the operator's casing rather than the app's uppercase micro-label style.
+    await expect(selectionChip).toHaveCSS("text-transform", "none")
     // Do not click group chips here — toggling a large group can stall the UI.
 
     // Workspace tabs navigate to `?tab=`, so they are links, not buttons.
