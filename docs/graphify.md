@@ -54,9 +54,13 @@ uv tool install "graphifyy[all]"      # everything
 graphify install
 ```
 
-This auto-detects your assistant and writes the skill to your **home** directory — for
-Claude Code that is `~/.claude/skills/graphify/SKILL.md`. Nothing is written into this
-repo, and nothing is committed.
+This auto-detects your assistant and writes to your **home** directory:
+
+- `~/.claude/skills/graphify/SKILL.md` (+ a `references/` dir)
+- a short registration block appended to your **global** `~/.claude/CLAUDE.md`
+
+Nothing is written into this repo, and nothing is committed. The project's checked-in
+`CLAUDE.md` is not touched.
 
 Useful variants:
 
@@ -85,8 +89,8 @@ From the repo root, inside your assistant:
 /graphify .
 ```
 
-The first build is the slow one — it walks every source file. Expect a few minutes on
-this repo. It writes everything to `graphify-out/`:
+This walks every source file, then hands the prose (Markdown, ADRs) to your assistant for
+semantic extraction. It writes everything to `graphify-out/`:
 
 | File | What it is |
 |---|---|
@@ -109,11 +113,45 @@ this repo. It writes everything to `graphify-out/`:
 If you want code structure only and no LLM in the loop at all:
 
 ```bash
-graphify extract . --code-only
+graphify extract . --code-only     # AST pass: writes graph.json
+graphify cluster-only . --no-label # subsystems + GRAPH_REPORT.md + graph.html
 ```
 
-Pure AST, no API key required, no docs indexed. `graphify update .` does the same
-incrementally.
+Pure AST, no API key required, nothing leaves the machine. Measured on this repo
+(2026-07-28, graphify 0.9.28):
+
+| | |
+|---|---|
+| Code files indexed | 691 |
+| Docs skipped by `--code-only` | 118 |
+| Result | **4,840 nodes, 15,042 edges, 233 communities** |
+| Wall time | **~14 s** |
+
+So the "first build is slow" warning does not really apply here on the code-only path —
+it's fast enough to run whenever. The expensive part is only the semantic doc pass.
+
+Two things it does on its own, worth knowing:
+
+- **It refuses to index files that look secret.** On this repo it skipped `.env.example`
+  and `reset_password.mjml` as "potentially sensitive". That's the desired behaviour —
+  don't override it.
+- **Pure-data files produce nothing.** ~27 files (`launch.json`, `settings.json`, VS Code
+  config, fixture JSON) yield zero nodes and are simply absent from the graph.
+
+### Naming the subsystems
+
+The AST pass can find communities but can't *name* them — the report will say
+`Community 124` rather than "channel sync pipeline". Naming needs one LLM pass:
+
+```bash
+graphify label .                  # name every community
+graphify label . --missing-only   # keep existing names, fill gaps only
+```
+
+This is the one step that costs something. It picks a backend from whatever key is set
+(`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, …) or a local `OLLAMA_BASE_URL`. Running
+`/graphify .` from inside Claude Code does this through your existing session instead,
+which is usually the cheapest route.
 
 ---
 
@@ -144,6 +182,25 @@ graphify god-nodes --top 15
 Handy flags: `--budget N` caps `query` output at N tokens (default 2000);
 `--depth N` and `--relation R` tune `affected`; `--json` makes `god-nodes`
 machine-readable.
+
+### What the output actually looks like
+
+Set expectations correctly, or you'll be disappointed:
+
+- **`query` does not answer in prose.** It runs a BFS from the nodes matching your
+  question and prints the matching subgraph as `NODE`/edge lines. It is *context for an
+  assistant*, not an answer for a human. Broad questions blow the token budget fast — the
+  question above matched 637 nodes and got truncated to 27 at the default budget. Narrow
+  the question or raise `--budget`.
+- **`path` and `explain` are the ones you read directly.** They're precise and cite
+  `file:line` for every edge, tagged `EXTRACTED` vs `INFERRED`. `explain "proxy_pool"`
+  returns all 17 connections with exact source locations.
+- **`path` warns on ambiguous matches.** If two nodes score identically it says so and
+  picks one — use a more specific name (`ProxyPoolManager`, not `proxy`) when you see it.
+
+For reference, the hubs in this repo today are `cn()` (165 edges), `Channel` (80),
+`CommandContext` (76), `Post` (69), and `utc_now()` (68) — which is a fair summary of
+where gravity sits in the codebase.
 
 ### Why this beats grep here
 
@@ -208,12 +265,14 @@ only lists the *extra* exclusions. It skips, and why:
 - `TG-Summarizer/` — parity reference for the pre-migration app, absent from most clones
 - test reports and tool caches
 
-Loosen it if you want migrations or the generated client in the graph.
+Loosen it if you want migrations or the generated client in the graph. Verified on the
+first build: **zero** nodes came from any excluded path.
 
 ### `.gitignore`
 
-`graphify-out/` is ignored. The graph is derived from source and rebuilt in seconds with
-`--update`, so committing it mostly buys merge conflicts.
+`graphify-out/` is ignored, for two measured reasons: the artefacts are large
+(`graph.json` 7.4 MB, `graph.html` 5.7 MB) and the whole thing rebuilds from source in
+~14 s. Committing it mostly buys merge conflicts and repo bloat.
 
 **If you'd rather commit it** — so teammates and CI get the graph without rebuilding —
 drop the `graphify-out/` line from `.gitignore` and set up the union merge driver, which
@@ -248,13 +307,18 @@ to graphify. Keep it that way.
 ## Quick reference
 
 ```bash
-uv tool install graphifyy        # install CLI
-graphify install                 # register /graphify skill
-/graphify .                      # first build
-/graphify . --update             # incremental rebuild
-graphify query "..."             # ask the graph
-graphify path "A" "B"            # trace A → B
-graphify affected "X"            # blast radius of changing X
-graphify god-nodes               # architectural hubs
-graphify hook install            # rebuild on every commit
+uv tool install graphifyy          # install CLI
+graphify install                   # register /graphify skill
+/graphify .                        # first build (assistant-driven, indexes docs too)
+/graphify . --update               # incremental rebuild
+
+graphify extract . --code-only     # or: build offline, no LLM, ~14s
+graphify cluster-only . --no-label #      …then subsystems + report + graph.html
+
+graphify path "A" "B"              # trace A → B  (read this one directly)
+graphify explain "X"               # X and its neighbours, with file:line
+graphify affected "X"              # blast radius of changing X
+graphify god-nodes                 # architectural hubs
+graphify query "..."               # subgraph as LLM context, not a prose answer
+graphify hook install              # rebuild on every commit
 ```
