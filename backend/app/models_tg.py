@@ -77,6 +77,12 @@ class Channel(SQLModel, table=True):
     )
     discovered_via: dict[str, Any] | None = Field(default=None, sa_column=Column(JSON))
     history_complete_to_cutoff: bool = True
+    # Set once a backward walk paginates off the beginning of the channel. Such
+    # a channel is fully covered even when its oldest post is newer than the
+    # cutoff -- there is no older history to fetch. Without this, channels
+    # younger than the retention window stay `history_complete_to_cutoff=False`
+    # forever and are re-backfilled by auto-sync on every run.
+    history_reached_channel_start: bool = False
     anchor_post_id: int | None = None
     oldest_stored_post_timestamp: int | None = Field(
         default=None, sa_column=_ms_ts(nullable=True)

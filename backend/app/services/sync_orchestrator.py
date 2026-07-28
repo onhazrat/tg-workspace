@@ -402,6 +402,9 @@ class _PageApplyResult:
     forwards: list[dict[str, Any]] = field(default_factory=list)
     sync_failed: bool = False
     sync_error: str | None = None
+    # The backward walk paginated past the channel's first post: there is no
+    # older history to fetch, whatever the cutoff says.
+    reached_channel_start: bool = False
 
 
 def _prepare_channel_sync(
@@ -645,6 +648,12 @@ def _apply_scrape_page(
 
         if not posts:
             result.stop_sync = True
+            # An empty page while walking backward means we paginated past the
+            # channel's first post. `before_id is not None` keeps a private or
+            # empty channel -- whose very first page is blank -- from claiming
+            # it reached its own start.
+            if ctx.retrieval_pass in ("initial", "backfill") and before_id is not None:
+                result.reached_channel_start = True
             session.commit()
             return result
 
@@ -741,6 +750,7 @@ def _finalize_channel_success(
     final_latest_id: int,
     requests_log: list[Any],
     responses_log: list[Any],
+    reached_channel_start: bool = False,
 ) -> None:
     with Session(engine) as session:
         channel = session.get(Channel, ctx.channel_id)
@@ -749,7 +759,12 @@ def _finalize_channel_success(
 
         group = get_group_for_channel(session, channel)
         was_restricted = is_restricted_group(group)
-        update_channel_coverage(session, channel, ctx.scrape_cutoff_ms)
+        update_channel_coverage(
+            session,
+            channel,
+            ctx.scrape_cutoff_ms,
+            reached_channel_start=reached_channel_start,
+        )
 
         detected_language = channel.language or ctx.language
         if not detected_language:
@@ -1001,6 +1016,7 @@ async def sync_single_channel(
             iterations = 0
             stop_sync = False
             in_backfill = False
+            reached_channel_start = False
 
             while not stop_sync and not job.cancel_event.is_set():
                 if iterations >= settings.SCRAPER_ITERATION_LIMIT:
@@ -1051,6 +1067,8 @@ async def sync_single_channel(
                     before_id=before_id,
                 )
 
+                if page_result.reached_channel_start:
+                    reached_channel_start = True
                 if page_result.latest_id:
                     final_latest_id = page_result.latest_id
                     known_latest_id = page_result.latest_id
@@ -1109,6 +1127,7 @@ async def sync_single_channel(
                 final_latest_id=final_latest_id,
                 requests_log=requests_log,
                 responses_log=responses_log,
+                reached_channel_start=reached_channel_start,
             )
             ch_state.status = "success"
             ch_state.new_latest_id = final_latest_id or None

@@ -36,8 +36,16 @@ def update_channel_coverage(
     session: Session,
     channel: Channel,
     scrape_cutoff_ms: int,
+    *,
+    reached_channel_start: bool = False,
 ) -> None:
-    """Recompute anchor post and history coverage flags after a sync pass."""
+    """Recompute anchor post and history coverage flags after a sync pass.
+
+    `reached_channel_start` means the backward walk paginated off the beginning
+    of the channel during this sync. It is latched onto the channel because a
+    later head-only (incremental) sync never revisits the beginning and would
+    otherwise clear it.
+    """
     for anchor in session.exec(
         select(Post).where(Post.channel_name == channel.name, Post.is_anchor == True)  # noqa: E712
     ).all():
@@ -53,12 +61,21 @@ def update_channel_coverage(
     oldest_ts = oldest_ts_row if oldest_ts_row else None
     channel.oldest_stored_post_timestamp = oldest_ts
 
+    if reached_channel_start:
+        channel.history_reached_channel_start = True
+
     if scrape_cutoff_ms <= 0:
         channel.history_complete_to_cutoff = True
     elif oldest_ts is None:
         channel.history_complete_to_cutoff = False
     else:
-        channel.history_complete_to_cutoff = oldest_ts < scrape_cutoff_ms
+        # A post older than the cutoff proves the walk crossed the boundary.
+        # Failing that, having walked back to the channel's first post proves
+        # there is nothing older to fetch -- the channel is simply younger than
+        # the retention window, which is complete coverage, not partial.
+        channel.history_complete_to_cutoff = (
+            oldest_ts < scrape_cutoff_ms or channel.history_reached_channel_start
+        )
 
     anchor_post = session.exec(
         select(Post)

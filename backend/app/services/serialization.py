@@ -138,6 +138,7 @@ def channel_to_camel(
         "telegramChatId": ch.telegram_chat_id,
         "discoveredVia": ch.discovered_via,
         "historyCompleteToCutoff": ch.history_complete_to_cutoff,
+        "historyReachedChannelStart": ch.history_reached_channel_start,
         "anchorPostId": ch.anchor_post_id,
         "oldestStoredPostTimestamp": ch.oldest_stored_post_timestamp,
     }
