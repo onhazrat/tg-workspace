@@ -20,6 +20,22 @@ describe("TG chips", () => {
     }
   })
 
+  test("selection chips preserve author casing, filter chips stay uppercase", () => {
+    // Selection chips label user-authored tag and setting-group names, so
+    // uppercasing them would misreport the operator's own data ("iOS" → "IOS").
+    // Filter chips label fixed UI vocabulary, where the caps are just style.
+    for (const state of ["selected", "partial", "idle"] as const) {
+      expect(tgSelectionChipVariants({ state })).not.toContain("uppercase")
+    }
+    expect(tgFilterChipVariants({ selected: false })).toContain("uppercase")
+
+    const html = renderToStaticMarkup(
+      <TgSelectionChip state="idle">iOS</TgSelectionChip>,
+    )
+    expect(html).toContain("iOS")
+    expect(html).not.toContain("uppercase")
+  })
+
   test("meta chip sizes", () => {
     expect(tgMetaChipVariants({ size: "card" })).toContain("text-[10px]")
     expect(tgMetaChipVariants({ size: "history" })).toContain("font-mono")

@@ -3,8 +3,20 @@ import * as React from "react"
 
 import { cn } from "@/lib/utils"
 
+/**
+ * Selection chips label user-authored content — tag names and setting-group
+ * names — so they deliberately do NOT get the `uppercase tracking-widest`
+ * treatment the rest of the app uses for its micro-labels. Casing is data here:
+ * uppercasing turns "iOS" into "IOS" and "McKinsey" into "MCKINSEY", so the chip
+ * would stop showing what the operator actually typed. `ChannelCard` already
+ * renders the same tag names unmodified; this keeps the two views agreeing.
+ *
+ * `tgFilterChipVariants` below stays uppercase on purpose: it labels fixed UI
+ * vocabulary ("Original Only", sort names), where the caps are a style choice
+ * rather than a distortion of someone's content.
+ */
 const tgSelectionChipVariants = cva(
-  "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[10px] font-bold uppercase tracking-widest transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-app-ink/30",
+  "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[10px] font-bold tracking-wide transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-app-ink/30",
   {
     variants: {
       state: {
