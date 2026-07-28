@@ -1,6 +1,12 @@
 import { ArrowDown, ArrowUp } from "lucide-react"
 import type React from "react"
 import {
+  controlGroupItemClassName,
+  controlGroupLabelClassName,
+  controlSeparatorClassName,
+  controlWrapGroupClassName,
+} from "@/components/channel-grid/control-styles"
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -70,10 +76,8 @@ export const ChannelGridFilterBar: React.FC<ChannelGridFilterBarProps> = ({
 }) => {
   return (
     <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3">
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-lg border border-app-ink/5 bg-app-muted/30 px-3 py-1.5">
-        <span className="text-[9px] uppercase font-bold text-app-ink/50">
-          AI Prompt Context
-        </span>
+      <div className={controlWrapGroupClassName}>
+        <span className={controlGroupLabelClassName}>AI Prompt Context</span>
         <label className="flex items-center gap-1.5 text-[10px] font-semibold text-app-ink/70">
           <input
             type="checkbox"
@@ -98,21 +102,19 @@ export const ChannelGridFilterBar: React.FC<ChannelGridFilterBarProps> = ({
         </label>
       </div>
 
-      <div className="flex flex-wrap items-center gap-3 rounded-lg border border-app-ink/5 bg-app-muted/30 px-3 py-1.5">
+      <div className={controlWrapGroupClassName}>
         {isFilteringActive && (
           <>
-            <span className="text-[9px] uppercase font-bold text-app-ink/60">
+            <span className={controlGroupLabelClassName}>
               Showing {filteredCount} of {totalCount} channels
             </span>
-            <div className="h-4 w-px bg-app-ink/10" />
+            <div className={controlSeparatorClassName} />
           </>
         )}
         {allLanguages.length > 0 && (
           <>
             <div className="flex items-center gap-2">
-              <span className="text-[9px] uppercase font-bold text-app-ink/50">
-                Lang
-              </span>
+              <span className={controlGroupLabelClassName}>Lang</span>
               <Select
                 value={selectedLanguageFilter || "__all_languages__"}
                 onValueChange={(value) =>
@@ -121,7 +123,7 @@ export const ChannelGridFilterBar: React.FC<ChannelGridFilterBarProps> = ({
                   )
                 }
               >
-                <SelectTrigger className={selectTriggerClassName}>
+                <SelectTrigger size="sm" className={selectTriggerClassName}>
                   <SelectValue placeholder="All" />
                 </SelectTrigger>
                 <SelectContent className="border-app-ink/15 bg-app-card text-app-ink">
@@ -134,20 +136,18 @@ export const ChannelGridFilterBar: React.FC<ChannelGridFilterBarProps> = ({
                 </SelectContent>
               </Select>
             </div>
-            <div className="h-4 w-px bg-app-ink/10" />
+            <div className={controlSeparatorClassName} />
           </>
         )}
         <div className="flex items-center gap-2">
-          <span className="text-[9px] uppercase font-bold text-app-ink/50">
-            Sort By
-          </span>
+          <span className={controlGroupLabelClassName}>Sort By</span>
           <Select
             value={sortBy}
             onValueChange={(value) =>
               onSortByChange(value as ChannelGridSortOption)
             }
           >
-            <SelectTrigger className={selectTriggerClassName}>
+            <SelectTrigger size="sm" className={selectTriggerClassName}>
               <SelectValue />
             </SelectTrigger>
             <SelectContent className="border-app-ink/15 bg-app-card text-app-ink">
@@ -175,7 +175,7 @@ export const ChannelGridFilterBar: React.FC<ChannelGridFilterBarProps> = ({
             aria-label={`Sort ${sortDirection === "asc" ? "Ascending" : "Descending"}`}
             tooltip={`Sort ${sortDirection === "asc" ? "Ascending" : "Descending"}`}
             onClick={onToggleSortDirection}
-            className="p-1 text-app-ink/70 hover:text-app-ink hover:bg-app-ink/10"
+            className={`${controlGroupItemClassName} w-7 p-0 text-app-ink/70 hover:bg-app-ink/10 hover:text-app-ink`}
           >
             {sortDirection === "asc" ? (
               <ArrowUp size={12} />
@@ -184,7 +184,7 @@ export const ChannelGridFilterBar: React.FC<ChannelGridFilterBarProps> = ({
             )}
           </TgIconButton>
         </div>
-        <div className="h-4 w-px bg-app-ink/10" />
+        <div className={controlSeparatorClassName} />
         <div className="flex items-center gap-2">
           <TgInput
             type="number"
@@ -197,7 +197,7 @@ export const ChannelGridFilterBar: React.FC<ChannelGridFilterBarProps> = ({
             }}
             disabled={isTrimInputDisabled}
             data-testid="channel-trim-count"
-            className="w-14 rounded-md py-1 px-2 text-[10px] focus:ring-1"
+            className={`${controlGroupItemClassName} w-14 rounded-md border-app-ink/15 bg-app-card/70 px-2 py-0 text-[10px] focus:ring-1`}
             aria-label="Trim selection count"
           />
           <Tooltip>
@@ -209,7 +209,7 @@ export const ChannelGridFilterBar: React.FC<ChannelGridFilterBarProps> = ({
                 onClick={onTrimSelection}
                 disabled={isTrimDisabled}
                 data-testid="channel-trim-button"
-                className="bg-app-ink/10 text-app-ink hover:bg-app-ink/20 hover:text-app-ink"
+                className={`${controlGroupItemClassName} bg-app-ink/10 px-2.5 text-app-ink hover:bg-app-ink/20 hover:text-app-ink`}
               >
                 Trim
               </TgButton>
@@ -222,7 +222,7 @@ export const ChannelGridFilterBar: React.FC<ChannelGridFilterBarProps> = ({
             </TooltipContent>
           </Tooltip>
         </div>
-        <div className="h-4 w-px bg-app-ink/10" />
+        <div className={controlSeparatorClassName} />
         <label className="flex items-center gap-1.5 text-[10px] font-semibold text-app-ink/70">
           <input
             type="checkbox"
