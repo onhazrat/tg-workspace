@@ -14,6 +14,14 @@ export const queryKeys = {
   tagRun: (id: string) => ["tagRun", id] as const,
   discoverCandidates: (scope: unknown) =>
     ["discoverCandidates", scope] as const,
+  discoverReports: ["discoverReports"] as const,
+  discoverReport: (id: string) => ["discoverReport", id] as const,
+  /**
+   * The report Discover opens on. Kept separate from `discoverReport(id)`
+   * because "the newest report" is a moving target: generating one must
+   * invalidate this, but must not invalidate any report fetched by id.
+   */
+  latestDiscoverReport: ["discoverReport", "latest"] as const,
   postsCounts: (scope: unknown) => ["postsCounts", scope] as const,
   /** The infinite Posts feed, keyed on scope + filters + cap + sort. */
   postsFeed: (scope: unknown) => ["postsFeed", scope] as const,

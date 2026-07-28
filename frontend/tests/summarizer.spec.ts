@@ -256,8 +256,69 @@ async function mockDiscoverForwardPosts(
     postsInScope: sources.length + (fixture.originalPostCount ?? 0),
   }
 
+  // Generating now saves a report, so the response carries the stored-artifact
+  // envelope (id, frozen scope, timestamp) around the same aggregate.
+  const discoverReport = {
+    id: "e2e-report-1",
+    scope: {
+      channels: [fixture.carrierName],
+      startDate: 0,
+      endDate: now,
+      signals: ["forward", "mention", "link"],
+      keyword: null,
+      forwarded: "all",
+      media: "all",
+      maxPerChannel: 0,
+      maxPerChannelMode: "latest",
+      seed: 0,
+      scopedPostCount: null,
+    },
+    timestamp: now,
+    candidateCount: candidates.length,
+    ...discoverResponse,
+  }
+
   await page.route("**/api/v1/data/discover/candidates**", async (route) => {
     await route.fulfill({ json: discoverResponse })
+  })
+
+  // One handler for every report route: overlapping glob patterns are matched
+  // last-registered-first by Playwright, which makes separate routes for
+  // `/reports`, `/reports/latest` and `/reports/{id}` order-dependent.
+  // Acts as the store, so a report fetched by id matches the one generated.
+  let storedReport = discoverReport
+
+  await page.route("**/api/v1/data/discover/reports**", async (route) => {
+    const url = route.request().url()
+    if (route.request().method() === "POST") {
+      // Echo the requested scope back. A saved report describes the inputs it
+      // actually ran with, and the empty-state guide is derived from *that*
+      // rather than from the live signal chips — so a mock returning a fixed
+      // scope would make the guide disagree with what the test asked for.
+      const body = route.request().postDataJSON() ?? {}
+      storedReport = {
+        ...discoverReport,
+        scope: {
+          ...discoverReport.scope,
+          signals: body.signals ?? discoverReport.scope.signals,
+          forwarded: body.forwarded ?? "all",
+          media: body.media ?? "all",
+          keyword: body.keyword ?? null,
+        },
+      }
+      await route.fulfill({ json: storedReport })
+      return
+    }
+    if (url.includes("/reports/latest")) {
+      // These specs start with no saved report.
+      await route.fulfill({ json: null })
+      return
+    }
+    if (url.includes(`/reports/${discoverReport.id}`)) {
+      await route.fulfill({ json: storedReport })
+      return
+    }
+    await route.fulfill({ json: [] })
   })
 
   await page.route("**/api/v1/data/posts/counts**", async (route) => {

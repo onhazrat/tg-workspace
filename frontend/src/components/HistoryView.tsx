@@ -16,11 +16,13 @@ import { AnimatePresence, motion } from "motion/react"
 import type React from "react"
 import { useEffect, useMemo, useRef, useState } from "react"
 import { toast } from "sonner"
+import { DiscoverReportsHistory } from "@/components/discover/DiscoverReportsHistory"
 import { TgButton } from "@/components/ui/tg-button"
 import { TgMetaChip } from "@/components/ui/tg-chips"
 import { TgConfirmDialog } from "@/components/ui/tg-confirm-dialog"
 import { TgIconButton } from "@/components/ui/tg-icon-button"
 import { TgHeroEmptyState } from "@/components/ui/tg-segmented"
+import { useDiscoverReportParam } from "@/hooks/useDiscoverReportParam"
 import { formatSummaryModelLabel, isPendingSummary } from "../constants"
 import { useData } from "../contexts/DataContext"
 import { useUI } from "../contexts/UIContext"
@@ -71,6 +73,7 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
   handleSelectHistorySummary,
   setActiveTab,
 }) => {
+  const { openReport: openDiscoverReport } = useDiscoverReportParam()
   const { botCredentials, chatDestinations, loadHistory, summariesHistory } =
     useData()
   const {
@@ -531,6 +534,18 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
           )}
         </AnimatePresence>
       </div>
+
+      {/*
+       * Saved Discover reports archive alongside summaries (IDEA-011 W1). Kept
+       * as its own section rather than merged into `filteredHistory`, whose
+       * search/model/language filters are summary-specific.
+       */}
+      <DiscoverReportsHistory
+        onOpenReport={(reportId) => {
+          openDiscoverReport(reportId)
+          setActiveTab("discover")
+        }}
+      />
 
       {/* History List */}
       {filteredHistory.length === 0 ? (

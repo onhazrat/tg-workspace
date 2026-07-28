@@ -17,6 +17,7 @@
 | IDEA-008 | Thumbnail cache size walk per channel | backend | medium | 2026-07-20 | [detail](./ideas/IDEA-008-thumbnail-cache-walk-per-channel.md) | Full stat-walk of the cache dir after every channel scrape; caught live via py-spy |
 | IDEA-009 | pgvector for RAG search | backend | medium | 2026-07-21 | [detail](./ideas/IDEA-009-pgvector-for-rag.md) | Search still scores a capped window in Python; recall degrades silently as the corpus grows |
 | IDEA-010 | Shared paginated-list helper | backend | medium | 2026-07-21 | [detail](./ideas/IDEA-010-shared-paginated-list-helper.md) | The pattern is now copy-pasted 4×; this duplication is why the `stats.py` bulk-delete fix never reached `logs.py` |
+| IDEA-011 | Discover tab refinement | full-stack | medium | 2026-07-29 | [detail](./ideas/IDEA-011-discover-tab-refinement.md) | Survey doc — 14 proposals (D1–D14) in 8 workstreams; pick a workstream, not the whole doc. **W1 is designed and agreed**: Discover reports become saved artifacts modelled on summaries |
 
 ## In progress
 

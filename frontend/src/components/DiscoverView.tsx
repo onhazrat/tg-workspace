@@ -1,25 +1,31 @@
 import { Sparkles } from "lucide-react"
 import { motion } from "motion/react"
 import type React from "react"
-import { useEffect, useMemo, useState } from "react"
-import { SERVER_REPRODUCIBLE_CAP_MODES } from "@/api/data"
+import { useMemo, useState } from "react"
 import { DiscoverBulkBar } from "@/components/discover/DiscoverBulkBar"
+import { DiscoverCandidatePanel } from "@/components/discover/DiscoverCandidatePanel"
 import { DiscoverCandidateTable } from "@/components/discover/DiscoverCandidateTable"
 import { DiscoverEmptyState } from "@/components/discover/DiscoverEmptyState"
 import { DiscoverFilterBar } from "@/components/discover/DiscoverFilterBar"
+import { DiscoverReportBar } from "@/components/discover/DiscoverReportBar"
 import { DiscoverScopeCard } from "@/components/discover/DiscoverScopeCard"
 import { DiscoverSortChips } from "@/components/discover/DiscoverSortChips"
 import { useDiscoverFollowJob } from "@/components/discover/useDiscoverFollowJob"
 import { TgButton } from "@/components/ui/tg-button"
 import { TgConfirmDialog } from "@/components/ui/tg-confirm-dialog"
 import { useDebouncedValue } from "@/hooks/useDebouncedValue"
-import { useDiscoverCandidatesQuery } from "@/hooks/useDiscover"
 import {
-  computeDiscoveryCandidates,
+  type DiscoverCandidatesParams,
+  useCreateDiscoverReportMutation,
+  useDiscoverReportQuery,
+  useLatestDiscoverReportQuery,
+} from "@/hooks/useDiscover"
+import { useDiscoverReportParam } from "@/hooks/useDiscoverReportParam"
+import {
   countUnfollowedCandidates,
   DISCOVERY_SIGNAL_KINDS,
+  type DiscoveryCandidate,
   type DiscoveryEmptyReason,
-  type DiscoveryScopeCounts,
   type DiscoverySignalKind,
   deriveDiscoveryEmptyReason,
   filterDiscoveryCandidates,
@@ -29,21 +35,37 @@ import {
   type DiscoveryQuickAction,
   resolveDiscoveryEmptyState,
 } from "@/lib/posts/discover-empty-state"
+import {
+  type DiscoverReportView,
+  reportSignalKinds,
+  savedReportToView,
+} from "@/lib/posts/discover-report-view"
 import { useData } from "../contexts/DataContext"
 import { useScraper } from "../contexts/ScraperContext"
 import { useSettings } from "../contexts/SettingsContext"
 import { useUI } from "../contexts/UIContext"
 import { useApiStatus } from "../hooks/useApiStatus"
-import type { Post } from "../types"
 
-const EMPTY_SCOPE_COUNTS: DiscoveryScopeCounts = {
-  forwardPosts: 0,
-  mentionPosts: 0,
-  linkPosts: 0,
-}
+/**
+ * Seed for the `random` per-channel cap.
+ *
+ * Must match the Posts feed's seed (`usePostsView`, `ScraperContext`), which is
+ * likewise a constant 0 — a different seed would make Discover aggregate over a
+ * different "random" sample than the Posts tab shows for the same settings.
+ */
+const RANDOM_CAP_SEED = 0
 
+/**
+ * Discover: which channels do the channels you follow keep pointing at?
+ *
+ * A generated report is *saved* (IDEA-011 W1). The Channels/Posts selections
+ * are its input, captured at generate time; afterwards the report is immutable
+ * and nothing the user does elsewhere recomputes or invalidates it. That is why
+ * this component has no scope-invalidation effect: there is no derived result
+ * to keep in sync, only a stored artifact to display.
+ */
 export const DiscoverView: React.FC = () => {
-  const { channels, selectedChannels } = useData()
+  const { selectedChannels } = useData()
   const {
     getScopedPosts,
     forwardedFilter,
@@ -51,7 +73,6 @@ export const DiscoverView: React.FC = () => {
     postSearch,
     semanticSearchQuery,
     followDiscoverChannels,
-    setPostSearch,
     maxPostsPerChannel,
     maxPostsPerChannelMode,
     mediaFilter,
@@ -71,26 +92,9 @@ export const DiscoverView: React.FC = () => {
 
   // Ephemeral: a name filter is a per-visit refinement, not a durable preference.
   const [nameQuery, setNameQuery] = useState("")
+  const [inspecting, setInspecting] = useState<DiscoveryCandidate | null>(null)
 
-  // Discover is an action tab: nothing is computed until the user asks for a
-  // report, and changing the scope returns to the "Generate" prompt. This keeps
-  // opening the tab (or changing channels) from doing any work.
-  const [generated, setGenerated] = useState(false)
-  // Posts for the client fallback (semantic / random cap), fetched on generate.
-  const [clientPosts, setClientPosts] = useState<Post[]>([])
-
-  const enabledKinds = useMemo(
-    () => new Set<DiscoverySignalKind>(discoverSignals),
-    [discoverSignals],
-  )
-
-  // The server reproduces Discover for the ordinary case. The client path
-  // stays for the two scopes the server cannot reproduce: an active semantic
-  // (vector) query, and the per-channel cap's browser-seeded `random` mode.
-  const serverEligible =
-    !semanticSearchQuery.trim() &&
-    (maxPostsPerChannel <= 0 ||
-      SERVER_REPRODUCIBLE_CAP_MODES.has(maxPostsPerChannelMode))
+  const { reportId, openReport } = useDiscoverReportParam()
 
   const debouncedPostSearch = useDebouncedValue(postSearch, 300)
   const selectedChannelNames = useMemo(
@@ -98,7 +102,8 @@ export const DiscoverView: React.FC = () => {
     [selectedChannels],
   )
 
-  const serverParams = useMemo(
+  /** Live scope — the *input* to the next report, never a description of one. */
+  const liveParams: DiscoverCandidatesParams = useMemo(
     () => ({
       channelNames: selectedChannelNames,
       startDate,
@@ -108,6 +113,8 @@ export const DiscoverView: React.FC = () => {
       forwarded: forwardedFilter,
       media: mediaFilter,
       maxPerChannel: maxPostsPerChannel,
+      maxPerChannelMode: maxPostsPerChannelMode,
+      seed: RANDOM_CAP_SEED,
     }),
     [
       selectedChannelNames,
@@ -118,97 +125,49 @@ export const DiscoverView: React.FC = () => {
       forwardedFilter,
       mediaFilter,
       maxPostsPerChannel,
+      maxPostsPerChannelMode,
     ],
   )
 
-  // Return to the "Generate" prompt whenever the scope that defines a report
-  // changes, so a shown report is never silently stale for a different scope.
-  const scopeSignature = useMemo(
-    () =>
-      JSON.stringify(serverParams) +
-      semanticSearchQuery +
-      maxPostsPerChannelMode,
-    [serverParams, semanticSearchQuery, maxPostsPerChannelMode],
-  )
-  useEffect(() => {
-    setGenerated(false)
-    setClientPosts([])
-  }, [scopeSignature])
+  const latestQuery = useLatestDiscoverReportQuery(reportId === null)
+  const pinnedQuery = useDiscoverReportQuery(reportId)
+  const createReport = useCreateDiscoverReportMutation()
 
+  const view: DiscoverReportView | null = useMemo(() => {
+    const saved = reportId !== null ? pinnedQuery.data : latestQuery.data
+    return saved ? savedReportToView(saved) : null
+  }, [reportId, pinnedQuery.data, latestQuery.data])
+
+  const isLoadingReport =
+    reportId !== null ? pinnedQuery.isLoading : latestQuery.isLoading
+
+  /**
+   * Generate and save a report.
+   *
+   * A semantic query is the one scope whose *post selection* the server cannot
+   * derive from the scope alone — the vector search owns that ranking. So the
+   * client resolves which posts matched and passes their ids; the aggregation
+   * still happens server-side, in the single implementation (IDEA-011 D14).
+   */
   const handleGenerate = async () => {
-    setGenerated(true)
-    if (!serverEligible) {
-      setClientPosts(await getScopedPosts())
+    const params = { ...liveParams }
+    if (semanticSearchQuery.trim()) {
+      const posts = await getScopedPosts()
+      params.postIds = posts.map((post) => ({
+        channelName: post.channelName,
+        postId: post.id,
+      }))
     }
+    const report = await createReport.mutateAsync(params)
+    // Pin the new report so it stays on screen even as newer ones appear.
+    openReport(report.id)
   }
 
-  const serverQueryEnabled =
-    generated &&
-    serverEligible &&
-    selectedChannels.size > 0 &&
-    enabledKinds.size > 0
-  const serverQuery = useDiscoverCandidatesQuery(
-    serverParams,
-    serverQueryEnabled,
-  )
+  const showLatest = () => {
+    openReport(null)
+  }
 
-  const clientResult = useMemo(
-    () =>
-      serverEligible || !generated
-        ? null
-        : computeDiscoveryCandidates(clientPosts, channels, {
-            forwardedFilter,
-            selectedChannelCount: selectedChannels.size,
-            enabledKinds,
-            semanticQuery: semanticSearchQuery,
-          }),
-    [
-      serverEligible,
-      generated,
-      clientPosts,
-      channels,
-      forwardedFilter,
-      selectedChannels.size,
-      enabledKinds,
-      semanticSearchQuery,
-    ],
-  )
-
-  const {
-    candidates: rawCandidates,
-    scopeCounts,
-    emptyReason: computeEmptyReason,
-  } = useMemo(() => {
-    if (clientResult) return clientResult
-
-    const data = serverQuery.data
-    const serverCandidates = data?.candidates ?? []
-    // While the first server page is loading, withhold the empty reason so the
-    // guide does not flash before candidates arrive.
-    const settled =
-      !serverQueryEnabled || !serverQuery.isLoading || data != null
-    return {
-      candidates: serverCandidates,
-      scopeCounts: data?.scopeCounts ?? EMPTY_SCOPE_COUNTS,
-      emptyReason: settled
-        ? deriveDiscoveryEmptyReason({
-            enabledKinds,
-            selectedChannelCount: selectedChannels.size,
-            postsInScope: data?.postsInScope ?? 0,
-            candidateCount: serverCandidates.length,
-            forwardedFilter,
-          })
-        : undefined,
-    }
-  }, [
-    clientResult,
-    serverQuery.data,
-    serverQuery.isLoading,
-    serverQueryEnabled,
-    enabledKinds,
-    selectedChannels.size,
-    forwardedFilter,
-  ])
+  const rawCandidates = useMemo(() => view?.candidates ?? [], [view])
 
   const candidates = useMemo(() => {
     const filtered = filterDiscoveryCandidates(rawCandidates, {
@@ -225,9 +184,26 @@ export const DiscoverView: React.FC = () => {
     discoverSortKey,
   ])
 
-  const emptyReason: DiscoveryEmptyReason | undefined =
-    computeEmptyReason ??
-    (candidates.length === 0 ? "no_matching_candidates" : undefined)
+  /**
+   * Why the report is empty, described in terms of the report's own scope.
+   *
+   * Uses the signals the report was generated with rather than the chips'
+   * current value — the chips configure the *next* run, so after changing them
+   * they no longer explain what is on screen.
+   */
+  const emptyReason: DiscoveryEmptyReason | undefined = useMemo(() => {
+    if (!view) return undefined
+    const computed = deriveDiscoveryEmptyReason({
+      enabledKinds: reportSignalKinds(view, DISCOVERY_SIGNAL_KINDS),
+      selectedChannelCount: view.scope.channels.length,
+      postsInScope: view.postsInScope,
+      candidateCount: rawCandidates.length,
+      forwardedFilter: view.scope.forwarded,
+    })
+    if (computed) return computed
+    return candidates.length === 0 ? "no_matching_candidates" : undefined
+  }, [view, rawCandidates.length, candidates.length])
+
   const emptyState = resolveDiscoveryEmptyState(emptyReason)
 
   const unfollowedCount = useMemo(
@@ -271,12 +247,6 @@ export const DiscoverView: React.FC = () => {
     setActiveTab(action.tab)
   }
 
-  const handleViewPosts = (name: string, isFollowed: boolean) => {
-    setForwardedFilter(isFollowed ? "forwarded" : "unfollowed_forwarded")
-    setPostSearch(name)
-    setActiveTab("posts")
-  }
-
   return (
     <motion.div
       key="discover"
@@ -284,17 +254,20 @@ export const DiscoverView: React.FC = () => {
       animate={{ opacity: 1, y: 0 }}
       className="space-y-6"
     >
+      <DiscoverReportBar
+        view={view}
+        isPinned={reportId !== null}
+        isGenerating={createReport.isPending}
+        isOffline={isOffline}
+        onGenerate={() => void handleGenerate()}
+        onShowLatest={showLatest}
+      />
+
       <DiscoverScopeCard
-        selectedChannelCount={selectedChannels.size}
-        startDate={startDate}
-        endDate={endDate}
-        forwardedFilter={forwardedFilter}
-        postSearch={postSearch}
-        scopeCounts={scopeCounts}
+        view={view}
+        liveChannelCount={selectedChannels.size}
         candidateCount={candidates.length}
         unfollowedCount={unfollowedCount}
-        semanticSearchQuery={semanticSearchQuery}
-        maxPostsPerChannel={maxPostsPerChannel}
       />
 
       <div className="rounded-xl border border-app-ink/10 bg-app-card p-4 shadow-sm">
@@ -317,10 +290,9 @@ export const DiscoverView: React.FC = () => {
         </div>
 
         {/*
-         * Only the *result* filters are gated. Signals configures the run — it
-         * feeds the request and changing it invalidates a generated report — so
-         * it stays on screen; gating the whole bar hid the one control you need
-         * before generating. See `DiscoverFilterBar`'s `showResultFilters`.
+         * Only the *result* filters are gated. Signals configures the next run —
+         * it feeds the request rather than filtering what is on screen — so it
+         * stays visible even with no report. See `showResultFilters`.
          */}
         <DiscoverFilterBar
           signals={discoverSignals}
@@ -331,7 +303,7 @@ export const DiscoverView: React.FC = () => {
           onMinTotalChange={setDiscoverMinTotal}
           nameQuery={nameQuery}
           onNameQueryChange={setNameQuery}
-          showResultFilters={generated}
+          showResultFilters={view !== null}
         />
 
         {candidates.length > 0 && follow.selectedForFollow.size > 0 ? (
@@ -357,7 +329,11 @@ export const DiscoverView: React.FC = () => {
           </div>
         ) : null}
 
-        {!generated ? (
+        {isLoadingReport ? (
+          <p className="py-12 text-center text-sm text-app-ink/50">
+            Loading report…
+          </p>
+        ) : view === null ? (
           <div
             className="flex flex-col items-center gap-4 py-12 text-center"
             data-testid="discover-generate-prompt"
@@ -369,14 +345,17 @@ export const DiscoverView: React.FC = () => {
               <p className="text-sm font-semibold">Discover new channels</p>
               <p className="mt-1 text-xs text-app-ink/60">
                 Generate a report of channels your selection forwards from,
-                mentions, or links to over the current time range.
+                mentions, or links to over the current time range. Reports are
+                saved, so changing your selection later won't affect them.
               </p>
             </div>
             <TgButton
               variant="primary"
               onClick={() => void handleGenerate()}
-              disabled={isOffline}
-              data-testid="discover-generate-button"
+              disabled={isOffline || createReport.isPending}
+              loading={createReport.isPending}
+              loadingLabel="Generating…"
+              data-testid="discover-generate-empty-button"
             >
               <Sparkles size={15} />
               Generate Discovery Report
@@ -398,10 +377,18 @@ export const DiscoverView: React.FC = () => {
             activeFollowNames={follow.activeFollowNames}
             resultStatusByName={follow.resultStatusByName}
             onFollow={(name) => void follow.followOne(name)}
-            onViewPosts={handleViewPosts}
+            onInspect={setInspecting}
           />
         )}
       </div>
+
+      <DiscoverCandidatePanel
+        candidate={inspecting}
+        onClose={() => setInspecting(null)}
+        isOffline={isOffline}
+        isFollowJobRunning={follow.isFollowJobRunning}
+        onFollow={(name) => void follow.followOne(name)}
+      />
 
       <TgConfirmDialog
         open={follow.pendingFollowNames !== null}

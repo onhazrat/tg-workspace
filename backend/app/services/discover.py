@@ -21,11 +21,13 @@ import re
 from dataclasses import dataclass, field
 from typing import Any, Literal
 
+from sqlalchemy import or_
 from sqlmodel import Session, col, select
 
 from app.models_tg import Channel, Post
 from app.services.post_filters import PostFilters, apply_post_filters
 from app.services.post_links_parser import channel_from_telegram_url
+from app.services.posts import random_cap_order
 from app.services.telegram_web import _all_web_domains, is_channel_handle
 
 SignalKind = Literal["forward", "mention", "link"]
@@ -141,6 +143,9 @@ def compute_discover_candidates(
     signals: set[SignalKind] | None = None,
     filters: PostFilters | None = None,
     max_per_channel: int = 0,
+    max_per_channel_mode: str = "latest",
+    seed: int = 0,
+    post_ids: list[tuple[str, int]] | None = None,
 ) -> dict[str, Any]:
     """Aggregate discovery candidates for a channel/date scope.
 
@@ -148,16 +153,24 @@ def compute_discover_candidates(
     descending, plus post-level `scopeCounts` which always report every kind
     regardless of which signals are enabled.
 
-    `filters` and `max_per_channel` reproduce the Posts-tab view the frontend
-    aggregated over (`buildFilteredPostsFromRaw`): keyword / forwarded / media,
-    then the `latest` per-channel cap. The cap's `random` mode is browser-only,
-    so callers pass `max_per_channel=0` and keep the client path when it is
-    active (see phase-4 scope decision).
+    `filters` and the cap reproduce the Posts-tab view the frontend aggregated
+    over (`buildFilteredPostsFromRaw`): keyword / forwarded / media, then the
+    per-channel cap in either `latest` or `random` mode — `random` reuses the
+    feed's seeded ordering (`posts.random_cap_order`) so the same posts are
+    chosen for the same seed.
+
+    `post_ids` restricts the scope to an explicit `(channel_name, post_id)` set.
+    That is how a semantic (vector) query is expressed here: the caller runs the
+    vector search, which owns the ranking, and passes the resulting posts in.
+    Aggregation therefore has exactly one implementation regardless of how the
+    post set was chosen (IDEA-011 D14).
     """
     enabled = signals if signals is not None else set(SIGNAL_KINDS)
 
     scope_counts = {"forwardPosts": 0, "mentionPosts": 0, "linkPosts": 0}
-    if not channel_names or not enabled:
+    # An explicit empty `post_ids` means "the search matched nothing", which is
+    # an empty scope — not "no restriction".
+    if not channel_names or not enabled or post_ids == []:
         return {"candidates": [], "scopeCounts": scope_counts, "postsInScope": 0}
 
     followed = {
@@ -170,11 +183,26 @@ def compute_discover_candidates(
         stmt = stmt.where(Post.timestamp >= start_date)
     if end_date is not None:
         stmt = stmt.where(Post.timestamp <= end_date)
+    if post_ids:
+        unique_pairs = {(name, post_id) for name, post_id in post_ids}
+        stmt = stmt.where(
+            or_(
+                *[
+                    (col(Post.channel_name) == name) & (col(Post.post_id) == post_id)
+                    for name, post_id in unique_pairs
+                ]
+            )
+        )
     if filters is not None:
         stmt = apply_post_filters(stmt, filters, followed_names=frozenset(followed))
-    # Order by (channel, timestamp desc) so the latest-cap can be applied while
-    # streaming; this ordering is served by ix_tg_posts_channel_name_timestamp.
-    stmt = stmt.order_by(col(Post.channel_name), col(Post.timestamp).desc())
+    # Order by channel first so the per-channel cap can be applied while
+    # streaming. `latest` then orders by timestamp desc, which is served by
+    # ix_tg_posts_channel_name_timestamp; `random` uses the feed's seeded
+    # ordering so the cap selects the same posts the Posts tab would show.
+    if max_per_channel > 0 and max_per_channel_mode == "random":
+        stmt = stmt.order_by(col(Post.channel_name), random_cap_order(seed))
+    else:
+        stmt = stmt.order_by(col(Post.channel_name), col(Post.timestamp).desc())
 
     by_source: dict[str, _Accumulator] = {}
     seen_per_channel: dict[str, int] = {}

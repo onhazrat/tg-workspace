@@ -2189,7 +2189,7 @@
       "post": {
         "tags": ["data"],
         "summary": "Discover Candidates",
-        "description": "Aggregated discovery candidates for a channel/date scope.\n\nReturns counts only. The client previously fetched every post body in\nscope to compute this in JS. The keyword/forwarded/media/maxPerChannel\nparams reproduce the Posts-tab view the client aggregated over; the caller\nkeeps the client path when a semantic query or a `random` cap is active.\n\nPOST rather than GET for the same reason as `/posts` \u2014 the channel selection\ntravels in the body so it cannot overflow the request line.",
+        "description": "Aggregated discovery candidates for a channel/date scope.\n\nReturns counts only. The client previously fetched every post body in\nscope to compute this in JS. The keyword/forwarded/media/cap params\nreproduce the Posts-tab view the client aggregated over, and\n`maxPerChannelMode`/`seed`/`postIds` cover the `random` cap and semantic\nscopes that used to keep a second client-side implementation alive.\n\nPOST rather than GET for the same reason as `/posts` \u2014 the channel selection\ntravels in the body so it cannot overflow the request line.",
         "operationId": "data-discover_candidates",
         "requestBody": {
           "content": {
@@ -2224,6 +2224,210 @@
           }
         },
         "security": [{ "OAuth2PasswordBearer": [] }]
+      }
+    },
+    "/api/v1/data/discover/reports": {
+      "post": {
+        "tags": ["data"],
+        "summary": "Create Discover Report",
+        "description": "Generate a Discover report and save it.\n\nUnlike `/discover/candidates`, which computes and forgets, this persists the\nresult together with a snapshot of the scope it was generated for. The saved\nreport is immutable: later changes to the channel selection or the Posts-tab\nfilters produce a *new* report rather than altering this one (IDEA-011 W1).",
+        "operationId": "data-create_discover_report",
+        "security": [{ "OAuth2PasswordBearer": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DiscoverCandidatesRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Data-Create Discover Report"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": ["data"],
+        "summary": "List Discover Reports",
+        "description": "Newest-first page of saved reports, without their candidate rows.\n\nSee `report_to_camel_light`: a wide-scope report holds the full\nsingle-reference tail, so the list ships a `candidateCount` instead.",
+        "operationId": "data-list_discover_reports",
+        "security": [{ "OAuth2PasswordBearer": [] }],
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 1000,
+              "minimum": 1,
+              "default": 100,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "title": "Offset"
+            }
+          },
+          {
+            "name": "search",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [{ "type": "string" }, { "type": "null" }],
+              "title": "Search"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": { "type": "object", "additionalProperties": true },
+                  "title": "Response Data-List Discover Reports"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/data/discover/reports/latest": {
+      "get": {
+        "tags": ["data"],
+        "summary": "Get Latest Discover Report",
+        "description": "The most recent saved report, or null if none exists yet.\n\nDeclared before `/discover/reports/{report_id}` so \"latest\" is not captured\nas an id by the path parameter.",
+        "operationId": "data-get_latest_discover_report",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    { "additionalProperties": true, "type": "object" },
+                    { "type": "null" }
+                  ],
+                  "title": "Response Data-Get Latest Discover Report"
+                }
+              }
+            }
+          }
+        },
+        "security": [{ "OAuth2PasswordBearer": [] }]
+      }
+    },
+    "/api/v1/data/discover/reports/{report_id}": {
+      "get": {
+        "tags": ["data"],
+        "summary": "Get Discover Report",
+        "description": "A saved report with every candidate, `isFollowed` resolved live.",
+        "operationId": "data-get_discover_report",
+        "security": [{ "OAuth2PasswordBearer": [] }],
+        "parameters": [
+          {
+            "name": "report_id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "title": "Report Id" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Data-Get Discover Report"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": ["data"],
+        "summary": "Delete Discover Report",
+        "operationId": "data-delete_discover_report",
+        "security": [{ "OAuth2PasswordBearer": [] }],
+        "parameters": [
+          {
+            "name": "report_id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "title": "Report Id" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": { "type": "string" },
+                  "title": "Response Data-Delete Discover Report"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
       }
     },
     "/api/v1/data/posts/counts": {
@@ -4863,12 +5067,37 @@
               { "type": "null" }
             ],
             "title": "Signals"
+          },
+          "maxPerChannelMode": {
+            "type": "string",
+            "title": "Maxperchannelmode",
+            "default": "latest"
+          },
+          "seed": { "type": "integer", "title": "Seed", "default": 0 },
+          "postIds": {
+            "anyOf": [
+              {
+                "items": { "$ref": "#/components/schemas/DiscoverPostRef" },
+                "type": "array"
+              },
+              { "type": "null" }
+            ],
+            "title": "Postids"
           }
         },
         "type": "object",
         "required": ["channelNames"],
         "title": "DiscoverCandidatesRequest",
-        "description": "`PostScopeRequest` plus the signal-kind filter.\n\n`channelNames` is re-declared as required: the discovery aggregate is always\nasked about an explicit selection, and the query-string version required it\ntoo."
+        "description": "`PostScopeRequest` plus the signal-kind filter and the cap/scope inputs.\n\n`channelNames` is re-declared as required: the discovery aggregate is always\nasked about an explicit selection, and the query-string version required it\ntoo.\n\n`maxPerChannelMode`/`seed` and `postIds` are what let Discover reproduce the\ntwo scopes that used to fall back to a second, client-side implementation of\nthe same counting rules \u2014 the `random` cap and a semantic query\n(IDEA-011 D14)."
+      },
+      "DiscoverPostRef": {
+        "properties": {
+          "channelName": { "type": "string", "title": "Channelname" },
+          "postId": { "type": "integer", "title": "Postid" }
+        },
+        "type": "object",
+        "required": ["channelName", "postId"],
+        "title": "DiscoverPostRef"
       },
       "DiscoveredViaPayload": {
         "properties": {

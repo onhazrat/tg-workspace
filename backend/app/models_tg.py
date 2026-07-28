@@ -151,6 +151,56 @@ class Summary(SQLModel, table=True):
     updated_at: datetime = Field(default_factory=utc_now)
 
 
+class DiscoverReport(SQLModel, table=True):
+    """A saved Discover run: the candidates found for a scope at a point in time.
+
+    Modelled on `Summary` — a report is an artifact the user generates and keeps,
+    not a view that recomputes. The scope columns are a *snapshot* of the
+    Channels/Posts selections at generate time, so changing those selections
+    later cannot alter or invalidate an existing report (IDEA-011 W1).
+
+    `candidates` deliberately stores the full result including the long
+    single-reference tail, so `minTotal` stays a view filter over saved data
+    rather than something applied destructively at save time.
+
+    `isFollowed` is NOT stored. It is derived against the live `tg_channels` set
+    whenever a report is read, so a saved report self-corrects as channels are
+    followed. Counts are historical; follow state is live.
+    """
+
+    __tablename__ = "tg_discover_reports"
+
+    id: str = Field(primary_key=True)
+    user_id: uuid.UUID | None = Field(default=None, index=True)
+
+    # --- scope snapshot (inputs, frozen at generate time) ---
+    channels: list[str] = Field(default_factory=list, sa_column=Column(JSON))
+    start_date: int = Field(default=0, sa_column=_ms_ts())
+    end_date: int = Field(default=0, sa_column=_ms_ts())
+    signals: list[str] = Field(default_factory=list, sa_column=Column(JSON))
+    keyword: str | None = None
+    forwarded: str = "all"
+    media: str = "all"
+    max_per_channel: int = 0
+    max_per_channel_mode: str = "latest"
+    # Seed for the `random` cap. Stored so the scope snapshot is complete: the
+    # same seed selects the same posts, which is what makes a `random`-capped
+    # report reproducible rather than a one-off.
+    seed: int = 0
+    # How many posts the scope was explicitly restricted to — a semantic query
+    # passes its matches in. `None` means unrestricted. The count rather than
+    # the ids: enough to explain the scope without another corpus-sized column.
+    scoped_post_count: int | None = None
+
+    # --- result ---
+    candidates: list[Any] = Field(default_factory=list, sa_column=Column(JSON))
+    scope_counts: dict[str, Any] = Field(default_factory=dict, sa_column=Column(JSON))
+    posts_in_scope: int = 0
+
+    timestamp: int = Field(default=0, sa_column=_ms_ts())
+    updated_at: datetime = Field(default_factory=utc_now)
+
+
 class TagRun(SQLModel, table=True):
     __tablename__ = "tg_tag_runs"
 

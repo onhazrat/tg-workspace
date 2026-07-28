@@ -816,16 +816,61 @@ export const DiscoverCandidatesRequestSchema = {
                 }
             ],
             title: 'Signals'
+        },
+        maxPerChannelMode: {
+            type: 'string',
+            title: 'Maxperchannelmode',
+            default: 'latest'
+        },
+        seed: {
+            type: 'integer',
+            title: 'Seed',
+            default: 0
+        },
+        postIds: {
+            anyOf: [
+                {
+                    items: {
+                        '$ref': '#/components/schemas/DiscoverPostRef'
+                    },
+                    type: 'array'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Postids'
         }
     },
     type: 'object',
     required: ['channelNames'],
     title: 'DiscoverCandidatesRequest',
-    description: `\`PostScopeRequest\` plus the signal-kind filter.
+    description: `\`PostScopeRequest\` plus the signal-kind filter and the cap/scope inputs.
 
 \`channelNames\` is re-declared as required: the discovery aggregate is always
 asked about an explicit selection, and the query-string version required it
-too.`
+too.
+
+\`maxPerChannelMode\`/\`seed\` and \`postIds\` are what let Discover reproduce the
+two scopes that used to fall back to a second, client-side implementation of
+the same counting rules — the \`random\` cap and a semantic query
+(IDEA-011 D14).`
+} as const;
+
+export const DiscoverPostRefSchema = {
+    properties: {
+        channelName: {
+            type: 'string',
+            title: 'Channelname'
+        },
+        postId: {
+            type: 'integer',
+            title: 'Postid'
+        }
+    },
+    type: 'object',
+    required: ['channelName', 'postId'],
+    title: 'DiscoverPostRef'
 } as const;
 
 export const DiscoveredViaPayloadSchema = {

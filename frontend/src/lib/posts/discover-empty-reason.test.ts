@@ -1,24 +1,18 @@
 import { describe, expect, test } from "bun:test"
-import type { Post } from "@/types"
 import {
-  computeDiscoveryCandidates,
   type DiscoverySignalKind,
   deriveDiscoveryEmptyReason,
 } from "./discover-candidates"
 
+/*
+ * The former "parity with computeDiscoveryCandidates" cases are gone with that
+ * function: the aggregation is server-side only now, so this helper is the sole
+ * source of the empty reason rather than a restatement of one embedded in a
+ * client-side aggregation (IDEA-011 D14).
+ */
+
 const ALL_KINDS = new Set<DiscoverySignalKind>(["forward", "mention", "link"])
 const FORWARD_ONLY = new Set<DiscoverySignalKind>(["forward"])
-
-function post(overrides: Partial<Post> = {}): Post {
-  return {
-    id: 1,
-    channelName: "carrier",
-    text: "",
-    date: "",
-    timestamp: 1000,
-    ...overrides,
-  } as Post
-}
 
 describe("deriveDiscoveryEmptyReason", () => {
   test("no signals wins over everything", () => {
@@ -92,56 +86,4 @@ describe("deriveDiscoveryEmptyReason", () => {
       }),
     ).toBeUndefined()
   })
-})
-
-describe("parity with computeDiscoveryCandidates", () => {
-  // The helper must reach the same reason the client function embeds inline,
-  // given the same scope facts.
-  const cases: {
-    name: string
-    posts: Post[]
-    selectedChannelCount: number
-    enabledKinds: Set<DiscoverySignalKind>
-    forwardedFilter: "all" | "original"
-  }[] = [
-    {
-      name: "posts with a mention",
-      posts: [post({ text: "hey @alpha_news" })],
-      selectedChannelCount: 1,
-      enabledKinds: ALL_KINDS,
-      forwardedFilter: "all",
-    },
-    {
-      name: "posts but no references",
-      posts: [post({ text: "nothing here" })],
-      selectedChannelCount: 1,
-      enabledKinds: ALL_KINDS,
-      forwardedFilter: "all",
-    },
-    {
-      name: "forward-only + original filter, no forwards",
-      posts: [post({ text: "plain" })],
-      selectedChannelCount: 1,
-      enabledKinds: FORWARD_ONLY,
-      forwardedFilter: "original",
-    },
-  ]
-
-  for (const c of cases) {
-    test(c.name, () => {
-      const result = computeDiscoveryCandidates(c.posts, [], {
-        forwardedFilter: c.forwardedFilter,
-        selectedChannelCount: c.selectedChannelCount,
-        enabledKinds: c.enabledKinds,
-      })
-      const derived = deriveDiscoveryEmptyReason({
-        enabledKinds: c.enabledKinds,
-        selectedChannelCount: c.selectedChannelCount,
-        postsInScope: c.posts.length,
-        candidateCount: result.candidates.length,
-        forwardedFilter: c.forwardedFilter,
-      })
-      expect(derived).toBe(result.emptyReason)
-    })
-  }
 })

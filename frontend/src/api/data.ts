@@ -37,9 +37,9 @@ export type DiscoveredViaPayload = {
 
 /**
  * The Posts-tab view state that maps onto server-side filtering, shared by the
- * Discover and counts endpoints. `maxPerChannel` is only sent for the `latest`
- * cap mode — `random` is browser-only, so those callers omit it and fall back
- * to the client computation.
+ * Discover and counts endpoints. The cap *mode* is not here because not every
+ * consumer has one; callers that do (the feed, Discover) add it themselves via
+ * `PostFeedQuery` / `DiscoverScopeQuery`.
  */
 export type PostScopeQuery = {
   channelNames?: string[]
@@ -98,9 +98,74 @@ export function postScopeBody(params: PostScopeQuery): Record<string, unknown> {
   return body
 }
 
-/** Cap modes whose per-channel selection can be reproduced server-side. */
-export const SERVER_REPRODUCIBLE_CAP_MODES: ReadonlySet<MaxPostsPerChannelMode> =
-  new Set<MaxPostsPerChannelMode>(["latest"])
+/**
+ * Inputs to a Discover run, on top of the shared post scope.
+ *
+ * `maxPerChannelMode` + `seed` and `postIds` are what make every scope
+ * reproducible server-side: the cap reuses the feed's seeded ordering, and a
+ * semantic query passes in the posts its vector search matched. Without them
+ * these two cases needed a duplicate client-side aggregation (IDEA-011 D14).
+ */
+export type DiscoverScopeQuery = PostScopeQuery & {
+  signals?: string[]
+  maxPerChannelMode?: MaxPostsPerChannelMode
+  seed?: number
+  /** Omit for no restriction; `[]` means the search matched nothing. */
+  postIds?: { channelName: string; postId: number }[]
+}
+
+function discoverScopeBody(
+  params: DiscoverScopeQuery,
+): Record<string, unknown> {
+  const body = postScopeBody(params)
+  // `channelNames` is required server-side, so send it even when empty rather
+  // than letting `postScopeBody`'s omit-empty rule drop it into a 422.
+  body.channelNames = params.channelNames ?? []
+  if (params.signals) body.signals = params.signals
+  if (params.maxPerChannelMode)
+    body.maxPerChannelMode = params.maxPerChannelMode
+  if (params.seed != null) body.seed = params.seed
+  // Sent even when empty: `[]` and "absent" mean different things here.
+  if (params.postIds != null) body.postIds = params.postIds
+  return body
+}
+
+/**
+ * The scope a saved report was generated for.
+ *
+ * A frozen copy of the inputs, not a pointer to live state — this is what the
+ * scope card renders, so it keeps describing where the numbers came from after
+ * the user changes their selection.
+ */
+export type DiscoverReportScope = {
+  channels: string[]
+  startDate: number
+  endDate: number
+  signals: string[]
+  keyword: string | null
+  forwarded: ForwardedFilterValue
+  media: MediaFilterValue
+  maxPerChannel: number
+  maxPerChannelMode: MaxPostsPerChannelMode
+  seed: number
+  /** Posts the scope was explicitly restricted to; `null` when unrestricted. */
+  scopedPostCount: number | null
+}
+
+/** List-view projection: metadata only, never the candidate rows. */
+export type DiscoverReportSummary = {
+  id: string
+  scope: DiscoverReportScope
+  scopeCounts: DiscoveryScopeCounts
+  postsInScope: number
+  timestamp: number
+  candidateCount: number
+}
+
+/** A saved report with its candidates. `isFollowed` is resolved live per read. */
+export type DiscoverReport = DiscoverReportSummary & {
+  candidates: DiscoveryCandidate[]
+}
 
 export type BulkFollowChannelInput = {
   name: string
@@ -275,18 +340,14 @@ export const dataApi = {
     }),
 
   /**
-   * Server-side Discover aggregation. Mirrors `computeDiscoveryCandidates`'s
-   * output (minus the client-only `emptyReason`) over the same filtered scope:
-   * keyword / forwarded / media, then the `latest` per-channel cap. Callers
-   * keep the client path when a semantic query or a `random` cap is active —
-   * neither is reproducible server-side.
+   * Discover aggregation without saving a report.
+   *
+   * The only implementation of the counting rules — the browser no longer has
+   * a copy. Covers every scope: keyword / forwarded / media, the per-channel
+   * cap in either mode, and an explicit `postIds` set for a semantic query.
    */
-  getDiscoverCandidates: (params: PostScopeQuery & { signals?: string[] }) => {
-    const body = postScopeBody(params)
-    // `channelNames` is required server-side here, so send it even when empty
-    // rather than letting `postScopeBody`'s omit-empty rule drop it into a 422.
-    body.channelNames = params.channelNames ?? []
-    if (params.signals) body.signals = params.signals
+  getDiscoverCandidates: (params: DiscoverScopeQuery) => {
+    const body = discoverScopeBody(params)
     return request<{
       candidates: DiscoveryCandidate[]
       scopeCounts: DiscoveryScopeCounts
@@ -297,6 +358,54 @@ export const dataApi = {
       body: JSON.stringify(body),
     })
   },
+
+  /**
+   * Generate a Discover report and save it.
+   *
+   * Same inputs as `getDiscoverCandidates`, but the result is persisted with a
+   * snapshot of the scope it was generated for. Changing the channel selection
+   * or the Posts-tab filters afterwards produces a *new* report rather than
+   * altering this one — see IDEA-011 W1.
+   */
+  createDiscoverReport: (params: DiscoverScopeQuery) => {
+    const body = discoverScopeBody(params)
+    return request<DiscoverReport>("/api/v1/data/discover/reports", {
+      method: "POST",
+      body: JSON.stringify(body),
+    })
+  },
+
+  /** Saved reports, newest first, without their candidate rows. */
+  listDiscoverReports: (params?: {
+    limit?: number
+    offset?: number
+    search?: string
+  }) => {
+    const qs = new URLSearchParams()
+    if (params?.limit != null) qs.set("limit", String(params.limit))
+    if (params?.offset != null) qs.set("offset", String(params.offset))
+    if (params?.search) qs.set("search", params.search)
+    const suffix = qs.toString() ? `?${qs}` : ""
+    return request<DiscoverReportSummary[]>(
+      `/api/v1/data/discover/reports${suffix}`,
+    )
+  },
+
+  /** The most recent saved report, or null when none has been generated. */
+  getLatestDiscoverReport: () =>
+    request<DiscoverReport | null>("/api/v1/data/discover/reports/latest"),
+
+  /** A saved report with every candidate, `isFollowed` resolved live. */
+  getDiscoverReport: (reportId: string) =>
+    request<DiscoverReport>(
+      `/api/v1/data/discover/reports/${encodeURIComponent(reportId)}`,
+    ),
+
+  deleteDiscoverReport: (reportId: string) =>
+    request<{ status: string }>(
+      `/api/v1/data/discover/reports/${encodeURIComponent(reportId)}`,
+      { method: "DELETE" },
+    ),
 
   /**
    * Per-channel post counts for a filtered scope (SQL GROUP BY).

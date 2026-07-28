@@ -1,22 +1,20 @@
-import { useQuery } from "@tanstack/react-query"
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 
 import { api } from "@/api"
-import type { PostScopeQuery } from "@/api/data"
+import type { DiscoverScopeQuery, PostScopeQuery } from "@/api/data"
 import type { DiscoverySignalKind } from "@/lib/posts/discover-candidates"
 
 import { queryKeys, SUMMARIZER_STALE_TIME } from "./queryKeys"
 
-export type DiscoverCandidatesParams = PostScopeQuery & {
-  signals: DiscoverySignalKind[]
+export type DiscoverCandidatesParams = DiscoverScopeQuery & {
+  signals?: DiscoverySignalKind[]
 }
 
 /**
- * Server-side Discover aggregation.
+ * Stateless Discover aggregation — computes without saving.
  *
- * Only enabled when the caller has decided the scope is reproducible
- * server-side (no semantic query, cap not in `random` mode) and there is a
- * scope to aggregate. When disabled, the caller falls back to the client
- * `computeDiscoveryCandidates` path.
+ * Discover itself generates saved reports; this remains for callers that want
+ * the aggregate without creating an artifact.
  */
 export function useDiscoverCandidatesQuery(
   params: DiscoverCandidatesParams,
@@ -28,6 +26,81 @@ export function useDiscoverCandidatesQuery(
     enabled,
     staleTime: SUMMARIZER_STALE_TIME,
     placeholderData: (previous) => previous,
+  })
+}
+
+/**
+ * The saved report Discover opens on.
+ *
+ * `null` (never generated) is a legitimate settled result, not an error, so the
+ * caller distinguishes "no report yet" from "still loading" via `isLoading`.
+ */
+export function useLatestDiscoverReportQuery(enabled = true) {
+  return useQuery({
+    queryKey: queryKeys.latestDiscoverReport,
+    queryFn: () => api.getLatestDiscoverReport(),
+    enabled,
+    staleTime: SUMMARIZER_STALE_TIME,
+  })
+}
+
+/** A specific saved report, for reopening one from history. */
+export function useDiscoverReportQuery(reportId: string | null) {
+  return useQuery({
+    queryKey: queryKeys.discoverReport(reportId ?? ""),
+    queryFn: () => api.getDiscoverReport(reportId as string),
+    enabled: Boolean(reportId),
+    staleTime: SUMMARIZER_STALE_TIME,
+  })
+}
+
+/** Saved reports, newest first, in the light projection. */
+export function useDiscoverReportsQuery(search?: string) {
+  return useQuery({
+    queryKey: [...queryKeys.discoverReports, search ?? ""],
+    queryFn: () => api.listDiscoverReports(search ? { search } : undefined),
+    staleTime: SUMMARIZER_STALE_TIME,
+  })
+}
+
+/**
+ * Generate and save a report.
+ *
+ * Seeds the new report into its own cache entry and into `latest` so opening
+ * Discover, or reopening this report from history, does not refetch what the
+ * mutation already returned.
+ */
+export function useCreateDiscoverReportMutation() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (params: DiscoverCandidatesParams) =>
+      api.createDiscoverReport(params),
+    onSuccess: (report) => {
+      queryClient.setQueryData(queryKeys.latestDiscoverReport, report)
+      queryClient.setQueryData(queryKeys.discoverReport(report.id), report)
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.discoverReports,
+      })
+    },
+  })
+}
+
+export function useDeleteDiscoverReportMutation() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (reportId: string) => api.deleteDiscoverReport(reportId),
+    onSuccess: (_result, reportId) => {
+      queryClient.removeQueries({
+        queryKey: queryKeys.discoverReport(reportId),
+      })
+      // The deleted report may have been the latest one.
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.latestDiscoverReport,
+      })
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.discoverReports,
+      })
+    },
   })
 }
 

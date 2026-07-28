@@ -120,8 +120,12 @@ def bulk_upsert_posts_impl(
     return count
 
 
-def _random_cap_order(seed: int) -> Any:
+def random_cap_order(seed: int) -> Any:
     """A deterministic pseudo-random ordering for the ``random`` per-channel cap.
+
+    Public because Discover applies the same cap: sharing the ordering is what
+    lets a `random`-capped scope be reproduced server-side, rather than being
+    aggregated in the browser (IDEA-011 D14).
 
     Seeded by the scope (channel, post, and a caller-supplied ``seed``) so the
     *same* posts are chosen across pages — offset paging over a per-request
@@ -200,7 +204,7 @@ def list_feed(
 
     if max_per_channel > 0:
         cap_order = (
-            _random_cap_order(seed)
+            random_cap_order(seed)
             if max_per_channel_mode == "random"
             else col(Post.timestamp).desc()
         )

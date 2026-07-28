@@ -1,20 +1,17 @@
 /**
- * Unified Discover candidate aggregation across all three discovery signals:
- * forwards, `@mentions`, and `t.me/` links in the post body.
+ * Discover candidate *types and view logic* — sorting, result filtering, and
+ * the empty-state reason.
  *
- * Counting rules:
- * - Per post, a handle contributes at most one occurrence of each kind. The
- *   extractors return deduped sets, so a post repeating `@foo` counts once.
- * - Self-references (a channel naming itself) are excluded entirely.
+ * The aggregation itself lives in `backend/app/services/discover.py` and has no
+ * counterpart here. A second implementation used to exist for the two scopes
+ * the server could not reproduce (a semantic query, and the `random`
+ * per-channel cap); both are now expressed server-side — as an explicit
+ * `postIds` set and a shared seeded cap ordering — so the subtle counting
+ * rules (one occurrence per kind per post, self-reference exclusion,
+ * case-insensitive handles) cannot drift between two copies (IDEA-011 D14).
  */
 
 import type { ForwardedFilterValue } from "@/lib/posts/post-view"
-import {
-  extractMentions,
-  extractPostLinkChannels,
-  normalizeHandle,
-} from "@/lib/posts/telegram-handles"
-import type { Channel, Post } from "@/types"
 
 export type DiscoverySignalKind = "forward" | "mention" | "link"
 
@@ -63,29 +60,13 @@ export interface DiscoveryScopeCounts {
   mentionPosts: number
   linkPosts: number
 }
-
-export interface DiscoveryResult {
-  candidates: DiscoveryCandidate[]
-  /** Post-level counts per signal, always across all kinds regardless of filters. */
-  scopeCounts: DiscoveryScopeCounts
-  emptyReason?: DiscoveryEmptyReason
-}
-
-export interface DiscoveryContext {
-  forwardedFilter: ForwardedFilterValue
-  selectedChannelCount: number
-  enabledKinds: ReadonlySet<DiscoverySignalKind>
-  semanticQuery?: string
-}
-
 /**
  * The empty-state reason for a computed candidate set, from scope facts alone.
  *
- * Kept as a standalone function so the server-side Discover path (which has the
- * same facts — enabled kinds, selected channels, posts-in-scope, candidate
- * count — but not the post array) resolves the reason identically to
- * `computeDiscoveryCandidates`. The precedence below must stay in lockstep with
- * that function's early returns.
+ * Derived on the client from facts the server returns — enabled kinds, selected
+ * channels, posts-in-scope, candidate count — rather than from the post array,
+ * which never reaches the browser. Its precedence must stay in lockstep with
+ * the early returns in `compute_discover_candidates`.
  */
 export function deriveDiscoveryEmptyReason(facts: {
   enabledKinds: ReadonlySet<DiscoverySignalKind>
@@ -105,207 +86,6 @@ export function deriveDiscoveryEmptyReason(facts: {
       : "no_candidates"
   }
   return undefined
-}
-
-function emptyCounts(): SignalCounts {
-  return { forward: 0, mention: 0, link: 0 }
-}
-
-function sumCounts(counts: SignalCounts): number {
-  return counts.forward + counts.mention + counts.link
-}
-
-/**
- * Handles referenced by a post, per kind, with self-references removed.
- *
- * Always extracts every kind so a single pass can serve both the candidate
- * aggregation (which filters by enabled kinds) and the scope summary (which
- * always reports the full picture). The extractors are the expensive part.
- */
-function postReferences(post: Post): Map<string, Set<DiscoverySignalKind>> {
-  const self = normalizeHandle(post.channelName)
-  const refs = new Map<string, Set<DiscoverySignalKind>>()
-
-  const add = (handle: string, kind: DiscoverySignalKind) => {
-    if (!handle || handle === self) return
-    const existing = refs.get(handle)
-    if (existing) existing.add(kind)
-    else refs.set(handle, new Set([kind]))
-  }
-
-  if (post.forwardedFrom) {
-    add(normalizeHandle(post.forwardedFrom), "forward")
-  }
-  for (const handle of extractMentions(post.text)) add(handle, "mention")
-  for (const handle of extractPostLinkChannels(post)) add(handle, "link")
-
-  return refs
-}
-
-interface Accumulator {
-  canonicalName: string
-  displayName?: string
-  counts: SignalCounts
-  byCarrier: Map<string, SignalCounts>
-  lastSeen: number
-  samplePost: Post
-}
-
-export function computeDiscoveryCandidates(
-  filteredPosts: Post[],
-  channels: Channel[],
-  ctx: DiscoveryContext,
-): DiscoveryResult {
-  const emptyScope: DiscoveryScopeCounts = {
-    forwardPosts: 0,
-    mentionPosts: 0,
-    linkPosts: 0,
-  }
-
-  if (ctx.enabledKinds.size === 0) {
-    return {
-      candidates: [],
-      scopeCounts: countPostsBySignal(filteredPosts),
-      emptyReason: "no_signals_enabled",
-    }
-  }
-
-  if (ctx.selectedChannelCount === 0) {
-    return {
-      candidates: [],
-      scopeCounts: emptyScope,
-      emptyReason: "no_channels_selected",
-    }
-  }
-
-  if (filteredPosts.length === 0) {
-    return {
-      candidates: [],
-      scopeCounts: emptyScope,
-      emptyReason: "no_posts_in_scope",
-    }
-  }
-
-  const followed = new Set(
-    channels.map((channel) => channel.name.toLowerCase()),
-  )
-  const bySource = new Map<string, Accumulator>()
-  const scopeCounts: DiscoveryScopeCounts = { ...emptyScope }
-
-  for (const post of filteredPosts) {
-    const allRefs = postReferences(post)
-    if (allRefs.size === 0) continue
-
-    // Scope counts always report every kind, independent of what's enabled.
-    let hasForward = false
-    let hasMention = false
-    let hasLink = false
-    for (const kinds of allRefs.values()) {
-      if (kinds.has("forward")) hasForward = true
-      if (kinds.has("mention")) hasMention = true
-      if (kinds.has("link")) hasLink = true
-    }
-    if (hasForward) scopeCounts.forwardPosts += 1
-    if (hasMention) scopeCounts.mentionPosts += 1
-    if (hasLink) scopeCounts.linkPosts += 1
-
-    for (const [handle, allKinds] of allRefs) {
-      const kinds = new Set(
-        [...allKinds].filter((kind) => ctx.enabledKinds.has(kind)),
-      )
-      if (kinds.size === 0) continue
-
-      let entry = bySource.get(handle)
-      if (!entry) {
-        entry = {
-          // Preserve the first-seen casing for display; `handle` stays the key.
-          canonicalName: kinds.has("forward")
-            ? (post.forwardedFrom ?? handle).replace(/^@/, "").trim()
-            : handle,
-          counts: emptyCounts(),
-          byCarrier: new Map(),
-          lastSeen: post.timestamp,
-          samplePost: post,
-        }
-        bySource.set(handle, entry)
-      }
-
-      let carrier = entry.byCarrier.get(post.channelName)
-      if (!carrier) {
-        carrier = emptyCounts()
-        entry.byCarrier.set(post.channelName, carrier)
-      }
-
-      for (const kind of kinds) {
-        entry.counts[kind] += 1
-        carrier[kind] += 1
-      }
-
-      const isNewest = post.timestamp >= entry.lastSeen
-      if (isNewest) {
-        entry.lastSeen = post.timestamp
-        entry.samplePost = post
-      }
-      // Forward metadata is the only source of a human-readable display name.
-      if (kinds.has("forward") && post.forwardedFromName) {
-        if (isNewest || !entry.displayName) {
-          entry.displayName = post.forwardedFromName
-          entry.canonicalName = (post.forwardedFrom ?? handle)
-            .replace(/^@/, "")
-            .trim()
-        }
-      }
-    }
-  }
-
-  if (bySource.size === 0) {
-    const forwardOnly =
-      ctx.enabledKinds.size === 1 && ctx.enabledKinds.has("forward")
-    return {
-      candidates: [],
-      scopeCounts,
-      emptyReason:
-        forwardOnly && ctx.forwardedFilter === "original"
-          ? "original_only"
-          : "no_candidates",
-    }
-  }
-
-  const candidates: DiscoveryCandidate[] = [...bySource.entries()].map(
-    ([handle, entry]) => {
-      const seenIn: DiscoverySeenIn[] = [...entry.byCarrier.entries()]
-        .map(([channelName, counts]) => ({
-          channelName,
-          counts,
-          total: sumCounts(counts),
-        }))
-        .sort((a, b) => {
-          if (b.total !== a.total) return b.total - a.total
-          return a.channelName.localeCompare(b.channelName)
-        })
-
-      return {
-        name: entry.canonicalName,
-        displayName: entry.displayName,
-        counts: entry.counts,
-        total: sumCounts(entry.counts),
-        seenIn,
-        seenInCount: seenIn.length,
-        lastSeen: entry.lastSeen,
-        isFollowed: followed.has(handle),
-        samplePost: {
-          channelName: entry.samplePost.channelName,
-          postId: entry.samplePost.id,
-          timestamp: entry.samplePost.timestamp,
-        },
-      }
-    },
-  )
-
-  return {
-    candidates: sortDiscoveryCandidates(candidates, "total"),
-    scopeCounts,
-  }
 }
 
 /* -------------------------------------------------------------------------- */
@@ -403,39 +183,6 @@ export function filterDiscoveryCandidates(
     }
     return true
   })
-}
-
-/* -------------------------------------------------------------------------- */
-/* Scope summary                                                              */
-/* -------------------------------------------------------------------------- */
-
-/**
- * Post-level counts for the scope card. `computeDiscoveryCandidates` returns
- * these as part of its single pass; this standalone form is only for the
- * degenerate case where no signals are enabled (and for tests).
- */
-export function countPostsBySignal(posts: Post[]): DiscoveryScopeCounts {
-  let forwardPosts = 0
-  let mentionPosts = 0
-  let linkPosts = 0
-
-  for (const post of posts) {
-    const refs = postReferences(post)
-    if (refs.size === 0) continue
-    let hasForward = false
-    let hasMention = false
-    let hasLink = false
-    for (const kinds of refs.values()) {
-      if (kinds.has("forward")) hasForward = true
-      if (kinds.has("mention")) hasMention = true
-      if (kinds.has("link")) hasLink = true
-    }
-    if (hasForward) forwardPosts += 1
-    if (hasMention) mentionPosts += 1
-    if (hasLink) linkPosts += 1
-  }
-
-  return { forwardPosts, mentionPosts, linkPosts }
 }
 
 export function countUnfollowedCandidates(

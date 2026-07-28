@@ -41,7 +41,13 @@ interface DiscoverCandidateTableProps {
   activeFollowNames: string[]
   resultStatusByName: Map<string, string>
   onFollow: (name: string) => void
-  onViewPosts: (name: string, isFollowed: boolean) => void
+  /**
+   * Open the candidate's evidence panel.
+   *
+   * Replaces the old "View posts" navigation, which wrote shared Posts-tab
+   * scope state and thereby discarded the report being read (IDEA-011 D1).
+   */
+  onInspect: (candidate: DiscoveryCandidate) => void
 }
 
 export const DiscoverCandidateTable: React.FC<DiscoverCandidateTableProps> = ({
@@ -54,7 +60,7 @@ export const DiscoverCandidateTable: React.FC<DiscoverCandidateTableProps> = ({
   activeFollowNames,
   resultStatusByName,
   onFollow,
-  onViewPosts,
+  onInspect,
 }) => {
   const headerCheckboxRef = useRef<HTMLInputElement>(null)
   const headerState = headerCheckboxState(candidates, selectedForFollow)
@@ -223,10 +229,11 @@ export const DiscoverCandidateTable: React.FC<DiscoverCandidateTableProps> = ({
                       type="button"
                       variant="secondary"
                       size="sm"
-                      onClick={() => onViewPosts(row.name, row.isFollowed)}
+                      data-testid={`discover-inspect-${row.name}`}
+                      onClick={() => onInspect(row)}
                       className="rounded-full text-app-ink/70"
                     >
-                      View posts
+                      Details
                     </TgButton>
                   </div>
                 </td>

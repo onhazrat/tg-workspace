@@ -151,11 +151,16 @@ export type ChatRequest = {
 };
 
 /**
- * `PostScopeRequest` plus the signal-kind filter.
+ * `PostScopeRequest` plus the signal-kind filter and the cap/scope inputs.
  *
  * `channelNames` is re-declared as required: the discovery aggregate is always
  * asked about an explicit selection, and the query-string version required it
  * too.
+ *
+ * `maxPerChannelMode`/`seed` and `postIds` are what let Discover reproduce the
+ * two scopes that used to fall back to a second, client-side implementation of
+ * the same counting rules — the `random` cap and a semantic query
+ * (IDEA-011 D14).
  */
 export type DiscoverCandidatesRequest = {
     channelNames: Array<(string)>;
@@ -166,12 +171,20 @@ export type DiscoverCandidatesRequest = {
     media?: string;
     maxPerChannel?: number;
     signals?: (Array<(string)> | null);
+    maxPerChannelMode?: string;
+    seed?: number;
+    postIds?: (Array<DiscoverPostRef> | null);
 };
 
 export type DiscoveredViaPayload = {
     channelName: string;
     postId: number;
     timestamp: number;
+};
+
+export type DiscoverPostRef = {
+    channelName: string;
+    postId: number;
 };
 
 export type EmbedRequest = {
@@ -799,6 +812,44 @@ export type DataDiscoverCandidatesData = {
 
 export type DataDiscoverCandidatesResponse = ({
     [key: string]: unknown;
+});
+
+export type DataCreateDiscoverReportData = {
+    requestBody: DiscoverCandidatesRequest;
+};
+
+export type DataCreateDiscoverReportResponse = ({
+    [key: string]: unknown;
+});
+
+export type DataListDiscoverReportsData = {
+    limit?: number;
+    offset?: number;
+    search?: (string | null);
+};
+
+export type DataListDiscoverReportsResponse = (Array<{
+    [key: string]: unknown;
+}>);
+
+export type DataGetLatestDiscoverReportResponse = (({
+    [key: string]: unknown;
+} | null));
+
+export type DataGetDiscoverReportData = {
+    reportId: string;
+};
+
+export type DataGetDiscoverReportResponse = ({
+    [key: string]: unknown;
+});
+
+export type DataDeleteDiscoverReportData = {
+    reportId: string;
+};
+
+export type DataDeleteDiscoverReportResponse = ({
+    [key: string]: (string);
 });
 
 export type DataPostsCountsData = {

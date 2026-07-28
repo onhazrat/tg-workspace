@@ -26,6 +26,14 @@ export type SummarizerSearch = {
   channelGroup?: string
   /** Selected setting group in Settings → Channels & Sync. */
   settingGroup?: string
+  /**
+   * Saved Discover report to open on the Discover tab.
+   *
+   * In the URL rather than component state so History can deep-link a report,
+   * and so reopening one is shareable and survives a reload. Absent means
+   * "the most recent report".
+   */
+  report?: string
 }
 
 export const Route = createFileRoute("/_tg/summarizer")({
@@ -49,6 +57,9 @@ export const Route = createFileRoute("/_tg/summarizer")({
     }
     if (typeof search.settingGroup === "string" && search.settingGroup.trim()) {
       result.settingGroup = search.settingGroup.trim()
+    }
+    if (typeof search.report === "string" && search.report.trim()) {
+      result.report = search.report.trim()
     }
     return result
   },

@@ -120,6 +120,15 @@ from app.services.discover import (
     SignalKind,
     compute_discover_candidates,
 )
+from app.services.discover_reports import (
+    DEFAULT_REPORT_PAGE_SIZE,
+    MAX_REPORT_PAGE_SIZE,
+    create_report,
+    delete_report,
+    get_report,
+    latest_report,
+    list_reports,
+)
 from app.services.logs import (
     DEFAULT_LOG_PAGE_SIZE,
     LOG_MODELS,
@@ -579,16 +588,35 @@ class PostFeedRequest(PostScopeRequest):
         return None
 
 
+class DiscoverPostRef(BaseModel):
+    channel_name: str = PydanticField(alias="channelName")
+    post_id: int = PydanticField(alias="postId")
+
+
 class DiscoverCandidatesRequest(PostScopeRequest):
-    """`PostScopeRequest` plus the signal-kind filter.
+    """`PostScopeRequest` plus the signal-kind filter and the cap/scope inputs.
 
     `channelNames` is re-declared as required: the discovery aggregate is always
     asked about an explicit selection, and the query-string version required it
     too.
+
+    `maxPerChannelMode`/`seed` and `postIds` are what let Discover reproduce the
+    two scopes that used to fall back to a second, client-side implementation of
+    the same counting rules — the `random` cap and a semantic query
+    (IDEA-011 D14).
     """
 
     channel_names: list[str] = PydanticField(alias="channelNames")
     signals: list[str] | None = None
+    max_per_channel_mode: str = PydanticField("latest", alias="maxPerChannelMode")
+    seed: int = 0
+    post_ids: list[DiscoverPostRef] | None = PydanticField(None, alias="postIds")
+
+    def resolved_post_ids(self) -> list[tuple[str, int]] | None:
+        """`None` means "no restriction"; `[]` means "matched nothing"."""
+        if self.post_ids is None:
+            return None
+        return [(ref.channel_name, ref.post_id) for ref in self.post_ids]
 
 
 @router.post("/posts")
@@ -657,33 +685,118 @@ def discover_candidates(
     """Aggregated discovery candidates for a channel/date scope.
 
     Returns counts only. The client previously fetched every post body in
-    scope to compute this in JS. The keyword/forwarded/media/maxPerChannel
-    params reproduce the Posts-tab view the client aggregated over; the caller
-    keeps the client path when a semantic query or a `random` cap is active.
+    scope to compute this in JS. The keyword/forwarded/media/cap params
+    reproduce the Posts-tab view the client aggregated over, and
+    `maxPerChannelMode`/`seed`/`postIds` cover the `random` cap and semantic
+    scopes that used to keep a second client-side implementation alive.
 
     POST rather than GET for the same reason as `/posts` — the channel selection
     travels in the body so it cannot overflow the request line.
     """
-    names = [n.strip() for n in body.channel_names if n.strip()]
-    kinds = (
-        {s.strip() for s in body.signals if s.strip()}
-        if body.signals is not None
-        else None
-    )
+    return compute_discover_candidates(session, **_discover_kwargs(body))
+
+
+def _parse_discover_signals(signals: list[str] | None) -> set[str] | None:
+    """Validate signal kinds, shared by the stateless and saved-report routes."""
+    kinds = {s.strip() for s in signals if s.strip()} if signals is not None else None
     unknown = kinds - set(SIGNAL_KINDS) if kinds else set()
     if unknown:
         raise HTTPException(
             status_code=422, detail=f"unknown signal(s): {sorted(unknown)}"
         )
-    return compute_discover_candidates(
-        session,
-        channel_names=names,
-        start_date=body.start_date,
-        end_date=body.end_date,
-        signals=cast("set[SignalKind] | None", kinds),
-        filters=_parse_post_filters(body.keyword, body.forwarded, body.media),
-        max_per_channel=body.max_per_channel,
-    )
+    return kinds
+
+
+def _discover_kwargs(body: DiscoverCandidatesRequest) -> dict[str, Any]:
+    """Validated aggregation inputs, shared by the compute and save routes.
+
+    Both routes must interpret an identical request identically — a report is
+    just a persisted version of the same aggregate — so the parsing lives here
+    rather than being duplicated per route.
+    """
+    if body.max_per_channel_mode not in FEED_CAP_MODES:
+        raise HTTPException(
+            status_code=422,
+            detail=f"unknown maxPerChannelMode: {body.max_per_channel_mode}",
+        )
+    return {
+        "channel_names": [n.strip() for n in body.channel_names if n.strip()],
+        "start_date": body.start_date,
+        "end_date": body.end_date,
+        "signals": cast(
+            "set[SignalKind] | None", _parse_discover_signals(body.signals)
+        ),
+        "filters": _parse_post_filters(body.keyword, body.forwarded, body.media),
+        "max_per_channel": body.max_per_channel,
+        "max_per_channel_mode": body.max_per_channel_mode,
+        "seed": body.seed,
+        "post_ids": body.resolved_post_ids(),
+    }
+
+
+@router.post("/discover/reports")
+def create_discover_report(
+    body: DiscoverCandidatesRequest,
+    session: SessionDep,
+    _current_user: CurrentUser,
+) -> dict[str, Any]:
+    """Generate a Discover report and save it.
+
+    Unlike `/discover/candidates`, which computes and forgets, this persists the
+    result together with a snapshot of the scope it was generated for. The saved
+    report is immutable: later changes to the channel selection or the Posts-tab
+    filters produce a *new* report rather than altering this one (IDEA-011 W1).
+    """
+    return create_report(session, user_id=_current_user.id, **_discover_kwargs(body))
+
+
+@router.get("/discover/reports")
+def list_discover_reports(
+    session: SessionDep,
+    _current_user: CurrentUser,
+    limit: int = Query(default=DEFAULT_REPORT_PAGE_SIZE, ge=1, le=MAX_REPORT_PAGE_SIZE),
+    offset: int = Query(default=0, ge=0),
+    search: str | None = Query(default=None),
+) -> list[dict[str, Any]]:
+    """Newest-first page of saved reports, without their candidate rows.
+
+    See `report_to_camel_light`: a wide-scope report holds the full
+    single-reference tail, so the list ships a `candidateCount` instead.
+    """
+    return list_reports(session, limit=limit, offset=offset, search=search)
+
+
+@router.get("/discover/reports/latest")
+def get_latest_discover_report(
+    session: SessionDep,
+    _current_user: CurrentUser,
+) -> dict[str, Any] | None:
+    """The most recent saved report, or null if none exists yet.
+
+    Declared before `/discover/reports/{report_id}` so "latest" is not captured
+    as an id by the path parameter.
+    """
+    return latest_report(session)
+
+
+@router.get("/discover/reports/{report_id}")
+def get_discover_report(
+    report_id: str,
+    session: SessionDep,
+    _current_user: CurrentUser,
+) -> dict[str, Any]:
+    """A saved report with every candidate, `isFollowed` resolved live."""
+    return get_report(session, report_id)
+
+
+@router.delete("/discover/reports/{report_id}")
+def delete_discover_report(
+    report_id: str,
+    session: SessionDep,
+    _current_user: CurrentUser,
+) -> dict[str, str]:
+    delete_report(session, report_id)
+    return {"status": "deleted"}
 
 
 @router.post("/posts/counts")
