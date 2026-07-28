@@ -18,3 +18,7 @@ frontend/playwright/.cache/
 frontend/playwright/.auth/
 frontend/.playwright-browsers/
 data/channel-photos/
+
+# graphify: derived knowledge graph, rebuilt from source on demand.
+# See docs/graphify.md if you want to commit it instead.
+graphify-out/
