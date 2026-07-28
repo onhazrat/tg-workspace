@@ -5,6 +5,12 @@
 | **[ideas-log/](ideas-log/)** | Backlog of ideas to pick up in future work sessions (with AI or solo) |
 | **[migration/](migration/)** | TG-Summarizer → FastAPI migration ADRs, inventory, and remediation |
 
+## Tooling
+
+| Document | Description |
+|----------|-------------|
+| [graphify.md](graphify.md) | Codebase knowledge graph — install, build, and query the graph instead of grepping |
+
 ## Audits & investigations
 
 | Document | Description |

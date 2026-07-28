@@ -1,0 +1,35 @@
+# Extra exclusions for `graphify` on top of .gitignore (which is honoured
+# automatically). Same syntax as .gitignore.
+
+# Graphify's own output — never feed the graph back into itself.
+graphify-out/
+
+# Claude Code scratch space. Worktrees under .claude/ are full copies of this
+# repo; indexing them would duplicate every node in the graph.
+.claude/
+
+# Lock files: hundreds of KB of machine-generated pins, zero architecture.
+uv.lock
+bun.lock
+
+# Generated, committed-but-not-hand-edited (ADR-006). The hand-written client
+# in frontend/src/api/ is the one worth mapping.
+frontend/src/client/
+frontend/openapi.json
+
+# Alembic revisions: one near-identical module per migration. Excluded from
+# lint and type-check for the same reason.
+backend/app/alembic/versions/
+
+# Parity reference for the pre-migration standalone app, not part of this
+# codebase's architecture. Absent from most clones.
+TG-Summarizer/
+
+# Test/report artefacts and caches.
+frontend/playwright-report/
+frontend/test-results/
+htmlcov/
+**/__snapshots__/
+**/.pytest_cache/
+**/.ruff_cache/
+**/.mypy_cache/
