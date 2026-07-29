@@ -1,6 +1,6 @@
 import { EyeOff, Plus, Undo2 } from "lucide-react"
 import type React from "react"
-import { useEffect, useRef } from "react"
+import { useEffect, useRef, useState } from "react"
 import { RelativeTime } from "@/components/RelativeTime"
 import { TgButton } from "@/components/ui/tg-button"
 import {
@@ -13,6 +13,7 @@ import {
   headerCheckboxState,
   isRowCheckboxChecked,
   isRowCheckboxDisabled,
+  selectRange,
   toggleSelectAllUnfollowed,
   toggleUnfollowedSelection,
 } from "@/lib/posts/discover-selection"
@@ -87,6 +88,45 @@ export const DiscoverCandidateTable: React.FC<DiscoverCandidateTableProps> = ({
     }
   }, [headerState])
 
+  /**
+   * Whether shift was held for the click currently being processed.
+   *
+   * `onChange` carries no modifier keys, and `onClick` on a checkbox runs
+   * before the change is dispatched, so the flag is captured there and read a
+   * moment later.
+   */
+  const shiftHeldRef = useRef(false)
+
+  /**
+   * The row a range extends *from* — the last row toggled without shift.
+   *
+   * Stored by name rather than index so sorting or filtering between two
+   * clicks cannot silently move the anchor to a different channel.
+   */
+  const [anchorName, setAnchorName] = useState<string | null>(null)
+
+  const handleRowToggle = (row: DiscoveryCandidate, index: number) => {
+    const anchorIndex =
+      anchorName === null
+        ? -1
+        : candidates.findIndex((c) => c.name === anchorName)
+
+    if (shiftHeldRef.current && anchorIndex >= 0 && anchorIndex !== index) {
+      const shouldSelect = !selectedForFollow.has(row.name)
+      setSelectedForFollow((prev) =>
+        selectRange(candidates, anchorIndex, index, prev, shouldSelect),
+      )
+      // The anchor stays put, so repeated shift-clicks grow and shrink one
+      // range instead of chaining new ones from wherever you last landed.
+      return
+    }
+
+    setSelectedForFollow((prev) =>
+      toggleUnfollowedSelection(row.name, row.isFollowed, prev),
+    )
+    setAnchorName(row.name)
+  }
+
   return (
     <div className="overflow-x-auto">
       <table className="w-full min-w-[900px] text-left text-sm">
@@ -135,7 +175,7 @@ export const DiscoverCandidateTable: React.FC<DiscoverCandidateTableProps> = ({
           </tr>
         </thead>
         <tbody>
-          {candidates.map((row) => {
+          {candidates.map((row, index) => {
             const rowStatus = resultStatusByName.get(row.name)
             return (
               <tr key={row.name} className="border-t border-app-ink/10">
@@ -152,16 +192,12 @@ export const DiscoverCandidateTable: React.FC<DiscoverCandidateTableProps> = ({
                       isOffline ||
                       isRowCheckboxDisabled(row.isFollowed, isFollowJobRunning)
                     }
-                    onChange={() =>
-                      setSelectedForFollow((prev) =>
-                        toggleUnfollowedSelection(
-                          row.name,
-                          row.isFollowed,
-                          prev,
-                        ),
-                      )
-                    }
+                    onClick={(event) => {
+                      shiftHeldRef.current = event.shiftKey
+                    }}
+                    onChange={() => handleRowToggle(row, index)}
                     className="accent-blue-600"
+                    title="Shift-click to select a range"
                     aria-label={
                       row.isFollowed
                         ? `@${row.name} already followed`

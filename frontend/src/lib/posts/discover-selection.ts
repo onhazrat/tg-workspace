@@ -95,6 +95,40 @@ export function pruneSelectionAfterFollow(
 }
 
 /**
+ * Apply one selection state across a contiguous run of rows — shift-click.
+ *
+ * Follows the mail-client convention: the state applied to the whole range is
+ * the state the *clicked* row ends up in, so shift-clicking a selected row
+ * clears the range rather than re-selecting it.
+ *
+ * Followed rows are skipped, not toggled: their checkbox is disabled, so
+ * sweeping over one must not quietly do what clicking it cannot.
+ *
+ * Indices are resolved by the caller against the rows *currently on screen*,
+ * which is what makes the range mean what the user sees after sorting or
+ * filtering has reordered the table.
+ */
+export function selectRange(
+  candidates: readonly DiscoverSelectableRow[],
+  anchorIndex: number,
+  targetIndex: number,
+  selected: ReadonlySet<string>,
+  shouldSelect: boolean,
+): Set<string> {
+  const next = new Set(selected)
+  if (anchorIndex < 0 || targetIndex < 0) return next
+  const start = Math.min(anchorIndex, targetIndex)
+  const end = Math.max(anchorIndex, targetIndex)
+  for (let i = start; i <= end; i += 1) {
+    const row = candidates[i]
+    if (!row || row.isFollowed) continue
+    if (shouldSelect) next.add(row.name)
+    else next.delete(row.name)
+  }
+  return next
+}
+
+/**
  * Drop names from the selection after a bulk dismiss/restore.
  *
  * Unlike a follow job there is no per-name failure to keep around: the whole
