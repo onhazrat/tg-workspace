@@ -1,11 +1,15 @@
 import { describe, expect, it } from "bun:test"
 
 import {
+  buildChannelPseudoTagChips,
   collectAllChannelTags,
   filterChannelsByTag,
   filterTagsBySearch,
   filterUntaggedChannels,
+  findChannelPseudoTag,
+  isUiPseudoTag,
   isUntaggedChannel,
+  PARTIAL_HISTORY_TAG_ID,
   sortTagsForChannelGrid,
   UNTAGGED_TAG_ID,
 } from "@/lib/channels/channel-tags"
@@ -65,6 +69,80 @@ describe("filterChannelsByTag", () => {
 
   it("returns empty for unknown tag", () => {
     expect(filterChannelsByTag(sampleChannels, "missing")).toEqual([])
+  })
+})
+
+describe("partial history pseudo-tag", () => {
+  const historyChannels: Channel[] = [
+    {
+      id: "complete",
+      name: "complete",
+      tags: ["tech"],
+      lastUpdated: 0,
+      followedAt: 0,
+      historyCompleteToCutoff: true,
+    },
+    {
+      id: "partial",
+      name: "partial",
+      tags: ["tech"],
+      lastUpdated: 0,
+      followedAt: 0,
+      historyCompleteToCutoff: false,
+    },
+    {
+      id: "unknown",
+      name: "unknown",
+      tags: [],
+      lastUpdated: 0,
+      followedAt: 0,
+    },
+  ]
+
+  it("selects only channels flagged incomplete, not undetermined ones", () => {
+    expect(
+      filterChannelsByTag(historyChannels, PARTIAL_HISTORY_TAG_ID).map(
+        (c) => c.name,
+      ),
+    ).toEqual(["partial"])
+  })
+
+  it("is recognised as a pseudo-tag, unlike a real tag name", () => {
+    expect(isUiPseudoTag(PARTIAL_HISTORY_TAG_ID)).toBe(true)
+    expect(isUiPseudoTag(UNTAGGED_TAG_ID)).toBe(true)
+    expect(isUiPseudoTag("tech")).toBe(false)
+    expect(findChannelPseudoTag(PARTIAL_HISTORY_TAG_ID)?.label).toBe(
+      "Partial history",
+    )
+  })
+
+  it("builds a chip per matching pseudo-tag, with its channel names", () => {
+    const chips = buildChannelPseudoTagChips(historyChannels, "")
+    expect(chips.map((chip) => chip.id)).toEqual([
+      UNTAGGED_TAG_ID,
+      PARTIAL_HISTORY_TAG_ID,
+    ])
+    expect(chips[1].channelNames).toEqual(["partial"])
+    expect(chips[1].testId).toBe("channel-tag-partial-history")
+  })
+
+  it("hides chips that match no channel", () => {
+    const allComplete = [historyChannels[0]]
+    expect(buildChannelPseudoTagChips(allComplete, "")).toEqual([])
+  })
+
+  it("honours the tag search box", () => {
+    expect(
+      buildChannelPseudoTagChips(historyChannels, "partial").map(
+        (chip) => chip.id,
+      ),
+    ).toEqual([PARTIAL_HISTORY_TAG_ID])
+    expect(
+      buildChannelPseudoTagChips(historyChannels, "untag").map(
+        (chip) => chip.id,
+      ),
+    ).toEqual([UNTAGGED_TAG_ID])
+    expect(buildChannelPseudoTagChips(historyChannels, "zzz")).toEqual([])
   })
 })
 

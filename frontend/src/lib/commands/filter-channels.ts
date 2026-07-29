@@ -50,7 +50,15 @@ export function filterChannelsByQuery(
   return channels.filter((channel) => channelMatchesSearch(channel, mode, term))
 }
 
+/**
+ * A channel whose stored posts do not reach the scrape retention cutoff.
+ * Undefined means "not yet determined", which is not the same as incomplete.
+ */
+export function isPartialHistoryChannel(channel: Channel): boolean {
+  return channel.historyCompleteToCutoff === false
+}
+
 /** Channels whose stored posts do not reach the scrape retention cutoff. */
 export function filterPartialHistoryChannels(channels: Channel[]): Channel[] {
-  return channels.filter((channel) => channel.historyCompleteToCutoff === false)
+  return channels.filter(isPartialHistoryChannel)
 }

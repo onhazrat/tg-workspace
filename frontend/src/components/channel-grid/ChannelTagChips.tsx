@@ -3,13 +3,15 @@ import type React from "react"
 import { useLayoutEffect, useRef, useState } from "react"
 import { TgSelectionChip } from "@/components/ui/tg-chips"
 import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tg-tooltip"
+import {
   getChannelNamesWithTag,
   getChipSelectionState,
 } from "@/lib/channels/channel-grid-chips"
-import {
-  UNTAGGED_TAG_ID,
-  UNTAGGED_TAG_LABEL,
-} from "@/lib/channels/channel-tags"
+import type { ChannelPseudoTagChip } from "@/lib/channels/channel-tags"
 import {
   COLLAPSED_TAG_WALL_MAX_PX,
   isTagWallOverflowing,
@@ -21,26 +23,22 @@ type ChannelTagChipsProps = {
   channels: Channel[]
   selectedChannels: Set<string>
   visibleTags: string[]
-  showUntaggedTagChip: boolean
-  untaggedChannelNames: string[]
+  pseudoTagChips: ChannelPseudoTagChip[]
   onToggleTag: (tag: string) => void
 }
 
-/** Tag chip row, including the synthetic "Untagged" chip. Click toggles selection of matching channels. */
+/** Tag chip row, including the synthetic pseudo-tag chips ("Untagged", "Partial history"). Click toggles selection of matching channels. */
 export const ChannelTagChips: React.FC<ChannelTagChipsProps> = ({
   channels,
   selectedChannels,
   visibleTags,
-  showUntaggedTagChip,
-  untaggedChannelNames,
+  pseudoTagChips,
   onToggleTag,
 }) => {
-  const untagged = getChipSelectionState(untaggedChannelNames, selectedChannels)
-
   const listRef = useRef<HTMLDivElement>(null)
   const [expanded, setExpanded] = useState(false)
   const [overflows, setOverflows] = useState(false)
-  const totalChips = visibleTags.length + (showUntaggedTagChip ? 1 : 0)
+  const totalChips = visibleTags.length + pseudoTagChips.length
 
   /**
    * Measured rather than guessed from the chip count: chip width follows the tag
@@ -99,26 +97,34 @@ export const ChannelTagChips: React.FC<ChannelTagChipsProps> = ({
             </TgSelectionChip>
           )
         })}
-        {showUntaggedTagChip && (
-          <TgSelectionChip
-            key={UNTAGGED_TAG_ID}
-            state={
-              untagged.isAllSelected
-                ? "selected"
-                : untagged.isPartial
-                  ? "partial"
-                  : "idle"
-            }
-            data-testid="channel-tag-untagged"
-            onClick={() => onToggleTag(UNTAGGED_TAG_ID)}
-          >
-            <Tag size={10} />
-            {UNTAGGED_TAG_LABEL}
-            <span className="opacity-60 text-[8px]">
-              ({untagged.selectedCount}/{untaggedChannelNames.length})
-            </span>
-          </TgSelectionChip>
-        )}
+        {pseudoTagChips.map((chip) => {
+          const { selectedCount, isAllSelected, isPartial } =
+            getChipSelectionState(chip.channelNames, selectedChannels)
+          const Icon = chip.icon
+
+          return (
+            <Tooltip key={chip.id}>
+              <TooltipTrigger asChild>
+                <TgSelectionChip
+                  state={
+                    isAllSelected ? "selected" : isPartial ? "partial" : "idle"
+                  }
+                  data-testid={chip.testId}
+                  onClick={() => onToggleTag(chip.id)}
+                >
+                  <Icon size={10} />
+                  {chip.label}
+                  <span className="opacity-60 text-[8px]">
+                    ({selectedCount}/{chip.channelNames.length})
+                  </span>
+                </TgSelectionChip>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>{chip.tooltip}</p>
+              </TooltipContent>
+            </Tooltip>
+          )
+        })}
       </div>
 
       {(overflows || expanded) && (
