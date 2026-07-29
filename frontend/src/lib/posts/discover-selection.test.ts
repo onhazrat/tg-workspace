@@ -10,6 +10,7 @@ import {
   isRowCheckboxDisabled,
   needsBulkFollowConfirm,
   pruneSelectionAfterFollow,
+  removeFromSelection,
   toggleSelectAllUnfollowed,
   toggleUnfollowedSelection,
 } from "./discover-selection"
@@ -136,5 +137,27 @@ describe("buildBulkFollowChannels", () => {
       },
       { name: "gamma" },
     ])
+  })
+})
+
+describe("removeFromSelection", () => {
+  test("drops the acted-on names", () => {
+    const next = removeFromSelection(new Set(["a", "b", "c"]), ["a", "c"])
+    expect([...next]).toEqual(["b"])
+  })
+
+  test("names not in the selection are ignored", () => {
+    const next = removeFromSelection(new Set(["a"]), ["zzz"])
+    expect([...next]).toEqual(["a"])
+  })
+
+  test("does not mutate the input set", () => {
+    const original = new Set(["a", "b"])
+    removeFromSelection(original, ["a"])
+    expect([...original]).toEqual(["a", "b"])
+  })
+
+  test("an empty name list is a no-op", () => {
+    expect([...removeFromSelection(new Set(["a"]), [])]).toEqual(["a"])
   })
 })

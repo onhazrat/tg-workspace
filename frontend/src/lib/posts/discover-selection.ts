@@ -94,6 +94,24 @@ export function pruneSelectionAfterFollow(
   return next
 }
 
+/**
+ * Drop names from the selection after a bulk dismiss/restore.
+ *
+ * Unlike a follow job there is no per-name failure to keep around: the whole
+ * batch either applied or the mutation errored, so every acted-on name leaves
+ * the selection. The rows also leave the current view (dismissed rows only
+ * appear under "Ignored"), so keeping them selected would leave a count
+ * referring to rows that are no longer on screen.
+ */
+export function removeFromSelection(
+  selected: ReadonlySet<string>,
+  names: readonly string[],
+): Set<string> {
+  const next = new Set(selected)
+  for (const name of names) next.delete(name)
+  return next
+}
+
 /** Names created by the follow job (added or unavailable) for D10A workspace merge. */
 export function createdChannelNamesFromResults(
   results: readonly { name: string; status: string }[],

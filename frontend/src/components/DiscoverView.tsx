@@ -42,6 +42,7 @@ import {
   reportSignalKinds,
   savedReportToView,
 } from "@/lib/posts/discover-report-view"
+import { removeFromSelection } from "@/lib/posts/discover-selection"
 import { useData } from "../contexts/DataContext"
 import { useScraper } from "../contexts/ScraperContext"
 import { useSettings } from "../contexts/SettingsContext"
@@ -229,6 +230,29 @@ export const DiscoverView: React.FC = () => {
     followDiscoverChannels,
   })
 
+  /**
+   * Dismiss (or restore) every selected candidate in one call.
+   *
+   * Scoped to the same selection bulk-follow uses, which excludes followed
+   * candidates — their row checkbox is disabled. Those are still dismissable
+   * one at a time from the row's own button.
+   */
+  const dismissSelected = () => {
+    const names = [...follow.selectedForFollow]
+    if (names.length === 0) return
+    const ignored = discoverFollowState !== "ignored"
+    setIgnored.mutate(
+      { handles: names, ignored },
+      {
+        onSuccess: () => {
+          follow.setSelectedForFollow((prev) =>
+            removeFromSelection(prev, names),
+          )
+        },
+      },
+    )
+  }
+
   const toggleSignal = (kind: DiscoverySignalKind) => {
     setDiscoverSignals(
       discoverSignals.includes(kind)
@@ -334,6 +358,11 @@ export const DiscoverView: React.FC = () => {
             followProgress={follow.followProgress}
             onFollowSelected={() => void follow.followSelected()}
             onClearSelection={() => follow.setSelectedForFollow(new Set())}
+            onDismissSelected={dismissSelected}
+            dismissMode={
+              discoverFollowState === "ignored" ? "restore" : "dismiss"
+            }
+            isDismissPending={setIgnored.isPending}
           />
         ) : null}
 
