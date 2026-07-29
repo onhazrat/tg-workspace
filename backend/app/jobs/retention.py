@@ -11,6 +11,7 @@ from sqlmodel import Session, col, func, or_, select
 from app.jobs.settings import load_media_settings, load_retention_settings
 from app.models_tg import (
     Channel,
+    DiscoverReport,
     EmbeddingLog,
     LLMLog,
     NetworkLog,
@@ -37,6 +38,49 @@ logger = logging.getLogger(__name__)
 # Delete expired posts in bounded batches: a backlog can be hundreds of
 # thousands of rows, and materialising them all at once OOM-killed the worker.
 POST_DELETE_BATCH = 500
+
+
+def _prune_discover_reports(session: Session, *, max_days: int, max_count: int) -> int:
+    """Trim saved Discover reports by age, then by count.
+
+    Reports are the one table that grows per user action with no natural bound:
+    each Generate stores its whole candidate list, single-reference tail included,
+    as a JSON blob. Nothing else prunes them.
+
+    Both caps apply and 0 disables either, matching the post and log windows. The
+    count cap is what actually bounds size — an age window alone lets a burst of
+    reports generated in one afternoon survive in full.
+
+    There is deliberately no floor: if the policy says the newest report goes, it
+    goes, and Discover shows its empty state prompting a Generate. Setting the
+    values to 0 is how you opt out, rather than the job second-guessing them.
+    """
+    deleted = 0
+
+    if max_days > 0:
+        cutoff = int(utc_now().timestamp() * 1000) - max_days * 24 * 60 * 60 * 1000
+        result = session.execute(
+            sa_delete(DiscoverReport).where(col(DiscoverReport.timestamp) < cutoff)
+        )
+        session.commit()
+        deleted += cast(Any, result).rowcount or 0
+
+    if max_count > 0:
+        # Ids of everything past the newest N, then one bulk delete. The blob
+        # column is never loaded — only the ids are selected.
+        stale = session.exec(
+            select(DiscoverReport.id)
+            .order_by(col(DiscoverReport.timestamp).desc(), col(DiscoverReport.id))
+            .offset(max_count)
+        ).all()
+        if stale:
+            result = session.execute(
+                sa_delete(DiscoverReport).where(col(DiscoverReport.id).in_(stale))
+            )
+            session.commit()
+            deleted += cast(Any, result).rowcount or 0
+
+    return deleted
 
 
 def run_retention_cleanup(session: Session) -> dict[str, int]:
@@ -157,16 +201,30 @@ def run_retention_cleanup(session: Session) -> dict[str, int]:
             touch_sync(session, "translations")
             touch_sync(session, "channels")
 
+    deleted_reports = _prune_discover_reports(
+        session,
+        max_days=int(settings.get("reportRetentionDays") or 0),
+        max_count=int(settings.get("reportRetentionMax") or 0),
+    )
+    if deleted_reports:
+        touch_sync(session, "discover_reports")
+
     media_settings = load_media_settings(session)
     max_mb = int(media_settings.get("thumbCacheMaxSizeMb") or 0)
     if max_mb > 0:
         enforce_thumb_cache_size_limit(max_mb)
 
     logger.info(
-        "Retention cleanup: deleted %s posts, %s log rows (postDays=%s, logDays=%s)",
+        "Retention cleanup: deleted %s posts, %s log rows, %s reports "
+        "(postDays=%s, logDays=%s)",
         deleted_posts,
         deleted_logs,
+        deleted_reports,
         post_days,
         log_days,
     )
-    return {"deletedPosts": deleted_posts, "deletedLogs": deleted_logs}
+    return {
+        "deletedPosts": deleted_posts,
+        "deletedLogs": deleted_logs,
+        "deletedReports": deleted_reports,
+    }

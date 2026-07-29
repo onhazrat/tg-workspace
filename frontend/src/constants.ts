@@ -10,6 +10,8 @@ export const AUTO_SYNC_INTERVAL_MIN_MINUTES = 5
 export const AUTO_SYNC_INTERVAL_MAX_MINUTES = 24 * 60
 export const RETENTION_POST_DAYS_DEFAULT = env.retentionPostDaysDefault
 export const RETENTION_LOG_DAYS_DEFAULT = env.retentionLogDaysDefault
+export const RETENTION_REPORT_DAYS_DEFAULT = env.retentionReportDaysDefault
+export const RETENTION_REPORT_MAX_DEFAULT = env.retentionReportMaxDefault
 export const THEME_DEFAULT = "dark"
 
 export const WORKSPACE_TABS = [

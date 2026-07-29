@@ -7,6 +7,8 @@ import {
   MODELS,
   RETENTION_LOG_DAYS_DEFAULT,
   RETENTION_POST_DAYS_DEFAULT,
+  RETENTION_REPORT_DAYS_DEFAULT,
+  RETENTION_REPORT_MAX_DEFAULT,
 } from "@/constants"
 import { NETWORK_SETTINGS_DEFAULTS } from "@/lib/settings/network"
 import { appSettingsSpec } from "@/lib/settings/schema"
@@ -620,9 +622,46 @@ export const SETTINGS_CATALOG: SettingCatalogEntry[] = [
     },
   },
   {
+    id: "reportRetentionDays",
+    label: "Discover Report Retention Days",
+    description:
+      "Delete saved Discover reports older than this many days (0 = never).",
+    keywords: ["retention", "discover", "reports", "days"],
+    group: "data",
+    source: "app",
+    defaultValue: RETENTION_REPORT_DAYS_DEFAULT,
+    editorCommandId: "edit-report-retention-days",
+    editorFieldId: "reportRetentionDays",
+    editorFieldLabel: "Discover Report Retention (days)",
+    control: {
+      kind: "number",
+      min: 0,
+      integer: true,
+      formatBadge: formatRetentionBadge,
+    },
+  },
+  {
+    id: "reportRetentionMax",
+    label: "Discover Report Limit",
+    description:
+      "Keep only this many of the newest Discover reports (0 = no limit).",
+    keywords: ["retention", "discover", "reports", "limit", "count"],
+    group: "data",
+    source: "app",
+    defaultValue: RETENTION_REPORT_MAX_DEFAULT,
+    editorCommandId: "edit-report-retention-max",
+    editorFieldId: "reportRetentionMax",
+    editorFieldLabel: "Discover Report Limit (count)",
+    control: {
+      kind: "number",
+      min: 0,
+      integer: true,
+    },
+  },
+  {
     id: "panel-retention",
     label: "Retention",
-    description: "Post and log retention policies.",
+    description: "Post, log and Discover report retention policies.",
     keywords: ["retention", "data", "cleanup"],
     group: "data",
     source: "app",

@@ -13,7 +13,6 @@ import { DiscoverScopeCard } from "@/components/discover/DiscoverScopeCard"
 import { DiscoverSortChips } from "@/components/discover/DiscoverSortChips"
 import { DiscoverWeightsEditor } from "@/components/discover/DiscoverWeightsEditor"
 import { useDiscoverFollowJob } from "@/components/discover/useDiscoverFollowJob"
-import { useDiscoverProbeSweep } from "@/components/discover/useDiscoverProbeSweep"
 import { TgButton } from "@/components/ui/tg-button"
 import { TgConfirmDialog } from "@/components/ui/tg-confirm-dialog"
 import { useDebouncedValue } from "@/hooks/useDebouncedValue"
@@ -24,6 +23,7 @@ import {
   useDiscoverReportQuery,
   useLatestDiscoverReportQuery,
 } from "@/hooks/useDiscover"
+import { useDiscoverProbeQueue } from "@/hooks/useDiscoverProbeQueue"
 import { useDiscoverReportParam } from "@/hooks/useDiscoverReportParam"
 import {
   countUnfollowedCandidates,
@@ -233,20 +233,14 @@ export const DiscoverView: React.FC = () => {
   })
 
   /**
-   * Resolve what each candidate handle actually is, in the background (D9).
+   * Watch the server-side handle-probe queue (D9).
    *
-   * Fed `rawCandidates` rather than the filtered `candidates`: the sweep should
-   * cover the whole report, not just the slice currently on screen, or changing
-   * a filter would silently change which handles ever get checked.
-   *
-   * `compute_discover_candidates` stores them strongest-first, so this is
-   * already the rank order the sweep probes in — the top of the report resolves
-   * within seconds rather than after the single-reference tail.
+   * No candidate list is passed, and that is the point: generating a report
+   * enqueues its candidates server-side, in the rank order they were computed in,
+   * and a scheduled job drains the queue whether or not this tab is open. This
+   * view only reads progress and offers recheck and pause.
    */
-  const probe = useDiscoverProbeSweep({
-    candidates: rawCandidates,
-    enabled: !isOffline && view !== null,
-  })
+  const probe = useDiscoverProbeQueue({ enabled: !isOffline })
 
   /**
    * Dismiss (or restore) every selected candidate in one call.
@@ -382,10 +376,11 @@ export const DiscoverView: React.FC = () => {
           showResultFilters={view !== null}
         />
 
-        {probe.isRunning && probe.job ? (
+        {probe.queue ? (
           <DiscoverProbeBar
-            job={probe.job}
-            onCancel={() => void probe.cancel()}
+            queue={probe.queue}
+            onSetPaused={probe.setPaused}
+            isPausePending={probe.isPausePending}
           />
         ) : null}
 

@@ -19,6 +19,10 @@ from app.core.config import settings
 from app.core.db import engine
 from app.jobs.auto_summary import run_auto_summary
 from app.jobs.auto_sync import run_auto_sync
+from app.jobs.discover_probe import (
+    DISCOVER_PROBE_JOB_ID,
+    run_discover_probe_sweep,
+)
 from app.jobs.retention import run_retention_cleanup
 from app.jobs.settings import (
     JOB_IDS,
@@ -123,12 +127,17 @@ async def job_translation_batch() -> None:
     await _run_guarded("translation_batch", run_translation_batch)
 
 
+async def job_discover_probe() -> None:
+    await _run_guarded(DISCOVER_PROBE_JOB_ID, run_discover_probe_sweep)
+
+
 _JOB_RUNNERS: dict[str, Callable[[], Awaitable[None]]] = {
     "auto_sync": job_auto_sync,
     "embeddings": job_embeddings,
     "auto_summary": job_auto_summary,
     "retention": job_retention,
     "translation_batch": job_translation_batch,
+    DISCOVER_PROBE_JOB_ID: job_discover_probe,
 }
 
 
@@ -256,6 +265,19 @@ def start_scheduler() -> None:
         seconds=settings.TRANSLATION_BATCH_JOB_INTERVAL_SECONDS,
         id="translation_batch",
         replace_existing=True,
+    )
+    scheduler.add_job(
+        job_discover_probe,
+        "interval",
+        seconds=settings.DISCOVER_PROBE_JOB_INTERVAL_SECONDS,
+        id=DISCOVER_PROBE_JOB_ID,
+        replace_existing=True,
+        # Same reasoning as retention: a sweep blocks on network fetches for far
+        # longer than APScheduler's 1s default grace, so a strict trigger would
+        # drop ticks as misfires and defer a full interval. Running late is fine;
+        # not running is not.
+        misfire_grace_time=None,
+        coalesce=True,
     )
 
     with Session(engine) as session:

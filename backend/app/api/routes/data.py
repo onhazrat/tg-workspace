@@ -13,7 +13,9 @@ from pydantic import Field as PydanticField
 
 from app.api.deps import CurrentUser, SessionDep
 from app.core.config import settings
+from app.jobs.discover_probe import DISCOVER_PROBE_JOB_ID, is_sweep_running
 from app.jobs.settings import (
+    is_job_enabled,
     load_jobs_settings,
     load_retention_settings,
     load_sync_settings,
@@ -125,14 +127,13 @@ from app.services.discover_ignored import (
     list_ignored,
     unignore_channels,
 )
-from app.services.discover_probe_job import (
-    active_probe_job,
-    cancel_probe_job,
-    create_probe_job,
-    get_probe_job,
-    run_probe_job,
+from app.services.discover_probes import (
+    DEFAULT_PROBE_PAGE_SIZE,
+    MAX_PROBE_PAGE_SIZE,
+    list_probes,
+    queue_counts,
+    requeue_probes,
 )
-from app.services.discover_probes import clear_probes, list_probes
 from app.services.discover_reports import (
     DEFAULT_REPORT_PAGE_SIZE,
     MAX_REPORT_PAGE_SIZE,
@@ -801,87 +802,54 @@ def list_discover_probes(
     session: SessionDep,
     _current_user: CurrentUser,
     status: str | None = Query(default=None),
+    limit: int = Query(default=DEFAULT_PROBE_PAGE_SIZE, ge=1, le=MAX_PROBE_PAGE_SIZE),
+    offset: int = Query(default=0, ge=0),
 ) -> list[dict[str, Any]]:
-    """Cached handle probes, optionally filtered by status."""
-    return list_probes(session, status=status)
+    """One page of cached handle probes, optionally filtered by status."""
+    return list_probes(session, status=status, limit=limit, offset=offset)
 
 
-@router.post("/discover/probe")
-async def start_discover_probe(
-    body: DiscoverProbeRequest,
-    current_user: CurrentUser,
-) -> dict[str, Any] | None:
-    """Start a background sweep over the given handles.
-
-    Returns `null` when every handle already has a cached verdict — the common
-    case once a corpus has been probed once. The client uses that to tell
-    "nothing to do" apart from "a sweep is running", so it does not show a
-    progress bar for work that will never happen.
-
-    The handle list is expected in the order the client ranks candidates, since
-    the sweep probes in that order.
-    """
-    job = await create_probe_job(handles=body.handles, user_id=current_user.id)
-    if job is None:
-        return None
-    if job.status == "pending":
-        asyncio.create_task(run_probe_job(job))
-    return job.to_camel()
-
-
-@router.get("/discover/probe/active")
-def get_active_discover_probe(_current_user: CurrentUser) -> dict[str, Any] | None:
-    """The sweep currently running, if any.
-
-    Declared before `/discover/probe/{probe_job_id}` so "active" is not captured
-    as an id. Lets a client that reloaded mid-sweep pick the progress back up
-    without having kept the job id.
-    """
-    job = active_probe_job()
-    return job.to_camel() if job else None
-
-
-@router.get("/discover/probe/{probe_job_id}")
-def get_discover_probe_status(
-    probe_job_id: str, _current_user: CurrentUser
+@router.get("/discover/probe/queue")
+def get_discover_probe_queue(
+    session: SessionDep,
+    _current_user: CurrentUser,
 ) -> dict[str, Any]:
-    job = get_probe_job(probe_job_id)
-    if job is None:
-        raise HTTPException(status_code=404, detail="Probe job not found")
-    return job.to_camel()
+    """Probe queue state, for the progress display.
 
+    There is no job id to poll: probing is a scheduled backend job draining a
+    durable queue (`app.jobs.discover_probe`), not something a client starts.
+    Everything the UI needs is a count, and the verdicts themselves arrive
+    through the report read, which already joins the probe table.
 
-@router.post("/discover/probe/{probe_job_id}/cancel")
-async def cancel_discover_probe(
-    probe_job_id: str, _current_user: CurrentUser
-) -> dict[str, Any]:
-    job = await cancel_probe_job(probe_job_id)
-    if job is None:
-        raise HTTPException(status_code=404, detail="Probe job not found")
-    return job.to_camel()
+    `enabled` reflects the operator's pause switch — the ordinary job toggle, so
+    pausing is durable and every open tab agrees about it.
+    """
+    counts = queue_counts(session)
+    return {
+        **counts,
+        "enabled": is_job_enabled(session, DISCOVER_PROBE_JOB_ID),
+        "running": is_sweep_running(),
+    }
 
 
 @router.post("/discover/probe/recheck")
-async def recheck_discover_probes(
+def recheck_discover_probes(
     body: DiscoverProbeRequest,
     session: SessionDep,
-    current_user: CurrentUser,
+    _current_user: CurrentUser,
 ) -> dict[str, Any]:
-    """Forget cached verdicts for these handles and probe them again.
+    """Discard cached verdicts for these handles and put them back in the queue.
 
     The escape hatch for a verdict that is wrong or has gone stale: a private
     channel that opened up, or a handle misjudged during an outage. Without it,
     caching indefinitely would mean a single bad answer is permanent.
 
-    Clearing and re-probing are one call because they are never wanted
-    separately — clearing alone would just make the row vanish from the "not
-    followable" view until some later sweep happened to pick it up.
+    Requeues at the front rather than merely forgetting. A row is both the cached
+    answer and the work item, so deleting it would drop the handle out of the
+    queue and nothing would fetch it again. The next drain tick picks these up
+    first, so the wait is bounded by the job interval.
     """
-    cleared = clear_probes(session, body.handles)
-    job = await create_probe_job(handles=body.handles, user_id=current_user.id)
-    if job is not None and job.status == "pending":
-        asyncio.create_task(run_probe_job(job))
-    return {"cleared": cleared, "job": job.to_camel() if job else None}
+    return {"requeued": requeue_probes(session, body.handles)}
 
 
 @router.post("/discover/reports")

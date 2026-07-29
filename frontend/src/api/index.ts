@@ -31,7 +31,7 @@ export type {
   BulkFollowRequest,
   BulkSyncSettingsPatchBody,
   DiscoveredViaPayload,
-  DiscoverProbeJob,
+  DiscoverProbeQueue,
   FollowChannelResult,
   FollowChannelResultStatus,
   FollowJobStatus,

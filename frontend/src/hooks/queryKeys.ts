@@ -16,7 +16,8 @@ export const queryKeys = {
     ["discoverCandidates", scope] as const,
   discoverReports: ["discoverReports"] as const,
   discoverIgnored: ["discoverIgnored"] as const,
-  discoverProbes: ["discoverProbes"] as const,
+  /** Server-side probe queue counts. Polled while work is outstanding. */
+  discoverProbeQueue: ["discoverProbeQueue"] as const,
   discoverReport: (id: string) => ["discoverReport", id] as const,
   /**
    * The report Discover opens on. Kept separate from `discoverReport(id)`

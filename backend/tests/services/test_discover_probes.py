@@ -14,11 +14,15 @@ from sqlmodel import Session, select
 from app.core.db import engine
 from app.models_tg import DiscoverHandleProbe, Post, utc_now
 from app.services.discover_probes import (
-    clear_probes,
+    DEFAULT_PROBE_PRIORITY,
+    dequeue_handles,
+    enqueue_handles,
     handles_needing_probe,
     list_probes,
     probe_map,
+    queue_counts,
     record_probe_result,
+    requeue_probes,
 )
 from app.services.discover_reports import create_report, get_report
 from app.services.post_filters import PostFilters
@@ -203,21 +207,161 @@ def test_recheck_requeues_a_resolved_handle() -> None:
         record_probe_result(session, "alpha_news", BOT_PAGE)
         assert handles_needing_probe(session, ["alpha_news"]) == []
 
-        assert clear_probes(session, ["@Alpha_News"]) == ["alpha_news"]
+        assert requeue_probes(session, ["@Alpha_News"]) == ["alpha_news"]
         assert handles_needing_probe(session, ["alpha_news"]) == ["alpha_news"]
 
 
-def test_recheck_of_an_unprobed_handle_is_not_an_error() -> None:
+def test_recheck_leaves_the_handle_in_the_queue() -> None:
+    """The trap in moving to a queue: forgetting is not the same as requeuing.
+
+    Recheck used to *delete* the row. Now that a row is both the cached answer
+    and the work item, deleting one would take the handle out of the queue
+    entirely and nothing would ever fetch it again — the recheck would look like
+    it worked and then silently never resolve.
+    """
     with Session(engine) as session:
-        assert clear_probes(session, ["never_seen"]) == []
+        record_probe_result(session, "alpha_news", BOT_PAGE)
+        requeue_probes(session, ["alpha_news"])
+        assert dequeue_handles(session, limit=10) == ["alpha_news"]
+
+
+def test_recheck_jumps_the_queue() -> None:
+    """The operator is looking at that row; it must not wait behind a report."""
+    with Session(engine) as session:
+        enqueue_handles(session, [f"bulk_{i}" for i in range(5)])
+        record_probe_result(session, "alpha_news", BOT_PAGE)
+        requeue_probes(session, ["alpha_news"])
+        assert dequeue_handles(session, limit=1) == ["alpha_news"]
+
+
+def test_recheck_of_an_unprobed_handle_queues_it() -> None:
+    """Recheck is offered on rows whose verdict has not arrived yet."""
+    with Session(engine) as session:
+        assert requeue_probes(session, ["never_seen"]) == ["never_seen"]
+        assert dequeue_handles(session, limit=10) == ["never_seen"]
 
 
 def test_recheck_can_overturn_a_verdict() -> None:
     with Session(engine) as session:
         record_probe_result(session, "alpha_news", BOT_PAGE)
-        clear_probes(session, ["alpha_news"])
+        requeue_probes(session, ["alpha_news"])
         result = record_probe_result(session, "alpha_news", OK_PAGE)
         assert result["status"] == "ok"
+
+
+def test_recheck_clears_the_stale_metadata_too() -> None:
+    """A cleared verdict must not leave the old display name behind."""
+    with Session(engine) as session:
+        record_probe_result(session, "alpha_news", OK_PAGE)
+        requeue_probes(session, ["alpha_news"])
+        row = session.get(DiscoverHandleProbe, "alpha_news")
+        assert row is not None
+        assert row.status == "unknown"
+        assert row.display_name is None
+        assert row.subscribers is None
+        assert row.checked_at is None
+        # And the read-time join drops it, so the row goes back to reading as
+        # "not checked yet" rather than as a fresh inconclusive verdict.
+        assert probe_map(session, {"alpha_news"}) == {}
+
+
+# --------------------------------------------------------------------------- #
+# The queue                                                                     #
+# --------------------------------------------------------------------------- #
+
+
+def test_enqueue_records_rank_as_drain_order() -> None:
+    with Session(engine) as session:
+        assert enqueue_handles(session, ["top", "middle", "tail"]) == 3
+        assert dequeue_handles(session, limit=10) == ["top", "middle", "tail"]
+
+
+def test_enqueue_normalizes_and_dedupes() -> None:
+    with Session(engine) as session:
+        assert enqueue_handles(session, ["@Alpha", "alpha", "", "  "]) == 1
+        assert dequeue_handles(session, limit=10) == ["alpha"]
+
+
+def test_enqueue_skips_handles_that_already_have_a_verdict() -> None:
+    """Re-generating a report over the same channels must cost nothing."""
+    with Session(engine) as session:
+        record_probe_result(session, "alpha_news", OK_PAGE)
+        record_probe_result(session, "helper_bot", BOT_PAGE)
+        assert enqueue_handles(session, ["alpha_news", "helper_bot", "fresh"]) == 1
+        assert dequeue_handles(session, limit=10) == ["fresh"]
+
+
+def _priority(session: Session, handle: str) -> int:
+    row = session.get(DiscoverHandleProbe, handle)
+    assert row is not None
+    return row.priority
+
+
+def test_a_better_rank_in_a_later_report_wins() -> None:
+    """Being near the top of *any* report is enough to be probed early."""
+    with Session(engine) as session:
+        enqueue_handles(session, ["a", "b", "c", "promoted"])
+        assert _priority(session, "promoted") == 3
+        enqueue_handles(session, ["promoted"])
+        assert _priority(session, "promoted") == 0
+
+
+def test_a_worse_rank_in_a_later_report_does_not_demote() -> None:
+    with Session(engine) as session:
+        enqueue_handles(session, ["important"])
+        enqueue_handles(session, ["a", "b", "important"])
+        assert _priority(session, "important") == 0
+
+
+def test_dequeue_respects_the_batch_bound() -> None:
+    with Session(engine) as session:
+        enqueue_handles(session, [f"h{i}" for i in range(10)])
+        assert len(dequeue_handles(session, limit=3)) == 3
+        assert dequeue_handles(session, limit=0) == []
+
+
+def test_dequeue_skips_a_handle_inside_its_backoff() -> None:
+    with Session(engine) as session:
+        enqueue_handles(session, ["flaky"])
+        record_probe_result(session, "flaky", None, error="timeout")
+        assert dequeue_handles(session, limit=10) == []
+        later = utc_now() + timedelta(days=2)
+        assert dequeue_handles(session, limit=10, now=later) == ["flaky"]
+
+
+def test_dequeue_is_empty_once_everything_is_resolved() -> None:
+    with Session(engine) as session:
+        enqueue_handles(session, ["alpha_news"])
+        record_probe_result(session, "alpha_news", OK_PAGE)
+        assert dequeue_handles(session, limit=10) == []
+
+
+def test_rows_predating_the_queue_still_drain_last() -> None:
+    """Migrated rows carry the sentinel priority, not rank 0."""
+    with Session(engine) as session:
+        session.add(DiscoverHandleProbe(handle="legacy", status="unknown"))
+        session.commit()
+        enqueue_handles(session, ["ranked"])
+        assert dequeue_handles(session, limit=10) == ["ranked", "legacy"]
+        legacy = session.get(DiscoverHandleProbe, "legacy")
+        assert legacy is not None
+        assert legacy.priority == DEFAULT_PROBE_PRIORITY
+
+
+def test_queue_counts_separate_pending_from_failing() -> None:
+    """A failing handle retries forever, so it must not hold a progress bar open."""
+    with Session(engine) as session:
+        enqueue_handles(session, ["waiting", "flaky"])
+        record_probe_result(session, "flaky", None, error="timeout")
+        record_probe_result(session, "alpha_news", OK_PAGE)
+        record_probe_result(session, "helper_bot", BOT_PAGE)
+
+        assert queue_counts(session) == {
+            "queued": 1,
+            "retrying": 1,
+            "resolved": 1,
+            "unavailable": 1,
+        }
 
 
 # --------------------------------------------------------------------------- #
@@ -243,6 +387,45 @@ def test_reports_carry_the_probe_for_each_candidate() -> None:
         by_name = {c["name"]: c for c in report["candidates"]}
         assert by_name["alpha_news"]["probe"]["status"] == "ok"
         assert by_name["helper_bot"]["probe"]["kind"] == "bot"
+
+
+def test_a_queued_candidate_still_reads_as_not_checked() -> None:
+    """A queue entry is not an answer.
+
+    Generating a report enqueues every candidate, which creates a probe row for
+    each one straight away — the table is the queue. A candidate waiting its turn
+    must keep reading as "not checked yet", not as an inconclusive result, or the
+    UI would show a verdict for something nothing has looked at.
+    """
+    with Session(engine) as session:
+        _seed(session, ["alpha_news"])
+        report = create_report(
+            session,
+            channel_names=["carrier"],
+            start_date=None,
+            end_date=None,
+            signals=None,
+            filters=PostFilters(),
+            max_per_channel=0,
+        )
+        assert report["candidates"][0]["probe"] is None
+        # The row exists, and is queued.
+        assert dequeue_handles(session, limit=10) == ["alpha_news"]
+
+
+def test_generating_a_report_queues_its_candidates() -> None:
+    with Session(engine) as session:
+        _seed(session, ["alpha_news", "helper_bot"])
+        create_report(
+            session,
+            channel_names=["carrier"],
+            start_date=None,
+            end_date=None,
+            signals=None,
+            filters=PostFilters(),
+            max_per_channel=0,
+        )
+        assert set(dequeue_handles(session, limit=10)) == {"alpha_news", "helper_bot"}
 
 
 def test_an_unprobed_candidate_has_no_probe_rather_than_a_verdict() -> None:
@@ -309,6 +492,18 @@ def test_list_probes_filters_by_status() -> None:
         unavailable = list_probes(session, status="unavailable")
         assert [row["handle"] for row in unavailable] == ["helper_bot"]
         assert len(list_probes(session)) == 2
+
+
+def test_list_probes_is_paged() -> None:
+    """This cache is never pruned, so the read has to be bounded."""
+    with Session(engine) as session:
+        enqueue_handles(session, [f"h{i:02d}" for i in range(5)])
+        page = list_probes(session, limit=2)
+        assert [row["handle"] for row in page] == ["h00", "h01"]
+        assert [row["handle"] for row in list_probes(session, limit=2, offset=2)] == [
+            "h02",
+            "h03",
+        ]
 
 
 def test_probe_map_is_scoped_to_the_handles_asked_about() -> None:

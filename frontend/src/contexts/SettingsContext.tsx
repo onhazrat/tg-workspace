@@ -99,6 +99,10 @@ interface SettingsContextType {
   setPostRetentionDays: (days: number) => void
   logRetentionDays: number
   setLogRetentionDays: (days: number) => void
+  reportRetentionDays: number
+  setReportRetentionDays: (days: number) => void
+  reportRetentionMax: number
+  setReportRetentionMax: (count: number) => void
   globalStartTimeMode: GlobalStartTimeMode
   setGlobalStartTimeMode: (mode: GlobalStartTimeMode) => void
   globalStartTimeValue: GlobalStartTimeValue

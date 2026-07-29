@@ -12,7 +12,14 @@ from sqlmodel import Session
 from app.core.config import settings
 from app.models_tg import AppSetting, utc_now
 
-JOB_IDS = ("auto_sync", "embeddings", "auto_summary", "retention", "translation_batch")
+JOB_IDS = (
+    "auto_sync",
+    "embeddings",
+    "auto_summary",
+    "retention",
+    "translation_batch",
+    "discover_probe",
+)
 
 
 def default_job_enabled(job_id: str) -> bool:
@@ -22,6 +29,7 @@ def default_job_enabled(job_id: str) -> bool:
         "auto_summary": settings.JOBS_AUTO_SUMMARY_ENABLED_DEFAULT,
         "retention": settings.JOBS_RETENTION_ENABLED_DEFAULT,
         "translation_batch": settings.JOBS_TRANSLATION_BATCH_ENABLED_DEFAULT,
+        "discover_probe": settings.JOBS_DISCOVER_PROBE_ENABLED_DEFAULT,
     }
     return defaults.get(job_id, True)
 
@@ -48,6 +56,10 @@ def _default_retention() -> dict[str, Any]:
     return {
         "postRetentionDays": settings.RETENTION_POST_DAYS_DEFAULT,
         "logRetentionDays": settings.RETENTION_LOG_DAYS_DEFAULT,
+        # Both caps apply to saved Discover reports, whichever bites first, and
+        # 0 disables either one — same convention as the two windows above.
+        "reportRetentionDays": settings.RETENTION_REPORT_DAYS_DEFAULT,
+        "reportRetentionMax": settings.RETENTION_REPORT_MAX_DEFAULT,
     }
 
 

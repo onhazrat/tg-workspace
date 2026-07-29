@@ -8,6 +8,8 @@ import {
   MODELS,
   RETENTION_LOG_DAYS_DEFAULT,
   RETENTION_POST_DAYS_DEFAULT,
+  RETENTION_REPORT_DAYS_DEFAULT,
+  RETENTION_REPORT_MAX_DEFAULT,
 } from "@/constants"
 import type {
   DiscoverFollowState,
@@ -223,6 +225,21 @@ export const appSettingsSpec = {
   logRetentionDays: intSetting("logRetentionDays", RETENTION_LOG_DAYS_DEFAULT, {
     section: "retention",
   }),
+  // Saved Discover reports, capped two ways: by age and by count. Both are
+  // server-only — unlike post/log retention, nothing in the browser cache
+  // mirrors a report — but they live in the schema so the operator can reach
+  // them, since 0 (disable) is the documented escape hatch and the retention job
+  // has no floor guard that would keep the newest report regardless.
+  reportRetentionDays: intSetting(
+    "reportRetentionDays",
+    RETENTION_REPORT_DAYS_DEFAULT,
+    { section: "retention" },
+  ),
+  reportRetentionMax: intSetting(
+    "reportRetentionMax",
+    RETENTION_REPORT_MAX_DEFAULT,
+    { section: "retention" },
+  ),
   translationEnabled: booleanSetting("translationEnabled", false, {
     section: "translation",
   }),

@@ -32,7 +32,7 @@ from sqlmodel import Session, col, select
 from app.models_tg import Channel, DiscoverReport, utc_now
 from app.services.discover import SignalKind, compute_discover_candidates
 from app.services.discover_ignored import ignored_handles
-from app.services.discover_probes import probe_map
+from app.services.discover_probes import enqueue_handles, probe_map
 from app.services.post_filters import PostFilters
 
 DEFAULT_REPORT_PAGE_SIZE = 100
@@ -255,6 +255,15 @@ def create_report(
     session.add(report)
     session.commit()
     session.refresh(report)
+
+    # Queue the handles for probing. This is the only enqueue point for reports:
+    # they are created server-side with the candidates already ranked, so rank
+    # order — which is the probe drain order — comes for free here and could not
+    # be reconstructed as reliably anywhere else. Handles with a verdict already
+    # are skipped inside `enqueue_handles`, so a report over familiar channels
+    # queues nothing.
+    enqueue_handles(session, [c["name"] for c in result["candidates"]])
+
     return report_to_camel(session, report)
 
 

@@ -844,6 +844,8 @@ export type DataRemoveDiscoverIgnoredResponse = ({
 });
 
 export type DataListDiscoverProbesData = {
+    limit?: number;
+    offset?: number;
     status?: (string | null);
 };
 
@@ -851,31 +853,7 @@ export type DataListDiscoverProbesResponse = (Array<{
     [key: string]: unknown;
 }>);
 
-export type DataStartDiscoverProbeData = {
-    requestBody: DiscoverProbeRequest;
-};
-
-export type DataStartDiscoverProbeResponse = (({
-    [key: string]: unknown;
-} | null));
-
-export type DataGetActiveDiscoverProbeResponse = (({
-    [key: string]: unknown;
-} | null));
-
-export type DataGetDiscoverProbeStatusData = {
-    probeJobId: string;
-};
-
-export type DataGetDiscoverProbeStatusResponse = ({
-    [key: string]: unknown;
-});
-
-export type DataCancelDiscoverProbeData = {
-    probeJobId: string;
-};
-
-export type DataCancelDiscoverProbeResponse = ({
+export type DataGetDiscoverProbeQueueResponse = ({
     [key: string]: unknown;
 });
 

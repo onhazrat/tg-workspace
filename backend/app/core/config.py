@@ -129,6 +129,7 @@ class Settings(BaseSettings):
     # settle first. Set to 0 to disable the startup run.
     RETENTION_JOB_STARTUP_DELAY_SECONDS: int = 60
     TRANSLATION_BATCH_JOB_INTERVAL_SECONDS: int = 30
+    DISCOVER_PROBE_JOB_INTERVAL_SECONDS: int = 30
 
     # Default enabled state when no jobs AppSetting row exists yet
     JOBS_EMBEDDINGS_ENABLED_DEFAULT: bool = False
@@ -136,6 +137,7 @@ class Settings(BaseSettings):
     JOBS_AUTO_SUMMARY_ENABLED_DEFAULT: bool = True
     JOBS_RETENTION_ENABLED_DEFAULT: bool = True
     JOBS_TRANSLATION_BATCH_ENABLED_DEFAULT: bool = False
+    JOBS_DISCOVER_PROBE_ENABLED_DEFAULT: bool = True
 
     # Embeddings backfill
     EMBEDDINGS_CHUNK_SIZE: int = 20
@@ -144,6 +146,18 @@ class Settings(BaseSettings):
     # Retention defaults (AppSetting bootstrap)
     RETENTION_POST_DAYS_DEFAULT: int = 90
     RETENTION_LOG_DAYS_DEFAULT: int = 30
+    # Discover reports store the full candidate list, tail included, as a JSON
+    # blob per generate — the one table that grows per user action. Both caps
+    # apply; 0 disables either one, like the post/log windows above.
+    RETENTION_REPORT_DAYS_DEFAULT: int = 90
+    RETENTION_REPORT_MAX_DEFAULT: int = 50
+
+    # Discover handle probes
+    #
+    # How many handles one sweep fetches. A batch commonly outlasts the interval
+    # above, which is fine: the sweep lock makes the overlapping tick a no-op, so
+    # the real pace is set by how fast Telegram answers.
+    DISCOVER_PROBE_BATCH_SIZE: int = 60
 
     # Translation batch job
     TRANSLATION_BATCH_LIMIT: int = 20

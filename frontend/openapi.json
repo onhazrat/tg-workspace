@@ -2327,7 +2327,7 @@
       "get": {
         "tags": ["data"],
         "summary": "List Discover Probes",
-        "description": "Cached handle probes, optionally filtered by status.",
+        "description": "One page of cached handle probes, optionally filtered by status.",
         "operationId": "data-list_discover_probes",
         "security": [{ "OAuth2PasswordBearer": [] }],
         "parameters": [
@@ -2338,6 +2338,29 @@
             "schema": {
               "anyOf": [{ "type": "string" }, { "type": "null" }],
               "title": "Status"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 1000,
+              "minimum": 1,
+              "default": 200,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "title": "Offset"
             }
           }
         ],
@@ -2365,153 +2388,34 @@
         }
       }
     },
-    "/api/v1/data/discover/probe": {
-      "post": {
-        "tags": ["data"],
-        "summary": "Start Discover Probe",
-        "description": "Start a background sweep over the given handles.\n\nReturns `null` when every handle already has a cached verdict \u2014 the common\ncase once a corpus has been probed once. The client uses that to tell\n\"nothing to do\" apart from \"a sweep is running\", so it does not show a\nprogress bar for work that will never happen.\n\nThe handle list is expected in the order the client ranks candidates, since\nthe sweep probes in that order.",
-        "operationId": "data-start_discover_probe",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": { "$ref": "#/components/schemas/DiscoverProbeRequest" }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "anyOf": [
-                    { "additionalProperties": true, "type": "object" },
-                    { "type": "null" }
-                  ],
-                  "title": "Response Data-Start Discover Probe"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
-              }
-            }
-          }
-        },
-        "security": [{ "OAuth2PasswordBearer": [] }]
-      }
-    },
-    "/api/v1/data/discover/probe/active": {
+    "/api/v1/data/discover/probe/queue": {
       "get": {
         "tags": ["data"],
-        "summary": "Get Active Discover Probe",
-        "description": "The sweep currently running, if any.\n\nDeclared before `/discover/probe/{probe_job_id}` so \"active\" is not captured\nas an id. Lets a client that reloaded mid-sweep pick the progress back up\nwithout having kept the job id.",
-        "operationId": "data-get_active_discover_probe",
+        "summary": "Get Discover Probe Queue",
+        "description": "Probe queue state, for the progress display.\n\nThere is no job id to poll: probing is a scheduled backend job draining a\ndurable queue (`app.jobs.discover_probe`), not something a client starts.\nEverything the UI needs is a count, and the verdicts themselves arrive\nthrough the report read, which already joins the probe table.\n\n`enabled` reflects the operator's pause switch \u2014 the ordinary job toggle, so\npausing is durable and every open tab agrees about it.",
+        "operationId": "data-get_discover_probe_queue",
         "responses": {
           "200": {
             "description": "Successful Response",
             "content": {
               "application/json": {
                 "schema": {
-                  "anyOf": [
-                    { "additionalProperties": true, "type": "object" },
-                    { "type": "null" }
-                  ],
-                  "title": "Response Data-Get Active Discover Probe"
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Data-Get Discover Probe Queue"
                 }
               }
             }
           }
         },
         "security": [{ "OAuth2PasswordBearer": [] }]
-      }
-    },
-    "/api/v1/data/discover/probe/{probe_job_id}": {
-      "get": {
-        "tags": ["data"],
-        "summary": "Get Discover Probe Status",
-        "operationId": "data-get_discover_probe_status",
-        "security": [{ "OAuth2PasswordBearer": [] }],
-        "parameters": [
-          {
-            "name": "probe_job_id",
-            "in": "path",
-            "required": true,
-            "schema": { "type": "string", "title": "Probe Job Id" }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "additionalProperties": true,
-                  "title": "Response Data-Get Discover Probe Status"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/data/discover/probe/{probe_job_id}/cancel": {
-      "post": {
-        "tags": ["data"],
-        "summary": "Cancel Discover Probe",
-        "operationId": "data-cancel_discover_probe",
-        "security": [{ "OAuth2PasswordBearer": [] }],
-        "parameters": [
-          {
-            "name": "probe_job_id",
-            "in": "path",
-            "required": true,
-            "schema": { "type": "string", "title": "Probe Job Id" }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "additionalProperties": true,
-                  "title": "Response Data-Cancel Discover Probe"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
-              }
-            }
-          }
-        }
       }
     },
     "/api/v1/data/discover/probe/recheck": {
       "post": {
         "tags": ["data"],
         "summary": "Recheck Discover Probes",
-        "description": "Forget cached verdicts for these handles and probe them again.\n\nThe escape hatch for a verdict that is wrong or has gone stale: a private\nchannel that opened up, or a handle misjudged during an outage. Without it,\ncaching indefinitely would mean a single bad answer is permanent.\n\nClearing and re-probing are one call because they are never wanted\nseparately \u2014 clearing alone would just make the row vanish from the \"not\nfollowable\" view until some later sweep happened to pick it up.",
+        "description": "Discard cached verdicts for these handles and put them back in the queue.\n\nThe escape hatch for a verdict that is wrong or has gone stale: a private\nchannel that opened up, or a handle misjudged during an outage. Without it,\ncaching indefinitely would mean a single bad answer is permanent.\n\nRequeues at the front rather than merely forgetting. A row is both the cached\nanswer and the work item, so deleting it would drop the handle out of the\nqueue and nothing would fetch it again. The next drain tick picks these up\nfirst, so the wait is bounded by the job interval.",
         "operationId": "data-recheck_discover_probes",
         "requestBody": {
           "content": {

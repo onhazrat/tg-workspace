@@ -3,7 +3,7 @@
 import type { CancelablePromise } from './core/CancelablePromise';
 import { OpenAPI } from './core/OpenAPI';
 import { request as __request } from './core/request';
-import type { AiApiListModelsResponse, AiApiSummaryData, AiApiSummaryResponse, AiApiSummaryPromptData, AiApiSummaryPromptResponse, AiApiSummaryStreamData, AiApiSummaryStreamResponse, AiApiChatStreamData, AiApiChatStreamResponse, AiApiTagPromptData, AiApiTagPromptResponse, AiApiTagStreamData, AiApiTagStreamResponse, AiApiEmbeddingsData, AiApiEmbeddingsResponse, AiApiTranslateData, AiApiTranslateResponse, DataGetSyncMetaRouteResponse, DataListChannelsData, DataListChannelsResponse, DataUpsertChannelData, DataUpsertChannelResponse, DataDeleteChannelData, DataDeleteChannelResponse, DataStartBulkFollowData, DataStartBulkFollowResponse, DataGetBulkFollowStatusData, DataGetBulkFollowStatusResponse, DataBulkFollowEventsData, DataBulkFollowEventsResponse, DataCancelBulkFollowData, DataCancelBulkFollowResponse, DataBulkReresolveStartIdsEndpointData, DataBulkReresolveStartIdsEndpointResponse, DataBulkResetSyncEndpointData, DataBulkResetSyncEndpointResponse, DataBulkSyncSettingsEndpointData, DataBulkSyncSettingsEndpointResponse, DataListSettingGroupsResponse, DataCreateSettingGroupData, DataCreateSettingGroupResponse, DataUpdateSettingGroupData, DataUpdateSettingGroupResponse, DataDeleteSettingGroupData, DataDeleteSettingGroupResponse, DataBulkAssignSettingGroupData, DataBulkAssignSettingGroupResponse, DataBulkChannelTagsEndpointData, DataBulkChannelTagsEndpointResponse, DataGetChannelStatsData, DataGetChannelStatsResponse, DataListPostsData, DataListPostsResponse, DataDiscoverCandidatesData, DataDiscoverCandidatesResponse, DataListDiscoverIgnoredResponse, DataAddDiscoverIgnoredData, DataAddDiscoverIgnoredResponse, DataRemoveDiscoverIgnoredData, DataRemoveDiscoverIgnoredResponse, DataListDiscoverProbesData, DataListDiscoverProbesResponse, DataStartDiscoverProbeData, DataStartDiscoverProbeResponse, DataGetActiveDiscoverProbeResponse, DataGetDiscoverProbeStatusData, DataGetDiscoverProbeStatusResponse, DataCancelDiscoverProbeData, DataCancelDiscoverProbeResponse, DataRecheckDiscoverProbesData, DataRecheckDiscoverProbesResponse, DataCreateDiscoverReportData, DataCreateDiscoverReportResponse, DataListDiscoverReportsData, DataListDiscoverReportsResponse, DataGetLatestDiscoverReportResponse, DataGetDiscoverReportData, DataGetDiscoverReportResponse, DataDeleteDiscoverReportData, DataDeleteDiscoverReportResponse, DataPostsCountsData, DataPostsCountsResponse, DataLookupPostsRouteData, DataLookupPostsRouteResponse, DataBulkUpsertPostsRouteData, DataBulkUpsertPostsRouteResponse, DataListSummariesData, DataListSummariesResponse, DataGetSummaryData, DataGetSummaryResponse, DataUpsertSummaryData, DataUpsertSummaryResponse, DataDeleteSummaryData, DataDeleteSummaryResponse, DataListTagRunsData, DataListTagRunsResponse, DataGetTagRunData, DataGetTagRunResponse, DataUpsertTagRunData, DataUpsertTagRunResponse, DataDeleteTagRunData, DataDeleteTagRunResponse, DataListBotCredentialsResponse, DataUpsertBotCredentialData, DataUpsertBotCredentialResponse, DataDeleteBotCredentialData, DataDeleteBotCredentialResponse, DataMigrateBotCredentialsData, DataMigrateBotCredentialsResponse, DataListChatDestinationsResponse, DataUpsertChatDestinationData, DataUpsertChatDestinationResponse, DataDeleteChatDestinationData, DataDeleteChatDestinationResponse, DataUpsertEmbeddingsData, DataUpsertEmbeddingsResponse, DataGetTranslationData, DataGetTranslationResponse, DataListTranslationsData, DataListTranslationsResponse, DataUpsertTranslationsData, DataUpsertTranslationsResponse, DataListPublishLogsRouteData, DataListPublishLogsRouteResponse, DataCreatePublishLogsData, DataCreatePublishLogsResponse, DataListSyncLogsRouteData, DataListSyncLogsRouteResponse, DataCreateSyncLogsData, DataCreateSyncLogsResponse, DataListLlmLogsRouteData, DataListLlmLogsRouteResponse, DataCreateLlmLogsData, DataCreateLlmLogsResponse, DataListEmbeddingLogsRouteData, DataListEmbeddingLogsRouteResponse, DataCreateEmbeddingLogsData, DataCreateEmbeddingLogsResponse, DataListNetworkLogsRouteData, DataListNetworkLogsRouteResponse, DataCreateNetworkLogsData, DataCreateNetworkLogsResponse, DataDbStatsResponse, DataTableSizesResponse, DataClearTableRouteData, DataClearTableRouteResponse, DataPurgeLogsData, DataPurgeLogsResponse, DataGetNetworkSettingsResponse, DataPutNetworkSettingsData, DataPutNetworkSettingsResponse, DataGetSettingData, DataGetSettingResponse, DataPutSettingData, DataPutSettingResponse, DataImportDataData, DataImportDataResponse, DataExportDataResponse, ItemsReadItemsData, ItemsReadItemsResponse, ItemsCreateItemData, ItemsCreateItemResponse, ItemsReadItemData, ItemsReadItemResponse, ItemsUpdateItemData, ItemsUpdateItemResponse, ItemsDeleteItemData, ItemsDeleteItemResponse, JobsJobsStatusResponse, JobsGetRuntimeConfigResponse, JobsTriggerSchedulerJobData, JobsTriggerSchedulerJobResponse, JobsUpdateSchedulerJobData, JobsUpdateSchedulerJobResponse, JobsStartSyncJobData, JobsStartSyncJobResponse, JobsGetSyncJobStatusData, JobsGetSyncJobStatusResponse, JobsSyncJobEventsData, JobsSyncJobEventsResponse, JobsCancelSyncJobData, JobsCancelSyncJobResponse, LoginLoginAccessTokenData, LoginLoginAccessTokenResponse, LoginTestTokenResponse, LoginRecoverPasswordData, LoginRecoverPasswordResponse, LoginResetPasswordData, LoginResetPasswordResponse, LoginRecoverPasswordHtmlContentData, LoginRecoverPasswordHtmlContentResponse, NetworkApiTestProxyData, NetworkApiTestProxyResponse, NetworkApiProxyHealthResponse, NetworkApiTorStatusResponse, NetworkApiTorIpResponse, NetworkApiTorRestartResponse, NetworkApiTorNewIdentityData, NetworkApiTorNewIdentityResponse, RagRagStatusResponse, RagRagEmbedData, RagRagEmbedResponse, RagRagSearchData, RagRagSearchResponse, TelegramApiScrapeData, TelegramApiScrapeResponse, TelegramApiChannelInfoData, TelegramApiChannelInfoResponse, TelegramApiResolveStartTimeData, TelegramApiResolveStartTimeResponse, TelegramApiBotInfoData, TelegramApiBotInfoResponse, TelegramApiPublishData, TelegramApiPublishResponse, TelegramApiChannelPhotoData, TelegramApiChannelPhotoResponse, TelegramApiPostThumbData, TelegramApiPostThumbResponse, TelegramApiBotFileData, TelegramApiBotFileResponse, UsersReadUsersData, UsersReadUsersResponse, UsersCreateUserData, UsersCreateUserResponse, UsersReadUserMeResponse, UsersDeleteUserMeResponse, UsersUpdateUserMeData, UsersUpdateUserMeResponse, UsersUpdatePasswordMeData, UsersUpdatePasswordMeResponse, UsersRegisterUserData, UsersRegisterUserResponse, UsersReadUserByIdData, UsersReadUserByIdResponse, UsersUpdateUserData, UsersUpdateUserResponse, UsersDeleteUserData, UsersDeleteUserResponse, UtilsTestEmailData, UtilsTestEmailResponse, UtilsHealthCheckResponse } from './types.gen';
+import type { AiApiListModelsResponse, AiApiSummaryData, AiApiSummaryResponse, AiApiSummaryPromptData, AiApiSummaryPromptResponse, AiApiSummaryStreamData, AiApiSummaryStreamResponse, AiApiChatStreamData, AiApiChatStreamResponse, AiApiTagPromptData, AiApiTagPromptResponse, AiApiTagStreamData, AiApiTagStreamResponse, AiApiEmbeddingsData, AiApiEmbeddingsResponse, AiApiTranslateData, AiApiTranslateResponse, DataGetSyncMetaRouteResponse, DataListChannelsData, DataListChannelsResponse, DataUpsertChannelData, DataUpsertChannelResponse, DataDeleteChannelData, DataDeleteChannelResponse, DataStartBulkFollowData, DataStartBulkFollowResponse, DataGetBulkFollowStatusData, DataGetBulkFollowStatusResponse, DataBulkFollowEventsData, DataBulkFollowEventsResponse, DataCancelBulkFollowData, DataCancelBulkFollowResponse, DataBulkReresolveStartIdsEndpointData, DataBulkReresolveStartIdsEndpointResponse, DataBulkResetSyncEndpointData, DataBulkResetSyncEndpointResponse, DataBulkSyncSettingsEndpointData, DataBulkSyncSettingsEndpointResponse, DataListSettingGroupsResponse, DataCreateSettingGroupData, DataCreateSettingGroupResponse, DataUpdateSettingGroupData, DataUpdateSettingGroupResponse, DataDeleteSettingGroupData, DataDeleteSettingGroupResponse, DataBulkAssignSettingGroupData, DataBulkAssignSettingGroupResponse, DataBulkChannelTagsEndpointData, DataBulkChannelTagsEndpointResponse, DataGetChannelStatsData, DataGetChannelStatsResponse, DataListPostsData, DataListPostsResponse, DataDiscoverCandidatesData, DataDiscoverCandidatesResponse, DataListDiscoverIgnoredResponse, DataAddDiscoverIgnoredData, DataAddDiscoverIgnoredResponse, DataRemoveDiscoverIgnoredData, DataRemoveDiscoverIgnoredResponse, DataListDiscoverProbesData, DataListDiscoverProbesResponse, DataGetDiscoverProbeQueueResponse, DataRecheckDiscoverProbesData, DataRecheckDiscoverProbesResponse, DataCreateDiscoverReportData, DataCreateDiscoverReportResponse, DataListDiscoverReportsData, DataListDiscoverReportsResponse, DataGetLatestDiscoverReportResponse, DataGetDiscoverReportData, DataGetDiscoverReportResponse, DataDeleteDiscoverReportData, DataDeleteDiscoverReportResponse, DataPostsCountsData, DataPostsCountsResponse, DataLookupPostsRouteData, DataLookupPostsRouteResponse, DataBulkUpsertPostsRouteData, DataBulkUpsertPostsRouteResponse, DataListSummariesData, DataListSummariesResponse, DataGetSummaryData, DataGetSummaryResponse, DataUpsertSummaryData, DataUpsertSummaryResponse, DataDeleteSummaryData, DataDeleteSummaryResponse, DataListTagRunsData, DataListTagRunsResponse, DataGetTagRunData, DataGetTagRunResponse, DataUpsertTagRunData, DataUpsertTagRunResponse, DataDeleteTagRunData, DataDeleteTagRunResponse, DataListBotCredentialsResponse, DataUpsertBotCredentialData, DataUpsertBotCredentialResponse, DataDeleteBotCredentialData, DataDeleteBotCredentialResponse, DataMigrateBotCredentialsData, DataMigrateBotCredentialsResponse, DataListChatDestinationsResponse, DataUpsertChatDestinationData, DataUpsertChatDestinationResponse, DataDeleteChatDestinationData, DataDeleteChatDestinationResponse, DataUpsertEmbeddingsData, DataUpsertEmbeddingsResponse, DataGetTranslationData, DataGetTranslationResponse, DataListTranslationsData, DataListTranslationsResponse, DataUpsertTranslationsData, DataUpsertTranslationsResponse, DataListPublishLogsRouteData, DataListPublishLogsRouteResponse, DataCreatePublishLogsData, DataCreatePublishLogsResponse, DataListSyncLogsRouteData, DataListSyncLogsRouteResponse, DataCreateSyncLogsData, DataCreateSyncLogsResponse, DataListLlmLogsRouteData, DataListLlmLogsRouteResponse, DataCreateLlmLogsData, DataCreateLlmLogsResponse, DataListEmbeddingLogsRouteData, DataListEmbeddingLogsRouteResponse, DataCreateEmbeddingLogsData, DataCreateEmbeddingLogsResponse, DataListNetworkLogsRouteData, DataListNetworkLogsRouteResponse, DataCreateNetworkLogsData, DataCreateNetworkLogsResponse, DataDbStatsResponse, DataTableSizesResponse, DataClearTableRouteData, DataClearTableRouteResponse, DataPurgeLogsData, DataPurgeLogsResponse, DataGetNetworkSettingsResponse, DataPutNetworkSettingsData, DataPutNetworkSettingsResponse, DataGetSettingData, DataGetSettingResponse, DataPutSettingData, DataPutSettingResponse, DataImportDataData, DataImportDataResponse, DataExportDataResponse, ItemsReadItemsData, ItemsReadItemsResponse, ItemsCreateItemData, ItemsCreateItemResponse, ItemsReadItemData, ItemsReadItemResponse, ItemsUpdateItemData, ItemsUpdateItemResponse, ItemsDeleteItemData, ItemsDeleteItemResponse, JobsJobsStatusResponse, JobsGetRuntimeConfigResponse, JobsTriggerSchedulerJobData, JobsTriggerSchedulerJobResponse, JobsUpdateSchedulerJobData, JobsUpdateSchedulerJobResponse, JobsStartSyncJobData, JobsStartSyncJobResponse, JobsGetSyncJobStatusData, JobsGetSyncJobStatusResponse, JobsSyncJobEventsData, JobsSyncJobEventsResponse, JobsCancelSyncJobData, JobsCancelSyncJobResponse, LoginLoginAccessTokenData, LoginLoginAccessTokenResponse, LoginTestTokenResponse, LoginRecoverPasswordData, LoginRecoverPasswordResponse, LoginResetPasswordData, LoginResetPasswordResponse, LoginRecoverPasswordHtmlContentData, LoginRecoverPasswordHtmlContentResponse, NetworkApiTestProxyData, NetworkApiTestProxyResponse, NetworkApiProxyHealthResponse, NetworkApiTorStatusResponse, NetworkApiTorIpResponse, NetworkApiTorRestartResponse, NetworkApiTorNewIdentityData, NetworkApiTorNewIdentityResponse, RagRagStatusResponse, RagRagEmbedData, RagRagEmbedResponse, RagRagSearchData, RagRagSearchResponse, TelegramApiScrapeData, TelegramApiScrapeResponse, TelegramApiChannelInfoData, TelegramApiChannelInfoResponse, TelegramApiResolveStartTimeData, TelegramApiResolveStartTimeResponse, TelegramApiBotInfoData, TelegramApiBotInfoResponse, TelegramApiPublishData, TelegramApiPublishResponse, TelegramApiChannelPhotoData, TelegramApiChannelPhotoResponse, TelegramApiPostThumbData, TelegramApiPostThumbResponse, TelegramApiBotFileData, TelegramApiBotFileResponse, UsersReadUsersData, UsersReadUsersResponse, UsersCreateUserData, UsersCreateUserResponse, UsersReadUserMeResponse, UsersDeleteUserMeResponse, UsersUpdateUserMeData, UsersUpdateUserMeResponse, UsersUpdatePasswordMeData, UsersUpdatePasswordMeResponse, UsersRegisterUserData, UsersRegisterUserResponse, UsersReadUserByIdData, UsersReadUserByIdResponse, UsersUpdateUserData, UsersUpdateUserResponse, UsersDeleteUserData, UsersDeleteUserResponse, UtilsTestEmailData, UtilsTestEmailResponse, UtilsHealthCheckResponse } from './types.gen';
 
 export class AiService {
     /**
@@ -635,9 +635,11 @@ export class DataService {
     
     /**
      * List Discover Probes
-     * Cached handle probes, optionally filtered by status.
+     * One page of cached handle probes, optionally filtered by status.
      * @param data The data for the request.
      * @param data.status
+     * @param data.limit
+     * @param data.offset
      * @returns unknown Successful Response
      * @throws ApiError
      */
@@ -646,7 +648,9 @@ export class DataService {
             method: 'GET',
             url: '/api/v1/data/discover/probes',
             query: {
-                status: data.status
+                status: data.status,
+                limit: data.limit,
+                offset: data.offset
             },
             errors: {
                 422: 'Validation Error'
@@ -655,101 +659,38 @@ export class DataService {
     }
     
     /**
-     * Start Discover Probe
-     * Start a background sweep over the given handles.
+     * Get Discover Probe Queue
+     * Probe queue state, for the progress display.
      *
-     * Returns `null` when every handle already has a cached verdict — the common
-     * case once a corpus has been probed once. The client uses that to tell
-     * "nothing to do" apart from "a sweep is running", so it does not show a
-     * progress bar for work that will never happen.
+     * There is no job id to poll: probing is a scheduled backend job draining a
+     * durable queue (`app.jobs.discover_probe`), not something a client starts.
+     * Everything the UI needs is a count, and the verdicts themselves arrive
+     * through the report read, which already joins the probe table.
      *
-     * The handle list is expected in the order the client ranks candidates, since
-     * the sweep probes in that order.
-     * @param data The data for the request.
-     * @param data.requestBody
+     * `enabled` reflects the operator's pause switch — the ordinary job toggle, so
+     * pausing is durable and every open tab agrees about it.
      * @returns unknown Successful Response
      * @throws ApiError
      */
-    public static startDiscoverProbe(data: DataStartDiscoverProbeData): CancelablePromise<DataStartDiscoverProbeResponse> {
-        return __request(OpenAPI, {
-            method: 'POST',
-            url: '/api/v1/data/discover/probe',
-            body: data.requestBody,
-            mediaType: 'application/json',
-            errors: {
-                422: 'Validation Error'
-            }
-        });
-    }
-    
-    /**
-     * Get Active Discover Probe
-     * The sweep currently running, if any.
-     *
-     * Declared before `/discover/probe/{probe_job_id}` so "active" is not captured
-     * as an id. Lets a client that reloaded mid-sweep pick the progress back up
-     * without having kept the job id.
-     * @returns unknown Successful Response
-     * @throws ApiError
-     */
-    public static getActiveDiscoverProbe(): CancelablePromise<DataGetActiveDiscoverProbeResponse> {
+    public static getDiscoverProbeQueue(): CancelablePromise<DataGetDiscoverProbeQueueResponse> {
         return __request(OpenAPI, {
             method: 'GET',
-            url: '/api/v1/data/discover/probe/active'
-        });
-    }
-    
-    /**
-     * Get Discover Probe Status
-     * @param data The data for the request.
-     * @param data.probeJobId
-     * @returns unknown Successful Response
-     * @throws ApiError
-     */
-    public static getDiscoverProbeStatus(data: DataGetDiscoverProbeStatusData): CancelablePromise<DataGetDiscoverProbeStatusResponse> {
-        return __request(OpenAPI, {
-            method: 'GET',
-            url: '/api/v1/data/discover/probe/{probe_job_id}',
-            path: {
-                probe_job_id: data.probeJobId
-            },
-            errors: {
-                422: 'Validation Error'
-            }
-        });
-    }
-    
-    /**
-     * Cancel Discover Probe
-     * @param data The data for the request.
-     * @param data.probeJobId
-     * @returns unknown Successful Response
-     * @throws ApiError
-     */
-    public static cancelDiscoverProbe(data: DataCancelDiscoverProbeData): CancelablePromise<DataCancelDiscoverProbeResponse> {
-        return __request(OpenAPI, {
-            method: 'POST',
-            url: '/api/v1/data/discover/probe/{probe_job_id}/cancel',
-            path: {
-                probe_job_id: data.probeJobId
-            },
-            errors: {
-                422: 'Validation Error'
-            }
+            url: '/api/v1/data/discover/probe/queue'
         });
     }
     
     /**
      * Recheck Discover Probes
-     * Forget cached verdicts for these handles and probe them again.
+     * Discard cached verdicts for these handles and put them back in the queue.
      *
      * The escape hatch for a verdict that is wrong or has gone stale: a private
      * channel that opened up, or a handle misjudged during an outage. Without it,
      * caching indefinitely would mean a single bad answer is permanent.
      *
-     * Clearing and re-probing are one call because they are never wanted
-     * separately — clearing alone would just make the row vanish from the "not
-     * followable" view until some later sweep happened to pick it up.
+     * Requeues at the front rather than merely forgetting. A row is both the cached
+     * answer and the work item, so deleting it would drop the handle out of the
+     * queue and nothing would fetch it again. The next drain tick picks these up
+     * first, so the wait is bounded by the job interval.
      * @param data The data for the request.
      * @param data.requestBody
      * @returns unknown Successful Response

@@ -32,6 +32,21 @@ cached indefinitely, writing a verdict from a failed fetch would permanently
 hide a real channel from every future report, with nothing on screen to hint
 that anything went wrong. An `unknown` costs a retry; a wrong `unavailable`
 costs a channel, silently.
+
+## The table is also the queue
+
+`enqueue_handles` / `dequeue_handles` treat a `status="unknown"` row as a pending
+work item. The cache and the queue are the same row on purpose: two tables could
+disagree about whether a handle still needs fetching, and the disagreement would
+show up as either a handle probed twice or a handle probed never.
+
+`dequeue_handles` takes no candidate list — it answers "what should be fetched
+next" from the table alone. That is what allows probing to run as a scheduled
+backend job (`app.jobs.discover_probe`) rather than being driven from a React
+effect, which is where this logic used to live. The client had to supply the
+handle list, so it also had to remember which handles it had already asked
+about, chain the batches, and survive its own tab being closed. It could not do
+the last one.
 """
 
 from __future__ import annotations
@@ -39,6 +54,7 @@ from __future__ import annotations
 from datetime import datetime, timedelta
 from typing import Any
 
+from sqlalchemy import and_, func, or_
 from sqlmodel import Session, col, select
 
 from app.models_tg import DiscoverHandleProbe, utc_now
@@ -57,21 +73,35 @@ PROBE_KINDS = frozenset({"channel", "group", "bot", "user", "unknown"})
 RETRY_BACKOFF_BASE_MINUTES = 15
 RETRY_BACKOFF_MAX_MINUTES = 24 * 60
 
+#: Priority for a row nothing has ranked. Large rather than 0 so a handle
+#: enqueued with a real candidate rank always sorts ahead of one that was not.
+DEFAULT_PROBE_PRIORITY = 1_000_000
+
+#: A manual recheck jumps the queue. The operator is looking at that row, and a
+#: recheck that waited behind a freshly generated report would take minutes.
+RECHECK_PRIORITY = 0
+
+DEFAULT_PROBE_PAGE_SIZE = 200
+MAX_PROBE_PAGE_SIZE = 1000
+
 
 def normalize_handle(name: str) -> str:
     """Mirrors `discover.normalize_handle` — the key must match candidate names."""
     return name.lstrip("@").strip().lower()
 
 
-def _retry_due_at(row: DiscoverHandleProbe) -> datetime | None:
-    """When an inconclusive handle becomes eligible for another attempt."""
-    if row.attempted_at is None:
-        return None
+def _retry_deadline(attempts: int, *, now: datetime) -> datetime:
+    """When a handle that just failed becomes eligible for another attempt.
+
+    Stored on the row rather than recomputed at read time so the dequeue stays a
+    single indexable comparison. `attempts` is the count *including* the failure
+    being recorded, so the first failure waits one base interval.
+    """
     minutes = min(
-        RETRY_BACKOFF_BASE_MINUTES * (2 ** max(row.attempts - 1, 0)),
+        RETRY_BACKOFF_BASE_MINUTES * (2 ** max(attempts - 1, 0)),
         RETRY_BACKOFF_MAX_MINUTES,
     )
-    return row.attempted_at + timedelta(minutes=minutes)
+    return now + timedelta(minutes=minutes)
 
 
 def probe_to_camel(row: DiscoverHandleProbe) -> dict[str, Any]:
@@ -97,31 +127,161 @@ def probe_map(session: Session, handles: set[str]) -> dict[str, dict[str, Any]]:
     Scoped to the handles asked about rather than loading the whole table: the
     probe cache is global and grows across every report ever generated, while a
     single report only needs its own candidates.
+
+    Rows that have never been attempted are omitted. Since this table doubles as
+    the work queue, enqueuing a report's candidates creates a row for every one
+    of them immediately — but a queue entry is not an answer, and a candidate
+    waiting its turn must keep reading as "not checked yet" rather than as an
+    inconclusive result. Callers rely on a missing entry meaning exactly that.
     """
     if not handles:
         return {}
     statement = select(DiscoverHandleProbe).where(
-        col(DiscoverHandleProbe.handle).in_(handles)
+        col(DiscoverHandleProbe.handle).in_(handles),
+        col(DiscoverHandleProbe.attempted_at).is_not(None),
     )
     return {row.handle: probe_to_camel(row) for row in session.exec(statement).all()}
 
 
-def list_probes(session: Session, *, status: str | None = None) -> list[dict[str, Any]]:
+def list_probes(
+    session: Session,
+    *,
+    status: str | None = None,
+    limit: int = DEFAULT_PROBE_PAGE_SIZE,
+    offset: int = 0,
+) -> list[dict[str, Any]]:
+    """One page of probe rows, ordered by handle.
+
+    Paged rather than whole-table: this cache grows across every report ever
+    generated and is never pruned, so an unbounded select here would get slower
+    for the lifetime of the install (`docs/unbounded-query-audit.md`).
+    """
     statement = select(DiscoverHandleProbe)
     if status:
         statement = statement.where(col(DiscoverHandleProbe.status) == status)
-    statement = statement.order_by(col(DiscoverHandleProbe.handle))
+    statement = (
+        statement.order_by(col(DiscoverHandleProbe.handle)).offset(offset).limit(limit)
+    )
     return [probe_to_camel(row) for row in session.exec(statement).all()]
+
+
+def queue_counts(session: Session) -> dict[str, int]:
+    """Queue state for the progress display, as four indexed counts.
+
+    Deliberately global rather than scoped to one report: scoping would mean
+    loading that report's candidate blob on every poll, and the blob is the
+    corpus-sized column. In practice the queue is dominated by the newest report
+    anyway, because a resolved handle never re-enters it.
+
+    `queued` and `retrying` are split because they behave differently on screen:
+    `queued` drains to zero and can drive a progress bar, while `retrying` may
+    never reach zero — a permanently unreachable handle keeps retrying at the
+    backoff ceiling forever, by design.
+    """
+    unknown = col(DiscoverHandleProbe.status) == "unknown"
+    attempts = col(DiscoverHandleProbe.attempts)
+
+    def _count(clause: Any) -> int:
+        statement = select(func.count()).select_from(DiscoverHandleProbe).where(clause)
+        return int(session.exec(statement).one())
+
+    return {
+        "queued": _count(and_(unknown, attempts == 0)),
+        "retrying": _count(and_(unknown, attempts > 0)),
+        "resolved": _count(col(DiscoverHandleProbe.status) == "ok"),
+        "unavailable": _count(col(DiscoverHandleProbe.status) == "unavailable"),
+    }
+
+
+def enqueue_handles(session: Session, handles: list[str]) -> int:
+    """Queue `handles` for probing, in the order given, and return how many.
+
+    Pass candidates ranked strongest-first: the index in the list becomes the
+    row's `priority`, which is the drain order. A handle already queued from an
+    earlier report keeps the *better* of the two ranks, so appearing near the top
+    of any report is enough to be probed early.
+
+    Handles with a conclusive verdict are skipped entirely — that cache is the
+    reason a second report over overlapping channels costs almost nothing.
+    """
+    ranked: dict[str, int] = {}
+    for rank, raw in enumerate(handles):
+        handle = normalize_handle(raw)
+        if not handle or handle in ranked:
+            continue
+        ranked[handle] = rank
+    if not ranked:
+        return 0
+
+    existing = {
+        row.handle: row
+        for row in session.exec(
+            select(DiscoverHandleProbe).where(
+                col(DiscoverHandleProbe.handle).in_(set(ranked))
+            )
+        ).all()
+    }
+
+    queued = 0
+    for handle, rank in ranked.items():
+        row = existing.get(handle)
+        if row is None:
+            session.add(
+                DiscoverHandleProbe(
+                    handle=handle,
+                    status="unknown",
+                    priority=rank,
+                    created_at=utc_now(),
+                )
+            )
+            queued += 1
+            continue
+        if row.status in CONCLUSIVE_STATUSES:
+            continue
+        if rank < row.priority:
+            row.priority = rank
+            session.add(row)
+    session.commit()
+    return queued
+
+
+def dequeue_handles(
+    session: Session, *, limit: int, now: datetime | None = None
+) -> list[str]:
+    """The next batch to fetch, best-ranked first.
+
+    Takes no candidate list: the queue answers this from the table alone, which
+    is what lets a scheduled job drain it whether or not anyone has the Discover
+    tab open. A handle whose backoff has not elapsed is not due, and one with a
+    verdict is not pending, so both fall out of the WHERE rather than needing a
+    second pass.
+    """
+    if limit <= 0:
+        return []
+    moment = now or utc_now()
+    statement = (
+        select(DiscoverHandleProbe)
+        .where(
+            col(DiscoverHandleProbe.status) == "unknown",
+            or_(
+                col(DiscoverHandleProbe.retry_after).is_(None),
+                col(DiscoverHandleProbe.retry_after) <= moment,
+            ),
+        )
+        .order_by(col(DiscoverHandleProbe.priority), col(DiscoverHandleProbe.handle))
+        .limit(limit)
+    )
+    return [row.handle for row in session.exec(statement).all()]
 
 
 def handles_needing_probe(
     session: Session, handles: list[str], *, now: datetime | None = None
 ) -> list[str]:
-    """Which of `handles` the sweep should actually fetch, input order preserved.
+    """Which of `handles` are still pending, input order preserved.
 
-    Order is preserved because the caller passes candidates ranked by score, and
-    probing in that order is what makes the top of the report resolve within
-    seconds instead of after the long single-reference tail.
+    The same predicate as `dequeue_handles`, but scoped to a caller-supplied set
+    rather than the whole queue — used to answer "is there anything left to do
+    for *this* report" without draining anything.
 
     Skipped: handles with a conclusive verdict (cached indefinitely — a bot does
     not become a channel), and handles whose retry backoff has not elapsed.
@@ -152,8 +312,7 @@ def handles_needing_probe(
             continue
         if row.status in CONCLUSIVE_STATUSES:
             continue
-        due = _retry_due_at(row)
-        if due is None or due <= moment:
+        if row.retry_after is None or row.retry_after <= moment:
             out.append(handle)
     return out
 
@@ -190,6 +349,8 @@ def record_probe_result(
         row.status = "unknown"
         row.attempts += 1
         row.last_error = error or "no telegram page in response"
+        # Stays queued, but not due again until the backoff elapses.
+        row.retry_after = _retry_deadline(row.attempts, now=now)
         session.commit()
         session.refresh(row)
         return probe_to_camel(row)
@@ -207,27 +368,48 @@ def record_probe_result(
     # throttle retries of an unresolved handle, and this one is now resolved.
     row.attempts = 0
     row.last_error = None
+    row.retry_after = None
     row.checked_at = now
     session.commit()
     session.refresh(row)
     return probe_to_camel(row)
 
 
-def clear_probes(session: Session, handles: list[str]) -> list[str]:
-    """Forget probes so the next sweep re-fetches them — the manual recheck.
+def requeue_probes(
+    session: Session, handles: list[str], *, priority: int = RECHECK_PRIORITY
+) -> list[str]:
+    """Discard the cached answer and put the handle back at the front — recheck.
 
-    Deleting rather than flagging for refresh: a probe row *is* the cached
-    answer, so removing it returns the handle to "never probed", which the sweep
-    already knows how to handle. Unknown handles are skipped rather than 404ing,
-    since the UI offers recheck on rows that may not have been probed yet.
+    Note this *requeues* rather than merely forgetting. Under the queue model a
+    row is both the cached answer and the work item, so deleting it would take
+    the handle out of the queue entirely and nothing would ever fetch it again.
+    The row has to be reset in place: cleared of its verdict, and re-marked
+    pending at `priority` so the next drain tick picks it up first.
+
+    Returns every handle now queued, including ones that had never been probed —
+    the UI offers recheck on rows whose verdict has not arrived yet, and asking
+    for a handle nobody has looked at is a reasonable thing to do, not an error.
     """
-    removed: list[str] = []
+    requeued: list[str] = []
     for raw in handles:
         handle = normalize_handle(raw)
-        row = session.get(DiscoverHandleProbe, handle)
-        if row is None:
+        if not handle or handle in requeued:
             continue
-        session.delete(row)
-        removed.append(handle)
+        row = _get_or_create(session, handle)
+        row.status = "unknown"
+        row.kind = "unknown"
+        row.display_name = None
+        row.bio = None
+        row.subscribers = None
+        row.photo_url = None
+        row.latest_id = 0
+        row.attempts = 0
+        row.last_error = None
+        row.checked_at = None
+        row.attempted_at = None
+        row.retry_after = None
+        row.priority = priority
+        session.add(row)
+        requeued.append(handle)
     session.commit()
-    return removed
+    return requeued

@@ -364,7 +364,7 @@ pays for rows the user actually inspects.
 
 **Effort/risk.** Small–medium, mostly frontend.
 
-### D9. Channel metadata before you commit — **DONE 2026-07-29**
+### D9. Channel metadata before you commit — **DONE 2026-07-29, reworked 2026-07-30**
 
 `get_channel_info` used to run only **during** the follow job
 (`bulk_follow.py:273`), so following was a blind decision.
@@ -387,11 +387,11 @@ That makes this a filtering feature, not just an informational one.
 * **`tg_discover_probes`** — one row per normalized handle recording what a
   single fetch of `t.me/<handle>` said: `status` (`ok` / `unavailable` /
   `unknown`), a best-effort `kind`, display name, bio, subscriber text.
-* **A background sweep** (`services/discover_probe_job.py`) started
-  automatically when a report is opened, at concurrency 2 — below bulk-follow's
-  4, because it runs unprompted and competes with sync for the same proxy
-  lanes. Cancellable, capped at 400 handles per sweep, and probing in the
-  report's rank order so the top of the list resolves within seconds.
+* **A background sweep** at concurrency 2 — below bulk-follow's 4, because it
+  runs unprompted and competes with sync for the same proxy lanes — probing in
+  the report's rank order so the top of the list resolves first. Originally
+  started from the browser when a report was opened; now a scheduled backend job
+  draining a queue (see the reversal below).
 * **A "Not followable" view**, kept *separate* from the D8 dismiss list. A probe
   is a fact about the handle; a dismissal is a judgement by the operator.
   Merging them would make an automated verdict indistinguishable from a
@@ -399,6 +399,67 @@ That makes this a filtering feature, not just an informational one.
   two lists stay disjoint.
 * **Recheck**, per row and in bulk, which clears the cached verdict and
   re-probes.
+
+#### The second reversal: the client had no business orchestrating this
+
+Shipped 2026-07-29, reworked the next day. The first version put "which handles
+still need probing, and when does a sweep start" in a React effect
+(`useDiscoverProbeSweep`) driving a short-lived in-memory job. That was wrong,
+and the operator called it: the report is in the DB, the probed handles are in the
+DB, and the fetch is issued by the backend — so the client only ever needed the
+latest state to render, never a say in the orchestration.
+
+Three defects followed from the placement, and the first could not be fixed
+there at all:
+
+1. **Closing the Discover tab stranded the report.** A sweep was capped at 400
+   handles and the *client* chained the next batch from its poll loop. Generate a
+   900-candidate report, navigate away, and 500 handles were never probed —
+   indefinitely, silently. PR #50 tried to fix the chaining and could not fix
+   this, because the thing doing the chaining lived in the browser.
+2. **The dedupe and stop state were per-tab `useRef`s.** Two tabs re-requested
+   the same handles, and "Stop" in one was not honoured by the other.
+3. **`create_probe_job` had a check-then-act race across an `await`.** Two
+   callers could both pass the "is a sweep running" check before either recorded
+   one; the loser became an orphan sweep that the active-job endpoint could not
+   see and Stop could not reach, burning proxy lanes until it finished. Reachable
+   by a recheck click racing the auto-start effect, or just two tabs.
+
+The tell was that the server already owned the real decision —
+`handles_needing_probe`, with the cache check and the backoff clock — and the
+client was re-deriving a worse copy of it from a possibly stale report, then
+asking the server to re-filter the result. That is **exactly the D14 mistake**
+(one rule, two implementations, the client's copy wrong) reintroduced four
+workstreams later in a new place.
+
+**What replaced it.** `tg_discover_probes` became the queue as well as the cache
+— a `status="unknown"` row *is* a work item — with `priority` (candidate rank at
+enqueue) and `retry_after` (materialized backoff deadline) making the dequeue one
+indexable `WHERE`. `create_report` enqueues its candidates; a scheduled
+`discover_probe` job drains a bounded batch per tick. Deleted: the in-memory job,
+its four routes, the sweep hook, and the refs. The client keeps one query with a
+conditional `refetchInterval`, one pure predicate, and two operator actions.
+
+Registering it as an ordinary scheduler job carried most of the value: it
+inherits enable/disable, manual trigger and last-run status, and APScheduler's
+`max_instances=1` plus a module try-lock replaces the racy latch, so defect 3
+stops existing rather than being patched. "Pause" became the job toggle —
+durable, global, honoured by every tab — instead of a ref one tab ignored.
+
+Two things worth being explicit about:
+
+* **A queue entry is not an answer.** Enqueuing creates a row immediately, so
+  `probe_map` omits rows that have never been attempted. Otherwise a candidate
+  waiting its turn would read identically to one that failed three times.
+* **Recheck had to become a requeue, not a delete.** Deleting the row used to be
+  how recheck worked; under a queue model that removes the handle from the queue
+  entirely and nothing ever fetches it again. The row is reset in place at
+  priority 0.
+
+**Accepted regression:** reports generated before 2026-07-30 keep whatever probe
+rows they have, and their never-probed handles are never queued — there is no
+backfill. Regenerating over the same scope enqueues them. Deliberate trade
+against carrying a one-shot script for a day-old feature.
 
 #### The reversal on prefetching
 
@@ -430,8 +491,18 @@ channel, silently. Recheck exists as the second line of defence.
   is an ordinary outcome. The one firm rule is the bot check — Telegram requires
   bot usernames to end in `bot`.
 * The proportion of junk handles in a real corpus was never measured before
-  building; the feature was scoped on the operator's observation. The sweep's
-  `resolved` / `unavailable` counters now make that ratio observable in staging.
+  building; the feature was scoped on the operator's observation. The queue's
+  `resolved` / `unavailable` counts now make that ratio observable in staging.
+* A permanently unreachable handle retries forever at the 24h backoff ceiling, so
+  the `retrying` count need never reach zero. That is why the progress bar keys off
+  `queued` alone and reports `retrying` as a separate line — on a healthy install
+  it is absent, which makes its presence a real proxy-pool signal.
+* Effect wiring is still untested: the repo has no `@testing-library` or
+  `renderHook`, and component tests render to static markup, so no effect, state
+  or timer behaviour runs. Keeping the remaining client logic to one pure
+  predicate (`shouldPollProbeQueue`) is a deliberate response to that — it is the
+  only shape that *can* be covered here, and the state machine it replaced had no
+  coverage at all.
 
 ---
 

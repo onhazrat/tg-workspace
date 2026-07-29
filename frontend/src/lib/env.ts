@@ -47,6 +47,14 @@ export const env = {
     viteEnv?.VITE_RETENTION_LOG_DAYS_DEFAULT,
     30,
   ),
+  retentionReportDaysDefault: parseIntEnv(
+    viteEnv?.VITE_RETENTION_REPORT_DAYS_DEFAULT,
+    90,
+  ),
+  retentionReportMaxDefault: parseIntEnv(
+    viteEnv?.VITE_RETENTION_REPORT_MAX_DEFAULT,
+    50,
+  ),
   defaultAiModel: parseStringEnv(
     viteEnv?.VITE_DEFAULT_AI_MODEL,
     "gemini-3-flash-preview",

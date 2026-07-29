@@ -1,6 +1,6 @@
 # Unbounded query audit
 
-**Date:** 2026-07-21
+**Date:** 2026-07-21, re-run 2026-07-30 for the Discover tables (§4)
 **Scope:** every `.all()` in `backend/app/services/`, plus every `GET` route.
 
 Satisfies acceptance criteria 1 and 2 of `docs/architecture-remediation-plan.md`
@@ -110,7 +110,43 @@ page being processed.
 
 ---
 
-## 4. Related follow-ups
+## 4. The Discover tables (added 2026-07-30)
+
+`tg_discover_reports`, `tg_discover_ignored` and `tg_discover_probes` all landed
+on 2026-07-29, **after** the original sweep, so none of them were listed here.
+That is a lapse in this document's own re-run contract, not a new class of
+problem. Caught while moving probe orchestration server-side.
+
+| Site | Status |
+|---|---|
+| `discover_probes.py::list_probes` | **Bounded 2026-07-30** — `limit`/`offset`, default 200, cap 1000. Was a whole-table select on a table whose docstring says it grows across every report ever generated and is never pruned. |
+| `discover_probes.py::probe_map` | Bounded by an `IN` list — one report's candidate handles. |
+| `discover_probes.py::dequeue_handles` | `.limit(DISCOVER_PROBE_BATCH_SIZE)`. |
+| `discover_probes.py::queue_counts` | `SELECT count(*)`, four of them; no rows fetched. |
+| `discover_reports.py::list_reports` | `MAX_REPORT_PAGE_SIZE` (1000), light projection — the candidate blob is never loaded. |
+| `discover_reports.py::followed_names` | Bounded by channel count (§2). |
+| `discover_ignored.py::list_ignored` / `ignored_handles` | Unbounded, but bounded by operator action — one row per handle someone dismissed by hand. Same class as the config tables in §2. Worth revisiting if bulk-dismiss makes this grow faster than clicking does. |
+
+### Growth, as distinct from query bounds
+
+`tg_discover_reports` was the only table in the schema that grew per user action
+with **no retention at all**: each Generate stores its whole candidate list,
+single-reference tail included, as a JSON blob. Retention was added 2026-07-30
+(`reportRetentionDays` / `reportRetentionMax`, both in the retention
+`AppSetting`, 0 disables either). That also keeps the report-history search —
+`cast(channels AS text) ILIKE '%…%'`, an unindexable sequential scan — on a
+bounded number of rows.
+
+`tg_discover_probes` is deliberately **not** pruned: caching one verdict per
+handle indefinitely is the feature. It grows with distinct handles ever seen, not
+with reports.
+
+Still without retention, same shape, not addressed: `tg_summaries`,
+`tg_tag_runs`.
+
+---
+
+## 5. Related follow-ups
 
 - `IDEA-010` — a shared paginated-list helper. The pattern is now written out
   five times; this duplication is why the `stats.py` bulk-delete fix never

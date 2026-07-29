@@ -244,6 +244,15 @@ class DiscoverHandleProbe(SQLModel, table=True):
     Keyed by the normalized handle, like the dismiss table, so both join onto
     candidate names the same way.
 
+    ## This table is also the work queue
+
+    A row with `status="unknown"` *is* a pending work item, so the cache and the
+    queue are deliberately the same row rather than two tables that could
+    disagree about whether a handle still needs fetching. `priority` and
+    `retry_after` are what make the queue drainable without being handed a
+    candidate list — which is the whole reason probing can run as a scheduled
+    backend job instead of being driven from the browser.
+
     ## Why a verdict is never written from a failed fetch
 
     `status` is `ok` or `unavailable` only when a Telegram page actually parsed.
@@ -280,6 +289,25 @@ class DiscoverHandleProbe(SQLModel, table=True):
     #: conclusive answer.
     attempts: int = 0
     last_error: str | None = None
+
+    #: Drain order — lower first. Set from the candidate's rank in the report
+    #: that enqueued it, so the rows the operator is actually reading resolve
+    #: first instead of after the long single-reference tail. A handle enqueued
+    #: by several reports keeps the best (lowest) rank it ever had. The default
+    #: is a large sentinel rather than 0 so anything enqueued with a real rank
+    #: sorts ahead of rows that predate this column.
+    #:
+    #: Not indexed on its own — nothing queries priority alone. The composite
+    #: `ix_tg_discover_probes_queue` on `(status, priority)` is what serves the
+    #: dequeue, and it lives in the migration, as the other composite indexes in
+    #: this schema do.
+    priority: int = Field(default=1_000_000)
+
+    #: When an inconclusive handle becomes eligible for another attempt.
+    #: Materialized from `attempts` at write time rather than recomputed per row
+    #: at read time, which is what lets the dequeue be a single indexable WHERE.
+    #: `None` means "due now".
+    retry_after: datetime | None = None
 
     #: When a *conclusive* answer was last recorded. `None` while only failures
     #: have happened, which is what distinguishes "never resolved" from "known".

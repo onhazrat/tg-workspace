@@ -47,6 +47,10 @@ export const DatabaseManagement: React.FC<{
     setPostRetentionDays,
     logRetentionDays,
     setLogRetentionDays,
+    reportRetentionDays,
+    setReportRetentionDays,
+    reportRetentionMax,
+    setReportRetentionMax,
   } = useSettings()
 
   const [isExporting, setIsExporting] = useState(false)
@@ -388,8 +392,12 @@ export const DatabaseManagement: React.FC<{
             <RetentionPanel
               postRetentionDays={postRetentionDays}
               logRetentionDays={logRetentionDays}
+              reportRetentionDays={reportRetentionDays}
+              reportRetentionMax={reportRetentionMax}
               onPostRetentionDaysChange={setPostRetentionDays}
               onLogRetentionDaysChange={setLogRetentionDays}
+              onReportRetentionDaysChange={setReportRetentionDays}
+              onReportRetentionMaxChange={setReportRetentionMax}
               highlightId={highlightId}
             />
           </SettingAnchor>
