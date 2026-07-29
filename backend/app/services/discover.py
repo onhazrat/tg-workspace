@@ -25,6 +25,7 @@ from sqlalchemy import or_
 from sqlmodel import Session, col, select
 
 from app.models_tg import Channel, Post
+from app.services.discover_ignored import ignored_handles
 from app.services.post_filters import PostFilters, apply_post_filters
 from app.services.post_links_parser import channel_from_telegram_url
 from app.services.posts import random_cap_order
@@ -271,8 +272,9 @@ def compute_discover_candidates(
                         (post.forwarded_from or handle).lstrip("@").strip()
                     )
 
+    ignored = ignored_handles(session)
     candidates = [
-        _to_candidate(handle, entry, followed)
+        _to_candidate(handle, entry, followed, ignored)
         for handle, entry in by_source.items()
         if entry.sample_post is not None
     ]
@@ -293,7 +295,7 @@ def compute_discover_candidates(
 
 
 def _to_candidate(
-    handle: str, entry: _Accumulator, followed: set[str]
+    handle: str, entry: _Accumulator, followed: set[str], ignored: set[str]
 ) -> dict[str, Any]:
     seen_in: list[dict[str, Any]] = [
         {
@@ -316,6 +318,7 @@ def _to_candidate(
         "seenInCount": len(seen_in),
         "lastSeen": entry.last_seen,
         "isFollowed": handle in followed,
+        "isIgnored": handle in ignored,
         "samplePost": {
             "channelName": sample.channel_name,
             "postId": sample.post_id,

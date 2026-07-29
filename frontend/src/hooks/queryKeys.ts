@@ -15,6 +15,7 @@ export const queryKeys = {
   discoverCandidates: (scope: unknown) =>
     ["discoverCandidates", scope] as const,
   discoverReports: ["discoverReports"] as const,
+  discoverIgnored: ["discoverIgnored"] as const,
   discoverReport: (id: string) => ["discoverReport", id] as const,
   /**
    * The report Discover opens on. Kept separate from `discoverReport(id)`

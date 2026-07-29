@@ -31,6 +31,7 @@ from sqlmodel import Session, col, select
 
 from app.models_tg import Channel, DiscoverReport, utc_now
 from app.services.discover import SignalKind, compute_discover_candidates
+from app.services.discover_ignored import ignored_handles
 from app.services.post_filters import PostFilters
 
 DEFAULT_REPORT_PAGE_SIZE = 100
@@ -80,14 +81,16 @@ def followed_names(session: Session) -> set[str]:
     }
 
 
-def _with_live_follow_state(
-    candidates: list[Any], followed: set[str]
+def _with_live_state(
+    candidates: list[Any], followed: set[str], ignored: set[str]
 ) -> list[dict[str, Any]]:
-    """Overlay `isFollowed` from the live followed set.
+    """Overlay `isFollowed` / `isIgnored` from live state.
 
     The stored candidate rows carry whatever `compute_discover_candidates`
-    produced at generate time; that value is authoritative only for the instant
-    it was written, so it is replaced rather than trusted.
+    produced at generate time; those values are authoritative only for the
+    instant they were written, so they are replaced rather than trusted. This is
+    what makes following or dismissing a candidate update every saved report at
+    once instead of only the one on screen.
     """
     out: list[dict[str, Any]] = []
     for candidate in candidates:
@@ -95,17 +98,24 @@ def _with_live_follow_state(
             continue
         name = candidate.get("name")
         handle = name.lstrip("@").strip().lower() if isinstance(name, str) else ""
-        out.append({**candidate, "isFollowed": handle in followed})
+        out.append(
+            {
+                **candidate,
+                "isFollowed": handle in followed,
+                "isIgnored": handle in ignored,
+            }
+        )
     return out
 
 
 def report_to_camel(session: Session, report: DiscoverReport) -> dict[str, Any]:
     """Full projection, including every candidate."""
     followed = followed_names(session)
+    ignored = ignored_handles(session)
     stored = report.candidates or []
     return {
         **_base(report),
-        "candidates": _with_live_follow_state(stored, followed),
+        "candidates": _with_live_state(stored, followed, ignored),
         "candidateCount": len(stored),
     }
 

@@ -401,6 +401,26 @@ export const dataApi = {
       `/api/v1/data/discover/reports/${encodeURIComponent(reportId)}`,
     ),
 
+  /** Dismissed candidates, newest first. */
+  listDiscoverIgnored: () =>
+    request<{ handle: string; reason: string | null; createdAt: number }[]>(
+      "/api/v1/data/discover/ignored",
+    ),
+
+  /** Dismiss candidates so later reports stop re-surfacing them. Idempotent. */
+  ignoreDiscoverChannels: (handles: string[], reason?: string) =>
+    request<{ ignored: string[] }>("/api/v1/data/discover/ignored", {
+      method: "POST",
+      body: JSON.stringify(reason ? { handles, reason } : { handles }),
+    }),
+
+  /** Undo a dismissal. */
+  unignoreDiscoverChannels: (handles: string[]) =>
+    request<{ removed: string[] }>("/api/v1/data/discover/ignored", {
+      method: "DELETE",
+      body: JSON.stringify({ handles }),
+    }),
+
   deleteDiscoverReport: (reportId: string) =>
     request<{ status: string }>(
       `/api/v1/data/discover/reports/${encodeURIComponent(reportId)}`,

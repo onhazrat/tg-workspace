@@ -14,6 +14,7 @@ import type {
   DiscoverSortKey,
   DiscoverySignalKind,
 } from "@/lib/posts/discover-candidates"
+import { DEFAULT_DISCOVER_SIGNAL_WEIGHTS } from "@/lib/posts/discover-candidates"
 import type { GlobalStartTimeMode, GlobalStartTimeValue } from "@/types"
 
 /** Backend settings sections pushed via api.putSetting(section, payload). */
@@ -245,14 +246,36 @@ export const appSettingsSpec = {
   ),
   discoverSortKey: enumSetting<DiscoverSortKey>(
     "discoverSortKey",
-    z.enum(["total", "forward", "mention", "link", "lastSeen", "seenInCount"]),
+    z.enum([
+      "total",
+      "weighted",
+      "forward",
+      "mention",
+      "link",
+      "lastSeen",
+      "seenInCount",
+    ]),
     "total",
+  ),
+  // Per-kind weights for the "Weighted" sort. Editable because the right
+  // trade-off is corpus-specific: a forward is normally the strongest
+  // endorsement and a bare @mention the weakest, but how much stronger is a
+  // judgement only the operator can make. Applied client-side over the saved
+  // report, so changing them re-ranks instantly without regenerating.
+  discoverSignalWeights: jsonSetting(
+    "discoverSignalWeights",
+    z.object({
+      forward: z.number(),
+      mention: z.number(),
+      link: z.number(),
+    }),
+    DEFAULT_DISCOVER_SIGNAL_WEIGHTS,
   ),
   // "all" preserves the historical Discover behaviour of listing followed
   // sources too (rendered with a "Following" badge and a disabled checkbox).
   discoverFollowState: enumSetting<DiscoverFollowState>(
     "discoverFollowState",
-    z.enum(["all", "unfollowed", "followed"]),
+    z.enum(["all", "unfollowed", "followed", "ignored"]),
     "all",
   ),
   discoverMinTotal: intSetting("discoverMinTotal", 1),

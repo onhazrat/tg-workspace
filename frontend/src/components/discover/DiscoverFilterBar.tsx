@@ -4,7 +4,7 @@ import { TgInput } from "@/components/ui/tg-input"
 import { TgSegmentedControl } from "@/components/ui/tg-segmented"
 import {
   DISCOVER_FOLLOW_STATE_OPTIONS,
-  DISCOVER_MIN_TOTAL_OPTIONS,
+  DISCOVER_MIN_TOTAL_MIN,
   DISCOVERY_SIGNAL_KINDS,
   DISCOVERY_SIGNAL_LABELS,
   type DiscoverFollowState,
@@ -86,16 +86,26 @@ export const DiscoverFilterBar: React.FC<DiscoverFilterBarProps> = ({
           <span className="text-[11px] font-bold uppercase tracking-widest text-app-ink/50">
             Min hits
           </span>
-          <TgSegmentedControl
-            size="sm"
-            aria-label="Minimum total references"
+          {/*
+           * A free int rather than fixed 1+/2+/5+ buttons: the useful threshold
+           * depends on how big the report is, and on a wide scope the tail runs
+           * far past 5.
+           */}
+          <TgInput
+            variant="muted"
+            type="number"
+            min={DISCOVER_MIN_TOTAL_MIN}
+            step={1}
             value={String(minTotal)}
-            onChange={(value) => onMinTotalChange(Number.parseInt(value, 10))}
-            options={DISCOVER_MIN_TOTAL_OPTIONS.map((option) => ({
-              label: option.label,
-              value: String(option.value),
-              "data-testid": `discover-min-total-${option.value}`,
-            }))}
+            aria-label="Minimum total references"
+            data-testid="discover-min-total"
+            onChange={(event) => {
+              const next = Number.parseInt(event.target.value, 10)
+              // Ignore an empty/partial field rather than snapping to 1 mid-typing.
+              if (Number.isNaN(next)) return
+              onMinTotalChange(Math.max(DISCOVER_MIN_TOTAL_MIN, next))
+            }}
+            className="w-20 tabular-nums"
           />
         </div>
 

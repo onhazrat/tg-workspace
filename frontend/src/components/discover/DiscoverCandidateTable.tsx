@@ -1,11 +1,13 @@
-import { Plus } from "lucide-react"
+import { EyeOff, Plus, Undo2 } from "lucide-react"
 import type React from "react"
 import { useEffect, useRef } from "react"
 import { RelativeTime } from "@/components/RelativeTime"
 import { TgButton } from "@/components/ui/tg-button"
-import type {
-  DiscoveryCandidate,
-  DiscoverySignalKind,
+import {
+  type DiscoverSignalWeights,
+  type DiscoveryCandidate,
+  type DiscoverySignalKind,
+  weightedScore,
 } from "@/lib/posts/discover-candidates"
 import {
   headerCheckboxState,
@@ -48,6 +50,17 @@ interface DiscoverCandidateTableProps {
    * scope state and thereby discarded the report being read (IDEA-011 D1).
    */
   onInspect: (candidate: DiscoveryCandidate) => void
+  /** Dismiss (or restore) a candidate. */
+  onSetIgnored: (name: string, ignored: boolean) => void
+  weights: DiscoverSignalWeights
+  /**
+   * Show the weighted score column.
+   *
+   * Only while sorting by it: otherwise the ordering would be driven by a
+   * number the table never shows, which is what makes a weighted rank feel
+   * arbitrary.
+   */
+  showScore: boolean
 }
 
 export const DiscoverCandidateTable: React.FC<DiscoverCandidateTableProps> = ({
@@ -61,6 +74,9 @@ export const DiscoverCandidateTable: React.FC<DiscoverCandidateTableProps> = ({
   resultStatusByName,
   onFollow,
   onInspect,
+  onSetIgnored,
+  weights,
+  showScore,
 }) => {
   const headerCheckboxRef = useRef<HTMLInputElement>(null)
   const headerState = headerCheckboxState(candidates, selectedForFollow)
@@ -105,6 +121,14 @@ export const DiscoverCandidateTable: React.FC<DiscoverCandidateTableProps> = ({
               Link
             </th>
             <th className="pb-2">Total</th>
+            {showScore ? (
+              <th
+                className="pb-2"
+                title={`Weighted: ${weights.forward}×Fwd + ${weights.mention}×Men + ${weights.link}×Link`}
+              >
+                Score
+              </th>
+            ) : null}
             <th className="pb-2">Seen by</th>
             <th className="pb-2">Last seen</th>
             <th className="pb-2">Actions</th>
@@ -183,6 +207,14 @@ export const DiscoverCandidateTable: React.FC<DiscoverCandidateTableProps> = ({
                 >
                   {row.total}
                 </td>
+                {showScore ? (
+                  <td
+                    className="py-2 font-bold tabular-nums text-blue-600 dark:text-blue-400"
+                    data-testid={`discover-score-${row.name}`}
+                  >
+                    {weightedScore(row, weights)}
+                  </td>
+                ) : null}
                 <td className="py-2">
                   {row.seenIn.map((entry, index) => (
                     <span key={entry.channelName}>
@@ -234,6 +266,36 @@ export const DiscoverCandidateTable: React.FC<DiscoverCandidateTableProps> = ({
                       className="rounded-full text-app-ink/70"
                     >
                       Details
+                    </TgButton>
+                    {/*
+                     * Dismissing is offered even for followed candidates: a
+                     * channel can be worth following and still be noise in the
+                     * report you scan each week.
+                     */}
+                    <TgButton
+                      type="button"
+                      variant="secondary"
+                      size="sm"
+                      data-testid={`discover-ignore-${row.name}`}
+                      onClick={() => onSetIgnored(row.name, !row.isIgnored)}
+                      title={
+                        row.isIgnored
+                          ? "Show this channel in reports again"
+                          : "Hide this channel from future reports"
+                      }
+                      className="rounded-full text-app-ink/60"
+                    >
+                      {row.isIgnored ? (
+                        <>
+                          <Undo2 size={12} />
+                          Restore
+                        </>
+                      ) : (
+                        <>
+                          <EyeOff size={12} />
+                          Dismiss
+                        </>
+                      )}
                     </TgButton>
                   </div>
                 </td>

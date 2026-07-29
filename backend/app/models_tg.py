@@ -201,6 +201,31 @@ class DiscoverReport(SQLModel, table=True):
     updated_at: datetime = Field(default_factory=utc_now)
 
 
+class DiscoverIgnoredChannel(SQLModel, table=True):
+    """A Discover candidate the operator has decided against following.
+
+    Without this, every rerun re-surfaces everything already rejected: the good
+    candidates get followed and drop out of the unfollowed view, so the report
+    fills up with rejects and gets *less* useful the more it is used
+    (IDEA-011 D8).
+
+    Keyed by the normalized (lowercased, `@`-stripped) handle, matching how
+    `discover.py` compares handles, so a dismissal survives a candidate
+    reappearing with different casing.
+
+    Deliberately reversible and visible: dismissals are listed under the
+    "Ignored" filter and can be undone. A hidden, unreviewable blocklist would
+    be worse than none — a channel rejected once could never be reconsidered.
+    """
+
+    __tablename__ = "tg_discover_ignored"
+
+    handle: str = Field(primary_key=True)
+    user_id: uuid.UUID | None = Field(default=None, index=True)
+    reason: str | None = None
+    created_at: datetime = Field(default_factory=utc_now)
+
+
 class TagRun(SQLModel, table=True):
     __tablename__ = "tg_tag_runs"
 

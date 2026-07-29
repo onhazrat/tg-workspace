@@ -2226,6 +2226,103 @@
         "security": [{ "OAuth2PasswordBearer": [] }]
       }
     },
+    "/api/v1/data/discover/ignored": {
+      "get": {
+        "tags": ["data"],
+        "summary": "List Discover Ignored",
+        "description": "Dismissed candidates, newest first.",
+        "operationId": "data-list_discover_ignored",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": { "additionalProperties": true, "type": "object" },
+                  "type": "array",
+                  "title": "Response Data-List Discover Ignored"
+                }
+              }
+            }
+          }
+        },
+        "security": [{ "OAuth2PasswordBearer": [] }]
+      },
+      "post": {
+        "tags": ["data"],
+        "summary": "Add Discover Ignored",
+        "description": "Dismiss candidates so later reports stop re-surfacing them.\n\nIdempotent: re-dismissing an entry is a no-op rather than an error, since\nthe UI treats this as a toggle.",
+        "operationId": "data-add_discover_ignored",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/DiscoverIgnoreRequest" }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Data-Add Discover Ignored"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        },
+        "security": [{ "OAuth2PasswordBearer": [] }]
+      },
+      "delete": {
+        "tags": ["data"],
+        "summary": "Remove Discover Ignored",
+        "description": "Undo a dismissal.\n\nDELETE with a body rather than a path param so a batch can be undone in one\ncall, matching the POST.",
+        "operationId": "data-remove_discover_ignored",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/DiscoverIgnoreRequest" }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Data-Remove Discover Ignored"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        },
+        "security": [{ "OAuth2PasswordBearer": [] }]
+      }
+    },
     "/api/v1/data/discover/reports": {
       "post": {
         "tags": ["data"],
@@ -5089,6 +5186,22 @@
         "required": ["channelNames"],
         "title": "DiscoverCandidatesRequest",
         "description": "`PostScopeRequest` plus the signal-kind filter and the cap/scope inputs.\n\n`channelNames` is re-declared as required: the discovery aggregate is always\nasked about an explicit selection, and the query-string version required it\ntoo.\n\n`maxPerChannelMode`/`seed` and `postIds` are what let Discover reproduce the\ntwo scopes that used to fall back to a second, client-side implementation of\nthe same counting rules \u2014 the `random` cap and a semantic query\n(IDEA-011 D14)."
+      },
+      "DiscoverIgnoreRequest": {
+        "properties": {
+          "handles": {
+            "items": { "type": "string" },
+            "type": "array",
+            "title": "Handles"
+          },
+          "reason": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Reason"
+          }
+        },
+        "type": "object",
+        "required": ["handles"],
+        "title": "DiscoverIgnoreRequest"
       },
       "DiscoverPostRef": {
         "properties": {

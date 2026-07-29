@@ -214,7 +214,19 @@ changes, so the "proper" decoupling described in the original item is explicitly
 Two candidates with `total = 30` can differ enormously in how much they should
 be trusted. Today the ranking cannot tell them apart.
 
-### D5. Weight the signal kinds
+### D5. Weight the signal kinds — **DONE 2026-07-29**
+
+> Shipped as an additive "Weighted" sort; `total` was left alone rather than
+> redefined, so no existing ordering changed and `minTotal` keeps its meaning.
+> **Weights are user-editable** (defaults 3/2/1 forward/link/mention) rather
+> than constants — the right ratio is corpus-specific. Scoring and re-sorting
+> run client-side over the saved report, so a weight change re-ranks instantly
+> with no regeneration. The editor is shown only while that sort is active, and
+> a Score column appears with it so the ranking is explainable.
+>
+> Shipped alongside: **Min hits** became a free integer input instead of fixed
+> 1+/2+/5+ buttons — the useful threshold depends on report size, and a wide
+> scope's tail runs well past 5.
 
 `total` is `forward + mention + link` with equal weight
 (`discover.py:_to_candidate`, `discover-candidates.ts:337`).
@@ -272,7 +284,18 @@ a corpus-wide statistic, so keep it out of the first pass.
 Discover is a recurring workflow, but it has no memory of previous runs. Its
 signal-to-noise therefore degrades over time.
 
-### D8. Dismiss / "not interested" list
+### D8. Dismiss / "not interested" list — **DONE 2026-07-29**
+
+> `tg_discover_ignored`, keyed by the normalized handle. `isIgnored` is resolved
+> live per read exactly like `isFollowed`, so a dismissal applies to every saved
+> report at once — a report records what was *referenced*, not what the operator
+> has since decided about it.
+>
+> Dismissed rows are hidden from All / Unfollowed / Followed and surface under a
+> new **Ignored** filter. Hiding them everywhere is the point (a merely labelled
+> row still costs attention), while the Ignored view keeps every dismissal
+> reviewable and undoable rather than a silent blocklist. The stored report
+> keeps the candidate row, or there would be nothing left to un-dismiss from.
 
 **Why we may need this.** Every rerun re-surfaces everything you already
 rejected. Because the good candidates get followed and disappear from the
@@ -535,8 +558,8 @@ progress bar.
 |-------|-------|-----------|
 | 1 | **W1** (saved reports) + **D1** side panel | Agreed design; makes a generated report durable, which everything below benefits from |
 | 2 | **D2** | Renders evidence we already fetch, into the panel D1 builds |
-| 3 | **D5, D6** | Additive sort options, no migration, immediately visible quality gain |
-| 4 | **D8, D7** | Turn Discover from one-shot into a recurring tool; D7 gets easier once report history exists |
+| 3 | ~~**D5**~~ (done), **D6** | Additive sort options, no migration, immediately visible quality gain |
+| 4 | ~~**D8**~~ (done), **D7** | Turn Discover from one-shot into a recurring tool; D7 gets easier once report history exists |
 | 5 | ~~**D14**~~ (done), **D12** | Small, subtractive, reduce the cost of everything after |
 | 6 | **D10** | Before scope grows enough to hurt — note W1 persists the full tail, so this becomes about transfer and render, not storage |
 | 7 | **D9** | Larger UX change; needs rate-limit care |
@@ -553,9 +576,9 @@ progress bar.
 - [x] `isFollowed` on a saved report reflects the live followed set, not the
       value at generate time
 - [x] A pruned sample post degrades to a Telegram link, never an error
-- [ ] Candidate ranking can distinguish a forward from a mention, and one loud
-      carrier from several independent ones
-- [ ] Dismissed candidates stay dismissed across runs
+- [x] Candidate ranking can distinguish a forward from a mention (D5)
+- [ ] ...and one loud carrier from several independent ones (D6)
+- [x] Dismissed candidates stay dismissed across runs
 - [ ] A wide-scope report neither transfers nor renders its full long tail
 - [x] Discover candidate counts are produced by exactly one implementation
 
@@ -614,4 +637,5 @@ progress bar.
 | 2026-07-29 | Created — full read-through of the Discover path; 14 proposals captured, no code changed |
 | 2026-07-29 | W1 redesigned with the user: reports become saved artifacts modelled on summaries. D3 superseded, D4 reduced to a snapshot, D1 settled as a side panel. Four storage decisions recorded in W1. |
 | 2026-07-29 | W1 implemented (backend + frontend). Migration `u3v4w5x6y7z8`. |
+| 2026-07-29 | D5 (weighted sort, user-editable weights, client-side re-ranking) + Min hits as a free int; D8 (dismiss list, migration `v4w5x6y7z8a9`). |
 | 2026-07-29 | D14 implemented and the alembic head resolved: `origin/main` merged into the branch and `u3v4w5x6y7z8` re-chained onto `s1t2u3v4w5x6`, so there is a single linear head. |

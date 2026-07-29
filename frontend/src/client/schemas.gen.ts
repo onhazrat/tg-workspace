@@ -857,6 +857,32 @@ the same counting rules — the \`random\` cap and a semantic query
 (IDEA-011 D14).`
 } as const;
 
+export const DiscoverIgnoreRequestSchema = {
+    properties: {
+        handles: {
+            items: {
+                type: 'string'
+            },
+            type: 'array',
+            title: 'Handles'
+        },
+        reason: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Reason'
+        }
+    },
+    type: 'object',
+    required: ['handles'],
+    title: 'DiscoverIgnoreRequest'
+} as const;
+
 export const DiscoverPostRefSchema = {
     properties: {
         channelName: {

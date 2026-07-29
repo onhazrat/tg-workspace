@@ -120,6 +120,11 @@ from app.services.discover import (
     SignalKind,
     compute_discover_candidates,
 )
+from app.services.discover_ignored import (
+    ignore_channels,
+    list_ignored,
+    unignore_channels,
+)
 from app.services.discover_reports import (
     DEFAULT_REPORT_PAGE_SIZE,
     MAX_REPORT_PAGE_SIZE,
@@ -732,6 +737,51 @@ def _discover_kwargs(body: DiscoverCandidatesRequest) -> dict[str, Any]:
         "seed": body.seed,
         "post_ids": body.resolved_post_ids(),
     }
+
+
+class DiscoverIgnoreRequest(BaseModel):
+    handles: list[str]
+    reason: str | None = None
+
+
+@router.get("/discover/ignored")
+def list_discover_ignored(
+    session: SessionDep,
+    _current_user: CurrentUser,
+) -> list[dict[str, Any]]:
+    """Dismissed candidates, newest first."""
+    return list_ignored(session)
+
+
+@router.post("/discover/ignored")
+def add_discover_ignored(
+    body: DiscoverIgnoreRequest,
+    session: SessionDep,
+    _current_user: CurrentUser,
+) -> dict[str, Any]:
+    """Dismiss candidates so later reports stop re-surfacing them.
+
+    Idempotent: re-dismissing an entry is a no-op rather than an error, since
+    the UI treats this as a toggle.
+    """
+    added = ignore_channels(
+        session, body.handles, reason=body.reason, user_id=_current_user.id
+    )
+    return {"ignored": added}
+
+
+@router.delete("/discover/ignored")
+def remove_discover_ignored(
+    body: DiscoverIgnoreRequest,
+    session: SessionDep,
+    _current_user: CurrentUser,
+) -> dict[str, Any]:
+    """Undo a dismissal.
+
+    DELETE with a body rather than a path param so a batch can be undone in one
+    call, matching the POST.
+    """
+    return {"removed": unignore_channels(session, body.handles)}
 
 
 @router.post("/discover/reports")

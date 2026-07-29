@@ -85,6 +85,39 @@ export function useCreateDiscoverReportMutation() {
   })
 }
 
+/**
+ * Dismiss or restore candidates.
+ *
+ * `isIgnored` is resolved server-side per read, so every saved report reflects
+ * the change — hence invalidating reports wholesale rather than patching the
+ * one on screen.
+ */
+export function useDiscoverIgnoreMutation() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async ({
+      handles,
+      ignored,
+    }: {
+      handles: string[]
+      ignored: boolean
+    }): Promise<string[]> => {
+      // The two endpoints report their effect under different keys; the caller
+      // only cares which handles actually changed.
+      if (ignored) {
+        return (await api.ignoreDiscoverChannels(handles)).ignored
+      }
+      return (await api.unignoreDiscoverChannels(handles)).removed
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["discoverReport"] })
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.discoverIgnored,
+      })
+    },
+  })
+}
+
 export function useDeleteDiscoverReportMutation() {
   const queryClient = useQueryClient()
   return useMutation({

@@ -44,6 +44,8 @@ export interface DiscoveryCandidate {
   seenInCount: number
   lastSeen: number
   isFollowed: boolean
+  /** Dismissed by the operator. Resolved live per read, never frozen into a report. */
+  isIgnored?: boolean
   samplePost: { channelName: string; postId: number; timestamp: number }
 }
 
@@ -94,6 +96,7 @@ export function deriveDiscoveryEmptyReason(facts: {
 
 export type DiscoverSortKey =
   | "total"
+  | "weighted"
   | "forward"
   | "mention"
   | "link"
@@ -105,6 +108,7 @@ export const DISCOVER_SORT_OPTIONS: {
   value: DiscoverSortKey
 }[] = [
   { label: "Total", value: "total" },
+  { label: "Weighted", value: "weighted" },
   { label: "Forwards", value: "forward" },
   { label: "Mentions", value: "mention" },
   { label: "Links", value: "link" },
@@ -112,11 +116,46 @@ export const DISCOVER_SORT_OPTIONS: {
   { label: "Seen by", value: "seenInCount" },
 ]
 
+/**
+ * How much each signal kind counts toward the weighted score.
+ *
+ * `total` treats the three kinds as interchangeable, but they are not evidence
+ * of the same strength: a **forward** means a channel you trust republished
+ * that source, a **link** is a deliberate reference, and a bare **@mention**
+ * may be a complaint, a disclaimer or a namedrop. The defaults encode that
+ * ordering; the operator can retune them because the right ratio depends on
+ * the corpus.
+ */
+export type DiscoverSignalWeights = Record<DiscoverySignalKind, number>
+
+export const DEFAULT_DISCOVER_SIGNAL_WEIGHTS: DiscoverSignalWeights = {
+  forward: 3,
+  link: 2,
+  mention: 1,
+}
+
+/** Bounds for the weight inputs — wide enough to express "ignore this kind" (0). */
+export const DISCOVER_WEIGHT_MIN = 0
+export const DISCOVER_WEIGHT_MAX = 99
+
+export function weightedScore(
+  candidate: DiscoveryCandidate,
+  weights: DiscoverSignalWeights,
+): number {
+  return (
+    candidate.counts.forward * weights.forward +
+    candidate.counts.mention * weights.mention +
+    candidate.counts.link * weights.link
+  )
+}
+
 function sortValue(
   candidate: DiscoveryCandidate,
   sortKey: DiscoverSortKey,
+  weights: DiscoverSignalWeights,
 ): number {
   if (sortKey === "total") return candidate.total
+  if (sortKey === "weighted") return weightedScore(candidate, weights)
   if (sortKey === "lastSeen") return candidate.lastSeen
   if (sortKey === "seenInCount") return candidate.seenInCount
   return candidate.counts[sortKey]
@@ -125,9 +164,11 @@ function sortValue(
 export function sortDiscoveryCandidates(
   candidates: DiscoveryCandidate[],
   sortKey: DiscoverSortKey = "total",
+  weights: DiscoverSignalWeights = DEFAULT_DISCOVER_SIGNAL_WEIGHTS,
 ): DiscoveryCandidate[] {
   return [...candidates].sort((a, b) => {
-    const delta = sortValue(b, sortKey) - sortValue(a, sortKey)
+    const delta =
+      sortValue(b, sortKey, weights) - sortValue(a, sortKey, weights)
     if (delta !== 0) return delta
     if (b.total !== a.total) return b.total - a.total
     if (b.seenInCount !== a.seenInCount) return b.seenInCount - a.seenInCount
@@ -140,7 +181,7 @@ export function sortDiscoveryCandidates(
 /* Filtering                                                                  */
 /* -------------------------------------------------------------------------- */
 
-export type DiscoverFollowState = "all" | "unfollowed" | "followed"
+export type DiscoverFollowState = "all" | "unfollowed" | "followed" | "ignored"
 
 export const DISCOVER_FOLLOW_STATE_OPTIONS: {
   label: string
@@ -149,13 +190,16 @@ export const DISCOVER_FOLLOW_STATE_OPTIONS: {
   { label: "All", value: "all" },
   { label: "Unfollowed", value: "unfollowed" },
   { label: "Followed", value: "followed" },
+  { label: "Ignored", value: "ignored" },
 ]
 
-export const DISCOVER_MIN_TOTAL_OPTIONS: { label: string; value: number }[] = [
-  { label: "1+", value: 1 },
-  { label: "2+", value: 2 },
-  { label: "5+", value: 5 },
-]
+/**
+ * Floor for the "Min hits" threshold.
+ *
+ * 1 rather than 0 because a candidate exists only by being referenced at least
+ * once, so 0 and 1 would select the same rows.
+ */
+export const DISCOVER_MIN_TOTAL_MIN = 1
 
 export interface DiscoveryFilterOptions {
   followState: DiscoverFollowState
@@ -163,6 +207,15 @@ export interface DiscoveryFilterOptions {
   nameQuery: string
 }
 
+/**
+ * Narrow a report's candidates to what the operator wants to look at.
+ *
+ * Dismissed candidates are hidden from *every* view except "Ignored" — the
+ * whole point of D8 is that a rejection stops costing attention on later runs,
+ * which a merely-labelled row in the "All" list would not achieve. "Ignored" is
+ * their one home, which keeps the dismissal reviewable and undoable rather than
+ * a silent blocklist.
+ */
 export function filterDiscoveryCandidates(
   candidates: DiscoveryCandidate[],
   options: DiscoveryFilterOptions,
@@ -170,6 +223,11 @@ export function filterDiscoveryCandidates(
   const query = options.nameQuery.trim().toLowerCase()
   return candidates.filter((candidate) => {
     if (candidate.total < options.minTotal) return false
+    if (options.followState === "ignored") {
+      if (!candidate.isIgnored) return false
+    } else if (candidate.isIgnored) {
+      return false
+    }
     if (options.followState === "unfollowed" && candidate.isFollowed) {
       return false
     }

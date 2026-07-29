@@ -10,6 +10,7 @@ import { DiscoverFilterBar } from "@/components/discover/DiscoverFilterBar"
 import { DiscoverReportBar } from "@/components/discover/DiscoverReportBar"
 import { DiscoverScopeCard } from "@/components/discover/DiscoverScopeCard"
 import { DiscoverSortChips } from "@/components/discover/DiscoverSortChips"
+import { DiscoverWeightsEditor } from "@/components/discover/DiscoverWeightsEditor"
 import { useDiscoverFollowJob } from "@/components/discover/useDiscoverFollowJob"
 import { TgButton } from "@/components/ui/tg-button"
 import { TgConfirmDialog } from "@/components/ui/tg-confirm-dialog"
@@ -17,6 +18,7 @@ import { useDebouncedValue } from "@/hooks/useDebouncedValue"
 import {
   type DiscoverCandidatesParams,
   useCreateDiscoverReportMutation,
+  useDiscoverIgnoreMutation,
   useDiscoverReportQuery,
   useLatestDiscoverReportQuery,
 } from "@/hooks/useDiscover"
@@ -88,6 +90,8 @@ export const DiscoverView: React.FC = () => {
     setDiscoverFollowState,
     discoverMinTotal,
     setDiscoverMinTotal,
+    discoverSignalWeights,
+    setDiscoverSignalWeights,
   } = useSettings()
 
   // Ephemeral: a name filter is a per-visit refinement, not a durable preference.
@@ -132,6 +136,7 @@ export const DiscoverView: React.FC = () => {
   const latestQuery = useLatestDiscoverReportQuery(reportId === null)
   const pinnedQuery = useDiscoverReportQuery(reportId)
   const createReport = useCreateDiscoverReportMutation()
+  const setIgnored = useDiscoverIgnoreMutation()
 
   const view: DiscoverReportView | null = useMemo(() => {
     const saved = reportId !== null ? pinnedQuery.data : latestQuery.data
@@ -169,19 +174,26 @@ export const DiscoverView: React.FC = () => {
 
   const rawCandidates = useMemo(() => view?.candidates ?? [], [view])
 
+  // Filtering and ranking are client-side over the saved report, so changing a
+  // weight or a threshold re-ranks instantly instead of regenerating.
   const candidates = useMemo(() => {
     const filtered = filterDiscoveryCandidates(rawCandidates, {
       followState: discoverFollowState,
       minTotal: discoverMinTotal,
       nameQuery,
     })
-    return sortDiscoveryCandidates(filtered, discoverSortKey)
+    return sortDiscoveryCandidates(
+      filtered,
+      discoverSortKey,
+      discoverSignalWeights,
+    )
   }, [
     rawCandidates,
     discoverFollowState,
     discoverMinTotal,
     nameQuery,
     discoverSortKey,
+    discoverSignalWeights,
   ])
 
   /**
@@ -282,10 +294,18 @@ export const DiscoverView: React.FC = () => {
             ) : null}
           </h3>
           {candidates.length > 0 ? (
-            <DiscoverSortChips
-              sortKey={discoverSortKey}
-              onSortKeyChange={setDiscoverSortKey}
-            />
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+              {discoverSortKey === "weighted" ? (
+                <DiscoverWeightsEditor
+                  weights={discoverSignalWeights}
+                  onChange={setDiscoverSignalWeights}
+                />
+              ) : null}
+              <DiscoverSortChips
+                sortKey={discoverSortKey}
+                onSortKeyChange={setDiscoverSortKey}
+              />
+            </div>
           ) : null}
         </div>
 
@@ -378,6 +398,11 @@ export const DiscoverView: React.FC = () => {
             resultStatusByName={follow.resultStatusByName}
             onFollow={(name) => void follow.followOne(name)}
             onInspect={setInspecting}
+            onSetIgnored={(name, ignored) =>
+              setIgnored.mutate({ handles: [name], ignored })
+            }
+            weights={discoverSignalWeights}
+            showScore={discoverSortKey === "weighted"}
           />
         )}
       </div>

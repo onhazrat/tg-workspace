@@ -182,6 +182,11 @@ export type DiscoveredViaPayload = {
     timestamp: number;
 };
 
+export type DiscoverIgnoreRequest = {
+    handles: Array<(string)>;
+    reason?: (string | null);
+};
+
 export type DiscoverPostRef = {
     channelName: string;
     postId: number;
@@ -811,6 +816,26 @@ export type DataDiscoverCandidatesData = {
 };
 
 export type DataDiscoverCandidatesResponse = ({
+    [key: string]: unknown;
+});
+
+export type DataListDiscoverIgnoredResponse = (Array<{
+    [key: string]: unknown;
+}>);
+
+export type DataAddDiscoverIgnoredData = {
+    requestBody: DiscoverIgnoreRequest;
+};
+
+export type DataAddDiscoverIgnoredResponse = ({
+    [key: string]: unknown;
+});
+
+export type DataRemoveDiscoverIgnoredData = {
+    requestBody: DiscoverIgnoreRequest;
+};
+
+export type DataRemoveDiscoverIgnoredResponse = ({
     [key: string]: unknown;
 });
 

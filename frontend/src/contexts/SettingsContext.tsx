@@ -18,6 +18,7 @@ import {
 import { useCachePrune } from "@/hooks/useCachePrune"
 import type {
   DiscoverFollowState,
+  DiscoverSignalWeights,
   DiscoverSortKey,
   DiscoverySignalKind,
 } from "@/lib/posts/discover-candidates"
@@ -127,6 +128,8 @@ interface SettingsContextType {
   setDiscoverFollowState: (state: DiscoverFollowState) => void
   discoverMinTotal: number
   setDiscoverMinTotal: (minTotal: number) => void
+  discoverSignalWeights: DiscoverSignalWeights
+  setDiscoverSignalWeights: (weights: DiscoverSignalWeights) => void
 }
 
 const SettingsContext = createContext<SettingsContextType | undefined>(
