@@ -20,10 +20,9 @@ import {
   toggleNamesInSelection,
 } from "@/lib/channels/channel-grid-chips"
 import {
+  buildChannelPseudoTagChips,
   filterTagsBySearch,
-  filterUntaggedChannels,
-  UNTAGGED_TAG_ID,
-  UNTAGGED_TAG_LABEL,
+  findChannelPseudoTag,
 } from "@/lib/channels/channel-tags"
 import {
   collectChannelLanguages,
@@ -204,19 +203,9 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
     [allTags, tagSearch],
   )
 
-  const showUntaggedTagChip = useMemo(
-    () => filterTagsBySearch([UNTAGGED_TAG_LABEL], tagSearch).length > 0,
-    [tagSearch],
-  )
-
-  const untaggedChannelNames = useMemo(
-    () => filterUntaggedChannels(channels).map((c) => c.name),
-    [channels],
-  )
-
-  const selectableUntaggedChannelNames = useMemo(
-    () => filterUntaggedChannels(channels).map((c) => c.name),
-    [channels],
+  const pseudoTagChips = useMemo(
+    () => buildChannelPseudoTagChips(channels, tagSearch),
+    [channels, tagSearch],
   )
 
   const allLanguages = useMemo(
@@ -255,10 +244,10 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
   }
 
   const toggleTagSelection = (tag: string) => {
-    const channelsWithTag =
-      tag === UNTAGGED_TAG_ID
-        ? selectableUntaggedChannelNames
-        : getChannelNamesWithTag(channels, tag)
+    const pseudoTag = findChannelPseudoTag(tag)
+    const channelsWithTag = pseudoTag
+      ? channels.filter((c) => pseudoTag.matches(c)).map((c) => c.name)
+      : getChannelNamesWithTag(channels, tag)
     const allSelected = areAllNamesSelected(channelsWithTag, selectedChannels)
     setSelectedChannels((prev) =>
       toggleNamesInSelection(prev, channelsWithTag, allSelected),
@@ -323,8 +312,7 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
                 channels={channels}
                 selectedChannels={selectedChannels}
                 visibleTags={visibleTags}
-                showUntaggedTagChip={showUntaggedTagChip}
-                untaggedChannelNames={untaggedChannelNames}
+                pseudoTagChips={pseudoTagChips}
                 onToggleTag={toggleTagSelection}
               />
 

@@ -1,3 +1,4 @@
+import { Clock, type LucideIcon, Tag } from "lucide-react"
 import { toast } from "sonner"
 
 import {
@@ -6,13 +7,16 @@ import {
   removeTagsByName,
 } from "@/lib/channels/channel-tag-model"
 import { isVirtualGroupTag } from "@/lib/channels/virtual-group-tags"
+import { isPartialHistoryChannel } from "@/lib/commands/filter-channels"
 import type { CommandContext } from "@/lib/commands/types"
 import { upsertChannel } from "@/lib/repository"
 import type { Channel } from "@/types"
 
-/** UI-only tag id for the Channels tab pseudo-tag (not stored in DB). */
+/** UI-only tag ids for the Channels tab pseudo-tags (not stored in DB). */
 export const UNTAGGED_TAG_ID = "__ui_untagged__"
 export const UNTAGGED_TAG_LABEL = "Untagged"
+export const PARTIAL_HISTORY_TAG_ID = "__ui_partial_history__"
+export const PARTIAL_HISTORY_TAG_LABEL = "Partial history"
 
 export function isUntaggedChannel(channel: Channel): boolean {
   return getTagNames(channel.tags).length === 0
@@ -22,8 +26,77 @@ export function filterUntaggedChannels(channels: Channel[]): Channel[] {
   return channels.filter(isUntaggedChannel)
 }
 
-export function isUiUntaggedTag(tag: string): boolean {
-  return tag === UNTAGGED_TAG_ID
+/**
+ * A pseudo-tag is a chip on the tag wall backed by a channel property rather
+ * than a stored tag, so the same click-to-select gesture works for "channels
+ * with no tags" and "channels still missing history". Adding one here is enough
+ * to give it a chip, tag-search matching, and command-palette selection.
+ */
+export type ChannelPseudoTag = {
+  id: string
+  label: string
+  /** Stable hook for tests; also the chip's `data-testid`. */
+  testId: string
+  icon: LucideIcon
+  /** Explains what the chip selects, since the label alone is ambiguous. */
+  tooltip: string
+  matches: (channel: Channel) => boolean
+}
+
+export const CHANNEL_PSEUDO_TAGS: readonly ChannelPseudoTag[] = [
+  {
+    id: UNTAGGED_TAG_ID,
+    label: UNTAGGED_TAG_LABEL,
+    testId: "channel-tag-untagged",
+    icon: Tag,
+    tooltip: "Channels that have no tags yet",
+    matches: isUntaggedChannel,
+  },
+  {
+    // Mirrors the amber "Partial history" badge on the channel card.
+    id: PARTIAL_HISTORY_TAG_ID,
+    label: PARTIAL_HISTORY_TAG_LABEL,
+    testId: "channel-tag-partial-history",
+    icon: Clock,
+    tooltip: "Channels whose history does not reach the retention window",
+    matches: isPartialHistoryChannel,
+  },
+]
+
+export function findChannelPseudoTag(
+  tag: string,
+): ChannelPseudoTag | undefined {
+  return CHANNEL_PSEUDO_TAGS.find((pseudoTag) => pseudoTag.id === tag)
+}
+
+export function isUiPseudoTag(tag: string): boolean {
+  return findChannelPseudoTag(tag) !== undefined
+}
+
+/** A pseudo-tag chip ready to render: its label plus the channels it covers. */
+export type ChannelPseudoTagChip = ChannelPseudoTag & {
+  channelNames: string[]
+}
+
+/**
+ * Pseudo-tag chips to show on the tag wall. Like real tag chips these appear
+ * only when they match at least one channel, so a healthy library is not left
+ * with permanent "(0/0)" chips, and they honour the tag search box.
+ */
+export function buildChannelPseudoTagChips(
+  channels: Channel[],
+  tagSearch: string,
+): ChannelPseudoTagChip[] {
+  return CHANNEL_PSEUDO_TAGS.filter(
+    (pseudoTag) => filterTagsBySearch([pseudoTag.label], tagSearch).length > 0,
+  )
+    .map((pseudoTag) => ({
+      ...pseudoTag,
+      channelNames: channels
+        .filter((channel) => pseudoTag.matches(channel))
+        .map((channel) => channel.name),
+    }))
+    .filter((chip) => chip.channelNames.length > 0)
 }
 
 export function collectAllChannelTags(channels: Channel[]): string[] {
@@ -98,7 +171,8 @@ export function filterChannelsByTag(
   channels: Channel[],
   tag: string,
 ): Channel[] {
-  if (isUiUntaggedTag(tag)) return filterUntaggedChannels(channels)
+  const pseudoTag = findChannelPseudoTag(tag)
+  if (pseudoTag) return channels.filter((channel) => pseudoTag.matches(channel))
   const normalized = tag.trim().toLowerCase()
   if (!normalized) return []
   return channels.filter((channel) => {
@@ -146,12 +220,12 @@ export async function removeTagFromChannel(
 
 export function selectChannelsByTag(tag: string, ctx: CommandContext): void {
   const matching = filterChannelsByTag(ctx.channels, tag)
+  // Pseudo-tag ids are internal, so toasts name them by their chip label.
+  const label = findChannelPseudoTag(tag)?.label ?? tag.trim()
   if (matching.length === 0) {
-    toast.info(`No channels found with tag "${tag.trim()}"`)
+    toast.info(`No channels found with tag "${label}"`)
     return
   }
   ctx.setSelectedChannels(new Set(matching.map((channel) => channel.name)))
-  toast.success(
-    `Selected ${matching.length} channel(s) with tag "${tag.trim()}"`,
-  )
+  toast.success(`Selected ${matching.length} channel(s) with tag "${label}"`)
 }
