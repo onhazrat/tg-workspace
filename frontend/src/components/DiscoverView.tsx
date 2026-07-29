@@ -7,11 +7,13 @@ import { DiscoverCandidatePanel } from "@/components/discover/DiscoverCandidateP
 import { DiscoverCandidateTable } from "@/components/discover/DiscoverCandidateTable"
 import { DiscoverEmptyState } from "@/components/discover/DiscoverEmptyState"
 import { DiscoverFilterBar } from "@/components/discover/DiscoverFilterBar"
+import { DiscoverProbeBar } from "@/components/discover/DiscoverProbeBar"
 import { DiscoverReportBar } from "@/components/discover/DiscoverReportBar"
 import { DiscoverScopeCard } from "@/components/discover/DiscoverScopeCard"
 import { DiscoverSortChips } from "@/components/discover/DiscoverSortChips"
 import { DiscoverWeightsEditor } from "@/components/discover/DiscoverWeightsEditor"
 import { useDiscoverFollowJob } from "@/components/discover/useDiscoverFollowJob"
+import { useDiscoverProbeSweep } from "@/components/discover/useDiscoverProbeSweep"
 import { TgButton } from "@/components/ui/tg-button"
 import { TgConfirmDialog } from "@/components/ui/tg-confirm-dialog"
 import { useDebouncedValue } from "@/hooks/useDebouncedValue"
@@ -231,6 +233,22 @@ export const DiscoverView: React.FC = () => {
   })
 
   /**
+   * Resolve what each candidate handle actually is, in the background (D9).
+   *
+   * Fed `rawCandidates` rather than the filtered `candidates`: the sweep should
+   * cover the whole report, not just the slice currently on screen, or changing
+   * a filter would silently change which handles ever get checked.
+   *
+   * `compute_discover_candidates` stores them strongest-first, so this is
+   * already the rank order the sweep probes in — the top of the report resolves
+   * within seconds rather than after the single-reference tail.
+   */
+  const probe = useDiscoverProbeSweep({
+    candidates: rawCandidates,
+    enabled: !isOffline && view !== null,
+  })
+
+  /**
    * Dismiss (or restore) every selected candidate in one call.
    *
    * Scoped to the same selection bulk-follow uses, which excludes followed
@@ -251,6 +269,20 @@ export const DiscoverView: React.FC = () => {
         },
       },
     )
+  }
+
+  /**
+   * Re-probe every selected candidate.
+   *
+   * The selection clears afterwards because a successful recheck moves rows out
+   * of the "Not followable" view, and a count referring to rows no longer on
+   * screen is worse than no count.
+   */
+  const recheckSelected = () => {
+    const names = [...follow.selectedForFollow]
+    if (names.length === 0) return
+    probe.recheck(names)
+    follow.setSelectedForFollow(new Set())
   }
 
   const toggleSignal = (kind: DiscoverySignalKind) => {
@@ -350,6 +382,13 @@ export const DiscoverView: React.FC = () => {
           showResultFilters={view !== null}
         />
 
+        {probe.isRunning && probe.job ? (
+          <DiscoverProbeBar
+            job={probe.job}
+            onCancel={() => void probe.cancel()}
+          />
+        ) : null}
+
         {candidates.length > 0 && follow.selectedForFollow.size > 0 ? (
           <DiscoverBulkBar
             selectedCount={follow.selectedForFollow.size}
@@ -363,6 +402,9 @@ export const DiscoverView: React.FC = () => {
               discoverFollowState === "ignored" ? "restore" : "dismiss"
             }
             isDismissPending={setIgnored.isPending}
+            onRecheckSelected={recheckSelected}
+            showRecheck={discoverFollowState === "unavailable"}
+            isRecheckPending={probe.isRecheckPending}
           />
         ) : null}
 
@@ -430,6 +472,8 @@ export const DiscoverView: React.FC = () => {
             onSetIgnored={(name, ignored) =>
               setIgnored.mutate({ handles: [name], ignored })
             }
+            onRecheck={(name) => probe.recheck([name])}
+            isRecheckPending={probe.isRecheckPending}
             weights={discoverSignalWeights}
             showScore={discoverSortKey === "weighted"}
           />

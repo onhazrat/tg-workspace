@@ -192,6 +192,10 @@ export type DiscoverPostRef = {
     postId: number;
 };
 
+export type DiscoverProbeRequest = {
+    handles: Array<(string)>;
+};
+
 export type EmbedRequest = {
     texts: Array<(string)>;
     model?: (string | null);
@@ -836,6 +840,50 @@ export type DataRemoveDiscoverIgnoredData = {
 };
 
 export type DataRemoveDiscoverIgnoredResponse = ({
+    [key: string]: unknown;
+});
+
+export type DataListDiscoverProbesData = {
+    status?: (string | null);
+};
+
+export type DataListDiscoverProbesResponse = (Array<{
+    [key: string]: unknown;
+}>);
+
+export type DataStartDiscoverProbeData = {
+    requestBody: DiscoverProbeRequest;
+};
+
+export type DataStartDiscoverProbeResponse = (({
+    [key: string]: unknown;
+} | null));
+
+export type DataGetActiveDiscoverProbeResponse = (({
+    [key: string]: unknown;
+} | null));
+
+export type DataGetDiscoverProbeStatusData = {
+    probeJobId: string;
+};
+
+export type DataGetDiscoverProbeStatusResponse = ({
+    [key: string]: unknown;
+});
+
+export type DataCancelDiscoverProbeData = {
+    probeJobId: string;
+};
+
+export type DataCancelDiscoverProbeResponse = ({
+    [key: string]: unknown;
+});
+
+export type DataRecheckDiscoverProbesData = {
+    requestBody: DiscoverProbeRequest;
+};
+
+export type DataRecheckDiscoverProbesResponse = ({
     [key: string]: unknown;
 });
 

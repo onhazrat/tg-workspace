@@ -899,6 +899,21 @@ export const DiscoverPostRefSchema = {
     title: 'DiscoverPostRef'
 } as const;
 
+export const DiscoverProbeRequestSchema = {
+    properties: {
+        handles: {
+            items: {
+                type: 'string'
+            },
+            type: 'array',
+            title: 'Handles'
+        }
+    },
+    type: 'object',
+    required: ['handles'],
+    title: 'DiscoverProbeRequest'
+} as const;
+
 export const DiscoveredViaPayloadSchema = {
     properties: {
         channelName: {

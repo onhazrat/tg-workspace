@@ -180,6 +180,45 @@ def _extract_telegram_chat_id(soup: BeautifulSoup) -> int | None:
     return None
 
 
+def _classify_handle_kind(
+    soup: BeautifulSoup, channel_name: str, latest_id: int
+) -> str:
+    """What kind of thing a `t.me/<handle>` page describes — best effort.
+
+    Returns `channel` | `group` | `bot` | `user` | `unknown`.
+
+    This is deliberately *secondary* to `isUnavailableOnWebView`, which is a
+    structural fact (is there a readable message feed?). The kind is heuristics
+    over presentation markup Telegram can restyle at any time, so it is used to
+    word the UI — "this is a bot" reads better than "not followable" — and never
+    to decide what gets hidden. `unknown` is an ordinary outcome, not a failure.
+
+    The one firm rule in here is the bot check: Telegram *requires* bot
+    usernames to end in "bot", so for a handle with no feed and no member or
+    subscriber count, the suffix is strong evidence rather than a guess.
+    """
+    if latest_id > 0:
+        return "channel"
+
+    extra_el = soup.select_one(".tgme_page_extra")
+    extra = extra_el.get_text(" ", strip=True).lower() if extra_el else ""
+
+    # A subscriber count with no readable feed is a private or restricted
+    # channel: real, but not something we can scrape.
+    if "subscriber" in extra:
+        return "channel"
+    if "member" in extra:
+        return "group"
+    if channel_name.strip().lower().endswith("bot"):
+        return "bot"
+    # Presence lines only ever appear on personal accounts.
+    if "last seen" in extra or "online" in extra:
+        return "user"
+    if soup.select_one(".tgme_page_action"):
+        return "user"
+    return "unknown"
+
+
 def _parse_channel_meta(soup: BeautifulSoup, channel_name: str) -> dict[str, Any]:
     display = soup.select_one(".tgme_channel_info_header_title span")
     if not display:
@@ -210,6 +249,19 @@ def _parse_channel_meta(soup: BeautifulSoup, channel_name: str) -> dict[str, Any
     is_unavailable = latest_id == 0 and bool(soup.select_one(".tgme_page_action"))
     telegram_chat_id = _extract_telegram_chat_id(soup)
 
+    # Did we get a Telegram page at all, or a proxy error page / captcha / empty
+    # body? Callers that cache a verdict indefinitely (`discover_probes`) must
+    # be able to tell "Telegram says this handle is not followable" apart from
+    # "we never reached Telegram", because those look identical once reduced to
+    # `isUnavailableOnWebView`.
+    is_telegram_page = bool(
+        latest_id > 0
+        or soup.select_one(".tgme_page")
+        or soup.select_one(".tgme_page_action")
+        or soup.select_one(".tgme_channel_info")
+        or soup.select_one(".tgme_header")
+    )
+
     return {
         "channelName": channel_name,
         "displayName": display_name,
@@ -223,6 +275,8 @@ def _parse_channel_meta(soup: BeautifulSoup, channel_name: str) -> dict[str, Any
         "latestId": latest_id,
         "telegramChatId": telegram_chat_id,
         "isUnavailableOnWebView": is_unavailable,
+        "isTelegramPage": is_telegram_page,
+        "kind": _classify_handle_kind(soup, channel_name, latest_id),
     }
 
 

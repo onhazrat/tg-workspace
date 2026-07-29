@@ -32,6 +32,7 @@ from sqlmodel import Session, col, select
 from app.models_tg import Channel, DiscoverReport, utc_now
 from app.services.discover import SignalKind, compute_discover_candidates
 from app.services.discover_ignored import ignored_handles
+from app.services.discover_probes import probe_map
 from app.services.post_filters import PostFilters
 
 DEFAULT_REPORT_PAGE_SIZE = 100
@@ -81,28 +82,40 @@ def followed_names(session: Session) -> set[str]:
     }
 
 
+def _candidate_handle(candidate: dict[str, Any]) -> str:
+    name = candidate.get("name")
+    return name.lstrip("@").strip().lower() if isinstance(name, str) else ""
+
+
 def _with_live_state(
-    candidates: list[Any], followed: set[str], ignored: set[str]
+    candidates: list[Any],
+    followed: set[str],
+    ignored: set[str],
+    probes: dict[str, dict[str, Any]],
 ) -> list[dict[str, Any]]:
-    """Overlay `isFollowed` / `isIgnored` from live state.
+    """Overlay `isFollowed` / `isIgnored` / `probe` from live state.
 
     The stored candidate rows carry whatever `compute_discover_candidates`
     produced at generate time; those values are authoritative only for the
     instant they were written, so they are replaced rather than trusted. This is
-    what makes following or dismissing a candidate update every saved report at
-    once instead of only the one on screen.
+    what makes following, dismissing or probing a candidate update every saved
+    report at once instead of only the one on screen.
+
+    `probe` is `None` for a handle nothing has looked at yet, which the client
+    renders as "not checked" rather than as a verdict — an unprobed handle and
+    one confirmed unfollowable must not look the same.
     """
     out: list[dict[str, Any]] = []
     for candidate in candidates:
         if not isinstance(candidate, dict):
             continue
-        name = candidate.get("name")
-        handle = name.lstrip("@").strip().lower() if isinstance(name, str) else ""
+        handle = _candidate_handle(candidate)
         out.append(
             {
                 **candidate,
                 "isFollowed": handle in followed,
                 "isIgnored": handle in ignored,
+                "probe": probes.get(handle),
             }
         )
     return out
@@ -113,9 +126,11 @@ def report_to_camel(session: Session, report: DiscoverReport) -> dict[str, Any]:
     followed = followed_names(session)
     ignored = ignored_handles(session)
     stored = report.candidates or []
+    handles = {_candidate_handle(c) for c in stored if isinstance(c, dict)} - {""}
+    probes = probe_map(session, handles)
     return {
         **_base(report),
-        "candidates": _with_live_state(stored, followed, ignored),
+        "candidates": _with_live_state(stored, followed, ignored, probes),
         "candidateCount": len(stored),
     }
 

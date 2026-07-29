@@ -167,6 +167,28 @@ export type DiscoverReport = DiscoverReportSummary & {
   candidates: DiscoveryCandidate[]
 }
 
+/**
+ * Progress of a background handle-probe sweep (D9).
+ *
+ * There is no event stream for this one: the durable result is the probe table,
+ * which the report read already joins, so the client polls this count and
+ * refetches the report rather than receiving a second copy over SSE.
+ */
+export type DiscoverProbeJob = {
+  probeJobId: string
+  status: "pending" | "running" | "completed" | "failed" | "cancelled"
+  total: number
+  completed: number
+  /** Resolved as followable channels. */
+  resolved: number
+  /** Resolved as bots, accounts, groups or private channels. */
+  unavailable: number
+  /** Inconclusive — will be retried later, not recorded as a verdict. */
+  failed: number
+  createdAt: number
+  finishedAt: number | null
+}
+
 export type BulkFollowChannelInput = {
   name: string
   discoveredVia?: DiscoveredViaPayload
@@ -420,6 +442,47 @@ export const dataApi = {
       method: "DELETE",
       body: JSON.stringify({ handles }),
     }),
+
+  /**
+   * Start a background sweep resolving what each handle actually is (D9).
+   *
+   * Returns `null` when every handle already has a cached verdict — the normal
+   * case after the first sweep — so the caller can avoid showing progress for
+   * work that will not happen. Pass handles in rank order: the sweep probes in
+   * the order given, so the rows being read resolve first.
+   */
+  startDiscoverProbe: (handles: string[]) =>
+    request<DiscoverProbeJob | null>("/api/v1/data/discover/probe", {
+      method: "POST",
+      body: JSON.stringify({ handles }),
+    }),
+
+  getDiscoverProbeStatus: (probeJobId: string) =>
+    request<DiscoverProbeJob>(
+      `/api/v1/data/discover/probe/${encodeURIComponent(probeJobId)}`,
+    ),
+
+  /** The sweep currently running, for a client that reloaded mid-sweep. */
+  getActiveDiscoverProbe: () =>
+    request<DiscoverProbeJob | null>("/api/v1/data/discover/probe/active"),
+
+  cancelDiscoverProbe: (probeJobId: string) =>
+    request<DiscoverProbeJob>(
+      `/api/v1/data/discover/probe/${encodeURIComponent(probeJobId)}/cancel`,
+      { method: "POST" },
+    ),
+
+  /**
+   * Forget cached verdicts and probe these handles again.
+   *
+   * The escape hatch that makes caching indefinitely safe: a verdict recorded
+   * during an outage, or one that has since gone stale, can be overturned.
+   */
+  recheckDiscoverProbes: (handles: string[]) =>
+    request<{ cleared: string[]; job: DiscoverProbeJob | null }>(
+      "/api/v1/data/discover/probe/recheck",
+      { method: "POST", body: JSON.stringify({ handles }) },
+    ),
 
   deleteDiscoverReport: (reportId: string) =>
     request<{ status: string }>(

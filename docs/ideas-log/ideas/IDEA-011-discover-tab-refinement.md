@@ -364,10 +364,10 @@ pays for rows the user actually inspects.
 
 **Effort/risk.** Small–medium, mostly frontend.
 
-### D9. Channel metadata before you commit
+### D9. Channel metadata before you commit — **DONE 2026-07-29**
 
-`get_channel_info` runs only **during** the follow job
-(`bulk_follow.py:273`), so following is a blind decision.
+`get_channel_info` used to run only **during** the follow job
+(`bulk_follow.py:273`), so following was a blind decision.
 
 **Why we may need this.** You cannot see subscriber count, description,
 language, or whether the channel even still exists before committing. The
@@ -376,16 +376,62 @@ chains a sync for channels the user would have rejected on sight, and
 `unavailable` is discovered at the worst possible moment. For a bulk-follow of
 dozens of candidates that is real wasted scraping and real DB churn.
 
-**How we can achieve this.** A lazy "peek" endpoint wrapping the existing
-`get_channel_info`, called on row expand (pairs with D2), with the result cached
-per handle for the session. Do **not** prefetch the whole table — that is one
-scrape per candidate row, exactly the load pattern the bulk-follow
-investigation warned about. Optionally offer an explicit "peek top 10" action
-that respects the proxy pool's lane semantics
-(`services/proxy_pool.py`) and `FOLLOW_SCRAPE_CONCURRENCY`.
+Delivery widened the goal. The operator's observation was that a large share of
+candidates are not followable *at all* — bots, personal accounts, groups, and
+private or deleted channels are referenced from posts exactly the way real
+channels are, so the report asks for triage on rows that were never actionable.
+That makes this a filtering feature, not just an informational one.
 
-**Effort/risk.** Medium. Must be rate-limit aware; the scraping path is the
-project's most load-sensitive.
+#### What shipped
+
+* **`tg_discover_probes`** — one row per normalized handle recording what a
+  single fetch of `t.me/<handle>` said: `status` (`ok` / `unavailable` /
+  `unknown`), a best-effort `kind`, display name, bio, subscriber text.
+* **A background sweep** (`services/discover_probe_job.py`) started
+  automatically when a report is opened, at concurrency 2 — below bulk-follow's
+  4, because it runs unprompted and competes with sync for the same proxy
+  lanes. Cancellable, capped at 400 handles per sweep, and probing in the
+  report's rank order so the top of the list resolves within seconds.
+* **A "Not followable" view**, kept *separate* from the D8 dismiss list. A probe
+  is a fact about the handle; a dismissal is a judgement by the operator.
+  Merging them would make an automated verdict indistinguishable from a
+  deliberate one. A row carrying both flags appears only under "Ignored", so the
+  two lists stay disjoint.
+* **Recheck**, per row and in bulk, which clears the cached verdict and
+  re-probes.
+
+#### The reversal on prefetching
+
+This section originally said **do not prefetch the whole table** — one scrape
+per candidate row was the load pattern the bulk-follow investigation warned
+about. That advice assumed the cost recurred per report. With a global
+per-handle cache it does not: `handles_needing_probe` drops anything already
+resolved, so a handle is fetched once and never again, and the steady-state cost
+across reports approaches zero. The first sweep on a fresh install is the only
+expensive one. The original reasoning was right about the cost; it was wrong
+about the frequency.
+
+#### The rule that matters most
+
+A verdict is written **only** when a Telegram page actually parsed
+(`isTelegramPage`). Timeouts, HTTP errors and proxy block pages record `unknown`
+with an attempt count and exponential backoff instead.
+
+This is the whole reason the design is safe. Because a conclusive answer is
+cached indefinitely, writing a verdict from a failed fetch would permanently
+hide a real channel from every future report, with nothing on screen to hint
+anything went wrong. An `unknown` costs a retry; a wrong `unavailable` costs a
+channel, silently. Recheck exists as the second line of defence.
+
+#### Known limits
+
+* `kind` is HTML heuristics over presentation markup Telegram can restyle, so it
+  is **secondary**: it words a badge, never decides what gets hidden. `unknown`
+  is an ordinary outcome. The one firm rule is the bot check — Telegram requires
+  bot usernames to end in `bot`.
+* The proportion of junk handles in a real corpus was never measured before
+  building; the feature was scoped on the operator's observation. The sweep's
+  `resolved` / `unavailable` counters now make that ratio observable in staging.
 
 ---
 

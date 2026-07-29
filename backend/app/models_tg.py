@@ -226,6 +226,69 @@ class DiscoverIgnoredChannel(SQLModel, table=True):
     created_at: datetime = Field(default_factory=utc_now)
 
 
+class DiscoverHandleProbe(SQLModel, table=True):
+    """What one fetch of `t.me/<handle>` told us about a handle (IDEA-011 D9).
+
+    Most Discover candidates cannot be followed at all: bots, personal
+    accounts, groups, and private or deleted channels are all referenced from
+    posts exactly the way real channels are, so the report asks the operator to
+    triage rows that were never actionable. Probing resolves that once per
+    handle.
+
+    **Global and separate from `DiscoverIgnoredChannel` by design.** A dismissal
+    is a judgement ("not interesting to me"); a probe is a fact about the handle
+    ("cannot be followed by anyone"). Merging them would make an automated
+    verdict indistinguishable from a deliberate one in the UI, and would let a
+    misprobe silently masquerade as something the operator chose.
+
+    Keyed by the normalized handle, like the dismiss table, so both join onto
+    candidate names the same way.
+
+    ## Why a verdict is never written from a failed fetch
+
+    `status` is `ok` or `unavailable` only when a Telegram page actually parsed.
+    A timeout, an HTTP error, a proxy returning a block page — anything that
+    leaves us without a real answer — records `unknown` and increments
+    `attempts` instead. The whole premise of this table is that a handle is
+    probed once and the answer cached indefinitely, so caching a *failure* as a
+    verdict would permanently hide a real channel from every future report, with
+    nothing on screen to suggest anything went wrong.
+    """
+
+    __tablename__ = "tg_discover_probes"
+
+    handle: str = Field(primary_key=True)
+
+    #: `ok` (public channel we can scrape) | `unavailable` (exists but cannot be
+    #: followed) | `unknown` (no conclusive answer yet).
+    status: str = Field(default="unknown", index=True)
+
+    #: Best-effort: `channel` | `group` | `bot` | `user` | `unknown`. Secondary
+    #: to `status` — it sharpens the wording, never the filtering, because it is
+    #: HTML heuristics where `status` is a structural fact.
+    kind: str = Field(default="unknown")
+
+    display_name: str | None = None
+    bio: str | None = None
+    #: Raw text as Telegram renders it ("12.3K"), not parsed into an int: the
+    #: exact number is not worth a fragile locale-aware parse.
+    subscribers: str | None = None
+    photo_url: str | None = None
+    latest_id: int = 0
+
+    #: Consecutive inconclusive fetches. Drives retry backoff and is reset on a
+    #: conclusive answer.
+    attempts: int = 0
+    last_error: str | None = None
+
+    #: When a *conclusive* answer was last recorded. `None` while only failures
+    #: have happened, which is what distinguishes "never resolved" from "known".
+    checked_at: datetime | None = None
+    #: Every attempt, conclusive or not — the backoff clock.
+    attempted_at: datetime | None = None
+    created_at: datetime = Field(default_factory=utc_now)
+
+
 class TagRun(SQLModel, table=True):
     __tablename__ = "tg_tag_runs"
 

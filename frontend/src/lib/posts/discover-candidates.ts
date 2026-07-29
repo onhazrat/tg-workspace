@@ -35,6 +35,35 @@ export interface DiscoverySeenIn {
   total: number
 }
 
+/** What kind of thing a handle turned out to be. Best effort — see D9. */
+export type DiscoverProbeKind = "channel" | "group" | "bot" | "user" | "unknown"
+
+/**
+ * `ok` — a public channel that can be followed.
+ * `unavailable` — real, but not followable (bot, account, group, private).
+ * `unknown` — we could not reach a conclusion; will be retried.
+ */
+export type DiscoverProbeStatus = "ok" | "unavailable" | "unknown"
+
+/**
+ * What one fetch of `t.me/<handle>` told us (IDEA-011 D9).
+ *
+ * Absent (`null`/`undefined`) means *not checked yet*, which must render
+ * differently from a verdict: an unprobed handle is not evidence of anything.
+ */
+export interface DiscoveryProbe {
+  handle: string
+  status: DiscoverProbeStatus
+  kind: DiscoverProbeKind
+  displayName: string | null
+  bio: string | null
+  subscribers: string | null
+  photoUrl: string | null
+  attempts: number
+  lastError: string | null
+  checkedAt: number | null
+}
+
 export interface DiscoveryCandidate {
   name: string
   displayName?: string
@@ -46,7 +75,26 @@ export interface DiscoveryCandidate {
   isFollowed: boolean
   /** Dismissed by the operator. Resolved live per read, never frozen into a report. */
   isIgnored?: boolean
+  /**
+   * Automated verdict on the handle. Deliberately separate from `isIgnored`:
+   * one is a fact about the handle, the other a judgement by the operator, and
+   * conflating them would let a misprobe pass for a deliberate choice.
+   */
+  probe?: DiscoveryProbe | null
   samplePost: { channelName: string; postId: number; timestamp: number }
+}
+
+export const DISCOVER_PROBE_KIND_LABELS: Record<DiscoverProbeKind, string> = {
+  channel: "Channel",
+  group: "Group",
+  bot: "Bot",
+  user: "Account",
+  unknown: "Unknown",
+}
+
+/** True when a probe has concluded the handle cannot be followed. */
+export function isProbedUnavailable(candidate: DiscoveryCandidate): boolean {
+  return candidate.probe?.status === "unavailable"
 }
 
 export type DiscoveryEmptyReason =
@@ -181,7 +229,12 @@ export function sortDiscoveryCandidates(
 /* Filtering                                                                  */
 /* -------------------------------------------------------------------------- */
 
-export type DiscoverFollowState = "all" | "unfollowed" | "followed" | "ignored"
+export type DiscoverFollowState =
+  | "all"
+  | "unfollowed"
+  | "followed"
+  | "ignored"
+  | "unavailable"
 
 export const DISCOVER_FOLLOW_STATE_OPTIONS: {
   label: string
@@ -191,6 +244,7 @@ export const DISCOVER_FOLLOW_STATE_OPTIONS: {
   { label: "Unfollowed", value: "unfollowed" },
   { label: "Followed", value: "followed" },
   { label: "Ignored", value: "ignored" },
+  { label: "Not followable", value: "unavailable" },
 ]
 
 /**
@@ -210,11 +264,29 @@ export interface DiscoveryFilterOptions {
 /**
  * Narrow a report's candidates to what the operator wants to look at.
  *
- * Dismissed candidates are hidden from *every* view except "Ignored" — the
- * whole point of D8 is that a rejection stops costing attention on later runs,
- * which a merely-labelled row in the "All" list would not achieve. "Ignored" is
- * their one home, which keeps the dismissal reviewable and undoable rather than
- * a silent blocklist.
+ * Two independent kinds of hiding, kept apart on purpose:
+ *
+ * * **Dismissed** (`isIgnored`) — the operator's judgement. Hidden from every
+ *   view except "Ignored", because the point of D8 is that a rejection stops
+ *   costing attention on later runs, which a merely-labelled row would not
+ *   achieve.
+ * * **Not followable** (`probe.status === "unavailable"`) — an automated
+ *   verdict that the handle is a bot, an account, a group or a private channel.
+ *   Hidden from every view except "Not followable" (D9).
+ *
+ * Each has exactly one home view, so both stay reviewable and reversible rather
+ * than becoming a silent blocklist — and, crucially, a machine verdict never
+ * appears in the same bucket as a deliberate one.
+ *
+ * A row can carry both flags, in which case the *dismissal* wins and it appears
+ * only under "Ignored". The deliberate act is the more informative one to
+ * preserve, and it keeps the two lists disjoint, so a count in one is never
+ * partly explained by the other.
+ *
+ * Only a *concluded* verdict hides a row. A handle that has not been probed, or
+ * whose probe was inconclusive, stays visible — absence of evidence is not
+ * evidence, and the sweep is asynchronous, so half a report is normally
+ * unprobed when it first renders.
  */
 export function filterDiscoveryCandidates(
   candidates: DiscoveryCandidate[],
@@ -226,6 +298,16 @@ export function filterDiscoveryCandidates(
     if (options.followState === "ignored") {
       if (!candidate.isIgnored) return false
     } else if (candidate.isIgnored) {
+      return false
+    }
+    if (options.followState === "unavailable") {
+      if (!isProbedUnavailable(candidate)) return false
+    } else if (
+      // Not in the "Ignored" view: a dismissed row belongs there whether or not
+      // it also turned out to be unfollowable.
+      options.followState !== "ignored" &&
+      isProbedUnavailable(candidate)
+    ) {
       return false
     }
     if (options.followState === "unfollowed" && candidate.isFollowed) {

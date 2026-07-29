@@ -1,4 +1,4 @@
-import { EyeOff, Plus, Undo2 } from "lucide-react"
+import { EyeOff, Plus, RefreshCw, Undo2 } from "lucide-react"
 import type React from "react"
 import type { FollowJobStatus } from "@/api"
 import { TgButton } from "@/components/ui/tg-button"
@@ -19,6 +19,16 @@ interface DiscoverBulkBarProps {
   onDismissSelected: () => void
   dismissMode: "dismiss" | "restore"
   isDismissPending: boolean
+  /**
+   * Re-probe the selection, discarding cached verdicts.
+   *
+   * Only offered in the "Not followable" view: everywhere else the visible rows
+   * have no verdict to overturn, so a bulk recheck would just be an expensive
+   * no-op over handles the sweep already resolved.
+   */
+  onRecheckSelected: () => void
+  showRecheck: boolean
+  isRecheckPending: boolean
 }
 
 export const DiscoverBulkBar: React.FC<DiscoverBulkBarProps> = ({
@@ -31,6 +41,9 @@ export const DiscoverBulkBar: React.FC<DiscoverBulkBarProps> = ({
   onDismissSelected,
   dismissMode,
   isDismissPending,
+  onRecheckSelected,
+  showRecheck,
+  isRecheckPending,
 }) => (
   <div
     className="mb-3 flex flex-wrap items-center gap-3 rounded-lg border border-blue-500/20 bg-blue-500/5 px-3 py-2"
@@ -87,6 +100,22 @@ export const DiscoverBulkBar: React.FC<DiscoverBulkBarProps> = ({
         </>
       )}
     </TgButton>
+    {showRecheck ? (
+      <TgButton
+        type="button"
+        variant="secondary"
+        size="sm"
+        data-testid="discover-recheck-selected"
+        disabled={isOffline}
+        loading={isRecheckPending}
+        loadingLabel="Recheck selected"
+        onClick={onRecheckSelected}
+        className="rounded-full text-app-ink/70"
+      >
+        <RefreshCw size={12} />
+        Recheck selected
+      </TgButton>
+    ) : null}
     <TgButton
       type="button"
       variant="secondary"

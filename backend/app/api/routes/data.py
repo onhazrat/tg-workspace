@@ -125,6 +125,14 @@ from app.services.discover_ignored import (
     list_ignored,
     unignore_channels,
 )
+from app.services.discover_probe_job import (
+    active_probe_job,
+    cancel_probe_job,
+    create_probe_job,
+    get_probe_job,
+    run_probe_job,
+)
+from app.services.discover_probes import clear_probes, list_probes
 from app.services.discover_reports import (
     DEFAULT_REPORT_PAGE_SIZE,
     MAX_REPORT_PAGE_SIZE,
@@ -782,6 +790,98 @@ def remove_discover_ignored(
     call, matching the POST.
     """
     return {"removed": unignore_channels(session, body.handles)}
+
+
+class DiscoverProbeRequest(BaseModel):
+    handles: list[str]
+
+
+@router.get("/discover/probes")
+def list_discover_probes(
+    session: SessionDep,
+    _current_user: CurrentUser,
+    status: str | None = Query(default=None),
+) -> list[dict[str, Any]]:
+    """Cached handle probes, optionally filtered by status."""
+    return list_probes(session, status=status)
+
+
+@router.post("/discover/probe")
+async def start_discover_probe(
+    body: DiscoverProbeRequest,
+    current_user: CurrentUser,
+) -> dict[str, Any] | None:
+    """Start a background sweep over the given handles.
+
+    Returns `null` when every handle already has a cached verdict — the common
+    case once a corpus has been probed once. The client uses that to tell
+    "nothing to do" apart from "a sweep is running", so it does not show a
+    progress bar for work that will never happen.
+
+    The handle list is expected in the order the client ranks candidates, since
+    the sweep probes in that order.
+    """
+    job = await create_probe_job(handles=body.handles, user_id=current_user.id)
+    if job is None:
+        return None
+    if job.status == "pending":
+        asyncio.create_task(run_probe_job(job))
+    return job.to_camel()
+
+
+@router.get("/discover/probe/active")
+def get_active_discover_probe(_current_user: CurrentUser) -> dict[str, Any] | None:
+    """The sweep currently running, if any.
+
+    Declared before `/discover/probe/{probe_job_id}` so "active" is not captured
+    as an id. Lets a client that reloaded mid-sweep pick the progress back up
+    without having kept the job id.
+    """
+    job = active_probe_job()
+    return job.to_camel() if job else None
+
+
+@router.get("/discover/probe/{probe_job_id}")
+def get_discover_probe_status(
+    probe_job_id: str, _current_user: CurrentUser
+) -> dict[str, Any]:
+    job = get_probe_job(probe_job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="Probe job not found")
+    return job.to_camel()
+
+
+@router.post("/discover/probe/{probe_job_id}/cancel")
+async def cancel_discover_probe(
+    probe_job_id: str, _current_user: CurrentUser
+) -> dict[str, Any]:
+    job = await cancel_probe_job(probe_job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="Probe job not found")
+    return job.to_camel()
+
+
+@router.post("/discover/probe/recheck")
+async def recheck_discover_probes(
+    body: DiscoverProbeRequest,
+    session: SessionDep,
+    current_user: CurrentUser,
+) -> dict[str, Any]:
+    """Forget cached verdicts for these handles and probe them again.
+
+    The escape hatch for a verdict that is wrong or has gone stale: a private
+    channel that opened up, or a handle misjudged during an outage. Without it,
+    caching indefinitely would mean a single bad answer is permanent.
+
+    Clearing and re-probing are one call because they are never wanted
+    separately — clearing alone would just make the row vanish from the "not
+    followable" view until some later sweep happened to pick it up.
+    """
+    cleared = clear_probes(session, body.handles)
+    job = await create_probe_job(handles=body.handles, user_id=current_user.id)
+    if job is not None and job.status == "pending":
+        asyncio.create_task(run_probe_job(job))
+    return {"cleared": cleared, "job": job.to_camel() if job else None}
 
 
 @router.post("/discover/reports")

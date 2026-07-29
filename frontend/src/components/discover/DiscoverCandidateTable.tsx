@@ -1,9 +1,10 @@
-import { EyeOff, Plus, Undo2 } from "lucide-react"
+import { EyeOff, Plus, RefreshCw, Undo2 } from "lucide-react"
 import type React from "react"
 import { useEffect, useRef, useState } from "react"
 import { RelativeTime } from "@/components/RelativeTime"
 import { TgButton } from "@/components/ui/tg-button"
 import {
+  DISCOVER_PROBE_KIND_LABELS,
   type DiscoverSignalWeights,
   type DiscoveryCandidate,
   type DiscoverySignalKind,
@@ -34,6 +35,37 @@ const CountCell: React.FC<{ value: number; testId: string }> = ({
   </td>
 )
 
+/**
+ * What a probe concluded about a handle, as a small badge beside its name.
+ *
+ * Only rendered once a probe has *concluded*: an unprobed handle shows nothing
+ * rather than a placeholder, because a sweep is asynchronous and a row that
+ * simply has not been reached yet must not read as a finding.
+ *
+ * `ok` is silent too — "this is a channel" is the assumption every row already
+ * carries, so badging it would put a label on almost every line and make the
+ * ones that matter harder to spot.
+ */
+const ProbeBadge: React.FC<{ candidate: DiscoveryCandidate }> = ({
+  candidate,
+}) => {
+  const probe = candidate.probe
+  if (probe?.status !== "unavailable") return null
+  return (
+    <span
+      className="ml-2 rounded-full bg-amber-500/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-amber-700 dark:text-amber-400"
+      data-testid={`discover-probe-kind-${candidate.name}`}
+      title={
+        probe.kind === "unknown"
+          ? "Telegram has no public feed for this handle, so it cannot be followed"
+          : `Telegram reports this handle as a ${DISCOVER_PROBE_KIND_LABELS[probe.kind].toLowerCase()}, which cannot be followed`
+      }
+    >
+      {DISCOVER_PROBE_KIND_LABELS[probe.kind]}
+    </span>
+  )
+}
+
 interface DiscoverCandidateTableProps {
   candidates: DiscoveryCandidate[]
   selectedForFollow: Set<string>
@@ -53,6 +85,15 @@ interface DiscoverCandidateTableProps {
   onInspect: (candidate: DiscoveryCandidate) => void
   /** Dismiss (or restore) a candidate. */
   onSetIgnored: (name: string, ignored: boolean) => void
+  /**
+   * Re-probe a handle, discarding its cached verdict.
+   *
+   * Offered per row rather than only in bulk because the case that motivates it
+   * is singular: the operator recognises one specific handle as a channel that
+   * has been misjudged.
+   */
+  onRecheck: (name: string) => void
+  isRecheckPending: boolean
   weights: DiscoverSignalWeights
   /**
    * Show the weighted score column.
@@ -76,6 +117,8 @@ export const DiscoverCandidateTable: React.FC<DiscoverCandidateTableProps> = ({
   onFollow,
   onInspect,
   onSetIgnored,
+  onRecheck,
+  isRecheckPending,
   weights,
   showScore,
 }) => {
@@ -215,9 +258,13 @@ export const DiscoverCandidateTable: React.FC<DiscoverCandidateTableProps> = ({
                   >
                     @{row.name}
                   </a>
-                  {row.displayName ? (
+                  <ProbeBadge candidate={row} />
+                  {row.displayName || row.probe?.displayName ? (
                     <div className="text-xs text-app-ink/60">
-                      {row.displayName}
+                      {row.displayName || row.probe?.displayName}
+                      {row.probe?.subscribers
+                        ? ` · ${row.probe.subscribers} subscribers`
+                        : null}
                     </div>
                   ) : null}
                   {rowStatus &&
@@ -333,6 +380,26 @@ export const DiscoverCandidateTable: React.FC<DiscoverCandidateTableProps> = ({
                         </>
                       )}
                     </TgButton>
+                    {/*
+                     * Offered only where a verdict exists to overturn. On an
+                     * unprobed row there is nothing cached to discard, and the
+                     * sweep will reach it on its own.
+                     */}
+                    {row.probe ? (
+                      <TgButton
+                        type="button"
+                        variant="secondary"
+                        size="sm"
+                        data-testid={`discover-recheck-${row.name}`}
+                        disabled={isOffline || isRecheckPending}
+                        onClick={() => onRecheck(row.name)}
+                        title="Check this handle on Telegram again"
+                        className="rounded-full text-app-ink/60"
+                      >
+                        <RefreshCw size={12} />
+                        Recheck
+                      </TgButton>
+                    ) : null}
                   </div>
                 </td>
               </tr>
