@@ -63,7 +63,7 @@ Full stack via Docker: `docker compose watch` (frontend :5173, API :8000, Swagge
 
 - Python: mypy `strict`, `ty check`, ruff (isort, bugbear, no `print` — `T201`). Alembic dir excluded from lint/type-check.
 - TS/React: biome, **no semicolons, double quotes**.
-- CI test workflows are billing-blocked and never start (red ≠ failure); only the self-hosted staging deploy runs. Commit signing is required — a signing failure is a blocker to raise, not to bypass.
+- CI test workflows are billing-blocked and never start, so as of 2026-07-30 their `push`/`pull_request` triggers are **commented out** (`grep -rn CI-DISABLED .github/workflows/`; see `.github/workflows/DISABLED.md` for the list and how to re-enable). Expect **no** checks on a PR; run lint/tests locally instead. Only the self-hosted staging deploy runs. Commit signing is required — a signing failure is a blocker to raise, not to bypass.
 
 ## graphify
 

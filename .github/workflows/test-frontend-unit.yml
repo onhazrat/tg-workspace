@@ -1,23 +1,27 @@
 name: Test Frontend Unit
 
 on:
-  push:
-    branches:
-      - main
-    paths:
-      - "frontend/**"
-      - "package.json"
-      - "bun.lock"
-      - ".github/workflows/test-frontend-unit.yml"
-  pull_request:
-    types:
-      - opened
-      - synchronize
-    paths:
-      - "frontend/**"
-      - "package.json"
-      - "bun.lock"
-      - ".github/workflows/test-frontend-unit.yml"
+  # CI-DISABLED 2026-07-30: GitHub-hosted runners are billing-blocked, so every
+  # automatic run fails before its first step. Uncomment the two triggers below to
+  # re-enable. See .github/workflows/DISABLED.md.
+  # push:
+  #   branches:
+  #     - main
+  #   paths:
+  #     - "frontend/**"
+  #     - "package.json"
+  #     - "bun.lock"
+  #     - ".github/workflows/test-frontend-unit.yml"
+  # pull_request:
+  #   types:
+  #     - opened
+  #     - synchronize
+  #   paths:
+  #     - "frontend/**"
+  #     - "package.json"
+  #     - "bun.lock"
+  #     - ".github/workflows/test-frontend-unit.yml"
+  workflow_dispatch:
 
 permissions:
   contents: read

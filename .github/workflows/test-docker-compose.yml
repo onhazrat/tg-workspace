@@ -1,13 +1,17 @@
 name: Test Docker Compose
 
 on:
-  push:
-    branches:
-      - main
-  pull_request:
-    types:
-      - opened
-      - synchronize
+  # CI-DISABLED 2026-07-30: GitHub-hosted runners are billing-blocked, so every
+  # automatic run fails before its first step. Uncomment the two triggers below to
+  # re-enable. See .github/workflows/DISABLED.md.
+  # push:
+  #   branches:
+  #     - main
+  # pull_request:
+  #   types:
+  #     - opened
+  #     - synchronize
+  workflow_dispatch:
 
 permissions:
   contents: read
