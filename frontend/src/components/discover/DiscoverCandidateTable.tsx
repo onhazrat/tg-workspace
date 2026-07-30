@@ -220,6 +220,8 @@ export const DiscoverCandidateTable: React.FC<DiscoverCandidateTableProps> = ({
         <tbody>
           {candidates.map((row, index) => {
             const rowStatus = resultStatusByName.get(row.name)
+            const metaName = row.displayName || row.probe?.displayName || ""
+            const subscribers = row.probe?.subscribers || ""
             return (
               <tr key={row.name} className="border-t border-app-ink/10">
                 <td className="py-2 align-middle">
@@ -259,12 +261,29 @@ export const DiscoverCandidateTable: React.FC<DiscoverCandidateTableProps> = ({
                     @{row.name}
                   </a>
                   <ProbeBadge candidate={row} />
-                  {row.displayName || row.probe?.displayName ? (
+                  {/*
+                   * Name and count are separate bidi isolates.
+                   *
+                   * A Persian channel name is an RTL run inside an LTR line. As
+                   * one concatenated string the neutral separator and the ASCII
+                   * count get absorbed into that run and reorder — the count
+                   * lands to the left of the name, and punctuation at the edge
+                   * of the name jumps sides. `dir="auto"` resolves each run's
+                   * direction from its own first strong character and, per
+                   * HTML's default stylesheet, isolates it, so the line always
+                   * reads name · count regardless of script. Same treatment as
+                   * `PostCard` and `ChannelCard`.
+                   *
+                   * The count also renders when the name is missing, which the
+                   * single combined condition used to suppress.
+                   */}
+                  {metaName || subscribers ? (
                     <div className="text-xs text-app-ink/60">
-                      {row.displayName || row.probe?.displayName}
-                      {row.probe?.subscribers
-                        ? ` · ${row.probe.subscribers} subscribers`
-                        : null}
+                      {metaName ? <span dir="auto">{metaName}</span> : null}
+                      {metaName && subscribers ? " · " : null}
+                      {subscribers ? (
+                        <span dir="auto">{subscribers} subscribers</span>
+                      ) : null}
                     </div>
                   ) : null}
                   {rowStatus &&

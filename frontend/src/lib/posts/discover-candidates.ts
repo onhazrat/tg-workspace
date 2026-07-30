@@ -12,6 +12,7 @@
  */
 
 import type { ForwardedFilterValue } from "@/lib/posts/post-view"
+import { parseSubscriberCount } from "@/lib/subscriber-count"
 
 export type DiscoverySignalKind = "forward" | "mention" | "link"
 
@@ -150,6 +151,7 @@ export type DiscoverSortKey =
   | "link"
   | "lastSeen"
   | "seenInCount"
+  | "subscribers"
 
 export const DISCOVER_SORT_OPTIONS: {
   label: string
@@ -162,7 +164,27 @@ export const DISCOVER_SORT_OPTIONS: {
   { label: "Links", value: "link" },
   { label: "Last seen", value: "lastSeen" },
   { label: "Seen by", value: "seenInCount" },
+  { label: "Subscribers", value: "subscribers" },
 ]
+
+/**
+ * A candidate's subscriber count, or `null` when we do not know it.
+ *
+ * Unknown covers three states that are indistinguishable for ranking: never
+ * probed, probed inconclusively, and probed off a page that carried no counter
+ * at all (bots and personal accounts have none). Distinguishing them would not
+ * change where the row belongs in a size ranking — the end — and `ProbeBadge`
+ * already tells the operator which case a given row is.
+ *
+ * The count comes from the probe rather than from the report, so this key is the
+ * one sort that depends on the asynchronous sweep: on a fresh report most rows
+ * are `null` and migrate up the list as verdicts land (IDEA-011 D9).
+ */
+export function candidateSubscriberCount(
+  candidate: DiscoveryCandidate,
+): number | null {
+  return parseSubscriberCount(candidate.probe?.subscribers)
+}
 
 /**
  * How much each signal kind counts toward the weighted score.
@@ -197,15 +219,19 @@ export function weightedScore(
   )
 }
 
+/** `null` when the candidate has no value for this key — see the null handling
+ * in `sortDiscoveryCandidates`. Only `subscribers` can be unknown; every other
+ * key is derived from reference counts the report always carries. */
 function sortValue(
   candidate: DiscoveryCandidate,
   sortKey: DiscoverSortKey,
   weights: DiscoverSignalWeights,
-): number {
+): number | null {
   if (sortKey === "total") return candidate.total
   if (sortKey === "weighted") return weightedScore(candidate, weights)
   if (sortKey === "lastSeen") return candidate.lastSeen
   if (sortKey === "seenInCount") return candidate.seenInCount
+  if (sortKey === "subscribers") return candidateSubscriberCount(candidate)
   return candidate.counts[sortKey]
 }
 
@@ -215,9 +241,19 @@ export function sortDiscoveryCandidates(
   weights: DiscoverSignalWeights = DEFAULT_DISCOVER_SIGNAL_WEIGHTS,
 ): DiscoveryCandidate[] {
   return [...candidates].sort((a, b) => {
-    const delta =
-      sortValue(b, sortKey, weights) - sortValue(a, sortKey, weights)
-    if (delta !== 0) return delta
+    const aValue = sortValue(a, sortKey, weights)
+    const bValue = sortValue(b, sortKey, weights)
+    // Unknown always sinks to the end, never to a numeric position. Treating it
+    // as 0 would put a not-yet-probed handle below a channel we actually know to
+    // be tiny, asserting something we have not measured; treating it as
+    // Infinity would top the list with rows carrying no evidence at all. Rows
+    // that are both unknown fall through to the tie-breaks below, so they stay
+    // ordered by reference strength rather than arbitrarily.
+    if (aValue === null || bValue === null) {
+      if (aValue !== bValue) return aValue === null ? 1 : -1
+    } else if (aValue !== bValue) {
+      return bValue - aValue
+    }
     if (b.total !== a.total) return b.total - a.total
     if (b.seenInCount !== a.seenInCount) return b.seenInCount - a.seenInCount
     if (b.lastSeen !== a.lastSeen) return b.lastSeen - a.lastSeen

@@ -251,6 +251,44 @@ corpus.
 **Effort/risk.** Small. Main risk is picking weights by intuition — see Open
 questions.
 
+### D15. Sort by subscriber count — **DONE 2026-07-30**
+
+> Shipped as another additive sort key, `subscribers`, alongside D5's weighted
+> score. It is the first sort key whose value does **not** come from the report:
+> the count is read from the D9 probe, so on a freshly generated report most rows
+> have no value yet and climb the list as the sweep resolves them. That makes
+> "where does an unknown go" the whole design question rather than an edge case.
+>
+> **Unknown sorts last, never as a number.** Three states collapse into it —
+> never probed, probed inconclusively, and probed off a page with no counter at
+> all (bots and personal accounts have none). Treating them as `0` would rank a
+> handle we have not measured below a channel we know to be tiny, which reads as
+> a fact when it is the absence of one; treating them as `Infinity` would top the
+> list with the rows carrying the least evidence. Rows that are unknown on *both*
+> sides fall through to the existing reference-strength tie-breaks, so the tail
+> stays ordered rather than arbitrary.
+>
+> The count reaches us as display text (`"12.5K"`, `"8 214"`), never a number —
+> `t.me` gives no exact figure above ~10K — so ranking has to re-derive a
+> magnitude in `lib/subscriber-count.ts`, shared with the channel grid, which had
+> its own private copy. That copy multiplied by a million whenever the string
+> contained an "m" anywhere, so a count arriving with its label attached
+> (`"204 members"`) became 204 million; the shared parser requires the suffix to
+> end its word. The grid keeps its own `?? 0` for unknowns — its asc/desc toggle
+> makes that reasonable, and changing it was not part of this.
+>
+> **Shipped alongside — a bidi fix.** The `name · 12.5K subscribers` line was one
+> concatenated string, which renders wrong for a Persian channel name: the name
+> is an RTL run inside an LTR line, so the neutral separator and the ASCII count
+> beside it get reordered — the count moves to the left of the name and
+> punctuation at the edge of the name changes sides. Each run is now its own
+> `dir="auto"` element (isolated by HTML's default stylesheet), matching
+> `PostCard` and `ChannelCard`. Guarded by `lib/bidi-invariants.test.ts`, because
+> the bug is invisible on ASCII names and the tempting simplification back to one
+> template string reintroduces it. The candidate panel's display name and quoted
+> sample post got the same treatment. A count with no display name also renders
+> now; the old combined condition suppressed it.
+
 ### D6. Rank by independent corroboration, not volume
 
 `seenInCount` is only a **tie-break** in `sortDiscoveryCandidates`
@@ -760,3 +798,5 @@ progress bar.
 | 2026-07-29 | W1 implemented (backend + frontend). Migration `u3v4w5x6y7z8`. |
 | 2026-07-29 | D5 (weighted sort, user-editable weights, client-side re-ranking) + Min hits as a free int; D8 (dismiss list, migration `v4w5x6y7z8a9`). |
 | 2026-07-29 | D14 implemented and the alembic head resolved: `origin/main` merged into the branch and `u3v4w5x6y7z8` re-chained onto `s1t2u3v4w5x6`, so there is a single linear head. |
+| 2026-07-30 | D9 reworked — probing moved out of a React effect into a server-owned queue (PR #51, migration `x6y7z8a9b0c1`), with the decision record and an architectural survey in `docs/discover-probe-queue-plan.md` (PR #52). |
+| 2026-07-30 | D15 (subscribers sort, unknown-last) + the bidi fix for Persian channel names on the `name · count` line. Shared subscriber parser extracted; the channel grid's private copy had a ×1e6 bug on labelled counts. |

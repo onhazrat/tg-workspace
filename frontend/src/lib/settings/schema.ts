@@ -271,6 +271,7 @@ export const appSettingsSpec = {
       "link",
       "lastSeen",
       "seenInCount",
+      "subscribers",
     ]),
     "total",
   ),

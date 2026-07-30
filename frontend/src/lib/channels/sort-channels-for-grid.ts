@@ -1,3 +1,4 @@
+import { parseSubscriberCount } from "@/lib/subscriber-count"
 import type { Channel, ChannelStats, Post } from "@/types"
 
 export type ChannelGridSortOption =
@@ -70,15 +71,6 @@ const getNextAutoSyncAt = (channel: Channel): number | null => {
   return Math.min(...deadlines)
 }
 
-const parseSubscribers = (subStr?: string): number => {
-  if (!subStr) return 0
-  const numStr = subStr.replace(/[^0-9.]/g, "")
-  let num = parseFloat(numStr) || 0
-  if (subStr.toUpperCase().includes("K")) num *= 1000
-  if (subStr.toUpperCase().includes("M")) num *= 1000000
-  return num
-}
-
 const getSelectionTier = (
   channel: Channel,
   selectedChannels: Set<string>,
@@ -135,7 +127,15 @@ const compareBySortOption = (
     return aName.localeCompare(bName)
   }
   if (sortBy === "subscribers") {
-    return parseSubscribers(a.subscribers) - parseSubscribers(b.subscribers)
+    // An unknown count sorts as 0 here, which is this grid's long-standing
+    // behaviour and reasonable given its asc/desc toggle. The Discover ranking
+    // deliberately differs — it pushes unknowns to the end in either direction
+    // (see `sortDiscoveryCandidates`) — because a freshly generated report is
+    // normally half unprobed, so zeros would dominate the top or the bottom.
+    return (
+      (parseSubscriberCount(a.subscribers) ?? 0) -
+      (parseSubscriberCount(b.subscribers) ?? 0)
+    )
   }
   if (sortBy === "next_regular_sync") {
     return compareNullableSyncAt(a.nextRegularSyncAt, b.nextRegularSyncAt)

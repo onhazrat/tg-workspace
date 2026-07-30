@@ -85,7 +85,10 @@ export const DiscoverCandidatePanel: React.FC<DiscoverCandidatePanelProps> = ({
           <>
             <SheetHeader>
               <SheetTitle className="font-mono">@{candidate.name}</SheetTitle>
-              <SheetDescription>
+              {/* dir="auto" for the same reason as in the table: a Persian
+               * display name renders its own punctuation on the wrong side
+               * when it inherits the page's LTR direction. */}
+              <SheetDescription dir="auto">
                 {candidate.displayName ?? "Referenced by your channels"}
               </SheetDescription>
             </SheetHeader>
@@ -180,6 +183,7 @@ export const DiscoverCandidatePanel: React.FC<DiscoverCandidatePanelProps> = ({
                       <p className="text-sm text-app-ink/50">Loading post…</p>
                     ) : post?.text ? (
                       <blockquote
+                        dir="auto"
                         className="max-h-64 overflow-y-auto whitespace-pre-wrap rounded-lg border border-app-ink/10 bg-app-muted/30 p-3 text-sm"
                         data-testid="discover-panel-sample-text"
                       >
