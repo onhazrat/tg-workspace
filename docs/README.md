@@ -17,6 +17,7 @@
 |----------|-------------|
 | [staging-ui-ux-audit.md](staging-ui-ux-audit.md) | UI/UX walkthrough of the staging summarizer dashboard (2026-07-25) — open findings, IDs, root causes, suggested order |
 | [migration/PYTHON-314-TEMPLATE-RESYNC.md](migration/PYTHON-314-TEMPLATE-RESYNC.md) | Python 3.14 upgrade + upstream template re-sync (2026-07-26) — what shipped, divergences kept on purpose, and the gotchas (PEP 758, PEP 649, naive `utc_now()`) |
+| [discover-probe-queue-plan.md](discover-probe-queue-plan.md) | Moving Discover handle-probing out of a React effect into a server-owned queue (2026-07-30, PR #51) — decisions with the alternatives rejected, plus §5, a prioritised survey of architectural work still outstanding (`bulk_follow` durability, `useSyncQueue`, client/server drift) |
 
 ## Also at repo root
 

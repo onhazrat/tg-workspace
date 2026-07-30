@@ -366,6 +366,10 @@ pays for rows the user actually inspects.
 
 ### D9. Channel metadata before you commit — **DONE 2026-07-29, reworked 2026-07-30**
 
+> The decision record for the 2026-07-30 rework — every choice with the
+> alternatives rejected, and the architectural survey done alongside it — is
+> [`docs/discover-probe-queue-plan.md`](../../discover-probe-queue-plan.md).
+
 `get_channel_info` used to run only **during** the follow job
 (`bulk_follow.py:273`), so following was a blind decision.
 
