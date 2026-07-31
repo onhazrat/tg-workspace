@@ -18,6 +18,7 @@ from app.models_tg import (
     PostTranslation,
     PublishLog,
     SyncLog,
+    SyncLogPayload,
 )
 from app.services.channel_photos import channel_photo_api_path, has_cached_photo
 from app.services.channel_tags import normalize_channel_tags
@@ -211,8 +212,20 @@ def publish_log_to_camel(log: PublishLog) -> dict[str, Any]:
     return {"id": log.id, **model_to_camel(log)}
 
 
-def sync_log_to_camel(log: SyncLog) -> dict[str, Any]:
-    return {"id": log.id, **model_to_camel(log)}
+def sync_log_to_camel(
+    log: SyncLog, payload: SyncLogPayload | None = None
+) -> dict[str, Any]:
+    """Serialise a sync log with its (optional) payload row folded back in.
+
+    The bodies moved to tg_sync_log_payloads, but the wire shape did not change:
+    they are re-emitted here, and stay null when the payload has been reclaimed.
+    """
+    return {
+        "id": log.id,
+        **model_to_camel(log),
+        "fullRequest": payload.full_request if payload else None,
+        "fullResponse": payload.full_response if payload else None,
+    }
 
 
 def llm_log_to_camel(log: LLMLog) -> dict[str, Any]:

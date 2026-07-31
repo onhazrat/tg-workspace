@@ -6003,10 +6003,21 @@
             "type": "integer",
             "title": "Postretentiondays"
           },
-          "logRetentionDays": { "type": "integer", "title": "Logretentiondays" }
+          "logRetentionDays": {
+            "type": "integer",
+            "title": "Logretentiondays"
+          },
+          "payloadRetentionDays": {
+            "type": "integer",
+            "title": "Payloadretentiondays"
+          }
         },
         "type": "object",
-        "required": ["postRetentionDays", "logRetentionDays"],
+        "required": [
+          "postRetentionDays",
+          "logRetentionDays",
+          "payloadRetentionDays"
+        ],
         "title": "RetentionRuntimeSettings"
       },
       "RuntimeConfigResponse": {

@@ -8,7 +8,7 @@ from collections.abc import Callable, Iterator
 from typing import Any
 
 from fastapi.encoders import jsonable_encoder
-from sqlmodel import Session, select
+from sqlmodel import Session, col, select
 
 from app.models_tg import (
     BotCredential,
@@ -24,6 +24,7 @@ from app.models_tg import (
     PublishLog,
     Summary,
     SyncLog,
+    SyncLogPayload,
     utc_now,
 )
 from app.services.channel_setting_groups import (
@@ -291,14 +292,22 @@ def _stream_rows(
     session: Session,
     model: type[Any],
     to_camel: Callable[[Any], dict[str, Any]],
+    *,
+    statement: Any = None,
 ) -> Iterator[str]:
     """Yield a table as JSON array items, one row at a time.
 
     Exports must stay complete, so they cannot be capped like the log viewers.
     Streaming with a server-side cursor keeps peak memory flat instead of
     materialising every row (tg_posts alone is millions of rows) up front.
+
+    `statement` overrides the default select-one-table query — sync logs pass a
+    join so their payload rows stream alongside, and `to_camel` then receives
+    whatever tuple that statement yields.
     """
-    statement = select(model).execution_options(yield_per=EXPORT_CHUNK_ROWS)
+    if statement is None:
+        statement = select(model)
+    statement = statement.execution_options(yield_per=EXPORT_CHUNK_ROWS)
     result = session.exec(statement)
     try:
         first = True
@@ -353,22 +362,36 @@ def _stream_export_body(session: Session) -> Iterator[str]:
         separators=(",", ":"),
     )
 
+    # Sync logs keep their bodies in a companion table, so they stream over an
+    # outer join — an export must stay complete, and a log whose payload has
+    # been reclaimed still has to appear (with null bodies).
+    sync_logs_statement = select(SyncLog, SyncLogPayload).join(
+        SyncLogPayload,
+        col(SyncLogPayload.sync_log_id) == col(SyncLog.id),
+        isouter=True,
+    )
+
     # Large tables: stream row by row.
-    for key, model, to_camel in (
-        ("posts", Post, post_to_camel),
-        ("summaries", Summary, summary_to_camel),
-        ("bot_credentials", BotCredential, bot_to_camel),
-        ("chat_destinations", ChatDestination, chat_dest_to_camel),
-        ("publish_logs", PublishLog, publish_log_to_camel),
-        ("sync_logs", SyncLog, sync_log_to_camel),
-        ("llm_logs", LLMLog, llm_log_to_camel),
-        ("embedding_logs", EmbeddingLog, embedding_log_to_camel),
-        ("network_logs", NetworkLog, network_log_to_camel),
-        ("embeddings", PostEmbedding, embedding_to_camel),
-        ("translations", PostTranslation, translation_to_camel),
+    for key, model, to_camel, statement in (
+        ("posts", Post, post_to_camel, None),
+        ("summaries", Summary, summary_to_camel, None),
+        ("bot_credentials", BotCredential, bot_to_camel, None),
+        ("chat_destinations", ChatDestination, chat_dest_to_camel, None),
+        ("publish_logs", PublishLog, publish_log_to_camel, None),
+        (
+            "sync_logs",
+            SyncLog,
+            lambda row: sync_log_to_camel(row[0], row[1]),
+            sync_logs_statement,
+        ),
+        ("llm_logs", LLMLog, llm_log_to_camel, None),
+        ("embedding_logs", EmbeddingLog, embedding_log_to_camel, None),
+        ("network_logs", NetworkLog, network_log_to_camel, None),
+        ("embeddings", PostEmbedding, embedding_to_camel, None),
+        ("translations", PostTranslation, translation_to_camel, None),
     ):
         yield f',"{key}":['
-        yield from _stream_rows(session, model, to_camel)
+        yield from _stream_rows(session, model, to_camel, statement=statement)
         yield "]"
 
     yield "}}"

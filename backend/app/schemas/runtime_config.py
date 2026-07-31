@@ -99,6 +99,7 @@ class JobsRuntimeSettings(BaseModel):
 class RetentionRuntimeSettings(BaseModel):
     post_retention_days: int = Field(..., alias="postRetentionDays")
     log_retention_days: int = Field(..., alias="logRetentionDays")
+    payload_retention_days: int = Field(..., alias="payloadRetentionDays")
 
     model_config = {"populate_by_name": True}
 

@@ -13,6 +13,7 @@ import { api } from "@/api"
 import { type Theme, useTheme } from "@/components/theme-provider"
 import {
   RETENTION_LOG_DAYS_DEFAULT,
+  RETENTION_PAYLOAD_DAYS_DEFAULT,
   RETENTION_POST_DAYS_DEFAULT,
 } from "@/constants"
 import { useCachePrune } from "@/hooks/useCachePrune"
@@ -99,6 +100,8 @@ interface SettingsContextType {
   setPostRetentionDays: (days: number) => void
   logRetentionDays: number
   setLogRetentionDays: (days: number) => void
+  payloadRetentionDays: number
+  setPayloadRetentionDays: (days: number) => void
   reportRetentionDays: number
   setReportRetentionDays: (days: number) => void
   reportRetentionMax: number
@@ -222,6 +225,7 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({
           ...decodeServerSection("retention", {
             postRetentionDays: RETENTION_POST_DAYS_DEFAULT,
             logRetentionDays: RETENTION_LOG_DAYS_DEFAULT,
+            payloadRetentionDays: RETENTION_PAYLOAD_DAYS_DEFAULT,
             ...retention,
             ...legacyRetention,
           }),

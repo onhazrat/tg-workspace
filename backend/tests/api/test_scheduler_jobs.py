@@ -17,7 +17,7 @@ from app.jobs.auto_sync import run_auto_sync
 from app.jobs.retention import run_retention_cleanup
 from app.jobs.settings import default_job_enabled, save_setting
 from app.jobs.translation_batch import run_translation_batch
-from app.models_tg import Channel, Post, Summary, SyncLog
+from app.models_tg import Channel, Post, Summary, SyncLog, SyncLogPayload
 from app.services.network_settings import get_network_setting_row
 from app.services.operator import get_operator_user_id
 from app.services.scraper_jobs import clear_jobs_for_tests
@@ -438,6 +438,13 @@ def test_retention_deletes_old_logs_without_loading_them() -> None:
                 status="success",
                 timestamp=old_ts,
                 user_id=operator_id,
+            )
+        )
+        session.add(
+            SyncLogPayload(
+                sync_log_id="ret-old-log",
+                user_id=operator_id,
+                timestamp=old_ts,
                 full_response={"blob": "x" * 2000},
             )
         )
@@ -458,6 +465,103 @@ def test_retention_deletes_old_logs_without_loading_them() -> None:
         assert check.get(SyncLog, "ret-old-log") is None, "expired log not deleted"
         assert check.get(SyncLog, "ret-new-log") is not None, (
             "recent log wrongly deleted"
+        )
+
+
+def test_payload_retention_expires_bodies_but_keeps_the_log() -> None:
+    """The whole point of the split: shed the bulk, keep the audit trail.
+
+    Payloads run on a shorter horizon than the log rows, so a log older than
+    payloadRetentionDays but younger than logRetentionDays keeps its metadata
+    and simply reports no request/response.
+    """
+    now = int(time.time() * 1000)
+    old_ts = now - 10 * 24 * 60 * 60 * 1000
+    with Session(engine) as session:
+        save_setting(
+            session,
+            "retention",
+            {
+                "postRetentionDays": 0,
+                "logRetentionDays": 90,
+                "payloadRetentionDays": 7,
+            },
+        )
+        operator_id = get_operator_user_id(session)
+        session.add(
+            SyncLog(
+                id="ret-payload-log",
+                channel_name="c",
+                status="success",
+                timestamp=old_ts,
+                user_id=operator_id,
+            )
+        )
+        session.add(
+            SyncLogPayload(
+                sync_log_id="ret-payload-log",
+                user_id=operator_id,
+                timestamp=old_ts,
+                full_response={"blob": "x" * 2000},
+            )
+        )
+        session.commit()
+        result = run_retention_cleanup(session)
+        assert result["deletedPayloads"] >= 1
+
+    with Session(engine) as check:
+        assert check.get(SyncLogPayload, "ret-payload-log") is None, (
+            "expired payload not reclaimed"
+        )
+        assert check.get(SyncLog, "ret-payload-log") is not None, (
+            "log row wrongly deleted with its payload"
+        )
+
+
+def test_log_retention_leaves_no_orphan_payloads() -> None:
+    """payloadRetentionDays=0 (never) must not strand payloads.
+
+    There is no FK to cascade from, so the log sweep clears payloads at the log
+    cutoff too — otherwise disabling payload retention while keeping a finite
+    log window would leak rows whose log is already gone.
+    """
+    now = int(time.time() * 1000)
+    old_ts = now - 30 * 24 * 60 * 60 * 1000
+    with Session(engine) as session:
+        save_setting(
+            session,
+            "retention",
+            {
+                "postRetentionDays": 0,
+                "logRetentionDays": 7,
+                "payloadRetentionDays": 0,
+            },
+        )
+        operator_id = get_operator_user_id(session)
+        session.add(
+            SyncLog(
+                id="ret-orphan-log",
+                channel_name="c",
+                status="success",
+                timestamp=old_ts,
+                user_id=operator_id,
+            )
+        )
+        session.add(
+            SyncLogPayload(
+                sync_log_id="ret-orphan-log",
+                user_id=operator_id,
+                timestamp=old_ts,
+                full_response={"blob": "x" * 2000},
+            )
+        )
+        session.commit()
+        run_retention_cleanup(session)
+
+    with Session(engine) as check:
+        assert check.get(SyncLog, "ret-orphan-log") is None
+        assert check.get(SyncLogPayload, "ret-orphan-log") is None, (
+            "payload outlived the log row it belonged to"
         )
 
 

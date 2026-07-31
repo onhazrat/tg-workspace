@@ -1936,10 +1936,14 @@ export const RetentionRuntimeSettingsSchema = {
         logRetentionDays: {
             type: 'integer',
             title: 'Logretentiondays'
+        },
+        payloadRetentionDays: {
+            type: 'integer',
+            title: 'Payloadretentiondays'
         }
     },
     type: 'object',
-    required: ['postRetentionDays', 'logRetentionDays'],
+    required: ['postRetentionDays', 'logRetentionDays', 'payloadRetentionDays'],
     title: 'RetentionRuntimeSettings'
 } as const;
 

@@ -56,6 +56,7 @@ def _default_retention() -> dict[str, Any]:
     return {
         "postRetentionDays": settings.RETENTION_POST_DAYS_DEFAULT,
         "logRetentionDays": settings.RETENTION_LOG_DAYS_DEFAULT,
+        "payloadRetentionDays": settings.RETENTION_PAYLOAD_DAYS_DEFAULT,
         # Both caps apply to saved Discover reports, whichever bites first, and
         # 0 disables either one — same convention as the two windows above.
         "reportRetentionDays": settings.RETENTION_REPORT_DAYS_DEFAULT,

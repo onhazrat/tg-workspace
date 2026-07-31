@@ -441,6 +441,35 @@ class SyncLog(SQLModel, table=True):
     error: str | None = None
     timestamp: int = Field(default=0, sa_column=_ms_ts())
     source: str = ""
+    updated_at: datetime = Field(default_factory=utc_now)
+
+
+class SyncLogPayload(SQLModel, table=True):
+    """Request/response bodies for `SyncLog`, split off so they can be reclaimed.
+
+    These are the bulk of a sync log — full_response is ~17KB/row and up to 3MB
+    — and they live apart from `tg_sync_logs` because a bulk DELETE cannot give
+    disk back. PostgreSQL only marks deleted rows dead; the space returns to the
+    table's freelist for reuse, not to the OS. Actually shrinking a table needs
+    VACUUM FULL, which rewrites it into a new file and so wants free space equal
+    to the table it is rewriting — exactly what is missing once logs have filled
+    the disk. As its own table it can be truncated instead: instant, no
+    headroom required, and every log row (status, error, counts) survives.
+
+    Deliberately has no foreign key to tg_sync_logs. The table has to stay
+    droppable and truncatable at any moment, so a missing row here means
+    "payload no longer retained" rather than a broken log, and the delete paths
+    in `app.services.logs` clean up explicitly instead of relying on a cascade.
+    """
+
+    __tablename__ = "tg_sync_log_payloads"
+
+    sync_log_id: str = Field(primary_key=True)
+    user_id: uuid.UUID | None = Field(default=None, index=True)
+    # Denormalised from tg_sync_logs: payloads expire on their own, shorter
+    # horizon, and carrying the age here keeps that sweep a single-table bulk
+    # DELETE rather than a join across the whole log table.
+    timestamp: int = Field(default=0, sa_column=_ms_ts())
     full_request: dict[str, Any] | list[Any] | None = Field(
         default=None, sa_column=Column(JSON)
     )

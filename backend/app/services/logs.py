@@ -15,6 +15,7 @@ from app.models_tg import (
     NetworkLog,
     PublishLog,
     SyncLog,
+    SyncLogPayload,
     utc_now,
 )
 from app.services.serialization import (
@@ -71,9 +72,15 @@ def upsert_publish_log(
 def upsert_sync_log(
     session: Session, item: dict[str, Any], user_id: uuid.UUID | None = None
 ) -> None:
+    """Write a sync log, routing its bulk bodies to `SyncLogPayload`.
+
+    The caller still passes one flat dict — the split is an implementation
+    detail of how the rows are stored, not of the API.
+    """
     normalized = normalize_body(item)
     log_id = normalized.get("id") or str(uuid.uuid4())
     existing = session.get(SyncLog, log_id)
+    timestamp = normalized.get("timestamp", 0)
     fields = {
         "user_id": user_id,
         "channel_name": normalized.get("channel_name", ""),
@@ -81,10 +88,8 @@ def upsert_sync_log(
         "posts_count": normalized.get("posts_count", 0),
         "new_latest_id": normalized.get("new_latest_id"),
         "error": normalized.get("error"),
-        "timestamp": normalized.get("timestamp", 0),
+        "timestamp": timestamp,
         "source": normalized.get("source", ""),
-        "full_request": normalized.get("full_request"),
-        "full_response": normalized.get("full_response"),
     }
     if existing:
         for k, v in fields.items():
@@ -93,6 +98,56 @@ def upsert_sync_log(
         session.add(existing)
     else:
         session.add(SyncLog(id=log_id, **cast(Any, fields)))
+
+    _upsert_sync_log_payload(
+        session,
+        log_id,
+        user_id=user_id,
+        timestamp=timestamp,
+        full_request=normalized.get("full_request"),
+        full_response=normalized.get("full_response"),
+    )
+
+
+def _upsert_sync_log_payload(
+    session: Session,
+    log_id: str,
+    *,
+    user_id: uuid.UUID | None,
+    timestamp: int,
+    full_request: Any,
+    full_response: Any,
+) -> None:
+    """Store, update or clear one sync log's payload row.
+
+    A log with no bodies gets no payload row at all, and re-importing one
+    without bodies clears any row left over from a previous import, so the
+    payload table never accumulates rows that carry nothing.
+    """
+    existing = session.get(SyncLogPayload, log_id)
+    if full_request is None and full_response is None:
+        if existing:
+            session.delete(existing)
+        return
+
+    if existing:
+        existing.user_id = user_id
+        existing.timestamp = timestamp
+        existing.full_request = full_request
+        existing.full_response = full_response
+        existing.updated_at = utc_now()
+        session.add(existing)
+        return
+
+    session.add(
+        SyncLogPayload(
+            sync_log_id=log_id,
+            user_id=user_id,
+            timestamp=timestamp,
+            full_request=full_request,
+            full_response=full_response,
+        )
+    )
 
 
 def upsert_llm_log(
@@ -185,6 +240,11 @@ def delete_log_by_id(session: Session, log_type: str, log_id: str) -> bool:
     if not row:
         return False
     session.delete(row)
+    if log_type == "sync":
+        # tg_sync_log_payloads has no FK to cascade from — see SyncLogPayload.
+        payload = session.get(SyncLogPayload, log_id)
+        if payload:
+            session.delete(payload)
     session.commit()
     return True
 
@@ -199,6 +259,8 @@ def clear_logs(session: Session, log_type: str) -> int:
     """
     model, _ = LOG_MODELS[log_type]
     result = session.execute(sa_delete(model))
+    if log_type == "sync":
+        session.execute(sa_delete(SyncLogPayload))
     session.commit()
     return cast(Any, result).rowcount or 0
 
@@ -224,9 +286,29 @@ def delete_old_logs(
                 or_(col(user_id_col) == operator_id, col(user_id_col).is_(None))
             )
         result = session.execute(stmt)
+        if log_type == "sync":
+            session.execute(expire_sync_payloads_stmt(cutoff, operator_id))
         session.commit()
         deleted[log_type] = cast(Any, result).rowcount or 0
     return deleted
+
+
+def expire_sync_payloads_stmt(cutoff: int, operator_id: uuid.UUID | None) -> Any:
+    """Bulk DELETE of sync payloads older than `cutoff`.
+
+    Filters on the payload table's own denormalised timestamp so the sweep
+    never joins back to tg_sync_logs. Shared by the log-deletion paths here and
+    by `app.jobs.retention`, which also runs it on the shorter payload horizon.
+    """
+    stmt = sa_delete(SyncLogPayload).where(col(SyncLogPayload.timestamp) < cutoff)
+    if operator_id is not None:
+        stmt = stmt.where(
+            or_(
+                col(SyncLogPayload.user_id) == operator_id,
+                col(SyncLogPayload.user_id).is_(None),
+            )
+        )
+    return stmt
 
 
 def _list_logs_page[LogModel: SQLModel](
@@ -268,14 +350,26 @@ def list_publish_logs(
 def list_sync_logs(
     session: Session, *, limit: int = DEFAULT_LOG_PAGE_SIZE, offset: int = 0
 ) -> list[dict[str, Any]]:
-    return _list_logs_page(
-        session,
-        SyncLog,
-        col(SyncLog.timestamp),
-        sync_log_to_camel,
-        limit=limit,
-        offset=offset,
+    """Return one newest-first page of sync logs, payloads included.
+
+    Does not go through `_list_logs_page` because the bodies live in
+    tg_sync_log_payloads. The join is an OUTER one on purpose: that table can be
+    truncated at any time to reclaim disk, and a log whose payload is gone must
+    still list — it just reports null bodies. Same page caps apply, since the
+    payloads still ship inline.
+    """
+    statement = (
+        select(SyncLog, SyncLogPayload)
+        .join(
+            SyncLogPayload,
+            col(SyncLogPayload.sync_log_id) == col(SyncLog.id),
+            isouter=True,
+        )
+        .order_by(col(SyncLog.timestamp).desc())
+        .offset(offset)
+        .limit(limit)
     )
+    return [sync_log_to_camel(log, payload) for log, payload in session.exec(statement)]
 
 
 def list_llm_logs(

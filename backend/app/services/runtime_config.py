@@ -230,6 +230,10 @@ def build_runtime_config(
                 retention_settings.get("logRetentionDays")
                 or settings.RETENTION_LOG_DAYS_DEFAULT
             ),
+            "payloadRetentionDays": int(
+                retention_settings.get("payloadRetentionDays")
+                or settings.RETENTION_PAYLOAD_DAYS_DEFAULT
+            ),
         },
         "network": network_payload,
         "jobs": _jobs_runtime_payload(session),

@@ -212,6 +212,7 @@ describe("backend sections", () => {
     expect(Object.keys(buildSectionPayload("retention", settings))).toEqual([
       "postRetentionDays",
       "logRetentionDays",
+      "payloadRetentionDays",
       "reportRetentionDays",
       "reportRetentionMax",
     ])

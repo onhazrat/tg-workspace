@@ -414,6 +414,7 @@ export type ResolveStartTimeRequest = {
 export type RetentionRuntimeSettings = {
     postRetentionDays: number;
     logRetentionDays: number;
+    payloadRetentionDays: number;
 };
 
 export type RuntimeConfigResponse = {

@@ -60,6 +60,7 @@ TG_TABLES: tuple[str, ...] = (
     "tg_post_translations",
     "tg_posts",
     "tg_publish_logs",
+    "tg_sync_log_payloads",
     "tg_sync_logs",
     "tg_summaries",
     "tg_discover_reports",

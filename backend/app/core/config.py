@@ -146,6 +146,10 @@ class Settings(BaseSettings):
     # Retention defaults (AppSetting bootstrap)
     RETENTION_POST_DAYS_DEFAULT: int = 90
     RETENTION_LOG_DAYS_DEFAULT: int = 30
+    # Sync log request/response bodies are the bulk of a log (~17KB/row, up to
+    # 3MB) and live in tg_sync_log_payloads so they can be reclaimed on their
+    # own, much shorter horizon than the log metadata above. 0 = keep forever.
+    RETENTION_PAYLOAD_DAYS_DEFAULT: int = 7
     # Discover reports store the full candidate list, tail included, as a JSON
     # blob per generate — the one table that grows per user action. Both caps
     # apply; 0 disables either one, like the post/log windows above.

@@ -7,6 +7,7 @@ import {
   LANGUAGES,
   MODELS,
   RETENTION_LOG_DAYS_DEFAULT,
+  RETENTION_PAYLOAD_DAYS_DEFAULT,
   RETENTION_POST_DAYS_DEFAULT,
   RETENTION_REPORT_DAYS_DEFAULT,
   RETENTION_REPORT_MAX_DEFAULT,
@@ -225,6 +226,16 @@ export const appSettingsSpec = {
   logRetentionDays: intSetting("logRetentionDays", RETENTION_LOG_DAYS_DEFAULT, {
     section: "retention",
   }),
+  // Sync log request/response bodies live in their own table so they can be
+  // reclaimed without touching the log rows, which is why they get a shorter
+  // window than logRetentionDays above: a long audit trail stays cheap.
+  payloadRetentionDays: intSetting(
+    "payloadRetentionDays",
+    RETENTION_PAYLOAD_DAYS_DEFAULT,
+    {
+      section: "retention",
+    },
+  ),
   // Saved Discover reports, capped two ways: by age and by count. Both are
   // server-only — unlike post/log retention, nothing in the browser cache
   // mirrors a report — but they live in the schema so the operator can reach

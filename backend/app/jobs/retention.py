@@ -22,6 +22,7 @@ from app.models_tg import (
     SyncLog,
     utc_now,
 )
+from app.services.logs import expire_sync_payloads_stmt
 from app.services.operator import get_operator_user_id
 from app.services.post_sync_state import (
     prune_sync_state_below,
@@ -87,10 +88,12 @@ def run_retention_cleanup(session: Session) -> dict[str, int]:
     settings = load_retention_settings(session)
     post_days = int(settings.get("postRetentionDays") or 0)
     log_days = int(settings.get("logRetentionDays") or 0)
+    payload_days = int(settings.get("payloadRetentionDays") or 0)
     operator_id = get_operator_user_id(session)
 
     deleted_posts = 0
     deleted_logs = 0
+    deleted_payloads = 0
 
     # Logs first: they are the heaviest tables (tg_sync_logs full_response is
     # ~17KB/row, up to 3MB) and the cheapest to clear, so do them before the
@@ -115,11 +118,35 @@ def run_retention_cleanup(session: Session) -> dict[str, int]:
                     or_(col(user_id_col) == operator_id, col(user_id_col).is_(None))
                 )
             result = session.execute(del_stmt)
+            if model_cls is SyncLog:
+                # tg_sync_log_payloads has no FK to cascade from, so sweep it at
+                # the log cutoff too. Without this, an operator who disables
+                # payload retention (0 = never) while keeping a finite log
+                # window would strand payloads whose log row is already gone.
+                payload_result = session.execute(
+                    expire_sync_payloads_stmt(cutoff, operator_id)
+                )
+                deleted_payloads += cast(Any, payload_result).rowcount or 0
             session.commit()
             deleted = cast(Any, result).rowcount or 0
             if deleted:
                 deleted_logs += deleted
                 touch_sync(session, resource)
+
+    # Payloads expire on their own, shorter horizon: the bodies are the bulk of
+    # a sync log, so discarding them early keeps a long audit trail cheap.
+    if payload_days > 0:
+        payload_cutoff = (
+            int(utc_now().timestamp() * 1000) - payload_days * 24 * 60 * 60 * 1000
+        )
+        payload_result = session.execute(
+            expire_sync_payloads_stmt(payload_cutoff, operator_id)
+        )
+        session.commit()
+        expired = cast(Any, payload_result).rowcount or 0
+        if expired:
+            deleted_payloads += expired
+            touch_sync(session, "sync_logs")
 
     if post_days > 0:
         cutoff = int(utc_now().timestamp() * 1000) - post_days * 24 * 60 * 60 * 1000
@@ -215,16 +242,19 @@ def run_retention_cleanup(session: Session) -> dict[str, int]:
         enforce_thumb_cache_size_limit(max_mb)
 
     logger.info(
-        "Retention cleanup: deleted %s posts, %s log rows, %s reports "
-        "(postDays=%s, logDays=%s)",
+        "Retention cleanup: deleted %s posts, %s log rows, %s sync payloads, "
+        "%s reports (postDays=%s, logDays=%s, payloadDays=%s)",
         deleted_posts,
         deleted_logs,
+        deleted_payloads,
         deleted_reports,
         post_days,
         log_days,
+        payload_days,
     )
     return {
         "deletedPosts": deleted_posts,
         "deletedLogs": deleted_logs,
+        "deletedPayloads": deleted_payloads,
         "deletedReports": deleted_reports,
     }
