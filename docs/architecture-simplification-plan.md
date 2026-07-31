@@ -88,6 +88,16 @@ Alongside: 7 data-access paths → 2; 3 staleness systems → 1; 9 contexts → 
   ```
 - **Never mutate staging.** Verification there is read-only.
 - **One unit = one PR.** If a unit exceeds ~600 changed lines, split it before starting.
+- **Run backend suites serially — never two `pytest` runs at once.** `tests/conftest.py` points
+  every run at the single `app_test` database and truncates the `tg_*` tables after each test, so
+  concurrent runs destroy each other's fixtures. Observed 2026-08-01: two overlapping runs of the
+  *same commit* reported **199 failed / 521 passed / 13 errors** and **733 passed / 1 skipped**;
+  a clean isolated re-run gave **733 passed / 1 skipped**. Before investigating a red result,
+  check `pgrep -fc pytest`. A run killed mid-flight also leaves orphans that make the *next* run
+  **hang** rather than fail — `pkill -9 -f pytest` clears it. Same shared-backend hazard as the
+  Playwright `--workers=1` rule above.
+- **Run `mypy`/`ruff` via `uv run`.** `backend/scripts/lint.sh` invokes them bare, so it only
+  works with the venv already on `PATH`.
 
 ---
 
