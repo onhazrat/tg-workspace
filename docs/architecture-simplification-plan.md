@@ -1,7 +1,8 @@
 # Architecture simplification plan
 
 **Date:** 2026-07-31
-**Status:** Proposed — nothing implemented.
+**Status:** In progress — execution started 2026-08-01. Landed: `H3`.
+Each unit is marked ✅ **DONE** in place as it lands, with what the work changed about the plan.
 **Companion:** [`architecture-entropy-audit.md`](./architecture-entropy-audit.md) is the evidence base.
 Read §3 and §6 of it before starting workstream A or B.
 
@@ -370,15 +371,21 @@ distinct stages (parse → dedupe → persist → telemetry → follow-detection
 
 Same discipline. `import_data` is covered by `test_data.py`.
 
-#### H3 — Write down the service-boundary rule · **S**
+#### H3 — Write down the service-boundary rule · **S** · ✅ **DONE 2026-08-01**
 
 The cheapest unit in the plan and possibly the highest long-run value. Add to `CLAUDE.md` a
-one-paragraph rule for when code becomes its own service module — e.g. *"a service module owns
-one aggregate root or one external integration; parsers and pure transforms are separate
-modules; nothing splits on size alone."* Then note the ~4 existing modules that violate it and
-either merge them or record why they are exceptions.
+one-paragraph rule for when code becomes its own service module. Then note the modules that
+violate it and either merge them or record why they are exceptions.
 
-- Without this, workstream C and H re-create the sprawl within a year.
+**Shipped:** a five-kind taxonomy in `CLAUDE.md` (aggregate / read model / integration / pure
+transform / orchestrator) plus the anti-rule *never split because a file got long*, and three
+recorded exceptions.
+
+**What the analysis changed:** classifying all 44 modules against the rule showed **41 fit
+cleanly** — the `discover_*` and `post_*` clusters are principled, not arbitrary. Audit §E7 has
+been corrected accordingly. The real defect was the *absence of a rule*, not the module count.
+One finding to carry into workstream C: `routes/data.py` writes `AppSetting` directly, which
+also violates thin-routes.
 
 ---
 

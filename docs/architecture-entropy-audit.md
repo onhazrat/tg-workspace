@@ -299,6 +299,21 @@ genuinely separable and well-tested); others look like "this file got long". Wit
 rule, every new feature re-litigates where its code goes — the definition of architecture
 entropy.
 
+> **Corrected 2026-08-01 while executing H3.** The framing above was wrong in an important way,
+> and the correction is the more useful finding. Classifying all 44 modules against an explicit
+> rule (aggregate / read model / integration / pure transform / orchestrator — now written into
+> `CLAUDE.md`) shows **41 of 44 fit cleanly**. The `discover_*` and `post_*` clusters that look
+> arbitrary are not: `discover_probes` / `discover_reports` / `discover_ignored` each own a
+> distinct table, `discover.py` is a read-only aggregation that never commits, and the `post_*`
+> parsers take no `Session` at all. **The problem was never the module count** — it was that no
+> rule existed, so a principled split and an accidental one were indistinguishable to a reader.
+>
+> The three genuine exceptions, now recorded in `CLAUDE.md`: `async_db.py` is infrastructure
+> misfiled under `services/`; `followed_channels.py` deliberately writes `Channel` alongside
+> `channels.py` to share one creation path; and `AppSetting` has **three** writers —
+> `settings_store.py`, `jobs/settings.py`, and `routes/data.py` writing a table directly, which
+> also violates the thin-routes rule and is worth folding into workstream C.
+
 ### E8 — Template residue still wired in
 
 - `items` router mounted in `api/main.py`; `Item` / `ItemBase` / `ItemCreate` / `ItemUpdate` /
