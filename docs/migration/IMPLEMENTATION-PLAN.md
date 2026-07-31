@@ -6,6 +6,12 @@
 Phased migration from browser-first TG-Summarizer (IndexedDB + Express) to FastAPI + PostgreSQL with hybrid read-through cache. Critical path: **Phase 0 → 1 → 4 → 6**.
 **Migration complete (Phases 0–7), 2026-06-08.** IndexedDB is a read-through cache; Postgres, server jobs, and unified `frontend/src/api/` are in place. See phase completion tables below.
 
+> **Historical document — read principle 1 with care.** As of 2026-08-01 the read-through cache
+> is being retired: [ADR-009](./ADR-009-server-authoritative-data.md) supersedes ADR-003, making
+> PostgreSQL authoritative with TanStack Query as the only client cache. "PostgreSQL is
+> authoritative" still holds; "IndexedDB is a read-through cache" no longer does. The rest of
+> this document is kept as written, describing the migration as executed.
+
 ---
 
 ## Goal and principles

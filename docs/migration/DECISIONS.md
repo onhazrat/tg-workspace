@@ -23,8 +23,8 @@ These decisions resolve open questions from [TARGET-ARCHITECTURE.md](./TARGET-AR
 | 1 | Multi-user scope | **C** — single-operator now; nullable `user_id` columns for future multi-user |
 | 2 | Bot token migration | **A** — auto-upload from IndexedDB on first login, then purge locally |
 | 3 | Encryption key | **B** — dedicated `TOKEN_ENCRYPTION_KEY` env var |
-| 4 | Transition writes | **C** — API-first; IndexedDB fallback + user-visible warning on failure |
-| 5 | Offline mode | **C** — browse cached data; disable sync/scrape/summary/publish when API down |
+| 4 | Transition writes | ~~**C** — API-first; IndexedDB fallback + user-visible warning on failure~~ → ⚠️ **superseded 2026-08-01 by [ADR-009](./ADR-009-server-authoritative-data.md)**: API-first kept, fallback removed |
+| 5 | Offline mode | ~~**C** — browse cached data; disable sync/scrape/summary/publish when API down~~ → ⚠️ **superseded 2026-08-01 by [ADR-009](./ADR-009-server-authoritative-data.md)**: no offline browsing |
 | 6 | Auto-summary | **C** — per-channel `autoRegenerate` / publish flags respected server-side |
 | 7 | Translation | **C** — scheduler batch now; on-demand hover translations deferred |
 | 8 | Tor deployment | **A** — optional feature flag, off by default in Compose |
@@ -62,7 +62,13 @@ These decisions resolve open questions from [TARGET-ARCHITECTURE.md](./TARGET-AR
 
 ---
 
-## 4. Transition writes — **C**
+## 4. Transition writes — **C** — ⚠️ **superseded 2026-08-01**
+
+> **Superseded by [ADR-009](./ADR-009-server-authoritative-data.md).** The transition this
+> decision governed is complete: PostgreSQL *is* authoritative. What remains is the fallback
+> branch, and it now costs more than it returns — the IndexedDB write-fallback and its
+> "saved locally only" toast are removed, and a failed write surfaces as an error instead.
+> The API-first write direction itself is unchanged.
 
 **Rationale:** During the hybrid-sync transition ([ADR-003](./ADR-003-hybrid-sync.md)), writes must prefer the API so PostgreSQL becomes authoritative. When the API is unreachable, falling back to IndexedDB prevents data loss for the operator, but silent divergence is worse than a visible warning. The UI shows a toast/banner when a write lands only in cache.
 
@@ -70,7 +76,13 @@ These decisions resolve open questions from [TARGET-ARCHITECTURE.md](./TARGET-AR
 
 ---
 
-## 5. Offline mode — **C**
+## 5. Offline mode — **C** — ⚠️ **superseded 2026-08-01**
+
+> **Superseded by [ADR-009](./ADR-009-server-authoritative-data.md).** The premise no longer
+> holds: since the July 2026 remediation the post feed is server-paged, so with the API down the
+> *primary view* already renders nothing. Offline browsing is therefore retired deliberately
+> rather than maintained partially. This is an accepted capability loss, reasonable for a
+> self-hosted single-operator deployment where browser and backend share a machine or LAN.
 
 **Rationale:** IndexedDB already holds posts, channels, summaries, and embeddings. When the backend health check fails, the app should remain usable for read-only browsing of cached data. Mutating operations — channel sync, scrape, summary generation, publish — are disabled with clear UI affordances rather than queuing writes for later replay (deferred per ADR-003).
 
@@ -135,6 +147,6 @@ These decisions resolve open questions from [TARGET-ARCHITECTURE.md](./TARGET-AR
 | Decision | ADR / doc updated or confirmed |
 |----------|-------------------------------|
 | 1 | Confirms [ADR-002](./ADR-002-auth.md) light auth; extends [DATA-MODEL.md](./DATA-MODEL.md) |
-| 4, 5 | Refines [ADR-003](./ADR-003-hybrid-sync.md) offline and fallback behavior |
+| 4, 5 | ~~Refines [ADR-003](./ADR-003-hybrid-sync.md) offline and fallback behavior~~ → both superseded by [ADR-009](./ADR-009-server-authoritative-data.md) (2026-08-01), which also supersedes ADR-003 |
 | 6, 7, 9 | Refines [ADR-004](./ADR-004-job-runner.md) job scope and persistence |
 | 8 | Confirms [ADR-007](./ADR-007-tor-deployment.md) optional deployment |

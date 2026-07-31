@@ -1,7 +1,7 @@
 # Architecture simplification plan
 
 **Date:** 2026-07-31
-**Status:** In progress — execution started 2026-08-01. Landed: `H3`.
+**Status:** In progress — execution started 2026-08-01. Landed: `H3`, `A0`.
 Each unit is marked ✅ **DONE** in place as it lands, with what the work changed about the plan.
 **Companion:** [`architecture-entropy-audit.md`](./architecture-entropy-audit.md) is the evidence base.
 Read §3 and §6 of it before starting workstream A or B.
@@ -104,15 +104,21 @@ Dependencies are noted explicitly and are few by design.
 Sequenced internally (each still ships alone), because callers must move off `repository.ts`
 before it can be deleted.
 
-#### A0 — Supersede ADR-003 and Decisions #4/#5 · **S** · no dependencies
+#### A0 — Supersede ADR-003 and Decisions #4/#5 · **S** · ✅ **DONE 2026-08-01**
 
 Documentation only, but it must land **first** so later PRs aren't relitigating a locked ADR.
 
-- Add `docs/migration/ADR-009-server-authoritative-data.md`: server is the single source of
-  truth; TanStack Query is the only client cache; no offline browsing.
-- Mark ADR-003 `Superseded by ADR-009`; annotate Decisions #4 and #5 in `DECISIONS.md` with the
-  date, the reason (feed already server-only; multi-user roadmap), and a link.
-- **Verify:** links resolve; no code touched.
+**Shipped:** `docs/migration/ADR-009-server-authoritative-data.md` — PostgreSQL authoritative,
+TanStack Query the only client cache, writes fail loudly, no offline browsing, server state
+never in context. It records both alternatives considered (IndexedDB-as-persister behind
+react-query; freeze-and-decay) and why each was rejected, plus the A4 one-way-door hazard.
+
+ADR-003 marked superseded with what it got right and keeps; Decisions #4 and #5 annotated in
+place, in the summary table, and in the ADR-alignment table. Two further touch-points found
+while doing it and updated: the ADR index in `docs/migration/README.md`, and principle 1 of
+`IMPLEMENTATION-PLAN.md` (a completed historical doc, so annotated with a forward pointer rather
+than rewritten). Historical records — `INVENTORY.md`, `TARGET-ARCHITECTURE.md`,
+`REMEDIATION-PLAN.md`, `SECRETS-MATRIX.md` — deliberately left alone.
 
 #### A1 — Move the three remaining bulk post readers onto the server feed · **L** · after A0
 

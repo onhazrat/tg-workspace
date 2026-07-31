@@ -35,12 +35,13 @@ Documentation for migrating the browser-first TG-Summarizer app to the FastAPI +
 |-----|-------|
 | [ADR-001](./ADR-001-repo-layout.md) | Repository layout |
 | [ADR-002](./ADR-002-auth.md) | Authentication |
-| [ADR-003](./ADR-003-hybrid-sync.md) | Hybrid sync (API-first + cache) |
+| [ADR-003](./ADR-003-hybrid-sync.md) | ~~Hybrid sync (API-first + cache)~~ — ⚠️ superseded by ADR-009 |
 | [ADR-004](./ADR-004-job-runner.md) | APScheduler job runner |
 | [ADR-005](./ADR-005-vector-search.md) | Vector search |
 | [ADR-006](./ADR-006-api-client.md) | API client style |
 | [ADR-007](./ADR-007-tor-deployment.md) | Tor deployment |
 | [ADR-008](./ADR-008-ai-providers.md) | AI provider abstraction |
+| [ADR-009](./ADR-009-server-authoritative-data.md) | Server-authoritative data — supersedes ADR-003 and Decisions #4/#5 |
 
 ## Code references
 
