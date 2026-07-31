@@ -5,19 +5,25 @@
 import { beforeEach, describe, expect, mock, test } from "bun:test"
 import type { Post } from "@/types"
 
-// bun's runtime has no localStorage; repository.ts uses it for sync etags.
-const store = new Map<string, string>()
-;(globalThis as { localStorage?: unknown }).localStorage = {
-  getItem: (k: string) => store.get(k) ?? null,
-  setItem: (k: string, v: string) => {
-    store.set(k, v)
-  },
-  removeItem: (k: string) => {
-    store.delete(k)
-  },
-  clear: () => {
-    store.clear()
-  },
+// `repository.ts` uses localStorage for sync etags. Bun's bare runtime has
+// none, so this file used to install one unconditionally — but under the
+// happy-dom preload (`frontend/test-setup.ts`) a real localStorage already
+// exists as a readonly property, and assigning over it throws. Polyfill only
+// when it is genuinely absent, so this test is correct either way.
+if (!("localStorage" in globalThis)) {
+  const store = new Map<string, string>()
+  ;(globalThis as { localStorage?: unknown }).localStorage = {
+    getItem: (k: string) => store.get(k) ?? null,
+    setItem: (k: string, v: string) => {
+      store.set(k, v)
+    },
+    removeItem: (k: string) => {
+      store.delete(k)
+    },
+    clear: () => {
+      store.clear()
+    },
+  }
 }
 
 let getPostsCalls: {

@@ -1,0 +1,4 @@
+[test]
+# Registers happy-dom so `@testing-library/react` (render / renderHook) works.
+# See test-setup.ts for why this exists.
+preload = ["./test-setup.ts"]

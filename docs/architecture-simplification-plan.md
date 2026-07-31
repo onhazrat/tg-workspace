@@ -276,7 +276,9 @@ Note that `MEMORY.md` records 3 Playwright specs already failing on a pre-existi
 
 Three changes, each independently valuable and safe today:
 
-- drop `@hey-api/schemas` → removes `schemas.gen.ts`, **2,986 unused LOC**
+- drop `@hey-api/schemas` → removes `schemas.gen.ts`, **2,986 unused LOC**. Measured during T1:
+  this is not just repo weight — `bun run build` emits `dist/assets/schemas-*.js` at
+  **132.84 kB (39.70 kB gzip)**, shipped to every user for code nothing imports.
 - drop `asClass: true` → restores tree-shaking
 - replace `legacy/axios` with the fetch transport → removes the second HTTP stack and the
   `axios` dependency (`utils.ts` is the only non-generated consumer)
@@ -303,18 +305,39 @@ the five SSE endpoints and the blob downloads — codegen genuinely cannot expre
 
 *Addresses E11. **Gates A3, G1 and G2** — do not start those without it.*
 
-#### T1 — Add `@testing-library/react` + `renderHook` · **S** · no dependencies
+#### T1 — Add `@testing-library/react` + `renderHook` · **S** · ✅ **DONE 2026-08-01**
 
-The repo has **no** capability to test a hook or a context: 0 of 9 contexts and 2 of 32 hooks
-are tested, because neither `@testing-library/react` nor `renderHook` exists in
-`frontend/package.json`. Every context/hook refactor in this plan is otherwise verifiable only
-through Playwright e2e — slow, serial-only, and needing a rebuilt backend.
+The repo had **no** capability to test a hook or a context: 0 of 9 contexts and 2 of 32 hooks
+tested, because neither `@testing-library/react` nor `renderHook` existed. Every context/hook
+refactor in this plan was otherwise verifiable only through Playwright e2e.
 
-- Add the dependency; confirm it runs under `bun test` (the repo uses `bun test src`, not Vitest —
-  check compatibility early, and fall back to Vitest for component tests if needed).
-- Land one real test as proof: `DataContext` (393 LOC, the simplest and the one whose
-  react-query-derived shape is the model for the others).
-- **Verify:** `bun run --filter tg-summarizer-frontend test:unit` green, new test included.
+**Shipped:** `@testing-library/react` 16.3.2 + `@happy-dom/global-registrator`, wired through
+`frontend/bunfig.toml` → `frontend/test-setup.ts`. No Vitest needed — `bun test` works. Seven
+tests on `DataContext` covering the selection-reconciling effect and its localStorage
+persistence.
+
+**Two things the work taught, both worth carrying into later units:**
+
+1. **Bun's `mock.module` is process-wide, not file-scoped.** A first draft mocked
+   `@/lib/repository` and silently broke `repository.test.ts` once the whole suite ran in one
+   process — it hung. The fix is to avoid module mocks in context tests: **seed the react-query
+   cache instead.** Only three of `DataContext`'s queries can fetch (the five log queries and
+   `dbStats` are `enabled: false`), and seeded entries stay fresh for `SUMMARIZER_STALE_TIME`
+   (30 s), so no `queryFn` runs. Use this pattern for `T2` and the `G1` tests.
+2. **A global DOM changes existing behaviour.** `repository.posts.test.ts` assigned
+   `globalThis.localStorage` unconditionally with the comment *"bun's runtime has no
+   localStorage"*; happy-dom now provides one as a **readonly** property, so it threw. Fixed to
+   polyfill only when genuinely absent, so the file is correct with or without the preload.
+
+**Verified:** frontend **686 pass / 0 fail** across 99 files (baseline 679/98 — the delta is
+exactly the 7 new tests); `tsc -p tsconfig.build.json` clean; biome clean; `bun run build`
+succeeds. The new tests were **mutation-tested** — breaking auto-add fails 5, breaking
+vanish-removal fails 1, breaking persistence fails 1 — so they have teeth rather than merely
+passing.
+
+> Note: `tsconfig.build.json` excludes `src/**/*.test.tsx`, so test files are not typechecked by
+> the project's typecheck command. Pre-existing, not introduced here, but it means a type error
+> in a test only surfaces at runtime.
 
 #### T2 — Characterisation tests for `ScraperContext` · **M** · after T1, before G1
 
