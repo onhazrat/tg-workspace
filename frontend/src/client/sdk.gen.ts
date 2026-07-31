@@ -892,7 +892,7 @@ export class DataService {
      * @param data.limit
      * @param data.offset
      * @param data.search
-     * @returns unknown Successful Response
+     * @returns SummaryListItemResponse Successful Response
      * @throws ApiError
      */
     public static listSummaries(data: DataListSummariesData = {}): CancelablePromise<DataListSummariesResponse> {
@@ -915,7 +915,7 @@ export class DataService {
      * Full summary including citedPosts/promptText/chatMessages.
      * @param data The data for the request.
      * @param data.summaryId
-     * @returns unknown Successful Response
+     * @returns SummaryResponse Successful Response
      * @throws ApiError
      */
     public static getSummary(data: DataGetSummaryData): CancelablePromise<DataGetSummaryResponse> {
@@ -936,7 +936,7 @@ export class DataService {
      * @param data The data for the request.
      * @param data.summaryId
      * @param data.requestBody
-     * @returns unknown Successful Response
+     * @returns SummaryResponse Successful Response
      * @throws ApiError
      */
     public static upsertSummary(data: DataUpsertSummaryData): CancelablePromise<DataUpsertSummaryResponse> {
@@ -958,7 +958,7 @@ export class DataService {
      * Delete Summary
      * @param data The data for the request.
      * @param data.summaryId
-     * @returns string Successful Response
+     * @returns StatusResponse Successful Response
      * @throws ApiError
      */
     public static deleteSummary(data: DataDeleteSummaryData): CancelablePromise<DataDeleteSummaryResponse> {

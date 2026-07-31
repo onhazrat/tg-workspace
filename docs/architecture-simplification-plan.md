@@ -1,7 +1,8 @@
 # Architecture simplification plan
 
 **Date:** 2026-07-31
-**Status:** In progress — execution started 2026-08-01. Landed: `H3`, `A0`.
+**Status:** In progress — execution started 2026-08-01. Landed: `H3`, `A0`, `T1`, `B1`.
+Typed responses **30/129** (was 26). Contexts with a test **1/9** (was 0).
 Each unit is marked ✅ **DONE** in place as it lands, with what the work changed about the plan.
 **Companion:** [`architecture-entropy-audit.md`](./architecture-entropy-audit.md) is the evidence base.
 Read §3 and §6 of it before starting workstream A or B.
@@ -174,16 +175,35 @@ Remove `lib/cache.ts`, `workers/dbWorker.ts`, `MigrationPrompt.tsx`, `useCachePr
 
 *Addresses E1 — the highest-leverage item in the audit, and the prerequisite for E9.*
 
-#### B1 — Declare response models for one resource family, as the pattern · **M** · no dependencies
+#### B1 — Declare response models for one resource family, as the pattern · **M** · ✅ **DONE 2026-08-01**
 
-Pick `summaries` (10 endpoints, well-tested, low blast radius). Add response models to
-`app/schemas/`, annotate the routes, regenerate the client, and **write the convention down** in
-`CLAUDE.md`: *every route declares a response model; every request and response model lives in
-`app/schemas/<resource>.py`; no inline `BaseModel` in route modules.*
+Picked `summaries` — 4 endpoints (not 10 as estimated), well-tested, low blast radius.
 
-- **Verify:** `cd backend && bash scripts/lint.sh` (mypy strict + ty + ruff); `uv run pytest tests/ -q`;
-  `bash scripts/generate-client.sh`; `cd frontend && bunx tsc -p tsconfig.build.json --noEmit`.
-- **Deliverable beyond code:** the convention paragraph. Without it this decays.
+**Shipped:** `app/schemas/summaries.py` (`SummaryResponse`, `SummaryListItemResponse`,
+`SummaryUpsertRequest`) and `app/schemas/common.py` (`StatusResponse`, extracted because every
+family answers a delete with `{"status": "deleted"}`). All four routes annotated; client
+regenerated. **Typed responses 26/129 → 30/129.**
+
+**The pattern's one subtlety, now written into `CLAUDE.md`.** A summary is fixed columns plus an
+open `extra` JSON blob of UI flags that come and go. The models declare only the always-present
+columns and use `ConfigDict(extra="allow")` for the rest. Declaring a *conditional* key —
+`promptExcerpt`, present only when there is prompt text — would serialise it as an explicit
+`null` wherever it is absent today, silently changing the wire format. So conditional keys are
+documented in the model docstring rather than declared. This keeps the payload byte-identical
+while the operation still gains a real `$ref`. **Expect the same call in `channels`, `posts` and
+`tag-runs`, which all merge an `extra` column.**
+
+**Verified:** backend **733 passed / 1 skipped** (baseline match) with
+`tests/api/test_summaries_projection.py` passing **unchanged** — that 264-LOC file is the
+wire-compatibility guard, so leaving it untouched is the evidence the payload did not move.
+mypy strict clean (106 files), ruff clean, format clean, frontend **686 pass / 0 fail**,
+`tsc` clean.
+
+> Two environment notes for later units: `backend/scripts/lint.sh` calls bare `mypy`, so it only
+> works with the venv already on `PATH` — use `uv run mypy app` / `uv run ruff check app`
+> instead. And a standalone `uv run ty check` reports 31 pre-existing diagnostics from an
+> environment-resolution problem; none are in application code, and the pre-commit `ty` hook
+> passes.
 
 #### B2–B6 — Roll response models across the remaining families · **M each** · after B1
 

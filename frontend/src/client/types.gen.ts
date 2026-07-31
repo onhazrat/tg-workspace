@@ -486,6 +486,36 @@ export type StartSyncJobResponse = {
     jobId: string;
 };
 
+/**
+ * A bare outcome acknowledgement, e.g. ``{"status": "deleted"}``.
+ */
+export type StatusResponse = {
+    status: string;
+};
+
+/**
+ * List projection, as `summary_to_camel_light` builds it.
+ *
+ * Drops the three corpus-sized fields and adds ``chatMessageCount``, which the
+ * service always sets. ``promptExcerpt`` is *not* declared: it appears only
+ * when the summary actually has prompt text, and declaring it would emit
+ * ``"promptExcerpt": null`` for every summary that has none. It still reaches
+ * the client through ``extra="allow"``.
+ */
+export type SummaryListItemResponse = {
+    id: string;
+    text: string;
+    channels?: Array<(string)>;
+    startDate?: number;
+    endDate?: number;
+    language?: string;
+    model?: (string | null);
+    postCount?: (number | null);
+    timestamp?: number;
+    chatMessageCount?: number;
+    [key: string]: unknown | string | number;
+};
+
 export type SummaryRequest = {
     channels: Array<(string)>;
     channelsText?: string;
@@ -495,6 +525,46 @@ export type SummaryRequest = {
     model?: (string | null);
     temperature?: number;
     provider?: string;
+};
+
+/**
+ * One summary in the full projection, as `summary_to_camel` builds it.
+ *
+ * Carries every key of ``extra``, including the corpus-sized
+ * ``citedPosts`` / ``promptText`` / ``chatMessages``.
+ */
+export type SummaryResponse = {
+    id: string;
+    text: string;
+    channels?: Array<(string)>;
+    startDate?: number;
+    endDate?: number;
+    language?: string;
+    model?: (string | null);
+    postCount?: (number | null);
+    timestamp?: number;
+    [key: string]: unknown | string | number;
+};
+
+/**
+ * Body for ``PUT /data/summaries/{id}``.
+ *
+ * Intentionally permissive. The service accepts both camelCase and snake_case
+ * for the base columns, routes anything unrecognised into ``extra``, and
+ * treats an explicit ``null`` as "remove this key from ``extra``" — behaviour
+ * a stricter model would break. Declaring the base fields still documents the
+ * shape and gives the generated client something better than ``unknown``.
+ */
+export type SummaryUpsertRequest = {
+    text?: (string | null);
+    channels?: (Array<(string)> | null);
+    startDate?: (number | null);
+    endDate?: (number | null);
+    language?: (string | null);
+    model?: (string | null);
+    postCount?: (number | null);
+    timestamp?: (number | null);
+    [key: string]: unknown;
 };
 
 export type SyncJobStatusResponse = {
@@ -936,36 +1006,26 @@ export type DataListSummariesData = {
     search?: (string | null);
 };
 
-export type DataListSummariesResponse = (Array<{
-    [key: string]: unknown;
-}>);
+export type DataListSummariesResponse = (Array<SummaryListItemResponse>);
 
 export type DataGetSummaryData = {
     summaryId: string;
 };
 
-export type DataGetSummaryResponse = ({
-    [key: string]: unknown;
-});
+export type DataGetSummaryResponse = (SummaryResponse);
 
 export type DataUpsertSummaryData = {
-    requestBody: {
-        [key: string]: unknown;
-    };
+    requestBody: SummaryUpsertRequest;
     summaryId: string;
 };
 
-export type DataUpsertSummaryResponse = ({
-    [key: string]: unknown;
-});
+export type DataUpsertSummaryResponse = (SummaryResponse);
 
 export type DataDeleteSummaryData = {
     summaryId: string;
 };
 
-export type DataDeleteSummaryResponse = ({
-    [key: string]: (string);
-});
+export type DataDeleteSummaryResponse = (StatusResponse);
 
 export type DataListTagRunsData = {
     limit?: number;

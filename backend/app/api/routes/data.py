@@ -22,6 +22,7 @@ from app.jobs.settings import (
     load_translation_settings,
 )
 from app.models_tg import AppSetting, utc_now
+from app.schemas.common import StatusResponse
 from app.schemas.data import (
     BulkChannelSettingGroupRequest,
     BulkChannelTagsRequest,
@@ -33,6 +34,11 @@ from app.schemas.data import (
     BulkSyncSettingsRequest,
     CancelBulkFollowResponse,
     SettingGroupWriteRequest,
+)
+from app.schemas.summaries import (
+    SummaryListItemResponse,
+    SummaryResponse,
+    SummaryUpsertRequest,
 )
 from app.services.bulk_channels import (
     bulk_reresolve_start_ids,
@@ -984,13 +990,18 @@ def list_summaries(
     ),
     offset: int = Query(default=0, ge=0),
     search: str | None = Query(default=None),
-) -> list[dict[str, Any]]:
+) -> list[SummaryListItemResponse]:
     """List in the light projection — see `summary_to_camel_light`.
 
     `search` matches channels/text/promptText/model/note in SQL, so prompt
     bodies stay searchable without being shipped to the client.
     """
-    return list_summaries_impl(session, limit=limit, offset=offset, search=search)
+    return [
+        SummaryListItemResponse.model_validate(row)
+        for row in list_summaries_impl(
+            session, limit=limit, offset=offset, search=search
+        )
+    ]
 
 
 @router.get("/summaries/{summary_id}")
@@ -998,21 +1009,23 @@ def get_summary(
     summary_id: str,
     session: SessionDep,
     _current_user: CurrentUser,
-) -> dict[str, Any]:
+) -> SummaryResponse:
     """Full summary including citedPosts/promptText/chatMessages."""
-    return get_summary_impl(session, summary_id)
+    return SummaryResponse.model_validate(get_summary_impl(session, summary_id))
 
 
 @router.put("/summaries/{summary_id}")
 def upsert_summary(
     summary_id: str,
-    body: dict[str, Any],
+    body: SummaryUpsertRequest,
     session: SessionDep,
     _current_user: CurrentUser,
-) -> dict[str, Any]:
-    result = upsert_summary_impl(session, summary_id, body, user_id=_current_user.id)
+) -> SummaryResponse:
+    result = upsert_summary_impl(
+        session, summary_id, body.to_service_body(), user_id=_current_user.id
+    )
     touch_sync(session, "summaries")
-    return result
+    return SummaryResponse.model_validate(result)
 
 
 @router.delete("/summaries/{summary_id}")
@@ -1020,10 +1033,10 @@ def delete_summary(
     summary_id: str,
     session: SessionDep,
     _current_user: CurrentUser,
-) -> dict[str, str]:
+) -> StatusResponse:
     delete_summary_impl(session, summary_id)
     touch_sync(session, "summaries")
-    return {"status": "deleted"}
+    return StatusResponse(status="deleted")
 
 
 @router.get("/tag-runs")

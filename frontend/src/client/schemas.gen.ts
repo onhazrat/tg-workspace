@@ -2329,6 +2329,97 @@ export const StartSyncJobResponseSchema = {
     title: 'StartSyncJobResponse'
 } as const;
 
+export const StatusResponseSchema = {
+    properties: {
+        status: {
+            type: 'string',
+            title: 'Status'
+        }
+    },
+    type: 'object',
+    required: ['status'],
+    title: 'StatusResponse',
+    description: 'A bare outcome acknowledgement, e.g. ``{"status": "deleted"}``.'
+} as const;
+
+export const SummaryListItemResponseSchema = {
+    properties: {
+        id: {
+            type: 'string',
+            title: 'Id'
+        },
+        text: {
+            type: 'string',
+            title: 'Text'
+        },
+        channels: {
+            items: {
+                type: 'string'
+            },
+            type: 'array',
+            title: 'Channels'
+        },
+        startDate: {
+            type: 'integer',
+            title: 'Startdate',
+            default: 0
+        },
+        endDate: {
+            type: 'integer',
+            title: 'Enddate',
+            default: 0
+        },
+        language: {
+            type: 'string',
+            title: 'Language',
+            default: 'English'
+        },
+        model: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Model'
+        },
+        postCount: {
+            anyOf: [
+                {
+                    type: 'integer'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Postcount'
+        },
+        timestamp: {
+            type: 'integer',
+            title: 'Timestamp',
+            default: 0
+        },
+        chatMessageCount: {
+            type: 'integer',
+            title: 'Chatmessagecount',
+            default: 0
+        }
+    },
+    additionalProperties: true,
+    type: 'object',
+    required: ['id', 'text'],
+    title: 'SummaryListItemResponse',
+    description: `List projection, as \`summary_to_camel_light\` builds it.
+
+Drops the three corpus-sized fields and adds \`\`chatMessageCount\`\`, which the
+service always sets. \`\`promptExcerpt\`\` is *not* declared: it appears only
+when the summary actually has prompt text, and declaring it would emit
+\`\`"promptExcerpt": null\`\` for every summary that has none. It still reaches
+the client through \`\`extra="allow"\`\`.`
+} as const;
+
 export const SummaryRequestSchema = {
     properties: {
         channels: {
@@ -2388,6 +2479,182 @@ export const SummaryRequestSchema = {
     type: 'object',
     required: ['channels'],
     title: 'SummaryRequest'
+} as const;
+
+export const SummaryResponseSchema = {
+    properties: {
+        id: {
+            type: 'string',
+            title: 'Id'
+        },
+        text: {
+            type: 'string',
+            title: 'Text'
+        },
+        channels: {
+            items: {
+                type: 'string'
+            },
+            type: 'array',
+            title: 'Channels'
+        },
+        startDate: {
+            type: 'integer',
+            title: 'Startdate',
+            default: 0
+        },
+        endDate: {
+            type: 'integer',
+            title: 'Enddate',
+            default: 0
+        },
+        language: {
+            type: 'string',
+            title: 'Language',
+            default: 'English'
+        },
+        model: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Model'
+        },
+        postCount: {
+            anyOf: [
+                {
+                    type: 'integer'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Postcount'
+        },
+        timestamp: {
+            type: 'integer',
+            title: 'Timestamp',
+            default: 0
+        }
+    },
+    additionalProperties: true,
+    type: 'object',
+    required: ['id', 'text'],
+    title: 'SummaryResponse',
+    description: `One summary in the full projection, as \`summary_to_camel\` builds it.
+
+Carries every key of \`\`extra\`\`, including the corpus-sized
+\`\`citedPosts\`\` / \`\`promptText\`\` / \`\`chatMessages\`\`.`
+} as const;
+
+export const SummaryUpsertRequestSchema = {
+    properties: {
+        text: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Text'
+        },
+        channels: {
+            anyOf: [
+                {
+                    items: {
+                        type: 'string'
+                    },
+                    type: 'array'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Channels'
+        },
+        startDate: {
+            anyOf: [
+                {
+                    type: 'integer'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Startdate'
+        },
+        endDate: {
+            anyOf: [
+                {
+                    type: 'integer'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Enddate'
+        },
+        language: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Language'
+        },
+        model: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Model'
+        },
+        postCount: {
+            anyOf: [
+                {
+                    type: 'integer'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Postcount'
+        },
+        timestamp: {
+            anyOf: [
+                {
+                    type: 'integer'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Timestamp'
+        }
+    },
+    additionalProperties: true,
+    type: 'object',
+    title: 'SummaryUpsertRequest',
+    description: `Body for \`\`PUT /data/summaries/{id}\`\`.
+
+Intentionally permissive. The service accepts both camelCase and snake_case
+for the base columns, routes anything unrecognised into \`\`extra\`\`, and
+treats an explicit \`\`null\`\` as "remove this key from \`\`extra\`\`" — behaviour
+a stricter model would break. Declaring the base fields still documents the
+shape and gives the generated client something better than \`\`unknown\`\`.`
 } as const;
 
 export const SyncJobStatusResponseSchema = {
