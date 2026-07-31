@@ -174,7 +174,7 @@ export class AiService {
 export class DataService {
     /**
      * Get Sync Meta Route
-     * @returns unknown Successful Response
+     * @returns SyncMetaEntry Successful Response
      * @throws ApiError
      */
     public static getSyncMetaRoute(): CancelablePromise<DataGetSyncMetaRouteResponse> {
@@ -188,7 +188,7 @@ export class DataService {
      * List Channels
      * @param data The data for the request.
      * @param data.includeStats
-     * @returns unknown Successful Response
+     * @returns ChannelResponse Successful Response
      * @throws ApiError
      */
     public static listChannels(data: DataListChannelsData = {}): CancelablePromise<DataListChannelsResponse> {
@@ -209,7 +209,7 @@ export class DataService {
      * @param data The data for the request.
      * @param data.channelId
      * @param data.requestBody
-     * @returns unknown Successful Response
+     * @returns ChannelResponse Successful Response
      * @throws ApiError
      */
     public static upsertChannel(data: DataUpsertChannelData): CancelablePromise<DataUpsertChannelResponse> {
@@ -231,7 +231,7 @@ export class DataService {
      * Delete Channel
      * @param data The data for the request.
      * @param data.channelId
-     * @returns string Successful Response
+     * @returns StatusResponse Successful Response
      * @throws ApiError
      */
     public static deleteChannel(data: DataDeleteChannelData): CancelablePromise<DataDeleteChannelResponse> {
@@ -330,7 +330,7 @@ export class DataService {
      * Bulk Reresolve Start Ids Endpoint
      * @param data The data for the request.
      * @param data.requestBody
-     * @returns unknown Successful Response
+     * @returns BulkReresolveStartIdsResponse Successful Response
      * @throws ApiError
      */
     public static bulkReresolveStartIdsEndpoint(data: DataBulkReresolveStartIdsEndpointData = {}): CancelablePromise<DataBulkReresolveStartIdsEndpointResponse> {
@@ -349,7 +349,7 @@ export class DataService {
      * Bulk Reset Sync Endpoint
      * @param data The data for the request.
      * @param data.requestBody
-     * @returns unknown Successful Response
+     * @returns BulkResetSyncResponse Successful Response
      * @throws ApiError
      */
     public static bulkResetSyncEndpoint(data: DataBulkResetSyncEndpointData): CancelablePromise<DataBulkResetSyncEndpointResponse> {
@@ -368,7 +368,7 @@ export class DataService {
      * Bulk Sync Settings Endpoint
      * @param data The data for the request.
      * @param data.requestBody
-     * @returns number Successful Response
+     * @returns BulkUpdatedResponse Successful Response
      * @throws ApiError
      */
     public static bulkSyncSettingsEndpoint(data: DataBulkSyncSettingsEndpointData): CancelablePromise<DataBulkSyncSettingsEndpointResponse> {
@@ -461,7 +461,7 @@ export class DataService {
      * Bulk Assign Setting Group
      * @param data The data for the request.
      * @param data.requestBody
-     * @returns unknown Successful Response
+     * @returns BulkSettingGroupResponse Successful Response
      * @throws ApiError
      */
     public static bulkAssignSettingGroup(data: DataBulkAssignSettingGroupData): CancelablePromise<DataBulkAssignSettingGroupResponse> {
@@ -480,7 +480,7 @@ export class DataService {
      * Bulk Channel Tags Endpoint
      * @param data The data for the request.
      * @param data.requestBody
-     * @returns unknown Successful Response
+     * @returns BulkChannelTagsResponse Successful Response
      * @throws ApiError
      */
     public static bulkChannelTagsEndpoint(data: DataBulkChannelTagsEndpointData): CancelablePromise<DataBulkChannelTagsEndpointResponse> {
@@ -499,7 +499,7 @@ export class DataService {
      * Get Channel Stats
      * @param data The data for the request.
      * @param data.channelId
-     * @returns unknown Successful Response
+     * @returns ChannelStatsResponse Successful Response
      * @throws ApiError
      */
     public static getChannelStats(data: DataGetChannelStatsData): CancelablePromise<DataGetChannelStatsResponse> {

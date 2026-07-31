@@ -43,6 +43,17 @@ export type BulkChannelTagsRequest = {
     updates: Array<BulkChannelTagUpdate>;
 };
 
+/**
+ * Result of ``PATCH /data/channels/bulk-tags``.
+ *
+ * Returns the rewritten channel rows so the client can refresh without a
+ * second round-trip.
+ */
+export type BulkChannelTagsResponse = {
+    updated?: number;
+    channels?: Array<ChannelResponse>;
+};
+
 export type BulkChannelTagUpdate = {
     channelId: string;
     tags: Array<{
@@ -90,10 +101,47 @@ export type BulkReresolveStartIdsRequest = {
     autoFollowOnly?: boolean;
 };
 
+/**
+ * Result of ``POST /data/channels/bulk-reresolve-start-ids``.
+ *
+ * Mirrors `BulkReresolveResult`. The operation is deprecated — `start_id` no
+ * longer drives sync — hence the always-true `deprecated` flag and `message`.
+ */
+export type BulkReresolveStartIdsResponse = {
+    updated?: number;
+    skipped?: number;
+    wouldUpdate?: number;
+    errors?: Array<{
+        [key: string]: (string);
+    }>;
+    deprecated?: boolean;
+    message?: string;
+};
+
 export type BulkResetSyncRequest = {
     confirm?: boolean;
     channelIds?: (Array<(string)> | null);
     autoFollowOnly?: boolean;
+};
+
+/**
+ * Result of ``POST /data/channels/bulk-reset-sync``. Mirrors `BulkResetSyncResult`.
+ */
+export type BulkResetSyncResponse = {
+    channelsReset?: number;
+    postsDeleted?: number;
+    jobId?: (string | null);
+    errors?: Array<{
+        [key: string]: (string);
+    }>;
+};
+
+/**
+ * Result of ``PATCH /data/channels/bulk-setting-group``.
+ */
+export type BulkSettingGroupResponse = {
+    updated?: number;
+    settingGroupId: string;
 };
 
 export type BulkSyncSettingsRequest = {
@@ -102,6 +150,13 @@ export type BulkSyncSettingsRequest = {
     dynamicSyncEnabled?: (boolean | null);
     autoSyncIntervalMinutes?: (number | null);
     dynamicSyncExpectedPosts?: (number | null);
+};
+
+/**
+ * A bulk write that only reports how many rows it touched.
+ */
+export type BulkUpdatedResponse = {
+    updated?: number;
 };
 
 export type CancelBulkFollowResponse = {
@@ -122,6 +177,52 @@ export type ChannelInfoRequest = {
     channelName: string;
 };
 
+/**
+ * One channel, as `channel_to_camel` builds it.
+ *
+ * Carries the inherited setting-group fields and the optional ``stats`` block
+ * through ``extra`` — see the module docstring for why they are not declared.
+ */
+export type ChannelResponse = {
+    id: string;
+    name: string;
+    displayName?: (string | null);
+    photoUrl?: (string | null);
+    bio?: (string | null);
+    subscribers?: (string | null);
+    photos?: (string | null);
+    videos?: (string | null);
+    files?: (string | null);
+    links?: (string | null);
+    startId?: (number | null);
+    startTime?: (number | null);
+    tags?: Array<unknown>;
+    lastUpdated?: (number | null);
+    nextRegularSyncAt?: (number | null);
+    nextDynamicSyncAt?: (number | null);
+    language?: (string | null);
+    followedAt?: (number | null);
+    telegramChatId?: (number | null);
+    discoveredVia?: ({
+    [key: string]: unknown;
+} | null);
+    historyCompleteToCutoff?: boolean;
+    historyReachedChannelStart?: boolean;
+    anchorPostId?: (number | null);
+    oldestStoredPostTimestamp?: (number | null);
+    [key: string]: unknown | string | boolean;
+};
+
+/**
+ * Post aggregates for one channel, as `compute_channel_stats` builds it.
+ */
+export type ChannelStatsResponse = {
+    count: number;
+    minId?: (number | null);
+    maxId?: (number | null);
+    velocity?: number;
+};
+
 export type ChannelSyncProgress = {
     channelId: string;
     channelName: string;
@@ -129,6 +230,34 @@ export type ChannelSyncProgress = {
     postsFetched?: number;
     newLatestId?: (number | null);
     error?: (string | null);
+};
+
+/**
+ * Body for ``PUT /data/channels/{id}``.
+ *
+ * Deliberately permissive, like `SummaryUpsertRequest`. `upsert_channel`
+ * normalises camelCase to snake_case itself, rejects server-managed and
+ * group-inherited fields with a 400, and writes only recognised
+ * `Channel.model_fields` — so validation belongs there, not here, and a
+ * stricter model would turn those 400s into 422s and change the API's error
+ * contract.
+ */
+export type ChannelUpsertRequest = {
+    name?: (string | null);
+    displayName?: (string | null);
+    photoUrl?: (string | null);
+    bio?: (string | null);
+    subscribers?: (string | null);
+    startId?: (number | null);
+    startTime?: (number | null);
+    tags?: (Array<unknown> | null);
+    language?: (string | null);
+    followedAt?: (number | null);
+    telegramChatId?: (number | null);
+    discoveredVia?: ({
+    [key: string]: unknown;
+} | null);
+    [key: string]: unknown;
 };
 
 export type ChatMessage = {
@@ -576,6 +705,14 @@ export type SyncJobStatusResponse = {
     finishedAt?: (number | null);
 };
 
+/**
+ * One resource's sync etag, as `get_sync_meta` builds it.
+ */
+export type SyncMetaEntry = {
+    etag: string;
+    updatedAt: string;
+};
+
 export type SyncRuntimeSettings = {
     regularSyncIntervalMinutes: number;
     dynamicSyncEnabledDefault: boolean;
@@ -747,35 +884,27 @@ export type AiApiTranslateResponse = ({
 });
 
 export type DataGetSyncMetaRouteResponse = ({
-    [key: string]: unknown;
+    [key: string]: SyncMetaEntry;
 });
 
 export type DataListChannelsData = {
     includeStats?: boolean;
 };
 
-export type DataListChannelsResponse = (Array<{
-    [key: string]: unknown;
-}>);
+export type DataListChannelsResponse = (Array<ChannelResponse>);
 
 export type DataUpsertChannelData = {
     channelId: string;
-    requestBody: {
-        [key: string]: unknown;
-    };
+    requestBody: ChannelUpsertRequest;
 };
 
-export type DataUpsertChannelResponse = ({
-    [key: string]: unknown;
-});
+export type DataUpsertChannelResponse = (ChannelResponse);
 
 export type DataDeleteChannelData = {
     channelId: string;
 };
 
-export type DataDeleteChannelResponse = ({
-    [key: string]: (string);
-});
+export type DataDeleteChannelResponse = (StatusResponse);
 
 export type DataStartBulkFollowData = {
     requestBody: BulkFollowRequest;
@@ -805,25 +934,19 @@ export type DataBulkReresolveStartIdsEndpointData = {
     requestBody?: BulkReresolveStartIdsRequest;
 };
 
-export type DataBulkReresolveStartIdsEndpointResponse = ({
-    [key: string]: unknown;
-});
+export type DataBulkReresolveStartIdsEndpointResponse = (BulkReresolveStartIdsResponse);
 
 export type DataBulkResetSyncEndpointData = {
     requestBody: BulkResetSyncRequest;
 };
 
-export type DataBulkResetSyncEndpointResponse = ({
-    [key: string]: unknown;
-});
+export type DataBulkResetSyncEndpointResponse = (BulkResetSyncResponse);
 
 export type DataBulkSyncSettingsEndpointData = {
     requestBody: BulkSyncSettingsRequest;
 };
 
-export type DataBulkSyncSettingsEndpointResponse = ({
-    [key: string]: (number);
-});
+export type DataBulkSyncSettingsEndpointResponse = (BulkUpdatedResponse);
 
 export type DataListSettingGroupsResponse = (Array<{
     [key: string]: unknown;
@@ -858,25 +981,19 @@ export type DataBulkAssignSettingGroupData = {
     requestBody: BulkChannelSettingGroupRequest;
 };
 
-export type DataBulkAssignSettingGroupResponse = ({
-    [key: string]: unknown;
-});
+export type DataBulkAssignSettingGroupResponse = (BulkSettingGroupResponse);
 
 export type DataBulkChannelTagsEndpointData = {
     requestBody: BulkChannelTagsRequest;
 };
 
-export type DataBulkChannelTagsEndpointResponse = ({
-    [key: string]: unknown;
-});
+export type DataBulkChannelTagsEndpointResponse = (BulkChannelTagsResponse);
 
 export type DataGetChannelStatsData = {
     channelId: string;
 };
 
-export type DataGetChannelStatsResponse = ({
-    [key: string]: unknown;
-});
+export type DataGetChannelStatsResponse = (ChannelStatsResponse);
 
 export type DataListPostsData = {
     requestBody: PostFeedRequest;

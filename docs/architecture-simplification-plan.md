@@ -1,8 +1,8 @@
 # Architecture simplification plan
 
 **Date:** 2026-07-31
-**Status:** In progress — execution started 2026-08-01. Landed: `H3`, `A0`, `T1`, `B1`.
-Typed responses **30/129** (was 26). Contexts with a test **1/9** (was 0).
+**Status:** In progress — execution started 2026-08-01. Landed: `H3`, `A0`, `T1`, `B1`, `B2`.
+Typed responses **40/129** (was 26). Contexts with a test **1/9** (was 0).
 Each unit is marked ✅ **DONE** in place as it lands, with what the work changed about the plan.
 **Companion:** [`architecture-entropy-audit.md`](./architecture-entropy-audit.md) is the evidence base.
 Read §3 and §6 of it before starting workstream A or B.
@@ -215,11 +215,40 @@ mypy strict clean (106 files), ruff clean, format clean, frontend **686 pass / 0
 > environment-resolution problem; none are in application code, and the pre-commit `ty` hook
 > passes.
 
-#### B2–B6 — Roll response models across the remaining families · **M each** · after B1
+#### B2 — `channels` family · ✅ **DONE 2026-08-01**
 
-One PR per family: `channels` · `posts` + `discover` · `logs` + `stats` · `jobs` + `telegram` +
-`network` · `ai` + `rag`. Each independently mergeable; each moves the 26/129 typed-response
-count up. Track it — the number is a clean progress metric.
+**Shipped:** `app/schemas/channels.py` — `ChannelResponse`, `ChannelStatsResponse`,
+`ChannelUpsertRequest`, `SyncMetaEntry`, plus five bulk-operation models
+(`BulkReresolveStartIdsResponse`, `BulkResetSyncResponse`, `BulkUpdatedResponse`,
+`BulkSettingGroupResponse`, `BulkChannelTagsResponse`). **Typed responses 30/129 → 40/129.**
+Every channel-family endpoint is now typed except the SSE `bulk-follow/{id}/events`, which
+cannot be.
+
+**The rule got sharper here.** `ChannelResponse` is open (`extra="allow"`) because
+`channel_to_camel` merges in group-inherited settings and an optional `stats` block — both
+conditional. But the five **bulk** responses are built from dataclasses and literal dicts, so
+they are declared **closed**. Passthrough is for payloads that genuinely *are* open, not a
+default.
+
+**Wire compatibility is covered by existing tests, not assumed** — and this is what to check
+when converting the remaining families:
+- `test_stats_logs.py:296` asserts `row["stats"]["count"]` under `includeStats=true` → proves the
+  optional `stats` block still passes through.
+- `test_setting_groups.py:276` / `test_bulk_sync_settings.py:54` assert `row["regularSyncEnabled"]`
+  and `row["autoSyncIntervalMinutes"]` on channel rows → proves group-inherited fields still
+  pass through.
+- `test_setting_groups.py:232` asserts `PUT` with a group-inherited field still returns **400**
+  → proves the permissive `ChannelUpsertRequest` did not turn service-level rejections into 422s.
+  **This is the trap to watch for:** a strict request model changes the API's error contract.
+
+**Verified:** backend **733 passed / 1 skipped**, mypy strict clean (107 files), ruff clean,
+frontend **686 pass / 0 fail**, `tsc` clean.
+
+#### B3–B6 — Roll response models across the remaining families · **M each** · after B1
+
+One PR per family: `posts` + `discover` · `logs` + `stats` · `jobs` + `telegram` + `network` ·
+`ai` + `rag`. Each independently mergeable; each moves the typed-response count up. Track it —
+the number is a clean progress metric.
 
 - **Multi-user seam:** while touching each response model, keep corpus-level artefacts
   (embeddings, clusters, probe results) **user-agnostic** in their schemas, per `MEMORY.md`.

@@ -237,6 +237,29 @@ export const BulkChannelTagsRequestSchema = {
     title: 'BulkChannelTagsRequest'
 } as const;
 
+export const BulkChannelTagsResponseSchema = {
+    properties: {
+        updated: {
+            type: 'integer',
+            title: 'Updated',
+            default: 0
+        },
+        channels: {
+            items: {
+                '$ref': '#/components/schemas/ChannelResponse'
+            },
+            type: 'array',
+            title: 'Channels'
+        }
+    },
+    type: 'object',
+    title: 'BulkChannelTagsResponse',
+    description: `Result of \`\`PATCH /data/channels/bulk-tags\`\`.
+
+Returns the rewritten channel rows so the client can refresh without a
+second round-trip.`
+} as const;
+
 export const BulkFollowChannelEntrySchema = {
     properties: {
         name: {
@@ -434,6 +457,52 @@ export const BulkReresolveStartIdsRequestSchema = {
     title: 'BulkReresolveStartIdsRequest'
 } as const;
 
+export const BulkReresolveStartIdsResponseSchema = {
+    properties: {
+        updated: {
+            type: 'integer',
+            title: 'Updated',
+            default: 0
+        },
+        skipped: {
+            type: 'integer',
+            title: 'Skipped',
+            default: 0
+        },
+        wouldUpdate: {
+            type: 'integer',
+            title: 'Wouldupdate',
+            default: 0
+        },
+        errors: {
+            items: {
+                additionalProperties: {
+                    type: 'string'
+                },
+                type: 'object'
+            },
+            type: 'array',
+            title: 'Errors'
+        },
+        deprecated: {
+            type: 'boolean',
+            title: 'Deprecated',
+            default: true
+        },
+        message: {
+            type: 'string',
+            title: 'Message',
+            default: ''
+        }
+    },
+    type: 'object',
+    title: 'BulkReresolveStartIdsResponse',
+    description: `Result of \`\`POST /data/channels/bulk-reresolve-start-ids\`\`.
+
+Mirrors \`BulkReresolveResult\`. The operation is deprecated — \`start_id\` no
+longer drives sync — hence the always-true \`deprecated\` flag and \`message\`.`
+} as const;
+
 export const BulkResetSyncRequestSchema = {
     properties: {
         confirm: {
@@ -463,6 +532,63 @@ export const BulkResetSyncRequestSchema = {
     },
     type: 'object',
     title: 'BulkResetSyncRequest'
+} as const;
+
+export const BulkResetSyncResponseSchema = {
+    properties: {
+        channelsReset: {
+            type: 'integer',
+            title: 'Channelsreset',
+            default: 0
+        },
+        postsDeleted: {
+            type: 'integer',
+            title: 'Postsdeleted',
+            default: 0
+        },
+        jobId: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Jobid'
+        },
+        errors: {
+            items: {
+                additionalProperties: {
+                    type: 'string'
+                },
+                type: 'object'
+            },
+            type: 'array',
+            title: 'Errors'
+        }
+    },
+    type: 'object',
+    title: 'BulkResetSyncResponse',
+    description: 'Result of ``POST /data/channels/bulk-reset-sync``. Mirrors `BulkResetSyncResult`.'
+} as const;
+
+export const BulkSettingGroupResponseSchema = {
+    properties: {
+        updated: {
+            type: 'integer',
+            title: 'Updated',
+            default: 0
+        },
+        settingGroupId: {
+            type: 'string',
+            title: 'Settinggroupid'
+        }
+    },
+    type: 'object',
+    required: ['settingGroupId'],
+    title: 'BulkSettingGroupResponse',
+    description: 'Result of ``PATCH /data/channels/bulk-setting-group``.'
 } as const;
 
 export const BulkSyncSettingsRequestSchema = {
@@ -528,6 +654,19 @@ export const BulkSyncSettingsRequestSchema = {
     },
     type: 'object',
     title: 'BulkSyncSettingsRequest'
+} as const;
+
+export const BulkUpdatedResponseSchema = {
+    properties: {
+        updated: {
+            type: 'integer',
+            title: 'Updated',
+            default: 0
+        }
+    },
+    type: 'object',
+    title: 'BulkUpdatedResponse',
+    description: 'A bulk write that only reports how many rows it touched.'
 } as const;
 
 export const CancelBulkFollowResponseSchema = {
@@ -603,6 +742,292 @@ export const ChannelInfoRequestSchema = {
     title: 'ChannelInfoRequest'
 } as const;
 
+export const ChannelResponseSchema = {
+    properties: {
+        id: {
+            type: 'string',
+            title: 'Id'
+        },
+        name: {
+            type: 'string',
+            title: 'Name'
+        },
+        displayName: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Displayname'
+        },
+        photoUrl: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Photourl'
+        },
+        bio: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Bio'
+        },
+        subscribers: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Subscribers'
+        },
+        photos: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Photos'
+        },
+        videos: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Videos'
+        },
+        files: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Files'
+        },
+        links: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Links'
+        },
+        startId: {
+            anyOf: [
+                {
+                    type: 'integer'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Startid'
+        },
+        startTime: {
+            anyOf: [
+                {
+                    type: 'integer'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Starttime'
+        },
+        tags: {
+            items: {},
+            type: 'array',
+            title: 'Tags'
+        },
+        lastUpdated: {
+            anyOf: [
+                {
+                    type: 'integer'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Lastupdated'
+        },
+        nextRegularSyncAt: {
+            anyOf: [
+                {
+                    type: 'integer'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Nextregularsyncat'
+        },
+        nextDynamicSyncAt: {
+            anyOf: [
+                {
+                    type: 'integer'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Nextdynamicsyncat'
+        },
+        language: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Language'
+        },
+        followedAt: {
+            anyOf: [
+                {
+                    type: 'integer'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Followedat'
+        },
+        telegramChatId: {
+            anyOf: [
+                {
+                    type: 'integer'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Telegramchatid'
+        },
+        discoveredVia: {
+            anyOf: [
+                {
+                    additionalProperties: true,
+                    type: 'object'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Discoveredvia'
+        },
+        historyCompleteToCutoff: {
+            type: 'boolean',
+            title: 'Historycompletetocutoff',
+            default: true
+        },
+        historyReachedChannelStart: {
+            type: 'boolean',
+            title: 'Historyreachedchannelstart',
+            default: false
+        },
+        anchorPostId: {
+            anyOf: [
+                {
+                    type: 'integer'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Anchorpostid'
+        },
+        oldestStoredPostTimestamp: {
+            anyOf: [
+                {
+                    type: 'integer'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Oldeststoredposttimestamp'
+        }
+    },
+    additionalProperties: true,
+    type: 'object',
+    required: ['id', 'name'],
+    title: 'ChannelResponse',
+    description: `One channel, as \`channel_to_camel\` builds it.
+
+Carries the inherited setting-group fields and the optional \`\`stats\`\` block
+through \`\`extra\`\` — see the module docstring for why they are not declared.`
+} as const;
+
+export const ChannelStatsResponseSchema = {
+    properties: {
+        count: {
+            type: 'integer',
+            title: 'Count'
+        },
+        minId: {
+            anyOf: [
+                {
+                    type: 'integer'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Minid'
+        },
+        maxId: {
+            anyOf: [
+                {
+                    type: 'integer'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Maxid'
+        },
+        velocity: {
+            type: 'number',
+            title: 'Velocity',
+            default: 0
+        }
+    },
+    type: 'object',
+    required: ['count'],
+    title: 'ChannelStatsResponse',
+    description: 'Post aggregates for one channel, as `compute_channel_stats` builds it.'
+} as const;
+
 export const ChannelSyncProgressSchema = {
     properties: {
         channelId: {
@@ -648,6 +1073,156 @@ export const ChannelSyncProgressSchema = {
     type: 'object',
     required: ['channelId', 'channelName', 'status'],
     title: 'ChannelSyncProgress'
+} as const;
+
+export const ChannelUpsertRequestSchema = {
+    properties: {
+        name: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Name'
+        },
+        displayName: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Displayname'
+        },
+        photoUrl: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Photourl'
+        },
+        bio: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Bio'
+        },
+        subscribers: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Subscribers'
+        },
+        startId: {
+            anyOf: [
+                {
+                    type: 'integer'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Startid'
+        },
+        startTime: {
+            anyOf: [
+                {
+                    type: 'integer'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Starttime'
+        },
+        tags: {
+            anyOf: [
+                {
+                    items: {},
+                    type: 'array'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Tags'
+        },
+        language: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Language'
+        },
+        followedAt: {
+            anyOf: [
+                {
+                    type: 'integer'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Followedat'
+        },
+        telegramChatId: {
+            anyOf: [
+                {
+                    type: 'integer'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Telegramchatid'
+        },
+        discoveredVia: {
+            anyOf: [
+                {
+                    additionalProperties: true,
+                    type: 'object'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Discoveredvia'
+        }
+    },
+    additionalProperties: true,
+    type: 'object',
+    title: 'ChannelUpsertRequest',
+    description: `Body for \`\`PUT /data/channels/{id}\`\`.
+
+Deliberately permissive, like \`SummaryUpsertRequest\`. \`upsert_channel\`
+normalises camelCase to snake_case itself, rejects server-managed and
+group-inherited fields with a 400, and writes only recognised
+\`Channel.model_fields\` — so validation belongs there, not here, and a
+stricter model would turn those 400s into 422s and change the API's error
+contract.`
 } as const;
 
 export const ChatMessageSchema = {
@@ -2697,6 +3272,23 @@ export const SyncJobStatusResponseSchema = {
     type: 'object',
     required: ['jobId', 'status', 'source', 'channels', 'createdAt'],
     title: 'SyncJobStatusResponse'
+} as const;
+
+export const SyncMetaEntrySchema = {
+    properties: {
+        etag: {
+            type: 'string',
+            title: 'Etag'
+        },
+        updatedAt: {
+            type: 'string',
+            title: 'Updatedat'
+        }
+    },
+    type: 'object',
+    required: ['etag', 'updatedAt'],
+    title: 'SyncMetaEntry',
+    description: "One resource's sync etag, as `get_sync_meta` builds it."
 } as const;
 
 export const SyncRuntimeSettingsSchema = {

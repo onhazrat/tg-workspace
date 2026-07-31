@@ -22,6 +22,17 @@ from app.jobs.settings import (
     load_translation_settings,
 )
 from app.models_tg import AppSetting, utc_now
+from app.schemas.channels import (
+    BulkChannelTagsResponse,
+    BulkReresolveStartIdsResponse,
+    BulkResetSyncResponse,
+    BulkSettingGroupResponse,
+    BulkUpdatedResponse,
+    ChannelResponse,
+    ChannelStatsResponse,
+    ChannelUpsertRequest,
+    SyncMetaEntry,
+)
 from app.schemas.common import StatusResponse
 from app.schemas.data import (
     BulkChannelSettingGroupRequest,
@@ -258,8 +269,11 @@ def _follow_status_changed(
 def get_sync_meta_route(
     session: SessionDep,
     _current_user: CurrentUser,
-) -> dict[str, Any]:
-    return get_sync_meta(session)
+) -> dict[str, SyncMetaEntry]:
+    return {
+        resource: SyncMetaEntry.model_validate(entry)
+        for resource, entry in get_sync_meta(session).items()
+    }
 
 
 @router.get("/channels")
@@ -267,18 +281,25 @@ def list_channels(
     session: SessionDep,
     _current_user: CurrentUser,
     include_stats: bool = Query(False, alias="includeStats"),
-) -> list[dict[str, Any]]:
-    return list_channels_impl(session, include_stats=include_stats)
+) -> list[ChannelResponse]:
+    return [
+        ChannelResponse.model_validate(row)
+        for row in list_channels_impl(session, include_stats=include_stats)
+    ]
 
 
 @router.put("/channels/{channel_id}")
 def upsert_channel(
     channel_id: str,
-    body: dict[str, Any],
+    body: ChannelUpsertRequest,
     session: SessionDep,
     _current_user: CurrentUser,
-) -> dict[str, Any]:
-    return upsert_channel_impl(session, channel_id, body, user_id=_current_user.id)
+) -> ChannelResponse:
+    return ChannelResponse.model_validate(
+        upsert_channel_impl(
+            session, channel_id, body.to_service_body(), user_id=_current_user.id
+        )
+    )
 
 
 @router.post("/channels/bulk-follow", response_model=BulkFollowStartResponse)
@@ -393,7 +414,7 @@ async def bulk_reresolve_start_ids_endpoint(
     body: BulkReresolveStartIdsRequest = Body(
         default_factory=BulkReresolveStartIdsRequest
     ),
-) -> dict[str, Any]:
+) -> BulkReresolveStartIdsResponse:
     operator_id = _current_user.id or get_operator_user_id(session)
     result = await bulk_reresolve_start_ids(
         session,
@@ -403,14 +424,14 @@ async def bulk_reresolve_start_ids_endpoint(
         channel_ids=body.channel_ids,
         auto_follow_only=body.auto_follow_only,
     )
-    return {
-        "updated": result.updated,
-        "skipped": result.skipped,
-        "wouldUpdate": result.would_update,
-        "errors": result.errors,
-        "deprecated": result.deprecated,
-        "message": result.message,
-    }
+    return BulkReresolveStartIdsResponse(
+        updated=result.updated,
+        skipped=result.skipped,
+        wouldUpdate=result.would_update,
+        errors=result.errors,
+        deprecated=result.deprecated,
+        message=result.message,
+    )
 
 
 @router.post("/channels/bulk-reset-sync")
@@ -418,7 +439,7 @@ async def bulk_reset_sync_endpoint(
     session: SessionDep,
     _current_user: CurrentUser,
     body: BulkResetSyncRequest = Body(...),
-) -> dict[str, Any]:
+) -> BulkResetSyncResponse:
     if not body.confirm:
         raise HTTPException(
             status_code=400,
@@ -431,12 +452,12 @@ async def bulk_reset_sync_endpoint(
         channel_ids=body.channel_ids,
         auto_follow_only=body.auto_follow_only,
     )
-    return {
-        "channelsReset": result.channels_reset,
-        "postsDeleted": result.posts_deleted,
-        "jobId": result.job_id,
-        "errors": result.errors,
-    }
+    return BulkResetSyncResponse(
+        channelsReset=result.channels_reset,
+        postsDeleted=result.posts_deleted,
+        jobId=result.job_id,
+        errors=result.errors,
+    )
 
 
 @router.patch("/channels/bulk-sync-settings")
@@ -444,15 +465,17 @@ def bulk_sync_settings_endpoint(
     body: BulkSyncSettingsRequest,
     session: SessionDep,
     current_user: CurrentUser,
-) -> dict[str, int]:
-    return bulk_update_sync_settings_impl(
-        session,
-        channel_ids=body.channel_ids,
-        regular_sync_enabled=body.regular_sync_enabled,
-        dynamic_sync_enabled=body.dynamic_sync_enabled,
-        auto_sync_interval_minutes=body.auto_sync_interval_minutes,
-        dynamic_sync_expected_posts=body.dynamic_sync_expected_posts,
-        operator_id=current_user.id,
+) -> BulkUpdatedResponse:
+    return BulkUpdatedResponse.model_validate(
+        bulk_update_sync_settings_impl(
+            session,
+            channel_ids=body.channel_ids,
+            regular_sync_enabled=body.regular_sync_enabled,
+            dynamic_sync_enabled=body.dynamic_sync_enabled,
+            auto_sync_interval_minutes=body.auto_sync_interval_minutes,
+            dynamic_sync_expected_posts=body.dynamic_sync_expected_posts,
+            operator_id=current_user.id,
+        )
     )
 
 
@@ -511,7 +534,7 @@ def bulk_assign_setting_group(
     body: BulkChannelSettingGroupRequest,
     session: SessionDep,
     current_user: CurrentUser,
-) -> dict[str, Any]:
+) -> BulkSettingGroupResponse:
     result = bulk_assign_setting_group_impl(
         session,
         channel_ids=body.channel_ids,
@@ -519,7 +542,7 @@ def bulk_assign_setting_group(
         operator_id=current_user.id,
     )
     touch_sync(session, "channels")
-    return result
+    return BulkSettingGroupResponse.model_validate(result)
 
 
 @router.patch("/channels/bulk-tags")
@@ -527,14 +550,16 @@ def bulk_channel_tags_endpoint(
     body: BulkChannelTagsRequest,
     session: SessionDep,
     current_user: CurrentUser,
-) -> dict[str, Any]:
-    return bulk_update_channel_tags_impl(
-        session,
-        updates=[
-            {"channel_id": update.channel_id, "tags": update.tags}
-            for update in body.updates
-        ],
-        operator_id=current_user.id,
+) -> BulkChannelTagsResponse:
+    return BulkChannelTagsResponse.model_validate(
+        bulk_update_channel_tags_impl(
+            session,
+            updates=[
+                {"channel_id": update.channel_id, "tags": update.tags}
+                for update in body.updates
+            ],
+            operator_id=current_user.id,
+        )
     )
 
 
@@ -543,8 +568,8 @@ def delete_channel(
     channel_id: str,
     session: SessionDep,
     _current_user: CurrentUser,
-) -> dict[str, str]:
-    return delete_channel_impl(session, channel_id)
+) -> StatusResponse:
+    return StatusResponse.model_validate(delete_channel_impl(session, channel_id))
 
 
 @router.get("/channels/{channel_id}/stats")
@@ -552,8 +577,10 @@ def get_channel_stats(
     channel_id: str,
     session: SessionDep,
     _current_user: CurrentUser,
-) -> dict[str, Any]:
-    return get_channel_stats_impl(session, channel_id)
+) -> ChannelStatsResponse:
+    return ChannelStatsResponse.model_validate(
+        get_channel_stats_impl(session, channel_id)
+    )
 
 
 class PostScopeRequest(BaseModel):
