@@ -1378,6 +1378,87 @@ export const ChatRequestSchema = {
     title: 'ChatRequest'
 } as const;
 
+export const ClearTableResponseSchema = {
+    properties: {
+        deleted: {
+            type: 'integer',
+            title: 'Deleted',
+            default: 0
+        }
+    },
+    type: 'object',
+    title: 'ClearTableResponse',
+    description: 'How many rows `DELETE /data/tables/{name}` removed.'
+} as const;
+
+export const DbStatsResponseSchema = {
+    properties: {
+        postCount: {
+            type: 'integer',
+            title: 'Postcount',
+            default: 0
+        },
+        channelCount: {
+            type: 'integer',
+            title: 'Channelcount',
+            default: 0
+        },
+        summaryCount: {
+            type: 'integer',
+            title: 'Summarycount',
+            default: 0
+        },
+        embeddedPostCount: {
+            type: 'integer',
+            title: 'Embeddedpostcount',
+            default: 0
+        },
+        botCount: {
+            type: 'integer',
+            title: 'Botcount',
+            default: 0
+        },
+        destinationCount: {
+            type: 'integer',
+            title: 'Destinationcount',
+            default: 0
+        },
+        publishLogCount: {
+            type: 'integer',
+            title: 'Publishlogcount',
+            default: 0
+        },
+        syncLogCount: {
+            type: 'integer',
+            title: 'Synclogcount',
+            default: 0
+        },
+        llmLogCount: {
+            type: 'integer',
+            title: 'Llmlogcount',
+            default: 0
+        },
+        embeddingLogCount: {
+            type: 'integer',
+            title: 'Embeddinglogcount',
+            default: 0
+        },
+        networkLogCount: {
+            type: 'integer',
+            title: 'Networklogcount',
+            default: 0
+        }
+    },
+    type: 'object',
+    title: 'DbStatsResponse',
+    description: `Row counts across the corpus, scoped to the operator.
+
+\`embeddedPostCount\` is deliberately **not** operator-scoped: embeddings are a
+corpus-level artefact shared across users (see the multi-user seam note in
+the plan), so it counts the whole table while the rest count the operator's
+rows.`
+} as const;
+
 export const DiscoverCandidateResponseSchema = {
     properties: {
         name: {
@@ -1946,6 +2027,60 @@ export const EmbedRequestSchema = {
     title: 'EmbedRequest'
 } as const;
 
+export const EmbeddingLogResponseSchema = {
+    properties: {
+        id: {
+            type: 'string',
+            title: 'Id'
+        },
+        textCount: {
+            type: 'integer',
+            title: 'Textcount',
+            default: 0
+        },
+        tokensEstimated: {
+            anyOf: [
+                {
+                    type: 'integer'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Tokensestimated'
+        },
+        duration: {
+            type: 'number',
+            title: 'Duration',
+            default: 0
+        },
+        status: {
+            type: 'string',
+            title: 'Status'
+        },
+        error: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Error'
+        },
+        timestamp: {
+            type: 'integer',
+            title: 'Timestamp',
+            default: 0
+        }
+    },
+    type: 'object',
+    required: ['id', 'status'],
+    title: 'EmbeddingLogResponse',
+    description: 'One embedding batch.'
+} as const;
+
 export const FollowChannelResultResponseSchema = {
     properties: {
         name: {
@@ -2330,6 +2465,142 @@ export const JobsRuntimeSettingsSchema = {
     title: 'JobsRuntimeSettings'
 } as const;
 
+export const LLMLogResponseSchema = {
+    properties: {
+        id: {
+            type: 'string',
+            title: 'Id'
+        },
+        model: {
+            type: 'string',
+            title: 'Model'
+        },
+        prompt: {
+            type: 'string',
+            title: 'Prompt'
+        },
+        response: {
+            type: 'string',
+            title: 'Response'
+        },
+        systemInstruction: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Systeminstruction'
+        },
+        modelConfig: {
+            anyOf: [
+                {
+                    additionalProperties: true,
+                    type: 'object'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Modelconfig'
+        },
+        fullRequest: {
+            '$ref': '#/components/schemas/LogPayload'
+        },
+        fullResponse: {
+            '$ref': '#/components/schemas/LogPayload'
+        },
+        tokens: {
+            anyOf: [
+                {
+                    type: 'integer'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Tokens'
+        },
+        duration: {
+            anyOf: [
+                {
+                    type: 'number'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Duration'
+        },
+        status: {
+            type: 'string',
+            title: 'Status'
+        },
+        error: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Error'
+        },
+        timestamp: {
+            type: 'integer',
+            title: 'Timestamp',
+            default: 0
+        },
+        type: {
+            type: 'string',
+            title: 'Type',
+            default: ''
+        }
+    },
+    type: 'object',
+    required: ['id', 'model', 'prompt', 'response', 'status'],
+    title: 'LLMLogResponse',
+    description: `One model call: the prompt, the response, and what it cost.
+
+\`protected_namespaces=()\` is required, not decorative. Pydantic v2 reserves
+the \`model_\` prefix for its own API, and this table has both a \`model\` column
+and a \`model_config_json\` one — the latter collides with \`BaseModel.model_config\`
+itself. Without the override, declaring these fields raises at class-creation
+time. Renaming the columns is not an option: they are the wire format.`
+} as const;
+
+export const LogPayloadSchema = {
+    anyOf: [
+        {
+            additionalProperties: true,
+            type: 'object'
+        },
+        {
+            items: {},
+            type: 'array'
+        },
+        {
+            type: 'null'
+        }
+    ]
+} as const;
+
+export const LogWriteResponseSchema = {
+    properties: {
+        upserted: {
+            type: 'integer',
+            title: 'Upserted',
+            default: 0
+        }
+    },
+    type: 'object',
+    title: 'LogWriteResponse',
+    description: 'Result of a bulk log write: how many rows were accepted.'
+} as const;
+
 export const MessageSchema = {
     properties: {
         message: {
@@ -2340,6 +2611,102 @@ export const MessageSchema = {
     type: 'object',
     required: ['message'],
     title: 'Message'
+} as const;
+
+export const NetworkLogResponseSchema = {
+    properties: {
+        id: {
+            type: 'string',
+            title: 'Id'
+        },
+        url: {
+            type: 'string',
+            title: 'Url'
+        },
+        method: {
+            type: 'string',
+            title: 'Method'
+        },
+        status: {
+            type: 'string',
+            title: 'Status'
+        },
+        statusCode: {
+            anyOf: [
+                {
+                    type: 'integer'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Statuscode'
+        },
+        error: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Error'
+        },
+        duration: {
+            type: 'number',
+            title: 'Duration',
+            default: 0
+        },
+        timestamp: {
+            type: 'integer',
+            title: 'Timestamp',
+            default: 0
+        },
+        source: {
+            type: 'string',
+            title: 'Source',
+            default: ''
+        },
+        proxyUsed: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Proxyused'
+        },
+        attempts: {
+            anyOf: [
+                {
+                    type: 'integer'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Attempts'
+        },
+        telemetry: {
+            anyOf: [
+                {
+                    additionalProperties: true,
+                    type: 'object'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Telemetry'
+        }
+    },
+    type: 'object',
+    required: ['id', 'url', 'method', 'status'],
+    title: 'NetworkLogResponse',
+    description: 'One outbound HTTP fetch, including which proxy lane carried it.'
 } as const;
 
 export const NetworkRuntimeSettingsSchema = {
@@ -2992,6 +3359,76 @@ export const ProxyLaneSnapshotSchema = {
     title: 'ProxyLaneSnapshot'
 } as const;
 
+export const PublishLogResponseSchema = {
+    properties: {
+        id: {
+            type: 'string',
+            title: 'Id'
+        },
+        summaryId: {
+            type: 'string',
+            title: 'Summaryid'
+        },
+        botId: {
+            type: 'string',
+            title: 'Botid'
+        },
+        botName: {
+            type: 'string',
+            title: 'Botname'
+        },
+        chatId: {
+            type: 'string',
+            title: 'Chatid'
+        },
+        chatName: {
+            type: 'string',
+            title: 'Chatname'
+        },
+        status: {
+            type: 'string',
+            title: 'Status'
+        },
+        error: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Error'
+        },
+        timestamp: {
+            type: 'integer',
+            title: 'Timestamp',
+            default: 0
+        },
+        fullRequest: {
+            '$ref': '#/components/schemas/LogPayload'
+        },
+        fullResponse: {
+            '$ref': '#/components/schemas/LogPayload'
+        },
+        textSent: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Textsent'
+        }
+    },
+    type: 'object',
+    required: ['id', 'summaryId', 'botId', 'botName', 'chatId', 'chatName', 'status'],
+    title: 'PublishLogResponse',
+    description: 'One attempt to publish a summary to a Telegram chat.'
+} as const;
+
 export const PublishRequestSchema = {
     properties: {
         proxyEnabled: {
@@ -3068,6 +3505,38 @@ export const PublishRequestSchema = {
     type: 'object',
     required: ['chatId', 'text'],
     title: 'PublishRequest'
+} as const;
+
+export const PurgeLogsResponseSchema = {
+    properties: {
+        deleted: {
+            anyOf: [
+                {
+                    additionalProperties: {
+                        type: 'integer'
+                    },
+                    type: 'object'
+                },
+                {
+                    type: 'integer'
+                }
+            ],
+            title: 'Deleted',
+            default: 0
+        }
+    },
+    additionalProperties: true,
+    type: 'object',
+    title: 'PurgeLogsResponse',
+    description: `Result of \`DELETE /data/logs\`.
+
+Three call shapes share one response. A retention sweep (\`olderThanDays\`)
+deletes across every table and reports the per-type breakdown plus a
+\`total\`; deleting one entry or clearing one type reports a bare \`deleted\`
+count and no breakdown. \`deleted\` is therefore declared loose — it is an
+\`int\` in two of the three cases and a \`dict[str, int]\` in the third — and
+\`total\` is genuinely absent rather than null for the other two, so it stays
+undeclared and travels through \`extra\`.`
 } as const;
 
 export const RagEmbedRequestSchema = {
@@ -4086,6 +4555,74 @@ export const SyncJobStatusResponseSchema = {
     title: 'SyncJobStatusResponse'
 } as const;
 
+export const SyncLogResponseSchema = {
+    properties: {
+        id: {
+            type: 'string',
+            title: 'Id'
+        },
+        channelName: {
+            type: 'string',
+            title: 'Channelname'
+        },
+        status: {
+            type: 'string',
+            title: 'Status'
+        },
+        postsCount: {
+            type: 'integer',
+            title: 'Postscount',
+            default: 0
+        },
+        newLatestId: {
+            anyOf: [
+                {
+                    type: 'integer'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Newlatestid'
+        },
+        error: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Error'
+        },
+        timestamp: {
+            type: 'integer',
+            title: 'Timestamp',
+            default: 0
+        },
+        source: {
+            type: 'string',
+            title: 'Source',
+            default: 'manual'
+        },
+        fullRequest: {
+            '$ref': '#/components/schemas/LogPayload'
+        },
+        fullResponse: {
+            '$ref': '#/components/schemas/LogPayload'
+        }
+    },
+    type: 'object',
+    required: ['id', 'channelName', 'status'],
+    title: 'SyncLogResponse',
+    description: `One channel sync attempt, with its payload row folded back in.
+
+\`fullRequest\` / \`fullResponse\` live in \`tg_sync_log_payloads\` and are joined
+on an OUTER join: that table is truncatable, so a log whose payload has been
+reclaimed still lists and simply reports nulls.`
+} as const;
+
 export const SyncMetaEntrySchema = {
     properties: {
         etag: {
@@ -4172,6 +4709,33 @@ export const SyncRuntimeSettingsSchema = {
     type: 'object',
     required: ['regularSyncIntervalMinutes', 'dynamicSyncEnabledDefault', 'dynamicSyncExpectedPostsDefault', 'syncFailureBackoffMinutes', 'syncConcurrency', 'consecutiveFailures'],
     title: 'SyncRuntimeSettings'
+} as const;
+
+export const TableSizeResponseSchema = {
+    properties: {
+        name: {
+            type: 'string',
+            title: 'Name'
+        },
+        count: {
+            type: 'integer',
+            title: 'Count',
+            default: 0
+        },
+        size: {
+            type: 'integer',
+            title: 'Size',
+            default: 0
+        }
+    },
+    type: 'object',
+    required: ['name'],
+    title: 'TableSizeResponse',
+    description: `Row count and on-disk footprint for one exportable table.
+
+\`size\` is the whole physical footprint (heap + TOAST + indexes) straight from
+Postgres, not an estimate: JSON payload columns can dwarf what the row count
+alone suggests.`
 } as const;
 
 export const TagRequestSchema = {

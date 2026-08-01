@@ -3574,7 +3574,9 @@
               "application/json": {
                 "schema": {
                   "type": "array",
-                  "items": { "type": "object", "additionalProperties": true },
+                  "items": {
+                    "$ref": "#/components/schemas/PublishLogResponse"
+                  },
                   "title": "Response Data-List Publish Logs Route"
                 }
               }
@@ -3612,11 +3614,7 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {
-                  "type": "object",
-                  "additionalProperties": { "type": "integer" },
-                  "title": "Response Data-Create Publish Logs"
-                }
+                "schema": { "$ref": "#/components/schemas/LogWriteResponse" }
               }
             }
           },
@@ -3669,7 +3667,7 @@
               "application/json": {
                 "schema": {
                   "type": "array",
-                  "items": { "type": "object", "additionalProperties": true },
+                  "items": { "$ref": "#/components/schemas/SyncLogResponse" },
                   "title": "Response Data-List Sync Logs Route"
                 }
               }
@@ -3707,11 +3705,7 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {
-                  "type": "object",
-                  "additionalProperties": { "type": "integer" },
-                  "title": "Response Data-Create Sync Logs"
-                }
+                "schema": { "$ref": "#/components/schemas/LogWriteResponse" }
               }
             }
           },
@@ -3764,7 +3758,7 @@
               "application/json": {
                 "schema": {
                   "type": "array",
-                  "items": { "type": "object", "additionalProperties": true },
+                  "items": { "$ref": "#/components/schemas/LLMLogResponse" },
                   "title": "Response Data-List Llm Logs Route"
                 }
               }
@@ -3802,11 +3796,7 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {
-                  "type": "object",
-                  "additionalProperties": { "type": "integer" },
-                  "title": "Response Data-Create Llm Logs"
-                }
+                "schema": { "$ref": "#/components/schemas/LogWriteResponse" }
               }
             }
           },
@@ -3858,16 +3848,10 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "anyOf": [
-                    { "type": "object", "additionalProperties": true },
-                    {
-                      "type": "array",
-                      "items": {
-                        "type": "object",
-                        "additionalProperties": true
-                      }
-                    }
-                  ],
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/EmbeddingLogResponse"
+                  },
                   "title": "Response Data-List Embedding Logs Route"
                 }
               }
@@ -3905,11 +3889,7 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {
-                  "type": "object",
-                  "additionalProperties": { "type": "integer" },
-                  "title": "Response Data-Create Embedding Logs"
-                }
+                "schema": { "$ref": "#/components/schemas/LogWriteResponse" }
               }
             }
           },
@@ -3962,7 +3942,9 @@
               "application/json": {
                 "schema": {
                   "type": "array",
-                  "items": { "type": "object", "additionalProperties": true },
+                  "items": {
+                    "$ref": "#/components/schemas/NetworkLogResponse"
+                  },
                   "title": "Response Data-List Network Logs Route"
                 }
               }
@@ -4000,11 +3982,7 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {
-                  "type": "object",
-                  "additionalProperties": { "type": "integer" },
-                  "title": "Response Data-Create Network Logs"
-                }
+                "schema": { "$ref": "#/components/schemas/LogWriteResponse" }
               }
             }
           },
@@ -4029,11 +4007,7 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {
-                  "additionalProperties": true,
-                  "type": "object",
-                  "title": "Response Data-Db Stats"
-                }
+                "schema": { "$ref": "#/components/schemas/DbStatsResponse" }
               }
             }
           }
@@ -4052,7 +4026,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "items": { "additionalProperties": true, "type": "object" },
+                  "items": { "$ref": "#/components/schemas/TableSizeResponse" },
                   "type": "array",
                   "title": "Response Data-Table Sizes"
                 }
@@ -4082,11 +4056,7 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {
-                  "type": "object",
-                  "additionalProperties": true,
-                  "title": "Response Data-Clear Table Route"
-                }
+                "schema": { "$ref": "#/components/schemas/ClearTableResponse" }
               }
             }
           },
@@ -4151,11 +4121,7 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {
-                  "type": "object",
-                  "additionalProperties": true,
-                  "title": "Response Data-Purge Logs"
-                }
+                "schema": { "$ref": "#/components/schemas/PurgeLogsResponse" }
               }
             }
           },
@@ -5498,6 +5464,72 @@
         "required": ["message"],
         "title": "ChatRequest"
       },
+      "ClearTableResponse": {
+        "properties": {
+          "deleted": { "type": "integer", "title": "Deleted", "default": 0 }
+        },
+        "type": "object",
+        "title": "ClearTableResponse",
+        "description": "How many rows `DELETE /data/tables/{name}` removed."
+      },
+      "DbStatsResponse": {
+        "properties": {
+          "postCount": {
+            "type": "integer",
+            "title": "Postcount",
+            "default": 0
+          },
+          "channelCount": {
+            "type": "integer",
+            "title": "Channelcount",
+            "default": 0
+          },
+          "summaryCount": {
+            "type": "integer",
+            "title": "Summarycount",
+            "default": 0
+          },
+          "embeddedPostCount": {
+            "type": "integer",
+            "title": "Embeddedpostcount",
+            "default": 0
+          },
+          "botCount": { "type": "integer", "title": "Botcount", "default": 0 },
+          "destinationCount": {
+            "type": "integer",
+            "title": "Destinationcount",
+            "default": 0
+          },
+          "publishLogCount": {
+            "type": "integer",
+            "title": "Publishlogcount",
+            "default": 0
+          },
+          "syncLogCount": {
+            "type": "integer",
+            "title": "Synclogcount",
+            "default": 0
+          },
+          "llmLogCount": {
+            "type": "integer",
+            "title": "Llmlogcount",
+            "default": 0
+          },
+          "embeddingLogCount": {
+            "type": "integer",
+            "title": "Embeddinglogcount",
+            "default": 0
+          },
+          "networkLogCount": {
+            "type": "integer",
+            "title": "Networklogcount",
+            "default": 0
+          }
+        },
+        "type": "object",
+        "title": "DbStatsResponse",
+        "description": "Row counts across the corpus, scoped to the operator.\n\n`embeddedPostCount` is deliberately **not** operator-scoped: embeddings are a\ncorpus-level artefact shared across users (see the multi-user seam note in\nthe plan), so it counts the whole table while the rest count the operator's\nrows."
+      },
       "DiscoverCandidateResponse": {
         "properties": {
           "name": { "type": "string", "title": "Name" },
@@ -5854,6 +5886,31 @@
         "required": ["texts"],
         "title": "EmbedRequest"
       },
+      "EmbeddingLogResponse": {
+        "properties": {
+          "id": { "type": "string", "title": "Id" },
+          "textCount": {
+            "type": "integer",
+            "title": "Textcount",
+            "default": 0
+          },
+          "tokensEstimated": {
+            "anyOf": [{ "type": "integer" }, { "type": "null" }],
+            "title": "Tokensestimated"
+          },
+          "duration": { "type": "number", "title": "Duration", "default": 0.0 },
+          "status": { "type": "string", "title": "Status" },
+          "error": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Error"
+          },
+          "timestamp": { "type": "integer", "title": "Timestamp", "default": 0 }
+        },
+        "type": "object",
+        "required": ["id", "status"],
+        "title": "EmbeddingLogResponse",
+        "description": "One embedding batch."
+      },
       "FollowChannelResultResponse": {
         "properties": {
           "name": { "type": "string", "title": "Name" },
@@ -6095,11 +6152,112 @@
         "required": ["enabled", "intervals"],
         "title": "JobsRuntimeSettings"
       },
+      "LLMLogResponse": {
+        "properties": {
+          "id": { "type": "string", "title": "Id" },
+          "model": { "type": "string", "title": "Model" },
+          "prompt": { "type": "string", "title": "Prompt" },
+          "response": { "type": "string", "title": "Response" },
+          "systemInstruction": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Systeminstruction"
+          },
+          "modelConfig": {
+            "anyOf": [
+              { "additionalProperties": true, "type": "object" },
+              { "type": "null" }
+            ],
+            "title": "Modelconfig"
+          },
+          "fullRequest": { "$ref": "#/components/schemas/LogPayload" },
+          "fullResponse": { "$ref": "#/components/schemas/LogPayload" },
+          "tokens": {
+            "anyOf": [{ "type": "integer" }, { "type": "null" }],
+            "title": "Tokens"
+          },
+          "duration": {
+            "anyOf": [{ "type": "number" }, { "type": "null" }],
+            "title": "Duration"
+          },
+          "status": { "type": "string", "title": "Status" },
+          "error": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Error"
+          },
+          "timestamp": {
+            "type": "integer",
+            "title": "Timestamp",
+            "default": 0
+          },
+          "type": { "type": "string", "title": "Type", "default": "" }
+        },
+        "type": "object",
+        "required": ["id", "model", "prompt", "response", "status"],
+        "title": "LLMLogResponse",
+        "description": "One model call: the prompt, the response, and what it cost.\n\n`protected_namespaces=()` is required, not decorative. Pydantic v2 reserves\nthe `model_` prefix for its own API, and this table has both a `model` column\nand a `model_config_json` one \u2014 the latter collides with `BaseModel.model_config`\nitself. Without the override, declaring these fields raises at class-creation\ntime. Renaming the columns is not an option: they are the wire format."
+      },
+      "LogPayload": {
+        "anyOf": [
+          { "additionalProperties": true, "type": "object" },
+          { "items": {}, "type": "array" },
+          { "type": "null" }
+        ]
+      },
+      "LogWriteResponse": {
+        "properties": {
+          "upserted": { "type": "integer", "title": "Upserted", "default": 0 }
+        },
+        "type": "object",
+        "title": "LogWriteResponse",
+        "description": "Result of a bulk log write: how many rows were accepted."
+      },
       "Message": {
         "properties": { "message": { "type": "string", "title": "Message" } },
         "type": "object",
         "required": ["message"],
         "title": "Message"
+      },
+      "NetworkLogResponse": {
+        "properties": {
+          "id": { "type": "string", "title": "Id" },
+          "url": { "type": "string", "title": "Url" },
+          "method": { "type": "string", "title": "Method" },
+          "status": { "type": "string", "title": "Status" },
+          "statusCode": {
+            "anyOf": [{ "type": "integer" }, { "type": "null" }],
+            "title": "Statuscode"
+          },
+          "error": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Error"
+          },
+          "duration": { "type": "number", "title": "Duration", "default": 0.0 },
+          "timestamp": {
+            "type": "integer",
+            "title": "Timestamp",
+            "default": 0
+          },
+          "source": { "type": "string", "title": "Source", "default": "" },
+          "proxyUsed": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Proxyused"
+          },
+          "attempts": {
+            "anyOf": [{ "type": "integer" }, { "type": "null" }],
+            "title": "Attempts"
+          },
+          "telemetry": {
+            "anyOf": [
+              { "additionalProperties": true, "type": "object" },
+              { "type": "null" }
+            ],
+            "title": "Telemetry"
+          }
+        },
+        "type": "object",
+        "required": ["id", "url", "method", "status"],
+        "title": "NetworkLogResponse",
+        "description": "One outbound HTTP fetch, including which proxy lane carried it."
       },
       "NetworkRuntimeSettings": {
         "properties": {
@@ -6481,6 +6639,44 @@
         "required": ["proxyUrl", "maxParallel", "inUse", "inCooldown"],
         "title": "ProxyLaneSnapshot"
       },
+      "PublishLogResponse": {
+        "properties": {
+          "id": { "type": "string", "title": "Id" },
+          "summaryId": { "type": "string", "title": "Summaryid" },
+          "botId": { "type": "string", "title": "Botid" },
+          "botName": { "type": "string", "title": "Botname" },
+          "chatId": { "type": "string", "title": "Chatid" },
+          "chatName": { "type": "string", "title": "Chatname" },
+          "status": { "type": "string", "title": "Status" },
+          "error": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Error"
+          },
+          "timestamp": {
+            "type": "integer",
+            "title": "Timestamp",
+            "default": 0
+          },
+          "fullRequest": { "$ref": "#/components/schemas/LogPayload" },
+          "fullResponse": { "$ref": "#/components/schemas/LogPayload" },
+          "textSent": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Textsent"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "summaryId",
+          "botId",
+          "botName",
+          "chatId",
+          "chatName",
+          "status"
+        ],
+        "title": "PublishLogResponse",
+        "description": "One attempt to publish a summary to a Telegram chat."
+      },
       "PublishRequest": {
         "properties": {
           "proxyEnabled": {
@@ -6523,6 +6719,25 @@
         "type": "object",
         "required": ["chatId", "text"],
         "title": "PublishRequest"
+      },
+      "PurgeLogsResponse": {
+        "properties": {
+          "deleted": {
+            "anyOf": [
+              {
+                "additionalProperties": { "type": "integer" },
+                "type": "object"
+              },
+              { "type": "integer" }
+            ],
+            "title": "Deleted",
+            "default": 0
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "title": "PurgeLogsResponse",
+        "description": "Result of `DELETE /data/logs`.\n\nThree call shapes share one response. A retention sweep (`olderThanDays`)\ndeletes across every table and reports the per-type breakdown plus a\n`total`; deleting one entry or clearing one type reports a bare `deleted`\ncount and no breakdown. `deleted` is therefore declared loose \u2014 it is an\n`int` in two of the three cases and a `dict[str, int]` in the third \u2014 and\n`total` is genuinely absent rather than null for the other two, so it stays\nundeclared and travels through `extra`."
       },
       "RagEmbedRequest": {
         "properties": {
@@ -7125,6 +7340,42 @@
         "required": ["jobId", "status", "source", "channels", "createdAt"],
         "title": "SyncJobStatusResponse"
       },
+      "SyncLogResponse": {
+        "properties": {
+          "id": { "type": "string", "title": "Id" },
+          "channelName": { "type": "string", "title": "Channelname" },
+          "status": { "type": "string", "title": "Status" },
+          "postsCount": {
+            "type": "integer",
+            "title": "Postscount",
+            "default": 0
+          },
+          "newLatestId": {
+            "anyOf": [{ "type": "integer" }, { "type": "null" }],
+            "title": "Newlatestid"
+          },
+          "error": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Error"
+          },
+          "timestamp": {
+            "type": "integer",
+            "title": "Timestamp",
+            "default": 0
+          },
+          "source": {
+            "type": "string",
+            "title": "Source",
+            "default": "manual"
+          },
+          "fullRequest": { "$ref": "#/components/schemas/LogPayload" },
+          "fullResponse": { "$ref": "#/components/schemas/LogPayload" }
+        },
+        "type": "object",
+        "required": ["id", "channelName", "status"],
+        "title": "SyncLogResponse",
+        "description": "One channel sync attempt, with its payload row folded back in.\n\n`fullRequest` / `fullResponse` live in `tg_sync_log_payloads` and are joined\non an OUTER join: that table is truncatable, so a log whose payload has been\nreclaimed still lists and simply reports nulls."
+      },
       "SyncMetaEntry": {
         "properties": {
           "etag": { "type": "string", "title": "Etag" },
@@ -7186,6 +7437,17 @@
           "consecutiveFailures"
         ],
         "title": "SyncRuntimeSettings"
+      },
+      "TableSizeResponse": {
+        "properties": {
+          "name": { "type": "string", "title": "Name" },
+          "count": { "type": "integer", "title": "Count", "default": 0 },
+          "size": { "type": "integer", "title": "Size", "default": 0 }
+        },
+        "type": "object",
+        "required": ["name"],
+        "title": "TableSizeResponse",
+        "description": "Row count and on-disk footprint for one exportable table.\n\n`size` is the whole physical footprint (heap + TOAST + indexes) straight from\nPostgres, not an estimate: JSON payload columns can dwarf what the row count\nalone suggests."
       },
       "TagRequest": {
         "properties": {

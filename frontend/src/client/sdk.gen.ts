@@ -1280,7 +1280,7 @@ export class DataService {
      * @param data The data for the request.
      * @param data.limit
      * @param data.offset
-     * @returns unknown Successful Response
+     * @returns PublishLogResponse Successful Response
      * @throws ApiError
      */
     public static listPublishLogsRoute(data: DataListPublishLogsRouteData = {}): CancelablePromise<DataListPublishLogsRouteResponse> {
@@ -1301,7 +1301,7 @@ export class DataService {
      * Create Publish Logs
      * @param data The data for the request.
      * @param data.requestBody
-     * @returns number Successful Response
+     * @returns LogWriteResponse Successful Response
      * @throws ApiError
      */
     public static createPublishLogs(data: DataCreatePublishLogsData): CancelablePromise<DataCreatePublishLogsResponse> {
@@ -1321,7 +1321,7 @@ export class DataService {
      * @param data The data for the request.
      * @param data.limit
      * @param data.offset
-     * @returns unknown Successful Response
+     * @returns SyncLogResponse Successful Response
      * @throws ApiError
      */
     public static listSyncLogsRoute(data: DataListSyncLogsRouteData = {}): CancelablePromise<DataListSyncLogsRouteResponse> {
@@ -1342,7 +1342,7 @@ export class DataService {
      * Create Sync Logs
      * @param data The data for the request.
      * @param data.requestBody
-     * @returns number Successful Response
+     * @returns LogWriteResponse Successful Response
      * @throws ApiError
      */
     public static createSyncLogs(data: DataCreateSyncLogsData): CancelablePromise<DataCreateSyncLogsResponse> {
@@ -1362,7 +1362,7 @@ export class DataService {
      * @param data The data for the request.
      * @param data.limit
      * @param data.offset
-     * @returns unknown Successful Response
+     * @returns LLMLogResponse Successful Response
      * @throws ApiError
      */
     public static listLlmLogsRoute(data: DataListLlmLogsRouteData = {}): CancelablePromise<DataListLlmLogsRouteResponse> {
@@ -1383,7 +1383,7 @@ export class DataService {
      * Create Llm Logs
      * @param data The data for the request.
      * @param data.requestBody
-     * @returns number Successful Response
+     * @returns LogWriteResponse Successful Response
      * @throws ApiError
      */
     public static createLlmLogs(data: DataCreateLlmLogsData): CancelablePromise<DataCreateLlmLogsResponse> {
@@ -1403,7 +1403,7 @@ export class DataService {
      * @param data The data for the request.
      * @param data.limit
      * @param data.offset
-     * @returns unknown Successful Response
+     * @returns EmbeddingLogResponse Successful Response
      * @throws ApiError
      */
     public static listEmbeddingLogsRoute(data: DataListEmbeddingLogsRouteData = {}): CancelablePromise<DataListEmbeddingLogsRouteResponse> {
@@ -1424,7 +1424,7 @@ export class DataService {
      * Create Embedding Logs
      * @param data The data for the request.
      * @param data.requestBody
-     * @returns number Successful Response
+     * @returns LogWriteResponse Successful Response
      * @throws ApiError
      */
     public static createEmbeddingLogs(data: DataCreateEmbeddingLogsData): CancelablePromise<DataCreateEmbeddingLogsResponse> {
@@ -1444,7 +1444,7 @@ export class DataService {
      * @param data The data for the request.
      * @param data.limit
      * @param data.offset
-     * @returns unknown Successful Response
+     * @returns NetworkLogResponse Successful Response
      * @throws ApiError
      */
     public static listNetworkLogsRoute(data: DataListNetworkLogsRouteData = {}): CancelablePromise<DataListNetworkLogsRouteResponse> {
@@ -1465,7 +1465,7 @@ export class DataService {
      * Create Network Logs
      * @param data The data for the request.
      * @param data.requestBody
-     * @returns number Successful Response
+     * @returns LogWriteResponse Successful Response
      * @throws ApiError
      */
     public static createNetworkLogs(data: DataCreateNetworkLogsData): CancelablePromise<DataCreateNetworkLogsResponse> {
@@ -1482,7 +1482,7 @@ export class DataService {
     
     /**
      * Db Stats
-     * @returns unknown Successful Response
+     * @returns DbStatsResponse Successful Response
      * @throws ApiError
      */
     public static dbStats(): CancelablePromise<DataDbStatsResponse> {
@@ -1494,7 +1494,7 @@ export class DataService {
     
     /**
      * Table Sizes
-     * @returns unknown Successful Response
+     * @returns TableSizeResponse Successful Response
      * @throws ApiError
      */
     public static tableSizes(): CancelablePromise<DataTableSizesResponse> {
@@ -1508,7 +1508,7 @@ export class DataService {
      * Clear Table Route
      * @param data The data for the request.
      * @param data.name
-     * @returns unknown Successful Response
+     * @returns ClearTableResponse Successful Response
      * @throws ApiError
      */
     public static clearTableRoute(data: DataClearTableRouteData): CancelablePromise<DataClearTableRouteResponse> {
@@ -1531,7 +1531,7 @@ export class DataService {
      * @param data.type
      * @param data.logId
      * @param data.clearAll
-     * @returns unknown Successful Response
+     * @returns PurgeLogsResponse Successful Response
      * @throws ApiError
      */
     public static purgeLogs(data: DataPurgeLogsData = {}): CancelablePromise<DataPurgeLogsResponse> {

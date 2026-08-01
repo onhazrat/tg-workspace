@@ -59,7 +59,21 @@ from app.schemas.discover import (
     HandleProbeResponse,
     IgnoredChannelResponse,
 )
+from app.schemas.logs import (
+    EmbeddingLogResponse,
+    LLMLogResponse,
+    LogWriteResponse,
+    NetworkLogResponse,
+    PublishLogResponse,
+    PurgeLogsResponse,
+    SyncLogResponse,
+)
 from app.schemas.posts import BulkUpsertPostsResponse, PostResponse
+from app.schemas.stats import (
+    ClearTableResponse,
+    DbStatsResponse,
+    TableSizeResponse,
+)
 from app.schemas.summaries import (
     SummaryListItemResponse,
     SummaryResponse,
@@ -1249,8 +1263,11 @@ def list_publish_logs_route(
     _current_user: CurrentUser,
     limit: int = Query(default=DEFAULT_LOG_PAGE_SIZE, ge=1, le=MAX_LOG_PAGE_SIZE),
     offset: int = Query(default=0, ge=0),
-) -> list[dict[str, Any]]:
-    return list_publish_logs(session, limit=limit, offset=offset)
+) -> list[PublishLogResponse]:
+    return [
+        PublishLogResponse.model_validate(row)
+        for row in list_publish_logs(session, limit=limit, offset=offset)
+    ]
 
 
 @router.post("/publish-logs")
@@ -1258,8 +1275,10 @@ def create_publish_logs(
     body: list[dict[str, Any]],
     session: SessionDep,
     _current_user: CurrentUser,
-) -> dict[str, int]:
-    return create_logs(session, "publish", body, user_id=_current_user.id)
+) -> LogWriteResponse:
+    return LogWriteResponse.model_validate(
+        create_logs(session, "publish", body, user_id=_current_user.id)
+    )
 
 
 @router.get("/sync-logs")
@@ -1268,8 +1287,11 @@ def list_sync_logs_route(
     _current_user: CurrentUser,
     limit: int = Query(default=DEFAULT_LOG_PAGE_SIZE, ge=1, le=MAX_LOG_PAGE_SIZE),
     offset: int = Query(default=0, ge=0),
-) -> list[dict[str, Any]]:
-    return list_sync_logs(session, limit=limit, offset=offset)
+) -> list[SyncLogResponse]:
+    return [
+        SyncLogResponse.model_validate(row)
+        for row in list_sync_logs(session, limit=limit, offset=offset)
+    ]
 
 
 @router.post("/sync-logs")
@@ -1277,8 +1299,10 @@ def create_sync_logs(
     body: list[dict[str, Any]],
     session: SessionDep,
     _current_user: CurrentUser,
-) -> dict[str, int]:
-    return create_logs(session, "sync", body, user_id=_current_user.id)
+) -> LogWriteResponse:
+    return LogWriteResponse.model_validate(
+        create_logs(session, "sync", body, user_id=_current_user.id)
+    )
 
 
 @router.get("/llm-logs")
@@ -1287,8 +1311,11 @@ def list_llm_logs_route(
     _current_user: CurrentUser,
     limit: int = Query(default=DEFAULT_LOG_PAGE_SIZE, ge=1, le=MAX_LOG_PAGE_SIZE),
     offset: int = Query(default=0, ge=0),
-) -> list[dict[str, Any]]:
-    return list_llm_logs(session, limit=limit, offset=offset)
+) -> list[LLMLogResponse]:
+    return [
+        LLMLogResponse.model_validate(row)
+        for row in list_llm_logs(session, limit=limit, offset=offset)
+    ]
 
 
 @router.post("/llm-logs")
@@ -1296,8 +1323,10 @@ def create_llm_logs(
     body: list[dict[str, Any]],
     session: SessionDep,
     _current_user: CurrentUser,
-) -> dict[str, int]:
-    return create_logs(session, "llm", body, user_id=_current_user.id)
+) -> LogWriteResponse:
+    return LogWriteResponse.model_validate(
+        create_logs(session, "llm", body, user_id=_current_user.id)
+    )
 
 
 @router.get("/embedding-logs")
@@ -1306,8 +1335,11 @@ def list_embedding_logs_route(
     _current_user: CurrentUser,
     limit: int = Query(default=DEFAULT_LOG_PAGE_SIZE, ge=1, le=MAX_LOG_PAGE_SIZE),
     offset: int = Query(default=0, ge=0),
-) -> dict[str, Any] | list[dict[str, Any]]:
-    return list_embedding_logs(session, limit=limit, offset=offset)
+) -> list[EmbeddingLogResponse]:
+    return [
+        EmbeddingLogResponse.model_validate(row)
+        for row in list_embedding_logs(session, limit=limit, offset=offset)
+    ]
 
 
 @router.post("/embedding-logs")
@@ -1315,8 +1347,10 @@ def create_embedding_logs(
     body: list[dict[str, Any]],
     session: SessionDep,
     _current_user: CurrentUser,
-) -> dict[str, int]:
-    return create_logs(session, "embedding", body, user_id=_current_user.id)
+) -> LogWriteResponse:
+    return LogWriteResponse.model_validate(
+        create_logs(session, "embedding", body, user_id=_current_user.id)
+    )
 
 
 @router.get("/network-logs")
@@ -1325,8 +1359,11 @@ def list_network_logs_route(
     _current_user: CurrentUser,
     limit: int = Query(default=DEFAULT_LOG_PAGE_SIZE, ge=1, le=MAX_LOG_PAGE_SIZE),
     offset: int = Query(default=0, ge=0),
-) -> list[dict[str, Any]]:
-    return list_network_logs(session, limit=limit, offset=offset)
+) -> list[NetworkLogResponse]:
+    return [
+        NetworkLogResponse.model_validate(row)
+        for row in list_network_logs(session, limit=limit, offset=offset)
+    ]
 
 
 @router.post("/network-logs")
@@ -1334,24 +1371,31 @@ def create_network_logs(
     body: list[dict[str, Any]],
     session: SessionDep,
     _current_user: CurrentUser,
-) -> dict[str, int]:
-    return create_logs(session, "network", body, user_id=_current_user.id)
+) -> LogWriteResponse:
+    return LogWriteResponse.model_validate(
+        create_logs(session, "network", body, user_id=_current_user.id)
+    )
 
 
 @router.get("/stats")
 def db_stats(
     session: SessionDep,
     _current_user: CurrentUser,
-) -> dict[str, Any]:
-    return get_db_stats(session, operator_id=_current_user.id)
+) -> DbStatsResponse:
+    return DbStatsResponse.model_validate(
+        get_db_stats(session, operator_id=_current_user.id)
+    )
 
 
 @router.get("/table-sizes")
 def table_sizes(
     session: SessionDep,
     _current_user: CurrentUser,
-) -> list[dict[str, Any]]:
-    return get_table_sizes(session, operator_id=_current_user.id)
+) -> list[TableSizeResponse]:
+    return [
+        TableSizeResponse.model_validate(row)
+        for row in get_table_sizes(session, operator_id=_current_user.id)
+    ]
 
 
 @router.delete("/tables/{name}")
@@ -1359,7 +1403,7 @@ def clear_table_route(
     name: str,
     session: SessionDep,
     _current_user: CurrentUser,
-) -> dict[str, Any]:
+) -> ClearTableResponse:
     try:
         deleted = clear_table(session, name, operator_id=_current_user.id)
     except ValueError as exc:
@@ -1370,7 +1414,7 @@ def clear_table_route(
         # database no longer has.
         for resource in CLEARED_SYNC_RESOURCES.get(name, (name,)):
             touch_sync(session, resource)
-    return {"deleted": deleted}
+    return ClearTableResponse(deleted=deleted)
 
 
 @router.delete("/logs")
@@ -1381,14 +1425,16 @@ def purge_logs(
     log_type: str | None = Query(default=None, alias="type"),
     log_id: str | None = Query(default=None, alias="logId"),
     clear_all: bool = Query(default=False, alias="clearAll"),
-) -> dict[str, Any]:
+) -> PurgeLogsResponse:
     if older_than_days is not None and older_than_days > 0:
         deleted = delete_old_logs(
             session, older_than_days, operator_id=_current_user.id
         )
         for resource in {LOG_MODELS[k][1] for k in deleted if deleted[k]}:
             touch_sync(session, resource)
-        return {"deleted": deleted, "total": sum(deleted.values())}
+        return PurgeLogsResponse.model_validate(
+            {"deleted": deleted, "total": sum(deleted.values())}
+        )
 
     if log_type is None:
         raise HTTPException(
@@ -1403,13 +1449,13 @@ def purge_logs(
         if not delete_log_by_id(session, log_type, log_id):
             raise HTTPException(status_code=404, detail="Log entry not found")
         touch_sync(session, resource)
-        return {"deleted": 1}
+        return PurgeLogsResponse(deleted=1)
 
     if clear_all:
         count = clear_logs(session, log_type)
         if count:
             touch_sync(session, resource)
-        return {"deleted": count}
+        return PurgeLogsResponse(deleted=count)
 
     raise HTTPException(
         status_code=400,

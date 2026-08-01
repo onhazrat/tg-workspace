@@ -1,8 +1,8 @@
 # Architecture simplification plan
 
 **Date:** 2026-07-31
-**Status:** In progress — execution started 2026-08-01. Landed: `H3`, `A0`, `T1`, `B1`, `B2`, `B3`, `B4`.
-Typed responses **53/129** (was 26). Contexts with a test **1/9** (was 0).
+**Status:** In progress — execution started 2026-08-01. Landed: `H3`, `A0`, `T1`, `B1`–`B5`.
+Typed responses **67/129** (was 26). Contexts with a test **1/9** (was 0).
 Each unit is marked ✅ **DONE** in place as it lands, with what the work changed about the plan.
 **Companion:** [`architecture-entropy-audit.md`](./architecture-entropy-audit.md) is the evidence base.
 Read §3 and §6 of it before starting workstream A or B.
@@ -314,11 +314,43 @@ merging `probe` into the base model fails 2 tests, dropping `seenInCount` fails 
 **Verified:** backend **748 passed / 1 skipped** (733 + 15 new), mypy strict clean (109 files),
 ruff clean, frontend **686 pass / 0 fail**, `tsc` clean against the regenerated client.
 
-#### B5–B6 — Roll response models across the remaining families · **M each** · after B1
+#### B5 — `logs` + `stats` families · ✅ **DONE 2026-08-01**
 
-One PR per family: `logs` + `stats` · `jobs` + `telegram` + `network` · `ai` + `rag`. Each
-independently mergeable; each moves the typed-response count up. Track it — the number is a clean
-progress metric.
+Fourteen endpoints. **Shipped:** `app/schemas/logs.py` (five log models + a `LOG_SCHEMAS`
+registry that D1 needs) and `app/schemas/stats.py`. **Typed responses 53/129 → 67/129.**
+
+**A log's wire shape is its table.** Every serialiser is `{"id": …, **model_to_camel(row)}`, and
+`model_to_camel` camelises whatever columns exist minus `id`/`user_id`/`updated_at`. So these
+models are exhaustive by construction, and a new column now fails a test instead of silently
+widening an untyped `dict`.
+
+**The trap this unit found — and it bit me.** The wire format is *not* mechanically derived:
+`_CAMEL_OVERRIDES` in `services/serialization.py` renames columns explicitly, and two are not
+camelisations at all — `model_config_json` ships as **`modelConfig`** and `log_type` ships as
+**`type`**. Declaring the obvious alias does not error. It matches nothing on the way in,
+defaults the field to `None`, and *renames the key* on the way out: a 200 response that drops a
+column's value and emits a key no client has ever seen.
+
+**So the unit also shipped `tests/api/test_schema_aliases.py`**, a package-wide sweep asserting
+every declared alias equals `to_camel(field_name)`. New schema modules are covered the moment
+they are added. It found B1–B4 clean and one legitimate exemption: `JobsStatusResponse`'s keys
+are **job ids** from `JOB_IDS`, not columns, so `auto_sync` is correctly snake_case — the
+frontend reads `status.auto_sync?.pauseUntil`. Run this before trusting any future alias.
+
+**Also fixed:** `GET /embedding-logs` declared `dict[str, Any] | list[dict[str, Any]]`, an
+untyped `anyOf` in OpenAPI. The service only ever returns a list.
+
+**`PurgeLogsResponse` keeps `total` undeclared.** `DELETE /data/logs` answers three call shapes;
+`total` is genuinely absent from two. It travels through `extra` — and because `extra="allow"` is
+invisible to mypy, the route builds that response with `model_validate` rather than a keyword.
+
+**Verified:** backend **759 passed / 1 skipped**, mypy strict clean (111 files), ruff clean,
+frontend **686 pass / 0 fail**, `tsc` clean.
+
+#### B6 — Roll response models across the last families · **M each** · after B1
+
+One PR per family: `jobs` + `telegram` + `network` · `ai` + `rag`. Each independently mergeable;
+each moves the typed-response count up. Track it — the number is a clean progress metric.
 
 > **Two known blind spots in the metric** — it matches `$ref` and `items.$ref` only.
 > 1. A precise `dict[str, int]` (e.g. `/posts/counts`) renders as
@@ -625,7 +657,7 @@ Measurable, re-runnable — same discipline as the remediation plan's §12.
 |---|---|---|
 | Data-access paths from `components/` | 7 | 2 |
 | Client-side caches / staleness systems | 3 | 1 |
-| `$ref`-typed API responses | 26/129 → **53/129** | 129/129 |
+| `$ref`-typed API responses | 26/129 → **67/129** | 129/129 |
 | Hand-written domain types mirroring server tables | 24 | 0 |
 | Largest route module | 1,438 LOC | < 400 |
 | Largest frontend context | 1,103 LOC | < 300 |

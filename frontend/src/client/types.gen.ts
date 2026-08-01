@@ -309,6 +309,35 @@ export type ChatRequest = {
 };
 
 /**
+ * How many rows `DELETE /data/tables/{name}` removed.
+ */
+export type ClearTableResponse = {
+    deleted?: number;
+};
+
+/**
+ * Row counts across the corpus, scoped to the operator.
+ *
+ * `embeddedPostCount` is deliberately **not** operator-scoped: embeddings are a
+ * corpus-level artefact shared across users (see the multi-user seam note in
+ * the plan), so it counts the whole table while the rest count the operator's
+ * rows.
+ */
+export type DbStatsResponse = {
+    postCount?: number;
+    channelCount?: number;
+    summaryCount?: number;
+    embeddedPostCount?: number;
+    botCount?: number;
+    destinationCount?: number;
+    publishLogCount?: number;
+    syncLogCount?: number;
+    llmLogCount?: number;
+    embeddingLogCount?: number;
+    networkLogCount?: number;
+};
+
+/**
  * One discovered handle, as `_to_candidate` builds it.
  *
  * `isFollowed` / `isIgnored` are resolved against live state, never frozen —
@@ -483,6 +512,19 @@ export type DiscoverReportScopeResponse = {
     scopedPostCount?: (number | null);
 };
 
+/**
+ * One embedding batch.
+ */
+export type EmbeddingLogResponse = {
+    id: string;
+    textCount?: number;
+    tokensEstimated?: (number | null);
+    duration?: number;
+    status: string;
+    error?: (string | null);
+    timestamp?: number;
+};
+
 export type EmbedRequest = {
     texts: Array<(string)>;
     model?: (string | null);
@@ -575,8 +617,67 @@ export type JobsRuntimeSettings = {
     intervals: JobIntervals;
 };
 
+/**
+ * One model call: the prompt, the response, and what it cost.
+ *
+ * `protected_namespaces=()` is required, not decorative. Pydantic v2 reserves
+ * the `model_` prefix for its own API, and this table has both a `model` column
+ * and a `model_config_json` one — the latter collides with `BaseModel.model_config`
+ * itself. Without the override, declaring these fields raises at class-creation
+ * time. Renaming the columns is not an option: they are the wire format.
+ */
+export type LLMLogResponse = {
+    id: string;
+    model: string;
+    prompt: string;
+    response: string;
+    systemInstruction?: (string | null);
+    modelConfig?: ({
+    [key: string]: unknown;
+} | null);
+    fullRequest?: LogPayload;
+    fullResponse?: LogPayload;
+    tokens?: (number | null);
+    duration?: (number | null);
+    status: string;
+    error?: (string | null);
+    timestamp?: number;
+    type?: string;
+};
+
+export type LogPayload = {
+    [key: string]: unknown;
+} | Array<unknown> | null;
+
+/**
+ * Result of a bulk log write: how many rows were accepted.
+ */
+export type LogWriteResponse = {
+    upserted?: number;
+};
+
 export type Message = {
     message: string;
+};
+
+/**
+ * One outbound HTTP fetch, including which proxy lane carried it.
+ */
+export type NetworkLogResponse = {
+    id: string;
+    url: string;
+    method: string;
+    status: string;
+    statusCode?: (number | null);
+    error?: (string | null);
+    duration?: number;
+    timestamp?: number;
+    source?: string;
+    proxyUsed?: (string | null);
+    attempts?: (number | null);
+    telemetry?: ({
+    [key: string]: unknown;
+} | null);
 };
 
 export type NetworkRuntimeSettings = {
@@ -719,6 +820,24 @@ export type ProxyLaneSnapshot = {
     inCooldown: boolean;
 };
 
+/**
+ * One attempt to publish a summary to a Telegram chat.
+ */
+export type PublishLogResponse = {
+    id: string;
+    summaryId: string;
+    botId: string;
+    botName: string;
+    chatId: string;
+    chatName: string;
+    status: string;
+    error?: (string | null);
+    timestamp?: number;
+    fullRequest?: LogPayload;
+    fullResponse?: LogPayload;
+    textSent?: (string | null);
+};
+
 export type PublishRequest = {
     proxyEnabled?: boolean;
     proxies?: (Array<(string)> | null);
@@ -729,6 +848,24 @@ export type PublishRequest = {
     chatId: string;
     text: string;
     metadataText?: (string | null);
+};
+
+/**
+ * Result of `DELETE /data/logs`.
+ *
+ * Three call shapes share one response. A retention sweep (`olderThanDays`)
+ * deletes across every table and reports the per-type breakdown plus a
+ * `total`; deleting one entry or clearing one type reports a bare `deleted`
+ * count and no breakdown. `deleted` is therefore declared loose — it is an
+ * `int` in two of the three cases and a `dict[str, int]` in the third — and
+ * `total` is genuinely absent rather than null for the other two, so it stays
+ * undeclared and travels through `extra`.
+ */
+export type PurgeLogsResponse = {
+    deleted?: ({
+    [key: string]: (number);
+} | number);
+    [key: string]: unknown;
 };
 
 export type RagEmbedRequest = {
@@ -965,6 +1102,26 @@ export type SyncJobStatusResponse = {
 };
 
 /**
+ * One channel sync attempt, with its payload row folded back in.
+ *
+ * `fullRequest` / `fullResponse` live in `tg_sync_log_payloads` and are joined
+ * on an OUTER join: that table is truncatable, so a log whose payload has been
+ * reclaimed still lists and simply reports nulls.
+ */
+export type SyncLogResponse = {
+    id: string;
+    channelName: string;
+    status: string;
+    postsCount?: number;
+    newLatestId?: (number | null);
+    error?: (string | null);
+    timestamp?: number;
+    source?: string;
+    fullRequest?: LogPayload;
+    fullResponse?: LogPayload;
+};
+
+/**
  * One resource's sync etag, as `get_sync_meta` builds it.
  */
 export type SyncMetaEntry = {
@@ -982,6 +1139,19 @@ export type SyncRuntimeSettings = {
     autoSyncPauseUntil?: (number | null);
     globalStartTimeMode?: (string | null);
     globalStartTimeValue?: (string | number | null);
+};
+
+/**
+ * Row count and on-disk footprint for one exportable table.
+ *
+ * `size` is the whole physical footprint (heap + TOAST + indexes) straight from
+ * Postgres, not an estimate: JSON payload columns can dwarf what the row count
+ * alone suggests.
+ */
+export type TableSizeResponse = {
+    name: string;
+    count?: number;
+    size?: number;
 };
 
 export type TagRequest = {
@@ -1509,9 +1679,7 @@ export type DataListPublishLogsRouteData = {
     offset?: number;
 };
 
-export type DataListPublishLogsRouteResponse = (Array<{
-    [key: string]: unknown;
-}>);
+export type DataListPublishLogsRouteResponse = (Array<PublishLogResponse>);
 
 export type DataCreatePublishLogsData = {
     requestBody: Array<{
@@ -1519,18 +1687,14 @@ export type DataCreatePublishLogsData = {
     }>;
 };
 
-export type DataCreatePublishLogsResponse = ({
-    [key: string]: (number);
-});
+export type DataCreatePublishLogsResponse = (LogWriteResponse);
 
 export type DataListSyncLogsRouteData = {
     limit?: number;
     offset?: number;
 };
 
-export type DataListSyncLogsRouteResponse = (Array<{
-    [key: string]: unknown;
-}>);
+export type DataListSyncLogsRouteResponse = (Array<SyncLogResponse>);
 
 export type DataCreateSyncLogsData = {
     requestBody: Array<{
@@ -1538,18 +1702,14 @@ export type DataCreateSyncLogsData = {
     }>;
 };
 
-export type DataCreateSyncLogsResponse = ({
-    [key: string]: (number);
-});
+export type DataCreateSyncLogsResponse = (LogWriteResponse);
 
 export type DataListLlmLogsRouteData = {
     limit?: number;
     offset?: number;
 };
 
-export type DataListLlmLogsRouteResponse = (Array<{
-    [key: string]: unknown;
-}>);
+export type DataListLlmLogsRouteResponse = (Array<LLMLogResponse>);
 
 export type DataCreateLlmLogsData = {
     requestBody: Array<{
@@ -1557,20 +1717,14 @@ export type DataCreateLlmLogsData = {
     }>;
 };
 
-export type DataCreateLlmLogsResponse = ({
-    [key: string]: (number);
-});
+export type DataCreateLlmLogsResponse = (LogWriteResponse);
 
 export type DataListEmbeddingLogsRouteData = {
     limit?: number;
     offset?: number;
 };
 
-export type DataListEmbeddingLogsRouteResponse = (({
-    [key: string]: unknown;
-} | Array<{
-    [key: string]: unknown;
-}>));
+export type DataListEmbeddingLogsRouteResponse = (Array<EmbeddingLogResponse>);
 
 export type DataCreateEmbeddingLogsData = {
     requestBody: Array<{
@@ -1578,18 +1732,14 @@ export type DataCreateEmbeddingLogsData = {
     }>;
 };
 
-export type DataCreateEmbeddingLogsResponse = ({
-    [key: string]: (number);
-});
+export type DataCreateEmbeddingLogsResponse = (LogWriteResponse);
 
 export type DataListNetworkLogsRouteData = {
     limit?: number;
     offset?: number;
 };
 
-export type DataListNetworkLogsRouteResponse = (Array<{
-    [key: string]: unknown;
-}>);
+export type DataListNetworkLogsRouteResponse = (Array<NetworkLogResponse>);
 
 export type DataCreateNetworkLogsData = {
     requestBody: Array<{
@@ -1597,25 +1747,17 @@ export type DataCreateNetworkLogsData = {
     }>;
 };
 
-export type DataCreateNetworkLogsResponse = ({
-    [key: string]: (number);
-});
+export type DataCreateNetworkLogsResponse = (LogWriteResponse);
 
-export type DataDbStatsResponse = ({
-    [key: string]: unknown;
-});
+export type DataDbStatsResponse = (DbStatsResponse);
 
-export type DataTableSizesResponse = (Array<{
-    [key: string]: unknown;
-}>);
+export type DataTableSizesResponse = (Array<TableSizeResponse>);
 
 export type DataClearTableRouteData = {
     name: string;
 };
 
-export type DataClearTableRouteResponse = ({
-    [key: string]: unknown;
-});
+export type DataClearTableRouteResponse = (ClearTableResponse);
 
 export type DataPurgeLogsData = {
     clearAll?: boolean;
@@ -1624,9 +1766,7 @@ export type DataPurgeLogsData = {
     type?: (string | null);
 };
 
-export type DataPurgeLogsResponse = ({
-    [key: string]: unknown;
-});
+export type DataPurgeLogsResponse = (PurgeLogsResponse);
 
 export type DataGetNetworkSettingsResponse = ({
     [key: string]: unknown;
