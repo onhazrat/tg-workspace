@@ -737,11 +737,7 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {
-                  "additionalProperties": true,
-                  "type": "object",
-                  "title": "Response Network-Api Test Proxy"
-                }
+                "schema": { "$ref": "#/components/schemas/TestProxyResponse" }
               }
             }
           },
@@ -767,11 +763,7 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {
-                  "additionalProperties": true,
-                  "type": "object",
-                  "title": "Response Network-Api Proxy Health"
-                }
+                "schema": { "$ref": "#/components/schemas/ProxyHealthResponse" }
               }
             }
           }
@@ -789,11 +781,7 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {
-                  "additionalProperties": true,
-                  "type": "object",
-                  "title": "Response Network-Api Tor Status"
-                }
+                "schema": { "$ref": "#/components/schemas/TorStatusResponse" }
               }
             }
           }
@@ -811,11 +799,7 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {
-                  "additionalProperties": true,
-                  "type": "object",
-                  "title": "Response Network-Api Tor Ip"
-                }
+                "schema": { "$ref": "#/components/schemas/TorIpResponse" }
               }
             }
           }
@@ -833,11 +817,7 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {
-                  "additionalProperties": true,
-                  "type": "object",
-                  "title": "Response Network-Api Tor Restart"
-                }
+                "schema": { "$ref": "#/components/schemas/TorActionResponse" }
               }
             }
           }
@@ -863,11 +843,7 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {
-                  "additionalProperties": true,
-                  "type": "object",
-                  "title": "Response Network-Api Tor New Identity"
-                }
+                "schema": { "$ref": "#/components/schemas/TorActionResponse" }
               }
             }
           },
@@ -902,9 +878,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "type": "object",
-                  "title": "Response Telegram-Api Scrape"
+                  "$ref": "#/components/schemas/ScrapeChannelResponse"
                 }
               }
             }
@@ -939,11 +913,7 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {
-                  "additionalProperties": true,
-                  "type": "object",
-                  "title": "Response Telegram-Api Channel Info"
-                }
+                "schema": { "$ref": "#/components/schemas/ChannelInfoResponse" }
               }
             }
           },
@@ -980,9 +950,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "type": "object",
-                  "title": "Response Telegram-Api Resolve Start Time"
+                  "$ref": "#/components/schemas/ResolveStartTimeResponse"
                 }
               }
             }
@@ -1017,11 +985,7 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {
-                  "additionalProperties": true,
-                  "type": "object",
-                  "title": "Response Telegram-Api Bot Info"
-                }
+                "schema": { "$ref": "#/components/schemas/BotInfoResponse" }
               }
             }
           },
@@ -1055,11 +1019,7 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {
-                  "additionalProperties": true,
-                  "type": "object",
-                  "title": "Response Telegram-Api Publish"
-                }
+                "schema": { "$ref": "#/components/schemas/PublishResponse" }
               }
             }
           },
@@ -1187,11 +1147,7 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {
-                  "additionalProperties": true,
-                  "type": "object",
-                  "title": "Response Ai-Api List Models"
-                }
+                "schema": { "$ref": "#/components/schemas/ModelListResponse" }
               }
             }
           }
@@ -1217,11 +1173,7 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {
-                  "additionalProperties": true,
-                  "type": "object",
-                  "title": "Response Ai-Api Summary"
-                }
+                "schema": { "$ref": "#/components/schemas/CompletionResult" }
               }
             }
           },
@@ -1255,11 +1207,7 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {
-                  "additionalProperties": true,
-                  "type": "object",
-                  "title": "Response Ai-Api Summary Prompt"
-                }
+                "schema": { "$ref": "#/components/schemas/PromptResponse" }
               }
             }
           },
@@ -1353,11 +1301,7 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {
-                  "additionalProperties": { "type": "string" },
-                  "type": "object",
-                  "title": "Response Ai-Api Tag Prompt"
-                }
+                "schema": { "$ref": "#/components/schemas/PromptResponse" }
               }
             }
           },
@@ -1421,11 +1365,7 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {
-                  "additionalProperties": true,
-                  "type": "object",
-                  "title": "Response Ai-Api Embeddings"
-                }
+                "schema": { "$ref": "#/components/schemas/EmbeddingResult" }
               }
             }
           },
@@ -1459,11 +1399,7 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {
-                  "additionalProperties": true,
-                  "type": "object",
-                  "title": "Response Ai-Api Translate"
-                }
+                "schema": { "$ref": "#/components/schemas/TranslateResponse" }
               }
             }
           },
@@ -4351,11 +4287,7 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {
-                  "additionalProperties": true,
-                  "type": "object",
-                  "title": "Response Rag-Rag Status"
-                }
+                "schema": { "$ref": "#/components/schemas/RagStatusResponse" }
               }
             }
           }
@@ -4381,11 +4313,7 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {
-                  "additionalProperties": true,
-                  "type": "object",
-                  "title": "Response Rag-Rag Embed"
-                }
+                "schema": { "$ref": "#/components/schemas/RagEmbedResponse" }
               }
             }
           },
@@ -4419,11 +4347,7 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {
-                  "additionalProperties": true,
-                  "type": "object",
-                  "title": "Response Rag-Rag Search"
-                }
+                "schema": { "$ref": "#/components/schemas/RagSearchResponse" }
               }
             }
           },
@@ -4450,7 +4374,9 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
+                  "additionalProperties": {
+                    "$ref": "#/components/schemas/JobStatusEntry"
+                  },
                   "type": "object",
                   "title": "Response Jobs-Jobs Status"
                 }
@@ -4500,11 +4426,7 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {
-                  "type": "object",
-                  "additionalProperties": true,
-                  "title": "Response Jobs-Trigger Scheduler Job"
-                }
+                "schema": { "$ref": "#/components/schemas/JobStatusEntry" }
               }
             }
           },
@@ -4546,11 +4468,7 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {
-                  "type": "object",
-                  "additionalProperties": true,
-                  "title": "Response Jobs-Update Scheduler Job"
-                }
+                "schema": { "$ref": "#/components/schemas/JobStatusEntry" }
               }
             }
           },
@@ -4814,6 +4732,15 @@
         "type": "object",
         "required": ["method"],
         "title": "BotInfoRequest"
+      },
+      "BotInfoResponse": {
+        "properties": {
+          "telemetry": { "$ref": "#/components/schemas/Telemetry" }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "title": "BotInfoResponse",
+        "description": "A proxied Telegram Bot API reply.\n\nOpen by necessity: the caller picks the Bot API method, so the keys are\nwhatever that method returns. Only `telemetry` is ours."
       },
       "BulkChannelSettingGroupRequest": {
         "properties": {
@@ -5194,6 +5121,65 @@
         "required": ["channelName"],
         "title": "ChannelInfoRequest"
       },
+      "ChannelInfoResponse": {
+        "properties": {
+          "channelName": { "type": "string", "title": "Channelname" },
+          "displayName": {
+            "type": "string",
+            "title": "Displayname",
+            "default": ""
+          },
+          "photoUrl": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Photourl"
+          },
+          "bio": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Bio"
+          },
+          "subscribers": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Subscribers"
+          },
+          "photos": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Photos"
+          },
+          "videos": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Videos"
+          },
+          "files": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Files"
+          },
+          "links": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Links"
+          },
+          "latestId": { "type": "integer", "title": "Latestid", "default": 0 },
+          "telegramChatId": {
+            "anyOf": [{ "type": "integer" }, { "type": "null" }],
+            "title": "Telegramchatid"
+          },
+          "isUnavailableOnWebView": {
+            "type": "boolean",
+            "title": "Isunavailableonwebview",
+            "default": false
+          },
+          "isTelegramPage": {
+            "type": "boolean",
+            "title": "Istelegrampage",
+            "default": false
+          },
+          "kind": { "type": "string", "title": "Kind", "default": "unknown" },
+          "telemetry": { "$ref": "#/components/schemas/Telemetry" }
+        },
+        "type": "object",
+        "required": ["channelName"],
+        "title": "ChannelInfoResponse",
+        "description": "What one fetch of a channel's meta page reports.\n\nUnlike `ScrapeChannelResponse`, the counters here are `str | None`:\n`_parse_channel_meta` returns them straight from the parsed page without the\n`or \"\"` coercion that the scrape path applies. Same fields, different\nnullability \u2014 that difference is real and is why these are two models."
+      },
       "ChannelResponse": {
         "properties": {
           "id": { "type": "string", "title": "Id" },
@@ -5471,6 +5457,17 @@
         "type": "object",
         "title": "ClearTableResponse",
         "description": "How many rows `DELETE /data/tables/{name}` removed."
+      },
+      "CompletionResult": {
+        "properties": {
+          "text": { "type": "string", "title": "Text" },
+          "prompt": { "type": "string", "title": "Prompt" },
+          "model": { "type": "string", "title": "Model" },
+          "provider": { "type": "string", "title": "Provider" }
+        },
+        "type": "object",
+        "required": ["text", "prompt", "model", "provider"],
+        "title": "CompletionResult"
       },
       "DbStatsResponse": {
         "properties": {
@@ -5911,6 +5908,21 @@
         "title": "EmbeddingLogResponse",
         "description": "One embedding batch."
       },
+      "EmbeddingResult": {
+        "properties": {
+          "vectors": {
+            "items": { "items": { "type": "number" }, "type": "array" },
+            "type": "array",
+            "title": "Vectors"
+          },
+          "model": { "type": "string", "title": "Model" },
+          "provider": { "type": "string", "title": "Provider" },
+          "dimensions": { "type": "integer", "title": "Dimensions" }
+        },
+        "type": "object",
+        "required": ["vectors", "model", "provider", "dimensions"],
+        "title": "EmbeddingResult"
+      },
       "FollowChannelResultResponse": {
         "properties": {
           "name": { "type": "string", "title": "Name" },
@@ -6139,6 +6151,32 @@
         ],
         "title": "JobIntervals"
       },
+      "JobStatusEntry": {
+        "properties": {
+          "enabled": { "type": "boolean", "title": "Enabled", "default": true },
+          "lastRun": {
+            "anyOf": [{ "type": "integer" }, { "type": "null" }],
+            "title": "Lastrun"
+          },
+          "lastStatus": {
+            "type": "string",
+            "title": "Laststatus",
+            "default": "idle"
+          },
+          "lastError": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Lasterror"
+          },
+          "nextRun": {
+            "anyOf": [{ "type": "integer" }, { "type": "null" }],
+            "title": "Nextrun"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "title": "JobStatusEntry",
+        "description": "The scheduler's view of one job.\n\nFive keys are always present. Two more are **conditional** and therefore\nundeclared, travelling through `extra` exactly as they do today:\n\n* `detail` \u2014 set by `_mark_ok` only when a run reported something.\n* `pauseUntil` \u2014 set only on `auto_sync`, and only while a pause is active.\n\nDeclaring either would emit `\"detail\": null` / `\"pauseUntil\": null` on every\nother job and every other run, which is the trap B1 established the rule\nagainst."
+      },
       "JobsRuntimeSettings": {
         "properties": {
           "enabled": {
@@ -6216,6 +6254,29 @@
         "type": "object",
         "required": ["message"],
         "title": "Message"
+      },
+      "ModelInfo": {
+        "properties": {
+          "id": { "type": "string", "title": "Id" },
+          "label": { "type": "string", "title": "Label" },
+          "provider": { "type": "string", "title": "Provider" }
+        },
+        "type": "object",
+        "required": ["id", "label", "provider"],
+        "title": "ModelInfo"
+      },
+      "ModelListResponse": {
+        "properties": {
+          "models": {
+            "items": { "$ref": "#/components/schemas/ModelInfo" },
+            "type": "array",
+            "title": "Models"
+          },
+          "default": { "type": "string", "title": "Default", "default": "" }
+        },
+        "type": "object",
+        "title": "ModelListResponse",
+        "description": "Every model the configured providers expose, plus the current default.\n\n`default` is shipped alongside rather than flagged on an entry so a caller\ncan render the selector without scanning the list \u2014 and so a default that is\nno longer offered still round-trips instead of silently vanishing."
       },
       "NetworkLogResponse": {
         "properties": {
@@ -6591,6 +6652,14 @@
         "title": "PostScopeRequest",
         "description": "A post scope carried in a request body rather than a query string.\n\nThe channel selection can run to the full account \u2014 over a thousand handles \u2014\nwhich as `?channelNames=a,b,c,...` produced URLs long enough to hit proxy and\nserver header limits. A body has no such ceiling."
       },
+      "PromptResponse": {
+        "properties": {
+          "prompt": { "type": "string", "title": "Prompt", "default": "" }
+        },
+        "type": "object",
+        "title": "PromptResponse",
+        "description": "The assembled prompt, for the \"show me what you would send\" surfaces.\n\nShared by `/ai/summary/prompt` and `/ai/tag/prompt`: both assemble a prompt\nand neither runs a model, so they have one shape between them."
+      },
       "PromptScopeInput": {
         "properties": {
           "startDate": {
@@ -6627,6 +6696,18 @@
         "type": "object",
         "title": "PromptScopeInput",
         "description": "A Posts-feed scope the backend resolves into the prompt's posts block,\ninstead of the client shipping a pre-built ``postsText``. Mirrors the\nfrontend feed query params."
+      },
+      "ProxyHealthResponse": {
+        "properties": {
+          "badProxies": {
+            "items": { "type": "string" },
+            "type": "array",
+            "title": "Badproxies"
+          }
+        },
+        "type": "object",
+        "title": "ProxyHealthResponse",
+        "description": "Proxies currently marked bad by the pool."
       },
       "ProxyLaneSnapshot": {
         "properties": {
@@ -6720,6 +6801,20 @@
         "required": ["chatId", "text"],
         "title": "PublishRequest"
       },
+      "PublishResponse": {
+        "properties": {
+          "success": { "type": "boolean", "title": "Success", "default": true },
+          "results": { "items": {}, "type": "array", "title": "Results" },
+          "telemetry": {
+            "items": { "$ref": "#/components/schemas/Telemetry" },
+            "type": "array",
+            "title": "Telemetry"
+          }
+        },
+        "type": "object",
+        "title": "PublishResponse",
+        "description": "Result of sending a summary, one entry per 4000-character chunk.\n\n`results` holds the raw Bot API replies \u2014 same reasoning as\n`BotInfoResponse`, so they stay untyped."
+      },
       "PurgeLogsResponse": {
         "properties": {
           "deleted": {
@@ -6745,6 +6840,38 @@
         },
         "type": "object",
         "title": "RagEmbedRequest"
+      },
+      "RagEmbedResponse": {
+        "properties": {
+          "processed": {
+            "type": "integer",
+            "title": "Processed",
+            "default": 0
+          },
+          "upserted": { "type": "integer", "title": "Upserted", "default": 0 },
+          "pending": { "type": "integer", "title": "Pending", "default": 0 }
+        },
+        "type": "object",
+        "title": "RagEmbedResponse",
+        "description": "Result of one backfill pass.\n\n`pending` is recomputed after the write rather than derived, so a caller can\ndrive a progress bar from consecutive calls without tracking totals itself."
+      },
+      "RagSearchHit": {
+        "properties": {
+          "score": { "type": "number", "title": "Score" },
+          "channelName": { "type": "string", "title": "Channelname" },
+          "postId": { "type": "integer", "title": "Postid" },
+          "text": { "type": "string", "title": "Text", "default": "" },
+          "post": {
+            "anyOf": [
+              { "$ref": "#/components/schemas/PostResponse" },
+              { "type": "null" }
+            ]
+          }
+        },
+        "type": "object",
+        "required": ["score", "channelName", "postId"],
+        "title": "RagSearchHit",
+        "description": "One semantic match.\n\n`text` is the embedded text, kept separate from `post`: the post row may\nhave been pruned by retention since the embedding was written, in which case\n`post` is null but the matched text still renders."
       },
       "RagSearchRequest": {
         "properties": {
@@ -6774,6 +6901,37 @@
         "type": "object",
         "required": ["query"],
         "title": "RagSearchRequest"
+      },
+      "RagSearchResponse": {
+        "properties": {
+          "results": {
+            "items": { "$ref": "#/components/schemas/RagSearchHit" },
+            "type": "array",
+            "title": "Results"
+          },
+          "truncated": {
+            "type": "boolean",
+            "title": "Truncated",
+            "default": false
+          },
+          "scanned": { "type": "integer", "title": "Scanned", "default": 0 }
+        },
+        "type": "object",
+        "title": "RagSearchResponse",
+        "description": "Ranked matches for a query vector, best first.\n\n`truncated` and `scanned` describe the *scan*, not the results: similarity\nis computed in Python over a capped window, so a thin result set and a\ncapped scan are different failures and callers must be able to tell them\napart. (pgvector is the real fix \u2014 see `docs/ideas-log`.)"
+      },
+      "RagStatusResponse": {
+        "properties": {
+          "pending": { "type": "integer", "title": "Pending", "default": 0 },
+          "total": { "type": "integer", "title": "Total", "default": 0 },
+          "lastRun": {
+            "anyOf": [{ "type": "integer" }, { "type": "null" }],
+            "title": "Lastrun"
+          }
+        },
+        "type": "object",
+        "title": "RagStatusResponse",
+        "description": "How much of the operator's corpus has been embedded.\n\n`total` counts non-anchor posts only: anchors are pagination markers, not\ncontent, so embedding them would make the denominator meaningless."
       },
       "ReportCandidateResponse": {
         "properties": {
@@ -6850,6 +7008,13 @@
         "type": "object",
         "required": ["channelName", "targetTimeMs"],
         "title": "ResolveStartTimeRequest"
+      },
+      "ResolveStartTimeResponse": {
+        "properties": { "startId": { "type": "integer", "title": "Startid" } },
+        "type": "object",
+        "required": ["startId"],
+        "title": "ResolveStartTimeResponse",
+        "description": "The first post id at or after a target timestamp."
       },
       "RetentionRuntimeSettings": {
         "properties": {
@@ -6989,6 +7154,46 @@
         "type": "object",
         "title": "ScopeCountsResponse",
         "description": "How many posts in scope carried each signal kind.\n\nPost-level, not reference-level: a post forwarding two channels counts once\ntowards `forwardPosts`, which is what makes these comparable with\n`postsInScope`."
+      },
+      "ScrapeChannelResponse": {
+        "properties": {
+          "channelName": { "type": "string", "title": "Channelname" },
+          "displayName": {
+            "type": "string",
+            "title": "Displayname",
+            "default": ""
+          },
+          "photoUrl": { "type": "string", "title": "Photourl", "default": "" },
+          "bio": { "type": "string", "title": "Bio", "default": "" },
+          "subscribers": {
+            "type": "string",
+            "title": "Subscribers",
+            "default": ""
+          },
+          "photos": { "type": "string", "title": "Photos", "default": "" },
+          "videos": { "type": "string", "title": "Videos", "default": "" },
+          "files": { "type": "string", "title": "Files", "default": "" },
+          "links": { "type": "string", "title": "Links", "default": "" },
+          "telegramChatId": {
+            "anyOf": [{ "type": "integer" }, { "type": "null" }],
+            "title": "Telegramchatid"
+          },
+          "posts": {
+            "items": { "additionalProperties": true, "type": "object" },
+            "type": "array",
+            "title": "Posts"
+          },
+          "latestId": { "type": "integer", "title": "Latestid", "default": 0 },
+          "telemetry": {
+            "items": { "$ref": "#/components/schemas/Telemetry" },
+            "type": "array",
+            "title": "Telemetry"
+          }
+        },
+        "type": "object",
+        "required": ["channelName"],
+        "title": "ScrapeChannelResponse",
+        "description": "A scraped page range plus the channel meta that came with it.\n\nThe counter fields (`subscribers`, `photos`, \u2026) are the strings Telegram\nrenders (\"12.3K\"), not parsed numbers, and default to `\"\"` here rather than\n`null`: `scrape_channel` coerces every one with `or \"\"`, so the empty string\nis what the wire has always carried when a counter is missing."
       },
       "ScrapeRequest": {
         "properties": {
@@ -7505,11 +7710,23 @@
         "required": ["channels"],
         "title": "TagRequest"
       },
+      "Telemetry": {},
       "TestProxyRequest": {
         "properties": { "proxyUrl": { "type": "string", "title": "Proxyurl" } },
         "type": "object",
         "required": ["proxyUrl"],
         "title": "TestProxyRequest"
+      },
+      "TestProxyResponse": {
+        "properties": {
+          "success": { "type": "boolean", "title": "Success" },
+          "proxyUrl": { "type": "string", "title": "Proxyurl" }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": ["success", "proxyUrl"],
+        "title": "TestProxyResponse",
+        "description": "Result of probing one proxy URL.\n\nTwo shapes behind one model. Success adds `ip` and `latency`; failure adds\n`error` instead. Only `success` and `proxyUrl` appear in both, so only those\ntwo are declared \u2014 the rest flow through `extra` exactly as today."
       },
       "Token": {
         "properties": {
@@ -7524,6 +7741,23 @@
         "required": ["access_token"],
         "title": "Token"
       },
+      "TorActionResponse": {
+        "properties": {
+          "success": { "type": "boolean", "title": "Success" },
+          "message": { "type": "string", "title": "Message" }
+        },
+        "type": "object",
+        "required": ["success", "message"],
+        "title": "TorActionResponse",
+        "description": "Acknowledgement for a Tor control action (restart, new identity)."
+      },
+      "TorIpResponse": {
+        "properties": { "ip": { "type": "string", "title": "Ip" } },
+        "type": "object",
+        "required": ["ip"],
+        "title": "TorIpResponse",
+        "description": "The exit IP as seen through the Tor SOCKS proxy."
+      },
       "TorNewIdentityRequest": {
         "properties": {
           "port": {
@@ -7533,6 +7767,30 @@
         },
         "type": "object",
         "title": "TorNewIdentityRequest"
+      },
+      "TorStatusResponse": {
+        "properties": {
+          "running": {
+            "type": "boolean",
+            "title": "Running",
+            "default": false
+          },
+          "socksInUse": {
+            "type": "boolean",
+            "title": "Socksinuse",
+            "default": false
+          },
+          "controlInUse": {
+            "type": "boolean",
+            "title": "Controlinuse",
+            "default": false
+          },
+          "enabled": { "type": "boolean", "title": "Enabled", "default": false }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "title": "TorStatusResponse",
+        "description": "Whether the Tor sidecar is reachable.\n\n`autoSpawned` is present only when Tor is enabled \u2014 the disabled branch\nreturns a fixed four-key payload without it \u2014 so it is left to `extra`."
       },
       "TranslateRequest": {
         "properties": {
@@ -7558,6 +7816,21 @@
         "type": "object",
         "required": ["posts", "targetLanguage"],
         "title": "TranslateRequest"
+      },
+      "TranslateResponse": {
+        "properties": {
+          "translations": {
+            "items": {
+              "additionalProperties": { "type": "string" },
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Translations"
+          }
+        },
+        "type": "object",
+        "title": "TranslateResponse",
+        "description": "Translated posts, in the order they were submitted.\n\nEntries stay `dict[str, str]` because the provider contract is a bare\n`{id: text}`-shaped mapping chosen by the caller, not a fixed record."
       },
       "UpdateJobRequest": {
         "properties": { "enabled": { "type": "boolean", "title": "Enabled" } },

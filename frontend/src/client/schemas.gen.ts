@@ -183,6 +183,21 @@ export const BotInfoRequestSchema = {
     title: 'BotInfoRequest'
 } as const;
 
+export const BotInfoResponseSchema = {
+    properties: {
+        telemetry: {
+            '$ref': '#/components/schemas/Telemetry'
+        }
+    },
+    additionalProperties: true,
+    type: 'object',
+    title: 'BotInfoResponse',
+    description: `A proxied Telegram Bot API reply.
+
+Open by necessity: the caller picks the Bot API method, so the keys are
+whatever that method returns. Only \`telemetry\` is ours.`
+} as const;
+
 export const BulkChannelSettingGroupRequestSchema = {
     properties: {
         channelIds: {
@@ -800,6 +815,140 @@ export const ChannelInfoRequestSchema = {
     title: 'ChannelInfoRequest'
 } as const;
 
+export const ChannelInfoResponseSchema = {
+    properties: {
+        channelName: {
+            type: 'string',
+            title: 'Channelname'
+        },
+        displayName: {
+            type: 'string',
+            title: 'Displayname',
+            default: ''
+        },
+        photoUrl: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Photourl'
+        },
+        bio: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Bio'
+        },
+        subscribers: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Subscribers'
+        },
+        photos: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Photos'
+        },
+        videos: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Videos'
+        },
+        files: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Files'
+        },
+        links: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Links'
+        },
+        latestId: {
+            type: 'integer',
+            title: 'Latestid',
+            default: 0
+        },
+        telegramChatId: {
+            anyOf: [
+                {
+                    type: 'integer'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Telegramchatid'
+        },
+        isUnavailableOnWebView: {
+            type: 'boolean',
+            title: 'Isunavailableonwebview',
+            default: false
+        },
+        isTelegramPage: {
+            type: 'boolean',
+            title: 'Istelegrampage',
+            default: false
+        },
+        kind: {
+            type: 'string',
+            title: 'Kind',
+            default: 'unknown'
+        },
+        telemetry: {
+            '$ref': '#/components/schemas/Telemetry'
+        }
+    },
+    type: 'object',
+    required: ['channelName'],
+    title: 'ChannelInfoResponse',
+    description: `What one fetch of a channel's meta page reports.
+
+Unlike \`ScrapeChannelResponse\`, the counters here are \`str | None\`:
+\`_parse_channel_meta\` returns them straight from the parsed page without the
+\`or ""\` coercion that the scrape path applies. Same fields, different
+nullability — that difference is real and is why these are two models.`
+} as const;
+
 export const ChannelResponseSchema = {
     properties: {
         id: {
@@ -1389,6 +1538,30 @@ export const ClearTableResponseSchema = {
     type: 'object',
     title: 'ClearTableResponse',
     description: 'How many rows `DELETE /data/tables/{name}` removed.'
+} as const;
+
+export const CompletionResultSchema = {
+    properties: {
+        text: {
+            type: 'string',
+            title: 'Text'
+        },
+        prompt: {
+            type: 'string',
+            title: 'Prompt'
+        },
+        model: {
+            type: 'string',
+            title: 'Model'
+        },
+        provider: {
+            type: 'string',
+            title: 'Provider'
+        }
+    },
+    type: 'object',
+    required: ['text', 'prompt', 'model', 'provider'],
+    title: 'CompletionResult'
 } as const;
 
 export const DbStatsResponseSchema = {
@@ -2081,6 +2254,36 @@ export const EmbeddingLogResponseSchema = {
     description: 'One embedding batch.'
 } as const;
 
+export const EmbeddingResultSchema = {
+    properties: {
+        vectors: {
+            items: {
+                items: {
+                    type: 'number'
+                },
+                type: 'array'
+            },
+            type: 'array',
+            title: 'Vectors'
+        },
+        model: {
+            type: 'string',
+            title: 'Model'
+        },
+        provider: {
+            type: 'string',
+            title: 'Provider'
+        },
+        dimensions: {
+            type: 'integer',
+            title: 'Dimensions'
+        }
+    },
+    type: 'object',
+    required: ['vectors', 'model', 'provider', 'dimensions'],
+    title: 'EmbeddingResult'
+} as const;
+
 export const FollowChannelResultResponseSchema = {
     properties: {
         name: {
@@ -2447,6 +2650,68 @@ export const JobIntervalsSchema = {
     title: 'JobIntervals'
 } as const;
 
+export const JobStatusEntrySchema = {
+    properties: {
+        enabled: {
+            type: 'boolean',
+            title: 'Enabled',
+            default: true
+        },
+        lastRun: {
+            anyOf: [
+                {
+                    type: 'integer'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Lastrun'
+        },
+        lastStatus: {
+            type: 'string',
+            title: 'Laststatus',
+            default: 'idle'
+        },
+        lastError: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Lasterror'
+        },
+        nextRun: {
+            anyOf: [
+                {
+                    type: 'integer'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Nextrun'
+        }
+    },
+    additionalProperties: true,
+    type: 'object',
+    title: 'JobStatusEntry',
+    description: `The scheduler's view of one job.
+
+Five keys are always present. Two more are **conditional** and therefore
+undeclared, travelling through \`extra\` exactly as they do today:
+
+* \`detail\` — set by \`_mark_ok\` only when a run reported something.
+* \`pauseUntil\` — set only on \`auto_sync\`, and only while a pause is active.
+
+Declaring either would emit \`"detail": null\` / \`"pauseUntil": null\` on every
+other job and every other run, which is the trap B1 established the rule
+against.`
+} as const;
+
 export const JobsRuntimeSettingsSchema = {
     properties: {
         enabled: {
@@ -2611,6 +2876,50 @@ export const MessageSchema = {
     type: 'object',
     required: ['message'],
     title: 'Message'
+} as const;
+
+export const ModelInfoSchema = {
+    properties: {
+        id: {
+            type: 'string',
+            title: 'Id'
+        },
+        label: {
+            type: 'string',
+            title: 'Label'
+        },
+        provider: {
+            type: 'string',
+            title: 'Provider'
+        }
+    },
+    type: 'object',
+    required: ['id', 'label', 'provider'],
+    title: 'ModelInfo'
+} as const;
+
+export const ModelListResponseSchema = {
+    properties: {
+        models: {
+            items: {
+                '$ref': '#/components/schemas/ModelInfo'
+            },
+            type: 'array',
+            title: 'Models'
+        },
+        default: {
+            type: 'string',
+            title: 'Default',
+            default: ''
+        }
+    },
+    type: 'object',
+    title: 'ModelListResponse',
+    description: `Every model the configured providers expose, plus the current default.
+
+\`default\` is shipped alongside rather than flagged on an entry so a caller
+can render the selector without scanning the list — and so a default that is
+no longer offered still round-trips instead of silently vanishing.`
 } as const;
 
 export const NetworkLogResponseSchema = {
@@ -3262,6 +3571,22 @@ which as \`?channelNames=a,b,c,...\` produced URLs long enough to hit proxy and
 server header limits. A body has no such ceiling.`
 } as const;
 
+export const PromptResponseSchema = {
+    properties: {
+        prompt: {
+            type: 'string',
+            title: 'Prompt',
+            default: ''
+        }
+    },
+    type: 'object',
+    title: 'PromptResponse',
+    description: `The assembled prompt, for the "show me what you would send" surfaces.
+
+Shared by \`/ai/summary/prompt\` and \`/ai/tag/prompt\`: both assemble a prompt
+and neither runs a model, so they have one shape between them.`
+} as const;
+
 export const PromptScopeInputSchema = {
     properties: {
         startDate: {
@@ -3333,6 +3658,21 @@ export const PromptScopeInputSchema = {
     description: `A Posts-feed scope the backend resolves into the prompt's posts block,
 instead of the client shipping a pre-built \`\`postsText\`\`. Mirrors the
 frontend feed query params.`
+} as const;
+
+export const ProxyHealthResponseSchema = {
+    properties: {
+        badProxies: {
+            items: {
+                type: 'string'
+            },
+            type: 'array',
+            title: 'Badproxies'
+        }
+    },
+    type: 'object',
+    title: 'ProxyHealthResponse',
+    description: 'Proxies currently marked bad by the pool.'
 } as const;
 
 export const ProxyLaneSnapshotSchema = {
@@ -3507,6 +3847,34 @@ export const PublishRequestSchema = {
     title: 'PublishRequest'
 } as const;
 
+export const PublishResponseSchema = {
+    properties: {
+        success: {
+            type: 'boolean',
+            title: 'Success',
+            default: true
+        },
+        results: {
+            items: {},
+            type: 'array',
+            title: 'Results'
+        },
+        telemetry: {
+            items: {
+                '$ref': '#/components/schemas/Telemetry'
+            },
+            type: 'array',
+            title: 'Telemetry'
+        }
+    },
+    type: 'object',
+    title: 'PublishResponse',
+    description: `Result of sending a summary, one entry per 4000-character chunk.
+
+\`results\` holds the raw Bot API replies — same reasoning as
+\`BotInfoResponse\`, so they stay untyped.`
+} as const;
+
 export const PurgeLogsResponseSchema = {
     properties: {
         deleted: {
@@ -3549,6 +3917,72 @@ export const RagEmbedRequestSchema = {
     },
     type: 'object',
     title: 'RagEmbedRequest'
+} as const;
+
+export const RagEmbedResponseSchema = {
+    properties: {
+        processed: {
+            type: 'integer',
+            title: 'Processed',
+            default: 0
+        },
+        upserted: {
+            type: 'integer',
+            title: 'Upserted',
+            default: 0
+        },
+        pending: {
+            type: 'integer',
+            title: 'Pending',
+            default: 0
+        }
+    },
+    type: 'object',
+    title: 'RagEmbedResponse',
+    description: `Result of one backfill pass.
+
+\`pending\` is recomputed after the write rather than derived, so a caller can
+drive a progress bar from consecutive calls without tracking totals itself.`
+} as const;
+
+export const RagSearchHitSchema = {
+    properties: {
+        score: {
+            type: 'number',
+            title: 'Score'
+        },
+        channelName: {
+            type: 'string',
+            title: 'Channelname'
+        },
+        postId: {
+            type: 'integer',
+            title: 'Postid'
+        },
+        text: {
+            type: 'string',
+            title: 'Text',
+            default: ''
+        },
+        post: {
+            anyOf: [
+                {
+                    '$ref': '#/components/schemas/PostResponse'
+                },
+                {
+                    type: 'null'
+                }
+            ]
+        }
+    },
+    type: 'object',
+    required: ['score', 'channelName', 'postId'],
+    title: 'RagSearchHit',
+    description: `One semantic match.
+
+\`text\` is the embedded text, kept separate from \`post\`: the post row may
+have been pruned by retention since the embedding was written, in which case
+\`post\` is null but the matched text still renders.`
 } as const;
 
 export const RagSearchRequestSchema = {
@@ -3607,6 +4041,68 @@ export const RagSearchRequestSchema = {
     type: 'object',
     required: ['query'],
     title: 'RagSearchRequest'
+} as const;
+
+export const RagSearchResponseSchema = {
+    properties: {
+        results: {
+            items: {
+                '$ref': '#/components/schemas/RagSearchHit'
+            },
+            type: 'array',
+            title: 'Results'
+        },
+        truncated: {
+            type: 'boolean',
+            title: 'Truncated',
+            default: false
+        },
+        scanned: {
+            type: 'integer',
+            title: 'Scanned',
+            default: 0
+        }
+    },
+    type: 'object',
+    title: 'RagSearchResponse',
+    description: `Ranked matches for a query vector, best first.
+
+\`truncated\` and \`scanned\` describe the *scan*, not the results: similarity
+is computed in Python over a capped window, so a thin result set and a
+capped scan are different failures and callers must be able to tell them
+apart. (pgvector is the real fix — see \`docs/ideas-log\`.)`
+} as const;
+
+export const RagStatusResponseSchema = {
+    properties: {
+        pending: {
+            type: 'integer',
+            title: 'Pending',
+            default: 0
+        },
+        total: {
+            type: 'integer',
+            title: 'Total',
+            default: 0
+        },
+        lastRun: {
+            anyOf: [
+                {
+                    type: 'integer'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Lastrun'
+        }
+    },
+    type: 'object',
+    title: 'RagStatusResponse',
+    description: `How much of the operator's corpus has been embedded.
+
+\`total\` counts non-anchor posts only: anchors are pagination markers, not
+content, so embedding them would make the denominator meaningless.`
 } as const;
 
 export const ReportCandidateResponseSchema = {
@@ -3728,6 +4224,19 @@ export const ResolveStartTimeRequestSchema = {
     type: 'object',
     required: ['channelName', 'targetTimeMs'],
     title: 'ResolveStartTimeRequest'
+} as const;
+
+export const ResolveStartTimeResponseSchema = {
+    properties: {
+        startId: {
+            type: 'integer',
+            title: 'Startid'
+        }
+    },
+    type: 'object',
+    required: ['startId'],
+    title: 'ResolveStartTimeResponse',
+    description: 'The first post id at or after a target timestamp.'
 } as const;
 
 export const RetentionRuntimeSettingsSchema = {
@@ -3878,6 +4387,95 @@ export const ScopeCountsResponseSchema = {
 Post-level, not reference-level: a post forwarding two channels counts once
 towards \`forwardPosts\`, which is what makes these comparable with
 \`postsInScope\`.`
+} as const;
+
+export const ScrapeChannelResponseSchema = {
+    properties: {
+        channelName: {
+            type: 'string',
+            title: 'Channelname'
+        },
+        displayName: {
+            type: 'string',
+            title: 'Displayname',
+            default: ''
+        },
+        photoUrl: {
+            type: 'string',
+            title: 'Photourl',
+            default: ''
+        },
+        bio: {
+            type: 'string',
+            title: 'Bio',
+            default: ''
+        },
+        subscribers: {
+            type: 'string',
+            title: 'Subscribers',
+            default: ''
+        },
+        photos: {
+            type: 'string',
+            title: 'Photos',
+            default: ''
+        },
+        videos: {
+            type: 'string',
+            title: 'Videos',
+            default: ''
+        },
+        files: {
+            type: 'string',
+            title: 'Files',
+            default: ''
+        },
+        links: {
+            type: 'string',
+            title: 'Links',
+            default: ''
+        },
+        telegramChatId: {
+            anyOf: [
+                {
+                    type: 'integer'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Telegramchatid'
+        },
+        posts: {
+            items: {
+                additionalProperties: true,
+                type: 'object'
+            },
+            type: 'array',
+            title: 'Posts'
+        },
+        latestId: {
+            type: 'integer',
+            title: 'Latestid',
+            default: 0
+        },
+        telemetry: {
+            items: {
+                '$ref': '#/components/schemas/Telemetry'
+            },
+            type: 'array',
+            title: 'Telemetry'
+        }
+    },
+    type: 'object',
+    required: ['channelName'],
+    title: 'ScrapeChannelResponse',
+    description: `A scraped page range plus the channel meta that came with it.
+
+The counter fields (\`subscribers\`, \`photos\`, …) are the strings Telegram
+renders ("12.3K"), not parsed numbers, and default to \`""\` here rather than
+\`null\`: \`scrape_channel\` coerces every one with \`or ""\`, so the empty string
+is what the wire has always carried when a counter is missing.`
 } as const;
 
 export const ScrapeRequestSchema = {
@@ -4826,6 +5424,8 @@ export const TagRequestSchema = {
     title: 'TagRequest'
 } as const;
 
+export const TelemetrySchema = {} as const;
+
 export const TestProxyRequestSchema = {
     properties: {
         proxyUrl: {
@@ -4836,6 +5436,28 @@ export const TestProxyRequestSchema = {
     type: 'object',
     required: ['proxyUrl'],
     title: 'TestProxyRequest'
+} as const;
+
+export const TestProxyResponseSchema = {
+    properties: {
+        success: {
+            type: 'boolean',
+            title: 'Success'
+        },
+        proxyUrl: {
+            type: 'string',
+            title: 'Proxyurl'
+        }
+    },
+    additionalProperties: true,
+    type: 'object',
+    required: ['success', 'proxyUrl'],
+    title: 'TestProxyResponse',
+    description: `Result of probing one proxy URL.
+
+Two shapes behind one model. Success adds \`ip\` and \`latency\`; failure adds
+\`error\` instead. Only \`success\` and \`proxyUrl\` appear in both, so only those
+two are declared — the rest flow through \`extra\` exactly as today.`
 } as const;
 
 export const TokenSchema = {
@@ -4855,6 +5477,36 @@ export const TokenSchema = {
     title: 'Token'
 } as const;
 
+export const TorActionResponseSchema = {
+    properties: {
+        success: {
+            type: 'boolean',
+            title: 'Success'
+        },
+        message: {
+            type: 'string',
+            title: 'Message'
+        }
+    },
+    type: 'object',
+    required: ['success', 'message'],
+    title: 'TorActionResponse',
+    description: 'Acknowledgement for a Tor control action (restart, new identity).'
+} as const;
+
+export const TorIpResponseSchema = {
+    properties: {
+        ip: {
+            type: 'string',
+            title: 'Ip'
+        }
+    },
+    type: 'object',
+    required: ['ip'],
+    title: 'TorIpResponse',
+    description: 'The exit IP as seen through the Tor SOCKS proxy.'
+} as const;
+
 export const TorNewIdentityRequestSchema = {
     properties: {
         port: {
@@ -4871,6 +5523,38 @@ export const TorNewIdentityRequestSchema = {
     },
     type: 'object',
     title: 'TorNewIdentityRequest'
+} as const;
+
+export const TorStatusResponseSchema = {
+    properties: {
+        running: {
+            type: 'boolean',
+            title: 'Running',
+            default: false
+        },
+        socksInUse: {
+            type: 'boolean',
+            title: 'Socksinuse',
+            default: false
+        },
+        controlInUse: {
+            type: 'boolean',
+            title: 'Controlinuse',
+            default: false
+        },
+        enabled: {
+            type: 'boolean',
+            title: 'Enabled',
+            default: false
+        }
+    },
+    additionalProperties: true,
+    type: 'object',
+    title: 'TorStatusResponse',
+    description: `Whether the Tor sidecar is reachable.
+
+\`autoSpawned\` is present only when Tor is enabled — the disabled branch
+returns a fixed four-key payload without it — so it is left to \`extra\`.`
 } as const;
 
 export const TranslateRequestSchema = {
@@ -4909,6 +5593,27 @@ export const TranslateRequestSchema = {
     type: 'object',
     required: ['posts', 'targetLanguage'],
     title: 'TranslateRequest'
+} as const;
+
+export const TranslateResponseSchema = {
+    properties: {
+        translations: {
+            items: {
+                additionalProperties: {
+                    type: 'string'
+                },
+                type: 'object'
+            },
+            type: 'array',
+            title: 'Translations'
+        }
+    },
+    type: 'object',
+    title: 'TranslateResponse',
+    description: `Translated posts, in the order they were submitted.
+
+Entries stay \`dict[str, str]\` because the provider contract is a bare
+\`{id: text}\`-shaped mapping chosen by the caller, not a fixed record.`
 } as const;
 
 export const UpdateJobRequestSchema = {

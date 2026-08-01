@@ -8,7 +8,7 @@ import type { AiApiListModelsResponse, AiApiSummaryData, AiApiSummaryResponse, A
 export class AiService {
     /**
      * Api List Models
-     * @returns unknown Successful Response
+     * @returns ModelListResponse Successful Response
      * @throws ApiError
      */
     public static apiListModels(): CancelablePromise<AiApiListModelsResponse> {
@@ -22,7 +22,7 @@ export class AiService {
      * Api Summary
      * @param data The data for the request.
      * @param data.requestBody
-     * @returns unknown Successful Response
+     * @returns CompletionResult Successful Response
      * @throws ApiError
      */
     public static apiSummary(data: AiApiSummaryData): CancelablePromise<AiApiSummaryResponse> {
@@ -41,7 +41,7 @@ export class AiService {
      * Api Summary Prompt
      * @param data The data for the request.
      * @param data.requestBody
-     * @returns unknown Successful Response
+     * @returns PromptResponse Successful Response
      * @throws ApiError
      */
     public static apiSummaryPrompt(data: AiApiSummaryPromptData): CancelablePromise<AiApiSummaryPromptResponse> {
@@ -98,7 +98,7 @@ export class AiService {
      * Api Tag Prompt
      * @param data The data for the request.
      * @param data.requestBody
-     * @returns string Successful Response
+     * @returns PromptResponse Successful Response
      * @throws ApiError
      */
     public static apiTagPrompt(data: AiApiTagPromptData): CancelablePromise<AiApiTagPromptResponse> {
@@ -136,7 +136,7 @@ export class AiService {
      * Api Embeddings
      * @param data The data for the request.
      * @param data.requestBody
-     * @returns unknown Successful Response
+     * @returns EmbeddingResult Successful Response
      * @throws ApiError
      */
     public static apiEmbeddings(data: AiApiEmbeddingsData): CancelablePromise<AiApiEmbeddingsResponse> {
@@ -155,7 +155,7 @@ export class AiService {
      * Api Translate
      * @param data The data for the request.
      * @param data.requestBody
-     * @returns unknown Successful Response
+     * @returns TranslateResponse Successful Response
      * @throws ApiError
      */
     public static apiTranslate(data: AiApiTranslateData): CancelablePromise<AiApiTranslateResponse> {
@@ -1774,7 +1774,7 @@ export class ItemsService {
 export class JobsService {
     /**
      * Jobs Status
-     * @returns unknown Successful Response
+     * @returns JobStatusEntry Successful Response
      * @throws ApiError
      */
     public static jobsStatus(): CancelablePromise<JobsJobsStatusResponse> {
@@ -1800,7 +1800,7 @@ export class JobsService {
      * Trigger Scheduler Job
      * @param data The data for the request.
      * @param data.jobId
-     * @returns unknown Successful Response
+     * @returns JobStatusEntry Successful Response
      * @throws ApiError
      */
     public static triggerSchedulerJob(data: JobsTriggerSchedulerJobData): CancelablePromise<JobsTriggerSchedulerJobResponse> {
@@ -1821,7 +1821,7 @@ export class JobsService {
      * @param data The data for the request.
      * @param data.jobId
      * @param data.requestBody
-     * @returns unknown Successful Response
+     * @returns JobStatusEntry Successful Response
      * @throws ApiError
      */
     public static updateSchedulerJob(data: JobsUpdateSchedulerJobData): CancelablePromise<JobsUpdateSchedulerJobResponse> {
@@ -2021,7 +2021,7 @@ export class NetworkService {
      * Api Test Proxy
      * @param data The data for the request.
      * @param data.requestBody
-     * @returns unknown Successful Response
+     * @returns TestProxyResponse Successful Response
      * @throws ApiError
      */
     public static apiTestProxy(data: NetworkApiTestProxyData): CancelablePromise<NetworkApiTestProxyResponse> {
@@ -2038,7 +2038,7 @@ export class NetworkService {
     
     /**
      * Api Proxy Health
-     * @returns unknown Successful Response
+     * @returns ProxyHealthResponse Successful Response
      * @throws ApiError
      */
     public static apiProxyHealth(): CancelablePromise<NetworkApiProxyHealthResponse> {
@@ -2050,7 +2050,7 @@ export class NetworkService {
     
     /**
      * Api Tor Status
-     * @returns unknown Successful Response
+     * @returns TorStatusResponse Successful Response
      * @throws ApiError
      */
     public static apiTorStatus(): CancelablePromise<NetworkApiTorStatusResponse> {
@@ -2062,7 +2062,7 @@ export class NetworkService {
     
     /**
      * Api Tor Ip
-     * @returns unknown Successful Response
+     * @returns TorIpResponse Successful Response
      * @throws ApiError
      */
     public static apiTorIp(): CancelablePromise<NetworkApiTorIpResponse> {
@@ -2074,7 +2074,7 @@ export class NetworkService {
     
     /**
      * Api Tor Restart
-     * @returns unknown Successful Response
+     * @returns TorActionResponse Successful Response
      * @throws ApiError
      */
     public static apiTorRestart(): CancelablePromise<NetworkApiTorRestartResponse> {
@@ -2088,7 +2088,7 @@ export class NetworkService {
      * Api Tor New Identity
      * @param data The data for the request.
      * @param data.requestBody
-     * @returns unknown Successful Response
+     * @returns TorActionResponse Successful Response
      * @throws ApiError
      */
     public static apiTorNewIdentity(data: NetworkApiTorNewIdentityData): CancelablePromise<NetworkApiTorNewIdentityResponse> {
@@ -2107,7 +2107,7 @@ export class NetworkService {
 export class RagService {
     /**
      * Rag Status
-     * @returns unknown Successful Response
+     * @returns RagStatusResponse Successful Response
      * @throws ApiError
      */
     public static ragStatus(): CancelablePromise<RagRagStatusResponse> {
@@ -2121,7 +2121,7 @@ export class RagService {
      * Rag Embed
      * @param data The data for the request.
      * @param data.requestBody
-     * @returns unknown Successful Response
+     * @returns RagEmbedResponse Successful Response
      * @throws ApiError
      */
     public static ragEmbed(data: RagRagEmbedData): CancelablePromise<RagRagEmbedResponse> {
@@ -2140,7 +2140,7 @@ export class RagService {
      * Rag Search
      * @param data The data for the request.
      * @param data.requestBody
-     * @returns unknown Successful Response
+     * @returns RagSearchResponse Successful Response
      * @throws ApiError
      */
     public static ragSearch(data: RagRagSearchData): CancelablePromise<RagRagSearchResponse> {
@@ -2161,7 +2161,7 @@ export class TelegramService {
      * Api Scrape
      * @param data The data for the request.
      * @param data.requestBody
-     * @returns unknown Successful Response
+     * @returns ScrapeChannelResponse Successful Response
      * @throws ApiError
      */
     public static apiScrape(data: TelegramApiScrapeData): CancelablePromise<TelegramApiScrapeResponse> {
@@ -2180,7 +2180,7 @@ export class TelegramService {
      * Api Channel Info
      * @param data The data for the request.
      * @param data.requestBody
-     * @returns unknown Successful Response
+     * @returns ChannelInfoResponse Successful Response
      * @throws ApiError
      */
     public static apiChannelInfo(data: TelegramApiChannelInfoData): CancelablePromise<TelegramApiChannelInfoResponse> {
@@ -2199,7 +2199,7 @@ export class TelegramService {
      * Api Resolve Start Time
      * @param data The data for the request.
      * @param data.requestBody
-     * @returns unknown Successful Response
+     * @returns ResolveStartTimeResponse Successful Response
      * @throws ApiError
      */
     public static apiResolveStartTime(data: TelegramApiResolveStartTimeData): CancelablePromise<TelegramApiResolveStartTimeResponse> {
@@ -2218,7 +2218,7 @@ export class TelegramService {
      * Api Bot Info
      * @param data The data for the request.
      * @param data.requestBody
-     * @returns unknown Successful Response
+     * @returns BotInfoResponse Successful Response
      * @throws ApiError
      */
     public static apiBotInfo(data: TelegramApiBotInfoData): CancelablePromise<TelegramApiBotInfoResponse> {
@@ -2237,7 +2237,7 @@ export class TelegramService {
      * Api Publish
      * @param data The data for the request.
      * @param data.requestBody
-     * @returns unknown Successful Response
+     * @returns PublishResponse Successful Response
      * @throws ApiError
      */
     public static apiPublish(data: TelegramApiPublishData): CancelablePromise<TelegramApiPublishResponse> {

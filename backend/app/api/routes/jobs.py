@@ -13,7 +13,7 @@ from app.api.deps import CurrentUser, SessionDep
 from app.core.config import settings
 from app.jobs.scheduler import get_job_status, set_job_enabled_flag, trigger_job
 from app.jobs.settings import JOB_IDS
-from app.schemas.jobs import UpdateJobRequest
+from app.schemas.jobs import JobStatusEntry, UpdateJobRequest
 from app.schemas.runtime_config import RuntimeConfigResponse
 from app.schemas.sync_jobs import (
     CancelSyncJobResponse,
@@ -78,8 +78,11 @@ def _resolve_sync_entries(
 
 
 @router.get("/status")
-def jobs_status(_current_user: CurrentUser) -> dict[str, Any]:
-    return get_job_status()
+def jobs_status(_current_user: CurrentUser) -> dict[str, JobStatusEntry]:
+    return {
+        job_id: JobStatusEntry.model_validate(entry)
+        for job_id, entry in get_job_status().items()
+    }
 
 
 @router.get("/runtime-config", response_model=RuntimeConfigResponse)
@@ -94,11 +97,11 @@ def get_runtime_config(
 @router.post("/{job_id}/trigger")
 async def trigger_scheduler_job(
     job_id: str, _current_user: CurrentUser
-) -> dict[str, Any]:
+) -> JobStatusEntry:
     if job_id not in JOB_IDS:
         raise HTTPException(status_code=404, detail=f"Unknown job: {job_id}")
     try:
-        return await trigger_job(job_id)
+        return JobStatusEntry.model_validate(await trigger_job(job_id))
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
@@ -106,11 +109,11 @@ async def trigger_scheduler_job(
 @router.put("/{job_id}")
 def update_scheduler_job(
     job_id: str, body: UpdateJobRequest, _current_user: CurrentUser
-) -> dict[str, Any]:
+) -> JobStatusEntry:
     if job_id not in JOB_IDS:
         raise HTTPException(status_code=404, detail=f"Unknown job: {job_id}")
     try:
-        return set_job_enabled_flag(job_id, body.enabled)
+        return JobStatusEntry.model_validate(set_job_enabled_flag(job_id, body.enabled))
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 

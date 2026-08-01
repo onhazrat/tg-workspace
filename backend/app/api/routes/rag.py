@@ -12,6 +12,11 @@ from app.ai.registry import get_provider
 from app.api.deps import CurrentUser, SessionDep
 from app.core.config import settings
 from app.models_tg import Post, PostEmbedding
+from app.schemas.rag import (
+    RagEmbedResponse,
+    RagSearchResponse,
+    RagStatusResponse,
+)
 from app.services.channels import channel_names_for_operator
 from app.services.embeddings import backfill_embeddings, get_embedding_status
 from app.services.serialization import post_to_camel
@@ -55,9 +60,11 @@ def _effective_operator_channels(
 
 
 @router.get("/status")
-def rag_status(session: SessionDep, current_user: CurrentUser) -> dict[str, Any]:
+def rag_status(session: SessionDep, current_user: CurrentUser) -> RagStatusResponse:
     operator_channels = channel_names_for_operator(session, current_user.id)
-    return get_embedding_status(session, channel_names=operator_channels)
+    return RagStatusResponse.model_validate(
+        get_embedding_status(session, channel_names=operator_channels)
+    )
 
 
 @router.post("/embed")
@@ -65,12 +72,14 @@ async def rag_embed(
     body: RagEmbedRequest,
     session: SessionDep,
     current_user: CurrentUser,
-) -> dict[str, Any]:
+) -> RagEmbedResponse:
     if not settings.GEMINI_API_KEY:
         raise HTTPException(status_code=503, detail="GEMINI_API_KEY not configured")
     try:
-        return await backfill_embeddings(
-            session, limit=body.limit, operator_id=current_user.id
+        return RagEmbedResponse.model_validate(
+            await backfill_embeddings(
+                session, limit=body.limit, operator_id=current_user.id
+            )
         )
     except ValueError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
@@ -81,7 +90,7 @@ async def rag_search(
     body: RagSearchRequest,
     session: SessionDep,
     current_user: CurrentUser,
-) -> dict[str, Any]:
+) -> RagSearchResponse:
     if not settings.GEMINI_API_KEY:
         raise HTTPException(status_code=503, detail="GEMINI_API_KEY not configured")
     provider = get_provider("gemini")
@@ -96,7 +105,10 @@ async def rag_search(
         session, current_user, body.channels
     )
     if not allowed_channels:
-        return {"results": []}
+        # Explicitly the same key set as the main path. This branch used
+        # to return a bare `{"results": []}`, so callers saw `truncated`
+        # and `scanned` appear and disappear depending on scope.
+        return RagSearchResponse(results=[], truncated=False, scanned=0)
 
     scan_cap = min(max(body.scan_limit, 1), settings.RAG_SCAN_LIMIT_MAX)
 
@@ -164,4 +176,6 @@ async def rag_search(
         )
     # Surfaced so callers can tell a thin result set from a capped scan.
     # pgvector is the real fix; see docs/ideas-log.
-    return {"results": results, "truncated": truncated, "scanned": len(rows)}
+    return RagSearchResponse.model_validate(
+        {"results": results, "truncated": truncated, "scanned": len(rows)}
+    )

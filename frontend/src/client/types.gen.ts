@@ -34,6 +34,17 @@ export type BotInfoRequest = {
 } | null);
 };
 
+/**
+ * A proxied Telegram Bot API reply.
+ *
+ * Open by necessity: the caller picks the Bot API method, so the keys are
+ * whatever that method returns. Only `telemetry` is ours.
+ */
+export type BotInfoResponse = {
+    telemetry?: Telemetry;
+    [key: string]: unknown | Telemetry;
+};
+
 export type BulkChannelSettingGroupRequest = {
     channelIds: Array<(string)>;
     settingGroupId: string;
@@ -207,6 +218,32 @@ export type ChannelInfoRequest = {
 };
 
 /**
+ * What one fetch of a channel's meta page reports.
+ *
+ * Unlike `ScrapeChannelResponse`, the counters here are `str | None`:
+ * `_parse_channel_meta` returns them straight from the parsed page without the
+ * `or ""` coercion that the scrape path applies. Same fields, different
+ * nullability — that difference is real and is why these are two models.
+ */
+export type ChannelInfoResponse = {
+    channelName: string;
+    displayName?: string;
+    photoUrl?: (string | null);
+    bio?: (string | null);
+    subscribers?: (string | null);
+    photos?: (string | null);
+    videos?: (string | null);
+    files?: (string | null);
+    links?: (string | null);
+    latestId?: number;
+    telegramChatId?: (number | null);
+    isUnavailableOnWebView?: boolean;
+    isTelegramPage?: boolean;
+    kind?: string;
+    telemetry?: Telemetry;
+};
+
+/**
  * One channel, as `channel_to_camel` builds it.
  *
  * Carries the inherited setting-group fields and the optional ``stats`` block
@@ -313,6 +350,13 @@ export type ChatRequest = {
  */
 export type ClearTableResponse = {
     deleted?: number;
+};
+
+export type CompletionResult = {
+    text: string;
+    prompt: string;
+    model: string;
+    provider: string;
 };
 
 /**
@@ -525,6 +569,13 @@ export type EmbeddingLogResponse = {
     timestamp?: number;
 };
 
+export type EmbeddingResult = {
+    vectors: Array<Array<(number)>>;
+    model: string;
+    provider: string;
+    dimensions: number;
+};
+
 export type EmbedRequest = {
     texts: Array<(string)>;
     model?: (string | null);
@@ -618,6 +669,28 @@ export type JobsRuntimeSettings = {
 };
 
 /**
+ * The scheduler's view of one job.
+ *
+ * Five keys are always present. Two more are **conditional** and therefore
+ * undeclared, travelling through `extra` exactly as they do today:
+ *
+ * * `detail` — set by `_mark_ok` only when a run reported something.
+ * * `pauseUntil` — set only on `auto_sync`, and only while a pause is active.
+ *
+ * Declaring either would emit `"detail": null` / `"pauseUntil": null` on every
+ * other job and every other run, which is the trap B1 established the rule
+ * against.
+ */
+export type JobStatusEntry = {
+    enabled?: boolean;
+    lastRun?: (number | null);
+    lastStatus?: string;
+    lastError?: (string | null);
+    nextRun?: (number | null);
+    [key: string]: unknown | boolean | string;
+};
+
+/**
  * One model call: the prompt, the response, and what it cost.
  *
  * `protected_namespaces=()` is required, not decorative. Pydantic v2 reserves
@@ -658,6 +731,24 @@ export type LogWriteResponse = {
 
 export type Message = {
     message: string;
+};
+
+export type ModelInfo = {
+    id: string;
+    label: string;
+    provider: string;
+};
+
+/**
+ * Every model the configured providers expose, plus the current default.
+ *
+ * `default` is shipped alongside rather than flagged on an entry so a caller
+ * can render the selector without scanning the list — and so a default that is
+ * no longer offered still round-trips instead of silently vanishing.
+ */
+export type ModelListResponse = {
+    models?: Array<ModelInfo>;
+    default?: string;
 };
 
 /**
@@ -797,6 +888,16 @@ export type PostScopeRequest = {
 };
 
 /**
+ * The assembled prompt, for the "show me what you would send" surfaces.
+ *
+ * Shared by `/ai/summary/prompt` and `/ai/tag/prompt`: both assemble a prompt
+ * and neither runs a model, so they have one shape between them.
+ */
+export type PromptResponse = {
+    prompt?: string;
+};
+
+/**
  * A Posts-feed scope the backend resolves into the prompt's posts block,
  * instead of the client shipping a pre-built ``postsText``. Mirrors the
  * frontend feed query params.
@@ -811,6 +912,13 @@ export type PromptScopeInput = {
     maxPerChannelMode?: string;
     sort?: string;
     seed?: number;
+};
+
+/**
+ * Proxies currently marked bad by the pool.
+ */
+export type ProxyHealthResponse = {
+    badProxies?: Array<(string)>;
 };
 
 export type ProxyLaneSnapshot = {
@@ -851,6 +959,18 @@ export type PublishRequest = {
 };
 
 /**
+ * Result of sending a summary, one entry per 4000-character chunk.
+ *
+ * `results` holds the raw Bot API replies — same reasoning as
+ * `BotInfoResponse`, so they stay untyped.
+ */
+export type PublishResponse = {
+    success?: boolean;
+    results?: Array<unknown>;
+    telemetry?: Array<Telemetry>;
+};
+
+/**
  * Result of `DELETE /data/logs`.
  *
  * Three call shapes share one response. A retention sweep (`olderThanDays`)
@@ -872,6 +992,33 @@ export type RagEmbedRequest = {
     limit?: number;
 };
 
+/**
+ * Result of one backfill pass.
+ *
+ * `pending` is recomputed after the write rather than derived, so a caller can
+ * drive a progress bar from consecutive calls without tracking totals itself.
+ */
+export type RagEmbedResponse = {
+    processed?: number;
+    upserted?: number;
+    pending?: number;
+};
+
+/**
+ * One semantic match.
+ *
+ * `text` is the embedded text, kept separate from `post`: the post row may
+ * have been pruned by retention since the embedding was written, in which case
+ * `post` is null but the matched text still renders.
+ */
+export type RagSearchHit = {
+    score: number;
+    channelName: string;
+    postId: number;
+    text?: string;
+    post?: (PostResponse | null);
+};
+
 export type RagSearchRequest = {
     query: string;
     channels?: (Array<(string)> | null);
@@ -879,6 +1026,32 @@ export type RagSearchRequest = {
     endDate?: (number | null);
     limit?: number;
     scanLimit?: number;
+};
+
+/**
+ * Ranked matches for a query vector, best first.
+ *
+ * `truncated` and `scanned` describe the *scan*, not the results: similarity
+ * is computed in Python over a capped window, so a thin result set and a
+ * capped scan are different failures and callers must be able to tell them
+ * apart. (pgvector is the real fix — see `docs/ideas-log`.)
+ */
+export type RagSearchResponse = {
+    results?: Array<RagSearchHit>;
+    truncated?: boolean;
+    scanned?: number;
+};
+
+/**
+ * How much of the operator's corpus has been embedded.
+ *
+ * `total` counts non-anchor posts only: anchors are pagination markers, not
+ * content, so embedding them would make the denominator meaningless.
+ */
+export type RagStatusResponse = {
+    pending?: number;
+    total?: number;
+    lastRun?: (number | null);
 };
 
 /**
@@ -909,6 +1082,13 @@ export type ResolveStartTimeRequest = {
     torRotationThreshold?: number;
     channelName: string;
     targetTimeMs: number;
+};
+
+/**
+ * The first post id at or after a target timestamp.
+ */
+export type ResolveStartTimeResponse = {
+    startId: number;
 };
 
 export type RetentionRuntimeSettings = {
@@ -956,6 +1136,32 @@ export type ScopeCountsResponse = {
     forwardPosts?: number;
     mentionPosts?: number;
     linkPosts?: number;
+};
+
+/**
+ * A scraped page range plus the channel meta that came with it.
+ *
+ * The counter fields (`subscribers`, `photos`, …) are the strings Telegram
+ * renders ("12.3K"), not parsed numbers, and default to `""` here rather than
+ * `null`: `scrape_channel` coerces every one with `or ""`, so the empty string
+ * is what the wire has always carried when a counter is missing.
+ */
+export type ScrapeChannelResponse = {
+    channelName: string;
+    displayName?: string;
+    photoUrl?: string;
+    bio?: string;
+    subscribers?: string;
+    photos?: string;
+    videos?: string;
+    files?: string;
+    links?: string;
+    telegramChatId?: (number | null);
+    posts?: Array<{
+        [key: string]: unknown;
+    }>;
+    latestId?: number;
+    telemetry?: Array<Telemetry>;
 };
 
 export type ScrapeRequest = {
@@ -1168,8 +1374,23 @@ export type TagRequest = {
     tagsPerChannelMax?: (number | null);
 };
 
+export type Telemetry = unknown;
+
 export type TestProxyRequest = {
     proxyUrl: string;
+};
+
+/**
+ * Result of probing one proxy URL.
+ *
+ * Two shapes behind one model. Success adds `ip` and `latency`; failure adds
+ * `error` instead. Only `success` and `proxyUrl` appear in both, so only those
+ * two are declared — the rest flow through `extra` exactly as today.
+ */
+export type TestProxyResponse = {
+    success: boolean;
+    proxyUrl: string;
+    [key: string]: unknown | boolean | string;
 };
 
 export type Token = {
@@ -1177,8 +1398,37 @@ export type Token = {
     token_type?: string;
 };
 
+/**
+ * Acknowledgement for a Tor control action (restart, new identity).
+ */
+export type TorActionResponse = {
+    success: boolean;
+    message: string;
+};
+
+/**
+ * The exit IP as seen through the Tor SOCKS proxy.
+ */
+export type TorIpResponse = {
+    ip: string;
+};
+
 export type TorNewIdentityRequest = {
     port?: (number | null);
+};
+
+/**
+ * Whether the Tor sidecar is reachable.
+ *
+ * `autoSpawned` is present only when Tor is enabled — the disabled branch
+ * returns a fixed four-key payload without it — so it is left to `extra`.
+ */
+export type TorStatusResponse = {
+    running?: boolean;
+    socksInUse?: boolean;
+    controlInUse?: boolean;
+    enabled?: boolean;
+    [key: string]: unknown | boolean;
 };
 
 export type TranslateRequest = {
@@ -1188,6 +1438,18 @@ export type TranslateRequest = {
     targetLanguage: string;
     model?: (string | null);
     provider?: string;
+};
+
+/**
+ * Translated posts, in the order they were submitted.
+ *
+ * Entries stay `dict[str, str]` because the provider contract is a bare
+ * `{id: text}`-shaped mapping chosen by the caller, not a fixed record.
+ */
+export type TranslateResponse = {
+    translations?: Array<{
+        [key: string]: (string);
+    }>;
 };
 
 export type UpdateJobRequest = {
@@ -1250,25 +1512,19 @@ export type ValidationError = {
     };
 };
 
-export type AiApiListModelsResponse = ({
-    [key: string]: unknown;
-});
+export type AiApiListModelsResponse = (ModelListResponse);
 
 export type AiApiSummaryData = {
     requestBody: SummaryRequest;
 };
 
-export type AiApiSummaryResponse = ({
-    [key: string]: unknown;
-});
+export type AiApiSummaryResponse = (CompletionResult);
 
 export type AiApiSummaryPromptData = {
     requestBody: SummaryRequest;
 };
 
-export type AiApiSummaryPromptResponse = ({
-    [key: string]: unknown;
-});
+export type AiApiSummaryPromptResponse = (PromptResponse);
 
 export type AiApiSummaryStreamData = {
     requestBody: SummaryRequest;
@@ -1286,9 +1542,7 @@ export type AiApiTagPromptData = {
     requestBody: TagRequest;
 };
 
-export type AiApiTagPromptResponse = ({
-    [key: string]: (string);
-});
+export type AiApiTagPromptResponse = (PromptResponse);
 
 export type AiApiTagStreamData = {
     requestBody: TagRequest;
@@ -1300,17 +1554,13 @@ export type AiApiEmbeddingsData = {
     requestBody: EmbedRequest;
 };
 
-export type AiApiEmbeddingsResponse = ({
-    [key: string]: unknown;
-});
+export type AiApiEmbeddingsResponse = (EmbeddingResult);
 
 export type AiApiTranslateData = {
     requestBody: TranslateRequest;
 };
 
-export type AiApiTranslateResponse = ({
-    [key: string]: unknown;
-});
+export type AiApiTranslateResponse = (TranslateResponse);
 
 export type DataGetSyncMetaRouteResponse = ({
     [key: string]: SyncMetaEntry;
@@ -1846,7 +2096,7 @@ export type ItemsDeleteItemData = {
 export type ItemsDeleteItemResponse = (Message);
 
 export type JobsJobsStatusResponse = ({
-    [key: string]: unknown;
+    [key: string]: JobStatusEntry;
 });
 
 export type JobsGetRuntimeConfigResponse = (RuntimeConfigResponse);
@@ -1855,18 +2105,14 @@ export type JobsTriggerSchedulerJobData = {
     jobId: string;
 };
 
-export type JobsTriggerSchedulerJobResponse = ({
-    [key: string]: unknown;
-});
+export type JobsTriggerSchedulerJobResponse = (JobStatusEntry);
 
 export type JobsUpdateSchedulerJobData = {
     jobId: string;
     requestBody: UpdateJobRequest;
 };
 
-export type JobsUpdateSchedulerJobResponse = ({
-    [key: string]: unknown;
-});
+export type JobsUpdateSchedulerJobResponse = (JobStatusEntry);
 
 export type JobsStartSyncJobData = {
     requestBody: StartSyncJobRequest;
@@ -1922,93 +2168,65 @@ export type NetworkApiTestProxyData = {
     requestBody: TestProxyRequest;
 };
 
-export type NetworkApiTestProxyResponse = ({
-    [key: string]: unknown;
-});
+export type NetworkApiTestProxyResponse = (TestProxyResponse);
 
-export type NetworkApiProxyHealthResponse = ({
-    [key: string]: unknown;
-});
+export type NetworkApiProxyHealthResponse = (ProxyHealthResponse);
 
-export type NetworkApiTorStatusResponse = ({
-    [key: string]: unknown;
-});
+export type NetworkApiTorStatusResponse = (TorStatusResponse);
 
-export type NetworkApiTorIpResponse = ({
-    [key: string]: unknown;
-});
+export type NetworkApiTorIpResponse = (TorIpResponse);
 
-export type NetworkApiTorRestartResponse = ({
-    [key: string]: unknown;
-});
+export type NetworkApiTorRestartResponse = (TorActionResponse);
 
 export type NetworkApiTorNewIdentityData = {
     requestBody: TorNewIdentityRequest;
 };
 
-export type NetworkApiTorNewIdentityResponse = ({
-    [key: string]: unknown;
-});
+export type NetworkApiTorNewIdentityResponse = (TorActionResponse);
 
-export type RagRagStatusResponse = ({
-    [key: string]: unknown;
-});
+export type RagRagStatusResponse = (RagStatusResponse);
 
 export type RagRagEmbedData = {
     requestBody: RagEmbedRequest;
 };
 
-export type RagRagEmbedResponse = ({
-    [key: string]: unknown;
-});
+export type RagRagEmbedResponse = (RagEmbedResponse);
 
 export type RagRagSearchData = {
     requestBody: RagSearchRequest;
 };
 
-export type RagRagSearchResponse = ({
-    [key: string]: unknown;
-});
+export type RagRagSearchResponse = (RagSearchResponse);
 
 export type TelegramApiScrapeData = {
     requestBody: ScrapeRequest;
 };
 
-export type TelegramApiScrapeResponse = ({
-    [key: string]: unknown;
-});
+export type TelegramApiScrapeResponse = (ScrapeChannelResponse);
 
 export type TelegramApiChannelInfoData = {
     requestBody: ChannelInfoRequest;
 };
 
-export type TelegramApiChannelInfoResponse = ({
-    [key: string]: unknown;
-});
+export type TelegramApiChannelInfoResponse = (ChannelInfoResponse);
 
 export type TelegramApiResolveStartTimeData = {
     requestBody: ResolveStartTimeRequest;
 };
 
-export type TelegramApiResolveStartTimeResponse = ({
-    [key: string]: unknown;
-});
+export type TelegramApiResolveStartTimeResponse = (ResolveStartTimeResponse);
 
 export type TelegramApiBotInfoData = {
     requestBody: BotInfoRequest;
 };
 
-export type TelegramApiBotInfoResponse = ({
-    [key: string]: unknown;
-});
+export type TelegramApiBotInfoResponse = (BotInfoResponse);
 
 export type TelegramApiPublishData = {
     requestBody: PublishRequest;
 };
 
-export type TelegramApiPublishResponse = ({
-    [key: string]: unknown;
-});
+export type TelegramApiPublishResponse = (PublishResponse);
 
 export type TelegramApiChannelPhotoData = {
     channelId: string;

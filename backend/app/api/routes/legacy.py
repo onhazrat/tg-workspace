@@ -6,12 +6,18 @@ removal after one release cycle once all clients migrate to /api/v1/*.
 """
 
 import logging
-from typing import Any
 
 from fastapi import APIRouter, Response
 
 from app.api.deps import CurrentUser, SessionDep
 from app.api.routes import network, telegram
+from app.schemas.network import (
+    ProxyHealthResponse,
+    TestProxyResponse,
+    TorActionResponse,
+    TorIpResponse,
+    TorStatusResponse,
+)
 from app.schemas.telegram import (
     BotInfoRequest,
     ChannelInfoRequest,
@@ -20,6 +26,13 @@ from app.schemas.telegram import (
     ScrapeRequest,
     TestProxyRequest,
     TorNewIdentityRequest,
+)
+from app.schemas.telegram_ops import (
+    BotInfoResponse,
+    ChannelInfoResponse,
+    PublishResponse,
+    ResolveStartTimeResponse,
+    ScrapeChannelResponse,
 )
 
 router = APIRouter(prefix="/api", tags=["legacy"])
@@ -37,7 +50,7 @@ async def legacy_test_proxy(
     body: TestProxyRequest,
     _current_user: CurrentUser,
     response: Response,
-) -> dict[str, Any]:
+) -> TestProxyResponse:
     _mark_deprecated(response)
     return await network.api_test_proxy(body, _current_user)
 
@@ -45,7 +58,7 @@ async def legacy_test_proxy(
 @router.get("/proxy-health")
 def legacy_proxy_health(
     _current_user: CurrentUser, response: Response
-) -> dict[str, Any]:
+) -> ProxyHealthResponse:
     _mark_deprecated(response)
     return network.api_proxy_health(_current_user)
 
@@ -53,7 +66,7 @@ def legacy_proxy_health(
 @router.get("/tor-status")
 async def legacy_tor_status(
     _current_user: CurrentUser, response: Response
-) -> dict[str, Any]:
+) -> TorStatusResponse:
     _mark_deprecated(response)
     return await network.api_tor_status(_current_user)
 
@@ -61,7 +74,7 @@ async def legacy_tor_status(
 @router.get("/tor-ip")
 async def legacy_tor_ip(
     _current_user: CurrentUser, response: Response
-) -> dict[str, Any]:
+) -> TorIpResponse:
     _mark_deprecated(response)
     return await network.api_tor_ip(_current_user)
 
@@ -69,7 +82,7 @@ async def legacy_tor_ip(
 @router.post("/tor-restart")
 async def legacy_tor_restart(
     _current_user: CurrentUser, response: Response
-) -> dict[str, Any]:
+) -> TorActionResponse:
     _mark_deprecated(response)
     return await network.api_tor_restart(_current_user)
 
@@ -79,7 +92,7 @@ async def legacy_tor_new_identity(
     body: TorNewIdentityRequest,
     _current_user: CurrentUser,
     response: Response,
-) -> dict[str, Any]:
+) -> TorActionResponse:
     _mark_deprecated(response)
     return await network.api_tor_new_identity(body, _current_user)
 
@@ -90,7 +103,7 @@ async def legacy_bot_info(
     session: SessionDep,
     current_user: CurrentUser,
     response: Response,
-) -> dict[str, Any]:
+) -> BotInfoResponse:
     _mark_deprecated(response)
     return await telegram.api_bot_info(body, session, current_user)
 
@@ -101,7 +114,7 @@ async def legacy_publish(
     session: SessionDep,
     current_user: CurrentUser,
     response: Response,
-) -> dict[str, Any]:
+) -> PublishResponse:
     _mark_deprecated(response)
     return await telegram.api_publish(body, session, current_user)
 
@@ -111,7 +124,7 @@ async def legacy_channel_info(
     body: ChannelInfoRequest,
     current_user: CurrentUser,
     response: Response,
-) -> dict[str, Any]:
+) -> ChannelInfoResponse:
     _mark_deprecated(response)
     return await telegram.api_channel_info(body, current_user)
 
@@ -121,7 +134,7 @@ async def legacy_scrape(
     body: ScrapeRequest,
     current_user: CurrentUser,
     response: Response,
-) -> dict[str, Any]:
+) -> ScrapeChannelResponse:
     _mark_deprecated(response)
     return await telegram.api_scrape(body, current_user)
 
@@ -131,6 +144,6 @@ async def legacy_resolve_start_time(
     body: ResolveStartTimeRequest,
     current_user: CurrentUser,
     response: Response,
-) -> dict[str, Any]:
+) -> ResolveStartTimeResponse:
     _mark_deprecated(response)
     return await telegram.api_resolve_start_time(body, current_user)

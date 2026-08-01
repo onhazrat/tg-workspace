@@ -1,10 +1,16 @@
 import logging
-from typing import Any
 
 from fastapi import APIRouter, HTTPException
 
 from app.api.deps import CurrentUser
 from app.core.config import settings
+from app.schemas.network import (
+    ProxyHealthResponse,
+    TestProxyResponse,
+    TorActionResponse,
+    TorIpResponse,
+    TorStatusResponse,
+)
 from app.schemas.telegram import TestProxyRequest, TorNewIdentityRequest
 from app.services.network import (
     get_bad_proxies,
@@ -26,34 +32,36 @@ def _tor_disabled() -> None:
 @router.post("/test-proxy")
 async def api_test_proxy(
     body: TestProxyRequest, _current_user: CurrentUser
-) -> dict[str, Any]:
-    return await test_proxy(body.proxy_url)
+) -> TestProxyResponse:
+    return TestProxyResponse.model_validate(await test_proxy(body.proxy_url))
 
 
 @router.get("/proxy-health")
-def api_proxy_health(_current_user: CurrentUser) -> dict[str, Any]:
-    return {"badProxies": get_bad_proxies()}
+def api_proxy_health(_current_user: CurrentUser) -> ProxyHealthResponse:
+    return ProxyHealthResponse.model_validate({"badProxies": get_bad_proxies()})
 
 
 @router.get("/tor-status")
-async def api_tor_status(_current_user: CurrentUser) -> dict[str, Any]:
+async def api_tor_status(_current_user: CurrentUser) -> TorStatusResponse:
     if not settings.TOR_ENABLED:
-        return {
-            "running": False,
-            "socksInUse": False,
-            "controlInUse": False,
-            "enabled": False,
-        }
+        # No `autoSpawned` on this branch — see `TorStatusResponse`.
+        return TorStatusResponse.model_validate(
+            {
+                "running": False,
+                "socksInUse": False,
+                "controlInUse": False,
+                "enabled": False,
+            }
+        )
     status = await get_tor_status()
-    return {**status, "enabled": True}
+    return TorStatusResponse.model_validate({**status, "enabled": True})
 
 
 @router.get("/tor-ip")
-async def api_tor_ip(_current_user: CurrentUser) -> dict[str, Any]:
+async def api_tor_ip(_current_user: CurrentUser) -> TorIpResponse:
     _tor_disabled()
     try:
-        ip = await get_tor_ip()
-        return {"ip": ip}
+        return TorIpResponse(ip=await get_tor_ip())
     except Exception as exc:  # noqa: BLE001
         logger.exception("Failed to fetch IP via TOR")
         raise HTTPException(
@@ -62,23 +70,25 @@ async def api_tor_ip(_current_user: CurrentUser) -> dict[str, Any]:
 
 
 @router.post("/tor-restart")
-async def api_tor_restart(_current_user: CurrentUser) -> dict[str, Any]:
+async def api_tor_restart(_current_user: CurrentUser) -> TorActionResponse:
     _tor_disabled()
-    return {
-        "success": True,
-        "message": "TOR restart not managed in container; restart tor sidecar",
-    }
+    return TorActionResponse(
+        success=True,
+        message="TOR restart not managed in container; restart tor sidecar",
+    )
 
 
 @router.post("/tor-new-identity")
 async def api_tor_new_identity(
     body: TorNewIdentityRequest, _current_user: CurrentUser
-) -> dict[str, Any]:
+) -> TorActionResponse:
     _tor_disabled()
     try:
         port = body.port or settings.TOR_CONTROL_PORT
         await rotate_tor_identity(port)
-        return {"success": True, "message": "New identity requested successfully"}
+        return TorActionResponse(
+            success=True, message="New identity requested successfully"
+        )
     except Exception as exc:  # noqa: BLE001
         logger.exception("Failed to request new TOR identity")
         raise HTTPException(

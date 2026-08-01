@@ -1,6 +1,5 @@
 import json
 from collections.abc import AsyncIterator
-from typing import Any
 
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
@@ -8,6 +7,8 @@ from sqlmodel import Session
 
 from app.ai.models import (
     ChatRequest,
+    CompletionResult,
+    EmbeddingResult,
     EmbedRequest,
     PromptScopeInput,
     SummaryRequest,
@@ -20,6 +21,11 @@ from app.core.config import settings
 from app.prompts.summary import format_summary_prompt, rtl_instruction
 from app.prompts.tagging import format_tag_prompt
 from app.prompts.templates import CHAT_PROMPT, RAG_CHAT_PROMPT
+from app.schemas.ai import (
+    ModelListResponse,
+    PromptResponse,
+    TranslateResponse,
+)
 from app.services.prompt_assembly import (
     PromptScope,
     assemble_posts_text,
@@ -63,14 +69,16 @@ def _resolve_posts_text(
 
 
 @router.get("/models")
-def api_list_models(_current_user: CurrentUser) -> dict[str, Any]:
-    return {"models": list_all_models(), "default": default_model()}
+def api_list_models(_current_user: CurrentUser) -> ModelListResponse:
+    return ModelListResponse.model_validate(
+        {"models": list_all_models(), "default": default_model()}
+    )
 
 
 @router.post("/summary")
 async def api_summary(
     body: SummaryRequest, session: SessionDep, _current_user: CurrentUser
-) -> dict[str, Any]:
+) -> CompletionResult:
     if not settings.GEMINI_API_KEY:
         raise HTTPException(status_code=503, detail="GEMINI_API_KEY not configured")
     model = body.model or default_model()
@@ -86,14 +94,15 @@ async def api_summary(
             scope=body.scope,
         ),
     )
-    result = await provider.complete(prompt, model=model, temperature=body.temperature)
-    return result.model_dump()
+    # Returned directly: `CompletionResult` is already a Pydantic model, and
+    # the old `.model_dump()` existed only to satisfy a `dict` annotation.
+    return await provider.complete(prompt, model=model, temperature=body.temperature)
 
 
 @router.post("/summary/prompt")
 def api_summary_prompt(
     body: SummaryRequest, session: SessionDep, _current_user: CurrentUser
-) -> dict[str, Any]:
+) -> PromptResponse:
     prompt = format_summary_prompt(
         channels=body.channels,
         channels_text=body.channels_text,
@@ -105,7 +114,7 @@ def api_summary_prompt(
             scope=body.scope,
         ),
     )
-    return {"prompt": prompt}
+    return PromptResponse(prompt=prompt)
 
 
 @router.post("/summary/stream")
@@ -176,7 +185,7 @@ async def api_chat_stream(
 @router.post("/tag/prompt")
 def api_tag_prompt(
     body: TagRequest, session: SessionDep, _current_user: CurrentUser
-) -> dict[str, str]:
+) -> PromptResponse:
     prompt = format_tag_prompt(
         channels=body.channels,
         channels_text=body.channels_text,
@@ -192,7 +201,7 @@ def api_tag_prompt(
         tags_per_channel_min=body.tags_per_channel_min,
         tags_per_channel_max=body.tags_per_channel_max,
     )
-    return {"prompt": prompt}
+    return PromptResponse(prompt=prompt)
 
 
 @router.post("/tag/stream")
@@ -232,19 +241,19 @@ async def api_tag_stream(
 @router.post("/embeddings")
 async def api_embeddings(
     body: EmbedRequest, _current_user: CurrentUser
-) -> dict[str, Any]:
+) -> EmbeddingResult:
     if not settings.GEMINI_API_KEY:
         raise HTTPException(status_code=503, detail="GEMINI_API_KEY not configured")
     model = body.model or settings.EMBEDDING_MODEL
     provider = get_provider(body.provider)
-    result = await provider.embed(body.texts, model=model)
-    return result.model_dump()
+    # Same as `/summary`: `EmbeddingResult` is already a Pydantic model.
+    return await provider.embed(body.texts, model=model)
 
 
 @router.post("/translate")
 async def api_translate(
     body: TranslateRequest, _current_user: CurrentUser
-) -> dict[str, Any]:
+) -> TranslateResponse:
     if not settings.GEMINI_API_KEY:
         raise HTTPException(status_code=503, detail="GEMINI_API_KEY not configured")
     model = body.model or default_model()
@@ -252,4 +261,4 @@ async def api_translate(
     translations = await provider.translate_batch(
         body.posts, target_language=body.target_language, model=model
     )
-    return {"translations": translations}
+    return TranslateResponse(translations=translations)

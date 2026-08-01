@@ -1,8 +1,8 @@
 # Architecture simplification plan
 
 **Date:** 2026-07-31
-**Status:** In progress — execution started 2026-08-01. Landed: `H3`, `A0`, `T1`, `B1`–`B5`.
-Typed responses **67/129** (was 26). Contexts with a test **1/9** (was 0).
+**Status:** In progress — execution started 2026-08-01. Landed: `H3`, `A0`, `T1`, `B1`–`B6`.
+Typed responses **89/129** (was 26). Contexts with a test **1/9** (was 0).
 Each unit is marked ✅ **DONE** in place as it lands, with what the work changed about the plan.
 **Companion:** [`architecture-entropy-audit.md`](./architecture-entropy-audit.md) is the evidence base.
 Read §3 and §6 of it before starting workstream A or B.
@@ -347,10 +347,50 @@ invisible to mypy, the route builds that response with `model_validate` rather t
 **Verified:** backend **759 passed / 1 skipped**, mypy strict clean (111 files), ruff clean,
 frontend **686 pass / 0 fail**, `tsc` clean.
 
-#### B6 — Roll response models across the last families · **M each** · after B1
+#### B6 — `jobs` + `telegram` + `network` + `ai` + `rag` · ✅ **DONE 2026-08-01**
 
-One PR per family: `jobs` + `telegram` + `network` · `ai` + `rag`. Each independently mergeable;
-each moves the typed-response count up. Track it — the number is a clean progress metric.
+Twenty-three endpoints in one PR — the five non-`data` routers, done together because they share
+one property: almost every payload here has **conditional keys**.
+**Typed responses 67/129 → 89/129.**
+
+**Shipped:** `app/schemas/network.py`, `app/schemas/rag.py`, `app/schemas/telegram_ops.py`,
+`app/schemas/ai.py`, and a reworked `app/schemas/jobs.py`.
+
+**Two endpoints gained a schema by deleting code.** `app/ai/models.py` already declared
+`CompletionResult` and `EmbeddingResult` as Pydantic models, and `/ai/summary` and
+`/ai/embeddings` were calling `.model_dump()` on them *purely* to satisfy a `-> dict[str, Any]`
+annotation — throwing the type away on the way out. Returning the model directly is simpler and
+correctly typed. Worth checking for this pattern before writing any new model.
+
+**`JobsStatusResponse` was deleted, not used.** It existed, was referenced by nothing, and
+wiring it up would have shipped two bugs: it declared **five** jobs against six in `JOB_IDS`
+(so `discover_probe` — and every job added later — would have been silently dropped by the
+closed model), and its keys are job ids rather than columns, which is why it needed three
+exemptions in the alias sweep. `GET /jobs/status` is now `dict[str, JobStatusEntry]`, the shape
+it always had. `EXEMPT` is empty again.
+
+**Conditional keys found and left undeclared:** `JobStatusEntry.detail` / `.pauseUntil`,
+`TorStatusResponse.autoSpawned`, `TestProxyResponse`'s `ip`/`latency`/`error`. Each would have
+emitted a `null` no client has ever received.
+
+**One deliberate behaviour change.** `POST /rag/search` returned a bare `{"results": []}` when
+the scope resolved to no channels, but `{results, truncated, scanned}` otherwise — so callers
+could not read `truncated` unconditionally. Both branches now return the same key set.
+
+**A type error the models caught:** `telegramChatId` is an `int`, not a string. Declaring it
+`str | None` turned `test_telegram_channel_info.py` into a 500 — the existing test caught it.
+
+**And a test of mine that had to be fixed before merge:** the new `/rag/search` case made a live
+Gemini call when a key is configured, closing the event loop under the async tests that followed
+it. `test_smoke.py::test_rag_search` already skips for exactly this; the new test now does too.
+**Any test touching `/rag/search` or `/ai/*` must skip when `GEMINI_API_KEY` is set.**
+
+**Verified:** backend **767 passed / 2 skipped**, mypy strict clean (115 files), ruff clean,
+frontend **686 pass / 0 fail** (×3 runs), `tsc` clean. Mutation-tested: declaring `pauseUntil`
+fails 2, declaring `autoSpawned` fails 1.
+
+> `legacy.py` re-exports these handlers, so its eleven annotations were propagated to match.
+> That module is workstream E's to delete; this only keeps it type-consistent.
 
 > **Two known blind spots in the metric** — it matches `$ref` and `items.$ref` only.
 > 1. A precise `dict[str, int]` (e.g. `/posts/counts`) renders as
@@ -657,7 +697,7 @@ Measurable, re-runnable — same discipline as the remediation plan's §12.
 |---|---|---|
 | Data-access paths from `components/` | 7 | 2 |
 | Client-side caches / staleness systems | 3 | 1 |
-| `$ref`-typed API responses | 26/129 → **67/129** | 129/129 |
+| `$ref`-typed API responses | 26/129 → **89/129** | 129/129 |
 | Hand-written domain types mirroring server tables | 24 | 0 |
 | Largest route module | 1,438 LOC | < 400 |
 | Largest frontend context | 1,103 LOC | < 300 |

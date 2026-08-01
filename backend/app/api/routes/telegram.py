@@ -19,6 +19,13 @@ from app.schemas.telegram import (
     ResolveStartTimeRequest,
     ScrapeRequest,
 )
+from app.schemas.telegram_ops import (
+    BotInfoResponse,
+    ChannelInfoResponse,
+    PublishResponse,
+    ResolveStartTimeResponse,
+    ScrapeChannelResponse,
+)
 from app.services.channel_photos import read_cached_photo
 from app.services.network import fetch_with_retry, parse_telegram_entities
 from app.services.network_settings import (
@@ -108,17 +115,21 @@ def _resolve_bot_token(
 
 
 @router.post("/scrape")
-async def api_scrape(body: ScrapeRequest, _current_user: CurrentUser) -> dict[str, Any]:
+async def api_scrape(
+    body: ScrapeRequest, _current_user: CurrentUser
+) -> ScrapeChannelResponse:
     try:
-        return await scrape_channel(
-            body.url,
-            known_latest_id=body.known_latest_id,
-            known_display_name=body.known_display_name,
-            known_photo_url=body.known_photo_url,
-            proxies=_resolve_proxies(body),
-            tor_auto_rotate=body.tor_auto_rotate,
-            tor_rotation_threshold=body.tor_rotation_threshold,
-            proxy_concurrency=_resolve_proxy_concurrency(body),
+        return ScrapeChannelResponse.model_validate(
+            await scrape_channel(
+                body.url,
+                known_latest_id=body.known_latest_id,
+                known_display_name=body.known_display_name,
+                known_photo_url=body.known_photo_url,
+                proxies=_resolve_proxies(body),
+                tor_auto_rotate=body.tor_auto_rotate,
+                tor_rotation_threshold=body.tor_rotation_threshold,
+                proxy_concurrency=_resolve_proxy_concurrency(body),
+            )
         )
     except TelegramWebViewUnavailable as exc:
         raise HTTPException(
@@ -144,14 +155,16 @@ async def api_scrape(body: ScrapeRequest, _current_user: CurrentUser) -> dict[st
 @router.post("/channel-info")
 async def api_channel_info(
     body: ChannelInfoRequest, _current_user: CurrentUser
-) -> dict[str, Any]:
+) -> ChannelInfoResponse:
     try:
-        return await get_channel_info(
-            body.channel_name,
-            proxies=_resolve_proxies(body),
-            tor_auto_rotate=body.tor_auto_rotate,
-            tor_rotation_threshold=body.tor_rotation_threshold,
-            proxy_concurrency=_resolve_proxy_concurrency(body),
+        return ChannelInfoResponse.model_validate(
+            await get_channel_info(
+                body.channel_name,
+                proxies=_resolve_proxies(body),
+                tor_auto_rotate=body.tor_auto_rotate,
+                tor_rotation_threshold=body.tor_rotation_threshold,
+                proxy_concurrency=_resolve_proxy_concurrency(body),
+            )
         )
     except TelegramWebViewUnavailable as exc:
         raise HTTPException(
@@ -168,7 +181,7 @@ async def api_channel_info(
 @router.post("/resolve-start-time")
 async def api_resolve_start_time(
     body: ResolveStartTimeRequest, _current_user: CurrentUser
-) -> dict[str, Any]:
+) -> ResolveStartTimeResponse:
     try:
         start_id = await resolve_start_time_to_id(
             body.channel_name,
@@ -178,7 +191,7 @@ async def api_resolve_start_time(
             tor_rotation_threshold=body.tor_rotation_threshold,
             proxy_concurrency=_resolve_proxy_concurrency(body),
         )
-        return {"startId": start_id}
+        return ResolveStartTimeResponse.model_validate({"startId": start_id})
     except TelegramWebViewUnavailable as exc:
         raise HTTPException(
             status_code=400,
@@ -198,7 +211,7 @@ async def api_bot_info(
     body: BotInfoRequest,
     session: SessionDep,
     current_user: CurrentUser,
-) -> dict[str, Any]:
+) -> BotInfoResponse:
     token = _resolve_bot_token(
         session, body.credential_id, body.token, current_user=current_user
     )
@@ -223,7 +236,7 @@ async def api_bot_info(
             import json
 
             data = json.loads(data)
-        return {**data, "telemetry": telemetry}
+        return BotInfoResponse.model_validate({**data, "telemetry": telemetry})
     except Exception as exc:  # noqa: BLE001
         logger.exception("Bot info request failed")
         raise HTTPException(status_code=500, detail="Bot info request failed") from exc
@@ -234,7 +247,7 @@ async def api_publish(
     body: PublishRequest,
     session: SessionDep,
     current_user: CurrentUser,
-) -> dict[str, Any]:
+) -> PublishResponse:
     token = _resolve_bot_token(
         session, body.credential_id, body.token, current_user=current_user
     )
@@ -276,7 +289,7 @@ async def api_publish(
                 await send_chunk(body.metadata_text[i : i + 4000])
         for i in range(0, len(body.text), 4000):
             await send_chunk(body.text[i : i + 4000])
-        return {"success": True, "results": results, "telemetry": telemetry_logs}
+        return PublishResponse(success=True, results=results, telemetry=telemetry_logs)
     except Exception as exc:  # noqa: BLE001
         logger.exception("Publish request failed")
         raise HTTPException(status_code=500, detail="Publish request failed") from exc
