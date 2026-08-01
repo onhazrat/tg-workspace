@@ -3,7 +3,7 @@
 import type { CancelablePromise } from './core/CancelablePromise';
 import { OpenAPI } from './core/OpenAPI';
 import { request as __request } from './core/request';
-import type { LoginLoginAccessTokenData, LoginLoginAccessTokenResponse, LoginTestTokenResponse, LoginRecoverPasswordData, LoginRecoverPasswordResponse, LoginResetPasswordData, LoginResetPasswordResponse, LoginRecoverPasswordHtmlContentData, LoginRecoverPasswordHtmlContentResponse, UsersReadUsersData, UsersReadUsersResponse, UsersCreateUserData, UsersCreateUserResponse, UsersReadUserMeResponse, UsersDeleteUserMeResponse, UsersUpdateUserMeData, UsersUpdateUserMeResponse, UsersUpdatePasswordMeData, UsersUpdatePasswordMeResponse, UsersRegisterUserData, UsersRegisterUserResponse, UsersReadUserByIdData, UsersReadUserByIdResponse, UsersUpdateUserData, UsersUpdateUserResponse, UsersDeleteUserData, UsersDeleteUserResponse, UtilsTestEmailData, UtilsTestEmailResponse, UtilsHealthCheckResponse, ItemsReadItemsData, ItemsReadItemsResponse, ItemsCreateItemData, ItemsCreateItemResponse, ItemsReadItemData, ItemsReadItemResponse, ItemsUpdateItemData, ItemsUpdateItemResponse, ItemsDeleteItemData, ItemsDeleteItemResponse, NetworkApiTestProxyData, NetworkApiTestProxyResponse, NetworkApiProxyHealthResponse, NetworkApiTorStatusResponse, NetworkApiTorIpResponse, NetworkApiTorRestartResponse, NetworkApiTorNewIdentityData, NetworkApiTorNewIdentityResponse, TelegramApiScrapeData, TelegramApiScrapeResponse, TelegramApiChannelInfoData, TelegramApiChannelInfoResponse, TelegramApiResolveStartTimeData, TelegramApiResolveStartTimeResponse, TelegramApiBotInfoData, TelegramApiBotInfoResponse, TelegramApiPublishData, TelegramApiPublishResponse, TelegramApiChannelPhotoData, TelegramApiChannelPhotoResponse, TelegramApiPostThumbData, TelegramApiPostThumbResponse, TelegramApiBotFileData, TelegramApiBotFileResponse, AiApiListModelsResponse, AiApiSummaryData, AiApiSummaryResponse, AiApiSummaryPromptData, AiApiSummaryPromptResponse, AiApiSummaryStreamData, AiApiSummaryStreamResponse, AiApiChatStreamData, AiApiChatStreamResponse, AiApiTagPromptData, AiApiTagPromptResponse, AiApiTagStreamData, AiApiTagStreamResponse, AiApiEmbeddingsData, AiApiEmbeddingsResponse, AiApiTranslateData, AiApiTranslateResponse, DataGetSyncMetaRouteResponse, DataListChannelsData, DataListChannelsResponse, DataUpsertChannelData, DataUpsertChannelResponse, DataDeleteChannelData, DataDeleteChannelResponse, DataStartBulkFollowData, DataStartBulkFollowResponse, DataGetBulkFollowStatusData, DataGetBulkFollowStatusResponse, DataBulkFollowEventsData, DataBulkFollowEventsResponse, DataCancelBulkFollowData, DataCancelBulkFollowResponse, DataBulkReresolveStartIdsEndpointData, DataBulkReresolveStartIdsEndpointResponse, DataBulkResetSyncEndpointData, DataBulkResetSyncEndpointResponse, DataBulkSyncSettingsEndpointData, DataBulkSyncSettingsEndpointResponse, DataListSettingGroupsResponse, DataCreateSettingGroupData, DataCreateSettingGroupResponse, DataUpdateSettingGroupData, DataUpdateSettingGroupResponse, DataDeleteSettingGroupData, DataDeleteSettingGroupResponse, DataBulkAssignSettingGroupData, DataBulkAssignSettingGroupResponse, DataBulkChannelTagsEndpointData, DataBulkChannelTagsEndpointResponse, DataGetChannelStatsData, DataGetChannelStatsResponse, DataListPostsData, DataListPostsResponse, DataDiscoverCandidatesData, DataDiscoverCandidatesResponse, DataListDiscoverIgnoredResponse, DataAddDiscoverIgnoredData, DataAddDiscoverIgnoredResponse, DataRemoveDiscoverIgnoredData, DataRemoveDiscoverIgnoredResponse, DataListDiscoverProbesData, DataListDiscoverProbesResponse, DataGetDiscoverProbeQueueResponse, DataRecheckDiscoverProbesData, DataRecheckDiscoverProbesResponse, DataCreateDiscoverReportData, DataCreateDiscoverReportResponse, DataListDiscoverReportsData, DataListDiscoverReportsResponse, DataGetLatestDiscoverReportResponse, DataGetDiscoverReportData, DataGetDiscoverReportResponse, DataDeleteDiscoverReportData, DataDeleteDiscoverReportResponse, DataPostsCountsData, DataPostsCountsResponse, DataLookupPostsRouteData, DataLookupPostsRouteResponse, DataBulkUpsertPostsRouteData, DataBulkUpsertPostsRouteResponse, DataListSummariesData, DataListSummariesResponse, DataGetSummaryData, DataGetSummaryResponse, DataUpsertSummaryData, DataUpsertSummaryResponse, DataDeleteSummaryData, DataDeleteSummaryResponse, DataListTagRunsData, DataListTagRunsResponse, DataGetTagRunData, DataGetTagRunResponse, DataUpsertTagRunData, DataUpsertTagRunResponse, DataDeleteTagRunData, DataDeleteTagRunResponse, DataListBotCredentialsResponse, DataUpsertBotCredentialData, DataUpsertBotCredentialResponse, DataDeleteBotCredentialData, DataDeleteBotCredentialResponse, DataMigrateBotCredentialsData, DataMigrateBotCredentialsResponse, DataListChatDestinationsResponse, DataUpsertChatDestinationData, DataUpsertChatDestinationResponse, DataDeleteChatDestinationData, DataDeleteChatDestinationResponse, DataUpsertEmbeddingsData, DataUpsertEmbeddingsResponse, DataGetTranslationData, DataGetTranslationResponse, DataListTranslationsData, DataListTranslationsResponse, DataUpsertTranslationsData, DataUpsertTranslationsResponse, DataListPublishLogsRouteData, DataListPublishLogsRouteResponse, DataCreatePublishLogsData, DataCreatePublishLogsResponse, DataListSyncLogsRouteData, DataListSyncLogsRouteResponse, DataCreateSyncLogsData, DataCreateSyncLogsResponse, DataListLlmLogsRouteData, DataListLlmLogsRouteResponse, DataCreateLlmLogsData, DataCreateLlmLogsResponse, DataListEmbeddingLogsRouteData, DataListEmbeddingLogsRouteResponse, DataCreateEmbeddingLogsData, DataCreateEmbeddingLogsResponse, DataListNetworkLogsRouteData, DataListNetworkLogsRouteResponse, DataCreateNetworkLogsData, DataCreateNetworkLogsResponse, DataDbStatsResponse, DataTableSizesResponse, DataClearTableRouteData, DataClearTableRouteResponse, DataPurgeLogsData, DataPurgeLogsResponse, DataGetNetworkSettingsResponse, DataPutNetworkSettingsData, DataPutNetworkSettingsResponse, DataGetSettingData, DataGetSettingResponse, DataPutSettingData, DataPutSettingResponse, DataImportDataData, DataImportDataResponse, DataExportDataResponse, RagRagStatusResponse, RagRagEmbedData, RagRagEmbedResponse, RagRagSearchData, RagRagSearchResponse, JobsJobsStatusResponse, JobsGetRuntimeConfigResponse, JobsTriggerSchedulerJobData, JobsTriggerSchedulerJobResponse, JobsUpdateSchedulerJobData, JobsUpdateSchedulerJobResponse, JobsStartSyncJobData, JobsStartSyncJobResponse, JobsGetSyncJobStatusData, JobsGetSyncJobStatusResponse, JobsSyncJobEventsData, JobsSyncJobEventsResponse, JobsCancelSyncJobData, JobsCancelSyncJobResponse } from './types.gen';
+import type { LoginLoginAccessTokenData, LoginLoginAccessTokenResponse, LoginTestTokenResponse, LoginRecoverPasswordData, LoginRecoverPasswordResponse, LoginResetPasswordData, LoginResetPasswordResponse, LoginRecoverPasswordHtmlContentData, LoginRecoverPasswordHtmlContentResponse, UsersReadUsersData, UsersReadUsersResponse, UsersCreateUserData, UsersCreateUserResponse, UsersReadUserMeResponse, UsersDeleteUserMeResponse, UsersUpdateUserMeData, UsersUpdateUserMeResponse, UsersUpdatePasswordMeData, UsersUpdatePasswordMeResponse, UsersRegisterUserData, UsersRegisterUserResponse, UsersReadUserByIdData, UsersReadUserByIdResponse, UsersUpdateUserData, UsersUpdateUserResponse, UsersDeleteUserData, UsersDeleteUserResponse, UtilsTestEmailData, UtilsTestEmailResponse, UtilsHealthCheckResponse, ItemsReadItemsData, ItemsReadItemsResponse, ItemsCreateItemData, ItemsCreateItemResponse, ItemsReadItemData, ItemsReadItemResponse, ItemsUpdateItemData, ItemsUpdateItemResponse, ItemsDeleteItemData, ItemsDeleteItemResponse, NetworkApiTestProxyData, NetworkApiTestProxyResponse, NetworkApiProxyHealthResponse, NetworkApiTorStatusResponse, NetworkApiTorIpResponse, NetworkApiTorRestartResponse, NetworkApiTorNewIdentityData, NetworkApiTorNewIdentityResponse, TelegramApiScrapeData, TelegramApiScrapeResponse, TelegramApiChannelInfoData, TelegramApiChannelInfoResponse, TelegramApiResolveStartTimeData, TelegramApiResolveStartTimeResponse, TelegramApiBotInfoData, TelegramApiBotInfoResponse, TelegramApiPublishData, TelegramApiPublishResponse, TelegramApiChannelPhotoData, TelegramApiChannelPhotoResponse, TelegramApiPostThumbData, TelegramApiPostThumbResponse, TelegramApiBotFileData, TelegramApiBotFileResponse, AiApiListModelsResponse, AiApiSummaryData, AiApiSummaryResponse, AiApiSummaryPromptData, AiApiSummaryPromptResponse, AiApiSummaryStreamData, AiApiSummaryStreamResponse, AiApiChatStreamData, AiApiChatStreamResponse, AiApiTagPromptData, AiApiTagPromptResponse, AiApiTagStreamData, AiApiTagStreamResponse, AiApiEmbeddingsData, AiApiEmbeddingsResponse, AiApiTranslateData, AiApiTranslateResponse, DataGetSyncMetaRouteResponse, DataListChannelsData, DataListChannelsResponse, DataUpsertChannelData, DataUpsertChannelResponse, DataDeleteChannelData, DataDeleteChannelResponse, DataStartBulkFollowData, DataStartBulkFollowResponse, DataGetBulkFollowStatusData, DataGetBulkFollowStatusResponse, DataBulkFollowEventsData, DataBulkFollowEventsResponse, DataCancelBulkFollowData, DataCancelBulkFollowResponse, DataBulkReresolveStartIdsEndpointData, DataBulkReresolveStartIdsEndpointResponse, DataBulkResetSyncEndpointData, DataBulkResetSyncEndpointResponse, DataBulkSyncSettingsEndpointData, DataBulkSyncSettingsEndpointResponse, DataListSettingGroupsResponse, DataCreateSettingGroupData, DataCreateSettingGroupResponse, DataUpdateSettingGroupData, DataUpdateSettingGroupResponse, DataDeleteSettingGroupData, DataDeleteSettingGroupResponse, DataBulkAssignSettingGroupData, DataBulkAssignSettingGroupResponse, DataBulkChannelTagsEndpointData, DataBulkChannelTagsEndpointResponse, DataGetChannelStatsData, DataGetChannelStatsResponse, DataListPostsData, DataListPostsResponse, DataPostsCountsData, DataPostsCountsResponse, DataLookupPostsRouteData, DataLookupPostsRouteResponse, DataBulkUpsertPostsRouteData, DataBulkUpsertPostsRouteResponse, DataDiscoverCandidatesData, DataDiscoverCandidatesResponse, DataListDiscoverIgnoredResponse, DataAddDiscoverIgnoredData, DataAddDiscoverIgnoredResponse, DataRemoveDiscoverIgnoredData, DataRemoveDiscoverIgnoredResponse, DataListDiscoverProbesData, DataListDiscoverProbesResponse, DataGetDiscoverProbeQueueResponse, DataRecheckDiscoverProbesData, DataRecheckDiscoverProbesResponse, DataCreateDiscoverReportData, DataCreateDiscoverReportResponse, DataListDiscoverReportsData, DataListDiscoverReportsResponse, DataGetLatestDiscoverReportResponse, DataGetDiscoverReportData, DataGetDiscoverReportResponse, DataDeleteDiscoverReportData, DataDeleteDiscoverReportResponse, DataListSummariesData, DataListSummariesResponse, DataGetSummaryData, DataGetSummaryResponse, DataUpsertSummaryData, DataUpsertSummaryResponse, DataDeleteSummaryData, DataDeleteSummaryResponse, DataListTagRunsData, DataListTagRunsResponse, DataGetTagRunData, DataGetTagRunResponse, DataUpsertTagRunData, DataUpsertTagRunResponse, DataDeleteTagRunData, DataDeleteTagRunResponse, DataListBotCredentialsResponse, DataUpsertBotCredentialData, DataUpsertBotCredentialResponse, DataDeleteBotCredentialData, DataDeleteBotCredentialResponse, DataMigrateBotCredentialsData, DataMigrateBotCredentialsResponse, DataListChatDestinationsResponse, DataUpsertChatDestinationData, DataUpsertChatDestinationResponse, DataDeleteChatDestinationData, DataDeleteChatDestinationResponse, DataUpsertEmbeddingsData, DataUpsertEmbeddingsResponse, DataGetTranslationData, DataGetTranslationResponse, DataListTranslationsData, DataListTranslationsResponse, DataUpsertTranslationsData, DataUpsertTranslationsResponse, DataListPublishLogsRouteData, DataListPublishLogsRouteResponse, DataCreatePublishLogsData, DataCreatePublishLogsResponse, DataListSyncLogsRouteData, DataListSyncLogsRouteResponse, DataCreateSyncLogsData, DataCreateSyncLogsResponse, DataListLlmLogsRouteData, DataListLlmLogsRouteResponse, DataCreateLlmLogsData, DataCreateLlmLogsResponse, DataListEmbeddingLogsRouteData, DataListEmbeddingLogsRouteResponse, DataCreateEmbeddingLogsData, DataCreateEmbeddingLogsResponse, DataListNetworkLogsRouteData, DataListNetworkLogsRouteResponse, DataCreateNetworkLogsData, DataCreateNetworkLogsResponse, DataPurgeLogsData, DataPurgeLogsResponse, DataDbStatsResponse, DataTableSizesResponse, DataClearTableRouteData, DataClearTableRouteResponse, DataGetNetworkSettingsResponse, DataPutNetworkSettingsData, DataPutNetworkSettingsResponse, DataGetSettingData, DataGetSettingResponse, DataPutSettingData, DataPutSettingResponse, DataImportDataData, DataImportDataResponse, DataExportDataResponse, RagRagStatusResponse, RagRagEmbedData, RagRagEmbedResponse, RagRagSearchData, RagRagSearchResponse, JobsJobsStatusResponse, JobsGetRuntimeConfigResponse, JobsTriggerSchedulerJobData, JobsTriggerSchedulerJobResponse, JobsUpdateSchedulerJobData, JobsUpdateSchedulerJobResponse, JobsStartSyncJobData, JobsStartSyncJobResponse, JobsGetSyncJobStatusData, JobsGetSyncJobStatusResponse, JobsSyncJobEventsData, JobsSyncJobEventsResponse, JobsCancelSyncJobData, JobsCancelSyncJobResponse } from './types.gen';
 
 /**
  * Login Access Token
@@ -1222,6 +1222,70 @@ export const dataListPosts = (data: DataListPostsData): CancelablePromise<DataLi
 };
 
 /**
+ * Posts Counts
+ * Per-channel post counts for a filtered scope, computed as a SQL GROUP BY.
+ *
+ * Replaces the client's `buildPostsInScopeCounts`, which counted the fully
+ * fetched, client-filtered post array.
+ *
+ * POST rather than GET because the scope carries the channel selection: this is
+ * a read expressed as a POST purely so the selection travels in the body.
+ * @param data The data for the request.
+ * @param data.requestBody
+ * @returns number Successful Response
+ * @throws ApiError
+ */
+export const dataPostsCounts = (data: DataPostsCountsData): CancelablePromise<DataPostsCountsResponse> => {
+    return __request(OpenAPI, {
+        method: 'POST',
+        url: '/api/v1/data/posts/counts',
+        body: data.requestBody,
+        mediaType: 'application/json',
+        errors: {
+            422: 'Validation Error'
+        }
+    });
+};
+
+/**
+ * Lookup Posts Route
+ * @param data The data for the request.
+ * @param data.requestBody
+ * @returns PostResponse Successful Response
+ * @throws ApiError
+ */
+export const dataLookupPostsRoute = (data: DataLookupPostsRouteData): CancelablePromise<DataLookupPostsRouteResponse> => {
+    return __request(OpenAPI, {
+        method: 'POST',
+        url: '/api/v1/data/posts/lookup',
+        body: data.requestBody,
+        mediaType: 'application/json',
+        errors: {
+            422: 'Validation Error'
+        }
+    });
+};
+
+/**
+ * Bulk Upsert Posts Route
+ * @param data The data for the request.
+ * @param data.requestBody
+ * @returns BulkUpsertPostsResponse Successful Response
+ * @throws ApiError
+ */
+export const dataBulkUpsertPostsRoute = (data: DataBulkUpsertPostsRouteData): CancelablePromise<DataBulkUpsertPostsRouteResponse> => {
+    return __request(OpenAPI, {
+        method: 'POST',
+        url: '/api/v1/data/posts/bulk',
+        body: data.requestBody,
+        mediaType: 'application/json',
+        errors: {
+            422: 'Validation Error'
+        }
+    });
+};
+
+/**
  * Discover Candidates
  * Aggregated discovery candidates for a channel/date scope.
  *
@@ -1488,70 +1552,6 @@ export const dataDeleteDiscoverReport = (data: DataDeleteDiscoverReportData): Ca
         path: {
             report_id: data.reportId
         },
-        errors: {
-            422: 'Validation Error'
-        }
-    });
-};
-
-/**
- * Posts Counts
- * Per-channel post counts for a filtered scope, computed as a SQL GROUP BY.
- *
- * Replaces the client's `buildPostsInScopeCounts`, which counted the fully
- * fetched, client-filtered post array.
- *
- * POST rather than GET because the scope carries the channel selection: this is
- * a read expressed as a POST purely so the selection travels in the body.
- * @param data The data for the request.
- * @param data.requestBody
- * @returns number Successful Response
- * @throws ApiError
- */
-export const dataPostsCounts = (data: DataPostsCountsData): CancelablePromise<DataPostsCountsResponse> => {
-    return __request(OpenAPI, {
-        method: 'POST',
-        url: '/api/v1/data/posts/counts',
-        body: data.requestBody,
-        mediaType: 'application/json',
-        errors: {
-            422: 'Validation Error'
-        }
-    });
-};
-
-/**
- * Lookup Posts Route
- * @param data The data for the request.
- * @param data.requestBody
- * @returns PostResponse Successful Response
- * @throws ApiError
- */
-export const dataLookupPostsRoute = (data: DataLookupPostsRouteData): CancelablePromise<DataLookupPostsRouteResponse> => {
-    return __request(OpenAPI, {
-        method: 'POST',
-        url: '/api/v1/data/posts/lookup',
-        body: data.requestBody,
-        mediaType: 'application/json',
-        errors: {
-            422: 'Validation Error'
-        }
-    });
-};
-
-/**
- * Bulk Upsert Posts Route
- * @param data The data for the request.
- * @param data.requestBody
- * @returns BulkUpsertPostsResponse Successful Response
- * @throws ApiError
- */
-export const dataBulkUpsertPostsRoute = (data: DataBulkUpsertPostsRouteData): CancelablePromise<DataBulkUpsertPostsRouteResponse> => {
-    return __request(OpenAPI, {
-        method: 'POST',
-        url: '/api/v1/data/posts/bulk',
-        body: data.requestBody,
-        mediaType: 'application/json',
         errors: {
             422: 'Validation Error'
         }
@@ -2157,6 +2157,32 @@ export const dataCreateNetworkLogs = (data: DataCreateNetworkLogsData): Cancelab
 };
 
 /**
+ * Purge Logs
+ * @param data The data for the request.
+ * @param data.olderThanDays
+ * @param data.type
+ * @param data.logId
+ * @param data.clearAll
+ * @returns PurgeLogsResponse Successful Response
+ * @throws ApiError
+ */
+export const dataPurgeLogs = (data: DataPurgeLogsData = {}): CancelablePromise<DataPurgeLogsResponse> => {
+    return __request(OpenAPI, {
+        method: 'DELETE',
+        url: '/api/v1/data/logs',
+        query: {
+            olderThanDays: data.olderThanDays,
+            type: data.type,
+            logId: data.logId,
+            clearAll: data.clearAll
+        },
+        errors: {
+            422: 'Validation Error'
+        }
+    });
+};
+
+/**
  * Db Stats
  * @returns DbStatsResponse Successful Response
  * @throws ApiError
@@ -2193,32 +2219,6 @@ export const dataClearTableRoute = (data: DataClearTableRouteData): CancelablePr
         url: '/api/v1/data/tables/{name}',
         path: {
             name: data.name
-        },
-        errors: {
-            422: 'Validation Error'
-        }
-    });
-};
-
-/**
- * Purge Logs
- * @param data The data for the request.
- * @param data.olderThanDays
- * @param data.type
- * @param data.logId
- * @param data.clearAll
- * @returns PurgeLogsResponse Successful Response
- * @throws ApiError
- */
-export const dataPurgeLogs = (data: DataPurgeLogsData = {}): CancelablePromise<DataPurgeLogsResponse> => {
-    return __request(OpenAPI, {
-        method: 'DELETE',
-        url: '/api/v1/data/logs',
-        query: {
-            olderThanDays: data.olderThanDays,
-            type: data.type,
-            logId: data.logId,
-            clearAll: data.clearAll
         },
         errors: {
             422: 'Validation Error'

@@ -1870,6 +1870,28 @@ export type DataListPostsData = {
 
 export type DataListPostsResponse = (Array<PostResponse>);
 
+export type DataPostsCountsData = {
+    requestBody: PostScopeRequest;
+};
+
+export type DataPostsCountsResponse = ({
+    [key: string]: (number);
+});
+
+export type DataLookupPostsRouteData = {
+    requestBody: PostLookupRequest;
+};
+
+export type DataLookupPostsRouteResponse = (Array<PostResponse>);
+
+export type DataBulkUpsertPostsRouteData = {
+    requestBody: Array<{
+        [key: string]: unknown;
+    }>;
+};
+
+export type DataBulkUpsertPostsRouteResponse = (BulkUpsertPostsResponse);
+
 export type DataDiscoverCandidatesData = {
     requestBody: DiscoverCandidatesRequest;
 };
@@ -1933,28 +1955,6 @@ export type DataDeleteDiscoverReportData = {
 };
 
 export type DataDeleteDiscoverReportResponse = (StatusResponse);
-
-export type DataPostsCountsData = {
-    requestBody: PostScopeRequest;
-};
-
-export type DataPostsCountsResponse = ({
-    [key: string]: (number);
-});
-
-export type DataLookupPostsRouteData = {
-    requestBody: PostLookupRequest;
-};
-
-export type DataLookupPostsRouteResponse = (Array<PostResponse>);
-
-export type DataBulkUpsertPostsRouteData = {
-    requestBody: Array<{
-        [key: string]: unknown;
-    }>;
-};
-
-export type DataBulkUpsertPostsRouteResponse = (BulkUpsertPostsResponse);
 
 export type DataListSummariesData = {
     limit?: number;
@@ -2189,6 +2189,15 @@ export type DataCreateNetworkLogsData = {
 
 export type DataCreateNetworkLogsResponse = (LogWriteResponse);
 
+export type DataPurgeLogsData = {
+    clearAll?: boolean;
+    logId?: (string | null);
+    olderThanDays?: (number | null);
+    type?: (string | null);
+};
+
+export type DataPurgeLogsResponse = (PurgeLogsResponse);
+
 export type DataDbStatsResponse = (DbStatsResponse);
 
 export type DataTableSizesResponse = (Array<TableSizeResponse>);
@@ -2198,15 +2207,6 @@ export type DataClearTableRouteData = {
 };
 
 export type DataClearTableRouteResponse = (ClearTableResponse);
-
-export type DataPurgeLogsData = {
-    clearAll?: boolean;
-    logId?: (string | null);
-    olderThanDays?: (number | null);
-    type?: (string | null);
-};
-
-export type DataPurgeLogsResponse = (PurgeLogsResponse);
 
 export type DataGetNetworkSettingsResponse = ({
     [key: string]: unknown;

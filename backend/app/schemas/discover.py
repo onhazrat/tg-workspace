@@ -36,6 +36,9 @@ it holds here.
 from __future__ import annotations
 
 from pydantic import BaseModel, ConfigDict, Field
+from pydantic import Field as PydanticField
+
+from app.schemas.posts import PostScopeRequest
 
 
 class SignalCountsResponse(BaseModel):
@@ -273,3 +276,34 @@ class DiscoverProbeRecheckResponse(BaseModel):
     """
 
     requeued: list[str] = Field(default_factory=list)
+
+
+class DiscoverPostRef(BaseModel):
+    channel_name: str = PydanticField(alias="channelName")
+    post_id: int = PydanticField(alias="postId")
+
+
+class DiscoverCandidatesRequest(PostScopeRequest):
+    """`PostScopeRequest` plus the signal-kind filter and the cap/scope inputs.
+
+    `channelNames` is re-declared as required: the discovery aggregate is always
+    asked about an explicit selection, and the query-string version required it
+    too.
+
+    `maxPerChannelMode`/`seed` and `postIds` are what let Discover reproduce the
+    two scopes that used to fall back to a second, client-side implementation of
+    the same counting rules — the `random` cap and a semantic query
+    (IDEA-011 D14).
+    """
+
+    channel_names: list[str] = PydanticField(alias="channelNames")
+    signals: list[str] | None = None
+    max_per_channel_mode: str = PydanticField("latest", alias="maxPerChannelMode")
+    seed: int = 0
+    post_ids: list[DiscoverPostRef] | None = PydanticField(None, alias="postIds")
+
+    def resolved_post_ids(self) -> list[tuple[str, int]] | None:
+        """`None` means "no restriction"; `[]` means "matched nothing"."""
+        if self.post_ids is None:
+            return None
+        return [(ref.channel_name, ref.post_id) for ref in self.post_ids]

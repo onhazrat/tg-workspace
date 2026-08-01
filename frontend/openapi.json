@@ -2097,6 +2097,123 @@
         "security": [{ "OAuth2PasswordBearer": [] }]
       }
     },
+    "/api/v1/data/posts/counts": {
+      "post": {
+        "tags": ["data"],
+        "summary": "Posts Counts",
+        "description": "Per-channel post counts for a filtered scope, computed as a SQL GROUP BY.\n\nReplaces the client's `buildPostsInScopeCounts`, which counted the fully\nfetched, client-filtered post array.\n\nPOST rather than GET because the scope carries the channel selection: this is\na read expressed as a POST purely so the selection travels in the body.",
+        "operationId": "data-posts_counts",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/PostScopeRequest" }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": { "type": "integer" },
+                  "type": "object",
+                  "title": "Response Data-Posts Counts"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        },
+        "security": [{ "OAuth2PasswordBearer": [] }]
+      }
+    },
+    "/api/v1/data/posts/lookup": {
+      "post": {
+        "tags": ["data"],
+        "summary": "Lookup Posts Route",
+        "operationId": "data-lookup_posts_route",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/PostLookupRequest" }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": { "$ref": "#/components/schemas/PostResponse" },
+                  "type": "array",
+                  "title": "Response Data-Lookup Posts Route"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        },
+        "security": [{ "OAuth2PasswordBearer": [] }]
+      }
+    },
+    "/api/v1/data/posts/bulk": {
+      "post": {
+        "tags": ["data"],
+        "summary": "Bulk Upsert Posts Route",
+        "operationId": "data-bulk_upsert_posts_route",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "items": { "additionalProperties": true, "type": "object" },
+                "type": "array",
+                "title": "Body"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BulkUpsertPostsResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        },
+        "security": [{ "OAuth2PasswordBearer": [] }]
+      }
+    },
     "/api/v1/data/discover/candidates": {
       "post": {
         "tags": ["data"],
@@ -2552,123 +2669,6 @@
             }
           }
         }
-      }
-    },
-    "/api/v1/data/posts/counts": {
-      "post": {
-        "tags": ["data"],
-        "summary": "Posts Counts",
-        "description": "Per-channel post counts for a filtered scope, computed as a SQL GROUP BY.\n\nReplaces the client's `buildPostsInScopeCounts`, which counted the fully\nfetched, client-filtered post array.\n\nPOST rather than GET because the scope carries the channel selection: this is\na read expressed as a POST purely so the selection travels in the body.",
-        "operationId": "data-posts_counts",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": { "$ref": "#/components/schemas/PostScopeRequest" }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "additionalProperties": { "type": "integer" },
-                  "type": "object",
-                  "title": "Response Data-Posts Counts"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
-              }
-            }
-          }
-        },
-        "security": [{ "OAuth2PasswordBearer": [] }]
-      }
-    },
-    "/api/v1/data/posts/lookup": {
-      "post": {
-        "tags": ["data"],
-        "summary": "Lookup Posts Route",
-        "operationId": "data-lookup_posts_route",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": { "$ref": "#/components/schemas/PostLookupRequest" }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "items": { "$ref": "#/components/schemas/PostResponse" },
-                  "type": "array",
-                  "title": "Response Data-Lookup Posts Route"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
-              }
-            }
-          }
-        },
-        "security": [{ "OAuth2PasswordBearer": [] }]
-      }
-    },
-    "/api/v1/data/posts/bulk": {
-      "post": {
-        "tags": ["data"],
-        "summary": "Bulk Upsert Posts Route",
-        "operationId": "data-bulk_upsert_posts_route",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "items": { "additionalProperties": true, "type": "object" },
-                "type": "array",
-                "title": "Body"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/BulkUpsertPostsResponse"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
-              }
-            }
-          }
-        },
-        "security": [{ "OAuth2PasswordBearer": [] }]
       }
     },
     "/api/v1/data/summaries": {
@@ -3933,6 +3933,71 @@
         }
       }
     },
+    "/api/v1/data/logs": {
+      "delete": {
+        "tags": ["data"],
+        "summary": "Purge Logs",
+        "operationId": "data-purge_logs",
+        "security": [{ "OAuth2PasswordBearer": [] }],
+        "parameters": [
+          {
+            "name": "olderThanDays",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [{ "type": "integer" }, { "type": "null" }],
+              "title": "Olderthandays"
+            }
+          },
+          {
+            "name": "type",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [{ "type": "string" }, { "type": "null" }],
+              "title": "Type"
+            }
+          },
+          {
+            "name": "logId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [{ "type": "string" }, { "type": "null" }],
+              "title": "Logid"
+            }
+          },
+          {
+            "name": "clearAll",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "Clearall"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/PurgeLogsResponse" }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/data/stats": {
       "get": {
         "tags": ["data"],
@@ -3993,71 +4058,6 @@
             "content": {
               "application/json": {
                 "schema": { "$ref": "#/components/schemas/ClearTableResponse" }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/data/logs": {
-      "delete": {
-        "tags": ["data"],
-        "summary": "Purge Logs",
-        "operationId": "data-purge_logs",
-        "security": [{ "OAuth2PasswordBearer": [] }],
-        "parameters": [
-          {
-            "name": "olderThanDays",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [{ "type": "integer" }, { "type": "null" }],
-              "title": "Olderthandays"
-            }
-          },
-          {
-            "name": "type",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [{ "type": "string" }, { "type": "null" }],
-              "title": "Type"
-            }
-          },
-          {
-            "name": "logId",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [{ "type": "string" }, { "type": "null" }],
-              "title": "Logid"
-            }
-          },
-          {
-            "name": "clearAll",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "boolean",
-              "default": false,
-              "title": "Clearall"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": { "$ref": "#/components/schemas/PurgeLogsResponse" }
               }
             }
           },

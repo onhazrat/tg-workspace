@@ -1,7 +1,7 @@
 # Architecture simplification plan
 
 **Date:** 2026-07-31
-**Status:** In progress — execution started 2026-08-01. Landed: `H3`, `A0`, `T1`, `B1`–`B6`, `F1a`.
+**Status:** In progress — execution started 2026-08-01. Landed: `H3`, `A0`, `T1`, `B1`–`B6`, `F1a`, `C1`.
 Typed responses **89/129** (was 26). Contexts with a test **1/9** (was 0).
 Each unit is marked ✅ **DONE** in place as it lands, with what the work changed about the plan.
 **Companion:** [`architecture-entropy-audit.md`](./architecture-entropy-audit.md) is the evidence base.
@@ -424,18 +424,38 @@ UI-only types (`TabType`, `SyncQueueItem`, `ChatMessage`) in `types.ts`.
 
 *Addresses E2. Fully independent of A and B; can run in parallel.*
 
-#### C1–C5 — `data.py` → one module per resource family · **M each** · no dependencies
+#### C1 — `data.py` → one package, one module per resource family · ✅ **DONE 2026-08-01**
 
-1,438 LOC / 73 endpoints / 14 families → `routes/channels.py`, `routes/posts.py`,
-`routes/discover.py`, `routes/summaries.py`, `routes/logs.py`, `routes/settings.py`,
-`routes/admin.py`. Move the 6 inline `BaseModel`s into `app/schemas/` as you go (B1's rule).
+Done as **one** unit, not five: the split is only behaviour-preserving if it happens at once —
+a half-split module cannot be verified by the OpenAPI diff, which is the whole safety argument.
 
-- **Keep every URL path identical.** This is a pure file-move: same `prefix="/data"`, same
-  operation ids, so the generated client and all frontend callers are unaffected.
-- **Verify:** `uv run pytest tests/ -q`; then diff the OpenAPI before/after —
-  `bash scripts/generate-client.sh && git diff --stat frontend/openapi.json` should show
-  **no path changes**. That diff is the proof the move was behaviour-preserving.
-- **Risk:** Low — mechanical, and the OpenAPI diff catches mistakes.
+**Shipped:** `routes/data.py` (1,453 LOC, 73 endpoints, 14 families) → `routes/data/` with
+`channels` (425), `discover` (292), `logs` (202), `summaries` (156), `admin` (172), `posts`
+(118), `credentials` (99), `vectors` (71), plus `_shared.py` (38) and `__init__.py` (40).
+The six inline `BaseModel`s moved to `app/schemas/posts.py` and `app/schemas/discover.py`,
+finishing B1's rule — **no route module declares a model any more.**
+
+**The result to check:** `frontend/openapi.json` is **identical order-insensitively** — 304
+insertions, 304 deletions, all of it path-key reordering, with the same 129 operations, the same
+operation ids and the same component schemas.
+
+**It went wrong first, and quietly.** The initial extraction took each function's span from the
+`ast` node's `lineno`, which points at the `def` — so every block boundary orphaned its leading
+`@router.…` decorator and **twelve endpoints silently disappeared**, one per extracted range.
+They still imported, still type-checked, and 698 of 767 tests still passed. Only the OpenAPI diff
+named them. The rewrite addresses functions by name and derives spans from `decorator_list`
+upward, and additionally refuses to run if any top-level definition is unassigned.
+
+**So C1 also ships `tests/api/test_route_inventory.py`**, which parses the route modules and
+asserts every declared route is mounted, that no module declares routes without being included,
+and that the count is still 73. Mutation-tested against both real failure modes: orphaning a
+decorator fails 1, dropping an `include_router` fails 3.
+
+> The plan and audit both said "71 endpoints" and "1,438 LOC". Measured: **73** and **1,453**.
+> The test asserts the measured number.
+
+**Verified:** backend **770 passed / 2 skipped** (767 + 3 new), mypy strict clean (124 files),
+ruff clean, `tsc` clean, OpenAPI diff order-only.
 
 ---
 
@@ -720,7 +740,7 @@ Measurable, re-runnable — same discipline as the remediation plan's §12.
 | Generated-client LOC | 10,796 → **4,866** | — |
 | `$ref`-typed API responses | 26/129 → **89/129** | 129/129 |
 | Hand-written domain types mirroring server tables | 24 | 0 |
-| Largest route module | 1,438 LOC | < 400 |
+| Largest route module | 1,438 LOC → **425** | < 400 |
 | Largest frontend context | 1,103 LOC | < 300 |
 | Largest backend function | 257 LOC | < 80 |
 | Files touched to add a log type | ~30 | ~3 |

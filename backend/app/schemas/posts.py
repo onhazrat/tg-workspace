@@ -27,6 +27,13 @@ from __future__ import annotations
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
+from pydantic import Field as PydanticField
+
+from app.services.posts import (
+    DEFAULT_POST_PAGE_SIZE,
+    MAX_POST_LOOKUP_BATCH,
+    MAX_POST_PAGE_SIZE,
+)
 
 
 class PostResponse(BaseModel):
@@ -60,3 +67,69 @@ class BulkUpsertPostsResponse(BaseModel):
     """Result of ``POST /data/posts/bulk``."""
 
     upserted: int = 0
+
+
+class PostScopeRequest(BaseModel):
+    """A post scope carried in a request body rather than a query string.
+
+    The channel selection can run to the full account — over a thousand handles —
+    which as `?channelNames=a,b,c,...` produced URLs long enough to hit proxy and
+    server header limits. A body has no such ceiling.
+    """
+
+    channel_names: list[str] | None = PydanticField(None, alias="channelNames")
+    start_date: int | None = PydanticField(None, alias="startDate")
+    end_date: int | None = PydanticField(None, alias="endDate")
+    keyword: str | None = None
+    forwarded: str = "all"
+    media: str = "all"
+    max_per_channel: int = PydanticField(0, alias="maxPerChannel", ge=0)
+
+    def cleaned_channel_names(self) -> list[str] | None:
+        """Non-empty, trimmed handles — matching the old comma-split behaviour."""
+        if self.channel_names is None:
+            return None
+        names = [n.strip() for n in self.channel_names if n.strip()]
+        return names or None
+
+
+class PostFeedRequest(PostScopeRequest):
+    """`PostScopeRequest` plus the feed's paging, cap mode and sort.
+
+    `limit`/`offset` keep the same bounds the query params enforced, so an
+    out-of-range page is still a 422 rather than an unbounded read.
+    """
+
+    channel_name: str | None = PydanticField(None, alias="channelName")
+    limit: int = PydanticField(DEFAULT_POST_PAGE_SIZE, ge=1, le=MAX_POST_PAGE_SIZE)
+    offset: int = PydanticField(0, ge=0)
+    max_per_channel_mode: str = PydanticField("latest", alias="maxPerChannelMode")
+    sort: str = "time"
+    seed: int = 0
+
+    def resolved_channel_names(self) -> list[str] | None:
+        """`channelNames` wins; `channelName` is the single-channel shorthand.
+
+        Mirrors the old `if channel_names: ... elif channel_name: ...`, including
+        that an empty `channelNames` falls through to the singular form.
+        """
+        names = self.cleaned_channel_names()
+        if names:
+            return names
+        if self.channel_name and self.channel_name.strip():
+            return [self.channel_name.strip()]
+        return None
+
+
+class PostLookupRef(BaseModel):
+    channel_name: str = PydanticField(alias="channelName")
+    post_id: int = PydanticField(alias="postId")
+
+
+class PostLookupRequest(BaseModel):
+    """Batch of `(channelName, postId)` refs to resolve.
+
+    Capped so this cannot become another way to ask for unbounded rows.
+    """
+
+    posts: list[PostLookupRef] = PydanticField(max_length=MAX_POST_LOOKUP_BATCH)
