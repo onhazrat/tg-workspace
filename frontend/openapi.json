@@ -2183,9 +2183,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "type": "object",
-                  "title": "Response Data-Discover Candidates"
+                  "$ref": "#/components/schemas/DiscoverCandidatesResponse"
                 }
               }
             }
@@ -2214,7 +2212,9 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "items": { "additionalProperties": true, "type": "object" },
+                  "items": {
+                    "$ref": "#/components/schemas/IgnoredChannelResponse"
+                  },
                   "type": "array",
                   "title": "Response Data-List Discover Ignored"
                 }
@@ -2243,9 +2243,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "type": "object",
-                  "title": "Response Data-Add Discover Ignored"
+                  "$ref": "#/components/schemas/DiscoverIgnoredAddedResponse"
                 }
               }
             }
@@ -2280,9 +2278,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "type": "object",
-                  "title": "Response Data-Remove Discover Ignored"
+                  "$ref": "#/components/schemas/DiscoverIgnoredRemovedResponse"
                 }
               }
             }
@@ -2347,7 +2343,9 @@
               "application/json": {
                 "schema": {
                   "type": "array",
-                  "items": { "type": "object", "additionalProperties": true },
+                  "items": {
+                    "$ref": "#/components/schemas/HandleProbeResponse"
+                  },
                   "title": "Response Data-List Discover Probes"
                 }
               }
@@ -2376,9 +2374,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "type": "object",
-                  "title": "Response Data-Get Discover Probe Queue"
+                  "$ref": "#/components/schemas/DiscoverProbeQueueResponse"
                 }
               }
             }
@@ -2407,9 +2403,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "type": "object",
-                  "title": "Response Data-Recheck Discover Probes"
+                  "$ref": "#/components/schemas/DiscoverProbeRecheckResponse"
                 }
               }
             }
@@ -2449,9 +2443,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "additionalProperties": true,
-                  "title": "Response Data-Create Discover Report"
+                  "$ref": "#/components/schemas/DiscoverReportResponse"
                 }
               }
             }
@@ -2513,7 +2505,9 @@
               "application/json": {
                 "schema": {
                   "type": "array",
-                  "items": { "type": "object", "additionalProperties": true },
+                  "items": {
+                    "$ref": "#/components/schemas/DiscoverReportListItemResponse"
+                  },
                   "title": "Response Data-List Discover Reports"
                 }
               }
@@ -2543,7 +2537,7 @@
               "application/json": {
                 "schema": {
                   "anyOf": [
-                    { "additionalProperties": true, "type": "object" },
+                    { "$ref": "#/components/schemas/DiscoverReportResponse" },
                     { "type": "null" }
                   ],
                   "title": "Response Data-Get Latest Discover Report"
@@ -2576,9 +2570,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "additionalProperties": true,
-                  "title": "Response Data-Get Discover Report"
+                  "$ref": "#/components/schemas/DiscoverReportResponse"
                 }
               }
             }
@@ -2611,11 +2603,7 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {
-                  "type": "object",
-                  "additionalProperties": { "type": "string" },
-                  "title": "Response Data-Delete Discover Report"
-                }
+                "schema": { "$ref": "#/components/schemas/StatusResponse" }
               }
             }
           },
@@ -5188,6 +5176,28 @@
         "required": ["jobId", "status"],
         "title": "CancelSyncJobResponse"
       },
+      "CandidateSamplePostResponse": {
+        "properties": {
+          "channelName": { "type": "string", "title": "Channelname" },
+          "postId": { "type": "integer", "title": "Postid" },
+          "timestamp": { "type": "integer", "title": "Timestamp" }
+        },
+        "type": "object",
+        "required": ["channelName", "postId", "timestamp"],
+        "title": "CandidateSamplePostResponse",
+        "description": "Pointer to the most recent post that referenced a candidate.\n\nA pointer rather than the post body on purpose: retention may prune the post\nlater, and callers render a Telegram web-view link from these three fields so\nthe evidence stays reachable outside our corpus."
+      },
+      "CandidateSeenInResponse": {
+        "properties": {
+          "channelName": { "type": "string", "title": "Channelname" },
+          "counts": { "$ref": "#/components/schemas/SignalCountsResponse" },
+          "total": { "type": "integer", "title": "Total" }
+        },
+        "type": "object",
+        "required": ["channelName", "counts", "total"],
+        "title": "CandidateSeenInResponse",
+        "description": "One carrier channel's contribution to a candidate's totals."
+      },
       "ChannelInfoRequest": {
         "properties": {
           "proxyEnabled": {
@@ -5488,6 +5498,45 @@
         "required": ["message"],
         "title": "ChatRequest"
       },
+      "DiscoverCandidateResponse": {
+        "properties": {
+          "name": { "type": "string", "title": "Name" },
+          "displayName": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Displayname"
+          },
+          "counts": { "$ref": "#/components/schemas/SignalCountsResponse" },
+          "total": { "type": "integer", "title": "Total", "default": 0 },
+          "seenIn": {
+            "items": { "$ref": "#/components/schemas/CandidateSeenInResponse" },
+            "type": "array",
+            "title": "Seenin"
+          },
+          "seenInCount": {
+            "type": "integer",
+            "title": "Seenincount",
+            "default": 0
+          },
+          "lastSeen": { "type": "integer", "title": "Lastseen", "default": 0 },
+          "isFollowed": {
+            "type": "boolean",
+            "title": "Isfollowed",
+            "default": false
+          },
+          "isIgnored": {
+            "type": "boolean",
+            "title": "Isignored",
+            "default": false
+          },
+          "samplePost": {
+            "$ref": "#/components/schemas/CandidateSamplePostResponse"
+          }
+        },
+        "type": "object",
+        "required": ["name", "counts", "samplePost"],
+        "title": "DiscoverCandidateResponse",
+        "description": "One discovered handle, as `_to_candidate` builds it.\n\n`isFollowed` / `isIgnored` are resolved against live state, never frozen \u2014\ncounts are historical, follow state is not."
+      },
       "DiscoverCandidatesRequest": {
         "properties": {
           "channelNames": {
@@ -5548,6 +5597,27 @@
         "title": "DiscoverCandidatesRequest",
         "description": "`PostScopeRequest` plus the signal-kind filter and the cap/scope inputs.\n\n`channelNames` is re-declared as required: the discovery aggregate is always\nasked about an explicit selection, and the query-string version required it\ntoo.\n\n`maxPerChannelMode`/`seed` and `postIds` are what let Discover reproduce the\ntwo scopes that used to fall back to a second, client-side implementation of\nthe same counting rules \u2014 the `random` cap and a semantic query\n(IDEA-011 D14)."
       },
+      "DiscoverCandidatesResponse": {
+        "properties": {
+          "candidates": {
+            "items": {
+              "$ref": "#/components/schemas/DiscoverCandidateResponse"
+            },
+            "type": "array",
+            "title": "Candidates"
+          },
+          "scopeCounts": { "$ref": "#/components/schemas/ScopeCountsResponse" },
+          "postsInScope": {
+            "type": "integer",
+            "title": "Postsinscope",
+            "default": 0
+          }
+        },
+        "type": "object",
+        "required": ["scopeCounts"],
+        "title": "DiscoverCandidatesResponse",
+        "description": "Result of the stateless aggregation, `POST /discover/candidates`."
+      },
       "DiscoverIgnoreRequest": {
         "properties": {
           "handles": {
@@ -5562,7 +5632,32 @@
         },
         "type": "object",
         "required": ["handles"],
-        "title": "DiscoverIgnoreRequest"
+        "title": "DiscoverIgnoreRequest",
+        "description": "Handles to dismiss, or to un-dismiss.\n\nA list rather than a path parameter so a batch can be toggled in one call \u2014\nwhich is why the DELETE carries a body too."
+      },
+      "DiscoverIgnoredAddedResponse": {
+        "properties": {
+          "ignored": {
+            "items": { "type": "string" },
+            "type": "array",
+            "title": "Ignored"
+          }
+        },
+        "type": "object",
+        "title": "DiscoverIgnoredAddedResponse",
+        "description": "Handles newly dismissed. Excludes ones already dismissed: the call is\nidempotent, so a re-dismissal is a no-op rather than an error."
+      },
+      "DiscoverIgnoredRemovedResponse": {
+        "properties": {
+          "removed": {
+            "items": { "type": "string" },
+            "type": "array",
+            "title": "Removed"
+          }
+        },
+        "type": "object",
+        "title": "DiscoverIgnoredRemovedResponse",
+        "description": "Handles whose dismissal was undone. Unknown handles are omitted."
       },
       "DiscoverPostRef": {
         "properties": {
@@ -5572,6 +5667,39 @@
         "type": "object",
         "required": ["channelName", "postId"],
         "title": "DiscoverPostRef"
+      },
+      "DiscoverProbeQueueResponse": {
+        "properties": {
+          "queued": { "type": "integer", "title": "Queued", "default": 0 },
+          "retrying": { "type": "integer", "title": "Retrying", "default": 0 },
+          "resolved": { "type": "integer", "title": "Resolved", "default": 0 },
+          "unavailable": {
+            "type": "integer",
+            "title": "Unavailable",
+            "default": 0
+          },
+          "enabled": {
+            "type": "boolean",
+            "title": "Enabled",
+            "default": false
+          },
+          "running": { "type": "boolean", "title": "Running", "default": false }
+        },
+        "type": "object",
+        "title": "DiscoverProbeQueueResponse",
+        "description": "Probe queue state, for the progress display.\n\n`queued` and `retrying` are split because they behave differently on screen:\n`queued` drains to zero and can drive a progress bar, while `retrying` may\nnever reach zero \u2014 a permanently unreachable handle keeps retrying at the\nbackoff ceiling forever, by design."
+      },
+      "DiscoverProbeRecheckResponse": {
+        "properties": {
+          "requeued": {
+            "items": { "type": "string" },
+            "type": "array",
+            "title": "Requeued"
+          }
+        },
+        "type": "object",
+        "title": "DiscoverProbeRecheckResponse",
+        "description": "The handles now queued for a fresh probe.\n\nIncludes handles that had never been probed: the UI offers recheck on rows\nwhose verdict has not arrived yet, so asking for one nobody has looked at is\nreasonable rather than an error. A list, not a count \u2014 the caller needs to\nknow *which* rows to repaint as pending."
       },
       "DiscoverProbeRequest": {
         "properties": {
@@ -5583,7 +5711,117 @@
         },
         "type": "object",
         "required": ["handles"],
-        "title": "DiscoverProbeRequest"
+        "title": "DiscoverProbeRequest",
+        "description": "Handles whose cached verdict should be discarded and re-queued."
+      },
+      "DiscoverReportListItemResponse": {
+        "properties": {
+          "id": { "type": "string", "title": "Id" },
+          "scope": {
+            "$ref": "#/components/schemas/DiscoverReportScopeResponse"
+          },
+          "scopeCounts": { "$ref": "#/components/schemas/ScopeCountsResponse" },
+          "postsInScope": {
+            "type": "integer",
+            "title": "Postsinscope",
+            "default": 0
+          },
+          "timestamp": {
+            "type": "integer",
+            "title": "Timestamp",
+            "default": 0
+          },
+          "candidateCount": {
+            "type": "integer",
+            "title": "Candidatecount",
+            "default": 0
+          }
+        },
+        "type": "object",
+        "required": ["id", "scope", "scopeCounts"],
+        "title": "DiscoverReportListItemResponse",
+        "description": "A saved report without its candidate rows, as the history list ships it.\n\n`candidates` is the corpus-sized field \u2014 a wide-scope report holds the full\nsingle-reference tail \u2014 so the list carries `candidateCount` instead."
+      },
+      "DiscoverReportResponse": {
+        "properties": {
+          "id": { "type": "string", "title": "Id" },
+          "scope": {
+            "$ref": "#/components/schemas/DiscoverReportScopeResponse"
+          },
+          "scopeCounts": { "$ref": "#/components/schemas/ScopeCountsResponse" },
+          "postsInScope": {
+            "type": "integer",
+            "title": "Postsinscope",
+            "default": 0
+          },
+          "timestamp": {
+            "type": "integer",
+            "title": "Timestamp",
+            "default": 0
+          },
+          "candidateCount": {
+            "type": "integer",
+            "title": "Candidatecount",
+            "default": 0
+          },
+          "candidates": {
+            "items": { "$ref": "#/components/schemas/ReportCandidateResponse" },
+            "type": "array",
+            "title": "Candidates"
+          }
+        },
+        "type": "object",
+        "required": ["id", "scope", "scopeCounts"],
+        "title": "DiscoverReportResponse",
+        "description": "A saved report with every candidate and its live follow/probe state."
+      },
+      "DiscoverReportScopeResponse": {
+        "properties": {
+          "channels": {
+            "items": { "type": "string" },
+            "type": "array",
+            "title": "Channels"
+          },
+          "startDate": {
+            "type": "integer",
+            "title": "Startdate",
+            "default": 0
+          },
+          "endDate": { "type": "integer", "title": "Enddate", "default": 0 },
+          "signals": {
+            "items": { "type": "string" },
+            "type": "array",
+            "title": "Signals"
+          },
+          "keyword": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Keyword"
+          },
+          "forwarded": {
+            "type": "string",
+            "title": "Forwarded",
+            "default": "all"
+          },
+          "media": { "type": "string", "title": "Media", "default": "all" },
+          "maxPerChannel": {
+            "type": "integer",
+            "title": "Maxperchannel",
+            "default": 0
+          },
+          "maxPerChannelMode": {
+            "type": "string",
+            "title": "Maxperchannelmode",
+            "default": "latest"
+          },
+          "seed": { "type": "integer", "title": "Seed", "default": 0 },
+          "scopedPostCount": {
+            "anyOf": [{ "type": "integer" }, { "type": "null" }],
+            "title": "Scopedpostcount"
+          }
+        },
+        "type": "object",
+        "title": "DiscoverReportScopeResponse",
+        "description": "The frozen inputs a report was generated for.\n\nRendered by the scope card instead of live selection state \u2014 after the user\nchanges tabs, live state no longer describes where the numbers came from."
       },
       "DiscoveredViaPayload": {
         "properties": {
@@ -5673,6 +5911,60 @@
         },
         "type": "object",
         "title": "HTTPValidationError"
+      },
+      "HandleProbeResponse": {
+        "properties": {
+          "handle": { "type": "string", "title": "Handle" },
+          "status": {
+            "type": "string",
+            "title": "Status",
+            "default": "unknown"
+          },
+          "kind": { "type": "string", "title": "Kind", "default": "unknown" },
+          "displayName": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Displayname"
+          },
+          "bio": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Bio"
+          },
+          "subscribers": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Subscribers"
+          },
+          "photoUrl": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Photourl"
+          },
+          "attempts": { "type": "integer", "title": "Attempts", "default": 0 },
+          "lastError": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Lasterror"
+          },
+          "checkedAt": {
+            "anyOf": [{ "type": "integer" }, { "type": "null" }],
+            "title": "Checkedat"
+          }
+        },
+        "type": "object",
+        "required": ["handle"],
+        "title": "HandleProbeResponse",
+        "description": "A cached verdict about one handle, as `probe_to_camel` builds it.\n\n`status` is the structural fact (`ok` | `unavailable` | `unknown`); `kind`\n(`channel` | `group` | `bot` | `user` | `unknown`) is an HTML heuristic that\nsharpens the wording and is never filtered on."
+      },
+      "IgnoredChannelResponse": {
+        "properties": {
+          "handle": { "type": "string", "title": "Handle" },
+          "reason": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Reason"
+          },
+          "createdAt": { "type": "integer", "title": "Createdat", "default": 0 }
+        },
+        "type": "object",
+        "required": ["handle"],
+        "title": "IgnoredChannelResponse",
+        "description": "One dismissed candidate."
       },
       "ItemCreate": {
         "properties": {
@@ -6268,6 +6560,51 @@
         "required": ["query"],
         "title": "RagSearchRequest"
       },
+      "ReportCandidateResponse": {
+        "properties": {
+          "name": { "type": "string", "title": "Name" },
+          "displayName": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Displayname"
+          },
+          "counts": { "$ref": "#/components/schemas/SignalCountsResponse" },
+          "total": { "type": "integer", "title": "Total", "default": 0 },
+          "seenIn": {
+            "items": { "$ref": "#/components/schemas/CandidateSeenInResponse" },
+            "type": "array",
+            "title": "Seenin"
+          },
+          "seenInCount": {
+            "type": "integer",
+            "title": "Seenincount",
+            "default": 0
+          },
+          "lastSeen": { "type": "integer", "title": "Lastseen", "default": 0 },
+          "isFollowed": {
+            "type": "boolean",
+            "title": "Isfollowed",
+            "default": false
+          },
+          "isIgnored": {
+            "type": "boolean",
+            "title": "Isignored",
+            "default": false
+          },
+          "samplePost": {
+            "$ref": "#/components/schemas/CandidateSamplePostResponse"
+          },
+          "probe": {
+            "anyOf": [
+              { "$ref": "#/components/schemas/HandleProbeResponse" },
+              { "type": "null" }
+            ]
+          }
+        },
+        "type": "object",
+        "required": ["name", "counts", "samplePost"],
+        "title": "ReportCandidateResponse",
+        "description": "A candidate read back from a saved report, with its probe verdict joined.\n\n`probe` is `null` for a handle nothing has looked at yet, which callers must\nrender as \"not checked\" rather than as a verdict: an unprobed handle and one\nconfirmed unfollowable must not look the same."
+      },
       "ResolveStartTimeRequest": {
         "properties": {
           "proxyEnabled": {
@@ -6420,6 +6757,24 @@
         ],
         "title": "RuntimeConstants"
       },
+      "ScopeCountsResponse": {
+        "properties": {
+          "forwardPosts": {
+            "type": "integer",
+            "title": "Forwardposts",
+            "default": 0
+          },
+          "mentionPosts": {
+            "type": "integer",
+            "title": "Mentionposts",
+            "default": 0
+          },
+          "linkPosts": { "type": "integer", "title": "Linkposts", "default": 0 }
+        },
+        "type": "object",
+        "title": "ScopeCountsResponse",
+        "description": "How many posts in scope carried each signal kind.\n\nPost-level, not reference-level: a post forwarding two channels counts once\ntowards `forwardPosts`, which is what makes these comparable with\n`postsInScope`."
+      },
       "ScrapeRequest": {
         "properties": {
           "proxyEnabled": {
@@ -6527,6 +6882,16 @@
         },
         "type": "object",
         "title": "SettingGroupWriteRequest"
+      },
+      "SignalCountsResponse": {
+        "properties": {
+          "forward": { "type": "integer", "title": "Forward", "default": 0 },
+          "mention": { "type": "integer", "title": "Mention", "default": 0 },
+          "link": { "type": "integer", "title": "Link", "default": 0 }
+        },
+        "type": "object",
+        "title": "SignalCountsResponse",
+        "description": "References by signal kind.\n\nAlways carries all three kinds even when the request enabled a subset, so a\ncaller can render a stable set of columns."
       },
       "StartSyncJobRequest": {
         "properties": {

@@ -176,6 +176,28 @@ export type CancelSyncJobResponse = {
     status: string;
 };
 
+/**
+ * Pointer to the most recent post that referenced a candidate.
+ *
+ * A pointer rather than the post body on purpose: retention may prune the post
+ * later, and callers render a Telegram web-view link from these three fields so
+ * the evidence stays reachable outside our corpus.
+ */
+export type CandidateSamplePostResponse = {
+    channelName: string;
+    postId: number;
+    timestamp: number;
+};
+
+/**
+ * One carrier channel's contribution to a candidate's totals.
+ */
+export type CandidateSeenInResponse = {
+    channelName: string;
+    counts: SignalCountsResponse;
+    total: number;
+};
+
 export type ChannelInfoRequest = {
     proxyEnabled?: boolean;
     proxies?: (Array<(string)> | null);
@@ -287,6 +309,25 @@ export type ChatRequest = {
 };
 
 /**
+ * One discovered handle, as `_to_candidate` builds it.
+ *
+ * `isFollowed` / `isIgnored` are resolved against live state, never frozen —
+ * counts are historical, follow state is not.
+ */
+export type DiscoverCandidateResponse = {
+    name: string;
+    displayName?: (string | null);
+    counts: SignalCountsResponse;
+    total?: number;
+    seenIn?: Array<CandidateSeenInResponse>;
+    seenInCount?: number;
+    lastSeen?: number;
+    isFollowed?: boolean;
+    isIgnored?: boolean;
+    samplePost: CandidateSamplePostResponse;
+};
+
+/**
  * `PostScopeRequest` plus the signal-kind filter and the cap/scope inputs.
  *
  * `channelNames` is re-declared as required: the discovery aggregate is always
@@ -312,12 +353,42 @@ export type DiscoverCandidatesRequest = {
     postIds?: (Array<DiscoverPostRef> | null);
 };
 
+/**
+ * Result of the stateless aggregation, `POST /discover/candidates`.
+ */
+export type DiscoverCandidatesResponse = {
+    candidates?: Array<DiscoverCandidateResponse>;
+    scopeCounts: ScopeCountsResponse;
+    postsInScope?: number;
+};
+
 export type DiscoveredViaPayload = {
     channelName: string;
     postId: number;
     timestamp: number;
 };
 
+/**
+ * Handles newly dismissed. Excludes ones already dismissed: the call is
+ * idempotent, so a re-dismissal is a no-op rather than an error.
+ */
+export type DiscoverIgnoredAddedResponse = {
+    ignored?: Array<(string)>;
+};
+
+/**
+ * Handles whose dismissal was undone. Unknown handles are omitted.
+ */
+export type DiscoverIgnoredRemovedResponse = {
+    removed?: Array<(string)>;
+};
+
+/**
+ * Handles to dismiss, or to un-dismiss.
+ *
+ * A list rather than a path parameter so a batch can be toggled in one call —
+ * which is why the DELETE carries a body too.
+ */
 export type DiscoverIgnoreRequest = {
     handles: Array<(string)>;
     reason?: (string | null);
@@ -328,8 +399,88 @@ export type DiscoverPostRef = {
     postId: number;
 };
 
+/**
+ * Probe queue state, for the progress display.
+ *
+ * `queued` and `retrying` are split because they behave differently on screen:
+ * `queued` drains to zero and can drive a progress bar, while `retrying` may
+ * never reach zero — a permanently unreachable handle keeps retrying at the
+ * backoff ceiling forever, by design.
+ */
+export type DiscoverProbeQueueResponse = {
+    queued?: number;
+    retrying?: number;
+    resolved?: number;
+    unavailable?: number;
+    enabled?: boolean;
+    running?: boolean;
+};
+
+/**
+ * The handles now queued for a fresh probe.
+ *
+ * Includes handles that had never been probed: the UI offers recheck on rows
+ * whose verdict has not arrived yet, so asking for one nobody has looked at is
+ * reasonable rather than an error. A list, not a count — the caller needs to
+ * know *which* rows to repaint as pending.
+ */
+export type DiscoverProbeRecheckResponse = {
+    requeued?: Array<(string)>;
+};
+
+/**
+ * Handles whose cached verdict should be discarded and re-queued.
+ */
 export type DiscoverProbeRequest = {
     handles: Array<(string)>;
+};
+
+/**
+ * A saved report without its candidate rows, as the history list ships it.
+ *
+ * `candidates` is the corpus-sized field — a wide-scope report holds the full
+ * single-reference tail — so the list carries `candidateCount` instead.
+ */
+export type DiscoverReportListItemResponse = {
+    id: string;
+    scope: DiscoverReportScopeResponse;
+    scopeCounts: ScopeCountsResponse;
+    postsInScope?: number;
+    timestamp?: number;
+    candidateCount?: number;
+};
+
+/**
+ * A saved report with every candidate and its live follow/probe state.
+ */
+export type DiscoverReportResponse = {
+    id: string;
+    scope: DiscoverReportScopeResponse;
+    scopeCounts: ScopeCountsResponse;
+    postsInScope?: number;
+    timestamp?: number;
+    candidateCount?: number;
+    candidates?: Array<ReportCandidateResponse>;
+};
+
+/**
+ * The frozen inputs a report was generated for.
+ *
+ * Rendered by the scope card instead of live selection state — after the user
+ * changes tabs, live state no longer describes where the numbers came from.
+ */
+export type DiscoverReportScopeResponse = {
+    channels?: Array<(string)>;
+    startDate?: number;
+    endDate?: number;
+    signals?: Array<(string)>;
+    keyword?: (string | null);
+    forwarded?: string;
+    media?: string;
+    maxPerChannel?: number;
+    maxPerChannelMode?: string;
+    seed?: number;
+    scopedPostCount?: (number | null);
 };
 
 export type EmbedRequest = {
@@ -353,8 +504,37 @@ export type GlobalStartTimeSnapshot = {
     effectiveMs: number;
 };
 
+/**
+ * A cached verdict about one handle, as `probe_to_camel` builds it.
+ *
+ * `status` is the structural fact (`ok` | `unavailable` | `unknown`); `kind`
+ * (`channel` | `group` | `bot` | `user` | `unknown`) is an HTML heuristic that
+ * sharpens the wording and is never filtered on.
+ */
+export type HandleProbeResponse = {
+    handle: string;
+    status?: string;
+    kind?: string;
+    displayName?: (string | null);
+    bio?: (string | null);
+    subscribers?: (string | null);
+    photoUrl?: (string | null);
+    attempts?: number;
+    lastError?: (string | null);
+    checkedAt?: (number | null);
+};
+
 export type HTTPValidationError = {
     detail?: Array<ValidationError>;
+};
+
+/**
+ * One dismissed candidate.
+ */
+export type IgnoredChannelResponse = {
+    handle: string;
+    reason?: (string | null);
+    createdAt?: number;
 };
 
 export type ItemCreate = {
@@ -564,6 +744,27 @@ export type RagSearchRequest = {
     scanLimit?: number;
 };
 
+/**
+ * A candidate read back from a saved report, with its probe verdict joined.
+ *
+ * `probe` is `null` for a handle nothing has looked at yet, which callers must
+ * render as "not checked" rather than as a verdict: an unprobed handle and one
+ * confirmed unfollowable must not look the same.
+ */
+export type ReportCandidateResponse = {
+    name: string;
+    displayName?: (string | null);
+    counts: SignalCountsResponse;
+    total?: number;
+    seenIn?: Array<CandidateSeenInResponse>;
+    seenInCount?: number;
+    lastSeen?: number;
+    isFollowed?: boolean;
+    isIgnored?: boolean;
+    samplePost: CandidateSamplePostResponse;
+    probe?: (HandleProbeResponse | null);
+};
+
 export type ResolveStartTimeRequest = {
     proxyEnabled?: boolean;
     proxies?: (Array<(string)> | null);
@@ -607,6 +808,19 @@ export type RuntimeConstants = {
     environment: string;
 };
 
+/**
+ * How many posts in scope carried each signal kind.
+ *
+ * Post-level, not reference-level: a post forwarding two channels counts once
+ * towards `forwardPosts`, which is what makes these comparable with
+ * `postsInScope`.
+ */
+export type ScopeCountsResponse = {
+    forwardPosts?: number;
+    mentionPosts?: number;
+    linkPosts?: number;
+};
+
 export type ScrapeRequest = {
     proxyEnabled?: boolean;
     proxies?: (Array<(string)> | null);
@@ -636,6 +850,18 @@ export type SettingGroupWriteRequest = {
     includeInBulkSync?: (boolean | null);
     allowIndividualSync?: (boolean | null);
     resetSyncEnabled?: (boolean | null);
+};
+
+/**
+ * References by signal kind.
+ *
+ * Always carries all three kinds even when the request enabled a subset, so a
+ * caller can render a stable set of columns.
+ */
+export type SignalCountsResponse = {
+    forward?: number;
+    mention?: number;
+    link?: number;
 };
 
 export type StartSyncJobRequest = {
@@ -1038,29 +1264,21 @@ export type DataDiscoverCandidatesData = {
     requestBody: DiscoverCandidatesRequest;
 };
 
-export type DataDiscoverCandidatesResponse = ({
-    [key: string]: unknown;
-});
+export type DataDiscoverCandidatesResponse = (DiscoverCandidatesResponse);
 
-export type DataListDiscoverIgnoredResponse = (Array<{
-    [key: string]: unknown;
-}>);
+export type DataListDiscoverIgnoredResponse = (Array<IgnoredChannelResponse>);
 
 export type DataAddDiscoverIgnoredData = {
     requestBody: DiscoverIgnoreRequest;
 };
 
-export type DataAddDiscoverIgnoredResponse = ({
-    [key: string]: unknown;
-});
+export type DataAddDiscoverIgnoredResponse = (DiscoverIgnoredAddedResponse);
 
 export type DataRemoveDiscoverIgnoredData = {
     requestBody: DiscoverIgnoreRequest;
 };
 
-export type DataRemoveDiscoverIgnoredResponse = ({
-    [key: string]: unknown;
-});
+export type DataRemoveDiscoverIgnoredResponse = (DiscoverIgnoredRemovedResponse);
 
 export type DataListDiscoverProbesData = {
     limit?: number;
@@ -1068,29 +1286,21 @@ export type DataListDiscoverProbesData = {
     status?: (string | null);
 };
 
-export type DataListDiscoverProbesResponse = (Array<{
-    [key: string]: unknown;
-}>);
+export type DataListDiscoverProbesResponse = (Array<HandleProbeResponse>);
 
-export type DataGetDiscoverProbeQueueResponse = ({
-    [key: string]: unknown;
-});
+export type DataGetDiscoverProbeQueueResponse = (DiscoverProbeQueueResponse);
 
 export type DataRecheckDiscoverProbesData = {
     requestBody: DiscoverProbeRequest;
 };
 
-export type DataRecheckDiscoverProbesResponse = ({
-    [key: string]: unknown;
-});
+export type DataRecheckDiscoverProbesResponse = (DiscoverProbeRecheckResponse);
 
 export type DataCreateDiscoverReportData = {
     requestBody: DiscoverCandidatesRequest;
 };
 
-export type DataCreateDiscoverReportResponse = ({
-    [key: string]: unknown;
-});
+export type DataCreateDiscoverReportResponse = (DiscoverReportResponse);
 
 export type DataListDiscoverReportsData = {
     limit?: number;
@@ -1098,29 +1308,21 @@ export type DataListDiscoverReportsData = {
     search?: (string | null);
 };
 
-export type DataListDiscoverReportsResponse = (Array<{
-    [key: string]: unknown;
-}>);
+export type DataListDiscoverReportsResponse = (Array<DiscoverReportListItemResponse>);
 
-export type DataGetLatestDiscoverReportResponse = (({
-    [key: string]: unknown;
-} | null));
+export type DataGetLatestDiscoverReportResponse = ((DiscoverReportResponse | null));
 
 export type DataGetDiscoverReportData = {
     reportId: string;
 };
 
-export type DataGetDiscoverReportResponse = ({
-    [key: string]: unknown;
-});
+export type DataGetDiscoverReportResponse = (DiscoverReportResponse);
 
 export type DataDeleteDiscoverReportData = {
     reportId: string;
 };
 
-export type DataDeleteDiscoverReportResponse = ({
-    [key: string]: (string);
-});
+export type DataDeleteDiscoverReportResponse = (StatusResponse);
 
 export type DataPostsCountsData = {
     requestBody: PostScopeRequest;

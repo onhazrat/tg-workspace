@@ -714,6 +714,51 @@ export const CancelSyncJobResponseSchema = {
     title: 'CancelSyncJobResponse'
 } as const;
 
+export const CandidateSamplePostResponseSchema = {
+    properties: {
+        channelName: {
+            type: 'string',
+            title: 'Channelname'
+        },
+        postId: {
+            type: 'integer',
+            title: 'Postid'
+        },
+        timestamp: {
+            type: 'integer',
+            title: 'Timestamp'
+        }
+    },
+    type: 'object',
+    required: ['channelName', 'postId', 'timestamp'],
+    title: 'CandidateSamplePostResponse',
+    description: `Pointer to the most recent post that referenced a candidate.
+
+A pointer rather than the post body on purpose: retention may prune the post
+later, and callers render a Telegram web-view link from these three fields so
+the evidence stays reachable outside our corpus.`
+} as const;
+
+export const CandidateSeenInResponseSchema = {
+    properties: {
+        channelName: {
+            type: 'string',
+            title: 'Channelname'
+        },
+        counts: {
+            '$ref': '#/components/schemas/SignalCountsResponse'
+        },
+        total: {
+            type: 'integer',
+            title: 'Total'
+        }
+    },
+    type: 'object',
+    required: ['channelName', 'counts', 'total'],
+    title: 'CandidateSeenInResponse',
+    description: "One carrier channel's contribution to a candidate's totals."
+} as const;
+
 export const ChannelInfoRequestSchema = {
     properties: {
         proxyEnabled: {
@@ -1333,6 +1378,71 @@ export const ChatRequestSchema = {
     title: 'ChatRequest'
 } as const;
 
+export const DiscoverCandidateResponseSchema = {
+    properties: {
+        name: {
+            type: 'string',
+            title: 'Name'
+        },
+        displayName: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Displayname'
+        },
+        counts: {
+            '$ref': '#/components/schemas/SignalCountsResponse'
+        },
+        total: {
+            type: 'integer',
+            title: 'Total',
+            default: 0
+        },
+        seenIn: {
+            items: {
+                '$ref': '#/components/schemas/CandidateSeenInResponse'
+            },
+            type: 'array',
+            title: 'Seenin'
+        },
+        seenInCount: {
+            type: 'integer',
+            title: 'Seenincount',
+            default: 0
+        },
+        lastSeen: {
+            type: 'integer',
+            title: 'Lastseen',
+            default: 0
+        },
+        isFollowed: {
+            type: 'boolean',
+            title: 'Isfollowed',
+            default: false
+        },
+        isIgnored: {
+            type: 'boolean',
+            title: 'Isignored',
+            default: false
+        },
+        samplePost: {
+            '$ref': '#/components/schemas/CandidateSamplePostResponse'
+        }
+    },
+    type: 'object',
+    required: ['name', 'counts', 'samplePost'],
+    title: 'DiscoverCandidateResponse',
+    description: `One discovered handle, as \`_to_candidate\` builds it.
+
+\`isFollowed\` / \`isIgnored\` are resolved against live state, never frozen —
+counts are historical, follow state is not.`
+} as const;
+
 export const DiscoverCandidatesRequestSchema = {
     properties: {
         channelNames: {
@@ -1445,6 +1555,30 @@ the same counting rules — the \`random\` cap and a semantic query
 (IDEA-011 D14).`
 } as const;
 
+export const DiscoverCandidatesResponseSchema = {
+    properties: {
+        candidates: {
+            items: {
+                '$ref': '#/components/schemas/DiscoverCandidateResponse'
+            },
+            type: 'array',
+            title: 'Candidates'
+        },
+        scopeCounts: {
+            '$ref': '#/components/schemas/ScopeCountsResponse'
+        },
+        postsInScope: {
+            type: 'integer',
+            title: 'Postsinscope',
+            default: 0
+        }
+    },
+    type: 'object',
+    required: ['scopeCounts'],
+    title: 'DiscoverCandidatesResponse',
+    description: 'Result of the stateless aggregation, `POST /discover/candidates`.'
+} as const;
+
 export const DiscoverIgnoreRequestSchema = {
     properties: {
         handles: {
@@ -1468,7 +1602,42 @@ export const DiscoverIgnoreRequestSchema = {
     },
     type: 'object',
     required: ['handles'],
-    title: 'DiscoverIgnoreRequest'
+    title: 'DiscoverIgnoreRequest',
+    description: `Handles to dismiss, or to un-dismiss.
+
+A list rather than a path parameter so a batch can be toggled in one call —
+which is why the DELETE carries a body too.`
+} as const;
+
+export const DiscoverIgnoredAddedResponseSchema = {
+    properties: {
+        ignored: {
+            items: {
+                type: 'string'
+            },
+            type: 'array',
+            title: 'Ignored'
+        }
+    },
+    type: 'object',
+    title: 'DiscoverIgnoredAddedResponse',
+    description: `Handles newly dismissed. Excludes ones already dismissed: the call is
+idempotent, so a re-dismissal is a no-op rather than an error.`
+} as const;
+
+export const DiscoverIgnoredRemovedResponseSchema = {
+    properties: {
+        removed: {
+            items: {
+                type: 'string'
+            },
+            type: 'array',
+            title: 'Removed'
+        }
+    },
+    type: 'object',
+    title: 'DiscoverIgnoredRemovedResponse',
+    description: 'Handles whose dismissal was undone. Unknown handles are omitted.'
 } as const;
 
 export const DiscoverPostRefSchema = {
@@ -1487,6 +1656,69 @@ export const DiscoverPostRefSchema = {
     title: 'DiscoverPostRef'
 } as const;
 
+export const DiscoverProbeQueueResponseSchema = {
+    properties: {
+        queued: {
+            type: 'integer',
+            title: 'Queued',
+            default: 0
+        },
+        retrying: {
+            type: 'integer',
+            title: 'Retrying',
+            default: 0
+        },
+        resolved: {
+            type: 'integer',
+            title: 'Resolved',
+            default: 0
+        },
+        unavailable: {
+            type: 'integer',
+            title: 'Unavailable',
+            default: 0
+        },
+        enabled: {
+            type: 'boolean',
+            title: 'Enabled',
+            default: false
+        },
+        running: {
+            type: 'boolean',
+            title: 'Running',
+            default: false
+        }
+    },
+    type: 'object',
+    title: 'DiscoverProbeQueueResponse',
+    description: `Probe queue state, for the progress display.
+
+\`queued\` and \`retrying\` are split because they behave differently on screen:
+\`queued\` drains to zero and can drive a progress bar, while \`retrying\` may
+never reach zero — a permanently unreachable handle keeps retrying at the
+backoff ceiling forever, by design.`
+} as const;
+
+export const DiscoverProbeRecheckResponseSchema = {
+    properties: {
+        requeued: {
+            items: {
+                type: 'string'
+            },
+            type: 'array',
+            title: 'Requeued'
+        }
+    },
+    type: 'object',
+    title: 'DiscoverProbeRecheckResponse',
+    description: `The handles now queued for a fresh probe.
+
+Includes handles that had never been probed: the UI offers recheck on rows
+whose verdict has not arrived yet, so asking for one nobody has looked at is
+reasonable rather than an error. A list, not a count — the caller needs to
+know *which* rows to repaint as pending.`
+} as const;
+
 export const DiscoverProbeRequestSchema = {
     properties: {
         handles: {
@@ -1499,7 +1731,168 @@ export const DiscoverProbeRequestSchema = {
     },
     type: 'object',
     required: ['handles'],
-    title: 'DiscoverProbeRequest'
+    title: 'DiscoverProbeRequest',
+    description: 'Handles whose cached verdict should be discarded and re-queued.'
+} as const;
+
+export const DiscoverReportListItemResponseSchema = {
+    properties: {
+        id: {
+            type: 'string',
+            title: 'Id'
+        },
+        scope: {
+            '$ref': '#/components/schemas/DiscoverReportScopeResponse'
+        },
+        scopeCounts: {
+            '$ref': '#/components/schemas/ScopeCountsResponse'
+        },
+        postsInScope: {
+            type: 'integer',
+            title: 'Postsinscope',
+            default: 0
+        },
+        timestamp: {
+            type: 'integer',
+            title: 'Timestamp',
+            default: 0
+        },
+        candidateCount: {
+            type: 'integer',
+            title: 'Candidatecount',
+            default: 0
+        }
+    },
+    type: 'object',
+    required: ['id', 'scope', 'scopeCounts'],
+    title: 'DiscoverReportListItemResponse',
+    description: `A saved report without its candidate rows, as the history list ships it.
+
+\`candidates\` is the corpus-sized field — a wide-scope report holds the full
+single-reference tail — so the list carries \`candidateCount\` instead.`
+} as const;
+
+export const DiscoverReportResponseSchema = {
+    properties: {
+        id: {
+            type: 'string',
+            title: 'Id'
+        },
+        scope: {
+            '$ref': '#/components/schemas/DiscoverReportScopeResponse'
+        },
+        scopeCounts: {
+            '$ref': '#/components/schemas/ScopeCountsResponse'
+        },
+        postsInScope: {
+            type: 'integer',
+            title: 'Postsinscope',
+            default: 0
+        },
+        timestamp: {
+            type: 'integer',
+            title: 'Timestamp',
+            default: 0
+        },
+        candidateCount: {
+            type: 'integer',
+            title: 'Candidatecount',
+            default: 0
+        },
+        candidates: {
+            items: {
+                '$ref': '#/components/schemas/ReportCandidateResponse'
+            },
+            type: 'array',
+            title: 'Candidates'
+        }
+    },
+    type: 'object',
+    required: ['id', 'scope', 'scopeCounts'],
+    title: 'DiscoverReportResponse',
+    description: 'A saved report with every candidate and its live follow/probe state.'
+} as const;
+
+export const DiscoverReportScopeResponseSchema = {
+    properties: {
+        channels: {
+            items: {
+                type: 'string'
+            },
+            type: 'array',
+            title: 'Channels'
+        },
+        startDate: {
+            type: 'integer',
+            title: 'Startdate',
+            default: 0
+        },
+        endDate: {
+            type: 'integer',
+            title: 'Enddate',
+            default: 0
+        },
+        signals: {
+            items: {
+                type: 'string'
+            },
+            type: 'array',
+            title: 'Signals'
+        },
+        keyword: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Keyword'
+        },
+        forwarded: {
+            type: 'string',
+            title: 'Forwarded',
+            default: 'all'
+        },
+        media: {
+            type: 'string',
+            title: 'Media',
+            default: 'all'
+        },
+        maxPerChannel: {
+            type: 'integer',
+            title: 'Maxperchannel',
+            default: 0
+        },
+        maxPerChannelMode: {
+            type: 'string',
+            title: 'Maxperchannelmode',
+            default: 'latest'
+        },
+        seed: {
+            type: 'integer',
+            title: 'Seed',
+            default: 0
+        },
+        scopedPostCount: {
+            anyOf: [
+                {
+                    type: 'integer'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Scopedpostcount'
+        }
+    },
+    type: 'object',
+    title: 'DiscoverReportScopeResponse',
+    description: `The frozen inputs a report was generated for.
+
+Rendered by the scope card instead of live selection state — after the user
+changes tabs, live state no longer describes where the numbers came from.`
 } as const;
 
 export const DiscoveredViaPayloadSchema = {
@@ -1637,6 +2030,133 @@ export const HTTPValidationErrorSchema = {
     },
     type: 'object',
     title: 'HTTPValidationError'
+} as const;
+
+export const HandleProbeResponseSchema = {
+    properties: {
+        handle: {
+            type: 'string',
+            title: 'Handle'
+        },
+        status: {
+            type: 'string',
+            title: 'Status',
+            default: 'unknown'
+        },
+        kind: {
+            type: 'string',
+            title: 'Kind',
+            default: 'unknown'
+        },
+        displayName: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Displayname'
+        },
+        bio: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Bio'
+        },
+        subscribers: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Subscribers'
+        },
+        photoUrl: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Photourl'
+        },
+        attempts: {
+            type: 'integer',
+            title: 'Attempts',
+            default: 0
+        },
+        lastError: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Lasterror'
+        },
+        checkedAt: {
+            anyOf: [
+                {
+                    type: 'integer'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Checkedat'
+        }
+    },
+    type: 'object',
+    required: ['handle'],
+    title: 'HandleProbeResponse',
+    description: `A cached verdict about one handle, as \`probe_to_camel\` builds it.
+
+\`status\` is the structural fact (\`ok\` | \`unavailable\` | \`unknown\`); \`kind\`
+(\`channel\` | \`group\` | \`bot\` | \`user\` | \`unknown\`) is an HTML heuristic that
+sharpens the wording and is never filtered on.`
+} as const;
+
+export const IgnoredChannelResponseSchema = {
+    properties: {
+        handle: {
+            type: 'string',
+            title: 'Handle'
+        },
+        reason: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Reason'
+        },
+        createdAt: {
+            type: 'integer',
+            title: 'Createdat',
+            default: 0
+        }
+    },
+    type: 'object',
+    required: ['handle'],
+    title: 'IgnoredChannelResponse',
+    description: 'One dismissed candidate.'
 } as const;
 
 export const ItemCreateSchema = {
@@ -2620,6 +3140,82 @@ export const RagSearchRequestSchema = {
     title: 'RagSearchRequest'
 } as const;
 
+export const ReportCandidateResponseSchema = {
+    properties: {
+        name: {
+            type: 'string',
+            title: 'Name'
+        },
+        displayName: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Displayname'
+        },
+        counts: {
+            '$ref': '#/components/schemas/SignalCountsResponse'
+        },
+        total: {
+            type: 'integer',
+            title: 'Total',
+            default: 0
+        },
+        seenIn: {
+            items: {
+                '$ref': '#/components/schemas/CandidateSeenInResponse'
+            },
+            type: 'array',
+            title: 'Seenin'
+        },
+        seenInCount: {
+            type: 'integer',
+            title: 'Seenincount',
+            default: 0
+        },
+        lastSeen: {
+            type: 'integer',
+            title: 'Lastseen',
+            default: 0
+        },
+        isFollowed: {
+            type: 'boolean',
+            title: 'Isfollowed',
+            default: false
+        },
+        isIgnored: {
+            type: 'boolean',
+            title: 'Isignored',
+            default: false
+        },
+        samplePost: {
+            '$ref': '#/components/schemas/CandidateSamplePostResponse'
+        },
+        probe: {
+            anyOf: [
+                {
+                    '$ref': '#/components/schemas/HandleProbeResponse'
+                },
+                {
+                    type: 'null'
+                }
+            ]
+        }
+    },
+    type: 'object',
+    required: ['name', 'counts', 'samplePost'],
+    title: 'ReportCandidateResponse',
+    description: `A candidate read back from a saved report, with its probe verdict joined.
+
+\`probe\` is \`null\` for a handle nothing has looked at yet, which callers must
+render as "not checked" rather than as a verdict: an unprobed handle and one
+confirmed unfollowable must not look the same.`
+} as const;
+
 export const ResolveStartTimeRequestSchema = {
     properties: {
         proxyEnabled: {
@@ -2786,6 +3382,33 @@ export const RuntimeConstantsSchema = {
     type: 'object',
     required: ['syncMaxRetries', 'syncRetryBackoffBaseMs', 'syncJobSseThrottleMs', 'syncJobPersistIntervalMs', 'autoSyncPauseDurationMs', 'autoSyncFailureThresholdMin', 'embeddingsChunkSize', 'embeddingsBackfillLimitDefault', 'translationBatchLimit', 'translationBatchMaxChars', 'environment'],
     title: 'RuntimeConstants'
+} as const;
+
+export const ScopeCountsResponseSchema = {
+    properties: {
+        forwardPosts: {
+            type: 'integer',
+            title: 'Forwardposts',
+            default: 0
+        },
+        mentionPosts: {
+            type: 'integer',
+            title: 'Mentionposts',
+            default: 0
+        },
+        linkPosts: {
+            type: 'integer',
+            title: 'Linkposts',
+            default: 0
+        }
+    },
+    type: 'object',
+    title: 'ScopeCountsResponse',
+    description: `How many posts in scope carried each signal kind.
+
+Post-level, not reference-level: a post forwarding two channels counts once
+towards \`forwardPosts\`, which is what makes these comparable with
+\`postsInScope\`.`
 } as const;
 
 export const ScrapeRequestSchema = {
@@ -3015,6 +3638,32 @@ export const SettingGroupWriteRequestSchema = {
     },
     type: 'object',
     title: 'SettingGroupWriteRequest'
+} as const;
+
+export const SignalCountsResponseSchema = {
+    properties: {
+        forward: {
+            type: 'integer',
+            title: 'Forward',
+            default: 0
+        },
+        mention: {
+            type: 'integer',
+            title: 'Mention',
+            default: 0
+        },
+        link: {
+            type: 'integer',
+            title: 'Link',
+            default: 0
+        }
+    },
+    type: 'object',
+    title: 'SignalCountsResponse',
+    description: `References by signal kind.
+
+Always carries all three kinds even when the request enabled a subset, so a
+caller can render a stable set of columns.`
 } as const;
 
 export const StartSyncJobRequestSchema = {

@@ -559,7 +559,7 @@ export class DataService {
      * travels in the body so it cannot overflow the request line.
      * @param data The data for the request.
      * @param data.requestBody
-     * @returns unknown Successful Response
+     * @returns DiscoverCandidatesResponse Successful Response
      * @throws ApiError
      */
     public static discoverCandidates(data: DataDiscoverCandidatesData): CancelablePromise<DataDiscoverCandidatesResponse> {
@@ -577,7 +577,7 @@ export class DataService {
     /**
      * List Discover Ignored
      * Dismissed candidates, newest first.
-     * @returns unknown Successful Response
+     * @returns IgnoredChannelResponse Successful Response
      * @throws ApiError
      */
     public static listDiscoverIgnored(): CancelablePromise<DataListDiscoverIgnoredResponse> {
@@ -595,7 +595,7 @@ export class DataService {
      * the UI treats this as a toggle.
      * @param data The data for the request.
      * @param data.requestBody
-     * @returns unknown Successful Response
+     * @returns DiscoverIgnoredAddedResponse Successful Response
      * @throws ApiError
      */
     public static addDiscoverIgnored(data: DataAddDiscoverIgnoredData): CancelablePromise<DataAddDiscoverIgnoredResponse> {
@@ -618,7 +618,7 @@ export class DataService {
      * call, matching the POST.
      * @param data The data for the request.
      * @param data.requestBody
-     * @returns unknown Successful Response
+     * @returns DiscoverIgnoredRemovedResponse Successful Response
      * @throws ApiError
      */
     public static removeDiscoverIgnored(data: DataRemoveDiscoverIgnoredData): CancelablePromise<DataRemoveDiscoverIgnoredResponse> {
@@ -640,7 +640,7 @@ export class DataService {
      * @param data.status
      * @param data.limit
      * @param data.offset
-     * @returns unknown Successful Response
+     * @returns HandleProbeResponse Successful Response
      * @throws ApiError
      */
     public static listDiscoverProbes(data: DataListDiscoverProbesData = {}): CancelablePromise<DataListDiscoverProbesResponse> {
@@ -669,7 +669,7 @@ export class DataService {
      *
      * `enabled` reflects the operator's pause switch — the ordinary job toggle, so
      * pausing is durable and every open tab agrees about it.
-     * @returns unknown Successful Response
+     * @returns DiscoverProbeQueueResponse Successful Response
      * @throws ApiError
      */
     public static getDiscoverProbeQueue(): CancelablePromise<DataGetDiscoverProbeQueueResponse> {
@@ -693,7 +693,7 @@ export class DataService {
      * first, so the wait is bounded by the job interval.
      * @param data The data for the request.
      * @param data.requestBody
-     * @returns unknown Successful Response
+     * @returns DiscoverProbeRecheckResponse Successful Response
      * @throws ApiError
      */
     public static recheckDiscoverProbes(data: DataRecheckDiscoverProbesData): CancelablePromise<DataRecheckDiscoverProbesResponse> {
@@ -718,7 +718,7 @@ export class DataService {
      * filters produce a *new* report rather than altering this one (IDEA-011 W1).
      * @param data The data for the request.
      * @param data.requestBody
-     * @returns unknown Successful Response
+     * @returns DiscoverReportResponse Successful Response
      * @throws ApiError
      */
     public static createDiscoverReport(data: DataCreateDiscoverReportData): CancelablePromise<DataCreateDiscoverReportResponse> {
@@ -743,7 +743,7 @@ export class DataService {
      * @param data.limit
      * @param data.offset
      * @param data.search
-     * @returns unknown Successful Response
+     * @returns DiscoverReportListItemResponse Successful Response
      * @throws ApiError
      */
     public static listDiscoverReports(data: DataListDiscoverReportsData = {}): CancelablePromise<DataListDiscoverReportsResponse> {
@@ -782,7 +782,7 @@ export class DataService {
      * A saved report with every candidate, `isFollowed` resolved live.
      * @param data The data for the request.
      * @param data.reportId
-     * @returns unknown Successful Response
+     * @returns DiscoverReportResponse Successful Response
      * @throws ApiError
      */
     public static getDiscoverReport(data: DataGetDiscoverReportData): CancelablePromise<DataGetDiscoverReportResponse> {
@@ -802,7 +802,7 @@ export class DataService {
      * Delete Discover Report
      * @param data The data for the request.
      * @param data.reportId
-     * @returns string Successful Response
+     * @returns StatusResponse Successful Response
      * @throws ApiError
      */
     public static deleteDiscoverReport(data: DataDeleteDiscoverReportData): CancelablePromise<DataDeleteDiscoverReportResponse> {

@@ -1,8 +1,8 @@
 # Architecture simplification plan
 
 **Date:** 2026-07-31
-**Status:** In progress — execution started 2026-08-01. Landed: `H3`, `A0`, `T1`, `B1`, `B2`, `B3`.
-Typed responses **43/129** (was 26). Contexts with a test **1/9** (was 0).
+**Status:** In progress — execution started 2026-08-01. Landed: `H3`, `A0`, `T1`, `B1`, `B2`, `B3`, `B4`.
+Typed responses **53/129** (was 26). Contexts with a test **1/9** (was 0).
 Each unit is marked ✅ **DONE** in place as it lands, with what the work changed about the plan.
 **Companion:** [`architecture-entropy-audit.md`](./architecture-entropy-audit.md) is the evidence base.
 Read §3 and §6 of it before starting workstream A or B.
@@ -282,16 +282,56 @@ fields too. **Declaring a nested model is only safe when the stored shape is com
 **Verified:** backend **733 passed / 1 skipped**, mypy strict clean (108 files), ruff clean,
 frontend **686 pass / 0 fail**.
 
-#### B4–B6 — Roll response models across the remaining families · **M each** · after B1
+#### B4 — `discover` family · ✅ **DONE 2026-08-01**
 
-One PR per family: `discover` · `logs` + `stats` · `jobs` + `telegram` + `network` · `ai` +
-`rag`. Each independently mergeable; each moves the typed-response count up. Track it — the
-number is a clean progress metric.
+Twelve endpoints (the earlier note said thirteen; that was a miscount).
+**Shipped:** `app/schemas/discover.py` — sixteen models, all **closed**; nothing in this family
+merges an open `extra` blob. **Typed responses 42/129 → 53/129.**
 
-> Note on the metric: it counts `$ref` only. Some endpoints already return a precise
-> `dict[str, int]` (e.g. `/posts/counts`, a channel→count mapping) which renders as
-> `additionalProperties: {"type": "integer"}` — genuinely typed, but not a `$ref`. Don't wrap
-> those in a model just to move the number.
+**Two models per shape, not one optional field.** `DiscoverCandidateResponse` is what
+`compute_discover_candidates` produces; `ReportCandidateResponse` subclasses it and adds `probe`,
+the one key a *saved* report resolves at read time. `POST /discover/candidates` does not emit
+that key at all, so a single shared model with `probe: X | None = None` would have started
+sending `"probe": null` from the stateless aggregate — the same rule that keeps conditional keys
+out of `SummaryResponse`, and the reason `DiscoverReportResponse` /
+`DiscoverReportListItemResponse` split too.
+
+**This was the first family where declaring the nested shape was safe**, which is the condition
+B3 identified: `report_to_camel` reads candidates back out of a JSON column, so a closed model
+only works if every persisted row has every key. It does — `_to_candidate` is the single writer,
+has had one implementation since it was introduced, and `create_report` is the only constructor
+of a `DiscoverReport`. Verify that before declaring a stored blob in later units.
+
+**`requeue_probes` returns `list[str]`, not a count** — caught while writing the model. The
+route ships `{"requeued": [...]}`; the UI needs to know *which* rows to repaint as pending.
+
+**New: `tests/api/test_discover_projection.py` (15 tests).** The Discover services are covered
+well under `tests/services/`, but those call the service functions directly — response models sit
+at the HTTP boundary, so a model that truncates keys or adds `null`s passes every one of them.
+This is the first API-level coverage the family has beyond the probe queue. Mutation-tested:
+merging `probe` into the base model fails 2 tests, dropping `seenInCount` fails 3.
+
+**Verified:** backend **748 passed / 1 skipped** (733 + 15 new), mypy strict clean (109 files),
+ruff clean, frontend **686 pass / 0 fail**, `tsc` clean against the regenerated client.
+
+#### B5–B6 — Roll response models across the remaining families · **M each** · after B1
+
+One PR per family: `logs` + `stats` · `jobs` + `telegram` + `network` · `ai` + `rag`. Each
+independently mergeable; each moves the typed-response count up. Track it — the number is a clean
+progress metric.
+
+> **Two known blind spots in the metric** — it matches `$ref` and `items.$ref` only.
+> 1. A precise `dict[str, int]` (e.g. `/posts/counts`) renders as
+>    `additionalProperties: {"type": "integer"}` — genuinely typed, not a `$ref`.
+> 2. An optional response (`-> Model | None`) renders as `anyOf: [{$ref}, {"type": "null"}]` —
+>    also genuinely typed, also not matched. `GET /discover/reports/latest` is the live example.
+>
+> Don't wrap either in a wrapper model just to move the number. Both mean the real figure runs
+> slightly ahead of the reported one.
+>
+> The pre-B4 baseline is **42/129**, not the 43 recorded when B3 landed; re-measuring `origin/main`
+> with the §6 script gave 42. Run that script rather than an ad-hoc one — a script that counts
+> `anyOf` differently silently shifts the denominator too.
 
 - **Multi-user seam:** while touching each response model, keep corpus-level artefacts
   (embeddings, clusters, probe results) **user-agnostic** in their schemas, per `MEMORY.md`.
@@ -585,7 +625,7 @@ Measurable, re-runnable — same discipline as the remediation plan's §12.
 |---|---|---|
 | Data-access paths from `components/` | 7 | 2 |
 | Client-side caches / staleness systems | 3 | 1 |
-| `$ref`-typed API responses | 26/129 | 129/129 |
+| `$ref`-typed API responses | 26/129 → **53/129** | 129/129 |
 | Hand-written domain types mirroring server tables | 24 | 0 |
 | Largest route module | 1,438 LOC | < 400 |
 | Largest frontend context | 1,103 LOC | < 300 |

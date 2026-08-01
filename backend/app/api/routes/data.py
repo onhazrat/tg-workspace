@@ -46,6 +46,19 @@ from app.schemas.data import (
     CancelBulkFollowResponse,
     SettingGroupWriteRequest,
 )
+from app.schemas.discover import (
+    DiscoverCandidatesResponse,
+    DiscoverIgnoredAddedResponse,
+    DiscoverIgnoredRemovedResponse,
+    DiscoverIgnoreRequest,
+    DiscoverProbeQueueResponse,
+    DiscoverProbeRecheckResponse,
+    DiscoverProbeRequest,
+    DiscoverReportListItemResponse,
+    DiscoverReportResponse,
+    HandleProbeResponse,
+    IgnoredChannelResponse,
+)
 from app.schemas.posts import BulkUpsertPostsResponse, PostResponse
 from app.schemas.summaries import (
     SummaryListItemResponse,
@@ -732,7 +745,7 @@ def discover_candidates(
     body: DiscoverCandidatesRequest,
     session: SessionDep,
     _current_user: CurrentUser,
-) -> dict[str, Any]:
+) -> DiscoverCandidatesResponse:
     """Aggregated discovery candidates for a channel/date scope.
 
     Returns counts only. The client previously fetched every post body in
@@ -744,7 +757,9 @@ def discover_candidates(
     POST rather than GET for the same reason as `/posts` — the channel selection
     travels in the body so it cannot overflow the request line.
     """
-    return compute_discover_candidates(session, **_discover_kwargs(body))
+    return DiscoverCandidatesResponse.model_validate(
+        compute_discover_candidates(session, **_discover_kwargs(body))
+    )
 
 
 def _parse_discover_signals(signals: list[str] | None) -> set[str] | None:
@@ -785,18 +800,13 @@ def _discover_kwargs(body: DiscoverCandidatesRequest) -> dict[str, Any]:
     }
 
 
-class DiscoverIgnoreRequest(BaseModel):
-    handles: list[str]
-    reason: str | None = None
-
-
 @router.get("/discover/ignored")
 def list_discover_ignored(
     session: SessionDep,
     _current_user: CurrentUser,
-) -> list[dict[str, Any]]:
+) -> list[IgnoredChannelResponse]:
     """Dismissed candidates, newest first."""
-    return list_ignored(session)
+    return [IgnoredChannelResponse.model_validate(row) for row in list_ignored(session)]
 
 
 @router.post("/discover/ignored")
@@ -804,7 +814,7 @@ def add_discover_ignored(
     body: DiscoverIgnoreRequest,
     session: SessionDep,
     _current_user: CurrentUser,
-) -> dict[str, Any]:
+) -> DiscoverIgnoredAddedResponse:
     """Dismiss candidates so later reports stop re-surfacing them.
 
     Idempotent: re-dismissing an entry is a no-op rather than an error, since
@@ -813,7 +823,7 @@ def add_discover_ignored(
     added = ignore_channels(
         session, body.handles, reason=body.reason, user_id=_current_user.id
     )
-    return {"ignored": added}
+    return DiscoverIgnoredAddedResponse(ignored=added)
 
 
 @router.delete("/discover/ignored")
@@ -821,17 +831,15 @@ def remove_discover_ignored(
     body: DiscoverIgnoreRequest,
     session: SessionDep,
     _current_user: CurrentUser,
-) -> dict[str, Any]:
+) -> DiscoverIgnoredRemovedResponse:
     """Undo a dismissal.
 
     DELETE with a body rather than a path param so a batch can be undone in one
     call, matching the POST.
     """
-    return {"removed": unignore_channels(session, body.handles)}
-
-
-class DiscoverProbeRequest(BaseModel):
-    handles: list[str]
+    return DiscoverIgnoredRemovedResponse(
+        removed=unignore_channels(session, body.handles)
+    )
 
 
 @router.get("/discover/probes")
@@ -841,16 +849,19 @@ def list_discover_probes(
     status: str | None = Query(default=None),
     limit: int = Query(default=DEFAULT_PROBE_PAGE_SIZE, ge=1, le=MAX_PROBE_PAGE_SIZE),
     offset: int = Query(default=0, ge=0),
-) -> list[dict[str, Any]]:
+) -> list[HandleProbeResponse]:
     """One page of cached handle probes, optionally filtered by status."""
-    return list_probes(session, status=status, limit=limit, offset=offset)
+    return [
+        HandleProbeResponse.model_validate(row)
+        for row in list_probes(session, status=status, limit=limit, offset=offset)
+    ]
 
 
 @router.get("/discover/probe/queue")
 def get_discover_probe_queue(
     session: SessionDep,
     _current_user: CurrentUser,
-) -> dict[str, Any]:
+) -> DiscoverProbeQueueResponse:
     """Probe queue state, for the progress display.
 
     There is no job id to poll: probing is a scheduled backend job draining a
@@ -862,11 +873,11 @@ def get_discover_probe_queue(
     pausing is durable and every open tab agrees about it.
     """
     counts = queue_counts(session)
-    return {
+    return DiscoverProbeQueueResponse(
         **counts,
-        "enabled": is_job_enabled(session, DISCOVER_PROBE_JOB_ID),
-        "running": is_sweep_running(),
-    }
+        enabled=is_job_enabled(session, DISCOVER_PROBE_JOB_ID),
+        running=is_sweep_running(),
+    )
 
 
 @router.post("/discover/probe/recheck")
@@ -874,7 +885,7 @@ def recheck_discover_probes(
     body: DiscoverProbeRequest,
     session: SessionDep,
     _current_user: CurrentUser,
-) -> dict[str, Any]:
+) -> DiscoverProbeRecheckResponse:
     """Discard cached verdicts for these handles and put them back in the queue.
 
     The escape hatch for a verdict that is wrong or has gone stale: a private
@@ -886,7 +897,7 @@ def recheck_discover_probes(
     queue and nothing would fetch it again. The next drain tick picks these up
     first, so the wait is bounded by the job interval.
     """
-    return {"requeued": requeue_probes(session, body.handles)}
+    return DiscoverProbeRecheckResponse(requeued=requeue_probes(session, body.handles))
 
 
 @router.post("/discover/reports")
@@ -894,7 +905,7 @@ def create_discover_report(
     body: DiscoverCandidatesRequest,
     session: SessionDep,
     _current_user: CurrentUser,
-) -> dict[str, Any]:
+) -> DiscoverReportResponse:
     """Generate a Discover report and save it.
 
     Unlike `/discover/candidates`, which computes and forgets, this persists the
@@ -902,7 +913,9 @@ def create_discover_report(
     report is immutable: later changes to the channel selection or the Posts-tab
     filters produce a *new* report rather than altering this one (IDEA-011 W1).
     """
-    return create_report(session, user_id=_current_user.id, **_discover_kwargs(body))
+    return DiscoverReportResponse.model_validate(
+        create_report(session, user_id=_current_user.id, **_discover_kwargs(body))
+    )
 
 
 @router.get("/discover/reports")
@@ -912,26 +925,30 @@ def list_discover_reports(
     limit: int = Query(default=DEFAULT_REPORT_PAGE_SIZE, ge=1, le=MAX_REPORT_PAGE_SIZE),
     offset: int = Query(default=0, ge=0),
     search: str | None = Query(default=None),
-) -> list[dict[str, Any]]:
+) -> list[DiscoverReportListItemResponse]:
     """Newest-first page of saved reports, without their candidate rows.
 
     See `report_to_camel_light`: a wide-scope report holds the full
     single-reference tail, so the list ships a `candidateCount` instead.
     """
-    return list_reports(session, limit=limit, offset=offset, search=search)
+    return [
+        DiscoverReportListItemResponse.model_validate(row)
+        for row in list_reports(session, limit=limit, offset=offset, search=search)
+    ]
 
 
 @router.get("/discover/reports/latest")
 def get_latest_discover_report(
     session: SessionDep,
     _current_user: CurrentUser,
-) -> dict[str, Any] | None:
+) -> DiscoverReportResponse | None:
     """The most recent saved report, or null if none exists yet.
 
     Declared before `/discover/reports/{report_id}` so "latest" is not captured
     as an id by the path parameter.
     """
-    return latest_report(session)
+    report = latest_report(session)
+    return None if report is None else DiscoverReportResponse.model_validate(report)
 
 
 @router.get("/discover/reports/{report_id}")
@@ -939,9 +956,9 @@ def get_discover_report(
     report_id: str,
     session: SessionDep,
     _current_user: CurrentUser,
-) -> dict[str, Any]:
+) -> DiscoverReportResponse:
     """A saved report with every candidate, `isFollowed` resolved live."""
-    return get_report(session, report_id)
+    return DiscoverReportResponse.model_validate(get_report(session, report_id))
 
 
 @router.delete("/discover/reports/{report_id}")
@@ -949,9 +966,9 @@ def delete_discover_report(
     report_id: str,
     session: SessionDep,
     _current_user: CurrentUser,
-) -> dict[str, str]:
+) -> StatusResponse:
     delete_report(session, report_id)
-    return {"status": "deleted"}
+    return StatusResponse(status="deleted")
 
 
 @router.post("/posts/counts")
