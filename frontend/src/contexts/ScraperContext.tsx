@@ -1,34 +1,15 @@
 import { useQueryClient } from "@tanstack/react-query"
-import React, {
-  createContext,
-  useCallback,
-  useContext,
-  useEffect,
-  useRef,
-  useState,
-} from "react"
+import React, { createContext, useCallback, useContext, useEffect } from "react"
 import { toast } from "sonner"
-import {
-  api,
-  type BulkFollowChannelInput,
-  type FollowJobStatus,
-  type SyncJobStatus,
-  streamFollowJobEvents,
-  subscribeSyncJobEvents,
-} from "@/api"
+import { api, type BulkFollowChannelInput, type FollowJobStatus } from "@/api"
 import type { PromptScope } from "@/api/data"
 import { parseApiError, unavailableChannelToastMessage } from "@/lib/api-errors"
-import { env } from "@/lib/env"
 import { logger } from "@/lib/logger"
-import { createdChannelNamesFromResults } from "@/lib/posts/discover-selection"
-import {
-  deriveScrapingChannels,
-  hasRateLimitError,
-  isTerminalSyncStatus,
-  shouldFallBackToPolling,
-} from "@/lib/sync/job-state"
 import { useApiStatus } from "../hooks/useApiStatus"
-import { useDebouncedValue } from "../hooks/useDebouncedValue"
+import { useFollowJob } from "../hooks/useFollowJob"
+import { usePostFilters } from "../hooks/usePostFilters"
+import { usePromptPosts } from "../hooks/usePromptPosts"
+import { useSyncJob } from "../hooks/useSyncJob"
 import { useSyncQueue } from "../hooks/useSyncQueue"
 import {
   channelAllows,
@@ -41,15 +22,13 @@ import {
   LANGUAGE_DETECTION_SAMPLE_SIZE,
   selectChannelsForLanguageDetection,
 } from "../lib/language"
-import { parseMediaFilterValue } from "../lib/posts/post-media"
 import type {
   MaxPostsPerChannelMode,
   MediaFilterValue,
   PostSortOrder,
   PostViewOptions,
 } from "../lib/posts/post-view"
-import { computeScopedPosts } from "../lib/posts/scoped-posts"
-import { getChannelStats, upsertChannel } from "../lib/repository"
+import { upsertChannel } from "../lib/repository"
 import { buildActiveProxies, isNetworkRoutingActive } from "../lib/syncSettings"
 import type { Channel, Post } from "../types"
 import { useData } from "./DataContext"
@@ -192,75 +171,89 @@ export const ScraperProvider: React.FC<{ children: React.ReactNode }> = ({
     queryClient.invalidateQueries({ queryKey: ["discoverCandidates"] })
   }, [queryClient])
 
-  const [postSearch, setPostSearch] = useState("")
-  const [semanticSearchQuery, setSemanticSearchQuery] = useState("")
-  const [semanticSearchRespectsTimeRange, setSemanticSearchRespectsTimeRange] =
-    useState(false)
-  const [semanticSearchRespectsChannels, setSemanticSearchRespectsChannels] =
-    useState(false)
-  const [relatedPostSearch, setRelatedPostSearch] = useState<Post | null>(null)
-  const [scrapingChannels, setScrapingChannels] = useState<Set<string>>(
-    new Set(),
-  )
-  const [autoSyncPauseUntil, setAutoSyncPauseUntil] = useState<number | null>(
-    null,
-  )
-  const [consecutiveFailures, setConsecutiveFailures] = useState<number>(0)
-  const [forwardedFilter, setForwardedFilter] = useState<
-    "all" | "forwarded" | "original" | "unfollowed_forwarded"
-  >("all")
-  const [mediaFilter, setMediaFilter] = useState<MediaFilterValue>(() => {
-    if (typeof localStorage === "undefined") return "all"
-    return parseMediaFilterValue(localStorage.getItem("postFilter_media"))
+  const {
+    postSearch,
+    setPostSearch,
+    semanticSearchQuery,
+    setSemanticSearchQuery,
+    semanticSearchRespectsTimeRange,
+    setSemanticSearchRespectsTimeRange,
+    semanticSearchRespectsChannels,
+    setSemanticSearchRespectsChannels,
+    relatedPostSearch,
+    setRelatedPostSearch,
+    forwardedFilter,
+    setForwardedFilter,
+    mediaFilter,
+    setMediaFilter,
+    maxPostsPerChannel,
+    setMaxPostsPerChannel,
+    maxPostsPerChannelMode,
+    setMaxPostsPerChannelMode,
+    postSortOrder,
+    setPostSortOrder,
+    postViewOptions,
+    debouncedPostSearch,
+    debouncedSemanticSearchQuery,
+  } = usePostFilters()
+
+  const {
+    scrapingChannels,
+    setScrapingChannels,
+    autoSyncPauseUntil,
+    setAutoSyncPauseUntil,
+    consecutiveFailures,
+    setConsecutiveFailures,
+    waitSyncJob,
+    runServerSync,
+  } = useSyncJob({
+    isOffline,
+    channelCount: channels.length,
+    setIsRateLimited,
+    setChannelStats,
+    loadChannels,
+    loadSyncLogs,
+    invalidatePostViews,
   })
-  const [maxPostsPerChannel, setMaxPostsPerChannel] = useState<number>(() => {
-    const saved = localStorage.getItem("postFilter_maxPerChannel")
-    const parsed = saved ? Number.parseInt(saved, 10) : 0
-    return Number.isFinite(parsed) && parsed >= 0 ? parsed : 0
+
+  const { followDiscoverChannels } = useFollowJob({
+    isOffline,
+    proxyEnabled,
+    defaultProxyUrls,
+    torEnabled,
+    torMode,
+    torProxyUrls,
+    torAutoRotate,
+    torRotationThreshold,
+    setSelectedChannels,
+    setChannelStats,
+    loadChannels,
+    loadSyncLogs,
+    invalidatePostViews,
+    waitSyncJob,
+    setScrapingChannels,
   })
-  const [maxPostsPerChannelMode, setMaxPostsPerChannelMode] =
-    useState<MaxPostsPerChannelMode>(() => {
-      const saved = localStorage.getItem("postFilter_maxPerChannelMode")
-      return saved === "random" ? "random" : "latest"
-    })
-  const [postSortOrder, setPostSortOrder] = useState<PostSortOrder>(() => {
-    const saved = localStorage.getItem("postFilter_sortOrder")
-    return saved === "channel_time" ? "channel_time" : "time"
+
+  const { getScopedPosts, getPromptPostsInput } = usePromptPosts({
+    channels,
+    selectedChannels,
+    startDate,
+    endDate,
+    embeddingsEnabled,
+    debouncedPostSearch,
+    debouncedSemanticSearchQuery,
+    relatedPostSearch,
+    forwardedFilter,
+    mediaFilter,
+    postViewOptions,
+    semanticSearchRespectsTimeRange,
+    semanticSearchRespectsChannels,
+    searchSimilarPosts,
+    getPostsFeed: api.getPostsFeed,
   })
+
   const scrapingLocksRef = React.useRef<Set<string>>(new Set())
   const attemptedLanguageDetectionRef = React.useRef<Set<string>>(new Set())
-  const activeJobRef = useRef<string | null>(null)
-
-  const debouncedPostSearch = useDebouncedValue(postSearch, 300)
-  const debouncedSemanticSearchQuery = useDebouncedValue(
-    semanticSearchQuery,
-    300,
-  )
-
-  const postViewOptions: PostViewOptions = {
-    maxPostsPerChannel,
-    maxPostsPerChannelMode,
-    postSortOrder,
-  }
-
-  useEffect(() => {
-    localStorage.setItem(
-      "postFilter_maxPerChannel",
-      maxPostsPerChannel.toString(),
-    )
-  }, [maxPostsPerChannel])
-
-  useEffect(() => {
-    localStorage.setItem("postFilter_maxPerChannelMode", maxPostsPerChannelMode)
-  }, [maxPostsPerChannelMode])
-
-  useEffect(() => {
-    localStorage.setItem("postFilter_sortOrder", postSortOrder)
-  }, [postSortOrder])
-
-  useEffect(() => {
-    localStorage.setItem("postFilter_media", mediaFilter)
-  }, [mediaFilter])
 
   // Background language detection for existing channels.
   //
@@ -326,91 +319,6 @@ export const ScraperProvider: React.FC<{ children: React.ReactNode }> = ({
     return () => clearTimeout(timer)
   }, [loadChannels, channels])
 
-  const getScopedPosts = useCallback(
-    async (
-      searchText = debouncedPostSearch,
-      semanticQuery = debouncedSemanticSearchQuery,
-    ): Promise<Post[]> =>
-      computeScopedPosts({
-        searchText,
-        semanticQuery,
-        relatedPostSearch,
-        embeddingsEnabled,
-        selectedChannels: Array.from(selectedChannels),
-        startDate,
-        endDate,
-        forwardedFilter,
-        mediaFilter,
-        channels,
-        postViewOptions,
-        semanticSearchRespectsTimeRange,
-        semanticSearchRespectsChannels,
-        searchSimilarPosts,
-        getPostsFeed: api.getPostsFeed,
-      }),
-    [
-      startDate,
-      endDate,
-      selectedChannels,
-      debouncedPostSearch,
-      debouncedSemanticSearchQuery,
-      relatedPostSearch,
-      embeddingsEnabled,
-      semanticSearchRespectsTimeRange,
-      semanticSearchRespectsChannels,
-      searchSimilarPosts,
-      forwardedFilter,
-      channels,
-      mediaFilter,
-      maxPostsPerChannel,
-      maxPostsPerChannelMode,
-      postSortOrder,
-    ],
-  )
-
-  // What to feed an AI endpoint's posts block: a server-side `scope` the
-  // backend assembles itself (the ordinary path — no posts cross the wire), or
-  // client-fetched `posts` for the semantic/related search the server cannot
-  // reproduce (the caller formats those with its own formatter). Mirrors the
-  // Discover/feed server-eligible split.
-  const getPromptPostsInput = useCallback(async (): Promise<
-    | { posts: Post[]; scope?: undefined }
-    | { posts?: undefined; scope: PromptScope }
-  > => {
-    const semanticActive =
-      embeddingsEnabled &&
-      (!!relatedPostSearch || !!debouncedSemanticSearchQuery.trim())
-    if (semanticActive) {
-      return { posts: await getScopedPosts() }
-    }
-    return {
-      scope: {
-        startDate,
-        endDate,
-        keyword: debouncedPostSearch,
-        forwarded: forwardedFilter,
-        media: mediaFilter,
-        maxPerChannel: maxPostsPerChannel,
-        maxPerChannelMode: maxPostsPerChannelMode,
-        sort: postSortOrder,
-        seed: 0,
-      },
-    }
-  }, [
-    embeddingsEnabled,
-    relatedPostSearch,
-    debouncedSemanticSearchQuery,
-    getScopedPosts,
-    startDate,
-    endDate,
-    debouncedPostSearch,
-    forwardedFilter,
-    mediaFilter,
-    maxPostsPerChannel,
-    maxPostsPerChannelMode,
-    postSortOrder,
-  ])
-
   // Refresh the post views. The feed / counts / Discover are react-query
   // backed and refetch on their own when the scope or filter state changes;
   // callers that flip a filter and then "apply" it, and the post-sync paths,
@@ -419,192 +327,6 @@ export const ScraperProvider: React.FC<{ children: React.ReactNode }> = ({
   const handleFilterPosts = useCallback(async () => {
     invalidatePostViews()
   }, [invalidatePostViews])
-
-  const applySyncJobStatus = useCallback(
-    (status: SyncJobStatus) => {
-      setScrapingChannels(deriveScrapingChannels(status))
-      setIsRateLimited(hasRateLimitError(status))
-    },
-    [setIsRateLimited],
-  )
-
-  const pollSyncJobFallback = useCallback(
-    async (jobId: string) => {
-      const deadline = Date.now() + env.syncJobTimeoutMs
-      while (Date.now() < deadline) {
-        const status = await api.getSyncJobStatus(jobId)
-        applySyncJobStatus(status)
-        if (isTerminalSyncStatus(status.status)) {
-          return status
-        }
-        await new Promise((resolve) =>
-          setTimeout(resolve, env.syncJobFallbackPollMs),
-        )
-      }
-      await api.cancelSyncJob(jobId)
-      throw new Error("Sync job timed out")
-    },
-    [applySyncJobStatus],
-  )
-
-  const waitSyncJob = useCallback(
-    async (jobId: string) => {
-      const abortController = new AbortController()
-      const timeoutId = window.setTimeout(
-        () => abortController.abort(),
-        env.syncJobTimeoutMs,
-      )
-
-      try {
-        for await (const status of subscribeSyncJobEvents(
-          jobId,
-          abortController.signal,
-        )) {
-          applySyncJobStatus(status)
-          if (isTerminalSyncStatus(status.status)) {
-            return status
-          }
-        }
-        const finalStatus = await api.getSyncJobStatus(jobId)
-        applySyncJobStatus(finalStatus)
-        return finalStatus
-      } catch (err) {
-        if (!shouldFallBackToPolling(abortController.signal.aborted)) {
-          await api.cancelSyncJob(jobId)
-          throw new Error("Sync job timed out")
-        }
-        console.warn(
-          "[Scraper] SSE sync progress failed, falling back to polling:",
-          err,
-        )
-        return pollSyncJobFallback(jobId)
-      } finally {
-        window.clearTimeout(timeoutId)
-      }
-    },
-    [applySyncJobStatus, pollSyncJobFallback],
-  )
-
-  const runServerSync = useCallback(
-    async (
-      channelIds: string[],
-      channelNames: string[],
-      source: string,
-      refresh = true,
-      syncMode:
-        | "sync_all"
-        | "bulk"
-        | "individual"
-        | "recheck_restricted" = "bulk",
-    ) => {
-      if (isOffline) {
-        toast.warning(
-          "Server offline — sync disabled. Browsing cached data only.",
-        )
-        return
-      }
-      if (channelIds.length === 0) return
-
-      logger.debug(
-        `[Scraper] Starting server sync for ${channelIds.length} channel(s) from ${source}`,
-      )
-      setScrapingChannels((prev) => {
-        const next = new Set(prev)
-        channelNames.forEach((n) => next.add(n))
-        return next
-      })
-
-      try {
-        let jobId: string
-        try {
-          ;({ jobId } = await api.startSyncJob({
-            channelIds,
-            source,
-            syncMode,
-          }))
-        } catch (err) {
-          const message = err instanceof Error ? err.message : String(err)
-          if (message.includes("No channels to sync")) {
-            toast.error(
-              "No channels available to sync. Try re-adding the channel or run the user_id backfill script.",
-            )
-          }
-          throw err
-        }
-        activeJobRef.current = jobId
-        const result = await waitSyncJob(jobId)
-
-        const failures = result.channels.filter((ch) => ch.status === "failed")
-        const successes = result.channels.filter(
-          (ch) => ch.status === "success",
-        )
-
-        if (successes.length > 0) {
-          setConsecutiveFailures(0)
-          setAutoSyncPauseUntil(null)
-          for (const ch of successes) {
-            const s = await getChannelStats(ch.channelId, ch.channelName)
-            if (s) {
-              setChannelStats((prev) => ({
-                ...prev,
-                [ch.channelName]: { ...s, latestId: ch.newLatestId },
-              }))
-            }
-          }
-        }
-
-        if (failures.length > 0) {
-          setConsecutiveFailures((prev) => {
-            const next = prev + failures.length
-            if (next >= Math.max(3, channels.length)) {
-              setAutoSyncPauseUntil(Date.now() + 10 * 60 * 1000)
-              toast.error(
-                "Auto-sync paused for 10 minutes due to consecutive failures.",
-              )
-            }
-            return next
-          })
-          const firstErr = failures[0]?.error || "Sync failed"
-          if (failures.length === 1) {
-            toast.error(
-              `Sync failed for @${failures[0].channelName}: ${firstErr}`,
-            )
-          } else {
-            toast.error(`${failures.length} channel sync(s) failed`)
-          }
-        }
-
-        // Always reload channels so resolved startId appears after first sync.
-        await loadChannels()
-        if (refresh) {
-          await loadSyncLogs()
-          await handleFilterPosts()
-          invalidatePostViews()
-        }
-
-        if (failures.length > 0 && successes.length === 0) {
-          throw new Error(failures[0].error || "Sync failed")
-        }
-      } finally {
-        activeJobRef.current = null
-        setScrapingChannels((prev) => {
-          const next = new Set(prev)
-          channelNames.forEach((n) => next.delete(n))
-          return next
-        })
-      }
-    },
-    [
-      isOffline,
-      channels.length,
-      waitSyncJob,
-      loadChannels,
-      loadSyncLogs,
-      handleFilterPosts,
-      invalidatePostViews,
-      setChannelStats,
-    ],
-  )
 
   const handleScrapeChannel = useCallback(
     async (channel: Channel, refresh = true, source = "Manual") => {
@@ -850,200 +572,6 @@ export const ScraperProvider: React.FC<{ children: React.ReactNode }> = ({
       addToSyncQueue(newChannel, "Manual (Added from Forward)", () => {})
     }
   }
-
-  const waitFollowJob = useCallback(
-    async (
-      followJobId: string,
-      onProgress?: (status: FollowJobStatus) => void,
-    ) => {
-      const abortController = new AbortController()
-      const timeoutId = window.setTimeout(
-        () => abortController.abort(),
-        env.syncJobTimeoutMs,
-      )
-
-      try {
-        for await (const status of streamFollowJobEvents(
-          followJobId,
-          abortController.signal,
-        )) {
-          onProgress?.(status)
-          if (isTerminalSyncStatus(status.status)) {
-            return status
-          }
-        }
-        const finalStatus = await api.getFollowJobStatus(followJobId)
-        onProgress?.(finalStatus)
-        return finalStatus
-      } catch (err) {
-        if (abortController.signal.aborted) {
-          throw new Error("Follow job timed out")
-        }
-        console.warn(
-          "[Scraper] SSE follow progress failed, falling back to polling:",
-          err,
-        )
-        const deadline = Date.now() + env.syncJobTimeoutMs
-        while (Date.now() < deadline) {
-          const status = await api.getFollowJobStatus(followJobId)
-          onProgress?.(status)
-          if (isTerminalSyncStatus(status.status)) {
-            return status
-          }
-          await new Promise((resolve) =>
-            setTimeout(resolve, env.syncJobFallbackPollMs),
-          )
-        }
-        throw new Error("Follow job timed out")
-      } finally {
-        window.clearTimeout(timeoutId)
-      }
-    },
-    [],
-  )
-
-  const followDiscoverChannels = useCallback(
-    async (
-      channelsToFollow: BulkFollowChannelInput[],
-      options?: {
-        onProgress?: (status: FollowJobStatus) => void
-      },
-    ): Promise<FollowJobStatus | null> => {
-      if (isOffline) {
-        toast.warning("Server offline — cannot follow channels while offline.")
-        return null
-      }
-      if (channelsToFollow.length === 0) return null
-
-      const activeProxies = buildActiveProxies({
-        proxyEnabled,
-        defaultProxyUrls,
-        torEnabled,
-        torMode,
-        torProxyUrls,
-      })
-
-      const followingNames = channelsToFollow.map((c) => c.name)
-      setScrapingChannels((prev) => {
-        const next = new Set(prev)
-        followingNames.forEach((n) => next.add(n))
-        return next
-      })
-
-      try {
-        const { followJobId } = await api.bulkFollowChannels({
-          channels: channelsToFollow,
-          proxyEnabled: isNetworkRoutingActive({
-            proxyEnabled,
-            defaultProxyUrls,
-            torEnabled,
-            torMode,
-            torProxyUrls,
-          }),
-          proxies: activeProxies,
-          torAutoRotate,
-          torRotationThreshold,
-        })
-
-        const followStatus = await waitFollowJob(
-          followJobId,
-          options?.onProgress,
-        )
-
-        const createdNames = createdChannelNamesFromResults(
-          followStatus.results,
-        )
-        if (createdNames.length > 0) {
-          setSelectedChannels((prev) => {
-            const next = new Set(prev)
-            for (const name of createdNames) next.add(name)
-            return next
-          })
-        }
-
-        await loadChannels()
-
-        const parts: string[] = []
-        if (followStatus.added > 0) parts.push(`${followStatus.added} added`)
-        if (followStatus.unavailable > 0)
-          parts.push(`${followStatus.unavailable} unavailable`)
-        if (followStatus.skipped > 0)
-          parts.push(`${followStatus.skipped} skipped`)
-        if (followStatus.failed > 0) parts.push(`${followStatus.failed} failed`)
-        const summary =
-          parts.length > 0
-            ? `Follow finished: ${parts.join(", ")}`
-            : "Follow finished"
-
-        if (followStatus.failed > 0 && followStatus.added === 0) {
-          toast.error(summary)
-        } else if (followStatus.unavailable > 0 && followStatus.added === 0) {
-          toast.warning(summary, { duration: 8000 })
-        } else {
-          toast.success(summary)
-        }
-
-        if (followStatus.syncJobId) {
-          const channelNames = followStatus.results
-            .filter((r) => r.status === "added")
-            .map((r) => r.name)
-          setScrapingChannels(new Set(channelNames))
-          try {
-            activeJobRef.current = followStatus.syncJobId
-            const syncResult = await waitSyncJob(followStatus.syncJobId)
-            const successes = syncResult.channels.filter(
-              (ch) => ch.status === "success",
-            )
-            for (const ch of successes) {
-              const s = await getChannelStats(ch.channelId, ch.channelName)
-              if (s) {
-                setChannelStats((prev) => ({
-                  ...prev,
-                  [ch.channelName]: { ...s, latestId: ch.newLatestId },
-                }))
-              }
-            }
-            await loadChannels()
-            await loadSyncLogs()
-            await handleFilterPosts()
-            invalidatePostViews()
-          } finally {
-            activeJobRef.current = null
-          }
-        }
-
-        return followStatus
-      } catch (err) {
-        console.error("[Scraper] Discover bulk follow failed:", err)
-        toast.error(err instanceof Error ? err.message : "Bulk follow failed")
-        return null
-      } finally {
-        setScrapingChannels((prev) => {
-          const next = new Set(prev)
-          followingNames.forEach((n) => next.delete(n))
-          return next
-        })
-      }
-    },
-    [
-      isOffline,
-      proxyEnabled,
-      defaultProxyUrls,
-      torEnabled,
-      torMode,
-      torProxyUrls,
-      torAutoRotate,
-      torRotationThreshold,
-      waitFollowJob,
-      waitSyncJob,
-      setSelectedChannels,
-      loadChannels,
-      loadSyncLogs,
-      handleFilterPosts,
-      invalidatePostViews,
-      setChannelStats,
-    ],
-  )
 
   return (
     <ScraperContext.Provider

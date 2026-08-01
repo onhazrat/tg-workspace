@@ -878,20 +878,57 @@ and reported success. The set is now asserted literally; the same mutation fails
 *Addresses E4. G1 is much cheaper after A1 removes the scoped-posts fetching, and **must not
 start before T2** — there is currently no test covering any of this code.*
 
-#### G1 — Split `ScraperContext` by job · **L** · after T2; best after A1
+#### G1 — Split `ScraperContext` by job · ✅ **DONE 2026-08-01**
 
-1,103 LOC / 14 `useState` / 5 responsibilities →
+**1,104 → 632 LOC**, five responsibilities down to two.
 
-| New home | Takes |
-|---|---|
-| `contexts/PostFilterContext.tsx` | filter/sort UI state (7 `useState`) — genuinely UI state, stays a context |
-| `hooks/useSyncJob.ts` | `runServerSync`, `waitSyncJob`, `pollSyncJobFallback`, SSE |
-| `hooks/useFollowJob.ts` | `waitFollowJob`, `followDiscoverChannels` |
-| `hooks/usePromptPosts.ts` | `getPromptPostsInput` |
-| *(deleted by A1)* | `getScopedPosts` |
+| New home | LOC | Takes |
+|---|---|---|
+| `hooks/usePostFilters.ts` | 185 | the 10 filter/search `useState`s, their 4 `localStorage` effects, both debounces, `postViewOptions` |
+| `hooks/useSyncJob.ts` | 281 | `runServerSync`, `waitSyncJob`, `pollSyncJobFallback`, `applySyncJobStatus`, `scrapingChannels`, the failure backoff |
+| `hooks/useFollowJob.ts` | 279 | `waitFollowJob`, `followDiscoverChannels` |
+| `hooks/usePromptPosts.ts` | 167 | `getScopedPosts`, `getPromptPostsInput` |
 
-- **Verify:** frontend suite + e2e. `handleScrapeChannel` (lines 608–853) is the risky part —
-  read it fully before moving it.
+What stays in the context is now one thing: **scrape orchestration** — `handleScrapeChannel` and
+its siblings, the sync queue, `addNewChannel`, the language-detection effect, and composition.
+
+**Hooks, not a new context — one deviation from the plan, deliberately.** The plan put filter state
+in `contexts/PostFilterContext.tsx`. Splitting the *context* means changing every consumer, and the
+value of doing so is a re-render optimisation that **G2 is the right place to bank**, once it
+decides which providers survive. Doing it here would have made a large mechanical diff whose
+correctness rests on the same e2e suite the plan says is not a sufficient net for this refactor.
+So the state moved out; where it is *published* did not. `usePostFilters` is a context away when G2
+wants it.
+
+**The public surface is byte-identical** — verified by extracting and diffing the provider's
+`value={{…}}` block against `origin/main`. **Zero consumer files changed.** That is the property
+that made this safe to do in one step: any behaviour change has to be inside a moved function, and
+the three riskiest (`waitSyncJob`, `pollSyncJobFallback`, `waitFollowJob`) were diffed
+whitespace-insensitively against the original and confirmed **verbatim**.
+
+**Two pieces of dead weight found by moving the code:**
+
+1. **`activeJobRef` was written in four places and read in none.** A ref tracking the in-flight job
+   id that nothing consumed. Deleted.
+2. **`runServerSync` invalidated the post views twice** — `await handleFilterPosts()` followed by
+   `invalidatePostViews()`, where `handleFilterPosts` *is* `invalidatePostViews`. Collapsed to one;
+   `handleFilterPosts` survives as the name consumers call.
+
+**A typing bug the move surfaced.** `FollowJobDeps` first restated the five proxy settings by hand
+and got two of them wrong — `defaultProxyUrls` / `torProxyUrls` are a newline-or-comma-separated
+`string`, not `string[]`. It now `extends ProxySettings`, so the shape cannot drift again. This is
+the same class of defect workstream B exists to remove, one layer down.
+
+**Tests: 726 → 744.** `usePromptPosts.test.ts` (7) pins the scope-vs-posts decision — the
+load-bearing one, since a scope on the semantic path would silently summarise the *unranked*
+corpus. `usePostFilters.test.ts` (11) pins hydration against hostile stored values (a non-numeric
+cap must not become `NaN`, an unknown sort must not reach the server as a 422) and pins which four
+keys persist. Both use `renderHook` with **injected** dependencies — no `mock.module`, per T1.
+
+Mutation-tested: cap fallback 2 fail, sort fallback 1, dropped persistence 1, semantic→scope 2,
+dropped keyword 2.
+
+**Verified:** frontend **744 pass / 0 fail** across 103 files, `tsc` clean, biome clean.
 
 #### G2 — Reduce the provider tree · **M** · after G1 and A3 (so after T1/T2)
 
