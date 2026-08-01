@@ -56,6 +56,14 @@ export interface DataEntityDef<T extends DataEntityKind> {
   pluralLabel: string
   /** Which export/import/copy filters apply (channels include frozen). */
   filters: ExportFilter[]
+  /**
+   * Whether copy/export need the server (A2).
+   *
+   * Only posts do. Channels and summaries fall back to React state when
+   * offline, which is a view of server data rather than a second store; posts
+   * used to fall back to the IndexedDB mirror, and that reader is gone.
+   */
+  requiresServer?: boolean
   listForFilter: (
     filter: ExportFilter,
     ctx: CommandContext,

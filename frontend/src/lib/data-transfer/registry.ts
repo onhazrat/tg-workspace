@@ -65,7 +65,15 @@ function buildDisabledForFrozen(
 function buildCopyExportDisabled(
   filter: ExportFilter,
   ctx: Parameters<NonNullable<CommandDef["disabled"]>>[0],
+  requiresServer = false,
 ) {
+  // Posts set this (A2). Channels and summaries can still be listed offline
+  // because their offline source is React state, not a second data store; the
+  // post export's offline source was the IndexedDB mirror, which is gone. Same
+  // treatment `buildDisabledForImport` already gives every import command.
+  if (requiresServer && ctx.isOffline) {
+    return { disabled: true, reason: "Requires server connection" }
+  }
   if (filter === "selected") return buildDisabledForSelected(ctx)
   if (filter === "frozen") return buildDisabledForFrozen(ctx)
   return { disabled: false }
@@ -102,7 +110,8 @@ export function buildDataCommandsForEntity<T extends DataEntityKind>(
       label: `Copy List of ${filterLabel} ${def.pluralLabel}`,
       keywords: ["copy", "clipboard", ...sharedKeywords],
       group: "Copy",
-      disabled: (ctx) => buildCopyExportDisabled(filter, ctx),
+      disabled: (ctx) =>
+        buildCopyExportDisabled(filter, ctx, def.requiresServer),
       run: async (ctx) => {
         const items = await def.listForFilter(filter, ctx)
         if (items.length === 0) {
@@ -128,7 +137,8 @@ export function buildDataCommandsForEntity<T extends DataEntityKind>(
       label: `Export List of ${filterLabel} ${def.pluralLabel}`,
       keywords: ["export", "download", ...sharedKeywords],
       group: "Export",
-      disabled: (ctx) => buildCopyExportDisabled(filter, ctx),
+      disabled: (ctx) =>
+        buildCopyExportDisabled(filter, ctx, def.requiresServer),
       run: async (ctx) => {
         const items = await def.listForFilter(filter, ctx)
         if (items.length === 0) {

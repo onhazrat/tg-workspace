@@ -279,12 +279,56 @@ disabling the semantic branch fails 3.
 - **Multi-user seam:** put the new search endpoint behind the same `SessionDep`/`CurrentUser`
   deps as `/data/posts`, so row scoping later is a service-layer change only.
 
-#### A2 — Move export to stream from the server · **M** · independent of A1
+#### A2 — Post export reads the server, and pages it · ✅ **DONE 2026-08-01**
 
-`lib/data-transfer/entities/post.ts:76` reads IndexedDB directly — the one place that bypasses
-both stacks. `GET /data/export` already streams server-side; route the export UI through it.
+The unit's premise held — `entities/post.ts` was the last direct IndexedDB reader outside
+`lib/cache.ts` — but the remedy in the plan (*"`GET /data/export` already streams server-side;
+route the export UI through it"*) turned out to be about a **different export**. There are two:
 
-- **Verify:** export a dataset, re-import it, compare row counts (`tests/api/test_data.py` covers the endpoint).
+| | source | format | consumed by |
+|---|---|---|---|
+| palette *"Export List of Posts"* | this unit | per-entity JSONL | its own JSONL importer |
+| `DatabaseManagement` *"Export DB"* | `workers/dbWorker.ts` → **IndexedDB** | legacy `{type:"store"}` JSONL | its own worker importer |
+
+`GET /data/export` emits a third, unrelated shape (a single version-2 JSON document for
+`POST /data/import`) and **has no frontend caller at all**. Routing the palette export through it
+would have changed the file format its own importer reads.
+
+**A real bug found and fixed, which is the actual content of this unit.** The online branch called
+`api.getPosts({channelNames, startDate, endDate})` with **no `limit`** and treated the result as
+the complete corpus. It is not: `PostFeedRequest.limit` defaults to `DEFAULT_POST_PAGE_SIZE`
+(**500**). So an operator with more than 500 posts in range got a **silently truncated export
+online**, while the IndexedDB branch of the same function wrote every post the browser held. The
+two branches disagreed by however many posts the operator had, and nothing in either file recorded
+which one produced it.
+
+Now `fetchAllPostsFromServer` pages at `EXPORT_PAGE_SIZE` (5000 = `MAX_POST_PAGE_SIZE`, the largest
+the server will serve) until a short page arrives, bounded at `MAX_EXPORT_PAGES`.
+
+**The IndexedDB branch is gone rather than ported.** Under ADR-009 an export assembled from a
+possibly-stale local mirror is worse than no export, because nothing in the file says it was stale.
+The post commands are disabled while offline instead — the treatment every *import* command already
+had. That needed one new field, `DataEntityDef.requiresServer`; channels and summaries do **not**
+set it, because their offline source is React state (a view of server data), not a second store.
+
+**Tests.** `backend/tests/api/test_export_paging.py` (5) pins the endpoint behaviour — omitting
+`limit` returns one default page, offset paging reaches every row exactly once, a short page ends
+the loop, an exact multiple costs one extra request, the page size is capped at 422.
+`entities/post.test.ts` (9) pins the loop, with the fetcher injected rather than
+`mock.module`-ed (T1's process-wide-mock hazard).
+
+Mutation-tested: removing paging fails 6, stopping on a full page fails 6, freezing the offset
+fails 5, per-page progress fails 1 — and removing `MAX_EXPORT_PAGES` **hangs the suite forever**
+rather than failing, which is the clearest evidence the bound is load-bearing.
+
+**Carried to A4:** `DatabaseManagement`'s Export/Import DB still round-trips through
+`workers/dbWorker.ts` and IndexedDB, and its *import writes nowhere but the browser* — so once A4
+deletes the mirror, that import silently becomes a no-op. A4 must repoint both at
+`GET /data/export` / `POST /data/import`, and must keep reading the legacy `{type:"store"}` JSONL
+so existing backup files still import.
+
+**Verified:** backend **809 passed / 2 skipped**, frontend **726 pass / 0 fail**, mypy strict clean,
+ruff clean, `tsc` clean, biome clean.
 
 #### A3 — Collapse `repository.ts` into typed query hooks · **L** · after A1, A2, T1
 
