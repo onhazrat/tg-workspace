@@ -1083,6 +1083,24 @@ time and buys little. Included here so it is explicitly deprioritised rather tha
 
 ---
 
+## 3b. What is left, as of 2026-08-01
+
+Everything below is unstarted. Nothing here is blocked except workstream E.
+
+| Unit | Size | Blocked by | Note |
+|---|---|---|---|
+| **A3** — collapse `repository.ts` into query hooks | **L** | — | 66 exported functions, **47 consumer files**. The largest and riskiest remaining unit: it touches every write path. Port `repository.test.ts`'s `singleFlight` concurrency assertions to the hook layer rather than deleting them, and delete the now-callerless `getPostsByDateRange` here. |
+| **A4** — delete the IndexedDB layer | **M** | A3 | **Must also repoint `DatabaseManagement`'s Export/Import DB** at `GET /data/export` / `POST /data/import` — see A2. That import currently writes *nowhere but the browser*, so deleting the mirror without repointing it turns the feature into a silent no-op. Keep reading the legacy `{type:"store"}` JSONL so existing backups still import. One-way door: ship a release after A3. |
+| **G2** — reduce the provider tree | **M** | A3 | Also the right place to promote `usePostFilters` to a context, which G1 deliberately deferred. |
+| **F1b** — `legacy/axios` → fetch transport | **M** | — | Independent. Changes error *semantics* (`{data, error}` vs throwing); needs the e2e login flow. |
+| **F2** — summarizer calls onto the generated client | **L** | F1b | Supersede ADR-006 with the corrected rationale. |
+| **E1/E2/E3** — template residue | 3×**S** | **your decision** | Blocks nothing. |
+| **I** — component size outliers | — | — | Explicitly deprioritised; only where G1/A3 force changes. |
+
+**Recommended order:** `F1b` (independent, unblocks F2) → `A3` → `A4` + `G2` in parallel → `F2`.
+
+---
+
 ## 4. Suggested order
 
 Three tracks that can proceed in parallel; only the arrows are hard dependencies.
@@ -1134,21 +1152,31 @@ Recorded so they are decisions, not oversights:
 
 Measurable, re-runnable — same discipline as the remediation plan's §12.
 
-| Metric | Today | Target |
-|---|---|---|
-| Data-access paths from `components/` | 7 | 2 |
-| Client-side caches / staleness systems | 3 | 1 |
-| Generated-client LOC | 10,796 → **4,866** | — |
-| `$ref`-typed API responses | 26/129 → **104/121** | all typeable (17 are SSE/binary/blob/template) |
-| Hand-written domain types mirroring server tables | 24 → **6** (9 rebased, 9 UI-only) | 0 |
-| Largest route module | 1,438 LOC → **425** | < 400 |
-| Largest frontend context | 1,103 LOC (T2 extracted its sync decisions; G1 splits the rest) | < 300 |
-| Largest backend function | 257 → **174** (`run_retention_cleanup`, out of H scope; sync path now ≤ 120) | < 80 |
-| Files touched to add a log type | ~30 → **~12** (→ ~3 after A3) | ~3 |
-| Contexts with a test | 0/9 | ≥ 5/5 (after G2 consolidation) |
-| Hooks with a test | 2/32 | the ones holding logic |
-| Frontend LOC (excl. generated) | 59,881 | ≈ 54,000 |
-| Runtime deps removed | — | `idb`, `axios` |
+Re-measured **2026-08-01**, after A1a–A1c, A2, B7b and G1.
+
+| Metric | Start | Now | Target |
+|---|---|---|---|
+| Data-access paths from `components/` | 7 | **6** (`lib/cache` down to 2 files) | 2 |
+| Client-side caches / staleness systems | 3 | 3 (A3/A4 remove two) | 1 |
+| Generated-client LOC | 10,796 | **4,866** | — |
+| `$ref`-typed API responses | 26/129 | **104/121** | all typeable (17 are SSE/binary/blob/template) |
+| Hand-written domain types mirroring server tables | 24 | **6**, all now compiler-enforced (B7b) | 0 |
+| Largest route module | 1,438 LOC | **425** | < 400 |
+| Largest frontend context | 1,103 LOC | **717** (`AIContext`; `ScraperContext` now 632) | < 300 |
+| Largest backend function | 257 | **173** (`run_retention_cleanup`, out of H scope) | < 80 |
+| Files touched to add a log type | ~30 | **~12** (→ ~3 after A3) | ~3 |
+| Contexts with a test | 0/9 | 1/9 (`DataContext`) | ≥ 5/5 (after G2) |
+| Hooks with a test | 2/32 | **6/36** | the ones holding logic |
+| Frontend LOC (excl. generated) | 59,881 | 61,888 | ≈ 54,000 |
+| Frontend tests | 679 | **744** | — |
+| Backend tests | 767 | **809** | — |
+| Runtime deps removed | — | none yet | `idb`, `axios` |
+
+> **Two metrics have moved the "wrong" way, and both are expected.** Frontend LOC is *up* ~2,000:
+> this programme has so far been adding tests, response models and documented seams, while the
+> ~5,950-line deletion it promises is concentrated in **A3/A4** (`repository.ts`, `lib/cache.ts`,
+> `dbWorker.ts`), which have not run yet. `AIContext` overtaking `ScraperContext` as the largest
+> context is likewise arithmetic, not regression — G1 cut the latter by 40%.
 
 Re-run commands:
 
