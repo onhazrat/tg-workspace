@@ -44,9 +44,14 @@ def _resolve_posts_text(
     tag_format: bool = False,
 ) -> str:
     """Prompt posts block: an explicit client-built ``postsText`` wins (the
-    semantic/related path and background regeneration, which the server cannot
-    reproduce); otherwise the backend resolves the scope itself. Tag prompts use
-    the channel-grouped chronological format, summary/chat the flat one."""
+    semantic/related path, which the server cannot reproduce); otherwise the
+    backend resolves the scope itself. Tag prompts use the channel-grouped
+    chronological format, summary/chat the flat one.
+
+    Background regeneration used to be in the first group too. It is not any
+    more — it applies no filters beyond the channels and the shifted window, so
+    it is fully expressible as a scope and now sends one (A1b, pinned by
+    ``tests/api/test_autoregen_scope_parity.py``)."""
     if posts_text:
         return posts_text
     if scope is None:

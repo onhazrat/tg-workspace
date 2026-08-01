@@ -12,7 +12,6 @@ import { useApiStatus } from "../hooks/useApiStatus"
 import { formatChannelsForPrompt } from "../lib/channels/format-channels-for-prompt"
 import { formatPostsForPrompt } from "../lib/posts/post-view"
 import {
-  getPostsByDateRange,
   lookupPosts,
   saveLLMLog,
   savePublishLog,
@@ -493,18 +492,28 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({
         )
       }
 
-      const posts = await getPostsByDateRange(
-        s.channels,
-        newStartDate,
-        newEndDate,
-      )
+      // Auto-regenerate always takes the server-assembly path (A1b): it applies
+      // no filters beyond the channels and the shifted window, so the scope is
+      // fully expressible and there is no semantic branch to fall back to.
+      //
+      // Note it deliberately ignores the saved `postSearch` /
+      // `semanticSearchQuery` — those are carried onto the new summary as
+      // metadata but have never been *applied* when regenerating. That
+      // asymmetry predates this change and is preserved, not fixed.
+      const scope: PromptScope = {
+        startDate: newStartDate,
+        endDate: newEndDate,
+      }
+      const counts = await api.getPostsCounts({
+        channelNames: s.channels,
+        ...scope,
+      })
+      const postCount = Object.values(counts).reduce((sum, n) => sum + n, 0)
 
       let fullSummaryText = ""
-      if (posts.length === 0) {
+      if (postCount === 0) {
         fullSummaryText = `No new posts found in the selected channels between ${new Date(newStartDate).toLocaleString()} and ${new Date(newEndDate).toLocaleString()}.`
       } else {
-        const postsText = formatPostsForPrompt(posts)
-
         const startTime = Date.now()
         const result = await generateSummary(
           s.channels,
@@ -512,10 +521,11 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({
             includeBio: includeChannelBioInPrompt,
             includeTags: includeChannelTagsInPrompt,
           }),
-          postsText,
+          "",
           s.language,
           s.model || "gemini-3-flash-preview",
           aiTemperature,
+          scope,
         )
         fullSummaryText = result.text
         const { prompt, config, fullResponse } = result
@@ -543,7 +553,12 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({
 
       const newId = Date.now().toString()
 
-      const citedPosts = extractCitedPosts(fullSummaryText, posts)
+      // The scope path never holds the posts, so citations are resolved by
+      // lookup — the same two-step the interactive path uses.
+      const citedPosts = extractCitedPosts(
+        fullSummaryText,
+        await lookupPosts(parseCitationRefs(fullSummaryText)),
+      )
 
       const newSummary: Summary = {
         id: newId,
@@ -553,7 +568,7 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({
         endDate: newEndDate,
         language: s.language,
         model: s.model,
-        postCount: posts.length,
+        postCount,
         timestamp: Date.now(),
         autoRegenerate: true,
         autoPublish: s.autoPublish,
@@ -569,12 +584,7 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({
       await saveSummary(newSummary)
 
       // Auto-publish if enabled
-      if (
-        s.autoPublish &&
-        s.publishBotId &&
-        s.publishChatId &&
-        posts.length > 0
-      ) {
+      if (s.autoPublish && s.publishBotId && s.publishChatId && postCount > 0) {
         const bot = botCredentials.find((b) => b.id === s.publishBotId)
         const dest = chatDestinations.find((d) => d.id === s.publishChatId)
         if (bot && dest) {

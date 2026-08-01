@@ -152,7 +152,7 @@ The load-bearing unit. Callers of `getPostsByDateRange` that still pull whole da
 
 | Caller | Replacement |
 |---|---|
-| `AIContext.tsx:496` (prompt assembly) | already has a server path — `getPromptPostsInput` returns a `PromptScope`; extend it to cover the remaining branch |
+| `AIContext.tsx:496` (prompt assembly) | ✅ **A1b — done 2026-08-01**, see below |
 | `ScraperContext.getScopedPosts` → `lib/posts/scoped-posts.ts` | server-side filter+sort, as `usePostsView` already does |
 | `lib/commands/search-filters.ts:34` (palette search) | ✅ **A1a — done 2026-08-01**, see below |
 
@@ -183,9 +183,51 @@ and returned nothing, while the server branch omitted `channelNames` entirely an
 **whole corpus**. `searchPostsForPalette` now returns early on an empty selection — searching
 everything when the user has selected nothing is the wrong half of that accident to keep.
 
-**Still open in A1:** `AIContext.tsx:496` (auto-regenerate prompt assembly) and
-`ScraperContext.getScopedPosts`. Both are riskier — they touch summary generation, which the plan
-flags — and neither is unblocked by this unit.
+##### A1b — Auto-regenerate prompt assembly moved server-side · ✅ **DONE 2026-08-01**
+
+`generateBackgroundSummary` fetched **every post in the regenerated window** into the browser,
+concatenated them with `formatPostsForPrompt`, and posted the whole string back. It now sends a
+scope and lets the backend assemble the block — the same path `handleSummarize` has used since
+the `PromptScope` work.
+
+**The plan expected this to be the hard half of A1. It was the easy half.** The row above said
+"extend `getPromptPostsInput` to cover the remaining branch", implying auto-regenerate shares the
+interactive path's scope. It does not, and must not: auto-regenerate deliberately applies **no
+filters at all** beyond `s.channels` and the shifted window — not the current UI filter state, and
+not even the saved summary's own `postSearch`. So it needs its own two-field scope, not a share
+of `getPromptPostsInput`, and it has no semantic branch to fall back to.
+
+Three call sites of the fetched array had to move with it:
+
+| was | now |
+|---|---|
+| `posts.length === 0` (nothing to summarise) | `POST /data/posts/counts`, summed |
+| `posts.length` (`Summary.postCount`) | the same count |
+| `extractCitedPosts(text, posts)` | `lookupPosts(parseCitationRefs(text))` — the interactive path's two-step |
+
+**`AIContext` no longer imports `getPostsByDateRange` at all.** One caller left in the codebase:
+`ScraperContext.getScopedPosts` (A1c).
+
+**A pre-existing asymmetry found, characterised, not fixed.** A regenerated summary copies
+`postSearch` / `semanticSearchQuery` onto its successor as *metadata*, but has never **applied**
+them when regenerating. Making regeneration honour them would be a behaviour change dressed up as
+a refactor, so it is recorded in the code comment instead.
+
+`tests/api/test_autoregen_scope_parity.py` (7 tests) pins the substitution: a bare channels+window
+scope selects the same posts as the old date-range read, and each defaulted scope field
+(`forwarded`, `media`, `maxPerChannel`, `sort`, `seed`) is a **no-op**. Mutation-tested — breaking
+the window fails 3, the cap default fails 4, the channel scope fails 1, the forwarded default
+fails 1.
+
+> The first round of mutation testing **passed all 7 while the cap was broken**, because I mutated
+> the `PromptScope` dataclass default rather than `PromptScopeInput`'s. Only the schema default is
+> reachable from the wire, which is the one auto-regenerate actually relies on. The dataclass
+> default is dead as far as this path is concerned.
+
+**Verified:** backend **804 passed / 2 skipped**, frontend **715 pass / 0 fail**, mypy strict
+clean (128 files), ruff clean, `tsc` clean, biome clean.
+
+**Still open in A1:** `ScraperContext.getScopedPosts` (A1c).
 
 - **Verify:** `cd backend && uv run pytest tests/ -q`; `bun run --filter tg-summarizer-frontend test:unit`;
   e2e serially. Manually: generate a summary, run a palette search, use semantic search.

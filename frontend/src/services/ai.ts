@@ -83,6 +83,14 @@ export const generateSummaryStream = async (
   }
 }
 
+/**
+ * Non-streaming wrapper over {@link generateSummaryStream}.
+ *
+ * Takes `scope` for the same reason the streaming form does: when a scope is
+ * supplied the backend assembles the posts block itself and `postsText` is
+ * empty, so no posts cross the wire. Auto-regenerate is the only caller and it
+ * always uses that path (A1b).
+ */
 export const generateSummary = async (
   channels: string[],
   channelsText: string,
@@ -90,6 +98,7 @@ export const generateSummary = async (
   language: string,
   model: string,
   temperature: number = 0.7,
+  scope?: PromptScope,
 ): Promise<LLMResult> => {
   let text = ""
   const { stream, prompt, config } = await generateSummaryStream(
@@ -99,6 +108,7 @@ export const generateSummary = async (
     language,
     model,
     temperature,
+    scope,
   )
   for await (const chunk of stream) {
     text += chunk.text
