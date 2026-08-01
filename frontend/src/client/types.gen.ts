@@ -12,6 +12,22 @@ export type ActiveSyncJobSummary = {
     effectiveProxyCapacity?: (number | null);
 };
 
+/**
+ * A settings row: `{"key": …, "value": {…}}`.
+ *
+ * Shipped with B6b. `value` stays an open JSON object on purpose — the
+ * settings surface is a bag of sections whose shapes are owned by their own
+ * loaders (`jobs`, `sync`, `retention`, `translation`, `network`), and pinning
+ * them here would put five unrelated schemas behind one endpoint. The
+ * *envelope* is what callers depend on, and that is now typed.
+ */
+export type AppSettingResponse = {
+    key: string;
+    value?: {
+        [key: string]: unknown;
+    };
+};
+
 export type Body_login_login_access_token = {
     grant_type?: (string | null);
     username: string;
@@ -19,6 +35,18 @@ export type Body_login_login_access_token = {
     scope?: string;
     client_id?: (string | null);
     client_secret?: (string | null);
+};
+
+/**
+ * A stored bot, without its token.
+ */
+export type BotCredentialResponse = {
+    id: string;
+    name: string;
+    hasToken?: boolean;
+    username?: (string | null);
+    photoUrl?: (string | null);
+    lastValidated?: (number | null);
 };
 
 export type BotInfoRequest = {
@@ -326,6 +354,15 @@ export type ChannelUpsertRequest = {
     [key: string]: unknown;
 };
 
+/**
+ * A chat a summary can be published to.
+ */
+export type ChatDestinationResponse = {
+    id: string;
+    name: string;
+    chatId: string;
+};
+
 export type ChatMessage = {
     role: string;
     text: string;
@@ -630,6 +667,19 @@ export type IgnoredChannelResponse = {
     createdAt?: number;
 };
 
+/**
+ * Per-section row counts from an import.
+ *
+ * Only sections present in the document appear, so this is a mapping rather
+ * than a model with a field per table — importing a channels-only export must
+ * not report zeros for everything else.
+ */
+export type ImportDataResponse = {
+    imported?: {
+        [key: string]: (number);
+    };
+};
+
 export type ItemCreate = {
     title: string;
     description?: (string | null);
@@ -733,6 +783,18 @@ export type LogWriteResponse = {
 
 export type Message = {
     message: string;
+};
+
+/**
+ * Result of importing credentials from the client's local store.
+ *
+ * Returns the ids as well as the count so the caller can reconcile which of
+ * its local entries were accepted — entries without an id or token are skipped
+ * silently rather than failing the batch.
+ */
+export type MigrateCredentialsResponse = {
+    migrated?: number;
+    ids?: Array<(string)>;
 };
 
 export type ModelInfo = {
@@ -887,6 +949,18 @@ export type PostScopeRequest = {
     forwarded?: string;
     media?: string;
     maxPerChannel?: number;
+};
+
+/**
+ * One post translated into one language.
+ */
+export type PostTranslationResponse = {
+    id: string;
+    channelName: string;
+    postId: number;
+    language: string;
+    translatedText?: string;
+    timestamp?: number;
 };
 
 /**
@@ -1182,6 +1256,39 @@ export type ScraperRuntimeSettings = {
     iterationLimit: number;
 };
 
+/**
+ * One setting group.
+ *
+ * **Open for one key.** `channelCount` is attached only by the list endpoint,
+ * which knows the per-group tally; the create/update endpoints return the group
+ * without it. Declaring it optional would emit `"channelCount": null` from
+ * those, so it travels through `extra` — the same rule as `SummaryResponse`.
+ *
+ * `isReserved` is derived from the id rather than stored: the built-in groups
+ * (Default, Frozen, Restricted) are identified by well-known ids so they cannot
+ * be renamed out of existence.
+ */
+export type SettingGroupResponse = {
+    id: string;
+    name: string;
+    isDefault?: boolean;
+    isReserved?: boolean;
+    regularSyncEnabled?: boolean;
+    dynamicSyncEnabled?: boolean;
+    autoSyncIntervalMinutes?: number;
+    dynamicSyncExpectedPosts?: number;
+    autoFollowForwarded?: boolean;
+    isFrozen?: boolean;
+    isUnavailableOnWebView?: boolean;
+    includeInSyncAll?: boolean;
+    includeInBulkSync?: boolean;
+    allowIndividualSync?: boolean;
+    resetSyncEnabled?: boolean;
+    createdAt?: number;
+    updatedAt?: number;
+    [key: string]: unknown | string | boolean | number;
+};
+
 export type SettingGroupWriteRequest = {
     name?: (string | null);
     regularSyncEnabled?: (boolean | null);
@@ -1376,6 +1483,56 @@ export type TagRequest = {
     tagsPerChannelMax?: (number | null);
 };
 
+/**
+ * A tag run's identity and metadata — the history-list projection.
+ *
+ * Deliberately omits `promptText`, `responseText`, `suggestions` and
+ * `allTagsSnapshot`. Callers that need those fetch the run by id.
+ */
+export type TagRunListItemResponse = {
+    id: string;
+    status: string;
+    source: string;
+    mode: string;
+    channels?: Array<(string)>;
+    startDate?: number;
+    endDate?: number;
+    postCount?: number;
+    model?: (string | null);
+    error?: (string | null);
+    createdAt?: number;
+    updatedAt?: number;
+};
+
+/**
+ * A tag run with the corpus-sized fields the list omits.
+ *
+ * The four JSON payloads stay loosely typed: `suggestions` and `applyResult`
+ * are shaped by the tagging prompt's output contract, which is versioned by the
+ * prompt rather than by this schema, and pinning them here would make a prompt
+ * change a schema migration.
+ */
+export type TagRunResponse = {
+    id: string;
+    status: string;
+    source: string;
+    mode: string;
+    channels?: Array<(string)>;
+    startDate?: number;
+    endDate?: number;
+    postCount?: number;
+    model?: (string | null);
+    error?: (string | null);
+    createdAt?: number;
+    updatedAt?: number;
+    promptText?: (string | null);
+    responseText?: (string | null);
+    allTagsSnapshot?: unknown;
+    channelContextOptions?: unknown;
+    suggestions?: unknown;
+    applyResult?: unknown;
+};
+
 export type Telemetry = unknown;
 
 export type TestProxyRequest = {
@@ -1512,6 +1669,13 @@ export type ValidationError = {
     ctx?: {
         [key: string]: unknown;
     };
+};
+
+/**
+ * How many rows a bulk embedding or translation write accepted.
+ */
+export type VectorWriteResponse = {
+    upserted?: number;
 };
 
 export type LoginLoginAccessTokenData = {
@@ -1819,34 +1983,26 @@ export type DataBulkSyncSettingsEndpointData = {
 
 export type DataBulkSyncSettingsEndpointResponse = (BulkUpdatedResponse);
 
-export type DataListSettingGroupsResponse = (Array<{
-    [key: string]: unknown;
-}>);
+export type DataListSettingGroupsResponse = (Array<SettingGroupResponse>);
 
 export type DataCreateSettingGroupData = {
     requestBody: SettingGroupWriteRequest;
 };
 
-export type DataCreateSettingGroupResponse = ({
-    [key: string]: unknown;
-});
+export type DataCreateSettingGroupResponse = (SettingGroupResponse);
 
 export type DataUpdateSettingGroupData = {
     groupId: string;
     requestBody: SettingGroupWriteRequest;
 };
 
-export type DataUpdateSettingGroupResponse = ({
-    [key: string]: unknown;
-});
+export type DataUpdateSettingGroupResponse = (SettingGroupResponse);
 
 export type DataDeleteSettingGroupData = {
     groupId: string;
 };
 
-export type DataDeleteSettingGroupResponse = ({
-    [key: string]: (string);
-});
+export type DataDeleteSettingGroupResponse = (StatusResponse);
 
 export type DataBulkAssignSettingGroupData = {
     requestBody: BulkChannelSettingGroupRequest;
@@ -1990,17 +2146,13 @@ export type DataListTagRunsData = {
     offset?: number;
 };
 
-export type DataListTagRunsResponse = (Array<{
-    [key: string]: unknown;
-}>);
+export type DataListTagRunsResponse = (Array<TagRunListItemResponse>);
 
 export type DataGetTagRunData = {
     tagRunId: string;
 };
 
-export type DataGetTagRunResponse = ({
-    [key: string]: unknown;
-});
+export type DataGetTagRunResponse = (TagRunResponse);
 
 export type DataUpsertTagRunData = {
     requestBody: {
@@ -2009,21 +2161,15 @@ export type DataUpsertTagRunData = {
     tagRunId: string;
 };
 
-export type DataUpsertTagRunResponse = ({
-    [key: string]: unknown;
-});
+export type DataUpsertTagRunResponse = (TagRunResponse);
 
 export type DataDeleteTagRunData = {
     tagRunId: string;
 };
 
-export type DataDeleteTagRunResponse = ({
-    [key: string]: (string);
-});
+export type DataDeleteTagRunResponse = (StatusResponse);
 
-export type DataListBotCredentialsResponse = (Array<{
-    [key: string]: unknown;
-}>);
+export type DataListBotCredentialsResponse = (Array<BotCredentialResponse>);
 
 export type DataUpsertBotCredentialData = {
     botId: string;
@@ -2032,17 +2178,13 @@ export type DataUpsertBotCredentialData = {
     };
 };
 
-export type DataUpsertBotCredentialResponse = ({
-    [key: string]: unknown;
-});
+export type DataUpsertBotCredentialResponse = (BotCredentialResponse);
 
 export type DataDeleteBotCredentialData = {
     botId: string;
 };
 
-export type DataDeleteBotCredentialResponse = ({
-    [key: string]: (string);
-});
+export type DataDeleteBotCredentialResponse = (StatusResponse);
 
 export type DataMigrateBotCredentialsData = {
     requestBody: Array<{
@@ -2050,13 +2192,9 @@ export type DataMigrateBotCredentialsData = {
     }>;
 };
 
-export type DataMigrateBotCredentialsResponse = ({
-    [key: string]: unknown;
-});
+export type DataMigrateBotCredentialsResponse = (MigrateCredentialsResponse);
 
-export type DataListChatDestinationsResponse = (Array<{
-    [key: string]: unknown;
-}>);
+export type DataListChatDestinationsResponse = (Array<ChatDestinationResponse>);
 
 export type DataUpsertChatDestinationData = {
     destId: string;
@@ -2065,17 +2203,13 @@ export type DataUpsertChatDestinationData = {
     };
 };
 
-export type DataUpsertChatDestinationResponse = ({
-    [key: string]: unknown;
-});
+export type DataUpsertChatDestinationResponse = (ChatDestinationResponse);
 
 export type DataDeleteChatDestinationData = {
     destId: string;
 };
 
-export type DataDeleteChatDestinationResponse = ({
-    [key: string]: (string);
-});
+export type DataDeleteChatDestinationResponse = (StatusResponse);
 
 export type DataUpsertEmbeddingsData = {
     requestBody: Array<{
@@ -2083,9 +2217,7 @@ export type DataUpsertEmbeddingsData = {
     }>;
 };
 
-export type DataUpsertEmbeddingsResponse = ({
-    [key: string]: (number);
-});
+export type DataUpsertEmbeddingsResponse = (VectorWriteResponse);
 
 export type DataGetTranslationData = {
     channelName: string;
@@ -2102,9 +2234,7 @@ export type DataListTranslationsData = {
     offset?: number;
 };
 
-export type DataListTranslationsResponse = (Array<{
-    [key: string]: unknown;
-}>);
+export type DataListTranslationsResponse = (Array<PostTranslationResponse>);
 
 export type DataUpsertTranslationsData = {
     requestBody: Array<{
@@ -2112,9 +2242,7 @@ export type DataUpsertTranslationsData = {
     }>;
 };
 
-export type DataUpsertTranslationsResponse = ({
-    [key: string]: (number);
-});
+export type DataUpsertTranslationsResponse = (VectorWriteResponse);
 
 export type DataListLogsRouteData = {
     limit?: number;
@@ -2158,9 +2286,7 @@ export type DataClearTableRouteData = {
 
 export type DataClearTableRouteResponse = (ClearTableResponse);
 
-export type DataGetNetworkSettingsResponse = ({
-    [key: string]: unknown;
-});
+export type DataGetNetworkSettingsResponse = (AppSettingResponse);
 
 export type DataPutNetworkSettingsData = {
     requestBody: {
@@ -2168,17 +2294,13 @@ export type DataPutNetworkSettingsData = {
     };
 };
 
-export type DataPutNetworkSettingsResponse = ({
-    [key: string]: unknown;
-});
+export type DataPutNetworkSettingsResponse = (AppSettingResponse);
 
 export type DataGetSettingData = {
     key: string;
 };
 
-export type DataGetSettingResponse = ({
-    [key: string]: unknown;
-});
+export type DataGetSettingResponse = (AppSettingResponse);
 
 export type DataPutSettingData = {
     key: string;
@@ -2187,9 +2309,7 @@ export type DataPutSettingData = {
     };
 };
 
-export type DataPutSettingResponse = ({
-    [key: string]: unknown;
-});
+export type DataPutSettingResponse = (AppSettingResponse);
 
 export type DataImportDataData = {
     requestBody: {
@@ -2197,9 +2317,7 @@ export type DataImportDataData = {
     };
 };
 
-export type DataImportDataResponse = ({
-    [key: string]: unknown;
-});
+export type DataImportDataResponse = (ImportDataResponse);
 
 export type DataExportDataResponse = (unknown);
 

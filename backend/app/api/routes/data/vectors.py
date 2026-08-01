@@ -10,6 +10,7 @@ from typing import Any
 from fastapi import APIRouter, Query
 
 from app.api.deps import CurrentUser, SessionDep
+from app.schemas.vectors import PostTranslationResponse, VectorWriteResponse
 from app.services.data_vectors import (
     DEFAULT_VECTOR_PAGE_SIZE,
     MAX_VECTOR_PAGE_SIZE,
@@ -35,8 +36,8 @@ def upsert_embeddings(
     body: list[dict[str, Any]],
     session: SessionDep,
     _current_user: CurrentUser,
-) -> dict[str, int]:
-    return upsert_embeddings_impl(session, body)
+) -> VectorWriteResponse:
+    return VectorWriteResponse.model_validate(upsert_embeddings_impl(session, body))
 
 
 @router.get("/translations/one")
@@ -59,8 +60,11 @@ def list_translations(
     _current_user: CurrentUser,
     limit: int = Query(default=DEFAULT_VECTOR_PAGE_SIZE, ge=1, le=MAX_VECTOR_PAGE_SIZE),
     offset: int = Query(default=0, ge=0),
-) -> list[dict[str, Any]]:
-    return list_translations_impl(session, limit=limit, offset=offset)
+) -> list[PostTranslationResponse]:
+    return [
+        PostTranslationResponse.model_validate(row)
+        for row in list_translations_impl(session, limit=limit, offset=offset)
+    ]
 
 
 @router.post("/translations")
@@ -68,5 +72,5 @@ def upsert_translations(
     body: list[dict[str, Any]],
     session: SessionDep,
     _current_user: CurrentUser,
-) -> dict[str, int]:
-    return upsert_translations_impl(session, body)
+) -> VectorWriteResponse:
+    return VectorWriteResponse.model_validate(upsert_translations_impl(session, body))

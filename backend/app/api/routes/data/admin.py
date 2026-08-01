@@ -18,6 +18,7 @@ from app.jobs.settings import (
     load_translation_settings,
 )
 from app.models_tg import AppSetting, utc_now
+from app.schemas.common import AppSettingResponse, ImportDataResponse
 from app.schemas.stats import (
     ClearTableResponse,
     DbStatsResponse,
@@ -93,13 +94,13 @@ def clear_table_route(
 def get_network_settings(
     session: SessionDep,
     _current_user: CurrentUser,
-) -> dict[str, Any]:
+) -> AppSettingResponse:
     row = get_network_setting_row(session)
     value = network_settings_payload(
         row.value if row else None,
         owner_user_id=row.user_id if row else _current_user.id,
     )
-    return {"key": "network", "value": value}
+    return AppSettingResponse.model_validate({"key": "network", "value": value})
 
 
 @router.put("/settings/network")
@@ -107,7 +108,7 @@ def put_network_settings(
     body: dict[str, Any],
     session: SessionDep,
     _current_user: CurrentUser,
-) -> dict[str, Any]:
+) -> AppSettingResponse:
     row = get_network_setting_row(session)
     merged = merge_network_put(body, row.value if row else None)
     if row:
@@ -119,10 +120,12 @@ def put_network_settings(
     session.add(row)
     session.commit()
     touch_sync(session, "settings")
-    return {
-        "key": "network",
-        "value": network_settings_payload(merged, owner_user_id=_current_user.id),
-    }
+    return AppSettingResponse.model_validate(
+        {
+            "key": "network",
+            "value": network_settings_payload(merged, owner_user_id=_current_user.id),
+        }
+    )
 
 
 @router.get("/settings/{key}")
@@ -130,11 +133,11 @@ def get_setting(
     key: str,
     session: SessionDep,
     _current_user: CurrentUser,
-) -> dict[str, Any]:
+) -> AppSettingResponse:
     loader = _SETTING_LOADERS.get(key)
     if loader is not None:
-        return {"key": key, "value": loader(session)}
-    return get_app_setting(session, key)
+        return AppSettingResponse(key=key, value=loader(session))
+    return AppSettingResponse.model_validate(get_app_setting(session, key))
 
 
 @router.put("/settings/{key}")
@@ -143,10 +146,10 @@ def put_setting(
     body: dict[str, Any],
     session: SessionDep,
     _current_user: CurrentUser,
-) -> dict[str, Any]:
+) -> AppSettingResponse:
     result = put_app_setting(session, key, body, user_id=_current_user.id)
     touch_sync(session, "settings")
-    return result
+    return AppSettingResponse.model_validate(result)
 
 
 @router.post("/import")
@@ -154,8 +157,10 @@ def import_data(
     body: dict[str, Any],
     session: SessionDep,
     _current_user: CurrentUser,
-) -> dict[str, Any]:
-    return import_data_impl(session, body, user_id=_current_user.id)
+) -> ImportDataResponse:
+    return ImportDataResponse.model_validate(
+        import_data_impl(session, body, user_id=_current_user.id)
+    )
 
 
 @router.get("/export")

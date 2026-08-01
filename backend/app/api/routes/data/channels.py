@@ -40,6 +40,7 @@ from app.schemas.data import (
     CancelBulkFollowResponse,
     SettingGroupWriteRequest,
 )
+from app.schemas.setting_groups import SettingGroupResponse
 from app.services.bulk_channels import (
     bulk_reresolve_start_ids,
     bulk_reset_and_queue_sync,
@@ -327,8 +328,11 @@ def bulk_sync_settings_endpoint(
 def list_setting_groups(
     session: SessionDep,
     current_user: CurrentUser,
-) -> list[dict[str, Any]]:
-    return list_setting_groups_impl(session, operator_id=current_user.id)
+) -> list[SettingGroupResponse]:
+    return [
+        SettingGroupResponse.model_validate(row)
+        for row in list_setting_groups_impl(session, operator_id=current_user.id)
+    ]
 
 
 @router.post("/setting-groups")
@@ -336,14 +340,14 @@ def create_setting_group(
     body: SettingGroupWriteRequest,
     session: SessionDep,
     current_user: CurrentUser,
-) -> dict[str, Any]:
+) -> SettingGroupResponse:
     result = create_setting_group_impl(
         session,
         body.model_dump(by_alias=False, exclude_none=True),
         user_id=current_user.id,
     )
     touch_sync(session, "channels")
-    return result
+    return SettingGroupResponse.model_validate(result)
 
 
 @router.put("/setting-groups/{group_id}")
@@ -352,14 +356,14 @@ def update_setting_group(
     body: SettingGroupWriteRequest,
     session: SessionDep,
     _current_user: CurrentUser,
-) -> dict[str, Any]:
+) -> SettingGroupResponse:
     result = update_setting_group_impl(
         session,
         group_id,
         body.model_dump(by_alias=False, exclude_none=True),
     )
     touch_sync(session, "channels")
-    return result
+    return SettingGroupResponse.model_validate(result)
 
 
 @router.delete("/setting-groups/{group_id}")
@@ -367,10 +371,10 @@ def delete_setting_group(
     group_id: str,
     session: SessionDep,
     _current_user: CurrentUser,
-) -> dict[str, str]:
-    result = delete_setting_group_impl(session, group_id)
+) -> StatusResponse:
+    delete_setting_group_impl(session, group_id)
     touch_sync(session, "channels")
-    return result
+    return StatusResponse(status="deleted")
 
 
 @router.patch("/channels/bulk-setting-group")

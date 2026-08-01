@@ -1,8 +1,8 @@
 # Architecture simplification plan
 
 **Date:** 2026-07-31
-**Status:** In progress — execution started 2026-08-01. Landed: `H3`, `A0`, `T1`, `B1`–`B6`, `F1a`, `C1`, `D1`+`D2`, `H1`+`H2`, `G3`.
-Typed responses **81/121** (was 26/129). Contexts with a test **1/9** (was 0).
+**Status:** In progress — execution started 2026-08-01. Landed: `H3`, `A0`, `T1`, `B1`–`B6b`, `F1a`, `C1`, `D1`+`D2`, `H1`+`H2`, `G3`.
+Typed responses **104/121** (was 26/129) — effectively complete; see B6b. Contexts with a test **1/9** (was 0).
 Each unit is marked ✅ **DONE** in place as it lands, with what the work changed about the plan.
 **Companion:** [`architecture-entropy-audit.md`](./architecture-entropy-audit.md) is the evidence base.
 Read §3 and §6 of it before starting workstream A or B.
@@ -409,6 +409,38 @@ fails 2, declaring `autoSpawned` fails 1.
   (embeddings, clusters, probe results) **user-agnostic** in their schemas, per `MEMORY.md`.
   Scope at read time later; don't bake `user_id` into response shapes now.
 
+#### B6b — The six families the B-series never scheduled · ✅ **DONE 2026-08-01**
+
+**A gap in the plan, not in the execution.** B5/B6 were scoped as "`logs`+`stats`", "`jobs`+
+`telegram`+`network`", "`ai`+`rag`" — which quietly left **22 endpoints across six `/data`
+families** unassigned to any unit: setting groups, bot credentials, chat destinations, tag runs,
+translations, and the settings/import envelopes. B7 surfaced it, because generated types cannot
+be re-exported for endpoints still returning `additionalProperties: true`.
+
+**Shipped:** `app/schemas/setting_groups.py`, `credentials.py`, `tag_runs.py`, `vectors.py`, plus
+`AppSettingResponse` / `ImportDataResponse` in `common.py`. **Typed responses 81/121 → 104/121.**
+
+**`BotCredentialResponse` is a security boundary, and the test proves it.** It is closed and
+carries `hasToken`, never `token`. Demonstrated rather than asserted: making `bot_to_camel` emit
+`token` while the model stays closed leaves the test **passing** — the model strips the key.
+Opening the model with the same leaky serialiser makes it **fail**. A future serialiser change
+therefore cannot leak the token past this model; only editing the model can, which is visible in
+review and in the generated client.
+
+**A belief corrected by its own test.** I wrote `channelCount` off as a conditional key
+(`setting_group_to_camel` takes `channel_count: int | None = None`). All three call sites supply
+it, so it is always on the wire. The model still leaves it undeclared — declaring it with a
+default would turn a future omission into `0` rather than an absent key.
+
+**The remaining 17 are genuinely untypeable or metric blind spots:** 5 SSE streams, 3 binary
+image routes, 1 streaming export, 3 template utilities, 4 blind spots (`additionalProperties:
+$ref` for `sync-meta`/`jobs/status`, `anyOf: [$ref, null]` for `reports/latest`/`translations/one`
+— all typed, none counted), and `posts/counts` which is a precise `dict[str, int]`.
+**Every domain response now has a declared model.**
+
+**Verified:** backend **791 passed / 2 skipped** (+7 new), mypy strict clean (128 files), ruff
+clean, `tsc` clean.
+
 #### B7 — Retire `types.ts` server mirrors · **M** · after B2–B6
 
 Replace the 24 hand-written domain interfaces with re-exports of generated types. Keep
@@ -803,7 +835,7 @@ Measurable, re-runnable — same discipline as the remediation plan's §12.
 | Data-access paths from `components/` | 7 | 2 |
 | Client-side caches / staleness systems | 3 | 1 |
 | Generated-client LOC | 10,796 → **4,866** | — |
-| `$ref`-typed API responses | 26/129 → **81/121** | all |
+| `$ref`-typed API responses | 26/129 → **104/121** | all typeable (17 are SSE/binary/blob/template) |
 | Hand-written domain types mirroring server tables | 24 | 0 |
 | Largest route module | 1,438 LOC → **425** | < 400 |
 | Largest frontend context | 1,103 LOC | < 300 |

@@ -1813,7 +1813,9 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "items": { "additionalProperties": true, "type": "object" },
+                  "items": {
+                    "$ref": "#/components/schemas/SettingGroupResponse"
+                  },
                   "type": "array",
                   "title": "Response Data-List Setting Groups"
                 }
@@ -1843,9 +1845,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "type": "object",
-                  "title": "Response Data-Create Setting Group"
+                  "$ref": "#/components/schemas/SettingGroupResponse"
                 }
               }
             }
@@ -1892,9 +1892,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "additionalProperties": true,
-                  "title": "Response Data-Update Setting Group"
+                  "$ref": "#/components/schemas/SettingGroupResponse"
                 }
               }
             }
@@ -1927,11 +1925,7 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {
-                  "type": "object",
-                  "additionalProperties": { "type": "string" },
-                  "title": "Response Data-Delete Setting Group"
-                }
+                "schema": { "$ref": "#/components/schemas/StatusResponse" }
               }
             }
           },
@@ -2884,7 +2878,9 @@
               "application/json": {
                 "schema": {
                   "type": "array",
-                  "items": { "type": "object", "additionalProperties": true },
+                  "items": {
+                    "$ref": "#/components/schemas/TagRunListItemResponse"
+                  },
                   "title": "Response Data-List Tag Runs"
                 }
               }
@@ -2921,11 +2917,7 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {
-                  "type": "object",
-                  "additionalProperties": true,
-                  "title": "Response Data-Get Tag Run"
-                }
+                "schema": { "$ref": "#/components/schemas/TagRunResponse" }
               }
             }
           },
@@ -2969,11 +2961,7 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {
-                  "type": "object",
-                  "additionalProperties": true,
-                  "title": "Response Data-Upsert Tag Run"
-                }
+                "schema": { "$ref": "#/components/schemas/TagRunResponse" }
               }
             }
           },
@@ -3005,11 +2993,7 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {
-                  "type": "object",
-                  "additionalProperties": { "type": "string" },
-                  "title": "Response Data-Delete Tag Run"
-                }
+                "schema": { "$ref": "#/components/schemas/StatusResponse" }
               }
             }
           },
@@ -3035,7 +3019,9 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "items": { "additionalProperties": true, "type": "object" },
+                  "items": {
+                    "$ref": "#/components/schemas/BotCredentialResponse"
+                  },
                   "type": "array",
                   "title": "Response Data-List Bot Credentials"
                 }
@@ -3078,9 +3064,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "additionalProperties": true,
-                  "title": "Response Data-Upsert Bot Credential"
+                  "$ref": "#/components/schemas/BotCredentialResponse"
                 }
               }
             }
@@ -3113,11 +3097,7 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {
-                  "type": "object",
-                  "additionalProperties": { "type": "string" },
-                  "title": "Response Data-Delete Bot Credential"
-                }
+                "schema": { "$ref": "#/components/schemas/StatusResponse" }
               }
             }
           },
@@ -3155,9 +3135,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "type": "object",
-                  "title": "Response Data-Migrate Bot Credentials"
+                  "$ref": "#/components/schemas/MigrateCredentialsResponse"
                 }
               }
             }
@@ -3185,7 +3163,9 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "items": { "additionalProperties": true, "type": "object" },
+                  "items": {
+                    "$ref": "#/components/schemas/ChatDestinationResponse"
+                  },
                   "type": "array",
                   "title": "Response Data-List Chat Destinations"
                 }
@@ -3228,9 +3208,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "additionalProperties": true,
-                  "title": "Response Data-Upsert Chat Destination"
+                  "$ref": "#/components/schemas/ChatDestinationResponse"
                 }
               }
             }
@@ -3263,11 +3241,7 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {
-                  "type": "object",
-                  "additionalProperties": { "type": "string" },
-                  "title": "Response Data-Delete Chat Destination"
-                }
+                "schema": { "$ref": "#/components/schemas/StatusResponse" }
               }
             }
           },
@@ -3304,11 +3278,7 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {
-                  "additionalProperties": { "type": "integer" },
-                  "type": "object",
-                  "title": "Response Data-Upsert Embeddings"
-                }
+                "schema": { "$ref": "#/components/schemas/VectorWriteResponse" }
               }
             }
           },
@@ -3415,7 +3385,9 @@
               "application/json": {
                 "schema": {
                   "type": "array",
-                  "items": { "type": "object", "additionalProperties": true },
+                  "items": {
+                    "$ref": "#/components/schemas/PostTranslationResponse"
+                  },
                   "title": "Response Data-List Translations"
                 }
               }
@@ -3453,11 +3425,7 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {
-                  "type": "object",
-                  "additionalProperties": { "type": "integer" },
-                  "title": "Response Data-Upsert Translations"
-                }
+                "schema": { "$ref": "#/components/schemas/VectorWriteResponse" }
               }
             }
           },
@@ -3738,11 +3706,7 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {
-                  "additionalProperties": true,
-                  "type": "object",
-                  "title": "Response Data-Get Network Settings"
-                }
+                "schema": { "$ref": "#/components/schemas/AppSettingResponse" }
               }
             }
           }
@@ -3770,11 +3734,7 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {
-                  "additionalProperties": true,
-                  "type": "object",
-                  "title": "Response Data-Put Network Settings"
-                }
+                "schema": { "$ref": "#/components/schemas/AppSettingResponse" }
               }
             }
           },
@@ -3809,11 +3769,7 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {
-                  "type": "object",
-                  "additionalProperties": true,
-                  "title": "Response Data-Get Setting"
-                }
+                "schema": { "$ref": "#/components/schemas/AppSettingResponse" }
               }
             }
           },
@@ -3857,11 +3813,7 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {
-                  "type": "object",
-                  "additionalProperties": true,
-                  "title": "Response Data-Put Setting"
-                }
+                "schema": { "$ref": "#/components/schemas/AppSettingResponse" }
               }
             }
           },
@@ -3898,11 +3850,7 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {
-                  "additionalProperties": true,
-                  "type": "object",
-                  "title": "Response Data-Import Data"
-                }
+                "schema": { "$ref": "#/components/schemas/ImportDataResponse" }
               }
             }
           },
@@ -4314,6 +4262,20 @@
         ],
         "title": "ActiveSyncJobSummary"
       },
+      "AppSettingResponse": {
+        "properties": {
+          "key": { "type": "string", "title": "Key" },
+          "value": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Value"
+          }
+        },
+        "type": "object",
+        "required": ["key"],
+        "title": "AppSettingResponse",
+        "description": "A settings row: `{\"key\": \u2026, \"value\": {\u2026}}`.\n\nShipped with B6b. `value` stays an open JSON object on purpose \u2014 the\nsettings surface is a bag of sections whose shapes are owned by their own\nloaders (`jobs`, `sync`, `retention`, `translation`, `network`), and pinning\nthem here would put five unrelated schemas behind one endpoint. The\n*envelope* is what callers depend on, and that is now typed."
+      },
       "Body_login-login_access_token": {
         "properties": {
           "grant_type": {
@@ -4343,6 +4305,33 @@
         "type": "object",
         "required": ["username", "password"],
         "title": "Body_login-login_access_token"
+      },
+      "BotCredentialResponse": {
+        "properties": {
+          "id": { "type": "string", "title": "Id" },
+          "name": { "type": "string", "title": "Name" },
+          "hasToken": {
+            "type": "boolean",
+            "title": "Hastoken",
+            "default": false
+          },
+          "username": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Username"
+          },
+          "photoUrl": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Photourl"
+          },
+          "lastValidated": {
+            "anyOf": [{ "type": "integer" }, { "type": "null" }],
+            "title": "Lastvalidated"
+          }
+        },
+        "type": "object",
+        "required": ["id", "name"],
+        "title": "BotCredentialResponse",
+        "description": "A stored bot, without its token."
       },
       "BotInfoRequest": {
         "properties": {
@@ -5037,6 +5026,17 @@
         "title": "ChannelUpsertRequest",
         "description": "Body for ``PUT /data/channels/{id}``.\n\nDeliberately permissive, like `SummaryUpsertRequest`. `upsert_channel`\nnormalises camelCase to snake_case itself, rejects server-managed and\ngroup-inherited fields with a 400, and writes only recognised\n`Channel.model_fields` \u2014 so validation belongs there, not here, and a\nstricter model would turn those 400s into 422s and change the API's error\ncontract."
       },
+      "ChatDestinationResponse": {
+        "properties": {
+          "id": { "type": "string", "title": "Id" },
+          "name": { "type": "string", "title": "Name" },
+          "chatId": { "type": "string", "title": "Chatid" }
+        },
+        "type": "object",
+        "required": ["id", "name", "chatId"],
+        "title": "ChatDestinationResponse",
+        "description": "A chat a summary can be published to."
+      },
       "ChatMessage": {
         "properties": {
           "role": { "type": "string", "title": "Role" },
@@ -5691,6 +5691,18 @@
         "title": "IgnoredChannelResponse",
         "description": "One dismissed candidate."
       },
+      "ImportDataResponse": {
+        "properties": {
+          "imported": {
+            "additionalProperties": { "type": "integer" },
+            "type": "object",
+            "title": "Imported"
+          }
+        },
+        "type": "object",
+        "title": "ImportDataResponse",
+        "description": "Per-section row counts from an import.\n\nOnly sections present in the document appear, so this is a mapping rather\nthan a model with a field per table \u2014 importing a channels-only export must\nnot report zeros for everything else."
+      },
       "ItemCreate": {
         "properties": {
           "title": {
@@ -5919,6 +5931,19 @@
         "type": "object",
         "required": ["message"],
         "title": "Message"
+      },
+      "MigrateCredentialsResponse": {
+        "properties": {
+          "migrated": { "type": "integer", "title": "Migrated", "default": 0 },
+          "ids": {
+            "items": { "type": "string" },
+            "type": "array",
+            "title": "Ids"
+          }
+        },
+        "type": "object",
+        "title": "MigrateCredentialsResponse",
+        "description": "Result of importing credentials from the client's local store.\n\nReturns the ids as well as the count so the caller can reconcile which of\nits local entries were accepted \u2014 entries without an id or token are skipped\nsilently rather than failing the batch."
       },
       "ModelInfo": {
         "properties": {
@@ -6316,6 +6341,24 @@
         "type": "object",
         "title": "PostScopeRequest",
         "description": "A post scope carried in a request body rather than a query string.\n\nThe channel selection can run to the full account \u2014 over a thousand handles \u2014\nwhich as `?channelNames=a,b,c,...` produced URLs long enough to hit proxy and\nserver header limits. A body has no such ceiling."
+      },
+      "PostTranslationResponse": {
+        "properties": {
+          "id": { "type": "string", "title": "Id" },
+          "channelName": { "type": "string", "title": "Channelname" },
+          "postId": { "type": "integer", "title": "Postid" },
+          "language": { "type": "string", "title": "Language" },
+          "translatedText": {
+            "type": "string",
+            "title": "Translatedtext",
+            "default": ""
+          },
+          "timestamp": { "type": "integer", "title": "Timestamp", "default": 0 }
+        },
+        "type": "object",
+        "required": ["id", "channelName", "postId", "language"],
+        "title": "PostTranslationResponse",
+        "description": "One post translated into one language."
       },
       "PromptResponse": {
         "properties": {
@@ -6914,6 +6957,88 @@
         "required": ["maxPostsPerChannel", "iterationLimit"],
         "title": "ScraperRuntimeSettings"
       },
+      "SettingGroupResponse": {
+        "properties": {
+          "id": { "type": "string", "title": "Id" },
+          "name": { "type": "string", "title": "Name" },
+          "isDefault": {
+            "type": "boolean",
+            "title": "Isdefault",
+            "default": false
+          },
+          "isReserved": {
+            "type": "boolean",
+            "title": "Isreserved",
+            "default": false
+          },
+          "regularSyncEnabled": {
+            "type": "boolean",
+            "title": "Regularsyncenabled",
+            "default": true
+          },
+          "dynamicSyncEnabled": {
+            "type": "boolean",
+            "title": "Dynamicsyncenabled",
+            "default": false
+          },
+          "autoSyncIntervalMinutes": {
+            "type": "integer",
+            "title": "Autosyncintervalminutes",
+            "default": 0
+          },
+          "dynamicSyncExpectedPosts": {
+            "type": "integer",
+            "title": "Dynamicsyncexpectedposts",
+            "default": 0
+          },
+          "autoFollowForwarded": {
+            "type": "boolean",
+            "title": "Autofollowforwarded",
+            "default": false
+          },
+          "isFrozen": {
+            "type": "boolean",
+            "title": "Isfrozen",
+            "default": false
+          },
+          "isUnavailableOnWebView": {
+            "type": "boolean",
+            "title": "Isunavailableonwebview",
+            "default": false
+          },
+          "includeInSyncAll": {
+            "type": "boolean",
+            "title": "Includeinsyncall",
+            "default": true
+          },
+          "includeInBulkSync": {
+            "type": "boolean",
+            "title": "Includeinbulksync",
+            "default": true
+          },
+          "allowIndividualSync": {
+            "type": "boolean",
+            "title": "Allowindividualsync",
+            "default": true
+          },
+          "resetSyncEnabled": {
+            "type": "boolean",
+            "title": "Resetsyncenabled",
+            "default": true
+          },
+          "createdAt": {
+            "type": "integer",
+            "title": "Createdat",
+            "default": 0
+          },
+          "updatedAt": { "type": "integer", "title": "Updatedat", "default": 0 }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": ["id", "name"],
+        "title": "SettingGroupResponse",
+        "description": "One setting group.\n\n**Open for one key.** `channelCount` is attached only by the list endpoint,\nwhich knows the per-group tally; the create/update endpoints return the group\nwithout it. Declaring it optional would emit `\"channelCount\": null` from\nthose, so it travels through `extra` \u2014 the same rule as `SummaryResponse`.\n\n`isReserved` is derived from the id rather than stored: the built-in groups\n(Default, Frozen, Restricted) are identified by well-known ids so they cannot\nbe renamed out of existence."
+      },
       "SettingGroupWriteRequest": {
         "properties": {
           "name": {
@@ -7375,6 +7500,106 @@
         "required": ["channels"],
         "title": "TagRequest"
       },
+      "TagRunListItemResponse": {
+        "properties": {
+          "id": { "type": "string", "title": "Id" },
+          "status": { "type": "string", "title": "Status" },
+          "source": { "type": "string", "title": "Source" },
+          "mode": { "type": "string", "title": "Mode" },
+          "channels": {
+            "items": { "type": "string" },
+            "type": "array",
+            "title": "Channels"
+          },
+          "startDate": {
+            "type": "integer",
+            "title": "Startdate",
+            "default": 0
+          },
+          "endDate": { "type": "integer", "title": "Enddate", "default": 0 },
+          "postCount": {
+            "type": "integer",
+            "title": "Postcount",
+            "default": 0
+          },
+          "model": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Model"
+          },
+          "error": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Error"
+          },
+          "createdAt": {
+            "type": "integer",
+            "title": "Createdat",
+            "default": 0
+          },
+          "updatedAt": { "type": "integer", "title": "Updatedat", "default": 0 }
+        },
+        "type": "object",
+        "required": ["id", "status", "source", "mode"],
+        "title": "TagRunListItemResponse",
+        "description": "A tag run's identity and metadata \u2014 the history-list projection.\n\nDeliberately omits `promptText`, `responseText`, `suggestions` and\n`allTagsSnapshot`. Callers that need those fetch the run by id."
+      },
+      "TagRunResponse": {
+        "properties": {
+          "id": { "type": "string", "title": "Id" },
+          "status": { "type": "string", "title": "Status" },
+          "source": { "type": "string", "title": "Source" },
+          "mode": { "type": "string", "title": "Mode" },
+          "channels": {
+            "items": { "type": "string" },
+            "type": "array",
+            "title": "Channels"
+          },
+          "startDate": {
+            "type": "integer",
+            "title": "Startdate",
+            "default": 0
+          },
+          "endDate": { "type": "integer", "title": "Enddate", "default": 0 },
+          "postCount": {
+            "type": "integer",
+            "title": "Postcount",
+            "default": 0
+          },
+          "model": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Model"
+          },
+          "error": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Error"
+          },
+          "createdAt": {
+            "type": "integer",
+            "title": "Createdat",
+            "default": 0
+          },
+          "updatedAt": {
+            "type": "integer",
+            "title": "Updatedat",
+            "default": 0
+          },
+          "promptText": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Prompttext"
+          },
+          "responseText": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Responsetext"
+          },
+          "allTagsSnapshot": { "title": "Alltagssnapshot" },
+          "channelContextOptions": { "title": "Channelcontextoptions" },
+          "suggestions": { "title": "Suggestions" },
+          "applyResult": { "title": "Applyresult" }
+        },
+        "type": "object",
+        "required": ["id", "status", "source", "mode"],
+        "title": "TagRunResponse",
+        "description": "A tag run with the corpus-sized fields the list omits.\n\nThe four JSON payloads stay loosely typed: `suggestions` and `applyResult`\nare shaped by the tagging prompt's output contract, which is versioned by the\nprompt rather than by this schema, and pinning them here would make a prompt\nchange a schema migration."
+      },
       "Telemetry": {},
       "TestProxyRequest": {
         "properties": { "proxyUrl": { "type": "string", "title": "Proxyurl" } },
@@ -7705,6 +7930,14 @@
         "type": "object",
         "required": ["loc", "msg", "type"],
         "title": "ValidationError"
+      },
+      "VectorWriteResponse": {
+        "properties": {
+          "upserted": { "type": "integer", "title": "Upserted", "default": 0 }
+        },
+        "type": "object",
+        "title": "VectorWriteResponse",
+        "description": "How many rows a bulk embedding or translation write accepted."
       }
     },
     "securitySchemes": {

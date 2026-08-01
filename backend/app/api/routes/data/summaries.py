@@ -16,6 +16,7 @@ from app.schemas.summaries import (
     SummaryResponse,
     SummaryUpsertRequest,
 )
+from app.schemas.tag_runs import TagRunListItemResponse, TagRunResponse
 from app.services.summaries import (
     DEFAULT_SUMMARY_PAGE_SIZE,
     MAX_SUMMARY_PAGE_SIZE,
@@ -119,9 +120,12 @@ def list_tag_runs(
         default=DEFAULT_TAG_RUN_PAGE_SIZE, ge=1, le=MAX_TAG_RUN_PAGE_SIZE
     ),
     offset: int = Query(default=0, ge=0),
-) -> list[dict[str, Any]]:
+) -> list[TagRunListItemResponse]:
     """List runs in the light projection — see `tag_run_to_camel_light`."""
-    return list_tag_runs_impl(session, limit=limit, offset=offset)
+    return [
+        TagRunListItemResponse.model_validate(row)
+        for row in list_tag_runs_impl(session, limit=limit, offset=offset)
+    ]
 
 
 @router.get("/tag-runs/{tag_run_id}")
@@ -129,9 +133,9 @@ def get_tag_run(
     tag_run_id: str,
     session: SessionDep,
     _current_user: CurrentUser,
-) -> dict[str, Any]:
+) -> TagRunResponse:
     """Full run including promptText/responseText/suggestions."""
-    return get_tag_run_impl(session, tag_run_id)
+    return TagRunResponse.model_validate(get_tag_run_impl(session, tag_run_id))
 
 
 @router.put("/tag-runs/{tag_run_id}")
@@ -140,10 +144,10 @@ def upsert_tag_run(
     body: dict[str, Any],
     session: SessionDep,
     _current_user: CurrentUser,
-) -> dict[str, Any]:
+) -> TagRunResponse:
     result = upsert_tag_run_impl(session, tag_run_id, body, user_id=_current_user.id)
     touch_sync(session, "tag_runs")
-    return result
+    return TagRunResponse.model_validate(result)
 
 
 @router.delete("/tag-runs/{tag_run_id}")
@@ -151,7 +155,7 @@ def delete_tag_run(
     tag_run_id: str,
     session: SessionDep,
     _current_user: CurrentUser,
-) -> dict[str, str]:
+) -> StatusResponse:
     delete_tag_run_impl(session, tag_run_id)
     touch_sync(session, "tag_runs")
-    return {"status": "deleted"}
+    return StatusResponse(status="deleted")

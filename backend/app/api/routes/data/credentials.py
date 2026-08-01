@@ -10,6 +10,12 @@ from typing import Any
 from fastapi import APIRouter
 
 from app.api.deps import CurrentUser, SessionDep
+from app.schemas.common import StatusResponse
+from app.schemas.credentials import (
+    BotCredentialResponse,
+    ChatDestinationResponse,
+    MigrateCredentialsResponse,
+)
 from app.services.credentials import (
     delete_bot_credential as delete_bot_credential_impl,
 )
@@ -39,8 +45,11 @@ router = APIRouter()
 def list_bot_credentials(
     session: SessionDep,
     _current_user: CurrentUser,
-) -> list[dict[str, Any]]:
-    return list_bot_credentials_impl(session)
+) -> list[BotCredentialResponse]:
+    return [
+        BotCredentialResponse.model_validate(row)
+        for row in list_bot_credentials_impl(session)
+    ]
 
 
 @router.put("/bot-credentials/{bot_id}")
@@ -49,8 +58,10 @@ def upsert_bot_credential(
     body: dict[str, Any],
     session: SessionDep,
     _current_user: CurrentUser,
-) -> dict[str, Any]:
-    return upsert_bot_credential_impl(session, bot_id, body, user_id=_current_user.id)
+) -> BotCredentialResponse:
+    return BotCredentialResponse.model_validate(
+        upsert_bot_credential_impl(session, bot_id, body, user_id=_current_user.id)
+    )
 
 
 @router.delete("/bot-credentials/{bot_id}")
@@ -58,8 +69,9 @@ def delete_bot_credential(
     bot_id: str,
     session: SessionDep,
     _current_user: CurrentUser,
-) -> dict[str, str]:
-    return delete_bot_credential_impl(session, bot_id)
+) -> StatusResponse:
+    delete_bot_credential_impl(session, bot_id)
+    return StatusResponse(status="deleted")
 
 
 @router.post("/bot-credentials/migrate")
@@ -67,16 +79,21 @@ def migrate_bot_credentials(
     body: list[dict[str, Any]],
     session: SessionDep,
     _current_user: CurrentUser,
-) -> dict[str, Any]:
-    return migrate_bot_credentials_impl(session, body, user_id=_current_user.id)
+) -> MigrateCredentialsResponse:
+    return MigrateCredentialsResponse.model_validate(
+        migrate_bot_credentials_impl(session, body, user_id=_current_user.id)
+    )
 
 
 @router.get("/chat-destinations")
 def list_chat_destinations(
     session: SessionDep,
     _current_user: CurrentUser,
-) -> list[dict[str, Any]]:
-    return list_chat_destinations_impl(session)
+) -> list[ChatDestinationResponse]:
+    return [
+        ChatDestinationResponse.model_validate(row)
+        for row in list_chat_destinations_impl(session)
+    ]
 
 
 @router.put("/chat-destinations/{dest_id}")
@@ -85,9 +102,9 @@ def upsert_chat_destination(
     body: dict[str, Any],
     session: SessionDep,
     _current_user: CurrentUser,
-) -> dict[str, Any]:
-    return upsert_chat_destination_impl(
-        session, dest_id, body, user_id=_current_user.id
+) -> ChatDestinationResponse:
+    return ChatDestinationResponse.model_validate(
+        upsert_chat_destination_impl(session, dest_id, body, user_id=_current_user.id)
     )
 
 
@@ -96,5 +113,6 @@ def delete_chat_destination(
     dest_id: str,
     session: SessionDep,
     _current_user: CurrentUser,
-) -> dict[str, str]:
-    return delete_chat_destination_impl(session, dest_id)
+) -> StatusResponse:
+    delete_chat_destination_impl(session, dest_id)
+    return StatusResponse(status="deleted")

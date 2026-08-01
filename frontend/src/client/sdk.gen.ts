@@ -1061,7 +1061,7 @@ export const dataBulkSyncSettingsEndpoint = (data: DataBulkSyncSettingsEndpointD
 
 /**
  * List Setting Groups
- * @returns unknown Successful Response
+ * @returns SettingGroupResponse Successful Response
  * @throws ApiError
  */
 export const dataListSettingGroups = (): CancelablePromise<DataListSettingGroupsResponse> => {
@@ -1075,7 +1075,7 @@ export const dataListSettingGroups = (): CancelablePromise<DataListSettingGroups
  * Create Setting Group
  * @param data The data for the request.
  * @param data.requestBody
- * @returns unknown Successful Response
+ * @returns SettingGroupResponse Successful Response
  * @throws ApiError
  */
 export const dataCreateSettingGroup = (data: DataCreateSettingGroupData): CancelablePromise<DataCreateSettingGroupResponse> => {
@@ -1095,7 +1095,7 @@ export const dataCreateSettingGroup = (data: DataCreateSettingGroupData): Cancel
  * @param data The data for the request.
  * @param data.groupId
  * @param data.requestBody
- * @returns unknown Successful Response
+ * @returns SettingGroupResponse Successful Response
  * @throws ApiError
  */
 export const dataUpdateSettingGroup = (data: DataUpdateSettingGroupData): CancelablePromise<DataUpdateSettingGroupResponse> => {
@@ -1117,7 +1117,7 @@ export const dataUpdateSettingGroup = (data: DataUpdateSettingGroupData): Cancel
  * Delete Setting Group
  * @param data The data for the request.
  * @param data.groupId
- * @returns string Successful Response
+ * @returns StatusResponse Successful Response
  * @throws ApiError
  */
 export const dataDeleteSettingGroup = (data: DataDeleteSettingGroupData): CancelablePromise<DataDeleteSettingGroupResponse> => {
@@ -1656,7 +1656,7 @@ export const dataDeleteSummary = (data: DataDeleteSummaryData): CancelablePromis
  * @param data The data for the request.
  * @param data.limit
  * @param data.offset
- * @returns unknown Successful Response
+ * @returns TagRunListItemResponse Successful Response
  * @throws ApiError
  */
 export const dataListTagRuns = (data: DataListTagRunsData = {}): CancelablePromise<DataListTagRunsResponse> => {
@@ -1678,7 +1678,7 @@ export const dataListTagRuns = (data: DataListTagRunsData = {}): CancelablePromi
  * Full run including promptText/responseText/suggestions.
  * @param data The data for the request.
  * @param data.tagRunId
- * @returns unknown Successful Response
+ * @returns TagRunResponse Successful Response
  * @throws ApiError
  */
 export const dataGetTagRun = (data: DataGetTagRunData): CancelablePromise<DataGetTagRunResponse> => {
@@ -1699,7 +1699,7 @@ export const dataGetTagRun = (data: DataGetTagRunData): CancelablePromise<DataGe
  * @param data The data for the request.
  * @param data.tagRunId
  * @param data.requestBody
- * @returns unknown Successful Response
+ * @returns TagRunResponse Successful Response
  * @throws ApiError
  */
 export const dataUpsertTagRun = (data: DataUpsertTagRunData): CancelablePromise<DataUpsertTagRunResponse> => {
@@ -1721,7 +1721,7 @@ export const dataUpsertTagRun = (data: DataUpsertTagRunData): CancelablePromise<
  * Delete Tag Run
  * @param data The data for the request.
  * @param data.tagRunId
- * @returns string Successful Response
+ * @returns StatusResponse Successful Response
  * @throws ApiError
  */
 export const dataDeleteTagRun = (data: DataDeleteTagRunData): CancelablePromise<DataDeleteTagRunResponse> => {
@@ -1739,7 +1739,7 @@ export const dataDeleteTagRun = (data: DataDeleteTagRunData): CancelablePromise<
 
 /**
  * List Bot Credentials
- * @returns unknown Successful Response
+ * @returns BotCredentialResponse Successful Response
  * @throws ApiError
  */
 export const dataListBotCredentials = (): CancelablePromise<DataListBotCredentialsResponse> => {
@@ -1754,7 +1754,7 @@ export const dataListBotCredentials = (): CancelablePromise<DataListBotCredentia
  * @param data The data for the request.
  * @param data.botId
  * @param data.requestBody
- * @returns unknown Successful Response
+ * @returns BotCredentialResponse Successful Response
  * @throws ApiError
  */
 export const dataUpsertBotCredential = (data: DataUpsertBotCredentialData): CancelablePromise<DataUpsertBotCredentialResponse> => {
@@ -1776,7 +1776,7 @@ export const dataUpsertBotCredential = (data: DataUpsertBotCredentialData): Canc
  * Delete Bot Credential
  * @param data The data for the request.
  * @param data.botId
- * @returns string Successful Response
+ * @returns StatusResponse Successful Response
  * @throws ApiError
  */
 export const dataDeleteBotCredential = (data: DataDeleteBotCredentialData): CancelablePromise<DataDeleteBotCredentialResponse> => {
@@ -1796,7 +1796,7 @@ export const dataDeleteBotCredential = (data: DataDeleteBotCredentialData): Canc
  * Migrate Bot Credentials
  * @param data The data for the request.
  * @param data.requestBody
- * @returns unknown Successful Response
+ * @returns MigrateCredentialsResponse Successful Response
  * @throws ApiError
  */
 export const dataMigrateBotCredentials = (data: DataMigrateBotCredentialsData): CancelablePromise<DataMigrateBotCredentialsResponse> => {
@@ -1813,7 +1813,7 @@ export const dataMigrateBotCredentials = (data: DataMigrateBotCredentialsData): 
 
 /**
  * List Chat Destinations
- * @returns unknown Successful Response
+ * @returns ChatDestinationResponse Successful Response
  * @throws ApiError
  */
 export const dataListChatDestinations = (): CancelablePromise<DataListChatDestinationsResponse> => {
@@ -1828,7 +1828,7 @@ export const dataListChatDestinations = (): CancelablePromise<DataListChatDestin
  * @param data The data for the request.
  * @param data.destId
  * @param data.requestBody
- * @returns unknown Successful Response
+ * @returns ChatDestinationResponse Successful Response
  * @throws ApiError
  */
 export const dataUpsertChatDestination = (data: DataUpsertChatDestinationData): CancelablePromise<DataUpsertChatDestinationResponse> => {
@@ -1850,7 +1850,7 @@ export const dataUpsertChatDestination = (data: DataUpsertChatDestinationData): 
  * Delete Chat Destination
  * @param data The data for the request.
  * @param data.destId
- * @returns string Successful Response
+ * @returns StatusResponse Successful Response
  * @throws ApiError
  */
 export const dataDeleteChatDestination = (data: DataDeleteChatDestinationData): CancelablePromise<DataDeleteChatDestinationResponse> => {
@@ -1870,7 +1870,7 @@ export const dataDeleteChatDestination = (data: DataDeleteChatDestinationData): 
  * Upsert Embeddings
  * @param data The data for the request.
  * @param data.requestBody
- * @returns number Successful Response
+ * @returns VectorWriteResponse Successful Response
  * @throws ApiError
  */
 export const dataUpsertEmbeddings = (data: DataUpsertEmbeddingsData): CancelablePromise<DataUpsertEmbeddingsResponse> => {
@@ -1915,7 +1915,7 @@ export const dataGetTranslation = (data: DataGetTranslationData): CancelableProm
  * @param data The data for the request.
  * @param data.limit
  * @param data.offset
- * @returns unknown Successful Response
+ * @returns PostTranslationResponse Successful Response
  * @throws ApiError
  */
 export const dataListTranslations = (data: DataListTranslationsData = {}): CancelablePromise<DataListTranslationsResponse> => {
@@ -1936,7 +1936,7 @@ export const dataListTranslations = (data: DataListTranslationsData = {}): Cance
  * Upsert Translations
  * @param data The data for the request.
  * @param data.requestBody
- * @returns number Successful Response
+ * @returns VectorWriteResponse Successful Response
  * @throws ApiError
  */
 export const dataUpsertTranslations = (data: DataUpsertTranslationsData): CancelablePromise<DataUpsertTranslationsResponse> => {
@@ -2079,7 +2079,7 @@ export const dataClearTableRoute = (data: DataClearTableRouteData): CancelablePr
 
 /**
  * Get Network Settings
- * @returns unknown Successful Response
+ * @returns AppSettingResponse Successful Response
  * @throws ApiError
  */
 export const dataGetNetworkSettings = (): CancelablePromise<DataGetNetworkSettingsResponse> => {
@@ -2093,7 +2093,7 @@ export const dataGetNetworkSettings = (): CancelablePromise<DataGetNetworkSettin
  * Put Network Settings
  * @param data The data for the request.
  * @param data.requestBody
- * @returns unknown Successful Response
+ * @returns AppSettingResponse Successful Response
  * @throws ApiError
  */
 export const dataPutNetworkSettings = (data: DataPutNetworkSettingsData): CancelablePromise<DataPutNetworkSettingsResponse> => {
@@ -2112,7 +2112,7 @@ export const dataPutNetworkSettings = (data: DataPutNetworkSettingsData): Cancel
  * Get Setting
  * @param data The data for the request.
  * @param data.key
- * @returns unknown Successful Response
+ * @returns AppSettingResponse Successful Response
  * @throws ApiError
  */
 export const dataGetSetting = (data: DataGetSettingData): CancelablePromise<DataGetSettingResponse> => {
@@ -2133,7 +2133,7 @@ export const dataGetSetting = (data: DataGetSettingData): CancelablePromise<Data
  * @param data The data for the request.
  * @param data.key
  * @param data.requestBody
- * @returns unknown Successful Response
+ * @returns AppSettingResponse Successful Response
  * @throws ApiError
  */
 export const dataPutSetting = (data: DataPutSettingData): CancelablePromise<DataPutSettingResponse> => {
@@ -2155,7 +2155,7 @@ export const dataPutSetting = (data: DataPutSettingData): CancelablePromise<Data
  * Import Data
  * @param data The data for the request.
  * @param data.requestBody
- * @returns unknown Successful Response
+ * @returns ImportDataResponse Successful Response
  * @throws ApiError
  */
 export const dataImportData = (data: DataImportDataData): CancelablePromise<DataImportDataResponse> => {
