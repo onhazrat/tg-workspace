@@ -1,13 +1,14 @@
 import { describe, expect, test } from "bun:test"
 
+import type { PostFeedQuery } from "@/api/data"
 import {
   applyForwardedFilter,
   applyPostViewPipeline,
-  buildFilteredPostsFromRaw,
   type PostViewOptions,
 } from "@/lib/posts/post-view"
 import {
   computeScopedPosts,
+  SCOPED_POSTS_LIMIT,
   type ScopedPostsDeps,
 } from "@/lib/posts/scoped-posts"
 import type { Channel, Post } from "@/types"
@@ -72,47 +73,79 @@ function baseDeps(overrides: Partial<ScopedPostsDeps> = {}): ScopedPostsDeps {
     searchSimilarPosts: async () => {
       throw new Error("searchSimilarPosts should not be called")
     },
-    getPostsByDateRange: async () => {
-      throw new Error("getPostsByDateRange should not be called")
+    getPostsFeed: async () => {
+      throw new Error("getPostsFeed should not be called")
     },
     ...overrides,
   }
 }
 
 describe("computeScopedPosts", () => {
-  test("normal path: matches buildFilteredPostsFromRaw for the same inputs", async () => {
-    const raw = [
-      makePost("alpha", 1, 100),
-      makePost("beta", 2, 300),
-      makePost("alpha", 3, 200),
-    ]
-    const calls: unknown[][] = []
+  /**
+   * The normal path no longer filters anything client-side (A1c) — it hands the
+   * scope to `POST /data/posts` and returns what comes back. So what these
+   * tests can still guarantee is the *translation*: that every piece of filter
+   * state reaches the server, under the right name, unmodified.
+   *
+   * The filtering itself is pinned server-side, where it now happens:
+   * `app/services/post_filters.py` documents the per-filter parity targets and
+   * `tests/api/test_posts_feed.py` exercises them.
+   */
+  test("normal path: hands the whole filter state to the server feed", async () => {
+    const fromServer = [makePost("alpha", 1, 100)]
+    const calls: PostFeedQuery[] = []
     const deps = baseDeps({
       searchText: "Post",
-      forwardedFilter: "all",
-      mediaFilter: "all",
-      getPostsByDateRange: async (...args) => {
-        calls.push(args)
-        return raw
+      forwardedFilter: "unfollowed_forwarded",
+      mediaFilter: "photo",
+      postViewOptions: {
+        maxPostsPerChannel: 7,
+        maxPostsPerChannelMode: "random",
+        postSortOrder: "channel_time",
+      },
+      getPostsFeed: async (query) => {
+        calls.push(query)
+        return fromServer
       },
     })
 
     const result = await computeScopedPosts(deps)
 
-    // Byte-for-byte the eager path's output.
-    expect(result).toEqual(
-      buildFilteredPostsFromRaw(raw, {
-        searchText: "Post",
-        forwardedFilter: "all",
-        mediaFilter: "all",
-        channels,
-        view,
+    // Returned verbatim — no client-side post-processing survives.
+    expect(result).toBe(fromServer)
+    expect(calls).toEqual([
+      {
+        channelNames: ["alpha", "beta"],
         startDate: 1000,
         endDate: 9000,
-      }),
-    )
-    // Fetched exactly the selected channels + date range.
-    expect(calls).toEqual([[["alpha", "beta"], 1000, 9000]])
+        keyword: "Post",
+        forwarded: "unfollowed_forwarded",
+        media: "photo",
+        maxPerChannel: 7,
+        maxPerChannelMode: "random",
+        sort: "channel_time",
+        seed: 0,
+        limit: SCOPED_POSTS_LIMIT,
+      },
+    ])
+  })
+
+  test("normal path: the read is bounded", async () => {
+    // The point of A1c. This branch used to page a channel's whole history
+    // into the browser; a regression to an unbounded read would not change any
+    // other assertion here, so it gets its own.
+    let capturedLimit: number | undefined
+    const deps = baseDeps({
+      getPostsFeed: async (query) => {
+        capturedLimit = query.limit
+        return []
+      },
+    })
+
+    await computeScopedPosts(deps)
+
+    expect(capturedLimit).toBe(SCOPED_POSTS_LIMIT)
+    expect(SCOPED_POSTS_LIMIT).toBeLessThanOrEqual(5000)
   })
 
   test("semantic path: bounded at 50, RAG options honoured, view pipeline applied", async () => {
@@ -209,7 +242,7 @@ describe("computeScopedPosts", () => {
   })
 
   test("embeddings off: semantic query falls through to the normal path", async () => {
-    const raw = [makePost("alpha", 1, 100)]
+    const fromServer = [makePost("alpha", 1, 100)]
     let ragCalled = false
     const deps = baseDeps({
       embeddingsEnabled: false,
@@ -218,22 +251,25 @@ describe("computeScopedPosts", () => {
         ragCalled = true
         return []
       },
-      getPostsByDateRange: async () => raw,
+      getPostsFeed: async () => fromServer,
     })
 
     const result = await computeScopedPosts(deps)
 
     expect(ragCalled).toBe(false)
-    expect(result).toEqual(
-      buildFilteredPostsFromRaw(raw, {
-        searchText: "",
-        forwardedFilter: "all",
-        mediaFilter: "all",
-        channels,
-        view,
-        startDate: 1000,
-        endDate: 9000,
-      }),
-    )
+    expect(result).toBe(fromServer)
+  })
+
+  test("the semantic branches never touch the server feed", async () => {
+    // Semantic ranking is the one selection the server cannot derive from a
+    // scope, so those branches must stay on the RAG path. `baseDeps` throws
+    // from `getPostsFeed`, which is what makes this assertion real.
+    const deps = baseDeps({
+      embeddingsEnabled: true,
+      semanticQuery: "crypto",
+      searchSimilarPosts: async () => [makePost("alpha", 1, 100)],
+    })
+
+    expect((await computeScopedPosts(deps)).length).toBe(1)
   })
 })

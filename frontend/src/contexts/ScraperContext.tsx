@@ -49,11 +49,7 @@ import type {
   PostViewOptions,
 } from "../lib/posts/post-view"
 import { computeScopedPosts } from "../lib/posts/scoped-posts"
-import {
-  getChannelStats,
-  getPostsByDateRange,
-  upsertChannel,
-} from "../lib/repository"
+import { getChannelStats, upsertChannel } from "../lib/repository"
 import { buildActiveProxies, isNetworkRoutingActive } from "../lib/syncSettings"
 import type { Channel, Post } from "../types"
 import { useData } from "./DataContext"
@@ -288,14 +284,20 @@ export const ScraperProvider: React.FC<{ children: React.ReactNode }> = ({
         attempted.add(channel.name)
         try {
           // Bounded read: detection samples at most
-          // LANGUAGE_DETECTION_SAMPLE_SIZE posts, and the endpoint returns
-          // them newest-first, so there is nothing to gain by fetching more.
-          const recentPosts = await getPostsByDateRange(
-            [channel.name],
-            Date.now() - LANGUAGE_DETECTION_LOOKBACK_MS,
-            Date.now(),
-            { limit: LANGUAGE_DETECTION_SAMPLE_SIZE },
-          )
+          // LANGUAGE_DETECTION_SAMPLE_SIZE posts, and the feed returns them
+          // newest-first, so there is nothing to gain by fetching more.
+          //
+          // Straight to the feed rather than through `repository` (A1c): the
+          // repository wrapper's only extra behaviour here was falling back to
+          // the IndexedDB mirror, and ADR-009 makes the server authoritative.
+          // A failed sample is already caught below and simply retried later.
+          const recentPosts = await api.getPostsFeed({
+            channelNames: [channel.name],
+            startDate: Date.now() - LANGUAGE_DETECTION_LOOKBACK_MS,
+            endDate: Date.now(),
+            sort: "time",
+            limit: LANGUAGE_DETECTION_SAMPLE_SIZE,
+          })
           if (recentPosts && recentPosts.length > 0) {
             recentPosts.sort((a, b) => b.id - a.id)
             const lang = detectLanguageFromPosts(recentPosts)
@@ -344,7 +346,7 @@ export const ScraperProvider: React.FC<{ children: React.ReactNode }> = ({
         semanticSearchRespectsTimeRange,
         semanticSearchRespectsChannels,
         searchSimilarPosts,
-        getPostsByDateRange,
+        getPostsFeed: api.getPostsFeed,
       }),
     [
       startDate,

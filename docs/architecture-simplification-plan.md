@@ -153,7 +153,7 @@ The load-bearing unit. Callers of `getPostsByDateRange` that still pull whole da
 | Caller | Replacement |
 |---|---|
 | `AIContext.tsx:496` (prompt assembly) | ✅ **A1b — done 2026-08-01**, see below |
-| `ScraperContext.getScopedPosts` → `lib/posts/scoped-posts.ts` | server-side filter+sort, as `usePostsView` already does |
+| `ScraperContext.getScopedPosts` → `lib/posts/scoped-posts.ts` | ✅ **A1c — done 2026-08-01**, see below |
 | `lib/commands/search-filters.ts:34` (palette search) | ✅ **A1a — done 2026-08-01**, see below |
 
 Semantic/related search legitimately cannot be reproduced server-side and keeps a client path —
@@ -227,7 +227,51 @@ fails 1.
 **Verified:** backend **804 passed / 2 skipped**, frontend **715 pass / 0 fail**, mypy strict
 clean (128 files), ruff clean, `tsc` clean, biome clean.
 
-**Still open in A1:** `ScraperContext.getScopedPosts` (A1c).
+##### A1c — `computeScopedPosts` normal branch moved into SQL · ✅ **DONE 2026-08-01**
+
+The last bulk reader. `computeScopedPosts`'s non-semantic branch paged a channel's whole history
+into the browser and ran the client filter pipeline over it (`buildFilteredPostsFromRaw`:
+keyword → forwarded → media → per-channel cap → sort). It is now **one bounded
+`POST /data/posts` call**; every one of those five stages has a server counterpart kept in lockstep
+by `app/services/post_filters.py`.
+
+**The read is now bounded, and that is only sound because the server sorts before it limits.**
+`limit: SCOPED_POSTS_LIMIT` (200) returns the first 200 of the *same ordering* the client pipeline
+produced — not an arbitrary 200. Documented at the constant, because a future reader will otherwise
+try to raise it rather than page the feed.
+
+**How much of this branch was actually live turned out to be the interesting part.** Tracing the
+callers: `usePostsFeed`, `useScopedPostCounts`, `useCommandRegistry` and `DiscoverView` all call
+`getScopedPosts` **only when a semantic/related search is active** — they already had server paths
+for everything else. `getPromptPostsInput` likewise. So the unbounded date-range read was reached
+from exactly **one** place: `useEntityFlow`'s pick-post pool, which takes `.slice(0, 100)` off it
+immediately. A whole-history read to populate a hundred-row picker.
+
+**`channels` is no longer read on this path.** The `unfollowed_forwarded` filter needed the local
+channel list to decide what "followed" meant; the server resolves that from `tg_channels`.
+
+**Language detection moved too** (`ScraperContext`, background effect). It was already a *bounded*
+read, so not strictly an A1 target, but it went through `repository.getPostsByDateRange` whose only
+extra behaviour there was the IndexedDB fallback — which ADR-009 removes. Straight to
+`api.getPostsFeed` now.
+
+**`repository.getPostsByDateRange` has zero callers as of this unit.** It is deliberately *not*
+deleted here: `repository.posts.test.ts` is the only coverage of `singleFlight`'s de-dup, and A3
+is where those assertions get ported to the hook layer. Deleting it now would drop that coverage
+with nothing replacing it. It carries a doc comment saying so, and the dead
+`getPostsByDateRangeCached` alias (no callers, no tests) is gone.
+
+**Tests rebased, not deleted.** The two normal-path tests asserted client-pipeline parity, which no
+longer exists to assert. They now pin the **translation** — that every piece of filter state
+reaches the server under the right name — plus a dedicated boundedness test, since a regression to
+an unbounded read would not otherwise change any assertion. Mutation-tested: dropping `keyword`
+fails 1, unbounding the limit fails 2, zeroing the cap fails 1, hardcoding the sort fails 1,
+disabling the semantic branch fails 3.
+
+**Verified:** frontend **717 pass / 0 fail**, `tsc` clean, biome clean.
+
+**A1 is complete.** No `getPostsByDateRange` caller remains outside `lib/cache.ts` (A4) and
+`lib/data-transfer/entities/post.ts` (A2).
 
 - **Verify:** `cd backend && uv run pytest tests/ -q`; `bun run --filter tg-summarizer-frontend test:unit`;
   e2e serially. Manually: generate a summary, run a palette search, use semantic search.

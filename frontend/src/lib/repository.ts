@@ -312,6 +312,16 @@ async function fetchAllPosts(
   )
 }
 
+/**
+ * **No callers remain (A1c).** The three bulk readers this existed for now go
+ * straight to the server feed: palette search (A1a), auto-regenerate prompt
+ * assembly (A1b), and `computeScopedPosts` plus language detection (A1c).
+ *
+ * Kept only until A3, which deletes `repository.ts` as a unit and ports
+ * `repository.posts.test.ts`'s `singleFlight` concurrency assertions to the
+ * hook layer. Deleting it here would drop that coverage with nothing replacing
+ * it. **Do not add a new caller** — use `api.getPostsFeed`.
+ */
 export async function getPostsByDateRange(
   channelNames: string[],
   startDate: number,
@@ -936,15 +946,6 @@ export async function importIndexedDBToServer(): Promise<
   const result = await api.importData(payload)
   await refreshSyncMeta(true)
   return result.imported
-}
-
-/** @deprecated Use getPostsByDateRange — kept for backward compatibility */
-export async function getPostsByDateRangeCached(
-  channelNames: string[],
-  startDate: number,
-  endDate: number,
-) {
-  return getPostsByDateRange(channelNames, startDate, endDate)
 }
 
 /** @deprecated Use saveSummary — kept for backward compatibility */
