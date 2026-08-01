@@ -2142,7 +2142,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "items": { "additionalProperties": true, "type": "object" },
+                  "items": { "$ref": "#/components/schemas/PostResponse" },
                   "type": "array",
                   "title": "Response Data-List Posts"
                 }
@@ -2688,7 +2688,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "items": { "additionalProperties": true, "type": "object" },
+                  "items": { "$ref": "#/components/schemas/PostResponse" },
                   "type": "array",
                   "title": "Response Data-Lookup Posts Route"
                 }
@@ -2730,9 +2730,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": { "type": "integer" },
-                  "type": "object",
-                  "title": "Response Data-Bulk Upsert Posts Route"
+                  "$ref": "#/components/schemas/BulkUpsertPostsResponse"
                 }
               }
             }
@@ -5164,6 +5162,14 @@
         "title": "BulkUpdatedResponse",
         "description": "A bulk write that only reports how many rows it touched."
       },
+      "BulkUpsertPostsResponse": {
+        "properties": {
+          "upserted": { "type": "integer", "title": "Upserted", "default": 0 }
+        },
+        "type": "object",
+        "title": "BulkUpsertPostsResponse",
+        "description": "Result of ``POST /data/posts/bulk``."
+      },
       "CancelBulkFollowResponse": {
         "properties": {
           "followJobId": { "type": "string", "title": "Followjobid" },
@@ -6028,6 +6034,74 @@
         "required": ["posts"],
         "title": "PostLookupRequest",
         "description": "Batch of `(channelName, postId)` refs to resolve.\n\nCapped so this cannot become another way to ask for unbounded rows."
+      },
+      "PostResponse": {
+        "properties": {
+          "id": { "type": "integer", "title": "Id" },
+          "channelName": { "type": "string", "title": "Channelname" },
+          "text": { "type": "string", "title": "Text", "default": "" },
+          "date": { "type": "string", "title": "Date", "default": "" },
+          "timestamp": {
+            "type": "integer",
+            "title": "Timestamp",
+            "default": 0
+          },
+          "forwardedFrom": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Forwardedfrom"
+          },
+          "forwardedFromName": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Forwardedfromname"
+          },
+          "isAnchor": {
+            "type": "boolean",
+            "title": "Isanchor",
+            "default": false
+          },
+          "retrievedAt": {
+            "anyOf": [{ "type": "integer" }, { "type": "null" }],
+            "title": "Retrievedat"
+          },
+          "retrievalJobId": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Retrievaljobid"
+          },
+          "retrievalPass": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Retrievalpass"
+          },
+          "retrievalSource": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Retrievalsource"
+          },
+          "media": {
+            "anyOf": [
+              { "additionalProperties": true, "type": "object" },
+              { "type": "null" }
+            ],
+            "title": "Media"
+          },
+          "links": {
+            "anyOf": [{ "items": {}, "type": "array" }, { "type": "null" }],
+            "title": "Links"
+          },
+          "replyToPostId": {
+            "anyOf": [{ "type": "integer" }, { "type": "null" }],
+            "title": "Replytopostid"
+          },
+          "replyTo": {
+            "anyOf": [
+              { "additionalProperties": true, "type": "object" },
+              { "type": "null" }
+            ],
+            "title": "Replyto"
+          }
+        },
+        "type": "object",
+        "required": ["id", "channelName"],
+        "title": "PostResponse",
+        "description": "One post, as `post_to_camel` builds it."
       },
       "PostScopeRequest": {
         "properties": {

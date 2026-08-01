@@ -530,7 +530,7 @@ export class DataService {
      * as a POST purely so the selection travels in the body.
      * @param data The data for the request.
      * @param data.requestBody
-     * @returns unknown Successful Response
+     * @returns PostResponse Successful Response
      * @throws ApiError
      */
     public static listPosts(data: DataListPostsData): CancelablePromise<DataListPostsResponse> {
@@ -848,7 +848,7 @@ export class DataService {
      * Lookup Posts Route
      * @param data The data for the request.
      * @param data.requestBody
-     * @returns unknown Successful Response
+     * @returns PostResponse Successful Response
      * @throws ApiError
      */
     public static lookupPostsRoute(data: DataLookupPostsRouteData): CancelablePromise<DataLookupPostsRouteResponse> {
@@ -867,7 +867,7 @@ export class DataService {
      * Bulk Upsert Posts Route
      * @param data The data for the request.
      * @param data.requestBody
-     * @returns number Successful Response
+     * @returns BulkUpsertPostsResponse Successful Response
      * @throws ApiError
      */
     public static bulkUpsertPostsRoute(data: DataBulkUpsertPostsRouteData): CancelablePromise<DataBulkUpsertPostsRouteResponse> {

@@ -46,6 +46,7 @@ from app.schemas.data import (
     CancelBulkFollowResponse,
     SettingGroupWriteRequest,
 )
+from app.schemas.posts import BulkUpsertPostsResponse, PostResponse
 from app.schemas.summaries import (
     SummaryListItemResponse,
     SummaryResponse,
@@ -671,7 +672,7 @@ def list_posts(
     body: PostFeedRequest,
     session: SessionDep,
     _current_user: CurrentUser,
-) -> list[dict[str, Any]]:
+) -> list[PostResponse]:
     """One page of posts for a channel/date scope.
 
     With no filters, no cap and ``sort=time`` this is the newest-first page the
@@ -691,19 +692,22 @@ def list_posts(
             status_code=422,
             detail=f"unknown maxPerChannelMode: {body.max_per_channel_mode}",
         )
-    return list_feed_impl(
-        session,
-        channel_names=body.resolved_channel_names(),
-        start_date=body.start_date,
-        end_date=body.end_date,
-        filters=_parse_post_filters(body.keyword, body.forwarded, body.media),
-        max_per_channel=body.max_per_channel,
-        max_per_channel_mode=body.max_per_channel_mode,
-        sort=body.sort,
-        seed=body.seed,
-        limit=body.limit,
-        offset=body.offset,
-    )
+    return [
+        PostResponse.model_validate(row)
+        for row in list_feed_impl(
+            session,
+            channel_names=body.resolved_channel_names(),
+            start_date=body.start_date,
+            end_date=body.end_date,
+            filters=_parse_post_filters(body.keyword, body.forwarded, body.media),
+            max_per_channel=body.max_per_channel,
+            max_per_channel_mode=body.max_per_channel_mode,
+            sort=body.sort,
+            seed=body.seed,
+            limit=body.limit,
+            offset=body.offset,
+        )
+    ]
 
 
 def _parse_post_filters(keyword: str | None, forwarded: str, media: str) -> PostFilters:
@@ -993,10 +997,13 @@ def lookup_posts_route(
     body: PostLookupRequest,
     session: SessionDep,
     _current_user: CurrentUser,
-) -> list[dict[str, Any]]:
-    return lookup_posts_impl(
-        session, [(ref.channel_name, ref.post_id) for ref in body.posts]
-    )
+) -> list[PostResponse]:
+    return [
+        PostResponse.model_validate(row)
+        for row in lookup_posts_impl(
+            session, [(ref.channel_name, ref.post_id) for ref in body.posts]
+        )
+    ]
 
 
 @router.post("/posts/bulk")
@@ -1004,8 +1011,8 @@ def bulk_upsert_posts_route(
     body: list[dict[str, Any]],
     session: SessionDep,
     _current_user: CurrentUser,
-) -> dict[str, int]:
-    return bulk_upsert_posts(session, body)
+) -> BulkUpsertPostsResponse:
+    return BulkUpsertPostsResponse.model_validate(bulk_upsert_posts(session, body))
 
 
 @router.get("/summaries")

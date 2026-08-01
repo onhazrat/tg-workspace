@@ -159,6 +159,13 @@ export type BulkUpdatedResponse = {
     updated?: number;
 };
 
+/**
+ * Result of ``POST /data/posts/bulk``.
+ */
+export type BulkUpsertPostsResponse = {
+    upserted?: number;
+};
+
 export type CancelBulkFollowResponse = {
     followJobId: string;
     status: string;
@@ -463,6 +470,32 @@ export type PostLookupRef = {
  */
 export type PostLookupRequest = {
     posts: Array<PostLookupRef>;
+};
+
+/**
+ * One post, as `post_to_camel` builds it.
+ */
+export type PostResponse = {
+    id: number;
+    channelName: string;
+    text?: string;
+    date?: string;
+    timestamp?: number;
+    forwardedFrom?: (string | null);
+    forwardedFromName?: (string | null);
+    isAnchor?: boolean;
+    retrievedAt?: (number | null);
+    retrievalJobId?: (string | null);
+    retrievalPass?: (string | null);
+    retrievalSource?: (string | null);
+    media?: ({
+    [key: string]: unknown;
+} | null);
+    links?: (Array<unknown> | null);
+    replyToPostId?: (number | null);
+    replyTo?: ({
+    [key: string]: unknown;
+} | null);
 };
 
 /**
@@ -999,9 +1032,7 @@ export type DataListPostsData = {
     requestBody: PostFeedRequest;
 };
 
-export type DataListPostsResponse = (Array<{
-    [key: string]: unknown;
-}>);
+export type DataListPostsResponse = (Array<PostResponse>);
 
 export type DataDiscoverCandidatesData = {
     requestBody: DiscoverCandidatesRequest;
@@ -1103,9 +1134,7 @@ export type DataLookupPostsRouteData = {
     requestBody: PostLookupRequest;
 };
 
-export type DataLookupPostsRouteResponse = (Array<{
-    [key: string]: unknown;
-}>);
+export type DataLookupPostsRouteResponse = (Array<PostResponse>);
 
 export type DataBulkUpsertPostsRouteData = {
     requestBody: Array<{
@@ -1113,9 +1142,7 @@ export type DataBulkUpsertPostsRouteData = {
     }>;
 };
 
-export type DataBulkUpsertPostsRouteResponse = ({
-    [key: string]: (number);
-});
+export type DataBulkUpsertPostsRouteResponse = (BulkUpsertPostsResponse);
 
 export type DataListSummariesData = {
     limit?: number;

@@ -1,8 +1,8 @@
 # Architecture simplification plan
 
 **Date:** 2026-07-31
-**Status:** In progress — execution started 2026-08-01. Landed: `H3`, `A0`, `T1`, `B1`, `B2`.
-Typed responses **40/129** (was 26). Contexts with a test **1/9** (was 0).
+**Status:** In progress — execution started 2026-08-01. Landed: `H3`, `A0`, `T1`, `B1`, `B2`, `B3`.
+Typed responses **43/129** (was 26). Contexts with a test **1/9** (was 0).
 Each unit is marked ✅ **DONE** in place as it lands, with what the work changed about the plan.
 **Companion:** [`architecture-entropy-audit.md`](./architecture-entropy-audit.md) is the evidence base.
 Read §3 and §6 of it before starting workstream A or B.
@@ -88,14 +88,29 @@ Alongside: 7 data-access paths → 2; 3 staleness systems → 1; 9 contexts → 
   ```
 - **Never mutate staging.** Verification there is read-only.
 - **One unit = one PR.** If a unit exceeds ~600 changed lines, split it before starting.
-- **Run backend suites serially — never two `pytest` runs at once.** `tests/conftest.py` points
-  every run at the single `app_test` database and truncates the `tg_*` tables after each test, so
-  concurrent runs destroy each other's fixtures. Observed 2026-08-01: two overlapping runs of the
-  *same commit* reported **199 failed / 521 passed / 13 errors** and **733 passed / 1 skipped**;
-  a clean isolated re-run gave **733 passed / 1 skipped**. Before investigating a red result,
-  check `pgrep -fc pytest`. A run killed mid-flight also leaves orphans that make the *next* run
-  **hang** rather than fail — `pkill -9 -f pytest` clears it. Same shared-backend hazard as the
-  Playwright `--workers=1` rule above.
+- **Give each worktree its own test database.** `tests/conftest.py` defaults to a single
+  `app_test` and truncates the `tg_*` tables after each test — but `localhost:5432` is shared by
+  *every* worktree in `.claude/worktrees/` (whichever compose project starts first owns the
+  published port). So concurrent agents in different worktrees silently share one test database,
+  and a branch carrying a migration the others don't have will stamp `alembic_version` to a
+  revision they cannot resolve.
+
+  `conftest.py` supports an override — use it, and never drop `app_test` itself, since another
+  worktree may be mid-run against it:
+
+  ```bash
+  docker compose exec -T db psql -U postgres -d app -c "CREATE DATABASE app_test_<slug>;"
+  cd backend && POSTGRES_DB=app_test_<slug> uv run alembic upgrade head
+  TEST_POSTGRES_DB=app_test_<slug> uv run pytest tests/ -q
+  ```
+
+  Two failure signatures seen on 2026-08-01, both of which look like real regressions and are not:
+  **`734 errors — alembic.util.exc.CommandError: Can't locate revision`** (another worktree's
+  migration stamped the shared DB), and **199 failed / 521 passed** alongside a clean
+  733-passed run of the same commit (two suites truncating under each other). A run killed
+  mid-flight also leaves orphans that make the *next* run **hang** rather than fail —
+  `pkill -9 -f pytest` clears it. Same shared-backend hazard as the Playwright `--workers=1`
+  rule above.
 - **Run `mypy`/`ruff` via `uv run`.** `backend/scripts/lint.sh` invokes them bare, so it only
   works with the venv already on `PATH`.
 
@@ -244,11 +259,39 @@ when converting the remaining families:
 **Verified:** backend **733 passed / 1 skipped**, mypy strict clean (107 files), ruff clean,
 frontend **686 pass / 0 fail**, `tsc` clean.
 
-#### B3–B6 — Roll response models across the remaining families · **M each** · after B1
+#### B3 — `posts` family · ✅ **DONE 2026-08-01**
 
-One PR per family: `posts` + `discover` · `logs` + `stats` · `jobs` + `telegram` + `network` ·
-`ai` + `rag`. Each independently mergeable; each moves the typed-response count up. Track it —
-the number is a clean progress metric.
+Split out from the planned `posts` + `discover` unit: together they are 17 endpoints, well past
+the ~600-line rule in §2. `discover` becomes B4.
+
+**Shipped:** `app/schemas/posts.py` — `PostResponse`, `BulkUpsertPostsResponse`.
+**Typed responses 40/129 → 43/129.**
+
+**`PostResponse` is closed** — no `extra="allow"`. `post_to_camel` emits exactly seventeen keys
+and merges nothing conditional. Worth stating plainly: **the open models are the exception in
+this codebase, not the pattern.** Only `Summary` and `Channel` carry an open blob.
+
+**One level down, the same trap.** `media` / `links` / `replyTo` stay as loose JSON types even
+though `app/schemas/post_media.py` already models the first as `PostMedia`. Media is persisted
+via `PostMedia.to_storage_dict()`, which uses `exclude_none=True`, so a stored blob omits its
+empty fields — round-tripping it through the declared model on the way out would materialise
+those as explicit `null`s for every post with media. `response_model_exclude_none` cannot fix it
+either: it applies to the whole response and would strip legitimate nulls from the top-level
+fields too. **Declaring a nested model is only safe when the stored shape is complete.**
+
+**Verified:** backend **733 passed / 1 skipped**, mypy strict clean (108 files), ruff clean,
+frontend **686 pass / 0 fail**.
+
+#### B4–B6 — Roll response models across the remaining families · **M each** · after B1
+
+One PR per family: `discover` · `logs` + `stats` · `jobs` + `telegram` + `network` · `ai` +
+`rag`. Each independently mergeable; each moves the typed-response count up. Track it — the
+number is a clean progress metric.
+
+> Note on the metric: it counts `$ref` only. Some endpoints already return a precise
+> `dict[str, int]` (e.g. `/posts/counts`, a channel→count mapping) which renders as
+> `additionalProperties: {"type": "integer"}` — genuinely typed, but not a `$ref`. Don't wrap
+> those in a model just to move the number.
 
 - **Multi-user seam:** while touching each response model, keep corpus-level artefacts
   (embeddings, clusters, probe results) **user-agnostic** in their schemas, per `MEMORY.md`.

@@ -669,6 +669,19 @@ export const BulkUpdatedResponseSchema = {
     description: 'A bulk write that only reports how many rows it touched.'
 } as const;
 
+export const BulkUpsertPostsResponseSchema = {
+    properties: {
+        upserted: {
+            type: 'integer',
+            title: 'Upserted',
+            default: 0
+        }
+    },
+    type: 'object',
+    title: 'BulkUpsertPostsResponse',
+    description: 'Result of ``POST /data/posts/bulk``.'
+} as const;
+
 export const CancelBulkFollowResponseSchema = {
     properties: {
         followJobId: {
@@ -2135,6 +2148,156 @@ export const PostLookupRequestSchema = {
     description: `Batch of \`(channelName, postId)\` refs to resolve.
 
 Capped so this cannot become another way to ask for unbounded rows.`
+} as const;
+
+export const PostResponseSchema = {
+    properties: {
+        id: {
+            type: 'integer',
+            title: 'Id'
+        },
+        channelName: {
+            type: 'string',
+            title: 'Channelname'
+        },
+        text: {
+            type: 'string',
+            title: 'Text',
+            default: ''
+        },
+        date: {
+            type: 'string',
+            title: 'Date',
+            default: ''
+        },
+        timestamp: {
+            type: 'integer',
+            title: 'Timestamp',
+            default: 0
+        },
+        forwardedFrom: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Forwardedfrom'
+        },
+        forwardedFromName: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Forwardedfromname'
+        },
+        isAnchor: {
+            type: 'boolean',
+            title: 'Isanchor',
+            default: false
+        },
+        retrievedAt: {
+            anyOf: [
+                {
+                    type: 'integer'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Retrievedat'
+        },
+        retrievalJobId: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Retrievaljobid'
+        },
+        retrievalPass: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Retrievalpass'
+        },
+        retrievalSource: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Retrievalsource'
+        },
+        media: {
+            anyOf: [
+                {
+                    additionalProperties: true,
+                    type: 'object'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Media'
+        },
+        links: {
+            anyOf: [
+                {
+                    items: {},
+                    type: 'array'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Links'
+        },
+        replyToPostId: {
+            anyOf: [
+                {
+                    type: 'integer'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Replytopostid'
+        },
+        replyTo: {
+            anyOf: [
+                {
+                    additionalProperties: true,
+                    type: 'object'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Replyto'
+        }
+    },
+    type: 'object',
+    required: ['id', 'channelName'],
+    title: 'PostResponse',
+    description: 'One post, as `post_to_camel` builds it.'
 } as const;
 
 export const PostScopeRequestSchema = {
