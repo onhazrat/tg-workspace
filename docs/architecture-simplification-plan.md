@@ -1,7 +1,7 @@
 # Architecture simplification plan
 
 **Date:** 2026-07-31
-**Status:** In progress — execution started 2026-08-01. Landed: `H3`, `A0`, `T1`, `T2`, `B1`–`B7`, `F1a`, `C1`, `D1`+`D2`, `H1`+`H2`, `G3`.
+**Status:** In progress — execution started 2026-08-01. Landed: `H3`, `A0`, `T1`, `T2`, `B1`–`B7`, `F1a`, `A1a`, `C1`, `D1`+`D2`, `H1`+`H2`, `G3`.
 Typed responses **104/121** (was 26/129) — effectively complete; see B6b. Contexts with a test **1/9** (was 0).
 Each unit is marked ✅ **DONE** in place as it lands, with what the work changed about the plan.
 **Companion:** [`architecture-entropy-audit.md`](./architecture-entropy-audit.md) is the evidence base.
@@ -154,10 +154,38 @@ The load-bearing unit. Callers of `getPostsByDateRange` that still pull whole da
 |---|---|
 | `AIContext.tsx:496` (prompt assembly) | already has a server path — `getPromptPostsInput` returns a `PromptScope`; extend it to cover the remaining branch |
 | `ScraperContext.getScopedPosts` → `lib/posts/scoped-posts.ts` | server-side filter+sort, as `usePostsView` already does |
-| `lib/commands/search-filters.ts:34` (palette search) | a bounded server search endpoint |
+| `lib/commands/search-filters.ts:34` (palette search) | ✅ **A1a — done 2026-08-01**, see below |
 
 Semantic/related search legitimately cannot be reproduced server-side and keeps a client path —
 that split already exists and is documented in `ScraperContext`; preserve it.
+
+##### A1a — Palette search moved into SQL · ✅ **DONE 2026-08-01**
+
+**No new endpoint was needed**, contrary to the row above. The feed's existing `keyword` filter is
+already the *same predicate*, character for character:
+
+| | |
+|---|---|
+| `filterPostsByTextQuery` | `text.toLowerCase().includes(q) \|\| channelName.toLowerCase().includes(q)` |
+| `post_filters._keyword_clause` | `lower(text) LIKE %q% OR lower(channel_name) LIKE %q%` |
+
+So `searchPostsForPalette` now calls `api.getPostsFeed({ keyword, sort: "time", limit: 50 })`.
+It used to fetch **every post in the selected date range on every keystroke** to display at most
+fifty rows. Sorting and the cap moved server-side with it — `sort: "time"` is
+`timestamp DESC`, which is exactly the client's `(r, l) => r.timestamp - l.timestamp`.
+
+`tests/api/test_palette_search_parity.py` pins the equivalence: substring rather than prefix or
+word matching, either field, case-insensitive both ways, newest-first, cap applied in SQL.
+
+**A latent inconsistency found and resolved.** With *no* channels selected the old code did two
+different things depending on cache staleness: the IndexedDB branch looped over the channel list
+and returned nothing, while the server branch omitted `channelNames` entirely and searched the
+**whole corpus**. `searchPostsForPalette` now returns early on an empty selection — searching
+everything when the user has selected nothing is the wrong half of that accident to keep.
+
+**Still open in A1:** `AIContext.tsx:496` (auto-regenerate prompt assembly) and
+`ScraperContext.getScopedPosts`. Both are riskier — they touch summary generation, which the plan
+flags — and neither is unblocked by this unit.
 
 - **Verify:** `cd backend && uv run pytest tests/ -q`; `bun run --filter tg-summarizer-frontend test:unit`;
   e2e serially. Manually: generate a summary, run a palette search, use semantic search.

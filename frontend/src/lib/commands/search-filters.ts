@@ -1,5 +1,6 @@
 import type { CommandContext } from "@/lib/commands/types"
-import { getPostsByDateRange, listSummaries } from "@/lib/repository"
+import { api } from "@/api"
+import { listSummaries } from "@/lib/repository"
 import { searchSimilarPostsFromQuery } from "@/services/rag"
 import type { Post, SummaryListItem } from "@/types"
 
@@ -22,6 +23,22 @@ export function filterPostsByTextQuery(posts: Post[], query: string): Post[] {
  */
 export { filterSummariesByTextQuery } from "@/lib/summary-projection"
 
+/**
+ * Palette post search, run in SQL (A1).
+ *
+ * This used to pull **every post in the selected date range** into the browser
+ * and filter the array — for a wide scope that is the whole corpus, fetched on
+ * every keystroke, to display at most fifty rows.
+ *
+ * It needs no new endpoint. The feed's `keyword` filter is already
+ * character-for-character the same predicate: `post_filters._keyword_clause` is
+ * `lower(text) LIKE %q% OR lower(channel_name) LIKE %q%`, which is exactly what
+ * `filterPostsByTextQuery` does. Sorting and the cap move server-side with it,
+ * so the browser now receives at most `SEARCH_RESULTS_CAP` rows.
+ *
+ * `filterPostsByTextQuery` is kept and still exported — the semantic/related
+ * search path and the offline fallback both filter arrays they already hold.
+ */
 export async function searchPostsForPalette(
   ctx: CommandContext,
   query: string,
@@ -31,14 +48,23 @@ export async function searchPostsForPalette(
     endDate: Date.now(),
   }
   const selectedNames = Array.from(ctx.selectedChannels)
-  const posts = await getPostsByDateRange(
-    selectedNames,
-    range.startDate,
-    range.endDate,
-  )
-  return filterPostsByTextQuery(posts, query)
-    .sort((left, right) => right.timestamp - left.timestamp)
-    .slice(0, SEARCH_RESULTS_CAP)
+  if (!query.trim()) return []
+  // No selection means no scope. The old path was inconsistent about this: its
+  // IndexedDB branch looped over the channel list and so returned nothing, while
+  // its server branch omitted `channelNames` entirely and so returned the whole
+  // corpus — which of the two ran depended on cache staleness. Searching
+  // everything when the user has selected nothing is the wrong half of that
+  // accident to keep.
+  if (selectedNames.length === 0) return []
+
+  return api.getPostsFeed({
+    channelNames: selectedNames,
+    startDate: range.startDate,
+    endDate: range.endDate,
+    keyword: query.trim(),
+    sort: "time",
+    limit: SEARCH_RESULTS_CAP,
+  })
 }
 
 /**
