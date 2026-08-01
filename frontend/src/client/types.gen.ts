@@ -718,6 +718,8 @@ export type LLMLogResponse = {
     type?: string;
 };
 
+export type LogEntryResponse = PublishLogResponse | SyncLogResponse | LLMLogResponse | EmbeddingLogResponse | NetworkLogResponse;
+
 export type LogPayload = {
     [key: string]: unknown;
 } | Array<unknown> | null;
@@ -2114,80 +2116,28 @@ export type DataUpsertTranslationsResponse = ({
     [key: string]: (number);
 });
 
-export type DataListPublishLogsRouteData = {
+export type DataListLogsRouteData = {
     limit?: number;
+    /**
+     * publish | sync | llm | embedding | network
+     */
+    logType: string;
     offset?: number;
 };
 
-export type DataListPublishLogsRouteResponse = (Array<PublishLogResponse>);
+export type DataListLogsRouteResponse = (Array<LogEntryResponse>);
 
-export type DataCreatePublishLogsData = {
+export type DataCreateLogsRouteData = {
+    /**
+     * publish | sync | llm | embedding | network
+     */
+    logType: string;
     requestBody: Array<{
         [key: string]: unknown;
     }>;
 };
 
-export type DataCreatePublishLogsResponse = (LogWriteResponse);
-
-export type DataListSyncLogsRouteData = {
-    limit?: number;
-    offset?: number;
-};
-
-export type DataListSyncLogsRouteResponse = (Array<SyncLogResponse>);
-
-export type DataCreateSyncLogsData = {
-    requestBody: Array<{
-        [key: string]: unknown;
-    }>;
-};
-
-export type DataCreateSyncLogsResponse = (LogWriteResponse);
-
-export type DataListLlmLogsRouteData = {
-    limit?: number;
-    offset?: number;
-};
-
-export type DataListLlmLogsRouteResponse = (Array<LLMLogResponse>);
-
-export type DataCreateLlmLogsData = {
-    requestBody: Array<{
-        [key: string]: unknown;
-    }>;
-};
-
-export type DataCreateLlmLogsResponse = (LogWriteResponse);
-
-export type DataListEmbeddingLogsRouteData = {
-    limit?: number;
-    offset?: number;
-};
-
-export type DataListEmbeddingLogsRouteResponse = (Array<EmbeddingLogResponse>);
-
-export type DataCreateEmbeddingLogsData = {
-    requestBody: Array<{
-        [key: string]: unknown;
-    }>;
-};
-
-export type DataCreateEmbeddingLogsResponse = (LogWriteResponse);
-
-export type DataListNetworkLogsRouteData = {
-    limit?: number;
-    offset?: number;
-};
-
-export type DataListNetworkLogsRouteResponse = (Array<NetworkLogResponse>);
-
-export type DataCreateNetworkLogsData = {
-    requestBody: Array<{
-        [key: string]: unknown;
-    }>;
-};
-
-export type DataCreateNetworkLogsResponse = (LogWriteResponse);
+export type DataCreateLogsRouteResponse = (LogWriteResponse);
 
 export type DataPurgeLogsData = {
     clearAll?: boolean;

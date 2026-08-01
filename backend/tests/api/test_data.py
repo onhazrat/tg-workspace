@@ -531,11 +531,11 @@ def test_network_logs_crud(client: TestClient) -> None:
         }
     ]
     try:
-        r = client.post(f"{PREFIX}/network-logs", json=body, headers=headers)
+        r = client.post(f"{PREFIX}/logs/network", json=body, headers=headers)
         assert r.status_code == 200, r.text
         assert r.json()["upserted"] == 1
 
-        r2 = client.get(f"{PREFIX}/network-logs", headers=headers)
+        r2 = client.get(f"{PREFIX}/logs/network", headers=headers)
         assert r2.status_code == 200
         logs = r2.json()
         assert any(log["id"] == "nl-test-1" for log in logs)

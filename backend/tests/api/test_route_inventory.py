@@ -98,19 +98,23 @@ def test_the_data_package_is_fully_included() -> None:
 
 
 def test_the_split_did_not_change_the_route_count() -> None:
-    """73 `/data` endpoints before the split, and after it.
+    """The `/data` endpoint count, asserted deliberately.
 
     A bare number is a blunt instrument, but it is the one assertion that would
     have failed loudly on the first C1 attempt — it dropped twelve. Update it
     deliberately when an endpoint is genuinely added or removed.
 
     (The plan and audit both say "71 endpoints". That was already stale before
-    this split; the document has counted 73 since B-series work added none. The
-    figure here is measured, not copied.)
+    C1; the document has counted 73 since. The figure here is measured, not
+    copied.)
+
+    History: **73** through C1; **75** when D1 added the generic
+    `GET`/`POST /logs/{log_type}` pair alongside the ten per-type aliases; then
+    **65** once D2 deleted those ten.
     """
     data_routes = {
         (m, p) for m, p in _mounted_routes() if p.startswith("/api/v1/data/")
     }
-    assert len(data_routes) == 73, (
-        f"expected 73 /data endpoints, found {len(data_routes)}"
+    assert len(data_routes) == 65, (
+        f"expected 65 /data endpoints, found {len(data_routes)}"
     )

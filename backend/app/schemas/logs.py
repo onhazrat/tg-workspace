@@ -165,8 +165,24 @@ class PurgeLogsResponse(BaseModel):
     deleted: dict[str, int] | int = 0
 
 
+#: The wire type of `GET /data/logs/{log_type}`.
+#:
+#: A plain union, not a discriminated one: the five payloads share no tag field,
+#: and adding one would change the wire format of all five to serve the type
+#: system. The route already knows `log_type` from the path, so it validates
+#: with the exact model and the union only describes the result — which is also
+#: how the generated TypeScript reads it.
+type LogEntryResponse = (
+    PublishLogResponse
+    | SyncLogResponse
+    | LLMLogResponse
+    | EmbeddingLogResponse
+    | NetworkLogResponse
+)
+
+
 #: `log_type` → response model, the mirror of `services.logs.LOG_MODELS`.
-#: Workstream D1 needs exactly this to serve every log type from one pair of
+#: Workstream D1 uses exactly this to serve every log type from one pair of
 #: endpoints; it is declared here so the two registries stay adjacent to the
 #: shapes they describe.
 LOG_SCHEMAS: dict[str, type[BaseModel]] = {

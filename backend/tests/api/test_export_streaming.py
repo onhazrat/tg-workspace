@@ -32,7 +32,7 @@ def _auth(client: TestClient) -> dict[str, str]:
 
 def _seed_logs(client: TestClient, headers: dict[str, str], count: int) -> None:
     client.post(
-        f"{PREFIX}/sync-logs",
+        f"{PREFIX}/logs/sync",
         json=[
             {
                 "id": f"export-log-{i}",
@@ -89,7 +89,7 @@ def test_export_is_not_truncated_by_the_log_page_size(client: TestClient) -> Non
     over_page = DEFAULT_LOG_PAGE_SIZE + 25
     _seed_logs(client, headers, over_page)
 
-    listed = client.get(f"{PREFIX}/sync-logs", headers=headers).json()
+    listed = client.get(f"{PREFIX}/logs/sync", headers=headers).json()
     exported = client.get(f"{PREFIX}/export", headers=headers).json()
     exported_logs = [
         row

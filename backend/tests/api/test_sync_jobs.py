@@ -132,7 +132,7 @@ def test_start_sync_job_and_poll_status(client: TestClient) -> None:
     assert sync_meta.status_code == 200
     assert "posts" in sync_meta.json()
 
-    logs_r = client.get(f"{DATA}/sync-logs", headers=headers)
+    logs_r = client.get(f"{DATA}/logs/sync", headers=headers)
     assert logs_r.status_code == 200
     matching = [
         log for log in logs_r.json() if log.get("channelName") == "sync-test-ch"

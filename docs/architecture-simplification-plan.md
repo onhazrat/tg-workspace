@@ -1,8 +1,8 @@
 # Architecture simplification plan
 
 **Date:** 2026-07-31
-**Status:** In progress — execution started 2026-08-01. Landed: `H3`, `A0`, `T1`, `B1`–`B6`, `F1a`, `C1`.
-Typed responses **89/129** (was 26). Contexts with a test **1/9** (was 0).
+**Status:** In progress — execution started 2026-08-01. Landed: `H3`, `A0`, `T1`, `B1`–`B6`, `F1a`, `C1`, `D1`+`D2`.
+Typed responses **81/121** (was 26/129). Contexts with a test **1/9** (was 0).
 Each unit is marked ✅ **DONE** in place as it lands, with what the work changed about the plan.
 **Companion:** [`architecture-entropy-audit.md`](./architecture-entropy-audit.md) is the evidence base.
 Read §3 and §6 of it before starting workstream A or B.
@@ -463,24 +463,42 @@ ruff clean, `tsc` clean, OpenAPI diff order-only.
 
 *Addresses E3. Independent, but cheaper after B4 (logs response models).*
 
-#### D1 — One generic log resource on the backend · **M**
+#### D1 + D2 — One generic log resource · ✅ **DONE 2026-08-01**
 
-`services/logs.py` already has `_list_logs_page[LogModel]`. Extend the genericity outward: a
-registry mapping `log_type → (model, schema)`, and **two** endpoints
-(`GET /logs/{log_type}`, `POST /logs/{log_type}`) replacing ten.
+Shipped together. D1's aliases existed to let the frontend migrate independently; since this
+repo has exactly one frontend and it was migrated in the same change, carrying ten deprecated
+paths across a release would have been ceremony rather than safety.
 
-- Keep the five tables — they have different columns and that is legitimate. Genericise the
-  *handling*, not the storage.
-- **Compatibility:** keep the ten old paths as thin aliases for one release so the frontend can
-  migrate in D2 independently.
-- **Verify:** `tests/api/test_stats_logs.py` must pass unchanged against the alias paths.
+**Backend:** `GET`/`POST /data/logs/{log_type}` replace ten per-type endpoints.
+`services/logs.py` gains `LOG_LISTERS` + `list_logs(session, log_type, …)`;
+`schemas/logs.py` gains the `LogEntryResponse` union. `routes/data/logs.py` went
+**202 → 147 lines**, and **`/data` endpoints 73 → 65**.
 
-#### D2 — One log hook and one log type on the frontend · **S** · after D1
+**The five tables stay.** A publish log records a destination, a network log records a proxy;
+flattening them into one table of mostly-null columns would be a worse database. The genericity
+is in the *handling*.
 
-Five query hooks → one parameterised `useLogsQuery(logType)`; five `DataContext` fields → one
-record. Then drop the aliases from D1.
+**`LogEntryResponse` is a plain union, not a discriminated one.** The five payloads share no tag
+field, and inventing one would change the wire format of all five to serve the type system. The
+route already knows `log_type` from the path, so it validates with the exact model and the union
+only *describes* the result.
 
-- **Payoff to state in the PR:** adding a sixth log type goes from ~30 files to ~3.
+**Frontend:** `api/data.ts` collapses ten functions into `listLogs<T>(type)` /
+`createLogs<T>(type, logs)`, with the five named helpers kept as one-line typed sugar.
+
+**What was deliberately *not* done, and why.** The plan also asked for "five `DataContext` fields
+→ one record". `DataContext.publishLogs`/`syncLogs`/… feed through `repository.ts` into the
+**IndexedDB cache**, which `A3`/`A4` delete outright. Collapsing them now means editing 26 call
+sites in 3 components to build something A3 removes. **Deferred to A3**, where those fields are
+being reworked anyway. Until then the plan's "~30 files → ~3" payoff is only partly realised.
+
+> **Typed responses went 89/129 → 81/121.** Not a regression: ten typed alias endpoints were
+> deleted against two typed ones added. Fewer endpoints, same coverage.
+
+**Verified:** backend **784 passed / 2 skipped** (+19 new), mypy strict clean, ruff clean,
+frontend **686 pass / 0 fail**, `tsc` clean. Mutation-tested: pointing the `llm` registry entry
+at `EmbeddingLogResponse` fails 3 tests. `test_route_inventory.py`'s count assertion fired on the
++2 and again on the −10, exactly as intended.
 
 ---
 
@@ -738,12 +756,12 @@ Measurable, re-runnable — same discipline as the remediation plan's §12.
 | Data-access paths from `components/` | 7 | 2 |
 | Client-side caches / staleness systems | 3 | 1 |
 | Generated-client LOC | 10,796 → **4,866** | — |
-| `$ref`-typed API responses | 26/129 → **89/129** | 129/129 |
+| `$ref`-typed API responses | 26/129 → **81/121** | all |
 | Hand-written domain types mirroring server tables | 24 | 0 |
 | Largest route module | 1,438 LOC → **425** | < 400 |
 | Largest frontend context | 1,103 LOC | < 300 |
 | Largest backend function | 257 LOC | < 80 |
-| Files touched to add a log type | ~30 | ~3 |
+| Files touched to add a log type | ~30 → **~12** (→ ~3 after A3) | ~3 |
 | Contexts with a test | 0/9 | ≥ 5/5 (after G2 consolidation) |
 | Hooks with a test | 2/32 | the ones holding logic |
 | Frontend LOC (excl. generated) | 59,881 | ≈ 54,000 |

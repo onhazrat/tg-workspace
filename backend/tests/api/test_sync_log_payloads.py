@@ -61,11 +61,11 @@ def _post_log(
     if with_payload:
         body["fullRequest"] = {"url": f"https://t.me/s/ch?before={log_id}"}
         body["fullResponse"] = _body(log_id)
-    client.post(f"{PREFIX}/sync-logs", json=[body], headers=headers)
+    client.post(f"{PREFIX}/logs/sync", json=[body], headers=headers)
 
 
 def _listed(client: TestClient, headers: dict[str, str], log_id: str) -> dict:
-    body = client.get(f"{PREFIX}/sync-logs?limit=500", headers=headers).json()
+    body = client.get(f"{PREFIX}/logs/sync?limit=500", headers=headers).json()
     return next(row for row in body if row["id"] == log_id)
 
 
@@ -111,7 +111,7 @@ def test_logs_survive_truncating_the_payload_table(client: TestClient) -> None:
 
     _truncate_payloads()
 
-    listing = client.get(f"{PREFIX}/sync-logs?limit=500", headers=headers)
+    listing = client.get(f"{PREFIX}/logs/sync?limit=500", headers=headers)
     assert listing.status_code == 200
     row = next(r for r in listing.json() if r["id"] == log_id)
     assert row["status"] == "success"

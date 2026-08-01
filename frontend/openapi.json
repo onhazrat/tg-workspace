@@ -3472,13 +3472,25 @@
         }
       }
     },
-    "/api/v1/data/publish-logs": {
+    "/api/v1/data/logs/{log_type}": {
       "get": {
         "tags": ["data"],
-        "summary": "List Publish Logs Route",
-        "operationId": "data-list_publish_logs_route",
+        "summary": "List Logs Route",
+        "description": "One newest-first page of any log type.\n\nPaged rather than whole-table: these tables carry request/response JSON and\ngrow without bound between retention sweeps, so an unfiltered select can\nmaterialise gigabytes and OOM the worker. Full data ships via the export\npath, which streams.",
+        "operationId": "data-list_logs_route",
         "security": [{ "OAuth2PasswordBearer": [] }],
         "parameters": [
+          {
+            "name": "log_type",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "publish | sync | llm | embedding | network",
+              "title": "Log Type"
+            },
+            "description": "publish | sync | llm | embedding | network"
+          },
           {
             "name": "limit",
             "in": "query",
@@ -3510,10 +3522,8 @@
               "application/json": {
                 "schema": {
                   "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/PublishLogResponse"
-                  },
-                  "title": "Response Data-List Publish Logs Route"
+                  "items": { "$ref": "#/components/schemas/LogEntryResponse" },
+                  "title": "Response Data-List Logs Route"
                 }
               }
             }
@@ -3530,377 +3540,23 @@
       },
       "post": {
         "tags": ["data"],
-        "summary": "Create Publish Logs",
-        "operationId": "data-create_publish_logs",
-        "security": [{ "OAuth2PasswordBearer": [] }],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "array",
-                "items": { "type": "object", "additionalProperties": true },
-                "title": "Body"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": { "$ref": "#/components/schemas/LogWriteResponse" }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/data/sync-logs": {
-      "get": {
-        "tags": ["data"],
-        "summary": "List Sync Logs Route",
-        "operationId": "data-list_sync_logs_route",
+        "summary": "Create Logs Route",
+        "description": "Upsert a batch of log rows of one type.",
+        "operationId": "data-create_logs_route",
         "security": [{ "OAuth2PasswordBearer": [] }],
         "parameters": [
           {
-            "name": "limit",
-            "in": "query",
-            "required": false,
+            "name": "log_type",
+            "in": "path",
+            "required": true,
             "schema": {
-              "type": "integer",
-              "maximum": 5000,
-              "minimum": 1,
-              "default": 500,
-              "title": "Limit"
-            }
-          },
-          {
-            "name": "offset",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "minimum": 0,
-              "default": 0,
-              "title": "Offset"
-            }
+              "type": "string",
+              "description": "publish | sync | llm | embedding | network",
+              "title": "Log Type"
+            },
+            "description": "publish | sync | llm | embedding | network"
           }
         ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "array",
-                  "items": { "$ref": "#/components/schemas/SyncLogResponse" },
-                  "title": "Response Data-List Sync Logs Route"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
-              }
-            }
-          }
-        }
-      },
-      "post": {
-        "tags": ["data"],
-        "summary": "Create Sync Logs",
-        "operationId": "data-create_sync_logs",
-        "security": [{ "OAuth2PasswordBearer": [] }],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "array",
-                "items": { "type": "object", "additionalProperties": true },
-                "title": "Body"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": { "$ref": "#/components/schemas/LogWriteResponse" }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/data/llm-logs": {
-      "get": {
-        "tags": ["data"],
-        "summary": "List Llm Logs Route",
-        "operationId": "data-list_llm_logs_route",
-        "security": [{ "OAuth2PasswordBearer": [] }],
-        "parameters": [
-          {
-            "name": "limit",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "maximum": 5000,
-              "minimum": 1,
-              "default": 500,
-              "title": "Limit"
-            }
-          },
-          {
-            "name": "offset",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "minimum": 0,
-              "default": 0,
-              "title": "Offset"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "array",
-                  "items": { "$ref": "#/components/schemas/LLMLogResponse" },
-                  "title": "Response Data-List Llm Logs Route"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
-              }
-            }
-          }
-        }
-      },
-      "post": {
-        "tags": ["data"],
-        "summary": "Create Llm Logs",
-        "operationId": "data-create_llm_logs",
-        "security": [{ "OAuth2PasswordBearer": [] }],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "array",
-                "items": { "type": "object", "additionalProperties": true },
-                "title": "Body"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": { "$ref": "#/components/schemas/LogWriteResponse" }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/data/embedding-logs": {
-      "get": {
-        "tags": ["data"],
-        "summary": "List Embedding Logs Route",
-        "operationId": "data-list_embedding_logs_route",
-        "security": [{ "OAuth2PasswordBearer": [] }],
-        "parameters": [
-          {
-            "name": "limit",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "maximum": 5000,
-              "minimum": 1,
-              "default": 500,
-              "title": "Limit"
-            }
-          },
-          {
-            "name": "offset",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "minimum": 0,
-              "default": 0,
-              "title": "Offset"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/EmbeddingLogResponse"
-                  },
-                  "title": "Response Data-List Embedding Logs Route"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
-              }
-            }
-          }
-        }
-      },
-      "post": {
-        "tags": ["data"],
-        "summary": "Create Embedding Logs",
-        "operationId": "data-create_embedding_logs",
-        "security": [{ "OAuth2PasswordBearer": [] }],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "array",
-                "items": { "type": "object", "additionalProperties": true },
-                "title": "Body"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": { "$ref": "#/components/schemas/LogWriteResponse" }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/data/network-logs": {
-      "get": {
-        "tags": ["data"],
-        "summary": "List Network Logs Route",
-        "operationId": "data-list_network_logs_route",
-        "security": [{ "OAuth2PasswordBearer": [] }],
-        "parameters": [
-          {
-            "name": "limit",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "maximum": 5000,
-              "minimum": 1,
-              "default": 500,
-              "title": "Limit"
-            }
-          },
-          {
-            "name": "offset",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "minimum": 0,
-              "default": 0,
-              "title": "Offset"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/NetworkLogResponse"
-                  },
-                  "title": "Response Data-List Network Logs Route"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
-              }
-            }
-          }
-        }
-      },
-      "post": {
-        "tags": ["data"],
-        "summary": "Create Network Logs",
-        "operationId": "data-create_network_logs",
-        "security": [{ "OAuth2PasswordBearer": [] }],
         "requestBody": {
           "required": true,
           "content": {
@@ -6233,6 +5889,15 @@
         "required": ["id", "model", "prompt", "response", "status"],
         "title": "LLMLogResponse",
         "description": "One model call: the prompt, the response, and what it cost.\n\n`protected_namespaces=()` is required, not decorative. Pydantic v2 reserves\nthe `model_` prefix for its own API, and this table has both a `model` column\nand a `model_config_json` one \u2014 the latter collides with `BaseModel.model_config`\nitself. Without the override, declaring these fields raises at class-creation\ntime. Renaming the columns is not an option: they are the wire format."
+      },
+      "LogEntryResponse": {
+        "anyOf": [
+          { "$ref": "#/components/schemas/PublishLogResponse" },
+          { "$ref": "#/components/schemas/SyncLogResponse" },
+          { "$ref": "#/components/schemas/LLMLogResponse" },
+          { "$ref": "#/components/schemas/EmbeddingLogResponse" },
+          { "$ref": "#/components/schemas/NetworkLogResponse" }
+        ]
       },
       "LogPayload": {
         "anyOf": [

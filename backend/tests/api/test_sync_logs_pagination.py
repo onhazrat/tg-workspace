@@ -1,4 +1,4 @@
-"""GET /data/sync-logs must stay bounded.
+"""GET /data/logs/sync must stay bounded.
 
 tg_sync_logs stores a full_request/full_response payload per row. Selecting
 the whole table loaded every payload into memory at once and OOM-killed the
@@ -32,7 +32,7 @@ def _seed(
     client: TestClient, headers: dict[str, str], count: int, base_ts: int
 ) -> None:
     client.post(
-        f"{PREFIX}/sync-logs",
+        f"{PREFIX}/logs/sync",
         json=[
             {
                 "id": f"page-log-{i}",
@@ -52,7 +52,7 @@ def test_returns_newest_first(client: TestClient) -> None:
     base = int(time.time() * 1000)
     _seed(client, headers, 5, base)
 
-    body = client.get(f"{PREFIX}/sync-logs", headers=headers).json()
+    body = client.get(f"{PREFIX}/logs/sync", headers=headers).json()
     seeded = [row for row in body if str(row["id"]).startswith("page-log-")]
 
     timestamps = [row["timestamp"] for row in seeded]
@@ -64,7 +64,7 @@ def test_limit_caps_returned_rows(client: TestClient) -> None:
     base = int(time.time() * 1000) + 10_000
     _seed(client, headers, 12, base)
 
-    body = client.get(f"{PREFIX}/sync-logs?limit=3", headers=headers).json()
+    body = client.get(f"{PREFIX}/logs/sync?limit=3", headers=headers).json()
     assert len(body) == 3
 
 
@@ -73,8 +73,8 @@ def test_offset_pages_through(client: TestClient) -> None:
     base = int(time.time() * 1000) + 20_000
     _seed(client, headers, 6, base)
 
-    first = client.get(f"{PREFIX}/sync-logs?limit=2&offset=0", headers=headers).json()
-    second = client.get(f"{PREFIX}/sync-logs?limit=2&offset=2", headers=headers).json()
+    first = client.get(f"{PREFIX}/logs/sync?limit=2&offset=0", headers=headers).json()
+    second = client.get(f"{PREFIX}/logs/sync?limit=2&offset=2", headers=headers).json()
 
     assert len(first) == 2
     assert len(second) == 2
@@ -84,13 +84,13 @@ def test_offset_pages_through(client: TestClient) -> None:
 def test_response_is_a_bare_list(client: TestClient) -> None:
     """The frontend consumes SyncLog[]; keep the shape unchanged."""
     headers = _auth(client)
-    body = client.get(f"{PREFIX}/sync-logs", headers=headers).json()
+    body = client.get(f"{PREFIX}/logs/sync", headers=headers).json()
     assert isinstance(body, list)
 
 
 def test_default_limit_applies_without_params(client: TestClient) -> None:
     headers = _auth(client)
-    body = client.get(f"{PREFIX}/sync-logs", headers=headers).json()
+    body = client.get(f"{PREFIX}/logs/sync", headers=headers).json()
     assert len(body) <= DEFAULT_LOG_PAGE_SIZE
 
 
@@ -98,11 +98,11 @@ def test_limit_is_bounded(client: TestClient) -> None:
     """An unbounded limit would reintroduce the OOM."""
     headers = _auth(client)
     over = client.get(
-        f"{PREFIX}/sync-logs?limit={MAX_LOG_PAGE_SIZE + 1}", headers=headers
+        f"{PREFIX}/logs/sync?limit={MAX_LOG_PAGE_SIZE + 1}", headers=headers
     )
     assert over.status_code == 422
 
-    assert client.get(f"{PREFIX}/sync-logs?limit=0", headers=headers).status_code == 422
+    assert client.get(f"{PREFIX}/logs/sync?limit=0", headers=headers).status_code == 422
     assert (
-        client.get(f"{PREFIX}/sync-logs?offset=-1", headers=headers).status_code == 422
+        client.get(f"{PREFIX}/logs/sync?offset=-1", headers=headers).status_code == 422
     )

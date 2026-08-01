@@ -42,7 +42,7 @@ def test_db_stats_returns_counts(client: TestClient) -> None:
 def test_table_sizes_reports_every_export_section(client: TestClient) -> None:
     headers = _auth(client)
     client.post(
-        f"{PREFIX}/sync-logs",
+        f"{PREFIX}/logs/sync",
         json=[
             {
                 "id": "table-size-log",
@@ -89,7 +89,7 @@ def test_table_sizes_reports_every_export_section(client: TestClient) -> None:
 def test_clear_table_deletes_all_rows(client: TestClient) -> None:
     headers = _auth(client)
     client.post(
-        f"{PREFIX}/sync-logs",
+        f"{PREFIX}/logs/sync",
         json=[
             {
                 "id": "clear-table-log",
@@ -192,7 +192,7 @@ def test_delete_log_by_id_and_clear(client: TestClient) -> None:
     headers = _auth(client)
     log_id = "test-pub-log-1"
     client.post(
-        f"{PREFIX}/publish-logs",
+        f"{PREFIX}/logs/publish",
         json=[
             {
                 "id": log_id,
@@ -217,7 +217,7 @@ def test_delete_log_by_id_and_clear(client: TestClient) -> None:
     assert r.json()["deleted"] == 1
 
     client.post(
-        f"{PREFIX}/publish-logs",
+        f"{PREFIX}/logs/publish",
         json=[
             {
                 "id": "test-pub-log-2",
@@ -245,7 +245,7 @@ def test_delete_old_logs(client: TestClient) -> None:
     headers = _auth(client)
     old_ts = int(time.time() * 1000) - 40 * 24 * 60 * 60 * 1000
     client.post(
-        f"{PREFIX}/sync-logs",
+        f"{PREFIX}/logs/sync",
         json=[
             {
                 "id": "old-sync-log",

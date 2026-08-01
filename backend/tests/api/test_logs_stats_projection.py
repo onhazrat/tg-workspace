@@ -132,7 +132,7 @@ def test_publish_logs_keep_their_key_set(client: TestClient) -> None:
     _write(
         client,
         headers,
-        "publish-logs",
+        "logs/publish",
         {
             "id": "p1",
             "summaryId": "s1",
@@ -145,7 +145,7 @@ def test_publish_logs_keep_their_key_set(client: TestClient) -> None:
         },
     )
 
-    rows = client.get(f"{PREFIX}/publish-logs", headers=headers).json()
+    rows = client.get(f"{PREFIX}/logs/publish", headers=headers).json()
     assert len(rows) == 1
     assert set(rows[0]) == PUBLISH_KEYS
 
@@ -159,7 +159,7 @@ def test_sync_logs_keep_their_key_set_including_folded_payloads(
     _write(
         client,
         headers,
-        "sync-logs",
+        "logs/sync",
         {
             "id": "sy1",
             "channelName": "ch",
@@ -169,7 +169,7 @@ def test_sync_logs_keep_their_key_set_including_folded_payloads(
         },
     )
 
-    rows = client.get(f"{PREFIX}/sync-logs", headers=headers).json()
+    rows = client.get(f"{PREFIX}/logs/sync", headers=headers).json()
     assert len(rows) == 1
     assert set(rows[0]) == SYNC_KEYS
     assert rows[0]["postsCount"] == 3
@@ -192,7 +192,7 @@ def test_llm_logs_survive_pydantics_protected_model_prefix(
     _write(
         client,
         headers,
-        "llm-logs",
+        "logs/llm",
         {
             "id": "l1",
             "model": "gemini-2.0-flash",
@@ -205,7 +205,7 @@ def test_llm_logs_survive_pydantics_protected_model_prefix(
         },
     )
 
-    rows = client.get(f"{PREFIX}/llm-logs", headers=headers).json()
+    rows = client.get(f"{PREFIX}/logs/llm", headers=headers).json()
     assert len(rows) == 1
     assert set(rows[0]) == LLM_KEYS
     assert rows[0]["model"] == "gemini-2.0-flash"
@@ -220,7 +220,7 @@ def test_embedding_logs_keep_their_key_set(client: TestClient) -> None:
     _write(
         client,
         headers,
-        "embedding-logs",
+        "logs/embedding",
         {
             "id": "e1",
             "textCount": 12,
@@ -230,7 +230,7 @@ def test_embedding_logs_keep_their_key_set(client: TestClient) -> None:
         },
     )
 
-    rows = client.get(f"{PREFIX}/embedding-logs", headers=headers).json()
+    rows = client.get(f"{PREFIX}/logs/embedding", headers=headers).json()
     assert isinstance(rows, list)
     assert len(rows) == 1
     assert set(rows[0]) == EMBEDDING_KEYS
@@ -241,7 +241,7 @@ def test_network_logs_keep_their_key_set(client: TestClient) -> None:
     _write(
         client,
         headers,
-        "network-logs",
+        "logs/network",
         {
             "id": "n1",
             "url": "https://t.me/s/ch",
@@ -256,7 +256,7 @@ def test_network_logs_keep_their_key_set(client: TestClient) -> None:
         },
     )
 
-    rows = client.get(f"{PREFIX}/network-logs", headers=headers).json()
+    rows = client.get(f"{PREFIX}/logs/network", headers=headers).json()
     assert len(rows) == 1
     assert set(rows[0]) == NETWORK_KEYS
     assert rows[0]["telemetry"] == {"attempt": 1}
@@ -284,7 +284,7 @@ def test_purge_reports_a_total_only_for_the_retention_sweep(
     _write(
         client,
         headers,
-        "publish-logs",
+        "logs/publish",
         {
             "id": "purge-1",
             "summaryId": "s1",

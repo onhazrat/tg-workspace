@@ -290,6 +290,14 @@ export interface SettingGroupWriteBody {
   resetSyncEnabled?: boolean
 }
 
+/**
+ * The five log kinds the backend serves from one pair of endpoints (D1).
+ *
+ * Mirrors `app/services/logs.py::LOG_MODELS`. Adding a sixth kind is a line
+ * here and a line there — not a new endpoint pair.
+ */
+export type LogType = "publish" | "sync" | "llm" | "embedding" | "network"
+
 export const dataApi = {
   syncMeta: () =>
     request<Record<string, { etag: string; updatedAt?: string }>>(
@@ -676,46 +684,41 @@ export const dataApi = {
       body: JSON.stringify(translations),
     }),
 
-  listPublishLogs: () => request<PublishLog[]>("/api/v1/data/publish-logs"),
+  /**
+   * One page of any log type (D1). The backend serves all five kinds from
+   * `GET /data/logs/{type}`; the five named helpers below are typed sugar over
+   * this, not five different endpoints.
+   */
+  listLogs: <T>(type: LogType) => request<T[]>(`/api/v1/data/logs/${type}`),
+
+  createLogs: <T>(type: LogType, logs: T[]) =>
+    request<{ upserted: number }>(`/api/v1/data/logs/${type}`, {
+      method: "POST",
+      body: JSON.stringify(logs),
+    }),
+
+  listPublishLogs: () => dataApi.listLogs<PublishLog>("publish"),
 
   createPublishLogs: (logs: PublishLog[]) =>
-    request<{ upserted: number }>("/api/v1/data/publish-logs", {
-      method: "POST",
-      body: JSON.stringify(logs),
-    }),
+    dataApi.createLogs("publish", logs),
 
-  listSyncLogs: () => request<SyncLog[]>("/api/v1/data/sync-logs"),
+  listSyncLogs: () => dataApi.listLogs<SyncLog>("sync"),
 
-  createSyncLogs: (logs: SyncLog[]) =>
-    request<{ upserted: number }>("/api/v1/data/sync-logs", {
-      method: "POST",
-      body: JSON.stringify(logs),
-    }),
+  createSyncLogs: (logs: SyncLog[]) => dataApi.createLogs("sync", logs),
 
-  listLLMLogs: () => request<LLMLog[]>("/api/v1/data/llm-logs"),
+  listLLMLogs: () => dataApi.listLogs<LLMLog>("llm"),
 
-  createLLMLogs: (logs: LLMLog[]) =>
-    request<{ upserted: number }>("/api/v1/data/llm-logs", {
-      method: "POST",
-      body: JSON.stringify(logs),
-    }),
+  createLLMLogs: (logs: LLMLog[]) => dataApi.createLogs("llm", logs),
 
-  listEmbeddingLogs: () =>
-    request<EmbeddingLog[]>("/api/v1/data/embedding-logs"),
+  listEmbeddingLogs: () => dataApi.listLogs<EmbeddingLog>("embedding"),
 
   createEmbeddingLogs: (logs: EmbeddingLog[]) =>
-    request<{ upserted: number }>("/api/v1/data/embedding-logs", {
-      method: "POST",
-      body: JSON.stringify(logs),
-    }),
+    dataApi.createLogs("embedding", logs),
 
-  listNetworkLogs: () => request<NetworkLog[]>("/api/v1/data/network-logs"),
+  listNetworkLogs: () => dataApi.listLogs<NetworkLog>("network"),
 
   createNetworkLogs: (logs: NetworkLog[]) =>
-    request<{ upserted: number }>("/api/v1/data/network-logs", {
-      method: "POST",
-      body: JSON.stringify(logs),
-    }),
+    dataApi.createLogs("network", logs),
 
   importData: (payload: Record<string, unknown>) =>
     request<{ imported: Record<string, number> }>("/api/v1/data/import", {

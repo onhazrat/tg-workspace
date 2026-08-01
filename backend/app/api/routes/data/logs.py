@@ -3,16 +3,28 @@
 Split out of the former `routes/data.py` under C1. The parent router in
 `data/__init__.py` supplies the `/data` prefix and the `data` tag, so every
 path and operation id is unchanged.
+
+## One resource, five tables (D1)
+
+`GET /logs/{log_type}` and `POST /logs/{log_type}` serve all five kinds. The
+five tables stay — a publish log records a destination, a network log records a
+proxy, and flattening them into one table with mostly-null columns would be a
+worse database. **The genericity is in the handling, not the storage.**
+
+The ten original per-type paths (`/publish-logs`, `/sync-logs`, …) existed as
+deprecated aliases between D1 and D2 so the frontend could migrate
+independently. **D2 removed them** — `/logs/{log_type}` is now the only way in.
 """
 
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Path, Query
 
 from app.api.deps import CurrentUser, SessionDep
 from app.schemas.logs import (
     EmbeddingLogResponse,
     LLMLogResponse,
+    LogEntryResponse,
     LogWriteResponse,
     NetworkLogResponse,
     PublishLogResponse,
@@ -27,135 +39,67 @@ from app.services.logs import (
     create_logs,
     delete_log_by_id,
     delete_old_logs,
-    list_embedding_logs,
-    list_llm_logs,
-    list_network_logs,
-    list_publish_logs,
-    list_sync_logs,
+    list_logs,
 )
 from app.services.sync_meta import touch_sync
 
 router = APIRouter()
 
+#: Path-parameter constraint. Declaring the five valid values here means an
+#: unknown type is a 422 from FastAPI before the handler runs, and OpenAPI
+#: documents the enum rather than leaving `log_type` an opaque string.
+LogType = Path(description="publish | sync | llm | embedding | network")
 
-@router.get("/publish-logs")
-def list_publish_logs_route(
+
+def _known(log_type: str) -> str:
+    if log_type not in LOG_MODELS:
+        raise HTTPException(status_code=400, detail=f"Unknown log type: {log_type}")
+    return log_type
+
+
+@router.get("/logs/{log_type}")
+def list_logs_route(
     session: SessionDep,
     _current_user: CurrentUser,
+    log_type: str = LogType,
     limit: int = Query(default=DEFAULT_LOG_PAGE_SIZE, ge=1, le=MAX_LOG_PAGE_SIZE),
     offset: int = Query(default=0, ge=0),
-) -> list[PublishLogResponse]:
-    return [
-        PublishLogResponse.model_validate(row)
-        for row in list_publish_logs(session, limit=limit, offset=offset)
-    ]
+) -> list[LogEntryResponse]:
+    """One newest-first page of any log type.
+
+    Paged rather than whole-table: these tables carry request/response JSON and
+    grow without bound between retention sweeps, so an unfiltered select can
+    materialise gigabytes and OOM the worker. Full data ships via the export
+    path, which streams.
+    """
+    rows = list_logs(session, _known(log_type), limit=limit, offset=offset)
+    return [LOG_RESPONSES[log_type].model_validate(row) for row in rows]
 
 
-@router.post("/publish-logs")
-def create_publish_logs(
+@router.post("/logs/{log_type}")
+def create_logs_route(
     body: list[dict[str, Any]],
     session: SessionDep,
     _current_user: CurrentUser,
+    log_type: str = LogType,
 ) -> LogWriteResponse:
+    """Upsert a batch of log rows of one type."""
     return LogWriteResponse.model_validate(
-        create_logs(session, "publish", body, user_id=_current_user.id)
+        create_logs(session, _known(log_type), body, user_id=_current_user.id)
     )
 
 
-@router.get("/sync-logs")
-def list_sync_logs_route(
-    session: SessionDep,
-    _current_user: CurrentUser,
-    limit: int = Query(default=DEFAULT_LOG_PAGE_SIZE, ge=1, le=MAX_LOG_PAGE_SIZE),
-    offset: int = Query(default=0, ge=0),
-) -> list[SyncLogResponse]:
-    return [
-        SyncLogResponse.model_validate(row)
-        for row in list_sync_logs(session, limit=limit, offset=offset)
-    ]
-
-
-@router.post("/sync-logs")
-def create_sync_logs(
-    body: list[dict[str, Any]],
-    session: SessionDep,
-    _current_user: CurrentUser,
-) -> LogWriteResponse:
-    return LogWriteResponse.model_validate(
-        create_logs(session, "sync", body, user_id=_current_user.id)
-    )
-
-
-@router.get("/llm-logs")
-def list_llm_logs_route(
-    session: SessionDep,
-    _current_user: CurrentUser,
-    limit: int = Query(default=DEFAULT_LOG_PAGE_SIZE, ge=1, le=MAX_LOG_PAGE_SIZE),
-    offset: int = Query(default=0, ge=0),
-) -> list[LLMLogResponse]:
-    return [
-        LLMLogResponse.model_validate(row)
-        for row in list_llm_logs(session, limit=limit, offset=offset)
-    ]
-
-
-@router.post("/llm-logs")
-def create_llm_logs(
-    body: list[dict[str, Any]],
-    session: SessionDep,
-    _current_user: CurrentUser,
-) -> LogWriteResponse:
-    return LogWriteResponse.model_validate(
-        create_logs(session, "llm", body, user_id=_current_user.id)
-    )
-
-
-@router.get("/embedding-logs")
-def list_embedding_logs_route(
-    session: SessionDep,
-    _current_user: CurrentUser,
-    limit: int = Query(default=DEFAULT_LOG_PAGE_SIZE, ge=1, le=MAX_LOG_PAGE_SIZE),
-    offset: int = Query(default=0, ge=0),
-) -> list[EmbeddingLogResponse]:
-    return [
-        EmbeddingLogResponse.model_validate(row)
-        for row in list_embedding_logs(session, limit=limit, offset=offset)
-    ]
-
-
-@router.post("/embedding-logs")
-def create_embedding_logs(
-    body: list[dict[str, Any]],
-    session: SessionDep,
-    _current_user: CurrentUser,
-) -> LogWriteResponse:
-    return LogWriteResponse.model_validate(
-        create_logs(session, "embedding", body, user_id=_current_user.id)
-    )
-
-
-@router.get("/network-logs")
-def list_network_logs_route(
-    session: SessionDep,
-    _current_user: CurrentUser,
-    limit: int = Query(default=DEFAULT_LOG_PAGE_SIZE, ge=1, le=MAX_LOG_PAGE_SIZE),
-    offset: int = Query(default=0, ge=0),
-) -> list[NetworkLogResponse]:
-    return [
-        NetworkLogResponse.model_validate(row)
-        for row in list_network_logs(session, limit=limit, offset=offset)
-    ]
-
-
-@router.post("/network-logs")
-def create_network_logs(
-    body: list[dict[str, Any]],
-    session: SessionDep,
-    _current_user: CurrentUser,
-) -> LogWriteResponse:
-    return LogWriteResponse.model_validate(
-        create_logs(session, "network", body, user_id=_current_user.id)
-    )
+#: `log_type` -> response model, used to pick the right member of the
+#: `LogEntryResponse` union. Declared next to the routes because it is a
+#: presentation concern; `app/schemas/logs.py::LOG_SCHEMAS` is the same mapping
+#: for callers that need it without importing the router.
+LOG_RESPONSES: dict[str, type[LogEntryResponse]] = {
+    "publish": PublishLogResponse,
+    "sync": SyncLogResponse,
+    "llm": LLMLogResponse,
+    "embedding": EmbeddingLogResponse,
+    "network": NetworkLogResponse,
+}
 
 
 @router.delete("/logs")
@@ -182,8 +126,7 @@ def purge_logs(
             status_code=400,
             detail="Provide olderThanDays, or type with logId/clearAll",
         )
-    if log_type not in LOG_MODELS:
-        raise HTTPException(status_code=400, detail=f"Unknown log type: {log_type}")
+    _known(log_type)
 
     resource = LOG_MODELS[log_type][1]
     if log_id:

@@ -352,11 +352,11 @@ def list_sync_logs(
 ) -> list[dict[str, Any]]:
     """Return one newest-first page of sync logs, payloads included.
 
-    Does not go through `_list_logs_page` because the bodies live in
-    tg_sync_log_payloads. The join is an OUTER one on purpose: that table can be
-    truncated at any time to reclaim disk, and a log whose payload is gone must
-    still list — it just reports null bodies. Same page caps apply, since the
-    payloads still ship inline.
+    The one lister that does not go through `_list_logs_page`, because the
+    bodies live in tg_sync_log_payloads. The join is an OUTER one on purpose:
+    that table can be truncated at any time to reclaim disk, and a log whose
+    payload is gone must still list — it just reports null bodies. Same page
+    caps apply, since the payloads still ship inline.
     """
     statement = (
         select(SyncLog, SyncLogPayload)
@@ -409,6 +409,36 @@ def list_network_logs(
         limit=limit,
         offset=offset,
     )
+
+
+#: `log_type` -> the function that returns one page of it.
+#:
+#: The dispatch table that lets one endpoint serve all five. Adding a sixth log
+#: type means a table, a serialiser, a response model and one line here — not a
+#: new pair of routes, a new service function and a new frontend hook.
+LOG_LISTERS: dict[str, Callable[..., list[dict[str, Any]]]] = {
+    "publish": list_publish_logs,
+    "sync": list_sync_logs,
+    "llm": list_llm_logs,
+    "embedding": list_embedding_logs,
+    "network": list_network_logs,
+}
+
+
+def list_logs(
+    session: Session,
+    log_type: str,
+    *,
+    limit: int = DEFAULT_LOG_PAGE_SIZE,
+    offset: int = 0,
+) -> list[dict[str, Any]]:
+    """One newest-first page of any log type.
+
+    Raises `KeyError` for an unknown type; the route turns that into a 400 so
+    the error contract matches the purge endpoint, which has always 400ed rather
+    than 404ed on a bad `type`.
+    """
+    return LOG_LISTERS[log_type](session, limit=limit, offset=offset)
 
 
 def create_logs(
