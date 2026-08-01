@@ -5,7 +5,7 @@ import { useState } from "react"
 import { useForm } from "react-hook-form"
 import { z } from "zod"
 
-import { type ItemPublic, ItemsService } from "@/client"
+import { type ItemPublic, itemsUpdateItem } from "@/client"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -59,7 +59,7 @@ const EditItem = ({ item, onSuccess }: EditItemProps) => {
 
   const mutation = useMutation({
     mutationFn: (data: FormData) =>
-      ItemsService.updateItem({ id: item.id, requestBody: data }),
+      itemsUpdateItem({ id: item.id, requestBody: data }),
     onSuccess: () => {
       showSuccessToast("Item updated successfully")
       setIsOpen(false)

@@ -1512,6 +1512,196 @@ export type ValidationError = {
     };
 };
 
+export type LoginLoginAccessTokenData = {
+    formData: Body_login_login_access_token;
+};
+
+export type LoginLoginAccessTokenResponse = (Token);
+
+export type LoginTestTokenResponse = (UserPublic);
+
+export type LoginRecoverPasswordData = {
+    email: string;
+};
+
+export type LoginRecoverPasswordResponse = (Message);
+
+export type LoginResetPasswordData = {
+    requestBody: NewPassword;
+};
+
+export type LoginResetPasswordResponse = (Message);
+
+export type LoginRecoverPasswordHtmlContentData = {
+    email: string;
+};
+
+export type LoginRecoverPasswordHtmlContentResponse = (string);
+
+export type UsersReadUsersData = {
+    limit?: number;
+    skip?: number;
+};
+
+export type UsersReadUsersResponse = (UsersPublic);
+
+export type UsersCreateUserData = {
+    requestBody: UserCreate;
+};
+
+export type UsersCreateUserResponse = (UserPublic);
+
+export type UsersReadUserMeResponse = (UserPublic);
+
+export type UsersDeleteUserMeResponse = (Message);
+
+export type UsersUpdateUserMeData = {
+    requestBody: UserUpdateMe;
+};
+
+export type UsersUpdateUserMeResponse = (UserPublic);
+
+export type UsersUpdatePasswordMeData = {
+    requestBody: UpdatePassword;
+};
+
+export type UsersUpdatePasswordMeResponse = (Message);
+
+export type UsersRegisterUserData = {
+    requestBody: UserRegister;
+};
+
+export type UsersRegisterUserResponse = (UserPublic);
+
+export type UsersReadUserByIdData = {
+    userId: string;
+};
+
+export type UsersReadUserByIdResponse = (UserPublic);
+
+export type UsersUpdateUserData = {
+    requestBody: UserUpdate;
+    userId: string;
+};
+
+export type UsersUpdateUserResponse = (UserPublic);
+
+export type UsersDeleteUserData = {
+    userId: string;
+};
+
+export type UsersDeleteUserResponse = (Message);
+
+export type UtilsTestEmailData = {
+    emailTo: string;
+};
+
+export type UtilsTestEmailResponse = (Message);
+
+export type UtilsHealthCheckResponse = (boolean);
+
+export type ItemsReadItemsData = {
+    limit?: number;
+    skip?: number;
+};
+
+export type ItemsReadItemsResponse = (ItemsPublic);
+
+export type ItemsCreateItemData = {
+    requestBody: ItemCreate;
+};
+
+export type ItemsCreateItemResponse = (ItemPublic);
+
+export type ItemsReadItemData = {
+    id: string;
+};
+
+export type ItemsReadItemResponse = (ItemPublic);
+
+export type ItemsUpdateItemData = {
+    id: string;
+    requestBody: ItemUpdate;
+};
+
+export type ItemsUpdateItemResponse = (ItemPublic);
+
+export type ItemsDeleteItemData = {
+    id: string;
+};
+
+export type ItemsDeleteItemResponse = (Message);
+
+export type NetworkApiTestProxyData = {
+    requestBody: TestProxyRequest;
+};
+
+export type NetworkApiTestProxyResponse = (TestProxyResponse);
+
+export type NetworkApiProxyHealthResponse = (ProxyHealthResponse);
+
+export type NetworkApiTorStatusResponse = (TorStatusResponse);
+
+export type NetworkApiTorIpResponse = (TorIpResponse);
+
+export type NetworkApiTorRestartResponse = (TorActionResponse);
+
+export type NetworkApiTorNewIdentityData = {
+    requestBody: TorNewIdentityRequest;
+};
+
+export type NetworkApiTorNewIdentityResponse = (TorActionResponse);
+
+export type TelegramApiScrapeData = {
+    requestBody: ScrapeRequest;
+};
+
+export type TelegramApiScrapeResponse = (ScrapeChannelResponse);
+
+export type TelegramApiChannelInfoData = {
+    requestBody: ChannelInfoRequest;
+};
+
+export type TelegramApiChannelInfoResponse = (ChannelInfoResponse);
+
+export type TelegramApiResolveStartTimeData = {
+    requestBody: ResolveStartTimeRequest;
+};
+
+export type TelegramApiResolveStartTimeResponse = (ResolveStartTimeResponse);
+
+export type TelegramApiBotInfoData = {
+    requestBody: BotInfoRequest;
+};
+
+export type TelegramApiBotInfoResponse = (BotInfoResponse);
+
+export type TelegramApiPublishData = {
+    requestBody: PublishRequest;
+};
+
+export type TelegramApiPublishResponse = (PublishResponse);
+
+export type TelegramApiChannelPhotoData = {
+    channelId: string;
+};
+
+export type TelegramApiChannelPhotoResponse = (unknown);
+
+export type TelegramApiPostThumbData = {
+    channelName: string;
+    postId: number;
+};
+
+export type TelegramApiPostThumbResponse = (unknown);
+
+export type TelegramApiBotFileData = {
+    credentialId: string;
+    path: string;
+};
+
+export type TelegramApiBotFileResponse = (unknown);
+
 export type AiApiListModelsResponse = (ModelListResponse);
 
 export type AiApiSummaryData = {
@@ -2063,37 +2253,19 @@ export type DataImportDataResponse = ({
 
 export type DataExportDataResponse = (unknown);
 
-export type ItemsReadItemsData = {
-    limit?: number;
-    skip?: number;
+export type RagRagStatusResponse = (RagStatusResponse);
+
+export type RagRagEmbedData = {
+    requestBody: RagEmbedRequest;
 };
 
-export type ItemsReadItemsResponse = (ItemsPublic);
+export type RagRagEmbedResponse = (RagEmbedResponse);
 
-export type ItemsCreateItemData = {
-    requestBody: ItemCreate;
+export type RagRagSearchData = {
+    requestBody: RagSearchRequest;
 };
 
-export type ItemsCreateItemResponse = (ItemPublic);
-
-export type ItemsReadItemData = {
-    id: string;
-};
-
-export type ItemsReadItemResponse = (ItemPublic);
-
-export type ItemsUpdateItemData = {
-    id: string;
-    requestBody: ItemUpdate;
-};
-
-export type ItemsUpdateItemResponse = (ItemPublic);
-
-export type ItemsDeleteItemData = {
-    id: string;
-};
-
-export type ItemsDeleteItemResponse = (Message);
+export type RagRagSearchResponse = (RagSearchResponse);
 
 export type JobsJobsStatusResponse = ({
     [key: string]: JobStatusEntry;
@@ -2137,175 +2309,3 @@ export type JobsCancelSyncJobData = {
 };
 
 export type JobsCancelSyncJobResponse = (CancelSyncJobResponse);
-
-export type LoginLoginAccessTokenData = {
-    formData: Body_login_login_access_token;
-};
-
-export type LoginLoginAccessTokenResponse = (Token);
-
-export type LoginTestTokenResponse = (UserPublic);
-
-export type LoginRecoverPasswordData = {
-    email: string;
-};
-
-export type LoginRecoverPasswordResponse = (Message);
-
-export type LoginResetPasswordData = {
-    requestBody: NewPassword;
-};
-
-export type LoginResetPasswordResponse = (Message);
-
-export type LoginRecoverPasswordHtmlContentData = {
-    email: string;
-};
-
-export type LoginRecoverPasswordHtmlContentResponse = (string);
-
-export type NetworkApiTestProxyData = {
-    requestBody: TestProxyRequest;
-};
-
-export type NetworkApiTestProxyResponse = (TestProxyResponse);
-
-export type NetworkApiProxyHealthResponse = (ProxyHealthResponse);
-
-export type NetworkApiTorStatusResponse = (TorStatusResponse);
-
-export type NetworkApiTorIpResponse = (TorIpResponse);
-
-export type NetworkApiTorRestartResponse = (TorActionResponse);
-
-export type NetworkApiTorNewIdentityData = {
-    requestBody: TorNewIdentityRequest;
-};
-
-export type NetworkApiTorNewIdentityResponse = (TorActionResponse);
-
-export type RagRagStatusResponse = (RagStatusResponse);
-
-export type RagRagEmbedData = {
-    requestBody: RagEmbedRequest;
-};
-
-export type RagRagEmbedResponse = (RagEmbedResponse);
-
-export type RagRagSearchData = {
-    requestBody: RagSearchRequest;
-};
-
-export type RagRagSearchResponse = (RagSearchResponse);
-
-export type TelegramApiScrapeData = {
-    requestBody: ScrapeRequest;
-};
-
-export type TelegramApiScrapeResponse = (ScrapeChannelResponse);
-
-export type TelegramApiChannelInfoData = {
-    requestBody: ChannelInfoRequest;
-};
-
-export type TelegramApiChannelInfoResponse = (ChannelInfoResponse);
-
-export type TelegramApiResolveStartTimeData = {
-    requestBody: ResolveStartTimeRequest;
-};
-
-export type TelegramApiResolveStartTimeResponse = (ResolveStartTimeResponse);
-
-export type TelegramApiBotInfoData = {
-    requestBody: BotInfoRequest;
-};
-
-export type TelegramApiBotInfoResponse = (BotInfoResponse);
-
-export type TelegramApiPublishData = {
-    requestBody: PublishRequest;
-};
-
-export type TelegramApiPublishResponse = (PublishResponse);
-
-export type TelegramApiChannelPhotoData = {
-    channelId: string;
-};
-
-export type TelegramApiChannelPhotoResponse = (unknown);
-
-export type TelegramApiPostThumbData = {
-    channelName: string;
-    postId: number;
-};
-
-export type TelegramApiPostThumbResponse = (unknown);
-
-export type TelegramApiBotFileData = {
-    credentialId: string;
-    path: string;
-};
-
-export type TelegramApiBotFileResponse = (unknown);
-
-export type UsersReadUsersData = {
-    limit?: number;
-    skip?: number;
-};
-
-export type UsersReadUsersResponse = (UsersPublic);
-
-export type UsersCreateUserData = {
-    requestBody: UserCreate;
-};
-
-export type UsersCreateUserResponse = (UserPublic);
-
-export type UsersReadUserMeResponse = (UserPublic);
-
-export type UsersDeleteUserMeResponse = (Message);
-
-export type UsersUpdateUserMeData = {
-    requestBody: UserUpdateMe;
-};
-
-export type UsersUpdateUserMeResponse = (UserPublic);
-
-export type UsersUpdatePasswordMeData = {
-    requestBody: UpdatePassword;
-};
-
-export type UsersUpdatePasswordMeResponse = (Message);
-
-export type UsersRegisterUserData = {
-    requestBody: UserRegister;
-};
-
-export type UsersRegisterUserResponse = (UserPublic);
-
-export type UsersReadUserByIdData = {
-    userId: string;
-};
-
-export type UsersReadUserByIdResponse = (UserPublic);
-
-export type UsersUpdateUserData = {
-    requestBody: UserUpdate;
-    userId: string;
-};
-
-export type UsersUpdateUserResponse = (UserPublic);
-
-export type UsersDeleteUserData = {
-    userId: string;
-};
-
-export type UsersDeleteUserResponse = (Message);
-
-export type UtilsTestEmailData = {
-    emailTo: string;
-};
-
-export type UtilsTestEmailResponse = (Message);
-
-export type UtilsHealthCheckResponse = (boolean);

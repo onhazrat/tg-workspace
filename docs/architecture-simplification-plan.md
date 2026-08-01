@@ -1,7 +1,7 @@
 # Architecture simplification plan
 
 **Date:** 2026-07-31
-**Status:** In progress — execution started 2026-08-01. Landed: `H3`, `A0`, `T1`, `B1`–`B6`.
+**Status:** In progress — execution started 2026-08-01. Landed: `H3`, `A0`, `T1`, `B1`–`B6`, `F1a`.
 Typed responses **89/129** (was 26). Contexts with a test **1/9** (was 0).
 Each unit is marked ✅ **DONE** in place as it lands, with what the work changed about the plan.
 **Companion:** [`architecture-entropy-audit.md`](./architecture-entropy-audit.md) is the evidence base.
@@ -486,21 +486,41 @@ Note that `MEMORY.md` records 3 Playwright specs already failing on a pre-existi
 
 *Addresses E9. **Must not start before B2–B6** — see audit §6 for why the ordering is forced.*
 
-#### F1 — Fix the codegen config · **S** · independent of B
+#### F1a — Drop `@hey-api/schemas` and `asClass` · ✅ **DONE 2026-08-01**
 
-Three changes, each independently valuable and safe today:
+**Shipped:** `schemas.gen.ts` deleted (**5,930 LOC** — it had grown from the audit's 2,986 as
+B1–B6 added models) and `asClass: true` removed, so the SDK emits tree-shakeable standalone
+functions. The 16 `XService.method()` call sites became `xServiceMethod()`.
 
-- drop `@hey-api/schemas` → removes `schemas.gen.ts`, **2,986 unused LOC**. Measured during T1:
-  this is not just repo weight — `bun run build` emits `dist/assets/schemas-*.js` at
-  **132.84 kB (39.70 kB gzip)**, shipped to every user for code nothing imports.
-- drop `asClass: true` → restores tree-shaking
-- replace `legacy/axios` with the fetch transport → removes the second HTTP stack and the
-  `axios` dependency (`utils.ts` is the only non-generated consumer)
+> **The audit's bundle claim was wrong, and this unit disproves it.** The audit attributed
+> `dist/assets/schemas-*.js` (132.84 kB) to `@hey-api/schemas`. It is not that file. Three
+> checks: deleting `schemas.gen.ts` left that chunk **byte-identical** (same content hash); its
+> contents are Radix/React helpers, and Vite names the chunk after `src/lib/settings/schema.ts`,
+> its entry module; and total assets moved **2204 KB → 2200 KB** across the same 25 chunks.
+> `schemas.gen.ts` was never exported from `client/index.ts`, so nothing could import it and it
+> was already tree-shaken out.
+>
+> **The real payoff is repo weight, not bundle size:** 5,930 lines of generated noise that
+> regenerated on every API change and buried real diffs. Worth doing — just not for the stated
+> reason. §6's metrics table has been corrected.
 
-Port `clearStaleSession()` (the 401/403 redirect from `api/base.ts`) onto the generated client
-as an interceptor — it is the one behaviour the generated client lacks.
+**Verified:** frontend **686 pass / 0 fail**, `tsc` clean, biome clean, `bun run build` succeeds.
 
-- **Verify:** `bunx tsc --noEmit`; `bun run lint`; e2e login flow. Check the built bundle shrinks.
+#### F1b — Replace `legacy/axios` with the fetch transport · **M** · *not* S
+
+Split out of F1: the plan sized all three changes as **S** together, which is wrong for this one.
+`@hey-api/client-fetch` does not throw — it returns `{data, error, response}` — so the swap
+changes error *semantics*, not just wiring:
+
+- `main.tsx` builds its `QueryCache`/`MutationCache` `onError` around `err instanceof ApiError`
+- `utils.ts` narrows on both `ApiError` and `AxiosError`
+- all 16 call sites currently rely on a throwing client
+
+Plus the `clearStaleSession()` port (the 401/403 redirect from `api/base.ts`), which is the one
+behaviour the generated client lacks. Removing the `axios` dependency happens here, not in F1a.
+
+- **Verify:** `tsc`; `bun run lint`; **the e2e login flow specifically** — that is the path the
+  error-handling change can silently break, and it is why this needs its own PR.
 
 #### F2 — Move summarizer calls onto the generated client · **L** · after B2–B6 and F1
 
@@ -697,6 +717,7 @@ Measurable, re-runnable — same discipline as the remediation plan's §12.
 |---|---|---|
 | Data-access paths from `components/` | 7 | 2 |
 | Client-side caches / staleness systems | 3 | 1 |
+| Generated-client LOC | 10,796 → **4,866** | — |
 | `$ref`-typed API responses | 26/129 → **89/129** | 129/129 |
 | Hand-written domain types mirroring server tables | 24 | 0 |
 | Largest route module | 1,438 LOC | < 400 |

@@ -3,7 +3,7 @@ import { Trash2 } from "lucide-react"
 import { useState } from "react"
 import { useForm } from "react-hook-form"
 
-import { UsersService } from "@/client"
+import { usersDeleteUser } from "@/client"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -31,7 +31,7 @@ const DeleteUser = ({ id, onSuccess }: DeleteUserProps) => {
   const { handleSubmit } = useForm()
 
   const deleteUser = async (id: string) => {
-    await UsersService.deleteUser({ userId: id })
+    await usersDeleteUser({ userId: id })
   }
 
   const mutation = useMutation({

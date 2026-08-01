@@ -3,7 +3,7 @@ import { useMutation } from "@tanstack/react-query"
 import { useForm } from "react-hook-form"
 import { z } from "zod"
 
-import { type UpdatePassword, UsersService } from "@/client"
+import { type UpdatePassword, usersUpdatePasswordMe } from "@/client"
 import {
   Form,
   FormControl,
@@ -53,7 +53,7 @@ const ChangePassword = () => {
 
   const mutation = useMutation({
     mutationFn: (data: UpdatePassword) =>
-      UsersService.updatePasswordMe({ requestBody: data }),
+      usersUpdatePasswordMe({ requestBody: data }),
     onSuccess: () => {
       showSuccessToast("Password updated successfully")
       form.reset()
