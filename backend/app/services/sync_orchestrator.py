@@ -481,6 +481,274 @@ def _prepare_channel_sync(
         )
 
 
+def _freeze_channel_for_chat_id_problem(
+    session: Session,
+    channel: Channel,
+    *,
+    error: str,
+    response: dict[str, Any],
+    job_source: str,
+    user_id: uuid.UUID | None,
+    channel_owner_id: uuid.UUID | None,
+) -> None:
+    """Park a channel in the Frozen group and record why.
+
+    Shared by both chat-id failures below. Freezing rather than deleting or
+    silently continuing is the point: a chat-id problem means we may be about to
+    write another channel's posts into this one, and that is not something to
+    resolve automatically.
+    """
+    freeze_group = get_or_create_frozen_group(session, user_id=channel_owner_id)
+    bulk_assign_setting_group(
+        session,
+        channel_ids=[channel.id],
+        setting_group_id=freeze_group.id,
+        operator_id=channel_owner_id,
+    )
+    upsert_sync_log(
+        session,
+        {
+            "id": str(uuid.uuid4()),
+            "channelName": channel.name,
+            "status": "failed",
+            "postsCount": 0,
+            "error": error,
+            "timestamp": int(time.time() * 1000),
+            "source": job_source,
+            "fullRequest": response.get("fullRequest"),
+            "fullResponse": response,
+        },
+        user_id,
+    )
+    session.commit()
+    touch_sync(session, "channels")
+    touch_sync(session, "sync_logs")
+
+
+def _reconcile_telegram_chat_id(
+    session: Session,
+    channel: Channel,
+    scraped_chat_id: int | None,
+    *,
+    response: dict[str, Any],
+    job_source: str,
+    user_id: uuid.UUID | None,
+) -> str | None:
+    """Bind or verify the channel's Telegram chat id.
+
+    Handles are re-usable; chat ids are not. Three cases:
+
+    * **Not yet known** — adopt the scraped id, unless another of this operator's
+      channels already claims it. That collision means two handles resolve to one
+      chat, so both are suspect and this one is frozen.
+    * **Known and matching** — nothing to do.
+    * **Known and different** — the handle now points at a different chat.
+      Continuing would file the new chat's posts under the old channel's history,
+      so the channel is frozen and the sync stops.
+
+    Returns the error string when the sync must stop, `None` otherwise.
+    """
+    if scraped_chat_id is None:
+        return None
+
+    channel_owner_id = user_id or channel.user_id
+
+    if channel.telegram_chat_id is None:
+        duplicate_stmt = select(Channel).where(
+            Channel.id != channel.id,
+            Channel.telegram_chat_id == scraped_chat_id,
+        )
+        if channel_owner_id is None:
+            duplicate_stmt = duplicate_stmt.where(col(Channel.user_id).is_(None))
+        else:
+            duplicate_stmt = duplicate_stmt.where(Channel.user_id == channel_owner_id)
+        duplicate_channel = session.exec(duplicate_stmt).first()
+
+        if duplicate_channel is None:
+            channel.telegram_chat_id = scraped_chat_id
+            session.add(channel)
+            return None
+
+        _freeze_channel_for_chat_id_problem(
+            session,
+            channel,
+            error=(
+                "Sync chat ID conflict: scraped "
+                f"{scraped_chat_id} for @{channel.name}, already used by "
+                f"@{duplicate_channel.name}. Channel moved to Frozen group."
+            ),
+            response=response,
+            job_source=job_source,
+            user_id=user_id,
+            channel_owner_id=channel_owner_id,
+        )
+        # Deliberately not a stop: the conflict is logged and the channel frozen,
+        # but this page is still applied. Matches the behaviour before H1.
+        return None
+
+    if channel.telegram_chat_id == scraped_chat_id:
+        return None
+
+    mismatch_error = (
+        "Sync chat ID mismatch: stored "
+        f"{channel.telegram_chat_id}, scraped {scraped_chat_id} for "
+        f"@{channel.name}. Channel moved to Frozen group."
+    )
+    _freeze_channel_for_chat_id_problem(
+        session,
+        channel,
+        error=mismatch_error,
+        response=response,
+        job_source=job_source,
+        user_id=user_id,
+        channel_owner_id=channel_owner_id,
+    )
+    return mismatch_error
+
+
+#: Scrape-response field -> `Channel` column, for the metadata refresh.
+_CHANNEL_META_FIELDS: tuple[tuple[str, str], ...] = (
+    ("displayName", "display_name"),
+    ("photoUrl", "photo_url"),
+    ("bio", "bio"),
+    ("subscribers", "subscribers"),
+    ("photos", "photos"),
+    ("videos", "videos"),
+    ("files", "files"),
+    ("links", "links"),
+)
+
+
+def _refresh_channel_meta(
+    channel: Channel, response: dict[str, Any], result: _PageApplyResult
+) -> None:
+    """Copy the page's channel metadata onto the row.
+
+    Only truthy values overwrite: a page that omits a counter must not blank a
+    value we already have.
+    """
+    for field_name, attr in _CHANNEL_META_FIELDS:
+        val = response.get(field_name)
+        if val and getattr(channel, attr) != val:
+            setattr(channel, attr, val)
+        if field_name == "displayName" and val:
+            result.display_name = val
+        if field_name == "photoUrl" and val:
+            result.photo_url = val
+
+
+def _collect_new_forwards(
+    session: Session, channel: Channel, posts_to_save: list[dict[str, Any]]
+) -> list[dict[str, Any]]:
+    """Forwarded-from handles on this page that we do not already follow.
+
+    Returned rather than followed here: auto-follow is a decision for the caller,
+    and creating channels mid-page would change the set this very loop reads.
+    """
+    known_names = {c.name.lower() for c in session.exec(select(Channel)).all()}
+    found: list[dict[str, Any]] = []
+    for p in posts_to_save:
+        fwd = p.get("forwardedFrom")
+        if not fwd:
+            continue
+        clean_fwd = fwd.strip().replace("@", "").split("/")[-1]
+        if clean_fwd and clean_fwd.lower() not in known_names:
+            known_names.add(clean_fwd.lower())
+            found.append(
+                {
+                    "name": clean_fwd,
+                    "discoveredVia": {
+                        "channelName": channel.name,
+                        "postId": p["id"],
+                        "timestamp": p["timestamp"],
+                    },
+                }
+            )
+    return found
+
+
+def _decide_next_page(
+    response: dict[str, Any], before_id: int | None, result: _PageApplyResult
+) -> None:
+    """Set the next `before_id`, or stop.
+
+    Stops when the response offers no next id, and also when it offers one that
+    is not strictly older than the current cursor — that would page forwards or
+    stand still, which is how a backward walk turns into an infinite loop.
+    """
+    next_before = response.get("nextBeforeId")
+    if next_before is None:
+        result.stop_sync = True
+    elif before_id is not None and next_before >= before_id:
+        result.stop_sync = True
+    else:
+        result.next_before_id = next_before
+
+
+def _persist_page_posts(
+    session: Session,
+    ctx: _ChannelSyncCtx,
+    channel: Channel,
+    posts: list[dict[str, Any]],
+    page_ids: list[int],
+    result: _PageApplyResult,
+    *,
+    job_id: str,
+    job_source: str,
+    user_id: uuid.UUID | None,
+    session_seen_ids: set[int],
+) -> None:
+    """Save the page's new posts, and decide whether an incremental pass is done.
+
+    Posts we already hold are dropped rather than re-upserted: on the
+    `incremental` and `backfill` passes the overlap is the *expected* case, and
+    rewriting those rows would churn `retrieval_*` provenance for no gain.
+
+    Meeting stored posts on an incremental pass is the normal stop condition —
+    we have caught up. Any genuinely new ids on that same page sit *above* the
+    stored history, so the span between them and the newest stored post is
+    recorded as a gap before stopping; otherwise a channel that gained posts
+    while we were away would leave a hole nothing ever revisits.
+    """
+    existing_on_page = _existing_post_ids(session, channel.name, page_ids)
+    new_on_page = [pid for pid in page_ids if pid not in existing_on_page]
+
+    if ctx.retrieval_pass == "incremental" and existing_on_page:
+        if new_on_page:
+            record_gaps_to_existing_post(
+                session,
+                channel.name,
+                new_on_page,
+                min(existing_on_page),
+                job_id=job_id,
+                user_id=user_id,
+                session_seen_ids=session_seen_ids,
+            )
+        result.stop_sync = True
+        result.break_incremental = True
+
+    posts_to_save = _posts_to_save(channel.name, posts)
+    if ctx.retrieval_pass in ("incremental", "backfill") and existing_on_page:
+        posts_to_save = [p for p in posts_to_save if p["id"] not in existing_on_page]
+
+    if not posts_to_save:
+        return
+
+    bulk_upsert_posts_impl(
+        posts_to_save,
+        session,
+        retrieval_job_id=job_id,
+        retrieval_pass=ctx.retrieval_pass,
+        retrieval_source=job_source,
+    )
+    session.commit()
+    touch_sync(session, "posts")
+    result.posts_saved = len(posts_to_save)
+
+    if ctx.auto_follow:
+        result.forwards.extend(_collect_new_forwards(session, channel, posts_to_save))
+
+
 def _apply_scrape_page(
     ctx: _ChannelSyncCtx,
     response: dict[str, Any],
@@ -491,6 +759,13 @@ def _apply_scrape_page(
     session_seen_ids: set[int],
     before_id: int | None,
 ) -> _PageApplyResult:
+    """Apply one scraped page to the database.
+
+    The stages, in order: record telemetry, reconcile the chat id, refresh
+    channel metadata, record gaps, persist new posts, collect auto-follow
+    candidates, and decide whether to fetch another page. Each is its own
+    function above; this one is the sequence and the early exits.
+    """
     result = _PageApplyResult(
         stop_sync=False,
         break_incremental=False,
@@ -526,115 +801,21 @@ def _apply_scrape_page(
         )
         result.latest_id = latest_id
 
-        channel_owner_id = user_id or channel.user_id
-        if scraped_chat_id is not None:
-            if channel.telegram_chat_id is None:
-                duplicate_stmt = select(Channel).where(
-                    Channel.id != channel.id,
-                    Channel.telegram_chat_id == scraped_chat_id,
-                )
-                if channel_owner_id is None:
-                    duplicate_stmt = duplicate_stmt.where(
-                        col(Channel.user_id).is_(None)
-                    )
-                else:
-                    duplicate_stmt = duplicate_stmt.where(
-                        Channel.user_id == channel_owner_id
-                    )
-                duplicate_channel = session.exec(duplicate_stmt).first()
-                if duplicate_channel is None:
-                    channel.telegram_chat_id = scraped_chat_id
-                    session.add(channel)
-                else:
-                    freeze_group = get_or_create_frozen_group(
-                        session,
-                        user_id=channel_owner_id,
-                    )
-                    bulk_assign_setting_group(
-                        session,
-                        channel_ids=[channel.id],
-                        setting_group_id=freeze_group.id,
-                        operator_id=channel_owner_id,
-                    )
-                    conflict_error = (
-                        "Sync chat ID conflict: scraped "
-                        f"{scraped_chat_id} for @{channel.name}, already used by "
-                        f"@{duplicate_channel.name}. Channel moved to Frozen group."
-                    )
-                    upsert_sync_log(
-                        session,
-                        {
-                            "id": str(uuid.uuid4()),
-                            "channelName": channel.name,
-                            "status": "failed",
-                            "postsCount": 0,
-                            "error": conflict_error,
-                            "timestamp": int(time.time() * 1000),
-                            "source": job_source,
-                            "fullRequest": response.get("fullRequest"),
-                            "fullResponse": response,
-                        },
-                        user_id,
-                    )
-                    session.commit()
-                    touch_sync(session, "channels")
-                    touch_sync(session, "sync_logs")
-            elif channel.telegram_chat_id != scraped_chat_id:
-                freeze_group = get_or_create_frozen_group(
-                    session,
-                    user_id=channel_owner_id,
-                )
-                bulk_assign_setting_group(
-                    session,
-                    channel_ids=[channel.id],
-                    setting_group_id=freeze_group.id,
-                    operator_id=channel_owner_id,
-                )
-                mismatch_error = (
-                    "Sync chat ID mismatch: stored "
-                    f"{channel.telegram_chat_id}, scraped {scraped_chat_id} for "
-                    f"@{channel.name}. Channel moved to Frozen group."
-                )
-                upsert_sync_log(
-                    session,
-                    {
-                        "id": str(uuid.uuid4()),
-                        "channelName": channel.name,
-                        "status": "failed",
-                        "postsCount": 0,
-                        "error": mismatch_error,
-                        "timestamp": int(time.time() * 1000),
-                        "source": job_source,
-                        "fullRequest": response.get("fullRequest"),
-                        "fullResponse": response,
-                    },
-                    user_id,
-                )
-                session.commit()
-                touch_sync(session, "channels")
-                touch_sync(session, "sync_logs")
-                result.stop_sync = True
-                result.sync_failed = True
-                result.sync_error = mismatch_error
-                return result
+        chat_id_error = _reconcile_telegram_chat_id(
+            session,
+            channel,
+            scraped_chat_id,
+            response=response,
+            job_source=job_source,
+            user_id=user_id,
+        )
+        if chat_id_error is not None:
+            result.stop_sync = True
+            result.sync_failed = True
+            result.sync_error = chat_id_error
+            return result
 
-        for field, attr in (
-            ("displayName", "display_name"),
-            ("photoUrl", "photo_url"),
-            ("bio", "bio"),
-            ("subscribers", "subscribers"),
-            ("photos", "photos"),
-            ("videos", "videos"),
-            ("files", "files"),
-            ("links", "links"),
-        ):
-            val = response.get(field)
-            if val and getattr(channel, attr) != val:
-                setattr(channel, attr, val)
-            if field == "displayName" and val:
-                result.display_name = val
-            if field == "photoUrl" and val:
-                result.photo_url = val
+        _refresh_channel_meta(channel, response, result)
 
         page_ids = [p["id"] for p in posts]
         record_gaps_from_page(
@@ -657,63 +838,18 @@ def _apply_scrape_page(
             session.commit()
             return result
 
-        existing_on_page = _existing_post_ids(session, channel.name, page_ids)
-        new_on_page = [pid for pid in page_ids if pid not in existing_on_page]
-
-        if ctx.retrieval_pass == "incremental" and existing_on_page:
-            if new_on_page:
-                anchor_existing = min(existing_on_page)
-                record_gaps_to_existing_post(
-                    session,
-                    channel.name,
-                    new_on_page,
-                    anchor_existing,
-                    job_id=job_id,
-                    user_id=user_id,
-                    session_seen_ids=session_seen_ids,
-                )
-            result.stop_sync = True
-            result.break_incremental = True
-
-        posts_to_save = _posts_to_save(channel.name, posts)
-        if ctx.retrieval_pass in ("incremental", "backfill") and existing_on_page:
-            posts_to_save = [
-                p for p in posts_to_save if p["id"] not in existing_on_page
-            ]
-
-        if posts_to_save:
-            bulk_upsert_posts_impl(
-                posts_to_save,
-                session,
-                retrieval_job_id=job_id,
-                retrieval_pass=ctx.retrieval_pass,
-                retrieval_source=job_source,
-            )
-            session.commit()
-            touch_sync(session, "posts")
-            result.posts_saved = len(posts_to_save)
-
-            if ctx.auto_follow:
-                known_names = {
-                    c.name.lower() for c in session.exec(select(Channel)).all()
-                }
-                for p in posts_to_save:
-                    fwd = p.get("forwardedFrom")
-                    if not fwd:
-                        continue
-                    clean_fwd = fwd.strip().replace("@", "").split("/")[-1]
-                    if clean_fwd and clean_fwd.lower() not in known_names:
-                        known_names.add(clean_fwd.lower())
-                        result.forwards.append(
-                            {
-                                "name": clean_fwd,
-                                "discoveredVia": {
-                                    "channelName": channel.name,
-                                    "postId": p["id"],
-                                    "timestamp": p["timestamp"],
-                                },
-                            }
-                        )
+        _persist_page_posts(
+            session,
+            ctx,
+            channel,
+            posts,
+            page_ids,
+            result,
+            job_id=job_id,
+            job_source=job_source,
+            user_id=user_id,
+            session_seen_ids=session_seen_ids,
+        )
 
         if result.break_incremental:
             session.commit()
@@ -729,13 +865,7 @@ def _apply_scrape_page(
             session.commit()
             return result
 
-        next_before = response.get("nextBeforeId")
-        if next_before is None:
-            result.stop_sync = True
-        elif before_id is not None and next_before >= before_id:
-            result.stop_sync = True
-        else:
-            result.next_before_id = next_before
+        _decide_next_page(response, before_id, result)
 
         session.commit()
         return result
@@ -961,12 +1091,180 @@ def _finalize_channel_error(
         touch_sync(session, "sync_logs")
 
 
+@dataclass
+class _ChannelWalk:
+    """Accumulated state of one channel's backward walk.
+
+    Owned by `sync_single_channel` and mutated by `_walk_channel_pages`, so the
+    error handlers can still read `requests_log` / `responses_log` when the walk
+    raises part-way through — which is precisely when those logs matter.
+    """
+
+    total_new_posts: int = 0
+    final_latest_id: int = 0
+    reached_channel_start: bool = False
+    requests_log: list[Any] = field(default_factory=list)
+    responses_log: list[Any] = field(default_factory=list)
+    #: Set when a page reports a chat-id mismatch: the sync stops and the
+    #: channel is reported failed, without going through success finalisation.
+    failed_error: str | None = None
+
+
+async def _fetch_one_page(
+    ctx: _ChannelSyncCtx,
+    *,
+    before_id: int | None,
+    known_latest_id: int,
+) -> dict[str, Any]:
+    """Scrape one page and resolve the media it references.
+
+    Photo and thumbnail caching happen here rather than in `_apply_scrape_page`
+    because they are network work, and that function runs on the database thread.
+    """
+    response = await _scrape_page_with_retry(
+        ctx.channel_name,
+        before_id=before_id,
+        known_latest_id=known_latest_id,
+        known_display_name=ctx.display_name,
+        known_photo_url=ctx.photo_url,
+        proxies=ctx.proxies,
+        tor_auto_rotate=ctx.tor_auto_rotate,
+        tor_rotation_threshold=ctx.tor_rotation_threshold,
+        tor_control_enabled=ctx.tor_control_enabled,
+        tor_control_port=ctx.tor_control_port,
+        proxy_concurrency=ctx.proxy_concurrency,
+    )
+
+    response["photoUrl"] = await resolve_cached_photo_url(
+        ctx.channel_id,
+        response.get("photoUrl") or None,
+    )
+
+    await _cache_scraped_post_thumbs(
+        ctx.channel_name,
+        response.get("posts") or [],
+        ctx.media_settings,
+        proxies=ctx.proxies,
+        proxy_concurrency=ctx.proxy_concurrency,
+        tor_auto_rotate=ctx.tor_auto_rotate,
+        tor_rotation_threshold=ctx.tor_rotation_threshold,
+    )
+    return response
+
+
+async def _walk_channel_pages(
+    job: SyncJobState,
+    ch_state: ChannelSyncState,
+    ctx: _ChannelSyncCtx,
+    walk: _ChannelWalk,
+    *,
+    user_id: uuid.UUID | None,
+) -> None:
+    """Page backwards through a channel until a stop condition fires.
+
+    Stops on: the scraper reporting no next page, the per-channel iteration cap,
+    job cancellation, an incremental pass meeting posts we already hold, the
+    scrape cutoff, or a chat-id mismatch.
+
+    The `needs_backfill` transition appears twice on purpose. An incremental pass
+    can finish either by *meeting* stored posts (`break_incremental`) or by
+    simply running out of new ones (`stop_sync`), and a channel with a gap below
+    its stored history has to switch to the backfill pass in both cases.
+    """
+    known_latest_id = 0
+    before_id: int | None = None
+    iterations = 0
+    stop_sync = False
+    in_backfill = False
+    session_seen_ids: set[int] = set()
+
+    def enter_backfill() -> int | None:
+        nonlocal in_backfill
+        in_backfill = True
+        ctx.retrieval_pass = "backfill"
+        return ctx.min_stored_post_id
+
+    while not stop_sync and not job.cancel_event.is_set():
+        if iterations >= settings.SCRAPER_ITERATION_LIMIT:
+            break
+        iterations += 1
+
+        response = await _fetch_one_page(
+            ctx, before_id=before_id, known_latest_id=known_latest_id
+        )
+
+        if response.get("fullRequest"):
+            walk.requests_log.append(response["fullRequest"])
+        walk.responses_log.append(response)
+
+        page_result = await run_db(
+            _apply_scrape_page,
+            ctx,
+            response,
+            job_id=job.job_id,
+            job_source=job.source,
+            user_id=user_id,
+            session_seen_ids=session_seen_ids,
+            before_id=before_id,
+        )
+
+        if page_result.reached_channel_start:
+            walk.reached_channel_start = True
+        if page_result.latest_id:
+            walk.final_latest_id = page_result.latest_id
+            known_latest_id = page_result.latest_id
+        if page_result.display_name:
+            ctx.display_name = page_result.display_name
+        if page_result.photo_url:
+            ctx.photo_url = page_result.photo_url
+
+        if page_result.posts_saved:
+            walk.total_new_posts += page_result.posts_saved
+            ch_state.posts_fetched = walk.total_new_posts
+            await touch_job(job)
+
+            for fwd in page_result.forwards:
+                await _maybe_add_forwarded_channel(
+                    fwd["name"],
+                    discovered_via=fwd["discoveredVia"],
+                    proxies=ctx.proxies,
+                    tor_auto_rotate=ctx.tor_auto_rotate,
+                    tor_rotation_threshold=ctx.tor_rotation_threshold,
+                    user_id=user_id,
+                    effective_start_time=ctx.effective_start_time,
+                    proxy_concurrency=ctx.proxy_concurrency,
+                )
+
+        if page_result.break_incremental:
+            if ctx.needs_backfill and not in_backfill:
+                before_id = enter_backfill()
+                continue
+            break
+
+        stop_sync = page_result.stop_sync
+        if page_result.sync_failed:
+            walk.failed_error = page_result.sync_error
+            return
+        if stop_sync and ctx.needs_backfill and not in_backfill:
+            before_id = enter_backfill()
+            stop_sync = False
+            continue
+
+        before_id = page_result.next_before_id
+
+
 async def sync_single_channel(
     job: SyncJobState,
     ch_state: ChannelSyncState,
     *,
     user_id: uuid.UUID | None,
 ) -> None:
+    """Sync one channel: guard, prepare, walk its pages, finalise.
+
+    Everything specific to *how* pages are walked lives in
+    `_walk_channel_pages`; this function owns the channel lock, the cancellation
+    checks, and deciding which of the three finalisers runs.
+    """
     if job.cancel_event.is_set():
         ch_state.status = "cancelled"
         await touch_job(job)
@@ -999,11 +1297,7 @@ async def sync_single_channel(
             await touch_job(job)
             return
 
-        total_new_posts = 0
-        final_latest_id = 0
-        requests_log: list[Any] = []
-        responses_log: list[Any] = []
-        session_seen_ids: set[int] = set()
+        walk = _ChannelWalk()
         due_reason = (
             ch_state.metadata.get("dueReason")
             if isinstance(ch_state.metadata, dict)
@@ -1011,126 +1305,28 @@ async def sync_single_channel(
         )
 
         try:
-            known_latest_id = 0
-            before_id: int | None = None
-            iterations = 0
-            stop_sync = False
-            in_backfill = False
-            reached_channel_start = False
+            await _walk_channel_pages(job, ch_state, ctx, walk, user_id=user_id)
 
-            while not stop_sync and not job.cancel_event.is_set():
-                if iterations >= settings.SCRAPER_ITERATION_LIMIT:
-                    break
-                iterations += 1
-
-                response = await _scrape_page_with_retry(
-                    ctx.channel_name,
-                    before_id=before_id,
-                    known_latest_id=known_latest_id,
-                    known_display_name=ctx.display_name,
-                    known_photo_url=ctx.photo_url,
-                    proxies=ctx.proxies,
-                    tor_auto_rotate=ctx.tor_auto_rotate,
-                    tor_rotation_threshold=ctx.tor_rotation_threshold,
-                    tor_control_enabled=ctx.tor_control_enabled,
-                    tor_control_port=ctx.tor_control_port,
-                    proxy_concurrency=ctx.proxy_concurrency,
-                )
-
-                response["photoUrl"] = await resolve_cached_photo_url(
-                    ctx.channel_id,
-                    response.get("photoUrl") or None,
-                )
-
-                await _cache_scraped_post_thumbs(
-                    ctx.channel_name,
-                    response.get("posts") or [],
-                    ctx.media_settings,
-                    proxies=ctx.proxies,
-                    proxy_concurrency=ctx.proxy_concurrency,
-                    tor_auto_rotate=ctx.tor_auto_rotate,
-                    tor_rotation_threshold=ctx.tor_rotation_threshold,
-                )
-
-                if response.get("fullRequest"):
-                    requests_log.append(response["fullRequest"])
-                responses_log.append(response)
-
-                page_result = await run_db(
-                    _apply_scrape_page,
-                    ctx,
-                    response,
-                    job_id=job.job_id,
-                    job_source=job.source,
-                    user_id=user_id,
-                    session_seen_ids=session_seen_ids,
-                    before_id=before_id,
-                )
-
-                if page_result.reached_channel_start:
-                    reached_channel_start = True
-                if page_result.latest_id:
-                    final_latest_id = page_result.latest_id
-                    known_latest_id = page_result.latest_id
-                if page_result.display_name:
-                    ctx.display_name = page_result.display_name
-                if page_result.photo_url:
-                    ctx.photo_url = page_result.photo_url
-
-                if page_result.posts_saved:
-                    total_new_posts += page_result.posts_saved
-                    ch_state.posts_fetched = total_new_posts
-                    await touch_job(job)
-
-                    for fwd in page_result.forwards:
-                        await _maybe_add_forwarded_channel(
-                            fwd["name"],
-                            discovered_via=fwd["discoveredVia"],
-                            proxies=ctx.proxies,
-                            tor_auto_rotate=ctx.tor_auto_rotate,
-                            tor_rotation_threshold=ctx.tor_rotation_threshold,
-                            user_id=user_id,
-                            effective_start_time=ctx.effective_start_time,
-                            proxy_concurrency=ctx.proxy_concurrency,
-                        )
-
-                if page_result.break_incremental:
-                    if ctx.needs_backfill and not in_backfill:
-                        in_backfill = True
-                        ctx.retrieval_pass = "backfill"
-                        before_id = ctx.min_stored_post_id
-                        continue
-                    break
-
-                stop_sync = page_result.stop_sync
-                if page_result.sync_failed:
-                    ch_state.status = "failed"
-                    ch_state.error = page_result.sync_error
-                    ch_state.posts_fetched = total_new_posts
-                    await touch_job(job)
-                    return
-                if stop_sync and ctx.needs_backfill and not in_backfill:
-                    in_backfill = True
-                    ctx.retrieval_pass = "backfill"
-                    before_id = ctx.min_stored_post_id
-                    stop_sync = False
-                    continue
-
-                before_id = page_result.next_before_id
+            if walk.failed_error is not None:
+                ch_state.status = "failed"
+                ch_state.error = walk.failed_error
+                ch_state.posts_fetched = walk.total_new_posts
+                await touch_job(job)
+                return
 
             await run_db(
                 _finalize_channel_success,
                 ctx,
                 job=job,
                 user_id=user_id,
-                total_new_posts=total_new_posts,
-                final_latest_id=final_latest_id,
-                requests_log=requests_log,
-                responses_log=responses_log,
-                reached_channel_start=reached_channel_start,
+                total_new_posts=walk.total_new_posts,
+                final_latest_id=walk.final_latest_id,
+                requests_log=walk.requests_log,
+                responses_log=walk.responses_log,
+                reached_channel_start=walk.reached_channel_start,
             )
             ch_state.status = "success"
-            ch_state.new_latest_id = final_latest_id or None
+            ch_state.new_latest_id = walk.final_latest_id or None
             await touch_job(job)
 
         except SyncScrapeError as exc:
@@ -1140,14 +1336,14 @@ async def sync_single_channel(
                 exc,
                 job=job,
                 user_id=user_id,
-                total_new_posts=total_new_posts,
-                requests_log=requests_log,
-                responses_log=responses_log,
+                total_new_posts=walk.total_new_posts,
+                requests_log=walk.requests_log,
+                responses_log=walk.responses_log,
                 due_reason=due_reason,
             )
             ch_state.status = "failed"
             ch_state.error = str(exc)
-            ch_state.posts_fetched = total_new_posts
+            ch_state.posts_fetched = walk.total_new_posts
             await touch_job(job)
 
         except Exception as exc:  # noqa: BLE001
@@ -1158,14 +1354,14 @@ async def sync_single_channel(
                 str(exc),
                 job=job,
                 user_id=user_id,
-                total_new_posts=total_new_posts,
-                requests_log=requests_log,
-                responses_log=responses_log,
+                total_new_posts=walk.total_new_posts,
+                requests_log=walk.requests_log,
+                responses_log=walk.responses_log,
                 due_reason=due_reason,
             )
             ch_state.status = "failed"
             ch_state.error = str(exc)
-            ch_state.posts_fetched = total_new_posts
+            ch_state.posts_fetched = walk.total_new_posts
             await touch_job(job)
 
 

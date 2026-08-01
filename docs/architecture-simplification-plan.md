@@ -1,7 +1,7 @@
 # Architecture simplification plan
 
 **Date:** 2026-07-31
-**Status:** In progress — execution started 2026-08-01. Landed: `H3`, `A0`, `T1`, `B1`–`B6`, `F1a`, `C1`, `D1`+`D2`.
+**Status:** In progress — execution started 2026-08-01. Landed: `H3`, `A0`, `T1`, `B1`–`B6`, `F1a`, `C1`, `D1`+`D2`, `H1`+`H2`.
 Typed responses **81/121** (was 26/129). Contexts with a test **1/9** (was 0).
 Each unit is marked ✅ **DONE** in place as it lands, with what the work changed about the plan.
 **Companion:** [`architecture-entropy-audit.md`](./architecture-entropy-audit.md) is the evidence base.
@@ -660,17 +660,36 @@ settings systems (persistence + presentation), which is a defensible split — t
 
 *Addresses E6/E7. Independent of everything else.*
 
-#### H1 — Decompose `_apply_scrape_page` · **M**
+#### H1 + H2 — Decompose the sync-path god-functions · ✅ **DONE 2026-08-01**
 
-257 LOC at `sync_orchestrator.py:484`, the hardest function in the backend. Extract the
-distinct stages (parse → dedupe → persist → telemetry → follow-detection) into named functions.
+| function | before | after |
+|---|---|---|
+| `_apply_scrape_page` | 258 | **120** |
+| `sync_single_channel` | 206 | **110** |
+| `import_data` | 211 | **~30** (largest section importer: 63) |
 
-- **Verify:** `tests/api/test_sync_jobs.py` (779 LOC) must pass **unchanged** — do not edit tests
-  in this PR. If a test needs changing, the refactor changed behaviour: stop and reconsider.
+**Named stages, not line slices**, per the rule in `CLAUDE.md`. New functions:
+`_reconcile_telegram_chat_id`, `_freeze_channel_for_chat_id_problem`, `_refresh_channel_meta`,
+`_persist_page_posts`, `_collect_new_forwards`, `_decide_next_page`, `_fetch_one_page`,
+`_walk_channel_pages`, and seven per-section importers.
 
-#### H2 — Decompose `sync_single_channel` (205 LOC) and `import_data` (210 LOC) · **M**
+**`_ChannelWalk` is passed *in*, not returned.** Both `except` handlers in `sync_single_channel`
+need `requests_log`/`responses_log` even when the walk raises part-way — returning the state
+would lose exactly the diagnostic payload those error logs exist to carry.
 
-Same discipline. `import_data` is covered by `test_data.py`.
+**Two subtleties preserved and now documented rather than implicit:** the chat-id *conflict*
+branch freezes the channel but **does not** stop the sync, while the *mismatch* branch does; and
+the `needs_backfill` transition genuinely appears twice, because an incremental pass can end
+either by meeting stored posts or by running out of new ones.
+
+**Tests were not touched** — `git diff --stat -- tests/` is empty, which was the contract.
+Backend **784 passed / 2 skipped**, mypy strict clean, ruff clean.
+
+> **The `< 80` target is not met, deliberately.** `_apply_scrape_page` is 120 lines and is now a
+> readable sequence of named stages; cutting further would be line-slicing, which the rule
+> forbids. And the **largest backend function is now `jobs/retention.py::run_retention_cleanup`
+> at 174** — never in H1/H2's scope. If the metric matters, that is the next target, not more
+> cuts here.
 
 #### H3 — Write down the service-boundary rule · **S** · ✅ **DONE 2026-08-01**
 
@@ -760,7 +779,7 @@ Measurable, re-runnable — same discipline as the remediation plan's §12.
 | Hand-written domain types mirroring server tables | 24 | 0 |
 | Largest route module | 1,438 LOC → **425** | < 400 |
 | Largest frontend context | 1,103 LOC | < 300 |
-| Largest backend function | 257 LOC | < 80 |
+| Largest backend function | 257 → **174** (`run_retention_cleanup`, out of H scope; sync path now ≤ 120) | < 80 |
 | Files touched to add a log type | ~30 → **~12** (→ ~3 after A3) | ~3 |
 | Contexts with a test | 0/9 | ≥ 5/5 (after G2 consolidation) |
 | Hooks with a test | 2/32 | the ones holding logic |

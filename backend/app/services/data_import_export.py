@@ -72,14 +72,21 @@ def unwrap_import_body(body: dict[str, Any]) -> dict[str, Any]:
     return body
 
 
-def import_data(
-    session: Session, body: dict[str, Any], *, user_id: uuid.UUID | None
-) -> dict[str, Any]:
-    """Import from IndexedDB export JSON structure."""
-    payload = unwrap_import_body(body)
-    counts: dict[str, int] = {}
+def _import_channels(
+    session: Session, items: list[Any], *, user_id: uuid.UUID | None
+) -> int:
+    """Upsert exported channels, preserving server-managed state.
 
-    for item in payload.get("channels", []):
+    `SERVER_MANAGED_CHANNEL_FIELDS` are stripped rather than trusted: an export
+    carries sync bookkeeping (latest ids, next-run timestamps) that describes the
+    *exporting* install, and importing it would make this install believe it had
+    already fetched history it does not hold.
+
+    A channel arriving without a valid setting group is placed in Restricted when
+    the export marks it unavailable or frozen, and in the default group
+    otherwise — never left group-less, which nothing downstream tolerates.
+    """
+    for item in items:
         normalized = normalize_body(item)
         for field in SERVER_MANAGED_CHANNEL_FIELDS:
             normalized.pop(field, None)
@@ -127,24 +134,34 @@ def import_data(
                 discovered_via=normalized.get("discovered_via"),
             )
         session.add(ch)
-    if payload.get("channels"):
-        counts["channels"] = len(payload["channels"])
+    return len(items)
 
-    if payload.get("posts"):
-        counts["posts"] = bulk_upsert_posts_impl(payload["posts"], session)
 
-    for item in payload.get("summaries", []):
+#: Summary columns with their own field; everything else on an exported summary
+#: is preserved in `extra`, which is why `Summary` is an open model.
+_SUMMARY_KNOWN_FIELDS = {
+    "text",
+    "channels",
+    "startDate",
+    "endDate",
+    "language",
+    "model",
+    "postCount",
+    "timestamp",
+}
+
+
+def _import_summaries(
+    session: Session, items: list[Any], *, user_id: uuid.UUID | None
+) -> int:
+    """Upsert exported summaries, keeping unknown keys in `extra`.
+
+    Both camelCase and snake_case are accepted for the date and count fields:
+    exports exist from before and after the migration, and an import that
+    silently zeroed a summary's date range would be worse than rejecting it.
+    """
+    for item in items:
         sid = item.get("id")
-        known_fields = {
-            "text",
-            "channels",
-            "startDate",
-            "endDate",
-            "language",
-            "model",
-            "postCount",
-            "timestamp",
-        }
         summary = session.get(Summary, sid)
         if summary:
             summary.text = item.get("text", summary.text)
@@ -162,7 +179,9 @@ def import_data(
             )
             summary.timestamp = item.get("timestamp", summary.timestamp)
             summary.extra = {
-                k: v for k, v in item.items() if k not in known_fields and k != "id"
+                k: v
+                for k, v in item.items()
+                if k not in _SUMMARY_KNOWN_FIELDS and k != "id"
             }
             summary.updated_at = utc_now()
         else:
@@ -177,13 +196,23 @@ def import_data(
                 model=item.get("model"),
                 post_count=item.get("postCount", item.get("post_count")),
                 timestamp=item.get("timestamp", 0),
-                extra={k: v for k, v in item.items() if k not in known_fields},
+                extra={k: v for k, v in item.items() if k not in _SUMMARY_KNOWN_FIELDS},
             )
         session.add(summary)
-    if payload.get("summaries"):
-        counts["summaries"] = len(payload["summaries"])
+    return len(items)
 
-    for item in payload.get("bot_credentials", []):
+
+def _import_bot_credentials(
+    session: Session, items: list[Any], *, user_id: uuid.UUID | None
+) -> int:
+    """Upsert bot credentials, re-encrypting their tokens.
+
+    A *new* credential with no token is skipped entirely rather than stored
+    empty: a credential that cannot authenticate is not a credential, and a blank
+    row would surface in the UI as a usable bot. An *existing* one keeps its
+    stored token when the export omits it.
+    """
+    for item in items:
         normalized = normalize_body(item)
         bid = normalized.get("id", item.get("id"))
         token = normalized.get("token_encrypted") or normalized.get("token", "")
@@ -210,10 +239,13 @@ def import_data(
                 last_validated=normalized.get("last_validated"),
             )
         session.add(bot)
-    if payload.get("bot_credentials"):
-        counts["bot_credentials"] = len(payload["bot_credentials"])
+    return len(items)
 
-    for item in payload.get("chat_destinations", []):
+
+def _import_chat_destinations(
+    session: Session, items: list[Any], *, user_id: uuid.UUID | None
+) -> int:
+    for item in items:
         normalized = normalize_body(item)
         did = normalized.get("id", item.get("id"))
         dest = session.get(ChatDestination, did)
@@ -229,28 +261,42 @@ def import_data(
                 chat_id=normalized.get("chat_id", ""),
             )
         session.add(dest)
-    if payload.get("chat_destinations"):
-        counts["chat_destinations"] = len(payload["chat_destinations"])
+    return len(items)
 
-    for store, upsert_fn, _sync_key in [
-        ("publish_logs", upsert_publish_log, "publish_logs"),
-        ("sync_logs", upsert_sync_log, "sync_logs"),
-        ("llm_logs", upsert_llm_log, "llm_logs"),
-        ("embedding_logs", upsert_embedding_log, "embedding_logs"),
-        ("network_logs", upsert_network_log, "network_logs"),
-    ]:
+
+#: Export section -> the log upsert that owns it. Mirrors
+#: `services/logs.py::LOG_MODELS`; D1 genericised the API for these, and the
+#: writes stay per-type because the five tables genuinely differ.
+_LOG_IMPORTERS: tuple[tuple[str, Any], ...] = (
+    ("publish_logs", upsert_publish_log),
+    ("sync_logs", upsert_sync_log),
+    ("llm_logs", upsert_llm_log),
+    ("embedding_logs", upsert_embedding_log),
+    ("network_logs", upsert_network_log),
+)
+
+
+def _import_logs(
+    session: Session, payload: dict[str, Any], *, user_id: uuid.UUID | None
+) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for store, upsert_fn in _LOG_IMPORTERS:
         items = payload.get(store, [])
         for item in items:
             upsert_fn(session, item, user_id)
         if items:
             counts[store] = len(items)
+    return counts
 
-    for item in payload.get("embeddings", []):
+
+def _import_embeddings(session: Session, items: list[Any]) -> int:
+    """`merge` rather than add: embeddings are corpus-level and keyed by
+    `channel_name`/`post_id`, so re-importing must overwrite, not collide."""
+    for item in items:
         normalized = normalize_body(item)
-        eid = normalized.get("id", item.get("id"))
         session.merge(
             PostEmbedding(
-                id=eid,
+                id=normalized.get("id", item.get("id")),
                 channel_name=normalized.get("channel_name", ""),
                 post_id=int(normalized.get("post_id", 0)),
                 vector=normalized.get("vector", []),
@@ -260,15 +306,15 @@ def import_data(
                 dimensions=normalized.get("dimensions", 0),
             )
         )
-    if payload.get("embeddings"):
-        counts["embeddings"] = len(payload["embeddings"])
+    return len(items)
 
-    for item in payload.get("translations", []):
+
+def _import_translations(session: Session, items: list[Any]) -> int:
+    for item in items:
         normalized = normalize_body(item)
-        tid = normalized.get("id", item.get("id"))
         session.merge(
             PostTranslation(
-                id=tid,
+                id=normalized.get("id", item.get("id")),
                 channel_name=normalized.get("channel_name", ""),
                 post_id=int(normalized.get("post_id", 0)),
                 language=normalized.get("language", ""),
@@ -276,8 +322,52 @@ def import_data(
                 timestamp=normalized.get("timestamp", 0),
             )
         )
+    return len(items)
+
+
+def import_data(
+    session: Session, body: dict[str, Any], *, user_id: uuid.UUID | None
+) -> dict[str, Any]:
+    """Import an export document, section by section.
+
+    One transaction for the whole document: a partial import would leave posts
+    referencing channels that were never created. Each section reports how many
+    rows it took, and only sections that were present get a count and an etag
+    bump — importing a channels-only export must not invalidate the posts cache.
+    """
+    payload = unwrap_import_body(body)
+    counts: dict[str, int] = {}
+
+    if payload.get("channels"):
+        counts["channels"] = _import_channels(
+            session, payload["channels"], user_id=user_id
+        )
+
+    if payload.get("posts"):
+        counts["posts"] = bulk_upsert_posts_impl(payload["posts"], session)
+
+    if payload.get("summaries"):
+        counts["summaries"] = _import_summaries(
+            session, payload["summaries"], user_id=user_id
+        )
+
+    if payload.get("bot_credentials"):
+        counts["bot_credentials"] = _import_bot_credentials(
+            session, payload["bot_credentials"], user_id=user_id
+        )
+
+    if payload.get("chat_destinations"):
+        counts["chat_destinations"] = _import_chat_destinations(
+            session, payload["chat_destinations"], user_id=user_id
+        )
+
+    counts.update(_import_logs(session, payload, user_id=user_id))
+
+    if payload.get("embeddings"):
+        counts["embeddings"] = _import_embeddings(session, payload["embeddings"])
+
     if payload.get("translations"):
-        counts["translations"] = len(payload["translations"])
+        counts["translations"] = _import_translations(session, payload["translations"])
 
     session.commit()
     for key in counts:
