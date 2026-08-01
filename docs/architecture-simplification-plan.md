@@ -1,7 +1,7 @@
 # Architecture simplification plan
 
 **Date:** 2026-07-31
-**Status:** In progress — execution started 2026-08-01. Landed: `H3`, `A0`, `T1`, `B1`–`B6`, `F1a`, `C1`, `D1`+`D2`, `H1`+`H2`.
+**Status:** In progress — execution started 2026-08-01. Landed: `H3`, `A0`, `T1`, `B1`–`B6`, `F1a`, `C1`, `D1`+`D2`, `H1`+`H2`, `G3`.
 Typed responses **81/121** (was 26/129). Contexts with a test **1/9** (was 0).
 Each unit is marked ✅ **DONE** in place as it lands, with what the work changed about the plan.
 **Companion:** [`architecture-entropy-audit.md`](./architecture-entropy-audit.md) is the evidence base.
@@ -648,11 +648,39 @@ start before T2** — there is currently no test covering any of this code.*
 11 providers nested 11 deep → ~5. Providers whose entire content is server data
 (`DataContext`'s 9 repository-fed fields) become query hooks; only UI-state providers remain.
 
-#### G3 — Extract `useCommandRegistry` settings binding · **S** · independent
+#### G3 — Extract the settings binding · ✅ **DONE 2026-08-01**
 
-Fold `lib/commands/settings-schema.ts` (569 LOC) into a generic binding over
-`SETTINGS_CATALOG`, so a setting's parse/clamp/setter is declared once (E5). Leaves two
-settings systems (persistence + presentation), which is a defensible split — three is not.
+**The premise had already half-happened.** `settings-schema.ts` was *already* driven by
+`SETTINGS_CATALOG` — the fold the plan describes was largely done before this programme started.
+What remained was exactly what audit §E5 named: the command layer **re-deriving** setters and
+clamping.
+
+**Shipped (569 → 538 LOC):**
+* `booleanSetter` / `numberSetter` / `stringSetter` → one generic `catalogSetter<T>`. The three
+  were byte-identical apart from a cast applied to a value they never inspect.
+* `clampInt` / `clampFloat` → one `parseAgainstControl(value, control)`, taking bounds from the
+  catalog control rather than re-deriving them with `control.min ?? 0` / `control.max ?? 1`.
+* The deprecated `BOOLEAN_SETTINGS` / `NUMERIC_EDITOR_DEFS` exports deleted, and their two tests
+  rewritten to assert against the built commands — a test reading a *parallel* list could pass
+  while the palette itself was missing the command.
+
+**Those `??` fallbacks were dead code.** All 12 number controls declare `min`, and the single
+`step: "any"` control declares both bounds, so no behaviour changed. Verified by enumerating the
+catalog rather than assumed.
+
+**The real find: the binding had no tests at all.** Every existing test asserted a command's
+*shape* — id, label, badge — and none ever *ran* one. Breaking `catalogSetter`'s name derivation
+left all 90 passing. Eight new tests drive the commands through a spying settings proxy; the same
+mutation now fails **7**, and clamp/toggle mutations fail 1 each.
+
+**Verified:** frontend **695 pass / 0 fail** (12 consecutive runs), `tsc` clean, biome clean.
+
+> **Known rare flake, unrelated to this unit.** `src/lib/channels/mirror-hydration.test.ts`
+> failed twice in roughly twenty full-suite runs across this programme, always with
+> `QuotaExceededError` from its localStorage-quota simulation — happy-dom registers `localStorage`
+> globally (T1), so quota state is shared across files and the failure depends on execution order.
+> It did not reproduce in 12 consecutive runs. Pre-existing; not investigated further here because
+> no unit in this plan touches that file. Re-run before believing it.
 
 ---
 

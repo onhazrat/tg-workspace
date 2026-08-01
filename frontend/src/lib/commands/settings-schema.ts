@@ -11,17 +11,34 @@ function slugify(value: string): string {
   return value.toLowerCase().replace(/[^a-z0-9]+/g, "-")
 }
 
-function clampInt(value: string, min: number, max?: number): number | null {
-  const parsed = Number.parseInt(value, 10)
-  if (Number.isNaN(parsed) || parsed < min) return null
-  if (max !== undefined) return Math.min(max, parsed)
-  return parsed
-}
+/**
+ * Parse and clamp a raw editor string against a catalog `number` control.
+ *
+ * Single entry point on purpose (E5/G3). Two clamp paths used to live here with
+ * their *own* bound fallbacks (`control.min ?? 0`, `control.max ?? 1`), so a
+ * bound tightened in the catalog could stay loose in the command palette — the
+ * exact drift the catalog exists to prevent. Bounds now come from the control
+ * and nowhere else, and an absent bound means unbounded rather than zero.
+ *
+ * Returns `null` for input that is not a number or falls below `min`, which
+ * callers treat as "leave the setting alone" rather than coercing.
+ */
+function parseAgainstControl(
+  value: string,
+  control: { min?: number; max?: number; step?: number | "any" },
+): number | null {
+  if (control.step === "any") {
+    const parsed = Number.parseFloat(value)
+    if (Number.isNaN(parsed)) return null
+    const lower = control.min ?? Number.NEGATIVE_INFINITY
+    const upper = control.max ?? Number.POSITIVE_INFINITY
+    return Math.min(upper, Math.max(lower, parsed))
+  }
 
-function clampFloat(value: string, min: number, max: number): number | null {
-  const parsed = Number.parseFloat(value)
+  const parsed = Number.parseInt(value, 10)
   if (Number.isNaN(parsed)) return null
-  return Math.min(max, Math.max(min, parsed))
+  if (control.min !== undefined && parsed < control.min) return null
+  return control.max !== undefined ? Math.min(control.max, parsed) : parsed
 }
 
 type SliceKey = keyof CommandSettingsSlice
@@ -32,41 +49,24 @@ function sliceGetter(
   return (settings) => settings[key]
 }
 
-function booleanSetter(
+/**
+ * Bind a catalog entry to its `set{Key}` method on the settings slice.
+ *
+ * Replaces the three byte-identical `booleanSetter` / `numberSetter` /
+ * `stringSetter` functions, which differed only in the cast they applied to a
+ * value they never inspected. The slice's setters are generated from
+ * `lib/settings/schema.ts`, so the name is derivable and the lookup *is* the
+ * whole binding.
+ */
+function catalogSetter<T>(
   key: SliceKey,
-): (settings: CommandSettingsSlice, value: boolean) => void {
+): (settings: CommandSettingsSlice, value: T) => void {
+  const setterName =
+    `set${key.charAt(0).toUpperCase()}${key.slice(1)}` as keyof CommandSettingsSlice
   return (settings, value) => {
-    const setterName =
-      `set${key.charAt(0).toUpperCase()}${key.slice(1)}` as keyof CommandSettingsSlice
     const setter = settings[setterName]
     if (typeof setter === "function") {
-      ;(setter as (v: boolean) => void)(value)
-    }
-  }
-}
-
-function numberSetter(
-  key: SliceKey,
-): (settings: CommandSettingsSlice, value: number) => void {
-  return (settings, value) => {
-    const setterName =
-      `set${key.charAt(0).toUpperCase()}${key.slice(1)}` as keyof CommandSettingsSlice
-    const setter = settings[setterName]
-    if (typeof setter === "function") {
-      ;(setter as (v: number) => void)(value)
-    }
-  }
-}
-
-function stringSetter(
-  key: SliceKey,
-): (settings: CommandSettingsSlice, value: string) => void {
-  return (settings, value) => {
-    const setterName =
-      `set${key.charAt(0).toUpperCase()}${key.slice(1)}` as keyof CommandSettingsSlice
-    const setter = settings[setterName]
-    if (typeof setter === "function") {
-      ;(setter as (v: string) => void)(value)
+      ;(setter as (v: T) => void)(value)
     }
   }
 }
@@ -74,32 +74,6 @@ function stringSetter(
 function entrySliceKey(entry: SettingCatalogEntry): SliceKey {
   return (entry.sliceKey ?? entry.id) as SliceKey
 }
-
-/** @deprecated Prefer catalog — kept for tests that assert boolean defs exist. */
-export const BOOLEAN_SETTINGS = SETTINGS_CATALOG.filter(
-  (e) =>
-    e.control.kind === "boolean" &&
-    e.control.commandSlug !== "__embeddings_feature__",
-).map((e) => ({
-  key: entrySliceKey(e),
-  label: e.label,
-  keywords: e.keywords,
-}))
-
-/** @deprecated Prefer catalog — kept for tests that assert numeric editor defs. */
-export const NUMERIC_EDITOR_DEFS = SETTINGS_CATALOG.filter(
-  (e) => e.control.kind === "number" && e.editorCommandId,
-).map((e) => ({
-  id: e.editorCommandId as string,
-  label: `Edit ${e.label}`,
-  keywords: e.keywords,
-  fieldId: e.editorFieldId ?? e.id,
-  fieldLabel: e.editorFieldLabel ?? e.label,
-  min: e.control.kind === "number" ? e.control.min : undefined,
-  max: e.control.kind === "number" ? e.control.max : undefined,
-  step: e.control.kind === "number" ? e.control.step : undefined,
-  integer: e.control.kind === "number" ? e.control.integer : undefined,
-}))
 
 function buildBooleanCommands(): CommandDef[] {
   const commands: CommandDef[] = []
@@ -111,7 +85,7 @@ function buildBooleanCommands(): CommandDef[] {
     const slug = entry.control.commandSlug
     const key = entrySliceKey(entry)
     const getter = (s: CommandSettingsSlice) => Boolean(sliceGetter(key)(s))
-    const setter = booleanSetter(key)
+    const setter = catalogSetter<boolean>(key)
     const baseKeywords = [
       entry.label,
       ...entry.keywords,
@@ -163,7 +137,7 @@ function buildNumericEditorCommands(): CommandDef[] {
     if (control.kind !== "number") throw new Error("unreachable")
     const key = entrySliceKey(entry)
     const getter = (s: CommandSettingsSlice) => Number(sliceGetter(key)(s))
-    const setter = numberSetter(key)
+    const setter = catalogSetter<number>(key)
     const formatBadge = control.formatBadge ?? ((v: number) => String(v))
 
     return {
@@ -183,12 +157,7 @@ function buildNumericEditorCommands(): CommandDef[] {
         integer: control.integer,
         getValue: (ctx: CommandContext) => getter(ctx.settings),
         apply: (_ctx: CommandContext, value: string) => {
-          if (control.step === "any") {
-            const parsed = clampFloat(value, control.min ?? 0, control.max ?? 1)
-            if (parsed !== null) setter(_ctx.settings, parsed)
-            return
-          }
-          const parsed = clampInt(value, control.min ?? 0, control.max)
+          const parsed = parseAgainstControl(value, control)
           if (parsed !== null) setter(_ctx.settings, parsed)
         },
       },
@@ -219,7 +188,7 @@ function buildEnumCommands(): CommandDef[] {
             ctx.settings.setTheme(option.value as "light" | "dark" | "system")
             return
           }
-          stringSetter(key)(ctx.settings, option.value)
+          catalogSetter<string>(key)(ctx.settings, option.value)
         },
       })
     }
@@ -350,7 +319,7 @@ function buildEditorCommands(): CommandDef[] {
               }
               return
             }
-            stringSetter(key)(ctx.settings, value)
+            catalogSetter<string>(key)(ctx.settings, value)
           },
         },
         run: () => {},
