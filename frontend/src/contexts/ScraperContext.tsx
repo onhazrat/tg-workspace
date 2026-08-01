@@ -21,6 +21,12 @@ import { parseApiError, unavailableChannelToastMessage } from "@/lib/api-errors"
 import { env } from "@/lib/env"
 import { logger } from "@/lib/logger"
 import { createdChannelNamesFromResults } from "@/lib/posts/discover-selection"
+import {
+  deriveScrapingChannels,
+  hasRateLimitError,
+  isTerminalSyncStatus,
+  shouldFallBackToPolling,
+} from "@/lib/sync/job-state"
 import { useApiStatus } from "../hooks/useApiStatus"
 import { useDebouncedValue } from "../hooks/useDebouncedValue"
 import { useSyncQueue } from "../hooks/useSyncQueue"
@@ -414,15 +420,8 @@ export const ScraperProvider: React.FC<{ children: React.ReactNode }> = ({
 
   const applySyncJobStatus = useCallback(
     (status: SyncJobStatus) => {
-      const active = status.channels
-        .filter((ch) => ch.status === "running" || ch.status === "pending")
-        .map((ch) => ch.channelName)
-      setScrapingChannels(new Set(active))
-
-      const hasRateLimit = status.channels.some(
-        (ch) => ch.error && /rate limit/i.test(ch.error),
-      )
-      setIsRateLimited(hasRateLimit)
+      setScrapingChannels(deriveScrapingChannels(status))
+      setIsRateLimited(hasRateLimitError(status))
     },
     [setIsRateLimited],
   )
@@ -433,7 +432,7 @@ export const ScraperProvider: React.FC<{ children: React.ReactNode }> = ({
       while (Date.now() < deadline) {
         const status = await api.getSyncJobStatus(jobId)
         applySyncJobStatus(status)
-        if (["completed", "failed", "cancelled"].includes(status.status)) {
+        if (isTerminalSyncStatus(status.status)) {
           return status
         }
         await new Promise((resolve) =>
@@ -460,7 +459,7 @@ export const ScraperProvider: React.FC<{ children: React.ReactNode }> = ({
           abortController.signal,
         )) {
           applySyncJobStatus(status)
-          if (["completed", "failed", "cancelled"].includes(status.status)) {
+          if (isTerminalSyncStatus(status.status)) {
             return status
           }
         }
@@ -468,7 +467,7 @@ export const ScraperProvider: React.FC<{ children: React.ReactNode }> = ({
         applySyncJobStatus(finalStatus)
         return finalStatus
       } catch (err) {
-        if (abortController.signal.aborted) {
+        if (!shouldFallBackToPolling(abortController.signal.aborted)) {
           await api.cancelSyncJob(jobId)
           throw new Error("Sync job timed out")
         }
@@ -867,7 +866,7 @@ export const ScraperProvider: React.FC<{ children: React.ReactNode }> = ({
           abortController.signal,
         )) {
           onProgress?.(status)
-          if (["completed", "failed", "cancelled"].includes(status.status)) {
+          if (isTerminalSyncStatus(status.status)) {
             return status
           }
         }
@@ -886,7 +885,7 @@ export const ScraperProvider: React.FC<{ children: React.ReactNode }> = ({
         while (Date.now() < deadline) {
           const status = await api.getFollowJobStatus(followJobId)
           onProgress?.(status)
-          if (["completed", "failed", "cancelled"].includes(status.status)) {
+          if (isTerminalSyncStatus(status.status)) {
             return status
           }
           await new Promise((resolve) =>

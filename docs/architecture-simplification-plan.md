@@ -1,7 +1,7 @@
 # Architecture simplification plan
 
 **Date:** 2026-07-31
-**Status:** In progress — execution started 2026-08-01. Landed: `H3`, `A0`, `T1`, `B1`–`B7`, `F1a`, `C1`, `D1`+`D2`, `H1`+`H2`, `G3`.
+**Status:** In progress — execution started 2026-08-01. Landed: `H3`, `A0`, `T1`, `T2`, `B1`–`B7`, `F1a`, `C1`, `D1`+`D2`, `H1`+`H2`, `G3`.
 Typed responses **104/121** (was 26/129) — effectively complete; see B6b. Contexts with a test **1/9** (was 0).
 Each unit is marked ✅ **DONE** in place as it lands, with what the work changed about the plan.
 **Companion:** [`architecture-entropy-audit.md`](./architecture-entropy-audit.md) is the evidence base.
@@ -684,15 +684,34 @@ passing.
 > the project's typecheck command. Pre-existing, not introduced here, but it means a type error
 > in a test only surfaces at runtime.
 
-#### T2 — Characterisation tests for `ScraperContext` · **M** · after T1, before G1
+#### T2 — Characterisation tests for the sync-job watcher · ✅ **DONE 2026-08-01**
 
-Pin current behaviour of the five responsibilities *before* splitting them — especially
-`handleScrapeChannel` (lines 608–853) and the SSE/fallback-poll logic. These tests are the
-safety net G1 will otherwise not have.
+**Not done by mocking the context.** `ScraperContext` imports `@/api`, and two existing test
+files import it too — `mock.module` is process-wide, so mocking it would have reproduced exactly
+the T1 failure that hung the suite. The repo already has a better pattern, recorded in
+`useDiscoverProbeQueue.test.ts`: lift the decision into a pure function and test that.
 
-- Write them against today's behaviour, warts included; do not fix bugs in this PR.
-- **Verify:** tests pass on unmodified `main`. If one doesn't, it is describing a bug — record
-  it, don't paper over it.
+**Shipped:** `src/lib/sync/job-state.ts` — `isTerminalSyncStatus`, `deriveScrapingChannels`,
+`hasRateLimitError`, `shouldFallBackToPolling` — plus 20 characterisation tests.
+`ScraperContext` now calls them, so the tests guard the real path rather than a copy.
+
+**This is G1's safety net *and* a down payment on it**: `useSyncJob` extracts these decisions,
+and they are now already extracted and covered.
+
+**Two warts characterised, not fixed** (T2's contract): `hasRateLimitError` regexes the error
+*string*, so an unrelated error mentioning "rate limit" trips the banner and a plain `HTTP 429`
+does not. Both are asserted as-is and labelled `WART:` in the test names.
+
+**One real duplication removed:** `["completed", "failed", "cancelled"]` was written out inline
+**three times** in one file — the sync poller, the SSE watcher, and the follow-job watcher. That
+is how one of them ends up missing a state after the backend gains a fourth.
+
+**A bug in my own test, found by mutation-testing it.** The first version used
+`test.each([...TERMINAL_SYNC_STATUSES])`, which is self-referential: deleting `"cancelled"`
+deleted a *test case* rather than failing one, so the suite went from 19 passing to 18 passing
+and reported success. The set is now asserted literally; the same mutation fails 2 tests.
+
+**Verified:** frontend **714 pass / 0 fail**, `tsc` clean, biome clean.
 
 ---
 
@@ -879,7 +898,7 @@ Measurable, re-runnable — same discipline as the remediation plan's §12.
 | `$ref`-typed API responses | 26/129 → **104/121** | all typeable (17 are SSE/binary/blob/template) |
 | Hand-written domain types mirroring server tables | 24 → **6** (9 rebased, 9 UI-only) | 0 |
 | Largest route module | 1,438 LOC → **425** | < 400 |
-| Largest frontend context | 1,103 LOC | < 300 |
+| Largest frontend context | 1,103 LOC (T2 extracted its sync decisions; G1 splits the rest) | < 300 |
 | Largest backend function | 257 → **174** (`run_retention_cleanup`, out of H scope; sync path now ≤ 120) | < 80 |
 | Files touched to add a log type | ~30 → **~12** (→ ~3 after A3) | ~3 |
 | Contexts with a test | 0/9 | ≥ 5/5 (after G2 consolidation) |
