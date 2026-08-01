@@ -85,8 +85,17 @@ export interface PostReactionCount {
   isPaid?: boolean | null
 }
 
-/** Mirrors backend PostMedia schema (camelCase API). */
-export interface PostMedia {
+/**
+ * Mirrors backend PostMedia schema (camelCase API).
+ *
+ * A `type` rather than an `interface`, and that distinction is load-bearing:
+ * TypeScript gives type aliases an implicit index signature but withholds one
+ * from interfaces, so only the alias form is assignable to the server's
+ * `media?: { [key: string]: unknown }`. `types.conform.ts` asserts exactly that
+ * assignability (B7b) and cannot with an interface. Nothing extends or merges
+ * into this declaration, so the two forms are otherwise identical here.
+ */
+export type PostMedia = {
   kinds: PostMediaKind[]
   caption?: string | null
   durationSec?: number | null

@@ -751,6 +751,55 @@ Note that `MEMORY.md` records 3 Playwright specs already failing on a pre-existi
 
 ---
 
+#### B7b — Enforce all six conformance checks, in the right direction · ✅ **DONE 2026-08-01**
+
+The plan called this "enforce the four remaining checks", assuming they were unfinished work.
+**They were not.** Enumerating the mismatch sets — by iteratively `Exclude`-ing each field
+TypeScript named, since it reports only the first member of a union — gave exactly eight fields,
+and every one is a place where **our type is deliberately narrower than the server's**:
+
+| | server | ours |
+|---|---|---|
+| `LLMLog.status`, `NetworkLog.status` | `string` | `"success" \| "failed"` |
+| `LLMLog.type` | `string` | four known prompt kinds |
+| `Post.retrievalPass` | `string \| null` | `"initial" \| "incremental"` |
+| `Post.media`, `Post.links` | untyped JSON | `PostMedia`, `PostBodyLink[]` |
+| `Channel.tags`, `Channel.discoveredVia` | untyped JSON | shaped |
+
+None is drift, and none is fixable in the original direction: it asks the *server* to declare a
+literal union it deliberately does not, or a nested model that `schemas/posts.py` documents at
+length why it must not (declaring it changes the wire format — the B3 rule). The mechanical
+reading of the plan was to widen our types to match, which would have **thrown away real
+knowledge**: those four narrowings are what let a `switch` over log status be exhaustive.
+
+So each model now carries **three** assertions instead of one:
+
+1. `…Conforms` — server fields stay assignable to ours. Catches a **retype**.
+2. `…RefinementsHold` — the narrowed fields stay *subtypes* of the server's. Catches a retype
+   hiding under a narrowing.
+3. `…HasServerFields` — an explicit allowlist of load-bearing columns is still *declared*.
+
+**(3) exists because of a hole found by mutation-testing the guard itself, and the file's own
+docstring was asserting the opposite.** It claimed *"Rename `postsCount` … and the corresponding
+line stops compiling."* It did not: `MismatchedServerFields` iterates the **intersection** of the
+two key sets, so a renamed or dropped column simply leaves the comparison rather than failing it —
+silently, guard still green. A mutation renaming a server field compiled clean. This is the same
+shape of defect as B7's first draft, which could not fail at all.
+
+**One TypeScript subtlety was load-bearing.** `PostMedia` had to become a `type` alias instead of
+an `interface`: TS gives aliases an implicit index signature but withholds one from interfaces, so
+only the alias form is assignable to the server's `media?: { [key: string]: unknown }`. Nothing
+extends or merges into it, so the forms are otherwise identical.
+
+Mutation-tested (5 drift scenarios): rename a server field ✅, retype a refined field to a number
+✅, retype a plain field ✅, change a JSON column's shape ✅. The fifth — **widening *our* type for
+an untyped JSON column** — is *not* caught and **cannot be**: the server declares no information to
+check against. That limitation is now stated in the file rather than left implicit.
+
+**Verified:** frontend **744 pass / 0 fail**, `tsc` clean, biome clean.
+
+---
+
 ### Workstream F — Fix and consolidate the generated client
 
 *Addresses E9. **Must not start before B2–B6** — see audit §6 for why the ordering is forced.*
