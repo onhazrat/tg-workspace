@@ -1,7 +1,7 @@
 # Architecture simplification plan
 
 **Date:** 2026-07-31
-**Status:** In progress — execution started 2026-08-01. Landed: `H3`, `A0`, `T1`, `B1`–`B6b`, `F1a`, `C1`, `D1`+`D2`, `H1`+`H2`, `G3`.
+**Status:** In progress — execution started 2026-08-01. Landed: `H3`, `A0`, `T1`, `B1`–`B7`, `F1a`, `C1`, `D1`+`D2`, `H1`+`H2`, `G3`.
 Typed responses **104/121** (was 26/129) — effectively complete; see B6b. Contexts with a test **1/9** (was 0).
 Each unit is marked ✅ **DONE** in place as it lands, with what the work changed about the plan.
 **Companion:** [`architecture-entropy-audit.md`](./architecture-entropy-audit.md) is the evidence base.
@@ -441,14 +441,55 @@ $ref` for `sync-meta`/`jobs/status`, `anyOf: [$ref, null]` for `reports/latest`/
 **Verified:** backend **791 passed / 2 skipped** (+7 new), mypy strict clean (128 files), ruff
 clean, `tsc` clean.
 
-#### B7 — Retire `types.ts` server mirrors · **M** · after B2–B6
+#### B7 — Rebase `types.ts` on the generated client · ✅ **DONE 2026-08-01**
 
-Replace the 24 hand-written domain interfaces with re-exports of generated types. Keep
-UI-only types (`TabType`, `SyncQueueItem`, `ChatMessage`) in `types.ts`.
+**The plan said "replace with re-exports". Measured, that would have *lost* information in 22 of
+24 cases**, in four ways, each verified against the actual types:
 
-- **Verify:** `bunx tsc -p tsconfig.build.json --noEmit` is the test. Expect real breakage here —
-  that is the point: each error is a place where the frontend's belief about the server was
-  already wrong.
+1. **Open models erase field names.** `ChannelResponse`/`SummaryResponse` render as a top-level
+   `[key: string]: unknown`, so the group-inherited channel settings and summary UI flags — real
+   wire fields carried in `extra` — become anonymous.
+2. **Nested shapes are loose on purpose.** `TagRun.applyResult`, `Post.media` are `unknown`
+   server-side so a prompt or storage change is not a schema migration.
+3. **Client-side augmentations.** `ChannelStats.latestId` is written locally after a sync.
+4. **Literal-union narrowing.** Four log types know `status` is `"success" | "failed"`; OpenAPI
+   says `string`.
+
+**Shipped instead:** the **9 closed** generated types are now the base
+(`X = XResponse & <local knowledge>`), so the server's field set can no longer be hand-maintained.
+The **6 open** ones stay hand-written — rebasing them produced **190 errors**, because
+`Omit<T, K>` over an index signature collapses every named property to `unknown`.
+
+**`src/types.conform.ts` covers those six** — and is a *source* file, not a test, because
+`tsconfig.build.json` excludes tests: assertions in a test file would never be type-checked.
+
+**Two bugs in my own guard, both caught by mutation-testing it:**
+* The first version could not fail. `never` is assignable to everything, so mapping fields to
+  `true | never` and constraining to `Record<string, true>` always passed — both mutations went
+  green against it. Collecting the offending *keys* instead is what gives it teeth.
+* The second flagged everything, because an open model's index signature puts `string` into
+  `keyof`. `DeclaredKeys<T>` strips it.
+
+**Real findings, now recorded in code as exported mismatch sets (→ B7b):** `NetworkLog.status`
+and `LLMLog.status` narrow a server `string`; `Post` and `Channel` diverge on the deliberately
+loose columns. Hovering the exported type names the offending fields.
+
+**Three genuine type inaccuracies fixed:** `includesQuery` and `resolveFilePath` declared
+`string | undefined` for values the server sends as `null` (the runtime already coped — only the
+types were wrong), and `PostTranslation.translatedText` is always sent.
+
+**`AlwaysSent<T, K>`** restores fields that a Pydantic default makes *look* optional:
+`timestamp: int = 0` is non-required in OpenAPI but always serialised.
+
+**Verified:** `tsc` clean, frontend **695 pass / 0 fail**, biome clean. Mutation-tested: retyping
+`Summary.timestamp` server-side fails with `Type '"timestamp"' does not satisfy the constraint
+'never'`.
+
+#### B7b — Enforce the remaining four conformance checks · **M** · after B7
+
+Turn `PostMismatches` / `ChannelMismatches` / `LLMLogMismatches` / `NetworkLogMismatches` in
+`src/types.conform.ts` into enforced `NoMismatches<…>`. Each needs the hand-written type widened
+to the server's looser reality, then the call sites that relied on the narrower one updated.
 
 ---
 
@@ -836,7 +877,7 @@ Measurable, re-runnable — same discipline as the remediation plan's §12.
 | Client-side caches / staleness systems | 3 | 1 |
 | Generated-client LOC | 10,796 → **4,866** | — |
 | `$ref`-typed API responses | 26/129 → **104/121** | all typeable (17 are SSE/binary/blob/template) |
-| Hand-written domain types mirroring server tables | 24 | 0 |
+| Hand-written domain types mirroring server tables | 24 → **6** (9 rebased, 9 UI-only) | 0 |
 | Largest route module | 1,438 LOC → **425** | < 400 |
 | Largest frontend context | 1,103 LOC | < 300 |
 | Largest backend function | 257 → **174** (`run_retention_cleanup`, out of H scope; sync path now ≤ 120) | < 80 |

@@ -69,8 +69,13 @@ export function jsonIncludes(value: unknown, query: string): boolean {
   return value ? JSON.stringify(value).toLowerCase().includes(query) : false
 }
 
-const includesQuery = (text: string | undefined, query: string): boolean =>
-  text ? text.toLowerCase().includes(query) : false
+// `string | null` because that is what the server actually sends: a nullable
+// column (`error`, `textSent`, …) serialises as `null`, not as an absent key.
+// The runtime already coped; only the type was wrong. Surfaced by B7.
+const includesQuery = (
+  text: string | null | undefined,
+  query: string,
+): boolean => (text ? text.toLowerCase().includes(query) : false)
 
 export function filterPublishLogs(
   logs: PublishLog[],

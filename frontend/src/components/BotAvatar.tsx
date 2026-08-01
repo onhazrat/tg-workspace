@@ -3,7 +3,7 @@ import { useEffect, useState } from "react"
 import { api } from "@/api"
 import type { BotCredential } from "@/types"
 
-function resolveFilePath(photoUrl?: string): string | null {
+function resolveFilePath(photoUrl?: string | null): string | null {
   if (!photoUrl) return null
   if (photoUrl.includes("api.telegram.org/file/bot")) {
     const parts = photoUrl.split("/file/bot")
