@@ -151,7 +151,7 @@ export const usersDeleteUserMe = <ThrowOnError extends boolean = true>(options?:
                 type: 'http'
             }
         ],
-        responseStyle: 'fields',
+        responseStyle: 'data',
         url: '/api/v1/users/me',
         ...options
     });

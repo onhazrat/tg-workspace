@@ -226,22 +226,9 @@ def test_api_resolve_start_time_v1(
     assert response.json() == {"startId": 300}
 
 
-def test_api_resolve_start_time_legacy_alias(
-    mock_resolver_deps: tuple[AsyncMock, AsyncMock],
-) -> None:
-    channel_info, fetch_post = mock_resolver_deps
-    with (
-        patch("app.services.scraper.get_channel_info", channel_info),
-        patch("app.services.scraper._fetch_post_at_url", fetch_post),
-        patch("app.services.scraper.asyncio.sleep", AsyncMock()),
-    ):
-        response = client.post(
-            "/api/resolve-start-time",
-            json={"channelName": "testchannel", "targetTimeMs": 3_000},
-            headers=_auth_headers(),
-        )
-    assert response.status_code == 200
-    assert response.json() == {"startId": 300}
+# The `/api/resolve-start-time` alias case that used to live here went with the
+# legacy router in E2; `tests/api/test_api_version_boundary.py` now asserts the
+# unversioned path is unrouted.
 
 
 def test_api_resolve_start_time_unavailable() -> None:

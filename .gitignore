@@ -6,7 +6,6 @@ __pycache__
 .env
 htmlcov
 .coverage
-_template_tmp
 TG-Summarizer/tor-bin
 *.pyc
 .DS_Store

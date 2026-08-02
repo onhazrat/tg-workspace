@@ -27,13 +27,13 @@ def test_health_check() -> None:
 
 
 def test_proxy_health() -> None:
-    r = client.get("/api/proxy-health", headers=_auth_headers())
+    r = client.get("/api/v1/network/proxy-health", headers=_auth_headers())
     assert r.status_code == 200
     assert "badProxies" in r.json()
 
 
 def test_tor_status() -> None:
-    r = client.get("/api/tor-status", headers=_auth_headers())
+    r = client.get("/api/v1/network/tor-status", headers=_auth_headers())
     assert r.status_code == 200
     data = r.json()
     assert "running" in data
@@ -85,7 +85,9 @@ def test_data_channels_crud() -> None:
 
 
 def test_scrape_invalid_url() -> None:
-    r = client.post("/api/scrape", json={"url": "not-a-url"}, headers=_auth_headers())
+    r = client.post(
+        "/api/v1/telegram/scrape", json={"url": "not-a-url"}, headers=_auth_headers()
+    )
     assert r.status_code == 400
 
 

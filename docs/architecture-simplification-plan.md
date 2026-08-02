@@ -18,7 +18,7 @@ Agreed on 2026-07-31, before this plan was written:
 | 1 | **Retire the IndexedDB hybrid.** Supersede ADR-003 and Decisions #4/#5. | Workstream A is in scope. No offline browsing. |
 | 2 | **Incremental, independently shippable units.** | No phase gates. Every unit below is safe to merge alone, in almost any order. |
 | 3 | **Prepare multi-user seams; implement no multi-user behaviour.** | Where a refactor touches a boundary multi-user needs anyway, pick the shape that won't be redone. Ship no user-scoping. |
-| 4 | Template residue (`items`, `legacy.py`, `_template_tmp/`) | **Open** — see workstream E. Audit §6 provides the input needed to decide. |
+| 4 | Template residue (`items`, `legacy.py`, `_template_tmp/`) | **Decided 2026-08-02.** Not one question but three: `legacy.py` deleted, `_template_tmp/` was already gone, **`items` kept** — it is the codebase's only owner-scoped resource and Decision #3 wants that seam. See workstream E. |
 
 ---
 
@@ -1066,21 +1066,67 @@ at `EmbeddingLogResponse` fails 3 tests. `test_route_inventory.py`'s count asser
 
 ---
 
-### Workstream E — Template residue *(decision open)*
+### Workstream E — Template residue · ✅ **DECIDED 2026-08-02 — workstream E COMPLETE**
 
-*Addresses E8. Blocked on your call — audit §6 is the input.*
+*Addresses E8. Decision taken; audit §6 was the input.*
 
-The audit's finding: the keep-it argument is easier upstream template re-syncs, but workstream F
-deliberately diverges from the template's client config anyway, so that fidelity is being spent
-regardless. `users`/auth stays either way — it is load-bearing and multi-user needs it.
+The audit framed all three as one question — "delete the template leftovers" — and the answer
+turned out to be different for each. Surveying them before acting is what separated them.
 
-- **E1** — delete `items` router + models + `components/Items/` + routes · **S**
-- **E2** — delete `routes/legacy.py` (self-declared temporary, non-production only) · **S**
-- **E3** — delete `_template_tmp/` · **S**
+#### E1 — `items` · ❌ **WON'T DO — kept deliberately**
 
-**Verify:** `uv run pytest tests/ -q`; regenerate client; `bunx tsc --noEmit`; e2e.
-Note that `MEMORY.md` records 3 Playwright specs already failing on a pre-existing
-`PrivateService` client-generation gap — scope e2e runs to `summarizer.spec.ts` and don't chase those.
+**`items` is the only owner-scoped resource in the codebase, and multi-user is on the roadmap.**
+Every route in `routes/items.py` does `if not current_user.is_superuser and item.owner_id !=
+current_user.id`, and `User.items` is the only `cascade_delete` relationship in `models.py`.
+CLAUDE.md records the current position — *"one superuser owns all data — no per-user row scoping
+yet"* — and `MEMORY.md`'s multi-user roadmap says that is changing. So the template residue is
+also the working reference implementation of the exact pattern the multi-user work needs: read
+filtered by owner, write stamped with owner, superuser bypass, cascade on user delete.
+
+Deleting it would have cost 293 LOC of backend, six model classes, a frontend module and a route —
+and then the multi-user work would re-derive the same seven `owner_id` checks from the upstream
+template. The audit's own keep-it argument (upstream re-sync fidelity) is indeed dead, since
+workstream F deliberately diverges from the template's client config. **This is a different
+argument, and it survives.**
+
+Cost of keeping it: a `/items` demo route and a sidebar entry visible to the operator, and
+`tests/items.spec.ts` remains one of the three known-failing Playwright specs. Both are accepted.
+`frontend/src/api/sdk-call-shape.test.ts` also uses `itemsUpdateItem` as its probe for
+"id in the URL, fields in the body" — keeping `items` keeps that probe valid.
+
+**Revisit when:** multi-user row scoping actually lands on the domain tables. At that point `items`
+has served its purpose and becomes deletable in the same change.
+
+#### E2 — `routes/legacy.py` · ✅ **DONE 2026-08-02**
+
+Deleted, with its mount in `app/main.py`. It re-exported eleven pre-versioning aliases
+(`/api/publish`, `/api/bot-info`, `/api/tor-status`, …), each a call-through to the `/api/v1`
+handler with a `Deprecation` header, mounted only when `ENVIRONMENT != "production"`.
+
+Two facts made this safe rather than merely tidy: **the frontend calls zero non-v1 paths** (grep
+for `"/api/[^v]` in `frontend/src` returns nothing), and production already answered **410** for
+them via the middleware in `main.py`. So the aliases served no live client in any environment
+that matters. Confirmed with the operator that nothing outside the repo calls them either.
+
+**The 410 middleware stays.** With the router gone those paths are unrouted and a 404 would be
+truthful, but 410 Gone says *this existed and was withdrawn*, which is the more useful answer for a
+caller still holding old URLs — and it keeps the version boundary declared in one place.
+
+`tests/api/test_legacy.py` became `tests/api/test_api_version_boundary.py`: the two pass-through
+tests are gone with the routes, and what replaces them pins the boundary — all eleven aliases 404
+in every environment (a 401 would mean the router came back), production still 410s, and the 410
+does not swallow `/api/v1` itself, which is a prefix of `/api/`. `test_resolve_start_time.py`'s
+alias case went the same way.
+
+#### E3 — `_template_tmp/` · ✅ **DONE — it was already gone**
+
+Not on disk, zero tracked files (`git ls-files _template_tmp` is empty), and gitignored. The only
+residue was the `.gitignore` line, now removed. Nothing to delete; the backlog item outlived the
+thing it described.
+
+**Verified:** `uv run pytest tests/ -q`; `bash scripts/lint.sh`. No client regeneration needed —
+`generate-client.sh` already ran with `ENVIRONMENT=production`, so the legacy routes were never in
+the committed `openapi.json`, and E1's decision leaves the `items` surface untouched.
 
 ---
 
@@ -1675,25 +1721,20 @@ time and buys little. Included here so it is explicitly deprioritised rather tha
 
 ---
 
-## 3b. What is left, as of 2026-08-01
+## 3b. What is left, as of 2026-08-02
 
-Everything below is unstarted. Nothing here is blocked except workstream E.
+**Workstreams A, B, C, D, E, G, H and T are complete.** Nothing is blocked.
 
-> **F1b shipped**, so the row for it is gone and F2 is unblocked. What F1b left behind for A3/G2:
-> `ApiError` in `api/base.ts` carries a real `status` for both clients, and there is no longer a
-> global react-query `onError` — anything that needs to react to a failure has to do it where the
-> failure happens.
+> A3 → A4 shipped the whole data-path track: `repository.ts` (956 LOC / 67 exports) is gone, the
+> IndexedDB layer with it (−2,491 lines), and PostgreSQL is the only client-side store. G2 landed
+> alongside. E was decided rather than executed wholesale — see §E for why `items` stays.
 
 | Unit | Size | Blocked by | Note |
 |---|---|---|---|
-| **A3** — collapse `repository.ts` into query hooks | **L** | — | **956 LOC / 67 exports / 45 consumer files — surveyed 2026-08-01, see §A3 for the family split and three corrections to the original description.** Do the `queryClient`-singleton + explicit-invalidation prerequisite first, then one family per PR starting with logs (21 of 67). Port `repository.test.ts`'s `singleFlight` concurrency assertions to the hook layer rather than deleting them, and delete the now-callerless `getPostsByDateRange` here. |
-| **A4** — delete the IndexedDB layer | **M** | A3 | **Must also repoint `DatabaseManagement`'s Export/Import DB** at `GET /data/export` / `POST /data/import` — see A2. That import currently writes *nowhere but the browser*, so deleting the mirror without repointing it turns the feature into a silent no-op. Keep reading the legacy `{type:"store"}` JSONL so existing backups still import. One-way door: ship a release after A3. |
-| **G2** — reduce the provider tree | **M** | A3 | Also the right place to promote `usePostFilters` to a context, which G1 deliberately deferred. |
-| **F2** — closed-model families onto the generated client | **M** (was L) | — | **Re-scoped 2026-08-02 — see §F2.** A3 concentrated all API access into seven store modules, so this is now "point seven files at the client". But the generated types are a *regression* for the six open response models (`stats` on `ChannelResponse` types as `unknown`), so only the closed-model families (`jobs`, `network`, `rag`, `tg`) should move. Rewrite ADR-006 with that as the reason for keeping two clients. |
-| **E1/E2/E3** — template residue | 3×**S** | **your decision** | Blocks nothing. |
+| **F2** — closed-model families onto the generated client | **M** (was L) | — | **The only unit left.** Re-scoped 2026-08-02 — see §F2. A3 concentrated all API access into seven store modules, so this is now "point seven files at the client". But the generated types are a *regression* for the six open response models (`stats` on `ChannelResponse` types as `unknown`), so only the closed-model families (`jobs`, `network`, `rag`, `tg`) should move. Rewrite ADR-006 with that as the reason for keeping two clients. |
 | **I** — component size outliers | — | — | Explicitly deprioritised; only where G1/A3 force changes. |
 
-**Recommended order:** `A3` → `A4` + `G2` in parallel → `F2`. (`F1b` shipped 2026-08-01.)
+**Recommended order:** `F2`, then stop. `I` is not worth opening on its own.
 
 ---
 

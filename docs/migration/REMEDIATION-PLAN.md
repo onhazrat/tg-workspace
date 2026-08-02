@@ -227,7 +227,7 @@ flowchart TB
 - [x] **Frontend cutover** — verify no callers use `/api/*`:
   - `frontend/src/api/tg.ts`, `frontend/src/api/network.ts`, `frontend/src/services/telegram.ts` — all should use `/api/v1/...` via `frontend/src/api/base.ts`.
   - Grep repo for `"/api/publish"`, `"/api/bot-info"`, `"/api/scrape"`.
-- [ ] **Remove legacy router** — `backend/app/main.py` — delete `app.include_router(legacy.router)` after cutover + one release cycle.
+- [x] **Remove legacy router** — done 2026-08-02 (workstream E2): `routes/legacy.py` deleted along with its mount. The 410 middleware stays.
 - [x] **OpenAPI cleanup** — ensure generated client (`frontend/src/client/sdk.gen.ts`) has no legacy paths after regen.
 
 #### Acceptance criteria

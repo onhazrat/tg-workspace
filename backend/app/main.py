@@ -11,7 +11,6 @@ from starlette.middleware.cors import CORSMiddleware
 from starlette.responses import JSONResponse
 
 from app.api.main import api_router
-from app.api.routes import legacy
 from app.core.config import settings
 from app.core.db import engine, init_db
 from app.core.startup_checks import run_startup_checks
@@ -62,6 +61,14 @@ if settings.all_cors_origins:
 
 @app.middleware("http")
 async def block_legacy_api_in_production(request: Request, call_next: Any) -> Any:
+    """Answer 410, not 404, for the pre-`/api/v1` surface.
+
+    E2 deleted `routes/legacy.py`, so those paths are simply unrouted now and a
+    404 would be truthful. This stays anyway: 410 Gone says *this existed and
+    was withdrawn*, which is the accurate answer for a caller still holding the
+    old URLs, and it keeps the version boundary declared in one place rather
+    than only in the router prefix.
+    """
     path = request.url.path
     if (
         settings.ENVIRONMENT == "production"
@@ -76,7 +83,3 @@ async def block_legacy_api_in_production(request: Request, call_next: Any) -> An
 
 
 app.include_router(api_router, prefix=settings.API_V1_STR)
-if settings.ENVIRONMENT != "production":
-    app.include_router(legacy.router)
-else:
-    logger.info("Legacy /api/* router disabled in production (use /api/v1/*)")
