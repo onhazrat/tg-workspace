@@ -49,8 +49,7 @@ const UserInformation = () => {
   }
 
   const mutation = useMutation({
-    mutationFn: (data: UserUpdateMe) =>
-      usersUpdateUserMe({ requestBody: data }),
+    mutationFn: (data: UserUpdateMe) => usersUpdateUserMe({ body: data }),
     onSuccess: () => {
       showSuccessToast("User updated successfully")
       toggleEditMode()

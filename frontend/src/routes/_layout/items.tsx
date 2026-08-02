@@ -11,7 +11,7 @@ import PendingItems from "@/components/Pending/PendingItems"
 
 function getItemsQueryOptions() {
   return {
-    queryFn: () => itemsReadItems({ skip: 0, limit: 100 }),
+    queryFn: () => itemsReadItems({ query: { skip: 0, limit: 100 } }),
     queryKey: ["items"],
   }
 }

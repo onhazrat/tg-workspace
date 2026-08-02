@@ -1,14 +1,8 @@
-import {
-  MutationCache,
-  QueryCache,
-  QueryClient,
-  QueryClientProvider,
-} from "@tanstack/react-query"
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import { createRouter, RouterProvider } from "@tanstack/react-router"
 import { StrictMode } from "react"
 import { createRoot } from "react-dom/client"
-import { clearStaleSession, isAuthFailure } from "@/api/base"
-import { ApiError, OpenAPI } from "@/client"
+import { configureGeneratedClient } from "@/api/generated-client"
 import { ThemeProvider } from "@/components/theme-provider"
 import { routeTree } from "@/routeTree.gen"
 import "./index.css"
@@ -50,26 +44,15 @@ if (
   }
 }
 
-OpenAPI.BASE = import.meta.env.VITE_API_URL || ""
-OpenAPI.TOKEN = async () => localStorage.getItem("access_token") || ""
+configureGeneratedClient()
 
-const apiKey = import.meta.env.VITE_API_KEY
-if (apiKey) {
-  OpenAPI.HEADERS = { "X-API-Key": apiKey }
-}
-
-const handleApiError = (error: Error) => {
-  const status = error instanceof ApiError ? error.status : 401
-  const detail = error instanceof Error ? error.message : String(error)
-  if (localStorage.getItem("access_token") && isAuthFailure(status, detail)) {
-    clearStaleSession()
-  }
-}
-
-const queryClient = new QueryClient({
-  queryCache: new QueryCache({ onError: handleApiError }),
-  mutationCache: new MutationCache({ onError: handleApiError }),
-})
+// No `QueryCache`/`MutationCache` `onError` here on purpose. It used to clear a
+// stale session, but it could only read a status off the generated client's
+// errors and **defaulted everything else to 401** — so any failing summarizer
+// query, including a plain 500, logged the operator out. Both clients now
+// detect an auth failure at the transport, where the real status is (see
+// `api/base.ts` and `api/generated-client.ts`).
+const queryClient = new QueryClient()
 
 const router = createRouter({ routeTree })
 

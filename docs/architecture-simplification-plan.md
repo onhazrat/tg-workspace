@@ -341,6 +341,52 @@ assertions to the hook layer rather than deleting them).
 - Delete the write-fallback handler and its toast in `TgProviders.tsx`.
 - **Verify:** full frontend suite + e2e. Grep gate: `grep -rn "lib/repository" frontend/src` → 0.
 
+**Survey, 2026-08-01 (before starting).** `repository.ts` is **956 LOC / 67 exports / 45
+consumer files**. It is not one unit: split it by resource family, which is how it is already
+organised internally.
+
+| Family | fns | consumer files |
+|---|---|---|
+| logs | 21 | 18 |
+| channels | 7 | 20 |
+| summaries + tag runs | 8 | 16 |
+| posts | 7 | 12 |
+| bot credentials + chat destinations | 6 | 5 |
+| embeddings, translations, stats, network settings, migration | ~13 | — |
+| infrastructure (`singleFlight`, `apiWrite`, `listWithStaleCheck`, etag staleness, write fallback) | 5 | — |
+
+The infrastructure block can only be deleted once **every** family is migrated, so it stays until
+last. Start with **logs** — the largest single reduction (21 of 67) and the one D1/D2 already
+simplified server-side.
+
+**Three things the description above gets wrong, found by surveying:**
+
+1. **"Move each caller to a `hooks/use*.ts` query/mutation" is impossible for half of them.**
+   The log *writers* are mostly **not React**: `services/telegram.ts`, `services/ai.ts`,
+   `lib/network/tor-actions.ts`, `lib/channels/add-channel.ts`,
+   `lib/channels/refresh-metadata.ts`, `components/settings/network/useProxyTesting.ts`. They
+   cannot call a hook. They need a plain function — the point is to delete the *cache and
+   staleness* layer, not to force everything through React.
+
+2. **Deleting the etag path deletes the only thing that makes a written log appear.** Today
+   `apiWrite` calls `refreshSyncMeta(true)`, and the next `listWithStaleCheck` sees a changed
+   etag and refetches. `staleTime` does **not** replace that: it decides when a refetch is
+   *allowed*, not when one is *needed*. Writes must invalidate explicitly — and the non-React
+   writers above have no `useQueryClient`, so the `queryClient` singleton has to become
+   importable (it is currently constructed inline in `main.tsx`). **Do this first**, or every
+   migrated family silently shows data up to `SUMMARIZER_STALE_TIME` old.
+
+   This also means the logs slice cannot be split read-first/write-later: the reads stop being
+   self-refreshing the moment they leave `listWithStaleCheck`, so the writes have to land in the
+   same PR.
+
+3. **`useInvalidateLogs` in `hooks/useLogs.ts` has zero callers** — it was written for this and
+   never wired up. Freshness rides entirely on the etag path today. Either wire it in as part of
+   the logs slice or delete it; leaving it is how the illusion of coverage persists.
+
+Also: `useCachePrune.ts` imports `deleteOldLogs`/`deleteOldPosts` from `lib/cache`, **not**
+`lib/repository`, so it is untouched by A3 and belongs to A4.
+
 #### A4 — Delete the IndexedDB layer · **M** · after A3
 
 Remove `lib/cache.ts`, `workers/dbWorker.ts`, `MigrationPrompt.tsx`, `useCachePrune.ts`,
@@ -824,21 +870,78 @@ functions. The 16 `XService.method()` call sites became `xServiceMethod()`.
 
 **Verified:** frontend **686 pass / 0 fail**, `tsc` clean, biome clean, `bun run build` succeeds.
 
-#### F1b — Replace `legacy/axios` with the fetch transport · **M** · *not* S
+#### F1b — Replace `legacy/axios` with the fetch transport · ✅ **DONE 2026-08-01**
 
-Split out of F1: the plan sized all three changes as **S** together, which is wrong for this one.
-`@hey-api/client-fetch` does not throw — it returns `{data, error, response}` — so the swap
-changes error *semantics*, not just wiring:
+**Shipped:** `plugins: ["legacy/axios"]` → `[{name: "@hey-api/client-fetch", throwOnError: true}]`,
+the whole hand-rolled `src/client/core/` transport (**573 LOC**: `request.ts`, `OpenAPI.ts`,
+`ApiError.ts`, `CancelablePromise.ts`) deleted in favour of the maintained runtime, and the
+`axios` dependency removed. Bundle **2200 KB → 2152 KB** across the same 25 chunks — a real
+48 KB, unlike F1a's claimed saving.
 
-- `main.tsx` builds its `QueryCache`/`MutationCache` `onError` around `err instanceof ApiError`
-- `utils.ts` narrows on both `ApiError` and `AxiosError`
-- all 16 call sites currently rely on a throwing client
+**Two codegen options carry the whole unit.** `@hey-api/client-fetch` resolves to
+`{data, error, response}` and never throws. Left at that default it would not merely have
+changed 16 call sites — it would have **silently broken every react-query `queryFn`**, since
+react-query decides a query failed by the promise rejecting, so each failure would have read as
+a successful query returning `undefined`. `throwOnError` (on the *client* plugin — setting it on
+`@hey-api/sdk` is accepted and does nothing) plus `responseStyle: "data"` (on the sdk plugin)
+restore the legacy contract exactly. `responseStyle` has to be a *generator* option, not a
+runtime one: the runtime honours a client-level value, but the SDK only threads the matching
+type parameter when the generator emits it per call, so setting it at runtime alone leaves the
+types describing a shape the functions no longer return.
 
-Plus the `clearStaleSession()` port (the 401/403 redirect from `api/base.ts`), which is the one
-behaviour the generated client lacks. Removing the `axios` dependency happens here, not in F1a.
+Also mechanical, and forced by the modern parser: `requestBody:` → `body:`, path params →
+`path: {…}`, query params → `query: {…}`, `Body_login_login_access_token` →
+`BodyLoginLoginAccessToken`, `LLMLogResponse` → `LlmLogResponse`. The legacy
+`classNameBuilder`/`methodNameBuilder` had to go — they read `operation.name`/`operation.service`,
+which the modern parser does not emit, and **crash the generator outright**. Function names are
+unchanged, because the backend's `<tag>-<function_name>` operation ids already camelCase to
+exactly what the builder used to produce.
 
-- **Verify:** `tsc`; `bun run lint`; **the e2e login flow specifically** — that is the path the
-  error-handling change can silently break, and it is why this needs its own PR.
+> **The unit found a live logout bug, and fixing it is the reason `ApiError` moved.**
+> `main.tsx` cleared a stale session from a `QueryCache`/`MutationCache` `onError` reading
+> `error instanceof ApiError ? error.status : 401`. Only the *generated* client threw an
+> `ApiError`. Every hand-written `api/` call — which is what `useChannels`, `useDiscover`,
+> `usePostsView` and the rest run inside react-query — throws a plain `Error`, so **every**
+> failure took the `401` branch: a 500 on any summarizer query logged the operator out
+> mid-session.
+>
+> `ApiError` now lives in `api/base.ts`, both clients throw it, and both detect an auth failure
+> at the transport where the real status is. The global `onError` is deleted rather than fixed —
+> with the status available at the throw site there is nothing left for it to do.
+
+`@hey-api/client-fetch` throws the *parsed body* (a plain object), not an `Error`, and the body
+carries no status. `api/generated-client.ts` recombines the two in an error interceptor — the
+only place holding both the body and the `Response` — and that is also where `handleAuthError`
+runs, mirroring what `base.ts`'s `request()` already did for the hand-written client.
+
+**Verified:** `tsc` clean; **756 pass / 0 fail** across 104 files (744/103 before — the delta is
+exactly the 12 new transport tests); biome clean; `bun run build` succeeds; the client
+regenerates byte-identically. The 12 tests were **mutation-tested against 8 mutations** — client
+stops throwing, `{data}` envelope returns, auth handling removed, every failure logs out (the
+pre-F1b bug), raw body thrown, status not carried, `detail` not extracted, request interceptor
+removed — and all 8 fail the suite.
+
+**e2e:** `login`, `sign-up`, `reset-password`, `user-settings`, `admin` and `items` —
+**59 pass / 3 fail**, and the same 3 fail identically on pre-F1b `origin/main` (verified in a
+throwaway worktree at `d541278`), so none is caused by this unit: `admin › Edit a user`,
+`items › Edit an item` (both time out clicking Save with *"element is not stable … detached from
+the DOM"*, so no request is ever sent) and `user-settings › switch between theme modes` (pure
+`localStorage`, no API). The two edit call sites are the only converted ones passing a path param
+*and* a body, so `sdk-call-shape.test.ts` pins their translation deterministically instead —
+method, id-in-URL, and body — which the flaky e2e cannot.
+
+> **F1b also unblocked two whole e2e specs that could not previously load.**
+> `tests/utils/privateApi.ts` imported `OpenAPI` and `PrivateService` from the generated client,
+> but `scripts/generate-client.sh` exports the spec with `ENVIRONMENT=production` *on purpose*,
+> so `openapi.json` has no `/private` path and that symbol can never exist. The import threw at
+> module load and took `admin.spec.ts` and `items.spec.ts` with it. It is now a bare `fetch`,
+> which is the only form that is correct however the spec was generated. This is the
+> "pre-existing client-generation gap" recorded in memory — closed.
+
+> One mutation was badly formed on the first attempt and reported a false pass: `usersDeleteUserMe`,
+> `usersReadUserMe` and `usersUpdateUserMe` all share the URL `/api/v1/users/me`, so a URL-anchored
+> patch hit the wrong function. Re-anchored on the whole function opening, it fails as it should.
+> Third unit in a row where mutation testing caught something the green suite did not.
 
 #### F2 — Move summarizer calls onto the generated client · **L** · after B2–B6 and F1
 
@@ -1087,17 +1190,21 @@ time and buys little. Included here so it is explicitly deprioritised rather tha
 
 Everything below is unstarted. Nothing here is blocked except workstream E.
 
+> **F1b shipped**, so the row for it is gone and F2 is unblocked. What F1b left behind for A3/G2:
+> `ApiError` in `api/base.ts` carries a real `status` for both clients, and there is no longer a
+> global react-query `onError` — anything that needs to react to a failure has to do it where the
+> failure happens.
+
 | Unit | Size | Blocked by | Note |
 |---|---|---|---|
-| **A3** — collapse `repository.ts` into query hooks | **L** | — | 66 exported functions, **47 consumer files**. The largest and riskiest remaining unit: it touches every write path. Port `repository.test.ts`'s `singleFlight` concurrency assertions to the hook layer rather than deleting them, and delete the now-callerless `getPostsByDateRange` here. |
+| **A3** — collapse `repository.ts` into query hooks | **L** | — | **956 LOC / 67 exports / 45 consumer files — surveyed 2026-08-01, see §A3 for the family split and three corrections to the original description.** Do the `queryClient`-singleton + explicit-invalidation prerequisite first, then one family per PR starting with logs (21 of 67). Port `repository.test.ts`'s `singleFlight` concurrency assertions to the hook layer rather than deleting them, and delete the now-callerless `getPostsByDateRange` here. |
 | **A4** — delete the IndexedDB layer | **M** | A3 | **Must also repoint `DatabaseManagement`'s Export/Import DB** at `GET /data/export` / `POST /data/import` — see A2. That import currently writes *nowhere but the browser*, so deleting the mirror without repointing it turns the feature into a silent no-op. Keep reading the legacy `{type:"store"}` JSONL so existing backups still import. One-way door: ship a release after A3. |
 | **G2** — reduce the provider tree | **M** | A3 | Also the right place to promote `usePostFilters` to a context, which G1 deliberately deferred. |
-| **F1b** — `legacy/axios` → fetch transport | **M** | — | Independent. Changes error *semantics* (`{data, error}` vs throwing); needs the e2e login flow. |
-| **F2** — summarizer calls onto the generated client | **L** | F1b | Supersede ADR-006 with the corrected rationale. |
+| **F2** — summarizer calls onto the generated client | **L** | — | F1b is done, so this is unblocked. Supersede ADR-006 with the corrected rationale. The two clients now share `ApiError`, so the error contract no longer differs between them. |
 | **E1/E2/E3** — template residue | 3×**S** | **your decision** | Blocks nothing. |
 | **I** — component size outliers | — | — | Explicitly deprioritised; only where G1/A3 force changes. |
 
-**Recommended order:** `F1b` (independent, unblocks F2) → `A3` → `A4` + `G2` in parallel → `F2`.
+**Recommended order:** `A3` → `A4` + `G2` in parallel → `F2`. (`F1b` shipped 2026-08-01.)
 
 ---
 
@@ -1158,7 +1265,7 @@ Re-measured **2026-08-01**, after A1a–A1c, A2, B7b and G1.
 |---|---|---|---|
 | Data-access paths from `components/` | 7 | **6** (`lib/cache` down to 2 files) | 2 |
 | Client-side caches / staleness systems | 3 | 3 (A3/A4 remove two) | 1 |
-| Generated-client LOC | 10,796 | **4,866** | — |
+| Generated-client LOC | 10,796 | 11,120 — **up**, see below | — |
 | `$ref`-typed API responses | 26/129 | **104/121** | all typeable (17 are SSE/binary/blob/template) |
 | Hand-written domain types mirroring server tables | 24 | **6**, all now compiler-enforced (B7b) | 0 |
 | Largest route module | 1,438 LOC | **425** | < 400 |
@@ -1168,9 +1275,22 @@ Re-measured **2026-08-01**, after A1a–A1c, A2, B7b and G1.
 | Contexts with a test | 0/9 | 1/9 (`DataContext`) | ≥ 5/5 (after G2) |
 | Hooks with a test | 2/32 | **6/36** | the ones holding logic |
 | Frontend LOC (excl. generated) | 59,881 | 61,888 | ≈ 54,000 |
-| Frontend tests | 679 | **744** | — |
+| Frontend tests | 679 | **756** | — |
 | Backend tests | 767 | **809** | — |
-| Runtime deps removed | — | none yet | `idb`, `axios` |
+| Runtime deps removed | — | **`axios`** (F1b) | `idb`, `axios` |
+
+> **Generated-client LOC went up, and the metric is the thing that is wrong.** F1b deleted 573
+> lines of hand-rolled transport but `types.gen.ts` grew 2,378 → 7,340, because the modern
+> generator emits a `Data`/`Responses`/`Errors` triple per operation where `legacy/axios` emitted
+> nothing. Those types are what let a call site distinguish a path param from a query param from
+> a body at all; the legacy client took one flat bag of options and checked almost none of it.
+> Most of the 24 `tsc` errors were therefore shape changes, not latent bugs — but one was a real
+> bug the old client could not see: `queryFn: usersReadUserMe` passed *by reference*, so
+> react-query called it with its own context object. `legacy/axios` ignored the argument;
+> the new signature reads `context.client` as the SDK's `client` option.
+> Counting generated lines was a proxy for "noise that buries real diffs", which is why F1a
+> deleting `schemas.gen.ts` was worth doing; it is a bad proxy for type coverage bought with
+> generated code. Treat this row as retired rather than regressed.
 
 > **Two metrics have moved the "wrong" way, and both are expected.** Frontend LOC is *up* ~2,000:
 > this programme has so far been adding tests, response models and documented seams, while the

@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { useNavigate } from "@tanstack/react-router"
 
 import {
-  type Body_login_login_access_token as AccessToken,
+  type BodyLoginLoginAccessToken as AccessToken,
   loginLoginAccessToken,
   type UserPublic,
   type UserRegister,
@@ -23,13 +23,17 @@ const useAuth = () => {
 
   const { data: user } = useQuery<UserPublic | null, Error>({
     queryKey: ["currentUser"],
-    queryFn: usersReadUserMe,
+    // Wrapped, not passed directly: react-query calls a `queryFn` with its own
+    // context object (`{queryKey, signal, client, …}`), and the generated
+    // functions now take an options object whose `client` means something else
+    // entirely. Passing the reference compiles under `legacy/axios` only
+    // because that client ignored the argument.
+    queryFn: () => usersReadUserMe(),
     enabled: isLoggedIn(),
   })
 
   const signUpMutation = useMutation({
-    mutationFn: (data: UserRegister) =>
-      usersRegisterUser({ requestBody: data }),
+    mutationFn: (data: UserRegister) => usersRegisterUser({ body: data }),
     onSuccess: () => {
       navigate({ to: "/login" })
     },
@@ -40,9 +44,7 @@ const useAuth = () => {
   })
 
   const login = async (data: AccessToken) => {
-    const response = await loginLoginAccessToken({
-      formData: data,
-    })
+    const response = await loginLoginAccessToken({ body: data })
     localStorage.setItem("access_token", response.access_token)
   }
 

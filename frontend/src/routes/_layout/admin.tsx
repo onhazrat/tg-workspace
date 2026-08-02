@@ -11,7 +11,7 @@ import useAuth from "@/hooks/useAuth"
 
 function getUsersQueryOptions() {
   return {
-    queryFn: () => usersReadUsers({ skip: 0, limit: 100 }),
+    queryFn: () => usersReadUsers({ query: { skip: 0, limit: 100 } }),
     queryKey: ["users"],
   }
 }

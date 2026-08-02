@@ -1,6 +1,32 @@
 export const API_BASE = import.meta.env.VITE_API_URL || ""
 const API_KEY = import.meta.env.VITE_API_KEY || ""
 
+/**
+ * A failed HTTP response from either client, carrying the status.
+ *
+ * Both API clients throw this (ADR-006 keeps them separate; it does not require
+ * them to fail differently). `message` is the FastAPI `detail` string, which is
+ * what `lib/api-errors.ts` parses and what every existing `err instanceof Error`
+ * branch reads — so this is a strict widening of what was thrown before, not a
+ * new contract.
+ *
+ * **The `status` is the point.** Before F1b only the generated client's errors
+ * carried one, and `main.tsx` defaulted everything else to `401` — which meant
+ * any failing summarizer query logged the operator out. Auth failures are now
+ * handled once, at the transport, by both clients.
+ */
+export class ApiError extends Error {
+  readonly status: number
+  readonly body: unknown
+
+  constructor(status: number, detail: string, body?: unknown) {
+    super(detail)
+    this.name = "ApiError"
+    this.status = status
+    this.body = body
+  }
+}
+
 export function headers(json = true): HeadersInit {
   const h: Record<string, string> = {}
   if (json) h["Content-Type"] = "application/json"
@@ -48,7 +74,7 @@ export async function request<T>(path: string, init?: RequestInit): Promise<T> {
   if (!response.ok) {
     const detail = await parseErrorDetail(response)
     handleAuthError(response.status, detail)
-    throw new Error(detail)
+    throw new ApiError(response.status, detail)
   }
   return response.json() as Promise<T>
 }
@@ -59,7 +85,7 @@ export async function requestBlob(path: string): Promise<Blob> {
   if (!response.ok) {
     const detail = await parseErrorDetail(response)
     handleAuthError(response.status, detail)
-    throw new Error(detail)
+    throw new ApiError(response.status, detail)
   }
   return response.blob()
 }
@@ -80,7 +106,7 @@ export async function* sseJsonStream<T>(
   if (!response.ok) {
     const detail = await parseErrorDetail(response)
     handleAuthError(response.status, detail)
-    throw new Error(detail)
+    throw new ApiError(response.status, detail)
   }
   const reader = response.body?.getReader()
   if (!reader) return
@@ -120,7 +146,7 @@ export async function* sseTextStream(
   if (!response.ok) {
     const detail = await parseErrorDetail(response)
     handleAuthError(response.status, detail)
-    throw new Error(detail)
+    throw new ApiError(response.status, detail)
   }
   const reader = response.body?.getReader()
   if (!reader) return

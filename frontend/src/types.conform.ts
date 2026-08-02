@@ -57,7 +57,7 @@
 
 import type {
   ChannelResponse,
-  LLMLogResponse,
+  LlmLogResponse,
   NetworkLogResponse,
   PostResponse,
   SettingGroupResponse,
@@ -202,10 +202,10 @@ export type NetworkLogRefinementsHold = NoMismatches<
 /** Same `status` narrowing, plus `type`'s four known prompt kinds. */
 type LLMLogRefined = "status" | "type"
 export type LLMLogConforms = NoMismatches<
-  UnrefinedMismatches<LLMLogResponse, LLMLog, LLMLogRefined>
+  UnrefinedMismatches<LlmLogResponse, LLMLog, LLMLogRefined>
 >
 export type LLMLogRefinementsHold = NoMismatches<
-  BadRefinements<LLMLogResponse, LLMLog, LLMLogRefined>
+  BadRefinements<LlmLogResponse, LLMLog, LLMLogRefined>
 >
 
 /** Two JSON columns kept loose server-side (see `schemas/posts.py`), plus an enum. */
@@ -243,7 +243,7 @@ export type NetworkLogHasServerFields = NoMismatches<
 >
 export type LLMLogHasServerFields = NoMismatches<
   MissingServerFields<
-    LLMLogResponse,
+    LlmLogResponse,
     "id" | "status" | "timestamp" | "model" | "prompt" | "response"
   >
 >

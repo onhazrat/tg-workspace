@@ -1,20 +1,14 @@
-import { AxiosError } from "axios"
-import { ApiError } from "./client"
+import { ApiError } from "./api/base"
 
 function extractErrorMessage(err: unknown): string {
   if (err instanceof ApiError) {
+    // A 422 body carries `detail` as an array of per-field validation errors;
+    // anything else has already been flattened to a string in `message`.
     const errDetail = (err.body as { detail?: string | { msg: string }[] })
       ?.detail
-    if (typeof errDetail === "string") {
-      return errDetail
-    }
     if (Array.isArray(errDetail) && errDetail.length > 0) {
       return errDetail[0].msg
     }
-    return err.message
-  }
-
-  if (err instanceof AxiosError) {
     return err.message
   }
 

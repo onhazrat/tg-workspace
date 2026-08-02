@@ -59,7 +59,7 @@ function RecoverPassword() {
 
   const recoverPassword = async (data: FormData) => {
     await loginRecoverPassword({
-      email: data.email,
+      path: { email: data.email },
     })
   }
 
