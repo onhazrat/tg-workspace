@@ -1,5 +1,4 @@
 import type { CommandContext } from "@/lib/commands/types"
-import { clearChannelPosts } from "@/lib/repository"
 import type { Channel } from "@/types"
 import { deleteChannel } from "./store"
 
@@ -14,7 +13,6 @@ export async function deleteChannelByRecord(
   ctx: DeleteChannelContext,
 ): Promise<void> {
   await deleteChannel(channel.id)
-  await clearChannelPosts(channel.name)
   await ctx.loadChannels()
   await ctx.loadDBStats?.()
   ctx.setSelectedChannels((prev) => {

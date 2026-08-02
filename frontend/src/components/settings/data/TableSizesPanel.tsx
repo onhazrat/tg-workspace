@@ -3,18 +3,24 @@ import type React from "react"
 import { RelativeTime } from "@/components/RelativeTime"
 import { TgButton } from "@/components/ui/tg-button"
 import { TgIconButton } from "@/components/ui/tg-icon-button"
-import { TgSegmentedControl } from "@/components/ui/tg-segmented"
 import { TgSettingsSection } from "@/components/ui/tg-settings-section"
 import { isStaleCalculation } from "@/lib/data-freshness"
 
 export type TableSizeRow = { name: string; size: number; count: number }
-export type TableSizeSource = "local" | "server"
+/**
+ * Retained as a one-member union rather than deleted.
+ *
+ * A4 removed the browser mirror, so "local" no longer exists — but the cache
+ * keys in `DatabaseManagement` are namespaced by source, and keeping the type
+ * means an operator's cached server sizes survive the upgrade instead of being
+ * read back under a differently-shaped key.
+ */
+export type TableSizeSource = "server"
 
 type DbStats = {
   postCount?: number
   channelCount?: number
   summaryCount?: number
-  storageEstimate?: { usage?: number; quota?: number }
 } | null
 
 export const DatabaseStatsCards: React.FC<{ dbStats: DbStats }> = ({
@@ -66,50 +72,6 @@ export const DatabaseStatsCards: React.FC<{ dbStats: DbStats }> = ({
     <div className="border border-app-ink/10 p-6 bg-app-card shadow-sm flex flex-col justify-between">
       <div>
         <div className="flex items-center gap-3 mb-6 opacity-40">
-          <HardDrive size={16} />
-          <h4 className="text-[11px] uppercase font-bold tracking-widest">
-            Storage · Browser
-          </h4>
-        </div>
-        <div className="space-y-4">
-          <div className="flex justify-between items-center">
-            <span className="text-[10px] uppercase opacity-50 tracking-widest">
-              Used
-            </span>
-            <span className="font-mono font-bold text-[12px]">
-              {dbStats?.storageEstimate?.usage
-                ? `${(dbStats.storageEstimate.usage / (1024 * 1024)).toFixed(2)} MB`
-                : "Unknown"}
-            </span>
-          </div>
-          <div className="flex justify-between items-center">
-            <span className="text-[10px] uppercase opacity-50 tracking-widest">
-              Quota
-            </span>
-            <span className="font-mono font-bold text-[12px]">
-              {dbStats?.storageEstimate?.quota
-                ? `${(dbStats.storageEstimate.quota / (1024 * 1024 * 1024)).toFixed(2)} GB`
-                : "Unknown"}
-            </span>
-          </div>
-          {dbStats?.storageEstimate?.usage &&
-            dbStats?.storageEstimate?.quota && (
-              <div className="w-full h-1.5 bg-app-ink/5 rounded-full overflow-hidden mt-3">
-                <div
-                  className="h-full bg-app-ink/40"
-                  style={{
-                    width: `${(dbStats.storageEstimate.usage / dbStats.storageEstimate.quota) * 100}%`,
-                  }}
-                />
-              </div>
-            )}
-        </div>
-      </div>
-    </div>
-
-    <div className="border border-app-ink/10 p-6 bg-app-card shadow-sm flex flex-col justify-between">
-      <div>
-        <div className="flex items-center gap-3 mb-6 opacity-40">
           <AlertCircle size={16} />
           <h4 className="text-[11px] uppercase font-bold tracking-widest">
             Info · Browser Cache
@@ -151,13 +113,11 @@ type TableSizesPanelProps = {
   selectedTable: string
   selectedTablesForExport: Set<string>
   isCalculatingSizes: boolean
-  sizeSource: TableSizeSource
   actions?: React.ReactNode
   children?: React.ReactNode
   onSelectTable: (name: string) => void
   onToggleExportTable: (name: string, checked: boolean) => void
   onCalculateSizes: () => void
-  onChangeSizeSource: (source: TableSizeSource) => void
   onClearTable: (name: string) => void
 }
 
@@ -167,13 +127,11 @@ export const TableSizesPanel: React.FC<TableSizesPanelProps> = ({
   selectedTable,
   selectedTablesForExport,
   isCalculatingSizes,
-  sizeSource,
   actions,
   children,
   onSelectTable,
   onToggleExportTable,
   onCalculateSizes,
-  onChangeSizeSource,
   onClearTable,
 }) => (
   <TgSettingsSection
@@ -217,22 +175,6 @@ export const TableSizesPanel: React.FC<TableSizesPanelProps> = ({
       </>
     }
   >
-    <div className="flex items-center gap-3 mb-6">
-      <span className="text-[10px] uppercase opacity-50 tracking-widest font-bold">
-        Data Source
-      </span>
-      <TgSegmentedControl
-        size="dense"
-        aria-label="Table size data source"
-        value={sizeSource}
-        onChange={onChangeSizeSource}
-        options={[
-          { value: "local", label: "Local (Browser)" },
-          { value: "server", label: "Backend DB" },
-        ]}
-      />
-    </div>
-
     {tableSizes && (
       <div className="space-y-6">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">

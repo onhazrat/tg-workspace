@@ -2,122 +2,56 @@ import { toast } from "sonner"
 
 import { api } from "@/api"
 import { getNextTheme } from "@/components/theme-provider"
-import { clearAllData, exportDBMetadata, getTableSizes } from "@/lib/cache"
 import { filterChannelsForOperation } from "@/lib/channels/sync-permissions"
 import type { CommandDef } from "@/lib/commands/types"
 import {
+  exportDatabaseBlob,
+  importDatabaseFile,
+} from "@/lib/data-transfer/database"
+import {
   buildTimestampedFilename,
   downloadBlob,
-  pickSaveFile,
 } from "@/lib/data-transfer/download"
 import { triggerJsonlFilePicker } from "@/lib/data-transfer/upload"
 
+/**
+ * Whole-database export, to the server's streamed export.
+ *
+ * This ran in `workers/dbWorker.ts` against IndexedDB until A4. The command
+ * exports everything — the per-table selection lives in the Data settings
+ * panel, which is where the table list is visible.
+ */
 async function runDatabaseExport(): Promise<void> {
-  let fileHandle: FileSystemFileHandle | undefined
-  let useOPFS = false
-
+  toast.info("Exporting database…", { id: "export-progress" })
   try {
-    const saveResult = await pickSaveFile(
-      buildTimestampedFilename("telegram-summarizer-db"),
-    )
-    fileHandle = saveResult.fileHandle
-    useOPFS = saveResult.useBlobFallback
+    const blob = await exportDatabaseBlob()
+    downloadBlob(blob, buildTimestampedFilename("telegram-summarizer-db"))
+    toast.success("Database exported", { id: "export-progress" })
   } catch (err: unknown) {
-    if (err instanceof DOMException && err.name === "AbortError") return
-    useOPFS = true
-  }
-
-  const metadata = await exportDBMetadata()
-  const sizes = await getTableSizes()
-  const selectedTables = sizes.map((entry) => entry.name)
-
-  await new Promise<void>((resolve, reject) => {
-    const worker = new Worker(
-      new URL("../../workers/dbWorker.ts", import.meta.url),
-      { type: "module" },
+    toast.error(
+      `Export failed: ${err instanceof Error ? err.message : String(err)}`,
+      { id: "export-progress" },
     )
-
-    worker.onmessage = (event) => {
-      if (event.data.type === "PROGRESS") {
-        toast.info(event.data.message, { id: "export-progress" })
-        return
-      }
-      if (event.data.type === "SUCCESS") {
-        if (event.data.file) {
-          downloadBlob(
-            event.data.file,
-            buildTimestampedFilename("telegram-summarizer-db"),
-          )
-        }
-        toast.success("Database exported successfully", {
-          id: "export-progress",
-        })
-        worker.terminate()
-        resolve()
-        return
-      }
-      if (event.data.type === "ERROR") {
-        toast.error(`Export failed: ${event.data.error}`, {
-          id: "export-progress",
-        })
-        worker.terminate()
-        reject(new Error(event.data.error))
-      }
-    }
-
-    worker.postMessage({
-      type: "EXPORT",
-      fileHandle,
-      useOPFS,
-      metadata,
-      selectedTables,
-    })
-  })
+  }
 }
 
+/** Whole-database import, to `POST /data/import`. Reads legacy JSONL too. */
 async function runDatabaseImport(file: File): Promise<void> {
-  await new Promise<void>((resolve, reject) => {
-    const worker = new Worker(
-      new URL("../../workers/dbWorker.ts", import.meta.url),
-      { type: "module" },
+  toast.info("Importing database…", { id: "import-progress" })
+  try {
+    const imported = await importDatabaseFile(file)
+    const summary = Object.entries(imported)
+      .map(([table, count]) => `${table}: ${count}`)
+      .join(", ")
+    toast.success(`Import complete (${summary || "no records"})`, {
+      id: "import-progress",
+    })
+  } catch (err: unknown) {
+    toast.error(
+      `Import failed: ${err instanceof Error ? err.message : String(err)}`,
+      { id: "import-progress" },
     )
-
-    worker.onmessage = (event) => {
-      if (event.data.type === "PROGRESS") {
-        toast.info(event.data.message, { id: "import-progress" })
-        return
-      }
-      if (event.data.type === "METADATA") {
-        const meta = event.data.data
-        if (meta?.localStorage) {
-          localStorage.clear()
-          for (const [key, value] of Object.entries(meta.localStorage)) {
-            localStorage.setItem(key, value as string)
-          }
-        }
-        return
-      }
-      if (event.data.type === "SUCCESS") {
-        toast.success(event.data.message, { id: "import-progress" })
-        worker.terminate()
-        resolve()
-        return
-      }
-      if (event.data.type === "ERROR") {
-        toast.error(`Import failed: ${event.data.error}`, {
-          id: "import-progress",
-        })
-        worker.terminate()
-        reject(new Error(event.data.error))
-      }
-    }
-
-    worker.postMessage({ type: "IMPORT", file, clear: true })
-  })
-
-  setTimeout(() => {
-    window.location.reload()
-  }, 1500)
+  }
 }
 
 export function buildActionCommands(): CommandDef[] {
@@ -236,29 +170,13 @@ export function buildActionCommands(): CommandDef[] {
       },
     },
     {
-      id: "clear-cache",
-      kind: "action",
-      label: "Clear Cache",
-      keywords: ["clear", "cache", "data", "wipe", "indexeddb"],
-      group: "Data",
-      requiresConfirmation: true,
-      confirmDescription:
-        "This clears all local IndexedDB tables and localStorage. Server data is untouched.",
-      run: async () => {
-        await clearAllData()
-        toast.success("Local cache cleared")
-        window.location.reload()
-      },
-    },
-    {
       id: "export-database",
       kind: "action",
       label: "Export Database",
       keywords: ["export", "database", "backup", "jsonl", "download"],
       group: "Data",
       requiresConfirmation: true,
-      confirmDescription:
-        "Export all local database tables to a JSONL file on disk.",
+      confirmDescription: "Download a full backup of the server database.",
       run: async () => {
         await runDatabaseExport()
       },
@@ -271,7 +189,7 @@ export function buildActionCommands(): CommandDef[] {
       group: "Data",
       requiresConfirmation: true,
       confirmDescription:
-        "Import a JSONL backup file. This replaces local IndexedDB data and reloads the app.",
+        "Upload a backup file into the server database. Matching records are updated.",
       run: async () => {
         const file = await triggerJsonlFilePicker()
         if (!file) return

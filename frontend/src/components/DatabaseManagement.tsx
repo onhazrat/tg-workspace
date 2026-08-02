@@ -9,22 +9,17 @@ import { api } from "../api"
 import { useData } from "../contexts/DataContext"
 import { useSettings } from "../contexts/SettingsContext"
 import {
-  clearTable,
-  exportDBMetadata,
-  getTableSizes,
-  runQuery,
-} from "../lib/cache"
+  exportDatabaseBlob,
+  importDatabaseFile,
+} from "../lib/data-transfer/database"
 import {
   buildTimestampedFilename,
   downloadBlob,
-  pickSaveFile,
 } from "../lib/data-transfer/download"
-import { importIndexedDBToServer } from "../lib/repository"
 import {
   type ClearTableConfirm,
   DangerPanel,
 } from "./settings/data/DangerPanel"
-import { QueryPanel } from "./settings/data/QueryPanel"
 import { RetentionPanel } from "./settings/data/RetentionPanel"
 import {
   DatabaseStatsCards,
@@ -32,10 +27,7 @@ import {
   type TableSizeSource,
   TableSizesPanel,
 } from "./settings/data/TableSizesPanel"
-import {
-  TransferExportImportActions,
-  TransferPanel,
-} from "./settings/data/TransferPanel"
+import { TransferExportImportActions } from "./settings/data/TransferPanel"
 import { SettingAnchor } from "./settings/SettingAnchor"
 import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tg-tooltip"
 
@@ -62,12 +54,11 @@ export const DatabaseManagement: React.FC<{
 
   const [isExporting, setIsExporting] = useState(false)
   const [isImporting, setIsImporting] = useState(false)
-  const [isMigratingToServer, setIsMigratingToServer] = useState(false)
   const [confirmModal, setConfirmModal] = useState<ClearTableConfirm>(null)
 
-  // "Local" (browser IndexedDB) is the default source: it's what this panel
-  // always showed before the backend DB became a second, explicit option.
-  const [sizeSource, setSizeSource] = useState<TableSizeSource>("local")
+  // A4 removed the browser mirror, so there is one source of tables: the
+  // server. The local/server toggle this panel used to carry is gone with it.
+  const sizeSource: TableSizeSource = "server"
 
   const tableSizesCacheKey = (source: TableSizeSource) =>
     `tableSizesCache:${source}`
@@ -102,29 +93,15 @@ export const DatabaseManagement: React.FC<{
   })
   const [isCalculatingSizes, setIsCalculatingSizes] = useState(false)
   const [selectedTable, setSelectedTable] = useState<string>("")
-  const [query, setQuery] = useState<string>("")
-  const [queryResults, setQueryResults] = useState<unknown[] | null>(null)
-  const [isQuerying, setIsQuerying] = useState(false)
-  const [queryError, setQueryError] = useState<string | null>(null)
-
-  const handleChangeSizeSource = (source: TableSizeSource) => {
-    setSizeSource(source)
-    const sizes = readCachedSizes(source)
-    setTableSizes(sizes)
-    setTableSizesLastCalculated(readCachedLastCalculated(source))
-    setSelectedTablesForExport(
-      sizes ? new Set(sizes.map((s) => s.name)) : new Set(),
-    )
-    setSelectedTable(sizes?.[0]?.name ?? "")
-  }
+  const [_query, _setQuery] = useState<string>("")
+  const [_queryResults, _setQueryResults] = useState<unknown[] | null>(null)
+  const [_isQuerying, _setIsQuerying] = useState(false)
+  const [_queryError, _setQueryError] = useState<string | null>(null)
 
   const handleCalculateSizes = async () => {
     setIsCalculatingSizes(true)
     try {
-      const sizes =
-        sizeSource === "server"
-          ? await api.getTableSizes()
-          : await getTableSizes()
+      const sizes = await api.getTableSizes()
       setTableSizes(sizes)
       setSelectedTablesForExport(new Set(sizes.map((s) => s.name)))
       const now = Date.now()
@@ -148,116 +125,31 @@ export const DatabaseManagement: React.FC<{
     }
   }
 
-  const handleRunQuery = async () => {
-    if (!selectedTable) return
-    setIsQuerying(true)
-    setQueryError(null)
-    try {
-      const results = await runQuery(selectedTable, query)
-      setQueryResults(results)
-    } catch (err: unknown) {
-      console.error("Query failed:", err)
-      setQueryError(err instanceof Error ? err.message : String(err))
-      setQueryResults(null)
-    } finally {
-      setIsQuerying(false)
-    }
-  }
-
   const handleRefreshStats = async () => {
     await loadDBStats()
   }
 
-  const handleMigrateToServer = () => {
-    setConfirmModal({
-      isOpen: true,
-      title: "Migrate to Server",
-      message:
-        "This will export all IndexedDB data and upload it to the PostgreSQL backend. " +
-        "Existing server data for matching records will be updated. Continue?",
-      onConfirm: async () => {
-        setConfirmModal(null)
-        setIsMigratingToServer(true)
-        try {
-          const imported = await importIndexedDBToServer()
-          const summary = Object.entries(imported)
-            .map(([k, v]) => `${k}: ${v}`)
-            .join(", ")
-          toast.success(
-            `Server migration complete (${summary || "no records"})`,
-          )
-          await loadDBStats()
-          await loadChannels()
-          await loadHistory()
-        } catch (err: unknown) {
-          console.error("Server migration failed:", err)
-          toast.error(
-            `Server migration failed: ${err instanceof Error ? err.message : String(err)}`,
-          )
-        } finally {
-          setIsMigratingToServer(false)
-        }
-      },
-    })
-  }
-
   const handleExportDB = async () => {
+    setIsExporting(true)
     try {
-      let fileHandle: FileSystemFileHandle | undefined
-      let useOPFS = false
-      try {
-        const saveResult = await pickSaveFile(
-          buildTimestampedFilename("telegram-summarizer-db"),
-        )
-        fileHandle = saveResult.fileHandle
-        useOPFS = saveResult.useBlobFallback
-      } catch (err: unknown) {
-        if (err instanceof DOMException && err.name === "AbortError") return
-        useOPFS = true
-      }
-
-      setIsExporting(true)
-      const metadata = await exportDBMetadata()
-
-      const worker = new Worker(
-        new URL("../workers/dbWorker.ts", import.meta.url),
-        { type: "module" },
+      toast.info("Exporting database…", { id: "export-progress" })
+      // The whole selection means "everything"; `exportDatabaseBlob` treats an
+      // empty selection the same way.
+      const allSelected =
+        tableSizes !== null &&
+        selectedTablesForExport.size === tableSizes.length
+      const blob = await exportDatabaseBlob(
+        allSelected ? undefined : Array.from(selectedTablesForExport),
       )
-
-      worker.onmessage = (e) => {
-        if (e.data.type === "PROGRESS") {
-          toast.info(e.data.message, { id: "export-progress" })
-        } else if (e.data.type === "SUCCESS") {
-          if (e.data.file) {
-            downloadBlob(
-              e.data.file,
-              buildTimestampedFilename("telegram-summarizer-db"),
-            )
-          }
-          toast.success("Database exported successfully", {
-            id: "export-progress",
-          })
-          setIsExporting(false)
-          worker.terminate()
-        } else if (e.data.type === "ERROR") {
-          toast.error(`Export failed: ${e.data.error}`, {
-            id: "export-progress",
-          })
-          setIsExporting(false)
-          worker.terminate()
-        }
-      }
-
-      worker.postMessage({
-        type: "EXPORT",
-        fileHandle,
-        useOPFS,
-        metadata,
-        selectedTables: Array.from(selectedTablesForExport),
-      })
+      downloadBlob(blob, buildTimestampedFilename("telegram-summarizer-db"))
+      toast.success("Database exported successfully", { id: "export-progress" })
     } catch (err: unknown) {
       console.error("Export error:", err)
-      toast.error("Failed to start export")
+      toast.error(
+        `Export failed: ${err instanceof Error ? err.message : String(err)}`,
+        { id: "export-progress" },
+      )
+    } finally {
       setIsExporting(false)
     }
   }
@@ -265,63 +157,39 @@ export const DatabaseManagement: React.FC<{
   const handleImportDB = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
+    e.target.value = ""
 
+    setIsImporting(true)
     try {
-      setIsImporting(true)
-
-      const worker = new Worker(
-        new URL("../workers/dbWorker.ts", import.meta.url),
-        { type: "module" },
-      )
-
-      worker.onmessage = async (ev) => {
-        if (ev.data.type === "PROGRESS") {
-          toast.info(ev.data.message, { id: "import-progress" })
-        } else if (ev.data.type === "METADATA") {
-          const meta = ev.data.data
-          if (meta?.localStorage) {
-            localStorage.clear()
-            for (const [key, value] of Object.entries(meta.localStorage)) {
-              localStorage.setItem(key, value as string)
-            }
-          }
-        } else if (ev.data.type === "SUCCESS") {
-          toast.success(ev.data.message, { id: "import-progress" })
-          setIsImporting(false)
-          worker.terminate()
-          setTimeout(() => {
-            window.location.reload()
-          }, 1500)
-        } else if (ev.data.type === "ERROR") {
-          toast.error(`Import failed: ${ev.data.error}`, {
-            id: "import-progress",
-          })
-          setIsImporting(false)
-          worker.terminate()
-        }
-      }
-
-      worker.postMessage({ type: "IMPORT", file, clear: true })
+      toast.info("Importing database…", { id: "import-progress" })
+      const imported = await importDatabaseFile(file)
+      const summary = Object.entries(imported)
+        .map(([table, count]) => `${table}: ${count}`)
+        .join(", ")
+      toast.success(`Import complete (${summary || "no records"})`, {
+        id: "import-progress",
+      })
+      await Promise.all([loadDBStats(), loadChannels(), loadHistory()])
+      await handleCalculateSizes()
     } catch (err: unknown) {
       console.error("Import error:", err)
-      toast.error("Failed to start import")
+      toast.error(
+        `Import failed: ${err instanceof Error ? err.message : String(err)}`,
+        { id: "import-progress" },
+      )
+    } finally {
       setIsImporting(false)
     }
   }
 
   const handleClearTable = (tableName: string) => {
-    const sourceLabel = sizeSource === "server" ? "backend DB" : "local browser"
     setConfirmModal({
       isOpen: true,
       title: `Clear Table: ${tableName}`,
-      message: `Are you sure you want to delete all entries from the ${tableName} table in the ${sourceLabel}? This cannot be undone.`,
+      message: `Are you sure you want to delete all entries from the ${tableName} table? This cannot be undone.`,
       onConfirm: async () => {
         try {
-          if (sizeSource === "server") {
-            await api.clearServerTable(tableName)
-          } else {
-            await clearTable(tableName)
-          }
+          await api.clearServerTable(tableName)
           await loadDBStats()
           await handleCalculateSizes()
           setConfirmModal(null)
@@ -335,7 +203,6 @@ export const DatabaseManagement: React.FC<{
   }
 
   const showStats = focus === "data" || focus === "table-sizes"
-  const showTransfer = focus === "data" || focus === "transfer"
   const showRetention = focus === "data" || focus === "retention"
   const showTablesSection =
     focus === "data" ||
@@ -379,18 +246,6 @@ export const DatabaseManagement: React.FC<{
 
         {showStats && <DatabaseStatsCards dbStats={dbStats} />}
 
-        {showTransfer && (
-          <SettingAnchor
-            settingId="panel-transfer"
-            highlighted={highlightId === "panel-transfer"}
-          >
-            <TransferPanel
-              isMigratingToServer={isMigratingToServer}
-              onMigrate={handleMigrateToServer}
-            />
-          </SettingAnchor>
-        )}
-
         {showRetention && (
           <SettingAnchor
             settingId="panel-retention"
@@ -423,8 +278,6 @@ export const DatabaseManagement: React.FC<{
               selectedTable={selectedTable}
               selectedTablesForExport={selectedTablesForExport}
               isCalculatingSizes={isCalculatingSizes}
-              sizeSource={sizeSource}
-              onChangeSizeSource={handleChangeSizeSource}
               actions={
                 <TransferExportImportActions
                   isExporting={isExporting}
@@ -443,23 +296,7 @@ export const DatabaseManagement: React.FC<{
               }}
               onCalculateSizes={handleCalculateSizes}
               onClearTable={handleClearTable}
-            >
-              <SettingAnchor
-                settingId="panel-query"
-                highlighted={highlightId === "panel-query"}
-              >
-                <QueryPanel
-                  selectedTable={selectedTable}
-                  query={query}
-                  queryResults={queryResults}
-                  queryError={queryError}
-                  isQuerying={isQuerying}
-                  isServerSource={sizeSource === "server"}
-                  onQueryChange={setQuery}
-                  onRunQuery={handleRunQuery}
-                />
-              </SettingAnchor>
-            </TableSizesPanel>
+            />
           </SettingAnchor>
         )}
       </div>
@@ -471,10 +308,10 @@ export const DatabaseManagement: React.FC<{
           </h3>
           <p className="text-[11px] opacity-60 leading-relaxed font-serif">
             Channels, posts and summaries live in this deployment's PostgreSQL
-            database, which is the source of truth. Your browser also keeps a
-            local IndexedDB cache so the app stays readable while the server is
-            unreachable — clearing it loses nothing that has already synced.
-            Back up the server database; the browser cache is not a backup.
+            database, which is the only place they are stored. The browser keeps
+            nothing but your settings and the current selection, so clearing it
+            loses no data. Export from here to take a backup — and note that an
+            export is a point-in-time copy, not a running mirror.
           </p>
         </div>
       )}

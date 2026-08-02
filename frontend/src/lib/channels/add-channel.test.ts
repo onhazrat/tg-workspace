@@ -7,11 +7,11 @@ import {
 } from "@/lib/channels/add-channel"
 import {
   filterPostsByTextQuery,
-  filterSummariesByTextQuery,
   SEARCH_RESULTS_CAP,
 } from "@/lib/commands/search-filters"
 import type { CommandContext } from "@/lib/commands/types"
 import { getEntityCandidates } from "@/lib/commands/useChannelEntityFlow"
+import { filterSummariesByTextQuery } from "@/lib/summary-projection"
 import type { Channel, Post, Summary } from "@/types"
 
 const sampleChannels: Channel[] = [

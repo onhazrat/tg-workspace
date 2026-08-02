@@ -18,7 +18,7 @@ export function getExtendedEntityCandidates(
     // "pick-post" candidates are resolved in useEntityFlow, which fetches the
     // scoped posts on demand rather than reading an eager array.
     case "clear-db-table":
-      return (ctx.indexedDbTables ?? []).map((table) => ({
+      return (ctx.databaseTables ?? []).map((table) => ({
         id: table,
         label: table,
       }))

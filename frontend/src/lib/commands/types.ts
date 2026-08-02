@@ -197,7 +197,8 @@ export interface CommandContext {
   ) => Promise<boolean>
   loadHistory: () => Promise<void>
   currentSummaryId: string | null
-  indexedDbTables: string[]
+  /** Clearable server tables; see `lib/data-transfer/tables.ts`. */
+  databaseTables: string[]
   settingGroups: import("@/types").ChannelSettingGroup[]
   invalidateSettingGroups: () => Promise<void>
   setChannelGroupFilter: (groupId: string) => void

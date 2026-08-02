@@ -17,13 +17,6 @@ export function filterPostsByTextQuery(posts: Post[], query: string): Post[] {
 }
 
 /**
- * Re-exported from lib/summary-projection so the repository layer can share it
- * without depending on the command palette. It now serves the offline fallback
- * — the online path searches in SQL.
- */
-export { filterSummariesByTextQuery } from "@/lib/summary-projection"
-
-/**
  * Palette post search, run in SQL (A1).
  *
  * This used to pull **every post in the selected date range** into the browser

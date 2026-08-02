@@ -16,7 +16,6 @@ import {
   RETENTION_PAYLOAD_DAYS_DEFAULT,
   RETENTION_POST_DAYS_DEFAULT,
 } from "@/constants"
-import { useCachePrune } from "@/hooks/useCachePrune"
 import type {
   DiscoverFollowState,
   DiscoverSignalWeights,
@@ -302,9 +301,10 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({
       )
   }, [settings.embeddingsEnabled])
 
-  // Keep the IndexedDB mirror inside the retention window; without this it
-  // grows forever, independent of the backend's own sweep.
-  useCachePrune(settings.postRetentionDays, settings.logRetentionDays)
+  // No client-side retention sweep any more. It existed to keep the IndexedDB
+  // mirror inside the retention window; with the mirror gone, the backend's own
+  // scheduled `job_retention` is the only sweep, and it is the authoritative
+  // one. `postRetentionDays`/`logRetentionDays` still drive it server-side.
 
   const getEffectiveGlobalStartTime = useCallback(
     () =>

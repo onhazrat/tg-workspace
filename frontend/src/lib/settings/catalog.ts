@@ -671,7 +671,7 @@ export const SETTINGS_CATALOG: SettingCatalogEntry[] = [
   {
     id: "panel-table-sizes",
     label: "Table Sizes",
-    description: "Inspect IndexedDB and Postgres table sizes.",
+    description: "Inspect Postgres table sizes.",
     keywords: ["table", "sizes", "database", "data"],
     group: "data",
     source: "app",

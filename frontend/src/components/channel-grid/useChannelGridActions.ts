@@ -19,7 +19,6 @@ import {
   sortSettingGroupsForDisplay,
 } from "@/lib/channels/setting-groups"
 import { upsertChannel } from "@/lib/channels/store"
-import { clearChannelPosts } from "@/lib/repository"
 import type { Channel } from "@/types"
 
 /**
@@ -234,11 +233,9 @@ export function useChannelGridActions() {
         confirm: true,
         channelIds: [confirmResetModal.id],
       })
-      await clearChannelPosts(confirmResetModal.name)
       await loadChannels()
     } catch (err) {
       console.error("Reset & sync failed:", err)
-      await clearChannelPosts(confirmResetModal.name)
       addToSyncQueue(confirmResetModal, "Manual (Reset & Sync)", () => {})
     }
     setConfirmResetModal(null)

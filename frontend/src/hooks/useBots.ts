@@ -7,7 +7,6 @@ import type { SetStateAction } from "react"
 
 import { applySetStateAction } from "@/lib/applySetStateAction"
 import { listBotCredentials, listChatDestinations } from "@/lib/bots/store"
-import { cleanupLegacyBots } from "@/lib/repository"
 import type { BotCredential, ChatDestination } from "@/types"
 
 import { queryKeys } from "./queryKeys"
@@ -35,10 +34,6 @@ export function useBotsQuery() {
   return useQuery({
     queryKey: queryKeys.bots,
     queryFn: async (): Promise<BotsQueryResult> => {
-      // One-time cleanup of the pre-credential `bots` store. Rides along here
-      // because this is the only thing that reads bots on startup; it goes with
-      // the mirror in A4.
-      await cleanupLegacyBots()
       const [credentials, destinations] = await Promise.all([
         listBotCredentials(),
         listChatDestinations(),

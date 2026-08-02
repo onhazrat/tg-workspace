@@ -1,9 +1,7 @@
 import { describe, expect, test } from "bun:test"
 
-import {
-  filterPostsByTextQuery,
-  filterSummariesByTextQuery,
-} from "@/lib/commands/search-filters"
+import { filterPostsByTextQuery } from "@/lib/commands/search-filters"
+import { filterSummariesByTextQuery } from "@/lib/summary-projection"
 import type { Post, Summary } from "@/types"
 
 const posts: Post[] = [

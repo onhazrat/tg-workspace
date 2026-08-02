@@ -16,7 +16,6 @@ import {
 } from "@/hooks/useSettingGroups"
 import { useSettingsSection } from "@/hooks/useSettingsSection"
 import { useSummarizerGroupParams } from "@/hooks/useSummarizerGroupParams"
-import { INDEXEDDB_STORE_NAMES } from "@/lib/cache"
 import { buildPostsInScopeCounts } from "@/lib/channels/sort-channels-for-grid"
 import {
   buildActionCommands,
@@ -30,6 +29,7 @@ import {
   buildSettingCommands,
 } from "@/lib/commands"
 import type { CommandContext, CommandDef } from "@/lib/commands/types"
+import { SERVER_TABLE_NAMES } from "@/lib/data-transfer/tables"
 import { useLoadDBStats } from "./useDBStats"
 import { useInvalidateSummaries, useSummariesHistory } from "./useSummaries"
 
@@ -279,7 +279,7 @@ export function useCommandRegistry(): {
       copySummaryPrompt,
       completePendingSummary,
       loadHistory,
-      indexedDbTables: [...INDEXEDDB_STORE_NAMES],
+      databaseTables: [...SERVER_TABLE_NAMES],
       settingGroups,
       invalidateSettingGroups,
       setChannelGroupFilter,

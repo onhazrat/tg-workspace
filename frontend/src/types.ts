@@ -383,18 +383,16 @@ export interface SyncQueueItem {
  * IndexedDB mirror, not from the server. **A4 deletes them** along with the
  * IndexedDB layer; until then they are explicitly marked as client-side.
  */
-export type DBStats = DbStatsResponse & {
-  /** Client-side only — browser Storage API. Removed by A4. */
-  usage?: number
-  /** Client-side only — browser Storage API. Removed by A4. */
-  quota?: number
-  /** Client-side only — IndexedDB mirror. Removed by A4. */
-  storeSizes?: Record<string, number>
-  /** Client-side only — IndexedDB mirror. Removed by A4. */
-  storageEstimate?: Record<string, number>
-  /** Client-side only — IndexedDB mirror. Removed by A4. */
-  usageDetails?: Record<string, number>
-}
+/**
+ * Row counts from the server, and nothing else.
+ *
+ * A4 removed the five client-only fields (`usage`, `quota`, `storeSizes`,
+ * `storageEstimate`, `usageDetails`) along with the IndexedDB mirror and the
+ * browser Storage API readings that fed them. This is now exactly the server's
+ * response — no local half to merge in, which is why `getDBStats`'s
+ * field-by-field `remote.x ?? local.x` merge could go too.
+ */
+export type DBStats = DbStatsResponse
 
 /**
  * What `GET /data/tag-runs` returns: metadata only.

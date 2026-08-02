@@ -2,7 +2,6 @@ import { toast } from "sonner"
 
 import { api } from "@/api"
 import { JOB_LABELS, SERVER_JOB_IDS } from "@/hooks/useJobToggles"
-import { clearTable } from "@/lib/cache"
 import {
   backfillSyncChannel,
   bulkBackfillPartialHistoryChannels,
@@ -44,7 +43,6 @@ import type {
   EntityFlowType,
 } from "@/lib/commands/types"
 import { restartTorService, rotateTorIpNow } from "@/lib/network/tor-actions"
-import { importIndexedDBToServer } from "@/lib/repository"
 import { deleteSummary } from "@/lib/summaries/store"
 import type { Channel, Summary } from "@/types"
 
@@ -518,37 +516,16 @@ export function buildExtendedCommands(): CommandDef[] {
       },
     },
     {
-      id: "migrate-local-to-server",
-      kind: "action",
-      label: "Migrate Local Data to Server",
-      keywords: ["migrate", "server", "upload", "indexeddb", "postgres"],
-      group: "Data",
-      requiresConfirmation: true,
-      confirmDescription:
-        "Export all IndexedDB data and upload to PostgreSQL? Matching server records will be updated.",
-      disabled: offlineDisabled("Server offline"),
-      run: async (ctx) => {
-        const imported = await importIndexedDBToServer()
-        const summary = Object.entries(imported)
-          .map(([key, value]) => `${key}: ${value}`)
-          .join(", ")
-        toast.success(`Server migration complete (${summary || "no records"})`)
-        await ctx.loadDBStats?.()
-        await ctx.loadChannels()
-        await ctx.loadHistory()
-      },
-    },
-    {
-      id: "clear-indexeddb-table",
+      id: "clear-server-table",
       kind: "entity-root",
-      label: "Clear IndexedDB Table",
-      keywords: ["indexeddb", "table", "clear", "delete", "advanced"],
+      label: "Clear Database Table",
+      keywords: ["table", "clear", "delete", "truncate", "advanced"],
       group: "Data",
       entityFlow: "clear-db-table",
       requiresConfirmation: true,
       getConfirmDescription: (_ctx, payload) => {
         const table = payload as string | undefined
-        if (!table) return "Clear all records in this IndexedDB table?"
+        if (!table) return "Clear all records in this database table?"
         return `Clear all records in table "${table}"? This cannot be undone.`
       },
       run: async (ctx, payload) => {
@@ -556,7 +533,7 @@ export function buildExtendedCommands(): CommandDef[] {
           (payload as string | undefined) ??
           (ctx.palette.confirmPayload as string | undefined)
         if (!tableName) return
-        await clearTable(tableName)
+        await api.clearServerTable(tableName)
         await ctx.loadDBStats?.()
         toast.success(`Cleared table "${tableName}"`)
       },

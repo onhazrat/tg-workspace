@@ -46,7 +46,6 @@
     "driver.js": "^1.4.0",
     "form-data": "4.0.6",
     "franc-min": "^6.2.0",
-    "idb": "^8.0.3",
     "jszip": "^3.10.1",
     "langs": "^2.0.0",
     "lucide-react": "^1.17.0",

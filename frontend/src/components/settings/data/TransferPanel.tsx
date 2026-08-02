@@ -1,7 +1,6 @@
 import { Download, Upload } from "lucide-react"
 import type React from "react"
 import { TgButton } from "@/components/ui/tg-button"
-import { TgSettingsSection } from "@/components/ui/tg-settings-section"
 import {
   Tooltip,
   TooltipContent,
@@ -73,34 +72,4 @@ export const TransferExportImportActions: React.FC<{
       </Tooltip>
     </div>
   </>
-)
-
-type TransferPanelProps = {
-  isMigratingToServer: boolean
-  onMigrate: () => void
-}
-
-/** Server migration block (export/import live as section header actions). */
-export const TransferPanel: React.FC<TransferPanelProps> = ({
-  isMigratingToServer,
-  onMigrate,
-}) => (
-  <TgSettingsSection icon={Upload} title="Server Migration" className="mb-8">
-    <p className="text-[10px] opacity-50 italic serif mb-4">
-      One-time migration: upload your local IndexedDB data to the PostgreSQL
-      backend. Run this after logging in when moving from browser-only to the
-      FastAPI stack.
-    </p>
-    <TgButton
-      type="button"
-      variant="secondary"
-      size="md"
-      onClick={onMigrate}
-      loading={isMigratingToServer}
-      loadingLabel="Migrate IndexedDB to Server"
-    >
-      <Upload size={14} />
-      Migrate IndexedDB to Server
-    </TgButton>
-  </TgSettingsSection>
 )

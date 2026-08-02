@@ -1,7 +1,7 @@
 import { useQueryClient } from "@tanstack/react-query"
 import { useEffect } from "react"
 
-import { getDBStats } from "@/lib/repository"
+import { api } from "@/api"
 
 import { queryKeys } from "./queryKeys"
 import { fetchLogs } from "./useLogs"
@@ -14,7 +14,7 @@ export function useLazyTabData(activeTab: string) {
     if (activeTab === "settings") {
       void queryClient.prefetchQuery({
         queryKey: queryKeys.dbStats,
-        queryFn: () => getDBStats(),
+        queryFn: () => api.getStats(),
         staleTime: 30_000,
       })
     }

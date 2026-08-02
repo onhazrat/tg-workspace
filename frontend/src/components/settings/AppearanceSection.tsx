@@ -102,7 +102,7 @@ export const AppearanceSection: React.FC<{
             </div>
             <div className="flex justify-between text-[9px] font-mono uppercase tracking-widest">
               <span className="opacity-40">Storage</span>
-              <span>PostgreSQL · IndexedDB cache</span>
+              <span>PostgreSQL</span>
             </div>
             <div className="flex justify-between text-[9px] font-mono uppercase tracking-widest">
               <span className="opacity-40">AI Provider</span>

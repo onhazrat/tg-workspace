@@ -1,6 +1,6 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query"
 
-import { getDBStats } from "@/lib/repository"
+import { api } from "@/api"
 import type { DBStats } from "@/types"
 
 import { queryKeys } from "./queryKeys"
@@ -20,7 +20,7 @@ import { queryKeys } from "./queryKeys"
 export function useDBStatsQuery() {
   return useQuery({
     queryKey: queryKeys.dbStats,
-    queryFn: () => getDBStats(),
+    queryFn: () => api.getStats() as Promise<DBStats>,
     enabled: false,
   })
 }
@@ -39,7 +39,7 @@ export function useDBStats(): DBStats | null {
 export function useLoadDBStats() {
   const queryClient = useQueryClient()
   return async () => {
-    const stats = await getDBStats()
+    const stats = (await api.getStats()) as DBStats
     queryClient.setQueryData(queryKeys.dbStats, stats)
   }
 }

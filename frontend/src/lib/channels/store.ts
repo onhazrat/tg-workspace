@@ -1,5 +1,4 @@
 import { api } from "@/api"
-import { hydrateChannelMirror } from "@/lib/channels/mirror-hydration"
 import type { Channel, ChannelStats } from "@/types"
 
 /**
@@ -47,12 +46,11 @@ export type ChannelsApi = Pick<
  * and writes the result through `ctx.setChannels`, which is authoritative and
  * costs the same one request an invalidation would have triggered.
  *
- * ## Why there is no IndexedDB fall-through
+ * ## No IndexedDB anywhere
  *
- * These used to read the mirror when the etag said "fresh", or when the request
- * failed. Serving a channel list from the browser mirror is what ADR-009
- * retires. The mirror is still *written* (see below), which is a separate
- * concern that goes with A4.
+ * These used to read a browser mirror when the etag said "fresh" or the request
+ * failed, and write it back on every list. A3 removed the read, A4 removed the
+ * write and the mirror itself. PostgreSQL is the only store.
  */
 
 /**
@@ -77,22 +75,6 @@ export async function listChannelsWithStats(
     channels.push(channel)
     if (channelStats) stats[channel.name] = channelStats
   }
-
-  /**
-   * Fire-and-forget, deliberately.
-   *
-   * This used to `await cache.saveChannel(...)` per channel inside the loop —
-   * one IndexedDB transaction each, serially, in front of the data the Channels
-   * tab needs, which is what produced the long skeleton phase at ~1,070
-   * channels. `hydrateChannelMirror` batches it into one transaction and never
-   * rejects, so `void` here cannot produce an unhandled rejection.
-   *
-   * The mirror is now **write-only** as far as channels are concerned: nothing
-   * reads it back except `repository.checkNeedsMigration`, which asks "is there
-   * local data the server does not have?". A4 deletes both together — dropping
-   * the write here first would make that check silently answer "no".
-   */
-  void hydrateChannelMirror(channels)
 
   return { channels, stats }
 }

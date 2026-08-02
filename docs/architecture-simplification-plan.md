@@ -632,16 +632,58 @@ across 109 files.
 summaries + tag runs (8 / 16), posts (7 / 12), credentials (6 / 5), then the
 leftovers and the infrastructure block.
 
-#### A4 — Delete the IndexedDB layer · **M** · after A3
+#### A4 — Delete the IndexedDB layer · ✅ **DONE 2026-08-02 — workstream A COMPLETE**
 
-Remove `lib/cache.ts`, `workers/dbWorker.ts`, `MigrationPrompt.tsx`, `useCachePrune.ts`,
-`useBotCredentialMigration.ts`, the `idb` dependency, and the IndexedDB branches of
-`DatabaseManagement.tsx`.
+**Shipped: −2,491 / +136 lines.** `lib/cache.ts` (1,226), `workers/dbWorker.ts`
+(229), `lib/repository.ts` (116), `MigrationPrompt.tsx`, `useCachePrune.ts`,
+`useBotCredentialMigration.ts`, `lib/channels/mirror-hydration.ts` and the `idb`
+dependency are gone. **PostgreSQL is the only store.**
 
-- **One-way door.** Any operator who has never logged in since the bot-token migration
-  (Decision #2) would lose locally-held tokens. Ship A4 at least one release after A3, and note
-  it in the release notes.
-- **Verify:** full suites; `grep -rn "idb\|indexedDB" frontend/src` → 0; app boots clean in a fresh profile.
+> **Export/Import were repointed, and Import was broken before.** A2 found it and
+> A4 fixes it: `handleImportDB` ran `dbWorker`, which wrote the file into
+> IndexedDB and `localStorage` and reloaded the page — **it never reached the
+> server**, so the next sync erased it. Both now go through `GET /data/export`
+> and `POST /data/import` via `lib/data-transfer/database.ts`.
+>
+> **Legacy backups still import.** The old worker wrote JSONL, one
+> `{type:"store", storeName, data}` per line. `parseLegacyJsonl` reads it, so an
+> operator's existing file still restores — which matters more than usual now
+> that the browser copy is gone and that file may be their only one.
+
+**The per-table export selection is preserved**, filtered client-side.
+`GET /data/export` streams the whole corpus and takes no filter; narrowing the
+downloaded document keeps the export path a single always-complete streamed
+read, at the cost of transferring more than a partial export strictly needs.
+
+**Three things were genuinely removed, not moved:**
+
+1. **The Query panel.** It ran queries against IndexedDB object stores. There is
+   no server equivalent, and adding a SQL-query endpoint is a security decision,
+   not a refactor.
+2. **The "Storage · Browser" card** and the **local-vs-server data-source
+   toggle**. Both described a store that no longer exists; `TableSizeSource`
+   survives as a one-member union so cached server sizes keep their namespaced
+   key across the upgrade.
+3. **The "Migrate Local Data to Server" panel and command.** Its whole purpose
+   was IndexedDB → PostgreSQL.
+
+**Also:** `clear-indexeddb-table` became `clear-server-table` against
+`DELETE /data/tables/{name}`; `SERVER_TABLE_NAMES` mirrors the backend's
+`_TABLE_SECTIONS`; `DBStats` narrowed to exactly `DbStatsResponse`; the
+client-side retention sweep went, leaving the backend's scheduled
+`job_retention` as the only one; and user-facing copy promising a browser cache
+was corrected.
+
+**Verified:** `tsc` clean; biome clean; build succeeds; **819 pass / 0 fail**
+across 110 files. `lib/data-transfer/database.ts` is mutation-tested against 6
+mutations, all caught: legacy JSONL dropped, `type` discriminator removed,
+import never posts, table filter ignored, metadata dropped, unchecked store name.
+
+> **A test caught a real bug in the importer.** A legacy JSONL *line* also has an
+> object `data`, so it passed the "is this an export document?" check and a
+> single-row backup imported as a document whose one table was that row's
+> fields. The fix is the `type` discriminator — a document has none, a legacy
+> line always does.
 
 ---
 
@@ -1698,9 +1740,9 @@ Re-measured **2026-08-01**, after A1a–A1c, A2, B7b and G1.
 | Contexts with a test | 0/9 | 1/9 (`DataContext`) | ≥ 5/5 (after G2) |
 | Hooks with a test | 2/32 | **6/36** | the ones holding logic |
 | Frontend LOC (excl. generated) | 59,881 | 61,888 | ≈ 54,000 |
-| Frontend tests | 679 | **809** | — |
+| Frontend tests | 679 | **819** | — |
 | Backend tests | 767 | **809** | — |
-| Runtime deps removed | — | **`axios`** (F1b) | `idb`, `axios` |
+| Runtime deps removed | — | **`axios`** (F1b) + **`idb`** (A4) — target met | `idb`, `axios` |
 
 > **Generated-client LOC went up, and the metric is the thing that is wrong.** F1b deleted 573
 > lines of hand-rolled transport but `types.gen.ts` grew 2,378 → 7,340, because the modern
