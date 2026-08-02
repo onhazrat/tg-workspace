@@ -24,7 +24,6 @@ import {
 import { TgSegmentedControl } from "@/components/ui/tg-segmented"
 import { TgSettingsSection } from "@/components/ui/tg-settings-section"
 import { TgToggle } from "@/components/ui/tg-toggle"
-import { useData } from "@/contexts/DataContext"
 import { useSettings } from "@/contexts/SettingsContext"
 import { saveNetworkLog } from "@/lib/logs/write"
 import type { NetworkLog } from "@/types"
@@ -52,7 +51,6 @@ export const TorPanel: React.FC<{
     torRotationThreshold,
     setTorRotationThreshold,
   } = useSettings()
-  const { loadNetworkLogs } = useData()
 
   const {
     proxyTestResults,
@@ -102,7 +100,6 @@ export const TorPanel: React.FC<{
         source: "SettingsView.changeTorIp",
       }
       await saveNetworkLog(logEntry)
-      loadNetworkLogs()
     }
   }
 
@@ -138,7 +135,6 @@ export const TorPanel: React.FC<{
         source: "SettingsView.checkTorIp",
       }
       await saveNetworkLog(logEntry)
-      loadNetworkLogs()
     }
   }
 

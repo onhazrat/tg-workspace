@@ -108,7 +108,6 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({
     summariesHistory,
     botCredentials,
     chatDestinations,
-    loadLLMLogs,
   } = useData()
   const {
     startDate,
@@ -267,7 +266,6 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({
         type: "summary",
       }
       await saveLLMLog(llmLog)
-      await loadLLMLogs()
 
       if (fullSummaryText) {
         const newId = Date.now().toString()
@@ -545,7 +543,6 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({
           type: "summary",
         }
         await saveLLMLog(llmLog)
-        await loadLLMLogs()
       }
 
       const newId = Date.now().toString()

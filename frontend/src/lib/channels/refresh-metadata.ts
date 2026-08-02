@@ -93,9 +93,9 @@ export async function refreshChannelMetadata(
       attempts: attempts?.length || 1,
       telemetry: telemetryData,
     }
-    saveNetworkLog(logEntry)
-      .then(() => ctx.loadNetworkLogs())
-      .catch((e) => console.error("Failed to save network log:", e))
+    saveNetworkLog(logEntry).catch((e) =>
+      console.error("Failed to save network log:", e),
+    )
   }
 
   const updated: Channel = {

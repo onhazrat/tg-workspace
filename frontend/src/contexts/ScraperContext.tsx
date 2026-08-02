@@ -136,7 +136,6 @@ export const ScraperProvider: React.FC<{ children: React.ReactNode }> = ({
     setSelectedChannels,
     setChannelStats,
     loadChannels,
-    loadSyncLogs,
   } = useData()
   const {
     startDate,
@@ -212,7 +211,6 @@ export const ScraperProvider: React.FC<{ children: React.ReactNode }> = ({
     setIsRateLimited,
     setChannelStats,
     loadChannels,
-    loadSyncLogs,
     invalidatePostViews,
   })
 
@@ -228,7 +226,6 @@ export const ScraperProvider: React.FC<{ children: React.ReactNode }> = ({
     setSelectedChannels,
     setChannelStats,
     loadChannels,
-    loadSyncLogs,
     invalidatePostViews,
     waitSyncJob,
     setScrapingChannels,

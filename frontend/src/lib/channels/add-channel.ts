@@ -35,7 +35,6 @@ export interface AddChannelContext {
   setSelectedChannels: CommandContext["setSelectedChannels"]
   loadChannels: () => Promise<void>
   addToSyncQueue: CommandContext["addToSyncQueue"]
-  loadNetworkLogs: () => Promise<void>
   getEffectiveGlobalStartTime: () => number
   settings: AddChannelNetworkSettings
 }
@@ -46,7 +45,6 @@ export function toAddChannelContext(ctx: CommandContext): AddChannelContext {
     setSelectedChannels: ctx.setSelectedChannels,
     loadChannels: ctx.loadChannels,
     addToSyncQueue: ctx.addToSyncQueue,
-    loadNetworkLogs: ctx.loadNetworkLogs,
     getEffectiveGlobalStartTime: ctx.getEffectiveGlobalStartTime,
     settings: {
       proxyEnabled: ctx.settings.proxyEnabled,
@@ -178,9 +176,9 @@ export async function addChannelByName(
       attempts: attempts?.length || 1,
       telemetry: telemetryData,
     }
-    saveNetworkLog(logEntry)
-      .then(() => ctx.loadNetworkLogs())
-      .catch((e) => console.error("Failed to save network log:", e))
+    saveNetworkLog(logEntry).catch((e) =>
+      console.error("Failed to save network log:", e),
+    )
   }
 
   const newChannel: Channel = {

@@ -75,7 +75,6 @@ describe("addChannelByName duplicate", () => {
       setSelectedChannels: () => {},
       loadChannels: async () => {},
       addToSyncQueue: () => {},
-      loadNetworkLogs: async () => {},
       getEffectiveGlobalStartTime: () => 0,
       settings: {
         proxyEnabled: false,

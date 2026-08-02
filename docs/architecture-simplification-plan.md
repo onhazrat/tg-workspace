@@ -1360,6 +1360,37 @@ largest remaining contexts, and neither is server data — they are workflow
 state, so they stay. The 11-deep nesting is mostly not the cost; the count of
 providers holding server data is.
 
+**G2.1 — the logs half of `DataContext` · ✅ DONE 2026-08-02**
+
+**Shipped:** `LogsView` and `BotManagement` own their log queries (as
+`NetworkTelemetry` already did). `DataContext` loses 11 fields — five lists,
+five `loadXLogs` reloads and `logsLoading` — and goes **366 → 269 LOC**.
+
+> **The headline is 17 deleted call sites, not the 11 fields.** `loadXLogs()`
+> was being threaded through `CommandContext` (`lib/commands/types.ts`),
+> `add-channel.ts`'s dep object, `refresh-metadata.ts`, `tor-actions.ts`,
+> `useCommandRegistry`, `useChannelGridActions`, `useSyncJob`/`useFollowJob`'s
+> `Deps`, `ScraperContext`, `SettingsHub`, `SummaryView`, `TorPanel`,
+> `useProxyTesting`, `ChatContext` and `AIContext` — every one of them saying
+> "I wrote a log, please refresh the panel". A3.1 made the write invalidate, so
+> all of it is now redundant. The whole chain is deleted, including the
+> `loadNetworkLogs` field on the command-context contract.
+
+**The `enabled` flip is what unlocked it, and it is the thing to protect.**
+While `DataContext` created these queries with `enabled: false`,
+`invalidateQueries` could only mark them stale — it does **not** refetch a
+disabled query — so every writer had to refetch by hand. With the panels owning
+enabled queries the invalidation is sufficient. `hooks/useLogs.test.tsx` pins
+both halves of that asymmetry: an enabled query refetches on invalidation, a
+disabled one does not. Re-disable these and the first test fails, which is the
+signal the reloads have to come back.
+
+`useLazyTabData`'s prefetch stays — it warms the cache when the tab changes,
+before `LogsView` mounts, which an enabled query cannot do for itself.
+
+**Verified:** `tsc` clean; biome clean; build succeeds; **809 pass / 0 fail**
+across 110 files.
+
 #### G3 — Extract the settings binding · ✅ **DONE 2026-08-01**
 
 **The premise had already half-happened.** `settings-schema.ts` was *already* driven by
@@ -1548,7 +1579,7 @@ Re-measured **2026-08-01**, after A1a–A1c, A2, B7b and G1.
 | Contexts with a test | 0/9 | 1/9 (`DataContext`) | ≥ 5/5 (after G2) |
 | Hooks with a test | 2/32 | **6/36** | the ones holding logic |
 | Frontend LOC (excl. generated) | 59,881 | 61,888 | ≈ 54,000 |
-| Frontend tests | 679 | **806** | — |
+| Frontend tests | 679 | **809** | — |
 | Backend tests | 767 | **809** | — |
 | Runtime deps removed | — | **`axios`** (F1b) | `idb`, `axios` |
 

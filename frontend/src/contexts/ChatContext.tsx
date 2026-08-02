@@ -39,13 +39,8 @@ const ChatContext = createContext<ChatContextType | undefined>(undefined)
 export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
   children,
 }) => {
-  const {
-    channels,
-    selectedChannels,
-    summariesHistory,
-    loadHistory,
-    loadLLMLogs,
-  } = useData()
+  const { channels, selectedChannels, summariesHistory, loadHistory } =
+    useData()
   const {
     startDate,
     endDate,
@@ -281,7 +276,6 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
           type: chatMode === "history" ? "rag_chat" : "chat",
         }
         await saveLLMLog(llmLog)
-        await loadLLMLogs()
       }
 
       const finalMessages: {

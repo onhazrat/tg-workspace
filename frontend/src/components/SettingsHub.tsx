@@ -47,14 +47,7 @@ export const SettingsHub: React.FC = () => {
   const { setting: deepLinkSetting } = summarizerRoute.useSearch()
   const navigate = summarizerRoute.useNavigate()
   const settings = useSettings()
-  const {
-    loadDBStats,
-    loadLogs,
-    loadSyncLogs,
-    loadLLMLogs,
-    loadEmbeddingLogs,
-    loadNetworkLogs,
-  } = useData()
+  const { loadDBStats } = useData()
 
   const [searchQuery, setSearchQuery] = useState("")
   const debouncedQuery = useDebouncedValue(searchQuery, 200)
@@ -97,28 +90,9 @@ export const SettingsHub: React.FC = () => {
     if (dataSections.includes(activeSettingsTab)) {
       void loadDBStats()
     }
-    if (
-      activeSettingsTab === "diagnostics" ||
-      activeSettingsTab === "tools" ||
-      activeSettingsTab === "network-telemetry"
-    ) {
-      void Promise.all([
-        loadLogs(),
-        loadSyncLogs(),
-        loadLLMLogs(),
-        loadEmbeddingLogs(),
-        loadNetworkLogs(),
-      ])
-    }
-  }, [
-    activeSettingsTab,
-    loadDBStats,
-    loadLogs,
-    loadSyncLogs,
-    loadLLMLogs,
-    loadEmbeddingLogs,
-    loadNetworkLogs,
-  ])
+    // The log prefetch that used to live here is gone: every component that
+    // renders logs now owns an enabled query, so opening the tab fetches them.
+  }, [activeSettingsTab, loadDBStats])
 
   // Deep-link: ?setting=<id> → navigate to group + scroll/highlight
   useEffect(() => {

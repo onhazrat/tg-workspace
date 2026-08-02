@@ -146,7 +146,6 @@ export interface CommandContext {
   ) => void
   loadChannels: () => Promise<void>
   loadDBStats?: () => Promise<void>
-  loadNetworkLogs: () => Promise<void>
   getEffectiveGlobalStartTime: () => number
   isOffline: boolean
   autoSyncPauseUntil: number | null

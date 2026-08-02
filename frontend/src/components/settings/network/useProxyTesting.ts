@@ -1,7 +1,6 @@
 import { useState } from "react"
 import { toast } from "sonner"
 import { api } from "@/api"
-import { useData } from "@/contexts/DataContext"
 import { saveNetworkLog } from "@/lib/logs/write"
 import type { NetworkLog } from "@/types"
 
@@ -14,7 +13,6 @@ export type ProxyTestResult = {
 }
 
 export function useProxyTesting() {
-  const { loadNetworkLogs } = useData()
   const [proxyTestResults, setProxyTestResults] = useState<
     Record<string, ProxyTestResult>
   >({})
@@ -60,7 +58,6 @@ export function useProxyTesting() {
         source: "SettingsView.testProxy",
       }
       await saveNetworkLog(logEntry)
-      loadNetworkLogs()
     }
   }
 

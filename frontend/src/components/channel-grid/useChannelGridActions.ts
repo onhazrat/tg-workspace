@@ -34,7 +34,6 @@ export function useChannelGridActions() {
     setSelectedChannels,
     loadChannels,
     loadDBStats,
-    loadNetworkLogs,
   } = useData()
 
   const {
@@ -250,7 +249,6 @@ export function useChannelGridActions() {
       channels,
       setSelectedChannels,
       loadChannels,
-      loadNetworkLogs,
       addToSyncQueue,
       getEffectiveGlobalStartTime,
       settings: {

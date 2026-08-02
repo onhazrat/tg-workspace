@@ -154,13 +154,8 @@ export const SummaryView: React.FC<SummaryViewProps> = () => {
   } = useAI()
   const { isOffline } = useApiStatus()
   const [copied, setCopied] = useState(false)
-  const {
-    loadLogs,
-    botCredentials,
-    chatDestinations,
-    summariesHistory,
-    loadHistory,
-  } = useData()
+  const { botCredentials, chatDestinations, summariesHistory, loadHistory } =
+    useData()
   const { startDate, endDate, currentSummaryId, summarizing } = useUI()
 
   const currentSummary = summariesHistory.find((s) => s.id === currentSummaryId)
@@ -314,7 +309,6 @@ export const SummaryView: React.FC<SummaryViewProps> = () => {
         textSent: sendMetadata ? `${metadataText}\n\n${text}` : text,
       }
       await savePublishLog(log)
-      await loadLogs()
 
       if (result.success) {
         toast.success(`Successfully published using ${botName}!`)

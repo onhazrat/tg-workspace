@@ -34,7 +34,6 @@ export async function rotateTorIpNow(ctx: CommandContext): Promise<void> {
       source: "CommandPalette.rotateTorIp",
     }
     await saveNetworkLog(logEntry)
-    await ctx.loadNetworkLogs()
   }
 }
 

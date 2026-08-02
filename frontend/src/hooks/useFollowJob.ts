@@ -47,7 +47,6 @@ export interface FollowJobDeps extends ProxySettings {
     React.SetStateAction<Record<string, ChannelStats>>
   >
   loadChannels: () => Promise<void>
-  loadSyncLogs: () => Promise<void>
   invalidatePostViews: () => void
   /** From `useSyncJob` — the follow job chains into a sync job. */
   waitSyncJob: (jobId: string) => Promise<SyncJobStatus>
@@ -74,7 +73,6 @@ export function useFollowJob(deps: FollowJobDeps): FollowJob {
     setSelectedChannels,
     setChannelStats,
     loadChannels,
-    loadSyncLogs,
     invalidatePostViews,
     waitSyncJob,
     setScrapingChannels,
@@ -239,7 +237,6 @@ export function useFollowJob(deps: FollowJobDeps): FollowJob {
             }
           }
           await loadChannels()
-          await loadSyncLogs()
           invalidatePostViews()
         }
 
@@ -269,7 +266,6 @@ export function useFollowJob(deps: FollowJobDeps): FollowJob {
       waitSyncJob,
       setSelectedChannels,
       loadChannels,
-      loadSyncLogs,
       invalidatePostViews,
       setChannelStats,
     ],

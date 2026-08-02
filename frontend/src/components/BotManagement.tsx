@@ -2,6 +2,7 @@ import { motion } from "motion/react"
 import type React from "react"
 import { useState } from "react"
 import { toast } from "sonner"
+import { usePublishLogsQuery } from "@/hooks/useLogs"
 import {
   deleteBotCredential,
   deleteChatDestination,
@@ -38,19 +39,21 @@ type BotManagementProps = {
   highlightId?: string | null
 }
 
+const EMPTY_PUBLISH_LOGS: PublishLog[] = []
+
 export const BotManagement: React.FC<BotManagementProps> = ({
   focus = "publishing",
   highlightId = null,
 }) => {
   const {
-    loadLogs,
     botCredentials,
     setBotCredentials,
     chatDestinations,
     setChatDestinations,
-    publishLogs,
-    loadNetworkLogs,
   } = useData()
+  // Owned here rather than passed through `DataContext`: `savePublishLog`
+  // invalidates this key, and an enabled query refetches on its own.
+  const publishLogs = usePublishLogsQuery(true).data ?? EMPTY_PUBLISH_LOGS
   const {
     proxyEnabled,
     defaultProxyUrls,
@@ -138,9 +141,9 @@ export const BotManagement: React.FC<BotManagementProps> = ({
         attempts,
         telemetry: telemetryData,
       }
-      saveNetworkLog(logEntry)
-        .then(() => loadNetworkLogs())
-        .catch((e) => console.error("Failed to save network log:", e))
+      saveNetworkLog(logEntry).catch((e) =>
+        console.error("Failed to save network log:", e),
+      )
     }
   }
 
@@ -400,7 +403,6 @@ export const BotManagement: React.FC<BotManagementProps> = ({
         textSent: testMessage,
       }
       await savePublishLog(log)
-      await loadLogs()
 
       if (result.success) {
         toast.success(`Test message sent successfully using ${botName}!`)
@@ -447,7 +449,6 @@ export const BotManagement: React.FC<BotManagementProps> = ({
         textSent: text,
       }
       await savePublishLog(log)
-      await loadLogs()
 
       if (result.success) {
         toast.success(`Successfully published using ${botName}!`)

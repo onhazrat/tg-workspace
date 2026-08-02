@@ -10,7 +10,6 @@ import {
   useState,
 } from "react"
 import { listBotCredentials, listChatDestinations } from "@/lib/bots/store"
-import type { LogType } from "../api/data"
 import { queryKeys } from "../hooks/queryKeys"
 import {
   setChannelStatsInCache,
@@ -18,14 +17,6 @@ import {
   useChannelsQuery,
   useInvalidateChannels,
 } from "../hooks/useChannels"
-import {
-  fetchLogs,
-  useEmbeddingLogsQuery,
-  useLLMLogsQuery,
-  useNetworkLogsQuery,
-  usePublishLogsQuery,
-  useSyncLogsQuery,
-} from "../hooks/useLogs"
 import {
   useInvalidateSummaries,
   useSummariesQuery,
@@ -38,12 +29,7 @@ import type {
   ChannelStats,
   ChatDestination,
   DBStats,
-  EmbeddingLog,
-  LLMLog,
-  NetworkLog,
-  PublishLog,
   SummaryListItem,
-  SyncLog,
 } from "../types"
 
 interface BotsQueryResult {
@@ -74,30 +60,6 @@ interface DataContextType {
 
   dbStats: DBStats | null
   loadDBStats: () => Promise<void>
-
-  publishLogs: PublishLog[]
-  loadLogs: () => Promise<void>
-
-  /** First-load flags per log panel; see `logsLoading` below. */
-  logsLoading: {
-    publish: boolean
-    sync: boolean
-    llm: boolean
-    embedding: boolean
-    network: boolean
-  }
-
-  syncLogs: SyncLog[]
-  loadSyncLogs: () => Promise<void>
-
-  llmLogs: LLMLog[]
-  loadLLMLogs: () => Promise<void>
-
-  embeddingLogs: EmbeddingLog[]
-  loadEmbeddingLogs: () => Promise<void>
-
-  networkLogs: NetworkLog[]
-  loadNetworkLogs: () => Promise<void>
 
   selectedChannels: Set<string>
   setSelectedChannels: React.Dispatch<React.SetStateAction<Set<string>>>
@@ -139,12 +101,6 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({
     queryFn: () => getDBStats(),
     enabled: false,
   })
-
-  const publishLogsQuery = usePublishLogsQuery()
-  const syncLogsQuery = useSyncLogsQuery()
-  const llmLogsQuery = useLLMLogsQuery()
-  const embeddingLogsQuery = useEmbeddingLogsQuery()
-  const networkLogsQuery = useNetworkLogsQuery()
 
   const [selectedChannels, setSelectedChannels] = useState<Set<string>>(() => {
     if (typeof window !== "undefined") {
@@ -247,35 +203,6 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({
     await invalidateSummaries()
   }, [invalidateSummaries])
 
-  /**
-   * Imperative reloads for the log panels.
-   *
-   * These were five copies of the same `fetchQuery`, each re-implementing the
-   * newest-first sort inline. They share `fetchLogs` with `useLogsQuery` now,
-   * so a panel cannot order differently on refresh than it did on first load.
-   */
-  const loadLogsOfType = useCallback(
-    (type: LogType) => async () => {
-      await queryClient.fetchQuery({
-        queryKey: queryKeys.logs[type],
-        queryFn: () => fetchLogs(type),
-      })
-    },
-    [queryClient],
-  )
-
-  const loadLogs = useMemo(() => loadLogsOfType("publish"), [loadLogsOfType])
-  const loadSyncLogs = useMemo(() => loadLogsOfType("sync"), [loadLogsOfType])
-  const loadLLMLogs = useMemo(() => loadLogsOfType("llm"), [loadLogsOfType])
-  const loadEmbeddingLogs = useMemo(
-    () => loadLogsOfType("embedding"),
-    [loadLogsOfType],
-  )
-  const loadNetworkLogs = useMemo(
-    () => loadLogsOfType("network"),
-    [loadLogsOfType],
-  )
-
   const loadDBStats = useCallback(async () => {
     const stats = await getDBStats()
     queryClient.setQueryData(queryKeys.dbStats, stats)
@@ -287,11 +214,6 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({
   const chatDestinations = botsQuery.data?.destinations ?? emptyArray
   const summariesHistory = summariesQuery.data ?? emptyArray
   const dbStats = dbStatsQuery.data ?? null
-  const publishLogs = publishLogsQuery.data ?? emptyArray
-  const syncLogs = syncLogsQuery.data ?? emptyArray
-  const llmLogs = llmLogsQuery.data ?? emptyArray
-  const embeddingLogs = embeddingLogsQuery.data ?? emptyArray
-  const networkLogs = networkLogsQuery.data ?? emptyArray
 
   const isInitialChannelsLoading =
     channelsQuery.isPending && channels.length === 0
@@ -309,20 +231,12 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({
    * background refetch with data already on screen is not a loading state, so
    * the list does not flicker back to a skeleton every time it revalidates.
    */
-  const logsLoading = {
-    publish: publishLogsQuery.isPending && publishLogs.length === 0,
-    sync: syncLogsQuery.isPending && syncLogs.length === 0,
-    llm: llmLogsQuery.isPending && llmLogs.length === 0,
-    embedding: embeddingLogsQuery.isPending && embeddingLogs.length === 0,
-    network: networkLogsQuery.isPending && networkLogs.length === 0,
-  }
 
   return (
     <DataContext.Provider
       value={{
         channels,
         isInitialChannelsLoading,
-        logsLoading,
         setChannels,
         loadChannels,
         botCredentials,
@@ -336,16 +250,6 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({
         loadHistory,
         dbStats,
         loadDBStats,
-        publishLogs,
-        loadLogs,
-        syncLogs,
-        loadSyncLogs,
-        llmLogs,
-        loadLLMLogs,
-        embeddingLogs,
-        loadEmbeddingLogs,
-        networkLogs,
-        loadNetworkLogs,
         selectedChannels,
         setSelectedChannels,
         prevChannelNames,

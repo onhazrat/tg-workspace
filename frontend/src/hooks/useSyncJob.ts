@@ -47,7 +47,6 @@ export interface SyncJobDeps {
     React.SetStateAction<Record<string, ChannelStats>>
   >
   loadChannels: () => Promise<void>
-  loadSyncLogs: () => Promise<void>
   /** Refetch the server-backed post views once a sync has added rows. */
   invalidatePostViews: () => void
 }
@@ -78,7 +77,6 @@ export function useSyncJob(deps: SyncJobDeps): SyncJob {
     setIsRateLimited,
     setChannelStats,
     loadChannels,
-    loadSyncLogs,
     invalidatePostViews,
   } = deps
 
@@ -242,7 +240,6 @@ export function useSyncJob(deps: SyncJobDeps): SyncJob {
         // Always reload channels so resolved startId appears after first sync.
         await loadChannels()
         if (refresh) {
-          await loadSyncLogs()
           invalidatePostViews()
         }
 
@@ -262,7 +259,6 @@ export function useSyncJob(deps: SyncJobDeps): SyncJob {
       channelCount,
       waitSyncJob,
       loadChannels,
-      loadSyncLogs,
       invalidatePostViews,
       setChannelStats,
     ],

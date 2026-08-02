@@ -11,9 +11,15 @@ import { NetworkLogsTab } from "@/components/logs/NetworkLogsTab"
 import { PublishLogsTab } from "@/components/logs/PublishLogsTab"
 import { SyncLogsTab } from "@/components/logs/SyncLogsTab"
 import { TgConfirmDialog } from "@/components/ui/tg-confirm-dialog"
-import { useData } from "@/contexts/DataContext"
 import { useUI } from "@/contexts/UIContext"
-import { useDeleteLogsMutation } from "@/hooks/useLogs"
+import {
+  useDeleteLogsMutation,
+  useEmbeddingLogsQuery,
+  useLLMLogsQuery,
+  useNetworkLogsQuery,
+  usePublishLogsQuery,
+  useSyncLogsQuery,
+} from "@/hooks/useLogs"
 import {
   DEFAULT_LOG_FILTERS,
   filterEmbeddingLogs,
@@ -25,36 +31,59 @@ import {
   uniqueSorted,
 } from "@/lib/logs/filters"
 import { LOG_TAB_META, type LogTab } from "@/lib/logs/tabs"
+import type {
+  EmbeddingLog,
+  LLMLog,
+  NetworkLog,
+  PublishLog,
+  SyncLog,
+} from "@/types"
 
 const PAGE_SIZE = 20
 
-interface LogTabActions {
-  mutation: ReturnType<typeof useDeleteLogsMutation>
-  /**
-   * Still needed after the mutation invalidates.
-   *
-   * `DataContext` creates these queries with `enabled: false` — the panels are
-   * lazy — and `invalidateQueries` does not refetch a disabled query. What the
-   * invalidation buys is that this `fetchQuery` sees the entry as stale and
-   * goes to the server instead of returning the cache it just made wrong.
-   */
-  reload: () => Promise<void>
-}
+// Stable empty defaults: a fresh `[]` per render would re-run every `useMemo`
+// keyed on these lists.
+const EMPTY_PUBLISH: PublishLog[] = []
+const EMPTY_SYNC: SyncLog[] = []
+const EMPTY_LLM: LLMLog[] = []
+const EMPTY_NETWORK: NetworkLog[] = []
+const EMPTY_EMBEDDING: EmbeddingLog[] = []
 
 export const LogsView: React.FC = () => {
-  const {
-    publishLogs,
-    loadLogs,
-    syncLogs,
-    loadSyncLogs,
-    llmLogs,
-    loadLLMLogs,
-    networkLogs,
-    loadNetworkLogs,
-    embeddingLogs,
-    loadEmbeddingLogs,
-    logsLoading,
-  } = useData()
+  /**
+   * The panels own their queries.
+   *
+   * These used to arrive through `DataContext`, which held all five lists,
+   * five imperative `loadXLogs()` reloads and a `logsLoading` map — ~11 of its
+   * fields — purely to pass server state that react-query already owns.
+   * `NetworkTelemetry` was already doing it this way.
+   *
+   * **`enabled: true` is what makes the reloads unnecessary.** With the queries
+   * disabled, `invalidateQueries` marked them stale but could not refetch them,
+   * so every writer had to call back here imperatively. Enabled, the
+   * invalidation in `lib/logs/write.ts` refetches on its own.
+   */
+  const publishQuery = usePublishLogsQuery(true)
+  const syncQuery = useSyncLogsQuery(true)
+  const llmQuery = useLLMLogsQuery(true)
+  const networkQuery = useNetworkLogsQuery(true)
+  const embeddingQuery = useEmbeddingLogsQuery(true)
+
+  const publishLogs = publishQuery.data ?? EMPTY_PUBLISH
+  const syncLogs = syncQuery.data ?? EMPTY_SYNC
+  const llmLogs = llmQuery.data ?? EMPTY_LLM
+  const networkLogs = networkQuery.data ?? EMPTY_NETWORK
+  const embeddingLogs = embeddingQuery.data ?? EMPTY_EMBEDDING
+
+  /** First-load only: a refetch must not blank a panel that already has rows. */
+  const logsLoading: Record<LogTab, boolean> = {
+    publish: publishQuery.isPending && publishLogs.length === 0,
+    sync: syncQuery.isPending && syncLogs.length === 0,
+    llm: llmQuery.isPending && llmLogs.length === 0,
+    network: networkQuery.isPending && networkLogs.length === 0,
+    embedding: embeddingQuery.isPending && embeddingLogs.length === 0,
+  }
+
   const { setActiveTab, setCurrentSummaryId } = useUI()
   // Five unconditional calls in a fixed order — one per panel — because hooks
   // cannot be called from the `logActions` lookup below.
@@ -145,12 +174,15 @@ export const LogsView: React.FC = () => {
     embedding: filteredEmbeddingLogs.length,
   }
 
-  const logActions: Record<LogTab, LogTabActions> = {
-    publish: { mutation: deletePublish, reload: loadLogs },
-    sync: { mutation: deleteSync, reload: loadSyncLogs },
-    llm: { mutation: deleteLlm, reload: loadLLMLogs },
-    network: { mutation: deleteNetwork, reload: loadNetworkLogs },
-    embedding: { mutation: deleteEmbedding, reload: loadEmbeddingLogs },
+  const deleteMutations: Record<
+    LogTab,
+    ReturnType<typeof useDeleteLogsMutation>
+  > = {
+    publish: deletePublish,
+    sync: deleteSync,
+    llm: deleteLlm,
+    network: deleteNetwork,
+    embedding: deleteEmbedding,
   }
 
   const updateFilters = (patch: Partial<LogFilters>) => {
@@ -170,8 +202,9 @@ export const LogsView: React.FC = () => {
   }
 
   const handleDelete = (tab: LogTab) => async (id: string) => {
-    await logActions[tab].mutation.mutateAsync({ logId: id })
-    await logActions[tab].reload()
+    // No reload: the mutation invalidates, and these queries are enabled, so
+    // react-query refetches on its own.
+    await deleteMutations[tab].mutateAsync({ logId: id })
     toast.success(`${LOG_TAB_META[tab].label} log entry deleted.`)
   }
 
@@ -182,8 +215,7 @@ export const LogsView: React.FC = () => {
   const confirmClearLogs = async () => {
     const { noun } = LOG_TAB_META[activeLogTab]
     setClearLogsConfirmOpen(false)
-    await logActions[activeLogTab].mutation.mutateAsync({ clearAll: true })
-    await logActions[activeLogTab].reload()
+    await deleteMutations[activeLogTab].mutateAsync({ clearAll: true })
     toast.success(`All ${noun} logs cleared.`)
   }
 

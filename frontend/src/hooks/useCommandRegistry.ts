@@ -45,7 +45,6 @@ export function useCommandRegistry(): {
     summariesHistory,
     loadChannels,
     loadDBStats,
-    loadNetworkLogs,
     loadHistory,
   } = useData()
   const {
@@ -156,7 +155,6 @@ export function useCommandRegistry(): {
       addToSyncQueue,
       loadChannels,
       loadDBStats,
-      loadNetworkLogs,
       getEffectiveGlobalStartTime,
       isOffline,
       autoSyncPauseUntil,
@@ -308,7 +306,6 @@ export function useCommandRegistry(): {
       loadChannels,
       loadDBStats,
       loadHistory,
-      loadNetworkLogs,
       mediaFilter,
       palette,
       postSearch,
