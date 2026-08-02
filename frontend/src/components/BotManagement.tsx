@@ -2,16 +2,16 @@ import { motion } from "motion/react"
 import type React from "react"
 import { useState } from "react"
 import { toast } from "sonner"
-import { saveNetworkLog, savePublishLog } from "@/lib/logs/write"
-import { buildActiveProxies } from "@/lib/syncSettings"
-import { useData } from "../contexts/DataContext"
-import { useSettings } from "../contexts/SettingsContext"
 import {
   deleteBotCredential,
   deleteChatDestination,
   saveBotCredential,
   saveChatDestination,
-} from "../lib/repository"
+} from "@/lib/bots/store"
+import { saveNetworkLog, savePublishLog } from "@/lib/logs/write"
+import { buildActiveProxies } from "@/lib/syncSettings"
+import { useData } from "../contexts/DataContext"
+import { useSettings } from "../contexts/SettingsContext"
 import {
   fetchBotInfo as fetchBotInfoApi,
   publishSummary,

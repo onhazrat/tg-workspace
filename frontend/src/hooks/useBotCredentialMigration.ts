@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react"
 import { api } from "@/api"
+import { listBotCredentials } from "@/lib/bots/store"
 import * as cache from "@/lib/cache"
-import { listBotCredentials } from "@/lib/repository"
 
 const MIGRATED_KEY = "bot_credentials_migrated"
 

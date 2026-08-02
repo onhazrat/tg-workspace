@@ -5,15 +5,7 @@
 
 import { api } from "@/api"
 import { env } from "@/lib/env"
-import type {
-  BotCredential,
-  ChatDestination,
-  DBStats,
-  Post,
-  PostEmbedding,
-  PostTranslation,
-} from "../types"
-import { stripToken } from "./botCredential"
+import type { DBStats, Post, PostEmbedding, PostTranslation } from "../types"
 import * as cache from "./cache"
 
 let syncMeta: Record<string, { etag: string }> = {}
@@ -246,91 +238,6 @@ export async function clearChannelPosts(channelName: string): Promise<void> {
 
 export async function deleteOldPosts(days: number): Promise<number> {
   return cache.deleteOldPosts(days)
-}
-
-// --- bot credentials ---
-
-export async function listBotCredentials(): Promise<BotCredential[]> {
-  if (await isResourceStale("bot_credentials")) {
-    try {
-      const remote = await api.listBotCredentials()
-      for (const b of remote) {
-        await cache.saveBotCredential(stripToken(b))
-      }
-      markResourceSynced("bot_credentials")
-      return remote.map(stripToken)
-    } catch {
-      /* fall through */
-    }
-  }
-  const cached = await cache.getBotCredentials()
-  return cached.map(stripToken)
-}
-
-export async function saveBotCredential(
-  bot: BotCredential,
-): Promise<BotCredential> {
-  const payload: BotCredential = { ...bot }
-  const saved = await apiWrite(
-    "bot_credentials",
-    () => api.upsertBotCredential(bot.id, payload),
-    () => cache.saveBotCredential(stripToken(bot)),
-  )
-  return stripToken(saved)
-}
-
-export async function deleteBotCredential(id: string): Promise<void> {
-  try {
-    await api.deleteBotCredential(id)
-    await cache.deleteBotCredential(id)
-    await refreshSyncMeta(true)
-    markResourceSynced("bot_credentials")
-  } catch (error) {
-    await cache.deleteBotCredential(id)
-    onWriteFallback?.("bot_credentials", error)
-    throw error
-  }
-}
-
-// --- chat destinations ---
-
-export async function listChatDestinations(): Promise<ChatDestination[]> {
-  if (await isResourceStale("chat_destinations")) {
-    try {
-      const remote = await api.listChatDestinations()
-      for (const d of remote) {
-        await cache.saveChatDestination(d)
-      }
-      markResourceSynced("chat_destinations")
-      return remote
-    } catch {
-      /* fall through */
-    }
-  }
-  return cache.getChatDestinations()
-}
-
-export async function saveChatDestination(
-  dest: ChatDestination,
-): Promise<ChatDestination> {
-  return apiWrite(
-    "chat_destinations",
-    () => api.upsertChatDestination(dest.id, dest),
-    () => cache.saveChatDestination(dest),
-  )
-}
-
-export async function deleteChatDestination(id: string): Promise<void> {
-  try {
-    await api.deleteChatDestination(id)
-    await cache.deleteChatDestination(id)
-    await refreshSyncMeta(true)
-    markResourceSynced("chat_destinations")
-  } catch (error) {
-    await cache.deleteChatDestination(id)
-    onWriteFallback?.("chat_destinations", error)
-    throw error
-  }
 }
 
 // --- embeddings & translations ---

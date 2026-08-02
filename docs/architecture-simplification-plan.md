@@ -518,6 +518,23 @@ the search term, de-dup key ignores the summary id, tag-run reads rethrow.
 > `listSummaries`. `tsconfig.build.json` excludes `src/**/*.test.*`, so both
 > failed only under `bun test`. Expect one per family.
 
+**A3.4 — bot credentials + chat destinations · ✅ DONE 2026-08-02**
+
+**Shipped:** `lib/bots/store.ts` (6 functions), 3 importing files repointed.
+`repository.ts` **490 → 397 LOC, 28 → 22 exports**; consumer files 22 → 20.
+Suppress, not invalidate — `BotManagement` writes the `bots` cache through
+itself.
+
+**`stripToken` is now the only thing standing between a regressed server and a
+token in the browser**, so it is tested in both directions: a token the server
+should not have sent is stripped from a *read*, and the token legitimately sent
+on a *write* is stripped off whatever comes back. Both leak mutations fail.
+
+**Verified:** `tsc` clean; biome clean; build succeeds; **800 pass / 0 fail**
+across 109 files. Mutation-tested against 5 mutations, all caught: read leaks a
+token, save leaks a token, save invalidates, delete invalidates, chat-destination
+delete invalidates.
+
 > **Do NOT copy A3.1's invalidate-on-write into the channels family.** Surveyed
 > 2026-08-02, before starting it: the etag mechanism is doing **two opposite
 > jobs**, and only the logs one is "refetch after a write".
@@ -1430,7 +1447,7 @@ Re-measured **2026-08-01**, after A1a–A1c, A2, B7b and G1.
 | Contexts with a test | 0/9 | 1/9 (`DataContext`) | ≥ 5/5 (after G2) |
 | Hooks with a test | 2/32 | **6/36** | the ones holding logic |
 | Frontend LOC (excl. generated) | 59,881 | 61,888 | ≈ 54,000 |
-| Frontend tests | 679 | **792** | — |
+| Frontend tests | 679 | **800** | — |
 | Backend tests | 767 | **809** | — |
 | Runtime deps removed | — | **`axios`** (F1b) | `idb`, `axios` |
 

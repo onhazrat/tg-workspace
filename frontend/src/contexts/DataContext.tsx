@@ -9,6 +9,7 @@ import {
   useMemo,
   useState,
 } from "react"
+import { listBotCredentials, listChatDestinations } from "@/lib/bots/store"
 import type { LogType } from "../api/data"
 import { queryKeys } from "../hooks/queryKeys"
 import {
@@ -30,12 +31,7 @@ import {
   useSummariesQuery,
 } from "../hooks/useSummaries"
 import { applySetStateAction } from "../lib/applySetStateAction"
-import {
-  cleanupLegacyBots,
-  getDBStats,
-  listBotCredentials,
-  listChatDestinations,
-} from "../lib/repository"
+import { cleanupLegacyBots, getDBStats } from "../lib/repository"
 import type {
   BotCredential,
   Channel,
