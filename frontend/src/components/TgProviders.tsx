@@ -1,5 +1,4 @@
 import type { ReactNode } from "react"
-import { toast } from "sonner"
 import { CommandPalette } from "@/components/CommandPalette"
 import { CommandPaletteProvider } from "@/components/CommandPaletteProvider"
 import { MigrationPrompt } from "@/components/MigrationPrompt"
@@ -16,26 +15,15 @@ import { TranslationProvider } from "@/contexts/TranslationContext"
 import { UIProvider } from "@/contexts/UIContext"
 import { useBotCredentialMigration } from "@/hooks/useBotCredentialMigration"
 import { migrateEmbeddingsData, migrateSummaryDates } from "@/lib/cache"
-import { setWriteFallbackHandler } from "@/lib/repository"
 
 migrateEmbeddingsData().catch(console.error)
 migrateSummaryDates().catch(console.error)
 
-setWriteFallbackHandler((resource, error) => {
-  const message = error instanceof Error ? error.message : String(error)
-  const isAuthError =
-    message.includes("Not authenticated") ||
-    message.includes("Could not validate credentials") ||
-    message.includes("User not found")
-  if (isAuthError) return
-  console.warn(
-    `[repository] API write failed for ${resource}, saved to local cache`,
-    error,
-  )
-  toast.warning(`Saved ${resource} locally only — server sync failed`, {
-    duration: 6000,
-  })
-})
+// The "saved locally only — server sync failed" toast is gone with A3's write
+// fallback. It promised something no longer true: with the IndexedDB mirror
+// retired there is no local copy for a failed write to land in, so telling the
+// operator their data was saved would be a lie. A failed write now surfaces as
+// the error it is.
 
 export function TgProviders({ children }: { children: ReactNode }) {
   useBotCredentialMigration()

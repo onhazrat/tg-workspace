@@ -1,5 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react"
-import { loadNetworkSettings, saveNetworkSettings } from "@/lib/repository"
+import {
+  loadNetworkSettings,
+  saveNetworkSettings,
+} from "@/lib/settings/network-settings-store"
 import { parseProxyList } from "@/lib/syncSettings"
 import {
   buildNetworkSavePayload,

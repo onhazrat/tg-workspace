@@ -566,6 +566,48 @@ across 109 files. Mutation-tested against 4 real mutations, all caught: batch
 limit raised past what the server accepts, no batching at all, de-dup key stops
 sorting, de-dup key ignores the refs.
 
+**A3.6 — the remainder, and the infrastructure block · ✅ DONE 2026-08-02 — A3 COMPLETE**
+
+**Shipped:** `lib/translations/store.ts` and `lib/settings/network-settings-store.ts`,
+then the whole etag/write-fallback layer. `repository.ts` **252 → 116 LOC,
+17 → 7 exports**; consumer files 16 → 13.
+
+**A3 total: 956 → 116 LOC, 67 → 7 exports, 45 → 13 consumer files.**
+
+- **`listEmbeddings`/`saveEmbeddings` were dead** — zero callers. Deleted, not
+  moved. That is four dead exports A3 has now found (`bulkSyncChannelSettings`,
+  `saveSummarySynced`, `getPostsWithoutEmbeddings`, and these two).
+- **The translations etag was actively harmful.** `getTranslation` was a
+  full-table download per read gated on a resource etag, and `saveTranslation`
+  bumped that etag — so every save forced the next read to re-download every
+  translation in the database. It is a single-row request now, needing neither
+  etag nor invalidation.
+- **`setWriteFallbackHandler` and its toast are gone**, as the plan asked. The
+  toast said *"Saved {resource} locally only — server sync failed"*, which with
+  the mirror retired would be a **lie**: there is no local copy for a failed
+  write to land in. A failed write now surfaces as the error it is.
+- **`checkNeedsMigration` and `importIndexedDBToServer` both called
+  `refreshSyncMeta(true)` for nothing** — it primed an etag cache that never
+  affected either. The import's call is replaced by
+  `queryClient.invalidateQueries()` with no filter: a wholesale replacement of
+  every table where nothing was written through is the one place in this
+  codebase that is right.
+
+**What deliberately remains, and why it is not A3's:** `clearChannelPosts`,
+`deleteOldPosts`, `getDBStats`, `cleanupLegacyBots`, `checkNeedsMigration`,
+`importIndexedDBToServer`, `export { cache }`. Every one is a `lib/cache`
+wrapper or part of the one-time IndexedDB→server migration. A3 moves *API*
+access out; these have no API to move. The file header now says this in place so
+nothing grows back.
+
+> **A4's first job is `getDBStats`.** It merges the server's stats response with
+> local mirror counts field by field (`remote.x ?? local.x`). Deleting the
+> mirror means confirming the server covers every `DBStats` field first — check,
+> do not assume.
+
+**Verified:** `tsc` clean; biome clean; build succeeds; **806 pass / 0 fail**
+across 109 files.
+
 > **Do NOT copy A3.1's invalidate-on-write into the channels family.** Surveyed
 > 2026-08-02, before starting it: the etag mechanism is doing **two opposite
 > jobs**, and only the logs one is "refetch after a write".
@@ -1289,6 +1331,34 @@ dropped keyword 2.
 
 11 providers nested 11 deep → ~5. Providers whose entire content is server data
 (`DataContext`'s 9 repository-fed fields) become query hooks; only UI-state providers remain.
+
+**Survey, 2026-08-02 (A3 is done, so this is now unblocked).**
+
+`DataContext` is 366 LOC exposing ~24 fields to **27 `useData()` consumers**. The
+split is clean and the plan's framing is right: all but two fields are server
+data (`channels`, `channelStats`, `botCredentials`, `chatDestinations`,
+`summariesHistory`, `dbStats`, five log lists, their five loaders, `logsLoading`).
+Only `selectedChannels` and `prevChannelNames` are genuine UI state — which is
+what `DataContext` should be left holding.
+
+**Take the logs half first.** After A3.1 the five log lists are already backed by
+`useLogsQuery`, so moving their consumers off `useData()` is mechanical rather
+than a redesign. 20 files touch those fields.
+
+> **The trap in that slice:** many of those 20 call `loadXLogs()` right after
+> writing a log, and it *looks* redundant now that `lib/logs/write.ts`
+> invalidates. It is not. `DataContext` creates the log queries with
+> `enabled: false` — the panels are lazy — and **`invalidateQueries` does not
+> refetch a disabled query**. The invalidation only marks the entry stale so the
+> next `fetchQuery` goes to the server. Delete the reload and the panel silently
+> stops updating after a write. Either keep the reload, or make the panel's
+> query `enabled` when it is mounted — the latter is the real fix and is what
+> makes the reload genuinely removable.
+
+Sizes for the rest: `AIContext` 714 LOC and `ScraperContext` 632 are the two
+largest remaining contexts, and neither is server data — they are workflow
+state, so they stay. The 11-deep nesting is mostly not the cost; the count of
+providers holding server data is.
 
 #### G3 — Extract the settings binding · ✅ **DONE 2026-08-01**
 

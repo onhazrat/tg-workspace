@@ -21,13 +21,13 @@ import type React from "react"
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { toast } from "sonner"
 import { api } from "@/api"
+import { getTranslation, saveTranslation } from "@/lib/translations/store"
 import { useData } from "../contexts/DataContext"
 import { useScraper } from "../contexts/ScraperContext"
 import { useSettings } from "../contexts/SettingsContext"
 import { useTranslation } from "../contexts/TranslationContext"
 import { getMediaKindLabel, getPostMediaKinds } from "../lib/posts/post-media"
 import { renderPostText } from "../lib/posts/render-post-text"
-import { getTranslation, saveTranslation } from "../lib/repository"
 import {
   telegramWebViewChannelUrl,
   telegramWebViewPostUrl,

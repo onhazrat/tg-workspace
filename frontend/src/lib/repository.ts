@@ -1,84 +1,23 @@
 /**
- * Hybrid sync: API-first with IndexedDB cache (read-through).
- * On API write failure: fall back to IndexedDB and notify via onWriteFallback.
+ * What is left of the hybrid-sync layer, waiting on A4.
+ *
+ * A3 emptied this file of API access: the resource families moved to
+ * `lib/<family>/store.ts` and the etag-staleness and write-fallback machinery
+ * that wrapped them is deleted. **Nothing here should grow.** Every remaining
+ * export is either a thin `lib/cache` wrapper from the browser-only era or part
+ * of the one-time IndexedDB→server migration, and all of it disappears with the
+ * mirror in A4 (`lib/cache.ts`, `workers/dbWorker.ts`, `MigrationPrompt.tsx`).
+ *
+ * `getDBStats` is the one that still merges: it fills fields the server's stats
+ * response omits from the local mirror. Deleting the mirror means checking
+ * whether the server covers every `DBStats` field first — do that in A4 rather
+ * than assuming.
  */
 
 import { api } from "@/api"
-import { env } from "@/lib/env"
-import type { DBStats, PostEmbedding, PostTranslation } from "../types"
+import { queryClient } from "@/lib/queryClient"
+import type { DBStats, PostTranslation } from "../types"
 import * as cache from "./cache"
-
-let syncMeta: Record<string, { etag: string }> = {}
-let syncMetaFetchedAt = 0
-
-type WriteFallbackHandler = (resource: string, error: unknown) => void
-let onWriteFallback: WriteFallbackHandler | null = null
-
-export function setWriteFallbackHandler(
-  handler: WriteFallbackHandler | null,
-): void {
-  onWriteFallback = handler
-}
-
-export function getSyncMeta(): Record<string, { etag: string }> {
-  return { ...syncMeta }
-}
-
-export async function refreshSyncMeta(force = false): Promise<void> {
-  const now = Date.now()
-  if (!force && now - syncMetaFetchedAt < env.syncMetaMinIntervalMs) {
-    return
-  }
-  try {
-    syncMeta = await api.syncMeta()
-    syncMetaFetchedAt = now
-  } catch {
-    /* server unavailable — use cache only */
-  }
-}
-
-export function invalidateSyncMetaCache(): void {
-  syncMetaFetchedAt = 0
-}
-
-async function isResourceStale(resource: string): Promise<boolean> {
-  await refreshSyncMeta()
-  const remote = syncMeta[resource]?.etag
-  if (!remote) return false
-  const localKey = `sync_etag_${resource}`
-  const local = localStorage.getItem(localKey)
-  return local !== remote
-}
-
-function markResourceSynced(resource: string): void {
-  const remote = syncMeta[resource]?.etag
-  if (remote) {
-    localStorage.setItem(`sync_etag_${resource}`, remote)
-  }
-}
-
-async function apiWrite<T>(
-  resource: string,
-  apiFn: () => Promise<T>,
-  cacheFn: () => Promise<void>,
-): Promise<T> {
-  try {
-    const result = await apiFn()
-    await cacheFn()
-    await refreshSyncMeta(true)
-    markResourceSynced(resource)
-    return result
-  } catch (error) {
-    await cacheFn()
-    onWriteFallback?.(resource, error)
-    throw error
-  }
-}
-
-// `singleFlight`/`resetInFlight` moved to `lib/singleFlight.ts` in A3.3 —
-// they are shared infrastructure that outlives this file, and the resource
-// families leaving it still need them.
-import { singleFlight } from "./singleFlight"
 
 // --- posts (cache-only leftovers, deleted with the mirror in A4) ---
 //
@@ -93,72 +32,6 @@ export async function clearChannelPosts(channelName: string): Promise<void> {
 
 export async function deleteOldPosts(days: number): Promise<number> {
   return cache.deleteOldPosts(days)
-}
-
-// --- embeddings & translations ---
-
-export async function listEmbeddings(): Promise<PostEmbedding[]> {
-  if (await isResourceStale("embeddings")) {
-    try {
-      const remote = await api.listEmbeddings()
-      await cache.saveEmbeddings(remote)
-      markResourceSynced("embeddings")
-      return remote
-    } catch {
-      /* fall through */
-    }
-  }
-  return cache.getAllEmbeddings()
-}
-
-export async function saveEmbeddings(
-  embeddings: PostEmbedding[],
-): Promise<void> {
-  await apiWrite(
-    "embeddings",
-    () => api.upsertEmbeddings(embeddings),
-    () => cache.saveEmbeddings(embeddings),
-  )
-}
-
-/**
- * Read one translation.
- *
- * Previously a full-table download per read, gated on a resource etag — and
- * because `saveTranslation` bumps that etag, every save forced the next read
- * to re-download every translation in the database. Now a single-row request
- * with the result cached locally; the cache answers when the server is
- * unreachable.
- */
-export async function getTranslation(
-  channelName: string,
-  postId: number,
-  language: string,
-): Promise<PostTranslation | undefined> {
-  const key = `translation:${channelName}#${postId}#${language}`
-  return singleFlight(key, async () => {
-    try {
-      const remote = await api.getTranslation(channelName, postId, language)
-      if (remote) {
-        await cache.saveTranslation(remote)
-        return remote
-      }
-      // A confirmed absence — do not fall back to a stale cached row.
-      return undefined
-    } catch {
-      return cache.getTranslation(channelName, postId, language)
-    }
-  })
-}
-
-export async function saveTranslation(
-  translation: PostTranslation,
-): Promise<void> {
-  await apiWrite(
-    "translations",
-    () => api.upsertTranslations([translation]),
-    () => cache.saveTranslation(translation),
-  )
 }
 
 // --- stats & legacy bot cleanup ---
@@ -196,27 +69,14 @@ export async function cleanupLegacyBots(): Promise<void> {
   }
 }
 
-// --- network settings (server-backed) ---
-
-export async function loadNetworkSettings(): Promise<Record<string, unknown>> {
-  const row = await api.getNetworkSettings()
-  return row.value
-}
-
-export async function saveNetworkSettings(
-  value: Record<string, unknown>,
-): Promise<Record<string, unknown>> {
-  const row = await api.putNetworkSettings(value)
-  return row.value
-}
-
 // --- server migration ---
 
 export async function checkNeedsMigration(): Promise<boolean> {
   const localChannels = await cache.getChannels()
   if (localChannels.length === 0) return false
   try {
-    await refreshSyncMeta(true)
+    // The `refreshSyncMeta(true)` that used to sit here primed an etag cache
+    // that A3 deleted; it never affected the comparison below.
     const remote = await api.listChannels()
     return remote.length === 0
   } catch {
@@ -245,7 +105,11 @@ export async function importIndexedDBToServer(): Promise<
     },
   }
   const result = await api.importData(payload)
-  await refreshSyncMeta(true)
+  // A wholesale replacement of every table, and nothing wrote any of it
+  // through — the one case in this codebase where invalidating *everything* is
+  // right. The `refreshSyncMeta(true)` this replaces achieved the same thing
+  // via the etag layer that A3 deleted.
+  await queryClient.invalidateQueries()
   return result.imported
 }
 
