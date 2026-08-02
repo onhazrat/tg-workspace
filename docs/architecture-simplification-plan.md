@@ -1276,10 +1276,11 @@ method, id-in-URL, and body — which the flaky e2e cannot.
 > patch hit the wrong function. Re-anchored on the whole function opening, it fails as it should.
 > Third unit in a row where mutation testing caught something the green suite did not.
 
-#### F2 — Move summarizer calls onto the generated client · **L**
+#### F2 — Move summarizer calls onto the generated client · ✅ **DONE 2026-08-02**
 
 **Survey, 2026-08-02. The premise above is half wrong, and the correction changes
-the shape of the unit — read this before starting.**
+the shape of the unit.** The execution notes, including two corrections to *this
+survey*, follow it below.
 
 **The good half: A3 already did most of the work.** The plan describes replacing
 `api/data.ts` (835 LOC) and friends at every call site. That is no longer what it
@@ -1329,23 +1330,6 @@ client**, and the summarizer's core resources are open on purpose. Two clients
 is the right answer for a narrower and better-evidenced reason than the ADR
 currently gives.
 
-**Per-model openness, measured 2026-08-02** — so the next session does not
-re-derive it. Openness is per *model*, not per family, so the split is finer
-than "these four files":
-
-| model | | model | |
-|---|---|---|---|
-| `SyncJobStatusResponse` | **closed** | `RuntimeConfigResponse` | **closed** |
-| `RagStatusResponse` | **closed** | `ChannelInfoResponse` | **closed** |
-| `PublishResponse` | **closed** | `TorIpResponse` | **closed** |
-| `ProxyHealthResponse` | **closed** | `BotInfoResponse` | **OPEN** |
-| `TorStatusResponse` | **OPEN** | | |
-
-Measure it with:
-`sed -n "/^export type <T> = {/,/^};/p" src/client/types.gen.ts | grep -c "\[key: string\]"`
-— a non-zero count is an index signature, and an index signature is what makes
-the generated type worse than the hand-written one.
-
 **The real prize is the duplicate types, not the calls.** `api/jobs.ts` alone
 hand-declares `JobStatusEntry`, `SyncJobChannelStatus`, `SyncJobStatus` and
 `RuntimeConfig` — server response shapes retyped by hand, exactly the drift B7
@@ -1353,9 +1337,96 @@ removed for domain types. The four modules are only 266 LOC of `request<T>()`
 wrappers; the win is deleting the parallel type declarations underneath them,
 which is why the closed models are worth moving and the open ones are not.
 
-**Recommended:** re-scope F2 to the closed-model families only (**M**, not L),
-and rewrite ADR-006 with the reason above. Leaving the open-model families
-hand-written is a decision, not a leftover — record it as such.
+---
+
+### F2 — executed 2026-08-02 · ✅ **DONE — the plan's backlog is now empty**
+
+The survey above was right about the shape and **wrong about the measurement**.
+Both corrections are worth keeping, because both would otherwise be re-derived.
+
+#### Correction 1 — the grep one-liner is wrong in both directions
+
+The recommended measurement was:
+
+```
+sed -n "/^export type <T> = {/,/^};/p" src/client/types.gen.ts | grep -c "\[key: string\]"
+```
+
+It counts index signatures **anywhere in the type's source text, including on
+nested fields**. It reported `ScrapeChannelResponse` and `PostResponse` as OPEN;
+both are closed at the top level and merely carry one loose column (`posts`,
+`media`). The correct test is at the type level, and is now a compile-time
+assertion in `frontend/src/api/client-split.conform.ts`:
+
+```ts
+type IsClosed<T> = string extends keyof T ? false : true
+```
+
+`string extends keyof T` holds only for a genuine top-level index signature,
+because a closed object's `keyof` is a union of string literals.
+
+Re-measured properly: `JobStatusEntry`, `TorStatusResponse`, `TestProxyResponse`
+and `BotInfoResponse` are open. Everything else in these four families is closed.
+
+#### Correction 2 — openness is not the only disqualifier
+
+**A closed model can still be unusable.** OpenAPI cannot express *"has a
+server-side default, therefore always present"*, so `timestamp: int = 0` emits
+as `timestamp?: number`. `RagSearchResponse` is closed, and the `PostResponse`
+nested two levels inside it is closed too — but every field on it is optional,
+so it is not assignable to the frontend `Post`. `ragSearch` stayed hand-written
+for that reason, not for openness.
+
+#### What moved
+
+`getRuntimeConfig`, `getSyncJobStatus`, `startSyncJob`, `cancelSyncJob`,
+`healthCheck`, `proxyHealth`, `torIp`, `torRestart`, `torNewIdentity`,
+`ragStatus`, `ragEmbed`, `channelInfo`, `publish`.
+
+The `api.*` facade kept its signatures, so no consumer changed except where a
+now-redundant cast could be deleted. `RuntimeConfig` was the biggest single win:
+six `Record<string, unknown>` fields became declared models.
+
+`JobStatusEntry` stays hand-declared and is the one place where that is an
+*upgrade* — it declares `pauseUntil`, which the open model can only type
+`unknown`.
+
+#### Two dead wrappers deleted, not moved
+
+`scrape` and `resolveStartTime` had **no callers**: scraping has been driven by
+`POST /api/v1/jobs/sync` since the migration, and start times are resolved in
+`jobs/settings.py`. Both routes are still live and still used by the backend.
+
+#### Three live defects the move surfaced
+
+Each one is a place where a generated type stopped agreeing with a hand-written
+cast — which is the whole argument for generated types, arriving unprompted.
+
+1. **`GET /api/v1/network/proxy-health` returned 500 whenever a proxy was
+   actually in cooldown.** `ProxyHealthResponse.bad_proxies` was declared
+   `list[str]` in B6, but `services/network.get_bad_proxies()` has always
+   returned `{"url", "cooldownRemaining"}` dicts, so `model_validate` raised.
+   Every existing test ran against an empty list — including B6's own key-set
+   check — so it never showed. Fixed with a declared `BadProxy` model plus a
+   test that populates the cooldown map, verified to fail against the old model.
+2. **`data.error` on the channel-info success path was unreachable.**
+   `ChannelInfoResponse` declares no `error`; the key only ever arrives inside
+   an `HTTPException(400, detail={...})`, which the `catch` already handles.
+   Two call sites carried the dead branch.
+3. **`data.error` led the publish failure chain and could never be non-null.**
+   `PublishResponse` is closed and has no `error` field, and the route returns
+   nothing else on a 200.
+
+#### The split is now enforced, in both directions
+
+`client-split.conform.ts` asserts that every moved model stays **closed**, and —
+the more useful half — that every model kept hand-written is still **open** (or
+still non-assignable). Close one server-side and the build breaks, telling
+whoever did it that the call can now move. That is what keeps a deliberate
+exception from decaying into a leftover nobody dares touch.
+
+ADR-006 is rewritten with the corrected rationale: not SSE, not untyped
+responses, but *open models and all-optional closed models*.
 
 <details><summary>Original F2 description (superseded by the survey above)</summary>
 
@@ -1723,18 +1794,21 @@ time and buys little. Included here so it is explicitly deprioritised rather tha
 
 ## 3b. What is left, as of 2026-08-02
 
-**Workstreams A, B, C, D, E, G, H and T are complete.** Nothing is blocked.
+**Every workstream in this plan is complete: A, B, C, D, E, F, G, H and T.**
 
 > A3 → A4 shipped the whole data-path track: `repository.ts` (956 LOC / 67 exports) is gone, the
 > IndexedDB layer with it (−2,491 lines), and PostgreSQL is the only client-side store. G2 landed
-> alongside. E was decided rather than executed wholesale — see §E for why `items` stays.
+> alongside. E was decided rather than executed wholesale — see §E for why `items` stays. F2 closed
+> the contract track and rewrote ADR-006 with a rationale that survives scrutiny.
 
 | Unit | Size | Blocked by | Note |
 |---|---|---|---|
-| **F2** — closed-model families onto the generated client | **M** (was L) | — | **The only unit left.** Re-scoped 2026-08-02 — see §F2. A3 concentrated all API access into seven store modules, so this is now "point seven files at the client". But the generated types are a *regression* for the six open response models (`stats` on `ChannelResponse` types as `unknown`), so only the closed-model families (`jobs`, `network`, `rag`, `tg`) should move. Rewrite ADR-006 with that as the reason for keeping two clients. |
-| **I** — component size outliers | — | — | Explicitly deprioritised; only where G1/A3 force changes. |
+| **I** — component size outliers | — | — | The only item never scheduled, and **explicitly deprioritised** from the start: address size only where another change forces it. Not worth opening on its own. |
 
-**Recommended order:** `F2`, then stop. `I` is not worth opening on its own.
+**Recommended next:** nothing in this plan. If the programme continues, the honest next
+target is not on this list — `jobs/retention.py::run_retention_cleanup` is now the longest
+backend function at 174 lines (H1/H2 noted it and correctly refused to widen scope), and the
+17 open response models remain the standing reason the two clients cannot merge.
 
 ---
 

@@ -104,25 +104,28 @@ export async function addChannelByName(
   let telegramChatId: number | undefined
 
   try {
-    const data = (await api.channelInfo({
+    const data = await api.channelInfo({
       channelName,
       proxyEnabled: isNetworkRoutingActive(proxySettings),
       proxies: activeProxies,
       torAutoRotate: ctx.settings.torAutoRotate,
       torRotationThreshold: ctx.settings.torRotationThreshold,
-    })) as Record<string, unknown>
+    })
 
     status = 200
+    // `Telemetry` is `Any` on the backend by design, so it generates as
+    // `unknown` and this one cast survives. Every other field below used to
+    // need one too, until F2 moved this call onto the generated client.
     telemetryData = data.telemetry as Record<string, unknown> | undefined
 
-    if (data.displayName) displayName = data.displayName as string
-    if (data.photoUrl) photoUrl = data.photoUrl as string
-    if (data.bio) bio = data.bio as string
-    if (data.subscribers) subscribers = data.subscribers as string
-    if (data.photos) photos = data.photos as string
-    if (data.videos) videos = data.videos as string
-    if (data.files) files = data.files as string
-    if (data.links) links = data.links as string
+    if (data.displayName) displayName = data.displayName
+    if (data.photoUrl) photoUrl = data.photoUrl
+    if (data.bio) bio = data.bio
+    if (data.subscribers) subscribers = data.subscribers
+    if (data.photos) photos = data.photos
+    if (data.videos) videos = data.videos
+    if (data.files) files = data.files
+    if (data.links) links = data.links
     if (data.isUnavailableOnWebView) {
       isUnavailableOnWebView = true
     }

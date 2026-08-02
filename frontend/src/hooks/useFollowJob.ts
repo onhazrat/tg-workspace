@@ -232,7 +232,11 @@ export function useFollowJob(deps: FollowJobDeps): FollowJob {
             if (s) {
               setChannelStats((prev) => ({
                 ...prev,
-                [ch.channelName]: { ...s, latestId: ch.newLatestId },
+                // Nullable on the wire — see the same write in `useSyncJob`.
+                [ch.channelName]: {
+                  ...s,
+                  latestId: ch.newLatestId ?? undefined,
+                },
               }))
             }
           }

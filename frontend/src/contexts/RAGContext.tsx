@@ -48,11 +48,13 @@ export const RAGProvider: React.FC<{ children: ReactNode }> = ({
     }
     try {
       const status = await api.ragStatus()
-      setIsSyncing(status.pending > 0)
-      setProgress({
-        current: Math.max(0, status.total - status.pending),
-        total: status.total,
-      })
+      // Every field on `RagStatusResponse` has a server-side default, so all
+      // three are always on the wire — but a defaulted Pydantic field is
+      // `optional` in OpenAPI, so the generated type cannot say so.
+      const pending = status.pending ?? 0
+      const total = status.total ?? 0
+      setIsSyncing(pending > 0)
+      setProgress({ current: Math.max(0, total - pending), total })
     } catch (error) {
       console.error("[RAGProvider] Failed to fetch embedding status:", error)
     }

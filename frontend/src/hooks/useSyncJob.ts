@@ -210,7 +210,14 @@ export function useSyncJob(deps: SyncJobDeps): SyncJob {
             if (s) {
               setChannelStats((prev) => ({
                 ...prev,
-                [ch.channelName]: { ...s, latestId: ch.newLatestId },
+                // `newLatestId` is genuinely nullable — `sync_orchestrator`
+                // sends `final_latest_id or None`. The hand-written type used
+                // to declare it `number | undefined`, so a null landed in
+                // `ChannelStats.latestId` in violation of its own type.
+                [ch.channelName]: {
+                  ...s,
+                  latestId: ch.newLatestId ?? undefined,
+                },
               }))
             }
           }

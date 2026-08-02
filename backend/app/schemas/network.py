@@ -27,12 +27,32 @@ class TestProxyResponse(BaseModel):
     proxy_url: str = Field(alias="proxyUrl")
 
 
-class ProxyHealthResponse(BaseModel):
-    """Proxies currently marked bad by the pool."""
+class BadProxy(BaseModel):
+    """One proxy in cooldown, with the seconds left on it."""
 
     model_config = ConfigDict(populate_by_name=True)
 
-    bad_proxies: list[str] = Field(default_factory=list, alias="badProxies")
+    url: str
+    cooldown_remaining: int = Field(alias="cooldownRemaining")
+
+
+class ProxyHealthResponse(BaseModel):
+    """Proxies currently marked bad by the pool.
+
+    `bad_proxies` was declared `list[str]` in B6, but
+    `services/network.get_bad_proxies()` has always returned
+    `list[dict[str, Any]]` — `{"url", "cooldownRemaining"}` per entry. The
+    mismatch never showed because the list is empty on a healthy deployment;
+    the moment any proxy entered cooldown, `model_validate` raised and
+    `GET /api/v1/network/proxy-health` answered **500** — precisely when an
+    operator would be looking at the panel. F2 found it by moving the caller
+    onto the generated client, where the frontend's `as {url, cooldownRemaining}[]`
+    cast stopped agreeing with the declared type.
+    """
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    bad_proxies: list[BadProxy] = Field(default_factory=list, alias="badProxies")
 
 
 class TorStatusResponse(BaseModel):

@@ -67,12 +67,7 @@ export const publishSummary = async (
       torRotationThreshold,
     }
 
-    const data = (await api.publish(requestBody)) as {
-      success?: boolean
-      results?: unknown[]
-      telemetry?: unknown
-      error?: string
-    }
+    const data = await api.publish(requestBody)
 
     if (data.telemetry) {
       logTelemetry(
@@ -100,8 +95,12 @@ export const publishSummary = async (
       ) as { description?: string } | undefined
       return {
         success: false,
+        // `data.error` used to lead this chain. `PublishResponse` is closed and
+        // declares no `error`, and the route returns nothing else on a 200, so
+        // that read could never be non-null — the generated type is what
+        // proved it. Failures arrive per-chunk in `results`, or as a thrown
+        // `ApiError` caught below.
         error:
-          data.error ??
           firstError?.description ??
           "Publish failed: Telegram API returned an error",
         responses: results,

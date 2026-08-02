@@ -12,6 +12,7 @@ import { AnimatePresence, motion } from "motion/react"
 import type React from "react"
 import { useEffect, useState } from "react"
 import { api } from "@/api"
+import type { BadProxy } from "@/client"
 import { SettingAnchor } from "@/components/settings/SettingAnchor"
 import { TgButton } from "@/components/ui/tg-button"
 import { TgHelpText, TgInput, TgTextarea } from "@/components/ui/tg-input"
@@ -53,9 +54,7 @@ export const ProxyPanel: React.FC<{
     clearProxyResults,
   } = useProxyTesting()
 
-  const [badProxies, setBadProxies] = useState<
-    { url: string; cooldownRemaining: number }[]
-  >([])
+  const [badProxies, setBadProxies] = useState<BadProxy[]>([])
 
   // Credentials are hidden until explicitly revealed. While hidden the textarea is
   // read-only and shows a masked projection, so there is no code path that can
@@ -82,9 +81,7 @@ export const ProxyPanel: React.FC<{
   const fetchProxyHealth = async () => {
     try {
       const data = await api.proxyHealth()
-      setBadProxies(
-        data.badProxies as { url: string; cooldownRemaining: number }[],
-      )
+      setBadProxies(data.badProxies ?? [])
     } catch (error) {
       console.error("Failed to fetch proxy health:", error)
     }

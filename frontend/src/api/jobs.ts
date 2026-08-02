@@ -1,5 +1,39 @@
+import {
+  jobsCancelSyncJob,
+  jobsGetRuntimeConfig,
+  jobsGetSyncJobStatus,
+  jobsStartSyncJob,
+  type SyncJobStatusResponse,
+  utilsHealthCheck,
+} from "@/client"
 import { request, sseJsonStream } from "./base"
 
+/**
+ * Jobs API — split between the two clients along **response-model openness**.
+ *
+ * F2's rule: a call moves to the generated client when its response model is
+ * *closed*, and stays hand-written when the model is open
+ * (`ConfigDict(extra="allow")`). An open model renders in OpenAPI as a
+ * top-level `[key: string]: unknown` index signature, so every conditional key
+ * riding in `extra` arrives typed as `unknown` — the generated type is then
+ * strictly *worse* than the hand-written one. See ADR-006.
+ *
+ * The prize here was never the call wrappers; it was the four server response
+ * shapes this file used to re-declare by hand (`RuntimeConfig`,
+ * `SyncJobStatus`, `SyncJobChannelStatus`, and the two inline sync-job
+ * envelopes). Those are now aliases onto the generated types, so the compiler
+ * keeps them in step with the backend the way B7 did for domain types.
+ */
+
+/**
+ * The scheduler's view of one job — **hand-written on purpose.**
+ *
+ * `app/schemas/jobs.py::JobStatusEntry` is open: `pauseUntil` and `detail` are
+ * conditional and travel through `extra` rather than being declared, because
+ * declaring them would emit an explicit `null` on every job that lacks them.
+ * The generated `JobStatusEntry` therefore carries an index signature and types
+ * `pauseUntil` as `unknown`. This declaration is more precise, so it stays.
+ */
 export type JobStatusEntry = {
   enabled: boolean
   lastRun: number | null
@@ -9,43 +43,22 @@ export type JobStatusEntry = {
   pauseUntil?: number | null
 }
 
-export type SyncJobChannelStatus = {
-  channelId: string
-  channelName: string
-  status: string
-  postsFetched: number
-  newLatestId?: number
-  error?: string
-}
-
-export type SyncJobStatus = {
-  jobId: string
-  status: string
-  source: string
-  channels: SyncJobChannelStatus[]
-  createdAt: number
-  finishedAt?: number
-}
-
-export type RuntimeConfig = {
-  nowMs: number
-  scrapeCutoffMs: number
-  effectiveGlobalStartTimeMs: number
-  globalStartTime: {
-    mode: string
-    value: string | number | null
-    effectiveMs: number
-  }
-  sync: Record<string, unknown>
-  scraper: Record<string, unknown>
-  network: Record<string, unknown>
-  jobs: Record<string, unknown>
-  retention: Record<string, unknown>
-  constants: Record<string, unknown>
-  activeSyncJob: Record<string, unknown> | null
-}
+export type {
+  /** One channel's progress inside a sync job. */
+  ChannelSyncProgress as SyncJobChannelStatus,
+  /**
+   * The resolved runtime configuration.
+   *
+   * The generated type is a large upgrade: `sync`, `scraper`, `network`,
+   * `jobs`, `retention` and `constants` were each `Record<string, unknown>`
+   * here and are now their own declared models.
+   */
+  RuntimeConfigResponse as RuntimeConfig,
+  SyncJobStatusResponse as SyncJobStatus,
+} from "@/client"
 
 export const jobsApi = {
+  // Open response model (`JobStatusEntry`) — stays on the hand-written client.
   jobsStatus: () =>
     request<Record<string, JobStatusEntry>>("/api/v1/jobs/status"),
 
@@ -60,38 +73,38 @@ export const jobsApi = {
       body: JSON.stringify({ enabled }),
     }),
 
+  // Closed response models — generated.
   startSyncJob: (body: {
     channelIds?: string[]
     source?: string
     syncMode?: "sync_all" | "bulk" | "individual" | "recheck_restricted"
-  }) =>
-    request<{ jobId: string }>("/api/v1/jobs/sync", {
-      method: "POST",
-      body: JSON.stringify(body),
-    }),
+  }) => jobsStartSyncJob({ body }),
 
   getSyncJobStatus: (jobId: string) =>
-    request<SyncJobStatus>(`/api/v1/jobs/sync/${jobId}`),
+    jobsGetSyncJobStatus({ path: { job_id: jobId } }),
 
   cancelSyncJob: (jobId: string) =>
-    request<{ jobId: string; status: string }>(
-      `/api/v1/jobs/sync/${jobId}/cancel`,
-      {
-        method: "POST",
-      },
-    ),
+    jobsCancelSyncJob({ path: { job_id: jobId } }),
 
-  healthCheck: () => request<boolean>("/api/v1/utils/health-check/"),
+  healthCheck: () => utilsHealthCheck(),
 
-  getRuntimeConfig: () => request<RuntimeConfig>("/api/v1/jobs/runtime-config"),
+  getRuntimeConfig: () => jobsGetRuntimeConfig(),
 }
 
-/** Subscribe to sync job progress via SSE (full status snapshots). */
+/**
+ * Subscribe to sync job progress via SSE (full status snapshots).
+ *
+ * Stays hand-written whatever the model's openness: codegen cannot express a
+ * long-lived `text/event-stream`. It is typed off the *generated* status model
+ * so the stream and the one-shot `getSyncJobStatus` reconnect fallback cannot
+ * drift apart.
+ */
 export async function* subscribeSyncJobEvents(
   jobId: string,
   signal?: AbortSignal,
-): AsyncGenerator<SyncJobStatus> {
-  yield* sseJsonStream<SyncJobStatus>(`/api/v1/jobs/sync/${jobId}/events`, {
-    signal,
-  })
+): AsyncGenerator<SyncJobStatusResponse> {
+  yield* sseJsonStream<SyncJobStatusResponse>(
+    `/api/v1/jobs/sync/${jobId}/events`,
+    { signal },
+  )
 }

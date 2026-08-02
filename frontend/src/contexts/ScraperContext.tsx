@@ -510,7 +510,7 @@ export const ScraperProvider: React.FC<{ children: React.ReactNode }> = ({
     })
 
     try {
-      const data = (await api.channelInfo({
+      const data = await api.channelInfo({
         channelName: cleanName,
         proxyEnabled: isNetworkRoutingActive({
           proxyEnabled,
@@ -522,14 +522,16 @@ export const ScraperProvider: React.FC<{ children: React.ReactNode }> = ({
         proxies: activeProxies,
         torAutoRotate,
         torRotationThreshold,
-      })) as Record<string, unknown>
+      })
 
-      if (data.displayName) displayName = String(data.displayName)
-      if (data.photoUrl) photoUrl = String(data.photoUrl)
+      if (data.displayName) displayName = data.displayName
+      if (data.photoUrl) photoUrl = data.photoUrl
       if (data.isUnavailableOnWebView) isUnavailableOnWebView = true
-      if (data.error && !data.isUnavailableOnWebView) {
-        toast.error(String(data.error))
-      }
+      // There used to be an `if (data.error)` branch here. `ChannelInfoResponse`
+      // is closed and has no `error`: the key only ever arrives inside an
+      // `HTTPException(400, detail={"error", "isUnavailableOnWebView"})`, which
+      // the `catch` below already handles via `parseApiError`. The branch was
+      // unreachable, and the generated type is what proved it.
     } catch (err: unknown) {
       console.error("Failed to fetch initial channel info:", err)
       const parsed = parseApiError(err)

@@ -1,15 +1,28 @@
+import {
+  networkApiProxyHealth,
+  networkApiTorIp,
+  networkApiTorNewIdentity,
+  networkApiTorRestart,
+} from "@/client"
 import { request } from "./base"
 
+/**
+ * Network API — split by response-model openness (see `api/jobs.ts` and
+ * ADR-006 for the rule).
+ *
+ * `TestProxyResponse` and `TorStatusResponse` are open
+ * (`ConfigDict(extra="allow")`), so their generated types carry an index
+ * signature and the hand-written shapes below are the more precise ones.
+ */
 export const networkApi = {
+  // Open response model — hand-written.
   testProxy: (proxyUrl: string) =>
     request("/api/v1/network/test-proxy", {
       method: "POST",
       body: JSON.stringify({ proxyUrl }),
     }),
 
-  proxyHealth: () =>
-    request<{ badProxies: unknown[] }>("/api/v1/network/proxy-health"),
-
+  // Open response model — hand-written.
   torStatus: () =>
     request<{
       running: boolean
@@ -18,13 +31,13 @@ export const networkApi = {
       autoSpawned: boolean
     }>("/api/v1/network/tor-status"),
 
-  torIp: () => request<{ ip: string }>("/api/v1/network/tor-ip"),
+  // Closed response models — generated.
+  proxyHealth: () => networkApiProxyHealth(),
 
-  torRestart: () => request("/api/v1/network/tor-restart", { method: "POST" }),
+  torIp: () => networkApiTorIp(),
+
+  torRestart: () => networkApiTorRestart(),
 
   torNewIdentity: (port?: number) =>
-    request("/api/v1/network/tor-new-identity", {
-      method: "POST",
-      body: JSON.stringify({ port }),
-    }),
+    networkApiTorNewIdentity({ body: { port } }),
 }

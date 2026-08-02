@@ -38,33 +38,34 @@ export async function refreshChannelMetadata(
   const wasUnavailable = channel.isUnavailableOnWebView === true
 
   try {
-    const data = (await api.channelInfo({
+    const data = await api.channelInfo({
       channelName: channel.name,
       proxyEnabled: isNetworkRoutingActive(proxySettings),
       proxies: activeProxies,
       torAutoRotate: ctx.settings.torAutoRotate,
       torRotationThreshold: ctx.settings.torRotationThreshold,
-    })) as Record<string, unknown>
+    })
 
     status = 200
+    // `Telemetry` is `Any` on the backend, so it generates as `unknown` and
+    // keeps its cast; the field casts below are gone with F2.
     telemetryData = data.telemetry as Record<string, unknown> | undefined
 
-    if (data.displayName) displayName = data.displayName as string
-    if (data.photoUrl) photoUrl = data.photoUrl as string
-    if (data.bio) bio = data.bio as string
-    if (data.subscribers) subscribers = data.subscribers as string
-    if (data.photos) photos = data.photos as string
-    if (data.videos) videos = data.videos as string
-    if (data.files) files = data.files as string
-    if (data.links) links = data.links as string
+    if (data.displayName) displayName = data.displayName
+    if (data.photoUrl) photoUrl = data.photoUrl
+    if (data.bio) bio = data.bio
+    if (data.subscribers) subscribers = data.subscribers
+    if (data.photos) photos = data.photos
+    if (data.videos) videos = data.videos
+    if (data.files) files = data.files
+    if (data.links) links = data.links
     if (data.isUnavailableOnWebView) {
-      isUnavailableOnWebView = Boolean(data.isUnavailableOnWebView)
+      isUnavailableOnWebView = true
     } else if (wasUnavailable) {
       isUnavailableOnWebView = false
     }
-    if (data.error && !data.isUnavailableOnWebView) {
-      toast.error(String(data.error))
-    }
+    // The `if (data.error)` branch that stood here was unreachable — see the
+    // same removal in `ScraperContext`.
   } catch (err: unknown) {
     console.error("Failed to refresh channel metadata:", err)
     errorMsg =

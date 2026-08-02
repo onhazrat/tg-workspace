@@ -4276,6 +4276,19 @@
         "title": "AppSettingResponse",
         "description": "A settings row: `{\"key\": \u2026, \"value\": {\u2026}}`.\n\nShipped with B6b. `value` stays an open JSON object on purpose \u2014 the\nsettings surface is a bag of sections whose shapes are owned by their own\nloaders (`jobs`, `sync`, `retention`, `translation`, `network`), and pinning\nthem here would put five unrelated schemas behind one endpoint. The\n*envelope* is what callers depend on, and that is now typed."
       },
+      "BadProxy": {
+        "properties": {
+          "url": { "type": "string", "title": "Url" },
+          "cooldownRemaining": {
+            "type": "integer",
+            "title": "Cooldownremaining"
+          }
+        },
+        "type": "object",
+        "required": ["url", "cooldownRemaining"],
+        "title": "BadProxy",
+        "description": "One proxy in cooldown, with the seconds left on it."
+      },
       "Body_login-login_access_token": {
         "properties": {
           "grant_type": {
@@ -6408,14 +6421,14 @@
       "ProxyHealthResponse": {
         "properties": {
           "badProxies": {
-            "items": { "type": "string" },
+            "items": { "$ref": "#/components/schemas/BadProxy" },
             "type": "array",
             "title": "Badproxies"
           }
         },
         "type": "object",
         "title": "ProxyHealthResponse",
-        "description": "Proxies currently marked bad by the pool."
+        "description": "Proxies currently marked bad by the pool.\n\n`bad_proxies` was declared `list[str]` in B6, but\n`services/network.get_bad_proxies()` has always returned\n`list[dict[str, Any]]` \u2014 `{\"url\", \"cooldownRemaining\"}` per entry. The\nmismatch never showed because the list is empty on a healthy deployment;\nthe moment any proxy entered cooldown, `model_validate` raised and\n`GET /api/v1/network/proxy-health` answered **500** \u2014 precisely when an\noperator would be looking at the panel. F2 found it by moving the caller\nonto the generated client, where the frontend's `as {url, cooldownRemaining}[]`\ncast stopped agreeing with the declared type."
       },
       "ProxyLaneSnapshot": {
         "properties": {

@@ -17,6 +17,8 @@ has ever received:
 
 from __future__ import annotations
 
+import time
+
 import pytest
 from fastapi.testclient import TestClient
 
@@ -137,6 +139,29 @@ def test_proxy_health_keeps_its_key_set(client: TestClient) -> None:
     body = client.get(f"{V1}/network/proxy-health", headers=_auth(client)).json()
     assert set(body) == {"badProxies"}
     assert isinstance(body["badProxies"], list)
+
+
+def test_proxy_health_serialises_a_proxy_in_cooldown(client: TestClient) -> None:
+    """The empty-list case is not a test of the entry shape.
+
+    `bad_proxies` was declared `list[str]` while `get_bad_proxies()` has always
+    returned `{"url", "cooldownRemaining"}` dicts. Every existing check —
+    including the key-set one above — ran against an empty list on a healthy
+    deployment, so the mismatch never surfaced. With one proxy in cooldown the
+    old model raised inside `model_validate` and the endpoint answered 500.
+    """
+    from app.services import network
+
+    network._bad_proxies["http://cooldown.example:8080"] = (time.time() * 1000) + 30_000
+    try:
+        response = client.get(f"{V1}/network/proxy-health", headers=_auth(client))
+
+        assert response.status_code == 200
+        (entry,) = response.json()["badProxies"]
+        assert entry["url"] == "http://cooldown.example:8080"
+        assert 0 < entry["cooldownRemaining"] <= 30
+    finally:
+        network._bad_proxies.pop("http://cooldown.example:8080", None)
 
 
 def test_model_listing_keeps_its_key_set(client: TestClient) -> None:
