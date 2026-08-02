@@ -6560,7 +6560,8 @@
           "limit": { "type": "integer", "title": "Limit", "default": 100 }
         },
         "type": "object",
-        "title": "RagEmbedRequest"
+        "title": "RagEmbedRequest",
+        "description": "One backfill pass over posts that have no embedding yet."
       },
       "RagEmbedResponse": {
         "properties": {
@@ -6621,7 +6622,8 @@
         },
         "type": "object",
         "required": ["query"],
-        "title": "RagSearchRequest"
+        "title": "RagSearchRequest",
+        "description": "A semantic search over the embedded corpus.\n\n`limit` caps the *results*; `scan_limit` caps how many embeddings are\ncompared before ranking. They are separate because a thin result set and a\ncapped scan are different failures \u2014 see `RagSearchResponse`."
       },
       "RagSearchResponse": {
         "properties": {

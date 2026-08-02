@@ -42,10 +42,26 @@ from app.services.serialization import to_camel
 #: client and desynchronise the response from `JOB_IDS`.
 #:
 #: Add an entry only for a field that genuinely is not a column, with a comment.
+#: The second case is different, and worth reading before adding a third.
+#: `PrivateUserCreate` is a **request** model for the template's local-only
+#: `/private` surface, which speaks snake_case on the wire — the e2e helper
+#: (`frontend/tests/utils/privateApi.ts`) posts `full_name` and `is_verified`
+#: literally. Aliasing them to camelCase would not fix a mismatch, it would
+#: break the only caller.
+#:
+#: It surfaced when the model moved from `routes/private.py` into `schemas/`
+#: to satisfy `test_route_module_hygiene.py`, which pulled it into this
+#: whole-package sweep for the first time. That also exposes a gap in this
+#: file's own framing: the docstring says "every *response* model", but the
+#: sweep walks every `BaseModel` in `app.schemas`, request models included.
+#: For summarizer requests that is correct and desirable — they share the
+#: camelCase wire format. `/private` is the one surface that does not.
 EXEMPT: set[tuple[str, str]] = {
     ("JobsStatusResponse", "auto_sync"),
     ("JobsStatusResponse", "auto_summary"),
     ("JobsStatusResponse", "translation_batch"),
+    ("PrivateUserCreate", "full_name"),
+    ("PrivateUserCreate", "is_verified"),
 }
 
 

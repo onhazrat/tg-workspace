@@ -1,7 +1,12 @@
-"""Response models for the RAG (embedding + semantic search) endpoints.
+"""Request and response models for the RAG (embedding + semantic search) endpoints.
 
-Part of B6 in `docs/architecture-simplification-plan.md`. All three are closed —
-every branch of every service function here returns the same key set.
+Part of B6 in `docs/architecture-simplification-plan.md`. All three responses are
+closed — every branch of every service function here returns the same key set.
+
+The two *request* models arrived later: they lived inline in `routes/rag.py`
+until `tests/api/test_route_module_hygiene.py` started enforcing the rule that
+`CLAUDE.md` had stated all along. Moving a Pydantic class between modules does
+not change its OpenAPI schema name, so the generated client is unaffected.
 
 `RagSearchHit.post` reuses `PostResponse` rather than redeclaring the post
 shape: the route builds it with `post_to_camel`, the same serialiser
@@ -18,7 +23,32 @@ from __future__ import annotations
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.core.config import settings
 from app.schemas.posts import PostResponse
+
+
+class RagSearchRequest(BaseModel):
+    """A semantic search over the embedded corpus.
+
+    `limit` caps the *results*; `scan_limit` caps how many embeddings are
+    compared before ranking. They are separate because a thin result set and a
+    capped scan are different failures — see `RagSearchResponse`.
+    """
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    query: str
+    channels: list[str] | None = None
+    start_date: int | None = Field(default=None, alias="startDate")
+    end_date: int | None = Field(default=None, alias="endDate")
+    limit: int = settings.RAG_SEARCH_LIMIT_DEFAULT
+    scan_limit: int = Field(default=settings.RAG_SCAN_LIMIT_MAX, alias="scanLimit")
+
+
+class RagEmbedRequest(BaseModel):
+    """One backfill pass over posts that have no embedding yet."""
+
+    limit: int = settings.RAG_EMBED_LIMIT_DEFAULT
 
 
 class RagStatusResponse(BaseModel):

@@ -2616,6 +2616,7 @@ export type PurgeLogsResponse = {
 
 /**
  * RagEmbedRequest
+ * One backfill pass over posts that have no embedding yet.
  */
 export type RagEmbedRequest = {
     /**
@@ -2676,6 +2677,11 @@ export type RagSearchHit = {
 
 /**
  * RagSearchRequest
+ * A semantic search over the embedded corpus.
+ *
+ * `limit` caps the *results*; `scan_limit` caps how many embeddings are
+ * compared before ranking. They are separate because a thin result set and a
+ * capped scan are different failures — see `RagSearchResponse`.
  */
 export type RagSearchRequest = {
     /**

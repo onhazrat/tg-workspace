@@ -41,17 +41,17 @@ Full stack via Docker: `docker compose watch` (frontend :5173, API :8000, Swagge
 
 - **Two model modules, intentionally split.** `app/models.py` holds only the template auth models (`User`, `Item`). All domain models — channels, posts, summaries, bot credentials, embeddings, logs, sync metadata, and `AppSetting` (JSON settings rows) — live in `app/models_tg.py`. Alembic imports both.
 - **Thin routes, fat services.** `app/api/routes/*.py` are thin; business logic lives in `app/services/*.py` (e.g. `routes/data/channels.py` → the `channels.py`/`posts.py`/`credentials.py` services). **`/data` is a package, one module per resource family** (`routes/data/`): it was a single 1,453-line router until C1 split it. The parent router in `data/__init__.py` owns the `/data` prefix and the `data` tag, so operation ids stay `data-<function_name>` — never change a route function's name without expecting the generated client to change with it. `tests/api/test_route_inventory.py` asserts every declared route is actually mounted. `sync_orchestrator.py` drives channel sync (backward pagination, auto-follow); `proxy_pool.py` gives per-proxy lane semaphores; `scraper.py` fetches/parses `t.me`. AI providers are pluggable under `app/ai/providers/` behind a registry (`app/ai/registry.py`).
-- **Every route declares a response model.** Request *and* response models live in `app/schemas/<resource>.py` — never inline `BaseModel` in a route module. A route returning `dict[str, Any]` becomes `{"additionalProperties": true}` in OpenAPI and `Record<string, unknown>` in the generated TypeScript, which is why the frontend hand-maintains duplicate domain interfaces that no compiler keeps in step. `app/schemas/summaries.py` is the reference (B1); shapes shared across families (e.g. `StatusResponse` for `{"status": "deleted"}`) go in `app/schemas/common.py`.
+- **Every route declares a response model.** *Enforced: `tests/api/test_route_module_hygiene.py`.* Request *and* response models live in `app/schemas/<resource>.py` — never inline `BaseModel` in a route module. A route returning `dict[str, Any]` becomes `{"additionalProperties": true}` in OpenAPI and `Record<string, unknown>` in the generated TypeScript, which is why the frontend hand-maintains duplicate domain interfaces that no compiler keeps in step. `app/schemas/summaries.py` is the reference (B1); shapes shared across families (e.g. `StatusResponse` for `{"status": "deleted"}`) go in `app/schemas/common.py`.
   - **Rows with an open `extra` JSON column** (`Summary`, and anything else merging `extra` into its payload) use `model_config = ConfigDict(extra="allow")` and declare only the *always-present* columns. Do **not** declare a conditional key just to be thorough: a declared optional field serialises as an explicit `null` where the key is absent today, which silently changes the wire format. Let conditional keys flow through `extra`, and say so in the model docstring.
   - Migration progress is measurable — count `$ref`-typed 200 responses in `frontend/openapi.json` (see §6 of `docs/architecture-simplification-plan.md`). It was 26/129 before B1.
-- **Every service module is one of five kinds.** `app/services/` has 44 modules; without a rule, every new feature re-litigates where its code goes. New code must fit one kind, and say which:
+- **Every service module is one of five kinds.** *Enforced: `tests/services/test_service_kinds.py`, which holds the full per-module inventory — that file, not this list, is the authority.* `app/services/` has 44 modules; without a rule, every new feature re-litigates where its code goes. New code must fit one kind, and say which:
   1. **Aggregate** — owns one table and is the *only* module that writes it (`channels.py`, `posts.py`, `summaries.py`, `discover_reports.py`, `settings_store.py`).
-  2. **Read model** — read-only aggregation across tables; takes a `Session`, never commits (`discover.py`, `stats.py`).
+  2. **Read model** — read-only aggregation across tables; takes a `Session`, never commits (`discover.py`, `runtime_config.py`). *Not `stats.py`* — this list used to claim it was one, but `clear_table` deletes across every aggregate's table and commits, so it is a declared exception.
   3. **Integration** — owns one external boundary (`scraper.py` → `t.me`, `network.py` → HTTP/proxy, `publish.py` → Bot API, `embeddings.py` → provider).
   4. **Pure transform** — no `Session`, no network, trivially testable (`post_media_parser.py`, `post_reply_parser.py`, `channel_tags.py`, `serialization.py`).
   5. **Orchestrator** — owns one workflow and coordinates the other four (`sync_orchestrator.py`, `bulk_follow.py`, `data_import_export.py`).
 
-  **Never split a module because it got long.** A file extracted only to reduce a line count must fit one of the five kinds or be merged back — decomposing `sync_orchestrator.py` means extracting named *stages*, not slicing lines. Three deliberate exceptions exist today: `async_db.py` is an infrastructure utility that belongs in `core/`, not `services/`; `followed_channels.py` writes `Channel` alongside `channels.py` so the Discover and auto-follow paths share one creation path; and `AppSetting` has three writers (`settings_store.py`, `jobs/settings.py`, and — against the thin-routes rule — `routes/data/admin.py` directly).
+  **Never split a module because it got long.** A file extracted only to reduce a line count must fit one of the five kinds or be merged back — decomposing `sync_orchestrator.py` means extracting named *stages*, not slicing lines. Deliberate exceptions live in `EXCEPTIONS` in the test, each with a reason: `async_db.py` is an infrastructure utility that belongs in `core/`, not `services/`; `followed_channels.py` writes `Channel` alongside `channels.py` so the Discover and auto-follow paths share one creation path; `stats.py` is a read model carrying one destructive admin operation. Separately, `AppSetting` has three writers (`settings_store.py`, `jobs/settings.py`, and — against the thin-routes rule — `routes/data/admin.py` directly).
 - **Router assembly.** `app/api/main.py` builds the `/api/v1` router; `private` routes mount only when `ENVIRONMENT == "local"`. `app/main.py` adds `APIKeyMiddleware`, CORS (outermost, so preflight beats auth), the lifespan (startup checks → `init_db` → `start_scheduler`), and a middleware that returns **410** for any `/api/*` not under `/api/v1/*` in production.
 - **Auth dependencies** (`app/api/deps.py`): `SessionDep`, `CurrentUser` (JWT), `get_current_active_superuser`. **Mode A** (single-operator, hardened) is the deployment model: all AI/RAG/network/telegram/jobs routes require auth; in staging/production a request must carry a JWT **or** `X-API-Key` (fail-closed); raw bot tokens in request bodies are rejected outside `local` (use stored `credentialId`). One superuser owns all data — no per-user row scoping yet.
 - **Scheduler runs in-process, single replica** (APScheduler). Do **not** scale the backend horizontally without external job coordination (ADR-004).
@@ -59,9 +59,10 @@ Full stack via Docker: `docker compose watch` (frontend :5173, API :8000, Swagge
 
 ## Frontend architecture
 
-- **Two API clients, by design (ADR-006).** Hand-written `frontend/src/api/` for the summarizer (REST + SSE streaming + bulk payloads); generated `frontend/src/client/` (committed, do not hand-edit) for the admin/user shell only. After backend API changes, regenerate with `bash scripts/generate-client.sh` — it runs with `ENVIRONMENT=production` so the committed `frontend/openapi.json` excludes legacy routes.
-- **Server state = TanStack Query, always.** `DataContext` derives from queries and exposes Dispatch-compatible setters as query-cache write-throughs (`hooks/useChannels.ts`, generic helper `lib/applySetStateAction.ts`); query keys in `hooks/queryKeys.ts`. Add new server state through react-query, not context `useState`.
-- **Settings = schema-driven.** All localStorage-backed settings are declared in `frontend/src/lib/settings/schema.ts` (zod: key, default, legacy keys, backend section); `SettingsContext.tsx` is a thin provider over generated setters. Add settings to the schema, not as new `useState` hooks. Theme is owned by `theme-provider` in `main.tsx` (`localStorage: vite-ui-theme`) — do not add a second theme toggle.
+- **Two API clients, split per *call* by contract (ADR-006).** *Enforced: `src/api/client-split.conform.ts`.* Generated `frontend/src/client/` (committed, do not hand-edit) for the admin/user shell **and** every summarizer call whose response type is at least as useful as a hand-written one. Hand-written `frontend/src/api/` for the rest: SSE streams, blob downloads, and calls whose generated type would be a *downgrade* — either an **open** model (`extra="allow"` → a top-level `[key: string]: unknown`, so `extra` keys arrive as `unknown`) or a **closed but all-optional** one (OpenAPI cannot say "has a default, therefore always present"). The split is per call, not per family: `jobs` has five generated and three hand-written. Measure openness with `string extends keyof T`, never by grepping for `[key: string]` — that also counts *nested* index signatures. After backend API changes, regenerate with `bash scripts/generate-client.sh` (runs with `ENVIRONMENT=production`).
+- **Server state = TanStack Query, always.** *Enforced (partially): `src/lib/architecture-invariants.test.ts` pins `DataContext`'s field set, so server state cannot be re-added there.* `DataContext` derives from queries and exposes Dispatch-compatible setters as query-cache write-throughs (`hooks/useChannels.ts`, generic helper `lib/applySetStateAction.ts`); query keys in `hooks/queryKeys.ts`. Add new server state through react-query, not context `useState`.
+- **PostgreSQL is the only client-side store.** *Enforced: `src/lib/architecture-invariants.test.ts`.* A4 deleted the IndexedDB mirror (−2,491 lines) — no `idb`/`localforage`/`dexie` dependency, no `indexedDB`, no DB worker. The browser keeps settings and the current selection, nothing else.
+- **Settings = schema-driven.** All localStorage-backed settings are declared in `frontend/src/lib/settings/schema.ts` (zod: key, default, legacy keys, backend section); `SettingsContext.tsx` is a thin provider over generated setters. Add settings to the schema, not as new `useState` hooks. Theme is owned by `theme-provider` in `main.tsx` (`localStorage: vite-ui-theme`) — do not add a second theme toggle (*that one is enforced*; the schema rule is **not** — be careful).
 - **Routing/tabs come from the URL.** TanStack Router. The active summarizer tab is the `?tab=` param on `/summarizer` (not localStorage); settings sub-sections use `?section=`.
 
 ## Testing & migrations
@@ -69,6 +70,35 @@ Full stack via Docker: `docker compose watch` (frontend :5173, API :8000, Swagge
 - **pytest uses a separate database (`app_test`) always** — `tests/conftest.py` overrides `POSTGRES_DB` to it and each test truncates `tg_*` tables afterward. Never point the dev server at `app_test`, and keep `POSTGRES_DB=app` for dev. One-time: `createdb app_test && cd backend && POSTGRES_DB=app_test uv run alembic upgrade head`.
 - After changing any model, generate an Alembic revision and commit it; migrations live in `backend/app/alembic/versions/`.
 - Maintenance/backfill scripts live in `backend/scripts/` (run with `uv run python backend/scripts/<name>.py`, usually `--dry-run` first) — see `MEMORY.md`.
+
+## Architecture guards — read this before "simplifying" something
+
+The rules above are not all equal. Some are **enforced** by a compile error or a
+failing test; the rest are prose and rely on you. Prose decayed here before: this
+file said *"never inline `BaseModel` in a route module"* from B1 onward, and three
+modules were violating it when the guards below were written. So when a guard
+fires, the answer is almost never to delete the guard.
+
+| Guard | Enforces | Kind |
+|---|---|---|
+| `frontend/src/types.conform.ts` | hand-written domain types match the server | compile error |
+| `frontend/src/api/client-split.conform.ts` | the two-client split, **in both directions** | compile error |
+| `frontend/src/lib/architecture-invariants.test.ts` | no browser DB; `DataContext` stays small; one theme owner | test |
+| `backend/tests/api/test_route_module_hygiene.py` | no models in route modules; handlers annotate returns | test |
+| `backend/tests/services/test_service_kinds.py` | every service module declares one of the five kinds | test |
+| `backend/tests/api/test_route_inventory.py` | declared routes are actually mounted | test |
+| `backend/tests/api/test_*_projection.py` | response key sets — no invented `null`s | test |
+| pre-commit `generate-frontend-sdk` | the committed client matches the backend | hook |
+
+`client-split.conform.ts` is the pattern worth copying. It asserts not only that
+the *generated* models stayed closed, but that the *hand-written* ones are still
+open — so closing one server-side breaks the build and tells you the call can now
+move. **A deliberate exception that nothing checks becomes a leftover nobody dares
+touch.** Assert the reason, not just the state.
+
+**Mutation-test every guard before trusting it.** A green suite proves nothing
+until you have watched it go red. This caught a false pass in six separate units
+of the simplification programme — including one guard that could not fail at all.
 
 ## Conventions
 

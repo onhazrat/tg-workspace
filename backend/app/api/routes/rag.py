@@ -4,7 +4,6 @@ from typing import Any
 
 import numpy as np
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel, Field
 from sqlalchemy import and_, or_
 from sqlmodel import col, select
 
@@ -13,7 +12,9 @@ from app.api.deps import CurrentUser, SessionDep
 from app.core.config import settings
 from app.models_tg import Post, PostEmbedding
 from app.schemas.rag import (
+    RagEmbedRequest,
     RagEmbedResponse,
+    RagSearchRequest,
     RagSearchResponse,
     RagStatusResponse,
 )
@@ -22,21 +23,6 @@ from app.services.embeddings import backfill_embeddings, get_embedding_status
 from app.services.serialization import post_to_camel
 
 router = APIRouter(prefix="/rag", tags=["rag"])
-
-
-class RagSearchRequest(BaseModel):
-    query: str
-    channels: list[str] | None = None
-    start_date: int | None = Field(None, alias="startDate")
-    end_date: int | None = Field(None, alias="endDate")
-    limit: int = settings.RAG_SEARCH_LIMIT_DEFAULT
-    scan_limit: int = Field(settings.RAG_SCAN_LIMIT_MAX, alias="scanLimit")
-
-    model_config = {"populate_by_name": True}
-
-
-class RagEmbedRequest(BaseModel):
-    limit: int = settings.RAG_EMBED_LIMIT_DEFAULT
 
 
 def _cosine(a: list[float], b: list[float]) -> float:
