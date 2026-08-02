@@ -1283,6 +1283,30 @@ client**, and the summarizer's core resources are open on purpose. Two clients
 is the right answer for a narrower and better-evidenced reason than the ADR
 currently gives.
 
+**Per-model openness, measured 2026-08-02** — so the next session does not
+re-derive it. Openness is per *model*, not per family, so the split is finer
+than "these four files":
+
+| model | | model | |
+|---|---|---|---|
+| `SyncJobStatusResponse` | **closed** | `RuntimeConfigResponse` | **closed** |
+| `RagStatusResponse` | **closed** | `ChannelInfoResponse` | **closed** |
+| `PublishResponse` | **closed** | `TorIpResponse` | **closed** |
+| `ProxyHealthResponse` | **closed** | `BotInfoResponse` | **OPEN** |
+| `TorStatusResponse` | **OPEN** | | |
+
+Measure it with:
+`sed -n "/^export type <T> = {/,/^};/p" src/client/types.gen.ts | grep -c "\[key: string\]"`
+— a non-zero count is an index signature, and an index signature is what makes
+the generated type worse than the hand-written one.
+
+**The real prize is the duplicate types, not the calls.** `api/jobs.ts` alone
+hand-declares `JobStatusEntry`, `SyncJobChannelStatus`, `SyncJobStatus` and
+`RuntimeConfig` — server response shapes retyped by hand, exactly the drift B7
+removed for domain types. The four modules are only 266 LOC of `request<T>()`
+wrappers; the win is deleting the parallel type declarations underneath them,
+which is why the closed models are worth moving and the open ones are not.
+
 **Recommended:** re-scope F2 to the closed-model families only (**M**, not L),
 and rewrite ADR-006 with the reason above. Leaving the open-model families
 hand-written is a decision, not a leftover — record it as such.
