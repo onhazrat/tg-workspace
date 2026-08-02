@@ -1,6 +1,6 @@
 import { ExternalLink, Loader2 } from "lucide-react"
 import { useEffect, useState } from "react"
-import { getPost } from "../lib/repository"
+import { getPost } from "@/lib/posts/store"
 import { telegramWebViewPostUrl } from "../lib/telegram-web"
 import type { Post } from "../types"
 import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tg-tooltip"

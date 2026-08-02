@@ -5,7 +5,7 @@
 
 import { api } from "@/api"
 import { env } from "@/lib/env"
-import type { DBStats, Post, PostEmbedding, PostTranslation } from "../types"
+import type { DBStats, PostEmbedding, PostTranslation } from "../types"
 import * as cache from "./cache"
 
 let syncMeta: Record<string, { etag: string }> = {}
@@ -80,157 +80,12 @@ async function apiWrite<T>(
 // families leaving it still need them.
 import { singleFlight } from "./singleFlight"
 
-// --- posts ---
-
-/** Server-side cap; see MAX_POST_PAGE_SIZE in backend/app/services/posts.py. */
-const POST_PAGE_SIZE = 5000
-
-/**
- * Safety valve on the paging loop below. At 5000 rows a page this is 5M posts
- * — far past any legitimate view. Hitting it means a caller asked for a range
- * it should have narrowed, so we surface that rather than spin.
- */
-const MAX_POST_PAGES = 1000
-
-/**
- * Fetch every post in a range, paging through the now-bounded `GET /posts`.
- *
- * `GET /posts` used to return the whole matching set in one unbounded
- * response. Rather than let existing callers silently receive only the first
- * page, this pages to exhaustion — the transfer is the same size, but the
- * backend no longer materialises it all at once, which is what OOM-killed the
- * worker.
- *
- * Callers that only need a bounded sample should pass `limit` instead of
- * paging the whole range.
- */
-async function fetchAllPosts(
-  channelNames: string[],
-  startDate: number,
-  endDate: number,
-): Promise<Post[]> {
-  const all: Post[] = []
-  for (let page = 0; page < MAX_POST_PAGES; page++) {
-    const batch = await api.getPosts({
-      channelNames,
-      startDate,
-      endDate,
-      limit: POST_PAGE_SIZE,
-      offset: page * POST_PAGE_SIZE,
-    })
-    all.push(...batch)
-    if (batch.length < POST_PAGE_SIZE) return all
-  }
-  throw new Error(
-    `getPostsByDateRange exceeded ${MAX_POST_PAGES} pages ` +
-      `(${MAX_POST_PAGES * POST_PAGE_SIZE} posts) for ` +
-      `${channelNames.length} channel(s) — narrow the date range`,
-  )
-}
-
-/**
- * **No callers remain (A1c).** The three bulk readers this existed for now go
- * straight to the server feed: palette search (A1a), auto-regenerate prompt
- * assembly (A1b), and `computeScopedPosts` plus language detection (A1c).
- *
- * Kept only until A3, which deletes `repository.ts` as a unit and ports
- * `repository.posts.test.ts`'s `singleFlight` concurrency assertions to the
- * hook layer. Deleting it here would drop that coverage with nothing replacing
- * it. **Do not add a new caller** — use `api.getPostsFeed`.
- */
-export async function getPostsByDateRange(
-  channelNames: string[],
-  startDate: number,
-  endDate: number,
-  options: { limit?: number } = {},
-): Promise<Post[]> {
-  const { limit } = options
-  const key = `posts:${channelNames.join(",")}:${startDate}:${endDate}:${limit ?? "all"}`
-  return singleFlight(key, async () => {
-    if (await isResourceStale("posts")) {
-      try {
-        const remote =
-          limit != null
-            ? await api.getPosts({ channelNames, startDate, endDate, limit })
-            : await fetchAllPosts(channelNames, startDate, endDate)
-        await cache.savePosts(remote)
-        // A bounded read is a sample, not the full resource — marking the
-        // resource synced off one page would suppress later full fetches.
-        if (limit == null) markResourceSynced("posts")
-        return remote
-      } catch {
-        /* fall through */
-      }
-    }
-    const cached = await cache.getPostsByDateRange(
-      channelNames,
-      startDate,
-      endDate,
-    )
-    return limit != null ? cached.slice(0, limit) : cached
-  })
-}
-
-export async function getPost(
-  channelName: string,
-  id: number,
-): Promise<Post | undefined> {
-  const [match] = await lookupPosts([{ channelName, postId: id }])
-  if (match) return match
-  return cache.getPost(channelName, id)
-}
-
-/** Must not exceed MAX_POST_LOOKUP_BATCH in backend/app/services/posts.py. */
-const POST_LOOKUP_BATCH = 200
-
-/**
- * Resolve specific posts by natural key, batched into one request per 200.
- *
- * Replaces the previous `getPost`, which fetched a channel's entire history
- * to return a single row — and was called in a loop by RAG context assembly
- * and once per citation hover.
- */
-export async function lookupPosts(
-  refs: { channelName: string; postId: number }[],
-): Promise<Post[]> {
-  if (refs.length === 0) return []
-  const key = `posts:lookup:${refs
-    .map((r) => `${r.channelName}#${r.postId}`)
-    .sort()
-    .join(",")}`
-  return singleFlight(key, async () => {
-    try {
-      const batches: Post[][] = []
-      for (let i = 0; i < refs.length; i += POST_LOOKUP_BATCH) {
-        batches.push(
-          await api.lookupPosts(refs.slice(i, i + POST_LOOKUP_BATCH)),
-        )
-      }
-      const found = batches.flat()
-      if (found.length > 0) await cache.savePosts(found)
-      return found
-    } catch {
-      const cached = await Promise.all(
-        refs.map((r) => cache.getPost(r.channelName, r.postId)),
-      )
-      return cached.filter((p): p is Post => p !== undefined)
-    }
-  })
-}
-
-export async function bulkUpsertPosts(posts: Post[]): Promise<void> {
-  await apiWrite(
-    "posts",
-    () => api.bulkUpsertPosts(posts),
-    () => cache.savePosts(posts),
-  )
-}
-
-export async function getPostsWithoutEmbeddings(
-  limit: number = 50,
-): Promise<Post[]> {
-  return cache.getPostsWithoutEmbeddings(limit)
-}
+// --- posts (cache-only leftovers, deleted with the mirror in A4) ---
+//
+// These three never touched the server: they are thin `lib/cache` wrappers from
+// the browser-only era. A3 moves *API* access out of this file; something that
+// only reads or clears IndexedDB has nothing to move to, and disappears when
+// the mirror does. `getPostsWithoutEmbeddings` already has no callers.
 
 export async function clearChannelPosts(channelName: string): Promise<void> {
   await cache.clearChannelPosts(channelName)

@@ -1,5 +1,5 @@
 import { api } from "@/api"
-import { lookupPosts } from "../lib/repository"
+import { lookupPosts } from "@/lib/posts/store"
 import type { Post } from "../types"
 
 export interface RagSearchResult {

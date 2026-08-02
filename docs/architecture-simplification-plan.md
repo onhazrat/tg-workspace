@@ -535,6 +535,37 @@ across 109 files. Mutation-tested against 5 mutations, all caught: read leaks a
 token, save leaks a token, save invalidates, delete invalidates, chat-destination
 delete invalidates.
 
+**A3.5 — posts · ✅ DONE 2026-08-02**
+
+**Shipped:** `lib/posts/store.ts` — `lookupPosts`, `getPost`, `bulkUpsertPosts`.
+`repository.ts` **397 → 252 LOC, 22 → 17 exports**; consumer files 20 → 16.
+
+**`getPostsByDateRange` is gone**, along with `fetchAllPosts` and
+`repository.posts.test.ts`. A1c left it callerless and said explicitly to delete
+it "at A3, which ports the `singleFlight` concurrency assertions" — A3.3 did
+exactly that (`singleFlight.test.ts`), and A2 already replicated the paging-loop
+coverage in `data-transfer/entities/post.test.ts`, so nothing is lost.
+`getPostsWithoutEmbeddings` went too: also zero callers.
+
+**Three functions deliberately stay** — `clearChannelPosts`, `deleteOldPosts`
+and the mirror reads. They never touched the server; they are thin `lib/cache`
+wrappers from the browser-only era. A3 moves *API* access out of this file, and
+something that only clears IndexedDB has nowhere to move to. They disappear with
+the mirror in **A4**, and `repository.ts` now says so in place.
+
+> **A mutation survived, and it was the guard that was wrong, not the test.**
+> `lookupPosts`'s `refs.length === 0` early return turns out not to be what
+> makes the empty case issue no request — the batching loop runs zero times for
+> zero refs regardless. The guard only avoids registering a de-dup key. Rather
+> than delete a passing-looking assertion or keep a mutation that cannot fail,
+> the test now states what it actually verifies and the guard says what it is
+> for. Fifth unit where mutation testing changed something.
+
+**Verified:** `tsc` clean; biome clean; build succeeds; **806 pass / 0 fail**
+across 109 files. Mutation-tested against 4 real mutations, all caught: batch
+limit raised past what the server accepts, no batching at all, de-dup key stops
+sorting, de-dup key ignores the refs.
+
 > **Do NOT copy A3.1's invalidate-on-write into the channels family.** Surveyed
 > 2026-08-02, before starting it: the etag mechanism is doing **two opposite
 > jobs**, and only the logs one is "refetch after a write".
@@ -1447,7 +1478,7 @@ Re-measured **2026-08-01**, after A1a–A1c, A2, B7b and G1.
 | Contexts with a test | 0/9 | 1/9 (`DataContext`) | ≥ 5/5 (after G2) |
 | Hooks with a test | 2/32 | **6/36** | the ones holding logic |
 | Frontend LOC (excl. generated) | 59,881 | 61,888 | ≈ 54,000 |
-| Frontend tests | 679 | **800** | — |
+| Frontend tests | 679 | **806** | — |
 | Backend tests | 767 | **809** | — |
 | Runtime deps removed | — | **`axios`** (F1b) | `idb`, `axios` |
 

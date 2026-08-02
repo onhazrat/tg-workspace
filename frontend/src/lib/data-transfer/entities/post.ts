@@ -2,7 +2,7 @@ import { toast } from "sonner"
 
 import { api } from "@/api"
 import type { CommandContext } from "@/lib/commands/types"
-import { bulkUpsertPosts } from "@/lib/repository"
+import { bulkUpsertPosts } from "@/lib/posts/store"
 import type { Post } from "@/types"
 import type { DataEntityDef, ExportFilter, ImportResult } from "../types"
 
