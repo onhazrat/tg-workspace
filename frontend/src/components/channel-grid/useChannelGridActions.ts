@@ -17,7 +17,8 @@ import {
   findFrozenReservedGroup,
   sortSettingGroupsForDisplay,
 } from "@/lib/channels/setting-groups"
-import { clearChannelPosts, upsertChannel } from "@/lib/repository"
+import { upsertChannel } from "@/lib/channels/store"
+import { clearChannelPosts } from "@/lib/repository"
 import type { Channel } from "@/types"
 
 /**

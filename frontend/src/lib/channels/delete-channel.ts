@@ -1,6 +1,7 @@
 import type { CommandContext } from "@/lib/commands/types"
-import { clearChannelPosts, deleteChannel } from "@/lib/repository"
+import { clearChannelPosts } from "@/lib/repository"
 import type { Channel } from "@/types"
+import { deleteChannel } from "./store"
 
 export interface DeleteChannelContext
   extends Pick<

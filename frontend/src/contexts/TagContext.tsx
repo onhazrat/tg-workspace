@@ -18,13 +18,13 @@ import {
 } from "@/lib/channels/apply-tag-suggestions"
 import { formatChannelsForPrompt } from "@/lib/channels/format-channels-for-prompt"
 import { parseTagResponse } from "@/lib/channels/parse-tag-response"
+import { bulkUpdateChannelTags } from "@/lib/channels/store"
 import {
   formatAllTagsForPrompt,
   formatPostsForTagPrompt,
 } from "@/lib/channels/tag-prompt"
 import { tryWriteTextToClipboard } from "@/lib/data-transfer/clipboard"
 import {
-  bulkUpdateChannelTags,
   deleteTagRun,
   getTagRun,
   listTagRuns,

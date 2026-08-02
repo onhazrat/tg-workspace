@@ -7,7 +7,7 @@ import type { SetStateAction } from "react"
 
 import { applySetStateAction } from "@/lib/applySetStateAction"
 import { normalizeChannel } from "@/lib/channelNormalize"
-import { listChannelsWithStats } from "@/lib/repository"
+import { listChannelsWithStats } from "@/lib/channels/store"
 import type { Channel, ChannelStats } from "@/types"
 
 import { queryKeys, SUMMARIZER_STALE_TIME } from "./queryKeys"

@@ -20,9 +20,9 @@ import { useCallback, useState } from "react"
 import { toast } from "sonner"
 
 import { api, type SyncJobStatus, subscribeSyncJobEvents } from "@/api"
+import { getChannelStats } from "@/lib/channels/store"
 import { env } from "@/lib/env"
 import { logger } from "@/lib/logger"
-import { getChannelStats } from "@/lib/repository"
 import {
   deriveScrapingChannels,
   hasRateLimitError,
@@ -208,7 +208,7 @@ export function useSyncJob(deps: SyncJobDeps): SyncJob {
           setConsecutiveFailures(0)
           setAutoSyncPauseUntil(null)
           for (const ch of successes) {
-            const s = await getChannelStats(ch.channelId, ch.channelName)
+            const s = await getChannelStats(ch.channelId)
             if (s) {
               setChannelStats((prev) => ({
                 ...prev,

@@ -3,10 +3,10 @@ import { toast } from "sonner"
 import { api } from "@/api"
 import type { CommandContext } from "@/lib/commands/types"
 import { saveNetworkLog } from "@/lib/logs/write"
-import { upsertChannel } from "@/lib/repository"
 import { buildActiveProxies, isNetworkRoutingActive } from "@/lib/syncSettings"
 import { telegramWebViewChannelUrl } from "@/lib/telegram-web"
 import type { Channel, NetworkLog } from "@/types"
+import { upsertChannel } from "./store"
 
 export async function refreshChannelMetadata(
   channel: Channel,

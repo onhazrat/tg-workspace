@@ -4,10 +4,10 @@ import { api } from "@/api"
 import { parseApiError, unavailableChannelToastMessage } from "@/lib/api-errors"
 import type { CommandContext } from "@/lib/commands/types"
 import { saveNetworkLog } from "@/lib/logs/write"
-import { upsertChannel } from "@/lib/repository"
 import { buildActiveProxies, isNetworkRoutingActive } from "@/lib/syncSettings"
 import { telegramWebViewChannelUrl } from "@/lib/telegram-web"
 import type { Channel, NetworkLog } from "@/types"
+import { upsertChannel } from "./store"
 
 export function normalizeChannelHandle(input: string): string {
   return input.trim().replace(/^@/, "").split("/").pop() || ""

@@ -32,6 +32,7 @@ import {
   removeTagsByName,
 } from "@/lib/channels/channel-tag-model"
 import { findFrozenReservedGroup } from "@/lib/channels/setting-groups"
+import { upsertChannel } from "@/lib/channels/store"
 import { channelAllows, disabledReason } from "@/lib/channels/sync-permissions"
 import {
   syncScheduleDetail,
@@ -46,7 +47,6 @@ import { useData } from "../contexts/DataContext"
 import { useScraper } from "../contexts/ScraperContext"
 import { useSettings } from "../contexts/SettingsContext"
 import { useUI } from "../contexts/UIContext"
-import { upsertChannel } from "../lib/repository"
 import type { Channel } from "../types"
 import { ChannelAvatar } from "./ChannelAvatar"
 import { RelativeTime } from "./RelativeTime"

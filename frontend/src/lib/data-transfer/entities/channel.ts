@@ -1,5 +1,5 @@
+import { listChannels, upsertChannel } from "@/lib/channels/store"
 import type { CommandContext } from "@/lib/commands/types"
-import { listChannels, refreshSyncMeta, upsertChannel } from "@/lib/repository"
 import type { Channel } from "@/types"
 import type { DataEntityDef, ExportFilter, ImportResult } from "../types"
 
@@ -150,9 +150,13 @@ export async function upsertChannelRecords(
   }
 
   try {
+    // Refetch and write through, rather than invalidate: an import replaces
+    // rows wholesale, so the in-memory list has to be replaced too, and
+    // `ctx.setChannels` is the query-cache write-through. The
+    // `refreshSyncMeta(true)` that used to follow this only bumped an etag that
+    // no longer exists — this read already got the authoritative list.
     const channels = await listChannels()
     ctx.setChannels(channels)
-    await refreshSyncMeta(true)
   } catch {
     /* keep existing in-memory state */
   }

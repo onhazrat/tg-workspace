@@ -443,6 +443,46 @@ log type, entry not batched.
 > A2. Worth remembering for the remaining families: their tests will hit the
 > same thing.
 
+**A3.2 — channels · ✅ DONE 2026-08-02**
+
+**Shipped:** `lib/channels/store.ts` — `listChannelsWithStats`, `listChannels`,
+`upsertChannel`, `deleteChannel`, `bulkUpdateChannelTags`, `getChannelStats`.
+14 importing files repointed. `repository.ts` **749 → 633 LOC, 46 → 39
+exports**; consumer files 40 → 31.
+
+**Written to the rule below, not A3.1's:** no write invalidates. The optimistic
+write-throughs in `hooks/useChannels` stay exactly as they were, and
+`store.test.ts` asserts the *negative* — a `upsertChannel`/`deleteChannel`/
+`bulkUpdateChannelTags` must leave the cached list fresh and must not refetch.
+Both "someone generalised A3.1" mutations fail those.
+
+Three things the conversion turned up:
+
+- **`bulkSyncChannelSettings` was dead** — zero callers anywhere. Deleted rather
+  than carried across.
+- **`getChannelStats` lost its `channelName` parameter.** It only existed to key
+  the IndexedDB fallback; with the fallback gone the name is unused. It still
+  returns `null` rather than throwing, because both callers (`useSyncJob`,
+  `useFollowJob`) refresh a card *after* a sync that already succeeded.
+- **The data-import path does not invalidate either, and the plan's instinct to
+  make it would have been redundant.** `data-transfer/entities/channel.ts`
+  already re-reads with `listChannels()` and writes the result through
+  `ctx.setChannels`, which is authoritative and costs the same one request. Its
+  trailing `refreshSyncMeta(true)` — the last caller outside `repository.ts` —
+  is deleted.
+
+**The channel mirror is now write-only.** `hydrateChannelMirror` still runs, but
+nothing reads it back except `repository.checkNeedsMigration` ("is there local
+data the server does not have?"). Dropping the write here would make that check
+silently answer "no", so both go together **in A4** — the same trap A2 found for
+`DatabaseManagement`'s import.
+
+**Verified:** `tsc` clean; biome clean; build succeeds; **779 pass / 0 fail**
+across 107 files (769/106 before — the delta is the 10 new tests).
+Mutation-tested against 6 mutations, all caught: upsert invalidates, delete
+invalidates, stats not batched, stats not split out of the row, stats keyed by
+id instead of name, `getChannelStats` rethrows.
+
 > **Do NOT copy A3.1's invalidate-on-write into the channels family.** Surveyed
 > 2026-08-02, before starting it: the etag mechanism is doing **two opposite
 > jobs**, and only the logs one is "refetch after a write".
@@ -1355,7 +1395,7 @@ Re-measured **2026-08-01**, after A1a–A1c, A2, B7b and G1.
 | Contexts with a test | 0/9 | 1/9 (`DataContext`) | ≥ 5/5 (after G2) |
 | Hooks with a test | 2/32 | **6/36** | the ones holding logic |
 | Frontend LOC (excl. generated) | 59,881 | 61,888 | ≈ 54,000 |
-| Frontend tests | 679 | **769** | — |
+| Frontend tests | 679 | **779** | — |
 | Backend tests | 767 | **809** | — |
 | Runtime deps removed | — | **`axios`** (F1b) | `idb`, `axios` |
 

@@ -1,8 +1,8 @@
 import { getTagNames } from "@/lib/channels/channel-tag-model"
+import { upsertChannel } from "@/lib/channels/store"
 import { filterPartialHistoryChannels } from "@/lib/commands/filter-channels"
 import type { CommandContext, EntityFlowType } from "@/lib/commands/types"
 import { filterChannelsWithTelegramChatId } from "@/lib/data-transfer/entities/channel"
-import { upsertChannel } from "@/lib/repository"
 import type { Channel } from "@/types"
 
 export { filterChannelsByQuery } from "@/lib/commands/filter-channels"

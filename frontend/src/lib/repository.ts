@@ -4,12 +4,9 @@
  */
 
 import { api } from "@/api"
-import { hydrateChannelMirror } from "@/lib/channels/mirror-hydration"
 import { env } from "@/lib/env"
 import type {
   BotCredential,
-  Channel,
-  ChannelStats,
   ChatDestination,
   DBStats,
   Post,
@@ -122,122 +119,6 @@ export function singleFlight<T>(key: string, fn: () => Promise<T>): Promise<T> {
 /** Test seam: drop any outstanding de-dup entries. */
 export function resetInFlight(): void {
   inFlight.clear()
-}
-
-// --- channels ---
-
-export async function listChannels(): Promise<Channel[]> {
-  const { channels } = await listChannelsWithStats()
-  return channels
-}
-
-/** Single round-trip for channels + per-channel stats (avoids N+1). */
-export async function listChannelsWithStats(): Promise<{
-  channels: Channel[]
-  stats: Record<string, ChannelStats>
-}> {
-  /**
-   * Split the server response into what the UI renders and what the offline
-   * mirror stores, then hand the render data back **without waiting for the
-   * write**.
-   *
-   * This used to `await cache.saveChannel(...)` per channel inside the loop —
-   * one IndexedDB transaction each, serially, in front of the data the Channels
-   * tab needs. At ~1,070 channels that is what produced the long skeleton phase.
-   * The mirror is still written (ADR/DECISIONS §5 keeps it as the offline read
-   * cache), just in one transaction, in the background.
-   */
-  const persist = (rows: (Channel & { stats?: ChannelStats })[]) => {
-    const channels: Channel[] = []
-    const stats: Record<string, ChannelStats> = {}
-    for (const row of rows) {
-      const { stats: channelStats, ...channel } = row
-      channels.push(channel)
-      if (channelStats) stats[channel.name] = channelStats
-    }
-    void hydrateChannelMirror(channels)
-    return { channels, stats }
-  }
-
-  if (await isResourceStale("channels")) {
-    try {
-      const remote = await api.listChannels({ includeStats: true })
-      const result = persist(remote)
-      markResourceSynced("channels")
-      return result
-    } catch {
-      /* fall through to cache */
-    }
-  }
-  const cached = await cache.getChannels()
-  const stats: Record<string, ChannelStats> = {}
-  for (const ch of cached) {
-    const s = await cache.getChannelStats(ch.name)
-    if (s) stats[ch.name] = s
-  }
-  return { channels: cached, stats }
-}
-
-export async function upsertChannel(channel: Channel): Promise<Channel> {
-  return apiWrite(
-    "channels",
-    () => api.upsertChannel(channel.id, channel),
-    () => cache.saveChannel(channel),
-  )
-}
-
-export async function bulkSyncChannelSettings(body: {
-  channelIds: string[] | null
-  regularSyncEnabled?: boolean
-  dynamicSyncEnabled?: boolean
-  autoSyncIntervalMinutes?: number
-  dynamicSyncExpectedPosts?: number
-}): Promise<{ updated: number }> {
-  const result = await api.bulkSyncSettings(body)
-  await refreshSyncMeta(true)
-  markResourceSynced("channels")
-  return { updated: result.updated }
-}
-
-export async function bulkUpdateChannelTags(
-  updates: { channelId: string; tags: Channel["tags"] }[],
-): Promise<{ updated: number; channels: Channel[] }> {
-  try {
-    const result = await api.bulkUpdateChannelTags({ updates })
-    for (const channel of result.channels) {
-      await cache.saveChannel(channel)
-    }
-    await refreshSyncMeta(true)
-    markResourceSynced("channels")
-    return result
-  } catch (error) {
-    onWriteFallback?.("channels", error)
-    throw error
-  }
-}
-
-export async function deleteChannel(id: string): Promise<void> {
-  try {
-    await api.deleteChannel(id)
-    await cache.deleteChannel(id)
-    await refreshSyncMeta(true)
-    markResourceSynced("channels")
-  } catch (error) {
-    await cache.deleteChannel(id)
-    onWriteFallback?.("channels", error)
-    throw error
-  }
-}
-
-export async function getChannelStats(
-  channelId: string,
-  channelName: string,
-): Promise<ChannelStats | null> {
-  try {
-    return await api.getChannelStats(channelId)
-  } catch {
-    return cache.getChannelStats(channelName)
-  }
 }
 
 // --- posts ---

@@ -4,6 +4,7 @@ import { toast } from "sonner"
 import { api, type BulkFollowChannelInput, type FollowJobStatus } from "@/api"
 import type { PromptScope } from "@/api/data"
 import { parseApiError, unavailableChannelToastMessage } from "@/lib/api-errors"
+import { upsertChannel } from "@/lib/channels/store"
 import { logger } from "@/lib/logger"
 import { useApiStatus } from "../hooks/useApiStatus"
 import { useFollowJob } from "../hooks/useFollowJob"
@@ -28,7 +29,6 @@ import type {
   PostSortOrder,
   PostViewOptions,
 } from "../lib/posts/post-view"
-import { upsertChannel } from "../lib/repository"
 import { buildActiveProxies, isNetworkRoutingActive } from "../lib/syncSettings"
 import type { Channel, Post } from "../types"
 import { useData } from "./DataContext"

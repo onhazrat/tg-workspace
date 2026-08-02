@@ -1,8 +1,8 @@
 import { toast } from "sonner"
 
 import type { CommandContext } from "@/lib/commands/types"
-import { upsertChannel } from "@/lib/repository"
 import type { Channel } from "@/types"
+import { upsertChannel } from "./store"
 
 export async function updateChannelStartId(
   channel: Channel,

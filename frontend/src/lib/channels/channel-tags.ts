@@ -9,8 +9,8 @@ import {
 import { isVirtualGroupTag } from "@/lib/channels/virtual-group-tags"
 import { isPartialHistoryChannel } from "@/lib/commands/filter-channels"
 import type { CommandContext } from "@/lib/commands/types"
-import { upsertChannel } from "@/lib/repository"
 import type { Channel } from "@/types"
+import { upsertChannel } from "./store"
 
 /** UI-only tag ids for the Channels tab pseudo-tags (not stored in DB). */
 export const UNTAGGED_TAG_ID = "__ui_untagged__"

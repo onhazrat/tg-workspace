@@ -22,9 +22,9 @@ import {
   type SyncJobStatus,
   streamFollowJobEvents,
 } from "@/api"
+import { getChannelStats } from "@/lib/channels/store"
 import { env } from "@/lib/env"
 import { createdChannelNamesFromResults } from "@/lib/posts/discover-selection"
-import { getChannelStats } from "@/lib/repository"
 import { isTerminalSyncStatus } from "@/lib/sync/job-state"
 import {
   buildActiveProxies,
@@ -230,7 +230,7 @@ export function useFollowJob(deps: FollowJobDeps): FollowJob {
             (ch) => ch.status === "success",
           )
           for (const ch of successes) {
-            const s = await getChannelStats(ch.channelId, ch.channelName)
+            const s = await getChannelStats(ch.channelId)
             if (s) {
               setChannelStats((prev) => ({
                 ...prev,
