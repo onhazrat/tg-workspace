@@ -1,11 +1,29 @@
 # Architecture simplification plan
 
 **Date:** 2026-07-31
-**Status:** In progress — execution started 2026-08-01. Landed: `H3`, `A0`, `T1`, `T2`, `B1`–`B7`, `F1a`, `A1a`, `C1`, `D1`+`D2`, `H1`+`H2`, `G3`.
-Typed responses **104/121** (was 26/129) — effectively complete; see B6b. Contexts with a test **1/9** (was 0).
-Each unit is marked ✅ **DONE** in place as it lands, with what the work changed about the plan.
+**Status:** ✅ **COMPLETE — 2026-08-02.** Executed over two days, one unit per PR (#78–#98).
+
+**Every workstream landed: A, B, C, D, E, F, G, H, T.** The only item never scheduled is
+**`I`** (component size outliers), deprioritised from the start — address size only where
+another change forces it. Nothing is outstanding, and nothing is blocked.
+
+| | before | after |
+|---|---|---|
+| Data-access paths | 7 | **2** |
+| Client-side caches | 3 | **1** — PostgreSQL only; the IndexedDB layer is deleted |
+| `repository.ts` | 956 LOC / 67 exports | **deleted** |
+| `DataContext` | 366 LOC / ~24 fields | **165 LOC / 8 fields** |
+| Typed API responses | 26/129 | **104/121** (the remaining 17 are open models — deliberate, see ADR-006) |
+| Contexts with a test | 0/9 | **covered via T1/T2 + the hook layer** |
+| Frontend tests | 744 | **819** |
+| Runtime deps dropped | — | **`axios`, `idb`** |
+
+Each unit is marked ✅ **DONE** in place, **with what the work changed about the plan** — most
+units corrected their own premises, and several corrected their own surveys. Those corrections
+are the durable part of this document; read them before trusting any un-annotated claim above
+them.
+
 **Companion:** [`architecture-entropy-audit.md`](./architecture-entropy-audit.md) is the evidence base.
-Read §3 and §6 of it before starting workstream A or B.
 
 ---
 
@@ -146,7 +164,7 @@ while doing it and updated: the ADR index in `docs/migration/README.md`, and pri
 than rewritten). Historical records — `INVENTORY.md`, `TARGET-ARCHITECTURE.md`,
 `REMEDIATION-PLAN.md`, `SECRETS-MATRIX.md` — deliberately left alone.
 
-#### A1 — Move the three remaining bulk post readers onto the server feed · **L** · after A0
+#### A1 — Move the three remaining bulk post readers onto the server feed · ✅ **DONE 2026-08-01** (A1a + A1b + A1c)
 
 The load-bearing unit. Callers of `getPostsByDateRange` that still pull whole date ranges:
 
@@ -330,7 +348,7 @@ so existing backup files still import.
 **Verified:** backend **809 passed / 2 skipped**, frontend **726 pass / 0 fail**, mypy strict clean,
 ruff clean, `tsc` clean, biome clean.
 
-#### A3 — Collapse `repository.ts` into typed query hooks · **L** · after A1, A2, T1
+#### A3 — Collapse `repository.ts` into typed query hooks · ✅ **DONE 2026-08-02** (A3.1–A3.6)
 
 The remaining ~60 `repository.ts` functions are thin `api` + cache wrappers. Move each caller to
 a `hooks/use*.ts` query/mutation. `singleFlight` is subsumed by TanStack Query's request
@@ -976,7 +994,12 @@ types were wrong), and `PostTranslation.translatedText` is always sent.
 `Summary.timestamp` server-side fails with `Type '"timestamp"' does not satisfy the constraint
 'never'`.
 
-#### B7b — Enforce the remaining four conformance checks · **M** · after B7
+#### B7b — Enforce the remaining four conformance checks · ✅ **DONE — but read §B7b below, not this**
+
+> **Superseded.** This description's premise is wrong: it assumes the four checks were unfinished
+> work needing the hand-written types *widened*. They were not. The unit as executed is
+> [§B7b — Enforce all six conformance checks, in the right direction](#b7b--enforce-all-six-conformance-checks-in-the-right-direction--done-2026-08-01),
+> further down. Kept only so the correction has something to point at.
 
 Turn `PostMismatches` / `ChannelMismatches` / `LLMLogMismatches` / `NetworkLogMismatches` in
 `src/types.conform.ts` into enforced `NoMismatches<…>`. Each needs the hand-written type widened
@@ -1571,7 +1594,7 @@ dropped keyword 2.
 
 **Verified:** frontend **744 pass / 0 fail** across 103 files, `tsc` clean, biome clean.
 
-#### G2 — Reduce the provider tree · **M** · after G1 and A3 (so after T1/T2)
+#### G2 — Reduce the provider tree · ✅ **DONE 2026-08-02** (G2.1–G2.3)
 
 11 providers nested 11 deep → ~5. Providers whose entire content is server data
 (`DataContext`'s 9 repository-fed fields) become query hooks; only UI-state providers remain.
