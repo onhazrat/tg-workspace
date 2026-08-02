@@ -4,6 +4,10 @@ import { toast } from "sonner"
 import { api } from "@/api"
 import type { PromptScope } from "@/api/data"
 import { useBotCredentials, useChatDestinations } from "@/hooks/useBots"
+import {
+  useInvalidateSummaries,
+  useSummariesHistory,
+} from "@/hooks/useSummaries"
 import { saveLLMLog, savePublishLog } from "@/lib/logs/write"
 import { lookupPosts } from "@/lib/posts/store"
 import { saveSummary } from "@/lib/summaries/store"
@@ -102,8 +106,9 @@ const AIContext = createContext<AIContextType | undefined>(undefined)
 export const AIProvider: React.FC<{ children: React.ReactNode }> = ({
   children,
 }) => {
-  const { channels, selectedChannels, loadHistory, summariesHistory } =
-    useData()
+  const { channels, selectedChannels } = useData()
+  const summariesHistory = useSummariesHistory()
+  const loadHistory = useInvalidateSummaries()
   const botCredentials = useBotCredentials()
   const chatDestinations = useChatDestinations()
   const {

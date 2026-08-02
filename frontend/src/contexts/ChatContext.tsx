@@ -3,6 +3,10 @@ import { createContext, useContext, useEffect, useRef, useState } from "react"
 import { toast } from "sonner"
 import { api } from "@/api"
 import type { PromptScope } from "@/api/data"
+import {
+  useInvalidateSummaries,
+  useSummariesHistory,
+} from "@/hooks/useSummaries"
 import { saveLLMLog } from "@/lib/logs/write"
 import { saveSummary } from "@/lib/summaries/store"
 import { formatChannelsForPrompt } from "../lib/channels/format-channels-for-prompt"
@@ -39,8 +43,9 @@ const ChatContext = createContext<ChatContextType | undefined>(undefined)
 export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
   children,
 }) => {
-  const { channels, selectedChannels, summariesHistory, loadHistory } =
-    useData()
+  const { channels, selectedChannels } = useData()
+  const summariesHistory = useSummariesHistory()
+  const loadHistory = useInvalidateSummaries()
   const {
     startDate,
     endDate,

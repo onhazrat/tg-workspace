@@ -2,6 +2,8 @@ import { Database } from "lucide-react"
 import { useEffect, useState } from "react"
 import { toast } from "sonner"
 import { useData } from "@/contexts/DataContext"
+import { useLoadDBStats } from "@/hooks/useDBStats"
+import { useInvalidateSummaries } from "@/hooks/useSummaries"
 import { checkNeedsMigration, importIndexedDBToServer } from "@/lib/repository"
 import {
   Dialog,
@@ -16,7 +18,9 @@ import { TgButton } from "./ui/tg-button"
 const DISMISSED_KEY = "migration_prompt_dismissed"
 
 export function MigrationPrompt() {
-  const { loadChannels, loadHistory, loadDBStats } = useData()
+  const { loadChannels } = useData()
+  const loadHistory = useInvalidateSummaries()
+  const loadDBStats = useLoadDBStats()
   const [show, setShow] = useState(false)
   const [migrating, setMigrating] = useState(false)
 

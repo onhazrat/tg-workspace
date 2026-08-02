@@ -3,7 +3,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import { renderHook, waitFor } from "@testing-library/react"
 import type { ReactNode } from "react"
 import { queryKeys } from "./queryKeys"
-import { useLogsQuery } from "./useLogs"
+import { type LogLister, useLogsQuery } from "./useLogs"
 
 /**
  * The property G2.1 rests on: **an enabled query refetches when its key is
@@ -28,81 +28,66 @@ function wrapper(client: QueryClient) {
 }
 
 let fetches = 0
-let rows: { id: string; timestamp: number }[] = []
+let rows: { timestamp: number }[] = []
 
 /**
- * Stub the global `fetch` rather than `mock.module("@/api", …)`: Bun's module
- * mocks are process-wide and `lib/repository.posts.test.ts` already mocks that
- * module. This also exercises the real `api.listLogs` path.
+ * Injected through `LogsQueryOptions.fetcher`, not a `fetch` stub.
+ * `globalThis.fetch` is shared by every test file in the process, so swapping
+ * it here raced with other files' in-flight requests.
  */
 function harness() {
   fetches = 0
-  rows = [{ id: "a", timestamp: 1 }]
-  const original = globalThis.fetch
-  globalThis.fetch = (async () => {
+  rows = [{ timestamp: 1 }]
+  const lister = (async () => {
     fetches++
-    return new Response(JSON.stringify(rows), {
-      status: 200,
-      headers: { "Content-Type": "application/json" },
-    })
-  }) as unknown as typeof fetch
+    return rows
+  }) as unknown as LogLister
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   })
-  return { client, restore: () => (globalThis.fetch = original) }
+  return { client, lister }
 }
 
 describe("useLogsQuery", () => {
   it("refetches on invalidation when enabled", async () => {
-    const { client, restore } = harness()
-    try {
-      renderHook(() => useLogsQuery("publish", true), {
-        wrapper: wrapper(client),
-      })
-      await waitFor(() => expect(fetches).toBe(1))
+    const { client, lister } = harness()
+    renderHook(() => useLogsQuery("publish", true, { lister }), {
+      wrapper: wrapper(client),
+    })
+    await waitFor(() => expect(fetches).toBe(1))
 
-      await client.invalidateQueries({ queryKey: queryKeys.logs.publish })
+    await client.invalidateQueries({ queryKey: queryKeys.logs.publish })
 
-      // This is what makes `lib/logs/write.ts`'s invalidation enough on its own.
-      await waitFor(() => expect(fetches).toBe(2))
-    } finally {
-      restore()
-    }
+    // This is what makes `lib/logs/write.ts`'s invalidation enough on its own.
+    await waitFor(() => expect(fetches).toBe(2))
   })
 
   it("does NOT refetch on invalidation when disabled", async () => {
-    const { client, restore } = harness()
-    try {
-      renderHook(() => useLogsQuery("publish", false), {
-        wrapper: wrapper(client),
-      })
-      await client.invalidateQueries({ queryKey: queryKeys.logs.publish })
-      await new Promise((r) => setTimeout(r, 30))
+    const { client, lister } = harness()
+    renderHook(() => useLogsQuery("publish", false, { lister }), {
+      wrapper: wrapper(client),
+    })
+    await client.invalidateQueries({ queryKey: queryKeys.logs.publish })
+    await new Promise((r) => setTimeout(r, 30))
 
-      // The trap G2.1 removed: a disabled query is marked stale and left alone,
-      // so a panel wired this way silently stops updating after a write.
-      expect(fetches).toBe(0)
-    } finally {
-      restore()
-    }
+    // The trap G2.1 removed: a disabled query is marked stale and left alone,
+    // so a panel wired this way silently stops updating after a write.
+    expect(fetches).toBe(0)
   })
 
   it("sorts newest first", async () => {
-    const { client, restore } = harness()
-    rows = [
-      { id: "old", timestamp: 1 },
-      { id: "new", timestamp: 9 },
-      { id: "mid", timestamp: 5 },
-    ]
-    try {
-      const { result } = renderHook(() => useLogsQuery("sync", true), {
-        wrapper: wrapper(client),
-      })
+    const { client, lister } = harness()
+    rows = [{ timestamp: 1 }, { timestamp: 9 }, { timestamp: 5 }]
+    {
+      const { result } = renderHook(
+        () => useLogsQuery("sync", true, { lister }),
+        {
+          wrapper: wrapper(client),
+        },
+      )
 
       await waitFor(() => expect(result.current.data).toBeDefined())
       expect(result.current.data?.map((l) => l.timestamp)).toEqual([9, 5, 1])
-    } finally {
-      restore()
     }
   })
 })

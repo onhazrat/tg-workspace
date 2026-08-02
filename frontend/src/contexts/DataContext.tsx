@@ -1,4 +1,4 @@
-import { useQuery, useQueryClient } from "@tanstack/react-query"
+import { useQueryClient } from "@tanstack/react-query"
 import type React from "react"
 import {
   createContext,
@@ -6,23 +6,15 @@ import {
   useCallback,
   useContext,
   useEffect,
-  useMemo,
   useState,
 } from "react"
-import { listBotCredentials, listChatDestinations } from "@/lib/bots/store"
-import { queryKeys } from "../hooks/queryKeys"
 import {
   setChannelStatsInCache,
   setChannelsInCache,
   useChannelsQuery,
   useInvalidateChannels,
 } from "../hooks/useChannels"
-import {
-  useInvalidateSummaries,
-  useSummariesQuery,
-} from "../hooks/useSummaries"
-import { getDBStats } from "../lib/repository"
-import type { Channel, ChannelStats, DBStats, SummaryListItem } from "../types"
+import type { Channel, ChannelStats } from "../types"
 
 interface DataContextType {
   channels: Channel[]
@@ -34,12 +26,6 @@ interface DataContextType {
   setChannelStats: React.Dispatch<
     React.SetStateAction<Record<string, ChannelStats>>
   >
-
-  summariesHistory: SummaryListItem[]
-  loadHistory: () => Promise<void>
-
-  dbStats: DBStats | null
-  loadDBStats: () => Promise<void>
 
   selectedChannels: Set<string>
   setSelectedChannels: React.Dispatch<React.SetStateAction<Set<string>>>
@@ -58,16 +44,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({
 }) => {
   const queryClient = useQueryClient()
   const invalidateChannels = useInvalidateChannels()
-  const invalidateSummaries = useInvalidateSummaries()
 
   const channelsQuery = useChannelsQuery()
-  const summariesQuery = useSummariesQuery()
-
-  const dbStatsQuery = useQuery({
-    queryKey: queryKeys.dbStats,
-    queryFn: () => getDBStats(),
-    enabled: false,
-  })
 
   const [selectedChannels, setSelectedChannels] = useState<Set<string>>(() => {
     if (typeof window !== "undefined") {
@@ -138,19 +116,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({
     await invalidateChannels()
   }, [invalidateChannels])
 
-  const loadHistory = useCallback(async () => {
-    await invalidateSummaries()
-  }, [invalidateSummaries])
-
-  const loadDBStats = useCallback(async () => {
-    const stats = await getDBStats()
-    queryClient.setQueryData(queryKeys.dbStats, stats)
-  }, [queryClient])
-
   const channels = channelsQuery.data?.channels ?? emptyArray
   const channelStats = channelsQuery.data?.channelStats ?? emptyChannelStats
-  const summariesHistory = summariesQuery.data ?? emptyArray
-  const dbStats = dbStatsQuery.data ?? null
 
   const isInitialChannelsLoading =
     channelsQuery.isPending && channels.length === 0
@@ -178,10 +145,6 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({
         loadChannels,
         channelStats,
         setChannelStats,
-        summariesHistory,
-        loadHistory,
-        dbStats,
-        loadDBStats,
         selectedChannels,
         setSelectedChannels,
         prevChannelNames,

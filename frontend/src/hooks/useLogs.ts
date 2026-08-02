@@ -42,13 +42,25 @@ function sortByTimestamp<T extends { timestamp: number }>(logs: T[]): T[] {
  */
 export async function fetchLogs(
   type: LogType,
+  list: LogLister = api.listLogs,
 ): Promise<{ timestamp: number }[]> {
-  return sortByTimestamp(await api.listLogs<{ timestamp: number }>(type))
+  return sortByTimestamp(await list<{ timestamp: number }>(type))
 }
+
+/**
+ * Test seam for the transport only — the sort above always applies.
+ *
+ * Injected rather than mocked because Bun's module mocks are process-wide (see
+ * `LogPoster` in `lib/logs/write.ts`), and stubbing the global `fetch` instead
+ * leaks across test files.
+ */
+export type LogLister = <T>(type: LogType) => Promise<T[]>
 
 export type LogsQueryOptions = {
   /** Poll interval in ms. Omit for no polling. */
   refetchInterval?: number
+  /** Test seam; see `LogLister`. */
+  lister?: LogLister
 }
 
 export function useLogsQuery(
@@ -58,7 +70,7 @@ export function useLogsQuery(
 ) {
   return useQuery({
     queryKey: queryKeys.logs[type],
-    queryFn: () => fetchLogs(type),
+    queryFn: () => fetchLogs(type, options.lister),
     staleTime: SUMMARIZER_STALE_TIME,
     enabled,
     refetchInterval: options.refetchInterval,

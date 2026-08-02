@@ -1188,6 +1188,65 @@ method, id-in-URL, and body — which the flaky e2e cannot.
 > patch hit the wrong function. Re-anchored on the whole function opening, it fails as it should.
 > Third unit in a row where mutation testing caught something the green suite did not.
 
+#### F2 — Move summarizer calls onto the generated client · **L**
+
+**Survey, 2026-08-02. The premise above is half wrong, and the correction changes
+the shape of the unit — read this before starting.**
+
+**The good half: A3 already did most of the work.** The plan describes replacing
+`api/data.ts` (835 LOC) and friends at every call site. That is no longer what it
+means. A3 concentrated *all* summarizer API access into seven small store
+modules — `lib/{logs/write,channels/store,summaries/store,bots/store,posts/store,
+translations/store,settings/network-settings-store}.ts`. F2 is now "point seven
+files at the generated client", not "rewrite 835 lines across the app".
+
+**The bad half: the generated client is not a strict improvement, and for the
+summarizer's core resources it is a regression.** The plan says the blocker was
+untyped responses (103) and is "now fixed" at 104/121 typed. Typed is not the
+same as *useful*: the six models B7b could not rebase — `Post`, `Channel`,
+`Summary`, `ChannelSettingGroup`, `LLMLog`, `NetworkLog` — are **open**
+(`ConfigDict(extra="allow")`), and OpenAPI renders an open model as a top-level
+`[key: string]: unknown` index signature. Anything riding in `extra` therefore
+arrives as `unknown`.
+
+Demonstrated, not assumed:
+
+```ts
+declare const row: ChannelResponse
+const s: ChannelStats | undefined = row.stats
+// error TS2322: Type 'unknown' is not assignable to type 'ChannelStats | undefined'
+```
+
+`listChannelsWithStats` depends on exactly that key. The hand-written
+`request<(Channel & {stats?: ChannelStats})[]>` types it correctly today, so
+moving it to `dataListChannels` would **lose** type information and need a cast.
+The same applies wherever a conditional key travels through `extra` — which is
+the design B1 chose deliberately, and which `CLAUDE.md` forbids "fixing" by
+declaring the key (a declared optional field serialises as an explicit `null`
+where the key is absent, changing the wire format).
+
+**So F2 splits along model openness, and only one half is worth doing:**
+
+* **Closed-model families — do these.** `jobs.ts` (97 LOC), `network.ts`,
+  `rag.ts`, `tg.ts` got closed response models in B6, so the generated calls are
+  a genuine upgrade. Note `jobs.ts` keeps the sync-job SSE by hand either way.
+* **Open-model families — do NOT.** `channels`, `posts`, `summaries` and the log
+  reads. Their hand-written signatures are *more* precise than the generated
+  ones. Moving them trades real type safety for uniformity.
+
+**This also supersedes what ADR-006 should say.** The rationale is not "SSE
+blocks codegen" (8 endpoints) *or* "untyped responses" (fixed). It is that
+**open response models cannot be expressed usefully in a generated TypeScript
+client**, and the summarizer's core resources are open on purpose. Two clients
+is the right answer for a narrower and better-evidenced reason than the ADR
+currently gives.
+
+**Recommended:** re-scope F2 to the closed-model families only (**M**, not L),
+and rewrite ADR-006 with the reason above. Leaving the open-model families
+hand-written is a decision, not a leftover — record it as such.
+
+<details><summary>Original F2 description (superseded by the survey above)</summary>
+
 #### F2 — Move summarizer calls onto the generated client · **L** · after B2–B6 and F1
 
 Replace `api/data.ts` (832 LOC), `api/ai.ts`, `api/jobs.ts`, `api/network.ts`, `api/rag.ts`,
@@ -1198,6 +1257,8 @@ the five SSE endpoints and the blob downloads — codegen genuinely cannot expre
   SSE (8 endpoints), it was untyped responses (103) — now fixed.
 - **Verify:** full frontend suite + e2e. Streaming paths (summary stream, sync SSE, bulk-follow
   SSE) need manual confirmation; they are the least test-covered part of the app.
+
+</details>
 
 ---
 
@@ -1412,6 +1473,43 @@ should end up holding.
 
 **Verified:** `tsc` clean; biome clean; build succeeds; **809 pass / 0 fail**.
 
+**G2.3 — summaries + dbStats out of `DataContext` · ✅ DONE 2026-08-02 — G2 COMPLETE**
+
+**Shipped:** `useSummariesHistory()` added to `hooks/useSummaries.ts`, new
+`hooks/useDBStats.ts`. Nine consumers repointed, including `useCommandRegistry`,
+which builds `CommandContext` — so the non-React command layer keeps its
+contract unchanged while sourcing these from hooks.
+
+**`DataContext`: 366 → 168 LOC, ~24 fields → 8.**
+
+What is left is `channels`/`channelStats` and `selectedChannels`/
+`prevChannelNames`, and they belong together: the selection-reconciling effect
+(auto-add on a new channel, drop on a vanished one — the behaviour
+`DataContext.test.tsx` covers) reads the channel list to decide. Splitting them
+would mean a provider whose only job is to watch another provider. The context
+is now one coherent thing — *the channel list and which of them are selected* —
+rather than a grab-bag.
+
+> **The plan's framing was "11 providers nested 11 deep → ~5", and that is not
+> what mattered.** Nesting depth costs nothing at runtime; the cost was that a
+> provider held server state, so every consumer of *any* field re-rendered when
+> *any* of them changed, and reaching a value meant threading it through the
+> tree. All eleven providers remain — `AIContext` (714 LOC) and `ScraperContext`
+> (632) are workflow state and legitimately are contexts. What changed is that
+> **no provider is now a proxy for react-query.** Counting providers would have
+> scored this as 0/6.
+
+**Verified:** `tsc` clean; biome clean; build succeeds; **809 pass / 0 fail**,
+stress-run six times.
+
+> **A flake I introduced, caught and removed.** `hooks/useLogs.test.tsx` first
+> stubbed `globalThis.fetch` — which every test file in the process shares, so it
+> raced with other files' in-flight requests and produced a one-in-a-dozen
+> failure *elsewhere* in the suite. Replaced with an injected `LogLister`,
+> matching the pattern A2/A3 settled on. The seam had to go inside `fetchLogs`
+> rather than replace it: injected one level up, it bypassed the newest-first
+> sort and the sort assertion silently stopped testing anything.
+
 #### G3 — Extract the settings binding · ✅ **DONE 2026-08-01**
 
 **The premise had already half-happened.** `settings-schema.ts` was *already* driven by
@@ -1525,7 +1623,7 @@ Everything below is unstarted. Nothing here is blocked except workstream E.
 | **A3** — collapse `repository.ts` into query hooks | **L** | — | **956 LOC / 67 exports / 45 consumer files — surveyed 2026-08-01, see §A3 for the family split and three corrections to the original description.** Do the `queryClient`-singleton + explicit-invalidation prerequisite first, then one family per PR starting with logs (21 of 67). Port `repository.test.ts`'s `singleFlight` concurrency assertions to the hook layer rather than deleting them, and delete the now-callerless `getPostsByDateRange` here. |
 | **A4** — delete the IndexedDB layer | **M** | A3 | **Must also repoint `DatabaseManagement`'s Export/Import DB** at `GET /data/export` / `POST /data/import` — see A2. That import currently writes *nowhere but the browser*, so deleting the mirror without repointing it turns the feature into a silent no-op. Keep reading the legacy `{type:"store"}` JSONL so existing backups still import. One-way door: ship a release after A3. |
 | **G2** — reduce the provider tree | **M** | A3 | Also the right place to promote `usePostFilters` to a context, which G1 deliberately deferred. |
-| **F2** — summarizer calls onto the generated client | **L** | — | F1b is done, so this is unblocked. Supersede ADR-006 with the corrected rationale. The two clients now share `ApiError`, so the error contract no longer differs between them. |
+| **F2** — closed-model families onto the generated client | **M** (was L) | — | **Re-scoped 2026-08-02 — see §F2.** A3 concentrated all API access into seven store modules, so this is now "point seven files at the client". But the generated types are a *regression* for the six open response models (`stats` on `ChannelResponse` types as `unknown`), so only the closed-model families (`jobs`, `network`, `rag`, `tg`) should move. Rewrite ADR-006 with that as the reason for keeping two clients. |
 | **E1/E2/E3** — template residue | 3×**S** | **your decision** | Blocks nothing. |
 | **I** — component size outliers | — | — | Explicitly deprioritised; only where G1/A3 force changes. |
 
@@ -1594,7 +1692,7 @@ Re-measured **2026-08-01**, after A1a–A1c, A2, B7b and G1.
 | `$ref`-typed API responses | 26/129 | **104/121** | all typeable (17 are SSE/binary/blob/template) |
 | Hand-written domain types mirroring server tables | 24 | **6**, all now compiler-enforced (B7b) | 0 |
 | Largest route module | 1,438 LOC | **425** | < 400 |
-| Largest frontend context | 1,103 LOC | **717** (`AIContext`; `ScraperContext` now 632) | < 300 |
+| Largest frontend context | 1,103 LOC | **714** (`AIContext`; `ScraperContext` 632, `DataContext` 168) | < 300 |
 | Largest backend function | 257 | **173** (`run_retention_cleanup`, out of H scope) | < 80 |
 | Files touched to add a log type | ~30 | **~5** (A3.1 collapsed the frontend side) | ~3 |
 | Contexts with a test | 0/9 | 1/9 (`DataContext`) | ≥ 5/5 (after G2) |

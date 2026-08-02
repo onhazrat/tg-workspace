@@ -24,9 +24,12 @@ import { TgIconButton } from "@/components/ui/tg-icon-button"
 import { TgHeroEmptyState } from "@/components/ui/tg-segmented"
 import { useBotCredentials, useChatDestinations } from "@/hooks/useBots"
 import { useDiscoverReportParam } from "@/hooks/useDiscoverReportParam"
+import {
+  useInvalidateSummaries,
+  useSummariesHistory,
+} from "@/hooks/useSummaries"
 import { deleteSummary, saveSummary } from "@/lib/summaries/store"
 import { formatSummaryModelLabel, isPendingSummary } from "../constants"
-import { useData } from "../contexts/DataContext"
 import { useUI } from "../contexts/UIContext"
 import { useSummarySearchQuery } from "../hooks/useSummaries"
 import { markdownPreview } from "../lib/markdown"
@@ -77,7 +80,8 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
   const { openReport: openDiscoverReport } = useDiscoverReportParam()
   const botCredentials = useBotCredentials()
   const chatDestinations = useChatDestinations()
-  const { loadHistory, summariesHistory } = useData()
+  const summariesHistory = useSummariesHistory()
+  const loadHistory = useInvalidateSummaries()
   const {
     historySearchQuery,
     setHistorySearchQuery,

@@ -30,6 +30,8 @@ import {
   buildSettingCommands,
 } from "@/lib/commands"
 import type { CommandContext, CommandDef } from "@/lib/commands/types"
+import { useLoadDBStats } from "./useDBStats"
+import { useInvalidateSummaries, useSummariesHistory } from "./useSummaries"
 
 export function useCommandRegistry(): {
   commands: CommandDef[]
@@ -42,11 +44,13 @@ export function useCommandRegistry(): {
     selectedChannels,
     setSelectedChannels,
     setChannels,
-    summariesHistory,
     loadChannels,
-    loadDBStats,
-    loadHistory,
   } = useData()
+  // Sourced from their own hooks rather than `DataContext`; the
+  // `CommandContext` contract these feed is unchanged.
+  const summariesHistory = useSummariesHistory()
+  const loadHistory = useInvalidateSummaries()
+  const loadDBStats = useLoadDBStats()
   const {
     setActiveTab,
     startDate,

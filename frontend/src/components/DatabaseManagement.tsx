@@ -3,6 +3,8 @@ import { motion } from "motion/react"
 import type React from "react"
 import { useState } from "react"
 import { toast } from "sonner"
+import { useDBStats, useLoadDBStats } from "@/hooks/useDBStats"
+import { useInvalidateSummaries } from "@/hooks/useSummaries"
 import { api } from "../api"
 import { useData } from "../contexts/DataContext"
 import { useSettings } from "../contexts/SettingsContext"
@@ -41,7 +43,10 @@ export const DatabaseManagement: React.FC<{
   focus?: "data" | "retention" | "table-sizes" | "transfer" | "query"
   highlightId?: string | null
 }> = ({ focus = "data", highlightId = null }) => {
-  const { dbStats, loadDBStats, loadChannels, loadHistory } = useData()
+  const { loadChannels } = useData()
+  const dbStats = useDBStats()
+  const loadDBStats = useLoadDBStats()
+  const loadHistory = useInvalidateSummaries()
   const {
     postRetentionDays,
     setPostRetentionDays,

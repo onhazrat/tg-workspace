@@ -18,12 +18,15 @@ import ReactMarkdown from "react-markdown"
 import { toast } from "sonner"
 import { TgButton } from "@/components/ui/tg-button"
 import { useBotCredentials, useChatDestinations } from "@/hooks/useBots"
+import {
+  useInvalidateSummaries,
+  useSummariesHistory,
+} from "@/hooks/useSummaries"
 import { savePublishLog } from "@/lib/logs/write"
 import { saveSummary } from "@/lib/summaries/store"
 import { buildActiveProxies } from "@/lib/syncSettings"
 import { formatSummaryModelLabel, isPendingSummary } from "../constants"
 import { generateDefaultMetadataText, useAI } from "../contexts/AIContext"
-import { useData } from "../contexts/DataContext"
 import { useScraper } from "../contexts/ScraperContext"
 import { useSettings } from "../contexts/SettingsContext"
 import { useUI } from "../contexts/UIContext"
@@ -157,7 +160,8 @@ export const SummaryView: React.FC<SummaryViewProps> = () => {
   const [copied, setCopied] = useState(false)
   const botCredentials = useBotCredentials()
   const chatDestinations = useChatDestinations()
-  const { summariesHistory, loadHistory } = useData()
+  const summariesHistory = useSummariesHistory()
+  const loadHistory = useInvalidateSummaries()
   const { startDate, endDate, currentSummaryId, summarizing } = useUI()
 
   const currentSummary = summariesHistory.find((s) => s.id === currentSummaryId)

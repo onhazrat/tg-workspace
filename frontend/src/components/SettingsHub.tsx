@@ -15,8 +15,8 @@ import { SettingsSearchResults } from "@/components/settings/SettingsSearchResul
 import { SettingsTocNav } from "@/components/settings/SettingsTocNav"
 import { TgIconButton } from "@/components/ui/tg-icon-button"
 import { TgInput } from "@/components/ui/tg-input"
-import { useData } from "@/contexts/DataContext"
 import { useSettings } from "@/contexts/SettingsContext"
+import { useLoadDBStats } from "@/hooks/useDBStats"
 import { useSettingsSection } from "@/hooks/useSettingsSection"
 import {
   getCatalogEntry,
@@ -47,7 +47,7 @@ export const SettingsHub: React.FC = () => {
   const { setting: deepLinkSetting } = summarizerRoute.useSearch()
   const navigate = summarizerRoute.useNavigate()
   const settings = useSettings()
-  const { loadDBStats } = useData()
+  const loadDBStats = useLoadDBStats()
 
   const [searchQuery, setSearchQuery] = useState("")
   const debouncedQuery = useDebouncedValue(searchQuery, 200)

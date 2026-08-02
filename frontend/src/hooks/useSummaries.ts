@@ -2,6 +2,8 @@ import { useQuery, useQueryClient } from "@tanstack/react-query"
 
 import { getSummary, listSummaries } from "@/lib/summaries/store"
 
+import type { SummaryListItem } from "@/types"
+
 import { queryKeys, SUMMARIZER_STALE_TIME } from "./queryKeys"
 
 /** Metadata-only history. Use `useSummaryDetailQuery` for the heavy fields. */
@@ -49,6 +51,19 @@ export function useSummaryDetailQuery(id: string | null) {
     enabled: !!id,
     staleTime: SUMMARIZER_STALE_TIME,
   })
+}
+
+const emptyHistory: SummaryListItem[] = []
+
+/**
+ * The history list itself, with a stable empty default.
+ *
+ * Extracted from `DataContext` in G2.3, where it was `summariesQuery.data ??
+ * emptyArray`. Consumers that only need the rows use this; the ones that also
+ * need loading state keep `useSummariesQuery()`.
+ */
+export function useSummariesHistory(): SummaryListItem[] {
+  return useSummariesQuery().data ?? emptyHistory
 }
 
 export function useInvalidateSummaries() {

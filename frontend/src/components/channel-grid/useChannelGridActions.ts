@@ -3,6 +3,7 @@ import { api } from "@/api"
 import { useData } from "@/contexts/DataContext"
 import { useScraper } from "@/contexts/ScraperContext"
 import { useSettings } from "@/contexts/SettingsContext"
+import { useLoadDBStats } from "@/hooks/useDBStats"
 import {
   useInvalidateSettingGroups,
   useSettingGroupsQuery,
@@ -33,8 +34,8 @@ export function useChannelGridActions() {
     selectedChannels,
     setSelectedChannels,
     loadChannels,
-    loadDBStats,
   } = useData()
+  const loadDBStats = useLoadDBStats()
 
   const {
     proxyEnabled,
