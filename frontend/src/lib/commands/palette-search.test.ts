@@ -30,7 +30,7 @@ let searchCalls: (string | undefined)[] = []
 // Summary search runs server-side now — `promptText` is matched in SQL and is
 // no longer shipped to the client — so the palette calls the repository rather
 // than filtering `ctx.summariesHistory` in memory.
-mock.module("@/lib/repository", () => ({
+mock.module("@/lib/summaries/store", () => ({
   listSummaries: async (options: { search?: string } = {}) => {
     searchCalls.push(options.search)
     if (!options.search) return ALL_SUMMARIES

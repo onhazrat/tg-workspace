@@ -23,6 +23,7 @@ import {
 import { AnimatePresence, motion } from "motion/react"
 import { useEffect, useLayoutEffect, useRef, useState } from "react"
 import { api } from "@/api"
+import { getSummary } from "@/lib/summaries/store"
 import { ChannelGrid } from "./components/ChannelGrid"
 import { ChatView } from "./components/ChatView"
 import { useCommandPaletteContext } from "./components/CommandPaletteProvider"
@@ -62,7 +63,6 @@ import {
   type RestoredScope,
   restoredScopeNotice,
 } from "./lib/history/restored-scope-notice"
-import { getSummary } from "./lib/repository"
 import type { SummaryListItem, TabType } from "./types"
 
 export default function App() {

@@ -483,6 +483,41 @@ Mutation-tested against 6 mutations, all caught: upsert invalidates, delete
 invalidates, stats not batched, stats not split out of the row, stats keyed by
 id instead of name, `getChannelStats` rethrows.
 
+**A3.3 — summaries + tag runs · ✅ DONE 2026-08-02**
+
+**Shipped:** `lib/summaries/store.ts` (8 functions), and `singleFlight` extracted
+to `lib/singleFlight.ts` — it is shared infrastructure that outlives
+`repository.ts`, so the families leaving cannot keep importing it from the file
+they are leaving. `repository.test.ts` became `singleFlight.test.ts` with its
+five concurrency assertions intact, which is the "port them, do not delete them"
+the plan asked for. `repository.ts` **633 → 490 LOC, 39 → 28 exports**; consumer
+files 31 → 22.
+
+**Suppress, not invalidate** — same rule as channels. A summary write happens on
+every autosave of the summary currently streaming, i.e. once per token batch;
+invalidating would refetch the whole history that often. `DataContext.loadHistory()`
+is already `useInvalidateSummaries()` for callers that do want a refresh.
+
+**`singleFlight` survives for summaries but was dropped for logs**, and the
+difference is real: `useSummariesQuery`/`useSummaryDetailQuery` get react-query's
+de-duplication for free, but `listSummaries` also has two callers react-query
+never sees — `lib/commands/search-filters.ts` and
+`lib/data-transfer/entities/summary.ts`. It goes with the infrastructure block,
+once nothing outside a hook reads a summary.
+
+**Also deleted:** `saveSummarySynced`, a `@deprecated` alias with zero callers.
+
+**Verified:** `tsc` clean; biome clean; build succeeds; **792 pass / 0 fail**
+across 108 files (779/107 before). Mutation-tested against 6 mutations, all
+caught: save invalidates, delete invalidates, search dropped, de-dup key ignores
+the search term, de-dup key ignores the summary id, tag-run reads rethrow.
+
+> Two test files had to be repointed and neither was caught by `tsc`:
+> `repository.posts.test.ts` imported `resetInFlight` from `@/lib/repository`,
+> and `palette-search.test.ts` had `mock.module("@/lib/repository", …)` for
+> `listSummaries`. `tsconfig.build.json` excludes `src/**/*.test.*`, so both
+> failed only under `bun test`. Expect one per family.
+
 > **Do NOT copy A3.1's invalidate-on-write into the channels family.** Surveyed
 > 2026-08-02, before starting it: the etag mechanism is doing **two opposite
 > jobs**, and only the logs one is "refetch after a write".
@@ -1395,7 +1430,7 @@ Re-measured **2026-08-01**, after A1a–A1c, A2, B7b and G1.
 | Contexts with a test | 0/9 | 1/9 (`DataContext`) | ≥ 5/5 (after G2) |
 | Hooks with a test | 2/32 | **6/36** | the ones holding logic |
 | Frontend LOC (excl. generated) | 59,881 | 61,888 | ≈ 54,000 |
-| Frontend tests | 679 | **779** | — |
+| Frontend tests | 679 | **792** | — |
 | Backend tests | 767 | **809** | — |
 | Runtime deps removed | — | **`axios`** (F1b) | `idb`, `axios` |
 

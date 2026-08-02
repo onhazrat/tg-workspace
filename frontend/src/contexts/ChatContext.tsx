@@ -4,9 +4,9 @@ import { toast } from "sonner"
 import { api } from "@/api"
 import type { PromptScope } from "@/api/data"
 import { saveLLMLog } from "@/lib/logs/write"
+import { saveSummary } from "@/lib/summaries/store"
 import { formatChannelsForPrompt } from "../lib/channels/format-channels-for-prompt"
 import { formatPostsForPrompt } from "../lib/posts/post-view"
-import { saveSummary } from "../lib/repository"
 import {
   AIServiceError,
   chatWithHistoryStream,

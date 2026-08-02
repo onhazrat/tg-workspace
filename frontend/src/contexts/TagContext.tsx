@@ -29,7 +29,7 @@ import {
   getTagRun,
   listTagRuns,
   upsertTagRun,
-} from "@/lib/repository"
+} from "@/lib/summaries/store"
 import { generateTagStream, getTagPrompt } from "@/services/ai"
 import type { TagRun, TagRunSummary } from "@/types"
 import { useData } from "./DataContext"

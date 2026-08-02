@@ -12,17 +12,9 @@ import type {
   Post,
   PostEmbedding,
   PostTranslation,
-  Summary,
-  SummaryListItem,
-  TagRun,
-  TagRunSummary,
 } from "../types"
 import { stripToken } from "./botCredential"
 import * as cache from "./cache"
-import {
-  filterSummariesByTextQuery,
-  toSummaryListItem,
-} from "./summary-projection"
 
 let syncMeta: Record<string, { etag: string }> = {}
 let syncMetaFetchedAt = 0
@@ -91,35 +83,10 @@ async function apiWrite<T>(
   }
 }
 
-/**
- * In-flight request de-duplication.
- *
- * Staleness is tracked as a single global etag per resource with no
- * coordination between callers, so concurrent readers of the same resource
- * each fired their own identical request. Posts were worst: six direct call
- * sites and no TanStack Query coverage. Callers arriving while a request is
- * outstanding now await that same promise.
- *
- * Entries are removed once settled, so this is a de-duplicator, not a cache —
- * it never serves a stale value to a later caller.
- */
-const inFlight = new Map<string, Promise<unknown>>()
-
-export function singleFlight<T>(key: string, fn: () => Promise<T>): Promise<T> {
-  const existing = inFlight.get(key)
-  if (existing) return existing as Promise<T>
-
-  const promise = fn().finally(() => {
-    inFlight.delete(key)
-  })
-  inFlight.set(key, promise)
-  return promise
-}
-
-/** Test seam: drop any outstanding de-dup entries. */
-export function resetInFlight(): void {
-  inFlight.clear()
-}
+// `singleFlight`/`resetInFlight` moved to `lib/singleFlight.ts` in A3.3 —
+// they are shared infrastructure that outlives this file, and the resource
+// families leaving it still need them.
+import { singleFlight } from "./singleFlight"
 
 // --- posts ---
 
@@ -279,108 +246,6 @@ export async function clearChannelPosts(channelName: string): Promise<void> {
 
 export async function deleteOldPosts(days: number): Promise<number> {
   return cache.deleteOldPosts(days)
-}
-
-// --- summaries ---
-
-/**
- * Metadata-only list. Use `getSummary` for citedPosts/promptText/chatMessages.
- *
- * `search` is passed to the server so prompt bodies stay searchable — they are
- * ~94% of what this endpoint used to return and are no longer shipped.
- */
-export async function listSummaries(
-  options: { search?: string } = {},
-): Promise<SummaryListItem[]> {
-  const { search } = options
-  return singleFlight(`summaries:${search ?? ""}`, async () => {
-    // A search is a server-side query, not a mirror of the whole resource:
-    // going through the etag gate would answer from an unfiltered cache.
-    if (search) {
-      try {
-        return await api.listSummaries({ search })
-      } catch {
-        const cached = await cache.getSummaries()
-        return filterSummariesByTextQuery(cached, search).map(toSummaryListItem)
-      }
-    }
-
-    if (await isResourceStale("summaries")) {
-      try {
-        const remote = await api.listSummaries()
-        for (const s of remote) {
-          await cache.saveSummaryListItem(s)
-        }
-        markResourceSynced("summaries")
-        return remote
-      } catch {
-        /* fall through */
-      }
-    }
-    return (await cache.getSummaries()).map(toSummaryListItem)
-  })
-}
-
-/** One summary in full, including the heavy fields. */
-export async function getSummary(id: string): Promise<Summary | undefined> {
-  return singleFlight(`summary:${id}`, async () => {
-    try {
-      const remote = await api.getSummary(id)
-      await cache.saveSummary(remote)
-      return remote
-    } catch {
-      return (await cache.getSummaries()).find((s) => s.id === id)
-    }
-  })
-}
-
-export async function saveSummary(summary: Summary): Promise<Summary> {
-  return apiWrite(
-    "summaries",
-    () => api.upsertSummary(summary.id, summary),
-    () => cache.saveSummary(summary),
-  )
-}
-
-export async function deleteSummary(id: string): Promise<void> {
-  try {
-    await api.deleteSummary(id)
-    await cache.deleteSummary(id)
-    await refreshSyncMeta(true)
-    markResourceSynced("summaries")
-  } catch (error) {
-    await cache.deleteSummary(id)
-    onWriteFallback?.("summaries", error)
-    throw error
-  }
-}
-
-/** Metadata-only list; use `getTagRun` for prompt/response/suggestions. */
-export async function listTagRuns(): Promise<TagRunSummary[]> {
-  try {
-    return await api.listTagRuns()
-  } catch {
-    return []
-  }
-}
-
-/** One run in full, including the heavy prompt and response fields. */
-export async function getTagRun(id: string): Promise<TagRun | undefined> {
-  return singleFlight(`tagRun:${id}`, async () => {
-    try {
-      return await api.getTagRun(id)
-    } catch {
-      return undefined
-    }
-  })
-}
-
-export async function upsertTagRun(run: TagRun): Promise<TagRun> {
-  return api.upsertTagRun(run.id, run)
-}
-
-export async function deleteTagRun(id: string): Promise<void> {
-  await api.deleteTagRun(id)
 }
 
 // --- bot credentials ---
@@ -620,11 +485,6 @@ export async function importIndexedDBToServer(): Promise<
   const result = await api.importData(payload)
   await refreshSyncMeta(true)
   return result.imported
-}
-
-/** @deprecated Use saveSummary — kept for backward compatibility */
-export async function saveSummarySynced(summary: Summary) {
-  return saveSummary(summary)
 }
 
 export { cache }

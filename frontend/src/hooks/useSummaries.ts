@@ -1,6 +1,6 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query"
 
-import { getSummary, listSummaries } from "@/lib/repository"
+import { getSummary, listSummaries } from "@/lib/summaries/store"
 
 import { queryKeys, SUMMARIZER_STALE_TIME } from "./queryKeys"
 

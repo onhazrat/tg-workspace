@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, test } from "bun:test"
-import { resetInFlight, singleFlight } from "@/lib/repository"
+import { resetInFlight, singleFlight } from "@/lib/singleFlight"
 
 describe("singleFlight", () => {
   beforeEach(() => {

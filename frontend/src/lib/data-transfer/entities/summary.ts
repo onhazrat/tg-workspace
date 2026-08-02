@@ -1,5 +1,5 @@
 import type { CommandContext } from "@/lib/commands/types"
-import { listSummaries, saveSummary } from "@/lib/repository"
+import { listSummaries, saveSummary } from "@/lib/summaries/store"
 import type { Summary } from "@/types"
 import type { DataEntityDef, ExportFilter, ImportResult } from "../types"
 

@@ -4,6 +4,7 @@ import { toast } from "sonner"
 import { api } from "@/api"
 import type { PromptScope } from "@/api/data"
 import { saveLLMLog, savePublishLog } from "@/lib/logs/write"
+import { saveSummary } from "@/lib/summaries/store"
 import {
   formatSummaryModelLabel,
   isPendingSummary,
@@ -12,7 +13,7 @@ import {
 import { useApiStatus } from "../hooks/useApiStatus"
 import { formatChannelsForPrompt } from "../lib/channels/format-channels-for-prompt"
 import { formatPostsForPrompt } from "../lib/posts/post-view"
-import { lookupPosts, saveSummary } from "../lib/repository"
+import { lookupPosts } from "../lib/repository"
 import { buildActiveProxies } from "../lib/syncSettings"
 import {
   AIServiceError,

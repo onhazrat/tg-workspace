@@ -65,7 +65,9 @@ mock.module("@/lib/cache", () => ({
   getPost: async () => undefined,
 }))
 
-const { getPostsByDateRange, resetInFlight } = await import("@/lib/repository")
+const { getPostsByDateRange } = await import("@/lib/repository")
+// `singleFlight` moved out of `repository.ts` in A3.3.
+const { resetInFlight } = await import("@/lib/singleFlight")
 
 describe("getPostsByDateRange", () => {
   beforeEach(() => {

@@ -44,7 +44,8 @@ import type {
   EntityFlowType,
 } from "@/lib/commands/types"
 import { restartTorService, rotateTorIpNow } from "@/lib/network/tor-actions"
-import { deleteSummary, importIndexedDBToServer } from "@/lib/repository"
+import { importIndexedDBToServer } from "@/lib/repository"
+import { deleteSummary } from "@/lib/summaries/store"
 import type { Channel, Summary } from "@/types"
 
 function offlineDisabled(reason: string) {

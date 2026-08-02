@@ -1,6 +1,6 @@
 import { api } from "@/api"
 import type { CommandContext } from "@/lib/commands/types"
-import { listSummaries } from "@/lib/repository"
+import { listSummaries } from "@/lib/summaries/store"
 import { searchSimilarPostsFromQuery } from "@/services/rag"
 import type { Post, SummaryListItem } from "@/types"
 
