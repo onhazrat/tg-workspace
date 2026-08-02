@@ -1391,6 +1391,27 @@ before `LogsView` mounts, which an enabled query cannot do for itself.
 **Verified:** `tsc` clean; biome clean; build succeeds; **809 pass / 0 fail**
 across 110 files.
 
+**G2.2 — bot credentials + chat destinations out of `DataContext` · ✅ DONE 2026-08-02**
+
+**Shipped:** `hooks/useBots.ts` — the same query, the same key and the same
+write-through setters, reached directly instead of through the provider tree.
+Four consumers moved (`AIContext`, `HistoryView`, `SummaryView`,
+`BotManagement`); `QuickMessagePanel` and `DestinationsPanel` already took them
+as props and are untouched. `DataContext` **269 → 208 LOC**.
+
+`loadBots` was **dead** — zero callers. Deleted rather than ported.
+
+`useBotsQuery` keeps `cleanupLegacyBots()` in its `queryFn`: it is a one-time
+migration of the pre-credential `bots` store that rides along because this is
+the only thing reading bots on startup. It goes with the mirror in **A4**.
+
+**`DataContext` is now 208 LOC and 12 fields**, down from 366 and ~24: channels
+(4), summaries (2), `dbStats` (2), and the four genuine UI-state fields
+(`selectedChannels`, `prevChannelNames` and their setters) that are what it
+should end up holding.
+
+**Verified:** `tsc` clean; biome clean; build succeeds; **809 pass / 0 fail**.
+
 #### G3 — Extract the settings binding · ✅ **DONE 2026-08-01**
 
 **The premise had already half-happened.** `settings-schema.ts` was *already* driven by

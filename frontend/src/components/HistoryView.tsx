@@ -22,6 +22,7 @@ import { TgMetaChip } from "@/components/ui/tg-chips"
 import { TgConfirmDialog } from "@/components/ui/tg-confirm-dialog"
 import { TgIconButton } from "@/components/ui/tg-icon-button"
 import { TgHeroEmptyState } from "@/components/ui/tg-segmented"
+import { useBotCredentials, useChatDestinations } from "@/hooks/useBots"
 import { useDiscoverReportParam } from "@/hooks/useDiscoverReportParam"
 import { deleteSummary, saveSummary } from "@/lib/summaries/store"
 import { formatSummaryModelLabel, isPendingSummary } from "../constants"
@@ -74,8 +75,9 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
   setActiveTab,
 }) => {
   const { openReport: openDiscoverReport } = useDiscoverReportParam()
-  const { botCredentials, chatDestinations, loadHistory, summariesHistory } =
-    useData()
+  const botCredentials = useBotCredentials()
+  const chatDestinations = useChatDestinations()
+  const { loadHistory, summariesHistory } = useData()
   const {
     historySearchQuery,
     setHistorySearchQuery,

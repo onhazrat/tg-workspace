@@ -17,6 +17,7 @@ import React, { useState } from "react"
 import ReactMarkdown from "react-markdown"
 import { toast } from "sonner"
 import { TgButton } from "@/components/ui/tg-button"
+import { useBotCredentials, useChatDestinations } from "@/hooks/useBots"
 import { savePublishLog } from "@/lib/logs/write"
 import { saveSummary } from "@/lib/summaries/store"
 import { buildActiveProxies } from "@/lib/syncSettings"
@@ -154,8 +155,9 @@ export const SummaryView: React.FC<SummaryViewProps> = () => {
   } = useAI()
   const { isOffline } = useApiStatus()
   const [copied, setCopied] = useState(false)
-  const { botCredentials, chatDestinations, summariesHistory, loadHistory } =
-    useData()
+  const botCredentials = useBotCredentials()
+  const chatDestinations = useChatDestinations()
+  const { summariesHistory, loadHistory } = useData()
   const { startDate, endDate, currentSummaryId, summarizing } = useUI()
 
   const currentSummary = summariesHistory.find((s) => s.id === currentSummaryId)

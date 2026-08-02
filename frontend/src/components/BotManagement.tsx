@@ -2,6 +2,12 @@ import { motion } from "motion/react"
 import type React from "react"
 import { useState } from "react"
 import { toast } from "sonner"
+import {
+  useBotCredentials,
+  useChatDestinations,
+  useSetBotCredentials,
+  useSetChatDestinations,
+} from "@/hooks/useBots"
 import { usePublishLogsQuery } from "@/hooks/useLogs"
 import {
   deleteBotCredential,
@@ -11,7 +17,6 @@ import {
 } from "@/lib/bots/store"
 import { saveNetworkLog, savePublishLog } from "@/lib/logs/write"
 import { buildActiveProxies } from "@/lib/syncSettings"
-import { useData } from "../contexts/DataContext"
 import { useSettings } from "../contexts/SettingsContext"
 import {
   fetchBotInfo as fetchBotInfoApi,
@@ -45,12 +50,10 @@ export const BotManagement: React.FC<BotManagementProps> = ({
   focus = "publishing",
   highlightId = null,
 }) => {
-  const {
-    botCredentials,
-    setBotCredentials,
-    chatDestinations,
-    setChatDestinations,
-  } = useData()
+  const botCredentials = useBotCredentials()
+  const setBotCredentials = useSetBotCredentials()
+  const chatDestinations = useChatDestinations()
+  const setChatDestinations = useSetChatDestinations()
   // Owned here rather than passed through `DataContext`: `savePublishLog`
   // invalidates this key, and an enabled query refetches on its own.
   const publishLogs = usePublishLogsQuery(true).data ?? EMPTY_PUBLISH_LOGS

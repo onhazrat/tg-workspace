@@ -21,34 +21,14 @@ import {
   useInvalidateSummaries,
   useSummariesQuery,
 } from "../hooks/useSummaries"
-import { applySetStateAction } from "../lib/applySetStateAction"
-import { cleanupLegacyBots, getDBStats } from "../lib/repository"
-import type {
-  BotCredential,
-  Channel,
-  ChannelStats,
-  ChatDestination,
-  DBStats,
-  SummaryListItem,
-} from "../types"
-
-interface BotsQueryResult {
-  credentials: BotCredential[]
-  destinations: ChatDestination[]
-}
+import { getDBStats } from "../lib/repository"
+import type { Channel, ChannelStats, DBStats, SummaryListItem } from "../types"
 
 interface DataContextType {
   channels: Channel[]
   isInitialChannelsLoading: boolean
   setChannels: React.Dispatch<React.SetStateAction<Channel[]>>
   loadChannels: () => Promise<void>
-
-  botCredentials: BotCredential[]
-  setBotCredentials: React.Dispatch<React.SetStateAction<BotCredential[]>>
-
-  chatDestinations: ChatDestination[]
-  setChatDestinations: React.Dispatch<React.SetStateAction<ChatDestination[]>>
-  loadBots: () => Promise<void>
 
   channelStats: Record<string, ChannelStats>
   setChannelStats: React.Dispatch<
@@ -82,19 +62,6 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({
 
   const channelsQuery = useChannelsQuery()
   const summariesQuery = useSummariesQuery()
-
-  const botsQuery = useQuery({
-    queryKey: queryKeys.bots,
-    queryFn: async (): Promise<BotsQueryResult> => {
-      await cleanupLegacyBots()
-      const [credentials, destinations] = await Promise.all([
-        listBotCredentials(),
-        listChatDestinations(),
-      ])
-      return { credentials, destinations }
-    },
-    staleTime: 30_000,
-  })
 
   const dbStatsQuery = useQuery({
     queryKey: queryKeys.dbStats,
@@ -167,37 +134,9 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({
     React.Dispatch<React.SetStateAction<Record<string, ChannelStats>>>
   >((action) => setChannelStatsInCache(queryClient, action), [queryClient])
 
-  const setBotCredentials = useCallback<
-    React.Dispatch<React.SetStateAction<BotCredential[]>>
-  >(
-    (action) => {
-      queryClient.setQueryData<BotsQueryResult>(queryKeys.bots, (old) => ({
-        credentials: applySetStateAction(action, old?.credentials ?? []),
-        destinations: old?.destinations ?? [],
-      }))
-    },
-    [queryClient],
-  )
-
-  const setChatDestinations = useCallback<
-    React.Dispatch<React.SetStateAction<ChatDestination[]>>
-  >(
-    (action) => {
-      queryClient.setQueryData<BotsQueryResult>(queryKeys.bots, (old) => ({
-        credentials: old?.credentials ?? [],
-        destinations: applySetStateAction(action, old?.destinations ?? []),
-      }))
-    },
-    [queryClient],
-  )
-
   const loadChannels = useCallback(async () => {
     await invalidateChannels()
   }, [invalidateChannels])
-
-  const loadBots = useCallback(async () => {
-    await queryClient.invalidateQueries({ queryKey: queryKeys.bots })
-  }, [queryClient])
 
   const loadHistory = useCallback(async () => {
     await invalidateSummaries()
@@ -210,8 +149,6 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({
 
   const channels = channelsQuery.data?.channels ?? emptyArray
   const channelStats = channelsQuery.data?.channelStats ?? emptyChannelStats
-  const botCredentials = botsQuery.data?.credentials ?? emptyArray
-  const chatDestinations = botsQuery.data?.destinations ?? emptyArray
   const summariesHistory = summariesQuery.data ?? emptyArray
   const dbStats = dbStatsQuery.data ?? null
 
@@ -239,11 +176,6 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({
         isInitialChannelsLoading,
         setChannels,
         loadChannels,
-        botCredentials,
-        setBotCredentials,
-        chatDestinations,
-        setChatDestinations,
-        loadBots,
         channelStats,
         setChannelStats,
         summariesHistory,
