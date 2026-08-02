@@ -26,7 +26,7 @@ import { TgSettingsSection } from "@/components/ui/tg-settings-section"
 import { TgToggle } from "@/components/ui/tg-toggle"
 import { useData } from "@/contexts/DataContext"
 import { useSettings } from "@/contexts/SettingsContext"
-import { saveNetworkLog } from "@/lib/repository"
+import { saveNetworkLog } from "@/lib/logs/write"
 import type { NetworkLog } from "@/types"
 import { useProxyTesting } from "./useProxyTesting"
 

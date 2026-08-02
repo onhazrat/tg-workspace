@@ -3,6 +3,7 @@ import { createContext, useContext, useState } from "react"
 import { toast } from "sonner"
 import { api } from "@/api"
 import type { PromptScope } from "@/api/data"
+import { saveLLMLog, savePublishLog } from "@/lib/logs/write"
 import {
   formatSummaryModelLabel,
   isPendingSummary,
@@ -11,12 +12,7 @@ import {
 import { useApiStatus } from "../hooks/useApiStatus"
 import { formatChannelsForPrompt } from "../lib/channels/format-channels-for-prompt"
 import { formatPostsForPrompt } from "../lib/posts/post-view"
-import {
-  lookupPosts,
-  saveLLMLog,
-  savePublishLog,
-  saveSummary,
-} from "../lib/repository"
+import { lookupPosts, saveSummary } from "../lib/repository"
 import { buildActiveProxies } from "../lib/syncSettings"
 import {
   AIServiceError,

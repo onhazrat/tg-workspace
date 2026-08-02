@@ -13,6 +13,7 @@ import { SyncLogsTab } from "@/components/logs/SyncLogsTab"
 import { TgConfirmDialog } from "@/components/ui/tg-confirm-dialog"
 import { useData } from "@/contexts/DataContext"
 import { useUI } from "@/contexts/UIContext"
+import { useDeleteLogsMutation } from "@/hooks/useLogs"
 import {
   DEFAULT_LOG_FILTERS,
   filterEmbeddingLogs,
@@ -24,24 +25,19 @@ import {
   uniqueSorted,
 } from "@/lib/logs/filters"
 import { LOG_TAB_META, type LogTab } from "@/lib/logs/tabs"
-import {
-  clearEmbeddingLogs,
-  clearLLMLogs,
-  clearNetworkLogs,
-  clearPublishLogs,
-  clearSyncLogs,
-  deleteEmbeddingLog,
-  deleteLLMLog,
-  deleteNetworkLog,
-  deletePublishLog,
-  deleteSyncLog,
-} from "@/lib/repository"
 
 const PAGE_SIZE = 20
 
 interface LogTabActions {
-  remove: (id: string) => Promise<void>
-  clear: () => Promise<void>
+  mutation: ReturnType<typeof useDeleteLogsMutation>
+  /**
+   * Still needed after the mutation invalidates.
+   *
+   * `DataContext` creates these queries with `enabled: false` — the panels are
+   * lazy — and `invalidateQueries` does not refetch a disabled query. What the
+   * invalidation buys is that this `fetchQuery` sees the entry as stale and
+   * goes to the server instead of returning the cache it just made wrong.
+   */
   reload: () => Promise<void>
 }
 
@@ -60,6 +56,13 @@ export const LogsView: React.FC = () => {
     logsLoading,
   } = useData()
   const { setActiveTab, setCurrentSummaryId } = useUI()
+  // Five unconditional calls in a fixed order — one per panel — because hooks
+  // cannot be called from the `logActions` lookup below.
+  const deletePublish = useDeleteLogsMutation("publish")
+  const deleteSync = useDeleteLogsMutation("sync")
+  const deleteLlm = useDeleteLogsMutation("llm")
+  const deleteNetwork = useDeleteLogsMutation("network")
+  const deleteEmbedding = useDeleteLogsMutation("embedding")
   const [activeLogTab, setActiveLogTab] = useState<LogTab>("publish")
   const [filters, setFilters] = useState<LogFilters>(DEFAULT_LOG_FILTERS)
   const [showFilters, setShowFilters] = useState(false)
@@ -143,23 +146,11 @@ export const LogsView: React.FC = () => {
   }
 
   const logActions: Record<LogTab, LogTabActions> = {
-    publish: {
-      remove: deletePublishLog,
-      clear: clearPublishLogs,
-      reload: loadLogs,
-    },
-    sync: { remove: deleteSyncLog, clear: clearSyncLogs, reload: loadSyncLogs },
-    llm: { remove: deleteLLMLog, clear: clearLLMLogs, reload: loadLLMLogs },
-    network: {
-      remove: deleteNetworkLog,
-      clear: clearNetworkLogs,
-      reload: loadNetworkLogs,
-    },
-    embedding: {
-      remove: deleteEmbeddingLog,
-      clear: clearEmbeddingLogs,
-      reload: loadEmbeddingLogs,
-    },
+    publish: { mutation: deletePublish, reload: loadLogs },
+    sync: { mutation: deleteSync, reload: loadSyncLogs },
+    llm: { mutation: deleteLlm, reload: loadLLMLogs },
+    network: { mutation: deleteNetwork, reload: loadNetworkLogs },
+    embedding: { mutation: deleteEmbedding, reload: loadEmbeddingLogs },
   }
 
   const updateFilters = (patch: Partial<LogFilters>) => {
@@ -179,7 +170,7 @@ export const LogsView: React.FC = () => {
   }
 
   const handleDelete = (tab: LogTab) => async (id: string) => {
-    await logActions[tab].remove(id)
+    await logActions[tab].mutation.mutateAsync({ logId: id })
     await logActions[tab].reload()
     toast.success(`${LOG_TAB_META[tab].label} log entry deleted.`)
   }
@@ -191,7 +182,7 @@ export const LogsView: React.FC = () => {
   const confirmClearLogs = async () => {
     const { noun } = LOG_TAB_META[activeLogTab]
     setClearLogsConfirmOpen(false)
-    await logActions[activeLogTab].clear()
+    await logActions[activeLogTab].mutation.mutateAsync({ clearAll: true })
     await logActions[activeLogTab].reload()
     toast.success(`All ${noun} logs cleared.`)
   }

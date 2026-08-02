@@ -2,6 +2,7 @@ import { motion } from "motion/react"
 import type React from "react"
 import { useState } from "react"
 import { toast } from "sonner"
+import { saveNetworkLog, savePublishLog } from "@/lib/logs/write"
 import { buildActiveProxies } from "@/lib/syncSettings"
 import { useData } from "../contexts/DataContext"
 import { useSettings } from "../contexts/SettingsContext"
@@ -10,8 +11,6 @@ import {
   deleteChatDestination,
   saveBotCredential,
   saveChatDestination,
-  saveNetworkLog,
-  savePublishLog,
 } from "../lib/repository"
 import {
   fetchBotInfo as fetchBotInfoApi,

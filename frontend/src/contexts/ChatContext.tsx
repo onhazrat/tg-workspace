@@ -3,9 +3,10 @@ import { createContext, useContext, useEffect, useRef, useState } from "react"
 import { toast } from "sonner"
 import { api } from "@/api"
 import type { PromptScope } from "@/api/data"
+import { saveLLMLog } from "@/lib/logs/write"
 import { formatChannelsForPrompt } from "../lib/channels/format-channels-for-prompt"
 import { formatPostsForPrompt } from "../lib/posts/post-view"
-import { saveLLMLog, saveSummary } from "../lib/repository"
+import { saveSummary } from "../lib/repository"
 import {
   AIServiceError,
   chatWithHistoryStream,

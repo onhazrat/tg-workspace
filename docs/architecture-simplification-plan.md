@@ -387,6 +387,86 @@ simplified server-side.
 Also: `useCachePrune.ts` imports `deleteOldLogs`/`deleteOldPosts` from `lib/cache`, **not**
 `lib/repository`, so it is untouched by A3 and belongs to A4.
 
+**A3.1 — logs + the invalidation prerequisite · ✅ DONE 2026-08-02**
+
+**Shipped:** the first family, plus the seam every later family needs.
+`repository.ts` **956 → 749 LOC, 67 → 46 exports**; consumer files 45 → 40.
+
+- `lib/queryClient.ts` — the `QueryClient` is now a module singleton rather than
+  a local in `main.tsx`, so non-React writers can invalidate. This is the
+  prerequisite the survey called for; every remaining family depends on it.
+- `lib/logs/write.ts` — five plain `saveXLog` functions replacing the
+  `repository` ones. Plain functions, not hooks, because most callers are
+  services.
+- `hooks/useLogs.ts` — reads go straight to `api.listLogs(type)`; new
+  `useDeleteLogsMutation(type)` covers delete *and* clear from the one endpoint
+  D1/D2 collapsed. Dead `useInvalidateLogs` deleted.
+- `DataContext` — five near-identical `loadXLogs` collapsed onto one
+  `loadLogsOfType(type)` sharing `fetchLogs` with the query hook.
+- `repository.ts` — the 21 log functions and the now-unreferenced
+  `listWithStaleCheck` deleted.
+
+> **A failed log write no longer throws, deliberately.** `apiWrite` rethrew
+> after saving to IndexedDB, so the entry survived locally and the throw was
+> recoverable. With the mirror gone there is nothing to fall back to, and
+> rethrowing would let a failed *log* break the operation it was recording — a
+> proxy test that worked would report as failed because recording it did not.
+> Several callers never awaited these anyway (`saveNetworkLog(entry)` in
+> `add-channel.ts`, `refresh-metadata.ts`), so a rejection was an unhandled
+> promise rejection, not an error anyone saw. Deletes still throw: the operator
+> asked for those.
+
+> **`LogsView` still calls `reload()` after the mutation, and must.** The log
+> queries are created with `enabled: false` — the panels are lazy — and
+> `invalidateQueries` does not refetch a disabled query. What the invalidation
+> buys is that the *next* `fetchQuery` sees the entry as stale and goes to the
+> server instead of returning the cache the write just made wrong. That is the
+> faithful replacement for the etag path, and it is why the mechanism is
+> invalidate-*and*-refetch rather than either alone.
+
+**A pre-existing bug fixed on the way:** `useLazyTabData` prefetched
+`queryKeys.logs.publish`/`.sync` with a bare list call and **no sort**, writing
+the same keys `useLogsQuery` sorts. Whichever won the race decided the order, so
+those two panels could render oldest-first. Both now go through `fetchLogs`.
+
+**Verified:** `tsc` clean; biome clean; build succeeds; **769 pass / 0 fail**
+across 106 files (758/105 before — the delta is the 11 new tests).
+Mutation-tested against 6 mutations, all caught: invalidation dropped,
+invalidates every panel, invalidates after a failure, rethrows on failure, wrong
+log type, entry not batched.
+
+> **The first draft of the test passed alone and failed in the suite.** It used
+> `spyOn(api, "createLogs")`; `src/lib/repository.posts.test.ts` calls
+> `mock.module("@/api", …)`, and Bun's module mocks are **process-wide**, so the
+> spy observed that file's stub once everything ran in one process. Fixed by
+> injecting the writer (`LogPoster`), the pattern this repo already settled on in
+> A2. Worth remembering for the remaining families: their tests will hit the
+> same thing.
+
+> **Do NOT copy A3.1's invalidate-on-write into the channels family.** Surveyed
+> 2026-08-02, before starting it: the etag mechanism is doing **two opposite
+> jobs**, and only the logs one is "refetch after a write".
+>
+> For channels, `apiWrite` calls `markResourceSynced("channels")`, which writes
+> the *new* etag to `localStorage` so the next `isResourceStale("channels")`
+> returns **false** — a channel write deliberately **suppresses** the refetch,
+> because 17 call sites have already applied the change optimistically through
+> `setChannelsInCache`/`setChannelStatsInCache`. Adding
+> `invalidateQueries(queryKeys.channels)` to `upsertChannel` would refetch the
+> whole list on every edit and once per channel during bulk follow — at the
+> ~1,070 channels a real account holds, that is the shape of load this programme
+> already had to root-cause once (see `docs/discover-bulk-follow-load-investigation.md`).
+>
+> So the channels family is: delete the cache read path and the etag layer, keep
+> the optimistic write-throughs, and add **no** invalidation on write. Check
+> which of the two jobs the etag is doing for every remaining family before
+> converting it — `markResourceSynced` after a write means "suppress", a bare
+> `refreshSyncMeta(true)` with no mark means "refetch".
+
+**Remaining families**, in the order to take them: channels (7 fns / 20 files),
+summaries + tag runs (8 / 16), posts (7 / 12), credentials (6 / 5), then the
+leftovers and the infrastructure block.
+
 #### A4 — Delete the IndexedDB layer · **M** · after A3
 
 Remove `lib/cache.ts`, `workers/dbWorker.ts`, `MigrationPrompt.tsx`, `useCachePrune.ts`,
@@ -1271,11 +1351,11 @@ Re-measured **2026-08-01**, after A1a–A1c, A2, B7b and G1.
 | Largest route module | 1,438 LOC | **425** | < 400 |
 | Largest frontend context | 1,103 LOC | **717** (`AIContext`; `ScraperContext` now 632) | < 300 |
 | Largest backend function | 257 | **173** (`run_retention_cleanup`, out of H scope) | < 80 |
-| Files touched to add a log type | ~30 | **~12** (→ ~3 after A3) | ~3 |
+| Files touched to add a log type | ~30 | **~5** (A3.1 collapsed the frontend side) | ~3 |
 | Contexts with a test | 0/9 | 1/9 (`DataContext`) | ≥ 5/5 (after G2) |
 | Hooks with a test | 2/32 | **6/36** | the ones holding logic |
 | Frontend LOC (excl. generated) | 59,881 | 61,888 | ≈ 54,000 |
-| Frontend tests | 679 | **756** | — |
+| Frontend tests | 679 | **769** | — |
 | Backend tests | 767 | **809** | — |
 | Runtime deps removed | — | **`axios`** (F1b) | `idb`, `axios` |
 

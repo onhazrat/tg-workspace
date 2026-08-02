@@ -2,7 +2,7 @@ import { useState } from "react"
 import { toast } from "sonner"
 import { api } from "@/api"
 import { useData } from "@/contexts/DataContext"
-import { saveNetworkLog } from "@/lib/repository"
+import { saveNetworkLog } from "@/lib/logs/write"
 import type { NetworkLog } from "@/types"
 
 export type ProxyTestResult = {

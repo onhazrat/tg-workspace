@@ -12,16 +12,11 @@ import type {
   ChannelStats,
   ChatDestination,
   DBStats,
-  EmbeddingLog,
-  LLMLog,
-  NetworkLog,
   Post,
   PostEmbedding,
   PostTranslation,
-  PublishLog,
   Summary,
   SummaryListItem,
-  SyncLog,
   TagRun,
   TagRunSummary,
 } from "../types"
@@ -127,25 +122,6 @@ export function singleFlight<T>(key: string, fn: () => Promise<T>): Promise<T> {
 /** Test seam: drop any outstanding de-dup entries. */
 export function resetInFlight(): void {
   inFlight.clear()
-}
-
-async function listWithStaleCheck<T>(
-  resource: string,
-  fetchRemote: () => Promise<T[]>,
-  persistRemote: (items: T[]) => Promise<void>,
-  readCache: () => Promise<T[]>,
-): Promise<T[]> {
-  if (await isResourceStale(resource)) {
-    try {
-      const remote = await fetchRemote()
-      await persistRemote(remote)
-      markResourceSynced(resource)
-      return remote
-    } catch {
-      /* fall through to cache */
-    }
-  }
-  return readCache()
 }
 
 // --- channels ---
@@ -675,189 +651,6 @@ export async function saveTranslation(
     () => api.upsertTranslations([translation]),
     () => cache.saveTranslation(translation),
   )
-}
-
-// --- logs (reads API-first, deletes cache-only until server endpoints exist) ---
-
-export async function listPublishLogs(): Promise<PublishLog[]> {
-  return listWithStaleCheck(
-    "publish_logs",
-    () => api.listPublishLogs(),
-    async (logs) => {
-      for (const log of logs) await cache.savePublishLog(log)
-    },
-    () => cache.getPublishLogs(),
-  )
-}
-
-export async function listSyncLogs(): Promise<SyncLog[]> {
-  return listWithStaleCheck(
-    "sync_logs",
-    () => api.listSyncLogs(),
-    async (logs) => {
-      for (const log of logs) await cache.saveSyncLog(log)
-    },
-    () => cache.getSyncLogs(),
-  )
-}
-
-export async function listLLMLogs(): Promise<LLMLog[]> {
-  return listWithStaleCheck(
-    "llm_logs",
-    () => api.listLLMLogs(),
-    async (logs) => {
-      for (const log of logs) await cache.saveLLMLog(log)
-    },
-    () => cache.getLLMLogs(),
-  )
-}
-
-export async function listEmbeddingLogs(): Promise<EmbeddingLog[]> {
-  return listWithStaleCheck(
-    "embedding_logs",
-    () => api.listEmbeddingLogs(),
-    async (logs) => {
-      for (const log of logs) await cache.saveEmbeddingLog(log)
-    },
-    () => cache.getEmbeddingLogs(),
-  )
-}
-
-export async function listNetworkLogs(): Promise<NetworkLog[]> {
-  return listWithStaleCheck(
-    "network_logs",
-    () => api.listNetworkLogs(),
-    async (logs) => {
-      for (const log of logs) await cache.saveNetworkLog(log)
-    },
-    () => cache.getNetworkLogs(),
-  )
-}
-
-export async function savePublishLog(log: PublishLog): Promise<void> {
-  await apiWrite(
-    "publish_logs",
-    () => api.createPublishLogs([log]),
-    () => cache.savePublishLog(log),
-  )
-}
-
-export async function saveSyncLog(log: SyncLog): Promise<void> {
-  await apiWrite(
-    "sync_logs",
-    () => api.createSyncLogs([log]),
-    () => cache.saveSyncLog(log),
-  )
-}
-
-export async function saveLLMLog(log: LLMLog): Promise<void> {
-  await apiWrite(
-    "llm_logs",
-    () => api.createLLMLogs([log]),
-    () => cache.saveLLMLog(log),
-  )
-}
-
-export async function saveEmbeddingLog(log: EmbeddingLog): Promise<void> {
-  await apiWrite(
-    "embedding_logs",
-    () => api.createEmbeddingLogs([log]),
-    () => cache.saveEmbeddingLog(log),
-  )
-}
-
-export async function saveNetworkLog(log: NetworkLog): Promise<void> {
-  await apiWrite(
-    "network_logs",
-    () => api.createNetworkLogs([log]),
-    () => cache.saveNetworkLog(log),
-  )
-}
-
-async function deleteLogOnServer(
-  type: "publish" | "sync" | "llm" | "embedding" | "network",
-  opts: { logId?: string; clearAll?: boolean; olderThanDays?: number },
-): Promise<void> {
-  try {
-    await api.deleteLogs({ type, ...opts })
-    await refreshSyncMeta(true)
-  } catch (error) {
-    onWriteFallback?.(`${type}_logs`, error)
-    throw error
-  }
-}
-
-export async function deletePublishLog(id: string): Promise<void> {
-  await deleteLogOnServer("publish", { logId: id })
-  await cache.deletePublishLog(id)
-  markResourceSynced("publish_logs")
-}
-
-export async function clearPublishLogs(): Promise<void> {
-  await deleteLogOnServer("publish", { clearAll: true })
-  await cache.clearPublishLogs()
-  markResourceSynced("publish_logs")
-}
-
-export async function deleteSyncLog(id: string): Promise<void> {
-  await deleteLogOnServer("sync", { logId: id })
-  await cache.deleteSyncLog(id)
-  markResourceSynced("sync_logs")
-}
-
-export async function clearSyncLogs(): Promise<void> {
-  await deleteLogOnServer("sync", { clearAll: true })
-  await cache.clearSyncLogs()
-  markResourceSynced("sync_logs")
-}
-
-export async function deleteLLMLog(id: string): Promise<void> {
-  await deleteLogOnServer("llm", { logId: id })
-  await cache.deleteLLMLog(id)
-  markResourceSynced("llm_logs")
-}
-
-export async function clearLLMLogs(): Promise<void> {
-  await deleteLogOnServer("llm", { clearAll: true })
-  await cache.clearLLMLogs()
-  markResourceSynced("llm_logs")
-}
-
-export async function deleteEmbeddingLog(id: string): Promise<void> {
-  await deleteLogOnServer("embedding", { logId: id })
-  await cache.deleteEmbeddingLog(id)
-  markResourceSynced("embedding_logs")
-}
-
-export async function clearEmbeddingLogs(): Promise<void> {
-  await deleteLogOnServer("embedding", { clearAll: true })
-  await cache.clearEmbeddingLogs()
-  markResourceSynced("embedding_logs")
-}
-
-export async function deleteNetworkLog(id: string): Promise<void> {
-  await deleteLogOnServer("network", { logId: id })
-  await cache.deleteNetworkLog(id)
-  markResourceSynced("network_logs")
-}
-
-export async function clearNetworkLogs(): Promise<void> {
-  await deleteLogOnServer("network", { clearAll: true })
-  await cache.clearNetworkLogs()
-  markResourceSynced("network_logs")
-}
-
-export async function deleteOldLogs(days: number): Promise<number> {
-  try {
-    const result = await api.deleteLogs({ olderThanDays: days })
-    await refreshSyncMeta(true)
-    const total = result.total ?? 0
-    await cache.deleteOldLogs(days)
-    return total
-  } catch (error) {
-    onWriteFallback?.("logs", error)
-    return cache.deleteOldLogs(days)
-  }
 }
 
 // --- stats & legacy bot cleanup ---

@@ -6,8 +6,10 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useMemo,
   useState,
 } from "react"
+import type { LogType } from "../api/data"
 import { queryKeys } from "../hooks/queryKeys"
 import {
   setChannelStatsInCache,
@@ -16,6 +18,7 @@ import {
   useInvalidateChannels,
 } from "../hooks/useChannels"
 import {
+  fetchLogs,
   useEmbeddingLogsQuery,
   useLLMLogsQuery,
   useNetworkLogsQuery,
@@ -32,11 +35,6 @@ import {
   getDBStats,
   listBotCredentials,
   listChatDestinations,
-  listEmbeddingLogs,
-  listLLMLogs,
-  listNetworkLogs,
-  listPublishLogs,
-  listSyncLogs,
 } from "../lib/repository"
 import type {
   BotCredential,
@@ -253,55 +251,34 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({
     await invalidateSummaries()
   }, [invalidateSummaries])
 
-  const loadLogs = useCallback(async () => {
-    await queryClient.fetchQuery({
-      queryKey: queryKeys.logs.publish,
-      queryFn: async () => {
-        const logs = await listPublishLogs()
-        return logs.sort((a, b) => b.timestamp - a.timestamp)
-      },
-    })
-  }, [queryClient])
+  /**
+   * Imperative reloads for the log panels.
+   *
+   * These were five copies of the same `fetchQuery`, each re-implementing the
+   * newest-first sort inline. They share `fetchLogs` with `useLogsQuery` now,
+   * so a panel cannot order differently on refresh than it did on first load.
+   */
+  const loadLogsOfType = useCallback(
+    (type: LogType) => async () => {
+      await queryClient.fetchQuery({
+        queryKey: queryKeys.logs[type],
+        queryFn: () => fetchLogs(type),
+      })
+    },
+    [queryClient],
+  )
 
-  const loadSyncLogs = useCallback(async () => {
-    await queryClient.fetchQuery({
-      queryKey: queryKeys.logs.sync,
-      queryFn: async () => {
-        const logs = await listSyncLogs()
-        return logs.sort((a, b) => b.timestamp - a.timestamp)
-      },
-    })
-  }, [queryClient])
-
-  const loadLLMLogs = useCallback(async () => {
-    await queryClient.fetchQuery({
-      queryKey: queryKeys.logs.llm,
-      queryFn: async () => {
-        const logs = await listLLMLogs()
-        return logs.sort((a, b) => b.timestamp - a.timestamp)
-      },
-    })
-  }, [queryClient])
-
-  const loadEmbeddingLogs = useCallback(async () => {
-    await queryClient.fetchQuery({
-      queryKey: queryKeys.logs.embedding,
-      queryFn: async () => {
-        const logs = await listEmbeddingLogs()
-        return logs.sort((a, b) => b.timestamp - a.timestamp)
-      },
-    })
-  }, [queryClient])
-
-  const loadNetworkLogs = useCallback(async () => {
-    await queryClient.fetchQuery({
-      queryKey: queryKeys.logs.network,
-      queryFn: async () => {
-        const logs = await listNetworkLogs()
-        return logs.sort((a, b) => b.timestamp - a.timestamp)
-      },
-    })
-  }, [queryClient])
+  const loadLogs = useMemo(() => loadLogsOfType("publish"), [loadLogsOfType])
+  const loadSyncLogs = useMemo(() => loadLogsOfType("sync"), [loadLogsOfType])
+  const loadLLMLogs = useMemo(() => loadLogsOfType("llm"), [loadLogsOfType])
+  const loadEmbeddingLogs = useMemo(
+    () => loadLogsOfType("embedding"),
+    [loadLogsOfType],
+  )
+  const loadNetworkLogs = useMemo(
+    () => loadLogsOfType("network"),
+    [loadLogsOfType],
+  )
 
   const loadDBStats = useCallback(async () => {
     const stats = await getDBStats()

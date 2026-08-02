@@ -2,7 +2,7 @@ import { toast } from "sonner"
 
 import { api } from "@/api"
 import type { CommandContext } from "@/lib/commands/types"
-import { saveNetworkLog } from "@/lib/repository"
+import { saveNetworkLog } from "@/lib/logs/write"
 import type { NetworkLog } from "@/types"
 
 export async function rotateTorIpNow(ctx: CommandContext): Promise<void> {

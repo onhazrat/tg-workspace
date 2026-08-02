@@ -1,9 +1,10 @@
 import { useQueryClient } from "@tanstack/react-query"
 import { useEffect } from "react"
 
-import { getDBStats, listPublishLogs, listSyncLogs } from "@/lib/repository"
+import { getDBStats } from "@/lib/repository"
 
 import { queryKeys } from "./queryKeys"
+import { fetchLogs } from "./useLogs"
 
 /** Load heavy diagnostics data only when settings / history tabs are opened. */
 export function useLazyTabData(activeTab: string) {
@@ -21,14 +22,18 @@ export function useLazyTabData(activeTab: string) {
 
   useEffect(() => {
     if (activeTab === "history" || activeTab === "settings") {
+      // `fetchLogs`, not a bare list call: these write the *same* query keys as
+      // `useLogsQuery`, and prefetching unsorted data meant the publish and
+      // sync panels rendered in whatever order the server returned whenever the
+      // prefetch won the race.
       void queryClient.prefetchQuery({
         queryKey: queryKeys.logs.publish,
-        queryFn: () => listPublishLogs(),
+        queryFn: () => fetchLogs("publish"),
         staleTime: 30_000,
       })
       void queryClient.prefetchQuery({
         queryKey: queryKeys.logs.sync,
-        queryFn: () => listSyncLogs(),
+        queryFn: () => fetchLogs("sync"),
         staleTime: 30_000,
       })
     }

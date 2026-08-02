@@ -1,5 +1,5 @@
 import { api } from "@/api"
-import { saveNetworkLog } from "../lib/repository"
+import { saveNetworkLog } from "@/lib/logs/write"
 import type { NetworkLog } from "../types"
 
 const logTelemetry = async (

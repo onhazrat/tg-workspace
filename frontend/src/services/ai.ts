@@ -1,6 +1,6 @@
 import { api } from "@/api"
 import type { PromptScope } from "@/api/data"
-import { saveEmbeddingLog } from "../lib/repository"
+import { saveEmbeddingLog } from "@/lib/logs/write"
 import type { EmbeddingLog } from "../types"
 
 export class AIServiceError extends Error {
