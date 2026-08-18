@@ -6,7 +6,10 @@ import uuid
 from typing import Any
 
 from fastapi import HTTPException
+from sqlalchemy import String, bindparam, cast, true
 from sqlalchemy import delete as sa_delete
+from sqlalchemy import select as sa_select
+from sqlalchemy.dialects.postgresql import ARRAY
 from sqlmodel import Session, col, func, select
 
 from app.models_tg import Channel, Post, utc_now
@@ -138,22 +141,49 @@ def _fetch_recent_timestamps_by_channel(
     *,
     limit: int = 100,
 ) -> dict[str, list[int]]:
-    rn = (
-        func.row_number()
-        .over(
-            partition_by=Post.channel_name,
-            order_by=col(Post.timestamp).desc(),
+    """The newest `limit` timestamps per channel, oldest first.
+
+    Top-N per group, done as a LATERAL rather than a window function. A
+    `row_number() OVER (PARTITION BY channel_name)` has to read every row of
+    every channel before discarding all but `limit` of each: on staging that
+    walked 4.52M index rows to return 130k, 1.56s of a 2.7s channel list.
+    LATERAL lets `ix_tg_posts_channel_name_timestamp` stop after `limit`
+    entries per channel — identical rows out, 106ms.
+
+    The names arrive as one array parameter rather than a 2,068-row VALUES
+    clause: the SQL text stays constant, so SQLAlchemy's compiled-statement
+    cache hits instead of recompiling per call. Measured on staging, that is
+    0.39s against VALUES' 0.55s for the same rows.
+
+    Names are de-duplicated because joining against the name list multiplies
+    rows where the `IN (...)` this replaced collapsed them, and `Channel.name`
+    carries no unique constraint.
+    """
+    if not channel_names:
+        return {}
+
+    wanted = sa_select(
+        func.unnest(
+            cast(
+                bindparam("names", value=list(dict.fromkeys(channel_names))),
+                ARRAY(String),
+            )
+        ).label("name")
+    ).subquery("wanted")
+    newest = (
+        sa_select(col(Post.timestamp).label("timestamp"))
+        .where(
+            col(Post.channel_name) == wanted.c.name,
+            col(Post.timestamp) > 0,
         )
-        .label("rn")
+        .order_by(col(Post.timestamp).desc())
+        .limit(limit)
+        .lateral("newest")
     )
-    ranked = (
-        select(Post.channel_name, Post.timestamp, rn).where(
-            col(Post.channel_name).in_(channel_names),
-            Post.timestamp > 0,
+    rows = session.execute(
+        sa_select(wanted.c.name, newest.c.timestamp).select_from(
+            wanted.join(newest, true())
         )
-    ).subquery()
-    rows = session.exec(
-        select(ranked.c.channel_name, ranked.c.timestamp).where(ranked.c.rn <= limit)
     ).all()
     by_channel: dict[str, list[int]] = {}
     for channel_name, timestamp in rows:

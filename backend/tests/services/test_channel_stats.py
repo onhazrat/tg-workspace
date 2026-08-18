@@ -11,6 +11,7 @@ from sqlmodel import Session
 from app.core.db import engine
 from app.models_tg import Post, utc_now
 from app.services.channels import (
+    _fetch_recent_timestamps_by_channel,
     compute_channel_stats,
     compute_channel_stats_batch,
     get_channel_stats,
@@ -176,3 +177,80 @@ def test_get_channel_stats_no_posts_raises() -> None:
             assert exc.detail == "No posts for channel"
         else:
             raise AssertionError("expected HTTPException")
+
+
+def test_recent_timestamps_cap_is_per_channel_not_global() -> None:
+    """The `limit` is top-N *per channel*.
+
+    The window function this replaced enforced it with
+    `row_number() OVER (PARTITION BY channel_name) <= limit`; the LATERAL
+    enforces it with a per-iteration `LIMIT`. A single global `LIMIT` would
+    pass every other stats test in this file — count, min/max and velocity all
+    survive one channel starving another — so it is asserted here directly.
+    """
+    stamps = _hourly_timestamps(5)
+    with Session(engine) as session:
+        for channel in ("cap-a", "cap-b"):
+            add_test_channel(session, channel)
+            for idx, ts in enumerate(stamps, start=1):
+                session.add(
+                    Post(
+                        channel_name=channel,
+                        post_id=idx,
+                        text=f"{channel}-{idx}",
+                        timestamp=ts,
+                    )
+                )
+        session.commit()
+
+        recent = _fetch_recent_timestamps_by_channel(
+            session, ["cap-a", "cap-b"], limit=3
+        )
+
+    # Each channel keeps its own newest three, ascending — not three between them.
+    assert recent == {"cap-a": stamps[-3:], "cap-b": stamps[-3:]}
+
+
+def test_recent_timestamps_keeps_the_newest_not_the_first_found() -> None:
+    """Insertion order must not decide which timestamps survive the cap."""
+    stamps = _hourly_timestamps(6)
+    scrambled = [stamps[0], stamps[5], stamps[2], stamps[4], stamps[1], stamps[3]]
+    with Session(engine) as session:
+        add_test_channel(session, "order-ch")
+        for idx, ts in enumerate(scrambled, start=1):
+            session.add(
+                Post(
+                    channel_name="order-ch",
+                    post_id=idx,
+                    text=f"p{idx}",
+                    timestamp=ts,
+                )
+            )
+        session.commit()
+
+        recent = _fetch_recent_timestamps_by_channel(session, ["order-ch"], limit=2)
+
+    assert recent == {"order-ch": stamps[-2:]}
+
+
+def test_recent_timestamps_tolerates_a_repeated_channel_name() -> None:
+    """A VALUES join would multiply rows where `IN (...)` collapsed them."""
+    stamps = _hourly_timestamps(3)
+    with Session(engine) as session:
+        add_test_channel(session, "dup-ch")
+        for idx, ts in enumerate(stamps, start=1):
+            session.add(
+                Post(channel_name="dup-ch", post_id=idx, text=f"p{idx}", timestamp=ts)
+            )
+        session.commit()
+
+        recent = _fetch_recent_timestamps_by_channel(
+            session, ["dup-ch", "dup-ch"], limit=100
+        )
+
+    assert recent == {"dup-ch": stamps}
+
+
+def test_recent_timestamps_with_no_channels_asks_the_database_nothing() -> None:
+    with Session(engine) as session:
+        assert _fetch_recent_timestamps_by_channel(session, [], limit=100) == {}

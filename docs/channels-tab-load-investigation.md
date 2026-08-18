@@ -170,6 +170,30 @@ on "unreferenced" alone would have taken all of them today, including any still 
 a saved report. `backend/scripts/prune_channel_photos.py --dry-run` reports the backlog
 and how much of it is currently eligible.
 
+### Follow-up: the velocity query
+
+`_fetch_recent_timestamps_by_channel` was the other 1.56 s. It was a top-N-per-group
+written as a window function, so it read every row of every channel before discarding
+all but 100 of each — 4.52 M index rows to return 129,980.
+
+Rewritten as a LATERAL, which lets `ix_tg_posts_channel_name_timestamp` stop after 100
+entries per channel. `EXPLAIN ANALYZE` on staging: **1,556 ms → 106 ms**, reading 129,980
+rows instead of 4.52 M. End to end from Python, **1.50 s → 0.39 s**, and the two queries
+were run side by side against the live database to confirm **identical output** — same
+1,809 keys, same 129,980 timestamps.
+
+The channel names travel as one array parameter (`unnest`) rather than a 2,068-row
+`VALUES` clause, which keeps the SQL text constant so SQLAlchemy's compiled-statement
+cache hits: 0.39 s versus 0.55 s for the same rows.
+
+`_fetch_channel_aggregates` was left alone on evidence, not by omission: the same LATERAL
+treatment measured 1,117 ms against its current 1,035 ms. An exact per-channel `count(*)`
+has to touch every row however it is written.
+
+Guarded by four tests in `test_channel_stats.py`. The per-channel cap had no coverage at
+all before — count, min/max and velocity all survive one channel starving another, so a
+single global `LIMIT` would have passed the entire existing suite. Mutation-tested:
+moving the `LIMIT` outside the LATERAL fails exactly one test, the new one.
+
 Still open, deliberately: `serialization.py` is declared `PURE_TRANSFORM` but
-`channel_to_camel` touches the filesystem, and `_fetch_recent_timestamps_by_channel`
-still walks 4.52 M index rows for `velocity`.
+`channel_to_camel` touches the filesystem.
