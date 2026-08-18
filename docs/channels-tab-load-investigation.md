@@ -161,9 +161,14 @@ Fixed in the commit that carries this doc.
   Without it, any test exercising `run_retention_cleanup` sweeps the developer's real
   `data/` caches — verified by planting a 400-day-old file and watching it die.
 
-The 6,361 existing orphans on staging were deliberately left in place: after the glob is
-gone, directory size no longer affects lookup cost, and the scheduled sweep takes them
-once deployed. `backend/scripts/prune_channel_photos.py --dry-run` reports the backlog.
+The existing orphans on staging were deliberately left in place: after the glob is gone,
+directory size no longer affects lookup cost. Measured after deploy, all 12,714 orphaned
+files (6,357 avatars plus their sidecars) are 16.2–20.1 days old — one Discover probe
+campaign about three weeks ago — so the hourly sweep reclaims them in roughly ten days,
+as they cross the 30-day floor, not immediately. That is the age floor working: pruning
+on "unreferenced" alone would have taken all of them today, including any still shown in
+a saved report. `backend/scripts/prune_channel_photos.py --dry-run` reports the backlog
+and how much of it is currently eligible.
 
 Still open, deliberately: `serialization.py` is declared `PURE_TRANSFORM` but
 `channel_to_camel` touches the filesystem, and `_fetch_recent_timestamps_by_channel`
