@@ -197,3 +197,54 @@ moving the `LIMIT` outside the LATERAL fails exactly one test, the new one.
 
 Still open, deliberately: `serialization.py` is declared `PURE_TRANSFORM` but
 `channel_to_camel` touches the filesystem.
+
+## Round three: the bottleneck moved off the backend
+
+After the two server-side fixes, the Channels tab still felt slow, so it was measured
+from the operator's own browser rather than from inside the container. That changed the
+picture completely:
+
+| | measured |
+|---|---|
+| `/data/channels?includeStats=true`, from the browser | **6–10 s** |
+| same request, server-side | 1.95 s |
+| payload | **3.39 MB**, `content-encoding: null` |
+| gzipped | 0.53 MB (6.4×), 76 ms CPU |
+| effective throughput to the box | **0.33–0.75 MB/s** |
+| latency floor (3 KB response) | ~1.7 s |
+| JSON parse in the browser | 30 ms |
+
+**Nothing on the deployment was compressed** — not the API and not the frontend, whose
+`summarizer-*.js` is 1,039 KB served raw. Traefik had middlewares defined but no
+`compress`, and `app/main.py` adds only CORS and the API-key middleware. So roughly 5
+of the ~7 seconds was transferring uncompressed bytes over a slow link: more than the
+entire backend cost, and invisible to every measurement taken inside the datacentre.
+
+Fixed by enabling Traefik compression — see **Response compression** in `deployment.md`
+for the configuration, the reasoning about where it lives, and how to verify it.
+
+One assumption worth recording as *wrong*: the exclusion of `text/event-stream` is
+usually justified with "compression breaks SSE". Measured against traefik:3.6, it does
+not — events still flush per write, arriving at t=0,1,2,3 s with and without gzip. The
+exclusion is still correct, for a different reason: these events are ~14 bytes and gzip
+framing takes each to ~24, so compressing a long-lived stream costs CPU to send ~70%
+more bytes. Traefik does **not** exclude SSE by default, so the entry is load-bearing
+either way.
+
+### What is left after compression
+
+The remaining levers, roughly in order of leverage:
+
+1. **Stop fetching what the tab does not need.** `DataContext` fetches for every tab,
+   so the Channels tab also waits on `/data/summaries` — **2.69 s server-side for 49
+   rows**, 1.15 MB. That endpoint is worth its own investigation.
+2. **ETag → 304 on the channel list.** `tg_sync_meta.etag` already tracks per-resource
+   change, and `telegram.py:309` already does conditional requests for images. Today
+   `refetchOnWindowFocus: true` with a 30 s stale time re-downloads the whole list on
+   every window focus.
+3. **Trim the payload.** `bio` alone is 39.6% of it (861 KB), `tags` another 14.5%.
+4. **Denormalise the post counts** onto `tg_channels` to remove the ~1.1 s exact
+   `count(*)` floor. `oldest_stored_post_timestamp` and `anchor_post_id` are precedent
+   for derived columns on that table.
+5. **Server-side pagination and faceting** — the real fix, and the largest change. The
+   grid shows 20 of 2,068. Blocked on the tag chips needing global counts.

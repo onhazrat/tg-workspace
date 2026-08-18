@@ -154,8 +154,30 @@ services:
       - traefik.http.routers.${STACK_NAME?Variable not set}-backend-https.tls=true
       - traefik.http.routers.${STACK_NAME?Variable not set}-backend-https.tls.certresolver=le
 
+      # Response compression. The API ships large JSON: the channel list alone is
+      # 3.39 MB uncompressed and 0.53 MB gzipped (6.4x), and it was going over the
+      # wire raw. On a ~0.3-0.75 MB/s link that was ~5s of the ~7s the Channels tab
+      # waited. Encoding costs ~76ms of CPU for that payload. See deployment.md.
+      #
+      # excludedcontenttypes is load-bearing, and each entry was measured against
+      # traefik:3.6 rather than assumed:
+      #   text/event-stream - the five SSE routes (sync progress, AI streaming).
+      #     Traefik does NOT skip these on its own: drop this entry and it gzips
+      #     them. It does not stall the stream — events still flush per write, at
+      #     t=0,1,2,3s in both cases — so the usual "compression breaks SSE" story
+      #     does not apply here. The real cost is that these events are ~14 bytes
+      #     and gzip framing takes each to ~24, so compressing spends CPU on a
+      #     long-lived stream to make it 70% bigger.
+      #   image/*           - avatars and post thumbs are already-compressed JPEG.
+      #     Re-encoding burns CPU per request for no gain, and these are the
+      #     highest-frequency responses the API serves.
+      - traefik.http.middlewares.${STACK_NAME?Variable not set}-backend-compress.compress=true
+      - traefik.http.middlewares.${STACK_NAME?Variable not set}-backend-compress.compress.excludedcontenttypes=text/event-stream,image/jpeg,image/png,image/webp,image/gif
+      - traefik.http.middlewares.${STACK_NAME?Variable not set}-backend-compress.compress.minresponsebodybytes=1024
+
       # Enable redirection for HTTP and HTTPS
       - traefik.http.routers.${STACK_NAME?Variable not set}-backend-http.middlewares=https-redirect
+      - traefik.http.routers.${STACK_NAME?Variable not set}-backend-https.middlewares=${STACK_NAME?Variable not set}-backend-compress
 
   frontend:
     image: '${DOCKER_IMAGE_FRONTEND?Variable not set}:${TAG-latest}'
@@ -189,8 +211,23 @@ services:
       - traefik.http.routers.${STACK_NAME?Variable not set}-frontend-https.tls=true
       - traefik.http.routers.${STACK_NAME?Variable not set}-frontend-https.tls.certresolver=le
 
+      # Response compression, as on the backend. The bundle was shipping raw too:
+      # summarizer-*.js is 1,039 KB with no content-encoding. Text assets are the
+      # whole payload here, so the exclusions do nothing today; they are kept
+      # identical to the backend's so the two read the same and neither drifts if
+      # this router ever serves something else.
+      #
+      # Deliberately a *separate* middleware from the backend's rather than one
+      # shared definition: Traefik's Docker provider drops the labels of a stopped
+      # container, so a shared middleware defined on the backend would take the
+      # frontend's router down with it.
+      - traefik.http.middlewares.${STACK_NAME?Variable not set}-frontend-compress.compress=true
+      - traefik.http.middlewares.${STACK_NAME?Variable not set}-frontend-compress.compress.excludedcontenttypes=text/event-stream,image/jpeg,image/png,image/webp,image/gif
+      - traefik.http.middlewares.${STACK_NAME?Variable not set}-frontend-compress.compress.minresponsebodybytes=1024
+
       # Enable redirection for HTTP and HTTPS
       - traefik.http.routers.${STACK_NAME?Variable not set}-frontend-http.middlewares=https-redirect
+      - traefik.http.routers.${STACK_NAME?Variable not set}-frontend-https.middlewares=${STACK_NAME?Variable not set}-frontend-compress
 volumes:
   app-db-data:
   app-media-data:

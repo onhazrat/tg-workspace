@@ -56,6 +56,7 @@ Full stack via Docker: `docker compose watch` (frontend :5173, API :8000, Swagge
 - **Auth dependencies** (`app/api/deps.py`): `SessionDep`, `CurrentUser` (JWT), `get_current_active_superuser`. **Mode A** (single-operator, hardened) is the deployment model: all AI/RAG/network/telegram/jobs routes require auth; in staging/production a request must carry a JWT **or** `X-API-Key` (fail-closed); raw bot tokens in request bodies are rejected outside `local` (use stored `credentialId`). One superuser owns all data — no per-user row scoping yet.
 - **Scheduler runs in-process, single replica** (APScheduler). Do **not** scale the backend horizontally without external job coordination (ADR-004).
 - **Sync progress is pushed over SSE**, not polled: `POST /api/v1/jobs/sync` → `GET /api/v1/jobs/sync/{id}/events`. One-shot `GET .../{id}` is the reconnect fallback.
+- **Compression is Traefik's job, not the app's.** Deployed responses are gzipped by a `compress` middleware declared on the `backend`/`frontend` service labels in `compose.yml` (see `deployment.md`). Do **not** add Starlette's `GZipMiddleware` to `app/main.py`: it would double-encode behind the proxy, and unlike Traefik it buffers, which *would* stall the SSE routes. `uv run fastapi dev` serves uncompressed — that is expected, and it is why payload sizes look different locally than in the browser against staging.
 
 ## Frontend architecture
 

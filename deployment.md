@@ -120,6 +120,82 @@ uv run python scripts/backfill_user_id.py             # apply
 
 **Single-owner model:** Mode A treats the bootstrap superuser as the sole data owner. Scheduler jobs (auto-sync, retention, summaries) and manual sync without `channelIds` only touch channels/posts linked to that user. Legacy `/api/*` routes return **410 Gone** in production; use `/api/v1/*` only.
 
+## Response compression
+
+Traefik gzips responses for both the API and the dashboard. Before this, nothing on
+the deployment was compressed — the channel list went over the wire as **3.39 MB** of
+raw JSON, and `summarizer-*.js` as **1,039 KB** of raw JavaScript. On a slow link
+(measured ~0.3–0.75 MB/s from Iran to the Hetzner box) that transfer was roughly 5 of
+the ~7 seconds the Channels tab took to load, which is more than the entire backend
+cost of the same request.
+
+**Effect on the largest payload:** 3.39 MB → **0.53 MB** (6.4×), for ~76 ms of encoding CPU.
+
+### Where it is configured, and why there
+
+In `compose.yml`, as labels on the `backend` and `frontend` services — **not** in
+`compose.traefik.yml`.
+
+The shared `https-redirect` middleware lives in the Traefik stack, so that would have
+been the consistent-looking home. It is the wrong one here: the Traefik stack is
+deployed by hand from `/root/code/traefik-public/`, while `deploy-staging.yml` only
+ever touches the application stack. A middleware defined there would not ship with the
+app, and enabling it would mean a manual Traefik restart — an ingress outage — on every
+environment. Traefik's Docker provider reads labels from every container on the
+`traefik-public` network, so defining it on the app's own services works identically
+and rides along with the normal deploy.
+
+The backend and frontend get **two separate middleware definitions** with identical
+settings rather than one shared one, because the Docker provider drops the labels of a
+stopped container: a single definition living on the backend would take the frontend's
+router down with it whenever the backend was down.
+
+### What is excluded, and why
+
+Both middlewares set:
+
+```
+excludedcontenttypes=text/event-stream,image/jpeg,image/png,image/webp,image/gif
+minresponsebodybytes=1024
+```
+
+**`text/event-stream`** — the five SSE routes (sync progress, AI streaming). This entry
+is load-bearing: **Traefik 3.6 does not skip SSE on its own.** Remove the entry and it
+gzips the stream, verified directly.
+
+It is worth recording what that would actually cost, because the usual reason given for
+this exclusion turns out not to apply. Compressed SSE does **not** stall: events still
+flush per write, measured arriving at t=0, 1, 2, 3 s with and without compression. The
+real cost is size — an event here is ~14 bytes and gzip framing takes each to ~24, so
+compressing spends CPU on a long-lived connection in order to send ~70% *more* bytes.
+
+**`image/*`** — cached avatars and post thumbnails are already-compressed JPEG. Gzip
+cannot shrink them and may grow them slightly, and they are the highest-frequency
+responses the API serves (one per visible channel on the Channels tab). They already
+carry `ETag` and `Cache-Control`, so the win there is revalidation, not encoding.
+
+`minresponsebodybytes=1024` keeps small JSON replies uncompressed, where framing
+overhead would outweigh any saving.
+
+### Verifying it
+
+```bash
+# Expect: content-encoding: gzip, and vary: accept-encoding
+curl -s -D- -o /dev/null -H 'Accept-Encoding: gzip' \
+  https://api.${DOMAIN}/api/v1/utils/health-check/ | grep -i 'content-encoding\|vary'
+
+# Expect NO content-encoding on an SSE route
+curl -s -D- -o /dev/null --max-time 5 -H 'Accept-Encoding: gzip' \
+  -H "X-API-Key: ${API_KEY}" \
+  https://api.${DOMAIN}/api/v1/jobs/sync/<id>/events | grep -i 'content-encoding'
+```
+
+A missing `content-encoding` on a large JSON response usually means the router lost its
+middleware reference — check `traefik.http.routers.<stack>-backend-https.middlewares`
+resolves to a middleware that is actually defined, and look for a Traefik log line
+naming an unknown middleware. Middleware names are namespaced per provider, so the
+reference in a Docker label resolves against Docker-provided middlewares.
+
 ## Continuous deployment (GitHub Actions)
 
 Workflows deploy via self-hosted runners with labels:
