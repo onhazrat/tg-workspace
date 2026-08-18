@@ -23,6 +23,7 @@ from app.models_tg import (
     PostTranslation,
     PublishLog,
     Summary,
+    SummaryPayload,
     SyncLog,
     SyncLogPayload,
     utc_now,
@@ -58,7 +59,13 @@ from app.services.serialization import (
     sync_log_to_camel,
     translation_to_camel,
 )
-from app.services.summaries import summary_to_camel
+from app.services.summaries import (
+    HEAVY_SUMMARY_FIELDS,
+    PAYLOAD_COLUMNS,
+    apply_summary_payload,
+    refresh_summary_derived_columns,
+    summary_to_camel,
+)
 from app.services.sync_meta import touch_sync
 
 
@@ -139,6 +146,11 @@ def _import_channels(
 
 #: Summary columns with their own field; everything else on an exported summary
 #: is preserved in `extra`, which is why `Summary` is an open model.
+#:
+#: The corpus-sized fields and the two derived ones are excluded here as well:
+#: they are routed to `tg_summary_payloads` and recomputed respectively, so
+#: letting them fall into `extra` would put back exactly what the split took
+#: out.
 _SUMMARY_KNOWN_FIELDS = {
     "text",
     "channels",
@@ -148,6 +160,9 @@ _SUMMARY_KNOWN_FIELDS = {
     "model",
     "postCount",
     "timestamp",
+    *HEAVY_SUMMARY_FIELDS,
+    "chatMessageCount",
+    "promptExcerpt",
 }
 
 
@@ -159,6 +174,11 @@ def _import_summaries(
     Both camelCase and snake_case are accepted for the date and count fields:
     exports exist from before and after the migration, and an import that
     silently zeroed a summary's date range would be worse than rejecting it.
+
+    Exports written before `z8a9b0c1d2e3` carry the corpus-sized fields inline
+    alongside the small flags, exactly as exports written after it do — the
+    split is a storage detail, and the document shape did not change. Either
+    way they are routed to `tg_summary_payloads` here.
     """
     for item in items:
         sid = item.get("id")
@@ -199,6 +219,23 @@ def _import_summaries(
                 extra={k: v for k, v in item.items() if k not in _SUMMARY_KNOWN_FIELDS},
             )
         session.add(summary)
+
+        payload = apply_summary_payload(
+            session,
+            sid,
+            user_id=summary.user_id,
+            updates={
+                column: item[key]
+                for key, column in PAYLOAD_COLUMNS.items()
+                if item.get(key) is not None
+            },
+            removals={
+                column
+                for key, column in PAYLOAD_COLUMNS.items()
+                if key in item and item[key] is None
+            },
+        )
+        refresh_summary_derived_columns(summary, payload)
     return len(items)
 
 
@@ -461,10 +498,24 @@ def _stream_export_body(session: Session) -> Iterator[str]:
         isouter=True,
     )
 
+    # Same shape for summaries: citedPosts/promptText/chatMessages live in
+    # tg_summary_payloads, and a summary with none of them has no row there, so
+    # the join has to be outer or those summaries would vanish from the export.
+    summaries_statement = select(Summary, SummaryPayload).join(
+        SummaryPayload,
+        col(SummaryPayload.summary_id) == col(Summary.id),
+        isouter=True,
+    )
+
     # Large tables: stream row by row.
     for key, model, to_camel, statement in (
         ("posts", Post, post_to_camel, None),
-        ("summaries", Summary, summary_to_camel, None),
+        (
+            "summaries",
+            Summary,
+            lambda row: summary_to_camel(row[0], row[1]),
+            summaries_statement,
+        ),
         ("bot_credentials", BotCredential, bot_to_camel, None),
         ("chat_destinations", ChatDestination, chat_dest_to_camel, None),
         ("publish_logs", PublishLog, publish_log_to_camel, None),

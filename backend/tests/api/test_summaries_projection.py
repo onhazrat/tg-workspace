@@ -11,6 +11,7 @@ the history and palette surfaces render them.
 from __future__ import annotations
 
 from fastapi.testclient import TestClient
+from sqlmodel import Session
 
 from app.core.config import settings
 from app.services.summaries import (
@@ -262,3 +263,147 @@ def test_blank_search_returns_everything(client: TestClient) -> None:
     headers = _auth(client)
     _seed(client, headers, count=3)
     assert len(client.get(f"{PREFIX}/summaries?search=", headers=headers).json()) == 3
+
+
+# --- the storage split (z8a9b0c1d2e3) ----------------------------------------
+#
+# The three heavy fields moved to `tg_summary_payloads`. None of that is visible
+# on the wire, which is the point — these pin the merge semantics that used to
+# come free from their living in one JSON column.
+
+
+def test_a_put_without_the_heavy_fields_leaves_them_alone(client: TestClient) -> None:
+    """The list-item round trip.
+
+    Surfaces hand back a *list* item — which by construction has no
+    `promptText` or `citedPosts` — to toggle a flag. Absent has to keep
+    meaning "unchanged", or starring a summary would erase its corpus.
+    """
+    headers = _auth(client)
+    _seed(client, headers, count=1)
+
+    client.put(
+        f"{PREFIX}/summaries/sum-0",
+        json={"isStarred": False, "note": "edited"},
+        headers=headers,
+    )
+
+    body = client.get(f"{PREFIX}/summaries/sum-0", headers=headers).json()
+    assert body["note"] == "edited"
+    assert body["isStarred"] is False
+    assert len(body["chatMessages"]) == 2
+    assert body["citedPosts"]["ch#1"]["id"] == 1
+    assert body["promptText"].startswith("word ")
+
+
+def test_an_explicit_null_removes_one_heavy_field(client: TestClient) -> None:
+    headers = _auth(client)
+    _seed(client, headers, count=1)
+
+    client.put(f"{PREFIX}/summaries/sum-0", json={"citedPosts": None}, headers=headers)
+
+    body = client.get(f"{PREFIX}/summaries/sum-0", headers=headers).json()
+    assert "citedPosts" not in body
+    assert "promptText" in body
+
+
+def test_the_derived_fields_follow_the_heavy_ones(client: TestClient) -> None:
+    """`chatMessageCount` and `promptExcerpt` are columns now, so a write that
+    changes their source has to refresh them."""
+    headers = _auth(client)
+    _seed(client, headers, count=1)
+
+    client.put(
+        f"{PREFIX}/summaries/sum-0",
+        json={"chatMessages": [{"role": "user", "text": "one"}], "promptText": None},
+        headers=headers,
+    )
+
+    row = next(
+        r
+        for r in client.get(f"{PREFIX}/summaries", headers=headers).json()
+        if r["id"] == "sum-0"
+    )
+    assert row["chatMessageCount"] == 1
+    assert "promptExcerpt" not in row
+
+
+def test_a_client_cannot_write_the_derived_fields(client: TestClient) -> None:
+    """They are computed, and a stored copy could only go stale — clients do
+    PUT list items back, which is how 18 rows on staging came to hold them.
+
+    Asserted against **storage**, not the response: the columns are merged over
+    `extra` when the projection is built, so a stored copy is invisible right
+    up until the moment the column is null and the stale value shows through —
+    which is what `no-prompt` below covers.
+    """
+    from app.core.db import engine
+    from app.models_tg import Summary
+
+    headers = _auth(client)
+    client.put(
+        f"{PREFIX}/summaries/derived",
+        json={
+            "text": "t",
+            "channels": [],
+            "timestamp": 1,
+            "promptText": "the real prompt",
+            "chatMessageCount": 99,
+            "promptExcerpt": "a lie",
+        },
+        headers=headers,
+    )
+    client.put(
+        f"{PREFIX}/summaries/no-prompt",
+        json={
+            "text": "t",
+            "channels": [],
+            "timestamp": 2,
+            "promptExcerpt": "an excerpt of nothing",
+        },
+        headers=headers,
+    )
+
+    with Session(engine) as session:
+        for summary_id in ("derived", "no-prompt"):
+            row = session.get(Summary, summary_id)
+            assert row is not None
+            stored = set(row.extra or {})
+            assert "chatMessageCount" not in stored
+            assert "promptExcerpt" not in stored
+
+    by_id = {
+        r["id"]: r for r in client.get(f"{PREFIX}/summaries", headers=headers).json()
+    }
+    assert by_id["derived"]["chatMessageCount"] == 0
+    assert by_id["derived"]["promptExcerpt"] == "the real prompt"
+    # No prompt text, so no preview of it — not the one the client made up.
+    assert "promptExcerpt" not in by_id["no-prompt"]
+
+
+def test_deleting_a_summary_removes_its_payload(client: TestClient) -> None:
+    from app.core.db import engine
+    from app.models_tg import SummaryPayload
+
+    headers = _auth(client)
+    _seed(client, headers, count=1)
+    client.delete(f"{PREFIX}/summaries/sum-0", headers=headers)
+
+    with Session(engine) as session:
+        assert session.get(SummaryPayload, "sum-0") is None
+
+
+def test_clearing_the_summaries_table_clears_payloads(client: TestClient) -> None:
+    """`clear_table` has no cascade to lean on — the payload table deliberately
+    has no foreign key."""
+    from app.core.db import engine
+    from app.models_tg import SummaryPayload
+    from app.services.stats import clear_table
+
+    headers = _auth(client)
+    _seed(client, headers, count=2)
+
+    with Session(engine) as session:
+        clear_table(session, "summaries")
+        assert session.get(SummaryPayload, "sum-0") is None
+        assert session.get(SummaryPayload, "sum-1") is None

@@ -147,7 +147,54 @@ class Summary(SQLModel, table=True):
     model: str | None = None
     post_count: int | None = None
     timestamp: int = Field(default=0, sa_column=_ms_ts())
+    #: Open bag of small UI flags (`isStarred`, `autoPublish`, `note`, …).
+    #: The corpus-sized fields are **not** here — see `SummaryPayload`.
     extra: dict[str, Any] = Field(default_factory=dict, sa_column=Column(JSON))
+    # Derived from SummaryPayload and maintained on write, so the list
+    # projection never has to open the payload table. The list surfaces only
+    # ever showed a count and a truncated preview.
+    chat_message_count: int = 0
+    prompt_excerpt: str | None = None
+    updated_at: datetime = Field(default_factory=utc_now)
+
+
+class SummaryPayload(SQLModel, table=True):
+    """The corpus-sized half of a `Summary`, split off so listing skips it.
+
+    `citedPosts` (whole Post objects), `promptText` (a serialized post corpus)
+    and `chatMessages` (an entire conversation) used to live in
+    `Summary.extra`. TOAST is all-or-nothing per value, so reading *any* key of
+    `extra` detoasted the lot: one 49-row page carried 26 MB compressed
+    (48 MB of it `promptText`) to return 1.15 MB, and the endpoint took 2.69 s
+    on every tab load. Pushing the projection into SQL does not help — a
+    measured `extra::jsonb - 'citedPosts' - …` still costs 2.86 s, because the
+    detoast and parse happen either way.
+
+    As its own table the heavy half is simply not in the list query's FROM
+    clause, which is the point: this is **fail-closed** where a deferred column
+    would be fail-open. `select(Summary)` cannot regress into reading it.
+
+    Unlike `SyncLogPayload`, which exists so disposable telemetry can be
+    truncated, this is user content — the migration copies it across and the
+    downgrade merges it back. It follows that precedent on the other points
+    though: no foreign key, so the table stays droppable and truncatable, and
+    `app.services.summaries` cleans up explicitly rather than via a cascade.
+    """
+
+    __tablename__ = "tg_summary_payloads"
+
+    summary_id: str = Field(primary_key=True)
+    user_id: uuid.UUID | None = Field(default=None, index=True)
+    cited_posts: dict[str, Any] | list[Any] | None = Field(
+        default=None, sa_column=Column(JSON)
+    )
+    # Text, not JSON: it is ~90% of the weight and the only heavy field the
+    # search clause reads, so keeping it in its own column means an ILIKE
+    # detoasts the prompt bodies alone and leaves citedPosts untouched.
+    prompt_text: str | None = Field(default=None, sa_column=Column(Text))
+    chat_messages: dict[str, Any] | list[Any] | None = Field(
+        default=None, sa_column=Column(JSON)
+    )
     updated_at: datetime = Field(default_factory=utc_now)
 
 

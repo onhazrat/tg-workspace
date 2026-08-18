@@ -7247,7 +7247,7 @@
         "type": "object",
         "required": ["id", "text"],
         "title": "SummaryListItemResponse",
-        "description": "List projection, as `summary_to_camel_light` builds it.\n\nDrops the three corpus-sized fields and adds ``chatMessageCount``, which the\nservice always sets. ``promptExcerpt`` is *not* declared: it appears only\nwhen the summary actually has prompt text, and declaring it would emit\n``\"promptExcerpt\": null`` for every summary that has none. It still reaches\nthe client through ``extra=\"allow\"``."
+        "description": "List projection, as `summary_to_camel_light` builds it.\n\nOmits the three corpus-sized fields \u2014 the list query never opens the table\nthey live in \u2014 and adds ``chatMessageCount``, which the service always\nsets. ``promptExcerpt`` is *not* declared: it appears only when the summary\nactually has prompt text, and declaring it would emit\n``\"promptExcerpt\": null`` for every summary that has none. It still reaches\nthe client through ``extra=\"allow\"``."
       },
       "SummaryRequest": {
         "properties": {

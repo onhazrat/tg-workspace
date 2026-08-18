@@ -258,14 +258,61 @@ Three more changes, all against transfer rather than compute.
   Channel rows are quiet minute to minute — 0 changed in the last minute on staging,
   1 in five — so `refetchOnWindowFocus` mostly costs nothing now.
 
+### Round six: `/data/summaries`, the last one on the critical path
+
+Not the Channels tab itself — this one loaded on *every* tab, because `ChatContext` and
+`AIContext` are always mounted and both call `useSummariesHistory`.
+
+`select(Summary)` pulled **26 MB of the `extra` column per page to return 1.15 MB**, and
+took **2.69 s for 49 rows**. TOAST is all-or-nothing per value: `citedPosts`,
+`promptText` and `chatMessages` lived in `extra` alongside the small flags, so reading
+`isStarred` detoasted the whole corpus. Broken down, uncompressed:
+
+| key | total, 50 rows | rows carrying it |
+|---|---|---|
+| `promptText` | 48 MB | 50 |
+| `citedPosts` | 4.8 MB | 43 |
+| `chatMessages` | 0 | 0 |
+| everything else | **13 kB** | 50 |
+
+**Pushing the projection into SQL was measured and rejected.** It is the obvious
+migration-free fix, and it does not work:
+
+| variant | server time | buffers |
+|---|---|---|
+| `extra::jsonb - 'citedPosts' - 'promptText' - 'chatMessages'` | 2,862 ms | 11,028 |
+| the same columns without `extra` at all | **0.07 ms** | **7** |
+
+The detoast and the JSON parse happen either way; only the transfer to Python is saved.
+The fields have to leave the column.
+
+They left for `tg_summary_payloads`, following
+`y7z8a9b0c1d2_split_sync_log_payloads.py`. A **table** rather than a sibling column, so
+the fast path is fail-closed: `select(Summary)` cannot read what is not in its `FROM`
+clause, where a forgotten `defer()` would silently restore the 2.69 s. `chatMessageCount`
+and `promptExcerpt` became real columns — they are all the list surfaces ever showed of
+the heavy fields — so the list projection needs nothing from the new table at all.
+
+Unlike the sync-log precedent, whose bodies were disposable telemetry deliberately left
+behind, this is user content: the migration copies it across and the downgrade merges it
+back.
+
+Two things fell out that were not the point:
+
+- **`clear_table` was orphaning payload rows.** Neither `summaries` nor `sync_logs`
+  cleared its companion table, and neither has a foreign key to cascade from. Fixed for
+  both.
+- **18 staging rows held the server's own derived values in `extra`.** Clients PUT list
+  items back to toggle a flag, and `chatMessageCount`/`promptExcerpt` rode along. They
+  are recomputed on every write now and rejected from request bodies; a stored copy could
+  only ever go stale.
+
+The wire format is unchanged — regenerating the client produced a docstring diff and
+nothing else.
+
 ### What is left
 
-1. **`/data/summaries` — 2.69 s for 49 rows.** `select(Summary)` pulls **26 MB** of the
-   `extra` column per page to return 1.15 MB. It loads on *every* tab, because
-   `ChatContext` and `AIContext` are always mounted. Split the heavy fields into a
-   companion table the way `y7z8a9b0c1d2_split_sync_log_payloads.py` already did for
-   sync logs.
-2. **Denormalise the post counts** onto `tg_channels` to remove the ~1.1 s exact
+1. **Denormalise the post counts** onto `tg_channels` to remove the ~1.1 s exact
    `count(*)`. That cost is off the critical path now, so this is no longer urgent.
    `oldest_stored_post_timestamp` and `anchor_post_id` are precedent for derived
    columns there.

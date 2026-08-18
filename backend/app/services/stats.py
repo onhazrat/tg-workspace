@@ -22,7 +22,9 @@ from app.models_tg import (
     PostTranslation,
     PublishLog,
     Summary,
+    SummaryPayload,
     SyncLog,
+    SyncLogPayload,
 )
 from app.services.operator import get_operator_user_id
 
@@ -153,6 +155,16 @@ def clear_table(
         # posts were seen, so a later sync would skip re-fetching them.
         for dependent in (PostEmbedding, PostTranslation, PostSyncState):
             _scoped_delete(session, dependent, operator_id)
+
+    # Companion payload tables have no FK to cascade from — they stay
+    # truncatable on their own — so clearing the parent has to clear them
+    # explicitly or the heavy half is orphaned with nothing pointing at it.
+    for parent, payload in (
+        ("summaries", SummaryPayload),
+        ("sync_logs", SyncLogPayload),
+    ):
+        if name == parent:
+            _scoped_delete(session, payload, operator_id)
 
     session.commit()
     return deleted

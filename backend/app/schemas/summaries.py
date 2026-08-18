@@ -9,11 +9,16 @@ the server.
 
 **Why these models declare only part of the payload.** A summary is a fixed
 base plus an open-ended ``extra`` JSON column holding UI flags that come and go
-(``isStarred``, ``autoPublish``, ``note``, …) alongside the corpus-sized fields
-(``citedPosts``, ``promptText``, ``chatMessages``). Enumerating ``extra`` would
+(``isStarred``, ``autoPublish``, ``note``, …). Enumerating ``extra`` would
 either be wrong tomorrow or silently drop keys today, so these models declare
 the columns that are always present and let the rest through via
 ``extra="allow"``.
+
+The corpus-sized fields (``citedPosts``, ``promptText``, ``chatMessages``) are
+not in ``extra`` — they are a second table, ``tg_summary_payloads``. That is a
+storage split only: ``SummaryResponse`` reassembles them, so the detail payload
+looks exactly as it always did. See the ``SummaryPayload`` model docstring for
+the measurements.
 
 That is a deliberate trade: the wire format stays **byte-identical** — a key
 that is absent today stays absent rather than becoming an explicit ``null`` —
@@ -53,9 +58,10 @@ class SummaryResponse(BaseModel):
 class SummaryListItemResponse(SummaryResponse):
     """List projection, as `summary_to_camel_light` builds it.
 
-    Drops the three corpus-sized fields and adds ``chatMessageCount``, which the
-    service always sets. ``promptExcerpt`` is *not* declared: it appears only
-    when the summary actually has prompt text, and declaring it would emit
+    Omits the three corpus-sized fields — the list query never opens the table
+    they live in — and adds ``chatMessageCount``, which the service always
+    sets. ``promptExcerpt`` is *not* declared: it appears only when the summary
+    actually has prompt text, and declaring it would emit
     ``"promptExcerpt": null`` for every summary that has none. It still reaches
     the client through ``extra="allow"``.
     """

@@ -27,6 +27,7 @@ from app.services.network_settings import (
 from app.services.operator import get_operator_user_id, select_operator_channels
 from app.services.publish import publish_summary_text
 from app.services.scraper_jobs import create_job, has_active_sync_job
+from app.services.summaries import apply_summary_payload
 from app.services.sync_meta import touch_sync
 from app.services.sync_orchestrator import run_sync_job
 
@@ -193,7 +194,6 @@ async def _regenerate_one(session: Session, summary: Summary) -> str | None:
         "semanticSearchQuery": extra.get("semanticSearchQuery"),
         "semanticSearchRespectsTimeRange": extra.get("semanticSearchRespectsTimeRange"),
         "semanticSearchRespectsChannels": extra.get("semanticSearchRespectsChannels"),
-        "citedPosts": cited,
         "postCount": len(posts),
     }
 
@@ -211,6 +211,15 @@ async def _regenerate_one(session: Session, summary: Summary) -> str | None:
         extra=new_extra,
     )
     session.add(new_summary)
+    # citedPosts is corpus-sized and lives in tg_summary_payloads, not `extra`
+    # — see SummaryPayload. Routed through the aggregate so the derived
+    # columns on tg_summaries stay in step with it.
+    apply_summary_payload(
+        session,
+        new_id,
+        user_id=new_summary.user_id,
+        updates={"cited_posts": cited},
+    )
 
     summary.extra = {**extra, "autoRegenerate": False}
     summary.updated_at = utc_now()

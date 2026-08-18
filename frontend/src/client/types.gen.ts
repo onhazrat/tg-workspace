@@ -3278,9 +3278,10 @@ export type StatusResponse = {
  * SummaryListItemResponse
  * List projection, as `summary_to_camel_light` builds it.
  *
- * Drops the three corpus-sized fields and adds ``chatMessageCount``, which the
- * service always sets. ``promptExcerpt`` is *not* declared: it appears only
- * when the summary actually has prompt text, and declaring it would emit
+ * Omits the three corpus-sized fields — the list query never opens the table
+ * they live in — and adds ``chatMessageCount``, which the service always
+ * sets. ``promptExcerpt`` is *not* declared: it appears only when the summary
+ * actually has prompt text, and declaring it would emit
  * ``"promptExcerpt": null`` for every summary that has none. It still reaches
  * the client through ``extra="allow"``.
  */
