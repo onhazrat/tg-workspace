@@ -187,6 +187,11 @@ class Settings(BaseSettings):
 
     # Cached channel avatar images (relative to repo root unless absolute)
     CHANNEL_PHOTO_DIR: str = "data/channel-photos"
+    # How long an avatar no channel references survives before the retention
+    # sweep takes it. Must stay above the Discover report window: a probed
+    # candidate is not a channel row yet, so a shorter floor strips avatars off
+    # reports still on screen. 0 disables the sweep.
+    CHANNEL_PHOTO_ORPHAN_MAX_AGE_DAYS: int = 30
     # Cached post photo/video thumbnails (relative to repo root unless absolute)
     POST_THUMB_DIR: str = "data/post-thumbs"
     POST_THUMB_CACHE_MAX_SIZE_MB_DEFAULT: int = 2048

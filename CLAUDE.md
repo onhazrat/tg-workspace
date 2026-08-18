@@ -88,7 +88,16 @@ fires, the answer is almost never to delete the guard.
 | `backend/tests/services/test_service_kinds.py` | every service module declares one of the five kinds | test |
 | `backend/tests/api/test_route_inventory.py` | declared routes are actually mounted | test |
 | `backend/tests/api/test_*_projection.py` | response key sets — no invented `null`s | test |
+| `backend/tests/services/test_photo_cache_lookup_cost.py` | image-cache lookups don't scan the directory, in **both** twin modules | test |
 | pre-commit `generate-frontend-sdk` | the committed client matches the backend | hook |
+
+**A fix applied to one of two twin modules is half a fix.** `channel_photos.py` and
+`post_thumbnails.py` are the same module twice over (same `_META_SUFFIX`, `_meta_path`,
+`_find_image_path`, `has_cached_*`, bounded extension set). The thumb cache was fixed to
+probe extensions instead of globbing, with the reasoning in its docstring; the avatar
+cache kept the glob for two more months and turned a channel list into 30 seconds. Its
+guard is parametrised over *both* modules for that reason — when you fix one of a pair,
+guard the pair.
 
 `client-split.conform.ts` is the pattern worth copying. It asserts not only that
 the *generated* models stayed closed, but that the *hand-written* ones are still

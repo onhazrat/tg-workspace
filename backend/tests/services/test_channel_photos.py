@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import asyncio
+import os
+import time
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -94,3 +96,65 @@ def test_delete_cached_photo_removes_files() -> None:
             assert not channel_photos.has_cached_photo("remove-me")
 
     asyncio.run(_run())
+
+
+def test_delete_cached_photo_removes_the_meta_sidecar(tmp_path) -> None:
+    """The glob this replaced matched `.meta.json` too; the explicit list must."""
+    directory = channel_photos._photo_dir()
+    (directory / "orphan-meta.jpg").write_bytes(b"x")
+    (directory / "orphan-meta.meta.json").write_text("{}", encoding="utf-8")
+
+    channel_photos.delete_cached_photo("orphan-meta")
+
+    assert list(directory.iterdir()) == []
+
+
+def _touch(directory, stem: str, *, age_days: float) -> None:
+    for name in (f"{stem}.jpg", f"{stem}.meta.json"):
+        path = directory / name
+        path.write_bytes(b"x")
+        old = time.time() - age_days * 24 * 60 * 60
+        os.utime(path, (old, old))
+
+
+def test_prune_keeps_referenced_photos_however_old() -> None:
+    directory = channel_photos._photo_dir()
+    _touch(directory, "live", age_days=999)
+
+    removed = channel_photos.prune_orphaned_photos({"live"}, max_age_days=30)
+
+    assert removed == 0
+    assert channel_photos.has_cached_photo("live")
+
+
+def test_prune_removes_old_unreferenced_photos_with_their_meta() -> None:
+    directory = channel_photos._photo_dir()
+    _touch(directory, "gone", age_days=90)
+
+    removed = channel_photos.prune_orphaned_photos(set(), max_age_days=30)
+
+    assert removed == 2
+    assert list(directory.iterdir()) == []
+
+
+def test_prune_spares_recently_probed_candidates() -> None:
+    """Discover caches an avatar before the channel row exists.
+
+    Without the age floor the sweep would strip avatars off a report the
+    operator is still looking at.
+    """
+    directory = channel_photos._photo_dir()
+    _touch(directory, "just-probed", age_days=1)
+
+    removed = channel_photos.prune_orphaned_photos(set(), max_age_days=30)
+
+    assert removed == 0
+    assert channel_photos.has_cached_photo("just-probed")
+
+
+def test_prune_is_disabled_by_a_zero_window() -> None:
+    directory = channel_photos._photo_dir()
+    _touch(directory, "ancient", age_days=9999)
+
+    assert channel_photos.prune_orphaned_photos(set(), max_age_days=0) == 0
+    assert channel_photos.has_cached_photo("ancient")

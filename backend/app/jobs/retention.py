@@ -8,6 +8,9 @@ from typing import Any, cast
 from sqlalchemy import delete as sa_delete
 from sqlmodel import Session, col, func, or_, select
 
+# Aliased: `run_retention_cleanup` binds a local `settings` to the operator's
+# runtime retention values, which would shadow the process settings object.
+from app.core.config import settings as app_settings
 from app.jobs.settings import load_media_settings, load_retention_settings
 from app.models_tg import (
     Channel,
@@ -22,6 +25,7 @@ from app.models_tg import (
     SyncLog,
     utc_now,
 )
+from app.services.channel_photos import photo_stem, prune_orphaned_photos
 from app.services.logs import expire_sync_payloads_stmt
 from app.services.operator import get_operator_user_id
 from app.services.post_sync_state import (
@@ -241,13 +245,26 @@ def run_retention_cleanup(session: Session) -> dict[str, int]:
     if max_mb > 0:
         enforce_thumb_cache_size_limit(max_mb)
 
+    # Avatars, unlike thumbs, are bounded by channel count once the unreferenced
+    # ones go, so this sweeps orphans rather than enforcing a size cap: a cap
+    # would evict live avatars while leaving the actual garbage in place.
+    #
+    # Ids only — the sweep needs 2k strings, not 2k hydrated Channel rows.
+    channel_ids = cast(list[str], session.exec(select(Channel.id)).all())
+    deleted_photos = prune_orphaned_photos(
+        {photo_stem(cid) for cid in channel_ids},
+        max_age_days=app_settings.CHANNEL_PHOTO_ORPHAN_MAX_AGE_DAYS,
+    )
+
     logger.info(
         "Retention cleanup: deleted %s posts, %s log rows, %s sync payloads, "
-        "%s reports (postDays=%s, logDays=%s, payloadDays=%s)",
+        "%s reports, %s orphaned avatars (postDays=%s, logDays=%s, "
+        "payloadDays=%s)",
         deleted_posts,
         deleted_logs,
         deleted_payloads,
         deleted_reports,
+        deleted_photos,
         post_days,
         log_days,
         payload_days,
@@ -257,4 +274,5 @@ def run_retention_cleanup(session: Session) -> dict[str, int]:
         "deletedLogs": deleted_logs,
         "deletedPayloads": deleted_payloads,
         "deletedReports": deleted_reports,
+        "deletedPhotos": deleted_photos,
     }

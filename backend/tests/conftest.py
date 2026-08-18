@@ -66,6 +66,21 @@ def _apply_alembic_migrations() -> Generator[None]:
 
 
 @pytest.fixture(scope="session", autouse=True)
+def _isolate_image_caches(tmp_path_factory: pytest.TempPathFactory) -> Generator[None]:
+    """Point the on-disk image caches at a scratch dir for the whole suite.
+
+    `run_retention_cleanup` deletes from both of them — thumbs over the size cap,
+    avatars no channel references. Tests that exercise it would otherwise sweep
+    the developer's real `data/` caches, which is a slow, silent, and confusing
+    way to lose a warm cache.
+    """
+    root = tmp_path_factory.mktemp("image-caches")
+    config_module.settings.CHANNEL_PHOTO_DIR = str(root / "channel-photos")
+    config_module.settings.POST_THUMB_DIR = str(root / "post-thumbs")
+    yield
+
+
+@pytest.fixture(scope="session", autouse=True)
 def db() -> Generator[Session | None]:
     try:
         with Session(engine) as session:
