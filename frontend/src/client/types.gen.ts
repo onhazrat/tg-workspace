@@ -5314,6 +5314,25 @@ export type DataListChannelsResponses = {
 
 export type DataListChannelsResponse = DataListChannelsResponses[keyof DataListChannelsResponses];
 
+export type DataListChannelStatsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/data/channels/stats';
+};
+
+export type DataListChannelStatsResponses = {
+    /**
+     * Response Data-List Channel Stats
+     * Successful Response
+     */
+    200: {
+        [key: string]: ChannelStatsResponse;
+    };
+};
+
+export type DataListChannelStatsResponse = DataListChannelStatsResponses[keyof DataListChannelStatsResponses];
+
 export type DataDeleteChannelData = {
     body?: never;
     path: {

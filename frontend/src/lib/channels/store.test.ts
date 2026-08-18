@@ -7,8 +7,8 @@ import {
   type ChannelsApi,
   deleteChannel,
   getChannelStats,
+  listChannelStats,
   listChannels,
-  listChannelsWithStats,
   upsertChannel,
 } from "./store"
 
@@ -35,6 +35,7 @@ const stats = (posts: number): ChannelStats =>
   ({ totalPosts: posts }) as ChannelStats
 
 let listed: Array<Record<string, unknown> | undefined> = []
+let statsListed = 0
 let upserted: Array<[string, unknown]> = []
 let deleted: string[] = []
 let statsFail = false
@@ -46,8 +47,8 @@ let statsFail = false
  * process. See `ChannelsApi` in `store.ts`.
  */
 const fakeApi = {
-  listChannels: async (params?: { includeStats?: boolean }) => {
-    listed.push(params)
+  listChannels: async () => {
+    listed.push(undefined)
     return [{ ...channel("alpha"), stats: stats(3) }, { ...channel("beta") }]
   },
   upsertChannel: async (id: string, body: Partial<Channel>) => {
@@ -62,16 +63,17 @@ const fakeApi = {
     if (statsFail) throw new Error(`no stats for ${id}`)
     return stats(7)
   },
+  listChannelStats: async () => {
+    statsListed += 1
+    return { alpha: stats(3) }
+  },
   bulkUpdateChannelTags: async (_body: {
     updates: { channelId: string; tags: Channel["tags"] }[]
   }) => ({ updated: 1, channels: [channel("alpha")] }),
 } as unknown as ChannelsApi
 
 function seedFresh() {
-  queryClient.setQueryData(queryKeys.channels, {
-    channels: [],
-    channelStats: {},
-  })
+  queryClient.setQueryData(queryKeys.channels, [])
 }
 
 function isStale(): boolean {
@@ -85,6 +87,7 @@ function isStale(): boolean {
 
 beforeEach(() => {
   listed = []
+  statsListed = 0
   upserted = []
   deleted = []
   statsFail = false
@@ -95,36 +98,36 @@ afterEach(() => {
   queryClient.clear()
 })
 
-describe("listChannelsWithStats", () => {
-  it("asks for stats in the same request", async () => {
-    await listChannelsWithStats(fakeApi)
+describe("listChannels / listChannelStats", () => {
+  it("does not ask for stats on the list request", async () => {
+    await listChannels(fakeApi)
 
-    // Without `includeStats` the Channels tab needs one stats request per
-    // channel — ~1,070 of them.
-    expect(listed).toEqual([{ includeStats: true }])
+    // `includeStats=true` cost 2.36s of a 3.13s response for 46KB of a 536KB
+    // payload, and blocked the grid's first paint on it. Stats are their own
+    // request now.
+    expect(listed).toEqual([undefined])
   })
 
-  it("splits stats out of the rows and keys them by channel name", async () => {
-    const { channels, stats: byName } = await listChannelsWithStats(fakeApi)
+  it("never lets a stats block ride along on a Channel", async () => {
+    // An older server still emits one; it must not reach the Channel type.
+    const channels = await listChannels(fakeApi)
 
     expect(channels.map((c) => c.name)).toEqual(["alpha", "beta"])
-    expect(byName).toEqual({ alpha: stats(3) })
-    // The `stats` key must not survive on the channel itself.
     expect("stats" in channels[0]).toBe(false)
   })
 
-  it("goes to the server every time — there is no cache fall-through", async () => {
-    await listChannelsWithStats(fakeApi)
-    await listChannelsWithStats(fakeApi)
-
-    expect(listed).toHaveLength(2)
+  it("fetches stats as one batch keyed by channel name", async () => {
+    // Still one request for all of them — the N+1 `includeStats` existed to
+    // avoid is still avoided, just on its own call.
+    expect(await listChannelStats(fakeApi)).toEqual({ alpha: stats(3) })
+    expect(statsListed).toBe(1)
   })
 
-  it("listChannels drops the stats half", async () => {
-    expect((await listChannels(fakeApi)).map((c) => c.name)).toEqual([
-      "alpha",
-      "beta",
-    ])
+  it("goes to the server every time — there is no cache fall-through", async () => {
+    await listChannels(fakeApi)
+    await listChannels(fakeApi)
+
+    expect(listed).toHaveLength(2)
   })
 })
 

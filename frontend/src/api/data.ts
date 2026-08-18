@@ -304,12 +304,20 @@ export const dataApi = {
       "/api/v1/data/sync-meta",
     ),
 
-  listChannels: (params?: { includeStats?: boolean }) => {
-    const qs = params?.includeStats ? "?includeStats=true" : ""
-    return request<(Channel & { stats?: ChannelStats })[]>(
-      `/api/v1/data/channels${qs}`,
-    )
-  },
+  /**
+   * The channel list, without stats.
+   *
+   * The `includeStats` parameter this used to take is gone from the client on
+   * purpose. The server still accepts it, but nothing here should pass it: the
+   * aggregates behind it cost 2.36s of a 3.13s response for 46KB of a 536KB
+   * payload and blocked the Channels grid's first paint. `listChannelStats`
+   * fetches them alongside instead.
+   *
+   * The response is still typed as possibly carrying `stats` because an older
+   * server does emit it; `lib/channels/store.ts` strips it.
+   */
+  listChannels: () =>
+    request<(Channel & { stats?: ChannelStats })[]>("/api/v1/data/channels"),
 
   upsertChannel: (id: string, channel: Partial<Channel>) =>
     request<Channel>(`/api/v1/data/channels/${id}`, {
@@ -324,6 +332,17 @@ export const dataApi = {
 
   getChannelStats: (id: string) =>
     request<ChannelStats>(`/api/v1/data/channels/${id}/stats`),
+
+  /**
+   * Every channel's stats in one call, keyed by channel name.
+   *
+   * Split off `listChannels({ includeStats: true })`: the aggregates behind it
+   * cost 2.36s of a 3.13s response for 46KB of a 536KB payload, and only two of
+   * the Channels grid's eleven sort options read them. As its own request the
+   * grid paints from the base list and these fill in after.
+   */
+  listChannelStats: () =>
+    request<Record<string, ChannelStats>>("/api/v1/data/channels/stats"),
 
   getPosts: (params?: {
     channelNames?: string[]

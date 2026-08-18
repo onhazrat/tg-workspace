@@ -3,6 +3,11 @@ import { env } from "@/lib/env"
 /** React Query keys for summarizer server state. */
 export const queryKeys = {
   channels: ["channels"] as const,
+  /**
+   * Separate from `channels` so the grid paints without waiting on it — the
+   * aggregates behind these cost 2.36s against the list's 0.78s.
+   */
+  channelStats: ["channelStats"] as const,
   settingGroups: ["settingGroups"] as const,
   bots: ["bots"] as const,
   summaries: ["summaries"] as const,

@@ -80,6 +80,9 @@ from app.services.channels import (
     get_channel_stats as get_channel_stats_impl,
 )
 from app.services.channels import (
+    list_all_channel_stats,
+)
+from app.services.channels import (
     list_channels as list_channels_impl,
 )
 from app.services.channels import (
@@ -131,6 +134,27 @@ def list_channels(
         ChannelResponse.model_validate(row)
         for row in list_channels_impl(session, include_stats=include_stats)
     ]
+
+
+@router.get("/channels/stats")
+def list_channel_stats(
+    session: SessionDep,
+    _current_user: CurrentUser,
+) -> dict[str, ChannelStatsResponse]:
+    """Post aggregates for every channel, keyed by channel name.
+
+    The Channels tab's stats, split off `GET /channels?includeStats=true` so the
+    grid can paint without them: they cost 2.36s of a 3.13s response and 46 KB of
+    a 536 KB payload, and only two of the grid's eleven sort options read them.
+
+    Declared ahead of every `/channels/{channel_id}` route so a literal "stats"
+    can never be captured as a channel id — the same ordering hazard the
+    `/discover/reports/latest` and `/settings/network` routes are placed against.
+    """
+    return {
+        name: ChannelStatsResponse.model_validate(stats)
+        for name, stats in list_all_channel_stats(session).items()
+    }
 
 
 @router.put("/channels/{channel_id}")

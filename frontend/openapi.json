@@ -1481,6 +1481,31 @@
         }
       }
     },
+    "/api/v1/data/channels/stats": {
+      "get": {
+        "tags": ["data"],
+        "summary": "List Channel Stats",
+        "description": "Post aggregates for every channel, keyed by channel name.\n\nThe Channels tab's stats, split off `GET /channels?includeStats=true` so the\ngrid can paint without them: they cost 2.36s of a 3.13s response and 46 KB of\na 536 KB payload, and only two of the grid's eleven sort options read them.\n\nDeclared ahead of every `/channels/{channel_id}` route so a literal \"stats\"\ncan never be captured as a channel id \u2014 the same ordering hazard the\n`/discover/reports/latest` and `/settings/network` routes are placed against.",
+        "operationId": "data-list_channel_stats",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "$ref": "#/components/schemas/ChannelStatsResponse"
+                  },
+                  "type": "object",
+                  "title": "Response Data-List Channel Stats"
+                }
+              }
+            }
+          }
+        },
+        "security": [{ "OAuth2PasswordBearer": [] }]
+      }
+    },
     "/api/v1/data/channels/{channel_id}": {
       "put": {
         "tags": ["data"],

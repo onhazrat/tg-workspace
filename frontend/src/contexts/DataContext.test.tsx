@@ -45,10 +45,10 @@ function seededClient(names: string[]): QueryClient {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   })
-  client.setQueryData(queryKeys.channels, {
-    channels: names.map(channel),
-    channelStats: {},
-  })
+  // Two entries since the split: the grid paints from `channels` alone, and
+  // `channelStats` arrives on its own request.
+  client.setQueryData(queryKeys.channels, names.map(channel))
+  client.setQueryData(queryKeys.channelStats, {})
   client.setQueryData(queryKeys.summaries, [])
   client.setQueryData(queryKeys.bots, { credentials: [], destinations: [] })
   return client

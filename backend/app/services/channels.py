@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 import uuid
-from typing import Any
+from typing import Any, cast
 
 from fastapi import HTTPException
-from sqlalchemy import String, bindparam, cast, true
+from sqlalchemy import String, bindparam, true
+from sqlalchemy import cast as sa_cast
 from sqlalchemy import delete as sa_delete
 from sqlalchemy import select as sa_select
 from sqlalchemy.dialects.postgresql import ARRAY
@@ -164,7 +165,7 @@ def _fetch_recent_timestamps_by_channel(
 
     wanted = sa_select(
         func.unnest(
-            cast(
+            sa_cast(
                 bindparam("names", value=list(dict.fromkeys(channel_names))),
                 ARRAY(String),
             )
@@ -214,6 +215,19 @@ def compute_channel_stats_batch(
             "velocity": _velocity_from_timestamps(timestamps_by_channel.get(name, [])),
         }
     return out
+
+
+def list_all_channel_stats(session: Session) -> dict[str, dict[str, Any]]:
+    """Post aggregates for every channel, keyed by channel name.
+
+    Split out of `GET /channels?includeStats=true`, where the two queries behind
+    it cost 2.36s of a 3.13s response while contributing 46 KB of a 536 KB
+    payload. The grid was blocking its first paint on data that only two of its
+    eleven sort options read — `activity_rate` and `total_posts` — and not the
+    default one. As its own call it fills in after the grid is already up.
+    """
+    names = cast(list[str], session.exec(select(Channel.name)).all())
+    return compute_channel_stats_batch(session, names)
 
 
 def channel_names_for_operator(

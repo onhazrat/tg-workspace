@@ -11,6 +11,7 @@ import {
 import {
   setChannelStatsInCache,
   setChannelsInCache,
+  useChannelStatsQuery,
   useChannelsQuery,
   useInvalidateChannels,
 } from "../hooks/useChannels"
@@ -46,6 +47,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({
   const invalidateChannels = useInvalidateChannels()
 
   const channelsQuery = useChannelsQuery()
+  const channelStatsQuery = useChannelStatsQuery()
 
   const [selectedChannels, setSelectedChannels] = useState<Set<string>>(() => {
     if (typeof window !== "undefined") {
@@ -87,7 +89,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({
 
   useEffect(() => {
     if (!channelsQuery.data) return
-    const names = channelsQuery.data.channels.map((c) => c.name)
+    const names = channelsQuery.data.map((c) => c.name)
     setPrevChannelNames((prevNames) => {
       setSelectedChannels((currentSelected) => {
         const nextSelected = new Set(currentSelected)
@@ -116,8 +118,10 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({
     await invalidateChannels()
   }, [invalidateChannels])
 
-  const channels = channelsQuery.data?.channels ?? emptyArray
-  const channelStats = channelsQuery.data?.channelStats ?? emptyChannelStats
+  const channels = channelsQuery.data ?? emptyArray
+  // Stats land in their own request; the grid renders before they arrive and the
+  // two stats-dependent sorts re-sort when they do.
+  const channelStats = channelStatsQuery.data ?? emptyChannelStats
 
   const isInitialChannelsLoading =
     channelsQuery.isPending && channels.length === 0

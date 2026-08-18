@@ -18,6 +18,7 @@ export type ChannelsApi = Pick<
   | "upsertChannel"
   | "deleteChannel"
   | "getChannelStats"
+  | "listChannelStats"
   | "bulkUpdateChannelTags"
 >
 
@@ -54,36 +55,32 @@ export type ChannelsApi = Pick<
  */
 
 /**
- * Channels plus their per-channel stats, in one round trip.
+ * The channel list the grid paints from — **without** stats.
  *
- * `includeStats` exists to avoid the N+1 this otherwise becomes: the Channels
- * tab needs a stats row per channel, and fetching them individually is ~1,070
- * requests.
+ * Stats used to ride along on `includeStats=true`, one round trip for both. The
+ * round trip was never the problem: the two aggregate queries behind the stats
+ * cost 2.36s of a 3.13s response while contributing 46KB of a 536KB payload, so
+ * the grid blocked its first paint on them. Only `activity_rate` and
+ * `total_posts` — two of eleven sort options, and not the default — read them at
+ * all.
+ *
+ * They are still one batch, just a second one: see `listChannelStats`. The N+1
+ * that `includeStats` existed to avoid is still avoided.
  */
-export async function listChannelsWithStats(
-  client: ChannelsApi = api,
-): Promise<{
-  channels: Channel[]
-  stats: Record<string, ChannelStats>
-}> {
-  const rows = await client.listChannels({ includeStats: true })
-
-  const channels: Channel[] = []
-  const stats: Record<string, ChannelStats> = {}
-  for (const row of rows) {
-    const { stats: channelStats, ...channel } = row
-    channels.push(channel)
-    if (channelStats) stats[channel.name] = channelStats
-  }
-
-  return { channels, stats }
-}
-
 export async function listChannels(
   client: ChannelsApi = api,
 ): Promise<Channel[]> {
-  const { channels } = await listChannelsWithStats(client)
-  return channels
+  const rows = await client.listChannels()
+  // The server no longer emits `stats` here, but a client running against an
+  // older build would; strip it rather than letting it ride along on Channel.
+  return rows.map(({ stats: _stats, ...channel }) => channel)
+}
+
+/** Every channel's stats, keyed by channel name. */
+export async function listChannelStats(
+  client: ChannelsApi = api,
+): Promise<Record<string, ChannelStats>> {
+  return client.listChannelStats()
 }
 
 export async function upsertChannel(
