@@ -233,18 +233,44 @@ either way.
 
 ### What is left after compression
 
-The remaining levers, roughly in order of leverage:
+### Rounds four and five: splitting the list, and conditional requests
 
-1. **Stop fetching what the tab does not need.** `DataContext` fetches for every tab,
-   so the Channels tab also waits on `/data/summaries` — **2.69 s server-side for 49
-   rows**, 1.15 MB. That endpoint is worth its own investigation.
-2. **ETag → 304 on the channel list.** `tg_sync_meta.etag` already tracks per-resource
-   change, and `telegram.py:309` already does conditional requests for images. Today
-   `refetchOnWindowFocus: true` with a 30 s stale time re-downloads the whole list on
-   every window focus.
-3. **Trim the payload.** `bio` alone is 39.6% of it (861 KB), `tags` another 14.5%.
-4. **Denormalise the post counts** onto `tg_channels` to remove the ~1.1 s exact
-   `count(*)` floor. `oldest_stored_post_timestamp` and `anchor_post_id` are precedent
-   for derived columns on that table.
-5. **Server-side pagination and faceting** — the real fix, and the largest change. The
+Three more changes, all against transfer rather than compute.
+
+| | before | after |
+|---|---|---|
+| grid's blocking call, server | 3.13 s | **0.35 s** |
+| grid's blocking call, from the browser | 3.3–4.3 s | **~1.5 s** |
+| its payload, gzipped | 536 KB | **298 KB** |
+
+- **Stats split off** into `GET /data/channels/stats`. They were 2.36 s of a 3.13 s
+  response for 46 KB of payload, and only `activity_rate` and `total_posts` — two of
+  eleven sort options, and not the default — read them.
+- **Bios split off** into `GET /data/channels/bios`, 196 KB of 494 KB. Truncating was
+  measured first and rejected: bios cap at 255 characters (mean 145), so cutting at
+  300 saves nothing. `DataContext` merges them back onto the channel objects so
+  `channel.bio` keeps working — a `channelBios` map read directly would have let a
+  prompt built before it arrived quietly lose its bios.
+- **ETag/304** on all three channel reads, hashing the body rather than reading
+  `tg_sync_meta` (whose `channels` etag does not move when a *setting group* changes,
+  and the payload merges that group's fields in). Verified through Traefik that
+  compression preserves the validator: a conditional request returns 304 with 0 bytes.
+  Channel rows are quiet minute to minute — 0 changed in the last minute on staging,
+  1 in five — so `refetchOnWindowFocus` mostly costs nothing now.
+
+### What is left
+
+1. **`/data/summaries` — 2.69 s for 49 rows.** `select(Summary)` pulls **26 MB** of the
+   `extra` column per page to return 1.15 MB. It loads on *every* tab, because
+   `ChatContext` and `AIContext` are always mounted. Split the heavy fields into a
+   companion table the way `y7z8a9b0c1d2_split_sync_log_payloads.py` already did for
+   sync logs.
+2. **Denormalise the post counts** onto `tg_channels` to remove the ~1.1 s exact
+   `count(*)`. That cost is off the critical path now, so this is no longer urgent.
+   `oldest_stored_post_timestamp` and `anchor_post_id` are precedent for derived
+   columns there.
+3. **Server-side pagination and faceting** — the real fix and the largest change. The
    grid shows 20 of 2,068. Blocked on the tag chips needing global counts.
+
+**Measure from a browser, not from inside the container.** Every number that mattered
+in rounds four and five was invisible to server-side measurement.
