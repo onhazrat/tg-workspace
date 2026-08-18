@@ -3,6 +3,29 @@ services:
   db:
     image: postgres:18
     restart: always
+    # pg_stat_statements is the root-cause half of the perf loop: it turns "this
+    # endpoint is slow" into "this normalised query, N calls, this many blocks
+    # read". `shared_blks_read` is precisely the signal that names a TOAST
+    # detoast — the defect behind z8a9b0c1d2e3, which cost 26 MB a page and took
+    # a hand investigation to find.
+    #
+    # It has to be preloaded, so it lives here rather than in a migration, and
+    # `CREATE EXTENSION` runs from scripts/postgres-init on a fresh volume (an
+    # existing deployment needs it once by hand — see deployment.md).
+    #
+    # track_io_timing is what makes the read/write time columns non-zero.
+    # Negligible on Linux with a TSC clocksource; verify with `pg_test_timing`
+    # if this box is ever virtualised onto a slower one.
+    command:
+      - postgres
+      - -c
+      - shared_preload_libraries=pg_stat_statements
+      - -c
+      - pg_stat_statements.max=5000
+      - -c
+      - pg_stat_statements.track=top
+      - -c
+      - track_io_timing=on
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
       interval: 10s

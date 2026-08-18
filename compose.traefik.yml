@@ -7,6 +7,15 @@ services:
       # Listen on port 443, default for HTTPS
       - 443:443
     restart: always
+    # One line per request with no rotation reached 241 MB on the staging box,
+    # on a disk that was 92% full. Docker's default json-file driver keeps
+    # everything forever; these options are the whole of its retention policy.
+    # 5 x 50 MB is roughly a fortnight at current traffic.
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "5"
     environment:
       # Cloudflare API token for Let's Encrypt DNS-01 challenge (Zone:Read + DNS:Edit)
       - CF_DNS_API_TOKEN=${CF_DNS_API_TOKEN?Variable not set}
@@ -65,6 +74,15 @@ services:
       - --certificatesresolvers.le.acme.dnschallenge.delaybeforecheck=10
       # Enable the access log, with HTTP requests
       - --accesslog
+      # JSON, not the default CLF. The access log is the only place that sees
+      # the *client's* wall time, which is the measurement this deployment kept
+      # getting wrong — rounds three to five of
+      # docs/channels-tab-load-investigation.md were transfer cost, invisible to
+      # every server-side number. JSON adds the fields that matter and are not
+      # in CLF at all: OriginDuration (time inside the app) against Duration
+      # (total), so `backend/scripts/slow_endpoints.py` can print the split
+      # rather than making someone infer it.
+      - --accesslog.format=json
       # Enable the Traefik log, for configurations and errors
       - --log
       # Enable the Dashboard and API

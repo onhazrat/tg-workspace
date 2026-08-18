@@ -16,6 +16,7 @@ from app.core.db import engine, init_db
 from app.core.startup_checks import run_startup_checks
 from app.jobs.scheduler import start_scheduler, stop_scheduler
 from app.middleware.api_key import APIKeyMiddleware
+from app.middleware.timing import TimingMiddleware
 
 logger = logging.getLogger(__name__)
 
@@ -47,6 +48,11 @@ app = FastAPI(
 )
 
 app.add_middleware(APIKeyMiddleware)
+
+# Inside CORS but outside everything else, so the measured span is the whole
+# application: a request rejected by the API key middleware is still timed, and
+# a slow rejection is exactly the kind of thing that would otherwise go unseen.
+app.add_middleware(TimingMiddleware)
 
 # CORS must be outermost so preflight OPTIONS is handled before API key auth.
 if settings.all_cors_origins:

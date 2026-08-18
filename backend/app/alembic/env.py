@@ -10,8 +10,15 @@ config = context.config
 
 # Interpret the config file for Python logging.
 # This line sets up loggers basically.
+#
+# `disable_existing_loggers=False` is load-bearing, not tidiness. The default is
+# True, which sets `.disabled = True` on every logger that already exists — and
+# `tests/conftest.py` imports `app.main` before it runs the migrations, so the
+# default silently disabled every application logger for the whole test session.
+# Nothing failed; log assertions just quietly could not work, which is why no
+# test in this repo used `caplog` until `tests/api/test_timing_middleware.py`.
 assert config.config_file_name is not None
-fileConfig(config.config_file_name)
+fileConfig(config.config_file_name, disable_existing_loggers=False)
 
 # add your model's MetaData object here
 # for 'autogenerate' support

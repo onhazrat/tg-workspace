@@ -49,6 +49,12 @@ class Settings(BaseSettings):
 
     PROJECT_NAME: str
     SENTRY_DSN: HttpUrl | None = None
+
+    #: Log a WARNING for any request whose time-to-first-byte reaches this.
+    #: 0 disables the log line; the `Server-Timing` header is always sent.
+    #: 1s is deliberately loud — on this deployment anything over it has so far
+    #: turned out to be a real defect, not load.
+    SLOW_REQUEST_LOG_MS: int = 1000
     POSTGRES_SERVER: str
     POSTGRES_PORT: int = 5432
     POSTGRES_USER: str

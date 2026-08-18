@@ -196,6 +196,91 @@ resolves to a middleware that is actually defined, and look for a Traefik log li
 naming an unknown middleware. Middleware names are namespaced per provider, so the
 reference in a Docker label resolves against Docker-provided middlewares.
 
+## Finding slow endpoints
+
+Every performance problem on this deployment so far was found by hand, one
+investigation at a time (`docs/channels-tab-load-investigation.md`). These three
+layers exist so the next one is found by a command. They answer different
+questions and none of them replaces the others.
+
+### 1. The edge — Traefik's access log
+
+**What only it can tell you: how long the *client* waited, and how many bytes it
+took.** This is the layer that matters most here and the one that was ignored
+longest: rounds three to five of the channels investigation were all transfer
+cost, and every server-side measurement said the backend was fine.
+
+It is JSON (`--accesslog.format=json` in `compose.traefik.yml`) so it carries
+`OriginDuration` — time inside the application — alongside `Duration`, the
+total. The gap between them is the wire.
+
+```bash
+ssh root@staging-vm 'docker logs traefik-public-traefik-1 2>&1' \
+  | uv run python backend/scripts/slow_endpoints.py --top 25
+```
+
+Ranked by **total** time, not mean: a route hit twice at 30 s matters less than
+one hit ten thousand times at 400 ms, and only the second is why the app feels
+slow. `--by mean|max|bytes|count` re-ranks. A row with a small `origin` and a
+large `xfer` needs fewer bytes, not a faster query.
+
+> The log rotates at 5 x 50 MB. It previously had no rotation at all and reached
+> 241 MB on a disk that was 92% full — this is a retention policy, not tuning.
+
+### 2. The application — `Server-Timing` and the slow-request log
+
+`app/middleware/timing.py` puts `Server-Timing: app;dur=<ms>` on every response
+and logs a WARNING for anything over `SLOW_REQUEST_LOG_MS` (default 1000, 0
+disables the log and keeps the header).
+
+```bash
+ssh root@staging-vm 'docker logs --tail 5000 tg-summarizer-staging-backend-1 2>&1' \
+  | grep "slow request"
+```
+
+The header is what makes the browser useful: it appears in the DevTools network
+waterfall next to the transfer bar, so backend time and download time are on the
+same row. It is echoed with `Timing-Allow-Origin` for allowed CORS origins,
+because a cross-origin response otherwise hides that detail.
+
+The log line uses the **route template**, not the URL, so `/data/summaries/{id}`
+is one line rather than one per summary.
+
+### 3. The database — `pg_stat_statements`
+
+**What only it can tell you: which query, and how much I/O it did.**
+`shared_blks_read` is exactly the signal that names a TOAST detoast — the defect
+behind `z8a9b0c1d2e3`, which cost 26 MB per page of summaries and took a hand
+investigation to find.
+
+Preloaded via the `command:` on the `db` service. On a **fresh** volume
+`scripts/postgres-init/02-pg-stat-statements.sh` registers it; an **existing**
+deployment needs the extension once by hand after the restart that picks up the
+new `command:`:
+
+```bash
+docker compose exec db psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" \
+  -c 'CREATE EXTENSION IF NOT EXISTS pg_stat_statements;'
+```
+
+Worst queries by total time, and by I/O:
+
+```sql
+SELECT calls, round(total_exec_time)::int AS total_ms,
+       round(mean_exec_time)::int AS mean_ms,
+       shared_blks_read, shared_blks_hit,
+       round(shared_blk_read_time)::int AS read_ms,
+       left(query, 90) AS query
+FROM pg_stat_statements
+ORDER BY total_exec_time DESC LIMIT 15;
+
+SELECT pg_stat_statements_reset();   -- before a measurement run
+```
+
+`track_io_timing=on` is what makes the `*_time` columns non-zero. Its cost is
+negligible on Linux with a TSC clocksource; run `pg_test_timing` if this box is
+ever moved onto slower virtualisation.
+
 ## Continuous deployment (GitHub Actions)
 
 Workflows deploy via self-hosted runners with labels:
