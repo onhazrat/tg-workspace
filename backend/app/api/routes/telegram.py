@@ -1,4 +1,3 @@
-import hashlib
 import logging
 import uuid
 from typing import Any
@@ -9,6 +8,7 @@ from fastapi.responses import Response
 from sqlmodel import Session
 
 from app.api.deps import CurrentUser, SessionDep
+from app.api.http_cache import etag_for, matches_if_none_match
 from app.core.config import settings
 from app.core.secrets import decrypt_token
 from app.models_tg import BotCredential
@@ -311,16 +311,13 @@ def _image_response(
     * `private` because the route is authenticated; this must never be held by a
       shared cache that could serve it to another user.
     """
-    etag = f'"{hashlib.sha256(content).hexdigest()[:32]}"'
+    etag = etag_for(content)
     headers = {
         "Cache-Control": (f"private, max-age={settings.CHANNEL_IMAGE_MAX_AGE_SECONDS}"),
         "ETag": etag,
     }
 
-    # `If-None-Match` may carry several validators, and a proxy may have made ours
-    # weak (`W/"..."`) in transit.
-    provided = request.headers.get("if-none-match", "")
-    if any(tag.strip().removeprefix("W/") == etag for tag in provided.split(",")):
+    if matches_if_none_match(request, etag):
         return Response(status_code=304, headers=headers)
 
     return Response(content=content, media_type=content_type, headers=headers)

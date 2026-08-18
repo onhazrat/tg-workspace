@@ -16,6 +16,13 @@ today — changing the wire format for every caller that does not ask for stats.
 They flow through ``extra="allow"`` instead. Same call as `SummaryResponse`; see
 that module for the reasoning in full.
 
+``bio`` joined them, and for exactly that reason. It is 40% of the channel
+list's gzipped bytes, so the list stopped sending it (``GET /channels/bios``
+serves it instead) while ``PUT /channels/{id}`` still returns a channel in full.
+Left declared, ``model_validate`` on a bio-less row put ``"bio": null`` back on
+the wire and claimed 1,662 channels had no bio — a test caught it. Conditional
+keys belong in ``extra`` here; that is what the rule above is for.
+
 ``ChannelStatsResponse`` *is* declared concretely, because at
 ``GET /data/channels/{id}/stats`` it is the entire response and every field is
 always present.
@@ -52,7 +59,6 @@ class ChannelResponse(BaseModel):
     name: str
     display_name: str | None = Field(default=None, alias="displayName")
     photo_url: str | None = Field(default=None, alias="photoUrl")
-    bio: str | None = None
     subscribers: str | None = None
     photos: str | None = None
     videos: str | None = None

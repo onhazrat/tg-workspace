@@ -6,11 +6,13 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useMemo,
   useState,
 } from "react"
 import {
   setChannelStatsInCache,
   setChannelsInCache,
+  useChannelBiosQuery,
   useChannelStatsQuery,
   useChannelsQuery,
   useInvalidateChannels,
@@ -48,6 +50,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({
 
   const channelsQuery = useChannelsQuery()
   const channelStatsQuery = useChannelStatsQuery()
+  const channelBiosQuery = useChannelBiosQuery()
 
   const [selectedChannels, setSelectedChannels] = useState<Set<string>>(() => {
     if (typeof window !== "undefined") {
@@ -118,7 +121,28 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({
     await invalidateChannels()
   }, [invalidateChannels])
 
-  const channels = channelsQuery.data ?? emptyArray
+  const rawChannels = channelsQuery.data ?? emptyArray
+
+  /**
+   * Bios are fetched separately — 40% of the list's bytes for two clamped lines
+   * on a card — and merged back on here rather than exposed as their own context
+   * field.
+   *
+   * That keeps `channel.bio` working for every consumer unchanged: the card, and
+   * `format-channels-for-prompt` for the selected channels. The alternative, a
+   * `channelBios` map consumers read directly, would have meant a prompt silently
+   * losing bios if it were built before the map arrived — a quiet quality
+   * regression rather than a visible one. Here the only window is that a card's
+   * bio line appears a beat late, which is the same trade the stats split makes.
+   */
+  const channels = useMemo(() => {
+    const bios = channelBiosQuery.data
+    if (!bios) return rawChannels
+    return rawChannels.map((c) =>
+      bios[c.name] ? { ...c, bio: bios[c.name] } : c,
+    )
+  }, [rawChannels, channelBiosQuery.data])
+
   // Stats land in their own request; the grid renders before they arrive and the
   // two stats-dependent sorts re-sort when they do.
   const channelStats = channelStatsQuery.data ?? emptyChannelStats

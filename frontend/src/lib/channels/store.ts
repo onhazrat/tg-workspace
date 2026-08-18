@@ -19,6 +19,7 @@ export type ChannelsApi = Pick<
   | "deleteChannel"
   | "getChannelStats"
   | "listChannelStats"
+  | "listChannelBios"
   | "bulkUpdateChannelTags"
 >
 
@@ -81,6 +82,13 @@ export async function listChannelStats(
   client: ChannelsApi = api,
 ): Promise<Record<string, ChannelStats>> {
   return client.listChannelStats()
+}
+
+/** Every channel's bio, keyed by channel name. Channels without one are absent. */
+export async function listChannelBios(
+  client: ChannelsApi = api,
+): Promise<Record<string, string>> {
+  return client.listChannelBios()
 }
 
 export async function upsertChannel(

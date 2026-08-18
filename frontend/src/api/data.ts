@@ -344,6 +344,16 @@ export const dataApi = {
   listChannelStats: () =>
     request<Record<string, ChannelStats>>("/api/v1/data/channels/stats"),
 
+  /**
+   * Every channel's bio, keyed by channel name.
+   *
+   * Also split off the list: bio is 196KB of its 494KB gzipped, and the grid
+   * clamps it to two lines on the ~20 cards on screen. `DataContext` merges
+   * these back onto the channel objects, so `channel.bio` still works.
+   */
+  listChannelBios: () =>
+    request<Record<string, string>>("/api/v1/data/channels/bios"),
+
   getPosts: (params?: {
     channelNames?: string[]
     startDate?: number

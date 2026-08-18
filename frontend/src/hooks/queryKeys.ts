@@ -8,6 +8,8 @@ export const queryKeys = {
    * aggregates behind these cost 2.36s against the list's 0.78s.
    */
   channelStats: ["channelStats"] as const,
+  /** Also separate: 40% of the list's bytes, for two clamped lines on a card. */
+  channelBios: ["channelBios"] as const,
   settingGroups: ["settingGroups"] as const,
   bots: ["bots"] as const,
   summaries: ["summaries"] as const,

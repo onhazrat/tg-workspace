@@ -7,7 +7,11 @@ import type { SetStateAction } from "react"
 
 import { applySetStateAction } from "@/lib/applySetStateAction"
 import { normalizeChannel } from "@/lib/channelNormalize"
-import { listChannelStats, listChannels } from "@/lib/channels/store"
+import {
+  listChannelBios,
+  listChannelStats,
+  listChannels,
+} from "@/lib/channels/store"
 import type { Channel, ChannelStats } from "@/types"
 
 import { queryKeys, SUMMARIZER_STALE_TIME } from "./queryKeys"
@@ -51,12 +55,22 @@ export function useChannelStatsQuery() {
   })
 }
 
+export function useChannelBiosQuery() {
+  return useQuery({
+    queryKey: queryKeys.channelBios,
+    queryFn: () => listChannelBios(),
+    staleTime: SUMMARIZER_STALE_TIME,
+    refetchOnWindowFocus: true,
+  })
+}
+
 export function useInvalidateChannels() {
   const queryClient = useQueryClient()
   return () =>
     Promise.all([
       queryClient.invalidateQueries({ queryKey: queryKeys.channels }),
       queryClient.invalidateQueries({ queryKey: queryKeys.channelStats }),
+      queryClient.invalidateQueries({ queryKey: queryKeys.channelBios }),
     ])
 }
 

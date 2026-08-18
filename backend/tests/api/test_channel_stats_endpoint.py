@@ -121,3 +121,87 @@ def test_channels_list_no_longer_needs_the_stats_block(client: TestClient) -> No
 
     row = next(r for r in rows if r["name"] == "stats-ep-plain")
     assert "stats" not in row
+
+
+def test_bios_are_keyed_by_name_and_skip_empty_ones(client: TestClient) -> None:
+    headers = _auth(client)
+    with Session(engine) as session:
+        add_test_channel(session, "bio-has", bio="a description")
+        add_test_channel(session, "bio-none")
+        session.commit()
+
+    body = client.get(f"{PREFIX}/channels/bios", headers=headers).json()
+
+    assert body["bio-has"] == "a description"
+    assert "bio-none" not in body
+
+
+def test_the_channel_list_omits_bio_rather_than_nulling_it(
+    client: TestClient,
+) -> None:
+    """Absent, not `"bio": null`.
+
+    `ChannelResponse` still declares `bio` because `PUT /channels/{id}` returns a
+    channel in full. A declared-but-empty field would serialise as an explicit
+    null here and claim these channels have no bio, which is the wire-format trap
+    `app/schemas/summaries.py` documents.
+    """
+    headers = _auth(client)
+    with Session(engine) as session:
+        add_test_channel(session, "bio-omitted", bio="still in the database")
+        session.commit()
+
+    row = next(
+        r
+        for r in client.get(f"{PREFIX}/channels", headers=headers).json()
+        if r["name"] == "bio-omitted"
+    )
+
+    assert "bio" not in row
+
+
+@pytest.mark.parametrize("path", ["/channels", "/channels/stats", "/channels/bios"])
+def test_unchanged_reads_come_back_as_a_bodiless_304(
+    client: TestClient, path: str
+) -> None:
+    """`refetchOnWindowFocus` asks for these on every focus; unchanged is free."""
+    headers = _auth(client)
+    _seed("etag-ch", [1])
+
+    first = client.get(f"{PREFIX}{path}", headers=headers)
+    assert first.status_code == 200
+    etag = first.headers["etag"]
+    assert first.headers["cache-control"] == "private, no-cache"
+
+    second = client.get(f"{PREFIX}{path}", headers={**headers, "If-None-Match": etag})
+
+    assert second.status_code == 304
+    assert second.content == b""
+    assert second.headers["etag"] == etag
+
+
+def test_a_weakened_validator_still_matches(client: TestClient) -> None:
+    """A proxy may return our tag as `W/"..."`, and may send several."""
+    headers = _auth(client)
+    _seed("etag-weak", [1])
+
+    etag = client.get(f"{PREFIX}/channels", headers=headers).headers["etag"]
+    r = client.get(
+        f"{PREFIX}/channels",
+        headers={**headers, "If-None-Match": f'"other", W/{etag}'},
+    )
+
+    assert r.status_code == 304
+
+
+def test_a_changed_list_does_not_serve_a_stale_304(client: TestClient) -> None:
+    """The validator hashes the body, so any payload change invalidates it."""
+    headers = _auth(client)
+    _seed("etag-before", [1])
+    etag = client.get(f"{PREFIX}/channels", headers=headers).headers["etag"]
+
+    _seed("etag-after", [2])
+    r = client.get(f"{PREFIX}/channels", headers={**headers, "If-None-Match": etag})
+
+    assert r.status_code == 200
+    assert any(c["name"] == "etag-after" for c in r.json())

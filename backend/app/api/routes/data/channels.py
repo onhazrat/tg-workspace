@@ -11,10 +11,11 @@ import time
 from collections.abc import AsyncIterator
 from typing import Any
 
-from fastapi import APIRouter, Body, HTTPException, Query
+from fastapi import APIRouter, Body, HTTPException, Query, Request, Response
 from fastapi.responses import StreamingResponse
 
 from app.api.deps import CurrentUser, SessionDep
+from app.api.http_cache import json_response_with_etag
 from app.core.config import settings
 from app.schemas.channels import (
     BulkChannelTagsResponse,
@@ -83,6 +84,9 @@ from app.services.channels import (
     list_all_channel_stats,
 )
 from app.services.channels import (
+    list_channel_bios as list_channel_bios_impl,
+)
+from app.services.channels import (
     list_channels as list_channels_impl,
 )
 from app.services.channels import (
@@ -124,23 +128,36 @@ def get_sync_meta_route(
     }
 
 
-@router.get("/channels")
+@router.get("/channels", response_model=list[ChannelResponse])
 def list_channels(
+    request: Request,
     session: SessionDep,
     _current_user: CurrentUser,
     include_stats: bool = Query(False, alias="includeStats"),
-) -> list[ChannelResponse]:
-    return [
-        ChannelResponse.model_validate(row)
-        for row in list_channels_impl(session, include_stats=include_stats)
-    ]
+) -> Response:
+    """The channel list, without `bio` — see `list_channel_bios`.
+
+    Returns a hand-built `Response` so the body can be hashed into an `ETag`;
+    `response_model` above still drives the OpenAPI schema and the generated
+    client. `refetchOnWindowFocus` asks for this list on every window focus, and
+    channel rows are quiet minute to minute (0 changed in the last minute, 1 in
+    five, on staging), so most of those become a bodiless 304 instead of 494 KB.
+    """
+    return json_response_with_etag(
+        request,
+        [
+            ChannelResponse.model_validate(row)
+            for row in list_channels_impl(session, include_stats=include_stats)
+        ],
+    )
 
 
-@router.get("/channels/stats")
+@router.get("/channels/stats", response_model=dict[str, ChannelStatsResponse])
 def list_channel_stats(
+    request: Request,
     session: SessionDep,
     _current_user: CurrentUser,
-) -> dict[str, ChannelStatsResponse]:
+) -> Response:
     """Post aggregates for every channel, keyed by channel name.
 
     The Channels tab's stats, split off `GET /channels?includeStats=true` so the
@@ -151,10 +168,30 @@ def list_channel_stats(
     can never be captured as a channel id — the same ordering hazard the
     `/discover/reports/latest` and `/settings/network` routes are placed against.
     """
-    return {
-        name: ChannelStatsResponse.model_validate(stats)
-        for name, stats in list_all_channel_stats(session).items()
-    }
+    return json_response_with_etag(
+        request,
+        {
+            name: ChannelStatsResponse.model_validate(stats)
+            for name, stats in list_all_channel_stats(session).items()
+        },
+    )
+
+
+@router.get("/channels/bios", response_model=dict[str, str])
+def list_channel_bios(
+    request: Request,
+    session: SessionDep,
+    _current_user: CurrentUser,
+) -> Response:
+    """Every channel's bio, keyed by channel name.
+
+    40% of the channel list's gzipped bytes for something the grid clamps to two
+    lines on the ~20 cards on screen. Off the critical path here, the grid paints
+    from a 297 KB list instead of a 494 KB one.
+
+    Same ordering placement as `/channels/stats`: ahead of `/channels/{id}`.
+    """
+    return json_response_with_etag(request, list_channel_bios_impl(session))
 
 
 @router.put("/channels/{channel_id}")

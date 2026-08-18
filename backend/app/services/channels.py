@@ -281,9 +281,33 @@ def apply_channel_fields(
             setattr(ch, key, value)
 
 
+def list_channel_bios(session: Session) -> dict[str, str]:
+    """Every channel's bio, keyed by channel name. Empty bios are omitted.
+
+    Split off the channel list for the same reason as the stats: it is 196 KB of
+    a 494 KB gzipped payload — 40% — and the grid clamps it to two lines on the
+    ~20 cards actually on screen. Truncating instead was measured and rejected:
+    bios cap at 255 characters (mean 145), so cutting at 300 saves nothing and
+    cutting at 120 would visibly clip text that fits today.
+
+    A narrow two-column select, so this costs a fraction of what the full
+    channel list does.
+    """
+    rows = session.exec(select(Channel.name, Channel.bio)).all()
+    return {name: bio for name, bio in rows if bio}
+
+
 def list_channels(
     session: Session, *, include_stats: bool = False
 ) -> list[dict[str, Any]]:
+    """The channel list the grid paints from, **without `bio`**.
+
+    `bio` is served by `list_channel_bios` instead — see there. `ChannelResponse`
+    still declares it, because `PUT /channels/{id}` returns one channel in full;
+    on this route the key is simply absent rather than an explicit `null`, which
+    is why the payload is built as a dict here rather than serialised through the
+    model.
+    """
     channels = session.exec(select(Channel)).all()
     groups_by_id = load_groups_by_id(session)
     stats_map: dict[str, dict[str, Any]] = {}
@@ -293,6 +317,7 @@ def list_channels(
     for ch in channels:
         group = groups_by_id.get(ch.setting_group_id)
         row = channel_to_camel(ch, group=group)
+        row.pop("bio", None)
         if include_stats and ch.name in stats_map:
             row["stats"] = stats_map[ch.name]
         result.append(row)

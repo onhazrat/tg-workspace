@@ -112,11 +112,12 @@ def test_the_split_did_not_change_the_route_count() -> None:
     `GET`/`POST /logs/{log_type}` pair alongside the ten per-type aliases; then
     **65** once D2 deleted those ten; **66** with `GET /channels/stats`, which
     split the Channels tab's stats off `GET /channels?includeStats=true` so the
-    grid stops blocking its first paint on 2.36s of aggregate SQL.
+    grid stops blocking its first paint on 2.36s of aggregate SQL; **67** with
+    `GET /channels/bios`, splitting off the other 40% of that payload.
     """
     data_routes = {
         (m, p) for m, p in _mounted_routes() if p.startswith("/api/v1/data/")
     }
-    assert len(data_routes) == 66, (
-        f"expected 66 /data endpoints, found {len(data_routes)}"
+    assert len(data_routes) == 67, (
+        f"expected 67 /data endpoints, found {len(data_routes)}"
     )

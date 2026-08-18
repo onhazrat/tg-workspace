@@ -707,10 +707,6 @@ export type ChannelResponse = {
      */
     photoUrl?: string | null;
     /**
-     * Bio
-     */
-    bio?: string | null;
-    /**
      * Subscribers
      */
     subscribers?: string | null;
@@ -788,7 +784,7 @@ export type ChannelResponse = {
      * Oldeststoredposttimestamp
      */
     oldestStoredPostTimestamp?: number | null;
-    [key: string]: unknown | string | (string | null) | (string | null) | (string | null) | (string | null) | (string | null) | (string | null) | (string | null) | (string | null) | (number | null) | (number | null) | Array<unknown> | (number | null) | (number | null) | (number | null) | (string | null) | (number | null) | (number | null) | ({
+    [key: string]: unknown | string | (string | null) | (string | null) | (string | null) | (string | null) | (string | null) | (string | null) | (string | null) | (number | null) | (number | null) | Array<unknown> | (number | null) | (number | null) | (number | null) | (string | null) | (number | null) | (number | null) | ({
         [key: string]: unknown;
     } | null) | boolean | (number | null) | (number | null) | undefined;
 };
@@ -5332,6 +5328,25 @@ export type DataListChannelStatsResponses = {
 };
 
 export type DataListChannelStatsResponse = DataListChannelStatsResponses[keyof DataListChannelStatsResponses];
+
+export type DataListChannelBiosData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/data/channels/bios';
+};
+
+export type DataListChannelBiosResponses = {
+    /**
+     * Response Data-List Channel Bios
+     * Successful Response
+     */
+    200: {
+        [key: string]: string;
+    };
+};
+
+export type DataListChannelBiosResponse = DataListChannelBiosResponses[keyof DataListChannelBiosResponses];
 
 export type DataDeleteChannelData = {
     body?: never;

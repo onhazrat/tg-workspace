@@ -54,8 +54,9 @@ function seededClient(names: string[]): QueryClient {
   return client
 }
 
-function mountWithChannels(names: string[]) {
+function mountWithChannels(names: string[], bios?: Record<string, string>) {
   const client = seededClient(names)
+  if (bios) client.setQueryData(queryKeys.channelBios, bios)
   function wrapper({ children }: { children: ReactNode }) {
     return (
       <QueryClientProvider client={client}>
@@ -156,5 +157,35 @@ describe("useData", () => {
     expect(() => renderHook(() => useData())).toThrow(
       /must be used within a DataProvider/,
     )
+  })
+})
+
+describe("DataContext bio merge", () => {
+  /**
+   * Bios are fetched separately from the channel list — 40% of its bytes — and
+   * merged back onto the channel objects here. Every consumer reads
+   * `channel.bio`: the card, and `format-channels-for-prompt` for the selected
+   * channels. If the merge stops happening, prompts quietly lose their bios,
+   * which is the failure this asserts against.
+   */
+  it("puts bios back on the channels that have one", async () => {
+    const { result } = mountWithChannels(["alpha", "beta"], {
+      alpha: "the alpha channel",
+    })
+
+    await waitFor(() => expect(result.current.channels).toHaveLength(2))
+    const byName = Object.fromEntries(
+      result.current.channels.map((c) => [c.name, c.bio]),
+    )
+    expect(byName.alpha).toBe("the alpha channel")
+    expect(byName.beta).toBeUndefined()
+  })
+
+  it("renders the channels before bios arrive rather than waiting", async () => {
+    // The point of the split: an unresolved bios query must not hold the grid.
+    const { result } = mountWithChannels(["alpha"])
+
+    await waitFor(() => expect(result.current.channels).toHaveLength(1))
+    expect(result.current.channels[0].name).toBe("alpha")
   })
 })
