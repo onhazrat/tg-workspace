@@ -275,9 +275,30 @@ Session scope, immediately after deploy:
 Autovacuum cleared years of accumulated dead tuples within minutes of the transaction
 being released, which is the confirmation that the xmin pin was the cause.
 
-**Still outstanding:** the aggregate ran 64 times in 16.3 minutes — 4/minute for a
-job that ticks once a minute. The four-worker duplication is unchanged, pending the
-deployment-shape decision above. Table *files* also stay at their bloated size
-(`tg_sync_meta` 1,360 kB for 10 rows) because plain autovacuum reclaims space for
-reuse without shrinking; a one-off `VACUUM FULL` on those two small tables would
-recover it.
+### The four-worker duplication — fixed
+
+The aggregate ran 64 times in 16.3 minutes, 4/minute for a job that ticks once. Fixed
+in PR #107 by pinning the image to `--workers 1`; verified on staging as 6 auto-sync
+firings in 7 minutes of uptime, and jobs created per tick 4 → 1. The sequenced plan
+for scaling past one worker is `docs/scaling-to-multiple-workers.md`.
+
+### Reclaiming the table files — done
+
+Plain autovacuum reclaims space for reuse without shrinking the file, so both tables
+stayed at their bloated size after the xmin pin was released. `VACUUM FULL ANALYZE`
+on 2026-08-19, run with the operator's explicit go-ahead:
+
+| table | rows | heap before | heap after |
+|---|---:|---:|---:|
+| `tg_sync_meta` | 10 | 1,360 kB | **8 kB** |
+| `tg_channels` | 2,077 | 19 MB | **1,568 kB** |
+
+22 ms and 95 ms respectively; dead tuples zero on both, health check 200 afterwards.
+The size itself was never the problem — the scan cost was. `get_sync_meta` does a
+`SELECT` over the whole of `tg_sync_meta` on every call, and that table went from
+~170 pages to **one**.
+
+`tg_sync_jobs` was deliberately left alone: 196,047 rows in 153 MB is real data, not
+bloat, and it needs a retention policy rather than a vacuum. 711 of those rows are
+stranded in `running` from restarts — step 2 of the scaling plan (a claim that can
+expire) is what makes them reconcilable.
