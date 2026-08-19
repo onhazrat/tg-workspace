@@ -142,10 +142,76 @@ Single-row updates by primary key, with essentially no I/O — so the time is sp
 waiting, not working. Note the direction: the **rarer** the statement, the slower it
 is, which is not what a bad plan or a missing index looks like.
 
-The standing hypothesis is that this is a *symptom* rather than a cause: items 2 and 3
-together commit 277 k times per 10 hours — 7.7 fsyncs a second, sustained — and
-anything landing behind that queue waits. **Diagnose after 1–3 are deployed**, since
-the fix for the others may remove it. Do not pre-emptively add an index here.
+### Diagnosed — and it was neither of the obvious answers
+
+The commit-storm hypothesis above was wrong, and so was lock contention. Three
+measurements settled it.
+
+**The distribution, not the mean.** `min_exec_time` is **0 ms** for every one of
+these statements and `max_exec_time` is **10–21 seconds**, with a standard deviation
+around 5× the mean. They are not slow; they are instant except for rare multi-second
+stalls. That also disposes of the "rarer is slower" pattern — a rare statement simply
+has fewer samples to dilute one 21-second outlier.
+
+**Nothing is lock-blocked.** Sampling `pg_stat_activity` every 2 s for two minutes:
+`pg_blocking_pids` was empty on **every** row.
+
+**Autovacuum is running constantly and reclaiming nothing:**
+
+| table | live | dead | autovacuums | size |
+|---|---:|---:|---:|---|
+| `tg_sync_meta` | 10 | **4,743** | 1,062 | 1,360 kB |
+| `tg_channels` | 2,077 | **4,498** | 619 | 19 MB |
+
+A ten-row table carrying 4,743 dead tuples after a thousand autovacuums means one
+thing: **something is holding the xmin horizon.** And it was —
+
+```
+age_s | state               | query
+  283 | idle in transaction | SELECT wanted.name, newest.timestamp FROM ...
+  283 | idle in transaction | SELECT wanted.name, newest.timestamp FROM ...
+  283 | idle in transaction | SELECT wanted.name, newest.timestamp FROM ...
+  283 | idle in transaction | SELECT wanted.name, newest.timestamp FROM ...
+```
+
+Four transactions open for minutes; every other connection under 2 s. `run_auto_sync`
+planned *and synced* inside one `with Session(engine)`, so its transaction sat idle
+for the whole job. The updates were not waiting on a lock — they were walking pages
+full of tuples that could not be reclaimed.
+
+**Fixed** by closing the planning session before `run_sync_job`, guarded by
+`tests/jobs/test_auto_sync_session_scope.py`.
+
+### And why *four*
+
+Four, not one, because the container runs **`fastapi run --workers 4`**
+(`backend/Dockerfile:45`, inherited from the template and never revisited). Each
+worker runs its own in-process APScheduler, which contradicts `CLAUDE.md`/ADR-004:
+
+> **Scheduler runs in-process, single replica** (APScheduler). Do **not** scale the
+> backend horizontally without external job coordination.
+
+Confirmed in the data — four `Auto Sync (scheduler)` jobs created within 38 ms, every
+tick, for as far back as the log goes:
+
+```
+10:42:26 | 4 | running
+10:38:12 | 4 | running
+10:31:12 | 3 | completed
+10:31:11 | 1 | completed
+```
+
+This multiplied everything above by four, including the 69-minute aggregate: 2,189
+calls per 10 hours is ~3.6/minute for a job that ticks once a minute.
+`has_active_sync_job()` reads an **in-process** dict, so it cannot deduplicate across
+workers — the four workers scrape the same channels concurrently.
+
+It also explains the 711 rows stuck in `running` (and 48 in `pending`) going back to
+June: in-memory job state is lost on restart, and nothing reconciles the rows.
+
+**This is a deployment-shape decision, not a code fix** — one worker, a scheduler
+gated to one worker, or a separate single-replica scheduler service — so it is left
+for the operator to choose.
 
 ## Landing
 

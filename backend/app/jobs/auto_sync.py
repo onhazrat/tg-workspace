@@ -83,10 +83,25 @@ def _stats_for_scheduling(
 
 
 async def run_auto_sync() -> dict[str, Any]:
-    """Trigger sync for channels stale beyond configured interval."""
+    """Trigger sync for channels stale beyond configured interval.
+
+    The planning session is closed **before** the job runs. It used to stay open
+    across `await run_sync_job(...)`, so a transaction sat `idle in transaction`
+    for the whole sync — minutes — pinning the xmin horizon the entire time.
+    Autovacuum kept running and kept reclaiming nothing: measured on staging,
+    `tg_sync_meta` held **10 live rows and 4,743 dead ones** after 1,062
+    autovacuums, and `tg_channels` 2,077 live against 4,498 dead in 19 MB. That
+    bloat is what made single-row updates by primary key stall for whole seconds
+    with no I/O at all (`UPDATE tg_channels SET subscribers`: min 0 ms, max
+    21,361 ms, ~112 blocks read across 778 calls).
+
+    So: read what the decision needs, extract it as plain values, close the
+    session, then sync. Nothing below the `with` block may hold an ORM object —
+    `entries` and `due_reason_by_id` are deliberately plain tuples and strings.
+    """
+    now = int(time.time() * 1000)
     with Session(engine) as session:
         sync_cfg = load_sync_settings(session)
-        now = int(time.time() * 1000)
         pause_until = sync_cfg.get("autoSyncPauseUntil")
         if pause_until and now < int(pause_until):
             return {"skipped": True, "reason": "paused", "pauseUntil": pause_until}
@@ -162,53 +177,55 @@ async def run_auto_sync() -> dict[str, Any]:
             }
 
         entries = [(ch.id, ch.name) for ch in to_sync]
-        job = await create_job(
-            channel_entries=entries,
-            source=CHECK_SOURCE,
-            user_id=str(owner_id) if owner_id else None,
-            channel_meta_by_id={
-                ch.id: {"dueReason": due_reason_by_id.get(ch.id)} for ch in to_sync
-            },
-        )
-        await run_sync_job(job, owner_id)
+        checked = len(channels)
+        due_count = len(due_channels)
+        partial_count = len(partial_batch)
 
-        failures = [ch for ch in job.channels.values() if ch.status == "failed"]
-        successes = [ch for ch in job.channels.values() if ch.status == "success"]
+    job = await create_job(
+        channel_entries=entries,
+        source=CHECK_SOURCE,
+        user_id=str(owner_id) if owner_id else None,
+        channel_meta_by_id={
+            cid: {"dueReason": due_reason_by_id.get(cid)} for cid, _ in entries
+        },
+    )
+    await run_sync_job(job, owner_id)
 
-        with Session(engine) as session2:
-            sync_cfg = load_sync_settings(session2)
-            if failures:
-                prev_failures = int(sync_cfg.get("consecutiveFailures") or 0)
-                next_failures = prev_failures + len(failures)
-                updates: dict[str, Any] = {"consecutiveFailures": next_failures}
-                threshold = max(settings.AUTO_SYNC_FAILURE_THRESHOLD_MIN, len(channels))
-                if next_failures >= threshold:
-                    updates["autoSyncPauseUntil"] = (
-                        now + settings.AUTO_SYNC_PAUSE_DURATION_MS
-                    )
-                    logger.warning(
-                        "Auto-sync paused for 10 minutes after %s consecutive failures",
-                        next_failures,
-                    )
-                _update_sync_state(session2, updates)
-            elif successes:
-                _update_sync_state(session2, {"consecutiveFailures": 0})
+    failures = [ch for ch in job.channels.values() if ch.status == "failed"]
+    successes = [ch for ch in job.channels.values() if ch.status == "success"]
 
-        return {
-            "jobId": job.job_id,
-            "channels": len(to_sync),
-            "dueChannels": len(due_channels),
-            "partialChannels": len(partial_batch),
-            "dueRegular": sum(
-                1 for reason in due_reason_by_id.values() if reason == "regular"
-            ),
-            "dueDynamic": sum(
-                1 for reason in due_reason_by_id.values() if reason == "dynamic"
-            ),
-            "dueBoth": sum(
-                1 for reason in due_reason_by_id.values() if reason == "both"
-            ),
-            "failures": len(failures),
-            "successes": len(successes),
-            "status": job.status,
-        }
+    with Session(engine) as session2:
+        sync_cfg = load_sync_settings(session2)
+        if failures:
+            prev_failures = int(sync_cfg.get("consecutiveFailures") or 0)
+            next_failures = prev_failures + len(failures)
+            updates: dict[str, Any] = {"consecutiveFailures": next_failures}
+            threshold = max(settings.AUTO_SYNC_FAILURE_THRESHOLD_MIN, checked)
+            if next_failures >= threshold:
+                updates["autoSyncPauseUntil"] = (
+                    now + settings.AUTO_SYNC_PAUSE_DURATION_MS
+                )
+                logger.warning(
+                    "Auto-sync paused for 10 minutes after %s consecutive failures",
+                    next_failures,
+                )
+            _update_sync_state(session2, updates)
+        elif successes:
+            _update_sync_state(session2, {"consecutiveFailures": 0})
+
+    return {
+        "jobId": job.job_id,
+        "channels": len(entries),
+        "dueChannels": due_count,
+        "partialChannels": partial_count,
+        "dueRegular": sum(
+            1 for reason in due_reason_by_id.values() if reason == "regular"
+        ),
+        "dueDynamic": sum(
+            1 for reason in due_reason_by_id.values() if reason == "dynamic"
+        ),
+        "dueBoth": sum(1 for reason in due_reason_by_id.values() if reason == "both"),
+        "failures": len(failures),
+        "successes": len(successes),
+        "status": job.status,
+    }
