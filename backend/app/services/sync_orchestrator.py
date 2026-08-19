@@ -520,9 +520,9 @@ def _freeze_channel_for_chat_id_problem(
         },
         user_id,
     )
+    touch_sync(session, "channels", commit=False)
+    touch_sync(session, "sync_logs", commit=False)
     session.commit()
-    touch_sync(session, "channels")
-    touch_sync(session, "sync_logs")
 
 
 def _reconcile_telegram_chat_id(
@@ -741,8 +741,8 @@ def _persist_page_posts(
         retrieval_pass=ctx.retrieval_pass,
         retrieval_source=job_source,
     )
+    touch_sync(session, "posts", commit=False)
     session.commit()
-    touch_sync(session, "posts")
     result.posts_saved = len(posts_to_save)
 
     if ctx.auto_follow:
@@ -790,8 +790,8 @@ def _apply_scrape_page(
                 response["telemetry"],
                 user_id=user_id,
             )
+            touch_sync(session, "network_logs", commit=False)
             session.commit()
-            touch_sync(session, "network_logs")
 
         posts = response.get("posts") or []
         latest_id = int(response.get("latestId") or 0)
@@ -967,8 +967,8 @@ def _finalize_channel_success(
                 channel,
                 user_id=user_id or channel.user_id,
             )
+        touch_sync(session, "channels", commit=False)
         session.commit()
-        touch_sync(session, "channels")
 
         upsert_sync_log(
             session,
@@ -985,8 +985,8 @@ def _finalize_channel_success(
             },
             user_id,
         )
+        touch_sync(session, "sync_logs", commit=False)
         session.commit()
-        touch_sync(session, "sync_logs")
 
 
 def _finalize_channel_scrape_error(
@@ -1011,8 +1011,8 @@ def _finalize_channel_scrape_error(
                 channel,
                 user_id=user_id or channel.user_id,
             )
+            touch_sync(session, "channels", commit=False)
             session.commit()
-            touch_sync(session, "channels")
 
         if _is_scheduler_auto_sync_source(job.source) and due_reason:
             sync_settings = load_sync_settings(session)
@@ -1024,8 +1024,8 @@ def _finalize_channel_scrape_error(
             )
             channel.updated_at = utc_now()
             session.add(channel)
+            touch_sync(session, "channels", commit=False)
             session.commit()
-            touch_sync(session, "channels")
 
         upsert_sync_log(
             session,
@@ -1042,8 +1042,8 @@ def _finalize_channel_scrape_error(
             },
             user_id,
         )
+        touch_sync(session, "sync_logs", commit=False)
         session.commit()
-        touch_sync(session, "sync_logs")
 
 
 def _finalize_channel_error(
@@ -1070,8 +1070,8 @@ def _finalize_channel_error(
             )
             channel.updated_at = utc_now()
             session.add(channel)
+            touch_sync(session, "channels", commit=False)
             session.commit()
-            touch_sync(session, "channels")
         upsert_sync_log(
             session,
             {
@@ -1087,8 +1087,8 @@ def _finalize_channel_error(
             },
             user_id,
         )
+        touch_sync(session, "sync_logs", commit=False)
         session.commit()
-        touch_sync(session, "sync_logs")
 
 
 @dataclass

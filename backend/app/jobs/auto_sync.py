@@ -19,7 +19,7 @@ from app.services.network_settings import get_network_setting_row
 from app.services.operator import get_operator_user_id, select_operator_channels
 from app.services.scraper_jobs import create_job, has_active_sync_job
 from app.services.sync_orchestrator import run_sync_job
-from app.services.sync_schedule import due_reason, is_channel_due
+from app.services.sync_schedule import due_reason, is_channel_due, needs_dynamic_stats
 
 logger = logging.getLogger(__name__)
 
@@ -30,6 +30,56 @@ def _update_sync_state(session: Session, updates: dict[str, Any]) -> None:
     current = load_sync_settings(session)
     current.update(updates)
     save_setting(session, "sync", current)
+
+
+def _schedule_view(
+    channel: Channel, group: Any, stats: dict[str, Any] | None
+) -> SimpleNamespace:
+    """The subset of a channel `sync_schedule` actually reads.
+
+    `stats` is `None` on the first pass, before we know whether this channel's
+    decision depends on them — see `_stats_for_scheduling`. The stub values are
+    the ones that make `_is_dynamic_eligible` false, so a channel that the
+    predicate clears is decided identically either way.
+    """
+    return SimpleNamespace(
+        is_frozen=group.is_frozen,
+        regular_sync_enabled=group.regular_sync_enabled,
+        dynamic_sync_enabled=group.dynamic_sync_enabled,
+        next_regular_sync_at=channel.next_regular_sync_at,
+        next_dynamic_sync_at=channel.next_dynamic_sync_at,
+        has_posts=int((stats or {}).get("count") or 0) > 0,
+        velocity=float((stats or {}).get("velocity") or 0.0),
+    )
+
+
+def _stats_for_scheduling(
+    session: Session,
+    channels: list[Channel],
+    groups_by_id: dict[str, Any],
+    now_ms: int,
+) -> dict[str, dict[str, Any]]:
+    """Post stats for the channels whose due-ness can actually depend on them.
+
+    This used to be `compute_channel_stats_batch(session, every_channel_name)`,
+    which on staging meant `count(*)` plus `min`/`max` over 4.54M posts every 60
+    seconds — 69 minutes of database time and 76M block reads per 10 hours — for
+    two values, of which `min_id`/`max_id` were discarded outright. 1,756 of the
+    2,077 channels had a dynamic deadline still in the future, so their answer
+    was already fixed; six were live.
+
+    `needs_dynamic_stats` decides, not this function: the condition belongs next
+    to the rule it mirrors, in `sync_schedule`.
+    """
+    wanted = [
+        ch.name
+        for ch in channels
+        if (group := groups_by_id.get(ch.setting_group_id)) is not None
+        and needs_dynamic_stats(_schedule_view(ch, group, None), now_ms)
+    ]
+    if not wanted:
+        return {}
+    return compute_channel_stats_batch(session, wanted)
 
 
 async def run_auto_sync() -> dict[str, Any]:
@@ -54,24 +104,15 @@ async def run_auto_sync() -> dict[str, Any]:
         )
         channels = select_operator_channels(session, operator_id=owner_id)
         groups_by_id = load_groups_by_id(session)
-        stats_by_channel = compute_channel_stats_batch(
-            session, [ch.name for ch in channels]
-        )
+        stats_by_channel = _stats_for_scheduling(session, channels, groups_by_id, now)
         due_channels: list[Channel] = []
         due_reason_by_id: dict[str, str] = {}
         for channel in channels:
             group = groups_by_id.get(channel.setting_group_id)
             if group is None:
                 continue
-            stats = stats_by_channel.get(channel.name, {})
-            schedule_view = SimpleNamespace(
-                is_frozen=group.is_frozen,
-                regular_sync_enabled=group.regular_sync_enabled,
-                dynamic_sync_enabled=group.dynamic_sync_enabled,
-                next_regular_sync_at=channel.next_regular_sync_at,
-                next_dynamic_sync_at=channel.next_dynamic_sync_at,
-                has_posts=int(stats.get("count") or 0) > 0,
-                velocity=float(stats.get("velocity") or 0.0),
+            schedule_view = _schedule_view(
+                channel, group, stats_by_channel.get(channel.name)
             )
             if not is_channel_due(schedule_view, now):
                 continue

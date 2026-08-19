@@ -68,7 +68,6 @@ class SyncJobState:
     )
     _update_seq: int = field(default=0, repr=False)
     _flushed_job_status: str = field(default="", repr=False)
-    _flushed_channel_statuses: dict[str, str] = field(default_factory=dict, repr=False)
     _last_persist_at_ms: float = field(default=0.0, repr=False)
 
     def to_camel(self) -> dict[str, Any]:
@@ -102,22 +101,34 @@ def _channels_from_json(data: list[dict[str, Any]]) -> dict[str, ChannelSyncStat
     return result
 
 
-def _channel_statuses(job: SyncJobState) -> dict[str, str]:
-    return {cid: ch.status for cid, ch in job.channels.items()}
-
-
 def _mark_flushed(job: SyncJobState) -> None:
     job._flushed_job_status = job.status
-    job._flushed_channel_statuses = _channel_statuses(job)
     job._last_persist_at_ms = time.monotonic() * 1000
 
 
 def _should_flush_db(job: SyncJobState) -> bool:
+    """Whether to write the row now, or let the next status change carry it.
+
+    A *per-channel status change* used to force a flush, and `_persist_job`
+    rewrites the entire channel array to record one entry — so a job covering
+    2,077 channels rewrote a 2,077-element JSON document on every one of its
+    ~6,000 transitions. Measured on staging: **94,994 `UPDATE tg_sync_jobs SET
+    channels=<json>` in 10 hours, 7.5 minutes of database time and 270k block
+    reads**, quadratic in job size, and a whole-table job is the normal case for
+    this deployment.
+
+    The row is not the live read path. `get_job` serves `_active_jobs` from
+    memory and only falls back to the row when the process no longer holds the
+    job, so what the row buys is crash recovery — for which the interval that
+    already governs `postsFetched` staleness is the right granularity for
+    statuses too.
+
+    Terminal statuses and job-level transitions still flush immediately, so the
+    final state of a job is never left to a timer.
+    """
     if job.status in _TERMINAL_JOB_STATUSES:
         return True
     if job.status != job._flushed_job_status:
-        return True
-    if _channel_statuses(job) != job._flushed_channel_statuses:
         return True
     elapsed_ms = time.monotonic() * 1000 - job._last_persist_at_ms
     return elapsed_ms >= settings.SYNC_JOB_PERSIST_INTERVAL_MS

@@ -29,8 +29,49 @@ def _is_dynamic_eligible(channel: Any) -> bool:
 def _is_dynamic_due(channel: Any, now_ms: int) -> bool:
     if not _is_dynamic_eligible(channel):
         return False
+    return _dynamic_deadline_reached(channel, now_ms)
+
+
+def _dynamic_deadline_reached(channel: Any, now_ms: int) -> bool:
     deadline = _read(channel, "next_dynamic_sync_at")
     return deadline is None or now_ms >= int(deadline)
+
+
+def needs_dynamic_stats(channel: Any, now_ms: int) -> bool:
+    """Whether `has_posts`/`velocity` can change this channel's due-ness.
+
+    `_is_dynamic_eligible` is the *only* reader of those two fields, and it is
+    only reached from `_is_dynamic_due`. So no stats value can change any answer
+    this module gives unless the stats-independent conditions around that call
+    already hold: dynamic sync is on for the channel, and its dynamic deadline
+    has passed (or was never set).
+
+    This exists because the caller was paying to find out. `jobs/auto_sync.py`
+    computed `count(*)`, `min(post_id)` and `max(post_id)` across 4.54M posts for
+    all 2,077 channels every 60 seconds — 69 minutes of database time per 10
+    hours — to answer this for six of them. It lives here rather than in the
+    scheduler job so that it and the rule it mirrors are read together; split
+    across two files, the next condition added to `_is_dynamic_due` silently
+    stops being reflected in what the caller bothers to fetch.
+
+    **Not** short-circuited on `is_frozen`, though every frozen channel is
+    filtered out one step later by `is_channel_due`. Adding it would make the
+    predicate sound only for callers that consult `due_reason` *after*
+    `is_channel_due` — true of the one caller today, and an unmarked trap for the
+    next one. Without it the guarantee is unconditional: wherever this returns
+    `False`, every function in this module answers identically for every stats
+    value. It costs nothing to give up, because a frozen group disables both sync
+    modes anyway, so `dynamic_sync_enabled` already excludes those channels.
+
+    Deliberately conservative in the other direction: it may say `True` for a
+    channel that turns out not to be due, which only costs a stats row. Saying
+    `False` where the stats mattered would silently stop syncing a channel, which
+    is why `test_sync_schedule_stats_narrowing.py` checks the implication over
+    the whole input space rather than at sampled points.
+    """
+    if not bool(_read(channel, "dynamic_sync_enabled", False)):
+        return False
+    return _dynamic_deadline_reached(channel, now_ms)
 
 
 def compute_next_regular_sync_at_from_last_updated(
