@@ -165,6 +165,73 @@ class PurgeLogsResponse(BaseModel):
     deleted: dict[str, int] | int = 0
 
 
+# --- list projections -------------------------------------------------------
+#
+# `GET /data/logs/sync` returned 56.28 MB for one page of 500 rows, 99.7% of it
+# request/response bodies, none of which the viewer renders until a row is
+# expanded. The list dropped them; `GET /data/logs/{type}/{id}` returns the row
+# in full for the one row that was opened.
+#
+# These are separate models rather than the full ones with the heavy fields made
+# optional. A declared-but-absent field serialises as an explicit `null`, which
+# would claim every log has no body — the wire-format trap this repo documents
+# in `app/schemas/summaries.py`. Undeclared means absent.
+#
+# Embedding and network have no list model: neither has a heavy column, so their
+# list and detail shapes are the same object.
+
+
+class PublishLogListItemResponse(BaseModel):
+    """A publish log without `fullRequest` / `fullResponse` / `textSent`."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    id: str
+    summary_id: str = Field(alias="summaryId")
+    bot_id: str = Field(alias="botId")
+    bot_name: str = Field(alias="botName")
+    chat_id: str = Field(alias="chatId")
+    chat_name: str = Field(alias="chatName")
+    status: str
+    error: str | None = None
+    timestamp: int = 0
+
+
+class SyncLogListItemResponse(BaseModel):
+    """A sync log without its bodies — the list no longer joins the payload table."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    id: str
+    channel_name: str = Field(alias="channelName")
+    status: str
+    posts_count: int = Field(default=0, alias="postsCount")
+    new_latest_id: int | None = Field(default=None, alias="newLatestId")
+    error: str | None = None
+    timestamp: int = 0
+    source: str = "manual"
+
+
+class LLMLogListItemResponse(BaseModel):
+    """An LLM log without the prompt, the response, or the raw bodies.
+
+    `modelConfig` stays: it is `{"temperature": 0.7}`, and dropping it would be
+    churn rather than a saving.
+    """
+
+    model_config = ConfigDict(populate_by_name=True, protected_namespaces=())
+
+    id: str
+    model: str
+    model_config_json: dict[str, Any] | None = Field(default=None, alias="modelConfig")
+    tokens: int | None = None
+    duration: float | None = None
+    status: str
+    error: str | None = None
+    timestamp: int = 0
+    log_type: str = Field(default="", alias="type")
+
+
 #: The wire type of `GET /data/logs/{log_type}`.
 #:
 #: A plain union, not a discriminated one: the five payloads share no tag field,
@@ -173,6 +240,17 @@ class PurgeLogsResponse(BaseModel):
 #: with the exact model and the union only describes the result — which is also
 #: how the generated TypeScript reads it.
 type LogEntryResponse = (
+    PublishLogListItemResponse
+    | SyncLogListItemResponse
+    | LLMLogListItemResponse
+    | EmbeddingLogResponse
+    | NetworkLogResponse
+)
+
+
+#: The wire type of `GET /data/logs/{log_type}/{log_id}` — the same five kinds
+#: in full, bodies included.
+type LogDetailResponse = (
     PublishLogResponse
     | SyncLogResponse
     | LLMLogResponse
@@ -189,6 +267,18 @@ LOG_SCHEMAS: dict[str, type[BaseModel]] = {
     "publish": PublishLogResponse,
     "sync": SyncLogResponse,
     "llm": LLMLogResponse,
+    "embedding": EmbeddingLogResponse,
+    "network": NetworkLogResponse,
+}
+
+#: `log_type` -> the model a *list* page validates against. Embedding and
+#: network reuse their detail model because they have nothing heavy to drop;
+#: `services.logs.LOG_HEAVY_COLUMNS` is the same statement on the query side,
+#: and `tests/api/test_generic_logs.py` pins the two against each other.
+LOG_LIST_SCHEMAS: dict[str, type[BaseModel]] = {
+    "publish": PublishLogListItemResponse,
+    "sync": SyncLogListItemResponse,
+    "llm": LLMLogListItemResponse,
     "embedding": EmbeddingLogResponse,
     "network": NetworkLogResponse,
 }

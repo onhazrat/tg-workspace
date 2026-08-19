@@ -2,6 +2,9 @@ import { AlertTriangle } from "lucide-react"
 import { AnimatePresence, motion } from "motion/react"
 import type React from "react"
 
+import type { LogType } from "@/api/data"
+import { useLogDetailQuery } from "@/hooks/useLogs"
+
 /** Animated container for a log row's expandable detail section. */
 export const ExpandableLogDetails: React.FC<{
   expanded: boolean
@@ -102,3 +105,49 @@ export const LogErrorBlock: React.FC<{
     </div>
   </div>
 )
+
+/**
+ * Fetches the bodies for one expanded log row and hands them to `children`.
+ *
+ * The list projection stopped carrying them: `GET /data/logs/sync` was
+ * **56.28 MB for a page of 500 rows, 99.7% of it request/response bodies** that
+ * only an expanded row ever renders — and only one row is expanded at a time.
+ *
+ * Rendered *inside* `ExpandableLogDetails`, so it mounts on expand and the
+ * request happens then. Reopening the same row is a cache hit: the query key is
+ * per row and `staleTime` is infinite, because a log row never changes once
+ * written.
+ */
+export function LogDetailSection<T>({
+  type,
+  id,
+  children,
+}: {
+  type: LogType
+  id: string
+  children: (detail: T) => React.ReactNode
+}) {
+  const { data, isPending, isError, refetch } = useLogDetailQuery<T>(type, id)
+
+  if (isPending) {
+    return (
+      <p className="text-[9px] font-mono uppercase tracking-widest opacity-40">
+        Loading details…
+      </p>
+    )
+  }
+
+  if (isError || !data) {
+    return (
+      <button
+        type="button"
+        onClick={() => refetch()}
+        className="text-[9px] font-mono uppercase tracking-widest text-red-500 opacity-70 hover:opacity-100"
+      >
+        Could not load details — retry
+      </button>
+    )
+  }
+
+  return <>{children(data)}</>
+}

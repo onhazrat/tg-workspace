@@ -1,10 +1,26 @@
 import type {
   EmbeddingLog,
-  LLMLog,
+  LLMLogListItem,
   NetworkLog,
-  PublishLog,
-  SyncLog,
+  PublishLogListItem,
+  SyncLogListItem,
 } from "@/types"
+
+/**
+ * Client-side log filtering — **everything except the text search**.
+ *
+ * The text query moved to SQL (`GET /data/logs/{type}?search=…`). It had to:
+ * the list stopped carrying `fullRequest` / `fullResponse` and the LLM prompt
+ * and response, so "search in details" had nothing left to match here. The
+ * saving was 56.28 MB per page of sync logs, 99.7% of it those bodies.
+ *
+ * **These functions must not re-apply the query.** The server matches
+ * `fields OR bodies`; a second pass over fields alone would drop exactly the
+ * rows that matched only on a body — the ones "search in details" exists for.
+ *
+ * What stays here is what is cheap and already present: status, date range,
+ * and the bot/channel/model dropdowns.
+ */
 
 export type LogStatus = "success" | "failed"
 export type LogStatusFilter = "all" | LogStatus
@@ -64,50 +80,35 @@ export function matchesDateRange(
   return true
 }
 
-/** Case-insensitive substring match against the JSON serialization of a value. */
+/**
+ * Case-insensitive substring match against the JSON serialization of a value.
+ *
+ * No longer used by the log filters — the text search moved to SQL when the
+ * list stopped carrying the bodies there was nothing left to match. Kept
+ * exported because it is a general helper and is covered by its own tests.
+ */
 export function jsonIncludes(value: unknown, query: string): boolean {
   return value ? JSON.stringify(value).toLowerCase().includes(query) : false
 }
 
-// `string | null` because that is what the server actually sends: a nullable
-// column (`error`, `textSent`, …) serialises as `null`, not as an absent key.
-// The runtime already coped; only the type was wrong. Surfaced by B7.
-const includesQuery = (
-  text: string | null | undefined,
-  query: string,
-): boolean => (text ? text.toLowerCase().includes(query) : false)
-
 export function filterPublishLogs(
-  logs: PublishLog[],
+  logs: PublishLogListItem[],
   filters: CommonLogFilterCriteria & { botFilter: string },
-): PublishLog[] {
+): PublishLogListItem[] {
   return logs.filter((log) => {
     if (!matchesStatus(log.status, filters.statusFilter)) return false
     if (filters.botFilter !== "all" && log.botName !== filters.botFilter)
       return false
     if (!matchesDateRange(log.timestamp, filters.startDate, filters.endDate))
       return false
-    if (filters.searchQuery) {
-      const q = filters.searchQuery.toLowerCase()
-      const matchesFields =
-        includesQuery(log.botName, q) ||
-        includesQuery(log.chatName, q) ||
-        includesQuery(log.chatId, q) ||
-        includesQuery(log.error, q) ||
-        includesQuery(log.textSent, q)
-      const matchesDetails =
-        filters.searchInDetails &&
-        (jsonIncludes(log.fullRequest, q) || jsonIncludes(log.fullResponse, q))
-      if (!matchesFields && !matchesDetails) return false
-    }
     return true
   })
 }
 
 export function filterSyncLogs(
-  logs: SyncLog[],
+  logs: SyncLogListItem[],
   filters: CommonLogFilterCriteria & { channelFilter: string },
-): SyncLog[] {
+): SyncLogListItem[] {
   return logs.filter((log) => {
     if (!matchesStatus(log.status, filters.statusFilter)) return false
     if (
@@ -117,43 +118,20 @@ export function filterSyncLogs(
       return false
     if (!matchesDateRange(log.timestamp, filters.startDate, filters.endDate))
       return false
-    if (filters.searchQuery) {
-      const q = filters.searchQuery.toLowerCase()
-      const matchesFields =
-        includesQuery(log.channelName, q) ||
-        includesQuery(log.source, q) ||
-        includesQuery(log.error, q)
-      const matchesDetails =
-        filters.searchInDetails &&
-        (jsonIncludes(log.fullRequest, q) || jsonIncludes(log.fullResponse, q))
-      if (!matchesFields && !matchesDetails) return false
-    }
     return true
   })
 }
 
 export function filterLlmLogs(
-  logs: LLMLog[],
+  logs: LLMLogListItem[],
   filters: CommonLogFilterCriteria & { modelFilter: string },
-): LLMLog[] {
+): LLMLogListItem[] {
   return logs.filter((log) => {
     if (!matchesStatus(log.status, filters.statusFilter)) return false
     if (filters.modelFilter !== "all" && log.model !== filters.modelFilter)
       return false
     if (!matchesDateRange(log.timestamp, filters.startDate, filters.endDate))
       return false
-    if (filters.searchQuery) {
-      const q = filters.searchQuery.toLowerCase()
-      const matchesFields =
-        includesQuery(log.model, q) ||
-        includesQuery(log.prompt, q) ||
-        includesQuery(log.response, q) ||
-        includesQuery(log.error, q)
-      const matchesDetails =
-        filters.searchInDetails &&
-        (jsonIncludes(log.fullRequest, q) || jsonIncludes(log.fullResponse, q))
-      if (!matchesFields && !matchesDetails) return false
-    }
     return true
   })
 }
@@ -166,16 +144,6 @@ export function filterNetworkLogs(
     if (!matchesStatus(log.status, filters.statusFilter)) return false
     if (!matchesDateRange(log.timestamp, filters.startDate, filters.endDate))
       return false
-    if (filters.searchQuery) {
-      const q = filters.searchQuery.toLowerCase()
-      const matchesFields =
-        includesQuery(log.url, q) ||
-        includesQuery(log.method, q) ||
-        includesQuery(log.error, q)
-      const matchesDetails =
-        filters.searchInDetails && jsonIncludes(log.telemetry, q)
-      if (!matchesFields && !matchesDetails) return false
-    }
     return true
   })
 }
@@ -188,12 +156,6 @@ export function filterEmbeddingLogs(
     if (!matchesStatus(log.status, filters.statusFilter)) return false
     if (!matchesDateRange(log.timestamp, filters.startDate, filters.endDate))
       return false
-    if (filters.searchQuery) {
-      const q = filters.searchQuery.toLowerCase()
-      const matchesText = log.textCount.toString().includes(q)
-      const matchesError = includesQuery(log.error, q)
-      if (!matchesText && !matchesError) return false
-    }
     return true
   })
 }

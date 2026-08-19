@@ -12,6 +12,7 @@ import { PublishLogsTab } from "@/components/logs/PublishLogsTab"
 import { SyncLogsTab } from "@/components/logs/SyncLogsTab"
 import { TgConfirmDialog } from "@/components/ui/tg-confirm-dialog"
 import { useUI } from "@/contexts/UIContext"
+import { useDebouncedValue } from "@/hooks/useDebouncedValue"
 import {
   useDeleteLogsMutation,
   useEmbeddingLogsQuery,
@@ -63,11 +64,36 @@ export const LogsView: React.FC = () => {
    * so every writer had to call back here imperatively. Enabled, the
    * invalidation in `lib/logs/write.ts` refetches on its own.
    */
-  const publishQuery = usePublishLogsQuery(true)
-  const syncQuery = useSyncLogsQuery(true)
-  const llmQuery = useLLMLogsQuery(true)
-  const networkQuery = useNetworkLogsQuery(true)
-  const embeddingQuery = useEmbeddingLogsQuery(true)
+  const [filters, setFilters] = useState<LogFilters>(DEFAULT_LOG_FILTERS)
+
+  /**
+   * The text search runs on the server now.
+   *
+   * It has to: the list no longer carries `fullRequest` / `fullResponse` (or
+   * the LLM prompt and response), so "search in details" has nothing left to
+   * match client-side. It is also strictly better — the match is over the whole
+   * table rather than the 500 rows that happened to be fetched.
+   *
+   * Debounced because it is a request per change, and part of the query key so
+   * a new term refetches. The other filters stay client-side: they read fields
+   * the list still carries and cost nothing there.
+   */
+  const logSearch = useDebouncedValue(
+    useMemo(
+      () => ({
+        query: filters.searchQuery,
+        inDetails: filters.searchInDetails,
+      }),
+      [filters.searchQuery, filters.searchInDetails],
+    ),
+    300,
+  )
+
+  const publishQuery = usePublishLogsQuery(true, { search: logSearch })
+  const syncQuery = useSyncLogsQuery(true, { search: logSearch })
+  const llmQuery = useLLMLogsQuery(true, { search: logSearch })
+  const networkQuery = useNetworkLogsQuery(true, { search: logSearch })
+  const embeddingQuery = useEmbeddingLogsQuery(true, { search: logSearch })
 
   const publishLogs = publishQuery.data ?? EMPTY_PUBLISH
   const syncLogs = syncQuery.data ?? EMPTY_SYNC
@@ -93,7 +119,6 @@ export const LogsView: React.FC = () => {
   const deleteNetwork = useDeleteLogsMutation("network")
   const deleteEmbedding = useDeleteLogsMutation("embedding")
   const [activeLogTab, setActiveLogTab] = useState<LogTab>("publish")
-  const [filters, setFilters] = useState<LogFilters>(DEFAULT_LOG_FILTERS)
   const [showFilters, setShowFilters] = useState(false)
   const [expandedByTab, setExpandedByTab] = useState<
     Record<LogTab, string | null>

@@ -311,6 +311,23 @@ export type SyncLog = Omit<SyncLogResponse, "status"> & {
   status: "success" | "failed"
 } & AlwaysSent<SyncLogResponse, "timestamp" | "postsCount">
 
+/**
+ * What `GET /data/logs/{type}` actually returns — the corpus-sized fields are
+ * only on the detail route now.
+ *
+ * `GET /data/logs/sync` was **56.28 MB for a page of 500 rows, 99.7% of it
+ * request/response bodies**, and the viewer renders none of them until a row is
+ * expanded. These `Omit`s are what stops a card reading a field the list never
+ * sent; the full type is still what `useLogDetailQuery` returns.
+ */
+export type SyncLogListItem = Omit<SyncLog, "fullRequest" | "fullResponse">
+
+/** See `SyncLogListItem`. */
+export type PublishLogListItem = Omit<
+  PublishLog,
+  "fullRequest" | "fullResponse" | "textSent"
+>
+
 export interface LLMLog {
   id: string
   model: string
@@ -327,6 +344,12 @@ export interface LLMLog {
   timestamp: number
   type: "summary" | "chat" | "analysis" | "rag_chat"
 }
+
+/** See `SyncLogListItem`. `modelConfig` stays — it is `{temperature}`. */
+export type LLMLogListItem = Omit<
+  LLMLog,
+  "prompt" | "response" | "systemInstruction" | "fullRequest" | "fullResponse"
+>
 
 export type EmbeddingLog = Omit<EmbeddingLogResponse, "status"> & {
   status: "success" | "failed"

@@ -1803,6 +1803,54 @@ export type JobsRuntimeSettings = {
 };
 
 /**
+ * LLMLogListItemResponse
+ * An LLM log without the prompt, the response, or the raw bodies.
+ *
+ * `modelConfig` stays: it is `{"temperature": 0.7}`, and dropping it would be
+ * churn rather than a saving.
+ */
+export type LlmLogListItemResponse = {
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Model
+     */
+    model: string;
+    /**
+     * Modelconfig
+     */
+    modelConfig?: {
+        [key: string]: unknown;
+    } | null;
+    /**
+     * Tokens
+     */
+    tokens?: number | null;
+    /**
+     * Duration
+     */
+    duration?: number | null;
+    /**
+     * Status
+     */
+    status: string;
+    /**
+     * Error
+     */
+    error?: string | null;
+    /**
+     * Timestamp
+     */
+    timestamp?: number;
+    /**
+     * Type
+     */
+    type?: string;
+};
+
+/**
  * LLMLogResponse
  * One model call: the prompt, the response, and what it cost.
  *
@@ -1867,7 +1915,9 @@ export type LlmLogResponse = {
     type?: string;
 };
 
-export type LogEntryResponse = PublishLogResponse | SyncLogResponse | LlmLogResponse | EmbeddingLogResponse | NetworkLogResponse;
+export type LogDetailResponse = PublishLogResponse | SyncLogResponse | LlmLogResponse | EmbeddingLogResponse | NetworkLogResponse;
+
+export type LogEntryResponse = PublishLogListItemResponse | SyncLogListItemResponse | LlmLogListItemResponse | EmbeddingLogResponse | NetworkLogResponse;
 
 export type LogPayload = {
     [key: string]: unknown;
@@ -2471,6 +2521,49 @@ export type ProxyLaneSnapshot = {
      * Incooldown
      */
     inCooldown: boolean;
+};
+
+/**
+ * PublishLogListItemResponse
+ * A publish log without `fullRequest` / `fullResponse` / `textSent`.
+ */
+export type PublishLogListItemResponse = {
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Summaryid
+     */
+    summaryId: string;
+    /**
+     * Botid
+     */
+    botId: string;
+    /**
+     * Botname
+     */
+    botName: string;
+    /**
+     * Chatid
+     */
+    chatId: string;
+    /**
+     * Chatname
+     */
+    chatName: string;
+    /**
+     * Status
+     */
+    status: string;
+    /**
+     * Error
+     */
+    error?: string | null;
+    /**
+     * Timestamp
+     */
+    timestamp?: number;
 };
 
 /**
@@ -3485,6 +3578,45 @@ export type SyncJobStatusResponse = {
      * Finishedat
      */
     finishedAt?: number | null;
+};
+
+/**
+ * SyncLogListItemResponse
+ * A sync log without its bodies — the list no longer joins the payload table.
+ */
+export type SyncLogListItemResponse = {
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Channelname
+     */
+    channelName: string;
+    /**
+     * Status
+     */
+    status: string;
+    /**
+     * Postscount
+     */
+    postsCount?: number;
+    /**
+     * Newlatestid
+     */
+    newLatestId?: number | null;
+    /**
+     * Error
+     */
+    error?: string | null;
+    /**
+     * Timestamp
+     */
+    timestamp?: number;
+    /**
+     * Source
+     */
+    source?: string;
 };
 
 /**
@@ -6809,6 +6941,14 @@ export type DataListLogsRouteData = {
          * Offset
          */
         offset?: number;
+        /**
+         * Search
+         */
+        search?: string | null;
+        /**
+         * Searchindetails
+         */
+        searchInDetails?: boolean;
     };
     url: '/api/v1/data/logs/{log_type}';
 };
@@ -6867,6 +7007,42 @@ export type DataCreateLogsRouteResponses = {
 };
 
 export type DataCreateLogsRouteResponse = DataCreateLogsRouteResponses[keyof DataCreateLogsRouteResponses];
+
+export type DataGetLogRouteData = {
+    body?: never;
+    path: {
+        /**
+         * Log Type
+         * publish | sync | llm | embedding | network
+         */
+        log_type: string;
+        /**
+         * Log Id
+         * The log row's id
+         */
+        log_id: string;
+    };
+    query?: never;
+    url: '/api/v1/data/logs/{log_type}/{log_id}';
+};
+
+export type DataGetLogRouteErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type DataGetLogRouteError = DataGetLogRouteErrors[keyof DataGetLogRouteErrors];
+
+export type DataGetLogRouteResponses = {
+    /**
+     * Successful Response
+     */
+    200: LogDetailResponse;
+};
+
+export type DataGetLogRouteResponse = DataGetLogRouteResponses[keyof DataGetLogRouteResponses];
 
 export type DataPurgeLogsData = {
     body?: never;

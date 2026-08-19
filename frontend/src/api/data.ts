@@ -298,6 +298,14 @@ export interface SettingGroupWriteBody {
  */
 export type LogType = "publish" | "sync" | "llm" | "embedding" | "network"
 
+/**
+ * The text half of the Logs view's filter bar, evaluated by the server.
+ *
+ * The other filters (status, date, bot, channel, model) stay client-side —
+ * they read fields the list still carries and cost nothing there.
+ */
+export type LogSearch = { query: string; inDetails: boolean }
+
 export const dataApi = {
   syncMeta: () =>
     request<Record<string, { etag: string; updatedAt?: string }>>(
@@ -717,8 +725,30 @@ export const dataApi = {
    * One page of any log type (D1). The backend serves all five kinds from
    * `GET /data/logs/{type}`; the five named helpers below are typed sugar over
    * this, not five different endpoints.
+   *
+   * The text search runs on the server. It has to: the page no longer carries
+   * `fullRequest` / `fullResponse` (or, for LLM logs, the prompt and response),
+   * so there is nothing left client-side to match "search in details" against.
+   * It searches the whole table now instead of the fetched page.
    */
-  listLogs: <T>(type: LogType) => request<T[]>(`/api/v1/data/logs/${type}`),
+  listLogs: <T>(type: LogType, search?: LogSearch) => {
+    const q = new URLSearchParams()
+    if (search?.query) q.set("search", search.query)
+    if (search?.inDetails) q.set("searchInDetails", "true")
+    const suffix = q.size ? `?${q}` : ""
+    return request<T[]>(`/api/v1/data/logs/${type}${suffix}`)
+  },
+
+  /**
+   * One log row in full, bodies included.
+   *
+   * The list deliberately drops the corpus-sized fields — `GET /logs/sync` was
+   * 56.28 MB for a page of 500 rows, 99.7% of it request/response bodies that
+   * the viewer renders only for an expanded row, and it expands one at a time.
+   * This fetches that one row.
+   */
+  getLog: <T>(type: LogType, id: string) =>
+    request<T>(`/api/v1/data/logs/${type}/${encodeURIComponent(id)}`),
 
   createLogs: <T>(type: LogType, logs: T[]) =>
     request<{ upserted: number }>(`/api/v1/data/logs/${type}`, {

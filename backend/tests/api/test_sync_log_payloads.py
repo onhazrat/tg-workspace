@@ -69,6 +69,13 @@ def _listed(client: TestClient, headers: dict[str, str], log_id: str) -> dict:
     return next(row for row in body if row["id"] == log_id)
 
 
+def _detail(client: TestClient, headers: dict[str, str], log_id: str) -> dict:
+    """The bodies live here now — the list stopped joining the payload table."""
+    response = client.get(f"{PREFIX}/logs/sync/{log_id}", headers=headers)
+    assert response.status_code == 200, response.text
+    return dict(response.json())
+
+
 def _truncate_payloads() -> None:
     with Session(engine) as session:
         session.execute(sa_delete(SyncLogPayload))
@@ -76,14 +83,27 @@ def _truncate_payloads() -> None:
 
 
 def test_payload_round_trips_through_the_api(client: TestClient) -> None:
-    """The wire shape did not change when the columns moved."""
+    """The bodies survive the write; the detail route is where they surface."""
     headers = _auth(client)
     log_id = "payload-round-trip"
     _post_log(client, headers, log_id, timestamp=int(time.time() * 1000))
 
-    row = _listed(client, headers, log_id)
+    row = _detail(client, headers, log_id)
     assert row["fullResponse"] == _body(log_id)
     assert row["fullRequest"] == {"url": f"https://t.me/s/ch?before={log_id}"}
+
+
+def test_the_list_does_not_carry_the_bodies(client: TestClient) -> None:
+    """The saving itself: 56.28 MB for 500 rows, 99.7% of it these two keys."""
+    headers = _auth(client)
+    log_id = "payload-not-in-list"
+    _post_log(client, headers, log_id, timestamp=int(time.time() * 1000))
+
+    row = _listed(client, headers, log_id)
+
+    assert "fullRequest" not in row
+    assert "fullResponse" not in row
+    assert row["channelName"] == "ch"
 
 
 def test_bodies_are_stored_off_the_log_table(client: TestClient) -> None:
@@ -115,8 +135,12 @@ def test_logs_survive_truncating_the_payload_table(client: TestClient) -> None:
     assert listing.status_code == 200
     row = next(r for r in listing.json() if r["id"] == log_id)
     assert row["status"] == "success"
-    assert row["fullRequest"] is None
-    assert row["fullResponse"] is None
+
+    # And the detail route, which *is* the one that reads the truncated table,
+    # still answers rather than 404ing on the missing payload row.
+    detail = _detail(client, headers, log_id)
+    assert detail["fullRequest"] is None
+    assert detail["fullResponse"] is None
 
 
 def test_log_without_bodies_stores_no_payload_row(client: TestClient) -> None:

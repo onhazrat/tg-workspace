@@ -310,6 +310,42 @@ Two things fell out that were not the point:
 The wire format is unchanged — regenerating the client produced a docstring diff and
 nothing else.
 
+### Round seven: `/data/logs/sync`, found by the tooling rather than by hand
+
+The first thing `backend/scripts/slow_endpoints.py` turned up. One page was
+**56.28 MB for 500 rows, 99.7% of it request/response bodies** — and only
+**0.873 s of server time**, so entirely transfer. Observed at 43 s from a browser.
+
+Two independent wastes, both invisible from inside the container:
+
+- **The viewer shows 20 rows and the server ships 500.** `LogsView` slices an
+  already-fetched list, so 96% of the payload was never rendered.
+- **Every row carried its bodies**, though the viewer renders them only for an
+  expanded row, and expands one at a time.
+
+Fixing the second makes the first harmless: 500 rows of metadata is ~100 kB, so
+no pagination refactor was needed. The bodies moved to
+`GET /data/logs/{type}/{id}`.
+
+`tg_sync_log_payloads` had existed since `y7z8a9b0c1d2` — split off so the
+bodies could be *truncated* to reclaim disk. **The list joined them straight back
+in.** Splitting a table does not help if the read path reassembles it.
+
+The same defect was in `publish` (`fullRequest`/`fullResponse`/`textSent`) and
+`llm` (plus the prompt and response), so the fix is generic: `LOG_HEAVY_COLUMNS`
+per type, one column-select list path for all five, one detail route. Network was
+measured and left alone — its `telemetry` averages 174 bytes.
+
+**The text search had to move to SQL.** The Logs view has a *search in details*
+checkbox that matched the bodies client-side; with the bodies gone there was
+nothing left to match, and quietly dropping the feature would have been worse
+than the payload. `GET /logs/{type}?search=&searchInDetails=` now does it, so
+`textSent` and the LLM prompt stay searchable without being shipped — and the
+match covers the whole table rather than the page that happened to be fetched.
+The client filters keep status, date and the dropdowns, and **must not re-apply
+the query**: the server matches `fields OR bodies`, and a second pass over
+fields alone would drop exactly the rows *search in details* exists for.
+
 ### What is left
 
 1. **Denormalise the post counts** onto `tg_channels` to remove the ~1.1 s exact

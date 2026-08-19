@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import uuid
+from collections.abc import Mapping
 from typing import Any
 
 from app.models_tg import (
@@ -96,8 +97,20 @@ def normalize_body(body: dict[str, Any]) -> dict[str, Any]:
     return {to_snake(k): v for k, v in body.items()}
 
 
-def model_to_camel(row: Any, *, skip: frozenset[str] = frozenset()) -> dict[str, Any]:
-    data = row.model_dump()
+def mapping_to_camel(
+    data: Mapping[str, Any], *, skip: frozenset[str] = frozenset()
+) -> dict[str, Any]:
+    """Camelise a column-name -> value mapping, dropping the bookkeeping keys.
+
+    Split out of `model_to_camel` so a **column select** can be serialised
+    without an ORM entity. The log list projection selects only its light
+    columns, and there is no model instance to dump — see
+    `services/logs.py::_light_columns` for why deferring on the entity was the
+    wrong tool.
+
+    `id` is skipped here as it is in `model_to_camel`; every log serialiser puts
+    it back first so it leads the payload.
+    """
     result: dict[str, Any] = {}
     for key, value in data.items():
         if key in skip or key in ("id", "user_id", "updated_at"):
@@ -107,6 +120,10 @@ def model_to_camel(row: Any, *, skip: frozenset[str] = frozenset()) -> dict[str,
             value = str(value)
         result[camel] = value
     return result
+
+
+def model_to_camel(row: Any, *, skip: frozenset[str] = frozenset()) -> dict[str, Any]:
+    return mapping_to_camel(row.model_dump(), skip=skip)
 
 
 def channel_to_camel(

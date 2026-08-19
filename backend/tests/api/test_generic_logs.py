@@ -70,14 +70,51 @@ def _row(log_type: str, row_id: str) -> dict[str, Any]:
 
 
 def test_the_registries_cover_exactly_the_same_log_types() -> None:
-    """Three registries describe the five types; they must not drift apart."""
-    from app.api.routes.data.logs import LOG_RESPONSES
-    from app.schemas.logs import LOG_SCHEMAS
-    from app.services.logs import LOG_LISTERS
+    """Six registries describe the five types; they must not drift apart."""
+    from app.api.routes.data.logs import LOG_LIST_RESPONSES, LOG_RESPONSES
+    from app.schemas.logs import LOG_LIST_SCHEMAS, LOG_SCHEMAS
+    from app.services.logs import LOG_HEAVY_COLUMNS
 
-    assert set(LOG_MODELS) == set(LOG_LISTERS) == set(LOG_SCHEMAS)
+    assert set(LOG_MODELS) == set(LOG_HEAVY_COLUMNS) == set(LOG_SCHEMAS)
+    assert set(LOG_MODELS) == set(LOG_LIST_SCHEMAS) == set(LOG_LIST_RESPONSES)
     assert set(LOG_MODELS) == set(LOG_RESPONSES)
     assert set(LOG_MODELS) == set(FIXTURES), "this test file is missing a type"
+
+
+def test_every_heavy_column_is_a_real_column_of_its_table() -> None:
+    """A typo in `LOG_HEAVY_COLUMNS` would silently omit nothing.
+
+    The list projection filters columns by name, so a misspelled entry does not
+    raise — it just quietly stops saving anything, and the 56 MB comes back.
+    """
+    from app.services.logs import LOG_HEAVY_COLUMNS
+
+    for log_type, heavy in LOG_HEAVY_COLUMNS.items():
+        model, _ = LOG_MODELS[log_type]
+        real = {c.key for c in model.__table__.columns}  # type: ignore[attr-defined]
+        assert heavy <= real, f"{log_type}: {heavy - real} are not columns"
+
+
+def test_the_list_schema_declares_exactly_the_columns_the_query_selects() -> None:
+    """The two halves of the split, asserted against each other.
+
+    `LOG_HEAVY_COLUMNS` decides what the SQL omits and `LOG_LIST_SCHEMAS`
+    decides what the response declares. If they disagree, either a heavy field
+    is fetched and then dropped by pydantic (paid for, not shipped) or a
+    declared field is never fetched and serialises as an explicit `null`.
+    """
+    from app.schemas.logs import LOG_LIST_SCHEMAS
+    from app.services.logs import LOG_HEAVY_COLUMNS
+    from app.services.serialization import to_camel
+
+    for log_type, heavy in LOG_HEAVY_COLUMNS.items():
+        declared = {
+            f.alias or name
+            for name, f in LOG_LIST_SCHEMAS[log_type].model_fields.items()
+        }
+        assert declared.isdisjoint({to_camel(c) for c in heavy}), (
+            f"{log_type}: list schema declares a column the query never selects"
+        )
 
 
 @pytest.mark.parametrize("log_type", sorted(FIXTURES))
@@ -105,15 +142,18 @@ def test_each_type_keeps_its_own_shape_through_the_shared_route(
     """One endpoint, five payload shapes.
 
     The generic route picks the response model from the path parameter, so this
-    is where a mis-wired registry shows up: serving an LLM log through the
+    is where a miswired registry shows up: serving an LLM log through the
     embedding model would silently drop `prompt`, `response` and `model`.
     """
     headers = _auth(client)
     written = _row(log_type, f"shape-{log_type}")
     client.post(f"{PREFIX}/logs/{log_type}", json=[written], headers=headers)
 
-    rows = client.get(f"{PREFIX}/logs/{log_type}", headers=headers).json()
-    row = next(r for r in rows if r["id"] == f"shape-{log_type}")
+    # Round-tripped through the *detail* route: the list deliberately omits the
+    # corpus-sized fields, so it is not where "did every field survive" is asked.
+    row = client.get(
+        f"{PREFIX}/logs/{log_type}/shape-{log_type}", headers=headers
+    ).json()
     for key, value in written.items():
         assert row[key] == value, f"{log_type}.{key} did not round-trip"
 

@@ -1,11 +1,12 @@
 import { Bot, CheckCircle2, ExternalLink, FileText, Send } from "lucide-react"
 import type React from "react"
 import { TgIconButton } from "@/components/ui/tg-icon-button"
-import type { PublishLog } from "@/types"
+import type { PublishLog, PublishLogListItem } from "@/types"
 import { LogCard, LogMetaItem } from "./LogCard"
 import { DeleteLogButton, ExpandToggleButton } from "./LogCardActions"
 import {
   ExpandableLogDetails,
+  LogDetailSection,
   LogErrorBlock,
   RequestResponsePanels,
   TextDetailBlock,
@@ -14,7 +15,7 @@ import { LogEmptyState } from "./LogEmptyState"
 import { LogsSkeleton } from "./LogsSkeleton"
 
 interface PublishLogsTabProps {
-  logs: PublishLog[]
+  logs: PublishLogListItem[]
   /** First load in flight — distinct from having no logs. */
   isLoading: boolean
   visibleCount: number
@@ -99,15 +100,24 @@ export const PublishLogsTab: React.FC<PublishLogsTabProps> = ({
           </div>
 
           <ExpandableLogDetails expanded={expandedId === log.id}>
-            {log.textSent && (
-              <TextDetailBlock icon={<FileText size={10} />} label="Text Sent">
-                {log.textSent}
-              </TextDetailBlock>
-            )}
-            <RequestResponsePanels
-              request={log.fullRequest}
-              response={log.fullResponse}
-            />
+            <LogDetailSection<PublishLog> type="publish" id={log.id}>
+              {(detail) => (
+                <>
+                  {detail.textSent && (
+                    <TextDetailBlock
+                      icon={<FileText size={10} />}
+                      label="Text Sent"
+                    >
+                      {detail.textSent}
+                    </TextDetailBlock>
+                  )}
+                  <RequestResponsePanels
+                    request={detail.fullRequest}
+                    response={detail.fullResponse}
+                  />
+                </>
+              )}
+            </LogDetailSection>
           </ExpandableLogDetails>
         </LogCard>
       ))}

@@ -1,10 +1,11 @@
 import { Activity, Clock, Hash, RefreshCw } from "lucide-react"
 import type React from "react"
-import type { SyncLog } from "@/types"
+import type { SyncLog, SyncLogListItem } from "@/types"
 import { LogCard, LogMetaItem } from "./LogCard"
 import { DeleteLogButton, ExpandToggleButton } from "./LogCardActions"
 import {
   ExpandableLogDetails,
+  LogDetailSection,
   LogErrorBlock,
   RequestResponsePanels,
 } from "./LogDetailBlocks"
@@ -12,7 +13,7 @@ import { LogEmptyState } from "./LogEmptyState"
 import { LogsSkeleton } from "./LogsSkeleton"
 
 interface SyncLogsTabProps {
-  logs: SyncLog[]
+  logs: SyncLogListItem[]
   /** First load in flight — distinct from having no logs. */
   isLoading: boolean
   visibleCount: number
@@ -87,10 +88,14 @@ export const SyncLogsTab: React.FC<SyncLogsTabProps> = ({
           )}
 
           <ExpandableLogDetails expanded={expandedId === log.id}>
-            <RequestResponsePanels
-              request={log.fullRequest}
-              response={log.fullResponse}
-            />
+            <LogDetailSection<SyncLog> type="sync" id={log.id}>
+              {(detail) => (
+                <RequestResponsePanels
+                  request={detail.fullRequest}
+                  response={detail.fullResponse}
+                />
+              )}
+            </LogDetailSection>
           </ExpandableLogDetails>
         </LogCard>
       ))}

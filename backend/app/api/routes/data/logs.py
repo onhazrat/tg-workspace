@@ -23,12 +23,16 @@ from fastapi import APIRouter, HTTPException, Path, Query
 from app.api.deps import CurrentUser, SessionDep
 from app.schemas.logs import (
     EmbeddingLogResponse,
+    LLMLogListItemResponse,
     LLMLogResponse,
+    LogDetailResponse,
     LogEntryResponse,
     LogWriteResponse,
     NetworkLogResponse,
+    PublishLogListItemResponse,
     PublishLogResponse,
     PurgeLogsResponse,
+    SyncLogListItemResponse,
     SyncLogResponse,
 )
 from app.services.logs import (
@@ -39,6 +43,7 @@ from app.services.logs import (
     create_logs,
     delete_log_by_id,
     delete_old_logs,
+    get_log,
     list_logs,
 )
 from app.services.sync_meta import touch_sync
@@ -64,16 +69,49 @@ def list_logs_route(
     log_type: str = LogType,
     limit: int = Query(default=DEFAULT_LOG_PAGE_SIZE, ge=1, le=MAX_LOG_PAGE_SIZE),
     offset: int = Query(default=0, ge=0),
+    search: str | None = Query(default=None),
+    search_in_details: bool = Query(default=False, alias="searchInDetails"),
 ) -> list[LogEntryResponse]:
-    """One newest-first page of any log type.
+    """One newest-first page of any log type, without the corpus-sized fields.
 
     Paged rather than whole-table: these tables carry request/response JSON and
     grow without bound between retention sweeps, so an unfiltered select can
     materialise gigabytes and OOM the worker. Full data ships via the export
     path, which streams.
+
+    The bodies are on `GET /logs/{log_type}/{log_id}` — this page was 56.28 MB
+    for 500 rows, 99.7% of it bodies the viewer only renders for an expanded
+    row. `search` runs in SQL so they stay findable without being sent, and
+    `searchInDetails` extends the match into them; both now search the whole
+    table rather than the page that happened to be fetched.
     """
-    rows = list_logs(session, _known(log_type), limit=limit, offset=offset)
-    return [LOG_RESPONSES[log_type].model_validate(row) for row in rows]
+    rows = list_logs(
+        session,
+        _known(log_type),
+        limit=limit,
+        offset=offset,
+        search=search,
+        search_in_details=search_in_details,
+    )
+    return [LOG_LIST_RESPONSES[log_type].model_validate(row) for row in rows]
+
+
+@router.get("/logs/{log_type}/{log_id}")
+def get_log_route(
+    session: SessionDep,
+    _current_user: CurrentUser,
+    log_type: str = LogType,
+    log_id: str = Path(description="The log row's id"),
+) -> LogDetailResponse:
+    """One log row in full, bodies included.
+
+    The other half of the list projection. `GET /data/logs/sync` shipped
+    56.28 MB for a page of 500 rows, 99.7% of it request/response bodies that
+    the viewer renders only for an expanded row — and it expands one at a time.
+    This serves that one row.
+    """
+    row = get_log(session, _known(log_type), log_id)
+    return LOG_RESPONSES[log_type].model_validate(row)
 
 
 @router.post("/logs/{log_type}")
@@ -89,14 +127,26 @@ def create_logs_route(
     )
 
 
-#: `log_type` -> response model, used to pick the right member of the
-#: `LogEntryResponse` union. Declared next to the routes because it is a
+#: `log_type` -> **detail** response model, used to pick the right member of the
+#: `LogDetailResponse` union. The list route uses `LOG_LIST_SCHEMAS` instead. Declared next to the routes because it is a
 #: presentation concern; `app/schemas/logs.py::LOG_SCHEMAS` is the same mapping
 #: for callers that need it without importing the router.
-LOG_RESPONSES: dict[str, type[LogEntryResponse]] = {
+LOG_RESPONSES: dict[str, type[LogDetailResponse]] = {
     "publish": PublishLogResponse,
     "sync": SyncLogResponse,
     "llm": LLMLogResponse,
+    "embedding": EmbeddingLogResponse,
+    "network": NetworkLogResponse,
+}
+
+#: `log_type` -> the model a *list* page validates against. Embedding and
+#: network appear in both tables because they have no heavy column to drop.
+#: `app/schemas/logs.py::LOG_LIST_SCHEMAS` is the same mapping for callers that
+#: need it without importing the router.
+LOG_LIST_RESPONSES: dict[str, type[LogEntryResponse]] = {
+    "publish": PublishLogListItemResponse,
+    "sync": SyncLogListItemResponse,
+    "llm": LLMLogListItemResponse,
     "embedding": EmbeddingLogResponse,
     "network": NetworkLogResponse,
 }

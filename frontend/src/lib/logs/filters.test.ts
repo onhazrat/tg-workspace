@@ -163,33 +163,19 @@ describe("filterPublishLogs", () => {
     ).toEqual(["old"])
   })
 
-  test("search matches bot, chat and error fields", () => {
+  test("the text query is the server's job and must not be applied here", () => {
+    // The server matches `fields OR bodies` and the list no longer carries the
+    // bodies. A second pass over fields here would drop exactly the rows that
+    // matched only on a body — the ones "search in details" exists for.
     expect(
-      filterPublishLogs(logs, filters({ searchQuery: "daily" })).map(
-        (l) => l.id,
-      ),
-    ).toEqual(["a", "b"])
-    expect(
-      filterPublishLogs(logs, filters({ searchQuery: "not found" })).map(
-        (l) => l.id,
-      ),
-    ).toEqual(["b"])
-    expect(filterPublishLogs(logs, filters({ searchQuery: "zzz" }))).toEqual([])
-  })
-
-  test("searches request/response JSON only when searchInDetails is on", () => {
-    const withDetails = [
-      publishLog({ id: "d", fullRequest: { payload: "hidden-token" } }),
-    ]
-    expect(
-      filterPublishLogs(withDetails, filters({ searchQuery: "hidden-token" })),
-    ).toEqual([])
+      filterPublishLogs(logs, filters({ searchQuery: "zzz-matches-nothing" })),
+    ).toEqual(logs)
     expect(
       filterPublishLogs(
-        withDetails,
-        filters({ searchQuery: "hidden-token", searchInDetails: true }),
-      ).map((l) => l.id),
-    ).toEqual(["d"])
+        logs,
+        filters({ searchQuery: "zzz", searchInDetails: true }),
+      ),
+    ).toEqual(logs)
   })
 })
 
@@ -207,10 +193,10 @@ describe("filterSyncLogs", () => {
     ).toEqual(["b"])
   })
 
-  test("search matches source", () => {
+  test("the text query is not applied here — see filterPublishLogs", () => {
     expect(
-      filterSyncLogs(logs, filters({ searchQuery: "RSS" })).map((l) => l.id),
-    ).toEqual(["b"])
+      filterSyncLogs(logs, filters({ searchQuery: "zzz-matches-nothing" })),
+    ).toEqual(logs)
   })
 })
 
@@ -226,15 +212,10 @@ describe("filterLlmLogs", () => {
     ).toEqual(["b"])
   })
 
-  test("search matches prompt and response", () => {
+  test("the text query is not applied here — see filterPublishLogs", () => {
     expect(
-      filterLlmLogs(logs, filters({ searchQuery: "greeting" })).map(
-        (l) => l.id,
-      ),
-    ).toEqual(["a"])
-    expect(
-      filterLlmLogs(logs, filters({ searchQuery: "BONJOUR" })).map((l) => l.id),
-    ).toEqual(["b"])
+      filterLlmLogs(logs, filters({ searchQuery: "zzz-matches-nothing" })),
+    ).toEqual(logs)
   })
 })
 
@@ -248,24 +229,10 @@ describe("filterNetworkLogs", () => {
     }),
   ]
 
-  test("search matches method case-insensitively", () => {
+  test("the text query is not applied here — see filterPublishLogs", () => {
     expect(
-      filterNetworkLogs(logs, filters({ searchQuery: "post" })).map(
-        (l) => l.id,
-      ),
-    ).toEqual(["b"])
-  })
-
-  test("telemetry is only searched with searchInDetails", () => {
-    expect(filterNetworkLogs(logs, filters({ searchQuery: "berlin" }))).toEqual(
-      [],
-    )
-    expect(
-      filterNetworkLogs(
-        logs,
-        filters({ searchQuery: "berlin", searchInDetails: true }),
-      ).map((l) => l.id),
-    ).toEqual(["b"])
+      filterNetworkLogs(logs, filters({ searchQuery: "zzz-matches-nothing" })),
+    ).toEqual(logs)
   })
 })
 
@@ -275,17 +242,13 @@ describe("filterEmbeddingLogs", () => {
     embeddingLog({ id: "b", textCount: 7, error: "quota exceeded" }),
   ]
 
-  test("search matches text count and error", () => {
+  test("the text query is not applied here — see filterPublishLogs", () => {
     expect(
-      filterEmbeddingLogs(logs, filters({ searchQuery: "42" })).map(
-        (l) => l.id,
+      filterEmbeddingLogs(
+        logs,
+        filters({ searchQuery: "zzz-matches-nothing" }),
       ),
-    ).toEqual(["a"])
-    expect(
-      filterEmbeddingLogs(logs, filters({ searchQuery: "quota" })).map(
-        (l) => l.id,
-      ),
-    ).toEqual(["b"])
+    ).toEqual(logs)
   })
 
   test("filters by status and date like other tabs", () => {

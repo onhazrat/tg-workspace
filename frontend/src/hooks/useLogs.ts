@@ -1,13 +1,13 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 
 import { api } from "@/api"
-import type { LogType } from "@/api/data"
+import type { LogSearch, LogType } from "@/api/data"
 import type {
   EmbeddingLog,
-  LLMLog,
+  LLMLogListItem,
   NetworkLog,
-  PublishLog,
-  SyncLog,
+  PublishLogListItem,
+  SyncLogListItem,
 } from "@/types"
 
 import { queryKeys, SUMMARIZER_STALE_TIME } from "./queryKeys"
@@ -43,8 +43,9 @@ function sortByTimestamp<T extends { timestamp: number }>(logs: T[]): T[] {
 export async function fetchLogs(
   type: LogType,
   list: LogLister = api.listLogs,
+  search?: LogSearch,
 ): Promise<{ timestamp: number }[]> {
-  return sortByTimestamp(await list<{ timestamp: number }>(type))
+  return sortByTimestamp(await list<{ timestamp: number }>(type, search))
 }
 
 /**
@@ -54,13 +55,19 @@ export async function fetchLogs(
  * `LogPoster` in `lib/logs/write.ts`), and stubbing the global `fetch` instead
  * leaks across test files.
  */
-export type LogLister = <T>(type: LogType) => Promise<T[]>
+export type LogLister = <T>(type: LogType, search?: LogSearch) => Promise<T[]>
 
 export type LogsQueryOptions = {
   /** Poll interval in ms. Omit for no polling. */
   refetchInterval?: number
   /** Test seam; see `LogLister`. */
   lister?: LogLister
+  /**
+   * Server-side text search. Part of the query key, so changing it refetches —
+   * it has to, because the match now happens in SQL over the whole table
+   * rather than in the browser over the page that was already fetched.
+   */
+  search?: LogSearch
 }
 
 export function useLogsQuery(
@@ -68,31 +75,52 @@ export function useLogsQuery(
   enabled = false,
   options: LogsQueryOptions = {},
 ) {
+  const search = options.search?.query ? options.search : undefined
   return useQuery({
-    queryKey: queryKeys.logs[type],
-    queryFn: () => fetchLogs(type, options.lister),
+    queryKey: [
+      ...queryKeys.logs[type],
+      search?.query ?? "",
+      search?.inDetails ?? false,
+    ],
+    queryFn: () => fetchLogs(type, options.lister, search),
     staleTime: SUMMARIZER_STALE_TIME,
     enabled,
     refetchInterval: options.refetchInterval,
   })
 }
 
-export function usePublishLogsQuery(enabled = false) {
-  return useLogsQuery("publish", enabled) as ReturnType<
-    typeof useQuery<PublishLog[]>
+export function usePublishLogsQuery(
+  enabled = false,
+  options: LogsQueryOptions = {},
+) {
+  return useLogsQuery("publish", enabled, options) as ReturnType<
+    typeof useQuery<PublishLogListItem[]>
   >
 }
 
-export function useSyncLogsQuery(enabled = false) {
-  return useLogsQuery("sync", enabled) as ReturnType<typeof useQuery<SyncLog[]>>
+export function useSyncLogsQuery(
+  enabled = false,
+  options: LogsQueryOptions = {},
+) {
+  return useLogsQuery("sync", enabled, options) as ReturnType<
+    typeof useQuery<SyncLogListItem[]>
+  >
 }
 
-export function useLLMLogsQuery(enabled = false) {
-  return useLogsQuery("llm", enabled) as ReturnType<typeof useQuery<LLMLog[]>>
+export function useLLMLogsQuery(
+  enabled = false,
+  options: LogsQueryOptions = {},
+) {
+  return useLogsQuery("llm", enabled, options) as ReturnType<
+    typeof useQuery<LLMLogListItem[]>
+  >
 }
 
-export function useEmbeddingLogsQuery(enabled = false) {
-  return useLogsQuery("embedding", enabled) as ReturnType<
+export function useEmbeddingLogsQuery(
+  enabled = false,
+  options: LogsQueryOptions = {},
+) {
+  return useLogsQuery("embedding", enabled, options) as ReturnType<
     typeof useQuery<EmbeddingLog[]>
   >
 }
@@ -104,6 +132,29 @@ export function useNetworkLogsQuery(
   return useLogsQuery("network", enabled, options) as ReturnType<
     typeof useQuery<NetworkLog[]>
   >
+}
+
+/**
+ * The bodies for one expanded log row.
+ *
+ * The list projection stopped carrying `fullRequest` / `fullResponse` (and, for
+ * LLM logs, the prompt and response): `GET /data/logs/sync` was **56.28 MB for
+ * a page of 500 rows, 99.7% of it bodies**, and the viewer renders none of it
+ * until a row is expanded — one row at a time. So the row that is open fetches
+ * its own detail.
+ *
+ * `enabled` is the whole mechanism: passing `null` for a collapsed row means no
+ * request. Query keys are per row, so collapsing and reopening is a cache hit
+ * rather than a second fetch, and `staleTime` keeps it that way — a log row is
+ * immutable once written.
+ */
+export function useLogDetailQuery<T>(type: LogType, id: string | null) {
+  return useQuery({
+    queryKey: queryKeys.logDetail(type, id ?? ""),
+    queryFn: () => api.getLog<T>(type, id as string),
+    enabled: id !== null,
+    staleTime: Infinity,
+  })
 }
 
 /**

@@ -3493,7 +3493,7 @@
       "get": {
         "tags": ["data"],
         "summary": "List Logs Route",
-        "description": "One newest-first page of any log type.\n\nPaged rather than whole-table: these tables carry request/response JSON and\ngrow without bound between retention sweeps, so an unfiltered select can\nmaterialise gigabytes and OOM the worker. Full data ships via the export\npath, which streams.",
+        "description": "One newest-first page of any log type, without the corpus-sized fields.\n\nPaged rather than whole-table: these tables carry request/response JSON and\ngrow without bound between retention sweeps, so an unfiltered select can\nmaterialise gigabytes and OOM the worker. Full data ships via the export\npath, which streams.\n\nThe bodies are on `GET /logs/{log_type}/{log_id}` \u2014 this page was 56.28 MB\nfor 500 rows, 99.7% of it bodies the viewer only renders for an expanded\nrow. `search` runs in SQL so they stay findable without being sent, and\n`searchInDetails` extends the match into them; both now search the whole\ntable rather than the page that happened to be fetched.",
         "operationId": "data-list_logs_route",
         "security": [{ "OAuth2PasswordBearer": [] }],
         "parameters": [
@@ -3529,6 +3529,25 @@
               "minimum": 0,
               "default": 0,
               "title": "Offset"
+            }
+          },
+          {
+            "name": "search",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [{ "type": "string" }, { "type": "null" }],
+              "title": "Search"
+            }
+          },
+          {
+            "name": "searchInDetails",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "Searchindetails"
             }
           }
         ],
@@ -3592,6 +3611,57 @@
             "content": {
               "application/json": {
                 "schema": { "$ref": "#/components/schemas/LogWriteResponse" }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/data/logs/{log_type}/{log_id}": {
+      "get": {
+        "tags": ["data"],
+        "summary": "Get Log Route",
+        "description": "One log row in full, bodies included.\n\nThe other half of the list projection. `GET /data/logs/sync` shipped\n56.28 MB for a page of 500 rows, 99.7% of it request/response bodies that\nthe viewer renders only for an expanded row \u2014 and it expands one at a time.\nThis serves that one row.",
+        "operationId": "data-get_log_route",
+        "security": [{ "OAuth2PasswordBearer": [] }],
+        "parameters": [
+          {
+            "name": "log_type",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "publish | sync | llm | embedding | network",
+              "title": "Log Type"
+            },
+            "description": "publish | sync | llm | embedding | network"
+          },
+          {
+            "name": "log_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "The log row's id",
+              "title": "Log Id"
+            },
+            "description": "The log row's id"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/LogDetailResponse" }
               }
             }
           },
@@ -5916,6 +5986,42 @@
         "required": ["enabled", "intervals"],
         "title": "JobsRuntimeSettings"
       },
+      "LLMLogListItemResponse": {
+        "properties": {
+          "id": { "type": "string", "title": "Id" },
+          "model": { "type": "string", "title": "Model" },
+          "modelConfig": {
+            "anyOf": [
+              { "additionalProperties": true, "type": "object" },
+              { "type": "null" }
+            ],
+            "title": "Modelconfig"
+          },
+          "tokens": {
+            "anyOf": [{ "type": "integer" }, { "type": "null" }],
+            "title": "Tokens"
+          },
+          "duration": {
+            "anyOf": [{ "type": "number" }, { "type": "null" }],
+            "title": "Duration"
+          },
+          "status": { "type": "string", "title": "Status" },
+          "error": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Error"
+          },
+          "timestamp": {
+            "type": "integer",
+            "title": "Timestamp",
+            "default": 0
+          },
+          "type": { "type": "string", "title": "Type", "default": "" }
+        },
+        "type": "object",
+        "required": ["id", "model", "status"],
+        "title": "LLMLogListItemResponse",
+        "description": "An LLM log without the prompt, the response, or the raw bodies.\n\n`modelConfig` stays: it is `{\"temperature\": 0.7}`, and dropping it would be\nchurn rather than a saving."
+      },
       "LLMLogResponse": {
         "properties": {
           "id": { "type": "string", "title": "Id" },
@@ -5960,11 +6066,20 @@
         "title": "LLMLogResponse",
         "description": "One model call: the prompt, the response, and what it cost.\n\n`protected_namespaces=()` is required, not decorative. Pydantic v2 reserves\nthe `model_` prefix for its own API, and this table has both a `model` column\nand a `model_config_json` one \u2014 the latter collides with `BaseModel.model_config`\nitself. Without the override, declaring these fields raises at class-creation\ntime. Renaming the columns is not an option: they are the wire format."
       },
-      "LogEntryResponse": {
+      "LogDetailResponse": {
         "anyOf": [
           { "$ref": "#/components/schemas/PublishLogResponse" },
           { "$ref": "#/components/schemas/SyncLogResponse" },
           { "$ref": "#/components/schemas/LLMLogResponse" },
+          { "$ref": "#/components/schemas/EmbeddingLogResponse" },
+          { "$ref": "#/components/schemas/NetworkLogResponse" }
+        ]
+      },
+      "LogEntryResponse": {
+        "anyOf": [
+          { "$ref": "#/components/schemas/PublishLogListItemResponse" },
+          { "$ref": "#/components/schemas/SyncLogListItemResponse" },
+          { "$ref": "#/components/schemas/LLMLogListItemResponse" },
           { "$ref": "#/components/schemas/EmbeddingLogResponse" },
           { "$ref": "#/components/schemas/NetworkLogResponse" }
         ]
@@ -6485,6 +6600,34 @@
         "type": "object",
         "required": ["proxyUrl", "maxParallel", "inUse", "inCooldown"],
         "title": "ProxyLaneSnapshot"
+      },
+      "PublishLogListItemResponse": {
+        "properties": {
+          "id": { "type": "string", "title": "Id" },
+          "summaryId": { "type": "string", "title": "Summaryid" },
+          "botId": { "type": "string", "title": "Botid" },
+          "botName": { "type": "string", "title": "Botname" },
+          "chatId": { "type": "string", "title": "Chatid" },
+          "chatName": { "type": "string", "title": "Chatname" },
+          "status": { "type": "string", "title": "Status" },
+          "error": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Error"
+          },
+          "timestamp": { "type": "integer", "title": "Timestamp", "default": 0 }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "summaryId",
+          "botId",
+          "botName",
+          "chatId",
+          "chatName",
+          "status"
+        ],
+        "title": "PublishLogListItemResponse",
+        "description": "A publish log without `fullRequest` / `fullResponse` / `textSent`."
       },
       "PublishLogResponse": {
         "properties": {
@@ -7394,6 +7537,36 @@
         "type": "object",
         "required": ["jobId", "status", "source", "channels", "createdAt"],
         "title": "SyncJobStatusResponse"
+      },
+      "SyncLogListItemResponse": {
+        "properties": {
+          "id": { "type": "string", "title": "Id" },
+          "channelName": { "type": "string", "title": "Channelname" },
+          "status": { "type": "string", "title": "Status" },
+          "postsCount": {
+            "type": "integer",
+            "title": "Postscount",
+            "default": 0
+          },
+          "newLatestId": {
+            "anyOf": [{ "type": "integer" }, { "type": "null" }],
+            "title": "Newlatestid"
+          },
+          "error": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Error"
+          },
+          "timestamp": {
+            "type": "integer",
+            "title": "Timestamp",
+            "default": 0
+          },
+          "source": { "type": "string", "title": "Source", "default": "manual" }
+        },
+        "type": "object",
+        "required": ["id", "channelName", "status"],
+        "title": "SyncLogListItemResponse",
+        "description": "A sync log without its bodies \u2014 the list no longer joins the payload table."
       },
       "SyncLogResponse": {
         "properties": {

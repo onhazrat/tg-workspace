@@ -24,6 +24,10 @@ from app.core.config import settings
 
 PREFIX = f"{settings.API_V1_STR}/data"
 
+# The *detail* key sets — `GET /logs/{type}/{id}`, which is where the bodies
+# now live. A list page carries these minus HEAVY_*: `GET /logs/sync` shipped
+# 56.28 MB for 500 rows, 99.7% of it bodies the viewer renders only for the one
+# row an operator expanded.
 PUBLISH_KEYS = {
     "id",
     "summaryId",
@@ -38,6 +42,8 @@ PUBLISH_KEYS = {
     "fullResponse",
     "textSent",
 }
+HEAVY_PUBLISH_KEYS = {"fullRequest", "fullResponse", "textSent"}
+
 SYNC_KEYS = {
     "id",
     "channelName",
@@ -50,6 +56,8 @@ SYNC_KEYS = {
     "fullRequest",
     "fullResponse",
 }
+HEAVY_SYNC_KEYS = {"fullRequest", "fullResponse"}
+
 LLM_KEYS = {
     "id",
     "model",
@@ -65,6 +73,13 @@ LLM_KEYS = {
     "error",
     "timestamp",
     "type",
+}
+HEAVY_LLM_KEYS = {
+    "prompt",
+    "response",
+    "systemInstruction",
+    "fullRequest",
+    "fullResponse",
 }
 EMBEDDING_KEYS = {
     "id",
@@ -147,14 +162,20 @@ def test_publish_logs_keep_their_key_set(client: TestClient) -> None:
 
     rows = client.get(f"{PREFIX}/logs/publish", headers=headers).json()
     assert len(rows) == 1
-    assert set(rows[0]) == PUBLISH_KEYS
+    assert set(rows[0]) == PUBLISH_KEYS - HEAVY_PUBLISH_KEYS
+
+    detail = client.get(f"{PREFIX}/logs/publish/p1", headers=headers).json()
+    assert set(detail) == PUBLISH_KEYS
 
 
 def test_sync_logs_keep_their_key_set_including_folded_payloads(
     client: TestClient,
 ) -> None:
-    """`fullRequest`/`fullResponse` live in a truncatable side table but are part
-    of the log's wire shape, and read as null when the payload is gone."""
+    """`fullRequest`/`fullResponse` live in a truncatable side table and are part
+    of the **detail** wire shape, reading as null when the payload is gone.
+
+    The list omits them entirely rather than sending nulls — it does not join
+    that table at all any more, which is the whole saving."""
     headers = _auth(client)
     _write(
         client,
@@ -171,8 +192,12 @@ def test_sync_logs_keep_their_key_set_including_folded_payloads(
 
     rows = client.get(f"{PREFIX}/logs/sync", headers=headers).json()
     assert len(rows) == 1
-    assert set(rows[0]) == SYNC_KEYS
+    assert set(rows[0]) == SYNC_KEYS - HEAVY_SYNC_KEYS
     assert rows[0]["postsCount"] == 3
+
+    detail = client.get(f"{PREFIX}/logs/sync/sy1", headers=headers).json()
+    assert set(detail) == SYNC_KEYS
+    assert detail["fullRequest"] is None
 
 
 def test_llm_logs_survive_pydantics_protected_model_prefix(
@@ -207,10 +232,15 @@ def test_llm_logs_survive_pydantics_protected_model_prefix(
 
     rows = client.get(f"{PREFIX}/logs/llm", headers=headers).json()
     assert len(rows) == 1
-    assert set(rows[0]) == LLM_KEYS
+    assert set(rows[0]) == LLM_KEYS - HEAVY_LLM_KEYS
     assert rows[0]["model"] == "gemini-2.0-flash"
     assert rows[0]["modelConfig"] == {"temperature": 0.7}
     assert rows[0]["type"] == "summary"
+
+    detail = client.get(f"{PREFIX}/logs/llm/l1", headers=headers).json()
+    assert set(detail) == LLM_KEYS
+    assert detail["prompt"] == "hello"
+    assert detail["response"] == "hi"
 
 
 def test_embedding_logs_keep_their_key_set(client: TestClient) -> None:

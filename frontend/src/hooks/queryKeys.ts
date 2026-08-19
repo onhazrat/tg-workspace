@@ -42,6 +42,11 @@ export const queryKeys = {
     embedding: ["logs", "embedding"] as const,
     network: ["logs", "network"] as const,
   },
+  /**
+   * One expanded log row, with the bodies the list no longer carries. Keyed
+   * per row so expanding a second one does not refetch the first.
+   */
+  logDetail: (type: string, id: string) => ["logDetail", type, id] as const,
 } as const
 
 export const SUMMARIZER_STALE_TIME = env.queryStaleTimeMs

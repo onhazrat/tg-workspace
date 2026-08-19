@@ -1,10 +1,11 @@
 import { Bot, Cpu, FileText, MessageSquare, Zap } from "lucide-react"
 import type React from "react"
-import type { LLMLog } from "@/types"
+import type { LLMLog, LLMLogListItem } from "@/types"
 import { LogCard, LogMetaItem } from "./LogCard"
 import { DeleteLogButton, ExpandToggleButton } from "./LogCardActions"
 import {
   ExpandableLogDetails,
+  LogDetailSection,
   LogErrorBlock,
   RequestResponsePanels,
   TextDetailBlock,
@@ -13,7 +14,7 @@ import { LogEmptyState } from "./LogEmptyState"
 import { LogsSkeleton } from "./LogsSkeleton"
 
 interface LlmLogsTabProps {
-  logs: LLMLog[]
+  logs: LLMLogListItem[]
   /** First load in flight — distinct from having no logs. */
   isLoading: boolean
   visibleCount: number
@@ -105,35 +106,41 @@ export const LlmLogsTab: React.FC<LlmLogsTabProps> = ({
               )}
             </div>
 
-            {log.systemInstruction && (
-              <TextDetailBlock
-                icon={<Bot size={10} />}
-                label="System Instruction"
-              >
-                {log.systemInstruction}
-              </TextDetailBlock>
-            )}
-            <TextDetailBlock
-              icon={<MessageSquare size={10} />}
-              label="Prompt / Input"
-            >
-              {log.prompt}
-            </TextDetailBlock>
-            <TextDetailBlock
-              icon={<FileText size={10} />}
-              label="Response / Output"
-              variant="tall"
-            >
-              {log.response ||
-                (log.status === "failed"
-                  ? "No response generated."
-                  : "Empty response.")}
-            </TextDetailBlock>
+            <LogDetailSection<LLMLog> type="llm" id={log.id}>
+              {(detail) => (
+                <>
+                  {detail.systemInstruction && (
+                    <TextDetailBlock
+                      icon={<Bot size={10} />}
+                      label="System Instruction"
+                    >
+                      {detail.systemInstruction}
+                    </TextDetailBlock>
+                  )}
+                  <TextDetailBlock
+                    icon={<MessageSquare size={10} />}
+                    label="Prompt / Input"
+                  >
+                    {detail.prompt}
+                  </TextDetailBlock>
+                  <TextDetailBlock
+                    icon={<FileText size={10} />}
+                    label="Response / Output"
+                    variant="tall"
+                  >
+                    {detail.response ||
+                      (log.status === "failed"
+                        ? "No response generated."
+                        : "Empty response.")}
+                  </TextDetailBlock>
 
-            <RequestResponsePanels
-              request={log.fullRequest}
-              response={log.fullResponse}
-            />
+                  <RequestResponsePanels
+                    request={detail.fullRequest}
+                    response={detail.fullResponse}
+                  />
+                </>
+              )}
+            </LogDetailSection>
             {log.error && <LogErrorBlock error={log.error} />}
           </ExpandableLogDetails>
         </LogCard>

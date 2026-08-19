@@ -3,10 +3,13 @@
 from __future__ import annotations
 
 import uuid
-from collections.abc import Callable
 from typing import Any, cast
 
+from fastapi import HTTPException
+from sqlalchemy import Text
+from sqlalchemy import cast as sa_cast
 from sqlalchemy import delete as sa_delete
+from sqlalchemy import select as sa_select
 from sqlmodel import Session, SQLModel, col, or_, select
 
 from app.models_tg import (
@@ -19,11 +22,9 @@ from app.models_tg import (
     utc_now,
 )
 from app.services.serialization import (
-    embedding_log_to_camel,
-    llm_log_to_camel,
-    network_log_to_camel,
+    mapping_to_camel,
+    model_to_camel,
     normalize_body,
-    publish_log_to_camel,
     sync_log_to_camel,
 )
 
@@ -311,118 +312,137 @@ def expire_sync_payloads_stmt(cutoff: int, operator_id: uuid.UUID | None) -> Any
     return stmt
 
 
-def _list_logs_page[LogModel: SQLModel](
+#: Columns a *list* page does not select, per log type.
+#:
+#: `GET /data/logs/sync` returned **56.28 MB for one page of 500 rows, 99.7% of
+#: it request/response bodies**, in 0.87s of server time — a transfer problem,
+#: not a query one. The viewer renders none of it until a row is expanded, and
+#: it expands one row at a time, so the list ships metadata and
+#: `GET /data/logs/{type}/{id}` fetches the bodies for the row actually opened.
+#:
+#: Sync is absent because its bodies are not columns of `tg_sync_logs` at all —
+#: they live in `tg_sync_log_payloads`, and the list simply does not join it.
+#: Network is absent because `telemetry` was measured at 174 bytes a row: real
+#: enough to look heavy, small enough that dropping it would be churn.
+LOG_HEAVY_COLUMNS: dict[str, frozenset[str]] = {
+    "publish": frozenset({"full_request", "full_response", "text_sent"}),
+    "sync": frozenset(),
+    "llm": frozenset(
+        {"prompt", "response", "system_instruction", "full_request", "full_response"}
+    ),
+    "embedding": frozenset(),
+    "network": frozenset(),
+}
+
+
+#: Columns a text search matches, per type — exactly the fields the Logs view
+#: used to scan client-side over the fetched page.
+#:
+#: Moving this to SQL is what lets `text_sent`, `prompt` and `response` stay
+#: *searchable* while no longer being *shipped*, and it searches the whole table
+#: rather than the 500 rows that happened to be on the page.
+LOG_SEARCH_COLUMNS: dict[str, tuple[str, ...]] = {
+    "publish": ("bot_name", "chat_name", "chat_id", "error", "text_sent"),
+    "sync": ("channel_name", "source", "error"),
+    "llm": ("model", "prompt", "response", "error"),
+    "embedding": ("text_count", "error"),
+    "network": ("url", "method", "error"),
+}
+
+#: Additionally matched when the view's "search in details" box is ticked.
+#: Sync's bodies are not here because they are not columns of `tg_sync_logs` —
+#: `_log_search_clause` reaches them through an EXISTS on the payload table.
+LOG_DETAIL_SEARCH_COLUMNS: dict[str, tuple[str, ...]] = {
+    "publish": ("full_request", "full_response"),
+    "sync": (),
+    "llm": ("full_request", "full_response"),
+    "embedding": (),
+    "network": ("telemetry",),
+}
+
+
+def _log_search_clause(log_type: str, term: str, *, in_details: bool) -> Any:
+    """Case-insensitive substring match, mirroring the old client-side filter.
+
+    JSON columns are matched as text, which is what `jsonIncludes` did with
+    `JSON.stringify`. The two serialisations differ in whitespace, so a query
+    containing punctuation between keys could match in one and not the other;
+    for the word-ish queries this box takes they agree.
+    """
+    model, _ = LOG_MODELS[log_type]
+    table = _log_table(model)
+    like = f"%{term}%"
+    clauses: list[Any] = [
+        sa_cast(table.c[name], Text).ilike(like)
+        for name in LOG_SEARCH_COLUMNS[log_type]
+    ]
+    if in_details:
+        clauses += [
+            sa_cast(table.c[name], Text).ilike(like)
+            for name in LOG_DETAIL_SEARCH_COLUMNS[log_type]
+        ]
+        if log_type == "sync":
+            clauses.append(
+                sa_select(1)
+                .where(
+                    col(SyncLogPayload.sync_log_id) == table.c.id,
+                    or_(
+                        sa_cast(col(SyncLogPayload.full_request), Text).ilike(like),
+                        sa_cast(col(SyncLogPayload.full_response), Text).ilike(like),
+                    ),
+                )
+                .exists()
+            )
+    return or_(*clauses)
+
+
+def _log_table(model: type[SQLModel]) -> Any:
+    """The mapped table. `__table__` is set by SQLModel's metaclass at runtime."""
+    return cast(Any, model).__table__
+
+
+def _light_columns(model: type[SQLModel], heavy: frozenset[str]) -> list[Any]:
+    """The model's columns minus the heavy ones, for an explicit column select.
+
+    Selecting columns rather than the entity is deliberate. `defer()` would keep
+    the ORM object, and `model_to_camel` calls `model_dump()` — which touches
+    every attribute and would fire one lazy SELECT per deferred column per row.
+    A silent N+1 in place of a large payload is not a fix.
+    """
+    return [c for c in _log_table(model).columns if c.key not in heavy]
+
+
+def _list_logs_page(
     session: Session,
-    model: type[LogModel],
-    timestamp_col: Any,
-    to_camel: Callable[[Any], dict[str, Any]],
+    log_type: str,
     *,
     limit: int,
     offset: int,
+    search: str | None,
+    search_in_details: bool,
 ) -> list[dict[str, Any]]:
-    """Return one newest-first page of a log table.
+    """Return one newest-first page of a log table, without its heavy columns.
 
-    Log rows carry request/response JSON payloads and the tables grow without
-    bound between retention sweeps, so an unfiltered select can materialise
-    gigabytes at once and OOM the worker. Every viewer endpoint goes through
-    here; full data still ships via the export path, which streams.
+    Log tables grow without bound between retention sweeps, so this is paged;
+    full data still ships via the export path, which streams.
 
-    The ordering column is passed in rather than read off the type variable so
-    it stays statically checkable.
+    All five types share this one path now. Sync used to have its own because it
+    joined `tg_sync_log_payloads` to fold the bodies back in — dropping that join
+    is what makes it ordinary.
     """
-    statement = select(model).order_by(timestamp_col.desc()).offset(offset).limit(limit)
-    return [to_camel(row) for row in session.exec(statement).all()]
-
-
-def list_publish_logs(
-    session: Session, *, limit: int = DEFAULT_LOG_PAGE_SIZE, offset: int = 0
-) -> list[dict[str, Any]]:
-    return _list_logs_page(
-        session,
-        PublishLog,
-        col(PublishLog.timestamp),
-        publish_log_to_camel,
-        limit=limit,
-        offset=offset,
-    )
-
-
-def list_sync_logs(
-    session: Session, *, limit: int = DEFAULT_LOG_PAGE_SIZE, offset: int = 0
-) -> list[dict[str, Any]]:
-    """Return one newest-first page of sync logs, payloads included.
-
-    The one lister that does not go through `_list_logs_page`, because the
-    bodies live in tg_sync_log_payloads. The join is an OUTER one on purpose:
-    that table can be truncated at any time to reclaim disk, and a log whose
-    payload is gone must still list — it just reports null bodies. Same page
-    caps apply, since the payloads still ship inline.
-    """
-    statement = (
-        select(SyncLog, SyncLogPayload)
-        .join(
-            SyncLogPayload,
-            col(SyncLogPayload.sync_log_id) == col(SyncLog.id),
-            isouter=True,
+    model, _ = LOG_MODELS[log_type]
+    table = _log_table(model)
+    columns = _light_columns(model, LOG_HEAVY_COLUMNS[log_type])
+    statement = select(*columns)
+    if search and search.strip():
+        statement = statement.where(
+            _log_search_clause(log_type, search.strip(), in_details=search_in_details)
         )
-        .order_by(col(SyncLog.timestamp).desc())
-        .offset(offset)
-        .limit(limit)
-    )
-    return [sync_log_to_camel(log, payload) for log, payload in session.exec(statement)]
-
-
-def list_llm_logs(
-    session: Session, *, limit: int = DEFAULT_LOG_PAGE_SIZE, offset: int = 0
-) -> list[dict[str, Any]]:
-    return _list_logs_page(
-        session,
-        LLMLog,
-        col(LLMLog.timestamp),
-        llm_log_to_camel,
-        limit=limit,
-        offset=offset,
-    )
-
-
-def list_embedding_logs(
-    session: Session, *, limit: int = DEFAULT_LOG_PAGE_SIZE, offset: int = 0
-) -> list[dict[str, Any]]:
-    return _list_logs_page(
-        session,
-        EmbeddingLog,
-        col(EmbeddingLog.timestamp),
-        embedding_log_to_camel,
-        limit=limit,
-        offset=offset,
-    )
-
-
-def list_network_logs(
-    session: Session, *, limit: int = DEFAULT_LOG_PAGE_SIZE, offset: int = 0
-) -> list[dict[str, Any]]:
-    return _list_logs_page(
-        session,
-        NetworkLog,
-        col(NetworkLog.timestamp),
-        network_log_to_camel,
-        limit=limit,
-        offset=offset,
-    )
-
-
-#: `log_type` -> the function that returns one page of it.
-#:
-#: The dispatch table that lets one endpoint serve all five. Adding a sixth log
-#: type means a table, a serialiser, a response model and one line here — not a
-#: new pair of routes, a new service function and a new frontend hook.
-LOG_LISTERS: dict[str, Callable[..., list[dict[str, Any]]]] = {
-    "publish": list_publish_logs,
-    "sync": list_sync_logs,
-    "llm": list_llm_logs,
-    "embedding": list_embedding_logs,
-    "network": list_network_logs,
-}
+    statement = statement.order_by(table.c.timestamp.desc()).offset(offset).limit(limit)
+    return [
+        {"id": row._mapping["id"], **mapping_to_camel(dict(row._mapping))}
+        for row in session.execute(statement).all()
+    ]
 
 
 def list_logs(
@@ -431,14 +451,49 @@ def list_logs(
     *,
     limit: int = DEFAULT_LOG_PAGE_SIZE,
     offset: int = 0,
+    search: str | None = None,
+    search_in_details: bool = False,
 ) -> list[dict[str, Any]]:
-    """One newest-first page of any log type.
+    """One newest-first page of any log type, in the light projection.
+
+    **This must not read the heavy columns**, and for sync it must not open
+    `tg_sync_log_payloads` at all — pinned by
+    `tests/services/test_log_list_payload_cost.py`. `search` is the exception
+    and the reason the split works: the bodies stay searchable in SQL without
+    being sent, exactly as `services/summaries.py::_search_clause` does.
 
     Raises `KeyError` for an unknown type; the route turns that into a 400 so
     the error contract matches the purge endpoint, which has always 400ed rather
     than 404ed on a bad `type`.
     """
-    return LOG_LISTERS[log_type](session, limit=limit, offset=offset)
+    if log_type not in LOG_MODELS:
+        raise KeyError(log_type)
+    return _list_logs_page(
+        session,
+        log_type,
+        limit=limit,
+        offset=offset,
+        search=search,
+        search_in_details=search_in_details,
+    )
+
+
+def get_log(session: Session, log_type: str, log_id: str) -> dict[str, Any]:
+    """One log row in full, including whatever the list projection dropped.
+
+    The other half of the split: the viewer calls this for the single row the
+    operator expanded, so the bodies are fetched once for one row rather than
+    500 times for rows nobody opened.
+    """
+    model, _ = LOG_MODELS[log_type]
+    row = session.get(model, log_id)
+    if row is None:
+        raise HTTPException(status_code=404, detail=f"{log_type} log not found")
+    if log_type == "sync":
+        return sync_log_to_camel(
+            cast(SyncLog, row), session.get(SyncLogPayload, log_id)
+        )
+    return {"id": log_id, **model_to_camel(row)}
 
 
 def create_logs(
