@@ -382,16 +382,27 @@ def _log_search_clause(log_type: str, term: str, *, in_details: bool) -> Any:
             for name in LOG_DETAIL_SEARCH_COLUMNS[log_type]
         ]
         if log_type == "sync":
+            # `IN (uncorrelated subquery)`, not a correlated EXISTS. The
+            # EXISTS reads more naturally but is evaluated once per candidate
+            # log row, so it scales with `tg_sync_logs` (191k rows) rather than
+            # with the payload table. This runs the ILIKE once over the payloads
+            # and semi-joins the result.
+            #
+            # Measured on staging: 5.81s -> 4.54s. The gain is modest and the
+            # residual is not the join — it is detoasting ~5,700 bodies to match
+            # them, which is what searching bodies costs. That is why it is
+            # behind a checkbox, and why nothing else on this path pays it.
             clauses.append(
-                sa_select(1)
-                .where(
-                    col(SyncLogPayload.sync_log_id) == table.c.id,
-                    or_(
-                        sa_cast(col(SyncLogPayload.full_request), Text).ilike(like),
-                        sa_cast(col(SyncLogPayload.full_response), Text).ilike(like),
-                    ),
+                table.c.id.in_(
+                    sa_select(col(SyncLogPayload.sync_log_id)).where(
+                        or_(
+                            sa_cast(col(SyncLogPayload.full_request), Text).ilike(like),
+                            sa_cast(col(SyncLogPayload.full_response), Text).ilike(
+                                like
+                            ),
+                        )
+                    )
                 )
-                .exists()
             )
     return or_(*clauses)
 
