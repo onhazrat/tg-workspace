@@ -241,3 +241,43 @@ FROM pg_stat_statements ORDER BY total_exec_time DESC LIMIT 12;
 Expected: the aggregate drops out of the top of the list entirely (2,189 calls over
 2,077 names → the same call count over ~6), and `tg_sync_jobs` writes fall by roughly
 the ratio of status transitions to 5 s windows.
+
+## Result, measured
+
+Counters reset after both fixes deployed; window 16.3 minutes (2026-08-19 10:58 UTC).
+Both sides normalised to per-hour.
+
+| | calls/h | DB time/h | blocks read/h |
+|---|---|---|---|
+| stats aggregate | 219 → 236 | **413,776 ms → 710 ms** | 7.62 M → 21.7 k |
+| velocity LATERAL | 219 → 236 | 44,473 ms → 26 ms | 714 k → 18 |
+| `tg_sync_meta` etag | 18,188 → 869 | 115,467 ms → 52 ms | — |
+| `tg_sync_jobs` channel JSON | 9,499 → 26 | 44,920 ms → 4 ms | — |
+| `tg_channels` updates | ~5,900 → 769 | ~109,485 ms → 265 ms | — |
+| worst single stall | — | **21,361 ms → 30 ms** | — |
+
+**Only the first row is a controlled comparison.** The tick fires on a timer, so 219
+against 236 calls/h shows the rate is unchanged and the per-call cost really did fall
+from 1,890 ms to 3.0 ms — a 583x drop in total time for the same work. Every other row
+is confounded by how much sync activity happened to be in flight during the window;
+read them as directional.
+
+Session scope, immediately after deploy:
+
+| | before | after |
+|---|---:|---:|
+| connections `idle in transaction` | 24 | **0** |
+| stuck > 60 s | 4 (oldest 283 s) | **0** |
+| total connections | 32 | 5 |
+| `tg_sync_meta` dead tuples | 4,743 | **2** |
+| `tg_channels` dead tuples | 4,498 | **157** |
+
+Autovacuum cleared years of accumulated dead tuples within minutes of the transaction
+being released, which is the confirmation that the xmin pin was the cause.
+
+**Still outstanding:** the aggregate ran 64 times in 16.3 minutes — 4/minute for a
+job that ticks once a minute. The four-worker duplication is unchanged, pending the
+deployment-shape decision above. Table *files* also stay at their bloated size
+(`tg_sync_meta` 1,360 kB for 10 rows) because plain autovacuum reclaims space for
+reuse without shrinking; a one-off `VACUUM FULL` on those two small tables would
+recover it.
