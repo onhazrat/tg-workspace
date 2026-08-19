@@ -118,6 +118,13 @@ class Settings(BaseSettings):
     SYNC_RETRY_BACKOFF_BASE_MS: int = 2000
     SYNC_JOB_SSE_THROTTLE_MS: int = 1000
     SYNC_JOB_PERSIST_INTERVAL_MS: int = 5000
+    #: How long finished sync job rows are kept. 0 disables pruning.
+    #:
+    #: A deployment constant rather than an operator setting, unlike the windows
+    #: in `load_retention_settings`: there is no list endpoint for sync jobs, so
+    #: no one browses the history and no one can be surprised by its length. The
+    #: table had no policy at all and reached 196,047 rows / 153 MB.
+    SYNC_JOB_RETENTION_DAYS: int = 14
     AUTO_SYNC_CHECK_INTERVAL_SECONDS: int = 60
     AUTO_SYNC_INTERVAL_MINUTES_DEFAULT: int = 60
     AUTO_SYNC_PAUSE_DURATION_MS: int = 10 * 60 * 1000

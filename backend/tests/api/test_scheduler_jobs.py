@@ -18,6 +18,7 @@ from app.jobs.retention import run_retention_cleanup
 from app.jobs.settings import default_job_enabled, save_setting
 from app.jobs.translation_batch import run_translation_batch
 from app.models_tg import Channel, Post, Summary, SyncLog, SyncLogPayload
+from app.models_tg import SyncJob as SyncJobRow
 from app.services.network_settings import get_network_setting_row
 from app.services.operator import get_operator_user_id
 from app.services.scraper_jobs import clear_jobs_for_tests
@@ -420,6 +421,53 @@ def test_retention_deletes_old_posts() -> None:
         session.commit()
         result = run_retention_cleanup(session)
         assert result["deletedPosts"] >= 1
+
+
+def test_retention_prunes_old_sync_jobs() -> None:
+    """The scheduled job must actually call the pruner.
+
+    `test_sync_job_retention.py` covers the pruning rules; this covers the wiring,
+    which is the half that silently does nothing if the call is dropped —
+    `tg_sync_jobs` had no policy at all and reached 196,047 rows / 153 MB.
+    """
+    now = int(time.time() * 1000)
+    with Session(engine) as session:
+        session.add(
+            SyncJobRow(
+                id="retention-old-job",
+                status="completed",
+                source="test",
+                channels=[],
+                created_at=now - 400 * 24 * 60 * 60 * 1000,
+            )
+        )
+        session.commit()
+
+        result = run_retention_cleanup(session)
+
+        assert result["deletedSyncJobs"] >= 1
+        assert session.get(SyncJobRow, "retention-old-job") is None
+
+
+def test_retention_leaves_a_running_sync_job_alone() -> None:
+    """The other direction: retention must not reach a job that is still going,
+    however old, because that row is the SSE reconnect fallback."""
+    now = int(time.time() * 1000)
+    with Session(engine) as session:
+        session.add(
+            SyncJobRow(
+                id="retention-live-job",
+                status="running",
+                source="test",
+                channels=[],
+                created_at=now - 400 * 24 * 60 * 60 * 1000,
+            )
+        )
+        session.commit()
+
+        run_retention_cleanup(session)
+
+        assert session.get(SyncJobRow, "retention-live-job") is not None
 
 
 def test_retention_deletes_old_logs_without_loading_them() -> None:

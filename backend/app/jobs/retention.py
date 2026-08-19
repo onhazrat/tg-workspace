@@ -36,6 +36,7 @@ from app.services.post_thumbnails import (
     delete_cached_thumb,
     enforce_thumb_cache_size_limit,
 )
+from app.services.scraper_jobs import prune_finished_jobs
 from app.services.sync_meta import touch_sync
 
 logger = logging.getLogger(__name__)
@@ -240,6 +241,14 @@ def run_retention_cleanup(session: Session) -> dict[str, int]:
     if deleted_reports:
         touch_sync(session, "discover_reports")
 
+    # Sync jobs are the one table here with no operator-facing window: nothing
+    # lists them, so the horizon is a deployment constant. See
+    # `prune_finished_jobs` — terminal rows only, so a long sync is never
+    # deleted out from under the client reading its progress.
+    deleted_sync_jobs = prune_finished_jobs(
+        session, max_age_days=app_settings.SYNC_JOB_RETENTION_DAYS
+    )
+
     media_settings = load_media_settings(session)
     max_mb = int(media_settings.get("thumbCacheMaxSizeMb") or 0)
     if max_mb > 0:
@@ -258,21 +267,24 @@ def run_retention_cleanup(session: Session) -> dict[str, int]:
 
     logger.info(
         "Retention cleanup: deleted %s posts, %s log rows, %s sync payloads, "
-        "%s reports, %s orphaned avatars (postDays=%s, logDays=%s, "
-        "payloadDays=%s)",
+        "%s reports, %s sync jobs, %s orphaned avatars (postDays=%s, "
+        "logDays=%s, payloadDays=%s, syncJobDays=%s)",
         deleted_posts,
         deleted_logs,
         deleted_payloads,
         deleted_reports,
+        deleted_sync_jobs,
         deleted_photos,
         post_days,
         log_days,
         payload_days,
+        app_settings.SYNC_JOB_RETENTION_DAYS,
     )
     return {
         "deletedPosts": deleted_posts,
         "deletedLogs": deleted_logs,
         "deletedPayloads": deleted_payloads,
         "deletedReports": deleted_reports,
+        "deletedSyncJobs": deleted_sync_jobs,
         "deletedPhotos": deleted_photos,
     }

@@ -17,6 +17,7 @@ from app.core.startup_checks import run_startup_checks
 from app.jobs.scheduler import start_scheduler, stop_scheduler
 from app.middleware.api_key import APIKeyMiddleware
 from app.middleware.timing import TimingMiddleware
+from app.services.scraper_jobs import reconcile_interrupted_jobs
 
 logger = logging.getLogger(__name__)
 
@@ -34,6 +35,10 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     run_startup_checks()
     with Session(engine) as session:
         init_db(session)
+        # In-memory job progress does not survive the process, so any row still
+        # marked pending/running belongs to a dead process. Nothing reconciled
+        # them and they accumulated for months — 711 stranded rows on staging.
+        reconcile_interrupted_jobs(session)
     start_scheduler()
     logger.info("TG Summarizer backend started")
     yield

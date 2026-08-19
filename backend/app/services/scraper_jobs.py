@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import time
 import uuid
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, cast
 
-from sqlmodel import Session, delete
+from sqlalchemy import update as sa_update
+from sqlmodel import Session, col, delete
 
 from app.core.config import settings
 from app.core.db import engine
@@ -20,6 +22,8 @@ _channel_locks: dict[str, asyncio.Lock] = {}
 _cancel_events: dict[str, asyncio.Event] = {}
 _active_jobs: dict[str, SyncJobState] = {}
 _jobs_lock = asyncio.Lock()
+
+logger = logging.getLogger(__name__)
 
 _TERMINAL_JOB_STATUSES = frozenset({"completed", "failed", "cancelled"})
 
@@ -322,6 +326,79 @@ def get_active_sync_job_summary(
             "effectiveProxyCapacity": effective_proxy_capacity,
         }
     return None
+
+
+def reconcile_interrupted_jobs(session: Session) -> int:
+    """Fail every job left mid-flight by a restart, and say so in the row.
+
+    Job progress lives in `_active_jobs`, which does not survive the process.
+    Nothing ever reconciled the rows, so each restart stranded another handful:
+    **711 rows in `running` and 48 in `pending`** on staging, the oldest from
+    June. They are indistinguishable from live work to anything reading the
+    table, and retention cannot expire them either, because deleting by age
+    alone would eventually delete a genuinely long-running sync.
+
+    Startup is the right moment precisely because in-memory state is empty:
+    every non-terminal row is provably dead, with no need to guess an age
+    threshold.
+
+    **Only sound while the sync tier is a single replica.** With more than one
+    process running syncs, a starting process would fail jobs another one is
+    actively working. `backend/Dockerfile` pins `--workers 1` for this and two
+    other reasons (`tests/deployment/test_worker_count.py`); the general answer
+    is a claim that expires, which is step 2 of
+    `docs/scaling-to-multiple-workers.md`.
+
+    Marked `failed` rather than a new `interrupted` status, and with no reason
+    string: `tg_sync_jobs` has no `error` column, and neither a migration to add
+    one nor a fourth status value earns its cost here. A status the frontend
+    does not know would have to be threaded through `_TERMINAL_SYNC_STATUSES`
+    and the generated client, for a row nothing lists.
+    """
+    now_ms = int(time.time() * 1000)
+    result = session.execute(
+        sa_update(SyncJobRow)
+        .where(col(SyncJobRow.status).in_(("pending", "running")))
+        .values(status="failed", finished_at=now_ms, updated_at=utc_now())
+    )
+    session.commit()
+    count = cast(Any, result).rowcount or 0
+    if count:
+        logger.warning("Marked %s sync job(s) failed: interrupted by a restart", count)
+    return count
+
+
+def prune_finished_jobs(session: Session, *, max_age_days: int) -> int:
+    """Delete finished job rows past the retention window. 0 disables.
+
+    `tg_sync_jobs` reached **196,047 rows / 153 MB** with no policy at all. It is
+    write-heavy and read-almost-never: there is no list endpoint, and the only
+    reads are `GET /jobs/sync/{id}` and the SSE reconnect fallback, both for a
+    job that is currently running. So the history is a write-only audit trail,
+    and that is why the window is a deployment constant rather than an operator
+    setting — nothing in the UI browses it.
+
+    **Terminal rows only.** Deleting by age alone would eventually delete a sync
+    that is still working, and the row is what a reconnecting client reads.
+    Pairs with `reconcile_interrupted_jobs`: without it, a stranded `running`
+    row would be immortal.
+
+    No count cap, unlike Discover reports. Jobs are created at most once a
+    minute, so an age window bounds the table on its own; reports needed a cap
+    because a burst in one afternoon can outrun any age.
+    """
+    if max_age_days <= 0:
+        return 0
+
+    cutoff = int(time.time() * 1000) - max_age_days * 24 * 60 * 60 * 1000
+    result = session.execute(
+        delete(SyncJobRow).where(
+            col(SyncJobRow.status).in_(tuple(_TERMINAL_JOB_STATUSES)),
+            col(SyncJobRow.created_at) < cutoff,
+        )
+    )
+    session.commit()
+    return cast(Any, result).rowcount or 0
 
 
 def clear_active_jobs_for_tests() -> None:
