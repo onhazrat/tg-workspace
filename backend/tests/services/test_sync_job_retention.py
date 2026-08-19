@@ -26,15 +26,19 @@ what must survive.
 from __future__ import annotations
 
 import time
+from collections.abc import Iterator
+from contextlib import contextmanager
 from typing import cast
 
 import pytest
+from sqlalchemy import event
 from sqlmodel import Session, select
 
 from app.core.db import engine
 from app.models_tg import SyncJob as SyncJobRow
 from app.services.scraper_jobs import (
     _TERMINAL_JOB_STATUSES,
+    SYNC_JOB_DELETE_BATCH,
     clear_jobs_for_tests,
     prune_finished_jobs,
     reconcile_interrupted_jobs,
@@ -186,3 +190,62 @@ def test_reconciliation_is_idempotent() -> None:
 
         assert reconcile_interrupted_jobs(session) == 1
         assert reconcile_interrupted_jobs(session) == 0
+
+
+# --- transaction length -----------------------------------------------------
+
+
+@contextmanager
+def counted_commits() -> Iterator[list[int]]:
+    count = [0]
+
+    def on_commit(conn: object) -> None:
+        count[0] += 1
+
+    event.listen(engine, "commit", on_commit)
+    try:
+        yield count
+    finally:
+        event.remove(engine, "commit", on_commit)
+
+
+def test_a_large_backlog_is_cleared_in_several_transactions() -> None:
+    """Not about memory — only ids are selected, so the JSON is never loaded.
+
+    It is about how long one transaction lasts. The first real run has ~180k
+    rows to clear and `channels` is TOASTed (`pg_total_relation_size` was 871 MB
+    against a 153 MB heap). A single statement over that holds a transaction
+    open for its whole duration, and a long transaction pins the xmin horizon so
+    autovacuum reclaims nothing — the exact failure this codebase already hit
+    once today (`test_auto_sync_session_scope.py`).
+    """
+    with Session(engine) as session:
+        for i in range(5):
+            _job(session, f"bulk-{i}", status="completed", age_days=30)
+        session.commit()
+
+        with counted_commits() as commits:
+            deleted = prune_finished_jobs(session, max_age_days=14, batch_size=2)
+
+    assert deleted == 5, "every expired row must still go"
+    assert commits[0] >= 3, (
+        f"5 rows at batch_size=2 should take at least 3 transactions, took "
+        f"{commits[0]} — the deletes are not being batched"
+    )
+
+
+def test_the_batch_loop_terminates_when_nothing_matches() -> None:
+    """A loop whose delete silently matches nothing would spin forever, and it
+    would do so inside the scheduler with no output."""
+    with Session(engine) as session:
+        _job(session, "fresh", status="completed", age_days=1)
+        session.commit()
+
+        assert prune_finished_jobs(session, max_age_days=14, batch_size=2) == 0
+        assert _ids(session) == {"fresh"}
+
+
+def test_the_default_batch_is_bounded() -> None:
+    """`batch_size` defaulting to something enormous would make the batching
+    real in tests and absent in production."""
+    assert 0 < SYNC_JOB_DELETE_BATCH <= 10_000

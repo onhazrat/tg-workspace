@@ -10,7 +10,7 @@ from dataclasses import dataclass, field
 from typing import Any, cast
 
 from sqlalchemy import update as sa_update
-from sqlmodel import Session, col, delete
+from sqlmodel import Session, col, delete, select
 
 from app.core.config import settings
 from app.core.db import engine
@@ -24,6 +24,10 @@ _active_jobs: dict[str, SyncJobState] = {}
 _jobs_lock = asyncio.Lock()
 
 logger = logging.getLogger(__name__)
+
+#: Rows per delete transaction in `prune_finished_jobs`. Bounds transaction
+#: length, not memory — see that function.
+SYNC_JOB_DELETE_BATCH = 1000
 
 _TERMINAL_JOB_STATUSES = frozenset({"completed", "failed", "cancelled"})
 
@@ -368,7 +372,9 @@ def reconcile_interrupted_jobs(session: Session) -> int:
     return count
 
 
-def prune_finished_jobs(session: Session, *, max_age_days: int) -> int:
+def prune_finished_jobs(
+    session: Session, *, max_age_days: int, batch_size: int = SYNC_JOB_DELETE_BATCH
+) -> int:
     """Delete finished job rows past the retention window. 0 disables.
 
     `tg_sync_jobs` reached **196,047 rows / 153 MB** with no policy at all. It is
@@ -386,19 +392,44 @@ def prune_finished_jobs(session: Session, *, max_age_days: int) -> int:
     No count cap, unlike Discover reports. Jobs are created at most once a
     minute, so an age window bounds the table on its own; reports needed a cap
     because a burst in one afternoon can outrun any age.
+
+    **Deleted in bounded batches, each its own transaction.** Not for memory —
+    only ids are selected, so the JSON is never loaded — but for transaction
+    length. The first run against a table that never had a policy has ~180k rows
+    to clear, and `channels` is TOASTed: `pg_total_relation_size` was **871 MB**
+    against a 153 MB heap. One statement over that is a transaction held for as
+    long as it takes, and a long transaction pins the xmin horizon so autovacuum
+    reclaims nothing — the exact failure that left `tg_sync_meta` with 10 live
+    rows and 4,743 dead (`tests/jobs/test_auto_sync_session_scope.py`). Short
+    transactions let vacuum keep pace with the deletes instead of waiting behind
+    them.
     """
     if max_age_days <= 0:
         return 0
 
     cutoff = int(time.time() * 1000) - max_age_days * 24 * 60 * 60 * 1000
-    result = session.execute(
-        delete(SyncJobRow).where(
-            col(SyncJobRow.status).in_(tuple(_TERMINAL_JOB_STATUSES)),
-            col(SyncJobRow.created_at) < cutoff,
+    deleted = 0
+    while True:
+        stale = cast(
+            list[str],
+            session.exec(
+                select(SyncJobRow.id)
+                .where(
+                    col(SyncJobRow.status).in_(tuple(_TERMINAL_JOB_STATUSES)),
+                    col(SyncJobRow.created_at) < cutoff,
+                )
+                .limit(batch_size)
+            ).all(),
         )
-    )
-    session.commit()
-    return cast(Any, result).rowcount or 0
+        if not stale:
+            break
+        result = session.execute(
+            delete(SyncJobRow).where(col(SyncJobRow.id).in_(stale))
+        )
+        session.commit()
+        deleted += cast(Any, result).rowcount or 0
+
+    return deleted
 
 
 def clear_active_jobs_for_tests() -> None:
