@@ -302,3 +302,35 @@ The size itself was never the problem — the scan cost was. `get_sync_meta` doe
 bloat, and it needs a retention policy rather than a vacuum. 711 of those rows are
 stranded in `running` from restarts — step 2 of the scaling plan (a claim that can
 expire) is what makes them reconcilable.
+
+## `tg_sync_jobs` — retention and reclamation
+
+The table had **no retention policy at all**: 187,158 rows, and 759 of them stranded
+in `running`/`pending` by restarts going back to June. PRs #109 and #110.
+
+| | before | after |
+|---|---:|---:|
+| rows | 187,158 | **11,187** |
+| heap (`pg_relation_size`) | 153 MB | **5,856 kB** |
+| total (`pg_total_relation_size`) | **871 MB** | **30 MB** |
+| stranded `running`/`pending` | 759 | **0** |
+
+Disk 82% -> 79%.
+
+**`pg_relation_size` is heap only.** This table was reported at 153 MB from it and was
+really 871 MB — `channels` is a TOASTed JSON column, and the heap figure sees neither
+TOAST nor indexes. Size a table with a JSON column by `pg_total_relation_size`.
+
+**A `VACUUM FULL` is sized by live rows, not by the file.** Reclaiming 871 MB took
+**395 ms**, against a 10-30 s estimate: it copies only live tuples, and 11k rows is
+nothing. Almost all of that 871 MB was free space rather than data to move.
+
+Two ordering notes worth keeping:
+
+* Pruning is restricted to **terminal** rows, because the row is the SSE reconnect
+  fallback — which is exactly what made the 759 stranded rows immortal. The startup
+  reconciliation is what lets retention reach them; neither half works alone.
+* The batched delete (#110) landed one deploy *after* the unbatched version had
+  already cleared the 176k-row backlog. That run was fine (6 dead tuples afterwards),
+  so the batching is insurance against a future backlog rather than something this
+  round proved.
