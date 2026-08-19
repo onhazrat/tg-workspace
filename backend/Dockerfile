@@ -42,4 +42,23 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 
 WORKDIR /app/backend/
 
-CMD ["fastapi", "run", "--workers", "4"]
+# One worker, deliberately. Not a capacity decision — a correctness one.
+#
+# This image ran `--workers 4` (the FastAPI template default, never reconciled
+# with the scheduler that arrived later). Each worker starts its own in-process
+# APScheduler, so every scheduled job fired four times: four `Auto Sync
+# (scheduler)` jobs per tick, four workers scraping the same channels, and
+# `has_active_sync_job()` — a dict in one process — unable to see any of it.
+#
+# Three pieces of state are per-process and must be externalised before this
+# number can go up. `tests/deployment/test_worker_count.py` checks all three and
+# will tell you when the coupling is gone:
+#   * the job registry and its cancel/SSE machinery (`scraper_jobs`),
+#   * the per-proxy concurrency semaphores (`proxy_pool`) — the dangerous one,
+#     since N workers means N times the intended request rate at Telegram,
+#   * the scheduler itself.
+#
+# The sequenced plan for scaling past this is docs/scaling-to-multiple-workers.md.
+# Raising the count without following it does not add capacity, it adds
+# duplicate work.
+CMD ["fastapi", "run", "--workers", "1"]
