@@ -1,20 +1,19 @@
-import { Compass, FileText, MessageSquare, Tag } from "lucide-react"
+import { Compass, FileText, MessageSquare, Send, Tag } from "lucide-react"
 import { motion } from "motion/react"
 import type React from "react"
 import { useState } from "react"
 
+import { RunSettingsBar } from "@/components/action/RunSettingsBar"
 import { PasteTagsModal } from "@/components/PasteTagsModal"
 import { SummaryConfig } from "@/components/SummaryConfig"
 import { TagConfig } from "@/components/TagConfig"
 import { TgButton } from "@/components/ui/tg-button"
 import { useChatContext } from "@/contexts/ChatContext"
-import { useData } from "@/contexts/DataContext"
 import { useSettings } from "@/contexts/SettingsContext"
 import { useTagContext } from "@/contexts/TagContext"
 import { useUI } from "@/contexts/UIContext"
 import { useApiStatus } from "@/hooks/useApiStatus"
 import { useDiscoverGenerate } from "@/hooks/useDiscoverGenerate"
-import { useScopedPostCounts } from "@/hooks/usePostsView"
 import type { ChatMode } from "@/types"
 
 interface ActionCardProps {
@@ -54,37 +53,34 @@ const ActionCard: React.FC<ActionCardProps> = ({
  * single callback, so both work unchanged inside `TgProviders`. Discover needed
  * a seam, which is `useDiscoverGenerate`.
  *
- * Chat is the exception and gets a launcher rather than a form. Its composer
- * *is* its result view — input and transcript have to be co-located for
- * autoscroll and focus to work — so moving it here would break both for nothing.
+ * Chat has an input in both places, and that is not duplication. A chat only
+ * exists once someone has asked something, so the create form *is* a message
+ * box; the composer on the Chat tab then carries the conversation on, where it
+ * has to stay for autoscroll and focus to work against the transcript.
+ *
+ * Model and language sit above all four in `RunSettingsBar` rather than inside
+ * the Summary card, because three of the four read the same two settings.
+ * Discover reads neither — its report is a server-side aggregation with no
+ * inference in it.
  */
 export const ActionView: React.FC = () => {
-  const { selectedChannels } = useData()
   const { setActiveTab, setCurrentChatSessionId } = useUI()
-  const { chatMode, setChatMode, setChatInput, setChatMessages, chatInputRef } =
-    useChatContext()
+  const {
+    chatMode,
+    setChatMode,
+    setChatInput,
+    setChatMessages,
+    handleSendMessage,
+    isChatting,
+  } = useChatContext()
   const { embeddingsEnabled } = useSettings()
   const { completePendingTagRun } = useTagContext()
   const { isOffline } = useApiStatus()
   const { generate, isGenerating, channelCount } = useDiscoverGenerate()
 
   const [pasteOpen, setPasteOpen] = useState(false)
+  const [chatDraft, setChatDraft] = useState("")
 
-  const counts = useScopedPostCounts()
-  const postsInScope = Object.values(counts).reduce((sum, n) => sum + n, 0)
-
-  const scopeLine = `${selectedChannels.size} channel${
-    selectedChannels.size === 1 ? "" : "s"
-  } · ${postsInScope.toLocaleString()} posts in scope`
-
-  /**
-   * Start a *new* conversation, not continue the last one.
-   *
-   * Clearing both the transcript and `currentChatSessionId` is the whole point:
-   * `handleSendMessage` reuses that id, and the payload write replaces
-   * `messages` wholesale — so leaving it set would overwrite the previous
-   * chat's transcript with the first turn of this one.
-   */
   /**
    * Generate a report, then go and look at it.
    *
@@ -113,13 +109,29 @@ export const ActionView: React.FC = () => {
     return ok
   }
 
+  /**
+   * Open a conversation with its first question already asked.
+   *
+   * A chat only exists once someone has said something, so starting one from
+   * here means typing that first message here — the Chat tab then carries the
+   * conversation on from its own composer.
+   *
+   * The three explicit arguments are the point. Clearing the transcript and the
+   * session id is not enough on its own: `handleSendMessage` reads both from
+   * state captured before this render, so it would send the new question after
+   * the last conversation's turns and save the result *over* that
+   * conversation's transcript. Saying `[]` and `null` outright is the only
+   * version that cannot race the re-render.
+   */
   const startChat = () => {
+    const question = chatDraft.trim()
+    if (!question || isChatting) return
+    setChatDraft("")
     setChatInput("")
     setChatMessages([])
     setCurrentChatSessionId(null)
     setActiveTab("chat")
-    // The composer owns focus once it mounts; this is the hand-off.
-    window.setTimeout(() => chatInputRef.current?.focus(), 0)
+    void handleSendMessage({ message: question, history: [], sessionId: null })
   }
 
   return (
@@ -130,12 +142,7 @@ export const ActionView: React.FC = () => {
       exit={{ opacity: 0, y: -20 }}
       className="space-y-4"
     >
-      <p
-        data-testid="action-scope"
-        className="font-mono text-[11px] uppercase tracking-widest text-app-ink/50"
-      >
-        {scopeLine}
-      </p>
+      <RunSettingsBar />
 
       <ActionCard
         icon={<FileText size={16} />}
@@ -158,10 +165,7 @@ export const ActionView: React.FC = () => {
         title="Discover channels"
         description="Find the channels your channels keep pointing at."
       >
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <span className="font-mono text-[11px] uppercase tracking-widest text-app-ink/50">
-            {channelCount} channel{channelCount === 1 ? "" : "s"} scanned
-          </span>
+        <div className="flex flex-wrap items-center justify-end gap-3">
           <TgButton
             data-testid="action-generate-report"
             disabled={isGenerating || isOffline || channelCount === 0}
@@ -175,35 +179,58 @@ export const ActionView: React.FC = () => {
       <ActionCard
         icon={<MessageSquare size={16} />}
         title="Chat"
-        description="Ask questions instead of generating a document."
+        description="Ask questions instead of generating a document. The first message opens the conversation."
       >
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-1 rounded-lg border border-app-ink/10 bg-app-muted p-1">
-            {(
-              [
-                ["full_scope", "Full scope"],
-                ["semantic", "Semantic"],
-              ] as [ChatMode, string][]
-            ).map(([value, label]) => (
-              <button
-                key={value}
-                type="button"
-                aria-pressed={chatMode === value}
-                disabled={value === "semantic" && !embeddingsEnabled}
-                onClick={() => setChatMode(value)}
-                className={`rounded-md px-3 py-1.5 text-[10px] font-bold uppercase tracking-tight transition-all disabled:opacity-30 ${
-                  chatMode === value
-                    ? "bg-app-card text-app-ink shadow-sm"
-                    : "text-app-ink opacity-60 hover:opacity-100"
-                }`}
-              >
-                {label}
-              </button>
-            ))}
+        <div className="flex flex-col gap-3">
+          <textarea
+            data-testid="action-chat-input"
+            rows={2}
+            value={chatDraft}
+            onChange={(e) => setChatDraft(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault()
+                startChat()
+              }
+            }}
+            placeholder="Ask about trends, specific topics, or the channels in scope…"
+            className="w-full resize-none rounded-xl border border-app-ink/10 bg-app-muted/20 p-3 text-[13px] transition-all focus:border-app-ink/30 focus:outline-none focus:ring-4 focus:ring-app-ink/5"
+          />
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-1 rounded-lg border border-app-ink/10 bg-app-muted p-1">
+              {(
+                [
+                  ["full_scope", "Full scope"],
+                  ["semantic", "Semantic"],
+                ] as [ChatMode, string][]
+              ).map(([value, label]) => (
+                <button
+                  key={value}
+                  type="button"
+                  aria-pressed={chatMode === value}
+                  disabled={value === "semantic" && !embeddingsEnabled}
+                  onClick={() => setChatMode(value)}
+                  className={`rounded-md px-3 py-1.5 text-[10px] font-bold uppercase tracking-tight transition-all disabled:opacity-30 ${
+                    chatMode === value
+                      ? "bg-app-card text-app-ink shadow-sm"
+                      : "text-app-ink opacity-60 hover:opacity-100"
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+            <TgButton
+              data-testid="action-start-chat"
+              onClick={startChat}
+              disabled={!chatDraft.trim() || isChatting || isOffline}
+              loading={isChatting}
+              loadingLabel="Starting…"
+            >
+              <Send size={13} />
+              Start a chat
+            </TgButton>
           </div>
-          <TgButton data-testid="action-start-chat" onClick={startChat}>
-            Start a chat
-          </TgButton>
         </div>
       </ActionCard>
 

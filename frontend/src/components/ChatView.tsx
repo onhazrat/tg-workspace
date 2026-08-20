@@ -437,7 +437,7 @@ export const ChatView: React.FC = () => {
             onKeyDown={(e) => {
               if (e.key === "Enter" && !e.shiftKey) {
                 e.preventDefault()
-                handleSendMessage()
+                void handleSendMessage()
               }
             }}
             placeholder="Ask about trends, specific topics, or summarize selected channels..."
@@ -449,7 +449,7 @@ export const ChatView: React.FC = () => {
                 type="button"
                 variant="primary"
                 size="md"
-                onClick={handleSendMessage}
+                onClick={() => void handleSendMessage()}
                 disabled={!chatInput.trim()}
                 loading={isChatting}
                 aria-label="Send Message"

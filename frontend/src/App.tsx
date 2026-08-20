@@ -657,7 +657,10 @@ export default function App() {
                       <span className="text-[10px] font-mono uppercase tracking-widest text-app-ink/50 mb-0.5">
                         Active Channels
                       </span>
-                      <span className="text-xs font-medium tracking-tighter leading-none font-mono">
+                      <span
+                        data-testid="header-active-channels"
+                        className="text-xs font-medium tracking-tighter leading-none font-mono"
+                      >
                         {selectedChannels.size}
                       </span>
                     </div>

@@ -91,6 +91,7 @@ export const PasteTagsModal: React.FC<PasteTagsModalProps> = ({
             className="w-full rounded-lg border border-app-ink/10 bg-app-muted/10 px-3 py-2 text-sm"
           />
           <textarea
+            data-testid="paste-tags-response"
             value={text}
             onChange={(event) => setText(event.target.value)}
             rows={14}

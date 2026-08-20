@@ -7,6 +7,8 @@ import {
   useChatSessionQuery,
   useInvalidateChatSessions,
 } from "@/hooks/useChatSessions"
+import type { SendOptions } from "@/lib/chat-sessions/send-options"
+import { resolveSend } from "@/lib/chat-sessions/send-options"
 import { saveChatSession } from "@/lib/chat-sessions/store"
 import { saveLLMLog } from "@/lib/logs/write"
 import { formatChannelsForPrompt } from "../lib/channels/format-channels-for-prompt"
@@ -33,7 +35,13 @@ interface ChatContextType {
   setChatMode: React.Dispatch<React.SetStateAction<ChatMode>>
   chatEndRef: React.RefObject<HTMLDivElement | null>
   chatInputRef: React.RefObject<HTMLTextAreaElement | null>
-  handleSendMessage: () => Promise<void>
+  /**
+   * Send a turn. With no argument it sends what is in the composer, after the
+   * turns on screen, into the session on screen — which is what the Chat tab
+   * wants. The Action tab starts a conversation from outside all three, so it
+   * passes them explicitly. See `resolveSend`.
+   */
+  handleSendMessage: (options?: SendOptions) => Promise<void>
 }
 
 const ChatContext = createContext<ChatContextType | undefined>(undefined)
@@ -115,12 +123,21 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
     }
   }, [activeTab])
 
-  const handleSendMessage = async () => {
-    if (!chatInput.trim() || isChatting) return
+  const handleSendMessage = async (options?: SendOptions) => {
+    if (isChatting) return
 
-    const userMessage = chatInput.trim()
+    const {
+      message: userMessage,
+      history,
+      sessionId: baseSessionId,
+    } = resolveSend(options, {
+      chatInput,
+      chatMessages,
+      sessionId: currentChatSessionId,
+    })
+    if (!userMessage) return
+
     setChatInput("")
-    setChatMessages((prev) => [...prev, { role: "user", text: userMessage }])
     setIsChatting(true)
 
     try {
@@ -137,7 +154,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
 
       // Add user message and placeholder for AI
       const initialMessages: { role: "user" | "model"; text: string }[] = [
-        ...chatMessages,
+        ...history,
         { role: "user", text: userMessage },
         { role: "model", text: "" },
       ]
@@ -173,7 +190,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
               similarPosts,
               aiLanguage,
               selectedModel,
-              chatMessages,
+              history,
               userMessage,
               aiTemperature,
             )
@@ -257,7 +274,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
             postsText,
             aiLanguage,
             selectedModel,
-            chatMessages,
+            history,
             userMessage,
             aiTemperature,
             scope,
@@ -294,7 +311,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
           modelConfig: configUsed,
           fullRequest: {
             message: userMessage,
-            history: chatMessages,
+            history,
             config: configUsed,
           },
           fullResponse: lastResponse,
@@ -312,7 +329,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
         text: string
         sources?: any[]
       }[] = [
-        ...chatMessages,
+        ...history,
         { role: "user", text: userMessage },
         { role: "model", text: fullModelText, sources: similarPostsUsed },
       ]
@@ -330,7 +347,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
        * no summary, it assembles its prompt from the same channels and dates a
        * summary would. So there is no link to write.
        */
-      const sessionId = currentChatSessionId ?? Date.now().toString()
+      const sessionId = baseSessionId ?? Date.now().toString()
       const session: Partial<ChatSession> = {
         id: sessionId,
         channels: Array.from(selectedChannels),
@@ -355,7 +372,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
       // this session as already-loaded and never refetches over the turns we
       // are appending live.
       loadedSessionRef.current = sessionId
-      if (!currentChatSessionId) setCurrentChatSessionId(sessionId)
+      if (currentChatSessionId !== sessionId) setCurrentChatSessionId(sessionId)
       await loadHistory()
     } catch (err: unknown) {
       console.error(err)

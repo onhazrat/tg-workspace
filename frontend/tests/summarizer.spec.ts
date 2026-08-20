@@ -495,6 +495,46 @@ test.describe("TG Summarizer", () => {
     }
   })
 
+  /**
+   * A chat begins with a question, so the Action tab asks for one.
+   *
+   * The assertion stops at the user's turn on purpose. Whether the model
+   * answers depends on a provider being configured, but the wiring under test
+   * is everything up to the request: the draft becomes the first message, the
+   * view hops to Chat, and the transcript starts empty rather than inheriting
+   * whatever conversation was last open.
+   */
+  test("the Action tab starts a chat from its own input", async ({ page }) => {
+    await page.goto("/summarizer?tab=action")
+
+    const input = page.getByTestId("action-chat-input")
+    await expect(input).toBeVisible({ timeout: 15_000 })
+    await input.fill("what changed in the last week?")
+    await page.getByTestId("action-start-chat").click()
+
+    await expect(page).toHaveURL(/tab=chat/, { timeout: 15_000 })
+    await expect(page.getByText("what changed in the last week?")).toBeVisible({
+      timeout: 15_000,
+    })
+  })
+
+  test("the model and language selectors live above every action", async ({
+    page,
+  }) => {
+    await page.goto("/summarizer?tab=action")
+
+    const bar = page.getByTestId("action-run-settings")
+    await expect(bar.getByLabel("Inference model")).toBeVisible({
+      timeout: 15_000,
+    })
+    await expect(bar.getByLabel("Output language")).toBeVisible()
+
+    // One of each on the page — they used to be inside the Summary card, and
+    // a second copy would mean two controls writing one setting.
+    await expect(page.getByLabel("Inference model")).toHaveCount(1)
+    await expect(page.getByLabel("Output language")).toHaveCount(1)
+  })
+
   test("tag tab opens Tag view", async ({ page }) => {
     await page.goto("/summarizer?tab=summary")
     await page.locator("#tour-tab-tag").click()
@@ -834,7 +874,9 @@ test.describe("TG Summarizer", () => {
     // The tag create controls — Copy Prompt, Generate, Paste Response — moved
     // to the Action tab. The Tag tab shows the preview and the applied result.
     await page.locator("#tour-tab-action").click()
-    await expect(page.getByText("3 channels selected")).toBeVisible({
+    // The count lives in the workspace header now — the Tag card used to print
+    // its own copy of the same number, which is one more thing to keep in step.
+    await expect(page.getByTestId("header-active-channels")).toHaveText("3", {
       timeout: 15_000,
     })
     await expect(page.getByText(/batch/i)).not.toBeVisible()
@@ -851,7 +893,9 @@ test.describe("TG Summarizer", () => {
     })
 
     await page.getByRole("button", { name: "Paste Response" }).click()
-    await page.locator("textarea").fill(pastePayload)
+    // Named, not `locator("textarea")`: the Action tab has a chat composer of
+    // its own now, so a bare tag selector matches two elements.
+    await page.getByTestId("paste-tags-response").fill(pastePayload)
     await page.getByRole("button", { name: "Save Response" }).click()
     // Saving hands off to the Tag tab, which is where the suggestions render.
     await expect(page).toHaveURL(/tab=tag/, { timeout: 15_000 })
