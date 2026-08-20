@@ -163,11 +163,34 @@ export const SummaryView: React.FC<SummaryViewProps> = () => {
   const loadHistory = useInvalidateSummaries()
   const { startDate, endDate, currentSummaryId, summarizing } = useUI()
 
-  const currentSummary = summariesHistory.find((s) => s.id === currentSummaryId)
   // The prompt panel below needs the full promptText, which the list
   // projection omits (it was ~94% of that payload).
   const { data: currentSummaryDetail } = useSummaryDetailQuery(currentSummaryId)
   const currentPromptText = currentSummaryDetail?.promptText
+
+  /*
+   * Prefer the list row, fall back to the detail fetch.
+   *
+   * Reading only from `summariesHistory` made opening a summary from History
+   * depend on that list happening to be loaded and to contain the row — which
+   * is not something History guarantees any more, since it lists artifacts
+   * through `/data/artifacts` rather than through the summaries query. The
+   * detail fetch is keyed on the id in the URL, so it always has the answer.
+   */
+  const currentSummary =
+    summariesHistory.find((s) => s.id === currentSummaryId) ??
+    currentSummaryDetail
+
+  /*
+   * The body: live stream first, saved text second.
+   *
+   * `summary` is `AIContext`'s streaming buffer — only ever set by generating
+   * or pasting. Opening a saved summary used to fill it from the restore path
+   * in `App.tsx`; deleting that path left this view rendering nothing for every
+   * artifact opened from History, which is exactly what it looked like. Falling
+   * back to the stored text means the view works from the URL alone.
+   */
+  const summaryBody = summary ?? currentSummaryDetail?.text ?? null
   const isPending = currentSummary ? isPendingSummary(currentSummary) : false
   const isRegenerating = currentSummary
     ? regeneratingSummaries.has(currentSummary.id)
@@ -226,7 +249,7 @@ export const SummaryView: React.FC<SummaryViewProps> = () => {
   const [metadataText, setMetadataText] = useState("")
   const [isEditingMetadata, setIsEditingMetadata] = useState(false)
   const [isSavingMetadata, setIsSavingMetadata] = useState(false)
-  const telegramBodyLength = summary?.length ?? 0
+  const telegramBodyLength = summaryBody?.length ?? 0
   const telegramMetadataLength = sendMetadata ? metadataText.length : 0
   const telegramMessageLength =
     telegramBodyLength + telegramMetadataLength + (sendMetadata ? 2 : 0)
@@ -421,7 +444,7 @@ export const SummaryView: React.FC<SummaryViewProps> = () => {
               </span>
             </div>
           </>
-        ) : summary ? (
+        ) : summaryBody ? (
           <>
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-10 border-b border-app-ink/10 pb-6">
               <div>
@@ -574,7 +597,7 @@ export const SummaryView: React.FC<SummaryViewProps> = () => {
                       variant="ghost"
                       size="sm"
                       onClick={() => {
-                        navigator.clipboard.writeText(summary)
+                        navigator.clipboard.writeText(summaryBody ?? "")
                         setCopied(true)
                         setTimeout(() => setCopied(false), 2000)
                       }}
@@ -594,7 +617,7 @@ export const SummaryView: React.FC<SummaryViewProps> = () => {
                       variant="ghost"
                       size="sm"
                       onClick={() => {
-                        const blob = new Blob([summary], {
+                        const blob = new Blob([summaryBody ?? ""], {
                           type: "text/markdown",
                         })
                         const url = URL.createObjectURL(blob)
@@ -633,7 +656,7 @@ export const SummaryView: React.FC<SummaryViewProps> = () => {
               className={`prose prose-sm md:prose-base max-w-none prose-headings:tracking-tight prose-headings:font-bold prose-p:leading-relaxed prose-p:text-app-ink/80 prose-li:text-app-ink/80 prose-li:my-1 dark:prose-invert ${bodyDirection.className}`}
             >
               <ReactMarkdown components={markdownComponents}>
-                {summary}
+                {summaryBody}
               </ReactMarkdown>
             </div>
 

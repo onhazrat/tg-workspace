@@ -3,7 +3,10 @@ import { createContext, useContext, useEffect, useRef, useState } from "react"
 import { toast } from "sonner"
 import { api } from "@/api"
 import type { PromptScope } from "@/api/data"
-import { useInvalidateChatSessions } from "@/hooks/useChatSessions"
+import {
+  useChatSessionQuery,
+  useInvalidateChatSessions,
+} from "@/hooks/useChatSessions"
 import { saveChatSession } from "@/lib/chat-sessions/store"
 import { saveLLMLog } from "@/lib/logs/write"
 import { formatChannelsForPrompt } from "../lib/channels/format-channels-for-prompt"
@@ -68,6 +71,33 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
 
   const chatEndRef = useRef<HTMLDivElement>(null)
   const chatInputRef = useRef<HTMLTextAreaElement>(null)
+
+  /*
+   * Load a saved transcript when one is opened from History.
+   *
+   * `chatMessages` is React state that only `handleSendMessage` writes, so
+   * opening a chat from History set the id and left the view blank — the same
+   * defect the Summary tab had, and for the same reason: deleting the old
+   * restore path removed the only thing that filled these buffers.
+   *
+   * The ref tracks whose transcript is currently loaded, so this fires once per
+   * session rather than fighting with the turns being appended live: after the
+   * first message of a new chat the id becomes ours, and the ref already
+   * matches it.
+   */
+  const loadedSessionRef = useRef<string | null>(null)
+  const { data: openedSession } = useChatSessionQuery(currentChatSessionId)
+
+  useEffect(() => {
+    if (!currentChatSessionId) {
+      loadedSessionRef.current = null
+      return
+    }
+    if (loadedSessionRef.current === currentChatSessionId) return
+    if (!openedSession) return
+    loadedSessionRef.current = currentChatSessionId
+    setChatMessages(openedSession.messages ?? [])
+  }, [currentChatSessionId, openedSession])
 
   useEffect(() => {
     if (chatInputRef.current) {
@@ -321,6 +351,10 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
         semanticSearchRespectsChannels,
       }
       await saveChatSession(session)
+      // Claim the id before publishing it, so the loader effect above treats
+      // this session as already-loaded and never refetches over the turns we
+      // are appending live.
+      loadedSessionRef.current = sessionId
       if (!currentChatSessionId) setCurrentChatSessionId(sessionId)
       await loadHistory()
     } catch (err: unknown) {
