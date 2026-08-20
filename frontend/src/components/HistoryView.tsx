@@ -214,8 +214,17 @@ export const HistoryView: React.FC<HistoryViewProps> = ({ openArtifact }) => {
         <div className="grid gap-3">
           <AnimatePresence initial={false}>
             {visible.map((artifact) => (
+              /*
+               * `min-w-0` is load-bearing. A grid item defaults to
+               * `min-width: auto`, so the track sizes to the item's
+               * max-content — and one summary here carries 1,722 channel names
+               * on a single `truncate` line. Without it the card measured
+               * 17,374px and every row ran off the panel. Guarded by
+               * `tests/open-artifact.spec.ts`, which measures the scroller.
+               */
               <motion.div
                 key={`${artifact.kind}:${artifact.id}`}
+                className="min-w-0"
                 layout
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
@@ -287,6 +296,12 @@ export const HistoryView: React.FC<HistoryViewProps> = ({ openArtifact }) => {
         title={`Delete this ${
           pendingDelete ? ARTIFACT_KIND_LABELS[pendingDelete.kind] : "item"
         }?`}
+        /*
+         * Clamped for the same reason the card is: some summaries name over a
+         * thousand channels, and the un-clamped join filled the dialog and
+         * pushed the buttons off-screen.
+         */
+        descriptionClassName="line-clamp-3 break-words text-sm text-app-ink/70"
         description={
           pendingDelete?.channels?.join(", ") || "This cannot be undone."
         }

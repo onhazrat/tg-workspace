@@ -65,12 +65,18 @@ export const ArtifactCard: React.FC<ArtifactCardProps> = ({
    */
   const summary = artifact.kind === "summary" ? artifact : null
 
+  /*
+   * The `min-w-0`s below make the card safe to drop into any flex or grid
+   * parent; the one that actually fixed History is on the grid item in
+   * `HistoryView`, and the reasoning lives there. Either way `truncate` on the
+   * channel line only ellipsizes once something upstream clamps the width.
+   */
   return (
     <div
       data-testid="artifact-card"
       data-artifact-kind={artifact.kind}
       data-artifact-id={artifact.id}
-      className={`group relative flex flex-col gap-3 rounded-xl border p-5 shadow-sm transition-all hover:shadow-md ${
+      className={`group relative flex min-w-0 flex-col gap-3 rounded-xl border p-5 shadow-sm transition-all hover:shadow-md ${
         pending
           ? "border-amber-500/30 bg-amber-500/[0.03] hover:border-amber-500/50"
           : "border-app-ink/10 hover:border-app-ink/20"
@@ -79,7 +85,7 @@ export const ArtifactCard: React.FC<ArtifactCardProps> = ({
       <button
         type="button"
         onClick={() => onOpen(artifact)}
-        className="flex flex-col gap-1.5 text-left"
+        className="flex min-w-0 flex-col gap-1.5 text-left"
       >
         <div className="flex items-center gap-2">
           <Icon size={13} className="shrink-0 opacity-50" />
@@ -100,13 +106,13 @@ export const ArtifactCard: React.FC<ArtifactCardProps> = ({
         </p>
       </button>
 
-      <div className="flex items-center justify-between gap-3 text-[11px] font-mono text-app-ink/60">
-        <span>{artifactDetail(artifact)}</span>
+      <div className="flex min-w-0 items-center justify-between gap-3 text-[11px] font-mono text-app-ink/60">
+        <span className="truncate">{artifactDetail(artifact)}</span>
         <RelativeTime timestamp={artifact.timestamp} />
       </div>
 
       {artifact.note && (
-        <p className="rounded-md border border-app-ink/10 bg-app-muted/30 px-3 py-2 text-[11px] italic text-app-ink/70">
+        <p className="break-words rounded-md border border-app-ink/10 bg-app-muted/30 px-3 py-2 text-[11px] italic text-app-ink/70">
           {artifact.note}
         </p>
       )}
