@@ -1,12 +1,16 @@
 import type {
   BotCredentialResponse,
   ChannelStatsResponse,
+  ChatArtifactResponse,
   ChatDestinationResponse,
   DbStatsResponse,
+  DiscoveryArtifactResponse,
   EmbeddingLogResponse,
   PostTranslationResponse,
   PublishLogResponse,
+  SummaryArtifactResponse,
   SyncLogResponse,
+  TagArtifactResponse,
   TagRunResponse,
 } from "@/client"
 
@@ -342,7 +346,7 @@ export interface LLMLog {
   status: "success" | "failed"
   error?: string
   timestamp: number
-  type: "summary" | "chat" | "analysis" | "rag_chat"
+  type: "summary" | "chat_full_scope" | "analysis" | "chat_semantic"
 }
 
 /** See `SyncLogListItem`. `modelConfig` stays — it is `{temperature}`. */
@@ -466,21 +470,72 @@ export type TagRun = AlwaysSent<
     }
   }
 
-export type TabType =
-  | "summary"
-  | "posts"
-  | "channels"
-  | "tag"
-  | "discover"
-  | "history"
-  | "db"
-  | "chat"
-  | "bots"
-  | "settings"
-  | "logs"
+/**
+ * Re-exported so the ~10 existing importers keep working. The declaration lives
+ * in `constants.ts`, derived from `WORKSPACE_TABS` — see the comment there.
+ */
+export type { TabType } from "./constants"
 
 export interface ChatMessage {
   role: "user" | "model"
   text: string
   sources?: Post[]
 }
+
+/**
+ * How a chat sources the posts it reasons over.
+ *
+ * These were `"summary"` and `"history"`, and neither was true: the first read
+ * no summary — it assembles its prompt from the scope, exactly as a summary
+ * does — and the second has nothing to do with the History tab.
+ */
+export type ChatMode = "full_scope" | "semantic"
+
+/**
+ * A saved conversation.
+ *
+ * Hand-written for the same reason `Summary` is: `ChatSession` carries an open
+ * `extra` bag server-side, so the generated model has a top-level index
+ * signature and `Omit<>` over it would collapse every named field to `unknown`.
+ */
+export interface ChatSession {
+  id: string
+  title: string
+  channels: string[]
+  startDate: number
+  endDate: number
+  language: string
+  model?: string | null
+  mode: ChatMode
+  postCount?: number | null
+  timestamp: number
+  messages: ChatMessage[]
+  isStarred?: boolean
+  note?: string
+  postSearch?: string
+  semanticSearchQuery?: string
+  semanticSearchRespectsTimeRange?: boolean
+  semanticSearchRespectsChannels?: boolean
+}
+
+/** List projection: everything but the transcript. */
+export type ChatSessionListItem = Omit<ChatSession, "messages"> & {
+  messageCount: number
+}
+
+/** One row of the unified History list — see `/api/v1/data/artifacts`. */
+export type ArtifactKind = "summary" | "chat" | "tag" | "discovery"
+
+/**
+ * A row of the unified History list.
+ *
+ * Generated rather than hand-written, unusually for this file: the artifact
+ * models are **closed** (a projection over named columns, no `extra` bag), so
+ * OpenAPI emits a real discriminated union and narrowing by `kind` works.
+ * `client-split.conform.ts` asserts they stay closed.
+ */
+export type ArtifactListItem =
+  | SummaryArtifactResponse
+  | ChatArtifactResponse
+  | TagArtifactResponse
+  | DiscoveryArtifactResponse

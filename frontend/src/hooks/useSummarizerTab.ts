@@ -1,17 +1,7 @@
 import { getRouteApi } from "@tanstack/react-router"
 
+import { VALID_TABS } from "@/constants"
 import type { TabType } from "@/types"
-
-const VALID_TABS: TabType[] = [
-  "summary",
-  "posts",
-  "channels",
-  "tag",
-  "discover",
-  "history",
-  "chat",
-  "settings",
-]
 
 const summarizerRoute = getRouteApi("/_tg/summarizer")
 

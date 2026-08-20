@@ -50,6 +50,10 @@ INVENTORY: dict[str, str] = {
     # 1. Aggregate — owns one table and is the only module that writes it.
     "channel_setting_groups.py": AGGREGATE,
     "channels.py": AGGREGATE,
+    # Owns `tg_chat_sessions` *and* `tg_chat_session_payloads`: a companion
+    # payload table belongs to its parent's aggregate, like `logs.py` and
+    # `summaries.py`. The split is a storage detail the API never sees.
+    "chat_sessions.py": AGGREGATE,
     "credentials.py": AGGREGATE,
     "data_vectors.py": AGGREGATE,
     "discover_ignored.py": AGGREGATE,
@@ -64,6 +68,9 @@ INVENTORY: dict[str, str] = {
     "sync_meta.py": AGGREGATE,
     "tag_runs.py": AGGREGATE,
     # 2. Read model — read-only aggregation across tables; never commits.
+    # Unions four aggregates into one time-ordered page for History. Owns no
+    # table and never commits.
+    "artifacts.py": READ_MODEL,
     "discover.py": READ_MODEL,
     "network_settings.py": READ_MODEL,
     "operator.py": READ_MODEL,

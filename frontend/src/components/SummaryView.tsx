@@ -39,7 +39,6 @@ import { publishSummary } from "../services/telegram"
 import type { PublishLog, Summary } from "../types"
 import { PasteSummaryModal } from "./PasteSummaryModal"
 import { RelativeTime } from "./RelativeTime"
-import { SummaryConfig } from "./SummaryConfig"
 import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tg-tooltip"
 
 const EMPTY_CITED_POSTS: NonNullable<Summary["citedPosts"]> = {}
@@ -335,8 +334,6 @@ export const SummaryView: React.FC<SummaryViewProps> = () => {
       animate={{ opacity: 1, y: 0 }}
       className="space-y-6"
     >
-      <SummaryConfig />
-
       {/* The card is chrome and stays LTR. Direction is applied to the generated
           body below — when it lived here, English chrome inherited RTL from a
           Persian report and rendered its trailing period on the wrong side. */}

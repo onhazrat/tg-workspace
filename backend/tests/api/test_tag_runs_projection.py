@@ -122,3 +122,50 @@ def test_limit_is_bounded(client: TestClient) -> None:
     assert (
         client.get(f"{PREFIX}/tag-runs?offset=-1", headers=headers).status_code == 422
     )
+
+
+def test_star_and_note_survive_the_response_model(client: TestClient) -> None:
+    """The route must not drop what the service returns.
+
+    `isStarred` and `note` live in `TagRun.extra` server-side, and a response
+    model that neither declares them nor allows extras discards them silently:
+    the service hands them over, Pydantic throws them away, and the only symptom
+    is a star that never sticks. That is what happened here — caught by
+    `client-split.conform.ts` rather than by any test, which is why this one
+    exists.
+
+    They are declared rather than allowed through an open model because
+    `frontend/src/types.ts` derives `TagRun` from this schema, and `Omit<>` over
+    a top-level index signature collapses every field to `unknown`.
+    """
+    headers = _auth(client)
+    client.put(
+        f"{PREFIX}/tag-runs/run-starred",
+        json={"channels": ["ch"], "isStarred": True, "note": "worth keeping"},
+        headers=headers,
+    )
+
+    listed = client.get(f"{PREFIX}/tag-runs", headers=headers).json()
+    row = next(r for r in listed if r["id"] == "run-starred")
+
+    assert row["isStarred"] is True
+    assert row["note"] == "worth keeping"
+
+    detail = client.get(f"{PREFIX}/tag-runs/run-starred", headers=headers).json()
+    assert detail["isStarred"] is True
+
+
+def test_an_unstarred_run_reports_false_not_null(client: TestClient) -> None:
+    """A declared boolean defaults; it does not arrive as `null`."""
+    headers = _auth(client)
+    client.put(
+        f"{PREFIX}/tag-runs/run-plain",
+        json={"channels": ["ch"]},
+        headers=headers,
+    )
+
+    listed = client.get(f"{PREFIX}/tag-runs", headers=headers).json()
+    row = next(r for r in listed if r["id"] == "run-plain")
+
+    assert row["isStarred"] is False
+    assert row["note"] is None

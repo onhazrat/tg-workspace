@@ -205,8 +205,6 @@ function hoverRevealWithoutFocus(classes: string): boolean {
  * these later trips the sweep rather than slipping through.
  */
 const DECORATIVE_HOVER_REVEALS = [
-  // HistoryView — "edited" note badge on a summary row.
-  "opacity-0 group-hover/note:opacity-100 text-[11px] font-bold uppercase tracking-widest text-amber-700/80 transition-opacity",
   // SummaryView — truncation warning pill.
   "opacity-0 group-hover:opacity-100 text-[11px] font-medium text-amber-700/80 transition-opacity bg-amber-500/10 px-2 py-0.5 rounded-full",
   // SummaryView — section-anchor hint overlay.

@@ -35,6 +35,8 @@ it holds here.
 
 from __future__ import annotations
 
+from typing import Any
+
 from pydantic import BaseModel, ConfigDict, Field
 from pydantic import Field as PydanticField
 
@@ -189,6 +191,10 @@ class DiscoverReportListItemResponse(BaseModel):
 
     `candidates` is the corpus-sized field — a wide-scope report holds the full
     single-reference tail — so the list carries `candidateCount` instead.
+
+    `isStarred` and `note` are declared rather than riding in an open `extra`
+    bag — see `TagRunListItemResponse` for why the closed model is worth
+    keeping.
     """
 
     model_config = ConfigDict(populate_by_name=True)
@@ -197,8 +203,27 @@ class DiscoverReportListItemResponse(BaseModel):
     scope: DiscoverReportScopeResponse
     scope_counts: ScopeCountsResponse = Field(alias="scopeCounts")
     posts_in_scope: int = Field(default=0, alias="postsInScope")
+    is_starred: bool = Field(default=False, alias="isStarred")
+    note: str | None = None
     timestamp: int = 0
     candidate_count: int = Field(default=0, alias="candidateCount")
+
+
+class DiscoverReportFlagsRequest(BaseModel):
+    """Body for `PUT /data/discover/reports/{id}/flags`.
+
+    Only the small UI flags. A report's scope and candidates are immutable by
+    design — a different scope produces a new report — so there is deliberately
+    no way to edit them here.
+    """
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    is_starred: bool | None = Field(default=None, alias="isStarred")
+    note: str | None = None
+
+    def to_service_body(self) -> dict[str, Any]:
+        return self.model_dump(by_alias=True, exclude_unset=True)
 
 
 class DiscoverReportResponse(DiscoverReportListItemResponse):

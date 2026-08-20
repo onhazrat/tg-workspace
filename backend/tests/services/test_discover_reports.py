@@ -19,7 +19,6 @@ from app.services.discover_reports import (
     create_report,
     delete_report,
     get_report,
-    latest_report,
     list_reports,
 )
 from app.services.post_filters import PostFilters
@@ -177,21 +176,6 @@ def test_list_omits_candidates_but_reports_the_count() -> None:
         assert len(rows) == 1
         assert "candidates" not in rows[0]
         assert rows[0]["candidateCount"] == 1
-
-
-def test_latest_returns_the_newest_report_or_none() -> None:
-    with Session(engine) as session:
-        assert latest_report(session) is None
-
-        _seed(session, [_post(1, "carrier", 1000, forwarded_from="alpha_news")])
-        first = _create(session)
-        _seed(session, [_post(2, "carrier", 2000, forwarded_from="beta_daily")])
-        second = _create(session)
-
-        newest = latest_report(session)
-        assert newest is not None
-        assert newest["id"] == second["id"]
-        assert newest["id"] != first["id"]
 
 
 def test_list_is_newest_first() -> None:

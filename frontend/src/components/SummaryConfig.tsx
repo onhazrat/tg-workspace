@@ -137,7 +137,7 @@ export const SummaryConfig: React.FC = () => {
                 className="h-10 px-4"
               >
                 <Copy size={14} className="opacity-60" />
-                Copy Prompt
+                Copy Summary Prompt
               </TgButton>
             </TooltipTrigger>
             <TooltipContent>

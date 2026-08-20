@@ -107,3 +107,33 @@ def test_the_plan_for_lifting_this_exists() -> None:
 def test_the_files_this_guard_reads_exist(path: pathlib.Path) -> None:
     """A moved file would make every assertion above vacuous rather than red."""
     assert path.is_file(), f"{path} moved; this guard is now blind"
+
+
+def test_prestart_runs_the_chat_backfill() -> None:
+    """The chat move has to happen on deploy, not by hand.
+
+    `a9b0c1d2e3f4` creates `tg_chat_sessions`; until the backfill runs, every
+    existing chat is still a `tg_summaries` row that History renders as a
+    summary with an empty body. A deploy is the only moment the schema and the
+    data are guaranteed to be in step, so the two run together.
+
+    Asserted because it is easy to drop: the script began life as an
+    operator-run tool precisely *because* it deletes rows, and its own docstring
+    argues for that. Anyone reading only the docstring would remove this line.
+    """
+    prestart = (
+        pathlib.Path(__file__).resolve().parents[2] / "scripts" / "prestart.sh"
+    ).read_text()
+
+    assert "alembic upgrade head" in prestart
+    assert "backfill_chat_sessions.py" in prestart
+    # Order matters: the tables must exist before anything writes to them.
+    assert prestart.index("alembic upgrade head") < prestart.index(
+        "backfill_chat_sessions.py"
+    )
+    # No `|| true`. A half-migrated database that boots anyway is worse than a
+    # deploy that stops and says why.
+    backfill_line = next(
+        line for line in prestart.splitlines() if "backfill_chat_sessions.py" in line
+    )
+    assert "||" not in backfill_line

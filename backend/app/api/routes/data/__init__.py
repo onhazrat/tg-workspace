@@ -17,7 +17,9 @@ from fastapi import APIRouter
 
 from app.api.routes.data import (
     admin,
+    artifacts,
     channels,
+    chat_sessions,
     credentials,
     discover,
     logs,
@@ -32,6 +34,8 @@ router.include_router(channels.router)
 router.include_router(posts.router)
 router.include_router(discover.router)
 router.include_router(summaries.router)
+router.include_router(chat_sessions.router)
+router.include_router(artifacts.router)
 router.include_router(credentials.router)
 router.include_router(vectors.router)
 router.include_router(logs.router)

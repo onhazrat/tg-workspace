@@ -457,8 +457,12 @@ async function openDiscoverWithForwards(
     page.getByRole("heading", { name: "Channel Candidates" }),
   ).toBeVisible()
 
-  // Discover is an action tab: generate the report before candidates appear.
-  await page.getByTestId("discover-generate-button").click()
+  // Generating moved to the Action tab — Discover renders results only, and no
+  // longer auto-opens the most recent report. Click through rather than
+  // `gotoSummarizer`: a full page load would discard the pinned selection.
+  await page.locator("#tour-tab-action").click()
+  await page.getByTestId("action-generate-report").click()
+  await expect(page).toHaveURL(/tab=discover/, { timeout: 30_000 })
 
   const expectedSources =
     fixture.unfollowedSources.length + (fixture.followedSource ? 1 : 0)
@@ -571,8 +575,13 @@ test.describe("TG Summarizer", () => {
       link: false,
     })
 
-    // Discover is an action tab: generate after choosing the signal set.
-    await page.getByTestId("discover-generate-button").click()
+    // Generating moved to the Action tab. Click through rather than
+    // `gotoSummarizer`, which is a full page load and would discard the signal
+    // set and post filter this test just configured in memory. The Action card
+    // navigates back to Discover once the report exists.
+    await page.locator("#tour-tab-action").click()
+    await page.getByTestId("action-generate-report").click()
+    await expect(page).toHaveURL(/tab=discover/, { timeout: 30_000 })
 
     await expect(page.getByText(/forward metadata/i)).toBeVisible()
     await expect(
@@ -822,13 +831,15 @@ test.describe("TG Summarizer", () => {
       ).toBeVisible()
     }
 
-    await page.locator("#tour-tab-tag").click()
+    // The tag create controls — Copy Prompt, Generate, Paste Response — moved
+    // to the Action tab. The Tag tab shows the preview and the applied result.
+    await page.locator("#tour-tab-action").click()
     await expect(page.getByText("3 channels selected")).toBeVisible({
       timeout: 15_000,
     })
     await expect(page.getByText(/batch/i)).not.toBeVisible()
 
-    await page.getByRole("button", { name: "Copy Prompt" }).click()
+    await page.getByRole("button", { name: "Copy Tag Prompt" }).click()
     await expect(
       page.getByText(/tag prompt copied/i, { exact: false }),
     ).toBeVisible({ timeout: 15_000 })
@@ -842,6 +853,8 @@ test.describe("TG Summarizer", () => {
     await page.getByRole("button", { name: "Paste Response" }).click()
     await page.locator("textarea").fill(pastePayload)
     await page.getByRole("button", { name: "Save Response" }).click()
+    // Saving hands off to the Tag tab, which is where the suggestions render.
+    await expect(page).toHaveURL(/tab=tag/, { timeout: 15_000 })
     await expect(
       page.getByText(/Parsed tag suggestions for 3 channel/i),
     ).toBeVisible({ timeout: 15_000 })
@@ -883,11 +896,13 @@ test.describe("TG Summarizer", () => {
     await expect(page).toHaveURL(/section=network/)
   })
 
-  test("summary tab shows Copy Prompt button", async ({ page }) => {
-    await page.goto("/summarizer?tab=summary")
+  test("action tab shows the summary create controls", async ({ page }) => {
+    // They were on the Summary tab until Action became the one place work
+    // starts; the feature tabs render results only now.
+    await page.goto("/summarizer?tab=action")
 
     await expect(
-      page.locator("button").filter({ hasText: "Copy Prompt" }).first(),
+      page.locator("button").filter({ hasText: "Copy Summary Prompt" }).first(),
     ).toBeVisible()
     await expect(
       page.locator("button").filter({ hasText: "Generate Summary" }).first(),

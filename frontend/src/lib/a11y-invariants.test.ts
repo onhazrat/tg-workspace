@@ -19,11 +19,12 @@ import { join } from "node:path"
 
 const APP = join(import.meta.dir, "..", "App.tsx")
 
-/** The four icon-only controls in the header, by the icon each renders. */
+/** The icon-only controls in the header, by the icon each renders. */
 const HEADER_ICON_BUTTONS = [
   "CommandIcon",
   "HelpCircle",
   "Keyboard",
+  "fullscreenIcon",
   "themeIcon",
 ]
 
@@ -45,6 +46,32 @@ describe("header accessibility", () => {
     // nothing else for an accessible name to come from.
     const labels = source.match(/aria-label=/g) ?? []
     expect(labels.length).toBeGreaterThanOrEqual(HEADER_ICON_BUTTONS.length)
+  })
+
+  /**
+   * Focus mode hides the header, including the button that turned it on.
+   *
+   * So the fullscreen control is the one header button that must exist in two
+   * places: the header, and the tab bar while focus mode is active. Ship only
+   * the first and the page becomes chromeless with no visible way out — Esc and
+   * F11 work, but nothing on screen says so. The count check above cannot catch
+   * this, because the header button alone satisfies it.
+   */
+  it("offers a way out of focus mode once the header is hidden", () => {
+    expect(code).toContain('data-testid="fullscreen-button"')
+    expect(code).toContain('data-testid="fullscreen-exit-button"')
+    // Rendered under `isFullscreen`, i.e. exactly when the header is not.
+    expect(code).toContain("{isFullscreen && (")
+  })
+
+  /**
+   * Both fullscreen controls name themselves from the same state-derived label,
+   * for the reason the theme button does: a fixed "Full screen" would lie the
+   * moment you are already in it.
+   */
+  it("keeps the fullscreen buttons' names in step with their state", () => {
+    const labels = source.match(/aria-label=\{fullscreenLabel\}/g) ?? []
+    expect(labels.length).toBe(2)
   })
 
   it("keeps the theme button's name in step with its state", () => {

@@ -6,6 +6,7 @@ import { seedTestChannel } from "./utils/seed-channel"
 const TAB_LABELS: Record<string, string> = {
   channels: "Channels",
   posts: "Posts",
+  action: "Action",
   summary: "Summary",
   tag: "Tag",
   discover: "Discover",
@@ -302,6 +303,11 @@ test.describe("TG UI primitives", () => {
 
   test("history empty state uses TgHeroEmptyState", async ({ page }) => {
     await gotoSummarizer(page, "history")
+    // Search for something nothing can match, rather than assuming the
+    // database is empty. It used to be a safe assumption because History
+    // listed only summaries; now it lists every artifact kind, so any tag run
+    // left behind by another spec would render a populated list here.
+    await page.getByLabel("Search history").fill("zzz-no-such-artifact-zzz")
     await expect(
       page.locator('[data-slot="tg-hero-empty-state"]'),
     ).toBeVisible()

@@ -20,6 +20,14 @@ class TagRunListItemResponse(BaseModel):
 
     Deliberately omits `promptText`, `responseText`, `suggestions` and
     `allTagsSnapshot`. Callers that need those fetch the run by id.
+
+    `isStarred` and `note` are **declared**, not left to ride in an open `extra`
+    bag. CLAUDE.md's rule against declaring a conditional key protects an
+    *existing* wire format from acquiring `null`s; these keys are new, so their
+    format is a choice rather than a change — and the closed model is worth
+    keeping, because `frontend/src/types.ts` derives `TagRun` from this schema
+    and `Omit<>` over a top-level index signature collapses every field to
+    `unknown`. Opening this model was tried and did exactly that.
     """
 
     model_config = ConfigDict(populate_by_name=True)
@@ -31,11 +39,16 @@ class TagRunListItemResponse(BaseModel):
     channels: list[str] = Field(default_factory=list)
     start_date: int = Field(default=0, alias="startDate")
     end_date: int = Field(default=0, alias="endDate")
-    post_count: int = Field(default=0, alias="postCount")
+    #: Nullable, because `TagRun.post_count` is. Declared `int` with a default
+    #: until now, which made `GET /data/tag-runs` a 500 for any run created
+    #: without one — latent only because every current writer sets it.
+    post_count: int | None = Field(default=None, alias="postCount")
     model: str | None = None
     error: str | None = None
     created_at: int = Field(default=0, alias="createdAt")
     updated_at: int = Field(default=0, alias="updatedAt")
+    is_starred: bool = Field(default=False, alias="isStarred")
+    note: str | None = None
 
 
 class TagRunResponse(TagRunListItemResponse):

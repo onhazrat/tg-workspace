@@ -64,6 +64,12 @@ TG_TABLES: tuple[str, ...] = (
     "tg_sync_logs",
     "tg_summary_payloads",
     "tg_summaries",
+    "tg_chat_session_payloads",
+    "tg_chat_sessions",
+    # `tg_tag_runs` was missing until /data/artifacts started reading it.
+    # Harmless while only the Tag tab listed them; the moment a unified query
+    # spans the table, rows leaked by one test show up in another test's page.
+    "tg_tag_runs",
     "tg_discover_reports",
     "tg_discover_ignored",
     "tg_discover_probes",

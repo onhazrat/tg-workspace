@@ -121,7 +121,7 @@ export function pickSearchSummary(
   ctx.setCurrentSummaryId(summary.id)
   requestAnimationFrame(() => {
     document
-      .querySelector(`[data-history-summary-id="${summary.id}"]`)
+      .querySelector(`[data-artifact-id="${summary.id}"]`)
       ?.scrollIntoView({ behavior: "smooth", block: "center" })
   })
 }

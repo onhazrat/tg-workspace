@@ -136,6 +136,10 @@ interface SettingsContextType {
   setDiscoverMinTotal: (minTotal: number) => void
   discoverSignalWeights: DiscoverSignalWeights
   setDiscoverSignalWeights: (weights: DiscoverSignalWeights) => void
+  workspaceFocusMode: boolean
+  setWorkspaceFocusMode: (on: boolean) => void
+  compactWorkspaceTabs: boolean
+  setCompactWorkspaceTabs: (on: boolean) => void
 }
 
 const SettingsContext = createContext<SettingsContextType | undefined>(

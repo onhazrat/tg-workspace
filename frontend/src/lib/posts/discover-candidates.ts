@@ -1,4 +1,17 @@
 /**
+ * Seed for the `random` per-channel cap.
+ *
+ * Must match the Posts feed's seed (`usePostsView`, `ScraperContext`), which is
+ * likewise a constant 0 — a different seed would make Discover aggregate over a
+ * different "random" sample than the Posts tab shows for the same settings.
+ *
+ * Lives here rather than in `DiscoverView` because the Action tab generates
+ * reports too, and a second copy of this constant is a second thing to keep at
+ * 0.
+ */
+export const RANDOM_CAP_SEED = 0
+
+/**
  * Discover candidate *types and view logic* — sorting, result filtering, and
  * the empty-state reason.
  *

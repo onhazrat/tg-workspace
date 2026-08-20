@@ -1,4 +1,4 @@
-import { Link } from "@tanstack/react-router"
+import { Link, useNavigate } from "@tanstack/react-router"
 import {
   Activity,
   AlertCircle,
@@ -11,7 +11,9 @@ import {
   History,
   Keyboard,
   List,
+  Maximize2,
   MessageSquare,
+  Minimize2,
   Monitor,
   Moon,
   Send,
@@ -19,11 +21,12 @@ import {
   Sparkles,
   Sun,
   Tag,
+  Zap,
 } from "lucide-react"
 import { AnimatePresence, motion } from "motion/react"
 import { useEffect, useLayoutEffect, useRef, useState } from "react"
 import { api } from "@/api"
-import { getSummary } from "@/lib/summaries/store"
+import { ActionView } from "./components/ActionView"
 import { ChannelGrid } from "./components/ChannelGrid"
 import { ChatView } from "./components/ChatView"
 import { useCommandPaletteContext } from "./components/CommandPaletteProvider"
@@ -46,9 +49,6 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "./components/ui/tg-tooltip"
-import { WORKSPACE_TABS } from "./constants"
-import { useAI } from "./contexts/AIContext"
-import { useChatContext } from "./contexts/ChatContext"
 import { useData } from "./contexts/DataContext"
 import { useScraper } from "./contexts/ScraperContext"
 import { useSettings } from "./contexts/SettingsContext"
@@ -56,36 +56,28 @@ import { useUI } from "./contexts/UIContext"
 import { useApiStatus } from "./hooks/useApiStatus"
 import { useGuidedTour } from "./hooks/useGuidedTour"
 import { useScopedPostCounts } from "./hooks/usePostsView"
+import { useWorkspaceFullscreen } from "./hooks/useWorkspaceFullscreen"
 import { APP_VERSION } from "./lib/app-version"
-import { applyHistorySummarySelection } from "./lib/commands/history-selection"
+import { artifactDestination } from "./lib/history/open-artifact"
 import {
   isEmptyScope,
   type RestoredScope,
   restoredScopeNotice,
 } from "./lib/history/restored-scope-notice"
-import type { SummaryListItem, TabType } from "./types"
+import { visibleWorkspaceTabs } from "./lib/workspace-tabs"
+import type { ArtifactListItem, TabType } from "./types"
 
 export default function App() {
   const { isOffline } = useApiStatus()
 
   const { channels, selectedChannels, setSelectedChannels } = useData()
 
-  const {
-    activeTab,
-    setActiveTab,
-    isRateLimited,
-    setDateRange,
-    summarizing,
-    setCurrentSummaryId,
-  } = useUI()
+  const { activeTab, setActiveTab, isRateLimited, setDateRange, summarizing } =
+    useUI()
 
   const {
     postSearch,
     setPostSearch,
-    setSemanticSearchQuery,
-    setSemanticSearchRespectsTimeRange,
-    setSemanticSearchRespectsChannels,
-    setRelatedPostSearch,
     autoSyncPauseUntil,
     setAutoSyncPauseUntil,
   } = useScraper()
@@ -96,18 +88,24 @@ export default function App() {
     0,
   )
 
-  const { setChatMessages } = useChatContext()
-
-  const { setSummary } = useAI()
-
   const loadMoreRef = useRef<HTMLDivElement>(null)
   const scrollContainerRef = useRef<HTMLDivElement>(null)
   const [shortcutsOpen, setShortcutsOpen] = useState(false)
 
-  const { theme, setTheme, proxyEnabled, torEnabled } = useSettings()
+  const { theme, setTheme, proxyEnabled, torEnabled, compactWorkspaceTabs } =
+    useSettings()
 
+  const navigate = useNavigate()
   const { startTour } = useGuidedTour()
   const { setOpen: setCommandPaletteOpen } = useCommandPaletteContext()
+  const { isFullscreen, toggle: toggleFullscreen } = useWorkspaceFullscreen()
+
+  const fullscreenLabel = isFullscreen ? "Exit full screen" : "Full screen"
+  const fullscreenIcon = isFullscreen ? (
+    <Minimize2 size={14} />
+  ) : (
+    <Maximize2 size={14} />
+  )
 
   // Poll server job status for auto-sync pause banner (Phase 6 scheduler).
   useEffect(() => {
@@ -155,25 +153,31 @@ export default function App() {
    */
   const [restoredScope, setRestoredScope] = useState<RestoredScope | null>(null)
 
-  const handleSelectHistorySummary = (s: SummaryListItem) => {
+  /**
+   * Open an artifact from History: restore its scope, then go where it renders.
+   *
+   * Every artifact freezes the scope it was made from, so opening one replaces
+   * the channel selection and the date range — correctly, since the artifact
+   * only means anything beside the posts it came from. The banner below states
+   * that rather than letting it happen silently.
+   *
+   * Which tab, and which URL param, is `artifactDestination`'s call. Every kind
+   * is deep-linked now; only Discover reports were before.
+   */
+  const openArtifact = (artifact: ArtifactListItem) => {
     setRestoredScope({
-      channelCount: s.channels?.length ?? 0,
-      startDate: s.startDate,
-      endDate: s.endDate,
+      channelCount: artifact.channels?.length ?? 0,
+      startDate: artifact.startDate ?? 0,
+      endDate: artifact.endDate ?? 0,
     })
-    void applyHistorySummarySelection(s, {
-      setActiveTab,
-      setDateRange,
-      setSelectedChannels,
-      setChatMessages,
-      setCurrentSummaryId,
-      setPostSearch,
-      setSemanticSearchQuery,
-      setSemanticSearchRespectsTimeRange,
-      setSemanticSearchRespectsChannels,
-      setRelatedPostSearch,
-      setSummary,
-      loadDetail: getSummary,
+    setDateRange(artifact.startDate ?? 0, artifact.endDate ?? 0)
+    setSelectedChannels(new Set(artifact.channels ?? []))
+
+    const { tab, param } = artifactDestination(artifact)
+    void navigate({
+      to: "/summarizer",
+      search: (prev) => ({ ...prev, tab, [param]: artifact.id }),
+      replace: true,
     })
   }
 
@@ -247,7 +251,9 @@ export default function App() {
       </a>
       <main
         id="main-content"
-        className="app-shell flex min-h-0 flex-1 flex-col p-4 md:p-8"
+        className={`flex min-h-0 flex-1 flex-col ${
+          isFullscreen ? "w-full p-0" : "app-shell p-4 md:p-8"
+        }`}
       >
         {/* Offline Banner */}
         <AnimatePresence>
@@ -353,7 +359,11 @@ export default function App() {
 
         {/* Main Content Area */}
         <div className="w-full flex min-h-0 flex-1 flex-col">
-          <div className="flex flex-col sm:flex-row justify-between items-end mb-4 gap-4">
+          <div
+            className={`flex-col sm:flex-row justify-between items-end mb-4 gap-4 ${
+              isFullscreen ? "hidden" : "flex"
+            }`}
+          >
             <div>
               <h1 className="text-xl font-bold tracking-tighter uppercase leading-none">
                 Telegram Summarizer
@@ -418,6 +428,22 @@ export default function App() {
                 </TooltipTrigger>
                 <TooltipContent>
                   <p>Keyboard Shortcuts (?)</p>
+                </TooltipContent>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    type="button"
+                    data-testid="fullscreen-button"
+                    aria-label={fullscreenLabel}
+                    onClick={toggleFullscreen}
+                    className="p-1.5 border border-app-ink border-opacity-10 hover:border-opacity-40 transition-all rounded-md"
+                  >
+                    {fullscreenIcon}
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>{fullscreenLabel}</p>
                 </TooltipContent>
               </Tooltip>
               <Tooltip>
@@ -535,45 +561,81 @@ export default function App() {
                  * did not stack history entries, and still do not.
                  */}
                 <nav aria-label="Workspace sections" className="flex gap-4">
-                  {WORKSPACE_TABS.map((tab) => {
-                    const Icon =
-                      {
-                        Database,
-                        List,
-                        MessageSquare,
-                        History,
-                        Send,
-                        Settings,
-                        Sparkles,
-                        FileText,
-                        Activity,
-                        Tag,
-                        Compass,
-                      }[tab.icon] || Database
+                  {visibleWorkspaceTabs(compactWorkspaceTabs, activeTab).map(
+                    (tab) => {
+                      const Icon =
+                        {
+                          Database,
+                          List,
+                          MessageSquare,
+                          History,
+                          Send,
+                          Settings,
+                          Sparkles,
+                          FileText,
+                          Activity,
+                          Tag,
+                          Compass,
+                          Zap,
+                        }[tab.icon] || Database
 
-                    const isActive = activeTab === tab.id
+                      const isActive = activeTab === tab.id
 
-                    return (
-                      <Link
-                        key={tab.id}
-                        id={`tour-tab-${tab.id}`}
-                        to="/summarizer"
-                        search={(prev) => ({ ...prev, tab: tab.id as TabType })}
-                        replace
-                        aria-current={isActive ? "page" : undefined}
-                        className={`text-xs font-mono uppercase tracking-widest flex items-center gap-2 pb-1 border-b-2 transition-all ${
-                          isActive
-                            ? "border-app-ink opacity-100"
-                            : "border-transparent opacity-40"
-                        }`}
-                      >
-                        <Icon size={14} /> {tab.label}
-                      </Link>
-                    )
-                  })}
+                      return (
+                        <Link
+                          key={tab.id}
+                          id={`tour-tab-${tab.id}`}
+                          to="/summarizer"
+                          search={(prev) => ({
+                            ...prev,
+                            tab: tab.id as TabType,
+                          })}
+                          replace
+                          aria-current={isActive ? "page" : undefined}
+                          className={`text-xs font-mono uppercase tracking-widest flex items-center gap-2 pb-1 border-b-2 transition-all ${
+                            isActive
+                              ? "border-app-ink opacity-100"
+                              : "border-transparent opacity-40"
+                          }`}
+                        >
+                          <Icon size={14} /> {tab.label}
+                        </Link>
+                      )
+                    },
+                  )}
                 </nav>
                 <div className="flex items-center gap-6">
-                  <div className="flex items-center gap-6">
+                  {/*
+                   * The way out of focus mode.
+                   *
+                   * The header button that got you here is hidden by focus
+                   * mode, so without this the only exits are Esc and F11 —
+                   * both invisible, and neither discoverable by someone who
+                   * clicked a button they can no longer see.
+                   */}
+                  {isFullscreen && (
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <button
+                          type="button"
+                          data-testid="fullscreen-exit-button"
+                          aria-label={fullscreenLabel}
+                          onClick={toggleFullscreen}
+                          className="p-1.5 border border-app-ink border-opacity-10 hover:border-opacity-40 transition-all rounded-md"
+                        >
+                          {fullscreenIcon}
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p>{fullscreenLabel}</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  )}
+                  <div
+                    className={`items-center gap-6 ${
+                      isFullscreen ? "hidden" : "flex"
+                    }`}
+                  >
                     <div className="flex flex-col items-end">
                       <span className="text-[10px] font-mono uppercase tracking-widest text-app-ink/50 mb-0.5">
                         Last Sync
@@ -642,7 +704,7 @@ export default function App() {
                   </motion.div>
                 ) : activeTab === "history" ? (
                   <HistoryView
-                    handleSelectHistorySummary={handleSelectHistorySummary}
+                    openArtifact={openArtifact}
                     setActiveTab={setActiveTab}
                   />
                 ) : activeTab === "chat" ? (
@@ -655,6 +717,8 @@ export default function App() {
                   <DiscoverView />
                 ) : activeTab === "summary" ? (
                   <SummaryView />
+                ) : activeTab === "action" ? (
+                  <ActionView />
                 ) : activeTab === "settings" ? (
                   <SettingsHub />
                 ) : (

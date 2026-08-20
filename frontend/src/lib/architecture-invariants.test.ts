@@ -133,6 +133,81 @@ describe("A3 + G2 — DataContext holds UI state, not server state", () => {
   })
 })
 
+describe("One declaration of the workspace tabs", () => {
+  /**
+   * `WORKSPACE_TABS` is the only place a tab is declared.
+   *
+   * It was three places. `TabType` was a hand-written union in `types.ts`, and
+   * `VALID_TABS` was copied verbatim into `routes/_tg/summarizer.tsx` and
+   * `hooks/useSummarizerTab.ts` — the route validator and the hook that reads
+   * it, which is exactly the pair that has to agree. Updating one and not the
+   * other leaves a tab reachable by URL but silently falling back to `summary`,
+   * and it fails in the browser rather than in CI.
+   *
+   * The drift was already visible when this guard was written: the hand-written
+   * union carried `db`, `bots` and `logs`, three ids no tab had rendered for
+   * months and which nothing set.
+   */
+  it("declares VALID_TABS exactly once", () => {
+    const owners = sourceFiles(SRC)
+      .filter((f) => readFileSync(f, "utf8").includes("const VALID_TABS"))
+      .map(rel)
+
+    expect(owners).toEqual(["src/constants.ts"])
+  })
+
+  /** Same for the type: derived in one place, re-exported everywhere else. */
+  it("declares TabType exactly once", () => {
+    const owners = sourceFiles(SRC)
+      .filter((f) => /^export type TabType =/m.test(readFileSync(f, "utf8")))
+      .map(rel)
+
+    expect(owners).toEqual(["src/constants.ts"])
+  })
+
+  /**
+   * The route validator must accept every tab, including ones
+   * `compactWorkspaceTabs` hides from the nav.
+   *
+   * Hiding a tab is a decluttering choice, not a capability removal: History
+   * deep-links into hidden tabs, the command palette still offers them, and
+   * `setActiveTab("summary")` is called from several places that know nothing
+   * about the setting. If `VALID_TABS` were ever derived from the *filtered*
+   * list, every one of those would silently redirect to `summary`.
+   */
+  /**
+   * `compactWorkspaceTabs` hides tabs from the *nav*, and only from the nav.
+   *
+   * Every other consumer must keep seeing all of them: the route validator, the
+   * command palette's "Go to {label}" generator, and every `setActiveTab` call.
+   * Filtering any of those turns a decluttering preference into a capability
+   * removal, and the failure is silent — a deep link from History would land on
+   * `summary` instead of the artifact you clicked.
+   */
+  it("filters only the nav, never the palette or the validator", () => {
+    const palette = readFileSync(join(SRC, "lib/commands/navigate.ts"), "utf8")
+    expect(palette).not.toContain("compactWorkspaceTabs")
+
+    const app = readFileSync(join(SRC, "App.tsx"), "utf8")
+    // The nav is the one place the filter is applied.
+    expect(app).toContain("visibleWorkspaceTabs(compactWorkspaceTabs")
+
+    const route = readFileSync(join(SRC, "routes/_tg/summarizer.tsx"), "utf8")
+    expect(route).not.toContain("compactWorkspaceTabs")
+  })
+
+  it("validates against the unfiltered tab list", () => {
+    const constants = readFileSync(join(SRC, "constants.ts"), "utf8")
+    const declaration = /export const VALID_TABS[\s\S]*?\n\)\n/.exec(
+      constants,
+    )?.[0]
+
+    expect(declaration).toBeDefined()
+    expect(declaration).toContain("WORKSPACE_TABS.map")
+    expect(declaration).not.toContain("filter")
+  })
+})
+
 describe("One owner per piece of global state", () => {
   /**
    * `CLAUDE.md`: *"Theme is owned by `theme-provider` in `main.tsx`

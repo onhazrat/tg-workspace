@@ -55,7 +55,7 @@ export const ChatView: React.FC = () => {
     resolvedTheme: theme,
     embeddingsEnabled,
   } = useSettings()
-  const { setCurrentSummaryId } = useUI()
+  const { setCurrentSummaryId, setCurrentChatSessionId } = useUI()
   const { isSyncing, progress } = useRAG()
   const {
     chatMessages,
@@ -96,28 +96,28 @@ export const ChatView: React.FC = () => {
           <div className="flex items-center bg-app-muted rounded-lg p-1 border border-app-ink/10">
             <button
               type="button"
-              onClick={() => setChatMode("summary")}
+              onClick={() => setChatMode("full_scope")}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[10px] font-bold uppercase tracking-tight transition-all ${
-                chatMode === "summary"
+                chatMode === "full_scope"
                   ? "bg-app-card text-app-ink shadow-sm"
                   : "text-app-ink opacity-60 hover:opacity-100 hover:bg-app-ink/5"
               }`}
             >
               <FileText size={12} />
-              Current View
+              Full Scope
             </button>
             {embeddingsEnabled && (
               <button
                 type="button"
-                onClick={() => setChatMode("history")}
+                onClick={() => setChatMode("semantic")}
                 className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[10px] font-bold uppercase tracking-tight transition-all ${
-                  chatMode === "history"
+                  chatMode === "semantic"
                     ? "bg-app-card text-app-ink shadow-sm"
                     : "text-app-ink opacity-60 hover:opacity-100 hover:bg-app-ink/5"
                 }`}
               >
                 <Database size={12} />
-                All History
+                Semantic
               </button>
             )}
           </div>
@@ -206,6 +206,11 @@ export const ChatView: React.FC = () => {
                 tooltip="Clear Conversation"
                 onClick={() => {
                   setChatMessages([])
+                  // Both ids, or the next message writes the new turns over the
+                  // transcript of the conversation just cleared:
+                  // `handleSendMessage` reuses `currentChatSessionId` and the
+                  // payload write replaces `messages` wholesale.
+                  setCurrentChatSessionId(null)
                   setCurrentSummaryId(null)
                   setExpandedSources({})
                 }}
@@ -224,28 +229,28 @@ export const ChatView: React.FC = () => {
           <TgHeroEmptyState
             className="h-full max-w-md mx-auto py-10"
             icon={
-              chatMode === "summary" ? (
+              chatMode === "full_scope" ? (
                 <FileText size={28} className="opacity-40" />
               ) : (
                 <Database size={28} className="opacity-40" />
               )
             }
             title={
-              chatMode === "summary"
-                ? "Chat with Current View"
-                : "Chat with All History"
+              chatMode === "full_scope"
+                ? "Chat over the full scope"
+                : "Chat over semantic matches"
             }
             description={
-              chatMode === "summary"
-                ? "Ask questions about the currently filtered posts. The AI will analyze the visible content to provide answers."
-                : "Ask questions across your entire saved database using semantic search. The AI will find relevant past discussions."
+              chatMode === "full_scope"
+                ? "Ask about every post in the current scope — the selected channels, date range and filters."
+                : "Ask across everything saved. A vector search picks the posts most relevant to each question."
             }
           >
             <div className="w-full space-y-2">
               <TgFieldLabel className="mb-3 text-[9px] font-sans font-bold tracking-widest opacity-40 text-left pl-1">
                 Suggested Prompts
               </TgFieldLabel>
-              {(chatMode === "summary"
+              {(chatMode === "full_scope"
                 ? SUGGESTED_PROMPTS_SUMMARY
                 : SUGGESTED_PROMPTS_HISTORY
               ).map((prompt, idx) => (

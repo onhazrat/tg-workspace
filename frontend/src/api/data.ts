@@ -9,11 +9,15 @@ import type {
   PostSortOrder,
 } from "../lib/posts/post-view"
 import type {
+  ArtifactKind,
+  ArtifactListItem,
   BotCredential,
   Channel,
   ChannelSettingGroup,
   ChannelStats,
   ChatDestination,
+  ChatSession,
+  ChatSessionListItem,
   EmbeddingLog,
   LLMLog,
   NetworkLog,
@@ -464,10 +468,6 @@ export const dataApi = {
     )
   },
 
-  /** The most recent saved report, or null when none has been generated. */
-  getLatestDiscoverReport: () =>
-    request<DiscoverReport | null>("/api/v1/data/discover/reports/latest"),
-
   /** A saved report with every candidate, `isFollowed` resolved live. */
   getDiscoverReport: (reportId: string) =>
     request<DiscoverReport>(
@@ -516,6 +516,16 @@ export const dataApi = {
     request<{ requeued: string[] }>("/api/v1/data/discover/probe/recheck", {
       method: "POST",
       body: JSON.stringify({ handles }),
+    }),
+
+  /** Star or annotate a saved report — the only write a report accepts. */
+  updateDiscoverReportFlags: (
+    id: string,
+    flags: { isStarred?: boolean; note?: string | null },
+  ) =>
+    request<DiscoverReport>(`/api/v1/data/discover/reports/${id}/flags`, {
+      method: "PUT",
+      body: JSON.stringify(flags),
     }),
 
   deleteDiscoverReport: (reportId: string) =>
@@ -576,6 +586,69 @@ export const dataApi = {
   },
 
   getSummary: (id: string) => request<Summary>(`/api/v1/data/summaries/${id}`),
+
+  /**
+   * The unified History list — every artifact kind, newest first.
+   *
+   * Hand-written despite the models being closed, because this is the one call
+   * whose paging History drives directly and the generated wrapper adds nothing
+   * over a URLSearchParams. The *types* are generated; see `ArtifactListItem`.
+   */
+  listArtifacts: (params?: {
+    kind?: ArtifactKind
+    search?: string
+    starred?: boolean
+    limit?: number
+    offset?: number
+  }) => {
+    const qs = new URLSearchParams()
+    if (params?.kind) qs.set("kind", params.kind)
+    if (params?.search) qs.set("search", params.search)
+    if (params?.starred) qs.set("starred", "true")
+    if (params?.limit != null) qs.set("limit", String(params.limit))
+    if (params?.offset != null) qs.set("offset", String(params.offset))
+    const q = qs.toString()
+    return request<ArtifactListItem[]>(
+      `/api/v1/data/artifacts${q ? `?${q}` : ""}`,
+    )
+  },
+
+  /**
+   * Chat sessions.
+   *
+   * Hand-written rather than generated: `ChatSessionListItemResponse` is open
+   * (`extra="allow"`), because `isStarred`/`note`/`postSearch` and the
+   * `semanticSearch*` flags are conditional per row exactly as they are on
+   * `Summary`. Asserted in `client-split.conform.ts`.
+   */
+  listChatSessions: (params?: {
+    search?: string
+    limit?: number
+    offset?: number
+  }) => {
+    const qs = new URLSearchParams()
+    if (params?.search) qs.set("search", params.search)
+    if (params?.limit != null) qs.set("limit", String(params.limit))
+    if (params?.offset != null) qs.set("offset", String(params.offset))
+    const q = qs.toString()
+    return request<ChatSessionListItem[]>(
+      `/api/v1/data/chat-sessions${q ? `?${q}` : ""}`,
+    )
+  },
+
+  getChatSession: (id: string) =>
+    request<ChatSession>(`/api/v1/data/chat-sessions/${id}`),
+
+  upsertChatSession: (id: string, session: Partial<ChatSession>) =>
+    request<ChatSession>(`/api/v1/data/chat-sessions/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(session),
+    }),
+
+  deleteChatSession: (id: string) =>
+    request<{ status: string }>(`/api/v1/data/chat-sessions/${id}`, {
+      method: "DELETE",
+    }),
 
   /**
    * List projection — carries metadata only. `promptText`, `responseText`,

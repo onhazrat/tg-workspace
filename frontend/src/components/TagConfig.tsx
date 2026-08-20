@@ -1,4 +1,4 @@
-import { ClipboardPaste, Copy, Sparkles, Tags } from "lucide-react"
+import { ClipboardPaste, Copy, Sparkles } from "lucide-react"
 import type React from "react"
 import { TgButton } from "@/components/ui/tg-button"
 import { useData } from "@/contexts/DataContext"
@@ -11,15 +11,8 @@ interface TagConfigProps {
 
 export const TagConfig: React.FC<TagConfigProps> = ({ onPasteClick }) => {
   const { selectedChannels } = useData()
-  const {
-    mode,
-    setMode,
-    copyTagPrompt,
-    generateTags,
-    applyCurrentSuggestions,
-    isGenerating,
-    isApplying,
-  } = useTagContext()
+  const { mode, setMode, copyTagPrompt, generateTags, isGenerating } =
+    useTagContext()
 
   const selectedCount = selectedChannels.size
 
@@ -66,7 +59,7 @@ export const TagConfig: React.FC<TagConfigProps> = ({ onPasteClick }) => {
             onClick={() => void copyTagPrompt()}
           >
             <Copy size={13} />
-            Copy Prompt
+            Copy Tag Prompt
           </TgButton>
           <TgButton
             type="button"
@@ -87,18 +80,6 @@ export const TagConfig: React.FC<TagConfigProps> = ({ onPasteClick }) => {
           >
             <ClipboardPaste size={13} />
             Paste Response
-          </TgButton>
-          <TgButton
-            type="button"
-            variant="secondary"
-            size="md"
-            onClick={() => void applyCurrentSuggestions()}
-            loading={isApplying}
-            loadingLabel="Applying…"
-            className="border-emerald-500/30 bg-emerald-500/10 text-emerald-700 hover:bg-emerald-500/20"
-          >
-            <Tags size={13} />
-            Apply
           </TgButton>
         </div>
       </div>

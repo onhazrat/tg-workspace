@@ -29,21 +29,6 @@ export function useDiscoverCandidatesQuery(
   })
 }
 
-/**
- * The saved report Discover opens on.
- *
- * `null` (never generated) is a legitimate settled result, not an error, so the
- * caller distinguishes "no report yet" from "still loading" via `isLoading`.
- */
-export function useLatestDiscoverReportQuery(enabled = true) {
-  return useQuery({
-    queryKey: queryKeys.latestDiscoverReport,
-    queryFn: () => api.getLatestDiscoverReport(),
-    enabled,
-    staleTime: SUMMARIZER_STALE_TIME,
-  })
-}
-
 /** A specific saved report, for reopening one from history. */
 export function useDiscoverReportQuery(reportId: string | null) {
   return useQuery({
@@ -76,7 +61,6 @@ export function useCreateDiscoverReportMutation() {
     mutationFn: (params: DiscoverCandidatesParams) =>
       api.createDiscoverReport(params),
     onSuccess: (report) => {
-      queryClient.setQueryData(queryKeys.latestDiscoverReport, report)
       queryClient.setQueryData(queryKeys.discoverReport(report.id), report)
       void queryClient.invalidateQueries({
         queryKey: queryKeys.discoverReports,
@@ -125,10 +109,6 @@ export function useDeleteDiscoverReportMutation() {
     onSuccess: (_result, reportId) => {
       queryClient.removeQueries({
         queryKey: queryKeys.discoverReport(reportId),
-      })
-      // The deleted report may have been the latest one.
-      void queryClient.invalidateQueries({
-        queryKey: queryKeys.latestDiscoverReport,
       })
       void queryClient.invalidateQueries({
         queryKey: queryKeys.discoverReports,

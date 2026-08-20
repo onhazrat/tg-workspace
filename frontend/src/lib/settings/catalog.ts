@@ -137,6 +137,17 @@ export const SETTINGS_CATALOG: SettingCatalogEntry[] = [
     defaultValue: appSettingsSpec.showChannelStartId.defaultValue,
     control: { kind: "boolean", commandSlug: "show-channel-start-id" },
   },
+  {
+    id: "compactWorkspaceTabs",
+    label: "Compact Workspace Tabs",
+    description:
+      "Show only Channels, Posts, Action, History and Settings. Hidden tabs stay reachable by URL and from the command palette.",
+    keywords: ["appearance", "tabs", "workspace", "compact", "hide"],
+    group: "appearance",
+    source: "app",
+    defaultValue: appSettingsSpec.compactWorkspaceTabs.defaultValue,
+    control: { kind: "boolean", commandSlug: "compact-workspace-tabs" },
+  },
 
   // --- Channels & Sync ---
   {

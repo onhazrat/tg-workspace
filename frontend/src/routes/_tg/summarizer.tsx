@@ -2,20 +2,10 @@ import { createFileRoute } from "@tanstack/react-router"
 
 import App from "@/App"
 import { TgProviders } from "@/components/TgProviders"
+import { VALID_TABS } from "@/constants"
 import type { SettingsSection } from "@/lib/settingsSection"
 import { normalizeSettingsSection } from "@/lib/settingsSection"
 import type { TabType } from "@/types"
-
-const VALID_TABS: TabType[] = [
-  "summary",
-  "posts",
-  "channels",
-  "tag",
-  "discover",
-  "history",
-  "chat",
-  "settings",
-]
 
 export type SummarizerSearch = {
   tab?: TabType
@@ -34,6 +24,17 @@ export type SummarizerSearch = {
    * "the most recent report".
    */
   report?: string
+  /**
+   * The other three artifact kinds, on the same terms.
+   *
+   * Opening an artifact from History is a navigation — it should survive a
+   * reload and be worth copying out of the address bar. Only Discover reports
+   * were deep-linkable before; a summary was restored through component state
+   * and a chat could not be reopened at all.
+   */
+  summary?: string
+  chatSession?: string
+  tagRun?: string
 }
 
 export const Route = createFileRoute("/_tg/summarizer")({
@@ -58,8 +59,9 @@ export const Route = createFileRoute("/_tg/summarizer")({
     if (typeof search.settingGroup === "string" && search.settingGroup.trim()) {
       result.settingGroup = search.settingGroup.trim()
     }
-    if (typeof search.report === "string" && search.report.trim()) {
-      result.report = search.report.trim()
+    for (const key of ["report", "summary", "chatSession", "tagRun"] as const) {
+      const raw = search[key]
+      if (typeof raw === "string" && raw.trim()) result[key] = raw.trim()
     }
     return result
   },

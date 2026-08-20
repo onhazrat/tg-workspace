@@ -116,11 +116,14 @@ def test_the_split_did_not_change_the_route_count() -> None:
     `GET /channels/bios`, splitting off the other 40% of that payload; **68**
     with `GET /logs/{log_type}/{log_id}`, which takes the request/response
     bodies out of the log list — that page was 56.28 MB for 500 rows, 99.7% of
-    it bodies the viewer shows only for the one row an operator expands.
+    it bodies the viewer shows only for the one row an operator expands; and
+    **72** with the four `/chat-sessions` routes, which gave chats their own
+    aggregate instead of storing them as summaries whose text began `"Chat: "`;
+    and **73** with `GET /artifacts`, the unified list History reads.
     """
     data_routes = {
         (m, p) for m, p in _mounted_routes() if p.startswith("/api/v1/data/")
     }
-    assert len(data_routes) == 68, (
-        f"expected 68 /data endpoints, found {len(data_routes)}"
+    assert len(data_routes) == 73, (
+        f"expected 73 /data endpoints, found {len(data_routes)}"
     )

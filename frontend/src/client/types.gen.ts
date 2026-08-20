@@ -910,6 +910,68 @@ export type ChannelUpsertRequest = {
 };
 
 /**
+ * ChatArtifactResponse
+ */
+export type ChatArtifactResponse = {
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Title
+     */
+    title?: string;
+    /**
+     * Channels
+     */
+    channels?: Array<string>;
+    /**
+     * Startdate
+     */
+    startDate?: number;
+    /**
+     * Enddate
+     */
+    endDate?: number;
+    /**
+     * Timestamp
+     */
+    timestamp?: number;
+    /**
+     * Model
+     */
+    model?: string | null;
+    /**
+     * Postcount
+     */
+    postCount?: number | null;
+    /**
+     * Isstarred
+     */
+    isStarred?: boolean;
+    /**
+     * Note
+     */
+    note?: string | null;
+    /**
+     * Kind
+     */
+    kind: 'chat';
+    /**
+     * Messagecount
+     */
+    messageCount?: number;
+    /**
+     * Mode
+     */
+    mode?: 'full_scope' | 'semantic';
+    /**
+     * Language
+     */
+    language?: string;
+};
+
+/**
  * ChatDestinationResponse
  * A chat a summary can be published to.
  */
@@ -987,6 +1049,145 @@ export type ChatRequest = {
      * Provider
      */
     provider?: string;
+};
+
+/**
+ * ChatSessionListItemResponse
+ * A chat session's identity and metadata — the history-list projection.
+ *
+ * Deliberately omits `messages`. Callers that need the transcript fetch the
+ * session by id.
+ *
+ * Open (`extra="allow"`) because `ChatSession.extra` is: `isStarred`, `note`,
+ * `postSearch` and the `semanticSearch*` flags come and go per row exactly as
+ * they do on `Summary`. Declaring them would emit four-plus explicit `null`s
+ * on every row. The consequence is that chat-session calls belong in the
+ * hand-written frontend client, same side as summaries — see ADR-006 and
+ * `frontend/src/api/client-split.conform.ts`.
+ */
+export type ChatSessionListItemResponse = {
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Title
+     */
+    title?: string;
+    /**
+     * Channels
+     */
+    channels?: Array<string>;
+    /**
+     * Startdate
+     */
+    startDate?: number;
+    /**
+     * Enddate
+     */
+    endDate?: number;
+    /**
+     * Language
+     */
+    language?: string;
+    /**
+     * Model
+     */
+    model?: string | null;
+    /**
+     * Mode
+     */
+    mode?: 'full_scope' | 'semantic';
+    /**
+     * Postcount
+     */
+    postCount?: number | null;
+    /**
+     * Timestamp
+     */
+    timestamp?: number;
+    /**
+     * Messagecount
+     */
+    messageCount?: number;
+    [key: string]: unknown | string | Array<string> | number | (string | null) | ('full_scope' | 'semantic') | (number | null) | undefined;
+};
+
+/**
+ * ChatSessionResponse
+ * A chat session with the transcript the list omits.
+ *
+ * `messages` is always present — `[]` rather than absent when there is no
+ * payload row. See `chat_session_to_camel` for why this format differs from
+ * the summary one on that point.
+ *
+ * The turns stay loosely typed: `sources` carries whole posts whose shape is
+ * the scraper's, and pinning it here would make a scraper change a schema
+ * migration.
+ */
+export type ChatSessionResponse = {
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Title
+     */
+    title?: string;
+    /**
+     * Channels
+     */
+    channels?: Array<string>;
+    /**
+     * Startdate
+     */
+    startDate?: number;
+    /**
+     * Enddate
+     */
+    endDate?: number;
+    /**
+     * Language
+     */
+    language?: string;
+    /**
+     * Model
+     */
+    model?: string | null;
+    /**
+     * Mode
+     */
+    mode?: 'full_scope' | 'semantic';
+    /**
+     * Postcount
+     */
+    postCount?: number | null;
+    /**
+     * Timestamp
+     */
+    timestamp?: number;
+    /**
+     * Messagecount
+     */
+    messageCount?: number;
+    /**
+     * Messages
+     */
+    messages?: Array<unknown>;
+    [key: string]: unknown | string | Array<string> | number | (string | null) | ('full_scope' | 'semantic') | (number | null) | Array<unknown> | undefined;
+};
+
+/**
+ * ChatSessionUpsertRequest
+ * Body for `PUT /data/chat-sessions/{id}`.
+ *
+ * Permissive like the summary one: unrecognised keys go to `extra`, an
+ * explicit null removes an `extra` key, and `messages` routes to the payload
+ * table. `title` and `messageCount` are derived on write and stripped, so a
+ * client round-tripping a list item cannot shadow them.
+ */
+export type ChatSessionUpsertRequest = {
+    [key: string]: unknown;
 };
 
 /**
@@ -1317,11 +1518,34 @@ export type DiscoverProbeRequest = {
 };
 
 /**
+ * DiscoverReportFlagsRequest
+ * Body for `PUT /data/discover/reports/{id}/flags`.
+ *
+ * Only the small UI flags. A report's scope and candidates are immutable by
+ * design — a different scope produces a new report — so there is deliberately
+ * no way to edit them here.
+ */
+export type DiscoverReportFlagsRequest = {
+    /**
+     * Isstarred
+     */
+    isStarred?: boolean | null;
+    /**
+     * Note
+     */
+    note?: string | null;
+};
+
+/**
  * DiscoverReportListItemResponse
  * A saved report without its candidate rows, as the history list ships it.
  *
  * `candidates` is the corpus-sized field — a wide-scope report holds the full
  * single-reference tail — so the list carries `candidateCount` instead.
+ *
+ * `isStarred` and `note` are declared rather than riding in an open `extra`
+ * bag — see `TagRunListItemResponse` for why the closed model is worth
+ * keeping.
  */
 export type DiscoverReportListItemResponse = {
     /**
@@ -1334,6 +1558,14 @@ export type DiscoverReportListItemResponse = {
      * Postsinscope
      */
     postsInScope?: number;
+    /**
+     * Isstarred
+     */
+    isStarred?: boolean;
+    /**
+     * Note
+     */
+    note?: string | null;
     /**
      * Timestamp
      */
@@ -1359,6 +1591,14 @@ export type DiscoverReportResponse = {
      * Postsinscope
      */
     postsInScope?: number;
+    /**
+     * Isstarred
+     */
+    isStarred?: boolean;
+    /**
+     * Note
+     */
+    note?: string | null;
     /**
      * Timestamp
      */
@@ -1443,6 +1683,60 @@ export type DiscoveredViaPayload = {
      * Timestamp
      */
     timestamp: number;
+};
+
+/**
+ * DiscoveryArtifactResponse
+ */
+export type DiscoveryArtifactResponse = {
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Title
+     */
+    title?: string;
+    /**
+     * Channels
+     */
+    channels?: Array<string>;
+    /**
+     * Startdate
+     */
+    startDate?: number;
+    /**
+     * Enddate
+     */
+    endDate?: number;
+    /**
+     * Timestamp
+     */
+    timestamp?: number;
+    /**
+     * Model
+     */
+    model?: string | null;
+    /**
+     * Postcount
+     */
+    postCount?: number | null;
+    /**
+     * Isstarred
+     */
+    isStarred?: boolean;
+    /**
+     * Note
+     */
+    note?: string | null;
+    /**
+     * Kind
+     */
+    kind: 'discovery';
+    /**
+     * Candidatecount
+     */
+    candidateCount?: number;
 };
 
 /**
@@ -3368,6 +3662,77 @@ export type StatusResponse = {
 };
 
 /**
+ * SummaryArtifactResponse
+ * `status` is `"pending"` until an externally-run prompt is pasted back.
+ *
+ * `autoRegenerate` and `autoPublish` are here rather than left to the Summary
+ * tab because History is where they are toggled, and reading them out of
+ * `extra` costs nothing once `isStarred` is already being read.
+ */
+export type SummaryArtifactResponse = {
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Title
+     */
+    title?: string;
+    /**
+     * Channels
+     */
+    channels?: Array<string>;
+    /**
+     * Startdate
+     */
+    startDate?: number;
+    /**
+     * Enddate
+     */
+    endDate?: number;
+    /**
+     * Timestamp
+     */
+    timestamp?: number;
+    /**
+     * Model
+     */
+    model?: string | null;
+    /**
+     * Postcount
+     */
+    postCount?: number | null;
+    /**
+     * Isstarred
+     */
+    isStarred?: boolean;
+    /**
+     * Note
+     */
+    note?: string | null;
+    /**
+     * Kind
+     */
+    kind: 'summary';
+    /**
+     * Status
+     */
+    status?: string;
+    /**
+     * Language
+     */
+    language?: string;
+    /**
+     * Autoregenerate
+     */
+    autoRegenerate?: boolean;
+    /**
+     * Autopublish
+     */
+    autoPublish?: boolean;
+};
+
+/**
  * SummaryListItemResponse
  * List projection, as `summary_to_camel_light` builds it.
  *
@@ -3745,6 +4110,64 @@ export type TableSizeResponse = {
 };
 
 /**
+ * TagArtifactResponse
+ */
+export type TagArtifactResponse = {
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Title
+     */
+    title?: string;
+    /**
+     * Channels
+     */
+    channels?: Array<string>;
+    /**
+     * Startdate
+     */
+    startDate?: number;
+    /**
+     * Enddate
+     */
+    endDate?: number;
+    /**
+     * Timestamp
+     */
+    timestamp?: number;
+    /**
+     * Model
+     */
+    model?: string | null;
+    /**
+     * Postcount
+     */
+    postCount?: number | null;
+    /**
+     * Isstarred
+     */
+    isStarred?: boolean;
+    /**
+     * Note
+     */
+    note?: string | null;
+    /**
+     * Kind
+     */
+    kind: 'tag';
+    /**
+     * Status
+     */
+    status?: string;
+    /**
+     * Mode
+     */
+    mode?: string;
+};
+
+/**
  * TagRequest
  */
 export type TagRequest = {
@@ -3797,6 +4220,14 @@ export type TagRequest = {
  *
  * Deliberately omits `promptText`, `responseText`, `suggestions` and
  * `allTagsSnapshot`. Callers that need those fetch the run by id.
+ *
+ * `isStarred` and `note` are **declared**, not left to ride in an open `extra`
+ * bag. CLAUDE.md's rule against declaring a conditional key protects an
+ * *existing* wire format from acquiring `null`s; these keys are new, so their
+ * format is a choice rather than a change — and the closed model is worth
+ * keeping, because `frontend/src/types.ts` derives `TagRun` from this schema
+ * and `Omit<>` over a top-level index signature collapses every field to
+ * `unknown`. Opening this model was tried and did exactly that.
  */
 export type TagRunListItemResponse = {
     /**
@@ -3830,7 +4261,7 @@ export type TagRunListItemResponse = {
     /**
      * Postcount
      */
-    postCount?: number;
+    postCount?: number | null;
     /**
      * Model
      */
@@ -3847,6 +4278,14 @@ export type TagRunListItemResponse = {
      * Updatedat
      */
     updatedAt?: number;
+    /**
+     * Isstarred
+     */
+    isStarred?: boolean;
+    /**
+     * Note
+     */
+    note?: string | null;
 };
 
 /**
@@ -3890,7 +4329,7 @@ export type TagRunResponse = {
     /**
      * Postcount
      */
-    postCount?: number;
+    postCount?: number | null;
     /**
      * Model
      */
@@ -3907,6 +4346,14 @@ export type TagRunResponse = {
      * Updatedat
      */
     updatedAt?: number;
+    /**
+     * Isstarred
+     */
+    isStarred?: boolean;
+    /**
+     * Note
+     */
+    note?: string | null;
     /**
      * Prompttext
      */
@@ -6257,23 +6704,6 @@ export type DataCreateDiscoverReportResponses = {
 
 export type DataCreateDiscoverReportResponse = DataCreateDiscoverReportResponses[keyof DataCreateDiscoverReportResponses];
 
-export type DataGetLatestDiscoverReportData = {
-    body?: never;
-    path?: never;
-    query?: never;
-    url: '/api/v1/data/discover/reports/latest';
-};
-
-export type DataGetLatestDiscoverReportResponses = {
-    /**
-     * Response Data-Get Latest Discover Report
-     * Successful Response
-     */
-    200: DiscoverReportResponse | null;
-};
-
-export type DataGetLatestDiscoverReportResponse = DataGetLatestDiscoverReportResponses[keyof DataGetLatestDiscoverReportResponses];
-
 export type DataDeleteDiscoverReportData = {
     body?: never;
     path: {
@@ -6333,6 +6763,36 @@ export type DataGetDiscoverReportResponses = {
 };
 
 export type DataGetDiscoverReportResponse = DataGetDiscoverReportResponses[keyof DataGetDiscoverReportResponses];
+
+export type DataUpdateDiscoverReportFlagsData = {
+    body: DiscoverReportFlagsRequest;
+    path: {
+        /**
+         * Report Id
+         */
+        report_id: string;
+    };
+    query?: never;
+    url: '/api/v1/data/discover/reports/{report_id}/flags';
+};
+
+export type DataUpdateDiscoverReportFlagsErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type DataUpdateDiscoverReportFlagsError = DataUpdateDiscoverReportFlagsErrors[keyof DataUpdateDiscoverReportFlagsErrors];
+
+export type DataUpdateDiscoverReportFlagsResponses = {
+    /**
+     * Successful Response
+     */
+    200: DiscoverReportResponse;
+};
+
+export type DataUpdateDiscoverReportFlagsResponse = DataUpdateDiscoverReportFlagsResponses[keyof DataUpdateDiscoverReportFlagsResponses];
 
 export type DataListSummariesData = {
     body?: never;
@@ -6592,6 +7052,190 @@ export type DataUpsertTagRunResponses = {
 };
 
 export type DataUpsertTagRunResponse = DataUpsertTagRunResponses[keyof DataUpsertTagRunResponses];
+
+export type DataListChatSessionsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Limit
+         */
+        limit?: number;
+        /**
+         * Offset
+         */
+        offset?: number;
+        /**
+         * Search
+         */
+        search?: string | null;
+    };
+    url: '/api/v1/data/chat-sessions';
+};
+
+export type DataListChatSessionsErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type DataListChatSessionsError = DataListChatSessionsErrors[keyof DataListChatSessionsErrors];
+
+export type DataListChatSessionsResponses = {
+    /**
+     * Response Data-List Chat Sessions
+     * Successful Response
+     */
+    200: Array<ChatSessionListItemResponse>;
+};
+
+export type DataListChatSessionsResponse = DataListChatSessionsResponses[keyof DataListChatSessionsResponses];
+
+export type DataDeleteChatSessionData = {
+    body?: never;
+    path: {
+        /**
+         * Chat Session Id
+         */
+        chat_session_id: string;
+    };
+    query?: never;
+    url: '/api/v1/data/chat-sessions/{chat_session_id}';
+};
+
+export type DataDeleteChatSessionErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type DataDeleteChatSessionError = DataDeleteChatSessionErrors[keyof DataDeleteChatSessionErrors];
+
+export type DataDeleteChatSessionResponses = {
+    /**
+     * Successful Response
+     */
+    200: StatusResponse;
+};
+
+export type DataDeleteChatSessionResponse = DataDeleteChatSessionResponses[keyof DataDeleteChatSessionResponses];
+
+export type DataGetChatSessionData = {
+    body?: never;
+    path: {
+        /**
+         * Chat Session Id
+         */
+        chat_session_id: string;
+    };
+    query?: never;
+    url: '/api/v1/data/chat-sessions/{chat_session_id}';
+};
+
+export type DataGetChatSessionErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type DataGetChatSessionError = DataGetChatSessionErrors[keyof DataGetChatSessionErrors];
+
+export type DataGetChatSessionResponses = {
+    /**
+     * Successful Response
+     */
+    200: ChatSessionResponse;
+};
+
+export type DataGetChatSessionResponse = DataGetChatSessionResponses[keyof DataGetChatSessionResponses];
+
+export type DataUpsertChatSessionData = {
+    body: ChatSessionUpsertRequest;
+    path: {
+        /**
+         * Chat Session Id
+         */
+        chat_session_id: string;
+    };
+    query?: never;
+    url: '/api/v1/data/chat-sessions/{chat_session_id}';
+};
+
+export type DataUpsertChatSessionErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type DataUpsertChatSessionError = DataUpsertChatSessionErrors[keyof DataUpsertChatSessionErrors];
+
+export type DataUpsertChatSessionResponses = {
+    /**
+     * Successful Response
+     */
+    200: ChatSessionResponse;
+};
+
+export type DataUpsertChatSessionResponse = DataUpsertChatSessionResponses[keyof DataUpsertChatSessionResponses];
+
+export type DataListArtifactsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Kind
+         */
+        kind?: ('summary' | 'chat' | 'tag' | 'discovery') | null;
+        /**
+         * Search
+         */
+        search?: string | null;
+        /**
+         * Starred
+         */
+        starred?: boolean;
+        /**
+         * Limit
+         */
+        limit?: number;
+        /**
+         * Offset
+         */
+        offset?: number;
+    };
+    url: '/api/v1/data/artifacts';
+};
+
+export type DataListArtifactsErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type DataListArtifactsError = DataListArtifactsErrors[keyof DataListArtifactsErrors];
+
+export type DataListArtifactsResponses = {
+    /**
+     * Response Data-List Artifacts
+     * Successful Response
+     */
+    200: Array<({
+        kind: 'summary';
+    } & SummaryArtifactResponse) | ({
+        kind: 'chat';
+    } & ChatArtifactResponse) | ({
+        kind: 'tag';
+    } & TagArtifactResponse) | ({
+        kind: 'discovery';
+    } & DiscoveryArtifactResponse)>;
+};
+
+export type DataListArtifactsResponse = DataListArtifactsResponses[keyof DataListArtifactsResponses];
 
 export type DataListBotCredentialsData = {
     body?: never;

@@ -56,7 +56,7 @@ export const LlmLogsTab: React.FC<LlmLogsTabProps> = ({
               </LogMetaItem>
               <LogMetaItem
                 icon={
-                  log.type === "chat" ? (
+                  log.type === "chat_full_scope" ? (
                     <MessageSquare size={10} />
                   ) : (
                     <FileText size={10} />

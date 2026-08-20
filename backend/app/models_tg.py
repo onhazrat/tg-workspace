@@ -198,6 +198,94 @@ class SummaryPayload(SQLModel, table=True):
     updated_at: datetime = Field(default_factory=utc_now)
 
 
+class ChatSession(SQLModel, table=True):
+    """A saved conversation — a first-class artifact, not a summary in disguise.
+
+    A chat used to be a `Summary` whose `text` began with the literal string
+    `"Chat: "`, with the transcript in `SummaryPayload.chat_messages`. That
+    encoded the *kind* of an artifact in a prefix of its body text: the history
+    list, the type filter and the restore path each re-derived "is this a chat?"
+    from `str.startswith`, and a summary that legitimately began with those six
+    characters was one. Worse, a chat started while a summary was open patched
+    *that summary's* transcript instead of creating a row, so it never appeared
+    in history as its own thing.
+
+    Modelled column-for-column on `Summary`, deliberately: the two are siblings,
+    they list side by side, and every lesson `Summary` has already paid for
+    applies unchanged. In particular the transcript is **not** here and **not**
+    in `extra` — see `ChatSessionPayload`.
+
+    **There is no link to a summary, and that is the point.** Chat mode
+    `full_scope` never read one: the prompt is assembled from the selected
+    channels, the date range and the post filters, exactly as a summary's is. A
+    chat depends on its scope and nothing else. If "chats about this summary" is
+    ever wanted it is a link table, added when something needs it.
+    """
+
+    __tablename__ = "tg_chat_sessions"
+
+    id: str = Field(primary_key=True)
+    user_id: uuid.UUID | None = Field(default=None, index=True)
+    #: Derived from the first user message on write. A column rather than a
+    #: computed-on-read value so the list projection never opens the payload
+    #: table for it. This is what replaces the `"Chat: "` prefix — it stores the
+    #: *label*, where the prefix stored the kind.
+    title: str = Field(default="", sa_column=Column(Text))
+    channels: list[str] = Field(default_factory=list, sa_column=Column(JSON))
+    start_date: int = Field(default=0, sa_column=_ms_ts())
+    end_date: int = Field(default=0, sa_column=_ms_ts())
+    language: str = "English"
+    model: str | None = None
+    #: `"full_scope"` (every post in scope) or `"semantic"` (only the posts a
+    #: vector search retrieved). Named for what they do: these were once
+    #: `"summary"` and `"history"`, neither of which was true — the first read
+    #: no summary and the second had nothing to do with the History tab.
+    mode: str = "full_scope"
+    post_count: int | None = None
+    timestamp: int = Field(default=0, sa_column=_ms_ts())
+    #: Open bag of small UI flags (`isStarred`, `note`, `postSearch`,
+    #: `semanticSearchQuery`, …), exactly as on `Summary`. Conditional keys flow
+    #: through here and are deliberately **not** declared: a declared optional
+    #: field serialises as an explicit `null` where the key is absent today.
+    extra: dict[str, Any] = Field(default_factory=dict, sa_column=Column(JSON))
+    #: Derived from `ChatSessionPayload` and maintained on write, so the list
+    #: projection never has to open the payload table. Mirrors
+    #: `Summary.chat_message_count`.
+    message_count: int = 0
+    updated_at: datetime = Field(default_factory=utc_now)
+
+
+class ChatSessionPayload(SQLModel, table=True):
+    """The corpus-sized half of a `ChatSession`, split off so listing skips it.
+
+    Same split, same reason, same measurements as `SummaryPayload` — a
+    transcript is a whole conversation, and the history list renders a count and
+    a one-line title of it. It arrives here already knowing the answer: these
+    exact values sat in `Summary.extra` under `chatMessages`, cost a measured
+    26 MB per 49-row page together with their neighbours, and were moved into
+    `tg_summary_payloads` for that reason. Promoting chats to their own
+    aggregate must not walk that back, which is what a `messages` column on
+    `tg_chat_sessions` would be.
+
+    A **table** rather than a deferred column because a table is fail-closed:
+    `select(ChatSession)` cannot read what is not in its FROM clause, where a
+    forgotten `defer()` restores the full cost silently.
+
+    Like `SummaryPayload` this is user content, not disposable telemetry, so the
+    downgrade merges it back. And like both existing payload tables it has **no
+    foreign key**, so it stays droppable and truncatable, and
+    `app.services.chat_sessions` cleans up explicitly rather than via a cascade.
+    """
+
+    __tablename__ = "tg_chat_session_payloads"
+
+    chat_session_id: str = Field(primary_key=True)
+    user_id: uuid.UUID | None = Field(default=None, index=True)
+    #: `[{"role": "user" | "model", "text": str, "sources"?: [...]}]`
+    messages: list[Any] | None = Field(default=None, sa_column=Column(JSON))
+    updated_at: datetime = Field(default_factory=utc_now)
+
+
 class DiscoverReport(SQLModel, table=True):
     """A saved Discover run: the candidates found for a scope at a point in time.
 
@@ -243,8 +331,21 @@ class DiscoverReport(SQLModel, table=True):
     candidates: list[Any] = Field(default_factory=list, sa_column=Column(JSON))
     scope_counts: dict[str, Any] = Field(default_factory=dict, sa_column=Column(JSON))
     posts_in_scope: int = 0
+    #: `len(candidates)`, maintained on write.
+    #:
+    #: Without it the list projection has to read `candidates` — a corpus-sized
+    #: JSON column holding the whole single-reference tail — in order to ship one
+    #: integer. `report_to_camel_light` did exactly that until this column
+    #: existed, detoasting every report on the page to compute a `len()`. This is
+    #: the same trick `Summary.chat_message_count` plays one table over.
+    candidate_count: int = 0
 
     timestamp: int = Field(default=0, sa_column=_ms_ts())
+    #: Open bag of small UI flags (`isStarred`, `note`). Added when History
+    #: became one list over all four artifact kinds: a starred-only filter that
+    #: worked on summaries and chats but silently skipped tag runs and reports
+    #: is worse than either having the filter or not.
+    extra: dict[str, Any] = Field(default_factory=dict, sa_column=Column(JSON))
     updated_at: datetime = Field(default_factory=utc_now)
 
 
@@ -388,6 +489,9 @@ class TagRun(SQLModel, table=True):
     )
     apply_result: dict[str, Any] = Field(default_factory=dict, sa_column=Column(JSON))
     error: str | None = Field(default=None, sa_column=Column(Text))
+    #: Open bag of small UI flags (`isStarred`, `note`) — see the note on
+    #: `DiscoverReport.extra` for why all four artifact kinds have one.
+    extra: dict[str, Any] = Field(default_factory=dict, sa_column=Column(JSON))
     created_at: int = Field(default=0, sa_column=_ms_ts())
     updated_at_ms: int = Field(default=0, sa_column=_ms_ts())
     updated_at: datetime = Field(default_factory=utc_now)

@@ -11,6 +11,7 @@ import {
 import { toast } from "sonner"
 import { api } from "@/api"
 import { queryKeys, SUMMARIZER_STALE_TIME } from "@/hooks/queryKeys"
+import { useTagRunParam } from "@/hooks/useArtifactParams"
 import {
   applyTagSuggestions,
   buildBulkChannelTagUpdates,
@@ -82,7 +83,10 @@ export const TagProvider: React.FC<{ children: React.ReactNode }> = ({
   const [mode, setMode] = useState<TagMode>("add")
   const [isGenerating, setIsGenerating] = useState(false)
   const [isApplying, setIsApplying] = useState(false)
-  const [currentRunId, setCurrentRunId] = useState<string | null>(null)
+  // In the URL, so History's `?tagRun=` deep link actually opens a run — see
+  // the note on `currentSummaryId` in `UIContext`.
+  const { tagRunId: currentRunId, openTagRun: setCurrentRunId } =
+    useTagRunParam()
   const [suggestions, setSuggestions] = useState<Record<string, string[]>>({})
 
   // TagProvider is mounted unconditionally, so an unguarded fetch here ran on

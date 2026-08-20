@@ -47,6 +47,10 @@ import type {
   BotInfoResponse,
   ChannelInfoResponse,
   ChannelSyncProgress,
+  ChatArtifactResponse,
+  ChatSessionListItemResponse,
+  DiscoverReportResponse,
+  DiscoveryArtifactResponse,
   JobStatusEntry,
   PostResponse,
   ProxyHealthResponse,
@@ -54,7 +58,10 @@ import type {
   RagEmbedResponse,
   RagStatusResponse,
   RuntimeConfigResponse,
+  SummaryArtifactResponse,
   SyncJobStatusResponse,
+  TagArtifactResponse,
+  TagRunResponse,
   TestProxyResponse,
   TorIpResponse,
   TorStatusResponse,
@@ -107,6 +114,48 @@ export type TestProxyIsStillOpen = Assert<IsOpen<TestProxyResponse>>
 
 /** Forwards the raw Bot API reply, deliberately unmodelled. */
 export type BotInfoIsStillOpen = Assert<IsOpen<BotInfoResponse>>
+
+/**
+ * `isStarred`, `note`, `postSearch` and the `semanticSearch*` flags are
+ * conditional per row and ride in `extra`, exactly as they do on `Summary` —
+ * which is why chat sessions are hand-written on the same grounds.
+ */
+export type ChatSessionListItemIsStillOpen = Assert<
+  IsOpen<ChatSessionListItemResponse>
+>
+
+// ---------------------------------------------------------------------------
+// Tag runs and Discover reports: closed, and they must stay that way.
+//
+// Both gained `isStarred`/`note` when History became one list over all four
+// artifact kinds. Those keys are **declared** on the schemas rather than left
+// to ride in an open `extra` bag, and the assertion below is what keeps that
+// decision from being quietly reversed.
+//
+// The reason is concrete: `frontend/src/types.ts` derives `TagRun` from
+// `TagRunResponse`, and `Omit<>` over a top-level index signature collapses
+// every named field to `unknown`. Opening the model was tried during this work
+// and broke `TagView` in exactly that way — which is the 190-error failure the
+// types.ts header documents, reproduced in miniature.
+// ---------------------------------------------------------------------------
+
+export type TagRunIsClosed = Assert<IsClosed<TagRunResponse>>
+export type DiscoverReportIsClosed = Assert<IsClosed<DiscoverReportResponse>>
+
+// ---------------------------------------------------------------------------
+// The unified artifact list: closed on purpose, so it stays generated.
+//
+// It is a projection over named columns rather than a row with an `extra` bag,
+// which is what lets the four kinds be a real TypeScript discriminated union
+// instead of one type with four optional fields.
+// ---------------------------------------------------------------------------
+
+export type SummaryArtifactIsClosed = Assert<IsClosed<SummaryArtifactResponse>>
+export type ChatArtifactIsClosed = Assert<IsClosed<ChatArtifactResponse>>
+export type TagArtifactIsClosed = Assert<IsClosed<TagArtifactResponse>>
+export type DiscoveryArtifactIsClosed = Assert<
+  IsClosed<DiscoveryArtifactResponse>
+>
 
 // ---------------------------------------------------------------------------
 // Kept hand-written for the *other* reason: closed, but not assignable.

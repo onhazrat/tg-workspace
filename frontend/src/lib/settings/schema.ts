@@ -308,6 +308,14 @@ export const appSettingsSpec = {
     "all",
   ),
   discoverMinTotal: intSetting("discoverMinTotal", 1),
+  // Workspace chrome (local only — never mirrored to the backend).
+  //
+  // `workspaceFocusMode` persists but native browser fullscreen does not, and
+  // cannot: `requestFullscreen` needs a user gesture, so a reload restores the
+  // collapsed chrome without the browser being fullscreen. That asymmetry is
+  // deliberate — see `hooks/useWorkspaceFullscreen.ts`.
+  workspaceFocusMode: booleanSetting("workspaceFocusMode", false),
+  compactWorkspaceTabs: booleanSetting("compactWorkspaceTabs", false),
 }
 
 /** State shape derived from the schema — one property per setting. */

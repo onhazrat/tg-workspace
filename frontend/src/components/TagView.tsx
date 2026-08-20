@@ -1,7 +1,8 @@
-import { History, Trash2 } from "lucide-react"
 import { motion } from "motion/react"
 import type React from "react"
 import { useMemo, useState } from "react"
+import { GoToActionEmptyState } from "@/components/history/GoToActionEmptyState"
+import { ApplyTagsBar } from "@/components/tag/ApplyTagsBar"
 import { normalizeParsedTagSuggestions } from "@/lib/channels/apply-tag-suggestions"
 import { getTagNames } from "@/lib/channels/channel-tag-model"
 import {
@@ -12,24 +13,12 @@ import {
 import { tagPreviewScopeNote } from "@/lib/channels/tag-preview-scope"
 import { countOf } from "@/lib/plural"
 import { useData } from "../contexts/DataContext"
+
 import { useTagContext } from "../contexts/TagContext"
-import { PasteTagsModal } from "./PasteTagsModal"
-import { TagConfig } from "./TagConfig"
-import { TgIconButton } from "./ui/tg-icon-button"
 
 export const TagView: React.FC = () => {
   const { channels, selectedChannels } = useData()
-  const {
-    mode,
-    suggestions,
-    tagRuns,
-    currentRunId,
-    setCurrentRunId,
-    completePendingTagRun,
-    deleteRun,
-    selectedRun,
-  } = useTagContext()
-  const [pasteOpen, setPasteOpen] = useState(false)
+  const { mode, suggestions, selectedRun } = useTagContext()
 
   const previewMode = selectedRun?.mode ?? mode
 
@@ -88,7 +77,7 @@ export const TagView: React.FC = () => {
       animate={{ opacity: 1, y: 0 }}
       className="space-y-6"
     >
-      <TagConfig onPasteClick={() => setPasteOpen(true)} />
+      <ApplyTagsBar />
 
       <div className="rounded-xl border border-app-ink/10 bg-app-card p-4 shadow-sm">
         <div className="mb-3">
@@ -206,62 +195,24 @@ export const TagView: React.FC = () => {
         )}
       </div>
 
-      <div className="rounded-xl border border-app-ink/10 bg-app-card p-4 shadow-sm">
-        <div className="mb-3 flex items-center gap-2 text-sm font-bold uppercase tracking-widest text-app-ink/70">
-          <History size={14} />
-          Tag History
-        </div>
-        {tagRuns.length === 0 ? (
-          <p className="text-sm text-app-ink/60">No tag runs yet.</p>
-        ) : (
-          <div className="space-y-2">
-            {tagRuns.map((run) => (
-              <div
-                key={run.id}
-                className={`flex items-center justify-between rounded-lg border px-3 py-2 ${
-                  currentRunId === run.id
-                    ? "border-app-ink/30 bg-app-muted/20"
-                    : "border-app-ink/10"
-                }`}
-              >
-                <button
-                  type="button"
-                  onClick={() => setCurrentRunId(run.id)}
-                  className="text-left"
-                >
-                  <div className="text-xs font-bold uppercase tracking-wider text-app-ink">
-                    {run.mode === "add" ? "Add mode" : "Remove mode"} •{" "}
-                    {run.status}
-                  </div>
-                  <div className="text-xs text-app-ink/60">
-                    {run.channels.length} channels •{" "}
-                    {new Date(run.createdAt).toLocaleString()}
-                  </div>
-                </button>
-                <TgIconButton
-                  aria-label="Delete tag run"
-                  tooltip="Delete tag run"
-                  onClick={() => void deleteRun(run.id)}
-                  className="hover:text-red-500 hover:bg-app-muted/30"
-                >
-                  <Trash2 size={14} />
-                </TgIconButton>
-              </div>
-            ))}
-          </div>
-        )}
-        {selectedRun?.promptText ? (
-          <pre className="mt-4 max-h-56 overflow-y-auto rounded-lg border border-app-ink/10 bg-app-muted/10 p-3 text-xs font-mono text-app-ink/80">
-            {selectedRun.promptText}
-          </pre>
-        ) : null}
-      </div>
+      {/*
+        The Tag History panel is gone: History lists tag runs alongside every
+        other artifact now, and a per-tab copy of the same list is one more
+        place to keep in step. The prompt of the selected run stays, because
+        that is about the run on screen rather than about finding one.
+      */}
+      {selectedRun?.promptText ? (
+        <pre className="max-h-56 overflow-y-auto rounded-lg border border-app-ink/10 bg-app-muted/10 p-3 font-mono text-xs text-app-ink/80">
+          {selectedRun.promptText}
+        </pre>
+      ) : null}
 
-      <PasteTagsModal
-        isOpen={pasteOpen}
-        onClose={() => setPasteOpen(false)}
-        onSave={completePendingTagRun}
-      />
+      {!selectedRun && (
+        <GoToActionEmptyState
+          what="tag run"
+          description="Tag runs are saved with the channels they were made for. Open one from History, or start a new one."
+        />
+      )}
     </motion.div>
   )
 }

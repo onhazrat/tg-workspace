@@ -17,6 +17,14 @@ export const queryKeys = {
   dbStats: ["dbStats"] as const,
   health: ["health"] as const,
   torStatus: ["torStatus"] as const,
+  chatSessions: ["chatSessions"] as const,
+  chatSession: (id: string) => ["chatSession", id] as const,
+  /**
+   * The unified History list. Keyed on kind + search because the server does
+   * both — filtering client-side would defeat the paging.
+   */
+  artifacts: (kind: string | null, search: string, starred: boolean) =>
+    ["artifacts", kind ?? "all", search, starred] as const,
   tagRuns: ["tagRuns"] as const,
   tagRun: (id: string) => ["tagRun", id] as const,
   discoverCandidates: (scope: unknown) =>
@@ -26,12 +34,6 @@ export const queryKeys = {
   /** Server-side probe queue counts. Polled while work is outstanding. */
   discoverProbeQueue: ["discoverProbeQueue"] as const,
   discoverReport: (id: string) => ["discoverReport", id] as const,
-  /**
-   * The report Discover opens on. Kept separate from `discoverReport(id)`
-   * because "the newest report" is a moving target: generating one must
-   * invalidate this, but must not invalidate any report fetched by id.
-   */
-  latestDiscoverReport: ["discoverReport", "latest"] as const,
   postsCounts: (scope: unknown) => ["postsCounts", scope] as const,
   /** The infinite Posts feed, keyed on scope + filters + cap + sort. */
   postsFeed: (scope: unknown) => ["postsFeed", scope] as const,

@@ -3,12 +3,9 @@ import { createContext, useContext, useEffect, useRef, useState } from "react"
 import { toast } from "sonner"
 import { api } from "@/api"
 import type { PromptScope } from "@/api/data"
-import {
-  useInvalidateSummaries,
-  useSummariesHistory,
-} from "@/hooks/useSummaries"
+import { useInvalidateChatSessions } from "@/hooks/useChatSessions"
+import { saveChatSession } from "@/lib/chat-sessions/store"
 import { saveLLMLog } from "@/lib/logs/write"
-import { saveSummary } from "@/lib/summaries/store"
 import { formatChannelsForPrompt } from "../lib/channels/format-channels-for-prompt"
 import { formatPostsForPrompt } from "../lib/posts/post-view"
 import {
@@ -16,14 +13,12 @@ import {
   chatWithHistoryStream,
   generateChatStream,
 } from "../services/ai"
-import type { ChatMessage, LLMLog, Summary } from "../types"
+import type { ChatMessage, ChatMode, ChatSession, LLMLog } from "../types"
 import { useData } from "./DataContext"
 import { useRAG } from "./RAGContext"
 import { useScraper } from "./ScraperContext"
 import { useSettings } from "./SettingsContext"
 import { useUI } from "./UIContext"
-
-type ChatMode = "summary" | "history"
 
 interface ChatContextType {
   chatMessages: ChatMessage[]
@@ -44,14 +39,13 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
   children,
 }) => {
   const { channels, selectedChannels } = useData()
-  const summariesHistory = useSummariesHistory()
-  const loadHistory = useInvalidateSummaries()
+  const loadHistory = useInvalidateChatSessions()
   const {
     startDate,
     endDate,
     activeTab,
-    currentSummaryId,
-    setCurrentSummaryId,
+    currentChatSessionId,
+    setCurrentChatSessionId,
     includeChannelBioInPrompt,
     includeChannelTagsInPrompt,
   } = useUI()
@@ -70,7 +64,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([])
   const [chatInput, setChatInput] = useState("")
   const [isChatting, setIsChatting] = useState(false)
-  const [chatMode, setChatMode] = useState<ChatMode>("summary")
+  const [chatMode, setChatMode] = useState<ChatMode>("full_scope")
 
   const chatEndRef = useRef<HTMLDivElement>(null)
   const chatInputRef = useRef<HTMLTextAreaElement>(null)
@@ -119,7 +113,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
       ]
       setChatMessages(initialMessages)
 
-      if (chatMode === "history") {
+      if (chatMode === "semantic") {
         // RAG Logic
         toast.info("Searching history for relevant context...")
 
@@ -278,7 +272,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
           status: fullModelText ? "success" : "failed",
           timestamp: Date.now(),
           duration: duration,
-          type: chatMode === "history" ? "rag_chat" : "chat",
+          type: chatMode === "semantic" ? "chat_semantic" : "chat_full_scope",
         }
         await saveLLMLog(llmLog)
       }
@@ -293,43 +287,42 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
         { role: "model", text: fullModelText, sources: similarPostsUsed },
       ]
 
-      // Save to database
-      if (currentSummaryId) {
-        const existing = summariesHistory.find((s) => s.id === currentSummaryId)
-        if (existing) {
-          const updated: Summary = { ...existing, chatMessages: finalMessages }
-          await saveSummary(updated)
-          await loadHistory()
-        }
-      } else {
-        // Create a chat-only entry if no summary exists
-        const firstMsg =
-          userMessage.length > 50
-            ? `${userMessage.substring(0, 50)}...`
-            : userMessage
-        const newSummary: Summary = {
-          id: Date.now().toString(),
-          text: `Chat: ${firstMsg}`,
-          channels: Array.from(selectedChannels),
-          startDate,
-          endDate,
-          language: aiLanguage,
-          model: selectedModel,
-          postCount:
-            chatMode === "history"
-              ? (similarPostsUsed?.length ?? 0)
-              : summaryChatPostCount,
-          timestamp: Date.now(),
-          chatMessages: finalMessages,
-          postSearch: postSearch || undefined,
-          semanticSearchQuery: semanticSearchQuery || undefined,
-          semanticSearchRespectsTimeRange,
-          semanticSearchRespectsChannels,
-        }
-        await saveSummary(newSummary)
-        setCurrentSummaryId(newSummary.id)
-        await loadHistory()
+      /*
+       * Persist as a chat session.
+       *
+       * This used to write a `Summary`: either patching the currently-selected
+       * one's `chatMessages`, or inventing a row titled `Chat: <first 50
+       * chars>`. Both were wrong. Patching meant a conversation held while a
+       * summary happened to be open never became its own history entry, and the
+       * invented row encoded the artifact's *kind* in a prefix of its body text.
+       *
+       * A chat depends on its scope, not on a summary — `full_scope` mode reads
+       * no summary, it assembles its prompt from the same channels and dates a
+       * summary would. So there is no link to write.
+       */
+      const sessionId = currentChatSessionId ?? Date.now().toString()
+      const session: Partial<ChatSession> = {
+        id: sessionId,
+        channels: Array.from(selectedChannels),
+        startDate,
+        endDate,
+        language: aiLanguage,
+        model: selectedModel,
+        mode: chatMode,
+        postCount:
+          chatMode === "semantic"
+            ? (similarPostsUsed?.length ?? 0)
+            : summaryChatPostCount,
+        timestamp: Date.now(),
+        messages: finalMessages,
+        postSearch: postSearch || undefined,
+        semanticSearchQuery: semanticSearchQuery || undefined,
+        semanticSearchRespectsTimeRange,
+        semanticSearchRespectsChannels,
       }
+      await saveChatSession(session)
+      if (!currentChatSessionId) setCurrentChatSessionId(sessionId)
+      await loadHistory()
     } catch (err: unknown) {
       console.error(err)
       const errorMessage =

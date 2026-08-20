@@ -23,10 +23,12 @@ from __future__ import annotations
 
 import uuid
 from typing import Any
+from typing import cast as typing_cast
 
 from fastapi import HTTPException
 from sqlalchemy import Text, or_
 from sqlalchemy import cast as sa_cast
+from sqlalchemy import select as sa_select
 from sqlmodel import Session, col, select
 
 from app.models_tg import Channel, DiscoverReport, utc_now
@@ -132,18 +134,68 @@ def report_to_camel(session: Session, report: DiscoverReport) -> dict[str, Any]:
         **_base(report),
         "candidates": _with_live_state(stored, followed, ignored, probes),
         "candidateCount": len(stored),
+        **(report.extra or {}),
+    }
+
+
+#: The one corpus-sized column: a wide-scope report holds the whole
+#: single-reference tail.
+HEAVY_REPORT_COLUMNS = frozenset({"candidates"})
+
+
+def _light_columns() -> list[Any]:
+    """Every `tg_discover_reports` column except `candidates`.
+
+    Columns, not the entity. `report_to_camel_light` used to compute
+    `candidateCount` as `len(report.candidates)` off a `select(DiscoverReport)`
+    — detoasting the entire candidate array of every row on the page in order to
+    ship one integer. `candidate_count` is a real column now, maintained on
+    write, and this select is what makes the saving real.
+    """
+    return [
+        c
+        # `__table__` is set by SQLModel's metaclass at runtime — same cast
+        # `logs.py::_log_table` uses.
+        for c in typing_cast(Any, DiscoverReport).__table__.columns
+        if c.key not in HEAVY_REPORT_COLUMNS
+    ]
+
+
+def _light_from_mapping(row: dict[str, Any]) -> dict[str, Any]:
+    """The list projection, built from a column mapping rather than an entity."""
+    return {
+        "id": row["id"],
+        "scope": {
+            "channels": row["channels"],
+            "startDate": row["start_date"],
+            "endDate": row["end_date"],
+            "signals": row["signals"],
+            "keyword": row["keyword"],
+            "forwarded": row["forwarded"],
+            "media": row["media"],
+            "maxPerChannel": row["max_per_channel"],
+            "maxPerChannelMode": row["max_per_channel_mode"],
+            "seed": row["seed"],
+            "scopedPostCount": row["scoped_post_count"],
+        },
+        "scopeCounts": row["scope_counts"] or {},
+        "postsInScope": row["posts_in_scope"],
+        "timestamp": row["timestamp"],
+        "candidateCount": row["candidate_count"],
+        **(row.get("extra") or {}),
     }
 
 
 def report_to_camel_light(report: DiscoverReport) -> dict[str, Any]:
     """List projection: metadata and counts, never the candidate rows.
 
-    `candidates` is the corpus-sized field — a wide-scope report holds the full
-    single-reference tail — so the history list gets a count instead. Follow
-    state is not resolved here because nothing in the list view renders it.
+    Follow state is not resolved here because nothing in the list view renders
+    it. Kept for callers that already hold an entity; `list_reports` goes
+    through `_light_from_mapping` so it never materialises one.
     """
-    stored = report.candidates or []
-    return {**_base(report), "candidateCount": len(stored)}
+    return _light_from_mapping(
+        {c.key: getattr(report, c.key) for c in _light_columns()}
+    )
 
 
 def _search_clause(term: str) -> Any:
@@ -168,7 +220,7 @@ def list_reports(
     search: str | None = None,
 ) -> list[dict[str, Any]]:
     """One newest-first page of reports in the light projection."""
-    statement = select(DiscoverReport)
+    statement = sa_select(*_light_columns())
     if search and search.strip():
         statement = statement.where(_search_clause(search.strip()))
     statement = (
@@ -176,7 +228,42 @@ def list_reports(
         .offset(offset)
         .limit(limit)
     )
-    return [report_to_camel_light(r) for r in session.exec(statement).all()]
+    return [
+        _light_from_mapping(dict(row._mapping))
+        for row in session.execute(statement).all()
+    ]
+
+
+def update_report_flags(
+    session: Session, report_id: str, body: dict[str, Any]
+) -> dict[str, Any]:
+    """Set the small UI flags on a saved report.
+
+    The only write a report accepts. A report is otherwise immutable by design —
+    changing the scope produces a *new* report rather than editing this one — so
+    this deliberately touches nothing but `extra`. It exists because History
+    became one list over all four artifact kinds, and a starred-only filter that
+    skipped two of them would be worse than not having one.
+    """
+    report = session.get(DiscoverReport, report_id)
+    if report is None:
+        raise HTTPException(status_code=404, detail="report not found")
+
+    merged = dict(report.extra or {})
+    for key in ("isStarred", "note"):
+        if key not in body:
+            continue
+        value = body[key]
+        if value is None:
+            merged.pop(key, None)
+        else:
+            merged[key] = value
+    report.extra = merged
+    report.updated_at = utc_now()
+    session.add(report)
+    session.commit()
+    session.refresh(report)
+    return report_to_camel(session, report)
 
 
 def get_report(session: Session, report_id: str) -> dict[str, Any]:
@@ -184,19 +271,6 @@ def get_report(session: Session, report_id: str) -> dict[str, Any]:
     if report is None:
         raise HTTPException(status_code=404, detail="report not found")
     return report_to_camel(session, report)
-
-
-def latest_report(session: Session) -> dict[str, Any] | None:
-    """The most recent report, or None when the user has never generated one.
-
-    Discover opens on this, which is what makes reports feel persistent rather
-    than like a cache of the last run.
-    """
-    statement = select(DiscoverReport).order_by(
-        col(DiscoverReport.timestamp).desc(), col(DiscoverReport.id)
-    )
-    report = session.exec(statement).first()
-    return report_to_camel(session, report) if report is not None else None
 
 
 def create_report(
@@ -247,6 +321,8 @@ def create_report(
         seed=seed,
         scoped_post_count=None if post_ids is None else len(post_ids),
         candidates=result["candidates"],
+        # Maintained on write so the list never opens `candidates` to count it.
+        candidate_count=len(result["candidates"]),
         scope_counts=result["scopeCounts"],
         posts_in_scope=result["postsInScope"],
         timestamp=_now_ms(),

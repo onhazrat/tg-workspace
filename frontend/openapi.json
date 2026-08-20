@@ -2620,31 +2620,6 @@
         }
       }
     },
-    "/api/v1/data/discover/reports/latest": {
-      "get": {
-        "tags": ["data"],
-        "summary": "Get Latest Discover Report",
-        "description": "The most recent saved report, or null if none exists yet.\n\nDeclared before `/discover/reports/{report_id}` so \"latest\" is not captured\nas an id by the path parameter.",
-        "operationId": "data-get_latest_discover_report",
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "anyOf": [
-                    { "$ref": "#/components/schemas/DiscoverReportResponse" },
-                    { "type": "null" }
-                  ],
-                  "title": "Response Data-Get Latest Discover Report"
-                }
-              }
-            }
-          }
-        },
-        "security": [{ "OAuth2PasswordBearer": [] }]
-      }
-    },
     "/api/v1/data/discover/reports/{report_id}": {
       "get": {
         "tags": ["data"],
@@ -2700,6 +2675,53 @@
             "content": {
               "application/json": {
                 "schema": { "$ref": "#/components/schemas/StatusResponse" }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/data/discover/reports/{report_id}/flags": {
+      "put": {
+        "tags": ["data"],
+        "summary": "Update Discover Report Flags",
+        "description": "Star or annotate a saved report \u2014 the only write it accepts.",
+        "operationId": "data-update_discover_report_flags",
+        "security": [{ "OAuth2PasswordBearer": [] }],
+        "parameters": [
+          {
+            "name": "report_id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "title": "Report Id" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DiscoverReportFlagsRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DiscoverReportResponse"
+                }
               }
             }
           },
@@ -3043,6 +3065,292 @@
             "content": {
               "application/json": {
                 "schema": { "$ref": "#/components/schemas/StatusResponse" }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/data/chat-sessions": {
+      "get": {
+        "tags": ["data"],
+        "summary": "List Chat Sessions",
+        "description": "List in the light projection \u2014 see `chat_session_to_camel_light`.\n\n`search` matches title/channels/model/note in SQL. It does not reach the\ntranscript; the title already carries the first user message.",
+        "operationId": "data-list_chat_sessions",
+        "security": [{ "OAuth2PasswordBearer": [] }],
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 2000,
+              "minimum": 1,
+              "default": 200,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "title": "Offset"
+            }
+          },
+          {
+            "name": "search",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [{ "type": "string" }, { "type": "null" }],
+              "title": "Search"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ChatSessionListItemResponse"
+                  },
+                  "title": "Response Data-List Chat Sessions"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/data/chat-sessions/{chat_session_id}": {
+      "get": {
+        "tags": ["data"],
+        "summary": "Get Chat Session",
+        "description": "Full chat session including the transcript.",
+        "operationId": "data-get_chat_session",
+        "security": [{ "OAuth2PasswordBearer": [] }],
+        "parameters": [
+          {
+            "name": "chat_session_id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "title": "Chat Session Id" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ChatSessionResponse" }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": ["data"],
+        "summary": "Upsert Chat Session",
+        "operationId": "data-upsert_chat_session",
+        "security": [{ "OAuth2PasswordBearer": [] }],
+        "parameters": [
+          {
+            "name": "chat_session_id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "title": "Chat Session Id" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChatSessionUpsertRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ChatSessionResponse" }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": ["data"],
+        "summary": "Delete Chat Session",
+        "operationId": "data-delete_chat_session",
+        "security": [{ "OAuth2PasswordBearer": [] }],
+        "parameters": [
+          {
+            "name": "chat_session_id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "title": "Chat Session Id" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/StatusResponse" }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/data/artifacts": {
+      "get": {
+        "tags": ["data"],
+        "summary": "List Artifacts",
+        "description": "One newest-first page of every saved artifact, whatever its kind.\n\nA `UNION ALL` over four tables projecting **named columns only**. It must not\nopen `tg_summary_payloads` or `tg_chat_session_payloads`, and must not select\nthe corpus-sized columns of `tg_tag_runs` / `tg_discover_reports` \u2014 pinned by\n`tests/services/test_artifact_list_payload_cost.py`.\n\n`search` deliberately does not reach summary prompt bodies; that would mean\nopening a payload table. `/data/summaries?search=` still does.",
+        "operationId": "data-list_artifacts",
+        "security": [{ "OAuth2PasswordBearer": [] }],
+        "parameters": [
+          {
+            "name": "kind",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": ["summary", "chat", "tag", "discovery"],
+                  "type": "string"
+                },
+                { "type": "null" }
+              ],
+              "title": "Kind"
+            }
+          },
+          {
+            "name": "search",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [{ "type": "string" }, { "type": "null" }],
+              "title": "Search"
+            }
+          },
+          {
+            "name": "starred",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "Starred"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 1000,
+              "minimum": 1,
+              "default": 100,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "title": "Offset"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "oneOf": [
+                      {
+                        "$ref": "#/components/schemas/SummaryArtifactResponse"
+                      },
+                      { "$ref": "#/components/schemas/ChatArtifactResponse" },
+                      { "$ref": "#/components/schemas/TagArtifactResponse" },
+                      {
+                        "$ref": "#/components/schemas/DiscoveryArtifactResponse"
+                      }
+                    ],
+                    "discriminator": {
+                      "propertyName": "kind",
+                      "mapping": {
+                        "summary": "#/components/schemas/SummaryArtifactResponse",
+                        "chat": "#/components/schemas/ChatArtifactResponse",
+                        "tag": "#/components/schemas/TagArtifactResponse",
+                        "discovery": "#/components/schemas/DiscoveryArtifactResponse"
+                      }
+                    }
+                  },
+                  "title": "Response Data-List Artifacts"
+                }
               }
             }
           },
@@ -5154,6 +5462,65 @@
         "title": "ChannelUpsertRequest",
         "description": "Body for ``PUT /data/channels/{id}``.\n\nDeliberately permissive, like `SummaryUpsertRequest`. `upsert_channel`\nnormalises camelCase to snake_case itself, rejects server-managed and\ngroup-inherited fields with a 400, and writes only recognised\n`Channel.model_fields` \u2014 so validation belongs there, not here, and a\nstricter model would turn those 400s into 422s and change the API's error\ncontract."
       },
+      "ChatArtifactResponse": {
+        "properties": {
+          "id": { "type": "string", "title": "Id" },
+          "title": { "type": "string", "title": "Title", "default": "" },
+          "channels": {
+            "items": { "type": "string" },
+            "type": "array",
+            "title": "Channels"
+          },
+          "startDate": {
+            "type": "integer",
+            "title": "Startdate",
+            "default": 0
+          },
+          "endDate": { "type": "integer", "title": "Enddate", "default": 0 },
+          "timestamp": {
+            "type": "integer",
+            "title": "Timestamp",
+            "default": 0
+          },
+          "model": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Model"
+          },
+          "postCount": {
+            "anyOf": [{ "type": "integer" }, { "type": "null" }],
+            "title": "Postcount"
+          },
+          "isStarred": {
+            "type": "boolean",
+            "title": "Isstarred",
+            "default": false
+          },
+          "note": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Note"
+          },
+          "kind": { "type": "string", "const": "chat", "title": "Kind" },
+          "messageCount": {
+            "type": "integer",
+            "title": "Messagecount",
+            "default": 0
+          },
+          "mode": {
+            "type": "string",
+            "enum": ["full_scope", "semantic"],
+            "title": "Mode",
+            "default": "full_scope"
+          },
+          "language": {
+            "type": "string",
+            "title": "Language",
+            "default": "English"
+          }
+        },
+        "type": "object",
+        "required": ["id", "kind"],
+        "title": "ChatArtifactResponse"
+      },
       "ChatDestinationResponse": {
         "properties": {
           "id": { "type": "string", "title": "Id" },
@@ -5233,6 +5600,116 @@
         "type": "object",
         "required": ["message"],
         "title": "ChatRequest"
+      },
+      "ChatSessionListItemResponse": {
+        "properties": {
+          "id": { "type": "string", "title": "Id" },
+          "title": { "type": "string", "title": "Title", "default": "" },
+          "channels": {
+            "items": { "type": "string" },
+            "type": "array",
+            "title": "Channels"
+          },
+          "startDate": {
+            "type": "integer",
+            "title": "Startdate",
+            "default": 0
+          },
+          "endDate": { "type": "integer", "title": "Enddate", "default": 0 },
+          "language": {
+            "type": "string",
+            "title": "Language",
+            "default": "English"
+          },
+          "model": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Model"
+          },
+          "mode": {
+            "type": "string",
+            "enum": ["full_scope", "semantic"],
+            "title": "Mode",
+            "default": "full_scope"
+          },
+          "postCount": {
+            "anyOf": [{ "type": "integer" }, { "type": "null" }],
+            "title": "Postcount"
+          },
+          "timestamp": {
+            "type": "integer",
+            "title": "Timestamp",
+            "default": 0
+          },
+          "messageCount": {
+            "type": "integer",
+            "title": "Messagecount",
+            "default": 0
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": ["id"],
+        "title": "ChatSessionListItemResponse",
+        "description": "A chat session's identity and metadata \u2014 the history-list projection.\n\nDeliberately omits `messages`. Callers that need the transcript fetch the\nsession by id.\n\nOpen (`extra=\"allow\"`) because `ChatSession.extra` is: `isStarred`, `note`,\n`postSearch` and the `semanticSearch*` flags come and go per row exactly as\nthey do on `Summary`. Declaring them would emit four-plus explicit `null`s\non every row. The consequence is that chat-session calls belong in the\nhand-written frontend client, same side as summaries \u2014 see ADR-006 and\n`frontend/src/api/client-split.conform.ts`."
+      },
+      "ChatSessionResponse": {
+        "properties": {
+          "id": { "type": "string", "title": "Id" },
+          "title": { "type": "string", "title": "Title", "default": "" },
+          "channels": {
+            "items": { "type": "string" },
+            "type": "array",
+            "title": "Channels"
+          },
+          "startDate": {
+            "type": "integer",
+            "title": "Startdate",
+            "default": 0
+          },
+          "endDate": { "type": "integer", "title": "Enddate", "default": 0 },
+          "language": {
+            "type": "string",
+            "title": "Language",
+            "default": "English"
+          },
+          "model": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Model"
+          },
+          "mode": {
+            "type": "string",
+            "enum": ["full_scope", "semantic"],
+            "title": "Mode",
+            "default": "full_scope"
+          },
+          "postCount": {
+            "anyOf": [{ "type": "integer" }, { "type": "null" }],
+            "title": "Postcount"
+          },
+          "timestamp": {
+            "type": "integer",
+            "title": "Timestamp",
+            "default": 0
+          },
+          "messageCount": {
+            "type": "integer",
+            "title": "Messagecount",
+            "default": 0
+          },
+          "messages": { "items": {}, "type": "array", "title": "Messages" }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": ["id"],
+        "title": "ChatSessionResponse",
+        "description": "A chat session with the transcript the list omits.\n\n`messages` is always present \u2014 `[]` rather than absent when there is no\npayload row. See `chat_session_to_camel` for why this format differs from\nthe summary one on that point.\n\nThe turns stay loosely typed: `sources` carries whole posts whose shape is\nthe scraper's, and pinning it here would make a scraper change a schema\nmigration."
+      },
+      "ChatSessionUpsertRequest": {
+        "properties": {},
+        "additionalProperties": true,
+        "type": "object",
+        "title": "ChatSessionUpsertRequest",
+        "description": "Body for `PUT /data/chat-sessions/{id}`.\n\nPermissive like the summary one: unrecognised keys go to `extra`, an\nexplicit null removes an `extra` key, and `messages` routes to the payload\ntable. `title` and `messageCount` are derived on write and stripped, so a\nclient round-tripping a list item cannot shadow them."
       },
       "ClearTableResponse": {
         "properties": {
@@ -5527,6 +6004,21 @@
         "title": "DiscoverProbeRequest",
         "description": "Handles whose cached verdict should be discarded and re-queued."
       },
+      "DiscoverReportFlagsRequest": {
+        "properties": {
+          "isStarred": {
+            "anyOf": [{ "type": "boolean" }, { "type": "null" }],
+            "title": "Isstarred"
+          },
+          "note": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Note"
+          }
+        },
+        "type": "object",
+        "title": "DiscoverReportFlagsRequest",
+        "description": "Body for `PUT /data/discover/reports/{id}/flags`.\n\nOnly the small UI flags. A report's scope and candidates are immutable by\ndesign \u2014 a different scope produces a new report \u2014 so there is deliberately\nno way to edit them here."
+      },
       "DiscoverReportListItemResponse": {
         "properties": {
           "id": { "type": "string", "title": "Id" },
@@ -5538,6 +6030,15 @@
             "type": "integer",
             "title": "Postsinscope",
             "default": 0
+          },
+          "isStarred": {
+            "type": "boolean",
+            "title": "Isstarred",
+            "default": false
+          },
+          "note": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Note"
           },
           "timestamp": {
             "type": "integer",
@@ -5553,7 +6054,7 @@
         "type": "object",
         "required": ["id", "scope", "scopeCounts"],
         "title": "DiscoverReportListItemResponse",
-        "description": "A saved report without its candidate rows, as the history list ships it.\n\n`candidates` is the corpus-sized field \u2014 a wide-scope report holds the full\nsingle-reference tail \u2014 so the list carries `candidateCount` instead."
+        "description": "A saved report without its candidate rows, as the history list ships it.\n\n`candidates` is the corpus-sized field \u2014 a wide-scope report holds the full\nsingle-reference tail \u2014 so the list carries `candidateCount` instead.\n\n`isStarred` and `note` are declared rather than riding in an open `extra`\nbag \u2014 see `TagRunListItemResponse` for why the closed model is worth\nkeeping."
       },
       "DiscoverReportResponse": {
         "properties": {
@@ -5566,6 +6067,15 @@
             "type": "integer",
             "title": "Postsinscope",
             "default": 0
+          },
+          "isStarred": {
+            "type": "boolean",
+            "title": "Isstarred",
+            "default": false
+          },
+          "note": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Note"
           },
           "timestamp": {
             "type": "integer",
@@ -5645,6 +6155,54 @@
         "type": "object",
         "required": ["channelName", "postId", "timestamp"],
         "title": "DiscoveredViaPayload"
+      },
+      "DiscoveryArtifactResponse": {
+        "properties": {
+          "id": { "type": "string", "title": "Id" },
+          "title": { "type": "string", "title": "Title", "default": "" },
+          "channels": {
+            "items": { "type": "string" },
+            "type": "array",
+            "title": "Channels"
+          },
+          "startDate": {
+            "type": "integer",
+            "title": "Startdate",
+            "default": 0
+          },
+          "endDate": { "type": "integer", "title": "Enddate", "default": 0 },
+          "timestamp": {
+            "type": "integer",
+            "title": "Timestamp",
+            "default": 0
+          },
+          "model": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Model"
+          },
+          "postCount": {
+            "anyOf": [{ "type": "integer" }, { "type": "null" }],
+            "title": "Postcount"
+          },
+          "isStarred": {
+            "type": "boolean",
+            "title": "Isstarred",
+            "default": false
+          },
+          "note": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Note"
+          },
+          "kind": { "type": "string", "const": "discovery", "title": "Kind" },
+          "candidateCount": {
+            "type": "integer",
+            "title": "Candidatecount",
+            "default": 0
+          }
+        },
+        "type": "object",
+        "required": ["id", "kind"],
+        "title": "DiscoveryArtifactResponse"
       },
       "EmbedRequest": {
         "properties": {
@@ -7347,6 +7905,70 @@
         "title": "StatusResponse",
         "description": "A bare outcome acknowledgement, e.g. ``{\"status\": \"deleted\"}``."
       },
+      "SummaryArtifactResponse": {
+        "properties": {
+          "id": { "type": "string", "title": "Id" },
+          "title": { "type": "string", "title": "Title", "default": "" },
+          "channels": {
+            "items": { "type": "string" },
+            "type": "array",
+            "title": "Channels"
+          },
+          "startDate": {
+            "type": "integer",
+            "title": "Startdate",
+            "default": 0
+          },
+          "endDate": { "type": "integer", "title": "Enddate", "default": 0 },
+          "timestamp": {
+            "type": "integer",
+            "title": "Timestamp",
+            "default": 0
+          },
+          "model": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Model"
+          },
+          "postCount": {
+            "anyOf": [{ "type": "integer" }, { "type": "null" }],
+            "title": "Postcount"
+          },
+          "isStarred": {
+            "type": "boolean",
+            "title": "Isstarred",
+            "default": false
+          },
+          "note": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Note"
+          },
+          "kind": { "type": "string", "const": "summary", "title": "Kind" },
+          "status": {
+            "type": "string",
+            "title": "Status",
+            "default": "complete"
+          },
+          "language": {
+            "type": "string",
+            "title": "Language",
+            "default": "English"
+          },
+          "autoRegenerate": {
+            "type": "boolean",
+            "title": "Autoregenerate",
+            "default": false
+          },
+          "autoPublish": {
+            "type": "boolean",
+            "title": "Autopublish",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": ["id", "kind"],
+        "title": "SummaryArtifactResponse",
+        "description": "`status` is `\"pending\"` until an externally-run prompt is pasted back.\n\n`autoRegenerate` and `autoPublish` are here rather than left to the Summary\ntab because History is where they are toggled, and reading them out of\n`extra` costs nothing once `isStarred` is already being read."
+      },
       "SummaryListItemResponse": {
         "properties": {
           "id": { "type": "string", "title": "Id" },
@@ -7677,6 +8299,55 @@
         "title": "TableSizeResponse",
         "description": "Row count and on-disk footprint for one exportable table.\n\n`size` is the whole physical footprint (heap + TOAST + indexes) straight from\nPostgres, not an estimate: JSON payload columns can dwarf what the row count\nalone suggests."
       },
+      "TagArtifactResponse": {
+        "properties": {
+          "id": { "type": "string", "title": "Id" },
+          "title": { "type": "string", "title": "Title", "default": "" },
+          "channels": {
+            "items": { "type": "string" },
+            "type": "array",
+            "title": "Channels"
+          },
+          "startDate": {
+            "type": "integer",
+            "title": "Startdate",
+            "default": 0
+          },
+          "endDate": { "type": "integer", "title": "Enddate", "default": 0 },
+          "timestamp": {
+            "type": "integer",
+            "title": "Timestamp",
+            "default": 0
+          },
+          "model": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Model"
+          },
+          "postCount": {
+            "anyOf": [{ "type": "integer" }, { "type": "null" }],
+            "title": "Postcount"
+          },
+          "isStarred": {
+            "type": "boolean",
+            "title": "Isstarred",
+            "default": false
+          },
+          "note": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Note"
+          },
+          "kind": { "type": "string", "const": "tag", "title": "Kind" },
+          "status": {
+            "type": "string",
+            "title": "Status",
+            "default": "pending"
+          },
+          "mode": { "type": "string", "title": "Mode", "default": "add" }
+        },
+        "type": "object",
+        "required": ["id", "kind"],
+        "title": "TagArtifactResponse"
+      },
       "TagRequest": {
         "properties": {
           "channels": {
@@ -7751,9 +8422,8 @@
           },
           "endDate": { "type": "integer", "title": "Enddate", "default": 0 },
           "postCount": {
-            "type": "integer",
-            "title": "Postcount",
-            "default": 0
+            "anyOf": [{ "type": "integer" }, { "type": "null" }],
+            "title": "Postcount"
           },
           "model": {
             "anyOf": [{ "type": "string" }, { "type": "null" }],
@@ -7768,12 +8438,25 @@
             "title": "Createdat",
             "default": 0
           },
-          "updatedAt": { "type": "integer", "title": "Updatedat", "default": 0 }
+          "updatedAt": {
+            "type": "integer",
+            "title": "Updatedat",
+            "default": 0
+          },
+          "isStarred": {
+            "type": "boolean",
+            "title": "Isstarred",
+            "default": false
+          },
+          "note": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Note"
+          }
         },
         "type": "object",
         "required": ["id", "status", "source", "mode"],
         "title": "TagRunListItemResponse",
-        "description": "A tag run's identity and metadata \u2014 the history-list projection.\n\nDeliberately omits `promptText`, `responseText`, `suggestions` and\n`allTagsSnapshot`. Callers that need those fetch the run by id."
+        "description": "A tag run's identity and metadata \u2014 the history-list projection.\n\nDeliberately omits `promptText`, `responseText`, `suggestions` and\n`allTagsSnapshot`. Callers that need those fetch the run by id.\n\n`isStarred` and `note` are **declared**, not left to ride in an open `extra`\nbag. CLAUDE.md's rule against declaring a conditional key protects an\n*existing* wire format from acquiring `null`s; these keys are new, so their\nformat is a choice rather than a change \u2014 and the closed model is worth\nkeeping, because `frontend/src/types.ts` derives `TagRun` from this schema\nand `Omit<>` over a top-level index signature collapses every field to\n`unknown`. Opening this model was tried and did exactly that."
       },
       "TagRunResponse": {
         "properties": {
@@ -7793,9 +8476,8 @@
           },
           "endDate": { "type": "integer", "title": "Enddate", "default": 0 },
           "postCount": {
-            "type": "integer",
-            "title": "Postcount",
-            "default": 0
+            "anyOf": [{ "type": "integer" }, { "type": "null" }],
+            "title": "Postcount"
           },
           "model": {
             "anyOf": [{ "type": "string" }, { "type": "null" }],
@@ -7814,6 +8496,15 @@
             "type": "integer",
             "title": "Updatedat",
             "default": 0
+          },
+          "isStarred": {
+            "type": "boolean",
+            "title": "Isstarred",
+            "default": false
+          },
+          "note": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Note"
           },
           "promptText": {
             "anyOf": [{ "type": "string" }, { "type": "null" }],

@@ -1,4 +1,3 @@
-import { Sparkles } from "lucide-react"
 import { motion } from "motion/react"
 import type React from "react"
 import { useMemo, useState } from "react"
@@ -13,15 +12,11 @@ import { DiscoverScopeCard } from "@/components/discover/DiscoverScopeCard"
 import { DiscoverSortChips } from "@/components/discover/DiscoverSortChips"
 import { DiscoverWeightsEditor } from "@/components/discover/DiscoverWeightsEditor"
 import { useDiscoverFollowJob } from "@/components/discover/useDiscoverFollowJob"
-import { TgButton } from "@/components/ui/tg-button"
+import { GoToActionEmptyState } from "@/components/history/GoToActionEmptyState"
 import { TgConfirmDialog } from "@/components/ui/tg-confirm-dialog"
-import { useDebouncedValue } from "@/hooks/useDebouncedValue"
 import {
-  type DiscoverCandidatesParams,
-  useCreateDiscoverReportMutation,
   useDiscoverIgnoreMutation,
   useDiscoverReportQuery,
-  useLatestDiscoverReportQuery,
 } from "@/hooks/useDiscover"
 import { useDiscoverProbeQueue } from "@/hooks/useDiscoverProbeQueue"
 import { useDiscoverReportParam } from "@/hooks/useDiscoverReportParam"
@@ -52,15 +47,6 @@ import { useUI } from "../contexts/UIContext"
 import { useApiStatus } from "../hooks/useApiStatus"
 
 /**
- * Seed for the `random` per-channel cap.
- *
- * Must match the Posts feed's seed (`usePostsView`, `ScraperContext`), which is
- * likewise a constant 0 — a different seed would make Discover aggregate over a
- * different "random" sample than the Posts tab shows for the same settings.
- */
-const RANDOM_CAP_SEED = 0
-
-/**
  * Discover: which channels do the channels you follow keep pointing at?
  *
  * A generated report is *saved* (IDEA-011 W1). The Channels/Posts selections
@@ -71,18 +57,8 @@ const RANDOM_CAP_SEED = 0
  */
 export const DiscoverView: React.FC = () => {
   const { selectedChannels } = useData()
-  const {
-    getScopedPosts,
-    forwardedFilter,
-    setForwardedFilter,
-    postSearch,
-    semanticSearchQuery,
-    followDiscoverChannels,
-    maxPostsPerChannel,
-    maxPostsPerChannelMode,
-    mediaFilter,
-  } = useScraper()
-  const { setActiveTab, startDate, endDate } = useUI()
+  const { setForwardedFilter, followDiscoverChannels } = useScraper()
+  const { setActiveTab } = useUI()
   const { isOffline } = useApiStatus()
   const {
     discoverSignals,
@@ -103,73 +79,25 @@ export const DiscoverView: React.FC = () => {
 
   const { reportId, openReport } = useDiscoverReportParam()
 
-  const debouncedPostSearch = useDebouncedValue(postSearch, 300)
-  const selectedChannelNames = useMemo(
-    () => [...selectedChannels].sort(),
-    [selectedChannels],
-  )
-
-  /** Live scope — the *input* to the next report, never a description of one. */
-  const liveParams: DiscoverCandidatesParams = useMemo(
-    () => ({
-      channelNames: selectedChannelNames,
-      startDate,
-      endDate,
-      signals: discoverSignals,
-      keyword: debouncedPostSearch,
-      forwarded: forwardedFilter,
-      media: mediaFilter,
-      maxPerChannel: maxPostsPerChannel,
-      maxPerChannelMode: maxPostsPerChannelMode,
-      seed: RANDOM_CAP_SEED,
-    }),
-    [
-      selectedChannelNames,
-      startDate,
-      endDate,
-      discoverSignals,
-      debouncedPostSearch,
-      forwardedFilter,
-      mediaFilter,
-      maxPostsPerChannel,
-      maxPostsPerChannelMode,
-    ],
-  )
-
-  const latestQuery = useLatestDiscoverReportQuery(reportId === null)
+  /*
+   * Only the pinned report. There is deliberately no "open the latest one"
+   * fallback any more.
+   *
+   * Auto-opening existed because Discover had no History surface of its own —
+   * without it the tab was blank. Now every report is one click away in
+   * History, so "show me the last one automatically" is a special case to
+   * remember rather than a rule, and it made this the only tab whose content
+   * changed underneath you when someone else generated something.
+   */
   const pinnedQuery = useDiscoverReportQuery(reportId)
-  const createReport = useCreateDiscoverReportMutation()
   const setIgnored = useDiscoverIgnoreMutation()
 
-  const view: DiscoverReportView | null = useMemo(() => {
-    const saved = reportId !== null ? pinnedQuery.data : latestQuery.data
-    return saved ? savedReportToView(saved) : null
-  }, [reportId, pinnedQuery.data, latestQuery.data])
+  const view: DiscoverReportView | null = useMemo(
+    () => (pinnedQuery.data ? savedReportToView(pinnedQuery.data) : null),
+    [pinnedQuery.data],
+  )
 
-  const isLoadingReport =
-    reportId !== null ? pinnedQuery.isLoading : latestQuery.isLoading
-
-  /**
-   * Generate and save a report.
-   *
-   * A semantic query is the one scope whose *post selection* the server cannot
-   * derive from the scope alone — the vector search owns that ranking. So the
-   * client resolves which posts matched and passes their ids; the aggregation
-   * still happens server-side, in the single implementation (IDEA-011 D14).
-   */
-  const handleGenerate = async () => {
-    const params = { ...liveParams }
-    if (semanticSearchQuery.trim()) {
-      const posts = await getScopedPosts()
-      params.postIds = posts.map((post) => ({
-        channelName: post.channelName,
-        postId: post.id,
-      }))
-    }
-    const report = await createReport.mutateAsync(params)
-    // Pin the new report so it stays on screen even as newer ones appear.
-    openReport(report.id)
-  }
+  const isLoadingReport = reportId !== null && pinnedQuery.isLoading
 
   const showLatest = () => {
     openReport(null)
@@ -319,9 +247,6 @@ export const DiscoverView: React.FC = () => {
       <DiscoverReportBar
         view={view}
         isPinned={reportId !== null}
-        isGenerating={createReport.isPending}
-        isOffline={isOffline}
-        onGenerate={() => void handleGenerate()}
         onShowLatest={showLatest}
       />
 
@@ -420,33 +345,10 @@ export const DiscoverView: React.FC = () => {
             Loading report…
           </p>
         ) : view === null ? (
-          <div
-            className="flex flex-col items-center gap-4 py-12 text-center"
-            data-testid="discover-generate-prompt"
-          >
-            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-app-muted border border-app-ink/10">
-              <Sparkles size={22} className="opacity-60" />
-            </div>
-            <div className="max-w-md">
-              <p className="text-sm font-semibold">Discover new channels</p>
-              <p className="mt-1 text-xs text-app-ink/60">
-                Generate a report of channels your selection forwards from,
-                mentions, or links to over the current time range. Reports are
-                saved, so changing your selection later won't affect them.
-              </p>
-            </div>
-            <TgButton
-              variant="primary"
-              onClick={() => void handleGenerate()}
-              disabled={isOffline || createReport.isPending}
-              loading={createReport.isPending}
-              loadingLabel="Generating…"
-              data-testid="discover-generate-empty-button"
-            >
-              <Sparkles size={15} />
-              Generate Discovery Report
-            </TgButton>
-          </div>
+          <GoToActionEmptyState
+            what="discovery report"
+            description="Reports are saved with the scope they were made from, so changing your selection later won't affect them. Open one from History, or generate a new one."
+          />
         ) : candidates.length === 0 && emptyState ? (
           <DiscoverEmptyState
             state={emptyState}

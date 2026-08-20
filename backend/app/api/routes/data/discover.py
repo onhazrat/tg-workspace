@@ -25,6 +25,7 @@ from app.schemas.discover import (
     DiscoverProbeQueueResponse,
     DiscoverProbeRecheckResponse,
     DiscoverProbeRequest,
+    DiscoverReportFlagsRequest,
     DiscoverReportListItemResponse,
     DiscoverReportResponse,
     HandleProbeResponse,
@@ -53,8 +54,8 @@ from app.services.discover_reports import (
     create_report,
     delete_report,
     get_report,
-    latest_report,
     list_reports,
+    update_report_flags,
 )
 from app.services.posts import (
     FEED_CAP_MODES,
@@ -260,20 +261,6 @@ def list_discover_reports(
     ]
 
 
-@router.get("/discover/reports/latest")
-def get_latest_discover_report(
-    session: SessionDep,
-    _current_user: CurrentUser,
-) -> DiscoverReportResponse | None:
-    """The most recent saved report, or null if none exists yet.
-
-    Declared before `/discover/reports/{report_id}` so "latest" is not captured
-    as an id by the path parameter.
-    """
-    report = latest_report(session)
-    return None if report is None else DiscoverReportResponse.model_validate(report)
-
-
 @router.get("/discover/reports/{report_id}")
 def get_discover_report(
     report_id: str,
@@ -282,6 +269,19 @@ def get_discover_report(
 ) -> DiscoverReportResponse:
     """A saved report with every candidate, `isFollowed` resolved live."""
     return DiscoverReportResponse.model_validate(get_report(session, report_id))
+
+
+@router.put("/discover/reports/{report_id}/flags")
+def update_discover_report_flags(
+    report_id: str,
+    body: DiscoverReportFlagsRequest,
+    session: SessionDep,
+    _current_user: CurrentUser,
+) -> DiscoverReportResponse:
+    """Star or annotate a saved report — the only write it accepts."""
+    return DiscoverReportResponse.model_validate(
+        update_report_flags(session, report_id, body.to_service_body())
+    )
 
 
 @router.delete("/discover/reports/{report_id}")

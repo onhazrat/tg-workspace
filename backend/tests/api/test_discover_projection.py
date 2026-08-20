@@ -58,6 +58,11 @@ REPORT_BASE_KEYS = {
     "postsInScope",
     "timestamp",
     "candidateCount",
+    # Declared rather than left to an open `extra` bag, so History's
+    # starred-only filter spans all four artifact kinds instead of silently
+    # skipping this one.
+    "isStarred",
+    "note",
 }
 SCOPE_KEYS = {
     "channels",
@@ -243,21 +248,6 @@ def test_the_report_list_ships_a_count_not_the_candidates(client: TestClient) ->
     assert set(rows[0]) == REPORT_BASE_KEYS
     assert "candidates" not in rows[0]
     assert rows[0]["candidateCount"] == 1
-
-
-def test_the_latest_report_read_matches_the_by_id_read(client: TestClient) -> None:
-    headers = _auth(client)
-    _seed_forward()
-    by_id = _report(client, headers)
-
-    latest = client.get(f"{DATA}/discover/reports/latest", headers=headers).json()
-    assert latest == by_id
-
-
-def test_latest_is_null_before_any_report_exists(client: TestClient) -> None:
-    r = client.get(f"{DATA}/discover/reports/latest", headers=_auth(client))
-    assert r.status_code == 200
-    assert r.json() is None
 
 
 def test_dismissals_round_trip_with_their_declared_shape(client: TestClient) -> None:

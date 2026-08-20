@@ -1,4 +1,4 @@
-import { History, Sparkles } from "lucide-react"
+import { History } from "lucide-react"
 import type React from "react"
 import { RelativeTime } from "@/components/RelativeTime"
 import { TgButton } from "@/components/ui/tg-button"
@@ -8,25 +8,29 @@ interface DiscoverReportBarProps {
   view: DiscoverReportView | null
   /** True while an older report is pinned via `?report=`. */
   isPinned: boolean
-  isGenerating: boolean
-  isOffline: boolean
-  onGenerate: () => void
   onShowLatest: () => void
 }
 
 /**
- * Identifies the report on screen and offers to generate another.
+ * Identifies the report on screen.
  *
  * A report is an artifact, so the tab must always answer "which one am I
  * looking at, and when was it made?" — otherwise saved and freshly generated
  * results are indistinguishable.
+ *
+ * It used to also carry a Generate button, which mixed two jobs: *which report
+ * am I looking at* and *make another*. The second moved to the Action tab, the
+ * one place work starts.
+ *
+ * The secondary button says **Close report**, not "Show latest". Clearing
+ * `?report=` used to fall back to the most recent report; now that the tab
+ * shows results only and never auto-opens one, clearing it shows the empty
+ * state — so a button labelled "Show latest" would blank the tab it promised
+ * to fill.
  */
 export const DiscoverReportBar: React.FC<DiscoverReportBarProps> = ({
   view,
   isPinned,
-  isGenerating,
-  isOffline,
-  onGenerate,
   onShowLatest,
 }) => (
   <div
@@ -51,26 +55,13 @@ export const DiscoverReportBar: React.FC<DiscoverReportBarProps> = ({
           variant="secondary"
           size="sm"
           onClick={onShowLatest}
-          data-testid="discover-show-latest"
+          data-testid="discover-close-report"
           className="rounded-full"
         >
           <History size={12} />
-          Show latest
+          Close report
         </TgButton>
       ) : null}
     </div>
-
-    <TgButton
-      variant="primary"
-      size="sm"
-      onClick={onGenerate}
-      disabled={isOffline || isGenerating}
-      loading={isGenerating}
-      loadingLabel="Generating…"
-      data-testid="discover-generate-button"
-    >
-      <Sparkles size={14} />
-      {view === null ? "Generate Discovery Report" : "Generate new report"}
-    </TgButton>
   </div>
 )

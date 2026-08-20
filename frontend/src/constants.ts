@@ -18,6 +18,7 @@ export const THEME_DEFAULT = "dark"
 export const WORKSPACE_TABS = [
   { id: "channels", label: "Channels", icon: "Send" },
   { id: "posts", label: "Posts", icon: "List" },
+  { id: "action", label: "Action", icon: "Zap" },
   { id: "summary", label: "Summary", icon: "FileText" },
   { id: "tag", label: "Tag", icon: "Tag" },
   { id: "discover", label: "Discover", icon: "Compass" },
@@ -25,6 +26,49 @@ export const WORKSPACE_TABS = [
   { id: "history", label: "History", icon: "History" },
   { id: "settings", label: "Settings", icon: "Settings" },
 ] as const
+
+/**
+ * The workspace tabs, as a type.
+ *
+ * Derived rather than declared, because it used to be neither: `TabType` was a
+ * hand-written union in `types.ts` and `VALID_TABS` was copied into both
+ * `routes/_tg/summarizer.tsx` and `hooks/useSummarizerTab.ts`. Three lists to
+ * keep in step meant adding a tab to two of them left it reachable by URL but
+ * silently falling back to `summary`, and the hand-written union had drifted to
+ * carry three ids (`db`, `bots`, `logs`) that no tab had rendered for months.
+ *
+ * `WORKSPACE_TABS` is now the only place a tab is declared.
+ */
+export type TabType = (typeof WORKSPACE_TABS)[number]["id"]
+
+/**
+ * Every tab id, for validating `?tab=`.
+ *
+ * Deliberately the *unfiltered* list. `compactWorkspaceTabs` hides tabs from the
+ * nav, but a hidden tab must stay reachable by URL — otherwise every deep link,
+ * palette command and `setActiveTab` call breaks the moment the setting is
+ * flipped.
+ */
+export const VALID_TABS: readonly TabType[] = WORKSPACE_TABS.map(
+  (tab) => tab.id,
+)
+
+/**
+ * The tabs `compactWorkspaceTabs` leaves in the nav.
+ *
+ * Channels and Posts are how you set the scope, Action is how you make
+ * something from it, History is what you made, Settings is everything else.
+ * The four feature tabs render results and are reached by opening an artifact,
+ * so they do not need to be in the nav — but they stay in `VALID_TABS`, because
+ * hiding a tab must not make it unreachable.
+ */
+export const COMPACT_WORKSPACE_TAB_IDS: readonly TabType[] = [
+  "channels",
+  "posts",
+  "action",
+  "history",
+  "settings",
+]
 
 export const SETTINGS_TABS = [
   { id: "commonly-used", label: "Commonly Used", icon: "Star" },
