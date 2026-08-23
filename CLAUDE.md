@@ -140,3 +140,17 @@ Rules:
 - If graphify-out/wiki/index.md exists, use it for broad navigation instead of raw source browsing.
 - Read graphify-out/GRAPH_REPORT.md only for broad architecture review or when query/path/explain do not surface enough context.
 - After modifying code, run `graphify update .` to keep the graph current (AST-only, no API cost).
+
+## Agent skills
+
+### Issue tracker
+
+Local markdown under `.scratch/<feature-slug>/`, **not** GitHub Issues (which is enabled on the remote but unused). See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+The five canonical labels, unchanged, recorded as a `Status:` line in each issue file. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context: `CONTEXT.md` at the root, ADRs and `DECISIONS.md` in `docs/migration/` (not `docs/adr/`). See `docs/agents/domain.md`.
