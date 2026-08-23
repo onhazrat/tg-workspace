@@ -196,6 +196,49 @@ resolves to a middleware that is actually defined, and look for a Traefik log li
 naming an unknown middleware. Middleware names are namespaced per provider, so the
 reference in a Docker label resolves against Docker-provided middlewares.
 
+## Rate limiting the auth endpoints
+
+`/login`, `/users/signup`, `/password-recovery` and `/reset-password` are the
+anonymous paths that *cost* something: a login runs a bcrypt verify, a signup
+writes a row, a recovery can send mail. The API runs a single worker, so a flood
+does not degrade gracefully — it queues.
+
+(They are not the only anonymous paths. `/docs`, `/redoc` and
+`/api/v1/openapi.json` are exempt from the auth middleware in every environment,
+so the interactive schema is public on staging and production too. That is
+pre-existing and deliberate-by-default rather than decided; it is cheap to serve,
+which is why it is not rate limited, but it is worth a decision of its own.)
+
+Traefik attaches middlewares per **router**, never per path, so limiting only those
+paths takes a second router with a narrower rule:
+`<stack>-backend-auth-https`. It re-declares everything the catch-all carries — TLS,
+`.service`, and the compression middleware — because a request matches exactly one
+router and inherits nothing from the others. `.priority=1000` is explicit rather
+than left to Traefik's rule-length tie-break, which happens to favour this rule
+today only because it is the longer string.
+
+The limit is 10 requests a minute per client IP, bursting to 20. Traefik's default
+`sourceCriterion` is the direct remote address, which is the real client only while
+Traefik is the edge — put a CDN in front and every request shares one IP, so set
+`ratelimit.sourcecriterion.ipstrategy.depth` at the same time.
+
+`backend/tests/deployment/test_edge_rate_limit.py` guards the shape of all this.
+It deliberately does not pin the numbers, which are an operator's call.
+
+### Verifying it
+
+```bash
+# Expect: 200s, then 429 once the burst is spent
+for i in $(seq 1 30); do
+  curl -s -o /dev/null -w '%{http_code} ' -X POST \
+    -d 'username=nobody@example.com&password=wrong' \
+    https://api.${DOMAIN}/api/v1/login/access-token
+done; echo
+```
+
+No 429 at all means the request matched the catch-all router instead: check the
+rule and priority on `<stack>-backend-auth-https` in the Traefik dashboard.
+
 ## Finding slow endpoints
 
 Every performance problem on this deployment so far was found by hand, one

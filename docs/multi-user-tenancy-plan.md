@@ -234,6 +234,19 @@ worker-count reasoning. Each gets a short sequencing section pointing at the oth
 
 ## A0 — auth-flow fixes
 
+**Done**, except item 4, which is ticket 02. Guards:
+`backend/tests/api/test_public_route_exemptions.py`,
+`test_auth_middleware.py`, `test_password_recovery.py`,
+`backend/tests/deployment/test_edge_rate_limit.py`.
+
+One correction to item 1 below, found while fixing it: staging builds the
+frontend with `VITE_API_KEY=${API_KEY}` (`deploy-staging.yml:78`) and the
+generated client sends it on every request, so recovery *was* reachable there —
+on a secret embedded in a public JavaScript bundle. The fix stands, since a
+logged-out flow must not depend on a build-time key, but the second auth gate is
+weaker than `CLAUDE.md` claims wherever that variable is set. Worth its own
+ticket.
+
 Four pre-existing bugs, all verified in code:
 
 1. **Forgot-password is unreachable in staging/production.** `middleware/api_key.py:66` exempts

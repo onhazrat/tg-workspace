@@ -55,7 +55,7 @@ export const loginTestToken = <ThrowOnError extends boolean = true>(options?: Op
 
 /**
  * Recover Password
- * Password Recovery
+ * Request a password reset link.
  */
 export const loginRecoverPassword = <ThrowOnError extends boolean = true>(options: Options<LoginRecoverPasswordData, ThrowOnError>) => {
     return (options.client ?? _heyApiClient).post<LoginRecoverPasswordResponses, LoginRecoverPasswordErrors, ThrowOnError, 'data'>({

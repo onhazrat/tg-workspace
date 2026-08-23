@@ -1,7 +1,8 @@
+import logging
 from datetime import timedelta
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from fastapi.responses import HTMLResponse
 from fastapi.security import OAuth2PasswordRequestForm
 
@@ -16,6 +17,8 @@ from app.utils import (
     send_email,
     verify_password_reset_token,
 )
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["login"])
 
@@ -50,21 +53,45 @@ def test_token(current_user: CurrentUser) -> Any:
     return current_user
 
 
+# Three things have to hold for the response to be the same for every address,
+# and only the first is obvious. Kept as a comment rather than a docstring
+# because FastAPI publishes the docstring as the endpoint's OpenAPI description,
+# and this reasoning is for whoever edits the handler, not for its callers.
+#
+# 1. The **body** is one fixed string, whether or not the address has an account.
+# 2. Mail is only attempted when it is configured. `send_email` opens with
+#    `assert settings.emails_enabled` and `.env.example` ships `SMTP_HOST=`
+#    empty, so without that check an unregistered address got 200 and a
+#    registered one got 500 — the uniform message, undone by the line that sent
+#    it.
+# 3. The **latency** does not give it away either. An SMTP send costs hundreds
+#    of milliseconds to seconds, so sending inline would make a registered
+#    address measurably slower to answer — the same oracle read with a
+#    stopwatch. It runs after the response for that reason, and because on a
+#    single-worker deployment an inline send lets an anonymous caller pin a
+#    threadpool worker per request.
 @router.post("/password-recovery/{email}")
-def recover_password(email: str, session: SessionDep) -> Message:
-    """
-    Password Recovery
-    """
+def recover_password(
+    email: str, session: SessionDep, background: BackgroundTasks
+) -> Message:
+    """Request a password reset link."""
     user = crud.get_user_by_email(session=session, email=email)
 
-    # Always return the same response to prevent email enumeration attacks
-    # Only send email if user actually exists
-    if user:
+    if not settings.emails_enabled:
+        # Deliberately not conditioned on whether the address exists: this line
+        # is for the operator who set SMTP_HOST and forgot EMAILS_FROM_EMAIL and
+        # would otherwise see a cheerful 200 forever with no mail ever sent. It
+        # must not become a log-side account oracle.
+        logger.warning(
+            "Password recovery requested but mail is not configured; no email sent"
+        )
+    elif user:
         password_reset_token = generate_password_reset_token(email=email)
         email_data = generate_reset_password_email(
             email_to=user.email, email=email, token=password_reset_token
         )
-        send_email(
+        background.add_task(
+            send_email,
             email_to=user.email,
             subject=email_data.subject,
             html_content=email_data.html_content,

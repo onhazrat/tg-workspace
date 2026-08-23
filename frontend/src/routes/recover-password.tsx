@@ -66,7 +66,11 @@ function RecoverPassword() {
   const mutation = useMutation({
     mutationFn: recoverPassword,
     onSuccess: () => {
-      showSuccessToast("Password recovery email sent successfully")
+      // Mirrors the server's deliberately vague reply. The endpoint answers the
+      // same way for a registered and an unregistered address, and sends nothing
+      // at all when mail is unconfigured, so a confident "email sent" would be
+      // asserting something this page cannot know.
+      showSuccessToast("If that email is registered, we sent a recovery link")
       form.reset()
     },
     onError: handleError.bind(showErrorToast),

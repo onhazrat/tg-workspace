@@ -61,7 +61,7 @@
       "post": {
         "tags": ["login"],
         "summary": "Recover Password",
-        "description": "Password Recovery",
+        "description": "Request a password reset link.",
         "operationId": "login-recover_password",
         "parameters": [
           {

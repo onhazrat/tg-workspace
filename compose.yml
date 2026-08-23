@@ -198,9 +198,49 @@ services:
       - traefik.http.middlewares.${STACK_NAME?Variable not set}-backend-compress.compress.excludedcontenttypes=text/event-stream,image/jpeg,image/png,image/webp,image/gif
       - traefik.http.middlewares.${STACK_NAME?Variable not set}-backend-compress.compress.minresponsebodybytes=1024
 
+      # Rate limiting on the unauthenticated auth flows. These are the only
+      # endpoints an anonymous client can spend our CPU on, and they are the
+      # expensive kind: `/login/access-token` runs a bcrypt verify per call,
+      # `/users/signup` writes a row, `/password-recovery` can send mail. The
+      # API runs a single worker (see tests/deployment/test_worker_count.py), so
+      # a flood does not degrade gracefully — it queues.
+      #
+      # It lives here rather than in the app because the point is to reject
+      # before the request costs anything.
+      #
+      # average/period/burst: 10 requests a minute sustained, bursting to 20,
+      # per client IP. Generous for a human typing a password, useless for
+      # walking an address list. Traefik's default sourceCriterion is the direct
+      # remote address, which is the real client only while Traefik is the edge
+      # — put a CDN in front and every request shares one IP, so set
+      # `sourcecriterion.ipstrategy.depth` at the same time.
+      - traefik.http.middlewares.${STACK_NAME?Variable not set}-backend-ratelimit.ratelimit.average=10
+      - traefik.http.middlewares.${STACK_NAME?Variable not set}-backend-ratelimit.ratelimit.period=1m
+      - traefik.http.middlewares.${STACK_NAME?Variable not set}-backend-ratelimit.ratelimit.burst=20
+
+      # Traefik attaches middlewares per router, never per path, so limiting
+      # only these paths takes a second router with a narrower rule. It must
+      # re-declare everything the catch-all carries — TLS, the service, and
+      # compression — because a request matches exactly one router and inherits
+      # nothing from the others.
+      #
+      # The path list mirrors the middleware's public paths in
+      # `app/middleware/api_key.py`; tests/deployment/test_edge_rate_limit.py
+      # keeps the two in step.
+      - traefik.http.routers.${STACK_NAME?Variable not set}-backend-auth-https.rule=Host(`api.${DOMAIN?Variable not set}`) && (PathPrefix(`/api/v1/login`) || PathPrefix(`/api/v1/users/signup`) || PathPrefix(`/api/v1/password-recovery`) || PathPrefix(`/api/v1/reset-password`))
+      - traefik.http.routers.${STACK_NAME?Variable not set}-backend-auth-https.entrypoints=https
+      - traefik.http.routers.${STACK_NAME?Variable not set}-backend-auth-https.tls=true
+      - traefik.http.routers.${STACK_NAME?Variable not set}-backend-auth-https.tls.certresolver=le
+      - traefik.http.routers.${STACK_NAME?Variable not set}-backend-auth-https.service=${STACK_NAME?Variable not set}-backend
+      # Explicit, not inherited from Traefik's rule-length tie-break: that
+      # happens to favour this rule today only because it is the longer string.
+      - traefik.http.routers.${STACK_NAME?Variable not set}-backend-auth-https.priority=1000
+
       # Enable redirection for HTTP and HTTPS
       - traefik.http.routers.${STACK_NAME?Variable not set}-backend-http.middlewares=https-redirect
+      - traefik.http.routers.${STACK_NAME?Variable not set}-backend-https.service=${STACK_NAME?Variable not set}-backend
       - traefik.http.routers.${STACK_NAME?Variable not set}-backend-https.middlewares=${STACK_NAME?Variable not set}-backend-compress
+      - traefik.http.routers.${STACK_NAME?Variable not set}-backend-auth-https.middlewares=${STACK_NAME?Variable not set}-backend-ratelimit,${STACK_NAME?Variable not set}-backend-compress
 
   frontend:
     image: '${DOCKER_IMAGE_FRONTEND?Variable not set}:${TAG-latest}'
