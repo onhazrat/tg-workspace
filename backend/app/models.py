@@ -15,6 +15,12 @@ class UserBase(SQLModel):
     email: EmailStr = Field(unique=True, index=True, max_length=255)
     is_active: bool = True
     is_superuser: bool = False
+    # Distinct from `is_active` on purpose: "has never been approved" and "an
+    # Admin turned this account off" are different states, and the admin screen
+    # has to tell them apart. Defaults to approved so that turning on
+    # required-approval later cannot retroactively lock out existing accounts.
+    # Ticket 07 only makes the flag exist; ticket 25 is what enforces it.
+    is_approved: bool = True
     full_name: str | None = Field(default=None, max_length=255)
 
 

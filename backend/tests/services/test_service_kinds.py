@@ -75,6 +75,10 @@ INVENTORY: dict[str, str] = {
     "network_settings.py": READ_MODEL,
     "operator.py": READ_MODEL,
     "prompt_assembly.py": READ_MODEL,
+    # Resolves a User's permissions from their role assignments. Reads
+    # rbac_user_roles joined to rbac_roles and never commits; seeding is done by
+    # the migration and init_db, so this module has no reason to write.
+    "rbac.py": READ_MODEL,
     "runtime_config.py": READ_MODEL,
     # 3. Integration — owns one external boundary.
     "channel_photos.py": INTEGRATION,

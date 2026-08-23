@@ -11,7 +11,9 @@ from sqlmodel import Session
 from app.core import security
 from app.core.config import settings
 from app.core.db import engine
+from app.core.permissions import Permission
 from app.models import TokenPayload, User
+from app.services import rbac
 
 reusable_oauth2 = OAuth2PasswordBearer(
     tokenUrl=f"{settings.API_V1_STR}/login/access-token"
@@ -55,9 +57,37 @@ def get_current_user(session: SessionDep, token: TokenDep) -> User:
 CurrentUser = Annotated[User, Depends(get_current_user)]
 
 
-def get_current_active_superuser(current_user: CurrentUser) -> User:
-    if not current_user.is_superuser:
-        raise HTTPException(
-            status_code=403, detail="The user doesn't have enough privileges"
+class require_permission:  # noqa: N801 — reads as a dependency at call sites
+    """A route dependency that demands one named permission.
+
+    A callable object rather than a function, because a dependency that takes an
+    argument has to be *built* per call site, and FastAPI reads the signature of
+    `__call__` for an instance exactly as it reads a function's. Used as::
+
+        @router.get(
+            "/",
+            dependencies=[Depends(require_permission(Permission.USERS_READ))],
         )
-    return current_user
+
+    Naming the *permission* rather than a role is the whole point of ticket 07:
+    a fourth role becomes a row in `rbac_roles`, and no call site here changes.
+
+    Taking `CurrentUser` is not incidental: deciding whether *you* hold a
+    permission requires resolving who you are, so `get_current_user` always sits
+    beneath one of these. `test_public_route_exemptions.py` relies on that to
+    tell an authenticated route from a deliberately public one, and asserts it
+    rather than assuming it.
+    """
+
+    def __init__(self, permission: Permission) -> None:
+        self.required_permission = permission
+
+    def __call__(self, session: SessionDep, current_user: CurrentUser) -> User:
+        if not rbac.has_permission(session, current_user.id, self.required_permission):
+            # Says nothing about which permission was missing, deliberately: the
+            # caller cannot act on that, and it maps out the authorisation model
+            # for anyone probing. Same text the template's superuser check used.
+            raise HTTPException(
+                status_code=403, detail="The user doesn't have enough privileges"
+            )
+        return current_user

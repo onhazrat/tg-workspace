@@ -4570,6 +4570,10 @@ export type UserCreate = {
      */
     is_superuser?: boolean;
     /**
+     * Is Approved
+     */
+    is_approved?: boolean;
+    /**
      * Full Name
      */
     full_name?: string | null;
@@ -4595,6 +4599,10 @@ export type UserPublic = {
      * Is Superuser
      */
     is_superuser?: boolean;
+    /**
+     * Is Approved
+     */
+    is_approved?: boolean;
     /**
      * Full Name
      */

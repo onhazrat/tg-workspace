@@ -92,6 +92,13 @@ resolves when reopened after the follow list has changed.
 8. **Proper RBAC**: permission constants in code, a `role` table, a `user_role` join, seeded with
    **User**, **Admin**, **Owner**. Call sites check a *permission constant*, never a role name, so a
    fourth role is an INSERT rather than a migration. No permission-editor UI now.
+   **Done** (ticket 07): tables are `rbac_roles` / `rbac_user_roles` in a third model module,
+   `app/models_rbac.py`. Two things the plan did not anticipate. The permission set lives as a JSON
+   column *on the role row* rather than in a third join table, which is what makes "a fourth role is
+   an INSERT" literally one statement. And migration seeds drift from code constants the moment
+   someone adds a permission — the row still holds yesterday's list, and the row is what
+   authorisation reads — so `reconcile_seeded_roles` runs on every boot, touching only the three
+   seeded ids.
 9. **`impersonate` is a permission**, not a role. Owner holds it by default.
 10. **View as** is read-only by default and can be elevated to read-write when genuinely needed.
     Nobody may View as a holder of the `impersonate` permission. Elevation is refused when the target

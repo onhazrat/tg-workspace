@@ -7,9 +7,10 @@ from fastapi.responses import HTMLResponse
 from fastapi.security import OAuth2PasswordRequestForm
 
 from app import crud
-from app.api.deps import CurrentUser, SessionDep, get_current_active_superuser
+from app.api.deps import CurrentUser, SessionDep, require_permission
 from app.core import security
 from app.core.config import settings
+from app.core.permissions import Permission
 from app.models import Message, NewPassword, Token, UserPublic, UserUpdate
 from app.utils import (
     generate_password_reset_token,
@@ -126,7 +127,7 @@ def reset_password(session: SessionDep, body: NewPassword) -> Message:
 
 @router.post(
     "/password-recovery-html-content/{email}",
-    dependencies=[Depends(get_current_active_superuser)],
+    dependencies=[Depends(require_permission(Permission.USERS_MANAGE))],
     response_class=HTMLResponse,
 )
 def recover_password_html_content(email: str, session: SessionDep) -> Any:
@@ -145,6 +146,11 @@ def recover_password_html_content(email: str, session: SessionDep) -> Any:
         email_to=user.email, email=email, token=password_reset_token
     )
 
+    # The header name is "subject", not "subject:". A colon is the delimiter,
+    # not a name character, so the stray one the template shipped made this
+    # route raise on every call — it has never successfully returned. Found by
+    # ticket 07's "the superuser still reaches every route it used to" test,
+    # which appears to be the first thing that ever called it.
     return HTMLResponse(
-        content=email_data.html_content, headers={"subject:": email_data.subject}
+        content=email_data.html_content, headers={"subject": email_data.subject}
     )

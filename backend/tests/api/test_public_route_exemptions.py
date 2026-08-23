@@ -33,7 +33,7 @@ import pytest
 from fastapi.routing import APIRoute
 from starlette.routing import BaseRoute
 
-from app.api.deps import get_current_active_superuser, get_current_user
+from app.api.deps import get_current_user
 from app.main import app
 from app.middleware.api_key import (
     PUBLIC_API_PATHS,
@@ -41,7 +41,14 @@ from app.middleware.api_key import (
     is_public_path,
 )
 
-_AUTH_DEPENDENCIES = {get_current_user, get_current_active_superuser}
+#: Identity is enough here, and ticket 07 did not change that even though it
+#: added `require_permission`, which builds a fresh object per call site. A
+#: permission check has to know *who* is asking, so every one of those resolves
+#: `CurrentUser` — and therefore `get_current_user` — through its own signature.
+#: `test_a_permission_dependency_authenticates_first` pins that, because it is
+#: the reason this one-element set is sufficient rather than a happy accident.
+_AUTH_DEPENDENCIES = {get_current_user}
+
 
 _PARAM = re.compile(r"\{[^}]+\}")
 
@@ -168,6 +175,40 @@ def test_the_walk_sees_every_route_the_schema_does() -> None:
     assert walked == documented, (
         "the route walk and the OpenAPI schema disagree; `_walk` can no longer "
         "see the application's routes and this guard is not checking anything"
+    )
+
+
+def test_a_permission_dependency_authenticates_first() -> None:
+    """Why checking only for `get_current_user` catches permission-gated routes.
+
+    `require_permission` never appears in `_AUTH_DEPENDENCIES`, and does not
+    need to: it cannot decide whether *you* hold a permission without resolving
+    who you are, so `get_current_user` is always somewhere beneath it. Take
+    `CurrentUser` out of its signature and this guard would start reporting
+    every admin route as a public one the middleware must exempt — so the
+    relationship is asserted here rather than assumed.
+    """
+    from fastapi import Depends
+    from fastapi.dependencies.utils import get_dependant
+
+    from app.api.deps import require_permission
+    from app.core.permissions import Permission
+
+    def route(_: object = Depends(require_permission(Permission.USERS_READ))) -> None:
+        return None
+
+    dependant = get_dependant(path="/probe", call=route)
+
+    stack = list(dependant.dependencies)
+    seen = set()
+    while stack:
+        node = stack.pop()
+        seen.add(node.call)
+        stack.extend(node.dependencies)
+
+    assert get_current_user in seen, (
+        "`require_permission` no longer resolves the current user, so routes "
+        "guarded only by a permission now look unauthenticated to this guard"
     )
 
 

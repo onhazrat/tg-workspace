@@ -8689,6 +8689,11 @@
             "title": "Is Superuser",
             "default": false
           },
+          "is_approved": {
+            "type": "boolean",
+            "title": "Is Approved",
+            "default": true
+          },
           "full_name": {
             "anyOf": [
               { "type": "string", "maxLength": 255 },
@@ -8724,6 +8729,11 @@
             "type": "boolean",
             "title": "Is Superuser",
             "default": false
+          },
+          "is_approved": {
+            "type": "boolean",
+            "title": "Is Approved",
+            "default": true
           },
           "full_name": {
             "anyOf": [
