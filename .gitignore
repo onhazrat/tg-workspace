@@ -21,3 +21,7 @@ data/channel-photos/
 # graphify: derived knowledge graph, rebuilt from source on demand.
 # See docs/graphify.md if you want to commit it instead.
 graphify-out/
+
+# Claude Code local state: worktrees carry their own .venv and node_modules and
+# run to several GB, plus session checkpoints and local permission overrides.
+.claude/
