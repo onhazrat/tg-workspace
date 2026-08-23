@@ -349,11 +349,11 @@
           "required": true
         },
         "responses": {
-          "200": {
+          "202": {
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/UserPublic" }
+                "schema": { "$ref": "#/components/schemas/Message" }
               }
             }
           },
@@ -8797,6 +8797,10 @@
           "is_superuser": {
             "anyOf": [{ "type": "boolean" }, { "type": "null" }],
             "title": "Is Superuser"
+          },
+          "is_approved": {
+            "anyOf": [{ "type": "boolean" }, { "type": "null" }],
+            "title": "Is Approved"
           },
           "full_name": {
             "anyOf": [

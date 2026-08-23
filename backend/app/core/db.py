@@ -65,6 +65,12 @@ def init_db(session: Session) -> None:
     # This works because the models are already imported and registered from app.models
     # SQLModel.metadata.create_all(engine)
 
+    # Before any user is created: `crud.create_user` assigns the default role,
+    # which is a foreign key into `rbac_roles`. On a database whose seed rows
+    # were removed, creating the bootstrap superuser first would fail on that
+    # key rather than on anything that names the real problem.
+    reconcile_seeded_roles(session)
+
     user = session.exec(
         select(User).where(User.email == settings.FIRST_SUPERUSER)
     ).first()
@@ -82,8 +88,6 @@ def init_db(session: Session) -> None:
     # this covers a superuser bootstrapped into an empty database afterwards.
     # Authorisation reads roles only, so a bootstrap superuser without this row
     # would come up unable to manage anything.
-    reconcile_seeded_roles(session)
-
     if not session.get(UserRole, (user.id, ROLE_ADMIN)):
         session.add(UserRole(user_id=user.id, role_id=ROLE_ADMIN))
         session.commit()

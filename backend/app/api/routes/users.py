@@ -30,6 +30,14 @@ from app.utils import generate_new_account_email, send_email
 
 router = APIRouter(prefix="/users", tags=["users"])
 
+#: The one reply `POST /signup` gives, whatever the address. Named rather than
+#: inlined so a test asserting "known and unknown are identical" cannot pass by
+#: comparing two copies of a string that drifted from the route.
+REGISTRATION_RECEIVED = (
+    "Registration received. If approval is required, an administrator will "
+    "review your account."
+)
+
 
 @router.get(
     "/",
@@ -151,22 +159,37 @@ def delete_user_me(session: SessionDep, current_user: CurrentUser) -> Any:
     return Message(message="User deleted successfully")
 
 
-@router.post("/signup", response_model=UserPublic)
+# Answers the same way for every address, which is why it returns a message
+# rather than the created account. It used to reply 400 "already exists" for a
+# registered address and 200 for an unregistered one — an account oracle anyone
+# could walk an address list through, and the exact leak ticket 01 closed one
+# route over on password recovery. Returning the User here would reopen it by
+# construction, since a body containing an id is a body that only exists when
+# the account was really created.
+#
+# The cost is real and accepted: someone who mistypes an address they already
+# own gets no hint, and finds out when their password does not work. The edge
+# rate limit (compose.yml) is what keeps that from being a cheap oracle to probe
+# by timing instead.
+@router.post("/signup", response_model=Message, status_code=202)
 def register_user(session: SessionDep, user_in: UserRegister) -> Any:
     """
     Create new user without the need to be logged in.
     """
     if not settings.USERS_OPEN_REGISTRATION:
         raise HTTPException(status_code=403, detail="Open registration is disabled")
-    user = crud.get_user_by_email(session=session, email=user_in.email)
-    if user:
-        raise HTTPException(
-            status_code=400,
-            detail="The user with this email already exists in the system",
+
+    existing = crud.get_user_by_email(session=session, email=user_in.email)
+    if existing is None:
+        user_create = UserCreate.model_validate(
+            user_in,
+            # An Admin creating an account vouches for it; a stranger signing up
+            # does not, so only this path can land unapproved.
+            update={"is_approved": not settings.USERS_REQUIRE_APPROVAL},
         )
-    user_create = UserCreate.model_validate(user_in)
-    user = crud.create_user(session=session, user_create=user_create)
-    return user
+        crud.create_user(session=session, user_create=user_create)
+
+    return Message(message=REGISTRATION_RECEIVED)
 
 
 @router.get("/{user_id}", response_model=UserPublic)

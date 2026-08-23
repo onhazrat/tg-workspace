@@ -10,7 +10,7 @@
 **Implications:**
 
 - Production requires `API_KEY`, `TOKEN_ENCRYPTION_KEY`, and a non-default `SECRET_KEY`.
-- `USERS_OPEN_REGISTRATION=false` in production; single superuser owns all data.
+- ~~`USERS_OPEN_REGISTRATION=false` in production; single superuser owns all data.~~ → ⚠️ **superseded 2026-08-23 by [ADR-011](./ADR-011-multi-user-registration.md)**: registration is a supported path, gated by `USERS_OPEN_REGISTRATION` and `USERS_REQUIRE_APPROVAL`. Mode A remains a supported *configuration* (set open registration to false), no longer the only one.
 - Nullable `user_id` on TG tables is forward-compatible metadata; reads remain unscoped.
 - WS-B tasks marked **(Mode B only)** are deferred unless multi-user is explicitly chosen later.
 
@@ -20,7 +20,7 @@ These decisions resolve open questions from [TARGET-ARCHITECTURE.md](./TARGET-AR
 
 | # | Topic | Choice |
 |---|--------|--------|
-| 1 | Multi-user scope | **C** — single-operator now; nullable `user_id` columns for future multi-user |
+| 1 | Multi-user scope | ~~**C** — single-operator now; nullable `user_id` columns for future multi-user~~ → ⚠️ **superseded 2026-08-23 by [ADR-011](./ADR-011-multi-user-registration.md)**: multi-user is being built (`docs/multi-user-tenancy-plan.md`); registration and roles exist, per-User scoping is in progress |
 | 2 | Bot token migration | **A** — auto-upload from IndexedDB on first login, then purge locally |
 | 3 | Encryption key | **B** — dedicated `TOKEN_ENCRYPTION_KEY` env var |
 | 4 | Transition writes | ~~**C** — API-first; IndexedDB fallback + user-visible warning on failure~~ → ⚠️ **superseded 2026-08-01 by [ADR-009](./ADR-009-server-authoritative-data.md)**: API-first kept, fallback removed |

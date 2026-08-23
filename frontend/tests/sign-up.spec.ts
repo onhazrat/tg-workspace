@@ -70,24 +70,27 @@ test("Sign up with invalid email", async ({ page }) => {
   await expect(page.getByText(/Invalid email/i)).toBeVisible()
 })
 
-test("Sign up with existing email", async ({ page }) => {
+// This used to assert "The user with this email already exists in the system",
+// which is precisely the account-enumeration oracle ticket 25 removed: anyone
+// could walk an address list through the signup form. The server now answers
+// the same way whichever the address is, so the test asserts that instead.
+test("Sign up with existing email says nothing about it", async ({ page }) => {
   const fullName = "Test User"
   const email = randomEmail()
   const password = randomPassword()
 
   await page.goto("/signup")
-
   await fillForm(page, fullName, email, password, password)
   await page.getByRole("button", { name: "Sign Up" }).click()
+  await expect(page.getByText(/Registration received/i)).toBeVisible()
 
   await page.goto("/signup")
-
   await fillForm(page, fullName, email, password, password)
   await page.getByRole("button", { name: "Sign Up" }).click()
 
-  await page
-    .getByText("The user with this email already exists in the system")
-    .click()
+  // Identical to the first attempt, and with no hint that the address is taken.
+  await expect(page.getByText(/Registration received/i)).toBeVisible()
+  await expect(page.getByText(/already exists/i)).toHaveCount(0)
 })
 
 test("Sign up with weak password", async ({ page }) => {

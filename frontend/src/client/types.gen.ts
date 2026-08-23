@@ -4652,6 +4652,10 @@ export type UserUpdate = {
      */
     is_superuser?: boolean | null;
     /**
+     * Is Approved
+     */
+    is_approved?: boolean | null;
+    /**
      * Full Name
      */
     full_name?: string | null;
@@ -5015,7 +5019,7 @@ export type UsersRegisterUserResponses = {
     /**
      * Successful Response
      */
-    200: UserPublic;
+    202: Message;
 };
 
 export type UsersRegisterUserResponse = UsersRegisterUserResponses[keyof UsersRegisterUserResponses];

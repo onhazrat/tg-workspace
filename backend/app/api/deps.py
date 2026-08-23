@@ -57,6 +57,28 @@ def get_current_user(session: SessionDep, token: TokenDep) -> User:
 CurrentUser = Annotated[User, Depends(get_current_user)]
 
 
+#: The `detail` an unapproved account gets. A distinct string, not the generic
+#: privileges message, because the frontend routes on it: "you are waiting" and
+#: "you may not do this" are different states and only one of them resolves by
+#: someone else clicking a button.
+PENDING_APPROVAL_DETAIL = "Account is awaiting administrator approval"
+
+
+def require_approved_user(current_user: CurrentUser) -> User:
+    """Refuse an account that has not been approved yet.
+
+    Mounted on whole routers in `app/api/main.py` rather than on ~90 individual
+    routes — being unapproved is a property of the *session*, not of any one
+    endpoint, and a rule applied per route is a rule someone forgets on the
+    ninety-first. `users`, `login` and `utils` deliberately do not carry it, so
+    a pending person can still read `/users/me` (which is how the app knows to
+    show them the pending page) and sign out.
+    """
+    if not current_user.is_approved:
+        raise HTTPException(status_code=403, detail=PENDING_APPROVAL_DETAIL)
+    return current_user
+
+
 class require_permission:  # noqa: N801 — reads as a dependency at call sites
     """A route dependency that demands one named permission.
 

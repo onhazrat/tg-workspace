@@ -40,6 +40,10 @@ class UserUpdate(SQLModel):
     email: EmailStr | None = Field(default=None, max_length=255)
     is_active: bool | None = None
     is_superuser: bool | None = None
+    # Approve and un-approve. Separate from `is_active` because disabling an
+    # account an Admin already vetted, and never having vetted it, are different
+    # things — and only one of them is resolved by someone clicking approve.
+    is_approved: bool | None = None
     full_name: str | None = Field(default=None, max_length=255)
     password: str | None = Field(default=None, min_length=8, max_length=128)
 

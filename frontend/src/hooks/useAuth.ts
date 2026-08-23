@@ -19,7 +19,7 @@ const isLoggedIn = () => {
 const useAuth = () => {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
-  const { showErrorToast } = useCustomToast()
+  const { showErrorToast, showSuccessToast } = useCustomToast()
 
   const { data: user } = useQuery<UserPublic | null, Error>({
     queryKey: ["currentUser"],
@@ -34,7 +34,11 @@ const useAuth = () => {
 
   const signUpMutation = useMutation({
     mutationFn: (data: UserRegister) => usersRegisterUser({ body: data }),
-    onSuccess: () => {
+    onSuccess: (response) => {
+      // The server answers the same way whether or not the address was already
+      // registered, so this cannot claim an account was created. It shows what
+      // the server actually said.
+      showSuccessToast(response.message)
       navigate({ to: "/login" })
     },
     onError: handleError.bind(showErrorToast),

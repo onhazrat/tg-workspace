@@ -325,10 +325,11 @@ def test_register_user(client: TestClient, db: Session) -> None:
         f"{settings.API_V1_STR}/users/signup",
         json=data,
     )
-    assert r.status_code == 200
-    created_user = r.json()
-    assert created_user["email"] == username
-    assert created_user["full_name"] == full_name
+    # 202 and a message, not 200 and the account: the reply must look the same
+    # whether or not the address was free, and a body carrying an id only exists
+    # when creation actually happened. See tests/api/test_registration.py.
+    assert r.status_code == 202
+    assert set(r.json()) == {"message"}
 
     user_query = select(User).where(User.email == username)
     user_db = db.exec(user_query).first()
@@ -339,20 +340,25 @@ def test_register_user(client: TestClient, db: Session) -> None:
     assert verified
 
 
-def test_register_user_already_exists_error(client: TestClient) -> None:
-    password = random_lower_string()
-    full_name = random_lower_string()
+def test_register_user_already_exists_is_not_revealed(client: TestClient) -> None:
+    """This used to assert the leak: 400 "already exists" for a known address.
+
+    That is an account oracle — the same one ticket 01 closed on password
+    recovery — so the test now pins the opposite. A registered address gets the
+    identical 202 and message a free one does.
+    """
     data = {
         "email": settings.FIRST_SUPERUSER,
-        "password": password,
-        "full_name": full_name,
+        "password": random_lower_string(),
+        "full_name": random_lower_string(),
     }
     r = client.post(
         f"{settings.API_V1_STR}/users/signup",
         json=data,
     )
-    assert r.status_code == 400
-    assert r.json()["detail"] == "The user with this email already exists in the system"
+    assert r.status_code == 202
+    assert set(r.json()) == {"message"}
+    assert "exists" not in r.json()["message"].lower()
 
 
 def test_update_user(

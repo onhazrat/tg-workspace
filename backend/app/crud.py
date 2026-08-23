@@ -3,8 +3,10 @@ from typing import Any
 
 from sqlmodel import Session, select
 
+from app.core.permissions import ROLE_USER
 from app.core.security import get_password_hash, verify_password
 from app.models import Item, ItemCreate, User, UserCreate, UserUpdate
+from app.models_rbac import UserRole
 
 
 def create_user(*, session: Session, user_create: UserCreate) -> User:
@@ -12,6 +14,18 @@ def create_user(*, session: Session, user_create: UserCreate) -> User:
         user_create, update={"hashed_password": get_password_hash(user_create.password)}
     )
     session.add(db_obj)
+    session.commit()
+    session.refresh(db_obj)
+
+    # Every account gets the default role, whichever path created it — self
+    # signup, an Admin filling the form, or the bootstrap. Doing it here rather
+    # than in each caller is what makes "a User with no role" unrepresentable;
+    # `init_db` adds Admin *on top* for the bootstrap superuser.
+    #
+    # ROLE_USER grants nothing today (see `core/permissions.py`). It exists so
+    # that granting every signed-in person some future capability is one row
+    # rather than a backfill over the whole table.
+    session.add(UserRole(user_id=db_obj.id, role_id=ROLE_USER))
     session.commit()
     session.refresh(db_obj)
     return db_obj

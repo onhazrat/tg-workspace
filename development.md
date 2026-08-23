@@ -142,6 +142,17 @@ Log in at `/login` with those credentials, or sign up a new account when open re
 
 If signup is disabled (`USERS_OPEN_REGISTRATION=false`), use the bootstrap superuser or ask an admin to create your account.
 
+**Approval.** `USERS_REQUIRE_APPROVAL` (default `false`) decides whether a new account waits for an
+administrator. With it on, signing up still works and the person can still log in — they land on
+`/pending-approval` and every data route refuses them until an Admin sets `is_approved` from the
+users screen. It is a separate flag from `is_active`: disabling an approved account does not send it
+back to the pending queue when it is re-enabled. Turning approval on affects only accounts created
+afterwards. See [ADR-011](docs/migration/ADR-011-multi-user-registration.md).
+
+Note that `POST /users/signup` answers **202 with the same message for every address**, registered or
+not, so that it cannot be used to discover which addresses have accounts. A person who mistypes an
+address they already own gets no hint and finds out when their password does not work.
+
 ## Sprint 3 / UI
 
 Frontend hardening from Sprint 3 (full workstream log: [REMEDIATION-PLAN.md Appendix C](docs/migration/REMEDIATION-PLAN.md#appendix-c-sprint-3-implementation-log-2026-06-09)).
@@ -304,7 +315,9 @@ Remediation chose **Mode A** on 2026-06-09 ([DECISIONS.md](docs/migration/DECISI
 | `local` | JWT for UI; `API_KEY` optional | `TOKEN_ENCRYPTION_KEY` optional (dev fallback) |
 | `staging` / `production` | JWT or `X-API-Key`; fail-closed without either | `TOKEN_ENCRYPTION_KEY` required; `API_KEY` required in `production` |
 
-- Set `USERS_OPEN_REGISTRATION=false` in production.
+- Set `USERS_OPEN_REGISTRATION=false` in production — *or* leave signup open and set
+  `USERS_REQUIRE_APPROVAL=true` so each account is reviewed (ADR-011). Mode A is still a
+  supported configuration; it is no longer the only one.
 - All AI, RAG, network, telegram, and jobs routes require authentication.
 - Raw bot tokens in request bodies are rejected outside `local`; use stored `credentialId`.
 - Single superuser owns all Postgres data; per-user row scoping is deferred to Mode B.

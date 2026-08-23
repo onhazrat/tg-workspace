@@ -99,6 +99,12 @@ class Settings(BaseSettings):
     FIRST_SUPERUSER: EmailStr
     FIRST_SUPERUSER_PASSWORD: str
     USERS_OPEN_REGISTRATION: bool = True
+    # Off by default, deliberately: a self-hoster who turned open registration
+    # on asked for open registration, and silently queueing their sign-ups for
+    # an approval screen they never enabled would be the opposite of that.
+    # Turning it on affects only accounts created afterwards — `is_approved`
+    # defaults to true at the column level, so existing users stay approved.
+    USERS_REQUIRE_APPROVAL: bool = False
 
     # TG Summarizer
     GEMINI_API_KEY: str = ""
