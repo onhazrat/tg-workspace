@@ -349,6 +349,12 @@ For each environment, configure:
 * `EMAILS_FROM_EMAIL`
 * `SMTP_HOST`, `SMTP_USER`, `SMTP_PASSWORD` (if sending mail)
 * `SENTRY_DSN` (optional)
+* `USERS_REQUIRE_APPROVAL` (optional) — `true` to make every new account wait for an
+  Admin. Leave it unset for the default, `false`. Set it to the literal `true` or
+  `false`; the deploy writes `false` when the secret is unset **or empty**, because an
+  empty value is not a boolean and the backend would refuse to start. Approval only
+  matters where signup is open — see
+  [ADR-011](docs/migration/ADR-011-multi-user-registration.md).
 
 **Per environment**
 * `DOMAIN_STAGING` / `DOMAIN_PRODUCTION`

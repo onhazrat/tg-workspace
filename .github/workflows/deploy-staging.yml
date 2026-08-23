@@ -37,6 +37,9 @@ jobs:
       DOCKER_IMAGE_BACKEND: backend
       DOCKER_IMAGE_FRONTEND: frontend
       USERS_OPEN_REGISTRATION: "false"
+      # Optional. Unset is the common case, so it is defaulted where the
+      # .env is written rather than here — see the note beside that line.
+      USERS_REQUIRE_APPROVAL: ${{ secrets.USERS_REQUIRE_APPROVAL }}
       PROJECT_NAME: TG Summarizer
     steps:
       - name: Checkout
@@ -57,6 +60,12 @@ jobs:
             echo "FIRST_SUPERUSER=${FIRST_SUPERUSER}"
             echo "FIRST_SUPERUSER_PASSWORD=${FIRST_SUPERUSER_PASSWORD}"
             echo "USERS_OPEN_REGISTRATION=${USERS_OPEN_REGISTRATION}"
+            # `:-false` is load-bearing. An unset secret expands to the empty
+            # string, and `USERS_REQUIRE_APPROVAL=` is not a bool — pydantic
+            # raises ValidationError and the backend fails to start. Writing
+            # the default here keeps a deployment that never sets the secret
+            # booting, which is every deployment until someone turns approval on.
+            echo "USERS_REQUIRE_APPROVAL=${USERS_REQUIRE_APPROVAL:-false}"
             echo "API_KEY=${API_KEY}"
             echo "TOKEN_ENCRYPTION_KEY=${TOKEN_ENCRYPTION_KEY}"
             echo "SMTP_HOST=${SMTP_HOST}"
