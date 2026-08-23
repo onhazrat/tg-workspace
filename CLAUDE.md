@@ -107,6 +107,7 @@ fires, the answer is almost never to delete the guard.
 | `backend/tests/services/test_sync_job_retention.py` | sync jobs are pruned by age but never while unfinished; restarts reconcile | test |
 | `backend/tests/api/test_public_route_exemptions.py` | routes with no auth dependency are middleware-public, **and** every exemption still has such a route | test |
 | `backend/tests/api/test_permission_checks.py` | authorisation reads roles, never `is_superuser` or a role name; the superuser kept its access | test |
+| `backend/tests/api/test_send_email_call_sites.py` | every `send_email` caller checks `emails_enabled` first — the pair, not the site | test |
 | `backend/tests/core/test_permissions.py` | no stranded permission, no permission on the default role, seeded rows match the constants | test |
 | `backend/tests/deployment/test_edge_rate_limit.py` | the auth paths are rate limited at Traefik, and that router keeps its service, priority, and compression | test |
 | pre-commit `generate-frontend-sdk` | the committed client matches the backend | hook |
