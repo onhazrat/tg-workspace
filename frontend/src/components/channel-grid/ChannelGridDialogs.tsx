@@ -65,9 +65,9 @@ export const ChannelGridDialogs: React.FC<ChannelGridDialogsProps> = ({
               You are about to remove{" "}
               <span className="font-bold text-app-ink">
                 @{confirmDeleteChannel.name}
-              </span>
-              . This will also permanently delete all scraped posts associated
-              with this channel from your local database.
+              </span>{" "}
+              from your channel list. Its scraped posts stay in the shared
+              corpus; they are cleared later only if nobody else follows it.
             </>
           ) : (
             ""
@@ -75,7 +75,7 @@ export const ChannelGridDialogs: React.FC<ChannelGridDialogsProps> = ({
         }
         descriptionClassName="text-xs leading-relaxed text-app-ink/60"
         variant="destructive"
-        confirmLabel="Delete Everything"
+        confirmLabel="Remove From List"
         footerClassName="sm:justify-between"
         confirmClassName="flex-1"
         cancelClassName="flex-1"
@@ -98,14 +98,14 @@ export const ChannelGridDialogs: React.FC<ChannelGridDialogsProps> = ({
             You are about to remove{" "}
             <span className="font-bold text-app-ink">
               {selectedCount} selected channels
-            </span>
-            . This will also permanently delete all scraped posts associated
-            with these channels from your local database.
+            </span>{" "}
+            from your channel list. Their scraped posts stay in the shared
+            corpus; they are cleared later only if nobody else follows them.
           </>
         }
         descriptionClassName="text-xs leading-relaxed text-app-ink/60"
         variant="destructive"
-        confirmLabel={`Delete ${selectedCount} Channels`}
+        confirmLabel={`Remove ${selectedCount} Channels`}
         footerClassName="sm:justify-between"
         confirmClassName="flex-1"
         cancelClassName="flex-1"

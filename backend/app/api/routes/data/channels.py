@@ -75,13 +75,11 @@ from app.services.channels import (
     bulk_update_sync_settings as bulk_update_sync_settings_impl,
 )
 from app.services.channels import (
-    delete_channel as delete_channel_impl,
-)
-from app.services.channels import (
     get_channel_stats as get_channel_stats_impl,
 )
 from app.services.channels import (
     list_all_channel_stats,
+    unfollow_channel,
 )
 from app.services.channels import (
     list_channel_bios as list_channel_bios_impl,
@@ -472,13 +470,23 @@ def bulk_channel_tags_endpoint(
     )
 
 
+# Still named `delete_channel` after ticket 05 turned it into an unfollow: the
+# generated client derives `dataDeleteChannel` from this function's name, so a
+# rename churns the committed SDK and every call site for no change in
+# behaviour. The docstring below is deliberately short — it becomes the
+# operation's OpenAPI description and lands verbatim in `sdk.gen.ts`, so the
+# reasoning belongs here in a comment and the argument itself in
+# `unfollow_channel`.
 @router.delete("/channels/{channel_id}")
 def delete_channel(
     channel_id: str,
     session: SessionDep,
-    _current_user: CurrentUser,
+    current_user: CurrentUser,
 ) -> StatusResponse:
-    return StatusResponse.model_validate(delete_channel_impl(session, channel_id))
+    """Remove the channel from the caller's list. Its posts are left alone."""
+    return StatusResponse.model_validate(
+        unfollow_channel(session, channel_id, user_id=current_user.id)
+    )
 
 
 @router.get("/channels/{channel_id}/stats")

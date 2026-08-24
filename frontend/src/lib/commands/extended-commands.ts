@@ -147,12 +147,12 @@ export function buildExtendedCommands(): CommandDef[] {
     {
       id: "delete-selected-channels",
       kind: "action",
-      label: "Delete Selected Channels",
+      label: "Remove Selected Channels",
       keywords: ["channel", "delete", "selected", "bulk", "remove"],
       group: "Channels",
       requiresConfirmation: true,
       confirmDescription:
-        "Delete all selected channels and their locally cached posts? Server data is removed.",
+        "Remove all selected channels from your list? Their posts stay in the shared corpus and are cleared later only if nobody else follows them.",
       disabled: (ctx) => {
         if (ctx.isOffline) return { disabled: true, reason: "Server offline" }
         if (ctx.selectedChannels.size === 0) {

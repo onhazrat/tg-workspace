@@ -1574,6 +1574,7 @@
       "delete": {
         "tags": ["data"],
         "summary": "Delete Channel",
+        "description": "Remove the channel from the caller's list. Its posts are left alone.",
         "operationId": "data-delete_channel",
         "security": [{ "OAuth2PasswordBearer": [] }],
         "parameters": [

@@ -34,12 +34,38 @@ import uuid
 from collections.abc import Iterable, Sequence
 from typing import Any
 
+from sqlalchemy import delete as sa_delete
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlmodel import Session, col, func, select
 
 from app.models import User
-from app.models_tg import Channel, ChannelFollow, utc_now
+from app.models_tg import AppSetting, Channel, ChannelFollow, utc_now
 from app.services.operator import get_operator_user_id
+
+#: Global `AppSetting` key recording that the follow backfill ran to completion.
+#:
+#: Lives here rather than in `scripts/backfill_channel_follows.py` because two
+#: unrelated callers need the same answer and `app/` cannot import from
+#: `scripts/`: the script sets it, and ticket 05's retention collection refuses
+#: to run until it is set. The script's own comment argues why the marker is a
+#: one-shot record rather than the obvious "are there channels with no follow?"
+#: test — that question is correct until unfollow exists and a data-loss bug
+#: immediately after.
+FOLLOWS_BACKFILL_KEY = "follows_backfill"
+
+
+def follows_backfilled(session: Session) -> bool:
+    """Whether `tg_channel_follows` is authoritative yet. One PK lookup.
+
+    Until the backfill has recorded completion, an empty or partial follow
+    table means "nobody has written these rows yet", not "nobody follows these
+    channels". Those two readings are indistinguishable from the table alone
+    and have opposite consequences: the first is a database mid-upgrade, the
+    second is retention's queue. Anything that *deletes* on the strength of a
+    missing follow has to check this first.
+    """
+    row = session.get(AppSetting, FOLLOWS_BACKFILL_KEY)
+    return bool(row and row.value.get("completedAt"))
 
 
 def resolve_follow_owner(
@@ -160,6 +186,38 @@ def ensure_follow_for_channel(
     )
 
 
+def remove_follow(
+    session: Session,
+    *,
+    user_id: uuid.UUID,
+    channel_id: str,
+) -> bool:
+    """Drop one User's follow. Returns True if a row was removed (ticket 05).
+
+    The counterpart to `ensure_follow`, and the reason this module rather than
+    `channels.py` is still the only writer of the table: removal is one row
+    keyed on `(user_id, channel_id)`, and a delete that dropped the channel's
+    follows instead would unfollow every account that shares the handle.
+
+    `RETURNING` again, for the reason argued on `ensure_follow`: SQLModel's
+    `session.exec` wraps the result so `rowcount` stops meaning rows affected,
+    and the caller needs the difference between "your follow is gone" and "you
+    never had one" to answer 404.
+
+    Does **not** commit, matching `ensure_follow` — the caller owns the
+    transaction.
+    """
+    statement = (
+        sa_delete(ChannelFollow)
+        .where(
+            col(ChannelFollow.user_id) == user_id,
+            col(ChannelFollow.channel_id) == channel_id,
+        )
+        .returning(col(ChannelFollow.channel_id))
+    )
+    return session.execute(statement).first() is not None
+
+
 def follow_exists(
     session: Session,
     *,
@@ -176,11 +234,14 @@ def count_follows(session: Session) -> int:
 
 
 def channel_ids_without_follows(session: Session) -> list[str]:
-    """Channels nobody follows — the drift the backfill exists to remove.
+    """Channels nobody follows — retention's input, and the audit's.
 
-    After ticket 05 this stops being drift and becomes the retention job's
-    input, but until unfollow exists there is no legitimate way for a Channel
-    to reach zero followers.
+    Ticket 04 read this as pure drift: with no unfollow, a Channel at zero
+    followers could only mean a creation path that forgot to write one. Ticket
+    05 makes it a legitimate state — the one an unfollow leaves behind — so the
+    same query now feeds `collect_unfollowed_channels`, which reclaims the
+    corpus nobody is holding. `audit_tenancy_drift.py` still reports the count,
+    which is now a queue depth rather than an alarm.
     """
     followed = select(col(ChannelFollow.channel_id)).distinct()
     rows = session.exec(

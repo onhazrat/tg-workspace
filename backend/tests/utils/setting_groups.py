@@ -12,6 +12,7 @@ from app.services.channel_setting_groups import (
     ensure_default_group,
     get_or_create_restricted_group,
 )
+from app.services.follows import ensure_follow_for_channel
 from app.services.operator import get_operator_user_id
 
 
@@ -76,6 +77,13 @@ def upsert_sync_test_channel(
     else:
         channel = Channel(**payload)
     session.add(channel)
+    # The follow every production creation path writes (ticket 04's guard), so
+    # a channel built by a test is not born in the one state ticket 05 made
+    # meaningful: zero followers, which retention now collects. Without this a
+    # fixture channel would vanish mid-test the moment a retention run happened
+    # to touch it.
+    session.flush()
+    ensure_follow_for_channel(session, channel, user_id=user_id)
     session.commit()
     session.refresh(channel)
     return channel

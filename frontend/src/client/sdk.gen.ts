@@ -964,6 +964,7 @@ export const dataListChannelBios = <ThrowOnError extends boolean = true>(options
 
 /**
  * Delete Channel
+ * Remove the channel from the caller's list. Its posts are left alone.
  */
 export const dataDeleteChannel = <ThrowOnError extends boolean = true>(options: Options<DataDeleteChannelData, ThrowOnError>) => {
     return (options.client ?? _heyApiClient).delete<DataDeleteChannelResponses, DataDeleteChannelErrors, ThrowOnError, 'data'>({

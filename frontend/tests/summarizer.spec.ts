@@ -1086,7 +1086,7 @@ test.describe("TG Summarizer", () => {
     await page.getByTestId("command-palette-button").click()
     await page.getByPlaceholder("Type a command...").fill("delete channel")
     const deleteOption = page.getByRole("option", {
-      name: /Delete Channel/,
+      name: /Remove Channel/,
     })
     await expect(deleteOption).toBeVisible({ timeout: 10_000 })
     if (await deleteOption.isDisabled()) return
@@ -1100,7 +1100,7 @@ test.describe("TG Summarizer", () => {
 
     await channelOption.click()
     await expect(page.getByTestId("command-palette-confirm")).toBeVisible()
-    await expect(page.getByText(/Delete @/)).toBeVisible()
+    await expect(page.getByText(/Remove @/)).toBeVisible()
   })
 
   test("command palette search posts opens in-palette results", async ({
@@ -1391,12 +1391,15 @@ test.describe("command palette keyboard", () => {
     ).toBeVisible()
   })
 
-  test("K9: clear cache confirm proceeds via Tab and Enter", async ({
-    page,
-  }) => {
+  // Was "clear cache" until PR #94 (A4) deleted the IndexedDB layer and the
+  // command with it. The query then matched nothing and the test had been red
+  // ever since — invisibly, because CI is disabled. The subject is the confirm
+  // dialog's keyboard path, not the command, so it now uses one that exists and
+  // destroys nothing when it proceeds.
+  test("K9: a confirm proceeds via Tab and Enter", async ({ page }) => {
     await page.goto("/summarizer")
     await openPaletteKeyboard(page)
-    await runPaletteCommand(page, "clear cache")
+    await runPaletteCommand(page, "restart tor")
 
     await expect(page.getByTestId("command-palette-confirm")).toBeVisible()
     await page.keyboard.press("Tab")
@@ -1517,13 +1520,17 @@ test.describe("command palette keyboard", () => {
     await expect(page.getByTestId("command-palette")).toBeVisible()
   })
 
-  test("K15: clear indexeddb table confirm cancel via keyboard", async ({
+  // Same A4 fallout as K9: the command is "Clear Database Table" now, and
+  // "indexeddb" survives only as a keyword on Refresh Database Stats — an
+  // action, not an entity root — so the old query opened a flow with no filter
+  // to type into. This cancels at the confirm, so no table is truncated.
+  test("K15: clear database table confirm cancel via keyboard", async ({
     page,
   }) => {
     await gotoSummarizer(page, "summary")
 
     await openPaletteKeyboard(page)
-    await runPaletteCommand(page, "clear indexeddb")
+    await runPaletteCommand(page, "clear database table")
     await pickEntityFilterKeyboard(page, "translations")
 
     await expect(page.getByTestId("command-palette-confirm")).toBeVisible()

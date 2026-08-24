@@ -25,7 +25,13 @@ from app.models_tg import (
     SyncLog,
     utc_now,
 )
-from app.services.channel_photos import photo_stem, prune_orphaned_photos
+from app.services.channel_photos import (
+    delete_cached_photo,
+    photo_stem,
+    prune_orphaned_photos,
+)
+from app.services.channels import collect_unfollowed_channel
+from app.services.follows import channel_ids_without_follows, follows_backfilled
 from app.services.logs import expire_sync_payloads_stmt
 from app.services.operator import get_operator_user_id
 from app.services.post_sync_state import (
@@ -44,6 +50,10 @@ logger = logging.getLogger(__name__)
 # Delete expired posts in bounded batches: a backlog can be hundreds of
 # thousands of rows, and materialising them all at once OOM-killed the worker.
 POST_DELETE_BATCH = 500
+
+#: Channels collected per retention pass. Each one is a full corpus delete and
+#: nothing waits on the queue draining, so the next hourly run takes the rest.
+COLLECT_LIMIT = 100
 
 
 def _prune_discover_reports(session: Session, *, max_days: int, max_count: int) -> int:
@@ -87,6 +97,68 @@ def _prune_discover_reports(session: Session, *, max_days: int, max_count: int) 
             deleted += cast(Any, result).rowcount or 0
 
     return deleted
+
+
+def _collect_unfollowed_channels(session: Session) -> tuple[int, int]:
+    """Reclaim Channels nobody follows. Returns (channels, posts) deleted.
+
+    The deferred half of the delete that ticket 05 took out of the removal
+    path. A Channel at zero followers is unreachable — no account lists it, no
+    scheduler holds a deadline for it — so there is nothing left to protect,
+    and the corpus underneath it is bytes nobody asked for.
+
+    There is deliberately **no grace window**. Unfollowing is an explicit
+    action on your own list, and a window would need a setting, a timestamp
+    column, and an answer to what re-following inside it means. Re-following
+    before this job's next pass already keeps everything, because the check is
+    made at collection time rather than recorded at unfollow time.
+
+    Committed per channel, not per run: a busy channel's corpus is a large
+    delete, and batching the lot into one transaction would hold it open across
+    every one of them — the `idle in transaction` shape that pinned the xmin
+    horizon in `run_auto_sync`.
+
+    **Refuses to run until the follow backfill has recorded completion.** An
+    empty `tg_channel_follows` reads identically whether nobody follows these
+    channels or nobody has written the rows yet, and the two have opposite
+    consequences. This job fires ~60s after every boot, so on a database whose
+    backfill has not run — the native dev flow never invokes `prestart.sh`, and
+    a restored pre-ticket-04 backup has no marker either — the unguarded
+    version would delete every channel and every post a minute after startup.
+    The operator's retention windows are no defence: collection ignores them,
+    so `postRetentionDays: 0` would not have saved that database.
+
+    `COLLECT_LIMIT` bounds one pass because each channel's corpus delete is
+    expensive and there is no deadline on draining the queue: the next hourly
+    run takes the rest.
+    """
+    if not follows_backfilled(session):
+        logger.warning(
+            "Retention: skipping unfollowed-channel collection — the follow "
+            "backfill has not recorded completion, so an absent follow does "
+            "not yet mean nobody follows the channel. Run "
+            "scripts/backfill_channel_follows.py."
+        )
+        return 0, 0
+
+    channel_ids = channel_ids_without_follows(session)[:COLLECT_LIMIT]
+    if not channel_ids:
+        return 0, 0
+
+    collected = 0
+    posts = 0
+    for channel_id in channel_ids:
+        posts += collect_unfollowed_channel(session, channel_id)
+        session.commit()
+        # After the commit, not inside it: a rollback would otherwise leave the
+        # Channel alive with its cached avatar already gone from disk.
+        delete_cached_photo(channel_id)
+        collected += 1
+
+    if collected:
+        touch_sync(session, "channels", commit=False)
+        touch_sync(session, "posts")
+    return collected, posts
 
 
 def run_retention_cleanup(session: Session) -> dict[str, int]:
@@ -233,6 +305,13 @@ def run_retention_cleanup(session: Session) -> dict[str, int]:
             touch_sync(session, "translations")
             touch_sync(session, "channels")
 
+    # After the post sweep, before the avatar sweep: collecting a channel
+    # removes its posts, and the avatar sweep below builds its keep-set from the
+    # surviving channel ids — running it first would leave the collected
+    # channels' avatars on disk for another whole cycle.
+    deleted_channels, collected_posts = _collect_unfollowed_channels(session)
+    deleted_posts += collected_posts
+
     deleted_reports = _prune_discover_reports(
         session,
         max_days=int(settings.get("reportRetentionDays") or 0),
@@ -267,13 +346,14 @@ def run_retention_cleanup(session: Session) -> dict[str, int]:
 
     logger.info(
         "Retention cleanup: deleted %s posts, %s log rows, %s sync payloads, "
-        "%s reports, %s sync jobs, %s orphaned avatars (postDays=%s, "
-        "logDays=%s, payloadDays=%s, syncJobDays=%s)",
+        "%s reports, %s sync jobs, %s unfollowed channels, %s orphaned avatars "
+        "(postDays=%s, logDays=%s, payloadDays=%s, syncJobDays=%s)",
         deleted_posts,
         deleted_logs,
         deleted_payloads,
         deleted_reports,
         deleted_sync_jobs,
+        deleted_channels,
         deleted_photos,
         post_days,
         log_days,
@@ -286,5 +366,6 @@ def run_retention_cleanup(session: Session) -> dict[str, int]:
         "deletedPayloads": deleted_payloads,
         "deletedReports": deleted_reports,
         "deletedSyncJobs": deleted_sync_jobs,
+        "deletedChannels": deleted_channels,
         "deletedPhotos": deleted_photos,
     }

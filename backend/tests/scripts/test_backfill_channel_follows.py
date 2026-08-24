@@ -36,7 +36,11 @@ _SCRIPTS_DIR = Path(__file__).resolve().parents[2] / "scripts"
 if str(_SCRIPTS_DIR) not in sys.path:
     sys.path.insert(0, str(_SCRIPTS_DIR))
 
-from audit_tenancy_drift import audit  # noqa: E402
+from audit_tenancy_drift import (  # noqa: E402
+    AWAITING_COLLECTION,
+    audit,
+    drift_only,
+)
 from backfill_channel_follows import (  # noqa: E402
     already_completed,
     backfill,
@@ -152,12 +156,21 @@ def test_batching_covers_every_channel(session: Session) -> None:
     assert stats["created"] == 5
 
 
-def test_the_audit_reports_channels_with_no_follow(session: Session) -> None:
+def test_the_audit_counts_channels_awaiting_collection(session: Session) -> None:
+    """Counted, and deliberately not drift.
+
+    Before ticket 05 a Channel could only reach zero followers through a
+    backfill that had not run or a creation path that skipped its dual-write,
+    so the audit called it drift. Unfollow made it the ordinary state retention
+    collects, and leaving it in the strict gate would fail a healthy database
+    in the window between a removal and the next retention run.
+    """
     _channel(session, "audit_lonely")
 
     findings = audit()
 
-    assert findings["channels_with_no_follow"] == 1
+    assert findings[AWAITING_COLLECTION] == 1
+    assert AWAITING_COLLECTION not in drift_only(findings)
 
 
 def test_the_audit_is_clean_after_the_backfill(session: Session) -> None:
@@ -166,7 +179,7 @@ def test_the_audit_is_clean_after_the_backfill(session: Session) -> None:
     backfill()
     findings = audit()
 
-    assert "channels_with_no_follow" not in findings
+    assert AWAITING_COLLECTION not in findings
 
 
 def test_the_audit_counts_a_null_owner_as_drift(session: Session) -> None:
@@ -198,7 +211,7 @@ def test_a_channel_followed_by_someone_else_is_still_unfollowed_by_you(
 
     findings = audit()
 
-    assert "channels_with_no_follow" not in findings
+    assert AWAITING_COLLECTION not in findings
     session.exec(delete(User).where(col(User.id) == account.id))
     session.commit()
 

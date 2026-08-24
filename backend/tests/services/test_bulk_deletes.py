@@ -3,6 +3,12 @@
 These had no test coverage at all, which is why converting them did not move
 the suite. Each previously materialised every matching row before deleting it
 — the same shape that OOM-killed the worker on staging.
+
+The channel cases moved from `delete_channel` to `collect_unfollowed_channel`
+when ticket 05 split unfollow from delete. The bulk SQL is the same and still
+worth guarding, but nothing reaches it from a request any more: retention calls
+it once a Channel has no followers left. What removal does now is guarded in
+`test_unfollow.py`.
 """
 
 from __future__ import annotations
@@ -11,7 +17,7 @@ from sqlmodel import Session, col, select
 
 from app.core.db import engine
 from app.models_tg import Post, PostSyncState
-from app.services.channels import delete_channel
+from app.services.channels import collect_unfollowed_channel
 from app.services.post_sync_state import (
     clear_channel_sync_state,
     prune_sync_state_below,
@@ -51,18 +57,19 @@ def _state_ids(channel: str) -> set[int]:
         }
 
 
-def test_delete_channel_removes_its_posts() -> None:
+def test_collection_removes_its_posts() -> None:
     with Session(engine) as session:
         add_test_channel(session, "doomed", name="doomed")
         _add_posts(session, "doomed", 5)
         session.commit()
 
-        delete_channel(session, "doomed")
+        collect_unfollowed_channel(session, "doomed")
+        session.commit()
 
     assert _post_ids("doomed") == set()
 
 
-def test_delete_channel_leaves_other_channels_alone() -> None:
+def test_collection_leaves_other_channels_alone() -> None:
     """The bulk DELETE must stay scoped to the channel being removed."""
     with Session(engine) as session:
         add_test_channel(session, "doomed", name="doomed")
@@ -71,17 +78,19 @@ def test_delete_channel_leaves_other_channels_alone() -> None:
         _add_posts(session, "keeper", 4)
         session.commit()
 
-        delete_channel(session, "doomed")
+        collect_unfollowed_channel(session, "doomed")
+        session.commit()
 
     assert _post_ids("doomed") == set()
     assert _post_ids("keeper") == {0, 1, 2, 3}
 
 
-def test_delete_channel_with_no_posts_succeeds() -> None:
+def test_collection_with_no_posts_succeeds() -> None:
     with Session(engine) as session:
         add_test_channel(session, "empty", name="empty")
         session.commit()
-        assert delete_channel(session, "empty") == {"status": "deleted"}
+        assert collect_unfollowed_channel(session, "empty") == 0
+        session.commit()
 
 
 def test_clear_channel_sync_state_returns_deleted_count() -> None:

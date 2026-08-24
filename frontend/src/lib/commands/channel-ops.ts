@@ -72,7 +72,7 @@ const CHANNEL_OPS: ChannelOpDef[] = [
   {
     id: "delete-channel",
     kind: "entity-root",
-    label: "Delete Channel",
+    label: "Remove Channel",
     keywords: ["channel", "delete", "remove", "single", "one"],
     group: "Channels",
     entityFlow: "delete-channel",
@@ -80,9 +80,9 @@ const CHANNEL_OPS: ChannelOpDef[] = [
     getConfirmDescription: (_ctx, payload) => {
       const channel = payload as Channel | undefined
       if (!channel) {
-        return "Delete this channel and all locally cached posts? Server data is removed."
+        return "Remove this channel from your list? Its posts stay in the shared corpus."
       }
-      return `Delete @${channel.name} and all locally cached posts for this channel? Server data is removed.`
+      return `Remove @${channel.name} from your channel list? Its posts stay in the shared corpus and are cleared later only if nobody else follows it.`
     },
     disabled: (ctx) => {
       if (ctx.isOffline) {
@@ -99,7 +99,7 @@ const CHANNEL_OPS: ChannelOpDef[] = [
         (ctx.palette.confirmPayload as Channel | undefined)
       if (!channel) return
       await deleteChannelByRecord(channel, ctx)
-      toast.success(`Deleted @${channel.name}`)
+      toast.success(`Removed @${channel.name}`)
     },
   },
   {

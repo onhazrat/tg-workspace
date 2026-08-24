@@ -282,8 +282,8 @@ export const ChannelCard: React.FC<ChannelCardProps> = ({
         </TgIconButton>
         <TgIconButton
           variant="frosted"
-          aria-label="Delete Channel"
-          tooltip="Delete Channel"
+          aria-label="Remove Channel"
+          tooltip="Remove Channel"
           onClick={(e) => {
             e.stopPropagation()
             handleRemoveChannel(channel)

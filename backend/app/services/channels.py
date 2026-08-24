@@ -13,8 +13,13 @@ from sqlalchemy import select as sa_select
 from sqlalchemy.dialects.postgresql import ARRAY
 from sqlmodel import Session, col, func, select
 
-from app.models_tg import Channel, Post, utc_now
-from app.services.channel_photos import delete_cached_photo
+from app.models_tg import (
+    Channel,
+    Post,
+    PostEmbedding,
+    PostTranslation,
+    utc_now,
+)
 from app.services.channel_setting_groups import (
     ensure_default_group,
     get_group_for_channel,
@@ -27,7 +32,8 @@ from app.services.channel_tags import (
     normalize_channel_tags,
     reject_reserved_virtual_group_tags,
 )
-from app.services.follows import ensure_follow_for_channel
+from app.services.follows import ensure_follow_for_channel, remove_follow
+from app.services.post_sync_state import clear_channel_sync_state
 from app.services.serialization import channel_to_camel, normalize_body
 from app.services.sync_meta import touch_sync
 from app.services.sync_schedule import (
@@ -393,20 +399,110 @@ def upsert_channel(
     return channel_to_camel(ch, group=group)
 
 
-def delete_channel(session: Session, channel_id: str) -> dict[str, str]:
+def unfollow_channel(
+    session: Session,
+    channel_id: str,
+    *,
+    user_id: uuid.UUID,
+) -> dict[str, str]:
+    """Take a Channel off one account's list (ticket 05).
+
+    This used to delete the Channel row and bulk-delete every Post under it,
+    for everybody, with no ownership check. That was coherent while one
+    operator owned the database and stops being coherent the moment a Channel
+    is a shared corpus: the second follower of a handle would lose a scrape
+    they had nothing to do with because the first follower tidied their list.
+
+    So removal drops the Follow and touches nothing else. The Channel and its
+    Posts survive for as long as anyone still follows them, and
+    `collect_unfollowed_channels` reclaims them from the retention job once
+    nobody does — the delete is deferred, not abandoned.
+
+    A channel the caller does not follow answers **404, not 403**, per the
+    seam's `assert_owner` convention: 403 confirms the row exists, which is the
+    enumeration oracle signup was hardened against. The detail names the
+    resource so the oracle does not simply move into the body.
+
+    **The channel list does not filter on follows yet** (ticket 15), so while
+    enforcement is still off a removed channel stays visible until retention
+    collects it. That gap is deliberate and argued in ticket 05: closing it
+    here would mean scoping a read path a batch early, and the seam's rule is
+    that no batch changes a response while the flag is off.
+    """
     ch = session.get(Channel, channel_id)
     if not ch:
         raise HTTPException(status_code=404, detail="Channel not found")
-    # Bulk DELETE rather than loading every post to delete it one by one: a
-    # busy channel holds hundreds of thousands of rows, and materialising them
-    # to delete them is the same shape that OOM-killed the worker on staging.
-    session.execute(sa_delete(Post).where(col(Post.channel_name) == ch.name))
-    session.delete(ch)
+    if not remove_follow(session, user_id=user_id, channel_id=channel_id):
+        raise HTTPException(status_code=404, detail="Channel not found")
+    # `commit=False` immediately before the commit, so the etag moves in the
+    # same transaction as the change it announces: split across two, a crash in
+    # between leaves the follow gone and the etag stale, and a stale etag tells
+    # every client there is nothing to refetch.
+    touch_sync(session, "channels", commit=False)
     session.commit()
-    delete_cached_photo(channel_id)
-    touch_sync(session, "channels")
-    touch_sync(session, "posts")
-    return {"status": "deleted"}
+    return {"status": "unfollowed"}
+
+
+def collect_unfollowed_channel(session: Session, channel_id: str) -> int:
+    """Delete a Channel nobody follows, with the corpus underneath it.
+
+    The deferred half of what `delete_channel` used to do in one step, called
+    from the retention job over `channel_ids_without_follows`. Deleting the
+    Posts here is not a contradiction of unfollow leaving them alone: unfollow
+    is one account acting on its own list, this runs only once *no* account
+    holds the corpus.
+
+    The dependent rows go too. None of `tg_posts`, `tg_post_embeddings`,
+    `tg_post_translations` or `tg_post_sync_state` has a foreign key to
+    `tg_channels` — they are keyed by `channel_name` — so nothing cascades, and
+    a collection that removed only the Channel would leave four tables pointing
+    at a handle nothing can reach, reclaimable only by the post retention
+    window, which an operator is free to set to 0.
+
+    Bulk DELETE rather than loading every post to delete it one by one: a busy
+    channel holds hundreds of thousands of rows, and materialising them to
+    delete them is the same shape that OOM-killed the worker on staging. That
+    is also why cached thumbnails are left to the thumb cache's own size cap —
+    clearing them needs a post id each, which is exactly the fetch this avoids.
+
+    **The corpus is keyed by name and the Channel by id, so a name shared with
+    a surviving Channel keeps its corpus.** `Channel.name` carries no unique
+    constraint and `apply_channel_fields` lets a caller rewrite it, so two rows
+    can name the same handle; deleting posts by name would then destroy the
+    still-followed row's entire corpus from a background job with nobody
+    watching. Rare, silent, unrecoverable — the three properties that make a
+    check worth its query.
+
+    Returns the number of Posts deleted. Does **not** commit, and does not
+    touch the avatar on disk: the caller commits, and only then is the row
+    provably gone. See `_collect_unfollowed_channels`.
+    """
+    ch = session.get(Channel, channel_id)
+    if not ch:
+        return 0
+
+    shares_name = session.exec(
+        select(Channel.id).where(Channel.name == ch.name, Channel.id != ch.id).limit(1)
+    ).first()
+    if shares_name is None:
+        session.execute(
+            sa_delete(PostEmbedding).where(col(PostEmbedding.channel_name) == ch.name)
+        )
+        session.execute(
+            sa_delete(PostTranslation).where(
+                col(PostTranslation.channel_name) == ch.name
+            )
+        )
+        clear_channel_sync_state(session, ch.name)
+        result = session.execute(
+            sa_delete(Post).where(col(Post.channel_name) == ch.name)
+        )
+        deleted = cast(Any, result).rowcount or 0
+    else:
+        deleted = 0
+
+    session.delete(ch)
+    return deleted
 
 
 def get_channel_stats(session: Session, channel_id: str) -> dict[str, Any]:

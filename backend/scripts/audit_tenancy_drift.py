@@ -17,10 +17,12 @@ cause it, against a live database, before anything is enforced:
 * **Orphan owners.** A `user_id` naming an account that no longer exists. The
   TG tables have no foreign key to `user.id`, so a deleted account leaves its
   rows behind pointing at nothing; nothing has ever noticed.
-* **Channels nobody follows.** After the backfill this should be zero. Until
-  ticket 05 splits unfollow from delete there is no legitimate way to reach it,
-  so a non-zero count means the backfill has not run or a creation path skipped
-  its dual-write.
+* **Channels nobody follows.** This was drift until ticket 05: with no unfollow,
+  the only way to reach zero followers was a backfill that had not run or a
+  creation path that skipped its dual-write. Unfollow made it a legitimate
+  state — the one retention collects — so it is now reported as a queue depth
+  and **not** counted as a finding. A count that stays high across retention
+  runs is still worth looking at; a count that is merely non-zero is not.
 * **Unowned settings.** `tg_app_settings` rows with no owner, which ticket 06
   splits into a global table and a per-user one. A key that is genuinely global
   is not drift — it is why that ticket exists — so this counts them and does not
@@ -71,6 +73,20 @@ def _count(session: Session, statement) -> int:
     return session.exec(statement).one()
 
 
+#: Reported by the audit but not drift. `channels_awaiting_collection` counts
+#: Channels nobody follows, which was impossible before ticket 05 and is now
+#: simply retention's queue. It stays in the returned dict so the count is
+#: assertable, and out of the strict gate so a healthy database still exits 0 —
+#: a key that is merely printed cannot be tested in either direction.
+AWAITING_COLLECTION = "channels_awaiting_collection"
+NON_DRIFT_KEYS = frozenset({AWAITING_COLLECTION})
+
+
+def drift_only(findings: dict[str, int]) -> dict[str, int]:
+    """The findings that actually mean something is wrong."""
+    return {k: v for k, v in findings.items() if k not in NON_DRIFT_KEYS}
+
+
 def audit(*, verbose: bool = False) -> dict[str, int]:
     """Count drift. Returns a flat dict; prints a report."""
     findings: dict[str, int] = {}
@@ -108,9 +124,15 @@ def audit(*, verbose: bool = False) -> dict[str, int]:
         orphan_follows = orphan_follow_channel_ids(session)
 
         print(f"  channels={channels} follows={follows}")
-        print(f"  channels_with_no_follow={len(unfollowed)}")
+        # Reported, but not drift since ticket 05 — see the module docstring.
+        # `--strict` would otherwise fail on a healthy database in the window
+        # between a removal and the next retention run.
+        print(
+            f"  channels_awaiting_collection={len(unfollowed)}  "
+            "(retention collects these)"
+        )
         if unfollowed:
-            findings["channels_with_no_follow"] = len(unfollowed)
+            findings[AWAITING_COLLECTION] = len(unfollowed)
             print(f"    e.g. {unfollowed[:10]}")
         if orphan_follows:
             # The foreign key makes this impossible, so a hit here means the
@@ -130,9 +152,10 @@ def audit(*, verbose: bool = False) -> dict[str, int]:
             findings["settings_with_no_owner"] = unowned
 
     print("== summary ==")
-    if findings:
-        for key in sorted(findings):
-            print(f"  {key}={findings[key]}")
+    drift = drift_only(findings)
+    if drift:
+        for key in sorted(drift):
+            print(f"  {key}={drift[key]}")
     else:
         print("  no drift")
     return findings
@@ -153,7 +176,7 @@ def main() -> None:
     args = parser.parse_args()
 
     findings = audit(verbose=args.verbose)
-    if args.strict and findings:
+    if args.strict and drift_only(findings):
         sys.exit(1)
 
 
