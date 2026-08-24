@@ -1,3 +1,6 @@
+import { queryClient } from "@/lib/queryClient"
+import { TOKEN_STORAGE_KEY } from "@/lib/storage/scoped"
+
 export const API_BASE = import.meta.env.VITE_API_URL || ""
 const API_KEY = import.meta.env.VITE_API_KEY || ""
 
@@ -31,7 +34,7 @@ export function headers(json = true): HeadersInit {
   const h: Record<string, string> = {}
   if (json) h["Content-Type"] = "application/json"
   if (API_KEY) h["X-API-Key"] = API_KEY
-  const token = localStorage.getItem("access_token")
+  const token = localStorage.getItem(TOKEN_STORAGE_KEY)
   if (token) h.Authorization = `Bearer ${token}`
   return h
 }
@@ -44,9 +47,21 @@ export function isAuthFailure(status: number, detail: string): boolean {
   )
 }
 
+/**
+ * Drop a session the server has stopped accepting.
+ *
+ * The `queryClient.clear()` is not decoration. This used to rely on the hard
+ * `window.location.href` below to discard the previous account's cached
+ * channels, posts and logs — which works, but only on the branch that takes it:
+ * a session expiring while the operator is already sitting on `/login` left the
+ * whole cache intact. Clearing explicitly makes it true on both branches, and
+ * stops the hard navigation from being load-bearing for something it never
+ * mentions.
+ */
 export function clearStaleSession(): void {
-  if (!localStorage.getItem("access_token")) return
-  localStorage.removeItem("access_token")
+  if (!localStorage.getItem(TOKEN_STORAGE_KEY)) return
+  localStorage.removeItem(TOKEN_STORAGE_KEY)
+  queryClient.clear()
   if (!window.location.pathname.startsWith("/login")) {
     window.location.href = "/login"
   }

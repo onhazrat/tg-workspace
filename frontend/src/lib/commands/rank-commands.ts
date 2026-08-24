@@ -1,3 +1,4 @@
+import { scopedStorage } from "@/lib/storage/scoped"
 import type { AffinityEntry, CommandDef, RankedCommand } from "./types"
 
 export const AFFINITY_STORAGE_KEY = "commandPaletteSearchAffinity"
@@ -134,7 +135,7 @@ export function filterAndRank(
 export function loadAffinityEntries(): AffinityEntry[] {
   if (typeof window === "undefined") return []
   try {
-    const raw = localStorage.getItem(AFFINITY_STORAGE_KEY)
+    const raw = scopedStorage.getItem(AFFINITY_STORAGE_KEY)
     if (!raw) return []
     const parsed = JSON.parse(raw) as AffinityEntry[]
     return Array.isArray(parsed) ? parsed : []
@@ -145,7 +146,7 @@ export function loadAffinityEntries(): AffinityEntry[] {
 
 export function saveAffinityEntries(entries: AffinityEntry[]): void {
   if (typeof window === "undefined") return
-  localStorage.setItem(AFFINITY_STORAGE_KEY, JSON.stringify(entries))
+  scopedStorage.setItem(AFFINITY_STORAGE_KEY, JSON.stringify(entries))
 }
 
 export function recordAffinityPick(

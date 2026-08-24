@@ -43,6 +43,7 @@ import type {
   EntityFlowType,
 } from "@/lib/commands/types"
 import { restartTorService, rotateTorIpNow } from "@/lib/network/tor-actions"
+import { scopedStorage } from "@/lib/storage/scoped"
 import { deleteSummary } from "@/lib/summaries/store"
 import type { Channel, Summary } from "@/types"
 
@@ -180,7 +181,7 @@ export function buildExtendedCommands(): CommandDef[] {
         min: 1,
         integer: true,
         getValue: () => {
-          const saved = localStorage.getItem("channelGrid_trimCount")
+          const saved = scopedStorage.getItem("channelGrid_trimCount")
           return saved && Number.parseInt(saved, 10) > 0
             ? Number.parseInt(saved, 10)
             : ""
@@ -199,7 +200,7 @@ export function buildExtendedCommands(): CommandDef[] {
             setSelectedChannels: (next) => ctx.setSelectedChannels(next),
           })
           if (Number.isFinite(count) && count >= 1) {
-            localStorage.setItem("channelGrid_trimCount", String(count))
+            scopedStorage.setItem("channelGrid_trimCount", String(count))
           }
         },
       },

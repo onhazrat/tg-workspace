@@ -1,5 +1,6 @@
 import { test as setup } from "@playwright/test"
 import { firstSuperuser, firstSuperuserPassword } from "./config.ts"
+import { seedScopedStorage } from "./utils/scoped-storage.ts"
 
 const authFile = "playwright/.auth/user.json"
 
@@ -9,9 +10,8 @@ setup("authenticate", async ({ page }) => {
   await page.getByTestId("password-input").fill(firstSuperuserPassword)
   await page.getByRole("button", { name: "Log In" }).click()
   await page.waitForURL(/\/summarizer/)
-  await page.evaluate(() => {
-    localStorage.setItem("hasSeenTour", "true")
-    localStorage.setItem("selectedChannels", "[]")
-  })
+  // Namespaced, so the app actually reads them back — and seeded *after* the
+  // login, because the namespace is derived from the token the login issued.
+  await seedScopedStorage(page, { hasSeenTour: "true", selectedChannels: "[]" })
   await page.context().storageState({ path: authFile })
 })

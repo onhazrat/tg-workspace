@@ -216,16 +216,135 @@ describe("One owner per piece of global state", () => {
    * Two writers to one storage key is the shape of bug where the UI disagrees
    * with itself depending on which control you last touched. Cheap to assert,
    * genuinely annoying to debug.
+   *
+   * Ticket 02 moved the literal into `lib/storage/scoped.ts`, which needed to
+   * name it anyway to keep it *out* of the per-account namespace. Two files
+   * spelling the same key by hand was the weaker version of this guard.
    */
-  it("has a single owner of the theme storage key", () => {
+  it("declares the theme storage key exactly once", () => {
     const owners = sourceFiles(SRC)
-      .filter((f) => readFileSync(f, "utf8").includes("vite-ui-theme"))
+      .filter((f) => !/\.test\.tsx?$/.test(f))
+      .filter((f) => readFileSync(f, "utf8").includes('"vite-ui-theme"'))
       .map(rel)
 
-    // `main.tsx` passes it in, `theme-provider.tsx` defaults it. No third.
-    expect(owners.sort()).toEqual([
-      "src/components/theme-provider.tsx",
-      "src/main.tsx",
-    ])
+    expect(owners).toEqual(["src/lib/storage/scoped.ts"])
+  })
+
+  it("has a single writer of the theme", () => {
+    const writers = sourceFiles(SRC)
+      .filter((f) => !/\.test\.tsx?$/.test(f))
+      .filter((f) => /setItem\(storageKey/.test(readFileSync(f, "utf8")))
+      .map(rel)
+
+    expect(writers).toEqual(["src/components/theme-provider.tsx"])
+  })
+})
+
+describe("Ticket 02 — browser storage has four owners, and they are named", () => {
+  /**
+   * Roughly thirty keys — `selectedChannels`, `postFilter_*`, `channelGrid_*`,
+   * `hasSeenTour`, every schema-driven setting — were written under a bare name
+   * with no account in it. Correct for a one-operator deployment; on a shared
+   * machine the second person to sign in inherited the first person's selection,
+   * filters and settings, with nothing on screen saying where any of it came
+   * from.
+   *
+   * `lib/storage/scoped.ts` namespaces them under `u:<userId>:`. That fix is
+   * only as good as its coverage: **one** forgotten `localStorage.setItem` in a
+   * new hook re-opens the leak for that key, silently, and the line looks
+   * exactly like the twelve around it. So the rule is not "namespace your keys",
+   * which nobody can check — it is "do not say `localStorage` at all", which a
+   * regex can.
+   *
+   * The four exceptions each have a reason, recorded in `scoped.ts`:
+   * the storage module itself, the theme provider and the transport (both of
+   * which read a device-scoped key), and the auth hook (which owns the token
+   * every namespace is derived from).
+   */
+  const STORAGE_OWNERS = [
+    "src/api/base.ts",
+    "src/components/theme-provider.tsx",
+    "src/hooks/useAuth.ts",
+    "src/lib/storage/scoped.ts",
+  ]
+
+  /**
+   * Comments discuss `localStorage` constantly and one export document has it
+   * as a field *name*; neither is a storage access. Strip both, then look for
+   * the bare identifier.
+   *
+   * Matching the identifier rather than `localStorage.` is the whole difference
+   * between a guard and a suggestion. `f(localStorage)` and
+   * `Object.keys(localStorage)` are member-access-free, and so was the line this
+   * ticket deleted from `SettingsContext`:
+   * `loadAppSettings(typeof window !== "undefined" ? localStorage : …)`. A guard
+   * that misses the exact pattern the change removed is not guarding anything.
+   */
+  function stripCommentsAndStrings(source: string): string {
+    return source
+      .replace(/\/\*[\s\S]*?\*\//g, "")
+      .replace(/\/\/[^\n]*/g, "")
+      .replace(/"(?:[^"\\\n]|\\.)*"/g, '""')
+      .replace(/'(?:[^'\\\n]|\\.)*'/g, "''")
+      .replace(/`(?:[^`\\]|\\.)*`/g, "``")
+  }
+
+  const ACCESS = /\b(?:localStorage|sessionStorage)\b/
+
+  it("is touched by exactly four modules", () => {
+    const offenders = sourceFiles(SRC)
+      .filter((f) => !/\.test\.tsx?$/.test(f))
+      .filter((f) =>
+        ACCESS.test(stripCommentsAndStrings(readFileSync(f, "utf8"))),
+      )
+      .map(rel)
+
+    expect(
+      offenders.sort(),
+      "Browser storage is per-account now (lib/storage/scoped.ts). Use " +
+        "`scopedStorage` instead of `localStorage`, or add the module here " +
+        "with the reason its key belongs to the device rather than the account.",
+    ).toEqual(STORAGE_OWNERS)
+  })
+
+  /**
+   * The other half of "leaves nothing behind". Removing the token used to be
+   * the whole of `logout()`, so every channel, post and summary the previous
+   * person loaded stayed in the query cache for the next one to read.
+   */
+  it("clears the query cache on logout", () => {
+    const src = readFileSync(join(SRC, "hooks", "useAuth.ts"), "utf8")
+    const logout = /const logout = \(\) => \{[\s\S]*?\n {2}\}/.exec(src)?.[0]
+
+    expect(logout).toBeDefined()
+    expect(logout).toContain("queryClient.clear()")
+  })
+
+  /** And on a session the server rejected, which is the same problem. */
+  it("clears the query cache when a stale session is dropped", () => {
+    const src = readFileSync(join(SRC, "api", "base.ts"), "utf8")
+    const clear = /export function clearStaleSession[\s\S]*?\n\}/.exec(src)?.[0]
+
+    expect(clear).toBeDefined()
+    expect(clear).toContain("queryClient.clear()")
+  })
+
+  /**
+   * Every entry here is a key that survives a sign-out and is readable by the
+   * next account, so the set is asserted exactly: a third one has to be argued
+   * for in a PR, not slipped in beside two that already look harmless.
+   */
+  it("keeps the device-scoped list to the two keys that earned it", () => {
+    const src = readFileSync(join(SRC, "lib", "storage", "scoped.ts"), "utf8")
+    const list =
+      /DEVICE_SCOPED_KEYS: readonly string\[\] = \[([\s\S]*?)\]/.exec(src)?.[1]
+
+    expect(list).toBeDefined()
+    const entries = (list ?? "")
+      .split(",")
+      .map((e) => e.trim())
+      .filter(Boolean)
+
+    expect(entries).toEqual(["TOKEN_STORAGE_KEY", "THEME_STORAGE_KEY"])
   })
 })

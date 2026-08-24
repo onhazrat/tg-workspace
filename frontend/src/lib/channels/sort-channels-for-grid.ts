@@ -1,3 +1,4 @@
+import { scopedStorage } from "@/lib/storage/scoped"
 import { parseSubscriberCount } from "@/lib/subscriber-count"
 import type { Channel, ChannelStats, Post } from "@/types"
 
@@ -35,8 +36,8 @@ export function getChannelGridSortFromStorage(): {
   sortBy: ChannelGridSortOption
   sortDirection: "asc" | "desc"
 } {
-  const savedSortBy = localStorage.getItem("channelGrid_sortBy")
-  const savedSortDirection = localStorage.getItem("channelGrid_sortDirection")
+  const savedSortBy = scopedStorage.getItem("channelGrid_sortBy")
+  const savedSortDirection = scopedStorage.getItem("channelGrid_sortDirection")
   const sortBy = (savedSortBy as ChannelGridSortOption) || DEFAULT_SORT_BY
   const sortDirection =
     (savedSortDirection as "asc" | "desc") || DEFAULT_SORT_DIRECTION

@@ -3,6 +3,11 @@ import { expect, test } from "@playwright/test"
 
 import { WORKSPACE_TABS } from "../src/constants"
 import {
+  clearScopedStorage,
+  readScopedStorage,
+  seedScopedStorage,
+} from "./utils/scoped-storage.ts"
+import {
   seedBulkChannels,
   seedPartialHistoryChannel,
   seedTestChannel,
@@ -328,14 +333,14 @@ async function mockDiscoverForwardPosts(
     })
   })
 
-  await page.evaluate((ts) => {
-    localStorage.removeItem("sync_etag_posts")
-    localStorage.setItem("startDateTs", String(ts - 14 * 24 * 60 * 60 * 1000))
-    localStorage.setItem("endDateTs", String(ts + 60_000))
-    localStorage.setItem("postFilter_maxPerChannel", "0")
+  await clearScopedStorage(page, ["sync_etag_posts"])
+  await seedScopedStorage(page, {
+    startDateTs: String(now - 14 * 24 * 60 * 60 * 1000),
+    endDateTs: String(now + 60_000),
+    postFilter_maxPerChannel: "0",
     // Persisted across specs; a leftover media filter would empty the scope.
-    localStorage.setItem("postFilter_media", "all")
-  }, now)
+    postFilter_media: "all",
+  })
 }
 
 function completedFollowJobStatus(followJobId: string, channelNames: string[]) {
@@ -424,8 +429,8 @@ async function pinSelectionToCarrier(page: Page, carrierName: string) {
   // channels, and the spec fails with a "no posts in scope" far from the cause.
   // Retry until the pin sticks rather than asserting a racy first attempt.
   const expected = JSON.stringify([carrierName])
-  const readSelection = () =>
-    page.evaluate(() => localStorage.getItem("selectedChannels") ?? "[]")
+  const readSelection = async () =>
+    (await readScopedStorage(page, "selectedChannels")) ?? "[]"
 
   for (let attempt = 0; attempt < 3; attempt += 1) {
     if ((await readSelection()) === expected) break
@@ -440,9 +445,7 @@ async function pinSelectionToCarrier(page: Page, carrierName: string) {
   await expect.poll(readSelection, { timeout: 15_000 }).toBe(expected)
 
   // Force a fresh mock pull on next mount (avoid IDB pollution from sync jobs).
-  await page.evaluate(() => {
-    localStorage.removeItem("sync_etag_posts")
-  })
+  await clearScopedStorage(page, ["sync_etag_posts"])
 }
 
 async function openDiscoverWithForwards(
@@ -1753,9 +1756,7 @@ test.describe("command palette keyboard", () => {
       await route.fulfill({ json })
     })
 
-    await page.evaluate(() => {
-      localStorage.removeItem("sync_etag_posts")
-    })
+    await clearScopedStorage(page, ["sync_etag_posts"])
 
     await selectChannelsKeyboard(page, [channelName])
     await gotoSummarizer(page, "posts")
@@ -1764,7 +1765,7 @@ test.describe("command palette keyboard", () => {
     await page.getByTestId("post-media-filter-photo").click()
 
     await expect
-      .poll(() => page.evaluate(() => localStorage.getItem("postFilter_media")))
+      .poll(() => readScopedStorage(page, "postFilter_media"))
       .toBe("photo")
 
     await expect(page.getByTestId("post-card-media-badge-photo")).toBeVisible()
@@ -1847,11 +1848,11 @@ test.describe("command palette keyboard", () => {
       })
     })
 
-    await page.evaluate(() => {
-      localStorage.setItem("channelGrid_sortBy", "activity_rate")
-      localStorage.setItem("channelGrid_sortDirection", "asc")
-      localStorage.removeItem("sync_etag_channels")
+    await seedScopedStorage(page, {
+      channelGrid_sortBy: "activity_rate",
+      channelGrid_sortDirection: "asc",
     })
+    await clearScopedStorage(page, ["sync_etag_channels"])
 
     await page.reload()
     await expect(page.getByTestId("command-palette-button")).toBeVisible()

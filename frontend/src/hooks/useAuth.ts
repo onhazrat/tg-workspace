@@ -9,12 +9,11 @@ import {
   usersReadUserMe,
   usersRegisterUser,
 } from "@/client"
+import { hasSession, TOKEN_STORAGE_KEY } from "@/lib/storage/scoped"
 import { handleError } from "@/utils"
 import useCustomToast from "./useCustomToast"
 
-const isLoggedIn = () => {
-  return localStorage.getItem("access_token") !== null
-}
+const isLoggedIn = () => hasSession()
 
 const useAuth = () => {
   const navigate = useNavigate()
@@ -49,7 +48,7 @@ const useAuth = () => {
 
   const login = async (data: AccessToken) => {
     const response = await loginLoginAccessToken({ body: data })
-    localStorage.setItem("access_token", response.access_token)
+    localStorage.setItem(TOKEN_STORAGE_KEY, response.access_token)
   }
 
   const loginMutation = useMutation({
@@ -60,8 +59,22 @@ const useAuth = () => {
     onError: handleError.bind(showErrorToast),
   })
 
+  /**
+   * Sign out, leaving nothing of this account behind on the machine.
+   *
+   * Removing the token used to be the whole of it, which meant every channel,
+   * post, summary and log the previous person had loaded stayed in the query
+   * cache, readable by the next one until a refetch happened to replace it.
+   * `clear()` is the second half, and it has to run before the navigation so no
+   * in-flight render can re-read the old data.
+   *
+   * Stored *preferences* are not cleared here on purpose — they are namespaced
+   * per account (`lib/storage/scoped.ts`), so they are already unreachable to
+   * anyone else, and dropping them would mean signing back in to a reset app.
+   */
   const logout = () => {
-    localStorage.removeItem("access_token")
+    localStorage.removeItem(TOKEN_STORAGE_KEY)
+    queryClient.clear()
     navigate({ to: "/login" })
   }
 

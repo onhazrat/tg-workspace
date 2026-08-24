@@ -5,6 +5,7 @@ import { useState } from "react"
 import { toast } from "sonner"
 import { useDBStats, useLoadDBStats } from "@/hooks/useDBStats"
 import { useInvalidateSummaries } from "@/hooks/useSummaries"
+import { scopedStorage } from "@/lib/storage/scoped"
 import { api } from "../api"
 import { useData } from "../contexts/DataContext"
 import { useSettings } from "../contexts/SettingsContext"
@@ -66,7 +67,7 @@ export const DatabaseManagement: React.FC<{
     `tableSizesLastCalculated:${source}`
 
   const readCachedSizes = (source: TableSizeSource): TableSizeRow[] | null => {
-    const cached = localStorage.getItem(tableSizesCacheKey(source))
+    const cached = scopedStorage.getItem(tableSizesCacheKey(source))
     if (!cached) return null
     try {
       return JSON.parse(cached)
@@ -75,7 +76,7 @@ export const DatabaseManagement: React.FC<{
     }
   }
   const readCachedLastCalculated = (source: TableSizeSource): number | null => {
-    const cached = localStorage.getItem(tableSizesLastCalculatedKey(source))
+    const cached = scopedStorage.getItem(tableSizesLastCalculatedKey(source))
     return cached ? parseInt(cached, 10) : null
   }
 
@@ -106,11 +107,11 @@ export const DatabaseManagement: React.FC<{
       setSelectedTablesForExport(new Set(sizes.map((s) => s.name)))
       const now = Date.now()
       setTableSizesLastCalculated(now)
-      localStorage.setItem(
+      scopedStorage.setItem(
         tableSizesCacheKey(sizeSource),
         JSON.stringify(sizes),
       )
-      localStorage.setItem(
+      scopedStorage.setItem(
         tableSizesLastCalculatedKey(sizeSource),
         now.toString(),
       )

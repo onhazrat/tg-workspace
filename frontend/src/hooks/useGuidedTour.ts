@@ -1,6 +1,7 @@
 import { driver } from "driver.js"
 import { useCallback, useEffect, useState } from "react"
 import "driver.js/dist/driver.css"
+import { scopedStorage } from "@/lib/storage/scoped"
 import { useData } from "../contexts/DataContext"
 import { useUI } from "../contexts/UIContext"
 
@@ -9,7 +10,7 @@ export const useGuidedTour = () => {
   const { setActiveTab } = useUI()
   const [hasSeenTour, setHasSeenTour] = useState(() => {
     if (typeof window !== "undefined") {
-      return localStorage.getItem("hasSeenTour") === "true"
+      return scopedStorage.getItem("hasSeenTour") === "true"
     }
     return false
   })
@@ -27,7 +28,7 @@ export const useGuidedTour = () => {
       },
       onDestroyStarted: () => {
         if (!hasSeenTour) {
-          localStorage.setItem("hasSeenTour", "true")
+          scopedStorage.setItem("hasSeenTour", "true")
           setHasSeenTour(true)
         }
         driverObj.destroy()

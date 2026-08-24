@@ -6,6 +6,8 @@ import {
   useState,
 } from "react"
 
+import { THEME_STORAGE_KEY } from "@/lib/storage/scoped"
+
 export type Theme = "dark" | "light" | "system"
 
 const THEME_CYCLE: Theme[] = ["light", "dark", "system"]
@@ -38,7 +40,7 @@ const ThemeProviderContext = createContext<ThemeProviderState>(initialState)
 export function ThemeProvider({
   children,
   defaultTheme = "system",
-  storageKey = "vite-ui-theme",
+  storageKey = THEME_STORAGE_KEY,
   ...props
 }: ThemeProviderProps) {
   const [theme, setTheme] = useState<Theme>(

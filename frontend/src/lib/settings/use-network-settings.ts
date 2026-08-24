@@ -3,6 +3,7 @@ import {
   loadNetworkSettings,
   saveNetworkSettings,
 } from "@/lib/settings/network-settings-store"
+import { hasSession, scopedStorage } from "@/lib/storage/scoped"
 import { parseProxyList } from "@/lib/syncSettings"
 import {
   buildNetworkSavePayload,
@@ -15,7 +16,7 @@ import {
 
 /**
  * Server-backed network/proxy/Tor settings: hydrates ONCE on mount (merging
- * legacy localStorage "proxyEnabled"/"torEnabled" values and writing them back),
+ * legacy browser-stored "proxyEnabled"/"torEnabled" values and writing them back),
  * then debounce-saves any change 400ms after it settles.
  */
 export function useNetworkSettings(): {
@@ -58,19 +59,19 @@ export function useNetworkSettings(): {
   // every tor* state change because of its effect deps).
   useEffect(() => {
     if (typeof window === "undefined") return
-    localStorage.removeItem("proxyUrls")
-    localStorage.removeItem("torControlPassword")
+    scopedStorage.removeItem("proxyUrls")
+    scopedStorage.removeItem("torControlPassword")
 
-    if (!localStorage.getItem("access_token")) return
+    if (!hasSession()) return
 
     loadNetworkSettings()
       .then((value) => {
         const legacy: Record<string, unknown> = {}
-        const legacyProxyEnabled = localStorage.getItem("proxyEnabled")
+        const legacyProxyEnabled = scopedStorage.getItem("proxyEnabled")
         if (legacyProxyEnabled !== null && value.proxyEnabled === undefined) {
           legacy.proxyEnabled = legacyProxyEnabled === "true"
         }
-        const legacyTorEnabled = localStorage.getItem("torEnabled")
+        const legacyTorEnabled = scopedStorage.getItem("torEnabled")
         if (legacyTorEnabled !== null && value.torEnabled === undefined) {
           legacy.torEnabled = legacyTorEnabled === "true"
         }
@@ -98,7 +99,7 @@ export function useNetworkSettings(): {
 
   // Debounced save of any writable field change (post-hydration only).
   useEffect(() => {
-    if (!hydrated.current || !localStorage.getItem("access_token")) return
+    if (!hydrated.current || !hasSession()) return
     if (saveTimer.current) clearTimeout(saveTimer.current)
     saveTimer.current = setTimeout(() => {
       saveNetworkSettings(buildNetworkSavePayload(network)).catch(console.error)

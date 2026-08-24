@@ -9,6 +9,7 @@ import {
   useMemo,
   useState,
 } from "react"
+import { scopedStorage } from "@/lib/storage/scoped"
 import {
   setChannelStatsInCache,
   setChannelsInCache,
@@ -54,7 +55,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({
 
   const [selectedChannels, setSelectedChannels] = useState<Set<string>>(() => {
     if (typeof window !== "undefined") {
-      const saved = localStorage.getItem("selectedChannels")
+      const saved = scopedStorage.getItem("selectedChannels")
       try {
         return saved ? new Set(JSON.parse(saved)) : new Set()
       } catch {
@@ -66,7 +67,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({
 
   const [prevChannelNames, setPrevChannelNames] = useState<Set<string>>(() => {
     if (typeof window !== "undefined") {
-      const saved = localStorage.getItem("prevChannelNames")
+      const saved = scopedStorage.getItem("prevChannelNames")
       try {
         return saved ? new Set(JSON.parse(saved)) : new Set()
       } catch {
@@ -77,14 +78,14 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({
   })
 
   useEffect(() => {
-    localStorage.setItem(
+    scopedStorage.setItem(
       "selectedChannels",
       JSON.stringify(Array.from(selectedChannels)),
     )
   }, [selectedChannels])
 
   useEffect(() => {
-    localStorage.setItem(
+    scopedStorage.setItem(
       "prevChannelNames",
       JSON.stringify(Array.from(prevChannelNames)),
     )

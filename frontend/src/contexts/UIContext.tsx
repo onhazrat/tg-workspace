@@ -6,6 +6,7 @@ import {
   useEffect,
   useState,
 } from "react"
+import { scopedStorage } from "@/lib/storage/scoped"
 import {
   useChatSessionParam,
   useSummaryParam,
@@ -76,19 +77,19 @@ export const UIProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [includeChannelBioInPrompt, setIncludeChannelBioInPrompt] =
     useState<boolean>(() => {
       if (typeof window === "undefined") return false
-      return localStorage.getItem("prompt_includeChannelBio") === "true"
+      return scopedStorage.getItem("prompt_includeChannelBio") === "true"
     })
   const [includeChannelTagsInPrompt, setIncludeChannelTagsInPrompt] =
     useState<boolean>(() => {
       if (typeof window === "undefined") return false
-      return localStorage.getItem("prompt_includeChannelTags") === "true"
+      return scopedStorage.getItem("prompt_includeChannelTags") === "true"
     })
 
   const [startDate, setStartDateInternal] = useState<number>(() => {
     if (typeof window !== "undefined") {
-      const saved = localStorage.getItem("startDateTs")
+      const saved = scopedStorage.getItem("startDateTs")
       if (saved && !Number.isNaN(Number(saved))) return Number(saved)
-      const oldSaved = localStorage.getItem("startDate")
+      const oldSaved = scopedStorage.getItem("startDate")
       if (oldSaved) {
         const ts = new Date(oldSaved).getTime()
         if (!Number.isNaN(ts)) return ts
@@ -99,9 +100,9 @@ export const UIProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
 
   const [endDate, setEndDateInternal] = useState<number>(() => {
     if (typeof window !== "undefined") {
-      const saved = localStorage.getItem("endDateTs")
+      const saved = scopedStorage.getItem("endDateTs")
       if (saved && !Number.isNaN(Number(saved))) return Number(saved)
-      const oldSaved = localStorage.getItem("endDate")
+      const oldSaved = scopedStorage.getItem("endDate")
       if (oldSaved) {
         const ts = new Date(oldSaved).getTime()
         if (!Number.isNaN(ts)) return ts
@@ -158,19 +159,19 @@ export const UIProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   }
 
   useEffect(() => {
-    localStorage.setItem("startDateTs", startDate.toString())
-    localStorage.setItem("endDateTs", endDate.toString())
+    scopedStorage.setItem("startDateTs", startDate.toString())
+    scopedStorage.setItem("endDateTs", endDate.toString())
   }, [startDate, endDate])
 
   useEffect(() => {
-    localStorage.setItem(
+    scopedStorage.setItem(
       "prompt_includeChannelBio",
       String(includeChannelBioInPrompt),
     )
   }, [includeChannelBioInPrompt])
 
   useEffect(() => {
-    localStorage.setItem(
+    scopedStorage.setItem(
       "prompt_includeChannelTags",
       String(includeChannelTagsInPrompt),
     )

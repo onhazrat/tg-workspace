@@ -1,6 +1,7 @@
 import { useCallback, useMemo, useState } from "react"
 
 import type { CommandDef } from "@/lib/commands/types"
+import { scopedStorage } from "@/lib/storage/scoped"
 
 const RECENTS_STORAGE_KEY = "commandPaletteRecents"
 const RECENTS_MAX_ENTRIES = 500
@@ -13,7 +14,7 @@ export interface RecentCommandEntry {
 function loadRecentEntries(): RecentCommandEntry[] {
   if (typeof window === "undefined") return []
   try {
-    const raw = localStorage.getItem(RECENTS_STORAGE_KEY)
+    const raw = scopedStorage.getItem(RECENTS_STORAGE_KEY)
     if (!raw) return []
     const parsed = JSON.parse(raw) as RecentCommandEntry[]
     return Array.isArray(parsed) ? parsed : []
@@ -24,7 +25,7 @@ function loadRecentEntries(): RecentCommandEntry[] {
 
 function saveRecentEntries(entries: RecentCommandEntry[]): void {
   if (typeof window === "undefined") return
-  localStorage.setItem(RECENTS_STORAGE_KEY, JSON.stringify(entries))
+  scopedStorage.setItem(RECENTS_STORAGE_KEY, JSON.stringify(entries))
 }
 
 export function useRecentCommands(commands: CommandDef[]) {

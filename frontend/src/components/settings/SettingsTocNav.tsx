@@ -8,13 +8,14 @@ import {
   type SettingsTocId,
   type SettingsTocNode,
 } from "@/lib/settings/toc"
+import { scopedStorage } from "@/lib/storage/scoped"
 import { cn } from "@/lib/utils"
 
 const EXPAND_STORAGE_KEY = "settings-toc-expanded"
 
 function readStoredExpanded(): Set<SettingsTocId> {
   try {
-    const raw = localStorage.getItem(EXPAND_STORAGE_KEY)
+    const raw = scopedStorage.getItem(EXPAND_STORAGE_KEY)
     if (!raw) return new Set()
     const parsed: unknown = JSON.parse(raw)
     if (!Array.isArray(parsed)) return new Set()
@@ -30,7 +31,7 @@ function readStoredExpanded(): Set<SettingsTocId> {
 
 function writeStoredExpanded(ids: Set<SettingsTocId>) {
   try {
-    localStorage.setItem(EXPAND_STORAGE_KEY, JSON.stringify([...ids]))
+    scopedStorage.setItem(EXPAND_STORAGE_KEY, JSON.stringify([...ids]))
   } catch {
     // session-local expand state is enough if storage is unavailable
   }

@@ -24,16 +24,17 @@ import type { GlobalStartTimeMode, GlobalStartTimeValue } from "@/types"
 export type BackendSection = "sync" | "retention" | "translation"
 
 export interface SettingSpec<T> {
-  /** localStorage key — must stay identical to the historical key for back-compat. */
+  /** Storage key — must stay identical to the historical key for back-compat.
+   *  `scopedStorage` prefixes it per account; the name here is the unprefixed one. */
   storageKey: string
-  /** Older localStorage keys consulted when the primary key is absent or invalid. */
+  /** Older storage keys consulted when the primary key is absent or invalid. */
   legacyStorageKeys?: readonly string[]
   /** Older server payload keys consulted when the primary key is absent or invalid. */
   serverLegacyKeys?: readonly string[]
-  /** Validates decoded localStorage values and raw server values alike. */
+  /** Validates decoded stored values and raw server values alike. */
   schema: z.ZodType<T>
   defaultValue: T
-  /** Raw localStorage string -> candidate value (then validated by `schema`). */
+  /** Raw stored string -> candidate value (then validated by `schema`). */
   decode: (raw: string) => unknown
   encode: (value: T) => string
   /** Backend section this key is mirrored to, if any. */
@@ -172,9 +173,9 @@ const globalStartTimeValueSetting: SettingSpec<GlobalStartTimeValue> = {
   section: "sync",
 }
 
-// Persistence note: historically only some of these keys had a persist-to-localStorage
+// Persistence note: historically only some of these keys had a persist-to-storage
 // effect; the store now persists EVERY key on change (benign unification — the
-// backend-synced keys still hydrate from the server, localStorage is a fallback).
+// backend-synced keys still hydrate from the server, browser storage is a fallback).
 export const appSettingsSpec = {
   aiLanguage: oneOfSetting("aiLanguage", LANGUAGES, DEFAULT_AI_LANGUAGE),
   selectedModel: oneOfSetting("selectedModel", MODEL_IDS, DEFAULT_MODEL),

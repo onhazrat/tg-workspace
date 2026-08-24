@@ -1,7 +1,7 @@
 /**
  * The Posts tab's filter state and what survives a reload (G1).
  *
- * Four of these ten values persist to `localStorage` by hand, outside
+ * Four of these ten values persist to browser storage by hand, outside
  * `lib/settings/schema.ts`. That is deliberate (see the hook's docstring) but
  * it means the parse-and-fall-back logic is hand-rolled, and hand-rolled
  * hydration is where a bad stored value turns into `NaN` posts per channel or
@@ -18,6 +18,12 @@ import {
   POST_FILTER_STORAGE_KEYS,
   usePostFilters,
 } from "@/hooks/usePostFilters"
+import { scopedKey, scopedStorage } from "@/lib/storage/scoped"
+
+// Ticket 02: these four keys live under the signed-in account's namespace, so
+// the test has to read them the way the hook writes them. Nothing here signs
+// in, which puts both sides in `u:anon:` — the namespacing itself is covered
+// once, in `lib/storage/scoped.test.ts`, rather than again in every hook.
 
 beforeEach(() => {
   localStorage.clear()
@@ -35,10 +41,10 @@ describe("usePostFilters — hydration", () => {
   })
 
   test("reads back what was stored", () => {
-    localStorage.setItem(POST_FILTER_STORAGE_KEYS.maxPerChannel, "25")
-    localStorage.setItem(POST_FILTER_STORAGE_KEYS.maxPerChannelMode, "random")
-    localStorage.setItem(POST_FILTER_STORAGE_KEYS.sortOrder, "channel_time")
-    localStorage.setItem(POST_FILTER_STORAGE_KEYS.media, "photo")
+    scopedStorage.setItem(POST_FILTER_STORAGE_KEYS.maxPerChannel, "25")
+    scopedStorage.setItem(POST_FILTER_STORAGE_KEYS.maxPerChannelMode, "random")
+    scopedStorage.setItem(POST_FILTER_STORAGE_KEYS.sortOrder, "channel_time")
+    scopedStorage.setItem(POST_FILTER_STORAGE_KEYS.media, "photo")
 
     const { result } = renderHook(() => usePostFilters())
 
@@ -50,7 +56,10 @@ describe("usePostFilters — hydration", () => {
 
   test("a non-numeric cap falls back to 0 rather than NaN", () => {
     // `NaN` would reach the feed as `maxPerChannel: NaN` and 422.
-    localStorage.setItem(POST_FILTER_STORAGE_KEYS.maxPerChannel, "not a number")
+    scopedStorage.setItem(
+      POST_FILTER_STORAGE_KEYS.maxPerChannel,
+      "not a number",
+    )
 
     expect(
       renderHook(() => usePostFilters()).result.current.maxPostsPerChannel,
@@ -58,7 +67,7 @@ describe("usePostFilters — hydration", () => {
   })
 
   test("a negative cap falls back to 0", () => {
-    localStorage.setItem(POST_FILTER_STORAGE_KEYS.maxPerChannel, "-5")
+    scopedStorage.setItem(POST_FILTER_STORAGE_KEYS.maxPerChannel, "-5")
 
     expect(
       renderHook(() => usePostFilters()).result.current.maxPostsPerChannel,
@@ -66,7 +75,7 @@ describe("usePostFilters — hydration", () => {
   })
 
   test("an unknown cap mode falls back to latest", () => {
-    localStorage.setItem(
+    scopedStorage.setItem(
       POST_FILTER_STORAGE_KEYS.maxPerChannelMode,
       "alphabetical",
     )
@@ -78,7 +87,7 @@ describe("usePostFilters — hydration", () => {
 
   test("an unknown sort falls back to time", () => {
     // The server's FEED_SORTS is {time, channel_time}; anything else is a 422.
-    localStorage.setItem(POST_FILTER_STORAGE_KEYS.sortOrder, "relevance")
+    scopedStorage.setItem(POST_FILTER_STORAGE_KEYS.sortOrder, "relevance")
 
     expect(
       renderHook(() => usePostFilters()).result.current.postSortOrder,
@@ -86,7 +95,7 @@ describe("usePostFilters — hydration", () => {
   })
 
   test("an unknown media filter falls back to all", () => {
-    localStorage.setItem(POST_FILTER_STORAGE_KEYS.media, "hologram")
+    scopedStorage.setItem(POST_FILTER_STORAGE_KEYS.media, "hologram")
 
     expect(renderHook(() => usePostFilters()).result.current.mediaFilter).toBe(
       "all",
@@ -105,16 +114,16 @@ describe("usePostFilters — persistence", () => {
       result.current.setMediaFilter("video")
     })
 
-    expect(localStorage.getItem(POST_FILTER_STORAGE_KEYS.maxPerChannel)).toBe(
+    expect(scopedStorage.getItem(POST_FILTER_STORAGE_KEYS.maxPerChannel)).toBe(
       "12",
     )
     expect(
-      localStorage.getItem(POST_FILTER_STORAGE_KEYS.maxPerChannelMode),
+      scopedStorage.getItem(POST_FILTER_STORAGE_KEYS.maxPerChannelMode),
     ).toBe("random")
-    expect(localStorage.getItem(POST_FILTER_STORAGE_KEYS.sortOrder)).toBe(
+    expect(scopedStorage.getItem(POST_FILTER_STORAGE_KEYS.sortOrder)).toBe(
       "channel_time",
     )
-    expect(localStorage.getItem(POST_FILTER_STORAGE_KEYS.media)).toBe("video")
+    expect(scopedStorage.getItem(POST_FILTER_STORAGE_KEYS.media)).toBe("video")
   })
 
   test("searches and the forwarded filter do NOT persist", () => {
@@ -130,8 +139,8 @@ describe("usePostFilters — persistence", () => {
     })
 
     expect(
-      Object.keys(localStorage).filter((k) => k.startsWith("postFilter_")),
-    ).not.toContain("postFilter_forwarded")
+      Object.keys(localStorage).filter((k) => k.includes("postFilter_")),
+    ).not.toContain(scopedKey("postFilter_forwarded"))
     expect(JSON.stringify(localStorage)).not.toContain("crypto")
   })
 

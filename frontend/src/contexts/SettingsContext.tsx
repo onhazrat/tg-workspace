@@ -33,6 +33,7 @@ import {
   sectionValues,
 } from "@/lib/settings/store"
 import { useNetworkSettings } from "@/lib/settings/use-network-settings"
+import { hasSession, scopedStorage } from "@/lib/storage/scoped"
 import { isRTLLanguage } from "@/lib/utils"
 import type { GlobalStartTimeMode, GlobalStartTimeValue } from "@/types"
 
@@ -151,32 +152,31 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({
 }) => {
   const { theme, resolvedTheme, setTheme: setGlobalTheme } = useTheme()
 
-  // One-time migration of the legacy "theme" localStorage key into the provider.
+  // One-time migration of the legacy "theme" storage key into the provider.
   useEffect(() => {
-    const legacy = localStorage.getItem("theme")
+    const legacy = scopedStorage.getItem("theme")
     if (legacy === "light" || legacy === "dark" || legacy === "system") {
       setGlobalTheme(legacy)
-      localStorage.removeItem("theme")
+      scopedStorage.removeItem("theme")
     }
   }, [setGlobalTheme])
 
   const setTheme = (next: Theme) => setGlobalTheme(next)
 
-  // All localStorage-backed settings live in one schema-driven state object.
+  // All browser-persisted settings live in one schema-driven state object,
+  // read through the per-account namespace rather than off bare `localStorage`.
   const [settings, setSettings] = useState<AppSettings>(() =>
-    loadAppSettings(
-      typeof window !== "undefined" ? localStorage : { getItem: () => null },
-    ),
+    loadAppSettings(scopedStorage),
   )
   // Generated once — every setter keeps a stable identity across renders.
   const setters = useMemo(() => createAppSettingSetters(setSettings), [])
 
-  // Persist changed keys to localStorage (all keys on the first run).
+  // Persist changed keys (all of them on the first run).
   const prevSettings = useRef<AppSettings | null>(null)
   useEffect(() => {
     persistAppSettings(
       settings,
-      localStorage,
+      scopedStorage,
       prevSettings.current ?? undefined,
     )
     prevSettings.current = settings
@@ -184,12 +184,12 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({
 
   const { network, setters: networkSetters } = useNetworkSettings()
 
-  // Hydrate backend-synced sections once on mount: merge legacy localStorage
+  // Hydrate backend-synced sections once on mount: merge legacy browser-stored
   // values into the server payloads and write the merge back when needed.
   const appSettingsHydrated = useRef(false)
   useEffect(() => {
     if (typeof window === "undefined") return
-    if (!localStorage.getItem("access_token")) return
+    if (!hasSession()) return
 
     Promise.all([
       api.getSetting("sync"),
@@ -203,7 +203,7 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({
         const translation = translationRow.value ?? {}
         const legacySync: Record<string, unknown> = {}
         const legacyRetention: Record<string, unknown> = {}
-        const legacyInterval = localStorage.getItem("autoSyncInterval")
+        const legacyInterval = scopedStorage.getItem("autoSyncInterval")
         if (
           legacyInterval !== null &&
           sync.regularSyncIntervalMinutes === undefined
@@ -213,7 +213,7 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({
             10,
           )
         }
-        const legacyPostRetention = localStorage.getItem("postRetentionDays")
+        const legacyPostRetention = scopedStorage.getItem("postRetentionDays")
         if (
           legacyPostRetention !== null &&
           retention.postRetentionDays === undefined
@@ -257,8 +257,7 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({
   // Push scheduler-related settings to Postgres for APScheduler jobs (Phase 6).
   useEffect(
     () => {
-      if (!localStorage.getItem("access_token") || !appSettingsHydrated.current)
-        return
+      if (!hasSession() || !appSettingsHydrated.current) return
       api
         .putSetting("sync", buildSectionPayload("sync", settings))
         .catch((err) =>
@@ -270,8 +269,7 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({
 
   useEffect(
     () => {
-      if (!localStorage.getItem("access_token") || !appSettingsHydrated.current)
-        return
+      if (!hasSession() || !appSettingsHydrated.current) return
       api
         .putSetting("retention", buildSectionPayload("retention", settings))
         .catch((err) =>
@@ -283,8 +281,7 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({
 
   useEffect(
     () => {
-      if (!localStorage.getItem("access_token") || !appSettingsHydrated.current)
-        return
+      if (!hasSession() || !appSettingsHydrated.current) return
       api
         .putSetting("translation", buildSectionPayload("translation", settings))
         .catch((err) =>
@@ -296,8 +293,7 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({
 
   // Embeddings toggle maps onto the "embeddings" job rather than a section.
   useEffect(() => {
-    if (!localStorage.getItem("access_token") || !appSettingsHydrated.current)
-      return
+    if (!hasSession() || !appSettingsHydrated.current) return
     api
       .updateJob("embeddings", settings.embeddingsEnabled)
       .catch((err) =>

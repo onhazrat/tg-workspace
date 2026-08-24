@@ -5,6 +5,7 @@ import { createRoot } from "react-dom/client"
 import { configureGeneratedClient } from "@/api/generated-client"
 import { ThemeProvider } from "@/components/theme-provider"
 import { queryClient } from "@/lib/queryClient"
+import { THEME_STORAGE_KEY } from "@/lib/storage/scoped"
 import { routeTree } from "@/routeTree.gen"
 import "./index.css"
 
@@ -65,7 +66,7 @@ declare module "@tanstack/react-router" {
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
-    <ThemeProvider defaultTheme="dark" storageKey="vite-ui-theme">
+    <ThemeProvider defaultTheme="dark" storageKey={THEME_STORAGE_KEY}>
       <QueryClientProvider client={queryClient}>
         <RouterProvider router={router} />
       </QueryClientProvider>

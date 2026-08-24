@@ -10,7 +10,7 @@
  * happens to survive a reload. Folding them in would put every filter tweak
  * through the settings write path and expose them in the settings UI, which is
  * not what they are. The distinction is worth keeping — but the hand-rolled
- * `localStorage` round-trip below is the price, and it is why the parse
+ * browser-storage round-trip below is the price, and it is why the parse
  * fallbacks (`"random" ? … : "latest"`) live here rather than in a zod schema.
  */
 
@@ -24,10 +24,11 @@ import type {
   PostSortOrder,
   PostViewOptions,
 } from "@/lib/posts/post-view"
+import { scopedStorage } from "@/lib/storage/scoped"
 import type { Post } from "@/types"
 import { useDebouncedValue } from "./useDebouncedValue"
 
-/** `localStorage` keys this hook owns. Exported so tests name them once. */
+/** Storage keys this hook owns, before namespacing. Named once, for tests. */
 export const POST_FILTER_STORAGE_KEYS = {
   maxPerChannel: "postFilter_maxPerChannel",
   maxPerChannelMode: "postFilter_maxPerChannelMode",
@@ -72,25 +73,26 @@ export interface PostFilters {
 }
 
 export function readStoredMaxPerChannel(): number {
-  const saved = localStorage.getItem(POST_FILTER_STORAGE_KEYS.maxPerChannel)
+  const saved = scopedStorage.getItem(POST_FILTER_STORAGE_KEYS.maxPerChannel)
   const parsed = saved ? Number.parseInt(saved, 10) : 0
   return Number.isFinite(parsed) && parsed >= 0 ? parsed : 0
 }
 
 export function readStoredMaxPerChannelMode(): MaxPostsPerChannelMode {
-  const saved = localStorage.getItem(POST_FILTER_STORAGE_KEYS.maxPerChannelMode)
+  const saved = scopedStorage.getItem(
+    POST_FILTER_STORAGE_KEYS.maxPerChannelMode,
+  )
   return saved === "random" ? "random" : "latest"
 }
 
 export function readStoredSortOrder(): PostSortOrder {
-  const saved = localStorage.getItem(POST_FILTER_STORAGE_KEYS.sortOrder)
+  const saved = scopedStorage.getItem(POST_FILTER_STORAGE_KEYS.sortOrder)
   return saved === "channel_time" ? "channel_time" : "time"
 }
 
 export function readStoredMediaFilter(): MediaFilterValue {
-  if (typeof localStorage === "undefined") return "all"
   return parseMediaFilterValue(
-    localStorage.getItem(POST_FILTER_STORAGE_KEYS.media),
+    scopedStorage.getItem(POST_FILTER_STORAGE_KEYS.media),
   )
 }
 
@@ -121,25 +123,25 @@ export function usePostFilters(): PostFilters {
     useState<PostSortOrder>(readStoredSortOrder)
 
   useEffect(() => {
-    localStorage.setItem(
+    scopedStorage.setItem(
       POST_FILTER_STORAGE_KEYS.maxPerChannel,
       maxPostsPerChannel.toString(),
     )
   }, [maxPostsPerChannel])
 
   useEffect(() => {
-    localStorage.setItem(
+    scopedStorage.setItem(
       POST_FILTER_STORAGE_KEYS.maxPerChannelMode,
       maxPostsPerChannelMode,
     )
   }, [maxPostsPerChannelMode])
 
   useEffect(() => {
-    localStorage.setItem(POST_FILTER_STORAGE_KEYS.sortOrder, postSortOrder)
+    scopedStorage.setItem(POST_FILTER_STORAGE_KEYS.sortOrder, postSortOrder)
   }, [postSortOrder])
 
   useEffect(() => {
-    localStorage.setItem(POST_FILTER_STORAGE_KEYS.media, mediaFilter)
+    scopedStorage.setItem(POST_FILTER_STORAGE_KEYS.media, mediaFilter)
   }, [mediaFilter])
 
   const debouncedPostSearch = useDebouncedValue(

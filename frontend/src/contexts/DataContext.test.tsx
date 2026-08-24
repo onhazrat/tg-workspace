@@ -5,7 +5,7 @@
  * Nothing here was previously expressible. The only way to exercise a component
  * was `renderToStaticMarkup` (one static pass, no effects, no state updates), so
  * 0 of 9 contexts had a test. What this file covers — an effect reconciling
- * selection state against a react-query result, plus its localStorage
+ * selection state against a react-query result, plus its browser-storage
  * persistence — needs a DOM, real effects, and re-renders.
  *
  * The behaviour is worth pinning independently of the tooling. `DataContext`
@@ -28,6 +28,7 @@ import { act, renderHook, waitFor } from "@testing-library/react"
 import type { ReactNode } from "react"
 import { DataProvider, useData } from "@/contexts/DataContext"
 import { queryKeys } from "@/hooks/queryKeys"
+import { scopedStorage } from "@/lib/storage/scoped"
 import type { Channel } from "@/types"
 
 function channel(name: string): Channel {
@@ -128,20 +129,20 @@ describe("DataContext channel selection", () => {
     })
   })
 
-  it("persists the selection to localStorage", async () => {
+  it("persists the selection to browser storage", async () => {
     const { result } = mountWithChannels(["alpha", "beta"])
     await waitFor(() => expect(result.current.selectedChannels.size).toBe(2))
 
     await waitFor(() => {
-      const saved = localStorage.getItem("selectedChannels")
+      const saved = scopedStorage.getItem("selectedChannels")
       expect(saved).not.toBeNull()
       expect(JSON.parse(saved as string).sort()).toEqual(["alpha", "beta"])
     })
   })
 
   it("restores a persisted selection instead of re-selecting everything", async () => {
-    localStorage.setItem("selectedChannels", JSON.stringify(["beta"]))
-    localStorage.setItem("prevChannelNames", JSON.stringify(["alpha", "beta"]))
+    scopedStorage.setItem("selectedChannels", JSON.stringify(["beta"]))
+    scopedStorage.setItem("prevChannelNames", JSON.stringify(["alpha", "beta"]))
 
     const { result } = mountWithChannels(["alpha", "beta"])
 

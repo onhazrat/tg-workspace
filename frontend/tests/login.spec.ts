@@ -1,6 +1,7 @@
 import { expect, type Page, test } from "@playwright/test"
 import { firstSuperuser, firstSuperuserPassword } from "./config.ts"
 import { randomPassword } from "./utils/random.ts"
+import { seedScopedStorage } from "./utils/scoped-storage.ts"
 
 test.use({ storageState: { cookies: [], origins: [] } })
 
@@ -44,7 +45,7 @@ test("Log in with valid email and password ", async ({ page }) => {
   await page.getByRole("button", { name: "Log In" }).click()
 
   await page.waitForURL(/\/summarizer/)
-  await page.evaluate(() => localStorage.setItem("hasSeenTour", "true"))
+  await seedScopedStorage(page, { hasSeenTour: "true" })
 })
 
 test("Log in with invalid email", async ({ page }) => {
@@ -73,7 +74,7 @@ test("Successful log out", async ({ page }) => {
   await page.getByRole("button", { name: "Log In" }).click()
 
   await page.waitForURL(/\/summarizer/)
-  await page.evaluate(() => localStorage.setItem("hasSeenTour", "true"))
+  await seedScopedStorage(page, { hasSeenTour: "true" })
   await page.goto("/settings")
 
   await page.getByTestId("user-menu").click()
@@ -88,7 +89,7 @@ test("Logged-out user cannot access protected routes", async ({ page }) => {
   await page.getByRole("button", { name: "Log In" }).click()
 
   await page.waitForURL(/\/summarizer/)
-  await page.evaluate(() => localStorage.setItem("hasSeenTour", "true"))
+  await seedScopedStorage(page, { hasSeenTour: "true" })
   await page.goto("/settings")
 
   await page.getByTestId("user-menu").click()
