@@ -325,6 +325,15 @@ behave; after the backfill neither is true, and keeping them leaks rows across u
 A guard greps for the symbol elsewhere: the failure mode of a flag is always the fourteenth place it
 got read.
 
+**Done** (ticket 03): the module, the classification, and the flag. Two things the plan did not
+anticipate. The follow-scoped branch cannot be written before ticket 04 creates
+`tg_channel_follows`, so it **raises** `NotImplementedError` there rather than picking one of the two
+wrong answers — an unscoped statement leaks, an empty one is a silent outage, and a raise makes an
+early flip a crash on the first query. `FOLLOW_KEYS` records the join column so ticket 04 has it.
+And the classification guard's model walk has to be **recursive**: `User` and `Item` descend from
+`UserBase`/`ItemBase`, so one level of `SQLModel.__subclasses__()` sees neither, and the guard would
+have passed while blind to exactly the two tables `OUT_OF_SCOPE` exists to excuse.
+
 **93 handlers across 14 modules take `_current_user: CurrentUser`** — auth enforced, identity
 discarded. Dropping the underscore as each is converted gives a countdown, and
 `test_route_module_hygiene.py` gains a rule that `_current_user` requires an allowlist entry with a

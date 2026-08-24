@@ -97,6 +97,10 @@ INVENTORY: dict[str, str] = {
     "post_reply_parser.py": PURE_TRANSFORM,
     "serialization.py": PURE_TRANSFORM,
     "sync_schedule.py": PURE_TRANSFORM,
+    # The tenancy seam. Builds scoped select statements and compares owner ids, executes
+    # nothing — so it is testable with no database, and acquiring a `Session`
+    # later fails `test_pure_transforms_do_no_io` rather than passing quietly.
+    "tenancy.py": PURE_TRANSFORM,
     "telegram_html.py": PURE_TRANSFORM,
     "telegram_web.py": PURE_TRANSFORM,
     # 5. Orchestrator — owns one workflow, coordinates the other four.
