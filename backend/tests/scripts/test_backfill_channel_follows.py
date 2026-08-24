@@ -37,7 +37,10 @@ if str(_SCRIPTS_DIR) not in sys.path:
     sys.path.insert(0, str(_SCRIPTS_DIR))
 
 from audit_tenancy_drift import audit  # noqa: E402
-from backfill_channel_follows import backfill  # noqa: E402
+from backfill_channel_follows import (  # noqa: E402
+    already_completed,
+    backfill,
+)
 
 
 @pytest.fixture
@@ -198,3 +201,93 @@ def test_a_channel_followed_by_someone_else_is_still_unfollowed_by_you(
     assert "channels_with_no_follow" not in findings
     session.exec(delete(User).where(col(User.id) == account.id))
     session.commit()
+
+
+# --------------------------------------------------------------------------
+# `--if-needed`, the mode prestart.sh runs on every deploy
+# --------------------------------------------------------------------------
+
+
+def test_if_needed_runs_the_first_time(session: Session) -> None:
+    _channel(session, "need_first")
+
+    stats = backfill(if_needed=True)
+
+    assert stats["created"] == 1
+    assert already_completed(session) is True
+
+
+def test_if_needed_does_nothing_once_recorded(session: Session) -> None:
+    """Every deploy after the first costs one primary-key lookup."""
+    _channel(session, "need_done")
+    backfill(if_needed=True)
+
+    _channel(session, "need_added_later")
+    stats = backfill(if_needed=True)
+
+    assert stats["channels"] == 0, "it should not have walked the table at all"
+
+
+def test_if_needed_does_not_resurrect_an_unfollowed_channel(
+    session: Session,
+) -> None:
+    """The reason the marker is a marker and not a "is there work?" query.
+
+    From ticket 05 onward, unfollowing leaves a Channel with zero followers on
+    purpose, until retention collects it. A deploy-time backfill that decided
+    what to do by asking `channel_ids_without_follows` would hand that channel
+    straight back to the operator who just removed it — silently, on the next
+    deploy, in the window before retention runs.
+    """
+    _channel(session, "need_unfollowed")
+    backfill(if_needed=True)
+    session.exec(delete(ChannelFollow))
+    session.commit()
+
+    backfill(if_needed=True)
+
+    assert session.exec(select(ChannelFollow)).all() == []
+
+
+def test_a_dry_run_never_sets_the_marker(session: Session) -> None:
+    """Otherwise a rehearsal would suppress the real run for good."""
+    _channel(session, "need_dry")
+
+    backfill(dry_run=True, if_needed=True)
+
+    assert already_completed(session) is False
+
+
+def test_an_interrupted_run_is_not_recorded_as_complete(
+    session: Session, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Marking before the walk finishes turns a crash into a permanent skip.
+
+    The channels a half-run never reached would stay unfollowed forever, and
+    `--if-needed` would never look at them again.
+    """
+    import backfill_channel_follows as module
+
+    for i in range(3):
+        _channel(session, f"need_crash_{i}")
+
+    def _explode(*args, **kwargs):
+        raise RuntimeError("connection lost")
+
+    monkeypatch.setattr(module, "ensure_follow_for_channel", _explode)
+    with pytest.raises(RuntimeError):
+        backfill(if_needed=True)
+
+    assert already_completed(session) is False
+
+
+def test_an_explicit_run_ignores_the_marker(session: Session) -> None:
+    """An operator asking for it by hand means it, marker or not."""
+    _channel(session, "need_manual")
+    backfill(if_needed=True)
+    session.exec(delete(ChannelFollow))
+    session.commit()
+
+    stats = backfill()
+
+    assert stats["created"] == 1

@@ -9,6 +9,11 @@ NULL — the rule `services/follows.py::resolve_follow_owner` applies to new
 writes, so a channel created during the backfill and one created a minute after
 it end up owned by the same account.
 
+Runs unattended from `prestart.sh` as `--if-needed`, after `initial_data.py`
+has created the first superuser this falls back to. An operator can still run it
+by hand, with `--dry-run` first; the two modes differ only in whether the
+completion marker short-circuits the walk.
+
 Idempotent by construction rather than by a `--force` flag somebody has to
 remember: every write is `ON CONFLICT DO NOTHING`, so running it twice is a
 no-op and running it after a partial failure resumes. That matters because this
@@ -40,22 +45,53 @@ load_dotenv(_REPO_ROOT / ".env")
 from sqlmodel import Session, col, func, select
 
 from app.core.db import engine
-from app.models_tg import Channel
+from app.models_tg import Channel, utc_now
 from app.services.follows import (
     ensure_follow_for_channel,
     follow_exists,
     resolve_follow_owner,
 )
 from app.services.operator import get_operator_user_id
+from app.services.settings_store import get_app_setting, put_app_setting
 
 #: Channels per transaction. Large enough that the run is a handful of round
 #: trips on the ~2,000-channel staging database, small enough that no snapshot
 #: is held open long.
 BATCH_SIZE = 500
 
+#: Global `AppSetting` key recording that this has run to completion.
+#:
+#: `--if-needed` checks this and nothing else, deliberately. The obvious test —
+#: "are there channels with no follow?" — is correct exactly until ticket 05
+#: lands, and then it is a data-loss bug: unfollowing is *supposed* to leave a
+#: channel with zero followers, so a deploy-time backfill asking that question
+#: would hand the channel straight back to the operator who just removed it,
+#: some time before retention collects it. A one-shot marker cannot develop
+#: that opinion, and it stays correct without anyone remembering to delete this
+#: from `prestart.sh` at ticket 05.
+#:
+#: Global, so it is the half of the settings split that stays in
+#: `tg_app_settings` at ticket 06.
+COMPLETION_KEY = "follows_backfill"
 
-def backfill(*, dry_run: bool = False, batch_size: int = BATCH_SIZE) -> dict[str, int]:
-    """Create one Follow per Channel. Returns counts for the operator to read."""
+
+def already_completed(session: Session) -> bool:
+    """Whether a full backfill has been recorded. One primary-key lookup."""
+    return bool(get_app_setting(session, COMPLETION_KEY)["value"].get("completedAt"))
+
+
+def backfill(
+    *,
+    dry_run: bool = False,
+    batch_size: int = BATCH_SIZE,
+    if_needed: bool = False,
+) -> dict[str, int]:
+    """Create one Follow per Channel. Returns counts for the operator to read.
+
+    `if_needed=True` is the unattended mode `prestart.sh` uses: it returns
+    immediately once the marker is set, so the cost on every later deploy is a
+    single primary-key lookup rather than a walk over every channel.
+    """
     stats = {
         "channels": 0,
         "created": 0,
@@ -74,6 +110,10 @@ def backfill(*, dry_run: bool = False, batch_size: int = BATCH_SIZE) -> dict[str
                 file=sys.stderr,
             )
             sys.exit(1)
+
+        if if_needed and already_completed(session):
+            print("follows backfill already completed; nothing to do")
+            return stats
 
         total = session.exec(select(func.count()).select_from(Channel)).one()
         print(f"{'[dry-run] ' if dry_run else ''}{total} channels to consider")
@@ -120,6 +160,17 @@ def backfill(*, dry_run: bool = False, batch_size: int = BATCH_SIZE) -> dict[str
             offset += batch_size
             print(f"  ...{min(offset, total)}/{total}")
 
+        # Only after every batch committed. Marking before the walk finishes
+        # would turn a run interrupted halfway into a permanent skip, and the
+        # channels it never reached would stay unfollowed forever.
+        if not dry_run:
+            put_app_setting(
+                session,
+                COMPLETION_KEY,
+                {"completedAt": int(utc_now().timestamp() * 1000)},
+                user_id=operator_id,
+            )
+
     print(
         f"{'[dry-run] ' if dry_run else ''}"
         f"channels={stats['channels']} follows_created={stats['created']} "
@@ -142,8 +193,17 @@ def main() -> None:
         default=BATCH_SIZE,
         help=f"Channels per transaction (default {BATCH_SIZE}).",
     )
+    parser.add_argument(
+        "--if-needed",
+        action="store_true",
+        help="Do nothing if a full backfill has already been recorded. Used by prestart.sh.",
+    )
     args = parser.parse_args()
-    backfill(dry_run=args.dry_run, batch_size=args.batch_size)
+    backfill(
+        dry_run=args.dry_run,
+        batch_size=args.batch_size,
+        if_needed=args.if_needed,
+    )
 
 
 if __name__ == "__main__":
