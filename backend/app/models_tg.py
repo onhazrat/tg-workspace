@@ -90,6 +90,68 @@ class Channel(SQLModel, table=True):
     updated_at: datetime = Field(default_factory=utc_now)
 
 
+class ChannelFollow(SQLModel, table=True):
+    """One User's relation to one Channel (ticket 04, plan step A1).
+
+    The Channel and its Posts are a shared corpus — `Channel.id` is the handle
+    and `Post` is unique per `(channel_name, post_id)`, so one scrape serves
+    every follower. What is *not* shared is the relation: which Channels you
+    watch, what you tagged them, when you started, and when yours next syncs.
+    Those columns sit on `tg_channels` today, where a second follower of the
+    same handle would have to overwrite the first one's values to have any of
+    their own.
+
+    Composite natural key `(user_id, channel_id)`, so following twice is
+    impossible by construction rather than by a check somebody remembers, and
+    "does this user follow this channel" is a primary-key hit. Both foreign
+    keys cascade: deleting an account takes its follows with it, and deleting a
+    Channel takes the follows of a row that no longer exists. `ix_..._channel_id`
+    serves the other direction — "who follows this channel", which retention and
+    the scheduler ask and which the PK's leading column cannot answer.
+
+    **Nothing reads this table yet.** Ticket 04 creates it, backfills it, and
+    dual-writes it from every Channel-creation path; the read paths adopt it in
+    tickets 15-16 and `Channel`'s copies of these columns are dropped in ticket
+    22. Until then both rows carry the value and the Channel's is authoritative.
+
+    `next_sync_at` has no counterpart on `Channel` and is deliberately here from
+    day one. The most-eager-wins scheduling the plan defers (decision 39) needs
+    exactly this column, and adding it later means a migration on a table that
+    by then has a row per user per channel.
+    """
+
+    __tablename__ = "tg_channel_follows"
+
+    user_id: uuid.UUID = Field(
+        foreign_key="user.id",
+        primary_key=True,
+        ondelete="CASCADE",
+    )
+    channel_id: str = Field(
+        foreign_key="tg_channels.id",
+        primary_key=True,
+        index=True,
+        ondelete="CASCADE",
+    )
+
+    #: The per-User fields currently duplicated on `Channel`, dropped there in
+    #: ticket 22. `setting_group_id` is nullable here and not on `Channel`:
+    #: a follow created before its group is resolved is a real state, and
+    #: inventing a group id to satisfy a NOT NULL would put a lie in the row.
+    setting_group_id: str | None = Field(default=None)
+    followed_at: int | None = Field(default=None, sa_column=_ms_ts(nullable=True))
+    tags: list[Any] = Field(default_factory=list, sa_column=Column(JSON))
+    start_id: int | None = None
+    start_time: int | None = Field(default=None, sa_column=_ms_ts(nullable=True))
+    discovered_via: dict[str, Any] | None = Field(default=None, sa_column=Column(JSON))
+
+    #: This follower's own next sync time. See the class docstring.
+    next_sync_at: int | None = Field(default=None, sa_column=_ms_ts(nullable=True))
+
+    created_at: datetime = Field(default_factory=utc_now)
+    updated_at: datetime = Field(default_factory=utc_now)
+
+
 class Post(SQLModel, table=True):
     __tablename__ = "tg_posts"
     __table_args__ = (UniqueConstraint("channel_name", "post_id"),)

@@ -27,6 +27,7 @@ from app.services.channel_tags import (
     normalize_channel_tags,
     reject_reserved_virtual_group_tags,
 )
+from app.services.follows import ensure_follow_for_channel
 from app.services.serialization import channel_to_camel, normalize_body
 from app.services.sync_meta import touch_sync
 from app.services.sync_schedule import (
@@ -379,6 +380,12 @@ def upsert_channel(
             **extras,
         )
     session.add(ch)
+    # The follow is a Core INSERT that executes immediately, so the Channel has
+    # to reach the database before it — but in the *same* transaction, or a
+    # failure between the two leaves a Channel nobody follows, which is exactly
+    # the drift `audit_tenancy_drift.py` reports.
+    session.flush()
+    ensure_follow_for_channel(session, ch, user_id=user_id)
     session.commit()
     session.refresh(ch)
     touch_sync(session, "channels")

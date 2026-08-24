@@ -59,6 +59,7 @@ INVENTORY: dict[str, str] = {
     "discover_ignored.py": AGGREGATE,
     "discover_probes.py": AGGREGATE,
     "discover_reports.py": AGGREGATE,
+    "follows.py": AGGREGATE,
     "logs.py": AGGREGATE,
     "post_sync_state.py": AGGREGATE,
     "posts.py": AGGREGATE,

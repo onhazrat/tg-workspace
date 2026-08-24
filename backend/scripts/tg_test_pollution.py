@@ -82,6 +82,7 @@ TG_TABLES: tuple[str, ...] = (
     "tg_chat_destinations",
     "tg_app_settings",
     "tg_channel_setting_groups",
+    "tg_channel_follows",
     "tg_channels",
 )
 

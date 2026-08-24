@@ -17,8 +17,9 @@ drive the shape here:
   translations are keyed the same way. `user_id` on those tables was only ever a
   "who scraped this first" stamp, and filtering on it would give a second
   follower of a channel an empty page for posts that are sitting right there.
-  Those tables are scoped by *who follows the channel*, and their `user_id`
-  columns are dropped in ticket 22.
+  Those tables are scoped by *who follows the channel* — an EXISTS against
+  `tg_channel_follows`, which ticket 04 created and backfilled — and their
+  `user_id` columns are dropped in ticket 22.
 * **Two shared tables are not follow-scoped at all.** A probe is a fact about a
   handle ("cannot be followed by anyone") and `SyncMeta` is a cache etag. They
   are unscoped deliberately, which is a thing worth writing down precisely
@@ -46,7 +47,7 @@ from typing import Any
 
 from fastapi import HTTPException
 from sqlalchemy.sql import Select
-from sqlmodel import SQLModel
+from sqlmodel import SQLModel, col, select
 
 from app.core.config import settings
 from app.models import Item, User
@@ -55,6 +56,7 @@ from app.models_tg import (
     AppSetting,
     BotCredential,
     Channel,
+    ChannelFollow,
     ChannelSettingGroup,
     ChatDestination,
     ChatSession,
@@ -100,13 +102,17 @@ class Scope(StrEnum):
     CORPUS = "corpus"
 
 
-#: Every table the seam is responsible for: 18 user-owned, and the 7 shared ones
+#: Every table the seam is responsible for: 19 user-owned, and the 7 shared ones
 #: the plan's decision 1 names — 5 of which a follow can reach and 2 of which it
 #: cannot. Note `Scope.CORPUS` is the narrower of those two senses.
 SCOPES: dict[type[SQLModel], Scope] = {
     # --- User-owned: artifacts, credentials, destinations, settings, setting
     # groups, sync jobs, and logs. Everything a User produces rather than reads.
     ChannelSettingGroup: Scope.USER_OWNED,
+    # Which channels you watch is private (user story 9). User-owned rather
+    # than follow-scoped: scoping the follow table *by* an EXISTS against
+    # itself is circular, and the row already names its owner.
+    ChannelFollow: Scope.USER_OWNED,
     Summary: Scope.USER_OWNED,
     SummaryPayload: Scope.USER_OWNED,
     ChatSession: Scope.USER_OWNED,
@@ -139,9 +145,14 @@ SCOPES: dict[type[SQLModel], Scope] = {
 }
 
 #: The column naming the Channel a follow-scoped row belongs to, for the EXISTS
-#: ticket 04 writes. `Channel.id` is the handle and every other corpus table
-#: repeats it as `channel_name`, so the join key is a string throughout rather
-#: than a surrogate id — recorded here because that is easy to misremember.
+#: in `scoped_select`. The join key is a string throughout rather than a
+#: surrogate id — recorded here because that is easy to misremember.
+#:
+#: **The two spellings do not hold the same value.** `Channel.id` is the
+#: primary key the follow's foreign key points at; `channel_name` holds
+#: `Channel.name`, which is writable and diverges the moment a channel is
+#: renamed. `scoped_select` joins through `tg_channels` for that reason rather
+#: than comparing the foreign key to `channel_name` directly.
 FOLLOW_KEYS: dict[type[SQLModel], str] = {
     Channel: "id",
     Post: "channel_name",
@@ -238,16 +249,38 @@ def scoped_select[StatementT: Select[Any]](
         return statement
 
     if scope is Scope.FOLLOW_SCOPED:
-        # `tg_channel_follows` arrives in ticket 04. There is no honest answer
-        # without it: returning everything leaks another account's corpus and
-        # returning nothing is a silent outage. Crash on the first query
-        # instead, so flipping the flag early is unmissable.
-        msg = (
-            f"{model.__name__} is follow-scoped and `tg_channel_follows` does "
-            f"not exist yet (ticket 04). Do not enable TENANCY_ENFORCED until "
-            f"the follow table is backfilled."
+        # An EXISTS against the follow table, never a filter on
+        # `Model.user_id`. Those columns are a "who scraped this first" stamp,
+        # and ticket 22 drops them; filtering on one would hand the second
+        # follower of a channel an empty page for posts sitting right there.
+        #
+        # A semi-join rather than a JOIN, because a JOIN multiplies rows when a
+        # channel has several followers and the caller's LIMIT would then be
+        # counting the wrong thing. EXISTS also lets PostgreSQL stop at the
+        # first matching follow.
+        join_column = getattr(model, FOLLOW_KEYS[model])
+        follows = select(ChannelFollow).where(ChannelFollow.user_id == user_id)
+
+        if model is Channel:
+            # The follow names the Channel by its primary key.
+            return statement.where(
+                follows.where(ChannelFollow.channel_id == join_column).exists()
+            )
+
+        # Everything else keys on `channel_name`, which holds `Channel.name` —
+        # **not** `Channel.id`. Nothing keeps those two equal: `name` is
+        # writable through `PUT /data/channels/{id}` (`apply_channel_fields`
+        # excludes only `id`, `user_id`, and `setting_group_id`) and an import
+        # sets them from separate fields. Correlating the FK directly against
+        # `channel_name` therefore compiles, runs, and silently returns nothing
+        # for every renamed channel — which is the "syntactically right,
+        # semantically wrong" failure a compiled-SQL assertion cannot see. So
+        # the EXISTS goes through `tg_channels` and compares name to name.
+        return statement.where(
+            follows.join(Channel, col(Channel.id) == col(ChannelFollow.channel_id))
+            .where(col(Channel.name) == join_column)
+            .exists()
         )
-        raise NotImplementedError(msg)
 
     return statement.where(getattr(model, OWNER_COLUMN) == user_id)
 

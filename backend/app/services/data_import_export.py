@@ -37,6 +37,7 @@ from app.services.channel_setting_groups import (
 from app.services.channel_tags import normalize_channel_tags
 from app.services.channels import SERVER_MANAGED_CHANNEL_FIELDS, apply_channel_fields
 from app.services.credentials import encrypt_bot_token
+from app.services.follows import ensure_follow_for_channel
 from app.services.logs import (
     upsert_embedding_log,
     upsert_llm_log,
@@ -93,6 +94,7 @@ def _import_channels(
     the export marks it unavailable or frozen, and in the default group
     otherwise — never left group-less, which nothing downstream tolerates.
     """
+    touched: list[Channel] = []
     for item in items:
         normalized = normalize_body(item)
         for field in SERVER_MANAGED_CHANNEL_FIELDS:
@@ -141,6 +143,14 @@ def _import_channels(
                 discovered_via=normalized.get("discovered_via"),
             )
         session.add(ch)
+        touched.append(ch)
+
+    # One flush for the batch, still inside the document's single transaction:
+    # `ensure_follow` is a Core INSERT that executes immediately, so the ORM
+    # adds above have to reach the database before the foreign key is checked.
+    session.flush()
+    for channel in touched:
+        ensure_follow_for_channel(session, channel, user_id=user_id)
     return len(items)
 
 

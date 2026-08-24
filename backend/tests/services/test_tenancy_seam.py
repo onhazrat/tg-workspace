@@ -281,19 +281,50 @@ def test_enabled_corpus_stays_unscoped(model: type[SQLModel]) -> None:
 
 
 @pytest.mark.usefixtures("enforced")
-def test_enabled_follow_scoped_refuses_until_the_table_exists() -> None:
-    """The one branch ticket 03 cannot finish, failing loudly rather than open.
+@pytest.mark.parametrize(
+    "model", sorted((m for m, s in SCOPES.items() if s is Scope.FOLLOW_SCOPED), key=str)
+)
+def test_enabled_follow_scoped_joins_the_follow_table(
+    model: type[SQLModel],
+) -> None:
+    """The branch ticket 03 could not write, now that ticket 04 built the table.
 
-    `tg_channel_follows` arrives in ticket 04. A follow-scoped model asked to
-    scope before then has no way to answer, and the two wrong answers are
-    "return everything" (a leak) and "return nothing" (a silent outage). It
-    raises instead, naming the ticket, so flipping the flag early is a crash on
-    the first query rather than a data-visibility bug found in production.
+    It scopes by *who follows the channel*, so it must reach
+    `tg_channel_follows` and must not filter the model's own `user_id`. Both
+    halves are asserted: the first is what the seam is for, and the second is
+    the mistake that looks correct — those columns exist right now, a filter on
+    one compiles and runs, and it would hand the second follower of a channel
+    an empty page for posts that are sitting right there.
     """
-    model = next(m for m, s in SCOPES.items() if s is Scope.FOLLOW_SCOPED)
+    compiled = str(scoped_select(select(model), model, uuid.uuid4()).compile())
+    # The predicate only. `select(Post)` names every column including
+    # `tg_posts.user_id`, so asserting against the whole statement would pass
+    # for the wrong reason and fail for the wrong reason.
+    where = compiled.split("WHERE", 1)[1]
 
-    with pytest.raises(NotImplementedError, match="ticket 04"):
-        scoped_select(select(model), model, uuid.uuid4())
+    assert "EXISTS" in where
+    assert "tg_channel_follows" in where
+    assert f"{model.__tablename__}.user_id" not in where
+
+
+@pytest.mark.usefixtures("enforced")
+def test_enabled_follow_scoped_joins_on_the_declared_key() -> None:
+    """The EXISTS correlates on `FOLLOW_KEYS`, not on a guessed column name.
+
+    `Channel` spells it `id` and every other corpus table repeats it as
+    `channel_name`, so a single hard-coded name would silently scope four of
+    the five tables against the wrong column — and still compile.
+    """
+    for model, key in FOLLOW_KEYS.items():
+        compiled = str(scoped_select(select(model), model, uuid.uuid4()).compile())
+        # The predicate only, for the same reason as the test above: every
+        # declared key is also a selected column, so checking the whole
+        # statement is a check that cannot fail.
+        where = compiled.split("WHERE", 1)[1]
+        assert f"{model.__tablename__}.{key}" in where, (
+            f"{model.__name__} should correlate its EXISTS on {key}, not on "
+            f"whatever column happens to be handy"
+        )
 
 
 @pytest.mark.usefixtures("enforced")

@@ -14,6 +14,7 @@ from app.services.channel_setting_groups import (
     ensure_default_group,
     get_or_create_restricted_group,
 )
+from app.services.follows import ensure_follow_for_channel
 from app.services.logs import upsert_network_log
 from app.services.network_settings import redact_proxy_url
 from app.services.sync_meta import touch_sync
@@ -83,7 +84,19 @@ def create_followed_channel(
 ) -> bool:
     """Create a newly followed channel. Returns False if it already exists."""
     with Session(engine) as session:
-        if channel_name_exists(session, clean):
+        existing = session.exec(
+            select(Channel).where(col(Channel.name) == clean)
+        ).first()
+        if existing is not None:
+            # Following a channel someone else already scraped is the case the
+            # shared corpus exists for: the Channel is not created, so the
+            # caller still hears "already followed", but the *relation* is new
+            # and has to be written or this account never sees the channel it
+            # just asked to follow once enforcement is on. The early return
+            # here used to skip it, which the dual-write guard cannot see —
+            # the module does call a follow writer, on the other branch.
+            if ensure_follow_for_channel(session, existing, user_id=user_id):
+                session.commit()
             return False
         if telemetry_url and telemetry:
             _save_network_telemetry(session, telemetry_url, telemetry, user_id=user_id)
@@ -92,31 +105,34 @@ def create_followed_channel(
             group = get_or_create_restricted_group(session, user_id=user_id)
         else:
             group = ensure_default_group(session, user_id=user_id)
-        session.add(
-            Channel(
-                id=clean,
-                name=clean,
-                display_name=display_name,
-                photo_url=photo_url,
-                start_time=effective_start_time,
-                last_updated=now,
-                followed_at=now,
-                tags=[],
-                setting_group_id=group.id,
-                discovered_via=discovered_via,
-                next_regular_sync_at=(
-                    compute_next_regular_sync_at_from_last_updated(
-                        now,
-                        group.auto_sync_interval_minutes,
-                        now,
-                    )
-                    if group.regular_sync_enabled
-                    else None
-                ),
-                next_dynamic_sync_at=None,
-                user_id=user_id,
-            )
+        channel = Channel(
+            id=clean,
+            name=clean,
+            display_name=display_name,
+            photo_url=photo_url,
+            start_time=effective_start_time,
+            last_updated=now,
+            followed_at=now,
+            tags=[],
+            setting_group_id=group.id,
+            discovered_via=discovered_via,
+            next_regular_sync_at=(
+                compute_next_regular_sync_at_from_last_updated(
+                    now,
+                    group.auto_sync_interval_minutes,
+                    now,
+                )
+                if group.regular_sync_enabled
+                else None
+            ),
+            next_dynamic_sync_at=None,
+            user_id=user_id,
         )
+        session.add(channel)
+        # Same transaction as the Channel it belongs to: see the comment in
+        # `channels.py`.
+        session.flush()
+        ensure_follow_for_channel(session, channel, user_id=user_id)
         session.commit()
         touch_sync(session, "channels")
         return True
