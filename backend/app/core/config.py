@@ -145,6 +145,34 @@ class Settings(BaseSettings):
     #: no one browses the history and no one can be surprised by its length. The
     #: table had no policy at all and reached 196,047 rows / 153 MB.
     SYNC_JOB_RETENTION_DAYS: int = 14
+    #: How often the in-process consumer sweeps `manual_single_normal` for
+    #: anything the post-enqueue kick missed (ticket 09) — a crashed kick, or a
+    #: message redelivered after its visibility timeout lapsed. The kick
+    #: handles the common case with no added latency; this is the backstop, so
+    #: it does not need to be sub-second — matched to `DISCOVER_PROBE_JOB_
+    #: INTERVAL_SECONDS` rather than tighter. `stop_scheduler` shuts down with
+    #: `wait=False`, so a run already in flight keeps executing past teardown;
+    #: a short interval made that collide with `tests/`'s per-module
+    #: `TestClient` teardown constantly (a stray in-flight sweep from one
+    #: test module racing a later module's own queue traffic), the same way
+    #: the existing 30-60s-interval jobs apparently never do. Moves to a
+    #: dedicated worker process in ticket 10.
+    MANUAL_SINGLE_QUEUE_POLL_INTERVAL_SECONDS: int = 30
+    #: How many `manual_single_normal` messages one drain claims at once. The
+    #: code this replaces had no cap at all — one `asyncio.create_task` per
+    #: request — so this is a new, deliberate limit rather than a tightened
+    #: one; generous by default because a manual single sync is one Channel
+    #: and the real concurrency limiter downstream is the proxy pool, not this.
+    MANUAL_SINGLE_QUEUE_BATCH_SIZE: int = 10
+    #: Redeliveries before a `manual_single_normal` message is archived rather
+    #: than retried again (decision 32: "cap redelivery ... and archive beyond
+    #: it rather than looping"). Counts `pgmq`'s own `read_ct`, so this is
+    #: attempts, not extra retries on top of the ones already inside the sync
+    #: itself (`SYNC_MAX_RETRIES`, `NETWORK_FETCH_RETRIES`) — a message only
+    #: gets redelivered at all when the *whole* job crashed instead of failing
+    #: a channel cleanly, which those inner retries already turned into a
+    #: normal "failed" job.
+    MANUAL_SINGLE_QUEUE_MAX_READ_COUNT: int = 3
     AUTO_SYNC_CHECK_INTERVAL_SECONDS: int = 60
     AUTO_SYNC_INTERVAL_MINUTES_DEFAULT: int = 60
     AUTO_SYNC_PAUSE_DURATION_MS: int = 10 * 60 * 1000

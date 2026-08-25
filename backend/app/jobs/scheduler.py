@@ -23,6 +23,7 @@ from app.jobs.discover_probe import (
     DISCOVER_PROBE_JOB_ID,
     run_discover_probe_sweep,
 )
+from app.jobs.manual_single_queue import job_manual_single_queue
 from app.jobs.retention import run_retention_cleanup
 from app.jobs.settings import (
     JOB_IDS,
@@ -278,6 +279,17 @@ def start_scheduler() -> None:
         # not running is not.
         misfire_grace_time=None,
         coalesce=True,
+    )
+    scheduler.add_job(
+        job_manual_single_queue,
+        "interval",
+        seconds=settings.MANUAL_SINGLE_QUEUE_POLL_INTERVAL_SECONDS,
+        id="manual_single_queue",
+        replace_existing=True,
+        # Not in `JOB_IDS` (see the module docstring): no enable/disable
+        # toggle, so no misfire/coalesce tuning either — a drain that
+        # overruns its interval is fine to queue up rather than collapse,
+        # since unlike retention or the probe sweep this one is short per run.
     )
 
     with Session(engine) as session:

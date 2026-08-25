@@ -11,6 +11,7 @@ from sqlmodel import Session
 
 from app.api.deps import CurrentUser, SessionDep
 from app.core.config import settings
+from app.jobs.manual_single_queue import enqueue_manual_single_sync
 from app.jobs.scheduler import get_job_status, set_job_enabled_flag, trigger_job
 from app.jobs.settings import JOB_IDS
 from app.schemas.jobs import JobStatusEntry, UpdateJobRequest
@@ -140,7 +141,17 @@ async def start_sync_job(
         sync_mode=sync_mode,
     )
     user_uuid = uuid.UUID(str(current_user.id))
-    asyncio.create_task(run_sync_job(job, user_uuid))
+    if sync_mode == "individual":
+        # Ticket 09: a manual single sync travels through the
+        # `manual_single_normal` PGMQ lane instead of a bare `asyncio.create_task`
+        # — see `app/jobs/manual_single_queue.py`. The job row already exists
+        # (`create_job` above), so the SSE stream at `GET
+        # /jobs/sync/{id}/events` sees the same "pending" -> "running" ->
+        # terminal sequence it always has, just enqueued rather than
+        # scheduled directly.
+        await enqueue_manual_single_sync(job.job_id, user_uuid)
+    else:
+        asyncio.create_task(run_sync_job(job, user_uuid))
     return StartSyncJobResponse(jobId=job.job_id)
 
 

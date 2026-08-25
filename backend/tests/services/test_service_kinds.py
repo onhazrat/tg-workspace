@@ -94,6 +94,10 @@ INVENTORY: dict[str, str] = {
     "channel_photos.py": INTEGRATION,
     "embeddings.py": INTEGRATION,
     "network.py": INTEGRATION,
+    # PGMQ (ticket 09): owns the `pgmq.*` SQL functions the migration
+    # installs, not an app table — the same shape of boundary as `scraper.py`
+    # (t.me) and `network.py` (HTTP/proxy).
+    "pgmq.py": INTEGRATION,
     "post_thumbnails.py": INTEGRATION,
     "proxy_pool.py": INTEGRATION,
     "publish.py": INTEGRATION,
@@ -106,6 +110,9 @@ INVENTORY: dict[str, str] = {
     "post_media_parser.py": PURE_TRANSFORM,
     "post_reply_parser.py": PURE_TRANSFORM,
     "serialization.py": PURE_TRANSFORM,
+    # PGMQ lane naming (ticket 09) — string constants and one function, no
+    # Session, no network. See its module docstring.
+    "sync_lanes.py": PURE_TRANSFORM,
     "sync_schedule.py": PURE_TRANSFORM,
     # The tenancy seam. Builds scoped select statements and compares owner ids, executes
     # nothing — so it is testable with no database, and acquiring a `Session`

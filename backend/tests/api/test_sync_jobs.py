@@ -12,11 +12,13 @@ from sqlmodel import Session
 from app.core.config import settings
 from app.core.db import engine
 from app.models_tg import SyncJob
+from app.services import pgmq
 from app.services.scraper_jobs import (
     clear_active_jobs_for_tests,
     clear_jobs_for_tests,
     get_job,
 )
+from app.services.sync_lanes import MANUAL_SINGLE_NORMAL_LANE
 
 PREFIX = f"{settings.API_V1_STR}/jobs"
 DATA = f"{settings.API_V1_STR}/data"
@@ -140,6 +142,84 @@ def test_start_sync_job_and_poll_status(client: TestClient) -> None:
     assert any(log["status"] == "success" for log in matching)
 
     client.delete(f"{DATA}/channels/sync-test-ch", headers=headers)
+    clear_jobs_for_tests()
+
+
+def test_individual_sync_travels_through_the_manual_single_lane(
+    client: TestClient,
+) -> None:
+    """Ticket 09: `syncMode: "individual"` now goes through PGMQ, not
+    `asyncio.create_task`. The polling protocol above must not change —
+    checked by reusing the exact same assertions against `GET
+    /jobs/sync/{id}` as the bulk-mode test.
+    """
+    clear_jobs_for_tests()
+    headers = _auth(client)
+
+    # A delta, not an absolute zero: `pgmq.*` tables are not part of the
+    # per-test `truncate_all_tg_tables` cleanup (they are not `tg_*` tables),
+    # so a durable queue is exactly the kind of state a leftover row from an
+    # unrelated run could sit in.
+    with Session(engine) as session:
+        before = pgmq.queue_length(session, MANUAL_SINGLE_NORMAL_LANE)
+
+    client.put(
+        f"{DATA}/channels/individual-sync-ch",
+        json={"name": "individual-sync-ch", "displayName": "Individual Sync"},
+        headers=headers,
+    )
+
+    posts = [
+        {
+            "id": 200,
+            "text": "Solo post",
+            "date": "2024-06-02T12:00:00+00:00",
+            "timestamp": 1_716_811_200_000,
+        },
+    ]
+
+    with patch(
+        "app.services.sync_orchestrator.scrape_channel_page",
+        new_callable=AsyncMock,
+        return_value=_mock_page_response(
+            "individual-sync-ch", posts, next_before_id=None
+        ),
+    ):
+        r = client.post(
+            f"{PREFIX}/sync",
+            json={
+                "channelIds": ["individual-sync-ch"],
+                "source": "Test",
+                "syncMode": "individual",
+            },
+            headers=headers,
+        )
+        assert r.status_code == 200
+        job_id = r.json()["jobId"]
+        assert job_id
+
+        deadline = time.time() + 10
+        final_status = None
+        while time.time() < deadline:
+            status_r = client.get(f"{PREFIX}/sync/{job_id}", headers=headers)
+            assert status_r.status_code == 200
+            data = status_r.json()
+            if data["status"] in ("completed", "failed", "cancelled"):
+                final_status = data
+                break
+            time.sleep(0.1)
+
+        assert final_status is not None
+        assert final_status["status"] == "completed"
+        assert final_status["channels"][0]["status"] == "success"
+        assert final_status["channels"][0]["postsFetched"] == 1
+
+    # The message actually round-tripped through the real lane rather than
+    # bypassing it — nothing left claimed or due beyond what was already there.
+    with Session(engine) as session:
+        assert pgmq.queue_length(session, MANUAL_SINGLE_NORMAL_LANE) == before
+
+    client.delete(f"{DATA}/channels/individual-sync-ch", headers=headers)
     clear_jobs_for_tests()
 
 
