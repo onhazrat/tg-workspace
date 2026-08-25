@@ -9,6 +9,7 @@ from typing import Any
 from app.models_tg import (
     BotCredential,
     Channel,
+    ChannelFollow,
     ChannelSettingGroup,
     ChatDestination,
     EmbeddingLog,
@@ -127,8 +128,23 @@ def model_to_camel(row: Any, *, skip: frozenset[str] = frozenset()) -> dict[str,
 
 
 def channel_to_camel(
-    ch: Channel, *, group: ChannelSettingGroup | None = None
+    ch: Channel,
+    *,
+    group: ChannelSettingGroup | None = None,
+    follow: ChannelFollow | None = None,
 ) -> dict[str, Any]:
+    """Build one channel's payload.
+
+    `follow` is the caller's `ChannelFollow` row for this channel, when the
+    caller has one (ticket 15). `tags`, `startId`, `startTime`, `followedAt`
+    and `discoveredVia` are the per-User columns ticket 04 copied onto
+    `ChannelFollow` and ticket 22 drops from `Channel` — while both tables
+    carry them, the Follow is the one to read, because it is the copy a second
+    follower of the same handle can have its own values in. `Channel`'s own
+    values are the fallback for a channel nobody has a Follow row for yet
+    (pre-backfill, or the flag-off callers that still pass none), so this never
+    turns a present value into a missing one.
+    """
     from app.services.channel_setting_groups import effective_channel_fields
 
     photo_url = ch.photo_url
@@ -145,16 +161,18 @@ def channel_to_camel(
         "videos": ch.videos,
         "files": ch.files,
         "links": ch.links,
-        "startId": ch.start_id,
-        "startTime": ch.start_time,
-        "tags": normalize_channel_tags(ch.tags),
+        "startId": follow.start_id if follow is not None else ch.start_id,
+        "startTime": follow.start_time if follow is not None else ch.start_time,
+        "tags": normalize_channel_tags(follow.tags if follow is not None else ch.tags),
         "lastUpdated": ch.last_updated,
         "nextRegularSyncAt": ch.next_regular_sync_at,
         "nextDynamicSyncAt": ch.next_dynamic_sync_at,
         "language": ch.language,
-        "followedAt": ch.followed_at,
+        "followedAt": follow.followed_at if follow is not None else ch.followed_at,
         "telegramChatId": ch.telegram_chat_id,
-        "discoveredVia": ch.discovered_via,
+        "discoveredVia": (
+            follow.discovered_via if follow is not None else ch.discovered_via
+        ),
         "historyCompleteToCutoff": ch.history_complete_to_cutoff,
         "historyReachedChannelStart": ch.history_reached_channel_start,
         "anchorPostId": ch.anchor_post_id,

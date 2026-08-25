@@ -176,13 +176,8 @@ def ensure_follow_for_channel(
         session,
         channel_id=channel.id,
         user_id=user_id if user_id is not None else channel.user_id,
-        setting_group_id=channel.setting_group_id,
-        followed_at=channel.followed_at,
-        tags=list(channel.tags or []),
-        start_id=channel.start_id,
-        start_time=channel.start_time,
-        discovered_via=channel.discovered_via,
         next_sync_at=channel.next_regular_sync_at,
+        **_channel_field_values(channel, MIRRORED_CHANNEL_FIELDS),
     )
 
 
@@ -278,3 +273,124 @@ def follows_for_channels(
     return session.exec(
         select(ChannelFollow).where(col(ChannelFollow.channel_id).in_(ids))
     ).all()
+
+
+def follows_for_user(
+    session: Session,
+    *,
+    user_id: uuid.UUID,
+    channel_ids: Iterable[str],
+) -> dict[str, ChannelFollow]:
+    """One User's follows of the given channels, keyed by channel id.
+
+    The read-side counterpart to `follows_for_channels`, which answers "who
+    follows this channel" (retention's question, and the audit's); this
+    answers "what does *this* user's follow of this channel say" — the
+    question the channel list (ticket 15) asks once it stops reading the
+    per-User fields off `Channel` itself.
+    """
+    ids = list(channel_ids)
+    if not ids:
+        return {}
+    rows = session.exec(
+        select(ChannelFollow).where(
+            ChannelFollow.user_id == user_id,
+            col(ChannelFollow.channel_id).in_(ids),
+        )
+    ).all()
+    return {f.channel_id: f for f in rows}
+
+
+#: The per-User columns `ensure_follow_for_channel` copies off a Channel at
+#: creation time, and the ones `sync_follow_settings` below mirrors after an
+#: edit. The one place both read from, so a seventh mirrored column is a diff
+#: to this tuple rather than to two call sites that would otherwise have to be
+#: kept in step by memory.
+MIRRORED_CHANNEL_FIELDS = (
+    "setting_group_id",
+    "followed_at",
+    "tags",
+    "start_id",
+    "start_time",
+    "discovered_via",
+)
+
+
+def _channel_field_values(channel: Channel, fields: Iterable[str]) -> dict[str, Any]:
+    """`fields`' current values on `channel`.
+
+    `tags` is copied to a fresh list rather than referenced: `Channel.tags` is
+    a JSON column backed by a mutable list, and writing the same list object
+    into a `ChannelFollow` row would let a later mutation of one show up on
+    the other through the shared reference.
+    """
+    values = {field: getattr(channel, field) for field in fields}
+    if "tags" in values:
+        values["tags"] = list(channel.tags or [])
+    return values
+
+
+def sync_follow_settings(
+    session: Session,
+    channel: Channel,
+    *,
+    user_id: uuid.UUID | None,
+    fields: Iterable[str] = MIRRORED_CHANNEL_FIELDS,
+) -> None:
+    """Mirror a just-edited Channel's per-User fields onto its owner's Follow.
+
+    `ensure_follow`/`ensure_follow_for_channel` are additive on purpose — a
+    second follower of an already-scraped channel must not have their tags
+    reset by somebody else re-creating it. An explicit edit through
+    `PUT /data/channels/{id}`, the bulk-tags endpoint, or an import overwriting
+    an existing channel is the opposite case: the caller means for the value
+    to change, `Channel` stays authoritative until ticket 22 drops these
+    columns from it, so its Follow has to move with it — otherwise the channel
+    list (ticket 15), which reads these fields off the Follow, would keep
+    showing the value from before the edit.
+
+    `fields` is the subset of `MIRRORED_CHANNEL_FIELDS` this particular edit
+    actually touched, and only that subset is written to an *existing* Follow.
+    Mirroring the full set unconditionally was the first cut here, and it was
+    wrong: an edit to one field (say `bio`, which is not even mirrored) would
+    still overwrite every other follower field with the Channel's current
+    values, clobbering a Follow that had legitimately diverged from the
+    Channel — exactly the per-User state ticket 15 exists to preserve. A
+    brand-new Follow still needs the complete row, so the *insert* side always
+    uses every mirrored field regardless of `fields`; only the conflict
+    *update* is narrowed.
+
+    Resolves the owner the same way `ensure_follow` does, so the two writers
+    can never disagree about whose row an edit lands on. A no-op when there is
+    no superuser to fall back to, matching `ensure_follow`.
+
+    `ON CONFLICT DO UPDATE` rather than `ensure_follow`'s `DO NOTHING` — this
+    is the one write path that means to overwrite an existing Follow's values.
+    `next_sync_at` is seeded on insert (a fresh Follow needs a schedule) but
+    never part of `fields`: it is the follower's own next-sync deadline, not
+    something a Channel edit should reset.
+    """
+    owner_id = resolve_follow_owner(session, user_id)
+    if owner_id is None:
+        return
+
+    now = utc_now()
+    insert_values = _channel_field_values(channel, MIRRORED_CHANNEL_FIELDS)
+    update_values = _channel_field_values(channel, fields)
+
+    statement = (
+        pg_insert(ChannelFollow)
+        .values(
+            user_id=owner_id,
+            channel_id=channel.id,
+            next_sync_at=channel.next_regular_sync_at,
+            created_at=now,
+            updated_at=now,
+            **insert_values,
+        )
+        .on_conflict_do_update(
+            index_elements=["user_id", "channel_id"],
+            set_={**update_values, "updated_at": now},
+        )
+    )
+    session.execute(statement)

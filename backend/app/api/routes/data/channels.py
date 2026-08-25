@@ -145,7 +145,9 @@ def list_channels(
         request,
         [
             ChannelResponse.model_validate(row)
-            for row in list_channels_impl(session, include_stats=include_stats)
+            for row in list_channels_impl(
+                session, user_id=_current_user.id, include_stats=include_stats
+            )
         ],
     )
 
@@ -170,7 +172,9 @@ def list_channel_stats(
         request,
         {
             name: ChannelStatsResponse.model_validate(stats)
-            for name, stats in list_all_channel_stats(session).items()
+            for name, stats in list_all_channel_stats(
+                session, user_id=_current_user.id
+            ).items()
         },
     )
 
@@ -189,7 +193,9 @@ def list_channel_bios(
 
     Same ordering placement as `/channels/stats`: ahead of `/channels/{id}`.
     """
-    return json_response_with_etag(request, list_channel_bios_impl(session))
+    return json_response_with_etag(
+        request, list_channel_bios_impl(session, user_id=_current_user.id)
+    )
 
 
 @router.put("/channels/{channel_id}")
@@ -496,5 +502,5 @@ def get_channel_stats(
     _current_user: CurrentUser,
 ) -> ChannelStatsResponse:
     return ChannelStatsResponse.model_validate(
-        get_channel_stats_impl(session, channel_id)
+        get_channel_stats_impl(session, channel_id, user_id=_current_user.id)
     )

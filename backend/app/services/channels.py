@@ -32,13 +32,19 @@ from app.services.channel_tags import (
     normalize_channel_tags,
     reject_reserved_virtual_group_tags,
 )
-from app.services.follows import ensure_follow_for_channel, remove_follow
+from app.services.follows import (
+    MIRRORED_CHANNEL_FIELDS,
+    follows_for_user,
+    remove_follow,
+    sync_follow_settings,
+)
 from app.services.post_sync_state import clear_channel_sync_state
 from app.services.serialization import channel_to_camel, normalize_body
 from app.services.sync_meta import touch_sync
 from app.services.sync_schedule import (
     compute_next_regular_sync_at_from_last_updated,
 )
+from app.services.tenancy import scoped_select
 
 SERVER_MANAGED_CHANNEL_FIELDS = frozenset({"telegram_chat_id"})
 
@@ -224,16 +230,24 @@ def compute_channel_stats_batch(
     return out
 
 
-def list_all_channel_stats(session: Session) -> dict[str, dict[str, Any]]:
-    """Post aggregates for every channel, keyed by channel name.
+def list_all_channel_stats(
+    session: Session, *, user_id: uuid.UUID
+) -> dict[str, dict[str, Any]]:
+    """Post aggregates for every Channel `user_id` may see, keyed by name.
 
     Split out of `GET /channels?includeStats=true`, where the two queries behind
     it cost 2.36s of a 3.13s response while contributing 46 KB of a 536 KB
     payload. The grid was blocking its first paint on data that only two of its
     eleven sort options read — `activity_rate` and `total_posts` — and not the
     default one. As its own call it fills in after the grid is already up.
+
+    Scoped the same way `list_channels` is (ticket 15): a no-op while
+    enforcement is off.
     """
-    names = cast(list[str], session.exec(select(Channel.name)).all())
+    names = cast(
+        list[str],
+        session.exec(scoped_select(select(Channel.name), Channel, user_id)).all(),
+    )
     return compute_channel_stats_batch(session, names)
 
 
@@ -288,8 +302,8 @@ def apply_channel_fields(
             setattr(ch, key, value)
 
 
-def list_channel_bios(session: Session) -> dict[str, str]:
-    """Every channel's bio, keyed by channel name. Empty bios are omitted.
+def list_channel_bios(session: Session, *, user_id: uuid.UUID) -> dict[str, str]:
+    """Every channel `user_id` may see's bio, keyed by name. Empty bios omitted.
 
     Split off the channel list for the same reason as the stats: it is 196 KB of
     a 494 KB gzipped payload — 40% — and the grid clamps it to two lines on the
@@ -298,14 +312,17 @@ def list_channel_bios(session: Session) -> dict[str, str]:
     cutting at 120 would visibly clip text that fits today.
 
     A narrow two-column select, so this costs a fraction of what the full
-    channel list does.
+    channel list does. `scoped_select` is a no-op while enforcement is off
+    (ticket 15), so this changes nothing until ticket 21 flips it on.
     """
-    rows = session.exec(select(Channel.name, Channel.bio)).all()
+    rows = session.exec(
+        scoped_select(select(Channel.name, Channel.bio), Channel, user_id)
+    ).all()
     return {name: bio for name, bio in rows if bio}
 
 
 def list_channels(
-    session: Session, *, include_stats: bool = False
+    session: Session, *, user_id: uuid.UUID, include_stats: bool = False
 ) -> list[dict[str, Any]]:
     """The channel list the grid paints from, **without `bio`**.
 
@@ -314,16 +331,24 @@ def list_channels(
     on this route the key is simply absent rather than an explicit `null`, which
     is why the payload is built as a dict here rather than serialised through the
     model.
+
+    Scoped to the Channels `user_id` follows (ticket 15) — a no-op while
+    enforcement is off. Each row's tags/startId/startTime/followedAt/
+    discoveredVia come from `user_id`'s own Follow when one exists, not from
+    the Channel — see `channel_to_camel`.
     """
-    channels = session.exec(select(Channel)).all()
+    channels = session.exec(scoped_select(select(Channel), Channel, user_id)).all()
     groups_by_id = load_groups_by_id(session)
+    follows_by_channel_id = follows_for_user(
+        session, user_id=user_id, channel_ids=[c.id for c in channels]
+    )
     stats_map: dict[str, dict[str, Any]] = {}
     if include_stats and channels:
         stats_map = compute_channel_stats_batch(session, [c.name for c in channels])
     result: list[dict[str, Any]] = []
     for ch in channels:
         group = groups_by_id.get(ch.setting_group_id)
-        row = channel_to_camel(ch, group=group)
+        row = channel_to_camel(ch, group=group, follow=follows_by_channel_id.get(ch.id))
         row.pop("bio", None)
         if include_stats and ch.name in stats_map:
             row["stats"] = stats_map[ch.name]
@@ -346,6 +371,14 @@ def upsert_channel(
         apply_channel_fields(ch, normalized, session=session)
         ch.updated_at = utc_now()
         group = get_group_for_channel(session, ch)
+        # Only the fields this particular edit touched — see
+        # `sync_follow_settings` for why mirroring the full set on every call
+        # is wrong. `setting_group_id` can never be one of these:
+        # `apply_channel_fields` above already rejected it with a 400 if the
+        # body carried it.
+        touched_follow_fields = [
+            field for field in MIRRORED_CHANNEL_FIELDS if field in normalized
+        ]
     else:
         name = normalized.get("name", channel_id)
         is_restricted = bool(
@@ -385,13 +418,23 @@ def upsert_channel(
             setting_group_id=group.id,
             **extras,
         )
+        # A brand-new Channel has no existing Follow to leave alone, so its
+        # first Follow mirrors every field ticket 22 will drop from Channel —
+        # matching what `ensure_follow_for_channel` would have written.
+        touched_follow_fields = list(MIRRORED_CHANNEL_FIELDS)
     session.add(ch)
     # The follow is a Core INSERT that executes immediately, so the Channel has
     # to reach the database before it — but in the *same* transaction, or a
     # failure between the two leaves a Channel nobody follows, which is exactly
     # the drift `audit_tenancy_drift.py` reports.
+    #
+    # `sync_follow_settings` rather than `ensure_follow_for_channel`: this is
+    # the endpoint an edit reaches through, so an existing Follow's tags/start
+    # time/etc. are meant to move with the new values, not survive them. See
+    # `channel_to_camel`, which is why this has to stay current: it reads
+    # these fields off the Follow, not `ch`.
     session.flush()
-    ensure_follow_for_channel(session, ch, user_id=user_id)
+    sync_follow_settings(session, ch, user_id=user_id, fields=touched_follow_fields)
     session.commit()
     session.refresh(ch)
     touch_sync(session, "channels")
@@ -505,8 +548,18 @@ def collect_unfollowed_channel(session: Session, channel_id: str) -> int:
     return deleted
 
 
-def get_channel_stats(session: Session, channel_id: str) -> dict[str, Any]:
-    ch = session.get(Channel, channel_id)
+def get_channel_stats(
+    session: Session, channel_id: str, *, user_id: uuid.UUID
+) -> dict[str, Any]:
+    """A channel not among those `user_id` follows answers 404 (ticket 15).
+
+    Same `assert_owner` convention `unfollow_channel` uses: 404 rather than
+    403, and the detail names the resource, so "you may not see this" and
+    "there is nothing here" stay indistinguishable from the response.
+    """
+    ch = session.exec(
+        scoped_select(select(Channel).where(Channel.id == channel_id), Channel, user_id)
+    ).first()
     if not ch:
         raise HTTPException(status_code=404, detail="Channel not found")
     stats = compute_channel_stats(session, ch.name)
@@ -589,6 +642,14 @@ def bulk_update_channel_tags(
         channel.tags = normalize_channel_tags(raw_tags)
         channel.updated_at = utc_now()
         session.add(channel)
+        # Tags are read from the Follow now (ticket 15) — see
+        # `channel_to_camel` — so the edit has to reach the operator's Follow
+        # row too, or `list_channels` would keep showing the old tags.
+        # `fields=["tags"]`, not the full mirrored set: this endpoint only
+        # ever changes tags, and mirroring the rest too would overwrite a
+        # Follow's own start time/discovered-via with the Channel's, on a
+        # request that never touched either.
+        sync_follow_settings(session, channel, user_id=operator_id, fields=["tags"])
         updated_rows.append(
             channel_to_camel(channel, group=groups_by_id.get(channel.setting_group_id))
         )

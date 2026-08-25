@@ -37,7 +37,7 @@ from app.services.channel_setting_groups import (
 from app.services.channel_tags import normalize_channel_tags
 from app.services.channels import SERVER_MANAGED_CHANNEL_FIELDS, apply_channel_fields
 from app.services.credentials import encrypt_bot_token
-from app.services.follows import ensure_follow_for_channel
+from app.services.follows import MIRRORED_CHANNEL_FIELDS, sync_follow_settings
 from app.services.logs import (
     upsert_embedding_log,
     upsert_llm_log,
@@ -94,7 +94,7 @@ def _import_channels(
     the export marks it unavailable or frozen, and in the default group
     otherwise — never left group-less, which nothing downstream tolerates.
     """
-    touched: list[Channel] = []
+    touched: list[tuple[Channel, list[str]]] = []
     for item in items:
         normalized = normalize_body(item)
         for field in SERVER_MANAGED_CHANNEL_FIELDS:
@@ -104,6 +104,13 @@ def _import_channels(
         if ch:
             apply_channel_fields(ch, normalized, session=session)
             ch.updated_at = utc_now()
+            # Only what this item actually carries — see
+            # `sync_follow_settings` for why mirroring the full set on every
+            # import would clobber a Follow that has legitimately diverged
+            # from the Channel for a field this item never mentions.
+            touched_follow_fields = [
+                field for field in MIRRORED_CHANNEL_FIELDS if field in normalized
+            ]
         else:
             setting_group_id = normalized.get("setting_group_id")
             group = (
@@ -142,15 +149,22 @@ def _import_channels(
                 followed_at=normalized.get("followed_at"),
                 discovered_via=normalized.get("discovered_via"),
             )
+            # A brand-new Channel has no existing Follow to leave alone, so
+            # its first Follow mirrors every field ticket 22 will drop from
+            # Channel.
+            touched_follow_fields = list(MIRRORED_CHANNEL_FIELDS)
         session.add(ch)
-        touched.append(ch)
+        touched.append((ch, touched_follow_fields))
 
     # One flush for the batch, still inside the document's single transaction:
-    # `ensure_follow` is a Core INSERT that executes immediately, so the ORM
-    # adds above have to reach the database before the foreign key is checked.
+    # `sync_follow_settings` is a Core INSERT that executes immediately, so
+    # the ORM adds above have to reach the database before the foreign key is
+    # checked.
     session.flush()
-    for channel in touched:
-        ensure_follow_for_channel(session, channel, user_id=user_id)
+    for channel, touched_follow_fields in touched:
+        sync_follow_settings(
+            session, channel, user_id=user_id, fields=touched_follow_fields
+        )
     return len(items)
 
 

@@ -62,8 +62,12 @@ CHANNEL_CREATORS: dict[str, str] = {
 
 #: The functions that write `tg_channel_follows`. All of them live in the
 #: aggregate — the point of naming them here is that a creator has to call one
-#: of these, not that it has to call a particular one.
-FOLLOW_WRITERS = ("ensure_follow_for_channel", "ensure_follow")
+#: of these, not that it has to call a particular one. `sync_follow_settings`
+#: (ticket 15) is the third: `channels.py`'s upsert is an edit, not just a
+#: creation, so it calls the `ON CONFLICT DO UPDATE` writer instead of the
+#: additive `ensure_follow_for_channel` — an existing Follow's tags/start time
+#: are meant to move with the edit, not survive it.
+FOLLOW_WRITERS = ("ensure_follow_for_channel", "ensure_follow", "sync_follow_settings")
 
 #: Modules permitted to name `ChannelFollow` in a constructor position. The
 #: aggregate writes it; the other two only reference the class — `models_tg.py`
@@ -73,6 +77,11 @@ FOLLOW_TABLE_WRITERS = {
     "app/services/follows.py",
     "app/models_tg.py",
     "app/services/tenancy.py",
+    # `channel_to_camel` takes `follow: ChannelFollow | None` (ticket 15) so it
+    # can read per-User fields off the caller's own Follow instead of the
+    # Channel — a type annotation, not a write. Same false positive the
+    # comment below already argues is cheap to accept.
+    "app/services/serialization.py",
 }
 
 

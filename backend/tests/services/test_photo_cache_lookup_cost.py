@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import os
 import pathlib
+import uuid
 from collections.abc import Callable, Generator, Iterator
 from contextlib import contextmanager
 from pathlib import Path
@@ -170,7 +171,10 @@ def test_channel_list_lookup_cost_does_not_scale_with_channel_count(
             _populate(tmp_path, [cid for cid in new_ids if int(cid[5:]) % 2 == 0])
 
             with count_directory_scans() as counter:
-                rows = list_channels(session)
+                # `TENANCY_ENFORCED` is off by default, so scoping is a no-op
+                # and any user id sees every channel — this test is about
+                # avatar-lookup cost, not the seam.
+                rows = list_channels(session, user_id=uuid.uuid4())
 
         assert len(rows) == target
         observed.append(counter.count)

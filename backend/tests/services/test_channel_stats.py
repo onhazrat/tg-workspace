@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import uuid
 from datetime import datetime
 from unittest.mock import patch
 
@@ -17,6 +18,11 @@ from app.services.channels import (
     get_channel_stats,
 )
 from tests.utils.setting_groups import add_test_channel
+
+# `get_channel_stats` requires a real `user_id` to scope against, but scoping
+# is a no-op while `TENANCY_ENFORCED` is off (the default here) — these tests
+# are about the stats math, not the seam, so any UUID does.
+_SOME_USER = uuid.uuid4()
 
 
 def _hourly_timestamps(count: int) -> list[int]:
@@ -160,7 +166,7 @@ def test_single_channel_stats_delegates_to_batch() -> None:
             batch_entry = compute_channel_stats_batch(session, ["delegate-ch"])[
                 "delegate-ch"
             ]
-            stats = get_channel_stats(session, "delegate-ch")
+            stats = get_channel_stats(session, "delegate-ch", user_id=_SOME_USER)
 
         assert stats == batch_entry
 
@@ -171,7 +177,7 @@ def test_get_channel_stats_no_posts_raises() -> None:
         session.commit()
 
         try:
-            get_channel_stats(session, "no-posts-ch")
+            get_channel_stats(session, "no-posts-ch", user_id=_SOME_USER)
         except HTTPException as exc:
             assert exc.status_code == 404
             assert exc.detail == "No posts for channel"
