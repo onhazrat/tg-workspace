@@ -58,6 +58,25 @@ from sqlalchemy import and_, func, or_
 from sqlmodel import Session, col, select
 
 from app.models_tg import DiscoverHandleProbe, utc_now
+from app.services.tenancy import unscoped_select
+
+#: Why the probe reads below do not go through `scoped_select` (ticket 16).
+#:
+#: Named once and passed to both, so the two cannot drift into stating
+#: different reasons for the same decision — and so the decision is one string
+#: to change if it is ever revisited.
+PROBE_SCOPE_REASON = (
+    "A probe is a fact about a handle, not about an account: "
+    "'@foo cannot be followed by anyone' has the same answer for every caller, "
+    "so `DiscoverHandleProbe` is classified `Scope.CORPUS` in "
+    "`services/tenancy.py`. Scoping it would make each account re-probe every "
+    "handle, multiplying fetches at Telegram by the number of accounts to "
+    "arrive at the same verdict — and the queue is drained by a scheduled job "
+    "with no user at all, which is the same reason `jobs/discover_probe.py` is "
+    "deliberately unmetered by the quota ledger. The row carries no owner and "
+    "nothing about it is private: it holds a public handle and what one fetch "
+    "of that public page said."
+)
 
 #: Statuses that mean "Telegram answered, and this is the answer".
 CONCLUSIVE_STATUSES = frozenset({"ok", "unavailable"})
@@ -136,9 +155,12 @@ def probe_map(session: Session, handles: set[str]) -> dict[str, dict[str, Any]]:
     """
     if not handles:
         return {}
-    statement = select(DiscoverHandleProbe).where(
-        col(DiscoverHandleProbe.handle).in_(handles),
-        col(DiscoverHandleProbe.attempted_at).is_not(None),
+    statement = unscoped_select(
+        select(DiscoverHandleProbe).where(
+            col(DiscoverHandleProbe.handle).in_(handles),
+            col(DiscoverHandleProbe.attempted_at).is_not(None),
+        ),
+        reason=PROBE_SCOPE_REASON,
     )
     return {row.handle: probe_to_camel(row) for row in session.exec(statement).all()}
 
@@ -156,7 +178,7 @@ def list_probes(
     generated and is never pruned, so an unbounded select here would get slower
     for the lifetime of the install (`docs/unbounded-query-audit.md`).
     """
-    statement = select(DiscoverHandleProbe)
+    statement = unscoped_select(select(DiscoverHandleProbe), reason=PROBE_SCOPE_REASON)
     if status:
         statement = statement.where(col(DiscoverHandleProbe.status) == status)
     statement = (
@@ -182,7 +204,10 @@ def queue_counts(session: Session) -> dict[str, int]:
     attempts = col(DiscoverHandleProbe.attempts)
 
     def _count(clause: Any) -> int:
-        statement = select(func.count()).select_from(DiscoverHandleProbe).where(clause)
+        statement = unscoped_select(
+            select(func.count()).select_from(DiscoverHandleProbe).where(clause),
+            reason=PROBE_SCOPE_REASON,
+        )
         return int(session.exec(statement).one())
 
     return {

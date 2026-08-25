@@ -14,6 +14,7 @@ from app.core.db import engine
 from app.models_tg import Post
 from app.services.discover import compute_discover_candidates
 from app.services.post_filters import PostFilters
+from tests.utils.tenancy import ANY_READER
 
 
 def _add(session: Session, post_id: int, **kw: Any) -> None:
@@ -38,13 +39,16 @@ def test_keyword_filter_scopes_discovery() -> None:
         _add(session, 2, text="ignore @beta_channel here", forwarded_from=None)
         session.commit()
         # No filter: both mentions discovered.
-        allc = compute_discover_candidates(session, channel_names=["carrier"])
+        allc = compute_discover_candidates(
+            session, channel_names=["carrier"], user_id=ANY_READER
+        )
         assert set(_totals(allc)) == {"alpha_news", "beta_channel"}
         # Keyword "great" keeps only post 1, so only alpha_news survives.
         scoped = compute_discover_candidates(
             session,
             channel_names=["carrier"],
             filters=PostFilters(keyword="great"),
+            user_id=ANY_READER,
         )
         assert set(_totals(scoped)) == {"alpha_news"}
 
@@ -59,6 +63,7 @@ def test_forwarded_filter_scopes_discovery() -> None:
             session,
             channel_names=["carrier"],
             filters=PostFilters(forwarded="original"),
+            user_id=ANY_READER,
         )
         assert set(_totals(scoped)) == {"alpha_news"}
 
@@ -74,6 +79,7 @@ def test_latest_cap_limits_posts_per_channel() -> None:
             session,
             channel_names=["carrier"],
             max_per_channel=1,
+            user_id=ANY_READER,
         )
         # Only the single newest post is considered.
         assert set(_totals(capped)) == {"gamma_channel"}
@@ -85,11 +91,14 @@ def test_no_filters_matches_prior_behavior() -> None:
     with Session(engine) as session:
         _add(session, 1, text="hi @alpha_news")
         session.commit()
-        base = compute_discover_candidates(session, channel_names=["carrier"])
+        base = compute_discover_candidates(
+            session, channel_names=["carrier"], user_id=ANY_READER
+        )
         explicit = compute_discover_candidates(
             session,
             channel_names=["carrier"],
             filters=PostFilters(),
             max_per_channel=0,
+            user_id=ANY_READER,
         )
         assert base == explicit

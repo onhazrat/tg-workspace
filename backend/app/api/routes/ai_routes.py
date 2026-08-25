@@ -1,4 +1,5 @@
 import json
+import uuid
 from collections.abc import AsyncIterator
 
 from fastapi import APIRouter, HTTPException
@@ -38,6 +39,7 @@ router = APIRouter(prefix="/ai", tags=["ai"])
 def _resolve_posts_text(
     session: Session,
     *,
+    user_id: uuid.UUID,
     channels: list[str],
     posts_text: str,
     scope: PromptScopeInput | None,
@@ -69,8 +71,8 @@ def _resolve_posts_text(
         seed=scope.seed,
     )
     if tag_format:
-        return assemble_tag_posts_text(session, prompt_scope)
-    return assemble_posts_text(session, prompt_scope)
+        return assemble_tag_posts_text(session, prompt_scope, user_id=user_id)
+    return assemble_posts_text(session, prompt_scope, user_id=user_id)
 
 
 @router.get("/models")
@@ -82,7 +84,7 @@ def api_list_models(_current_user: CurrentUser) -> ModelListResponse:
 
 @router.post("/summary")
 async def api_summary(
-    body: SummaryRequest, session: SessionDep, _current_user: CurrentUser
+    body: SummaryRequest, session: SessionDep, current_user: CurrentUser
 ) -> CompletionResult:
     if not settings.GEMINI_API_KEY:
         raise HTTPException(status_code=503, detail="GEMINI_API_KEY not configured")
@@ -94,6 +96,7 @@ async def api_summary(
         language=body.language,
         posts_text=_resolve_posts_text(
             session,
+            user_id=current_user.id,
             channels=body.channels,
             posts_text=body.posts_text,
             scope=body.scope,
@@ -106,7 +109,7 @@ async def api_summary(
 
 @router.post("/summary/prompt")
 def api_summary_prompt(
-    body: SummaryRequest, session: SessionDep, _current_user: CurrentUser
+    body: SummaryRequest, session: SessionDep, current_user: CurrentUser
 ) -> PromptResponse:
     prompt = format_summary_prompt(
         channels=body.channels,
@@ -114,6 +117,7 @@ def api_summary_prompt(
         language=body.language,
         posts_text=_resolve_posts_text(
             session,
+            user_id=current_user.id,
             channels=body.channels,
             posts_text=body.posts_text,
             scope=body.scope,
@@ -124,7 +128,7 @@ def api_summary_prompt(
 
 @router.post("/summary/stream")
 async def api_summary_stream(
-    body: SummaryRequest, session: SessionDep, _current_user: CurrentUser
+    body: SummaryRequest, session: SessionDep, current_user: CurrentUser
 ) -> StreamingResponse:
     if not settings.GEMINI_API_KEY:
         raise HTTPException(status_code=503, detail="GEMINI_API_KEY not configured")
@@ -136,6 +140,7 @@ async def api_summary_stream(
         language=body.language,
         posts_text=_resolve_posts_text(
             session,
+            user_id=current_user.id,
             channels=body.channels,
             posts_text=body.posts_text,
             scope=body.scope,
@@ -154,7 +159,7 @@ async def api_summary_stream(
 
 @router.post("/chat/stream")
 async def api_chat_stream(
-    body: ChatRequest, session: SessionDep, _current_user: CurrentUser
+    body: ChatRequest, session: SessionDep, current_user: CurrentUser
 ) -> StreamingResponse:
     if not settings.GEMINI_API_KEY:
         raise HTTPException(status_code=503, detail="GEMINI_API_KEY not configured")
@@ -167,6 +172,7 @@ async def api_chat_stream(
         rtl_instruction=rtl_instruction(body.language),
         posts_text=_resolve_posts_text(
             session,
+            user_id=current_user.id,
             channels=body.channels,
             posts_text=body.posts_text,
             scope=body.scope,
@@ -189,13 +195,14 @@ async def api_chat_stream(
 
 @router.post("/tag/prompt")
 def api_tag_prompt(
-    body: TagRequest, session: SessionDep, _current_user: CurrentUser
+    body: TagRequest, session: SessionDep, current_user: CurrentUser
 ) -> PromptResponse:
     prompt = format_tag_prompt(
         channels=body.channels,
         channels_text=body.channels_text,
         posts_text=_resolve_posts_text(
             session,
+            user_id=current_user.id,
             channels=body.channels,
             posts_text=body.posts_text,
             scope=body.scope,
@@ -211,7 +218,7 @@ def api_tag_prompt(
 
 @router.post("/tag/stream")
 async def api_tag_stream(
-    body: TagRequest, session: SessionDep, _current_user: CurrentUser
+    body: TagRequest, session: SessionDep, current_user: CurrentUser
 ) -> StreamingResponse:
     if not settings.GEMINI_API_KEY:
         raise HTTPException(status_code=503, detail="GEMINI_API_KEY not configured")
@@ -222,6 +229,7 @@ async def api_tag_stream(
         channels_text=body.channels_text,
         posts_text=_resolve_posts_text(
             session,
+            user_id=current_user.id,
             channels=body.channels,
             posts_text=body.posts_text,
             scope=body.scope,

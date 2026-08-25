@@ -9,6 +9,7 @@ feed shows, and formatted by the byte-identical ``format_posts_for_prompt``.
 
 from __future__ import annotations
 
+import uuid
 from dataclasses import dataclass
 from typing import Any, cast
 
@@ -53,12 +54,19 @@ class PromptScope:
     seed: int = 0
 
 
-def _fetch_scoped_posts(session: Session, scope: PromptScope) -> list[dict[str, Any]]:
+def _fetch_scoped_posts(
+    session: Session, scope: PromptScope, *, user_id: uuid.UUID
+) -> list[dict[str, Any]]:
     """All posts in scope (not a page), refusing a selection past the post cap.
 
     The AI paths summarise/tag *every* matching post, so this deliberately does
     not paginate — it fetches up to ``MAX_PROMPT_POSTS`` and refuses anything
     larger with a clear ``413`` rather than silently truncating.
+
+    ``user_id`` reaches both reads below, and the same one has to reach both:
+    the count decides whether the selection is refused, the feed assembles what
+    survives, and a count over a wider scope than the feed would 413 a
+    selection that would have fit.
     """
     if scope.forwarded not in FORWARDED_FILTERS:
         raise HTTPException(422, detail=f"unknown forwarded: {scope.forwarded}")
@@ -79,6 +87,7 @@ def _fetch_scoped_posts(session: Session, scope: PromptScope) -> list[dict[str, 
 
     counts = count_posts_in_scope(
         session,
+        user_id=user_id,
         channel_names=channel_names,
         start_date=scope.start_date,
         end_date=scope.end_date,
@@ -98,6 +107,7 @@ def _fetch_scoped_posts(session: Session, scope: PromptScope) -> list[dict[str, 
 
     return list_feed(
         session,
+        user_id=user_id,
         channel_names=channel_names,
         start_date=scope.start_date,
         end_date=scope.end_date,
@@ -125,14 +135,18 @@ def _enforce_token_budget(text: str) -> str:
     return text
 
 
-def assemble_posts_text(session: Session, scope: PromptScope) -> str:
+def assemble_posts_text(
+    session: Session, scope: PromptScope, *, user_id: uuid.UUID
+) -> str:
     """Summary/chat posts block for a scope — all matching posts, budget-checked."""
     return _enforce_token_budget(
-        format_posts_for_prompt(_fetch_scoped_posts(session, scope))
+        format_posts_for_prompt(_fetch_scoped_posts(session, scope, user_id=user_id))
     )
 
 
-def assemble_tag_posts_text(session: Session, scope: PromptScope) -> str:
+def assemble_tag_posts_text(
+    session: Session, scope: PromptScope, *, user_id: uuid.UUID
+) -> str:
     """Tag posts block (channel-grouped, chronological) for a scope."""
-    posts = _fetch_scoped_posts(session, scope)
+    posts = _fetch_scoped_posts(session, scope, user_id=user_id)
     return _enforce_token_budget(format_posts_for_tag_prompt(posts, scope.channels))

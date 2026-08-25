@@ -17,6 +17,7 @@ from app.models_tg import Post
 from app.prompts.posts import format_posts_for_prompt
 from app.services import prompt_assembly
 from app.services.prompt_assembly import PromptScope, assemble_posts_text
+from tests.utils.tenancy import ANY_READER
 
 
 def _add(session: Session, channel: str, post_id: int, **kw: Any) -> None:
@@ -38,7 +39,9 @@ def test_assembles_scope_matching_the_feed_order() -> None:
         _add(session, "a", 3, timestamp=200, text="middle")
         session.commit()
 
-        text = assemble_posts_text(session, PromptScope(channels=["a"]))
+        text = assemble_posts_text(
+            session, PromptScope(channels=["a"]), user_id=ANY_READER
+        )
 
         # Newest-first (time sort), formatted by the shared helper.
         assert text == format_posts_for_prompt(
@@ -52,7 +55,12 @@ def test_assembles_scope_matching_the_feed_order() -> None:
 
 def test_empty_scope_returns_empty_string() -> None:
     with Session(engine) as session:
-        assert assemble_posts_text(session, PromptScope(channels=["nope"])) == ""
+        assert (
+            assemble_posts_text(
+                session, PromptScope(channels=["nope"]), user_id=ANY_READER
+            )
+            == ""
+        )
 
 
 def test_rejects_too_many_posts(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -63,7 +71,9 @@ def test_rejects_too_many_posts(monkeypatch: pytest.MonkeyPatch) -> None:
         session.commit()
 
         with pytest.raises(HTTPException) as excinfo:
-            assemble_posts_text(session, PromptScope(channels=["a"]))
+            assemble_posts_text(
+                session, PromptScope(channels=["a"]), user_id=ANY_READER
+            )
         assert excinfo.value.status_code == 413
         assert "3" in str(excinfo.value.detail)
 
@@ -75,6 +85,8 @@ def test_rejects_over_token_budget(monkeypatch: pytest.MonkeyPatch) -> None:
         session.commit()
 
         with pytest.raises(HTTPException) as excinfo:
-            assemble_posts_text(session, PromptScope(channels=["a"]))
+            assemble_posts_text(
+                session, PromptScope(channels=["a"]), user_id=ANY_READER
+            )
         assert excinfo.value.status_code == 413
         assert "token" in str(excinfo.value.detail).lower()

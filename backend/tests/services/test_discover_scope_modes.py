@@ -16,6 +16,7 @@ from app.models_tg import Post
 from app.services.discover import compute_discover_candidates
 from app.services.discover_reports import create_report
 from app.services.post_filters import PostFilters
+from tests.utils.tenancy import ANY_READER
 
 
 def _post(post_id: int, forwarded_from: str, timestamp: int) -> Post:
@@ -37,7 +38,7 @@ def _seed_posts(session: Session, count: int = 12) -> None:
 def _run(session: Session, **kwargs: Any) -> dict[str, Any]:
     base: dict[str, Any] = {"channel_names": ["carrier"]}
     base.update(kwargs)
-    return compute_discover_candidates(session, **base)
+    return compute_discover_candidates(session, **base, user_id=ANY_READER)
 
 
 # --- random per-channel cap ------------------------------------------------
@@ -157,6 +158,7 @@ def test_saved_report_records_the_cap_mode_seed_and_scope_size() -> None:
             max_per_channel_mode="random",
             seed=42,
             post_ids=[("carrier", 1), ("carrier", 2), ("carrier", 3)],
+            user_id=ANY_READER,
         )
         scope = report["scope"]
         assert scope["maxPerChannelMode"] == "random"
@@ -175,6 +177,7 @@ def test_unrestricted_report_records_no_scoped_post_count() -> None:
             signals=None,
             filters=PostFilters(),
             max_per_channel=0,
+            user_id=ANY_READER,
         )
         assert report["scope"]["scopedPostCount"] is None
         assert report["scope"]["maxPerChannelMode"] == "latest"

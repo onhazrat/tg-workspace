@@ -3,16 +3,19 @@
 from __future__ import annotations
 
 import time
+import uuid
 from typing import Any
 
 from sqlalchemy import func, literal, or_
 from sqlalchemy.orm import aliased
 from sqlmodel import Session, col, select
 
-from app.models_tg import Channel, Post, utc_now
+from app.models_tg import Post, utc_now
+from app.services.follows import visible_channel_names
 from app.services.post_filters import PostFilters, apply_post_filters
 from app.services.serialization import post_to_camel
 from app.services.sync_meta import touch_sync
+from app.services.tenancy import scoped_select
 
 DEFAULT_POST_PAGE_SIZE = 500
 MAX_POST_PAGE_SIZE = 5000
@@ -161,6 +164,7 @@ def _feed_order_by(sort: str, entity: Any) -> list[Any]:
 def list_feed(
     session: Session,
     *,
+    user_id: uuid.UUID,
     channel_names: list[str] | None = None,
     start_date: int | None = None,
     end_date: int | None = None,
@@ -185,8 +189,13 @@ def list_feed(
     worker — the root cause of the staging incident. The ``ORDER BY`` always
     ends in ``(channel_name, post_id)`` so offset paging is deterministic (a
     non-deterministic order silently repeats and skips rows across pages).
+
+    ``user_id`` narrows the read to Channels the caller Follows (ticket 16).
+    The predicate goes on ``base``, *before* the ``row_number()`` wrapper
+    below, so a capped feed ranks only rows the caller can see — applying it
+    outside the subquery would let another account's posts consume the cap.
     """
-    base = select(Post)
+    base = scoped_select(select(Post), Post, user_id)
     if channel_names:
         base = base.where(col(Post.channel_name).in_(channel_names))
     if start_date is not None:
@@ -196,10 +205,7 @@ def list_feed(
     if filters is not None:
         followed: frozenset[str] | None = None
         if filters.forwarded == "unfollowed_forwarded":
-            followed = frozenset(
-                name.lower()  # ty: ignore[unresolved-attribute]
-                for name in session.exec(select(Channel.name)).all()
-            )
+            followed = frozenset(visible_channel_names(session, user_id=user_id))
         base = apply_post_filters(base, filters, followed_names=followed)
 
     if max_per_channel > 0:
@@ -229,7 +235,7 @@ def list_feed(
 
 
 def lookup_posts(
-    session: Session, pairs: list[tuple[str, int]]
+    session: Session, pairs: list[tuple[str, int]], *, user_id: uuid.UUID
 ) -> list[dict[str, Any]]:
     """Fetch specific posts by their `(channel_name, post_id)` natural key.
 
@@ -239,11 +245,17 @@ def lookup_posts(
 
     Duplicate pairs are collapsed, and the batch is expected to be capped by
     the caller (see MAX_POST_LOOKUP_BATCH).
+
+    A post under a Channel the caller does not Follow is absent for the same
+    reason an unknown pair is (ticket 16). Dropping it rather than raising is
+    deliberate: this endpoint's whole contract is that a missing post is
+    silence, so "you may not see this" and "there is nothing here" give the
+    same answer — the enumeration argument `assert_owner` makes with a 404.
     """
     unique = {(name, post_id) for name, post_id in pairs}
     if not unique:
         return []
-    stmt = select(Post).where(
+    stmt = scoped_select(select(Post), Post, user_id).where(
         or_(
             *[
                 (col(Post.channel_name) == name) & (col(Post.post_id) == post_id)
@@ -257,6 +269,7 @@ def lookup_posts(
 def count_posts_in_scope(
     session: Session,
     *,
+    user_id: uuid.UUID,
     channel_names: list[str] | None = None,
     start_date: int | None = None,
     end_date: int | None = None,
@@ -272,12 +285,17 @@ def count_posts_in_scope(
     `max_per_channel` clamps each channel's count to the cap. The cap's
     `random` and `latest` modes select *different* posts but the same *number*
     per channel, so a count is mode-independent and needs no client fallback.
+
+    Scoped with the same `user_id` `list_feed` takes, and it has to be: the AI
+    paths sum these counts to decide whether a selection fits in one prompt and
+    then call `list_feed` to assemble it, so a count over a wider set than the
+    feed returns would refuse a selection that would actually have fit.
     """
     count_expr: Any = func.count()
     if max_per_channel > 0:
         count_expr = func.least(count_expr, max_per_channel)
 
-    stmt = select(col(Post.channel_name), count_expr)
+    stmt = scoped_select(select(col(Post.channel_name), count_expr), Post, user_id)
     if channel_names:
         stmt = stmt.where(col(Post.channel_name).in_(channel_names))
     if start_date is not None:
@@ -287,10 +305,7 @@ def count_posts_in_scope(
     if filters is not None:
         followed: frozenset[str] | None = None
         if filters.forwarded == "unfollowed_forwarded":
-            followed = frozenset(
-                name.lower()  # ty: ignore[unresolved-attribute]
-                for name in session.exec(select(Channel.name)).all()
-            )
+            followed = frozenset(visible_channel_names(session, user_id=user_id))
         stmt = apply_post_filters(stmt, filters, followed_names=followed)
     stmt = stmt.group_by(col(Post.channel_name))
 

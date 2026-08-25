@@ -42,6 +42,7 @@ from app.models import User
 from app.models_tg import Channel, ChannelFollow, utc_now
 from app.services.operator import get_operator_user_id
 from app.services.settings_store import get_global_setting
+from app.services.tenancy import scoped_select
 
 #: Global `AppSetting` key recording that the follow backfill ran to completion.
 #:
@@ -299,6 +300,31 @@ def follows_for_user(
         )
     ).all()
     return {f.channel_id: f for f in rows}
+
+
+def visible_channel_names(session: Session, *, user_id: uuid.UUID) -> set[str]:
+    """The Channel *names* `user_id` may see, lowercased for handle comparison.
+
+    Three call sites ask the same question of `tg_channels` and all three
+    compare the answer against a handle scraped out of a post: the feed's and
+    the counts' `unfollowed_forwarded` filter ("is this forward's source one of
+    mine?") and Discover's `isFollowed` flag. They were three copies of
+    `select(Channel.name)`, which is the shape a fourth copy gets added to
+    without anyone noticing that one of them was never scoped.
+
+    **The name says "visible", not "followed", because the two differ while the
+    flag is off.** Unenforced, `scoped_select` is a no-op and this is every
+    Channel in the corpus — today's behaviour, preserved exactly. Enforced, it
+    is the Channels the caller Follows. Calling it `followed_channel_names`
+    would make it a lie in the state it actually ships in.
+
+    Lowercased here rather than at each call site: `discover.normalize_handle`
+    lowercases every handle it extracts, so an un-lowercased name silently
+    fails to match and the only symptom is a candidate the caller already
+    follows being offered again.
+    """
+    names = session.exec(scoped_select(select(Channel.name), Channel, user_id)).all()
+    return {str(name).lower() for name in names}
 
 
 #: The per-User columns `ensure_follow_for_channel` copies off a Channel at

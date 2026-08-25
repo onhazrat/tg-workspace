@@ -34,7 +34,7 @@ router = APIRouter()
 def list_posts(
     body: PostFeedRequest,
     session: SessionDep,
-    _current_user: CurrentUser,
+    current_user: CurrentUser,
 ) -> list[PostResponse]:
     """One page of posts for a channel/date scope.
 
@@ -59,6 +59,7 @@ def list_posts(
         PostResponse.model_validate(row)
         for row in list_feed_impl(
             session,
+            user_id=current_user.id,
             channel_names=body.resolved_channel_names(),
             start_date=body.start_date,
             end_date=body.end_date,
@@ -77,7 +78,7 @@ def list_posts(
 def posts_counts(
     body: PostScopeRequest,
     session: SessionDep,
-    _current_user: CurrentUser,
+    current_user: CurrentUser,
 ) -> dict[str, int]:
     """Per-channel post counts for a filtered scope, computed as a SQL GROUP BY.
 
@@ -89,6 +90,7 @@ def posts_counts(
     """
     return count_posts_in_scope_impl(
         session,
+        user_id=current_user.id,
         channel_names=body.cleaned_channel_names(),
         start_date=body.start_date,
         end_date=body.end_date,
@@ -101,12 +103,14 @@ def posts_counts(
 def lookup_posts_route(
     body: PostLookupRequest,
     session: SessionDep,
-    _current_user: CurrentUser,
+    current_user: CurrentUser,
 ) -> list[PostResponse]:
     return [
         PostResponse.model_validate(row)
         for row in lookup_posts_impl(
-            session, [(ref.channel_name, ref.post_id) for ref in body.posts]
+            session,
+            [(ref.channel_name, ref.post_id) for ref in body.posts],
+            user_id=current_user.id,
         )
     ]
 

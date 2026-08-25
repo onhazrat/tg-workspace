@@ -68,7 +68,7 @@ router = APIRouter()
 def discover_candidates(
     body: DiscoverCandidatesRequest,
     session: SessionDep,
-    _current_user: CurrentUser,
+    current_user: CurrentUser,
 ) -> DiscoverCandidatesResponse:
     """Aggregated discovery candidates for a channel/date scope.
 
@@ -82,7 +82,9 @@ def discover_candidates(
     travels in the body so it cannot overflow the request line.
     """
     return DiscoverCandidatesResponse.model_validate(
-        compute_discover_candidates(session, **_discover_kwargs(body))
+        compute_discover_candidates(
+            session, user_id=current_user.id, **_discover_kwargs(body)
+        )
     )
 
 

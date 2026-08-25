@@ -23,6 +23,7 @@ from app.services.discover_reports import (
 )
 from app.services.post_filters import PostFilters
 from tests.utils.setting_groups import add_test_channel
+from tests.utils.tenancy import ANY_READER
 
 
 def _post(
@@ -58,7 +59,7 @@ def _create(session: Session, **overrides: Any) -> dict[str, Any]:
         "max_per_channel": 0,
     }
     kwargs.update(overrides)
-    return create_report(session, **kwargs)
+    return create_report(session, **kwargs, user_id=ANY_READER)
 
 
 def test_generating_saves_a_readable_report() -> None:

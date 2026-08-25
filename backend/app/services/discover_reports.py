@@ -35,7 +35,9 @@ from app.models_tg import Channel, DiscoverReport, utc_now
 from app.services.discover import SignalKind, compute_discover_candidates
 from app.services.discover_ignored import ignored_handles
 from app.services.discover_probes import enqueue_handles, probe_map
+from app.services.follows import visible_channel_names
 from app.services.post_filters import PostFilters
+from app.services.tenancy import unscoped_select
 
 DEFAULT_REPORT_PAGE_SIZE = 100
 MAX_REPORT_PAGE_SIZE = 1000
@@ -77,11 +79,37 @@ def _base(report: DiscoverReport) -> dict[str, Any]:
     }
 
 
-def followed_names(session: Session) -> set[str]:
-    return {
-        name.lower()  # ty: ignore[unresolved-attribute]
-        for name in session.exec(select(Channel.name)).all()
-    }
+def followed_names(session: Session, *, user_id: uuid.UUID | None) -> set[str]:
+    """Whose follows `isFollowed` is answered from, for one saved report.
+
+    Was a bare `select(Channel.name)` — the *fourth* copy of the read ticket 16
+    consolidated into `visible_channel_names`, and the one that mattered most,
+    because it runs **after** the aggregation and overwrites the scoped answer
+    `compute_discover_candidates` just produced. Left alone it would have made
+    `POST /discover/reports` and `POST /discover/candidates` disagree about
+    `isFollowed` for byte-identical input the moment ticket 21 flips the flag.
+
+    `user_id` is the account whose follows the flag is about, and it is
+    required rather than defaulted so no caller can skip the question. `None`
+    is a real answer here, not a forgotten argument: a report written before
+    owners were stamped has no account to resolve against, and the honest
+    reading of its `isFollowed` is the corpus-wide one it has always had.
+    """
+    if user_id is None:
+        statement = unscoped_select(
+            select(Channel.name),
+            reason=(
+                "A saved report with no owner predates the `user_id` stamp, so "
+                "there is no account whose follows could answer `isFollowed`. "
+                "Reading the corpus is what this row has always meant; the "
+                "alternative — resolving a missing owner through "
+                "`get_operator_user_id` — is the NULL fallback the plan's "
+                "decision 24 dissolves. Ticket 17 scopes report *reads*, at "
+                "which point only the owner sees the row at all."
+            ),
+        )
+        return {str(name).lower() for name in session.exec(statement).all()}
+    return visible_channel_names(session, user_id=user_id)
 
 
 def _candidate_handle(candidate: dict[str, Any]) -> str:
@@ -123,9 +151,19 @@ def _with_live_state(
     return out
 
 
-def report_to_camel(session: Session, report: DiscoverReport) -> dict[str, Any]:
-    """Full projection, including every candidate."""
-    followed = followed_names(session)
+def report_to_camel(
+    session: Session, report: DiscoverReport, *, viewer_id: uuid.UUID | None
+) -> dict[str, Any]:
+    """Full projection, including every candidate.
+
+    `viewer_id` picks whose follows resolve `isFollowed`. It has no default:
+    the flag is a per-account answer, and a default would let a call site skip
+    deciding whose account it is. Today `get_report` and `update_report_flags`
+    pass the report's own owner because neither has an authenticated viewer to
+    pass; ticket 17 gives them one, and once a report is only readable by its
+    owner the two are the same value.
+    """
+    followed = followed_names(session, user_id=viewer_id)
     ignored = ignored_handles(session)
     stored = report.candidates or []
     handles = {_candidate_handle(c) for c in stored if isinstance(c, dict)} - {""}
@@ -263,14 +301,14 @@ def update_report_flags(
     session.add(report)
     session.commit()
     session.refresh(report)
-    return report_to_camel(session, report)
+    return report_to_camel(session, report, viewer_id=report.user_id)
 
 
 def get_report(session: Session, report_id: str) -> dict[str, Any]:
     report = session.get(DiscoverReport, report_id)
     if report is None:
         raise HTTPException(status_code=404, detail="report not found")
-    return report_to_camel(session, report)
+    return report_to_camel(session, report, viewer_id=report.user_id)
 
 
 def create_report(
@@ -285,16 +323,24 @@ def create_report(
     max_per_channel_mode: str = "latest",
     seed: int = 0,
     post_ids: list[tuple[str, int]] | None = None,
-    user_id: uuid.UUID | None = None,
+    user_id: uuid.UUID,
 ) -> dict[str, Any]:
     """Run the aggregation and persist it as a new report.
 
     Always creates; never overwrites an existing report for the same scope. Two
     runs over identical inputs are legitimately different artifacts — the corpus
     grows between them, and comparing the two is the point of keeping both.
+
+    `user_id` lost its `None` default in ticket 16. It was already the owner
+    stamp written onto the row, but it now also picks the scope the aggregation
+    runs over, and there is no honest answer to "aggregate as nobody" — the
+    tempting one, resolving a missing owner through `get_operator_user_id`, is
+    the NULL fallback the plan's decision 24 dissolves. The only caller is a
+    route holding a `CurrentUser`.
     """
     result = compute_discover_candidates(
         session,
+        user_id=user_id,
         channel_names=channel_names,
         start_date=start_date,
         end_date=end_date,
@@ -340,7 +386,11 @@ def create_report(
     # queues nothing.
     enqueue_handles(session, [c["name"] for c in result["candidates"]])
 
-    return report_to_camel(session, report)
+    # The acting caller, not `report.user_id`, although the two are equal here.
+    # Naming the argument the aggregation was scoped with is what keeps this
+    # projection from silently answering `isFollowed` for a different account
+    # than the one the candidates were computed for.
+    return report_to_camel(session, report, viewer_id=user_id)
 
 
 def delete_report(session: Session, report_id: str) -> None:

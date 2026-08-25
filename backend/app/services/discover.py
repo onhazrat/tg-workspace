@@ -18,18 +18,21 @@ two implementations cannot drift.
 from __future__ import annotations
 
 import re
+import uuid
 from dataclasses import dataclass, field
 from typing import Any, Literal
 
 from sqlalchemy import or_
 from sqlmodel import Session, col, select
 
-from app.models_tg import Channel, Post
+from app.models_tg import Post
 from app.services.discover_ignored import ignored_handles
+from app.services.follows import visible_channel_names
 from app.services.post_filters import PostFilters, apply_post_filters
 from app.services.post_links_parser import channel_from_telegram_url
 from app.services.posts import random_cap_order
 from app.services.telegram_web import _all_web_domains, is_channel_handle
+from app.services.tenancy import scoped_select
 
 SignalKind = Literal["forward", "mention", "link"]
 SIGNAL_KINDS: tuple[SignalKind, ...] = ("forward", "mention", "link")
@@ -138,6 +141,7 @@ class _Accumulator:
 def compute_discover_candidates(
     session: Session,
     *,
+    user_id: uuid.UUID,
     channel_names: list[str],
     start_date: int | None = None,
     end_date: int | None = None,
@@ -165,6 +169,18 @@ def compute_discover_candidates(
     vector search, which owns the ranking, and passes the resulting posts in.
     Aggregation therefore has exactly one implementation regardless of how the
     post set was chosen (IDEA-011 D14).
+
+    `user_id` scopes the aggregation to Channels the caller Follows (ticket
+    16). It narrows *two* independent reads, not one: the Posts being scanned,
+    and the followed-channel set behind each candidate's `isFollowed` flag. The
+    second is the one worth naming — left unscoped it reports a candidate as
+    already followed because another account follows it, which is both the
+    wrong answer for this caller and a fact about somebody else's account.
+
+    It also makes `post_ids` safe to accept from an unscoped ranker: the
+    semantic path runs its own vector search and passes the winners in here, so
+    the scoping predicate on the Post select is what keeps a post the caller
+    may not see out of the aggregate regardless of how it was chosen.
     """
     enabled = signals if signals is not None else set(SIGNAL_KINDS)
 
@@ -174,12 +190,11 @@ def compute_discover_candidates(
     if not channel_names or not enabled or post_ids == []:
         return {"candidates": [], "scopeCounts": scope_counts, "postsInScope": 0}
 
-    followed = {
-        name.lower()  # ty: ignore[unresolved-attribute]
-        for name in session.exec(select(Channel.name)).all()
-    }
+    followed = visible_channel_names(session, user_id=user_id)
 
-    stmt = select(Post).where(col(Post.channel_name).in_(channel_names))
+    stmt = scoped_select(select(Post), Post, user_id).where(
+        col(Post.channel_name).in_(channel_names)
+    )
     if start_date is not None:
         stmt = stmt.where(Post.timestamp >= start_date)
     if end_date is not None:

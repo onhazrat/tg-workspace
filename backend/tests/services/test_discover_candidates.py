@@ -18,6 +18,7 @@ from app.services.discover import (
     post_references,
 )
 from tests.utils.setting_groups import add_test_channel
+from tests.utils.tenancy import ANY_READER
 
 
 def _post(
@@ -61,6 +62,7 @@ def _run(
         scope = channels if channels is not None else ["carrier"]
         return compute_discover_candidates(
             session,
+            user_id=ANY_READER,
             channel_names=scope,
             signals=signals,  # type: ignore[arg-type]
         )
@@ -298,6 +300,7 @@ def test_date_scope_excludes_out_of_range_posts() -> None:
             channel_names=["carrier"],
             start_date=5000,
             end_date=10000,
+            user_id=ANY_READER,
         )
     assert [c["name"] for c in result["candidates"]] == ["beta_news"]
 

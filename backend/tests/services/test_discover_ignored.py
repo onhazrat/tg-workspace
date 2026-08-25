@@ -19,6 +19,7 @@ from app.services.discover_ignored import (
 )
 from app.services.discover_reports import create_report, get_report
 from app.services.post_filters import PostFilters
+from tests.utils.tenancy import ANY_READER
 
 
 def _seed(session: Session, sources: list[str]) -> None:
@@ -44,6 +45,7 @@ def _make_report(session: Session) -> dict:
         signals=None,
         filters=PostFilters(),
         max_per_channel=0,
+        user_id=ANY_READER,
     )
 
 
@@ -52,7 +54,9 @@ def test_ignoring_marks_the_candidate_in_new_reports() -> None:
         _seed(session, ["alpha_news", "beta_daily"])
         ignore_channels(session, ["alpha_news"])
 
-        result = compute_discover_candidates(session, channel_names=["carrier"])
+        result = compute_discover_candidates(
+            session, channel_names=["carrier"], user_id=ANY_READER
+        )
         by_name = {c["name"]: c for c in result["candidates"]}
         assert by_name["alpha_news"]["isIgnored"] is True
         assert by_name["beta_daily"]["isIgnored"] is False
@@ -90,7 +94,9 @@ def test_handles_are_normalized() -> None:
         ignore_channels(session, ["@Alpha_News"])
 
         assert ignored_handles(session) == {"alpha_news"}
-        result = compute_discover_candidates(session, channel_names=["carrier"])
+        result = compute_discover_candidates(
+            session, channel_names=["carrier"], user_id=ANY_READER
+        )
         assert result["candidates"][0]["isIgnored"] is True
 
 

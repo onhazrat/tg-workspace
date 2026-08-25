@@ -347,3 +347,21 @@ of owner-scoped access, and the tenancy seam has now replaced it.
 - [ ] Its table is dropped
 - [ ] Its tests go, including one of the three known-failing browser specs
 - [ ] Repository guidance no longer references it as the example
+
+## 30. Per-account Discover dismissals
+**Blocked by:** 3 — **blocks 21**
+
+**What to build:** Dismissing a Discover candidate is your judgement, not everybody's.
+`tg_discover_ignored` gains the owner half of its primary key so two accounts can dismiss and
+un-dismiss the same handle independently.
+
+Added after ticket 16, which scoped the Discover reads and found this one could not follow them.
+The table is keyed by `handle` alone, so this is a migration — composite key, cascading foreign
+key, backfilled owner — not a call-site change. Scoping only the read is worse than leaving it:
+`ignore_channels` skips a handle that already has a row, so once one account dismisses a handle,
+a second account's dismissal writes nothing and a scoped read tells them it is not dismissed.
+
+- [ ] The table is keyed by `(handle, user_id)`, with a cascading foreign key and existing rows backfilled to an owner
+- [ ] Dismissing, listing, and undoing all read and write the caller's own rows
+- [ ] Two accounts can hold opposite verdicts on one handle, and neither can see the other's
+- [ ] Both flag states are green

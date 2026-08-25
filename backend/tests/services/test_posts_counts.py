@@ -10,6 +10,7 @@ from app.core.db import engine
 from app.models_tg import Post
 from app.services.post_filters import PostFilters
 from app.services.posts import count_posts_in_scope
+from tests.utils.tenancy import ANY_READER
 
 
 def _add(session: Session, channel: str, post_id: int, **kw: Any) -> None:
@@ -31,7 +32,9 @@ def test_counts_group_by_channel() -> None:
         for i in range(5):
             _add(session, "b", i)
         session.commit()
-        counts = count_posts_in_scope(session, channel_names=["a", "b"])
+        counts = count_posts_in_scope(
+            session, channel_names=["a", "b"], user_id=ANY_READER
+        )
         assert counts == {"a": 3, "b": 5}
 
 
@@ -42,7 +45,11 @@ def test_counts_respect_channel_and_date_scope() -> None:
         _add(session, "b", 1, timestamp=500)
         session.commit()
         counts = count_posts_in_scope(
-            session, channel_names=["a"], start_date=200, end_date=900
+            session,
+            channel_names=["a"],
+            start_date=200,
+            end_date=900,
+            user_id=ANY_READER,
         )
         assert counts == {"a": 1}
 
@@ -57,6 +64,7 @@ def test_counts_apply_filters() -> None:
             session,
             channel_names=["a"],
             filters=PostFilters(keyword="vpn", forwarded="forwarded"),
+            user_id=ANY_READER,
         )
         assert counts == {"a": 1}
 
@@ -70,7 +78,7 @@ def test_counts_clamp_to_max_per_channel() -> None:
             _add(session, "b", i)
         session.commit()
         counts = count_posts_in_scope(
-            session, channel_names=["a", "b"], max_per_channel=5
+            session, channel_names=["a", "b"], max_per_channel=5, user_id=ANY_READER
         )
         assert counts == {"a": 5, "b": 3}
 
@@ -80,6 +88,9 @@ def test_counts_empty_when_no_match() -> None:
         _add(session, "a", 1, text="nothing")
         session.commit()
         counts = count_posts_in_scope(
-            session, channel_names=["a"], filters=PostFilters(keyword="zzz")
+            session,
+            channel_names=["a"],
+            filters=PostFilters(keyword="zzz"),
+            user_id=ANY_READER,
         )
         assert counts == {}
