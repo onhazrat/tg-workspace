@@ -84,6 +84,27 @@ services:
       SMTP_TLS: "false"
       EMAILS_FROM_EMAIL: "noreply@example.com"
 
+  # The sync worker gets the same watch/reload treatment as the backend, so a
+  # change to a scraping module restarts the thing that actually scrapes.
+  # Without this the worker would keep running the code baked into the image
+  # and a developer would be editing a process that is not doing the work —
+  # the worst kind of confusing, because the API *does* reload.
+  worker:
+    restart: "no"
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    develop:
+      watch:
+        - path: ./backend
+          action: sync+restart
+          target: /app/backend
+          ignore:
+            - ./backend/.venv
+            - .venv
+        - path: ./backend/pyproject.toml
+          action: rebuild
+
   mailcatcher:
     image: schickling/mailcatcher
     ports:

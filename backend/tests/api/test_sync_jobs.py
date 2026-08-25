@@ -6,6 +6,7 @@ import json
 import time
 from unittest.mock import AsyncMock, patch
 
+import pytest
 from fastapi.testclient import TestClient
 from sqlmodel import Session
 
@@ -59,6 +60,17 @@ def _mock_page_response(
             "attempts": [{"proxyUrl": "direct", "success": True}],
         },
     }
+
+
+@pytest.fixture(autouse=True)
+def _sync_worker(sync_worker: None) -> None:
+    """Every test here posts a sync and waits for it to happen.
+
+    Ticket 10 moved the draining into the worker process, so without something
+    playing that role the API enqueues, rings nobody, and these tests wait for
+    a job that will never start — a hang, not a failure. See the `sync_worker`
+    fixture in `conftest.py`.
+    """
 
 
 def test_start_sync_job_and_poll_status(client: TestClient) -> None:

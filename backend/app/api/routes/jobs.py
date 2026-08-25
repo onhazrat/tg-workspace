@@ -1,4 +1,3 @@
-import asyncio
 import json
 import time
 import uuid
@@ -11,9 +10,9 @@ from sqlmodel import Session
 
 from app.api.deps import CurrentUser, SessionDep
 from app.core.config import settings
-from app.jobs.manual_single_queue import enqueue_manual_single_sync
-from app.jobs.scheduler import get_job_status, set_job_enabled_flag, trigger_job
+from app.jobs.scheduler import get_job_status, request_job_run, set_job_enabled_flag
 from app.jobs.settings import JOB_IDS
+from app.jobs.sync_queue import enqueue_sync_job
 from app.schemas.jobs import JobStatusEntry, UpdateJobRequest
 from app.schemas.runtime_config import RuntimeConfigResponse
 from app.schemas.sync_jobs import (
@@ -34,7 +33,6 @@ from app.services.scraper_jobs import (
     get_job,
     wait_job_update,
 )
-from app.services.sync_orchestrator import run_sync_job
 
 _TERMINAL_SYNC_STATUSES = frozenset({"completed", "failed", "cancelled"})
 
@@ -102,7 +100,7 @@ async def trigger_scheduler_job(
     if job_id not in JOB_IDS:
         raise HTTPException(status_code=404, detail=f"Unknown job: {job_id}")
     try:
-        return JobStatusEntry.model_validate(await trigger_job(job_id))
+        return JobStatusEntry.model_validate(await request_job_run(job_id))
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
@@ -141,17 +139,14 @@ async def start_sync_job(
         sync_mode=sync_mode,
     )
     user_uuid = uuid.UUID(str(current_user.id))
-    if sync_mode == "individual":
-        # Ticket 09: a manual single sync travels through the
-        # `manual_single_normal` PGMQ lane instead of a bare `asyncio.create_task`
-        # — see `app/jobs/manual_single_queue.py`. The job row already exists
-        # (`create_job` above), so the SSE stream at `GET
-        # /jobs/sync/{id}/events` sees the same "pending" -> "running" ->
-        # terminal sequence it always has, just enqueued rather than
-        # scheduled directly.
-        await enqueue_manual_single_sync(job.job_id, user_uuid)
-    else:
-        asyncio.create_task(run_sync_job(job, user_uuid))
+    # Ticket 10: *every* mode enqueues now, one message per Channel, and the
+    # worker process is what runs them. Ticket 09 did this for `individual`
+    # only and left bulk on `asyncio.create_task`, which meant the API process
+    # was still doing the scraping for the heaviest requests — the exact thing
+    # a deploy or a restart interrupted. The job row already exists
+    # (`create_job` above), so `GET /jobs/sync/{id}/events` sees the same
+    # "pending" -> "running" -> terminal sequence it always has.
+    await enqueue_sync_job(job, user_uuid)
     return StartSyncJobResponse(jobId=job.job_id)
 
 

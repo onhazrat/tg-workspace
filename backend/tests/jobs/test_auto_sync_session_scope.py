@@ -112,7 +112,7 @@ def test_no_transaction_is_open_once_the_sync_starts(
     async def fake_run_sync_job(job: Any, owner_id: uuid.UUID | None) -> None:
         recorder.snapshot()
 
-    monkeypatch.setattr(auto_sync, "run_sync_job", fake_run_sync_job)
+    monkeypatch.setattr(auto_sync, "enqueue_sync_job", fake_run_sync_job)
 
     result = asyncio.run(auto_sync.run_auto_sync())
 
@@ -141,7 +141,7 @@ def test_the_planning_session_did_real_work_first(
     async def fake_run_sync_job(job: Any, owner_id: uuid.UUID | None) -> None:
         recorder.snapshot()
 
-    monkeypatch.setattr(auto_sync, "run_sync_job", fake_run_sync_job)
+    monkeypatch.setattr(auto_sync, "enqueue_sync_job", fake_run_sync_job)
 
     asyncio.run(auto_sync.run_auto_sync())
 
@@ -167,7 +167,7 @@ def test_the_plan_survives_the_session_it_was_built_in(
         seen["names"] = [ch.channel_name for ch in job.channels.values()]
         seen["meta"] = [ch.metadata for ch in job.channels.values()]
 
-    monkeypatch.setattr(auto_sync, "run_sync_job", fake_run_sync_job)
+    monkeypatch.setattr(auto_sync, "enqueue_sync_job", fake_run_sync_job)
 
     result = asyncio.run(auto_sync.run_auto_sync())
 
@@ -187,14 +187,44 @@ def test_no_orm_object_outlives_the_planning_block() -> None:
     `channels` after the `with` block, attribute access on a detached instance
     raises inside the scheduler thread — where it surfaces as "auto-sync quietly
     stopped", not as a test failure.
+
+    **Reads names, not substrings.** This used to split the source text and
+    check `"to_sync" not in after`, which reports a violation for any comment
+    below the block that happens to mention `run_auto_sync` — the function's own
+    name contains `to_sync`. It also needed `"channels)"` with the bracket
+    attached to avoid matching the `"channels"` dict key, which is the kind of
+    trick that works until the formatter moves a line. The AST has neither
+    problem: comments are not in it, string literals are not `Name` nodes, and
+    an identifier is matched as an identifier.
     """
+    import ast
     import inspect
+    import textwrap
 
     source = inspect.getsource(auto_sync.run_auto_sync)
-    _, after = source.split("    job = await create_job(", 1)
+    tree = ast.parse(textwrap.dedent(source))
+    func = tree.body[0]
+    assert isinstance(func, ast.AsyncFunctionDef)
 
-    for name in ("to_sync", "due_channels", "partial_batch", "channels)"):
-        assert name not in after, (
+    planning = next(
+        (node for node in func.body if isinstance(node, ast.With)),
+        None,
+    )
+    assert planning is not None, (
+        "the planning `with Session(engine)` block is gone; this guard is now blind"
+    )
+    assert planning.end_lineno is not None
+
+    used_after = {
+        node.id
+        for node in ast.walk(func)
+        if isinstance(node, ast.Name)
+        and node.lineno > planning.end_lineno
+        and isinstance(node.ctx, ast.Load)
+    }
+
+    for name in ("to_sync", "due_channels", "partial_batch", "channels"):
+        assert name not in used_after, (
             f"`{name}` is used after the planning session closes; it holds "
             "detached ORM rows. Project it to a plain value inside the block."
         )

@@ -22,18 +22,43 @@ sequenced plan is `docs/scaling-to-multiple-workers.md`.
 
 from __future__ import annotations
 
+import ast
 import inspect
 import pathlib
 import re
 
 import pytest
 
+from app.core.config import settings
 from app.services import proxy_pool, scraper_jobs
 
 _BACKEND = pathlib.Path(__file__).resolve().parents[2]
 _DOCKERFILE = _BACKEND / "Dockerfile"
 _MAIN = _BACKEND / "app" / "main.py"
+_WORKER = _BACKEND / "app" / "worker.py"
 _PLAN = _BACKEND.parent / "docs" / "scaling-to-multiple-workers.md"
+
+
+def _called_names(path: pathlib.Path) -> set[str]:
+    """Functions actually *called* in a module, from its AST.
+
+    Not `"name" in source`, for the reason the `localStorage` guard in the
+    frontend strips comments and strings before matching: the docstrings in
+    `main.py` explain at length that it no longer starts the scheduler, and a
+    substring check reads that explanation as the thing it forbids. A guard
+    that a correct file cannot satisfy is worse than no guard — the first
+    person to hit it deletes it.
+    """
+    tree = ast.parse(path.read_text())
+    names: set[str] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Call):
+            func = node.func
+            if isinstance(func, ast.Name):
+                names.add(func.id)
+            elif isinstance(func, ast.Attribute):
+                names.add(func.attr)
+    return names
 
 
 def _worker_count() -> int:
@@ -52,13 +77,136 @@ def test_the_image_runs_one_worker() -> None:
     )
 
 
-def test_the_scheduler_still_starts_inside_the_api_process() -> None:
-    """Reason 1. While the lifespan starts APScheduler, worker count *is* tick
-    multiplier — there is nothing else deciding who owns the schedule."""
-    assert "start_scheduler" in _MAIN.read_text(), (
-        "the API process no longer starts the scheduler — if it moved to its own "
-        f"single-replica service, this guard and the Dockerfile should be revisited "
-        f"together ({_PLAN.name})"
+def test_the_scheduler_has_left_the_api_process() -> None:
+    """Reason 1, **completed by ticket 10** — so this now asserts the opposite.
+
+    This used to read `assert "start_scheduler" in main.py`, with a message
+    saying that if the scheduler ever moved to its own single-replica service,
+    the guard and the Dockerfile should be revisited together. That is what
+    happened, so the assertion is inverted rather than deleted: the constraint
+    it protected (worker count is a tick multiplier) is gone, and what needs
+    protecting now is that it does not come back. An API process that started
+    APScheduler again would double every scheduled job against the worker's,
+    silently, which is the same failure `--workers 4` caused.
+
+    Two of the three reasons for `--workers 1` therefore survive: the job
+    registry and the proxy pool. Ticket 13 is what removes the proxy one.
+    """
+    assert "start_scheduler" not in _called_names(_MAIN), (
+        "the API process starts the scheduler again — it belongs to app/worker.py "
+        f"alone, or every scheduled job fires twice ({_PLAN.name})"
+    )
+    assert _WORKER.is_file(), (
+        "app/worker.py is gone but nothing in the API starts the scheduler either, "
+        "so nothing is scheduling anything"
+    )
+    assert "start_scheduler" in _called_names(_WORKER), (
+        "app/worker.py no longer starts the scheduler"
+    )
+
+
+def test_the_api_no_longer_fails_jobs_the_worker_is_running() -> None:
+    """The half of the split that is easy to miss.
+
+    `reconcile_interrupted_jobs` marks every non-terminal `tg_sync_jobs` row
+    failed at startup, which was sound only while a restart of the API meant
+    the sync was definitely dead. After ticket 10 it is not: an ordinary deploy
+    of the web tier would mark every job the worker is currently running as
+    failed, and the browser would be told so while the scrape carried on.
+    """
+    assert "reconcile_interrupted_jobs" not in _called_names(_MAIN), (
+        "the API process reconciles interrupted jobs again — after ticket 10 it "
+        "cannot tell a dead sync from a live one, and will fail the worker's "
+        "in-flight jobs on every deploy"
+    )
+    assert "reconcile_interrupted_jobs" in _called_names(_WORKER), (
+        "nothing reconciles interrupted jobs any more"
+    )
+
+
+def test_enqueueing_never_drains_in_the_enqueueing_process() -> None:
+    """The subtlest way to undo this whole ticket, found by a deadlocking test.
+
+    Ticket 09's `enqueue_manual_single_sync` fired a local drain right after
+    sending, so the common case paid no queue latency. That was right while the
+    enqueueing process *was* the consumer. It is precisely wrong now: `POST
+    /jobs/sync` and bulk follow both run in the API process, so a local kick
+    puts the scraping back in the tier ticket 10 removed it from — and nothing
+    would look broken, because the sync still happens and the stream still
+    updates. It would just die on every deploy again, which is the bug.
+
+    The kick is a `NOTIFY` instead, and this asserts the local call did not
+    creep back into `enqueue_sync_job`.
+    """
+    from app.jobs import sync_queue
+
+    source = inspect.getsource(sync_queue.enqueue_sync_job)
+    for forbidden in ("drain_sync_lanes", "_guarded_drain"):
+        assert forbidden not in source, (
+            f"`enqueue_sync_job` calls {forbidden} — whichever process enqueues "
+            "would run the sync, including the API. Ring the worker instead."
+        )
+    assert "publish" in source, (
+        "`enqueue_sync_job` no longer rings the worker, so a queued sync waits "
+        f"for the {settings.SYNC_QUEUE_POLL_INTERVAL_SECONDS}s sweep"
+    )
+    assert "start_lane_consumer" not in _called_names(_MAIN), (
+        "the API process consumes the sync lanes — that is the worker's job"
+    )
+    assert "start_lane_consumer" in _called_names(_WORKER), (
+        "nothing consumes the sync lanes on a ring; every sync now waits for "
+        "the periodic sweep"
+    )
+
+
+def test_the_api_asks_the_worker_to_run_a_job_rather_than_running_it() -> None:
+    """`POST /jobs/{id}/trigger` used to call the runner in-process.
+
+    That was fine while the API *was* the job runner. After ticket 10 it means
+    the API tier sweeping retention, or running the Discover probe — which
+    fetches `t.me` — on a button press, contradicting `app/worker.py`'s "the API
+    must never learn to scrape". `request_job_run` rings the worker instead and
+    waits for it to report back.
+
+    The `_job_status` read path has the mirror-image problem: it is filled in by
+    whichever process runs the jobs, so without the announcements the Jobs panel
+    reports `idle`/`null` for everything, forever, with nothing in error.
+    """
+    from app.api.routes import jobs as jobs_route
+
+    called = _called_names(pathlib.Path(inspect.getfile(jobs_route)))
+    assert "trigger_job" not in called, (
+        "the API runs scheduler jobs in-process again — retention and the probe "
+        "sweep would run in the API tier. Use request_job_run."
+    )
+    assert "request_job_run" in called, (
+        "the trigger endpoint no longer asks the worker to run the job"
+    )
+    assert "start_job_status_subscriber" in _called_names(_MAIN), (
+        "the API does not subscribe to scheduler status, so GET /jobs/status "
+        "will report idle/null for every job forever"
+    )
+    assert "start_job_trigger_consumer" in _called_names(_WORKER), (
+        "the worker ignores run requests, so the trigger endpoint does nothing"
+    )
+
+
+def test_the_sync_tier_is_a_single_replica() -> None:
+    """The invariant that replaced "one API worker runs the scheduler".
+
+    `proxy_pool`'s semaphores are per-process, so two worker replicas do not
+    double throughput — they double the request rate at each proxy. The compose
+    service says `replicas: 1`; this is what notices when someone raises it.
+    """
+    compose = (_BACKEND.parent / "compose.yml").read_text()
+    assert "python -m app.worker" in compose, (
+        "no compose service runs the sync worker; the scheduler is not running "
+        "anywhere in a deployed stack"
+    )
+    worker_block = compose.split("\n  worker:", 1)[1].split("\n  frontend:", 1)[0]
+    assert "replicas: 1" in worker_block, (
+        "the sync worker is no longer pinned to one replica — see "
+        f"{_PLAN.name} step 3 before raising it"
     )
 
 

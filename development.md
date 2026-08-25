@@ -41,6 +41,26 @@ uv run python -m uvicorn app.main:app --reload --port 8000
 
 Or use the FastAPI CLI: `uv run fastapi dev app/main.py --port 8000`.
 
+### The sync worker (a second process, and you need it)
+
+Since ticket 10 the API process **schedules nothing and scrapes nothing**. Auto
+sync, the queue consumer and every other APScheduler job live in a separate
+worker process. Run it alongside the API, in its own terminal:
+
+```bash
+cd backend && uv run python -m app.worker
+```
+
+Without it the app comes up perfectly and then quietly does nothing: pressing
+Sync answers 200 and the job sits at `pending` forever, because the message is
+on its PGMQ lane with nobody draining it, and auto-sync never fires at all. That
+is not a bug to debug — it is this process not running. The symptom is
+deliberately not an error, because in a deployed stack a worker that is down is
+a queue that drains late, not a request that fails.
+
+Under Docker there is nothing to do: `docker compose watch` starts the `worker`
+service with the same reload behaviour as `backend`.
+
 **Postgres schema (native dev)** — keep `POSTGRES_DB=app` in `.env` for the API (pytest uses `POSTGRES_DB_TEST=app_test` separately; do not point `POSTGRES_DB` at the test database). If only the Compose `db` container is running, apply migrations to `app` before startup:
 
 ```bash

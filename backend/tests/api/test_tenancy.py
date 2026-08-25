@@ -23,7 +23,7 @@ def _freeze_channels_except(session: Session, keep_ids: set[str]) -> None:
     freeze_channels_except(session, keep_ids)
 
 
-@patch("app.jobs.auto_sync.run_sync_job", new_callable=AsyncMock)
+@patch("app.jobs.auto_sync.enqueue_sync_job", new_callable=AsyncMock)
 @patch("app.jobs.auto_sync.create_job", new_callable=AsyncMock)
 def test_auto_sync_scopes_to_operator_channels(
     mock_create: AsyncMock,

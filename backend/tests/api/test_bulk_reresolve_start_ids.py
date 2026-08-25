@@ -77,7 +77,9 @@ def test_bulk_reset_sync_queues_job(client: TestClient, tg_test_channel) -> None
     )
 
     with (
-        patch("app.services.bulk_channels.asyncio.create_task") as mock_task,
+        # Ticket 10: the bulk reset enqueues onto `manual_bulk_normal` instead
+        # of firing a task, so this is what stops the sync actually running.
+        patch("app.jobs.sync_queue.enqueue_sync_job", new_callable=AsyncMock),
         patch(
             "app.services.sync_orchestrator.scrape_channel_page",
             new_callable=AsyncMock,
@@ -88,7 +90,6 @@ def test_bulk_reset_sync_queues_job(client: TestClient, tg_test_channel) -> None
             },
         ),
     ):
-        mock_task.return_value = None
         r = client.post(
             f"{DATA}/channels/bulk-reset-sync",
             json={"confirm": True, "channelIds": ["bulk-reset-ch-2"]},

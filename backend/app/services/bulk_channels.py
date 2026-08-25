@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 import logging
 import uuid
 from dataclasses import dataclass, field
@@ -127,8 +126,8 @@ async def bulk_reset_and_queue_sync(
     auto_follow_only: bool = False,
     source: str = "Bulk Reset & Sync",
 ) -> BulkResetSyncResult:
+    from app.jobs.sync_queue import enqueue_sync_job
     from app.services.scraper_jobs import create_job
-    from app.services.sync_orchestrator import run_sync_job
 
     channels = select_bulk_channels(
         session,
@@ -182,6 +181,6 @@ async def bulk_reset_and_queue_sync(
             sync_mode="bulk" if is_bulk else "individual",
         )
         result.job_id = job.job_id
-        asyncio.create_task(run_sync_job(job, operator_id))
+        await enqueue_sync_job(job, operator_id)
 
     return result

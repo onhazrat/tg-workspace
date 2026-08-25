@@ -14,10 +14,16 @@ from app.api.main import api_router
 from app.core.config import settings
 from app.core.db import engine, init_db
 from app.core.startup_checks import run_startup_checks
-from app.jobs.scheduler import start_scheduler, stop_scheduler
+from app.jobs.scheduler import (
+    start_job_status_subscriber,
+    stop_job_status_subscriber,
+)
 from app.middleware.api_key import APIKeyMiddleware
 from app.middleware.timing import TimingMiddleware
-from app.services.scraper_jobs import reconcile_interrupted_jobs
+from app.services.scraper_jobs import (
+    start_progress_subscriber,
+    stop_progress_subscriber,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -32,17 +38,30 @@ if settings.SENTRY_DSN and settings.ENVIRONMENT != "local":
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
+    """The API tier: serve requests, schedule nothing (ticket 10).
+
+    Two things this used to do are now `app/worker.py`'s alone.
+
+    `start_scheduler()` is the obvious one. The other is
+    `reconcile_interrupted_jobs`, and dropping it here is not tidiness — it is
+    the whole point. That function marks every non-terminal `tg_sync_jobs` row
+    failed, which was sound while a restart of *this* process meant the sync
+    was definitely dead. It no longer does: the sync runs in the worker, so an
+    ordinary API deploy would have failed every job the worker was in the
+    middle of, and told the browser so.
+
+    What is added instead is the progress subscriber, which is what lets `GET
+    /jobs/sync/{id}/events` stream a job this process is not running.
+    """
     run_startup_checks()
     with Session(engine) as session:
         init_db(session)
-        # In-memory job progress does not survive the process, so any row still
-        # marked pending/running belongs to a dead process. Nothing reconciled
-        # them and they accumulated for months — 711 stranded rows on staging.
-        reconcile_interrupted_jobs(session)
-    start_scheduler()
-    logger.info("TG Summarizer backend started")
+    start_progress_subscriber()
+    start_job_status_subscriber()
+    logger.info("TG Summarizer API started")
     yield
-    stop_scheduler()
+    stop_job_status_subscriber()
+    stop_progress_subscriber()
 
 
 app = FastAPI(

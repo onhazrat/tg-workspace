@@ -804,6 +804,15 @@ class SyncJob(SQLModel, table=True):
     user_id: uuid.UUID | None = Field(default=None, index=True)
     status: str = "pending"
     source: str = ""
+    #: Which shape of sync this is — `individual`, `bulk`, `sync_all`,
+    #: `recheck_restricted`, `auto`. Persisted since ticket 10, because the
+    #: process that *runs* the job is no longer the one that created it and can
+    #: only learn this from the row. It decides two things, and getting it wrong
+    #: is silent in both: the Budget the Requests are charged against
+    #: (`quota.budget_for_sync_mode`) and whether a Channel's setting group
+    #: permits the operation at all (`channel_allows_sync_operation`). Before
+    #: this column the worker rehydrated every job as `auto`.
+    sync_mode: str = Field(default="auto")
     channels: list[dict[str, Any]] = Field(default_factory=list, sa_column=Column(JSON))
     created_at: int = Field(default=0, sa_column=_ms_ts())
     finished_at: int | None = Field(default=None, sa_column=_ms_ts(nullable=True))

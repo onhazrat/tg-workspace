@@ -331,8 +331,8 @@ async def _chain_sync_job(
 ) -> None:
     if not syncable_names:
         return
+    from app.jobs.sync_queue import enqueue_sync_job
     from app.services.scraper_jobs import create_job
-    from app.services.sync_orchestrator import run_sync_job
 
     entries = [(name, name) for name in syncable_names]
     sync_job = await create_job(
@@ -342,7 +342,13 @@ async def _chain_sync_job(
         sync_mode="bulk",
     )
     job.sync_job_id = sync_job.job_id
-    asyncio.create_task(run_sync_job(sync_job, user_uuid))
+    # Ticket 10: the chained *sync* is enqueued onto `manual_bulk_normal`, one
+    # message per Channel, rather than run here. The probe phase above it
+    # (`run_follow_job`, one fetch per handle) still runs wherever the request
+    # landed and is still lost if that process restarts — moving it needs a
+    # queue message shaped like a probe, not like a Channel sync, which is not
+    # this ticket's.
+    await enqueue_sync_job(sync_job, user_uuid)
 
 
 async def run_follow_job(job: FollowJobState) -> None:
@@ -353,10 +359,13 @@ async def run_follow_job(job: FollowJobState) -> None:
     would hide the largest single manual source of Requests from the very view
     that reports what each account consumed.
 
-    The sync this chains is charged **separately and not twice**: it runs under
-    `run_sync_job`, which opens its own meter, and `metered()` nests — the inner
-    block restores the outer meter rather than clearing the slot, so fetches
-    made by the sync increment the sync's counter and not this one.
+    The sync this chains is charged **separately and not twice**, but no longer
+    for the reason this used to give. It said the sync runs under `run_sync_job`,
+    which opens its own nested meter — since ticket 10 the sync is not run here
+    at all: it is enqueued, and the worker meters each message on its own. The
+    conclusion survives, the mechanism changed, and a docstring describing a
+    mechanism that no longer exists is how a true statement becomes a false
+    invariant.
     """
     with metered() as meter:
         job.status = "running"

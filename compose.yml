@@ -242,6 +242,67 @@ services:
       - traefik.http.routers.${STACK_NAME?Variable not set}-backend-https.middlewares=${STACK_NAME?Variable not set}-backend-compress
       - traefik.http.routers.${STACK_NAME?Variable not set}-backend-auth-https.middlewares=${STACK_NAME?Variable not set}-backend-ratelimit,${STACK_NAME?Variable not set}-backend-compress
 
+  # The sync tier (ticket 10). Same image as `backend`, different entrypoint.
+  #
+  # This exists so that deploying or restarting the API stops aborting whatever
+  # sync is in flight — the scheduler and the queue consumer used to run inside
+  # the web process, so `fastapi run` coming down took the scrape with it.
+  #
+  # **Exactly one replica, and never more.** Not a capacity choice: the sync
+  # tier is bounded by how fast this deployment may politely hit `t.me` through
+  # a fixed set of proxies, and `proxy_pool`'s semaphores are per-process, so a
+  # second replica does not add throughput — it doubles the request rate at
+  # Telegram and gets the proxies blocked. `backend/tests/deployment/
+  # test_worker_count.py` asserts this, and `docs/scaling-to-multiple-workers.md`
+  # is the sequenced plan for lifting it (ticket 13 is the next step).
+  #
+  # No ports, no Traefik labels, no healthcheck endpoint: it serves nothing. It
+  # is on the default network only, because the one thing it talks to is `db`.
+  worker:
+    image: '${DOCKER_IMAGE_BACKEND?Variable not set}:${TAG-latest}'
+    restart: always
+    deploy:
+      replicas: 1
+    networks:
+      - default
+    volumes:
+      - app-media-data:/app/data
+    depends_on:
+      db:
+        condition: service_healthy
+        restart: true
+      prestart:
+        condition: service_completed_successfully
+    env_file:
+      - .env
+    environment:
+      - ENVIRONMENT=${ENVIRONMENT}
+      - SECRET_KEY=${SECRET_KEY?Variable not set}
+      - FIRST_SUPERUSER=${FIRST_SUPERUSER?Variable not set}
+      - FIRST_SUPERUSER_PASSWORD=${FIRST_SUPERUSER_PASSWORD?Variable not set}
+      - POSTGRES_SERVER=db
+      - POSTGRES_PORT=${POSTGRES_PORT}
+      - POSTGRES_DB=${POSTGRES_DB}
+      - POSTGRES_USER=${POSTGRES_USER?Variable not set}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD?Variable not set}
+      - SENTRY_DSN=${SENTRY_DSN}
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      # Required: `run_startup_checks` refuses to boot in production without it,
+      # and this service has `restart: always` and serves no HTTP — so a missing
+      # value is a silent crash-loop whose only symptom is that nothing ever
+      # syncs. It is declared on `backend` for the same reason.
+      - API_KEY=${API_KEY}
+      - TOR_CONTROL_PASSWORD=${TOR_CONTROL_PASSWORD}
+      - TOR_CONTROL_PORT=${TOR_CONTROL_PORT}
+      - TOR_SOCKS_PROXY=${TOR_SOCKS_PROXY}
+      - DEFAULT_PROXY_URLS=${DEFAULT_PROXY_URLS}
+      - EMBEDDING_MODEL=${EMBEDDING_MODEL}
+      - DEFAULT_AI_MODEL=${DEFAULT_AI_MODEL}
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    command: python -m app.worker
+
   frontend:
     image: '${DOCKER_IMAGE_FRONTEND?Variable not set}:${TAG-latest}'
     restart: always

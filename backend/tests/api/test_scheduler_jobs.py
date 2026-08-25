@@ -92,7 +92,7 @@ def test_trigger_unknown_job(client: TestClient) -> None:
     assert r.status_code == 404
 
 
-@patch("app.jobs.auto_sync.run_sync_job", new_callable=AsyncMock)
+@patch("app.jobs.auto_sync.enqueue_sync_job", new_callable=AsyncMock)
 @patch("app.jobs.auto_sync.create_job", new_callable=AsyncMock)
 def test_auto_sync_skips_when_no_due_channels(
     mock_create: AsyncMock,
@@ -131,7 +131,7 @@ def test_auto_sync_skips_when_no_due_channels(
     mock_run.assert_not_awaited()
 
 
-@patch("app.jobs.auto_sync.run_sync_job", new_callable=AsyncMock)
+@patch("app.jobs.auto_sync.enqueue_sync_job", new_callable=AsyncMock)
 @patch("app.jobs.auto_sync.create_job", new_callable=AsyncMock)
 def test_auto_sync_triggers_stale_channels(
     mock_create: AsyncMock,
@@ -186,7 +186,7 @@ def test_auto_sync_triggers_stale_channels(
     assert any(name == "stale-ch" for _id, name in called_entries)
 
 
-@patch("app.jobs.auto_sync.run_sync_job", new_callable=AsyncMock)
+@patch("app.jobs.auto_sync.enqueue_sync_job", new_callable=AsyncMock)
 @patch("app.jobs.auto_sync.create_job", new_callable=AsyncMock)
 def test_auto_sync_includes_fresh_partial_history_channels(
     mock_create: AsyncMock,
@@ -244,7 +244,7 @@ def test_auto_sync_includes_fresh_partial_history_channels(
     assert any(name == "partial-ch" for _id, name in called_entries)
 
 
-@patch("app.jobs.auto_sync.run_sync_job", new_callable=AsyncMock)
+@patch("app.jobs.auto_sync.enqueue_sync_job", new_callable=AsyncMock)
 @patch("app.jobs.auto_sync.create_job", new_callable=AsyncMock)
 def test_auto_sync_dynamic_only_channel_due_by_velocity(
     mock_create: AsyncMock,
@@ -309,7 +309,7 @@ def test_auto_sync_dynamic_only_channel_due_by_velocity(
     assert any(name == "dynamic-only-ch" for _id, name in called_entries)
 
 
-@patch("app.jobs.auto_sync.run_sync_job", new_callable=AsyncMock)
+@patch("app.jobs.auto_sync.enqueue_sync_job", new_callable=AsyncMock)
 @patch("app.jobs.auto_sync.create_job", new_callable=AsyncMock)
 def test_auto_sync_skips_channels_with_both_schedules_disabled(
     mock_create: AsyncMock,
@@ -352,7 +352,7 @@ def test_auto_sync_skips_channels_with_both_schedules_disabled(
     mock_run.assert_not_awaited()
 
 
-@patch("app.jobs.auto_sync.run_sync_job", new_callable=AsyncMock)
+@patch("app.jobs.auto_sync.enqueue_sync_job", new_callable=AsyncMock)
 @patch("app.jobs.auto_sync.create_job", new_callable=AsyncMock)
 def test_auto_sync_syncs_all_due_channels_in_one_job(
     mock_create: AsyncMock,

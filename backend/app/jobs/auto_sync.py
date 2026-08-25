@@ -5,20 +5,21 @@ from __future__ import annotations
 import logging
 import time
 from types import SimpleNamespace
-from typing import Any
+from typing import Any, cast
 
-from sqlmodel import Session
+from sqlalchemy import ColumnElement, func, or_
+from sqlmodel import Session, col, select
 
 from app.core.config import settings
 from app.core.db import engine
 from app.jobs.settings import load_sync_settings, save_sync_settings
+from app.jobs.sync_queue import enqueue_sync_job
 from app.models_tg import Channel
 from app.services.channel_setting_groups import load_groups_by_id
 from app.services.channels import compute_channel_stats_batch
 from app.services.network_settings import get_network_setting_row
 from app.services.operator import get_operator_user_id, select_operator_channels
-from app.services.scraper_jobs import create_job, has_active_sync_job
-from app.services.sync_orchestrator import run_sync_job
+from app.services.scraper_jobs import SyncJobState, create_job, has_active_sync_job
 from app.services.sync_schedule import due_reason, is_channel_due, needs_dynamic_stats
 
 logger = logging.getLogger(__name__)
@@ -196,33 +197,18 @@ async def run_auto_sync() -> dict[str, Any]:
             cid: {"dueReason": due_reason_by_id.get(cid)} for cid, _ in entries
         },
     )
-    await run_sync_job(job, owner_id)
-
-    failures = [ch for ch in job.channels.values() if ch.status == "failed"]
-    successes = [ch for ch in job.channels.values() if ch.status == "success"]
-
-    with Session(engine) as session2:
-        sync_cfg = load_sync_settings(session2)
-        if failures:
-            prev_failures = int(sync_cfg.get("consecutiveFailures") or 0)
-            next_failures = prev_failures + len(failures)
-            updates: dict[str, Any] = {"consecutiveFailures": next_failures}
-            threshold = max(settings.AUTO_SYNC_FAILURE_THRESHOLD_MIN, checked)
-            if next_failures >= threshold:
-                updates["autoSyncPauseUntil"] = (
-                    now + settings.AUTO_SYNC_PAUSE_DURATION_MS
-                )
-                logger.warning(
-                    "Auto-sync paused for 10 minutes after %s consecutive failures",
-                    next_failures,
-                )
-            _update_sync_state(session2, updates)
-        elif successes:
-            _update_sync_state(session2, {"consecutiveFailures": 0})
+    # Ticket 10: enqueued, one message per Channel, and drained by whichever
+    # process is running the worker — which after this ticket is never the API
+    # process. `run_auto_sync` therefore returns as soon as the messages are on
+    # the lane, and the counters below it moved to `record_auto_sync_outcome`,
+    # because there is no longer a point in this function where the sync is
+    # finished.
+    await enqueue_sync_job(job, owner_id)
 
     return {
         "jobId": job.job_id,
         "channels": len(entries),
+        "checked": checked,
         "dueChannels": due_count,
         "partialChannels": partial_count,
         "dueRegular": sum(
@@ -232,7 +218,76 @@ async def run_auto_sync() -> dict[str, Any]:
             1 for reason in due_reason_by_id.values() if reason == "dynamic"
         ),
         "dueBoth": sum(1 for reason in due_reason_by_id.values() if reason == "both"),
-        "failures": len(failures),
-        "successes": len(successes),
         "status": job.status,
     }
+
+
+def _operator_channel_count(session: Session) -> int:
+    """How many Channels this tick could have considered.
+
+    `run_auto_sync` used to have this in hand as `len(channels)` and pass it
+    straight into the threshold. It is recomputed here rather than smuggled
+    through the job row because a job carries Channels, not the size of the set
+    they were chosen from, and inventing a place to stash one number would
+    outlive the reason for it. One `count(*)` per finished auto-sync job — at
+    most once a tick — against the per-tick cost this ticket's predecessors
+    spent months removing, is not the expensive part of anything.
+
+    An actual `count(*)`, not `len(select_operator_channels(...))`. That spelling
+    hydrates every operator Channel — ~2,077 ORM rows on this deployment — to
+    produce one integer, which is the same "compute it for everything, read one
+    field" shape `needs_dynamic_stats` exists to have removed.
+    """
+    net_row = get_network_setting_row(session)
+    owner_id = (net_row.user_id if net_row else None) or get_operator_user_id(session)
+    stmt = select(func.count()).select_from(Channel)
+    if owner_id is not None:
+        stmt = stmt.where(
+            or_(
+                cast(ColumnElement[bool], Channel.user_id == owner_id),
+                col(Channel.user_id).is_(None),
+            )
+        )
+    return int(session.exec(stmt).one())
+
+
+def record_auto_sync_outcome(job: SyncJobState) -> None:
+    """Fold a finished auto-sync job into the scheduler's failure counters.
+
+    This ran inline in `run_auto_sync` while that function awaited the whole
+    sync. Ticket 10 enqueues instead, so the job finishes somewhere else and
+    later — `app/jobs/sync_queue.py` calls this from `_finalize_if_complete`
+    when the job it just finished came from the scheduler.
+
+    The consecutive-failure counter and the pause it can trigger are global
+    scheduler state (`sync_runtime`, ticket 06), which is why this writes only
+    the fields it names: the read-modify-write of the whole `sync` blob is
+    exactly what ticket 06 split apart, and the scheduler bumping a counter must
+    not write back a preference some browser last read.
+    """
+    failures = [ch for ch in job.channels.values() if ch.status == "failed"]
+    successes = [ch for ch in job.channels.values() if ch.status == "success"]
+    if not failures and not successes:
+        return
+
+    with Session(engine) as session:
+        sync_cfg = load_sync_settings(session)
+        if failures:
+            prev_failures = int(sync_cfg.get("consecutiveFailures") or 0)
+            next_failures = prev_failures + len(failures)
+            updates: dict[str, Any] = {"consecutiveFailures": next_failures}
+            threshold = max(
+                settings.AUTO_SYNC_FAILURE_THRESHOLD_MIN,
+                _operator_channel_count(session),
+            )
+            if next_failures >= threshold:
+                updates["autoSyncPauseUntil"] = (
+                    int(time.time() * 1000) + settings.AUTO_SYNC_PAUSE_DURATION_MS
+                )
+                logger.warning(
+                    "Auto-sync paused for 10 minutes after %s consecutive failures",
+                    next_failures,
+                )
+            _update_sync_state(session, updates)
+        elif successes:
+            _update_sync_state(session, {"consecutiveFailures": 0})

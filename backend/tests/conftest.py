@@ -36,7 +36,11 @@ from app.core.db import engine, init_db
 from app.main import app
 from app.models import Item, User
 from app.models_tg import Channel, ChannelSettingGroup
-from tests.utils.tg_cleanup import cleanup_channel_keys, truncate_all_tg_tables
+from tests.utils.tg_cleanup import (
+    cleanup_channel_keys,
+    purge_all_sync_lanes,
+    truncate_all_tg_tables,
+)
 from tests.utils.user import authentication_token_from_email
 from tests.utils.utils import get_superuser_token_headers
 
@@ -97,9 +101,16 @@ def db() -> Generator[Session | None]:
 
 @pytest.fixture(autouse=True)
 def _clean_tg_tables_after_test() -> Generator[None]:
-    """Truncate TG tables after each test so suites cannot pollute each other."""
+    """Truncate TG tables after each test so suites cannot pollute each other.
+
+    The sync lanes are purged too. PGMQ's tables live in the `pgmq` schema, so
+    the truncate never touched them — which made queued messages the one piece
+    of state that outlived a test, in the direction hardest to diagnose. See
+    `purge_all_sync_lanes`.
+    """
     yield
     truncate_all_tg_tables()
+    purge_all_sync_lanes()
 
 
 @pytest.fixture
@@ -179,6 +190,51 @@ def tg_test_channel() -> Generator:
 def client() -> Generator[TestClient]:
     with TestClient(app) as c:
         yield c
+
+
+@pytest.fixture
+def sync_worker(client: TestClient) -> Generator[None]:
+    """Stand in for the worker process (ticket 10).
+
+    After ticket 10 the API process enqueues and rings; it never drains a lane
+    itself, and `tests/deployment/test_worker_count.py` asserts that. So a test
+    that posts to `/jobs/sync` and waits for the sync to happen needs something
+    to be the worker, or it waits forever — which is exactly what the SSE test
+    did when the split landed.
+
+    The consumer is started **inside the app's own event loop**, through the
+    TestClient's portal, rather than in a thread of the test's own. The job
+    objects carry `asyncio.Event`s and `asyncio.Condition`s created in that
+    loop, and driving them from a second loop does not raise — it just never
+    wakes anything, which is a hang with no traceback.
+
+    Reached only through the queue and the `NOTIFY`, so this fixture exercises
+    the real path rather than short-circuiting it.
+    """
+    from app.core import pg_notify
+    from app.jobs import sync_queue
+
+    async def _start() -> None:
+        sync_queue.start_lane_consumer()
+        # Wait for the `LISTEN` to actually be established, not just for the
+        # task to exist. A ring published into that gap is simply lost —
+        # `NOTIFY` has no replay — and in production the worker's
+        # `SYNC_QUEUE_POLL_INTERVAL_SECONDS` sweep is what covers it. There is
+        # no sweep here, so without this the *first* test in a module enqueues
+        # into silence and then times out, while every later test passes
+        # because the connection is up by then. That is exactly what happened.
+        assert await pg_notify.listener(
+            sync_queue.SYNC_LANE_WAKE_CHANNEL
+        ).wait_until_listening(), "the stand-in worker never started listening"
+
+    async def _stop() -> None:
+        sync_queue.stop_lane_consumer()
+
+    client.portal.call(_start)
+    try:
+        yield
+    finally:
+        client.portal.call(_stop)
 
 
 @pytest.fixture(scope="module")

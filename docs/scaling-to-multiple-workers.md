@@ -3,6 +3,18 @@
 `backend/Dockerfile` runs `--workers 1`. That is a correctness constraint, not a
 capacity judgement, and this is how to remove it.
 
+> **Status after ticket 10 (2026-08-25).** Steps 1 and 4 are done and step 2 is
+> half done. The scheduler and all scraping now run in a separate `worker`
+> compose service (`app/worker.py`, `python -m app.worker`, one replica);
+> progress fans out over `LISTEN`/`NOTIFY` (`app/core/pg_notify.py`); every sync
+> mode enqueues one message per Channel onto a PGMQ lane. **Step 3 is the one
+> that still binds** — `proxy_pool`'s semaphores are per-process, which is why
+> the sync tier is pinned to one replica. Ticket 13 is that step. The API tier
+> still runs `--workers 1` because the job registry (step 2) is still a dict.
+> The order below is the original plan; the argument in each step is still the
+> argument, and `tests/deployment/test_worker_count.py` tracks which reasons
+> survive.
+
 ## Why the count is 1 today
 
 The image ran `--workers 4` — the FastAPI template default, never reconciled with the
@@ -54,7 +66,7 @@ still start in the API tier).
 
 Each step is independently shippable and leaves the system correct.
 
-### 1. Progress fan-out over Postgres `LISTEN`/`NOTIFY`
+### 1. Progress fan-out over Postgres `LISTEN`/`NOTIFY` — **done (ticket 10)**
 
 `GET /jobs/sync/{id}/events` blocks on an `asyncio.Condition` attached to the
 in-memory job. Replace the notify side with `NOTIFY sync_job_<id>` on flush and the
@@ -66,6 +78,16 @@ same-process fast path so nothing regresses while this lands.
 
 **Done when:** an SSE stream served by process A shows live progress for a job running
 in process B.
+
+**How it landed, and where this advice was wrong.** "Send the job id, let the
+reader fetch state" assumed the reader re-reads the row — but the row is exactly
+what `_should_flush_db` throttles to 5 seconds, so a wakeup that forces a row read
+buys a faster poll of stale data. The notification carries the changed Channel
+instead (a few hundred bytes against the 8000-byte cap, and no table write), and
+the watcher keeps a mirror it patches. The row keeps its 5-second cadence purely
+for crash recovery. Guard: `tests/services/test_cross_process_progress.py`,
+which asserts the watcher sees a state **the row does not have yet** — a test
+that only checked "progress arrives" would pass on the broken version.
 
 ### 2. Move the job claim into the database
 
@@ -94,7 +116,7 @@ have to have; "one process owns the proxies" is a constraint you can simply keep
 **Done when:** the total request rate at each proxy is independent of how many
 processes are running.
 
-### 4. Split the tiers, then scale the API
+### 4. Split the tiers, then scale the API — **the split is done (ticket 10)**
 
 With 1–3 done, this is a compose change plus an entrypoint flag rather than a
 redesign. The API tier goes to N workers; the sync tier stays at one replica and keeps
@@ -102,6 +124,14 @@ the scheduler.
 
 Update `tests/deployment/test_worker_count.py` in the same change — it should then
 assert the *sync* tier is single-replica, which is the invariant that still matters.
+
+**Done ahead of 2 and 3, deliberately.** This step was sequenced last because
+splitting the tiers while the state is in the wrong place degrades progress
+streaming — so ticket 10 did step 1 first and the degradation never happened.
+What it could *not* pull forward is the second half of this step: **the API tier
+is still `--workers 1`**, because the job registry is still a per-process dict
+(step 2). The compose split and the single-replica assertion are in place; the
+`--workers` number is what remains, and it is gated on step 2, not on this one.
 
 ## Also on the path to many users
 

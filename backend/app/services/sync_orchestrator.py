@@ -1227,7 +1227,7 @@ async def _walk_channel_pages(
         if page_result.posts_saved:
             walk.total_new_posts += page_result.posts_saved
             ch_state.posts_fetched = walk.total_new_posts
-            await touch_job(job)
+            await touch_job(job, ch_state)
 
             for fwd in page_result.forwards:
                 await _maybe_add_forwarded_channel(
@@ -1273,18 +1273,18 @@ async def sync_single_channel(
     """
     if job.cancel_event.is_set():
         ch_state.status = "cancelled"
-        await touch_job(job)
+        await touch_job(job, ch_state)
         return
 
     lock = acquire_channel(ch_state.channel_name)
     async with lock:
         if job.cancel_event.is_set():
             ch_state.status = "cancelled"
-            await touch_job(job)
+            await touch_job(job, ch_state)
             return
 
         ch_state.status = "running"
-        await touch_job(job)
+        await touch_job(job, ch_state)
 
         prep_status, ctx, deny_reason = await run_db(
             _prepare_channel_sync,
@@ -1295,12 +1295,12 @@ async def sync_single_channel(
         if prep_status == "missing":
             ch_state.status = "failed"
             ch_state.error = "Channel not found"
-            await touch_job(job)
+            await touch_job(job, ch_state)
             return
         if prep_status == "denied" or ctx is None:
             ch_state.status = "skipped"
             ch_state.error = deny_reason or "Sync not allowed for this channel"
-            await touch_job(job)
+            await touch_job(job, ch_state)
             return
 
         walk = _ChannelWalk()
@@ -1317,7 +1317,7 @@ async def sync_single_channel(
                 ch_state.status = "failed"
                 ch_state.error = walk.failed_error
                 ch_state.posts_fetched = walk.total_new_posts
-                await touch_job(job)
+                await touch_job(job, ch_state)
                 return
 
             await run_db(
@@ -1333,7 +1333,7 @@ async def sync_single_channel(
             )
             ch_state.status = "success"
             ch_state.new_latest_id = walk.final_latest_id or None
-            await touch_job(job)
+            await touch_job(job, ch_state)
 
         except SyncScrapeError as exc:
             await run_db(
@@ -1350,7 +1350,7 @@ async def sync_single_channel(
             ch_state.status = "failed"
             ch_state.error = str(exc)
             ch_state.posts_fetched = walk.total_new_posts
-            await touch_job(job)
+            await touch_job(job, ch_state)
 
         except Exception as exc:  # noqa: BLE001
             logger.exception("Sync failed for @%s", ch_state.channel_name)
@@ -1368,7 +1368,7 @@ async def sync_single_channel(
             ch_state.status = "failed"
             ch_state.error = str(exc)
             ch_state.posts_fetched = walk.total_new_posts
-            await touch_job(job)
+            await touch_job(job, ch_state)
 
 
 def _load_sync_job_concurrency(user_id: uuid.UUID | None) -> tuple[int, int | None]:
