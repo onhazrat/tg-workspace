@@ -41,6 +41,15 @@ class Permission(StrEnum):
     UTILS_ADMIN = "utils:admin"
     """Operational endpoints with no per-user meaning, such as test email."""
 
+    QUOTA_READ_ANY = "quota:read_any"
+    """Read what other accounts have spent against their Budgets.
+
+    Separate from `USERS_READ` because it answers a different question. Knowing
+    that an account exists is the price of administering accounts at all;
+    knowing how much it synced and when is a behavioural record, and the auditor
+    role the spec keeps in view might want one without the other.
+    """
+
     VIEW_AS = "view_as"
     """Look at the application as another User (ticket 26 builds the flow).
 
@@ -82,6 +91,7 @@ SEEDED_ROLES: tuple[RoleSeed, ...] = (
             Permission.USERS_MANAGE,
             Permission.ITEMS_MANAGE_ANY,
             Permission.UTILS_ADMIN,
+            Permission.QUOTA_READ_ANY,
         ),
     ),
     RoleSeed(
@@ -92,6 +102,7 @@ SEEDED_ROLES: tuple[RoleSeed, ...] = (
             Permission.USERS_MANAGE,
             Permission.ITEMS_MANAGE_ANY,
             Permission.UTILS_ADMIN,
+            Permission.QUOTA_READ_ANY,
             Permission.VIEW_AS,
         ),
     ),

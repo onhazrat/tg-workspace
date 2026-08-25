@@ -12,6 +12,7 @@ from typing import Any, Literal
 from sqlmodel import Session
 
 from app.core.db import engine
+from app.core.request_meter import metered
 from app.jobs.settings import (
     compute_effective_global_start_time_ms,
     load_retention_settings,
@@ -27,6 +28,7 @@ from app.services.network_settings import (
     load_network_settings,
     resolve_proxy_concurrency,
 )
+from app.services.quota import charge_sync_job
 from app.services.scraper import get_channel_info
 from app.services.telegram_web import (
     TelegramWebViewUnavailable,
@@ -344,52 +346,71 @@ async def _chain_sync_job(
 
 
 async def run_follow_job(job: FollowJobState) -> None:
-    job.status = "running"
-    await touch_follow_job(job)
+    """Probe every handle in the batch, then chain a sync for the ones added.
 
-    user_uuid = uuid.UUID(job.user_id) if job.user_id else None
-    effective_start_time = await run_db(_load_effective_start_time, user_uuid)
-    proxy_concurrency = await run_db(_load_proxy_concurrency, user_uuid)
-    sem = asyncio.Semaphore(FOLLOW_SCRAPE_CONCURRENCY)
+    Metered and charged to `manual_bulk` (ticket 08). The probe phase is one
+    `t.me` fetch per handle and a batch runs to hundreds, so leaving it out
+    would hide the largest single manual source of Requests from the very view
+    that reports what each account consumed.
 
-    async def _run_one(result: FollowChannelResult) -> None:
-        async with sem:
-            try:
-                await _process_one_channel(
-                    job,
-                    result,
-                    user_uuid=user_uuid,
-                    effective_start_time=effective_start_time,
-                    proxy_concurrency=proxy_concurrency,
-                )
-            except Exception as exc:  # noqa: BLE001
-                logger.exception("Bulk follow failed for @%s", result.name)
-                if result.status not in _TERMINAL_CHANNEL_STATUSES:
-                    result.status = "error"
-                    result.error = str(exc)
-                    await touch_follow_job(job)
+    The sync this chains is charged **separately and not twice**: it runs under
+    `run_sync_job`, which opens its own meter, and `metered()` nests — the inner
+    block restores the outer meter rather than clearing the slot, so fetches
+    made by the sync increment the sync's counter and not this one.
+    """
+    with metered() as meter:
+        job.status = "running"
+        await touch_follow_job(job)
 
-    await asyncio.gather(*[_run_one(r) for r in job.results])
+        user_uuid = uuid.UUID(job.user_id) if job.user_id else None
+        effective_start_time = await run_db(_load_effective_start_time, user_uuid)
+        proxy_concurrency = await run_db(_load_proxy_concurrency, user_uuid)
+        sem = asyncio.Semaphore(FOLLOW_SCRAPE_CONCURRENCY)
 
-    if job.cancel_event.is_set():
-        job.status = "cancelled"
-        for r in job.results:
-            if r.status in ("pending", "running"):
-                r.status = "cancelled"
-    else:
-        syncable_names = [r.name for r in job.results if r.status == "added"]
+        async def _run_one(result: FollowChannelResult) -> None:
+            async with sem:
+                try:
+                    await _process_one_channel(
+                        job,
+                        result,
+                        user_uuid=user_uuid,
+                        effective_start_time=effective_start_time,
+                        proxy_concurrency=proxy_concurrency,
+                    )
+                except Exception as exc:  # noqa: BLE001
+                    logger.exception("Bulk follow failed for @%s", result.name)
+                    if result.status not in _TERMINAL_CHANNEL_STATUSES:
+                        result.status = "error"
+                        result.error = str(exc)
+                        await touch_follow_job(job)
+
         try:
-            await _chain_sync_job(job, syncable_names, user_uuid)
-        except Exception:  # noqa: BLE001
-            logger.exception(
-                "Failed to chain sync job after follow job %s", job.follow_job_id
-            )
-        if any(r.status == "error" for r in job.results) and not any(
-            r.status in ("added", "unavailable", "skipped") for r in job.results
-        ):
-            job.status = "failed"
-        else:
-            job.status = "completed"
+            await asyncio.gather(*[_run_one(r) for r in job.results])
 
-    job.finished_at = int(time.time() * 1000)
-    await touch_follow_job(job)
+            if job.cancel_event.is_set():
+                job.status = "cancelled"
+                for r in job.results:
+                    if r.status in ("pending", "running"):
+                        r.status = "cancelled"
+            else:
+                syncable_names = [r.name for r in job.results if r.status == "added"]
+                try:
+                    await _chain_sync_job(job, syncable_names, user_uuid)
+                except Exception:  # noqa: BLE001
+                    logger.exception(
+                        "Failed to chain sync job after follow job %s",
+                        job.follow_job_id,
+                    )
+                if any(r.status == "error" for r in job.results) and not any(
+                    r.status in ("added", "unavailable", "skipped") for r in job.results
+                ):
+                    job.status = "failed"
+                else:
+                    job.status = "completed"
+
+            job.finished_at = int(time.time() * 1000)
+            await touch_follow_job(job)
+        finally:
+            # `finally` for the reason `run_sync_job` gives: the probes were
+            # made whether or not the batch finished tidily.
+            await run_db(charge_sync_job, user_uuid, "bulk", meter.telegram_requests)

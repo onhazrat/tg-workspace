@@ -72,6 +72,7 @@ from app.models_tg import (
     PostSyncState,
     PostTranslation,
     PublishLog,
+    QuotaUsage,
     Summary,
     SummaryPayload,
     SyncJob,
@@ -131,6 +132,11 @@ SCOPES: dict[type[SQLModel], Scope] = {
     EmbeddingLog: Scope.USER_OWNED,
     NetworkLog: Scope.USER_OWNED,
     SyncJob: Scope.USER_OWNED,
+    # What you spent is yours to see. User-owned even though the only reader
+    # today is the Admin view, which crosses accounts on purpose and says so
+    # through `unscoped_select` — an escape hatch is only meaningful where the
+    # default would have scoped.
+    QuotaUsage: Scope.USER_OWNED,
     # --- Follow-scoped: one scrape serves every follower.
     Channel: Scope.FOLLOW_SCOPED,
     Post: Scope.FOLLOW_SCOPED,

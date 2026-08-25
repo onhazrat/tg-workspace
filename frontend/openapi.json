@@ -4652,6 +4652,47 @@
           }
         }
       }
+    },
+    "/api/v1/quota/usage": {
+      "get": {
+        "tags": ["quota"],
+        "summary": "Read Quota Usage",
+        "description": "Every account's Request usage on one UTC day, per Budget.\n\n`day` defaults to today. Absent accounts spent nothing \u2014 the ledger only\nholds rows for work that actually happened, so a quiet day is a short list\nrather than a page of zeros.",
+        "operationId": "quota-read_quota_usage",
+        "security": [{ "OAuth2PasswordBearer": [] }],
+        "parameters": [
+          {
+            "name": "day",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                { "type": "string", "format": "date" },
+                { "type": "null" }
+              ],
+              "title": "Day"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/QuotaUsageResponse" }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -7301,6 +7342,42 @@
         "type": "object",
         "title": "PurgeLogsResponse",
         "description": "Result of `DELETE /data/logs`.\n\nThree call shapes share one response. A retention sweep (`olderThanDays`)\ndeletes across every table and reports the per-type breakdown plus a\n`total`; deleting one entry or clearing one type reports a bare `deleted`\ncount and no breakdown. `deleted` is therefore declared loose \u2014 it is an\n`int` in two of the three cases and a `dict[str, int]` in the third \u2014 and\n`total` is genuinely absent rather than null for the other two, so it stays\nundeclared and travels through `extra`."
+      },
+      "QuotaUsageEntry": {
+        "properties": {
+          "userId": { "type": "string", "format": "uuid", "title": "Userid" },
+          "email": { "type": "string", "title": "Email" },
+          "autoSync": { "type": "integer", "title": "Autosync", "default": 0 },
+          "manualBulk": {
+            "type": "integer",
+            "title": "Manualbulk",
+            "default": 0
+          },
+          "manualSingle": {
+            "type": "integer",
+            "title": "Manualsingle",
+            "default": 0
+          },
+          "total": { "type": "integer", "title": "Total", "default": 0 }
+        },
+        "type": "object",
+        "required": ["userId", "email"],
+        "title": "QuotaUsageEntry",
+        "description": "What one account spent on one day.\n\n`total` is sent rather than summed in the browser because it is the column\nthe table sorts by, and a sort key computed in two places is a sort key that\neventually disagrees with itself."
+      },
+      "QuotaUsageResponse": {
+        "properties": {
+          "day": { "type": "string", "format": "date", "title": "Day" },
+          "entries": {
+            "items": { "$ref": "#/components/schemas/QuotaUsageEntry" },
+            "type": "array",
+            "title": "Entries"
+          }
+        },
+        "type": "object",
+        "required": ["day"],
+        "title": "QuotaUsageResponse",
+        "description": "One day of the ledger, across every account that spent something.\n\n`day` is echoed back because the request may omit it and mean \"today\", and\na page that renders yesterday's numbers under today's heading \u2014 after a UTC\nmidnight rollover mid-session \u2014 would be wrong in the least visible way."
       },
       "RagEmbedRequest": {
         "properties": {

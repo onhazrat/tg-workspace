@@ -90,6 +90,11 @@ TG_TABLES: tuple[str, ...] = (
     "tg_channel_setting_groups",
     "tg_channel_follows",
     "tg_channels",
+    # The ticket 08 ledger. Truncated between tests like everything else here,
+    # despite being the one table production never prunes: a charge left behind
+    # by one test is another test's "this account has already spent something",
+    # and the accounts are recycled by email while the ledger keys on id.
+    "tg_quota_usage",
 )
 
 

@@ -55,6 +55,8 @@ import type {
   PostResponse,
   ProxyHealthResponse,
   PublishResponse,
+  QuotaUsageEntry,
+  QuotaUsageResponse,
   RagEmbedResponse,
   RagStatusResponse,
   RuntimeConfigResponse,
@@ -141,6 +143,23 @@ export type ChatSessionListItemIsStillOpen = Assert<
 
 export type TagRunIsClosed = Assert<IsClosed<TagRunResponse>>
 export type DiscoverReportIsClosed = Assert<IsClosed<DiscoverReportResponse>>
+
+// ---------------------------------------------------------------------------
+// The quota ledger (ticket 08): generated, and the identifying fields are not
+// optional.
+//
+// The per-Budget counts *are* optional — they have server-side defaults, and
+// OpenAPI cannot say "defaulted, therefore always present" — but `userId`,
+// `email` and `day` are required, so this is not the all-optional downgrade
+// that keeps `ragSearch` hand-written. Asserted rather than assumed because the
+// difference is one `= 0` on the backend model away.
+// ---------------------------------------------------------------------------
+
+export type QuotaUsageIsClosed = Assert<IsClosed<QuotaUsageResponse>>
+export type QuotaUsageEntryIsClosed = Assert<IsClosed<QuotaUsageEntry>>
+export type QuotaUsageEntryIdentifiesItsAccount = Assert<
+  QuotaUsageEntry extends { userId: string; email: string } ? true : false
+>
 
 // ---------------------------------------------------------------------------
 // The unified artifact list: closed on purpose, so it stays generated.

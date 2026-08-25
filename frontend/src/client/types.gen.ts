@@ -2998,6 +2998,60 @@ export type PurgeLogsResponse = {
 };
 
 /**
+ * QuotaUsageEntry
+ * What one account spent on one day.
+ *
+ * `total` is sent rather than summed in the browser because it is the column
+ * the table sorts by, and a sort key computed in two places is a sort key that
+ * eventually disagrees with itself.
+ */
+export type QuotaUsageEntry = {
+    /**
+     * Userid
+     */
+    userId: string;
+    /**
+     * Email
+     */
+    email: string;
+    /**
+     * Autosync
+     */
+    autoSync?: number;
+    /**
+     * Manualbulk
+     */
+    manualBulk?: number;
+    /**
+     * Manualsingle
+     */
+    manualSingle?: number;
+    /**
+     * Total
+     */
+    total?: number;
+};
+
+/**
+ * QuotaUsageResponse
+ * One day of the ledger, across every account that spent something.
+ *
+ * `day` is echoed back because the request may omit it and mean "today", and
+ * a page that renders yesterday's numbers under today's heading — after a UTC
+ * midnight rollover mid-session — would be wrong in the least visible way.
+ */
+export type QuotaUsageResponse = {
+    /**
+     * Day
+     */
+    day: string;
+    /**
+     * Entries
+     */
+    entries?: Array<QuotaUsageEntry>;
+};
+
+/**
  * RagEmbedRequest
  * One backfill pass over posts that have no embedding yet.
  */
@@ -8233,6 +8287,36 @@ export type JobsCancelSyncJobResponses = {
 };
 
 export type JobsCancelSyncJobResponse = JobsCancelSyncJobResponses[keyof JobsCancelSyncJobResponses];
+
+export type QuotaReadQuotaUsageData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Day
+         */
+        day?: string | null;
+    };
+    url: '/api/v1/quota/usage';
+};
+
+export type QuotaReadQuotaUsageErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type QuotaReadQuotaUsageError = QuotaReadQuotaUsageErrors[keyof QuotaReadQuotaUsageErrors];
+
+export type QuotaReadQuotaUsageResponses = {
+    /**
+     * Successful Response
+     */
+    200: QuotaUsageResponse;
+};
+
+export type QuotaReadQuotaUsageResponse = QuotaReadQuotaUsageResponses[keyof QuotaReadQuotaUsageResponses];
 
 export type ClientOptions = {
     baseUrl: `${string}://${string}` | (string & {});

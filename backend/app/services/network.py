@@ -15,6 +15,7 @@ from stem import Signal
 from stem.control import Controller
 
 from app.core.config import settings
+from app.core.request_meter import record_telegram_request
 from app.services.network_settings import normalize_proxy_url
 from app.services.proxy_pool import ProxyLane
 from app.services.telegram_web import (
@@ -179,6 +180,19 @@ async def fetch_with_retry(
     decoded text/JSON — used for media that must travel the same proxy or Tor
     lane as the page fetches, so scraping over Tor does not leak the real
     egress IP to Telegram's CDN.
+
+    **One Request for quota purposes is one attempt Telegram answered** (ticket
+    08), charged to whatever `core/request_meter` block is active — nothing, for
+    the callers that are not a sync.
+
+    Per *answered attempt*, not per call. An attempt that dies in transport —
+    dead proxy, connect timeout — is charged nothing and retried for free, which
+    is decision 15's "a flaky proxy is not the User's doing". An attempt that
+    came back with a status code, any status code, is charged, because Telegram
+    spent the same resources on it that it spends on a 200 (decision 20). The
+    two rules meet here rather than at the exit: a 404 satisfies `is_network`
+    and so goes round the retry branch up to `NETWORK_FETCH_RETRIES` times, and
+    charging once per call would bill eight real round trips as one.
     """
     global _tor_request_counter
     effective_retries = (
@@ -197,6 +211,7 @@ async def fetch_with_retry(
     tried: set[str] = set()
     telemetry: dict[str, Any] = {"attempts": []}
     start_total = time.time() * 1000
+    counts_towards_quota = is_telegram_web_url(url)
 
     for i in range(effective_retries):
         attempt_start = time.time() * 1000
@@ -248,6 +263,8 @@ async def fetch_with_retry(
             )
             telemetry["totalDuration"] = int(time.time() * 1000 - start_total)
             telemetry["success"] = True
+            if counts_towards_quota:
+                record_telegram_request()
             return data, telemetry
 
         except Exception as exc:  # noqa: BLE001
@@ -260,6 +277,25 @@ async def fetch_with_retry(
                 isinstance(exc, httpx.HTTPStatusError)
                 and exc.response.status_code == 429
             )
+            # A status code means Telegram answered; a soft-blocked web view is
+            # a page it served. Both cost Telegram what a 200 costs it, so both
+            # are charged (decision 20). A `TelegramWebViewUnavailable` is a
+            # `ConnectionError` subclass, so the obvious `is_network` test files
+            # it with the dead proxies — which is why this reads the soft-block
+            # flag rather than the exception's base class.
+            #
+            # Charged here, per attempt, and not once at the exit below. An
+            # `HTTPStatusError` satisfies `is_network` (it subclasses
+            # `httpx.HTTPError`), so the retry branch takes 404s and 429s round
+            # again — up to `NETWORK_FETCH_RETRIES`, which is **8**. A per-call
+            # charge would bill one Request for eight round trips Telegram
+            # actually served, and would do it worst for the accounts under the
+            # most rate-limit pressure, which are the ones generating the most
+            # load. See `docs/quota-ledger-plan.md`.
+            if counts_towards_quota and (
+                isinstance(exc, httpx.HTTPStatusError) or is_soft_block
+            ):
+                record_telegram_request()
 
             if proxy_url and is_network and not is_soft_block:
                 now_ms = time.time() * 1000

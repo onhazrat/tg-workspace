@@ -63,6 +63,10 @@ INVENTORY: dict[str, str] = {
     "logs.py": AGGREGATE,
     "post_sync_state.py": AGGREGATE,
     "posts.py": AGGREGATE,
+    # Owns `tg_quota_usage` (ticket 08) and is its only writer. The counting
+    # itself is not here — `core/request_meter.py` does that, because a
+    # ContextVar tally has no table and no domain in it.
+    "quota.py": AGGREGATE,
     "scraper_jobs.py": AGGREGATE,
     # The two halves of the ticket 06 settings split, one aggregate each. Not
     # one module owning both tables: the whole point of the split is that a key

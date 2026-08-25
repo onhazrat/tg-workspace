@@ -1,7 +1,7 @@
 """TG Summarizer domain models."""
 
 import uuid
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from typing import Any
 
 from sqlalchemy import JSON, BigInteger, Column, Text, UniqueConstraint
@@ -815,4 +815,50 @@ class SyncMeta(SQLModel, table=True):
 
     resource: str = Field(primary_key=True)
     etag: str
+    updated_at: datetime = Field(default_factory=utc_now)
+
+
+class QuotaUsage(SQLModel, table=True):
+    """What one User spent on one Budget on one UTC day (ticket 08).
+
+    The ledger, and for now only that: nothing reads it to decide anything.
+    Ticket 23 reads it at enqueue to pick a lane and ticket 24 to refuse at the
+    ceiling, so the shape here is the shape those questions need — "what has
+    this User spent today, on this Budget" is a primary-key hit.
+
+    `day` is a date rather than a timestamp because the reset is UTC midnight
+    (decision 16). A timestamp would move the boundary into every reader, and
+    the readers would eventually disagree about it.
+
+    `requests` counts HTTP Requests to the Telegram web view, not channel syncs
+    — one sync is anywhere between one request and fifty, so a limit denominated
+    in syncs is not a load control (decision 15). `services/quota.py` is the
+    sole writer and `core/request_meter.py` does the counting.
+
+    **Never pruned.** A few hundred rows a year per active account, and it is
+    the only record an Admin has to set a limit from; `run_retention_cleanup`
+    and `stats.clear_table` both work from explicit inventories this table is
+    deliberately absent from. The foreign key still cascades, as
+    `ChannelFollow` and `UserSetting` do: an account's ledger going with the
+    account is that account ceasing to exist, not a prune.
+    """
+
+    __tablename__ = "tg_quota_usage"
+
+    user_id: uuid.UUID = Field(
+        foreign_key="user.id",
+        primary_key=True,
+        ondelete="CASCADE",
+    )
+    #: UTC calendar day. The leading PK column is `user_id`, so the Admin view's
+    #: "everyone, on this day" needs an index of its own — the PK cannot serve a
+    #: predicate on its second column.
+    day: date = Field(primary_key=True, index=True)
+    #: One of `services/quota.Budget`. Stored as its string value, so this is a
+    #: persisted format: renaming a Budget needs a migration, not just an edit.
+    budget: str = Field(primary_key=True)
+
+    requests: int = 0
+
+    created_at: datetime = Field(default_factory=utc_now)
     updated_at: datetime = Field(default_factory=utc_now)

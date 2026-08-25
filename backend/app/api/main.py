@@ -9,6 +9,7 @@ from app.api.routes import (
     login,
     network,
     private,
+    quota,
     rag,
     telegram,
     users,
@@ -41,6 +42,7 @@ api_router.include_router(ai_routes.router, dependencies=APPROVED_ONLY)
 api_router.include_router(data.router, dependencies=APPROVED_ONLY)
 api_router.include_router(rag.router, dependencies=APPROVED_ONLY)
 api_router.include_router(jobs.router, dependencies=APPROVED_ONLY)
+api_router.include_router(quota.router, dependencies=APPROVED_ONLY)
 
 if settings.ENVIRONMENT == "local":
     api_router.include_router(private.router)

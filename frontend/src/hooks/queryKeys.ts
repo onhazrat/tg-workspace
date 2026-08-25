@@ -49,6 +49,11 @@ export const queryKeys = {
    * per row so expanding a second one does not refetch the first.
    */
   logDetail: (type: string, id: string) => ["logDetail", type, id] as const,
+  /**
+   * Admin Request usage for one UTC day. Keyed on the day because the ledger
+   * for a past day is immutable — yesterday cached forever is correct.
+   */
+  quotaUsage: (day: string) => ["quotaUsage", day] as const,
 } as const
 
 export const SUMMARIZER_STALE_TIME = env.queryStaleTimeMs

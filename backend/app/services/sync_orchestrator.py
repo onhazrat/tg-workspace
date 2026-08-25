@@ -15,6 +15,7 @@ from sqlmodel import Session, col, func, select
 
 from app.core.config import settings
 from app.core.db import engine
+from app.core.request_meter import metered
 from app.jobs.settings import (
     compute_scrape_cutoff_ms,
     load_media_settings,
@@ -58,6 +59,7 @@ from app.services.post_thumbnails import (
     enforce_thumb_cache_size_limit_throttled,
 )
 from app.services.posts import bulk_upsert_posts_impl
+from app.services.quota import charge_sync_job
 from app.services.scraper import get_channel_info, scrape_channel_page
 from app.services.scraper_jobs import (
     ChannelSyncState,
@@ -1389,30 +1391,53 @@ def _load_sync_job_concurrency(user_id: uuid.UUID | None) -> tuple[int, int | No
 
 
 async def run_sync_job(job: SyncJobState, user_id: uuid.UUID | None) -> None:
-    job.status = "running"
-    await touch_job(job)
-    concurrency, _proxy_capacity = await run_db(_load_sync_job_concurrency, user_id)
+    """Sync every Channel in the job, then charge what it spent (ticket 08).
 
-    sem = asyncio.Semaphore(concurrency)
+    The meter is opened here and read once at the end — decision 19's "account
+    at completion", charging the Requests the job actually made rather than the
+    guess an enqueue-time charge would have to use. `asyncio` copies the context
+    into the per-channel tasks below, so every fetch underneath finds this
+    meter, and a second job running beside this one increments its own.
 
-    async def _run_one(ch_state: ChannelSyncState) -> None:
-        async with sem:
+    A cancelled job is still charged for what it spent before the cancel. Those
+    Requests were made, and Telegram answered them.
+
+    The charge is the last thing that happens and cannot fail the job:
+    `charge_sync_job` swallows and logs its own errors, because an accounting
+    write nobody reads yet must not turn a completed sync into a failed one.
+    """
+    with metered() as meter:
+        job.status = "running"
+        await touch_job(job)
+        concurrency, _proxy_capacity = await run_db(_load_sync_job_concurrency, user_id)
+
+        sem = asyncio.Semaphore(concurrency)
+
+        async def _run_one(ch_state: ChannelSyncState) -> None:
+            async with sem:
+                if job.cancel_event.is_set():
+                    ch_state.status = "cancelled"
+                    return
+                await sync_single_channel(job, ch_state, user_id=user_id)
+
+        try:
+            await asyncio.gather(*[_run_one(ch) for ch in job.channels.values()])
+
             if job.cancel_event.is_set():
-                ch_state.status = "cancelled"
-                return
-            await sync_single_channel(job, ch_state, user_id=user_id)
+                job.status = "cancelled"
+            elif all(c.status in ("success", "skipped") for c in job.channels.values()):
+                job.status = "completed"
+            elif any(c.status == "success" for c in job.channels.values()):
+                job.status = "completed"
+            else:
+                job.status = "failed"
 
-    await asyncio.gather(*[_run_one(ch) for ch in job.channels.values()])
-
-    if job.cancel_event.is_set():
-        job.status = "cancelled"
-    elif all(c.status in ("success", "skipped") for c in job.channels.values()):
-        job.status = "completed"
-    elif any(c.status == "success" for c in job.channels.values()):
-        job.status = "completed"
-    else:
-        job.status = "failed"
-
-    job.finished_at = int(time.time() * 1000)
-    await persist_job(job)
-    deactivate_job(job.job_id)
+            job.finished_at = int(time.time() * 1000)
+            await persist_job(job)
+            deactivate_job(job.job_id)
+        finally:
+            # In `finally` so a job that dies part-way is still charged for the
+            # pages it fetched first. The alternative rewards a crash.
+            await run_db(
+                charge_sync_job, user_id, job.sync_mode, meter.telegram_requests
+            )

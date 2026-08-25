@@ -132,6 +132,7 @@ resolves when reopened after the follow list has changed.
 19. **Enforce at enqueue, account at completion.** Enqueue reads current usage to pick the lane;
     completion charges the actual Request count. Ledger `tg_quota_usage`, PK `(user_id, day, budget)`,
     **kept forever** — a few hundred rows a year, and it is what an Admin reads to set limits.
+    *The accounting half is built (ticket 08, `docs/quota-ledger-plan.md`); the enqueue half is 23.*
 20. **Failed syncs are charged** when the Request reached Telegram and came back, error responses
     included; **not charged** for proxy or network failures. Same line as #15, and it removes the
     incentive that would make failing channels effectively unlimited.
