@@ -49,6 +49,7 @@ from app.services.tag_runs import (
     list_tag_runs,
     upsert_tag_run,
 )
+from tests.utils.tenancy import ANY_READER
 
 
 @contextmanager
@@ -80,6 +81,7 @@ def _candidates(n: int, size: int) -> list[Any]:
 def _write_report(session: Session, report_id: str, candidates: list[Any]) -> None:
     report = DiscoverReport(
         id=report_id,
+        user_id=ANY_READER,
         channels=["a"],
         candidates=candidates,
         candidate_count=len(candidates),
@@ -90,7 +92,7 @@ def _write_report(session: Session, report_id: str, candidates: list[Any]) -> No
 
 
 def _write_tag_run(session: Session, run_id: str, **body: object) -> None:
-    upsert_tag_run(session, run_id, {"channels": ["a"], **body}, user_id=None)
+    upsert_tag_run(session, run_id, {"channels": ["a"], **body}, user_id=ANY_READER)
 
 
 def test_the_heavy_sets_are_not_silently_empty() -> None:
@@ -111,7 +113,7 @@ def test_listing_tag_runs_selects_no_heavy_column(column: str) -> None:
         )
 
         with captured_sql() as statements:
-            list_tag_runs(session)
+            list_tag_runs(session, user_id=ANY_READER)
 
     assert statements, "no SQL captured — the listener is not wired up"
     offenders = [s for s in statements if column in s]
@@ -125,7 +127,7 @@ def test_the_tag_run_detail_call_still_returns_them() -> None:
             session, "cols-tag-detail", promptText="corpus", responseText="r"
         )
 
-        full = get_tag_run(session, "cols-tag-detail")
+        full = get_tag_run(session, "cols-tag-detail", user_id=ANY_READER)
 
     assert full["promptText"] == "corpus"
     assert full["responseText"] == "r"
@@ -136,7 +138,7 @@ def test_listing_reports_never_reads_candidates() -> None:
         _write_report(session, "cols-report", _candidates(50, 500))
 
         with captured_sql() as statements:
-            list_reports(session)
+            list_reports(session, user_id=ANY_READER)
 
     assert statements
     offenders = [s for s in statements if "candidates" in s]
@@ -153,8 +155,12 @@ def test_the_stored_count_equals_the_thing_it_replaced() -> None:
     with Session(engine) as session:
         _write_report(session, "cols-count", _candidates(37, 10))
 
-        listed = next(row for row in list_reports(session) if row["id"] == "cols-count")
-        full = get_report(session, "cols-count")
+        listed = next(
+            row
+            for row in list_reports(session, user_id=ANY_READER)
+            if row["id"] == "cols-count"
+        )
+        full = get_report(session, "cols-count", user_id=ANY_READER)
 
     assert listed["candidateCount"] == len(full["candidates"]) == 37
 
@@ -166,7 +172,9 @@ def test_a_page_of_corpora_still_serialises_small() -> None:
             _write_tag_run(session, f"cols-big-tag-{i}", promptText="x" * 200_000)
             _write_report(session, f"cols-big-report-{i}", _candidates(200, 1000))
 
-        page = list_tag_runs(session) + list_reports(session)
+        page = list_tag_runs(session, user_id=ANY_READER) + list_reports(
+            session, user_id=ANY_READER
+        )
 
     assert len(json.dumps(page)) < 50_000
 
@@ -176,7 +184,9 @@ def test_starring_works_on_both_kinds() -> None:
     with Session(engine) as session:
         _write_tag_run(session, "cols-star-tag", isStarred=True)
         listed = next(
-            row for row in list_tag_runs(session) if row["id"] == "cols-star-tag"
+            row
+            for row in list_tag_runs(session, user_id=ANY_READER)
+            if row["id"] == "cols-star-tag"
         )
 
     assert listed["isStarred"] is True
@@ -194,10 +204,12 @@ def test_a_round_tripped_run_cannot_pin_its_own_timestamp() -> None:
     """
     with Session(engine) as session:
         first = upsert_tag_run(
-            session, "cols-roundtrip", {"channels": ["a"]}, user_id=None
+            session, "cols-roundtrip", {"channels": ["a"]}, user_id=ANY_READER
         )
         # Exactly what `upsertTagRun` does: send back what the list returned.
-        second = upsert_tag_run(session, "cols-roundtrip", dict(first), user_id=None)
+        second = upsert_tag_run(
+            session, "cols-roundtrip", dict(first), user_id=ANY_READER
+        )
 
         row = session.get(TagRun, "cols-roundtrip")
         assert row is not None

@@ -36,6 +36,7 @@ from app.services.artifacts import (
 from app.services.chat_sessions import upsert_chat_session
 from app.services.summaries import list_summaries, upsert_summary
 from app.services.tag_runs import upsert_tag_run
+from tests.utils.tenancy import ANY_READER
 
 PAYLOAD_TABLES = ("tg_summary_payloads", "tg_chat_session_payloads")
 
@@ -74,7 +75,7 @@ def _seed(session: Session, *, corpus: int = 100) -> None:
             "promptText": "x" * corpus,
             "citedPosts": [{"id": 1}],
         },
-        user_id=None,
+        user_id=ANY_READER,
     )
     upsert_chat_session(
         session,
@@ -84,7 +85,7 @@ def _seed(session: Session, *, corpus: int = 100) -> None:
             "timestamp": 300,
             "messages": [{"role": "user", "text": "y" * corpus}],
         },
-        user_id=None,
+        user_id=ANY_READER,
     )
     upsert_tag_run(
         session,
@@ -95,11 +96,12 @@ def _seed(session: Session, *, corpus: int = 100) -> None:
             "promptText": "z" * corpus,
             "responseText": "w" * corpus,
         },
-        user_id=None,
+        user_id=ANY_READER,
     )
     session.add(
         DiscoverReport(
             id="art-discovery",
+            user_id=ANY_READER,
             channels=["a"],
             candidates=[{"name": f"c{i}", "blurb": "q" * corpus} for i in range(20)],
             candidate_count=20,
@@ -127,7 +129,7 @@ def test_the_union_never_opens_either_payload_table(kind: str | None) -> None:
         _seed(session)
 
         with captured_sql() as statements:
-            list_artifacts(session, kind=kind)
+            list_artifacts(session, kind=kind, user_id=ANY_READER)
 
     assert statements, "no SQL captured — the listener is not wired up"
     for table in PAYLOAD_TABLES:
@@ -141,7 +143,7 @@ def test_the_union_never_selects_a_heavy_column(column: str) -> None:
         _seed(session)
 
         with captured_sql() as statements:
-            list_artifacts(session)
+            list_artifacts(session, user_id=ANY_READER)
 
     offenders = [s for s in statements if column in s]
     assert not offenders, f"the union selected {column}: {offenders}"
@@ -164,10 +166,10 @@ def test_each_artifact_appears_exactly_once() -> None:
                 "channels": ["a"],
                 "timestamp": 500,
             },
-            user_id=None,
+            user_id=ANY_READER,
         )
 
-        page = list_artifacts(session)
+        page = list_artifacts(session, user_id=ANY_READER)
 
     keys = [(row["kind"], row["id"]) for row in page]
     assert len(keys) == len(set(keys)) == 5
@@ -179,7 +181,9 @@ def test_kinds_carry_only_their_own_fields() -> None:
     """No invented nulls: this is why the response is a discriminated union."""
     with Session(engine) as session:
         _seed(session)
-        by_kind = {row["kind"]: row for row in list_artifacts(session)}
+        by_kind = {
+            row["kind"]: row for row in list_artifacts(session, user_id=ANY_READER)
+        }
 
     assert "status" in by_kind["summary"]
     assert "messageCount" not in by_kind["summary"]
@@ -215,20 +219,25 @@ def test_ordering_is_stable_across_pages() -> None:
                 session,
                 f"art-page-s{i}",
                 {"text": "t", "channels": [], "timestamp": 7},
-                user_id=None,
+                user_id=ANY_READER,
             )
             upsert_chat_session(
                 session,
                 f"art-page-c{i}",
                 {"channels": [], "timestamp": 7},
-                user_id=None,
+                user_id=ANY_READER,
             )
 
-        whole = [row["id"] for row in list_artifacts(session, limit=12)]
+        whole = [
+            row["id"] for row in list_artifacts(session, limit=12, user_id=ANY_READER)
+        ]
         paged: list[str] = []
         for offset in range(0, 12, 4):
             paged += [
-                row["id"] for row in list_artifacts(session, limit=4, offset=offset)
+                row["id"]
+                for row in list_artifacts(
+                    session, limit=4, offset=offset, user_id=ANY_READER
+                )
             ]
 
     assert paged == whole
@@ -247,7 +256,7 @@ def test_the_outer_sort_carries_the_tiebreak() -> None:
         _seed(session)
 
         with captured_sql() as statements:
-            list_artifacts(session)
+            list_artifacts(session, user_id=ANY_READER)
 
     outer = [s for s in statements if "ORDER BY" in s and "artifact" in s]
     assert outer, "no union query captured"
@@ -261,7 +270,7 @@ def test_the_kind_filter_removes_the_table_from_the_plan() -> None:
         _seed(session)
 
         with captured_sql() as statements:
-            page = list_artifacts(session, kind="chat")
+            page = list_artifacts(session, kind="chat", user_id=ANY_READER)
 
     assert [row["kind"] for row in page] == ["chat"]
     union_sql = [s for s in statements if "tg_chat_sessions" in s]
@@ -274,10 +283,15 @@ def test_search_matches_per_kind() -> None:
     with Session(engine) as session:
         _seed(session)
 
-        assert [r["id"] for r in list_artifacts(session, search="a summary body")] == [
-            "art-summary"
-        ]
-        assert [r["id"] for r in list_artifacts(session, search="add")] == ["art-tag"]
+        assert [
+            r["id"]
+            for r in list_artifacts(
+                session, search="a summary body", user_id=ANY_READER
+            )
+        ] == ["art-summary"]
+        assert [
+            r["id"] for r in list_artifacts(session, search="add", user_id=ANY_READER)
+        ] == ["art-tag"]
 
 
 def test_search_deliberately_does_not_reach_prompt_bodies() -> None:
@@ -298,15 +312,15 @@ def test_search_deliberately_does_not_reach_prompt_bodies() -> None:
                 "timestamp": 1,
                 "promptText": "xyzzy",
             },
-            user_id=None,
+            user_id=ANY_READER,
         )
 
-        assert [r["id"] for r in list_summaries(session, search="xyzzy")] == [
-            "art-prompt-only"
-        ]
+        assert [
+            r["id"] for r in list_summaries(session, search="xyzzy", user_id=ANY_READER)
+        ] == ["art-prompt-only"]
 
         with captured_sql() as statements:
-            found = list_artifacts(session, search="xyzzy")
+            found = list_artifacts(session, search="xyzzy", user_id=ANY_READER)
 
     assert found == []
     for table in PAYLOAD_TABLES:
@@ -318,7 +332,7 @@ def test_a_page_of_corpora_still_serialises_small() -> None:
     with Session(engine) as session:
         _seed(session, corpus=200_000)
 
-        page = list_artifacts(session)
+        page = list_artifacts(session, user_id=ANY_READER)
 
     assert len(page) == 4
     assert len(json.dumps(page)) < 20_000
@@ -328,9 +342,13 @@ def test_starring_spans_every_kind() -> None:
     """A filter that worked on half the list would be worse than none."""
     with Session(engine) as session:
         _seed(session)
-        upsert_tag_run(session, "art-tag", {"isStarred": True}, user_id=None)
+        upsert_tag_run(session, "art-tag", {"isStarred": True}, user_id=ANY_READER)
 
-        starred = {row["id"] for row in list_artifacts(session) if row["isStarred"]}
+        starred = {
+            row["id"]
+            for row in list_artifacts(session, user_id=ANY_READER)
+            if row["isStarred"]
+        }
 
     assert starred == {"art-tag"}
 
@@ -346,15 +364,15 @@ def test_the_starred_filter_runs_in_sql() -> None:
     """
     with Session(engine) as session:
         _seed(session)
-        upsert_tag_run(session, "art-tag", {"isStarred": True}, user_id=None)
+        upsert_tag_run(session, "art-tag", {"isStarred": True}, user_id=ANY_READER)
         upsert_summary(
             session,
             "art-starred-summary",
             {"text": "s", "channels": [], "timestamp": 900, "isStarred": True},
-            user_id=None,
+            user_id=ANY_READER,
         )
 
-        page = list_artifacts(session, starred=True)
+        page = list_artifacts(session, starred=True, user_id=ANY_READER)
 
     assert {row["id"] for row in page} == {"art-tag", "art-starred-summary"}
     assert all(row["isStarred"] for row in page)
@@ -363,9 +381,14 @@ def test_the_starred_filter_runs_in_sql() -> None:
 def test_the_starred_filter_spans_kinds_and_respects_kind() -> None:
     with Session(engine) as session:
         _seed(session)
-        upsert_tag_run(session, "art-tag", {"isStarred": True}, user_id=None)
+        upsert_tag_run(session, "art-tag", {"isStarred": True}, user_id=ANY_READER)
 
-        assert [r["id"] for r in list_artifacts(session, kind="tag", starred=True)] == [
-            "art-tag"
-        ]
-        assert list_artifacts(session, kind="chat", starred=True) == []
+        assert [
+            r["id"]
+            for r in list_artifacts(
+                session, kind="tag", starred=True, user_id=ANY_READER
+            )
+        ] == ["art-tag"]
+        assert (
+            list_artifacts(session, kind="chat", starred=True, user_id=ANY_READER) == []
+        )

@@ -12,6 +12,11 @@ from sqlmodel import Session, col
 
 from app.models_tg import TagRun, utc_now
 from app.services.serialization import to_snake
+from app.services.tenancy import assert_owner, scoped_select
+
+#: This family's 404, reused by `assert_owner` so a foreign row and an absent
+#: one answer identically. See `SUMMARY_NOT_FOUND`.
+TAG_RUN_NOT_FOUND = "Tag run not found"
 
 DEFAULT_TAG_RUN_PAGE_SIZE = 100
 MAX_TAG_RUN_PAGE_SIZE = 1000
@@ -114,10 +119,16 @@ def list_tag_runs(
     *,
     limit: int = DEFAULT_TAG_RUN_PAGE_SIZE,
     offset: int = 0,
+    user_id: uuid.UUID,
 ) -> list[dict[str, Any]]:
-    """Return one newest-first page of tag runs in the light projection."""
+    """Return one newest-first page of tag runs in the light projection.
+
+    The scope predicate goes on the column select, not on a wrapper: the light
+    projection is what runs, and a filter applied after it would be a second
+    query shape nobody tests.
+    """
     statement = (
-        sa_select(*_light_columns())
+        scoped_select(sa_select(*_light_columns()), TagRun, user_id)
         .order_by(col(TagRun.created_at).desc(), col(TagRun.id))
         .offset(offset)
         .limit(limit)
@@ -128,11 +139,19 @@ def list_tag_runs(
     ]
 
 
-def get_tag_run(session: Session, tag_run_id: str) -> dict[str, Any]:
-    """Return one tag run in full, including the heavy prompt/response fields."""
+def get_tag_run(
+    session: Session, tag_run_id: str, *, user_id: uuid.UUID
+) -> dict[str, Any]:
+    """Return one tag run in full, including the heavy prompt/response fields.
+
+    `prompt_text` is a whole serialized post corpus, so this is the one read in
+    the family where a missing ownership check hands over somebody else's
+    posts rather than their metadata.
+    """
     row = session.get(TagRun, tag_run_id)
     if row is None:
-        raise HTTPException(status_code=404, detail="Tag run not found")
+        raise HTTPException(status_code=404, detail=TAG_RUN_NOT_FOUND)
+    assert_owner(row.user_id, user_id, detail=TAG_RUN_NOT_FOUND)
     return tag_run_to_camel(row)
 
 
@@ -184,8 +203,12 @@ def upsert_tag_run(
     tag_run_id: str,
     body: dict[str, Any],
     *,
-    user_id: uuid.UUID | None,
+    user_id: uuid.UUID,
 ) -> dict[str, Any]:
+    """Create a tag run, or merge into the caller's existing one.
+
+    The ownership check is `upsert_summary`'s, for the same reason.
+    """
     known = {
         "status",
         "source",
@@ -218,6 +241,7 @@ def upsert_tag_run(
     now_ms = int(utc_now().timestamp() * 1000)
     tag_run = session.get(TagRun, tag_run_id)
     if tag_run:
+        assert_owner(tag_run.user_id, user_id, detail=TAG_RUN_NOT_FOUND)
         for key, value in body.items():
             snake = to_snake(key)
             if snake in known:
@@ -258,9 +282,10 @@ def upsert_tag_run(
     return tag_run_to_camel(tag_run)
 
 
-def delete_tag_run(session: Session, tag_run_id: str) -> None:
+def delete_tag_run(session: Session, tag_run_id: str, *, user_id: uuid.UUID) -> None:
     tag_run = session.get(TagRun, tag_run_id)
     if not tag_run:
-        raise HTTPException(status_code=404, detail="Tag run not found")
+        raise HTTPException(status_code=404, detail=TAG_RUN_NOT_FOUND)
+    assert_owner(tag_run.user_id, user_id, detail=TAG_RUN_NOT_FOUND)
     session.delete(tag_run)
     session.commit()

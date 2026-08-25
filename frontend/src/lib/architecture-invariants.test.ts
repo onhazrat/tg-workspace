@@ -348,3 +348,58 @@ describe("Ticket 02 — browser storage has four owners, and they are named", ()
     expect(entries).toEqual(["TOKEN_STORAGE_KEY", "THEME_STORAGE_KEY"])
   })
 })
+
+describe("Ticket 17 — an artifact id is a UUID, never a timestamp", () => {
+  /**
+   * `tg_summaries.id` and `tg_chat_sessions.id` are the *whole* primary key —
+   * there is no `user_id` in it — so the id namespace is global across
+   * accounts. `Date.now().toString()` has millisecond resolution, which was
+   * survivable only while a create could silently merge into whatever row the
+   * id already named.
+   *
+   * Ticket 17 scoped the upserts, so that merge is now a 404: the second
+   * account to save in a given millisecond gets "Summary not found" on a
+   * **create**, for a row its user has never seen and cannot retry. A UUID
+   * makes the collision impossible instead of making the failure friendlier.
+   *
+   * `TagContext` already did this and Discover reports are server-side uuid4;
+   * these two modules were the outliers, found by review after the scoping
+   * landed. Message ids inside a transcript are deliberately not covered — they
+   * are array keys within one artifact, never a database primary key.
+   */
+  const ARTIFACT_ID_BINDINGS =
+    /\b(?:const|let)\s+(newId|sessionId|runId)\s*=\s*([^\n]+)/g
+
+  const CONTEXTS = [
+    "src/contexts/AIContext.tsx",
+    "src/contexts/ChatContext.tsx",
+    "src/contexts/TagContext.tsx",
+  ]
+
+  it("binds every artifact id to crypto.randomUUID()", () => {
+    const offenders: string[] = []
+
+    for (const file of CONTEXTS) {
+      const source = readFileSync(join(FRONTEND, file), "utf8")
+      for (const [, name, value] of source.matchAll(ARTIFACT_ID_BINDINGS)) {
+        if (!value.includes("crypto.randomUUID()")) {
+          offenders.push(`${file}: ${name} = ${value.trim()}`)
+        }
+      }
+    }
+
+    expect(offenders).toEqual([])
+  })
+
+  it("finds the bindings it claims to check", () => {
+    // Without this the regex could stop matching — a rename, a reformat — and
+    // the guard above would pass by scanning nothing at all.
+    const found = CONTEXTS.flatMap((file) => [
+      ...readFileSync(join(FRONTEND, file), "utf8").matchAll(
+        ARTIFACT_ID_BINDINGS,
+      ),
+    ])
+
+    expect(found.length).toBeGreaterThanOrEqual(4)
+  })
+})

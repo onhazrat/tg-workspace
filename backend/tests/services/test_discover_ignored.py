@@ -71,7 +71,7 @@ def test_dismissal_applies_to_reports_generated_before_it() -> None:
 
         ignore_channels(session, ["alpha_news"])
 
-        refetched = get_report(session, report["id"])
+        refetched = get_report(session, report["id"], user_id=ANY_READER)
         assert refetched["candidates"][0]["isIgnored"] is True
 
 
@@ -82,7 +82,7 @@ def test_undo_restores_the_candidate_everywhere() -> None:
         ignore_channels(session, ["alpha_news"])
         unignore_channels(session, ["alpha_news"])
 
-        refetched = get_report(session, report["id"])
+        refetched = get_report(session, report["id"], user_id=ANY_READER)
         assert refetched["candidates"][0]["isIgnored"] is False
         assert ignored_handles(session) == set()
 

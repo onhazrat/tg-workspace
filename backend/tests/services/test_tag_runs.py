@@ -2,6 +2,7 @@ from sqlmodel import Session
 
 from app.core.db import engine
 from app.services.tag_runs import list_tag_runs, upsert_tag_run
+from tests.utils.tenancy import ANY_READER
 
 
 def test_upsert_tag_run_roundtrip() -> None:
@@ -20,7 +21,7 @@ def test_upsert_tag_run_roundtrip() -> None:
                 "channelContextOptions": {"includeBio": True, "includeTags": False},
                 "createdAt": 10,
             },
-            user_id=None,
+            user_id=ANY_READER,
         )
         assert created["id"] == "tag-run-service-1"
         assert created["status"] == "pending"
@@ -34,11 +35,11 @@ def test_upsert_tag_run_roundtrip() -> None:
                 "responseText": '{"chan_a":["Politics"]}',
                 "suggestions": {"chan_a": ["Politics"]},
             },
-            user_id=None,
+            user_id=ANY_READER,
         )
         assert updated["status"] == "completed"
         assert updated["suggestions"] == {"chan_a": ["Politics"]}
 
-        runs = list_tag_runs(session)
+        runs = list_tag_runs(session, user_id=ANY_READER)
         ids = [run["id"] for run in runs]
         assert "tag-run-service-1" in ids

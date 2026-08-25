@@ -29,6 +29,8 @@ from backfill_chat_sessions import (  # noqa: E402  # ty: ignore[unresolved-impo
     backfill_chats,
 )
 
+from tests.utils.tenancy import ANY_READER
+
 TURNS = [
     {"role": "user", "text": "what changed in the last week?"},
     {"role": "model", "text": "three things"},
@@ -42,7 +44,7 @@ def _write_summary(
         session,
         summary_id,
         {"text": text, "channels": ["a"], "timestamp": 1, **body},
-        user_id=None,
+        user_id=ANY_READER,
     )
 
 
@@ -96,7 +98,10 @@ def test_a_summary_with_a_chat_keeps_the_summary_and_extracts_the_chat() -> None
         # The transcript is gone from the summary's half...
         assert summary.chat_message_count == 0
         # ...but the rest of its payload is untouched.
-        assert get_summary(session, "bf-both")["promptText"] == "the corpus"
+        assert (
+            get_summary(session, "bf-both", user_id=ANY_READER)["promptText"]
+            == "the corpus"
+        )
 
         chat = session.get(ChatSession, "bf-both:chat")
         assert chat is not None

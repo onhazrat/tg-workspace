@@ -72,7 +72,7 @@ def test_generating_saves_a_readable_report() -> None:
         assert created["candidates"][0]["name"] == "alpha_news"
         assert created["postsInScope"] == 1
 
-        fetched = get_report(session, created["id"])
+        fetched = get_report(session, created["id"], user_id=ANY_READER)
         assert fetched["candidates"] == created["candidates"]
 
 
@@ -111,7 +111,7 @@ def test_new_posts_do_not_change_an_existing_report() -> None:
         # The corpus grows after the report was generated.
         _seed(session, [_post(2, "carrier", 2000, forwarded_from="beta_daily")])
 
-        refetched = get_report(session, created["id"])
+        refetched = get_report(session, created["id"], user_id=ANY_READER)
         assert refetched["candidateCount"] == 1
         assert [c["name"] for c in refetched["candidates"]] == ["alpha_news"]
 
@@ -133,7 +133,7 @@ def test_is_followed_is_live_not_frozen() -> None:
         add_test_channel(session, "alpha_news", name="alpha_news")
         session.commit()
 
-        refetched = get_report(session, created["id"])
+        refetched = get_report(session, created["id"], user_id=ANY_READER)
         assert refetched["candidates"][0]["isFollowed"] is True
 
 
@@ -144,7 +144,7 @@ def test_is_followed_matches_case_insensitively() -> None:
         add_test_channel(session, "alpha_news", name="alpha_news")
         session.commit()
 
-        refetched = get_report(session, created["id"])
+        refetched = get_report(session, created["id"], user_id=ANY_READER)
         assert refetched["candidates"][0]["isFollowed"] is True
 
 
@@ -173,7 +173,7 @@ def test_list_omits_candidates_but_reports_the_count() -> None:
         _seed(session, [_post(1, "carrier", 1000, forwarded_from="alpha_news")])
         _create(session)
 
-        rows = list_reports(session)
+        rows = list_reports(session, user_id=ANY_READER)
         assert len(rows) == 1
         assert "candidates" not in rows[0]
         assert rows[0]["candidateCount"] == 1
@@ -185,7 +185,7 @@ def test_list_is_newest_first() -> None:
         first = _create(session)
         second = _create(session)
 
-        rows = list_reports(session)
+        rows = list_reports(session, user_id=ANY_READER)
         assert [r["id"] for r in rows] == [second["id"], first["id"]]
 
 
@@ -195,7 +195,7 @@ def test_search_matches_scope_channels() -> None:
         _create(session, channel_names=["carrier"])
         _create(session, channel_names=["somewhere_else"])
 
-        rows = list_reports(session, search="carrier")
+        rows = list_reports(session, search="carrier", user_id=ANY_READER)
         assert len(rows) == 1
         assert rows[0]["scope"]["channels"] == ["carrier"]
 
@@ -205,16 +205,16 @@ def test_delete_removes_the_report() -> None:
         _seed(session, [_post(1, "carrier", 1000, forwarded_from="alpha_news")])
         created = _create(session)
 
-        delete_report(session, created["id"])
+        delete_report(session, created["id"], user_id=ANY_READER)
 
-        assert list_reports(session) == []
+        assert list_reports(session, user_id=ANY_READER) == []
         with pytest.raises(HTTPException) as excinfo:
-            get_report(session, created["id"])
+            get_report(session, created["id"], user_id=ANY_READER)
         assert excinfo.value.status_code == 404
 
 
 def test_missing_report_raises_404() -> None:
     with Session(engine) as session:
         with pytest.raises(HTTPException) as excinfo:
-            get_report(session, "does-not-exist")
+            get_report(session, "does-not-exist", user_id=ANY_READER)
         assert excinfo.value.status_code == 404

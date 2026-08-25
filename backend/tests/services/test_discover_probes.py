@@ -467,7 +467,7 @@ def test_probing_applies_to_reports_generated_before_it() -> None:
 
         record_probe_result(session, "helper_bot", BOT_PAGE)
 
-        refetched = get_report(session, report["id"])
+        refetched = get_report(session, report["id"], user_id=ANY_READER)
         assert refetched["candidates"][0]["probe"]["status"] == "unavailable"
 
 

@@ -43,6 +43,7 @@ from app.services.summaries import (
     list_summaries,
     upsert_summary,
 )
+from tests.utils.tenancy import ANY_READER
 
 PAYLOAD_TABLE = "tg_summary_payloads"
 
@@ -74,7 +75,7 @@ def _write(session: Session, summary_id: str, **body: object) -> None:
         session,
         summary_id,
         {"text": "t", "channels": [], "timestamp": 1, **body},
-        user_id=None,
+        user_id=ANY_READER,
     )
 
 
@@ -83,7 +84,7 @@ def test_listing_does_not_touch_the_payload_table() -> None:
         _write(session, "cost-list", promptText="x" * 1000, citedPosts={"a": {"id": 1}})
 
         with captured_sql() as statements:
-            list_summaries(session)
+            list_summaries(session, user_id=ANY_READER)
 
     assert statements, "no SQL captured — the listener is not wired up"
     offenders = [s for s in statements if PAYLOAD_TABLE in s]
@@ -96,7 +97,7 @@ def test_the_detail_call_does_touch_it() -> None:
         _write(session, "cost-detail", promptText="hello")
 
         with captured_sql() as statements:
-            body = get_summary(session, "cost-detail")
+            body = get_summary(session, "cost-detail", user_id=ANY_READER)
 
     assert body["promptText"] == "hello"
     assert any(PAYLOAD_TABLE in s for s in statements)
@@ -112,7 +113,7 @@ def test_searching_opens_it_deliberately() -> None:
         _write(session, "cost-search", promptText="a corpus containing xyzzy")
 
         with captured_sql() as statements:
-            found = list_summaries(session, search="xyzzy")
+            found = list_summaries(session, search="xyzzy", user_id=ANY_READER)
 
     assert [row["id"] for row in found] == ["cost-search"]
     assert any(PAYLOAD_TABLE in s for s in statements)
@@ -148,7 +149,7 @@ def test_a_page_of_huge_prompts_still_serialises_small() -> None:
             _write(session, f"cost-big-{i}", promptText=prompt, timestamp=i)
 
         with captured_sql() as statements:
-            page = list_summaries(session)
+            page = list_summaries(session, user_id=ANY_READER)
 
     assert len(page) >= 5
     assert not any(PAYLOAD_TABLE in s for s in statements)
@@ -161,7 +162,7 @@ def test_deleting_a_summary_takes_its_payload_with_it() -> None:
         _write(session, "cost-del", promptText="corpus")
         assert session.get(SummaryPayload, "cost-del") is not None
 
-        delete_summary(session, "cost-del")
+        delete_summary(session, "cost-del", user_id=ANY_READER)
 
         assert session.get(SummaryPayload, "cost-del") is None
 

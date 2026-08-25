@@ -347,7 +347,10 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
        * no summary, it assembles its prompt from the same channels and dates a
        * summary would. So there is no link to write.
        */
-      const sessionId = baseSessionId ?? Date.now().toString()
+      // A UUID, not a timestamp — see the note in `AIContext`. `id` is the
+      // whole primary key of `tg_chat_sessions`, and ticket 17 made a
+      // cross-account collision refuse the create instead of merging into it.
+      const sessionId = baseSessionId ?? crypto.randomUUID()
       const session: Partial<ChatSession> = {
         id: sessionId,
         channels: Array.from(selectedChannels),

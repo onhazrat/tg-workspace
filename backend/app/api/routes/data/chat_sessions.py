@@ -38,7 +38,7 @@ router = APIRouter()
 @router.get("/chat-sessions")
 def list_chat_sessions(
     session: SessionDep,
-    _current_user: CurrentUser,
+    current_user: CurrentUser,
     limit: int = Query(
         default=DEFAULT_CHAT_SESSION_PAGE_SIZE, ge=1, le=MAX_CHAT_SESSION_PAGE_SIZE
     ),
@@ -53,7 +53,7 @@ def list_chat_sessions(
     return [
         ChatSessionListItemResponse.model_validate(row)
         for row in list_chat_sessions_impl(
-            session, limit=limit, offset=offset, search=search
+            session, limit=limit, offset=offset, search=search, user_id=current_user.id
         )
     ]
 
@@ -62,11 +62,11 @@ def list_chat_sessions(
 def get_chat_session(
     chat_session_id: str,
     session: SessionDep,
-    _current_user: CurrentUser,
+    current_user: CurrentUser,
 ) -> ChatSessionResponse:
     """Full chat session including the transcript."""
     return ChatSessionResponse.model_validate(
-        get_chat_session_impl(session, chat_session_id)
+        get_chat_session_impl(session, chat_session_id, user_id=current_user.id)
     )
 
 
@@ -75,10 +75,10 @@ def upsert_chat_session(
     chat_session_id: str,
     body: ChatSessionUpsertRequest,
     session: SessionDep,
-    _current_user: CurrentUser,
+    current_user: CurrentUser,
 ) -> ChatSessionResponse:
     result = upsert_chat_session_impl(
-        session, chat_session_id, body.to_service_body(), user_id=_current_user.id
+        session, chat_session_id, body.to_service_body(), user_id=current_user.id
     )
     touch_sync(session, "chat_sessions")
     return ChatSessionResponse.model_validate(result)
@@ -88,8 +88,8 @@ def upsert_chat_session(
 def delete_chat_session(
     chat_session_id: str,
     session: SessionDep,
-    _current_user: CurrentUser,
+    current_user: CurrentUser,
 ) -> StatusResponse:
-    delete_chat_session_impl(session, chat_session_id)
+    delete_chat_session_impl(session, chat_session_id, user_id=current_user.id)
     touch_sync(session, "chat_sessions")
     return StatusResponse(status="deleted")

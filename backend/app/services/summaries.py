@@ -19,6 +19,13 @@ from sqlmodel import Session, col, select
 
 from app.models_tg import Summary, SummaryPayload, utc_now
 from app.services.serialization import to_snake
+from app.services.tenancy import assert_owner, scoped_select
+
+#: The 404 this family answers for a row that is not there. `assert_owner`
+#: reuses it for a row that is there and belongs to someone else, so the two
+#: are indistinguishable — a resource-specific detail beside a generic one is
+#: the enumeration oracle the 404-not-403 rule exists to close.
+SUMMARY_NOT_FOUND = "Summary not found"
 
 DEFAULT_SUMMARY_PAGE_SIZE = 200
 MAX_SUMMARY_PAGE_SIZE = 2000
@@ -149,13 +156,18 @@ def list_summaries(
     limit: int = DEFAULT_SUMMARY_PAGE_SIZE,
     offset: int = 0,
     search: str | None = None,
+    user_id: uuid.UUID,
 ) -> list[dict[str, Any]]:
     """Return one newest-first page of summaries in the light projection.
 
     **This must not touch `tg_summary_payloads`.** It is the reason the table
     exists — pinned by `tests/services/test_summary_list_payload_cost.py`.
+
+    `user_id` has no default for the reason `scoped_select` takes none: a
+    defaulted `None` lets a call site forget the argument and still compile,
+    and the seam would then have to invent a meaning for "no user".
     """
-    statement = select(Summary)
+    statement = scoped_select(select(Summary), Summary, user_id)
     if search and search.strip():
         statement = statement.where(_search_clause(search.strip()))
     statement = (
@@ -166,11 +178,19 @@ def list_summaries(
     return [summary_to_camel_light(s) for s in session.exec(statement).all()]
 
 
-def get_summary(session: Session, summary_id: str) -> dict[str, Any]:
-    """One summary in full, including citedPosts/promptText/chatMessages."""
+def get_summary(
+    session: Session, summary_id: str, *, user_id: uuid.UUID
+) -> dict[str, Any]:
+    """One summary in full, including citedPosts/promptText/chatMessages.
+
+    The payload row is fetched only after the parent's owner is accepted, so
+    the heavy half stays unreachable for a foreign id — the read that matters
+    is not always the one the function is named after.
+    """
     row = session.get(Summary, summary_id)
     if row is None:
-        raise HTTPException(status_code=404, detail="Summary not found")
+        raise HTTPException(status_code=404, detail=SUMMARY_NOT_FOUND)
+    assert_owner(row.user_id, user_id, detail=SUMMARY_NOT_FOUND)
     return summary_to_camel(row, session.get(SummaryPayload, summary_id))
 
 
@@ -236,9 +256,21 @@ def upsert_summary(
     summary_id: str,
     body: dict[str, Any],
     *,
-    user_id: uuid.UUID | None,
+    user_id: uuid.UUID,
 ) -> dict[str, Any]:
+    """Create a summary, or merge into the caller's existing one.
+
+    `user_id` was already the owner stamp; ticket 17 makes it the authority as
+    well. Without the check a second account overwrites the first's summary by
+    naming its id, and every read guard still passes — the merge does not care
+    whose row it landed on.
+
+    An absent id still creates, which is what makes this an upsert. The check
+    fires only on a row that exists and is somebody else's.
+    """
     summary = session.get(Summary, summary_id)
+    if summary is not None:
+        assert_owner(summary.user_id, user_id, detail=SUMMARY_NOT_FOUND)
     known = {
         "id",
         "text",
@@ -331,10 +363,11 @@ def upsert_summary(
     return summary_to_camel(summary, session.get(SummaryPayload, summary_id))
 
 
-def delete_summary(session: Session, summary_id: str) -> None:
+def delete_summary(session: Session, summary_id: str, *, user_id: uuid.UUID) -> None:
     summary = session.get(Summary, summary_id)
     if not summary:
-        raise HTTPException(status_code=404, detail="Summary not found")
+        raise HTTPException(status_code=404, detail=SUMMARY_NOT_FOUND)
+    assert_owner(summary.user_id, user_id, detail=SUMMARY_NOT_FOUND)
     session.delete(summary)
     # tg_summary_payloads has no FK to cascade from — see SummaryPayload.
     payload = session.get(SummaryPayload, summary_id)

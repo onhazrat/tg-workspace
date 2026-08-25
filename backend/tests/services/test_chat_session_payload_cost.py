@@ -37,6 +37,7 @@ from app.services.chat_sessions import (
     list_chat_sessions,
     upsert_chat_session,
 )
+from tests.utils.tenancy import ANY_READER
 
 PAYLOAD_TABLE = "tg_chat_session_payloads"
 
@@ -74,7 +75,7 @@ def _write(session: Session, chat_id: str, **body: object) -> None:
         session,
         chat_id,
         {"channels": [], "timestamp": 1, **body},
-        user_id=None,
+        user_id=ANY_READER,
     )
 
 
@@ -98,7 +99,7 @@ def test_listing_does_not_touch_the_payload_table() -> None:
         _write(session, "chat-cost-list", messages=_turns(6, 1000))
 
         with captured_sql() as statements:
-            list_chat_sessions(session)
+            list_chat_sessions(session, user_id=ANY_READER)
 
     assert statements, "no SQL captured — the listener is not wired up"
     offenders = [s for s in statements if PAYLOAD_TABLE in s]
@@ -118,11 +119,11 @@ def test_the_detail_call_does_touch_it_and_that_is_why_the_list_need_not() -> No
         _write(session, "chat-cost-detail", messages=_turns(4))
 
         with captured_sql() as statements:
-            detail = get_chat_session(session, "chat-cost-detail")
+            detail = get_chat_session(session, "chat-cost-detail", user_id=ANY_READER)
 
         listed = next(
             row
-            for row in list_chat_sessions(session)
+            for row in list_chat_sessions(session, user_id=ANY_READER)
             if row["id"] == "chat-cost-detail"
         )
 
@@ -175,7 +176,7 @@ def test_a_page_of_huge_transcripts_still_serialises_small() -> None:
         for i in range(5):
             _write(session, f"chat-cost-big-{i}", messages=_turns(20, 50_000))
 
-        page = list_chat_sessions(session)
+        page = list_chat_sessions(session, user_id=ANY_READER)
 
     assert len(json.dumps(page)) < 50_000
 
@@ -184,7 +185,7 @@ def test_deleting_takes_the_payload_with_it() -> None:
     """No FK to cascade from, so the aggregate has to do it explicitly."""
     with Session(engine) as session:
         _write(session, "chat-cost-delete", messages=_turns(2))
-        delete_chat_session(session, "chat-cost-delete")
+        delete_chat_session(session, "chat-cost-delete", user_id=ANY_READER)
 
         remaining = _payload_rows(session, "chat-cost-delete")
 

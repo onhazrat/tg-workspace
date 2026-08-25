@@ -29,18 +29,23 @@ from fastapi import HTTPException
 from sqlalchemy import Text, or_
 from sqlalchemy import cast as sa_cast
 from sqlalchemy import select as sa_select
-from sqlmodel import Session, col, select
+from sqlmodel import Session, col
 
-from app.models_tg import Channel, DiscoverReport, utc_now
+from app.models_tg import DiscoverReport, utc_now
 from app.services.discover import SignalKind, compute_discover_candidates
 from app.services.discover_ignored import ignored_handles
 from app.services.discover_probes import enqueue_handles, probe_map
 from app.services.follows import visible_channel_names
 from app.services.post_filters import PostFilters
-from app.services.tenancy import unscoped_select
+from app.services.tenancy import assert_owner, scoped_select
 
 DEFAULT_REPORT_PAGE_SIZE = 100
 MAX_REPORT_PAGE_SIZE = 1000
+
+#: This family's 404, reused by `assert_owner` so a foreign row and an absent
+#: one answer identically. Lower-case because that is what the route has always
+#: answered — matching the existing string is the requirement, not tidying it.
+REPORT_NOT_FOUND = "report not found"
 
 
 def _now_ms() -> int:
@@ -79,7 +84,7 @@ def _base(report: DiscoverReport) -> dict[str, Any]:
     }
 
 
-def followed_names(session: Session, *, user_id: uuid.UUID | None) -> set[str]:
+def followed_names(session: Session, *, user_id: uuid.UUID) -> set[str]:
     """Whose follows `isFollowed` is answered from, for one saved report.
 
     Was a bare `select(Channel.name)` — the *fourth* copy of the read ticket 16
@@ -89,26 +94,13 @@ def followed_names(session: Session, *, user_id: uuid.UUID | None) -> set[str]:
     `POST /discover/reports` and `POST /discover/candidates` disagree about
     `isFollowed` for byte-identical input the moment ticket 21 flips the flag.
 
-    `user_id` is the account whose follows the flag is about, and it is
-    required rather than defaulted so no caller can skip the question. `None`
-    is a real answer here, not a forgotten argument: a report written before
-    owners were stamped has no account to resolve against, and the honest
-    reading of its `isFollowed` is the corpus-wide one it has always had.
+    Ticket 16 left this accepting `None` and reading the whole corpus for an
+    ownerless report, because `get_report` had no viewer to offer. Ticket 17
+    gives it one — every caller now holds a `CurrentUser` — so the `None` branch
+    and its `unscoped_select` are gone rather than kept as an unreachable
+    fallback. The account asking is always known; a report with no owner is not
+    a reason to answer a *different* account's question with the corpus.
     """
-    if user_id is None:
-        statement = unscoped_select(
-            select(Channel.name),
-            reason=(
-                "A saved report with no owner predates the `user_id` stamp, so "
-                "there is no account whose follows could answer `isFollowed`. "
-                "Reading the corpus is what this row has always meant; the "
-                "alternative — resolving a missing owner through "
-                "`get_operator_user_id` — is the NULL fallback the plan's "
-                "decision 24 dissolves. Ticket 17 scopes report *reads*, at "
-                "which point only the owner sees the row at all."
-            ),
-        )
-        return {str(name).lower() for name in session.exec(statement).all()}
     return visible_channel_names(session, user_id=user_id)
 
 
@@ -152,16 +144,21 @@ def _with_live_state(
 
 
 def report_to_camel(
-    session: Session, report: DiscoverReport, *, viewer_id: uuid.UUID | None
+    session: Session, report: DiscoverReport, *, viewer_id: uuid.UUID
 ) -> dict[str, Any]:
     """Full projection, including every candidate.
 
-    `viewer_id` picks whose follows resolve `isFollowed`. It has no default:
-    the flag is a per-account answer, and a default would let a call site skip
-    deciding whose account it is. Today `get_report` and `update_report_flags`
-    pass the report's own owner because neither has an authenticated viewer to
-    pass; ticket 17 gives them one, and once a report is only readable by its
-    owner the two are the same value.
+    `viewer_id` picks whose follows resolve `isFollowed` — **the account
+    asking, never `report.user_id`**. Ticket 16 had to pass the owner from
+    `get_report` and `update_report_flags` as a placeholder, with a comment
+    saying so, because neither had an authenticated viewer in hand. Both take
+    one now, so the placeholder is gone.
+
+    The two values coincide the moment a report is only readable by its owner,
+    which is what this ticket makes true. That is exactly why the argument
+    keeps its own name: the day a report becomes shareable, "whose follows" and
+    "whose report" stop being the same question, and a call site that had
+    written `report.user_id` would answer the wrong one without changing.
     """
     followed = followed_names(session, user_id=viewer_id)
     ignored = ignored_handles(session)
@@ -256,9 +253,13 @@ def list_reports(
     limit: int = DEFAULT_REPORT_PAGE_SIZE,
     offset: int = 0,
     search: str | None = None,
+    user_id: uuid.UUID,
 ) -> list[dict[str, Any]]:
-    """One newest-first page of reports in the light projection."""
-    statement = sa_select(*_light_columns())
+    """One newest-first page of reports in the light projection.
+
+    `user_id` is required for the reason `list_summaries` states.
+    """
+    statement = scoped_select(sa_select(*_light_columns()), DiscoverReport, user_id)
     if search and search.strip():
         statement = statement.where(_search_clause(search.strip()))
     statement = (
@@ -273,7 +274,7 @@ def list_reports(
 
 
 def update_report_flags(
-    session: Session, report_id: str, body: dict[str, Any]
+    session: Session, report_id: str, body: dict[str, Any], *, user_id: uuid.UUID
 ) -> dict[str, Any]:
     """Set the small UI flags on a saved report.
 
@@ -285,7 +286,8 @@ def update_report_flags(
     """
     report = session.get(DiscoverReport, report_id)
     if report is None:
-        raise HTTPException(status_code=404, detail="report not found")
+        raise HTTPException(status_code=404, detail=REPORT_NOT_FOUND)
+    assert_owner(report.user_id, user_id, detail=REPORT_NOT_FOUND)
 
     merged = dict(report.extra or {})
     for key in ("isStarred", "note"):
@@ -301,14 +303,23 @@ def update_report_flags(
     session.add(report)
     session.commit()
     session.refresh(report)
-    return report_to_camel(session, report, viewer_id=report.user_id)
+    return report_to_camel(session, report, viewer_id=user_id)
 
 
-def get_report(session: Session, report_id: str) -> dict[str, Any]:
+def get_report(
+    session: Session, report_id: str, *, user_id: uuid.UUID
+) -> dict[str, Any]:
+    """One saved report with every candidate, `isFollowed` resolved live.
+
+    `viewer_id` is the caller, not `report.user_id`. Under enforcement the two
+    are equal by the line above; while the flag is off they are not, and the
+    caller is the one whose follows the flag is being rendered for.
+    """
     report = session.get(DiscoverReport, report_id)
     if report is None:
-        raise HTTPException(status_code=404, detail="report not found")
-    return report_to_camel(session, report, viewer_id=report.user_id)
+        raise HTTPException(status_code=404, detail=REPORT_NOT_FOUND)
+    assert_owner(report.user_id, user_id, detail=REPORT_NOT_FOUND)
+    return report_to_camel(session, report, viewer_id=user_id)
 
 
 def create_report(
@@ -393,9 +404,10 @@ def create_report(
     return report_to_camel(session, report, viewer_id=user_id)
 
 
-def delete_report(session: Session, report_id: str) -> None:
+def delete_report(session: Session, report_id: str, *, user_id: uuid.UUID) -> None:
     report = session.get(DiscoverReport, report_id)
     if report is None:
-        raise HTTPException(status_code=404, detail="report not found")
+        raise HTTPException(status_code=404, detail=REPORT_NOT_FOUND)
+    assert_owner(report.user_id, user_id, detail=REPORT_NOT_FOUND)
     session.delete(report)
     session.commit()

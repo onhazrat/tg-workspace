@@ -39,9 +39,10 @@ from sqlalchemy import (
     union_all,
 )
 from sqlalchemy import select as sa_select
-from sqlmodel import Session, col
+from sqlmodel import Session, SQLModel, col
 
 from app.models_tg import ChatSession, DiscoverReport, Summary, TagRun
+from app.services.tenancy import scoped_select
 
 DEFAULT_ARTIFACT_PAGE_SIZE = 100
 MAX_ARTIFACT_PAGE_SIZE = 1000
@@ -104,116 +105,143 @@ def _text_flag(model: Any, key: str) -> Any:
     return cast(col(model.extra).op("->>")(key), String)
 
 
-def _scoped(model: Any, user_id: uuid.UUID | None) -> Any:
-    """Rows this user may see.
+def _scoped(leg: Any, model: type[SQLModel], user_id: uuid.UUID) -> Any:
+    """One leg, narrowed to the rows this account may see.
 
-    Applied from day one rather than retrofitted. Nothing scopes by user yet —
-    one superuser owns everything — but this is a new endpoint with no clients,
-    and adding the predicate to four union legs later is the expensive version
-    of the same change. `IS NULL` keeps today's unowned rows visible.
+    This endpoint hand-rolled its own predicate — `owner == me OR owner IS
+    NULL` — before ticket 17, written pre-emptively while nothing else scoped
+    at all. It now goes through the seam like the four families it unions, so
+    History and `/data/summaries` cannot answer differently about the same row:
+    two owner filters with different NULL handling is precisely the drift
+    `tenancy.py` exists to prevent, and it would have surfaced as a summary
+    visible in one list and absent from the other.
+
+    Applied per leg because there is nowhere else to put it. The union is
+    wrapped in a subquery that projects the labelled output columns — `kind`,
+    `id`, `title` and the rest — and `user_id` is not one of them, so a
+    predicate on the outside has nothing to name. Adding it to the projection
+    to filter on it later would ship every artifact's owner to the caller in
+    order to throw the rows away one layer up.
     """
-    if user_id is None:
-        return literal(True)
-    return or_(col(model.user_id) == user_id, col(model.user_id).is_(None))
+    return scoped_select(leg, model, user_id)
 
 
-def _summary_leg(user_id: uuid.UUID | None) -> Any:
-    return sa_select(
-        literal("summary").label("kind"),
-        col(Summary.id).label("id"),
-        func.left(col(Summary.text), ARTIFACT_TITLE_CHARS).label("title"),
-        col(Summary.channels).label("channels"),
-        col(Summary.start_date).label("start_date"),
-        col(Summary.end_date).label("end_date"),
-        col(Summary.timestamp).label("timestamp"),
-        col(Summary.model).label("model"),
-        col(Summary.post_count).label("post_count"),
-        func.coalesce(
-            cast(col(Summary.extra).op("->>")("status"), String), literal("complete")
-        ).label("status"),
-        _null(String).label("mode"),
-        _null(Integer).label("message_count"),
-        _null(Integer).label("candidate_count"),
-        col(Summary.language).label("language"),
-        _starred(Summary).label("is_starred"),
-        _text_flag(Summary, "note").label("note"),
-        _flag(Summary, "autoRegenerate").label("auto_regenerate"),
-        _flag(Summary, "autoPublish").label("auto_publish"),
-    ).where(_scoped(Summary, user_id))
+def _summary_leg(user_id: uuid.UUID) -> Any:
+    return _scoped(
+        sa_select(
+            literal("summary").label("kind"),
+            col(Summary.id).label("id"),
+            func.left(col(Summary.text), ARTIFACT_TITLE_CHARS).label("title"),
+            col(Summary.channels).label("channels"),
+            col(Summary.start_date).label("start_date"),
+            col(Summary.end_date).label("end_date"),
+            col(Summary.timestamp).label("timestamp"),
+            col(Summary.model).label("model"),
+            col(Summary.post_count).label("post_count"),
+            func.coalesce(
+                cast(col(Summary.extra).op("->>")("status"), String),
+                literal("complete"),
+            ).label("status"),
+            _null(String).label("mode"),
+            _null(Integer).label("message_count"),
+            _null(Integer).label("candidate_count"),
+            col(Summary.language).label("language"),
+            _starred(Summary).label("is_starred"),
+            _text_flag(Summary, "note").label("note"),
+            _flag(Summary, "autoRegenerate").label("auto_regenerate"),
+            _flag(Summary, "autoPublish").label("auto_publish"),
+        ),
+        Summary,
+        user_id,
+    )
 
 
-def _chat_leg(user_id: uuid.UUID | None) -> Any:
-    return sa_select(
-        literal("chat").label("kind"),
-        col(ChatSession.id).label("id"),
-        col(ChatSession.title).label("title"),
-        col(ChatSession.channels).label("channels"),
-        col(ChatSession.start_date).label("start_date"),
-        col(ChatSession.end_date).label("end_date"),
-        col(ChatSession.timestamp).label("timestamp"),
-        col(ChatSession.model).label("model"),
-        col(ChatSession.post_count).label("post_count"),
-        _null(String).label("status"),
-        col(ChatSession.mode).label("mode"),
-        col(ChatSession.message_count).label("message_count"),
-        _null(Integer).label("candidate_count"),
-        col(ChatSession.language).label("language"),
-        _starred(ChatSession).label("is_starred"),
-        _text_flag(ChatSession, "note").label("note"),
-        literal(False).label("auto_regenerate"),
-        literal(False).label("auto_publish"),
-    ).where(_scoped(ChatSession, user_id))
+def _chat_leg(user_id: uuid.UUID) -> Any:
+    return _scoped(
+        sa_select(
+            literal("chat").label("kind"),
+            col(ChatSession.id).label("id"),
+            col(ChatSession.title).label("title"),
+            col(ChatSession.channels).label("channels"),
+            col(ChatSession.start_date).label("start_date"),
+            col(ChatSession.end_date).label("end_date"),
+            col(ChatSession.timestamp).label("timestamp"),
+            col(ChatSession.model).label("model"),
+            col(ChatSession.post_count).label("post_count"),
+            _null(String).label("status"),
+            col(ChatSession.mode).label("mode"),
+            col(ChatSession.message_count).label("message_count"),
+            _null(Integer).label("candidate_count"),
+            col(ChatSession.language).label("language"),
+            _starred(ChatSession).label("is_starred"),
+            _text_flag(ChatSession, "note").label("note"),
+            literal(False).label("auto_regenerate"),
+            literal(False).label("auto_publish"),
+        ),
+        ChatSession,
+        user_id,
+    )
 
 
-def _tag_leg(user_id: uuid.UUID | None) -> Any:
-    return sa_select(
-        literal("tag").label("kind"),
-        col(TagRun.id).label("id"),
-        (literal("Tags · ") + col(TagRun.mode)).label("title"),
-        col(TagRun.channels).label("channels"),
-        col(TagRun.start_date).label("start_date"),
-        col(TagRun.end_date).label("end_date"),
-        # The only rename: tag runs date from `created_at`, not `timestamp`.
-        # Deliberately *not* `updated_at_ms`, and never the naive `updated_at`
-        # datetime every one of these tables also carries — unifying TIMESTAMP
-        # with BIGINT fails at execution rather than at type-check.
-        col(TagRun.created_at).label("timestamp"),
-        col(TagRun.model).label("model"),
-        col(TagRun.post_count).label("post_count"),
-        col(TagRun.status).label("status"),
-        col(TagRun.mode).label("mode"),
-        _null(Integer).label("message_count"),
-        _null(Integer).label("candidate_count"),
-        _null(String).label("language"),
-        _starred(TagRun).label("is_starred"),
-        _text_flag(TagRun, "note").label("note"),
-        literal(False).label("auto_regenerate"),
-        literal(False).label("auto_publish"),
-    ).where(_scoped(TagRun, user_id))
+def _tag_leg(user_id: uuid.UUID) -> Any:
+    return _scoped(
+        sa_select(
+            literal("tag").label("kind"),
+            col(TagRun.id).label("id"),
+            (literal("Tags · ") + col(TagRun.mode)).label("title"),
+            col(TagRun.channels).label("channels"),
+            col(TagRun.start_date).label("start_date"),
+            col(TagRun.end_date).label("end_date"),
+            # The only rename: tag runs date from `created_at`, not `timestamp`.
+            # Deliberately *not* `updated_at_ms`, and never the naive `updated_at`
+            # datetime every one of these tables also carries — unifying TIMESTAMP
+            # with BIGINT fails at execution rather than at type-check.
+            col(TagRun.created_at).label("timestamp"),
+            col(TagRun.model).label("model"),
+            col(TagRun.post_count).label("post_count"),
+            col(TagRun.status).label("status"),
+            col(TagRun.mode).label("mode"),
+            _null(Integer).label("message_count"),
+            _null(Integer).label("candidate_count"),
+            _null(String).label("language"),
+            _starred(TagRun).label("is_starred"),
+            _text_flag(TagRun, "note").label("note"),
+            literal(False).label("auto_regenerate"),
+            literal(False).label("auto_publish"),
+        ),
+        TagRun,
+        user_id,
+    )
 
 
-def _discovery_leg(user_id: uuid.UUID | None) -> Any:
-    return sa_select(
-        literal("discovery").label("kind"),
-        col(DiscoverReport.id).label("id"),
-        func.coalesce(col(DiscoverReport.keyword), literal("Discover")).label("title"),
-        col(DiscoverReport.channels).label("channels"),
-        col(DiscoverReport.start_date).label("start_date"),
-        col(DiscoverReport.end_date).label("end_date"),
-        col(DiscoverReport.timestamp).label("timestamp"),
-        # Discover runs no model.
-        _null(String).label("model"),
-        col(DiscoverReport.posts_in_scope).label("post_count"),
-        _null(String).label("status"),
-        _null(String).label("mode"),
-        _null(Integer).label("message_count"),
-        col(DiscoverReport.candidate_count).label("candidate_count"),
-        _null(String).label("language"),
-        _starred(DiscoverReport).label("is_starred"),
-        _text_flag(DiscoverReport, "note").label("note"),
-        literal(False).label("auto_regenerate"),
-        literal(False).label("auto_publish"),
-    ).where(_scoped(DiscoverReport, user_id))
+def _discovery_leg(user_id: uuid.UUID) -> Any:
+    return _scoped(
+        sa_select(
+            literal("discovery").label("kind"),
+            col(DiscoverReport.id).label("id"),
+            func.coalesce(col(DiscoverReport.keyword), literal("Discover")).label(
+                "title"
+            ),
+            col(DiscoverReport.channels).label("channels"),
+            col(DiscoverReport.start_date).label("start_date"),
+            col(DiscoverReport.end_date).label("end_date"),
+            col(DiscoverReport.timestamp).label("timestamp"),
+            # Discover runs no model.
+            _null(String).label("model"),
+            col(DiscoverReport.posts_in_scope).label("post_count"),
+            _null(String).label("status"),
+            _null(String).label("mode"),
+            _null(Integer).label("message_count"),
+            col(DiscoverReport.candidate_count).label("candidate_count"),
+            _null(String).label("language"),
+            _starred(DiscoverReport).label("is_starred"),
+            _text_flag(DiscoverReport, "note").label("note"),
+            literal(False).label("auto_regenerate"),
+            literal(False).label("auto_publish"),
+        ),
+        DiscoverReport,
+        user_id,
+    )
 
 
 _LEGS = {
@@ -329,7 +357,7 @@ def list_artifacts(
     starred: bool = False,
     limit: int = DEFAULT_ARTIFACT_PAGE_SIZE,
     offset: int = 0,
-    user_id: uuid.UUID | None = None,
+    user_id: uuid.UUID,
 ) -> list[dict[str, Any]]:
     """One newest-first page of every saved artifact.
 

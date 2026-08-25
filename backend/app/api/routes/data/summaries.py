@@ -57,7 +57,7 @@ router = APIRouter()
 @router.get("/summaries")
 def list_summaries(
     session: SessionDep,
-    _current_user: CurrentUser,
+    current_user: CurrentUser,
     limit: int = Query(
         default=DEFAULT_SUMMARY_PAGE_SIZE, ge=1, le=MAX_SUMMARY_PAGE_SIZE
     ),
@@ -72,7 +72,7 @@ def list_summaries(
     return [
         SummaryListItemResponse.model_validate(row)
         for row in list_summaries_impl(
-            session, limit=limit, offset=offset, search=search
+            session, limit=limit, offset=offset, search=search, user_id=current_user.id
         )
     ]
 
@@ -81,10 +81,12 @@ def list_summaries(
 def get_summary(
     summary_id: str,
     session: SessionDep,
-    _current_user: CurrentUser,
+    current_user: CurrentUser,
 ) -> SummaryResponse:
     """Full summary including citedPosts/promptText/chatMessages."""
-    return SummaryResponse.model_validate(get_summary_impl(session, summary_id))
+    return SummaryResponse.model_validate(
+        get_summary_impl(session, summary_id, user_id=current_user.id)
+    )
 
 
 @router.put("/summaries/{summary_id}")
@@ -92,10 +94,10 @@ def upsert_summary(
     summary_id: str,
     body: SummaryUpsertRequest,
     session: SessionDep,
-    _current_user: CurrentUser,
+    current_user: CurrentUser,
 ) -> SummaryResponse:
     result = upsert_summary_impl(
-        session, summary_id, body.to_service_body(), user_id=_current_user.id
+        session, summary_id, body.to_service_body(), user_id=current_user.id
     )
     touch_sync(session, "summaries")
     return SummaryResponse.model_validate(result)
@@ -105,9 +107,9 @@ def upsert_summary(
 def delete_summary(
     summary_id: str,
     session: SessionDep,
-    _current_user: CurrentUser,
+    current_user: CurrentUser,
 ) -> StatusResponse:
-    delete_summary_impl(session, summary_id)
+    delete_summary_impl(session, summary_id, user_id=current_user.id)
     touch_sync(session, "summaries")
     return StatusResponse(status="deleted")
 
@@ -115,7 +117,7 @@ def delete_summary(
 @router.get("/tag-runs")
 def list_tag_runs(
     session: SessionDep,
-    _current_user: CurrentUser,
+    current_user: CurrentUser,
     limit: int = Query(
         default=DEFAULT_TAG_RUN_PAGE_SIZE, ge=1, le=MAX_TAG_RUN_PAGE_SIZE
     ),
@@ -124,7 +126,9 @@ def list_tag_runs(
     """List runs in the light projection — see `tag_run_to_camel_light`."""
     return [
         TagRunListItemResponse.model_validate(row)
-        for row in list_tag_runs_impl(session, limit=limit, offset=offset)
+        for row in list_tag_runs_impl(
+            session, limit=limit, offset=offset, user_id=current_user.id
+        )
     ]
 
 
@@ -132,10 +136,12 @@ def list_tag_runs(
 def get_tag_run(
     tag_run_id: str,
     session: SessionDep,
-    _current_user: CurrentUser,
+    current_user: CurrentUser,
 ) -> TagRunResponse:
     """Full run including promptText/responseText/suggestions."""
-    return TagRunResponse.model_validate(get_tag_run_impl(session, tag_run_id))
+    return TagRunResponse.model_validate(
+        get_tag_run_impl(session, tag_run_id, user_id=current_user.id)
+    )
 
 
 @router.put("/tag-runs/{tag_run_id}")
@@ -143,9 +149,9 @@ def upsert_tag_run(
     tag_run_id: str,
     body: dict[str, Any],
     session: SessionDep,
-    _current_user: CurrentUser,
+    current_user: CurrentUser,
 ) -> TagRunResponse:
-    result = upsert_tag_run_impl(session, tag_run_id, body, user_id=_current_user.id)
+    result = upsert_tag_run_impl(session, tag_run_id, body, user_id=current_user.id)
     touch_sync(session, "tag_runs")
     return TagRunResponse.model_validate(result)
 
@@ -154,8 +160,8 @@ def upsert_tag_run(
 def delete_tag_run(
     tag_run_id: str,
     session: SessionDep,
-    _current_user: CurrentUser,
+    current_user: CurrentUser,
 ) -> StatusResponse:
-    delete_tag_run_impl(session, tag_run_id)
+    delete_tag_run_impl(session, tag_run_id, user_id=current_user.id)
     touch_sync(session, "tag_runs")
     return StatusResponse(status="deleted")

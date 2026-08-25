@@ -22,6 +22,11 @@ from sqlmodel import Session, col, select
 
 from app.models_tg import ChatSession, ChatSessionPayload, utc_now
 from app.services.serialization import to_snake
+from app.services.tenancy import assert_owner, scoped_select
+
+#: This family's 404, reused by `assert_owner` so a foreign row and an absent
+#: one answer identically. See `SUMMARY_NOT_FOUND`.
+CHAT_SESSION_NOT_FOUND = "Chat session not found"
 
 DEFAULT_CHAT_SESSION_PAGE_SIZE = 200
 MAX_CHAT_SESSION_PAGE_SIZE = 2000
@@ -141,14 +146,17 @@ def list_chat_sessions(
     limit: int = DEFAULT_CHAT_SESSION_PAGE_SIZE,
     offset: int = 0,
     search: str | None = None,
+    user_id: uuid.UUID,
 ) -> list[dict[str, Any]]:
     """One newest-first page of chat sessions in the light projection.
 
     **This must not touch `tg_chat_session_payloads`.** It is the reason the
     table exists — pinned by
     `tests/services/test_chat_session_payload_cost.py`.
+
+    `user_id` is required for the reason `list_summaries` states.
     """
-    statement = select(ChatSession)
+    statement = scoped_select(select(ChatSession), ChatSession, user_id)
     if search and search.strip():
         statement = statement.where(_search_clause(search.strip()))
     statement = (
@@ -159,11 +167,18 @@ def list_chat_sessions(
     return [chat_session_to_camel_light(row) for row in session.exec(statement).all()]
 
 
-def get_chat_session(session: Session, chat_session_id: str) -> dict[str, Any]:
-    """One chat session in full, including the transcript."""
+def get_chat_session(
+    session: Session, chat_session_id: str, *, user_id: uuid.UUID
+) -> dict[str, Any]:
+    """One chat session in full, including the transcript.
+
+    The transcript is fetched only after the parent's owner is accepted, so it
+    stays unreachable for a foreign id.
+    """
     row = session.get(ChatSession, chat_session_id)
     if row is None:
-        raise HTTPException(status_code=404, detail="Chat session not found")
+        raise HTTPException(status_code=404, detail=CHAT_SESSION_NOT_FOUND)
+    assert_owner(row.user_id, user_id, detail=CHAT_SESSION_NOT_FOUND)
     return chat_session_to_camel(row, session.get(ChatSessionPayload, chat_session_id))
 
 
@@ -230,9 +245,16 @@ def upsert_chat_session(
     chat_session_id: str,
     body: dict[str, Any],
     *,
-    user_id: uuid.UUID | None,
+    user_id: uuid.UUID,
 ) -> dict[str, Any]:
+    """Create a chat, or merge into the caller's existing one.
+
+    The ownership check is `upsert_summary`'s, for the same reason: a merge
+    does not care whose row its id landed on.
+    """
     row = session.get(ChatSession, chat_session_id)
+    if row is not None:
+        assert_owner(row.user_id, user_id, detail=CHAT_SESSION_NOT_FOUND)
     known = {
         "id",
         "title",
@@ -325,10 +347,13 @@ def upsert_chat_session(
     return chat_session_to_camel(row, session.get(ChatSessionPayload, chat_session_id))
 
 
-def delete_chat_session(session: Session, chat_session_id: str) -> None:
+def delete_chat_session(
+    session: Session, chat_session_id: str, *, user_id: uuid.UUID
+) -> None:
     row = session.get(ChatSession, chat_session_id)
     if not row:
-        raise HTTPException(status_code=404, detail="Chat session not found")
+        raise HTTPException(status_code=404, detail=CHAT_SESSION_NOT_FOUND)
+    assert_owner(row.user_id, user_id, detail=CHAT_SESSION_NOT_FOUND)
     session.delete(row)
     # tg_chat_session_payloads has no FK to cascade from — see the model.
     payload = session.get(ChatSessionPayload, chat_session_id)

@@ -270,7 +270,11 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({
       await saveLLMLog(llmLog)
 
       if (fullSummaryText) {
-        const newId = Date.now().toString()
+        // A UUID, not a timestamp: `id` is the whole primary key of
+        // `tg_summaries`, so two accounts saving in the same millisecond would
+        // collide, and since ticket 17 the loser's create is refused as a 404
+        // rather than silently merging into the winner's row.
+        const newId = crypto.randomUUID()
 
         // Scope path never held the posts, so resolve the cited ones by lookup.
         const citedPosts = scope
@@ -361,7 +365,8 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({
       )
       await navigator.clipboard.writeText(prompt)
 
-      const newId = Date.now().toString()
+      // A UUID for the reason the interactive path uses one.
+      const newId = crypto.randomUUID()
       const pendingSummary: Summary = {
         id: newId,
         text: "",
@@ -547,7 +552,8 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({
         await saveLLMLog(llmLog)
       }
 
-      const newId = Date.now().toString()
+      // A UUID for the reason the interactive path uses one.
+      const newId = crypto.randomUUID()
 
       // The scope path never holds the posts, so citations are resolved by
       // lookup — the same two-step the interactive path uses.

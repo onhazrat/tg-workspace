@@ -247,7 +247,7 @@ def create_discover_report(
 @router.get("/discover/reports")
 def list_discover_reports(
     session: SessionDep,
-    _current_user: CurrentUser,
+    current_user: CurrentUser,
     limit: int = Query(default=DEFAULT_REPORT_PAGE_SIZE, ge=1, le=MAX_REPORT_PAGE_SIZE),
     offset: int = Query(default=0, ge=0),
     search: str | None = Query(default=None),
@@ -259,7 +259,13 @@ def list_discover_reports(
     """
     return [
         DiscoverReportListItemResponse.model_validate(row)
-        for row in list_reports(session, limit=limit, offset=offset, search=search)
+        for row in list_reports(
+            session,
+            limit=limit,
+            offset=offset,
+            search=search,
+            user_id=current_user.id,
+        )
     ]
 
 
@@ -267,10 +273,12 @@ def list_discover_reports(
 def get_discover_report(
     report_id: str,
     session: SessionDep,
-    _current_user: CurrentUser,
+    current_user: CurrentUser,
 ) -> DiscoverReportResponse:
     """A saved report with every candidate, `isFollowed` resolved live."""
-    return DiscoverReportResponse.model_validate(get_report(session, report_id))
+    return DiscoverReportResponse.model_validate(
+        get_report(session, report_id, user_id=current_user.id)
+    )
 
 
 @router.put("/discover/reports/{report_id}/flags")
@@ -278,11 +286,13 @@ def update_discover_report_flags(
     report_id: str,
     body: DiscoverReportFlagsRequest,
     session: SessionDep,
-    _current_user: CurrentUser,
+    current_user: CurrentUser,
 ) -> DiscoverReportResponse:
     """Star or annotate a saved report — the only write it accepts."""
     return DiscoverReportResponse.model_validate(
-        update_report_flags(session, report_id, body.to_service_body())
+        update_report_flags(
+            session, report_id, body.to_service_body(), user_id=current_user.id
+        )
     )
 
 
@@ -290,7 +300,7 @@ def update_discover_report_flags(
 def delete_discover_report(
     report_id: str,
     session: SessionDep,
-    _current_user: CurrentUser,
+    current_user: CurrentUser,
 ) -> StatusResponse:
-    delete_report(session, report_id)
+    delete_report(session, report_id, user_id=current_user.id)
     return StatusResponse(status="deleted")

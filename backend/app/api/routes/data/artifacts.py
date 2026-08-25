@@ -34,7 +34,7 @@ _ARTIFACT_ADAPTER: TypeAdapter[ArtifactListItemResponse] = TypeAdapter(
 @router.get("/artifacts")
 def list_artifacts(
     session: SessionDep,
-    _current_user: CurrentUser,
+    current_user: CurrentUser,
     kind: Literal["summary", "chat", "tag", "discovery"] | None = Query(default=None),
     search: str | None = Query(default=None),
     starred: bool = Query(default=False),
@@ -62,6 +62,6 @@ def list_artifacts(
             starred=starred,
             limit=limit,
             offset=offset,
-            user_id=_current_user.id,
+            user_id=current_user.id,
         )
     ]
