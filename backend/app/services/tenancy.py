@@ -79,6 +79,7 @@ from app.models_tg import (
     SyncLogPayload,
     SyncMeta,
     TagRun,
+    UserSetting,
 )
 
 #: Every user-owned table stamps its owner in the same column. Named once
@@ -122,10 +123,7 @@ SCOPES: dict[type[SQLModel], Scope] = {
     TagRun: Scope.USER_OWNED,
     BotCredential: Scope.USER_OWNED,
     ChatDestination: Scope.USER_OWNED,
-    # Ticket 06 splits this table in two — the global half an Admin owns, the
-    # per-User half everyone owns. Until then a settings row belongs to whoever
-    # wrote it, which is what this classification says.
-    AppSetting: Scope.USER_OWNED,
+    UserSetting: Scope.USER_OWNED,
     PublishLog: Scope.USER_OWNED,
     SyncLog: Scope.USER_OWNED,
     SyncLogPayload: Scope.USER_OWNED,
@@ -164,6 +162,14 @@ FOLLOW_KEYS: dict[type[SQLModel], str] = {
 #: Tables the seam is deliberately not responsible for, and why. An exemption
 #: nothing explains becomes a leftover nobody dares touch.
 OUT_OF_SCOPE: dict[type[SQLModel], str] = {
+    AppSetting: (
+        "Deployment-wide settings after the ticket 06 split: one row per key, "
+        "shared by every account by definition, and `key` is the whole primary "
+        "key so there is no per-user row for the seam to hide. Who may *write* "
+        "one is an Admin permission question, not a row-visibility one — the "
+        "same argument `Role` makes. The per-User half is `UserSetting`, which "
+        "is classified above."
+    ),
     User: (
         "The tenant itself, not something a tenant owns. Scoping the user table "
         "to a user is circular; who may list or edit accounts is an RBAC "

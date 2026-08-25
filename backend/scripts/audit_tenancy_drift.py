@@ -23,10 +23,13 @@ cause it, against a live database, before anything is enforced:
   state — the one retention collects — so it is now reported as a queue depth
   and **not** counted as a finding. A count that stays high across retention
   runs is still worth looking at; a count that is merely non-zero is not.
-* **Unowned settings.** `tg_app_settings` rows with no owner, which ticket 06
-  splits into a global table and a per-user one. A key that is genuinely global
-  is not drift — it is why that ticket exists — so this counts them and does not
-  judge them.
+* **Misfiled settings.** After ticket 06 a key lives in exactly one of the two
+  settings tables, and `services/settings_registry.py` says which. The guard in
+  `tests/services/test_settings_table_split.py` proves the *code* cannot write
+  one to the wrong table; only a live database can say whether a row already
+  did, since a row written before the split is invisible to an AST walk. A row
+  with no owner is no longer drift at all — `tg_app_settings` is global by
+  design, and that column is a stamp ticket 22 drops.
 
 Read-only by construction: it opens one session, runs `SELECT COUNT(*)` and
 nothing else, and never commits.
@@ -47,12 +50,13 @@ from sqlmodel import Session, SQLModel, col, func, select
 
 from app.core.db import engine
 from app.models import User
-from app.models_tg import AppSetting, Channel
+from app.models_tg import AppSetting, Channel, UserSetting
 from app.services.follows import (
     channel_ids_without_follows,
     count_follows,
     orphan_follow_channel_ids,
 )
+from app.services.settings_registry import GLOBAL_KEYS, USER_KEYS
 from app.services.tenancy import OWNER_COLUMN, SCOPES
 
 
@@ -80,6 +84,34 @@ def _count(session: Session, statement) -> int:
 #: a key that is merely printed cannot be tested in either direction.
 AWAITING_COLLECTION = "channels_awaiting_collection"
 NON_DRIFT_KEYS = frozenset({AWAITING_COLLECTION})
+
+
+def _misfiled_settings_keys(session: Session) -> list[str]:
+    """Keys sitting in the table the registry says is not theirs.
+
+    The live-data counterpart of `tests/services/test_settings_table_split.py`.
+    The guard proves the *code* cannot write a key to the wrong table; this
+    proves no row already did, which the guard cannot see — a row written
+    before ticket 06, or by a migration, is invisible to an AST walk.
+    """
+    stored_global = set(session.exec(select(col(AppSetting.key))).all())
+    stored_user = set(session.exec(select(col(UserSetting.key))).all())
+
+    return sorted((stored_global & set(USER_KEYS)) | (stored_user & set(GLOBAL_KEYS)))
+
+
+def _unclassified_settings_keys(session: Session) -> list[str]:
+    """Keys stored in either table that the registry does not name.
+
+    Not necessarily wrong — an operator can `PUT` any key — but it is the
+    shape a typo takes, and after the split an unclassified key cannot be read
+    back through `home_for` at all.
+    """
+    known = set(GLOBAL_KEYS) | set(USER_KEYS)
+    stored = set(session.exec(select(col(AppSetting.key))).all()) | set(
+        session.exec(select(col(UserSetting.key))).all()
+    )
+    return sorted(stored - known)
 
 
 def drift_only(findings: dict[str, int]) -> dict[str, int]:
@@ -141,15 +173,17 @@ def audit(*, verbose: bool = False) -> dict[str, int]:
             print(f"  follows_pointing_at_a_missing_channel={len(orphan_follows)}")
 
         print("== settings ==")
-        unowned = _count(
-            session,
-            select(func.count())
-            .select_from(AppSetting)
-            .where(col(AppSetting.user_id).is_(None)),
-        )
-        print(f"  tg_app_settings with no owner={unowned}  (ticket 06 splits these)")
-        if unowned:
-            findings["settings_with_no_owner"] = unowned
+        misfiled = _misfiled_settings_keys(session)
+        print(f"  settings keys in the wrong table={len(misfiled)}")
+        if misfiled:
+            findings["settings_keys_in_the_wrong_table"] = len(misfiled)
+            print(f"    {misfiled}")
+
+        unclassified = _unclassified_settings_keys(session)
+        print(f"  settings keys nobody classified={len(unclassified)}")
+        if unclassified:
+            findings["settings_keys_not_classified"] = len(unclassified)
+            print(f"    {unclassified}")
 
     print("== summary ==")
     drift = drift_only(findings)

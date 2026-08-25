@@ -11,7 +11,7 @@ from sqlmodel import Session
 
 from app.core.config import settings
 from app.core.db import engine
-from app.jobs.settings import load_sync_settings, save_setting
+from app.jobs.settings import load_sync_settings, save_sync_settings
 from app.models_tg import Channel
 from app.services.channel_setting_groups import load_groups_by_id
 from app.services.channels import compute_channel_stats_batch
@@ -27,9 +27,16 @@ CHECK_SOURCE = "Auto Sync (scheduler)"
 
 
 def _update_sync_state(session: Session, updates: dict[str, Any]) -> None:
-    current = load_sync_settings(session)
-    current.update(updates)
-    save_setting(session, "sync", current)
+    """Persist the scheduler's own counters, and nothing else.
+
+    This used to read the whole `sync` blob, apply `updates` to the copy, and
+    write the copy back — so every failure the scheduler counted also rewrote
+    whatever preferences the row happened to hold. Ticket 06 put those counters
+    in their own global row, so passing only the changed fields is now both
+    possible and the whole point: `save_sync_settings` routes each one and
+    touches no section this call did not name.
+    """
+    save_sync_settings(session, updates)
 
 
 def _schedule_view(

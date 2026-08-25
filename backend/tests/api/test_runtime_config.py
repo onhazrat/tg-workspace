@@ -6,7 +6,8 @@ from fastapi.testclient import TestClient
 from sqlmodel import Session
 
 from app.core.config import settings
-from app.jobs.settings import save_setting
+from app.jobs.settings import save_settings_section
+from app.services.operator import get_operator_user_id
 from app.services.scraper_jobs import clear_active_jobs_for_tests
 
 PREFIX = f"{settings.API_V1_STR}/jobs"
@@ -31,7 +32,10 @@ def test_runtime_config_requires_auth(client: TestClient) -> None:
 
 def test_runtime_config_effective_values(client: TestClient, db: Session) -> None:
     clear_active_jobs_for_tests()
-    save_setting(
+    # `globalStartTimeMode`/`Value` are per-User after ticket 06, and the request
+    # below is made as the operator, so they have to be written as them —
+    # `syncConcurrency` in the same call still lands in the global row.
+    save_settings_section(
         db,
         "sync",
         {
@@ -39,8 +43,9 @@ def test_runtime_config_effective_values(client: TestClient, db: Session) -> Non
             "globalStartTimeMode": "relative",
             "globalStartTimeValue": 7,
         },
+        user_id=get_operator_user_id(db),
     )
-    save_setting(
+    save_settings_section(
         db,
         "retention",
         {"postRetentionDays": 30, "logRetentionDays": 14},

@@ -64,7 +64,12 @@ INVENTORY: dict[str, str] = {
     "post_sync_state.py": AGGREGATE,
     "posts.py": AGGREGATE,
     "scraper_jobs.py": AGGREGATE,
+    # The two halves of the ticket 06 settings split, one aggregate each. Not
+    # one module owning both tables: the whole point of the split is that a key
+    # has one home, and a single module writing both is the one place that
+    # could quietly file a key in the wrong one.
     "settings_store.py": AGGREGATE,
+    "user_settings.py": AGGREGATE,
     "summaries.py": AGGREGATE,
     "sync_meta.py": AGGREGATE,
     "tag_runs.py": AGGREGATE,
@@ -101,6 +106,11 @@ INVENTORY: dict[str, str] = {
     # The tenancy seam. Builds scoped select statements and compares owner ids, executes
     # nothing — so it is testable with no database, and acquiring a `Session`
     # later fails `test_pure_transforms_do_no_io` rather than passing quietly.
+    # Which settings table a key lives in, and why. Sets and dicts of strings —
+    # both aggregates import it to refuse each other's keys, so it must stay
+    # free of a `Session` or the refusal would depend on the thing being
+    # refused.
+    "settings_registry.py": PURE_TRANSFORM,
     "tenancy.py": PURE_TRANSFORM,
     "telegram_html.py": PURE_TRANSFORM,
     "telegram_web.py": PURE_TRANSFORM,

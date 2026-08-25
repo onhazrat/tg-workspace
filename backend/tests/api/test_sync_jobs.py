@@ -526,17 +526,24 @@ def test_sync_backfill_completes_partial_history_in_multiple_passes(
     headers = _auth(client)
 
     with Session(engine) as session:
-        from app.jobs.settings import save_setting
+        from app.jobs.settings import save_settings_section
+        from app.services.operator import get_operator_user_id
 
-        save_setting(
+        # The start-time mode is per-User after ticket 06, and the requests
+        # below are made as the operator, so it has to be written as them.
+        # Without the owner the fields are dropped and the scrape cutoff falls
+        # back to the default — which this test would then fail on for a reason
+        # unrelated to backfill.
+        save_settings_section(
             session,
             "sync",
             {
                 "globalStartTimeMode": "absolute",
                 "globalStartTimeValue": "2001-09-09T01:46:40+00:00",
             },
+            user_id=get_operator_user_id(session),
         )
-        save_setting(
+        save_settings_section(
             session, "retention", {"postRetentionDays": 0, "logRetentionDays": 0}
         )
 
@@ -693,17 +700,24 @@ def test_sync_marks_channel_younger_than_cutoff_complete(client: TestClient) -> 
     headers = _auth(client)
 
     with Session(engine) as session:
-        from app.jobs.settings import save_setting
+        from app.jobs.settings import save_settings_section
+        from app.services.operator import get_operator_user_id
 
-        save_setting(
+        # The start-time mode is per-User after ticket 06, and the requests
+        # below are made as the operator, so it has to be written as them.
+        # Without the owner the fields are dropped and the scrape cutoff falls
+        # back to the default — which this test would then fail on for a reason
+        # unrelated to backfill.
+        save_settings_section(
             session,
             "sync",
             {
                 "globalStartTimeMode": "absolute",
                 "globalStartTimeValue": "2001-09-09T01:46:40+00:00",
             },
+            user_id=get_operator_user_id(session),
         )
-        save_setting(
+        save_settings_section(
             session, "retention", {"postRetentionDays": 0, "logRetentionDays": 0}
         )
 

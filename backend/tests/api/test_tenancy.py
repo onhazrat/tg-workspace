@@ -11,7 +11,7 @@ from sqlmodel import Session
 
 from app.core.db import engine
 from app.jobs.auto_sync import run_auto_sync
-from app.jobs.settings import save_setting
+from app.jobs.settings import save_settings_section
 from app.models_tg import Channel
 from app.services.network_settings import get_network_setting_row
 from app.services.operator import get_operator_user_id
@@ -42,7 +42,7 @@ def test_auto_sync_scopes_to_operator_channels(
             net_row.user_id = operator_id
             session.add(net_row)
 
-        save_setting(
+        save_settings_section(
             session,
             "sync",
             {

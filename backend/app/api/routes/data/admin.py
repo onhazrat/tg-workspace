@@ -5,10 +5,13 @@ Split out of the former `routes/data.py` under C1. The parent router in
 path and operation id is unchanged.
 """
 
+import uuid
+from collections.abc import Callable
 from typing import Any
 
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
+from sqlmodel import Session
 
 from app.api.deps import CurrentUser, SessionDep
 from app.jobs.settings import (
@@ -16,8 +19,8 @@ from app.jobs.settings import (
     load_retention_settings,
     load_sync_settings,
     load_translation_settings,
+    save_sync_settings,
 )
-from app.models_tg import AppSetting, utc_now
 from app.schemas.common import AppSettingResponse, ImportDataResponse
 from app.schemas.stats import (
     ClearTableResponse,
@@ -31,15 +34,25 @@ from app.services.network_settings import (
     merge_network_put,
     network_settings_payload,
 )
-from app.services.settings_store import get_app_setting, put_app_setting
+from app.services.settings_registry import SYNC_KEY, Home, home_for
+from app.services.settings_store import (
+    get_global_setting,
+    put_global_setting,
+    replace_global_setting,
+)
 from app.services.stats import clear_table, get_db_stats, get_table_sizes
 from app.services.sync_meta import touch_sync
+from app.services.user_settings import get_user_setting, put_user_setting
 
-_SETTING_LOADERS = {
-    "jobs": load_jobs_settings,
-    "sync": load_sync_settings,
-    "retention": load_retention_settings,
-    "translation": load_translation_settings,
+#: Keys whose GET returns defaults merged over the stored row rather than the
+#: bare row. Each takes the caller's id even when it ignores it, so the call
+#: site does not have to know which keys have a per-User half — after ticket 06
+#: `sync` does and the other three do not.
+_SETTING_LOADERS: dict[str, Callable[[Session, uuid.UUID], dict[str, Any]]] = {
+    "jobs": lambda session, _user_id: load_jobs_settings(session),
+    "sync": lambda session, user_id: load_sync_settings(session, user_id=user_id),
+    "retention": lambda session, _user_id: load_retention_settings(session),
+    "translation": lambda session, _user_id: load_translation_settings(session),
 }
 # Tables whose clear removes rows from more than one resource.
 CLEARED_SYNC_RESOURCES: dict[str, tuple[str, ...]] = {
@@ -111,14 +124,10 @@ def put_network_settings(
 ) -> AppSettingResponse:
     row = get_network_setting_row(session)
     merged = merge_network_put(body, row.value if row else None)
-    if row:
-        row.value = merged
-        row.user_id = _current_user.id
-        row.updated_at = utc_now()
-    else:
-        row = AppSetting(key="network", value=merged, user_id=_current_user.id)
-    session.add(row)
-    session.commit()
+    # Replace rather than merge: `merge_network_put` has already merged with the
+    # rules that understand proxy lists and Tor modes, so a second blind merge
+    # in the store would resurrect proxy URLs the operator just removed.
+    replace_global_setting(session, "network", merged, user_id=_current_user.id)
     touch_sync(session, "settings")
     return AppSettingResponse.model_validate(
         {
@@ -136,8 +145,26 @@ def get_setting(
 ) -> AppSettingResponse:
     loader = _SETTING_LOADERS.get(key)
     if loader is not None:
-        return AppSettingResponse(key=key, value=loader(session))
-    return AppSettingResponse.model_validate(get_app_setting(session, key))
+        return AppSettingResponse(key=key, value=loader(session, _current_user.id))
+    if _home_of(key) is Home.USER:
+        value = get_user_setting(session, key, user_id=_current_user.id)
+    else:
+        value = get_global_setting(session, key)
+    return AppSettingResponse(key=key, value=value)
+
+
+def _home_of(key: str) -> Home:
+    """`home_for`, but a 400 instead of a `KeyError` escaping as a 500.
+
+    Before ticket 06 any key was accepted and an unknown one read back as an
+    empty value. Now a key has to be classified to be routed at all, so the
+    honest answer is to say so — a request naming a key the registry does not
+    know is a client mistake, not a server one.
+    """
+    try:
+        return home_for(key)
+    except KeyError as exc:
+        raise HTTPException(status_code=400, detail=str(exc.args[0])) from exc
 
 
 @router.put("/settings/{key}")
@@ -147,9 +174,18 @@ def put_setting(
     session: SessionDep,
     _current_user: CurrentUser,
 ) -> AppSettingResponse:
-    result = put_app_setting(session, key, body, user_id=_current_user.id)
+    if key == SYNC_KEY:
+        # The three-row carve is invisible from here: the body arrives in the
+        # old blob shape and `save_sync_settings` routes each field to the table
+        # that owns it, so the response is still the whole reassembled blob.
+        save_sync_settings(session, body, user_id=_current_user.id)
+        value = load_sync_settings(session, user_id=_current_user.id)
+    elif _home_of(key) is Home.USER:
+        value = put_user_setting(session, key, body, user_id=_current_user.id)
+    else:
+        value = put_global_setting(session, key, body, user_id=_current_user.id)
     touch_sync(session, "settings")
-    return AppSettingResponse.model_validate(result)
+    return AppSettingResponse(key=key, value=value)
 
 
 @router.post("/import")

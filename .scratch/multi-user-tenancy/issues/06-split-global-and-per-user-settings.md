@@ -4,9 +4,9 @@
 
 **Blocked by:** None (can start immediately)
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] Global settings and per-User settings are separate tables with distinct keys
-- [ ] Scheduler runtime state moves to the global table
-- [ ] All writers thread the owner; a guard asserts no global key is written to the per-User table or the reverse
-- [ ] The data move is behaviour-neutral and safe to run unattended
+- [x] Global settings and per-User settings are separate tables with distinct keys
+- [x] Scheduler runtime state moves to the global table
+- [x] All writers thread the owner; a guard asserts no global key is written to the per-User table or the reverse
+- [x] The data move is behaviour-neutral and safe to run unattended

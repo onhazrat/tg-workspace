@@ -185,7 +185,10 @@ def build_runtime_config(
 ) -> dict[str, Any]:
     """Return effective runtime settings merged from DB AppSettings and env defaults."""
     now = now_ms if now_ms is not None else int(time.time() * 1000)
-    sync_settings = load_sync_settings(session)
+    # This payload carries all three halves of the old `sync` blob back to the
+    # browser — policy, the scheduler's counters, and this account's start-time
+    # preference — so it is one of the few reads that genuinely needs the owner.
+    sync_settings = load_sync_settings(session, user_id=user_id)
     retention_settings = load_retention_settings(session)
     effective_global_start_time_ms = compute_effective_global_start_time_ms(
         sync_settings, retention_settings, now_ms=now

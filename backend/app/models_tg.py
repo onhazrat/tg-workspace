@@ -611,10 +611,55 @@ class PostTranslation(SQLModel, table=True):
 
 
 class AppSetting(SQLModel, table=True):
+    """Deployment-wide settings: one row per key, shared by every account.
+
+    Ticket 06 made this the *global* half of a two-table split. `key` alone is
+    the primary key because there is one answer per deployment — which jobs
+    run, how fast the scheduler ticks, which proxies to use. What an account
+    may set for itself lives in `UserSetting` instead, and
+    `services/settings_registry.py` says which key is which.
+
+    `user_id` survives as a "last written by" stamp and no longer scopes
+    anything; ticket 22 drops it. It was never a scope: `key` being the whole
+    primary key meant two accounts could not hold different values, so the
+    column only ever recorded who saved last.
+    """
+
     __tablename__ = "tg_app_settings"
 
     key: str = Field(primary_key=True)
     user_id: uuid.UUID | None = Field(default=None, index=True)
+    value: dict[str, Any] = Field(sa_column=Column(JSON))
+    updated_at: datetime = Field(default_factory=utc_now)
+
+
+class UserSetting(SQLModel, table=True):
+    """One account's own settings: one row per key *per User* (ticket 06).
+
+    The composite primary key `(key, user_id)` is the entire point. In the old
+    single table `key` alone was the primary key, so a second account saving
+    its start-time preference overwrote the first account's — and, because
+    every writer read-modify-wrote the whole JSON blob, it also wrote back
+    whatever scheduler counters that browser last read.
+
+    A separate table rather than a nullable owner on `AppSetting`, because a
+    nullable owner is the ambiguity `operator.py` had: `user_id IS NULL` reads
+    identically as "belongs to the deployment" and "nobody stamped it", and
+    those two have opposite consequences once ticket 21 flips enforcement.
+
+    The foreign key cascades, following `ChannelFollow`: deleting an account
+    takes its settings with it, so a row cannot outlive its owner.
+    """
+
+    __tablename__ = "tg_user_settings"
+
+    key: str = Field(primary_key=True)
+    user_id: uuid.UUID = Field(
+        foreign_key="user.id",
+        primary_key=True,
+        index=True,
+        ondelete="CASCADE",
+    )
     value: dict[str, Any] = Field(sa_column=Column(JSON))
     updated_at: datetime = Field(default_factory=utc_now)
 

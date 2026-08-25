@@ -39,8 +39,9 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlmodel import Session, col, func, select
 
 from app.models import User
-from app.models_tg import AppSetting, Channel, ChannelFollow, utc_now
+from app.models_tg import Channel, ChannelFollow, utc_now
 from app.services.operator import get_operator_user_id
+from app.services.settings_store import get_global_setting
 
 #: Global `AppSetting` key recording that the follow backfill ran to completion.
 #:
@@ -64,8 +65,7 @@ def follows_backfilled(session: Session) -> bool:
     second is retention's queue. Anything that *deletes* on the strength of a
     missing follow has to check this first.
     """
-    row = session.get(AppSetting, FOLLOWS_BACKFILL_KEY)
-    return bool(row and row.value.get("completedAt"))
+    return bool(get_global_setting(session, FOLLOWS_BACKFILL_KEY).get("completedAt"))
 
 
 def resolve_follow_owner(

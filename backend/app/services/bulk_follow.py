@@ -220,9 +220,12 @@ def clear_follow_jobs_for_tests() -> None:
     _active_jobs.clear()
 
 
-def _load_effective_start_time(_user_id: uuid.UUID | None) -> int:
+def _load_effective_start_time(user_id: uuid.UUID | None) -> int:
+    # The parameter was unused until ticket 06 — the start-time mode it feeds
+    # lived in a single global blob, so whose follow this was made no
+    # difference. Now it does: `globalStartTimeMode`/`Value` are per-User.
     with Session(engine) as session:
-        sync_settings = load_sync_settings(session)
+        sync_settings = load_sync_settings(session, user_id=user_id)
         retention_settings = load_retention_settings(session)
         return compute_effective_global_start_time_ms(sync_settings, retention_settings)
 

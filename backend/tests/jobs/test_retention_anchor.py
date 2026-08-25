@@ -8,14 +8,14 @@ from sqlmodel import Session, select
 
 from app.core.db import engine
 from app.jobs.retention import run_retention_cleanup
-from app.jobs.settings import save_setting
+from app.jobs.settings import save_settings_section
 from app.models_tg import Post, PostEmbedding, PostSyncState, PostTranslation
 from app.services.operator import get_operator_user_id
 
 
 def test_retention_keeps_anchor_posts() -> None:
     with Session(engine) as session:
-        save_setting(
+        save_settings_section(
             session, "retention", {"postRetentionDays": 30, "logRetentionDays": 0}
         )
         old_ts = 1_000_000_000_000
@@ -57,7 +57,7 @@ def test_retention_batches_and_cascades(monkeypatch) -> None:
     ch = "ret-batch-ch"
 
     with Session(engine) as session:
-        save_setting(
+        save_settings_section(
             session, "retention", {"postRetentionDays": 30, "logRetentionDays": 0}
         )
         operator_id = get_operator_user_id(session)

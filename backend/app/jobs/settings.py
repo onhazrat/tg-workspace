@@ -1,4 +1,22 @@
-"""Load scheduler-related AppSetting values with defaults."""
+"""Load settings with their defaults, and route writes to the right table.
+
+Ticket 06 split settings in two: `tg_app_settings` for deployment policy and
+`tg_user_settings` for personal preference, with
+`services/settings_registry.py` saying which key is which. This module is the
+layer above both — it merges stored values over the env-derived defaults, and
+for `sync` it hides the fact that one JSON blob is now three rows in two
+tables.
+
+**The `sync` facade is the interesting part.** `GET`/`PUT /data/settings/sync`
+keep their exact old wire shape, so neither the browser nor the generated
+client changed, but underneath each field goes to the table it belongs to:
+scheduler policy and the scheduler's own counters are global, and the
+per-channel defaults a person picks are theirs. That is what removes the
+lost update this ticket exists to fix — every writer used to read-modify-write
+the whole blob, so a person saving a start-time preference wrote back whatever
+`consecutiveFailures` their browser last read, and the scheduler bumping its
+counter wrote back their stale preferences.
+"""
 
 from __future__ import annotations
 
@@ -10,7 +28,24 @@ from typing import Any
 from sqlmodel import Session
 
 from app.core.config import settings
-from app.models_tg import AppSetting, utc_now
+from app.services.settings_registry import (
+    SYNC_KEY,
+    SYNC_PREFS_KEY,
+    SYNC_RUNTIME_KEY,
+    Home,
+    home_for,
+    split_sync_payload,
+)
+from app.services.settings_store import (
+    get_global_setting,
+    put_global_setting,
+    replace_global_setting,
+)
+from app.services.user_settings import (
+    get_user_setting,
+    put_user_setting,
+    replace_user_setting,
+)
 
 JOB_IDS = (
     "auto_sync",
@@ -45,6 +80,14 @@ def _default_sync() -> dict[str, Any]:
         "dynamicSyncExpectedPostsDefault": 15,
         "syncFailureBackoffMinutes": 5,
         "syncConcurrency": settings.SYNC_CONCURRENCY_DEFAULT,
+        # Declared here from ticket 06 on. They were always part of the blob —
+        # the frontend writes them and `compute_effective_global_start_time_ms`
+        # reads them — but only ever as `.get(...) or "retention"` fallbacks, so
+        # the key set of a never-configured install did not list them. The
+        # registry needs the full field list to partition, and these two values
+        # are exactly what the reader and the browser already assume.
+        "globalStartTimeMode": "retention",
+        "globalStartTimeValue": None,
         "consecutiveFailures": 0,
         "autoSyncPauseUntil": None,
         "autoSyncPartialCursor": 0,
@@ -87,46 +130,113 @@ def _merge(defaults: dict[str, Any], stored: dict[str, Any] | None) -> dict[str,
 
 
 def load_setting(
-    session: Session, key: str, defaults: dict[str, Any]
+    session: Session,
+    key: str,
+    defaults: dict[str, Any],
+    *,
+    user_id: uuid.UUID | None = None,
 ) -> dict[str, Any]:
-    row = session.get(AppSetting, key)
-    return _merge(defaults, row.value if row else None)
+    """Stored value for `key` merged over `defaults`, from whichever table owns it.
+
+    `user_id` is required for a per-User key and ignored for a global one, so
+    the caller never has to know which it is — the registry does.
+    """
+    if home_for(key) is Home.USER:
+        if user_id is None:
+            return dict(defaults)
+        return _merge(defaults, get_user_setting(session, key, user_id=user_id))
+    return _merge(defaults, get_global_setting(session, key))
 
 
-def save_setting(
-    session: Session, key: str, value: dict[str, Any], user_id: uuid.UUID | None = None
+def save_settings_section(
+    session: Session,
+    key: str,
+    value: dict[str, Any],
+    *,
+    user_id: uuid.UUID | None = None,
 ) -> None:
-    if user_id is None:
-        from app.services.operator import get_operator_user_id
+    """Write `value` as the whole section under `key`, into the table that owns it.
 
-        user_id = get_operator_user_id(session)
-    row = session.get(AppSetting, key)
-    if row:
-        row.value = value
-        row.updated_at = utc_now()
-        if row.user_id is None and user_id is not None:
-            row.user_id = user_id
-    else:
-        row = AppSetting(key=key, value=value, user_id=user_id)
-    session.add(row)
-    session.commit()
+    Replaces the old `save_setting` and keeps its **replace** semantics, not the
+    endpoint's merge: callers here hold a complete section, and `{}` has to mean
+    "unset this" — clearing the follow-backfill marker is exactly that, and a
+    merge cannot express it.
+
+    `sync` is the exception and delegates, because its three destinations each
+    take only the fields this call actually names. Passing a partial `sync` body
+    is the normal case there, and replacing a section with it would drop the
+    fields the caller said nothing about.
+
+    A per-User key with no owner raises rather than resolving one through
+    `get_operator_user_id` — the NULL fallback the plan's decision 24 dissolves.
+    """
+    if key == SYNC_KEY:
+        save_sync_settings(session, value, user_id=user_id)
+        return
+    if home_for(key) is Home.USER:
+        if user_id is None:
+            raise ValueError(
+                f"Settings key {key!r} is per-User and needs an owner; there is "
+                f"no deployment-wide row to fall back to."
+            )
+        replace_user_setting(session, key, value, user_id=user_id)
+        return
+    replace_global_setting(session, key, value, user_id=user_id)
+
+
+def save_sync_settings(
+    session: Session,
+    payload: dict[str, Any],
+    *,
+    user_id: uuid.UUID | None = None,
+) -> None:
+    """Fan an old-shape `sync` body out to the three rows it now lives in.
+
+    Only the sections the payload actually touches are written, so a browser
+    saving its preferences never rewrites the scheduler's counters and the
+    scheduler bumping a counter never rewrites anybody's preferences. Fields
+    the registry does not recognise are dropped rather than guessed at.
+
+    Preference fields are skipped when there is no owner: the scheduler writes
+    through here too, and it has no account behind it.
+    """
+    sections = split_sync_payload(payload)
+    for key, section in sections.items():
+        if key == SYNC_PREFS_KEY:
+            if user_id is not None:
+                put_user_setting(session, key, section, user_id=user_id)
+            continue
+        put_global_setting(session, key, section, user_id=user_id)
 
 
 def load_jobs_settings(session: Session) -> dict[str, Any]:
     return load_setting(session, "jobs", _default_jobs())
 
 
-def load_sync_settings(session: Session) -> dict[str, Any]:
+def load_sync_settings(
+    session: Session, *, user_id: uuid.UUID | None = None
+) -> dict[str, Any]:
+    """The old `sync` blob, reassembled from the three rows it now lives in.
+
+    Callers see exactly the dict they saw before ticket 06, which is what lets
+    the endpoint, the scheduler and the orchestrator stay unchanged above this
+    line. `user_id` supplies the preference half; the scheduler passes none
+    because it reads only policy and runtime fields, both global — see
+    `test_the_scheduler_reads_runtime_without_an_owner`.
+    """
     defaults = _default_sync()
-    row = session.get(AppSetting, "sync")
-    stored = row.value if row else None
+    stored = {
+        **get_global_setting(session, SYNC_KEY),
+        **get_global_setting(session, SYNC_RUNTIME_KEY),
+    }
+    if user_id is not None:
+        stored.update(get_user_setting(session, SYNC_PREFS_KEY, user_id=user_id))
     merged = _merge(defaults, stored)
 
-    legacy_interval = (stored or {}).get("autoSyncInterval")
-    stored_has_regular_interval = isinstance(stored, dict) and (
-        "regularSyncIntervalMinutes" in stored
-    )
-    if not stored_has_regular_interval and isinstance(legacy_interval, (int, float)):
+    legacy_interval = stored.get("autoSyncInterval")
+    if "regularSyncIntervalMinutes" not in stored and isinstance(
+        legacy_interval, (int, float)
+    ):
         merged["regularSyncIntervalMinutes"] = int(legacy_interval)
 
     if not isinstance(merged.get("regularSyncIntervalMinutes"), int):
@@ -150,11 +260,12 @@ def load_sync_settings(session: Session) -> dict[str, Any]:
     merged.pop("autoSyncEnabled", None)
     merged.pop("autoSyncInterval", None)
 
-    if row and row.value != merged:
-        row.value = merged
-        row.updated_at = utc_now()
-        session.add(row)
-        session.commit()
+    # No write-back. This used to persist the normalised blob whenever it
+    # differed from the stored one, which put a commit on the hot path of every
+    # scheduler read — the shape `docs/scheduler-db-cost-plan.md` measured at 69
+    # minutes of database time per 10 hours. The clamping above is deterministic,
+    # so recomputing it per read costs nothing, and the legacy keys it used to
+    # clean up are carved out once by the ticket 06 migration instead.
     return merged
 
 
@@ -289,5 +400,5 @@ def set_job_enabled(session: Session, job_id: str, enabled: bool) -> dict[str, A
         entry = {}
     entry["enabled"] = enabled
     jobs[job_id] = entry
-    save_setting(session, "jobs", jobs)
+    save_settings_section(session, "jobs", jobs)
     return jobs

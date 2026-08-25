@@ -11,7 +11,7 @@ from sqlmodel import Session, col, select
 
 from app.core.db import engine
 from app.jobs.retention import _prune_discover_reports
-from app.jobs.settings import load_retention_settings, save_setting
+from app.jobs.settings import load_retention_settings, save_settings_section
 from app.models_tg import DiscoverReport, utc_now
 
 DAY_MS = 24 * 60 * 60 * 1000
@@ -106,7 +106,7 @@ def test_retention_settings_expose_both_report_caps() -> None:
 
 def test_stored_report_caps_override_the_defaults() -> None:
     with Session(engine) as session:
-        save_setting(
+        save_settings_section(
             session,
             "retention",
             {"reportRetentionDays": 0, "reportRetentionMax": 3},

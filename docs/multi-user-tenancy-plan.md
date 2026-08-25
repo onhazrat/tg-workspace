@@ -142,6 +142,15 @@ resolves when reopened after the follow list has changed.
     a new `tg_user_settings` holds per-user with PK `(key, user_id)`. Different things, different
     access control, so a separate table makes it a schema fact rather than a convention.
     `jobs`, `retention`, and `sync_runtime` are global; the per-user half of `sync` moves across.
+    **Done** (ticket 06). Three things the plan did not settle. The `sync` blob turned out to be
+    *three* things, not two — deployment scheduler policy, the scheduler's own counters, and the
+    per-channel defaults a person picks — so it is carved into global `sync`, global `sync_runtime`
+    and per-User `sync_prefs`, with `GET`/`PUT /data/settings/sync` kept as a facade so the wire
+    shape and the generated client are byte-identical. `media`, `network` and `translation` stay
+    global: each is read by a scheduled job with no User in hand, and per-account proxies or a
+    per-account disk budget would be settings that do not do what their label says. And the fix is
+    the *split*, not a permission check — every writer read-modify-wrote the whole blob, so the last
+    writer won regardless of who was allowed to write.
 22. **`SyncLog` is channel telemetry**: drop `user_id`; visibility follows "do you follow this
     channel". A nullable owner meaning "scheduled" resurrects the exact ambiguity `operator.py` had
     and fails open on a forgotten stamp.

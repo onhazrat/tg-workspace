@@ -15,7 +15,7 @@ from app.jobs import scheduler as sched
 from app.jobs.auto_summary import run_auto_summary
 from app.jobs.auto_sync import run_auto_sync
 from app.jobs.retention import run_retention_cleanup
-from app.jobs.settings import default_job_enabled, save_setting
+from app.jobs.settings import default_job_enabled, save_settings_section
 from app.jobs.translation_batch import run_translation_batch
 from app.models_tg import Channel, Post, Summary, SyncLog, SyncLogPayload
 from app.models_tg import SyncJob as SyncJobRow
@@ -101,7 +101,7 @@ def test_auto_sync_skips_when_no_due_channels(
     clear_jobs_for_tests()
     now = int(time.time() * 1000)
     with Session(engine) as session:
-        save_setting(
+        save_settings_section(
             session,
             "sync",
             {
@@ -141,7 +141,7 @@ def test_auto_sync_triggers_stale_channels(
     now = int(time.time() * 1000)
 
     with Session(engine) as session:
-        save_setting(
+        save_settings_section(
             session,
             "sync",
             {
@@ -196,7 +196,7 @@ def test_auto_sync_includes_fresh_partial_history_channels(
     now = int(time.time() * 1000)
 
     with Session(engine) as session:
-        save_setting(
+        save_settings_section(
             session,
             "sync",
             {
@@ -254,7 +254,7 @@ def test_auto_sync_dynamic_only_channel_due_by_velocity(
     now = int(time.time() * 1000)
 
     with Session(engine) as session:
-        save_setting(
+        save_settings_section(
             session,
             "sync",
             {
@@ -319,7 +319,7 @@ def test_auto_sync_skips_channels_with_both_schedules_disabled(
     now = int(time.time() * 1000)
 
     with Session(engine) as session:
-        save_setting(
+        save_settings_section(
             session,
             "sync",
             {
@@ -362,7 +362,7 @@ def test_auto_sync_syncs_all_due_channels_in_one_job(
     now = int(time.time() * 1000)
 
     with Session(engine) as session:
-        save_setting(
+        save_settings_section(
             session,
             "sync",
             {
@@ -407,7 +407,7 @@ def test_auto_sync_syncs_all_due_channels_in_one_job(
 def test_retention_deletes_old_posts() -> None:
     now = int(time.time() * 1000)
     with Session(engine) as session:
-        save_setting(
+        save_settings_section(
             session, "retention", {"postRetentionDays": 30, "logRetentionDays": 0}
         )
         session.add(
@@ -475,7 +475,7 @@ def test_retention_deletes_old_logs_without_loading_them() -> None:
     now = int(time.time() * 1000)
     old_ts = now - 10 * 24 * 60 * 60 * 1000
     with Session(engine) as session:
-        save_setting(
+        save_settings_section(
             session, "retention", {"postRetentionDays": 0, "logRetentionDays": 7}
         )
         operator_id = get_operator_user_id(session)
@@ -526,7 +526,7 @@ def test_payload_retention_expires_bodies_but_keeps_the_log() -> None:
     now = int(time.time() * 1000)
     old_ts = now - 10 * 24 * 60 * 60 * 1000
     with Session(engine) as session:
-        save_setting(
+        save_settings_section(
             session,
             "retention",
             {
@@ -576,7 +576,7 @@ def test_log_retention_leaves_no_orphan_payloads() -> None:
     now = int(time.time() * 1000)
     old_ts = now - 30 * 24 * 60 * 60 * 1000
     with Session(engine) as session:
-        save_setting(
+        save_settings_section(
             session,
             "retention",
             {
@@ -637,7 +637,7 @@ def test_retention_job_tolerates_a_busy_event_loop() -> None:
 @patch("app.jobs.translation_batch.get_provider")
 def test_translation_batch_skips_when_disabled(mock_provider) -> None:
     with Session(engine) as session:
-        save_setting(
+        save_settings_section(
             session,
             "translation",
             {"translationEnabled": False, "autoTranslate": False},

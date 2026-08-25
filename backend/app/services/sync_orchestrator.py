@@ -430,7 +430,11 @@ def _prepare_channel_sync(
 
         effective_user_id = user_id or channel.user_id
         network = load_network_settings(session, effective_user_id)
-        sync_settings = load_sync_settings(session)
+        # The owner matters here: `compute_scrape_cutoff_ms` below reads
+        # `globalStartTimeMode`/`Value`, which ticket 06 made per-User. Passing
+        # none would silently scrape from the default cutoff rather than the one
+        # this follower asked for.
+        sync_settings = load_sync_settings(session, user_id=effective_user_id)
         retention_settings = load_retention_settings(session)
         media_settings = load_media_settings(session)
         scrape_cutoff_ms = compute_scrape_cutoff_ms(sync_settings, retention_settings)

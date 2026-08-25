@@ -34,7 +34,7 @@ from sqlmodel import Session, col, delete, select
 
 from app.core.db import engine
 from app.jobs.retention import run_retention_cleanup
-from app.jobs.settings import save_setting
+from app.jobs.settings import save_settings_section
 from app.models_tg import (
     Channel,
     ChannelFollow,
@@ -54,7 +54,7 @@ def _retention_off(session: Session) -> None:
     Also records the follow backfill as complete, because collection refuses to
     run otherwise — see `test_collection_refuses_to_run_before_the_backfill`.
     """
-    save_setting(
+    save_settings_section(
         session,
         "retention",
         {
@@ -65,11 +65,13 @@ def _retention_off(session: Session) -> None:
             "reportRetentionMax": 0,
         },
     )
-    save_setting(session, FOLLOWS_BACKFILL_KEY, {"completedAt": 1_700_000_000_000})
+    save_settings_section(
+        session, FOLLOWS_BACKFILL_KEY, {"completedAt": 1_700_000_000_000}
+    )
 
 
 def _clear_backfill_marker(session: Session) -> None:
-    save_setting(session, FOLLOWS_BACKFILL_KEY, {})
+    save_settings_section(session, FOLLOWS_BACKFILL_KEY, {})
 
 
 def _unfollow_everyone(session: Session, channel_id: str) -> None:

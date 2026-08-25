@@ -52,7 +52,7 @@ from app.services.follows import (
     resolve_follow_owner,
 )
 from app.services.operator import get_operator_user_id
-from app.services.settings_store import get_app_setting, put_app_setting
+from app.services.settings_store import get_global_setting, put_global_setting
 
 #: Channels per transaction. Large enough that the run is a handful of round
 #: trips on the ~2,000-channel staging database, small enough that no snapshot
@@ -77,7 +77,7 @@ COMPLETION_KEY = "follows_backfill"
 
 def already_completed(session: Session) -> bool:
     """Whether a full backfill has been recorded. One primary-key lookup."""
-    return bool(get_app_setting(session, COMPLETION_KEY)["value"].get("completedAt"))
+    return bool(get_global_setting(session, COMPLETION_KEY).get("completedAt"))
 
 
 def backfill(
@@ -164,7 +164,7 @@ def backfill(
         # would turn a run interrupted halfway into a permanent skip, and the
         # channels it never reached would stay unfollowed forever.
         if not dry_run:
-            put_app_setting(
+            put_global_setting(
                 session,
                 COMPLETION_KEY,
                 {"completedAt": int(utc_now().timestamp() * 1000)},

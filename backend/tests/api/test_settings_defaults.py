@@ -7,7 +7,7 @@ from sqlmodel import Session
 
 from app.core.config import settings
 from app.core.db import engine
-from app.jobs.settings import save_setting
+from app.services.settings_store import put_global_setting
 
 PREFIX = f"{settings.API_V1_STR}/data"
 
@@ -72,7 +72,12 @@ def test_get_translation_settings_merges_defaults(client: TestClient) -> None:
 
 def test_sync_setting_migrates_legacy_auto_sync_interval(client: TestClient) -> None:
     with Session(engine) as session:
-        save_setting(
+        # Written straight into the global row rather than through
+        # `save_settings_section`, which routes by field and so drops a name the
+        # registry does not know. That is right for a write and wrong for this
+        # setup: nothing writes `autoSyncInterval` any more, an old database
+        # simply *has* it — which is the state under test.
+        put_global_setting(
             session,
             "sync",
             {"autoSyncInterval": 42, "syncConcurrency": 3},

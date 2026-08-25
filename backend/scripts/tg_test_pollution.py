@@ -81,6 +81,12 @@ TG_TABLES: tuple[str, ...] = (
     "tg_bot_credentials",
     "tg_chat_destinations",
     "tg_app_settings",
+    # The per-User half of the ticket 06 settings split. Listed with its
+    # sibling for the same reason `tg_tag_runs` was added: a settings row left
+    # behind by one test is another test's "the operator already configured
+    # this", and the two tables have to be cleared together or a carve half
+    # survives.
+    "tg_user_settings",
     "tg_channel_setting_groups",
     "tg_channel_follows",
     "tg_channels",
