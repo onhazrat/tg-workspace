@@ -25,3 +25,9 @@ graphify-out/
 # Claude Code local state: worktrees carry their own .venv and node_modules and
 # run to several GB, plus session checkpoints and local permission overrides.
 .claude/
+
+# Reference clone of https://github.com/fastapi/full-stack-fastapi-template,
+# kept for diffing this repo against upstream. Nested .git, so git reports the
+# whole directory as one untracked entry. Cited by docs/architecture-entropy-audit.md
+# (E8); re-create with: git clone --depth 1 <template-url> _template_tmp
+_template_tmp/
