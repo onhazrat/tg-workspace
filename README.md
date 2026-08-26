@@ -51,3 +51,4 @@ Supported surface: `/api/v1/telegram/*`, `/api/v1/network/*`, `/api/v1/ai/*`, `/
 
 - [Ideas log](docs/ideas-log/) — backlog for future work sessions
 - [Migration docs](docs/migration/) — ADRs, data model, and risks
+  
