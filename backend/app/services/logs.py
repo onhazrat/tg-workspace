@@ -27,6 +27,7 @@ from app.services.serialization import (
     normalize_body,
     sync_log_to_camel,
 )
+from app.services.tenancy import assert_owner, scoped_select, unscoped_select
 
 # Log list endpoints are viewers, not exports: cap what one request can load.
 DEFAULT_LOG_PAGE_SIZE = 500
@@ -39,6 +40,32 @@ LOG_MODELS: dict[str, tuple[type[SQLModel], str]] = {
     "embedding": (EmbeddingLog, "embedding_logs"),
     "network": (NetworkLog, "network_logs"),
 }
+
+#: Log types that belong to no single account, so a read of them crosses
+#: accounts on purpose (ticket 18).
+#:
+#: A network log records what the deployment's *proxies* did. There is no
+#: account whose rows they are, so decision 23 keeps a nullable `user_id` for
+#: whoever triggered the request and makes the family Admin-only, on the
+#: reasoning that a nullable owner leaking only to an Admin is an acceptable
+#: failure mode. `NetworkLog` stays `USER_OWNED` in `tenancy.SCOPES` and the
+#: read goes through `unscoped_select` instead, because an escape hatch is only
+#: meaningful where the default would have scoped — the same argument
+#: `QuotaUsage` makes.
+#:
+#: `routes/data/logs.py` reads this to decide which types demand
+#: `Permission.LOGS_READ_ANY`. One set rather than two lists, so the route's
+#: gate and this module's scoping cannot come to disagree about which types
+#: those are: a family readable by anyone *and* unscoped is the worst of both.
+ADMIN_ONLY_LOG_TYPES = frozenset({"network"})
+
+#: Why the reads below cross accounts for those types, in the one place
+#: `unscoped_select` exists to record it.
+_ADMIN_LOG_REASON = (
+    "Network logs are Admin-only (decision 23): they record proxy behaviour for "
+    "the deployment rather than for an account, and the route above this "
+    "demands Permission.LOGS_READ_ANY before it runs."
+)
 
 
 def upsert_publish_log(
@@ -427,6 +454,7 @@ def _list_logs_page(
     session: Session,
     log_type: str,
     *,
+    user_id: uuid.UUID,
     limit: int,
     offset: int,
     search: str | None,
@@ -445,6 +473,14 @@ def _list_logs_page(
     table = _log_table(model)
     columns = _light_columns(model, LOG_HEAVY_COLUMNS[log_type])
     statement = select(*columns)
+    # The predicate goes on before the ordering, the offset and the limit, and
+    # it has to: a page ranked over rows the caller cannot see would hand back
+    # fewer than `limit` of them, or none at all, while the rows it skipped sit
+    # in someone else's account. Same shape as the feed's window in ticket 16.
+    if log_type in ADMIN_ONLY_LOG_TYPES:
+        statement = unscoped_select(statement, reason=_ADMIN_LOG_REASON)
+    else:
+        statement = scoped_select(statement, model, user_id)
     if search and search.strip():
         statement = statement.where(
             _log_search_clause(log_type, search.strip(), in_details=search_in_details)
@@ -460,6 +496,7 @@ def list_logs(
     session: Session,
     log_type: str,
     *,
+    user_id: uuid.UUID,
     limit: int = DEFAULT_LOG_PAGE_SIZE,
     offset: int = 0,
     search: str | None = None,
@@ -476,12 +513,17 @@ def list_logs(
     Raises `KeyError` for an unknown type; the route turns that into a 400 so
     the error contract matches the purge endpoint, which has always 400ed rather
     than 404ed on a bad `type`.
+
+    `user_id` is required and has no default, for the reason `scoped_select`
+    gives: every caller of this already depends on `CurrentUser`, and a default
+    would let a new one scope to nobody without saying so.
     """
     if log_type not in LOG_MODELS:
         raise KeyError(log_type)
     return _list_logs_page(
         session,
         log_type,
+        user_id=user_id,
         limit=limit,
         offset=offset,
         search=search,
@@ -489,17 +531,30 @@ def list_logs(
     )
 
 
-def get_log(session: Session, log_type: str, log_id: str) -> dict[str, Any]:
+def get_log(
+    session: Session, log_type: str, log_id: str, *, user_id: uuid.UUID
+) -> dict[str, Any]:
     """One log row in full, including whatever the list projection dropped.
 
     The other half of the split: the viewer calls this for the single row the
     operator expanded, so the bodies are fetched once for one row rather than
     500 times for rows nobody opened.
+
+    A row belonging to someone else answers 404 with **the same detail an absent
+    row answers**, not 403. 403 would confirm the row exists, and the whole
+    reason `assert_owner` demands the string is that a distinguishable body
+    moves that oracle from the status line into the payload.
     """
     model, _ = LOG_MODELS[log_type]
     row = session.get(model, log_id)
     if row is None:
         raise HTTPException(status_code=404, detail=f"{log_type} log not found")
+    if log_type not in ADMIN_ONLY_LOG_TYPES:
+        assert_owner(
+            getattr(row, "user_id", None),
+            user_id,
+            detail=f"{log_type} log not found",
+        )
     if log_type == "sync":
         return sync_log_to_camel(
             cast(SyncLog, row), session.get(SyncLogPayload, log_id)
@@ -512,8 +567,46 @@ def create_logs(
     log_type: str,
     body: list[dict[str, Any]],
     *,
-    user_id: uuid.UUID | None = None,
+    user_id: uuid.UUID,
 ) -> dict[str, int]:
+    """Upsert a batch of log rows, refusing rows the caller does not own.
+
+    **The write is in scope, and the ticket's checkboxes did not say so.** Every
+    `upsert_*_log` merges into whatever row its `id` names and reassigns
+    `user_id` while it is there, so scoping the *read* over a writable row
+    leaves the whole family one guessed id away: a caller posting another
+    account's log id overwrites that row and becomes its owner, and every read
+    guard passes throughout. Ticket 17 found the identical shape in the four
+    artifact families; this is that fix, one ticket later, in the one place the
+    API enters.
+
+    The check is here rather than inside the five upserts because those have
+    other callers — the publisher, the scraper, the embedding job — that write
+    rows on an account's behalf and legitimately name any owner. This function
+    is the API's door, and it always has a real caller behind it, which is why
+    `user_id` lost its default.
+
+    An absent id still creates, which is what keeps an upsert an upsert.
+
+    All five types, network included. Network *reads* are Admin-only and cross
+    accounts, but a write landing on an existing row is an overwrite either way,
+    and none of the six frontend flows that record network telemetry ever
+    updates one — `writeLog` mints a fresh id every time. One rule over five
+    types beats a rule over four plus a paragraph excusing the fifth.
+    """
+    model, _ = LOG_MODELS[log_type]
+    for item in body:
+        log_id = normalize_body(item).get("id")
+        if not log_id:
+            continue
+        existing = session.get(model, log_id)
+        if existing is not None:
+            assert_owner(
+                getattr(existing, "user_id", None),
+                user_id,
+                detail=f"{log_type} log not found",
+            )
+
     upsert_fn = {
         "publish": upsert_publish_log,
         "sync": upsert_sync_log,

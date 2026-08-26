@@ -24,6 +24,7 @@ the bodies, so each type asserts:
 from __future__ import annotations
 
 import json
+import uuid
 from collections.abc import Iterator
 from contextlib import contextmanager
 
@@ -46,6 +47,13 @@ PAYLOAD_TABLE = "tg_sync_log_payloads"
 
 #: Big enough that shipping 500 of them is the difference the endpoint showed.
 BODY = {"messages": ["x" * 512 for _ in range(20)]}
+
+#: Whose page this is. Payload size is not a tenancy question, and this file has
+#: no opinion about the owner — but `list_logs` demands one with no default
+#: (ticket 18), on the reasoning that a caller who has not decided whose rows it
+#: wants should have to say so. Which rows come back for which account is
+#: `test_log_tenancy_scoping.py`'s subject, not this one's.
+VIEWER = uuid.uuid4()
 
 
 @contextmanager
@@ -121,10 +129,10 @@ def test_the_list_omits_the_heavy_keys_and_the_detail_carries_them(
 
         listed = next(
             row
-            for row in list_logs(session, log_type)
+            for row in list_logs(session, log_type, user_id=VIEWER)
             if row["id"] == f"cost-{log_type}"
         )
-        detail = get_log(session, log_type, f"cost-{log_type}")
+        detail = get_log(session, log_type, f"cost-{log_type}", user_id=VIEWER)
 
     heavy_wire_keys = {to_camel(c) for c in LOG_HEAVY_COLUMNS[log_type]} or {
         "fullRequest",
@@ -148,7 +156,7 @@ def test_listing_sync_logs_never_opens_the_payload_table() -> None:
         _seed(session, "cost-sync-sql", "sync")
 
         with captured_sql() as statements:
-            list_logs(session, "sync")
+            list_logs(session, "sync", user_id=VIEWER)
 
     assert statements, "no SQL captured — the listener is not wired up"
     offenders = [s for s in statements if PAYLOAD_TABLE in s]
@@ -161,7 +169,7 @@ def test_the_detail_route_does_open_it() -> None:
         _seed(session, "cost-sync-detail", "sync")
 
         with captured_sql() as statements:
-            detail = get_log(session, "sync", "cost-sync-detail")
+            detail = get_log(session, "sync", "cost-sync-detail", user_id=VIEWER)
 
     assert detail["fullResponse"] == BODY
     assert any(PAYLOAD_TABLE in s for s in statements)
@@ -176,7 +184,7 @@ def test_a_full_page_of_bodies_still_serialises_small() -> None:
         for i in range(50):
             _seed(session, f"cost-bulk-{i:03}", "sync")
 
-        page = list_logs(session, "sync", limit=500)
+        page = list_logs(session, "sync", limit=500, user_id=VIEWER)
 
     assert len(page) >= 50
     assert len(json.dumps(page)) < 50_000
@@ -204,10 +212,13 @@ def test_search_matches_fields_the_list_still_carries() -> None:
     with Session(engine) as session:
         _seed(session, "search-sync-a", "sync")
 
-        assert [r["id"] for r in list_logs(session, "sync", search="ch")] == [
-            "search-sync-a"
-        ]
-        assert list_logs(session, "sync", search="nothing-matches-this") == []
+        assert [
+            r["id"] for r in list_logs(session, "sync", search="ch", user_id=VIEWER)
+        ] == ["search-sync-a"]
+        assert (
+            list_logs(session, "sync", search="nothing-matches-this", user_id=VIEWER)
+            == []
+        )
 
 
 def test_search_matches_a_field_that_is_no_longer_shipped() -> None:
@@ -220,8 +231,8 @@ def test_search_matches_a_field_that_is_no_longer_shipped() -> None:
         _seed(session, "search-publish", "publish")
         _seed(session, "search-llm", "llm")
 
-        found_text_sent = list_logs(session, "publish", search="xxxx")
-        found_prompt = list_logs(session, "llm", search="pppp")
+        found_text_sent = list_logs(session, "publish", search="xxxx", user_id=VIEWER)
+        found_prompt = list_logs(session, "llm", search="pppp", user_id=VIEWER)
 
     assert [r["id"] for r in found_text_sent] == ["search-publish"]
     assert "textSent" not in found_text_sent[0]
@@ -239,8 +250,10 @@ def test_bodies_are_matched_only_with_search_in_details() -> None:
     with Session(engine) as session:
         _seed(session, "search-details", "sync")
 
-        without = list_logs(session, "sync", search=marker)
-        with_details = list_logs(session, "sync", search=marker, search_in_details=True)
+        without = list_logs(session, "sync", search=marker, user_id=VIEWER)
+        with_details = list_logs(
+            session, "sync", search=marker, search_in_details=True, user_id=VIEWER
+        )
 
     assert [r["id"] for r in without] == []
     assert [r["id"] for r in with_details] == ["search-details"]
@@ -250,5 +263,5 @@ def test_a_blank_search_is_not_a_filter() -> None:
     with Session(engine) as session:
         _seed(session, "search-blank", "sync")
 
-        assert list_logs(session, "sync", search="   ")
-        assert list_logs(session, "sync", search=None)
+        assert list_logs(session, "sync", search="   ", user_id=VIEWER)
+        assert list_logs(session, "sync", search=None, user_id=VIEWER)

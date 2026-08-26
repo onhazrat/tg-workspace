@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react"
+import { ApiError } from "@/api/base"
 import {
   loadNetworkSettings,
   saveNetworkSettings,
@@ -94,7 +95,17 @@ export function useNetworkSettings(): {
           }).catch(console.error)
         }
       })
-      .catch(console.error)
+      .catch((err: unknown) => {
+        // A refusal is an answer, not a fault. The proxy list became Admin-only
+        // in ticket 18 — its URLs carry credentials — and this hook is mounted
+        // by `SettingsContext` for every signed-in person, not just visitors to
+        // the settings page. So a plain account hits this on every app load;
+        // it keeps the defaults, never flips `hydrated`, and therefore never
+        // debounce-saves settings it was not shown. That is the right outcome,
+        // and it should not arrive as a console error on every boot.
+        if (err instanceof ApiError && err.status === 403) return
+        console.error(err)
+      })
   }, [])
 
   // Debounced save of any writable field change (post-hydration only).

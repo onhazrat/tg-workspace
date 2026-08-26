@@ -195,7 +195,14 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({
       api.getSetting("sync"),
       api.getSetting("retention"),
       api.getSetting("translation"),
-      api.jobsStatus(),
+      // Optional, and the `catch` is the point. `GET /jobs/status` became
+      // Admin-only in ticket 18, and one rejection inside `Promise.all` rejects
+      // the whole thing: sync, retention and translation would never be
+      // applied, `appSettingsHydrated` would never flip, and the three push
+      // effects below it would stay disabled for the rest of the session — all
+      // of it silent behind `.catch(console.error)`. The embeddings toggle is
+      // the only thing this call feeds, so a non-Admin simply does not get it.
+      api.jobsStatus().catch(() => null),
     ])
       .then(([syncRow, retentionRow, translationRow, jobsStatus]) => {
         const sync = syncRow.value ?? {}
@@ -234,7 +241,7 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({
           }),
           ...decodeServerSection("translation", translation),
         }
-        if (typeof jobsStatus.embeddings?.enabled === "boolean") {
+        if (typeof jobsStatus?.embeddings?.enabled === "boolean") {
           updates.embeddingsEnabled = jobsStatus.embeddings.enabled
         }
         setSettings((prev) => ({ ...prev, ...updates }))

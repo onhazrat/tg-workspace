@@ -148,9 +148,16 @@ def test_the_refusal_is_distinguishable_from_a_permissions_refusal(
 def test_approving_the_account_opens_the_data_routes(
     client: TestClient, pending_user: str, superuser_token_headers: dict[str, str]
 ) -> None:
-    """The whole point: an Admin flips one field and the person is in."""
+    """The whole point: an Admin flips one field and the person is in.
+
+    `/data/channels` rather than `/jobs/status`, which this used until ticket 18
+    made the scheduler Admin-only. Approval and permission are different gates
+    that both answer 403, so a route behind *both* of them cannot show that the
+    first one opened — this test would have gone on passing its first assertion
+    for the wrong reason and failing its last one forever.
+    """
     headers = {"Authorization": f"Bearer {_token(client, pending_user)}"}
-    assert client.get(f"{PREFIX}/jobs/status", headers=headers).status_code == 403
+    assert client.get(f"{PREFIX}/data/channels", headers=headers).status_code == 403
 
     with Session(engine) as session:
         row = session.exec(select(User).where(User.email == pending_user)).first()
@@ -165,7 +172,7 @@ def test_approving_the_account_opens_the_data_routes(
     assert approved.status_code == 200, approved.text
     assert approved.json()["is_approved"] is True
 
-    assert client.get(f"{PREFIX}/jobs/status", headers=headers).status_code == 200
+    assert client.get(f"{PREFIX}/data/channels", headers=headers).status_code == 200
 
 
 @pytest.mark.security

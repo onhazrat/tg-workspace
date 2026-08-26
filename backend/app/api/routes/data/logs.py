@@ -18,9 +18,10 @@ independently. **D2 removed them** — `/logs/{log_type}` is now the only way in
 
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, Path, Query
+from fastapi import APIRouter, Depends, HTTPException, Path, Query
 
-from app.api.deps import CurrentUser, SessionDep
+from app.api.deps import CurrentUser, SessionDep, require_permission
+from app.core.permissions import Permission
 from app.schemas.logs import (
     EmbeddingLogResponse,
     LLMLogListItemResponse,
@@ -36,6 +37,7 @@ from app.schemas.logs import (
     SyncLogResponse,
 )
 from app.services.logs import (
+    ADMIN_ONLY_LOG_TYPES,
     DEFAULT_LOG_PAGE_SIZE,
     LOG_MODELS,
     MAX_LOG_PAGE_SIZE,
@@ -62,7 +64,53 @@ def _known(log_type: str) -> str:
     return log_type
 
 
-@router.get("/logs/{log_type}")
+def require_readable_log_type(
+    session: SessionDep,
+    current_user: CurrentUser,
+    log_type: str = LogType,
+) -> None:
+    """Admin-only for the log types no account owns; open for the rest.
+
+    Network logs record what the deployment's proxies did, so there is no
+    account whose rows they are — decision 23 makes them Admin-only and keeps a
+    nullable owner for whoever triggered the request. The other four types are
+    things an account produced, and taking them away from the person who
+    produced them is not what ticket 18 asks for; the tenancy seam narrows those
+    to the caller's own rows instead.
+
+    The check is here rather than in `dependencies=` on the router because the
+    type is a *path parameter*: one handler serves five kinds, and only one of
+    them is administrative. `require_permission` is an ordinary callable, so
+    this composes it rather than reimplementing the refusal — which matters,
+    because the refusal text is asserted in three places and a second spelling
+    of it would be a second answer to "why were you refused".
+
+    **Reads only.** The first cut of ticket 18 put this on the write too, on the
+    tidy-sounding argument that an account which may not read the proxy log has
+    no business writing to it. Six frontend flows write network telemetry —
+    adding a channel, refreshing metadata, testing a proxy, the Tor panel and
+    actions, bot management — and `writeLog` swallows a failure with a
+    `console.warn` by design, so gating the write does not refuse anything
+    visibly. It just stops recording a non-Admin's telemetry, with nothing
+    anywhere saying so. A write stamps its author; the Admin still reads them
+    all, which is what decision 23 actually asks for.
+    """
+    if log_type in ADMIN_ONLY_LOG_TYPES:
+        require_permission(Permission.LOGS_READ_ANY)(session, current_user)
+
+
+#: The gate on the two deployment-wide purge branches. **Not on the route**: the
+#: same endpoint also deletes a single row by id, which is how every Logs tab
+#: removes one of the caller's own entries. Gating the route made that an error
+#: toast for anyone who is not an Admin, which is a regression dressed as a
+#: security fix — one row of your own is not an administrative act.
+ADMIN_ONLY = require_permission(Permission.DATA_ADMIN)
+
+#: The per-type gate, for the two read routes that name a `log_type`.
+READABLE_LOG_TYPE = [Depends(require_readable_log_type)]
+
+
+@router.get("/logs/{log_type}", dependencies=READABLE_LOG_TYPE)
 def list_logs_route(
     session: SessionDep,
     _current_user: CurrentUser,
@@ -88,6 +136,7 @@ def list_logs_route(
     rows = list_logs(
         session,
         _known(log_type),
+        user_id=_current_user.id,
         limit=limit,
         offset=offset,
         search=search,
@@ -96,7 +145,7 @@ def list_logs_route(
     return [LOG_LIST_RESPONSES[log_type].model_validate(row) for row in rows]
 
 
-@router.get("/logs/{log_type}/{log_id}")
+@router.get("/logs/{log_type}/{log_id}", dependencies=READABLE_LOG_TYPE)
 def get_log_route(
     session: SessionDep,
     _current_user: CurrentUser,
@@ -110,7 +159,7 @@ def get_log_route(
     the viewer renders only for an expanded row — and it expands one at a time.
     This serves that one row.
     """
-    row = get_log(session, _known(log_type), log_id)
+    row = get_log(session, _known(log_type), log_id, user_id=_current_user.id)
     return LOG_RESPONSES[log_type].model_validate(row)
 
 
@@ -155,16 +204,23 @@ LOG_LIST_RESPONSES: dict[str, type[LogEntryResponse]] = {
 @router.delete("/logs")
 def purge_logs(
     session: SessionDep,
-    _current_user: CurrentUser,
+    current_user: CurrentUser,
     older_than_days: int | None = Query(default=None, alias="olderThanDays"),
     log_type: str | None = Query(default=None, alias="type"),
     log_id: str | None = Query(default=None, alias="logId"),
     clear_all: bool = Query(default=False, alias="clearAll"),
 ) -> PurgeLogsResponse:
+    """Three deletes behind one endpoint, and they are not the same act.
+
+    `olderThanDays` and `clearAll` sweep across every account, so both demand
+    `DATA_ADMIN`. `logId` removes exactly one row, which is what the delete
+    button on each of the five Logs tabs calls, for everybody — gating the whole
+    route turned that into an error toast for any non-Admin, so the gate is per
+    branch. The single-row branch answers to the owner instead.
+    """
     if older_than_days is not None and older_than_days > 0:
-        deleted = delete_old_logs(
-            session, older_than_days, operator_id=_current_user.id
-        )
+        ADMIN_ONLY(session, current_user)
+        deleted = delete_old_logs(session, older_than_days, operator_id=current_user.id)
         for resource in {LOG_MODELS[k][1] for k in deleted if deleted[k]}:
             touch_sync(session, resource)
         return PurgeLogsResponse.model_validate(
@@ -180,12 +236,18 @@ def purge_logs(
 
     resource = LOG_MODELS[log_type][1]
     if log_id:
+        # Owner-checked, not Admin-gated, and checked *before* the delete: the
+        # alternative is removing someone else's row and then reporting that it
+        # could not be found. `get_log` raises the 404 that a foreign or absent
+        # row both get, with the detail that family already uses.
+        get_log(session, log_type, log_id, user_id=current_user.id)
         if not delete_log_by_id(session, log_type, log_id):
             raise HTTPException(status_code=404, detail="Log entry not found")
         touch_sync(session, resource)
         return PurgeLogsResponse(deleted=1)
 
     if clear_all:
+        ADMIN_ONLY(session, current_user)
         count = clear_logs(session, log_type)
         if count:
             touch_sync(session, resource)

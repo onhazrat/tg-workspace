@@ -3,17 +3,39 @@
 Split out of the former `routes/data.py` under C1. The parent router in
 `data/__init__.py` supplies the `/data` prefix and the `data` tag, so every
 path and operation id is unchanged.
+
+## Admin-only, with two exceptions (ticket 18)
+
+Everything here answers for the whole deployment: statistics counted across
+every account, a table cleared for everybody, an import that overwrites rows by
+id, an export that streams every account's rows, and the proxy list, whose URLs
+carry credentials. All of it was reachable by any authenticated person, which
+was invisible while there was one account and is the whole problem the moment
+there are two. Each of those routes now names `Permission.DATA_ADMIN`.
+
+`GET`/`PUT /settings/{key}` are the exceptions, and not because they are
+harmless. They are a facade over both settings tables: `sync` reassembles
+deployment policy, scheduler runtime and the caller's *own* preferences into
+one blob, and the frontend's Pause button writes a global runtime field through
+it. Gating the route wholesale would take a person's own sync preferences away
+from them, and gating it per field means routing authorisation through
+`settings_registry` beside the storage routing. Deployment-policy keys reaching
+this route is a real hole; it is recorded in
+`docs/admin-only-routes-and-log-scoping-plan.md` rather than half-closed here.
+`tests/api/test_admin_route_gating.py` holds both exemptions with that reason
+and fails if a *third* ungated route appears.
 """
 
 import uuid
 from collections.abc import Callable
 from typing import Any
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from sqlmodel import Session
 
-from app.api.deps import CurrentUser, SessionDep
+from app.api.deps import CurrentUser, SessionDep, require_permission
+from app.core.permissions import Permission
 from app.jobs.settings import (
     load_jobs_settings,
     load_retention_settings,
@@ -21,12 +43,14 @@ from app.jobs.settings import (
     load_translation_settings,
     save_sync_settings,
 )
+from app.models import User
 from app.schemas.common import AppSettingResponse, ImportDataResponse
 from app.schemas.stats import (
     ClearTableResponse,
     DbStatsResponse,
     TableSizeResponse,
 )
+from app.services import rbac
 from app.services.data_import_export import import_data as import_data_impl
 from app.services.data_import_export import stream_export_data
 from app.services.network_settings import (
@@ -34,7 +58,12 @@ from app.services.network_settings import (
     merge_network_put,
     network_settings_payload,
 )
-from app.services.settings_registry import SYNC_KEY, Home, home_for
+from app.services.settings_registry import (
+    SYNC_KEY,
+    SYNC_PREF_FIELDS,
+    Home,
+    home_for,
+)
 from app.services.settings_store import (
     get_global_setting,
     put_global_setting,
@@ -62,8 +91,16 @@ CLEARED_SYNC_RESOURCES: dict[str, tuple[str, ...]] = {
 
 router = APIRouter()
 
+#: The gate on every route in this module that answers for the deployment
+#: rather than for one account (ticket 18). Declared once and spread across the
+#: decorators, rather than mounted on the router in `data/__init__.py`, because
+#: two routes here are deliberately *not* Admin-only and a router-level
+#: dependency cannot be taken back off one route.
+ADMIN_ONLY_CALLABLE = require_permission(Permission.DATA_ADMIN)
+ADMIN_ONLY = [Depends(ADMIN_ONLY_CALLABLE)]
 
-@router.get("/stats")
+
+@router.get("/stats", dependencies=ADMIN_ONLY)
 def db_stats(
     session: SessionDep,
     _current_user: CurrentUser,
@@ -73,7 +110,7 @@ def db_stats(
     )
 
 
-@router.get("/table-sizes")
+@router.get("/table-sizes", dependencies=ADMIN_ONLY)
 def table_sizes(
     session: SessionDep,
     _current_user: CurrentUser,
@@ -84,7 +121,7 @@ def table_sizes(
     ]
 
 
-@router.delete("/tables/{name}")
+@router.delete("/tables/{name}", dependencies=ADMIN_ONLY)
 def clear_table_route(
     name: str,
     session: SessionDep,
@@ -103,7 +140,7 @@ def clear_table_route(
     return ClearTableResponse(deleted=deleted)
 
 
-@router.get("/settings/network")
+@router.get("/settings/network", dependencies=ADMIN_ONLY)
 def get_network_settings(
     session: SessionDep,
     _current_user: CurrentUser,
@@ -116,7 +153,7 @@ def get_network_settings(
     return AppSettingResponse.model_validate({"key": "network", "value": value})
 
 
-@router.put("/settings/network")
+@router.put("/settings/network", dependencies=ADMIN_ONLY)
 def put_network_settings(
     body: dict[str, Any],
     session: SessionDep,
@@ -172,23 +209,60 @@ def put_setting(
     key: str,
     body: dict[str, Any],
     session: SessionDep,
-    _current_user: CurrentUser,
+    current_user: CurrentUser,
 ) -> AppSettingResponse:
+    """Write one settings section, refusing deployment policy to a non-Admin.
+
+    The route stays open because the *key* decides, not the path.
+    `retention` sets `postRetentionDays`, which deletes every account's Posts on
+    the next sweep — table clearing on a timer, and the ticket's own goal is
+    that a new account cannot reach table clearing. `jobs` turns the scheduler
+    off for everybody. Those are `DATA_ADMIN`, and so is every other global key.
+
+    `sync` cannot be gated the same way, because it is a facade: one body
+    carries deployment policy, scheduler runtime, and the caller's own
+    preferences, and the Pause button writes a runtime field through it.
+    Refusing the whole request would take a person's own start-time preference
+    away from them; so for a caller without the permission the body is narrowed
+    to the fields the registry already declares personal, and the rest is
+    dropped rather than written. Dropping, not refusing, because the frontend
+    sends a whole section at once and a non-Admin saving their preferences
+    should not be told the save failed when the half that is theirs succeeded.
+    """
     if key == SYNC_KEY:
         # The three-row carve is invisible from here: the body arrives in the
         # old blob shape and `save_sync_settings` routes each field to the table
         # that owns it, so the response is still the whole reassembled blob.
-        save_sync_settings(session, body, user_id=_current_user.id)
-        value = load_sync_settings(session, user_id=_current_user.id)
+        save_sync_settings(
+            session,
+            _writable_sync_fields(body, session, current_user),
+            user_id=current_user.id,
+        )
+        value = load_sync_settings(session, user_id=current_user.id)
     elif _home_of(key) is Home.USER:
-        value = put_user_setting(session, key, body, user_id=_current_user.id)
+        value = put_user_setting(session, key, body, user_id=current_user.id)
     else:
-        value = put_global_setting(session, key, body, user_id=_current_user.id)
+        ADMIN_ONLY_CALLABLE(session, current_user)
+        value = put_global_setting(session, key, body, user_id=current_user.id)
     touch_sync(session, "settings")
     return AppSettingResponse(key=key, value=value)
 
 
-@router.post("/import")
+def _writable_sync_fields(
+    body: dict[str, Any], session: Session, current_user: User
+) -> dict[str, Any]:
+    """`body` as-is for an Admin; only the personal fields for anyone else.
+
+    `SYNC_PREF_FIELDS` is the registry's own answer to which half of the blob
+    belongs to the person rather than the deployment, so this invents no new
+    knowledge — the day a field moves between halves, it moves here with it.
+    """
+    if rbac.has_permission(session, current_user.id, Permission.DATA_ADMIN):
+        return body
+    return {k: v for k, v in body.items() if k in SYNC_PREF_FIELDS}
+
+
+@router.post("/import", dependencies=ADMIN_ONLY)
 def import_data(
     body: dict[str, Any],
     session: SessionDep,
@@ -199,7 +273,7 @@ def import_data(
     )
 
 
-@router.get("/export")
+@router.get("/export", dependencies=ADMIN_ONLY)
 def export_data(
     session: SessionDep,
     _current_user: CurrentUser,

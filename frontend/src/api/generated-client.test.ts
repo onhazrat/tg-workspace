@@ -149,9 +149,33 @@ describe("auth failures are handled at the transport", () => {
     expect(localStorage.getItem("access_token")).toBeNull()
   })
 
-  it("clears a stale session on 403", async () => {
+  /**
+   * Changed by ticket 18, deliberately.
+   *
+   * This used to assert that *any* 403 cleared the session, which was
+   * survivable only while an ordinary account never saw one — the
+   * administrative routes it could reach were open to everybody. Now that they
+   * are gated, `SettingsContext` mounts `useNetworkSettings` for every
+   * signed-in person, so a plain account calls `GET /data/settings/network` on
+   * boot, is correctly refused, and would be signed out for it on every
+   * attempt. A permission error is not an authentication error.
+   */
+  it("does NOT clear the session on an ordinary permission refusal", async () => {
     localStorage.setItem("access_token", "tok-123")
-    client.setConfig({ fetch: respondWith(403, { detail: "Forbidden" }) })
+    client.setConfig({
+      fetch: respondWith(403, {
+        detail: "The user doesn't have enough privileges",
+      }),
+    })
+
+    await usersReadUserMe().catch(() => {})
+
+    expect(localStorage.getItem("access_token")).toBe("tok-123")
+  })
+
+  it("clears a stale session on a 403 that says the account is off", async () => {
+    localStorage.setItem("access_token", "tok-123")
+    client.setConfig({ fetch: respondWith(403, { detail: "Inactive user" }) })
 
     await usersReadUserMe().catch(() => {})
 

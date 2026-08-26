@@ -39,10 +39,40 @@ export function headers(json = true): HeadersInit {
   return h
 }
 
+/**
+ * The detail `get_current_user` gives an account an Admin has switched off.
+ * A 403 that genuinely means the session is finished, as opposed to the many
+ * that mean "not this route".
+ */
+export const INACTIVE_USER_DETAIL = "Inactive user"
+
+/**
+ * Whether the server is saying this *session* is over, rather than refusing
+ * one request.
+ *
+ * **A bare 403 is not that, and treating it as one signs people out.** This
+ * returned true for every 403 until ticket 18, which was survivable only
+ * because a 403 was something an ordinary account never saw: the admin routes
+ * it could have hit were open to everybody. Now that they are not, a plain
+ * account loading the app calls `GET /data/settings/network`, is correctly
+ * refused, and — under the old rule — had its token dropped and was hard
+ * navigated to `/login`, on every attempt, forever. A permission error is not
+ * an authentication error, and the difference is not cosmetic: 401 means "I do
+ * not know who you are", 403 means "I do, and no".
+ *
+ * The two exceptions stay, because both really do mean the session cannot be
+ * used again: an account switched off mid-session, and a token whose subject
+ * has been deleted.
+ *
+ * This also stops signing out an account that is merely awaiting approval,
+ * which is what ADR-011 always said should happen — every data router refuses
+ * those with `PENDING_APPROVAL_DETAIL` precisely so the app can show the
+ * pending page instead of a permission error.
+ */
 export function isAuthFailure(status: number, detail: string): boolean {
   return (
     status === 401 ||
-    status === 403 ||
+    (status === 403 && detail === INACTIVE_USER_DETAIL) ||
     (status === 404 && detail === "User not found")
   )
 }
