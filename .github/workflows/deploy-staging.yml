@@ -4,6 +4,14 @@ on:
   push:
     branches:
       - main
+  # Deploying the current `main` on demand, without inventing a commit to push.
+  # Added 2026-08-26, when a critical Actions incident (throttled inbound work,
+  # 15:11Z onward) stopped creating runs for pushes to `main` while leaving
+  # dispatch working: two consecutive pushes produced no run at all, so the
+  # merge that was already on `main` could not reach staging and an empty
+  # "re-trigger" commit did not help either. A deploy reachable only by pushing
+  # has no recovery path when the push trigger is the broken part.
+  workflow_dispatch:
 
 permissions:
   contents: read
