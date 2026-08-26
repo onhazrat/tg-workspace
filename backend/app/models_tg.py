@@ -426,12 +426,32 @@ class DiscoverIgnoredChannel(SQLModel, table=True):
     Deliberately reversible and visible: dismissals are listed under the
     "Ignored" filter and can be undone. A hidden, unreviewable blocklist would
     be worse than none — a channel rejected once could never be reconsidered.
+
+    ## The owner is half the key (ticket 30)
+
+    `handle` alone was the primary key, so the first account to dismiss a
+    candidate dismissed it for everybody — and `ignore_channels` skips a handle
+    that already has a row, so the second account's dismissal wrote nothing at
+    all. Scoping the read without moving the key makes that *worse* rather than
+    better: the scoped read then reports the handle as not dismissed, so the
+    button silently does nothing for ever.
+
+    `user_id` is therefore part of the primary key and a real cascading foreign
+    key, not the nullable unconstrained stamp it was. A composite primary key
+    cannot hold NULL, so "belongs to nobody" stops being expressible — which is
+    the `operator.py` ambiguity decision 24 dissolves, settled here by the
+    migration rather than deferred to every reader.
     """
 
     __tablename__ = "tg_discover_ignored"
 
     handle: str = Field(primary_key=True)
-    user_id: uuid.UUID | None = Field(default=None, index=True)
+    user_id: uuid.UUID = Field(
+        foreign_key="user.id",
+        primary_key=True,
+        index=True,
+        ondelete="CASCADE",
+    )
     reason: str | None = None
     created_at: datetime = Field(default_factory=utc_now)
 

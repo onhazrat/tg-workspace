@@ -148,11 +148,16 @@ def report_to_camel(
 ) -> dict[str, Any]:
     """Full projection, including every candidate.
 
-    `viewer_id` picks whose follows resolve `isFollowed` — **the account
-    asking, never `report.user_id`**. Ticket 16 had to pass the owner from
-    `get_report` and `update_report_flags` as a placeholder, with a comment
-    saying so, because neither had an authenticated viewer in hand. Both take
-    one now, so the placeholder is gone.
+    `viewer_id` picks whose follows resolve `isFollowed` **and whose dismissals
+    resolve `isIgnored`** — the account asking, never `report.user_id`. Ticket
+    16 had to pass the owner from `get_report` and `update_report_flags` as a
+    placeholder, with a comment saying so, because neither had an authenticated
+    viewer in hand. Both take one now, so the placeholder is gone.
+
+    `isIgnored` joined `isFollowed` here in ticket 30. Until then dismissals
+    were keyed by handle alone, so this flag reported *everyone's* judgement —
+    a wrong answer for the caller and a fact about another account's opinion,
+    the same leak ticket 16 closed for `isFollowed`.
 
     The two values coincide the moment a report is only readable by its owner,
     which is what this ticket makes true. That is exactly why the argument
@@ -161,7 +166,7 @@ def report_to_camel(
     written `report.user_id` would answer the wrong one without changing.
     """
     followed = followed_names(session, user_id=viewer_id)
-    ignored = ignored_handles(session)
+    ignored = ignored_handles(session, user_id=viewer_id)
     stored = report.candidates or []
     handles = {_candidate_handle(c) for c in stored if isinstance(c, dict)} - {""}
     probes = probe_map(session, handles)

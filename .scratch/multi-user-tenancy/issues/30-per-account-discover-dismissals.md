@@ -6,12 +6,12 @@
 
 **Blocks:** 21
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] The table is keyed by `(handle, user_id)`, with a cascading foreign key and existing rows backfilled to an owner
-- [ ] Dismissing, listing, and undoing all read and write the caller's own rows
-- [ ] Two accounts can hold opposite verdicts on one handle, and neither can see the other's
-- [ ] Both flag states are green
+- [x] The table is keyed by `(handle, user_id)`, with a cascading foreign key and existing rows backfilled to an owner
+- [x] Dismissing, listing, and undoing all read and write the caller's own rows
+- [x] Two accounts can hold opposite verdicts on one handle, and neither can see the other's
+- [x] Both flag states are green
 
 ## Why this is its own ticket
 
@@ -66,3 +66,55 @@ reason not to flip the flag with it still open.
   when there is exactly one account, or whether every account starts clean. The
   spec's list of eighteen per-User tables names "ignored Channels", so clean is
   the default reading, but say so in the ticket comments either way.
+
+## Comments
+
+**Every account starts clean; the existing rows go to the operator.** The ticket
+asked for this to be settled either way. A dismissal is personal from here on —
+the spec's list of per-User tables names "ignored Channels", so it is not a
+deployment-wide default that new accounts inherit. The rows that already exist
+are adopted by the operator rather than dropped, because on the single-operator
+deployment this migrates, the operator is who made them.
+
+**The owner filter is not `scoped_select`, deliberately.** Every other tenancy
+batch is gated on the flag so it stays byte-identical until ticket 21. This one
+cannot be: the owner is half the primary key, so filtering on it answers an
+*identity* question (which row is yours), not a *visibility* one (which rows may
+you see). Gated off, two accounts collide on one row again and the composite key
+is decoration — `ignore_channels` would go back to skipping a handle another
+account had already dismissed. So `discover_ignored.py` filters on `user_id`
+directly and every guard is parametrised over both flag states, which is what
+the fourth checkbox asks for.
+
+Mutation-tested before being trusted. Gating the filter behind the flag fails
+**only** the flag-off variants (5 of them) while every flag-on variant still
+passes — that is precisely the shape a read-only half-fix takes, and the reason
+the ticket refuses it.
+
+**Migration branches verified against real rows**, not just round-tripped: a NULL
+stamp and an id left behind by a deleted account both adopt the operator (the
+orphan is the case that would otherwise abort the FK creation), a row with a live
+owner keeps it, and a database with no account at all drops its rows rather than
+leaving them unkeyable. It completes in one pass — alembic stamps a revision and
+never re-runs it, so nothing is left "for the next deploy".
+
+**Correction to the ticket's own note: the composite key does not break the
+build.** The ticket predicted `session.get(DiscoverIgnoredChannel, handle)`
+would "stop compiling the moment the key is composite", and treated that as the
+property which would find the call site. It is not true — reverting that line
+passes `mypy --strict` and `ty check` and fails only at runtime, as a 500 on
+`DELETE /data/discover/ignored`. The call site was found by reading for it, and
+what holds it is `test_undoing_never_reaches_another_accounts_dismissal`. Caught
+in review; the docstring now points at the test rather than crediting the type
+checker with a check it does not perform.
+
+**The no-owner branch raises instead of deleting.** The first cut dropped every
+row when no account could be resolved, justifying it in prose as unreachable
+with a non-empty table. Nothing checked that, and the branch is more reachable
+than it looked: since ticket 18 moved authorisation onto RBAC roles, nothing
+reads `is_superuser`, so an operator clearing it breaks nothing visible until
+this migration reads it as "no accounts exist" and silently deletes the
+deployment's dismissals on the next `prestart.sh`. It now counts first and
+refuses, naming the fix. The empty-table case — a fresh install migrated before
+its first superuser — still completes silently, which is the case the prose
+actually described.

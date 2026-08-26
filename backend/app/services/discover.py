@@ -287,7 +287,7 @@ def compute_discover_candidates(
                         (post.forwarded_from or handle).lstrip("@").strip()
                     )
 
-    ignored = ignored_handles(session)
+    ignored = ignored_handles(session, user_id=user_id)
     candidates = [
         _to_candidate(handle, entry, followed, ignored)
         for handle, entry in by_source.items()

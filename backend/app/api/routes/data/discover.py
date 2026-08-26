@@ -132,7 +132,10 @@ def list_discover_ignored(
     _current_user: CurrentUser,
 ) -> list[IgnoredChannelResponse]:
     """Dismissed candidates, newest first."""
-    return [IgnoredChannelResponse.model_validate(row) for row in list_ignored(session)]
+    return [
+        IgnoredChannelResponse.model_validate(row)
+        for row in list_ignored(session, user_id=_current_user.id)
+    ]
 
 
 @router.post("/discover/ignored")
@@ -164,7 +167,7 @@ def remove_discover_ignored(
     call, matching the POST.
     """
     return DiscoverIgnoredRemovedResponse(
-        removed=unignore_channels(session, body.handles)
+        removed=unignore_channels(session, body.handles, user_id=_current_user.id)
     )
 
 
