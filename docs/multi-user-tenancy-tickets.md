@@ -365,3 +365,35 @@ a second account's dismissal writes nothing and a scoped read tells them it is n
 - [ ] Dismissing, listing, and undoing all read and write the caller's own rows
 - [ ] Two accounts can hold opposite verdicts on one handle, and neither can see the other's
 - [ ] Both flag states are green
+
+## 31. Scope the import path
+**Blocked by:** 17
+
+**What to build:** `POST /data/import` stops writing rows that belong to other accounts.
+
+Found by review during ticket 17, whose own argument is that a scoped read over a writable row
+is half a fix. That ticket closed it for the four artifact families' own endpoints and not for
+import, which reaches the same tables by a different door — including bot credentials, which
+carry tokens.
+
+- [ ] Importing an id another account owns does not overwrite that row
+- [ ] The decision about whether an Admin may import *for* another account is written down, not implied
+- [ ] Bot credentials and chat destinations are covered, not just artifacts
+- [ ] Both flag states are green
+
+## 32. Scope credentials and chat destinations
+**Blocked by:** 3 — **blocks 21**
+
+**What to build:** Your bot credentials and chat destinations are yours. The two list endpoints
+stop returning every account's rows.
+
+Found by review during ticket 31, which closed the writes on these two families and left the
+reads open. The last unscoped read family. `tenancy.py` has classified both as `USER_OWNED`
+since ticket 03; only the call sites never adopted it, so one family answers two different
+questions about whose rows these are depending on the verb. The flip does not fix it — these
+reads never call `scoped_select`, so enforcement changes nothing here.
+
+- [ ] `list_bot_credentials` and `list_chat_destinations` read through `scoped_select`
+- [ ] Both take a `user_id` with no default, so a caller cannot omit it
+- [ ] A second account's credentials and destinations are absent from both lists
+- [ ] Both flag states are green
