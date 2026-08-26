@@ -41,6 +41,7 @@ from app.services.logs import (
     DEFAULT_LOG_PAGE_SIZE,
     LOG_MODELS,
     MAX_LOG_PAGE_SIZE,
+    SHARED_LOG_TYPES,
     clear_logs,
     create_logs,
     delete_log_by_id,
@@ -217,6 +218,13 @@ def purge_logs(
     button on each of the five Logs tabs calls, for everybody — gating the whole
     route turned that into an error toast for any non-Admin, so the gate is per
     branch. The single-row branch answers to the owner instead.
+
+    `SHARED_LOG_TYPES` is the exception, and it is derived from the tenancy
+    classification rather than listed here: for a type nobody owns a row of,
+    there is no owner for `get_log` to answer to, so the single-row delete is an
+    administrative act like the two sweeps. That covers sync logs from ticket 19
+    and network logs, which have been deletable one row at a time by any
+    authenticated account since the Admin gate went on their *reads* alone.
     """
     if older_than_days is not None and older_than_days > 0:
         ADMIN_ONLY(session, current_user)
@@ -240,6 +248,17 @@ def purge_logs(
         # alternative is removing someone else's row and then reporting that it
         # could not be found. `get_log` raises the 404 that a foreign or absent
         # row both get, with the detail that family already uses.
+        #
+        # **Except for the shared types, which are an administrative act.**
+        # Ticket 18 left this branch ungated because "one row of your own is not
+        # an administrative act". Ticket 19 makes a sync log channel telemetry
+        # visible to every Follower, and that sentence then points the other
+        # way: the row is nobody's own, so a Follower deleting it destroys the
+        # record for everyone else watching the Channel. That is what ticket
+        # 20's own checkbox forbids, and the same argument ticket 05 made for
+        # unfollowing a Channel rather than deleting it.
+        if log_type in SHARED_LOG_TYPES:
+            ADMIN_ONLY(session, current_user)
         get_log(session, log_type, log_id, user_id=current_user.id)
         if not delete_log_by_id(session, log_type, log_id):
             raise HTTPException(status_code=404, detail="Log entry not found")

@@ -104,9 +104,13 @@ class Scope(StrEnum):
     CORPUS = "corpus"
 
 
-#: Every table the seam is responsible for: 19 user-owned, and the 7 shared ones
-#: the plan's decision 1 names — 5 of which a follow can reach and 2 of which it
-#: cannot. Note `Scope.CORPUS` is the narrower of those two senses.
+#: Every table the seam is responsible for: 27 in all. 18 user-owned, and the 9
+#: shared ones the plan's decision 1 names — 7 of which a follow can reach and 2
+#: of which it cannot. Note `Scope.CORPUS` is the narrower of those two senses.
+#:
+#: Sync logs and their payload rows joined the follow-scoped group in ticket 19.
+#: They are the only members that are not corpus a scrape produced; they are the
+#: record *of* the scrape, which is a fact about the Channel just the same.
 SCOPES: dict[type[SQLModel], Scope] = {
     # --- User-owned: artifacts, credentials, destinations, settings, setting
     # groups, sync jobs, and logs. Everything a User produces rather than reads.
@@ -126,8 +130,6 @@ SCOPES: dict[type[SQLModel], Scope] = {
     ChatDestination: Scope.USER_OWNED,
     UserSetting: Scope.USER_OWNED,
     PublishLog: Scope.USER_OWNED,
-    SyncLog: Scope.USER_OWNED,
-    SyncLogPayload: Scope.USER_OWNED,
     LLMLog: Scope.USER_OWNED,
     EmbeddingLog: Scope.USER_OWNED,
     NetworkLog: Scope.USER_OWNED,
@@ -143,6 +145,15 @@ SCOPES: dict[type[SQLModel], Scope] = {
     PostSyncState: Scope.FOLLOW_SCOPED,
     PostEmbedding: Scope.FOLLOW_SCOPED,
     PostTranslation: Scope.FOLLOW_SCOPED,
+    # A sync log answers "did this Channel deliver Posts, and if not why not",
+    # which is a fact about the Channel and not about whoever triggered the
+    # scrape (ticket 19, plan decision 22). Owned by nobody: a nullable owner
+    # meaning "the scheduler wrote this" is the `operator.py` ambiguity, and it
+    # fails open on a forgotten stamp. The payload row takes its parent's scope
+    # the way `SummaryPayload` does — a child claiming an owner its parent does
+    # not have would make the bodies searchable and the log unreadable.
+    SyncLog: Scope.FOLLOW_SCOPED,
+    SyncLogPayload: Scope.FOLLOW_SCOPED,
     # --- Corpus: shared, and no follow can reach them.
     DiscoverHandleProbe: Scope.CORPUS,
     SyncMeta: Scope.CORPUS,
@@ -163,6 +174,12 @@ FOLLOW_KEYS: dict[type[SQLModel], str] = {
     PostSyncState: "channel_name",
     PostEmbedding: "channel_name",
     PostTranslation: "channel_name",
+    SyncLog: "channel_name",
+    # Denormalised onto the payload row by ticket 19's migration, for the same
+    # reason `timestamp` is: reaching the parent's name through a join would put
+    # `tg_sync_logs` (191k rows on staging) inside the predicate of every read
+    # of the table the payload split exists to keep cheap.
+    SyncLogPayload: "channel_name",
 }
 
 #: Tables the seam is deliberately not responsible for, and why. An exemption

@@ -229,7 +229,24 @@ export const LogsView: React.FC = () => {
   const handleDelete = (tab: LogTab) => async (id: string) => {
     // No reload: the mutation invalidates, and these queries are enabled, so
     // react-query refetches on its own.
-    await deleteMutations[tab].mutateAsync({ logId: id })
+    //
+    // The catch is not defensive padding. `useDeleteLogsMutation` says these
+    // "**do** throw: the operator asked for the deletion, so a failure has to
+    // reach them" — and until ticket 19 nothing here caught, so the failure
+    // reached a console as an unhandled rejection and the row simply stayed.
+    // Sync and network logs are telemetry nobody owns, so their single-row
+    // delete now answers 403 to a non-Admin, which is the first time this path
+    // refuses anything an operator can trigger from the UI.
+    try {
+      await deleteMutations[tab].mutateAsync({ logId: id })
+    } catch (e: unknown) {
+      toast.error(
+        `Could not delete that ${LOG_TAB_META[tab].noun} log: ${
+          e instanceof Error ? e.message : String(e)
+        }`,
+      )
+      return
+    }
     toast.success(`${LOG_TAB_META[tab].label} log entry deleted.`)
   }
 
@@ -240,7 +257,19 @@ export const LogsView: React.FC = () => {
   const confirmClearLogs = async () => {
     const { noun } = LOG_TAB_META[activeLogTab]
     setClearLogsConfirmOpen(false)
-    await deleteMutations[activeLogTab].mutateAsync({ clearAll: true })
+    // Same reasoning as `handleDelete`. This branch has demanded `DATA_ADMIN`
+    // since ticket 18, so it has been able to refuse a non-Admin for longer,
+    // and silently.
+    try {
+      await deleteMutations[activeLogTab].mutateAsync({ clearAll: true })
+    } catch (e: unknown) {
+      toast.error(
+        `Could not clear the ${noun} logs: ${
+          e instanceof Error ? e.message : String(e)
+        }`,
+      )
+      return
+    }
     toast.success(`All ${noun} logs cleared.`)
   }
 

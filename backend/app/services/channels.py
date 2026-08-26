@@ -38,6 +38,7 @@ from app.services.follows import (
     remove_follow,
     sync_follow_settings,
 )
+from app.services.logs import collect_channel_sync_logs
 from app.services.post_sync_state import clear_channel_sync_state
 from app.services.serialization import channel_to_camel, normalize_body
 from app.services.sync_meta import touch_sync
@@ -496,11 +497,19 @@ def collect_unfollowed_channel(session: Session, channel_id: str) -> int:
     holds the corpus.
 
     The dependent rows go too. None of `tg_posts`, `tg_post_embeddings`,
-    `tg_post_translations` or `tg_post_sync_state` has a foreign key to
-    `tg_channels` — they are keyed by `channel_name` — so nothing cascades, and
-    a collection that removed only the Channel would leave four tables pointing
-    at a handle nothing can reach, reclaimable only by the post retention
-    window, which an operator is free to set to 0.
+    `tg_post_translations`, `tg_post_sync_state`, `tg_sync_logs` or
+    `tg_sync_log_payloads` has a foreign key to `tg_channels` — they are keyed
+    by `channel_name` — so nothing cascades, and a collection that removed only
+    the Channel would leave six tables pointing at a handle nothing can reach,
+    reclaimable only by a retention window an operator is free to set to 0.
+
+    The two sync-log tables joined that list in **ticket 19**, when they became
+    channel telemetry keyed by name rather than rows owned by an account. They
+    are the heaviest tables in the schema, and stranding them is worse than
+    stranding posts: once the `tg_channels` row is gone there is no Follow for
+    the seam's EXISTS to find, so the rows are invisible to every account *and*
+    still on disk. Visible-nowhere and reclaimed-never is the state a collection
+    exists to prevent.
 
     Bulk DELETE rather than loading every post to delete it one by one: a busy
     channel holds hundreds of thousands of rows, and materialising them to
@@ -537,6 +546,11 @@ def collect_unfollowed_channel(session: Session, channel_id: str) -> int:
             )
         )
         clear_channel_sync_state(session, ch.name)
+        # Through the aggregate that owns those two tables, the way the sync
+        # state above goes through `post_sync_state`. This module owns
+        # `tg_channels`; reaching into `tg_sync_logs` from here would put a
+        # second writer on it.
+        collect_channel_sync_logs(session, ch.name)
         result = session.execute(
             sa_delete(Post).where(col(Post.channel_name) == ch.name)
         )

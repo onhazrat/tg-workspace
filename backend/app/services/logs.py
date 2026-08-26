@@ -13,6 +13,7 @@ from sqlalchemy import select as sa_select
 from sqlmodel import Session, SQLModel, col, or_, select
 
 from app.models_tg import (
+    Channel,
     EmbeddingLog,
     LLMLog,
     NetworkLog,
@@ -27,7 +28,14 @@ from app.services.serialization import (
     normalize_body,
     sync_log_to_camel,
 )
-from app.services.tenancy import assert_owner, scoped_select, unscoped_select
+from app.services.tenancy import (
+    Scope,
+    assert_owner,
+    scope_of,
+    scoped_select,
+    tenancy_enforced,
+    unscoped_select,
+)
 
 # Log list endpoints are viewers, not exports: cap what one request can load.
 DEFAULT_LOG_PAGE_SIZE = 500
@@ -58,6 +66,33 @@ LOG_MODELS: dict[str, tuple[type[SQLModel], str]] = {
 #: gate and this module's scoping cannot come to disagree about which types
 #: those are: a family readable by anyone *and* unscoped is the worst of both.
 ADMIN_ONLY_LOG_TYPES = frozenset({"network"})
+
+
+def _shared_log_types() -> frozenset[str]:
+    """Log types no single account owns a row of. Derived, never listed.
+
+    These are exactly the types `get_log` does **not** owner-check: the
+    Admin-only ones, whose rows record what the deployment's proxies did, and
+    the follow-scoped ones, whose rows are a fact about a Channel. For both, a
+    single-row delete takes something away from somebody other than the caller,
+    so `routes/data/logs.py` gates that branch on `Permission.DATA_ADMIN`.
+
+    Computed from `tenancy.SCOPES` rather than written out, because a
+    hand-maintained second list is the drift this programme keeps finding: a
+    type reclassified in the seam and forgotten here would go on being deletable
+    by anyone who can name its id, and every read guard would still pass.
+    """
+    return frozenset(
+        log_type
+        for log_type, (model, _) in LOG_MODELS.items()
+        if log_type in ADMIN_ONLY_LOG_TYPES or scope_of(model) is not Scope.USER_OWNED
+    )
+
+
+#: The answer, resolved once at import. `tenancy` is a pure transform with no
+#: database access, so classifying the five types costs nothing here.
+SHARED_LOG_TYPES = _shared_log_types()
+
 
 #: Why the reads below cross accounts for those types, in the one place
 #: `unscoped_select` exists to record it.
@@ -98,20 +133,39 @@ def upsert_publish_log(
 
 
 def upsert_sync_log(
-    session: Session, item: dict[str, Any], user_id: uuid.UUID | None = None
+    session: Session,
+    item: dict[str, Any],
+    user_id: uuid.UUID | None = None,  # noqa: ARG001 — ticket 19; see the docstring
 ) -> None:
     """Write a sync log, routing its bulk bodies to `SyncLogPayload`.
 
     The caller still passes one flat dict — the split is an implementation
     detail of how the rows are stored, not of the API.
+
+    **`user_id` is accepted and deliberately not written** (ticket 19, plan
+    decision 22). A sync log is channel telemetry: it answers "did this Channel
+    deliver Posts, and if not why not", which is a fact about the Channel rather
+    than about whoever triggered the scrape, so `tenancy.SCOPES` makes it
+    follow-scoped and nothing reads an owner off it. Keeping a nullable owner
+    that means "the scheduler wrote this" is the `operator.py` ambiguity, and it
+    fails open on a forgotten stamp.
+
+    The parameter stays because `data_import_export._LOG_IMPORTERS` dispatches
+    all five log types through one uniform `(session, item, user_id)` signature,
+    and `create_logs` below calls the five the same way. Ticket 22 drops the
+    column and the parameter together. Until then nothing at a call site shows
+    that it is ignored, which is why
+    `tests/services/test_sync_log_channel_telemetry.py` hands it a real account
+    and requires the stored row to carry `None`.
     """
     normalized = normalize_body(item)
     log_id = normalized.get("id") or str(uuid.uuid4())
     existing = session.get(SyncLog, log_id)
     timestamp = normalized.get("timestamp", 0)
+    channel_name = normalized.get("channel_name", "")
     fields = {
-        "user_id": user_id,
-        "channel_name": normalized.get("channel_name", ""),
+        "user_id": None,
+        "channel_name": channel_name,
         "status": normalized.get("status", "success"),
         "posts_count": normalized.get("posts_count", 0),
         "new_latest_id": normalized.get("new_latest_id"),
@@ -130,7 +184,7 @@ def upsert_sync_log(
     _upsert_sync_log_payload(
         session,
         log_id,
-        user_id=user_id,
+        channel_name=channel_name,
         timestamp=timestamp,
         full_request=normalized.get("full_request"),
         full_response=normalized.get("full_response"),
@@ -141,7 +195,7 @@ def _upsert_sync_log_payload(
     session: Session,
     log_id: str,
     *,
-    user_id: uuid.UUID | None,
+    channel_name: str,
     timestamp: int,
     full_request: Any,
     full_response: Any,
@@ -151,6 +205,13 @@ def _upsert_sync_log_payload(
     A log with no bodies gets no payload row at all, and re-importing one
     without bodies clears any row left over from a previous import, so the
     payload table never accumulates rows that carry nothing.
+
+    `channel_name` is denormalised from the parent, the way `timestamp` already
+    is, because ticket 19 scopes this row by "do you follow this channel" and
+    the seam correlates its EXISTS on a real column. It travels with the write
+    rather than being read back off the log, so a payload row can never name a
+    different channel than the log it belongs to. No owner is written, for the
+    reason `upsert_sync_log` gives.
     """
     existing = session.get(SyncLogPayload, log_id)
     if full_request is None and full_response is None:
@@ -159,7 +220,8 @@ def _upsert_sync_log_payload(
         return
 
     if existing:
-        existing.user_id = user_id
+        existing.user_id = None
+        existing.channel_name = channel_name
         existing.timestamp = timestamp
         existing.full_request = full_request
         existing.full_response = full_response
@@ -170,7 +232,8 @@ def _upsert_sync_log_payload(
     session.add(
         SyncLogPayload(
             sync_log_id=log_id,
-            user_id=user_id,
+            user_id=None,
+            channel_name=channel_name,
             timestamp=timestamp,
             full_request=full_request,
             full_response=full_response,
@@ -275,6 +338,42 @@ def delete_log_by_id(session: Session, log_type: str, log_id: str) -> bool:
             session.delete(payload)
     session.commit()
     return True
+
+
+def collect_channel_sync_logs(session: Session, channel_name: str) -> int:
+    """Delete every sync log for one Channel, with its payload rows.
+
+    Called by `channels.collect_unfollowed_channel` when retention reclaims a
+    Channel nobody follows. Ticket 19 made these two tables channel telemetry
+    keyed by `channel_name`, which puts them in the same position as
+    `tg_posts`: no foreign key to `tg_channels`, so nothing cascades.
+
+    Stranding them is worse than stranding posts. Once the `tg_channels` row is
+    gone there is no Follow for the seam's EXISTS to reach, so the rows are
+    invisible to every account *and* still on disk — and they are the heaviest
+    tables in the schema. `logRetentionDays` is the only other thing that would
+    ever take them, and `run_retention_cleanup` skips log sweeps entirely when
+    that window is 0.
+
+    Payloads first, so a failure between the two statements leaves an orphaned
+    log rather than an orphaned payload: the log is still reachable by the
+    ordinary retention sweep, and a payload whose log is gone is not.
+
+    Bulk DELETE, never load-then-delete, for the reason the caller gives: these
+    rows carry request and response bodies, and materialising them to delete
+    them is what OOM-killed the worker on staging.
+
+    Does **not** commit; the caller owns the transaction.
+    """
+    session.execute(
+        sa_delete(SyncLogPayload).where(
+            col(SyncLogPayload.channel_name) == channel_name
+        )
+    )
+    result = session.execute(
+        sa_delete(SyncLog).where(col(SyncLog.channel_name) == channel_name)
+    )
+    return cast(Any, result).rowcount or 0
 
 
 def clear_logs(session: Session, log_type: str) -> int:
@@ -544,12 +643,29 @@ def get_log(
     row answers**, not 403. 403 would confirm the row exists, and the whole
     reason `assert_owner` demands the string is that a distinguishable body
     moves that oracle from the status line into the payload.
+
+    A follow-scoped type takes the other branch, and there the two answers are
+    the *same code path* rather than two branches that have to be remembered to
+    answer alike: the row is fetched through `scoped_select`, so "not there" and
+    "not yours to see" are both an empty result. Ticket 19 makes sync logs the
+    only such type today.
     """
     model, _ = LOG_MODELS[log_type]
-    row = session.get(model, log_id)
+    follow_scoped = scope_of(model) is Scope.FOLLOW_SCOPED
+    row = (
+        session.exec(
+            scoped_select(
+                select(model).where(col(cast(Any, model).id) == log_id),
+                model,
+                user_id,
+            )
+        ).first()
+        if follow_scoped
+        else session.get(model, log_id)
+    )
     if row is None:
         raise HTTPException(status_code=404, detail=f"{log_type} log not found")
-    if log_type not in ADMIN_ONLY_LOG_TYPES:
+    if not follow_scoped and log_type not in ADMIN_ONLY_LOG_TYPES:
         assert_owner(
             getattr(row, "user_id", None),
             user_id,
@@ -560,6 +676,95 @@ def get_log(
             cast(SyncLog, row), session.get(SyncLogPayload, log_id)
         )
     return {"id": log_id, **model_to_camel(row)}
+
+
+def _visible_channel_names_exact(session: Session, *, user_id: uuid.UUID) -> set[str]:
+    """The Channel names `user_id` may see, compared the way the seam compares them.
+
+    **Not `follows.visible_channel_names`, and the difference is load-bearing.**
+    That one lowercases, because all three of its callers compare against a
+    handle scraped out of a post and `discover.normalize_handle` has already
+    lowercased that. This one feeds a write whose row is later read back through
+    `scoped_select`, which emits `tg_channels.name = tg_sync_logs.channel_name`,
+    an exact match in PostgreSQL.
+
+    Mixing the two admits a row that can never be read: an account following
+    `NewsHandle` would pass a case-insensitive write check for
+    `"channelName": "newshandle"`, and the resulting log would then be invisible
+    to every account including its author, because the EXISTS compares the
+    stored spelling to the Channel's. A write guard that is looser than the read
+    scope does not merely fail to protect, it manufactures unreachable rows.
+    """
+    return {
+        str(name)
+        for name in session.exec(
+            scoped_select(select(Channel.name), Channel, user_id)
+        ).all()
+    }
+
+
+def _assert_may_write_channel_telemetry(
+    session: Session,
+    body: list[dict[str, Any]],
+    *,
+    log_type: str,
+    user_id: uuid.UUID,
+) -> None:
+    """Refuse telemetry for a Channel the caller does not Follow.
+
+    The follow-scoped replacement for `assert_owner` on the write path. Two
+    Two rules, and the second is the one that is easy to miss.
+
+    **You may only write telemetry for a Channel you Follow.** An account cannot
+    fabricate history for a Channel it does not watch.
+
+    **Through this door the write is create-only.** An id that already names a
+    row is refused outright rather than merged. `upsert_sync_log` overwrites
+    `status`, `error`, `posts_count`, `new_latest_id`, `timestamp` and the
+    bodies, so a merge lets one Follower rewrite telemetry every other Follower
+    reads — and `routes/data/logs.py` gates the single-row *delete* on
+    `DATA_ADMIN` precisely because destroying that record is not one Follower's
+    to do. An overwrite destroys the same record and would have been left open;
+    checking that the caller can see the row it is about to flatten is not a
+    check that it may flatten it. Appending is not administrative, rewriting is,
+    and the id is the part being guessed either way.
+
+    The internal writers are unaffected, which is what makes create-only cheap:
+    `sync_orchestrator` mints a fresh uuid per attempt and `data_import_export`
+    calls `upsert_sync_log` directly. This function is only the API's door, and
+    `saveSyncLog` in the frontend is exported and called by nothing.
+
+    A no-op while `tenancy_enforced()` says so, which is the promise every batch
+    of this programme makes. It matters here rather than being a formality: with
+    the flag off every Channel is visible, so without the early return a log
+    naming a handle that has no `tg_channels` row yet would start being refused
+    today, and so would a re-POST of an existing id. Nothing in the app does
+    either, but the import path accepts arbitrary history and that is not a
+    response this ticket is allowed to change.
+
+    An unnamed Channel is refused under enforcement. `""` is not a handle anyone
+    can Follow, and telemetry that names no Channel is telemetry nobody can be
+    shown — failing closed is the only answer that does not invent a reader.
+
+    404 with the string an absent row gets, for the reason `assert_owner` states:
+    a distinguishable refusal moves the enumeration oracle into the payload. It
+    is also the right answer for the create-only refusal: "there is already a row
+    there" would confirm an id the caller guessed.
+    """
+    if not tenancy_enforced():
+        return
+
+    model, _ = LOG_MODELS[log_type]
+    visible = _visible_channel_names_exact(session, user_id=user_id)
+    detail = f"{log_type} log not found"
+
+    for item in body:
+        normalized = normalize_body(item)
+        log_id = normalized.get("id")
+        if log_id and session.get(model, log_id) is not None:
+            raise HTTPException(status_code=404, detail=detail)
+        if str(normalized.get("channel_name") or "") not in visible:
+            raise HTTPException(status_code=404, detail=detail)
 
 
 def create_logs(
@@ -593,19 +798,30 @@ def create_logs(
     and none of the six frontend flows that record network telemetry ever
     updates one — `writeLog` mints a fresh id every time. One rule over five
     types beats a rule over four plus a paragraph excusing the fifth.
+
+    **A follow-scoped type checks the Follow instead of the owner**, because
+    `assert_owner` on an ownerless row does not merely stop working: `owner_id
+    is None` raises, so leaving it here would refuse every sync log write the
+    moment ticket 21 flips the flag. Ticket 19 keeps ticket 18's fix by
+    restating it in the new vocabulary rather than dropping it.
     """
     model, _ = LOG_MODELS[log_type]
-    for item in body:
-        log_id = normalize_body(item).get("id")
-        if not log_id:
-            continue
-        existing = session.get(model, log_id)
-        if existing is not None:
-            assert_owner(
-                getattr(existing, "user_id", None),
-                user_id,
-                detail=f"{log_type} log not found",
-            )
+    if scope_of(model) is Scope.FOLLOW_SCOPED:
+        _assert_may_write_channel_telemetry(
+            session, body, log_type=log_type, user_id=user_id
+        )
+    else:
+        for item in body:
+            log_id = normalize_body(item).get("id")
+            if not log_id:
+                continue
+            existing = session.get(model, log_id)
+            if existing is not None:
+                assert_owner(
+                    getattr(existing, "user_id", None),
+                    user_id,
+                    detail=f"{log_type} log not found",
+                )
 
     upsert_fn = {
         "publish": upsert_publish_log,

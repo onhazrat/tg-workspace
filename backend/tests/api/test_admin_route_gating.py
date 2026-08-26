@@ -46,12 +46,14 @@ from app.main import app
 from app.models_tg import SyncJob
 from app.services.logs import (
     LOG_MODELS,
+    SHARED_LOG_TYPES,
     upsert_embedding_log,
     upsert_llm_log,
     upsert_network_log,
     upsert_publish_log,
     upsert_sync_log,
 )
+from app.services.tenancy import Scope, scope_of
 from tests.utils.user import create_random_user
 
 PREFIX = settings.API_V1_STR
@@ -259,7 +261,23 @@ def test_a_write_cannot_take_over_another_accounts_row(
         f"a plain user overwrote another account's {log_type} log: "
         f"{response.status_code} {response.text[:200]}"
     )
-    assert _owner_of(log_type, log_id) == victim, "the row changed hands"
+    # The harm is the overwrite, so that is what every type asserts. A 404 that
+    # arrives *after* the row was merged would satisfy the status check alone.
+    assert _row_field(log_type, log_id, "status") != "pwned", (
+        f"the {log_type} row was overwritten before the refusal"
+    )
+
+    if scope_of(LOG_MODELS[log_type][0]) is Scope.USER_OWNED:
+        assert _owner_of(log_type, log_id) == victim, "the row changed hands"
+    else:
+        # Ticket 19: a sync log has no owner to change hands. What has to hold
+        # instead is that the refusal came from the Follow rather than from
+        # nothing at all — asserted against the Channel in
+        # `tests/services/test_sync_log_channel_telemetry.py`, which can build
+        # real follows. Here the row simply has to survive.
+        assert _owner_of(log_type, log_id) is None, (
+            f"{log_type} logs are follow-scoped and must carry no owner"
+        )
 
 
 @pytest.mark.security
@@ -386,6 +404,79 @@ def test_deleting_another_accounts_log_row_is_not_found(
     )
 
 
+@pytest.mark.security
+@pytest.mark.parametrize("log_type", sorted(SHARED_LOG_TYPES))
+def test_deleting_a_row_nobody_owns_is_administrative(
+    client: TestClient, normal_user_token_headers: dict[str, str], log_type: str
+) -> None:
+    """Ticket 19: for a shared type there is no owner for the check to consult.
+
+    A sync log is telemetry every Follower of the Channel can read, so a
+    Follower deleting one destroys the record for all of them — ticket 20's own
+    checkbox says one person can never delete another's evidence. Network logs
+    reach the same gate from the other side: their *reads* went Admin-only in
+    ticket 18 while this branch stayed open, so any authenticated account could
+    delete a proxy log one row at a time without ever being able to read one.
+
+    Parametrised over `SHARED_LOG_TYPES` rather than a literal pair, so a type
+    reclassified in the seam arrives here on its own instead of being remembered.
+    """
+    log_id = f"shared-delete-{log_type}"
+    _seed_log(log_type, log_id, _new_user_id())
+
+    response = client.delete(
+        f"{PREFIX}/data/logs?type={log_type}&logId={log_id}",
+        headers=normal_user_token_headers,
+    )
+
+    assert response.status_code == 403, (
+        f"a plain user deleted a {log_type} log row nobody owns: "
+        f"{response.status_code} {response.text[:200]}"
+    )
+    assert response.json()["detail"] == NO_PRIVILEGES
+    assert _row_exists(log_type, log_id), "the row went before the gate ran"
+
+
+@pytest.mark.security
+@pytest.mark.parametrize("log_type", sorted(SHARED_LOG_TYPES))
+def test_an_admin_still_deletes_a_row_nobody_owns(
+    client: TestClient, superuser_token_headers: dict[str, str], log_type: str
+) -> None:
+    """Refusing everybody would satisfy the test above and be an outage."""
+    log_id = f"shared-delete-admin-{log_type}"
+    _seed_log(log_type, log_id, _new_user_id())
+
+    response = client.delete(
+        f"{PREFIX}/data/logs?type={log_type}&logId={log_id}",
+        headers=superuser_token_headers,
+    )
+
+    assert response.status_code == 200, response.text[:200]
+    assert response.json()["deleted"] == 1
+    assert not _row_exists(log_type, log_id)
+
+
+@pytest.mark.security
+def test_the_owned_types_did_not_join_the_admin_gate(
+    client: TestClient, normal_user_token_headers: dict[str, str]
+) -> None:
+    """The gate is per type, and moving it to the route would pass the pair above.
+
+    `publish` is the canary: it is still one row of your own, and ticket 18's
+    argument that deleting one is not an administrative act is untouched here.
+    """
+    assert "publish" not in SHARED_LOG_TYPES
+
+    me = client.get(f"{PREFIX}/users/me", headers=normal_user_token_headers).json()
+    _seed_log("publish", "still-mine-to-delete", uuid.UUID(me["id"]))
+
+    response = client.delete(
+        f"{PREFIX}/data/logs?type=publish&logId=still-mine-to-delete",
+        headers=normal_user_token_headers,
+    )
+    assert response.status_code == 200, response.text[:200]
+
+
 # ------------------------------------------------- the job nobody owns (23)
 
 
@@ -407,6 +498,12 @@ def _owner_of(log_type: str, log_id: str) -> uuid.UUID | None:
     with Session(engine) as session:
         row = session.get(LOG_MODELS[log_type][0], log_id)
         return None if row is None else row.user_id
+
+
+def _row_field(log_type: str, log_id: str, field: str) -> Any:
+    with Session(engine) as session:
+        row = session.get(LOG_MODELS[log_type][0], log_id)
+        return None if row is None else getattr(row, field, None)
 
 
 def _row_exists(log_type: str, log_id: str) -> bool:

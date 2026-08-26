@@ -42,8 +42,11 @@ from app.models_tg import (
     PostEmbedding,
     PostSyncState,
     PostTranslation,
+    SyncLog,
+    SyncLogPayload,
 )
 from app.services.follows import FOLLOWS_BACKFILL_KEY, ensure_follow
+from app.services.logs import upsert_sync_log
 from tests.utils.setting_groups import add_test_channel
 from tests.utils.user import create_random_user
 
@@ -223,6 +226,60 @@ def test_collection_takes_the_dependent_rows_too() -> None:
             ).all()
             == []
         )
+
+
+def test_collection_takes_the_sync_logs_too() -> None:
+    """Ticket 19 put two more tables in the no-cascade group, found by review.
+
+    `tg_sync_logs` and `tg_sync_log_payloads` are keyed by `channel_name` and
+    have no foreign key to `tg_channels`, exactly like the three above. Leaving
+    them behind is worse than leaving posts: once the Channel row is gone there
+    is no Follow for the seam's EXISTS to reach, so the rows are invisible to
+    every account *and* still on disk, and they are the heaviest tables in the
+    schema. `logRetentionDays` is the only other thing that would take them, and
+    `_retention_off` here is exactly the configuration under which it does not.
+    """
+    with Session(engine) as session:
+        _retention_off(session)
+        add_test_channel(session, "synclog-ch", name="synclog-ch")
+        upsert_sync_log(
+            session,
+            {
+                "id": "synclog-collected",
+                "channelName": "synclog-ch",
+                "timestamp": 1,
+                "fullResponse": {"body": "heavy"},
+            },
+        )
+        session.commit()
+        assert session.get(SyncLogPayload, "synclog-collected") is not None
+        _unfollow_everyone(session, "synclog-ch")
+
+        run_retention_cleanup(session)
+
+    with Session(engine) as session:
+        assert session.get(SyncLog, "synclog-collected") is None
+        assert session.get(SyncLogPayload, "synclog-collected") is None, (
+            "the payload row outlived the log that named it"
+        )
+
+
+def test_collection_spares_sync_logs_of_a_channel_someone_follows() -> None:
+    """Deleting every sync log would satisfy the test above."""
+    with Session(engine) as session:
+        _retention_off(session)
+        channel = add_test_channel(session, "synclog-kept", name="synclog-kept")
+        upsert_sync_log(
+            session,
+            {"id": "synclog-survives", "channelName": "synclog-kept", "timestamp": 1},
+        )
+        session.commit()
+        assert channel is not None
+
+        run_retention_cleanup(session)
+
+    with Session(engine) as session:
+        assert session.get(SyncLog, "synclog-survives") is not None
 
 
 def test_collection_leaves_a_followed_channel_alone_in_the_same_run() -> None:

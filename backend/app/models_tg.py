@@ -728,6 +728,13 @@ class SyncLogPayload(SQLModel, table=True):
     # horizon, and carrying the age here keeps that sweep a single-table bulk
     # DELETE rather than a join across the whole log table.
     timestamp: int = Field(default=0, sa_column=_ms_ts())
+    # Denormalised for the same class of reason as `timestamp`, one ticket
+    # later. Ticket 19 makes a sync log channel telemetry, so this row's
+    # visibility is "do you follow this channel" and `tenancy.FOLLOW_KEYS`
+    # requires a real column to correlate the EXISTS on. Reaching the name
+    # through tg_sync_logs would put a join inside the scope of every read of
+    # the table the split exists to keep cheap.
+    channel_name: str = Field(default="", index=True)
     full_request: dict[str, Any] | list[Any] | None = Field(
         default=None, sa_column=Column(JSON)
     )

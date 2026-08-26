@@ -49,9 +49,16 @@ from app.services.logs import (
 )
 from tests.utils.user import create_random_user
 
-#: The four types an account produces and therefore owns. `network` is the
-#: fifth and is handled on its own, below.
-OWNED_TYPES = ["publish", "sync", "llm", "embedding"]
+#: The three types an account produces and therefore owns.
+#:
+#: `network` is Admin-only and crosses accounts on purpose; it is handled on its
+#: own, below. `sync` left this list in **ticket 19**: a sync log answers "did
+#: this Channel deliver Posts, and if not why not", which is a fact about the
+#: Channel, so it is follow-scoped and carries no owner at all.
+#: `tests/services/test_sync_log_channel_telemetry.py` is its guard, and the two
+#: files together are what keeps "owned" and "shared" from quietly becoming the
+#: same list.
+OWNED_TYPES = ["publish", "llm", "embedding"]
 
 _UPSERTS = {
     "publish": upsert_publish_log,

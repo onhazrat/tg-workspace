@@ -3989,7 +3989,7 @@
       "delete": {
         "tags": ["data"],
         "summary": "Purge Logs",
-        "description": "Three deletes behind one endpoint, and they are not the same act.\n\n`olderThanDays` and `clearAll` sweep across every account, so both demand\n`DATA_ADMIN`. `logId` removes exactly one row, which is what the delete\nbutton on each of the five Logs tabs calls, for everybody \u2014 gating the whole\nroute turned that into an error toast for any non-Admin, so the gate is per\nbranch. The single-row branch answers to the owner instead.",
+        "description": "Three deletes behind one endpoint, and they are not the same act.\n\n`olderThanDays` and `clearAll` sweep across every account, so both demand\n`DATA_ADMIN`. `logId` removes exactly one row, which is what the delete\nbutton on each of the five Logs tabs calls, for everybody \u2014 gating the whole\nroute turned that into an error toast for any non-Admin, so the gate is per\nbranch. The single-row branch answers to the owner instead.\n\n`SHARED_LOG_TYPES` is the exception, and it is derived from the tenancy\nclassification rather than listed here: for a type nobody owns a row of,\nthere is no owner for `get_log` to answer to, so the single-row delete is an\nadministrative act like the two sweeps. That covers sync logs from ticket 19\nand network logs, which have been deletable one row at a time by any\nauthenticated account since the Admin gate went on their *reads* alone.",
         "operationId": "data-purge_logs",
         "security": [{ "OAuth2PasswordBearer": [] }],
         "parameters": [
