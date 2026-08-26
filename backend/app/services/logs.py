@@ -32,6 +32,7 @@ from app.services.serialization import (
 from app.services.tenancy import (
     Scope,
     assert_owner,
+    assert_owner_on_write,
     scope_of,
     scoped_select,
     tenancy_enforced,
@@ -925,7 +926,7 @@ def create_logs(
                 continue
             existing = session.get(model, log_id)
             if existing is not None:
-                assert_owner(
+                assert_owner_on_write(
                     getattr(existing, "user_id", None),
                     user_id,
                     detail=f"{log_type} log not found",

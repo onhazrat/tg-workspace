@@ -70,7 +70,7 @@ def delete_bot_credential(
     session: SessionDep,
     _current_user: CurrentUser,
 ) -> StatusResponse:
-    delete_bot_credential_impl(session, bot_id)
+    delete_bot_credential_impl(session, bot_id, user_id=_current_user.id)
     return StatusResponse(status="deleted")
 
 
@@ -114,5 +114,5 @@ def delete_chat_destination(
     session: SessionDep,
     _current_user: CurrentUser,
 ) -> StatusResponse:
-    delete_chat_destination_impl(session, dest_id)
+    delete_chat_destination_impl(session, dest_id, user_id=_current_user.id)
     return StatusResponse(status="deleted")

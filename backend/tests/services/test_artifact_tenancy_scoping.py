@@ -246,6 +246,58 @@ def test_list_is_unfiltered_while_the_flag_is_off(
 # --------------------------------------------------------------------------
 
 
+@pytest.mark.usefixtures("unenforced")
+@pytest.mark.parametrize("family", FAMILIES, ids=lambda f: f.kind)
+def test_write_and_delete_refuse_a_foreign_row_while_the_flag_is_off(
+    session: Session, user: User, other_user: User, family: Family
+) -> None:
+    """The one thing about these families that the flag does **not** defer.
+
+    Ticket 17 put both the reads and the writes on `assert_owner`, which returns
+    immediately while the flag is off — so `PUT /data/summaries/{id}` naming
+    another account's id still rewrote that row, on the shipping config, through
+    a route that is plain `CurrentUser` with no permission gate. Ticket 31 built
+    `assert_owner_on_write` for the import door and the same argument turned out
+    to cover these four: refusing to *show* a row is a visibility change and
+    that is what the flag exists to defer, while refusing to *overwrite or
+    destroy* one is an identity question, which a flag cannot gate. A single
+    deployment answering "may I overwrite this row" two different ways is the
+    drift the seam exists to prevent.
+
+    Sits directly beside `test_list_is_unfiltered_while_the_flag_is_off` on
+    purpose: the two together are the whole rule. Lists stay unfiltered until
+    ticket 21; writes stopped waiting for it.
+    """
+    row_id = f"t31-{family.kind}-theirs"
+    family.seed(session, row_id, other_user.id)
+
+    with pytest.raises(HTTPException) as written:
+        family.write(session, row_id, user.id)
+    session.rollback()
+
+    with pytest.raises(HTTPException) as removed:
+        family.remove(session, row_id, user.id)
+    session.rollback()
+
+    assert written.value.status_code == 404
+    assert written.value.detail == family.detail
+    assert removed.value.status_code == 404
+    assert removed.value.detail == family.detail
+
+
+@pytest.mark.usefixtures("unenforced")
+@pytest.mark.parametrize("family", FAMILIES, ids=lambda f: f.kind)
+def test_your_own_row_is_still_writable_while_the_flag_is_off(
+    session: Session, user: User, family: Family
+) -> None:
+    """The guard above must fire on a foreign row, not on every row with an id."""
+    row_id = f"t31-{family.kind}-mine"
+    family.seed(session, row_id, user.id)
+
+    family.write(session, row_id, user.id)
+    family.remove(session, row_id, user.id)
+
+
 @pytest.mark.usefixtures("enforced")
 @pytest.mark.parametrize("family", FAMILIES, ids=lambda f: f.kind)
 def test_reading_another_accounts_row_is_not_found(

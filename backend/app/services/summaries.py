@@ -19,7 +19,11 @@ from sqlmodel import Session, col, select
 
 from app.models_tg import Summary, SummaryPayload, utc_now
 from app.services.serialization import to_snake
-from app.services.tenancy import assert_owner, scoped_select
+from app.services.tenancy import (
+    assert_owner,
+    assert_owner_on_write,
+    scoped_select,
+)
 
 #: The 404 this family answers for a row that is not there. `assert_owner`
 #: reuses it for a row that is there and belongs to someone else, so the two
@@ -270,7 +274,7 @@ def upsert_summary(
     """
     summary = session.get(Summary, summary_id)
     if summary is not None:
-        assert_owner(summary.user_id, user_id, detail=SUMMARY_NOT_FOUND)
+        assert_owner_on_write(summary.user_id, user_id, detail=SUMMARY_NOT_FOUND)
     known = {
         "id",
         "text",
@@ -367,7 +371,7 @@ def delete_summary(session: Session, summary_id: str, *, user_id: uuid.UUID) -> 
     summary = session.get(Summary, summary_id)
     if not summary:
         raise HTTPException(status_code=404, detail=SUMMARY_NOT_FOUND)
-    assert_owner(summary.user_id, user_id, detail=SUMMARY_NOT_FOUND)
+    assert_owner_on_write(summary.user_id, user_id, detail=SUMMARY_NOT_FOUND)
     session.delete(summary)
     # tg_summary_payloads has no FK to cascade from — see SummaryPayload.
     payload = session.get(SummaryPayload, summary_id)

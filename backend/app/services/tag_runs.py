@@ -12,7 +12,11 @@ from sqlmodel import Session, col
 
 from app.models_tg import TagRun, utc_now
 from app.services.serialization import to_snake
-from app.services.tenancy import assert_owner, scoped_select
+from app.services.tenancy import (
+    assert_owner,
+    assert_owner_on_write,
+    scoped_select,
+)
 
 #: This family's 404, reused by `assert_owner` so a foreign row and an absent
 #: one answer identically. See `SUMMARY_NOT_FOUND`.
@@ -241,7 +245,7 @@ def upsert_tag_run(
     now_ms = int(utc_now().timestamp() * 1000)
     tag_run = session.get(TagRun, tag_run_id)
     if tag_run:
-        assert_owner(tag_run.user_id, user_id, detail=TAG_RUN_NOT_FOUND)
+        assert_owner_on_write(tag_run.user_id, user_id, detail=TAG_RUN_NOT_FOUND)
         for key, value in body.items():
             snake = to_snake(key)
             if snake in known:
@@ -286,6 +290,6 @@ def delete_tag_run(session: Session, tag_run_id: str, *, user_id: uuid.UUID) -> 
     tag_run = session.get(TagRun, tag_run_id)
     if not tag_run:
         raise HTTPException(status_code=404, detail=TAG_RUN_NOT_FOUND)
-    assert_owner(tag_run.user_id, user_id, detail=TAG_RUN_NOT_FOUND)
+    assert_owner_on_write(tag_run.user_id, user_id, detail=TAG_RUN_NOT_FOUND)
     session.delete(tag_run)
     session.commit()

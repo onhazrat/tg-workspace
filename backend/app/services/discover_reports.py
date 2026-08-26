@@ -37,7 +37,11 @@ from app.services.discover_ignored import ignored_handles
 from app.services.discover_probes import enqueue_handles, probe_map
 from app.services.follows import visible_channel_names
 from app.services.post_filters import PostFilters
-from app.services.tenancy import assert_owner, scoped_select
+from app.services.tenancy import (
+    assert_owner,
+    assert_owner_on_write,
+    scoped_select,
+)
 
 DEFAULT_REPORT_PAGE_SIZE = 100
 MAX_REPORT_PAGE_SIZE = 1000
@@ -292,7 +296,7 @@ def update_report_flags(
     report = session.get(DiscoverReport, report_id)
     if report is None:
         raise HTTPException(status_code=404, detail=REPORT_NOT_FOUND)
-    assert_owner(report.user_id, user_id, detail=REPORT_NOT_FOUND)
+    assert_owner_on_write(report.user_id, user_id, detail=REPORT_NOT_FOUND)
 
     merged = dict(report.extra or {})
     for key in ("isStarred", "note"):
@@ -413,6 +417,6 @@ def delete_report(session: Session, report_id: str, *, user_id: uuid.UUID) -> No
     report = session.get(DiscoverReport, report_id)
     if report is None:
         raise HTTPException(status_code=404, detail=REPORT_NOT_FOUND)
-    assert_owner(report.user_id, user_id, detail=REPORT_NOT_FOUND)
+    assert_owner_on_write(report.user_id, user_id, detail=REPORT_NOT_FOUND)
     session.delete(report)
     session.commit()

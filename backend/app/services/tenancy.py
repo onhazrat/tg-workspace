@@ -1,10 +1,19 @@
 """The one place that decides which rows a User may see (ticket 03, plan step A2).
 
-**This module is inert today.** `TENANCY_ENFORCED` ships `False`, and while it
-is off `scoped_select` hands back the statement it was given, unchanged. That is
-the point: the ~40 read paths that have never had an owner filter can adopt the
-seam one batch at a time, and no batch changes a single response until ticket 21
-flips the flag with an isolation guard behind it.
+**This module is inert today, with one deliberate exception.**
+`TENANCY_ENFORCED` ships `False`, and while it is off `scoped_select` hands back
+the statement it was given, unchanged. That is the point: the ~40 read paths
+that have never had an owner filter can adopt the seam one batch at a time, and
+no batch changes a single response until ticket 21 flips the flag with an
+isolation guard behind it.
+
+The exception is `assert_owner_on_write`, which refuses a foreign row whichever
+way the flag points (ticket 31). The flag gates *visibility*, and the reason it
+can be off is that a read answering differently would be a changed response.
+Overwriting a row that is already somebody else's is not a read, and no response
+moves when it is refused on a deployment that has one account — so gating it
+would buy nothing and leave the clobber open on the deployment that has it.
+Ticket 30 made the same call for the same reason: a flag cannot gate identity.
 
 ## Why a classification and not a `user_id` filter
 
@@ -345,6 +354,52 @@ def assert_owner(
 
     if owner_id is None or owner_id != user_id:
         raise HTTPException(status_code=404, detail=detail)
+
+
+def assert_owner_on_write(
+    owner_id: uuid.UUID | None,
+    user_id: uuid.UUID,
+    *,
+    detail: str,
+) -> None:
+    """Refuse to overwrite a row that already belongs to somebody else.
+
+    The write-path sibling of `assert_owner`, and the only thing in this module
+    that does something while `TENANCY_ENFORCED` is off.
+
+    Used by every by-id write and delete in `app/`: the import path, the four
+    artifact families, the log door, and the two credential families.
+    `assert_owner` is for reads only, and
+    `test_import_write_scoping.py::test_only_reads_use_the_gated_ownership_guard`
+    keeps the split honest — a write on the gated primitive goes on clobbering
+    another account's row until ticket 21, which is how nine of them were found.
+
+    **Why it is not gated.** The flag exists so that adopting the seam changes
+    no *response*, and a refusal to clobber is not a response anyone was
+    reading. On a single-account deployment there is no foreign row to refuse,
+    so nothing moves; on one with a second account the gated version leaves the
+    clobber exactly where it was, which makes gating a cost with no benefit.
+    Ticket 30 reached this by another road: the owner in a composite key answers
+    *which row is yours*, not *which rows you may see*, and a flag cannot gate
+    identity.
+
+    **A NULL owner is still writable while the flag is off**, which is the one
+    asymmetry between the two states and the reason this is not just
+    `owner_id != user_id`. Rows predating the stamp carry no owner, and so does
+    anything a background job wrote — every log `upsert_*` takes `user_id` as
+    optional. Refusing those would fail closed against the only account a
+    single-operator install has, which is the trap `assert_owner`'s own
+    docstring names. Under enforcement `assert_owner` adds that rule back,
+    because a row nobody can read and anybody can overwrite is the worst of both.
+
+    `detail` carries the same requirement it does on `assert_owner`: the exact
+    string this family answers for a row that is not there, so that "somebody
+    else owns it" and "there is nothing here" stay indistinguishable.
+    """
+    if owner_id is not None and owner_id != user_id:
+        raise HTTPException(status_code=404, detail=detail)
+
+    assert_owner(owner_id, user_id, detail=detail)
 
 
 def unscoped_select[StatementT: Select[Any]](

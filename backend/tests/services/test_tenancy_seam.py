@@ -48,6 +48,7 @@ import importlib
 import inspect
 import pathlib
 import uuid
+from collections.abc import Callable
 
 import pytest
 from fastapi import HTTPException
@@ -63,6 +64,7 @@ from app.services.tenancy import (
     SCOPES,
     Scope,
     assert_owner,
+    assert_owner_on_write,
     scope_of,
     scoped_select,
     tenancy_enforced,
@@ -251,6 +253,47 @@ def test_disabled_ownership_assertion_never_raises() -> None:
     assert_owner(None, uuid.uuid4(), detail="Summary not found")
 
 
+@pytest.mark.parametrize("flag", [False, True])
+def test_write_assertion_refuses_a_foreign_row_in_either_flag_state(
+    monkeypatch: pytest.MonkeyPatch, flag: bool
+) -> None:
+    """The seam's one non-inert function, recorded where the seam is read.
+
+    `assert_owner_on_write` is deliberately not gated (ticket 31): overwriting a
+    row that is already somebody else's is not a read, so refusing it changes no
+    response on a single-account deployment, and gating it would leave the
+    clobber open on exactly the deployment that has a second account. Ticket 30
+    reached the same place from the other direction — a flag cannot gate
+    identity.
+
+    Parametrised rather than left to the ambient default, because "in either
+    state" is the whole claim and a test that only ever sees one of them cannot
+    make it.
+    """
+    monkeypatch.setattr(settings, "TENANCY_ENFORCED", flag)
+    mine = uuid.uuid4()
+
+    with pytest.raises(HTTPException) as excinfo:
+        assert_owner_on_write(uuid.uuid4(), mine, detail="Summary not found")
+
+    assert excinfo.value.status_code == 404
+    assert excinfo.value.detail == "Summary not found"
+    assert_owner_on_write(mine, mine, detail="Summary not found")
+
+
+def test_disabled_write_assertion_still_admits_an_unstamped_row() -> None:
+    """The one half of the write guard that *is* flag-dependent.
+
+    A NULL owner stays writable while the flag is off, for the reason
+    `test_disabled_ownership_assertion_never_raises` gives directly above: rows
+    predating the stamp are the operator's own, and refusing them would fail
+    closed against the only account a single-operator install has. This one
+    belongs to that group and fails when the flag is forced on globally, exactly
+    as its neighbours do.
+    """
+    assert_owner_on_write(None, uuid.uuid4(), detail="Summary not found")
+
+
 # --------------------------------------------------------------------------
 # Enabled: what the branches actually do
 # --------------------------------------------------------------------------
@@ -356,7 +399,12 @@ def test_enabled_ownership_allows_the_owner_and_refuses_an_unstamped_row() -> No
     assert raised.value.status_code == 404
 
 
-def test_ownership_detail_is_required_and_has_no_default() -> None:
+@pytest.mark.parametrize(
+    "guard", [assert_owner, assert_owner_on_write], ids=lambda f: f.__name__
+)
+def test_ownership_detail_is_required_and_has_no_default(
+    guard: Callable[..., None],
+) -> None:
     """The status code is only half the answer; the body is the other half.
 
     Every 404 in this codebase names its resource — `"Summary not found"`,
@@ -364,8 +412,13 @@ def test_ownership_detail_is_required_and_has_no_default() -> None:
     here would make "someone else owns it" and "it is not there" tell apart by
     reading the payload, moving the enumeration oracle from the status line to
     the body rather than closing it. There must be no default to fall into.
+
+    Parametrised over both guards because they share the contract and only one
+    of them was pinned — review pointed out that giving `assert_owner_on_write`
+    a `detail="Not found"` default passed every guard in this file while
+    reopening exactly the oracle this test exists to close.
     """
-    detail = inspect.signature(assert_owner).parameters["detail"]
+    detail = inspect.signature(guard).parameters["detail"]
 
     assert detail.default is inspect.Parameter.empty
     assert detail.kind is inspect.Parameter.KEYWORD_ONLY
