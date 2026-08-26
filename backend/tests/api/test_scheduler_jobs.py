@@ -408,7 +408,7 @@ def test_retention_deletes_old_posts() -> None:
     now = int(time.time() * 1000)
     with Session(engine) as session:
         save_settings_section(
-            session, "retention", {"postRetentionDays": 30, "logRetentionDays": 0}
+            session, "retention", {"postRetentionDays": 30, "sharedLogRetentionDays": 0}
         )
         session.add(
             Post(
@@ -476,7 +476,7 @@ def test_retention_deletes_old_logs_without_loading_them() -> None:
     old_ts = now - 10 * 24 * 60 * 60 * 1000
     with Session(engine) as session:
         save_settings_section(
-            session, "retention", {"postRetentionDays": 0, "logRetentionDays": 7}
+            session, "retention", {"postRetentionDays": 0, "sharedLogRetentionDays": 7}
         )
         operator_id = get_operator_user_id(session)
         session.add(
@@ -520,8 +520,8 @@ def test_payload_retention_expires_bodies_but_keeps_the_log() -> None:
     """The whole point of the split: shed the bulk, keep the audit trail.
 
     Payloads run on a shorter horizon than the log rows, so a log older than
-    payloadRetentionDays but younger than logRetentionDays keeps its metadata
-    and simply reports no request/response.
+    payloadRetentionDays but younger than sharedLogRetentionDays keeps its
+    metadata and simply reports no request/response.
     """
     now = int(time.time() * 1000)
     old_ts = now - 10 * 24 * 60 * 60 * 1000
@@ -531,7 +531,7 @@ def test_payload_retention_expires_bodies_but_keeps_the_log() -> None:
             "retention",
             {
                 "postRetentionDays": 0,
-                "logRetentionDays": 90,
+                "sharedLogRetentionDays": 90,
                 "payloadRetentionDays": 7,
             },
         )
@@ -581,7 +581,7 @@ def test_log_retention_leaves_no_orphan_payloads() -> None:
             "retention",
             {
                 "postRetentionDays": 0,
-                "logRetentionDays": 7,
+                "sharedLogRetentionDays": 7,
                 "payloadRetentionDays": 0,
             },
         )

@@ -4,18 +4,25 @@ Ticket 06 split settings in two: `tg_app_settings` for deployment policy and
 `tg_user_settings` for personal preference, with
 `services/settings_registry.py` saying which key is which. This module is the
 layer above both — it merges stored values over the env-derived defaults, and
-for `sync` it hides the fact that one JSON blob is now three rows in two
-tables.
+for `sync` and `retention` it hides the fact that one JSON blob is now several
+rows across two tables.
 
-**The `sync` facade is the interesting part.** `GET`/`PUT /data/settings/sync`
-keep their exact old wire shape, so neither the browser nor the generated
-client changed, but underneath each field goes to the table it belongs to:
-scheduler policy and the scheduler's own counters are global, and the
-per-channel defaults a person picks are theirs. That is what removes the
-lost update this ticket exists to fix — every writer used to read-modify-write
-the whole blob, so a person saving a start-time preference wrote back whatever
+**The facades are the interesting part.** `GET`/`PUT /data/settings/sync` and
+`/retention` keep their exact old wire shape, so neither the browser nor the
+generated client changed, but underneath each field goes to the table it
+belongs to.
+
+For `sync` (ticket 06) that is scheduler policy and the scheduler's own
+counters global, and the per-channel defaults a person picks theirs. That is
+what removes the lost update: every writer used to read-modify-write the whole
+blob, so a person saving a start-time preference wrote back whatever
 `consecutiveFailures` their browser last read, and the scheduler bumping its
 counter wrote back their stale preferences.
+
+For `retention` (ticket 20) it is windows over shared rows global and windows
+over an account's own rows theirs. The lost update there was worse than a stale
+counter: one blob meant one `postRetentionDays` any account could set, and it
+deletes every account's Posts on the next sweep.
 """
 
 from __future__ import annotations
@@ -23,17 +30,21 @@ from __future__ import annotations
 import time
 import uuid
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, cast
 
-from sqlmodel import Session
+from sqlmodel import Session, select
 
 from app.core.config import settings
+from app.models import User
 from app.services.settings_registry import (
+    RETENTION_KEY,
+    RETENTION_PREFS_KEY,
     SYNC_KEY,
     SYNC_PREFS_KEY,
     SYNC_RUNTIME_KEY,
     Home,
     home_for,
+    split_retention_payload,
     split_sync_payload,
 )
 from app.services.settings_store import (
@@ -42,6 +53,7 @@ from app.services.settings_store import (
     replace_global_setting,
 )
 from app.services.user_settings import (
+    all_user_settings,
     get_user_setting,
     put_user_setting,
     replace_user_setting,
@@ -95,13 +107,21 @@ def _default_sync() -> dict[str, Any]:
     }
 
 
-def _default_retention() -> dict[str, Any]:
+def _default_retention_policy() -> dict[str, Any]:
+    """Deployment half of the old `retention` blob (ticket 20)."""
     return {
         "postRetentionDays": settings.RETENTION_POST_DAYS_DEFAULT,
-        "logRetentionDays": settings.RETENTION_LOG_DAYS_DEFAULT,
         "payloadRetentionDays": settings.RETENTION_PAYLOAD_DAYS_DEFAULT,
+        "sharedLogRetentionDays": settings.RETENTION_SHARED_LOG_DAYS_DEFAULT,
+    }
+
+
+def _default_retention_prefs() -> dict[str, Any]:
+    """Personal half: windows over the rows one account owns (ticket 20)."""
+    return {
+        "logRetentionDays": settings.RETENTION_LOG_DAYS_DEFAULT,
         # Both caps apply to saved Discover reports, whichever bites first, and
-        # 0 disables either one — same convention as the two windows above.
+        # 0 disables either one — same convention as the windows above.
         "reportRetentionDays": settings.RETENTION_REPORT_DAYS_DEFAULT,
         "reportRetentionMax": settings.RETENTION_REPORT_MAX_DEFAULT,
     }
@@ -162,16 +182,19 @@ def save_settings_section(
     "unset this" — clearing the follow-backfill marker is exactly that, and a
     merge cannot express it.
 
-    `sync` is the exception and delegates, because its three destinations each
-    take only the fields this call actually names. Passing a partial `sync` body
-    is the normal case there, and replacing a section with it would drop the
-    fields the caller said nothing about.
+    `sync` and `retention` are the exceptions and delegate, because their
+    destinations each take only the fields this call actually names. Passing a
+    partial body is the normal case for a facade, and replacing a section with
+    it would drop the fields the caller said nothing about.
 
     A per-User key with no owner raises rather than resolving one through
     `get_operator_user_id` — the NULL fallback the plan's decision 24 dissolves.
     """
     if key == SYNC_KEY:
         save_sync_settings(session, value, user_id=user_id)
+        return
+    if key == RETENTION_KEY:
+        save_retention_settings(session, value, user_id=user_id)
         return
     if home_for(key) is Home.USER:
         if user_id is None:
@@ -269,8 +292,103 @@ def load_sync_settings(
     return merged
 
 
-def load_retention_settings(session: Session) -> dict[str, Any]:
-    return load_setting(session, "retention", _default_retention())
+def load_retention_policy(session: Session) -> dict[str, Any]:
+    """The deployment's retention windows, with no personal fields in them.
+
+    What every caller outside the endpoint actually wants: the scrape stop
+    bound reads `postRetentionDays` and nothing else, and the retention job
+    reads the three policy windows separately from each account's own. Asking
+    for the reassembled blob there would hand those callers three more fields
+    they have no owner to resolve and no business reading.
+    """
+    return _merge(
+        _default_retention_policy(), get_global_setting(session, RETENTION_KEY)
+    )
+
+
+def load_retention_prefs_by_user(session: Session) -> dict[uuid.UUID, dict[str, Any]]:
+    """Every account's log and report windows, in two queries rather than 2N.
+
+    The retention job runs hourly forever, so it reads the whole set at once and
+    groups accounts by the window they chose. Reading a setting per account
+    inside the sweep is the shape that made the auto-sync tick cost 69 minutes
+    of database time per 10 hours: a scheduled job pays its query count every
+    tick, and nobody is watching to notice.
+
+    Every account appears, including the ones that never saved a preference —
+    the defaults are what their rows are swept on, and an account missing from
+    this map would be an account whose logs nothing ever collects.
+    """
+    defaults = _default_retention_prefs()
+    stored = all_user_settings(session, RETENTION_PREFS_KEY)
+    return {
+        user_id: _merge(defaults, stored.get(user_id))
+        for user_id in session.exec(select(User.id)).all()
+    }
+
+
+def load_retention_prefs(session: Session, *, user_id: uuid.UUID) -> dict[str, Any]:
+    """One account's own log and report windows.
+
+    `user_id` is required, with no default. The alternative — resolving a
+    missing owner to the operator — is the fallback plan decision 24 dissolves,
+    and here it would mean sweeping somebody's rows on a window they never set.
+    """
+    return _merge(
+        _default_retention_prefs(),
+        get_user_setting(session, RETENTION_PREFS_KEY, user_id=user_id),
+    )
+
+
+def load_retention_settings(
+    session: Session, *, user_id: uuid.UUID | None = None
+) -> dict[str, Any]:
+    """The old `retention` blob, reassembled from the two rows it now lives in.
+
+    The facade `GET /data/settings/retention` answers with, exactly as
+    `load_sync_settings` is for `sync`: the wire shape is unchanged, so neither
+    the browser nor the generated client changed when ticket 20 split the row.
+    With no `user_id` the personal half falls back to its defaults, which is
+    what a caller with no account in hand would have to show anyway.
+    """
+    merged = load_retention_policy(session)
+    merged.update(_default_retention_prefs())
+    if user_id is not None:
+        merged.update(get_user_setting(session, RETENTION_PREFS_KEY, user_id=user_id))
+    return merged
+
+
+def save_retention_settings(
+    session: Session,
+    payload: dict[str, Any],
+    *,
+    user_id: uuid.UUID | None = None,
+) -> None:
+    """Fan an old-shape `retention` body out to the two rows it now lives in.
+
+    Only the sections the payload names are written, so an Admin saving the
+    corpus window never rewrites their own report caps and a person saving
+    their log window never touches deployment policy.
+
+    A personal field with no owner **raises**, unlike `save_sync_settings`,
+    which drops one. The difference is who writes: the scheduler writes `sync`
+    with no account behind it and would fail on every tick, whereas every
+    caller here has a User in hand. Dropping is how a window silently keeps its
+    default while the caller believes it saved — which is exactly what a
+    settings write must not do.
+    """
+    sections = split_retention_payload(payload)
+    if RETENTION_PREFS_KEY in sections and user_id is None:
+        raise ValueError(
+            f"Retention field(s) {sorted(sections[RETENTION_PREFS_KEY])} are "
+            f"per-User and need an owner; there is no deployment-wide row to "
+            f"fall back to."
+        )
+    for key, section in sections.items():
+        if key == RETENTION_PREFS_KEY:
+            put_user_setting(session, key, section, user_id=cast(uuid.UUID, user_id))
+            continue
+        put_global_setting(session, key, section, user_id=user_id)
 
 
 def load_media_settings(session: Session) -> dict[str, Any]:

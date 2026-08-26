@@ -636,7 +636,7 @@ def test_sync_backfill_completes_partial_history_in_multiple_passes(
             user_id=get_operator_user_id(session),
         )
         save_settings_section(
-            session, "retention", {"postRetentionDays": 0, "logRetentionDays": 0}
+            session, "retention", {"postRetentionDays": 0, "sharedLogRetentionDays": 0}
         )
 
     client.put(
@@ -810,7 +810,7 @@ def test_sync_marks_channel_younger_than_cutoff_complete(client: TestClient) -> 
             user_id=get_operator_user_id(session),
         )
         save_settings_section(
-            session, "retention", {"postRetentionDays": 0, "logRetentionDays": 0}
+            session, "retention", {"postRetentionDays": 0, "sharedLogRetentionDays": 0}
         )
 
     client.put(

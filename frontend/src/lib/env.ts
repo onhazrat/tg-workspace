@@ -47,6 +47,10 @@ export const env = {
     viteEnv?.VITE_RETENTION_LOG_DAYS_DEFAULT,
     30,
   ),
+  retentionSharedLogDaysDefault: parseIntEnv(
+    viteEnv?.VITE_RETENTION_SHARED_LOG_DAYS_DEFAULT,
+    30,
+  ),
   retentionPayloadDaysDefault: parseIntEnv(
     viteEnv?.VITE_RETENTION_PAYLOAD_DAYS_DEFAULT,
     7,

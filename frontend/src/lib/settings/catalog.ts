@@ -9,6 +9,7 @@ import {
   RETENTION_POST_DAYS_DEFAULT,
   RETENTION_REPORT_DAYS_DEFAULT,
   RETENTION_REPORT_MAX_DEFAULT,
+  RETENTION_SHARED_LOG_DAYS_DEFAULT,
 } from "@/constants"
 import { NETWORK_SETTINGS_DEFAULTS } from "@/lib/settings/network"
 import { appSettingsSpec } from "@/lib/settings/schema"
@@ -617,7 +618,9 @@ export const SETTINGS_CATALOG: SettingCatalogEntry[] = [
   {
     id: "logRetentionDays",
     label: "Log Retention Days",
-    description: "Delete logs older than this many days (0 = never).",
+    description:
+      "Delete your publish, AI and embedding logs older than this many days " +
+      "(0 = never).",
     keywords: ["retention", "logs", "days"],
     group: "data",
     source: "app",
@@ -625,6 +628,26 @@ export const SETTINGS_CATALOG: SettingCatalogEntry[] = [
     editorCommandId: "edit-log-retention-days",
     editorFieldId: "logRetentionDays",
     editorFieldLabel: "Log Retention (days)",
+    control: {
+      kind: "number",
+      min: 0,
+      integer: true,
+      formatBadge: formatRetentionBadge,
+    },
+  },
+  {
+    id: "sharedLogRetentionDays",
+    label: "Shared Log Retention Days",
+    description:
+      "Delete sync and network logs, and logs no account owns, older than " +
+      "this many days (0 = never). Admin only.",
+    keywords: ["retention", "logs", "sync", "network", "shared", "days"],
+    group: "data",
+    source: "app",
+    defaultValue: RETENTION_SHARED_LOG_DAYS_DEFAULT,
+    editorCommandId: "edit-shared-log-retention-days",
+    editorFieldId: "sharedLogRetentionDays",
+    editorFieldLabel: "Shared Log Retention (days)",
     control: {
       kind: "number",
       min: 0,

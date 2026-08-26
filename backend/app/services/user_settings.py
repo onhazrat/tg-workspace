@@ -16,7 +16,7 @@ from __future__ import annotations
 from typing import Any
 from uuid import UUID
 
-from sqlmodel import Session
+from sqlmodel import Session, select
 
 from app.models_tg import UserSetting, utc_now
 from app.services.settings_registry import Home, require_home
@@ -27,6 +27,21 @@ def get_user_setting(session: Session, key: str, *, user_id: UUID) -> dict[str, 
     require_home(key, Home.USER)
     row = session.get(UserSetting, (key, user_id))
     return dict(row.value) if row else {}
+
+
+def all_user_settings(session: Session, key: str) -> dict[UUID, dict[str, Any]]:
+    """Every account's stored value for `key`, keyed by owner.
+
+    One query for the whole table rather than one per account. The caller is
+    the retention job, which sweeps on a timer forever: a read per account
+    inside an hourly job is a cost that grows with signups and that nobody is
+    watching. Accounts with nothing stored are simply absent — the caller
+    merges defaults, because "unset" and "set to the default" are the same
+    answer here and a row is not what makes an account real.
+    """
+    require_home(key, Home.USER)
+    rows = session.exec(select(UserSetting).where(UserSetting.key == key)).all()
+    return {row.user_id: dict(row.value) for row in rows}
 
 
 def put_user_setting(

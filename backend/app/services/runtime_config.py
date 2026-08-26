@@ -189,7 +189,11 @@ def build_runtime_config(
     # browser — policy, the scheduler's counters, and this account's start-time
     # preference — so it is one of the few reads that genuinely needs the owner.
     sync_settings = load_sync_settings(session, user_id=user_id)
-    retention_settings = load_retention_settings(session)
+    # The reassembled blob, not the policy half: the payload names
+    # `logRetentionDays`, which is this account's own window since ticket 20,
+    # and the two others are the deployment's. Passing the owner is what keeps
+    # this endpoint's shape identical to what it answered before the split.
+    retention_settings = load_retention_settings(session, user_id=user_id)
     effective_global_start_time_ms = compute_effective_global_start_time_ms(
         sync_settings, retention_settings, now_ms=now
     )

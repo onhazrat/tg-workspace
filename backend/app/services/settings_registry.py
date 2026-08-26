@@ -78,6 +78,50 @@ SYNC_PREF_FIELDS = frozenset(
     }
 )
 
+#: The `retention` blob's two destinations (ticket 20). Named constants for the
+#: reason the three `sync` ones are: the facade, the migration and the guard all
+#: have to agree on the spelling, and three spellings is how they stop agreeing.
+RETENTION_KEY = "retention"
+RETENTION_PREFS_KEY = "retention_prefs"
+
+#: Windows that delete rows more than one account can see, so an Admin sets them
+#: once for the deployment.
+#:
+#: `postRetentionDays` is the corpus — Posts and the embeddings, translations
+#: and sync state keyed to them. One scrape serves every follower, so a
+#: per-account window would mean the shortest one deciding for everybody: until
+#: ticket 18 gated the write, any account could set it to 1 and destroy every
+#: account's Posts on the next sweep. Gating the write closed that by
+#: permission; putting the field here closes it by construction.
+#: `payloadRetentionDays` is the sync log bodies, and `sharedLogRetentionDays`
+#: the log rows nobody owns — see `RETENTION_PREF_FIELDS` for where that line
+#: falls.
+RETENTION_POLICY_FIELDS = frozenset(
+    {
+        "postRetentionDays",
+        "payloadRetentionDays",
+        "sharedLogRetentionDays",
+    }
+)
+
+#: Windows over rows one account owns, so that account sets them.
+#:
+#: `logRetentionDays` covers the publish, LLM and embedding rows stamped with
+#: your id, and *only* those. Sync logs became Channel telemetry in ticket 19,
+#: network logs record what the deployment's proxies did, and a row a background
+#: job wrote carries no owner at all; all three are swept on
+#: `sharedLogRetentionDays` instead, because a window belonging to one person
+#: must never reach another person's evidence — which is the whole of ticket 20.
+#: The two report caps are the same argument from the other side: a Discover
+#: report is an artifact your account produced (ticket 17), not corpus it read.
+RETENTION_PREF_FIELDS = frozenset(
+    {
+        "logRetentionDays",
+        "reportRetentionDays",
+        "reportRetentionMax",
+    }
+)
+
 
 #: Deployment-wide keys: one row, shared by every account.
 GLOBAL_KEYS: dict[str, str] = {
@@ -94,10 +138,12 @@ GLOBAL_KEYS: dict[str, str] = {
         "nothing a person edits; per-account copies would mean the scheduler "
         "honouring one account's pause on everyone's behalf."
     ),
-    "retention": (
+    RETENTION_KEY: (
         "Deletes corpus rows every follower shares, so it is deployment "
-        "policy an Admin sets (plan decision 4). Ticket 20 splits the log and "
-        "report windows back out, where they genuinely are per-User."
+        "policy an Admin sets (plan decision 4). Ticket 20 took the log and "
+        "report windows back out to `retention_prefs`, where they genuinely "
+        "are per-User; what is left is the corpus window, the sync-body "
+        "window, and the window for log rows no account owns."
     ),
     "media": (
         "Thumbnail cache size and write policy on the deployment's own disk. "
@@ -121,6 +167,12 @@ GLOBAL_KEYS: dict[str, str] = {
 
 #: Per-User keys: one row per account, and two accounts never collide.
 USER_KEYS: dict[str, str] = {
+    RETENTION_PREFS_KEY: (
+        "How long to keep the log rows and Discover reports this account "
+        "produced. Personal because the rows are: one person choosing a short "
+        "window must not be able to delete another person's evidence, which is "
+        "exactly what one `logRetentionDays` for the whole deployment did."
+    ),
     SYNC_PREFS_KEY: (
         "Where a new follow starts and whether dynamic sync is on for it. Two "
         "accounts following one channel can want different history depths, and "
@@ -161,22 +213,43 @@ def require_home(key: str, expected: Home) -> None:
         )
 
 
-def split_sync_payload(payload: dict[str, object]) -> dict[str, dict[str, object]]:
-    """Fan one old-shape `sync` body out to the three keys it now lives under.
+def _split_payload(
+    payload: dict[str, object],
+    homes: tuple[tuple[str, frozenset[str]], ...],
+) -> dict[str, dict[str, object]]:
+    """Fan one old-shape body out to the keys its fields now live under.
 
-    Fields nobody classified are dropped rather than guessed at — the caller
-    is a `PUT` body from a browser, and inventing a home for an unknown field
-    is how a typo becomes a row. The result only holds the keys that actually
+    Fields nobody classified are dropped rather than guessed at — the caller is
+    a `PUT` body from a browser, and inventing a home for an unknown field is
+    how a typo becomes a row. The result only holds the keys that actually
     received something, so an unchanged section is not rewritten.
     """
-    homes = (
-        (SYNC_KEY, SYNC_POLICY_FIELDS),
-        (SYNC_RUNTIME_KEY, SYNC_RUNTIME_FIELDS),
-        (SYNC_PREFS_KEY, SYNC_PREF_FIELDS),
-    )
     out: dict[str, dict[str, object]] = {}
     for key, fields in homes:
         section = {k: v for k, v in payload.items() if k in fields}
         if section:
             out[key] = section
     return out
+
+
+def split_sync_payload(payload: dict[str, object]) -> dict[str, dict[str, object]]:
+    """Fan one old-shape `sync` body out to the three keys it now lives under."""
+    return _split_payload(
+        payload,
+        (
+            (SYNC_KEY, SYNC_POLICY_FIELDS),
+            (SYNC_RUNTIME_KEY, SYNC_RUNTIME_FIELDS),
+            (SYNC_PREFS_KEY, SYNC_PREF_FIELDS),
+        ),
+    )
+
+
+def split_retention_payload(payload: dict[str, object]) -> dict[str, dict[str, object]]:
+    """Fan one old-shape `retention` body out to the two keys it now lives under."""
+    return _split_payload(
+        payload,
+        (
+            (RETENTION_KEY, RETENTION_POLICY_FIELDS),
+            (RETENTION_PREFS_KEY, RETENTION_PREF_FIELDS),
+        ),
+    )

@@ -16,11 +16,12 @@ there are two. Each of those routes now names `Permission.DATA_ADMIN`.
 `GET`/`PUT /settings/{key}` are the exceptions, and not because they are
 harmless. They are a facade over both settings tables: `sync` reassembles
 deployment policy, scheduler runtime and the caller's *own* preferences into
-one blob, and the frontend's Pause button writes a global runtime field through
-it. Gating the route wholesale would take a person's own sync preferences away
-from them, and gating it per field means routing authorisation through
-`settings_registry` beside the storage routing. Deployment-policy keys reaching
-this route is a real hole; it is recorded in
+one blob — the frontend's Pause button writes a global runtime field through it
+— and after ticket 20 `retention` does the same for the corpus window and a
+person's own log and report windows. Gating the route wholesale would take
+those personal settings away from them, so authorisation is routed per field
+through `settings_registry` beside the storage routing. Deployment-policy keys
+reaching this route is a real hole; it is recorded in
 `docs/admin-only-routes-and-log-scoping-plan.md` rather than half-closed here.
 `tests/api/test_admin_route_gating.py` holds both exemptions with that reason
 and fails if a *third* ungated route appears.
@@ -41,6 +42,7 @@ from app.jobs.settings import (
     load_retention_settings,
     load_sync_settings,
     load_translation_settings,
+    save_retention_settings,
     save_sync_settings,
 )
 from app.models import User
@@ -59,6 +61,8 @@ from app.services.network_settings import (
     network_settings_payload,
 )
 from app.services.settings_registry import (
+    RETENTION_KEY,
+    RETENTION_PREF_FIELDS,
     SYNC_KEY,
     SYNC_PREF_FIELDS,
     Home,
@@ -75,13 +79,28 @@ from app.services.user_settings import get_user_setting, put_user_setting
 
 #: Keys whose GET returns defaults merged over the stored row rather than the
 #: bare row. Each takes the caller's id even when it ignores it, so the call
-#: site does not have to know which keys have a per-User half — after ticket 06
-#: `sync` does and the other three do not.
+#: site does not have to know which keys have a per-User half — after tickets 06
+#: and 20 `sync` and `retention` do, and the other two do not.
 _SETTING_LOADERS: dict[str, Callable[[Session, uuid.UUID], dict[str, Any]]] = {
     "jobs": lambda session, _user_id: load_jobs_settings(session),
     "sync": lambda session, user_id: load_sync_settings(session, user_id=user_id),
-    "retention": lambda session, _user_id: load_retention_settings(session),
+    RETENTION_KEY: lambda session, user_id: load_retention_settings(
+        session, user_id=user_id
+    ),
     "translation": lambda session, _user_id: load_translation_settings(session),
+}
+
+#: The facade keys, and which of their fields the registry calls personal.
+#:
+#: Both arrive in one old-shape blob that spans deployment policy and the
+#: caller's own preferences, so neither can be gated as a whole: refusing the
+#: request would take a person's own settings away from them, and dropping the
+#: policy half silently is what lets one PUT serve both kinds of caller. The
+#: field sets are the registry's, not this module's — the day a field changes
+#: home it changes here with it, rather than being narrowed by a stale copy.
+_FACADE_PREF_FIELDS: dict[str, frozenset[str]] = {
+    SYNC_KEY: SYNC_PREF_FIELDS,
+    RETENTION_KEY: RETENTION_PREF_FIELDS,
 }
 # Tables whose clear removes rows from more than one resource.
 CLEARED_SYNC_RESOURCES: dict[str, tuple[str, ...]] = {
@@ -213,32 +232,34 @@ def put_setting(
 ) -> AppSettingResponse:
     """Write one settings section, refusing deployment policy to a non-Admin.
 
-    The route stays open because the *key* decides, not the path.
-    `retention` sets `postRetentionDays`, which deletes every account's Posts on
-    the next sweep — table clearing on a timer, and the ticket's own goal is
-    that a new account cannot reach table clearing. `jobs` turns the scheduler
-    off for everybody. Those are `DATA_ADMIN`, and so is every other global key.
+    The route stays open because the *key* decides, not the path. `jobs` turns
+    the scheduler off for everybody, and so on for every other global key:
+    those are `DATA_ADMIN`.
 
-    `sync` cannot be gated the same way, because it is a facade: one body
-    carries deployment policy, scheduler runtime, and the caller's own
-    preferences, and the Pause button writes a runtime field through it.
-    Refusing the whole request would take a person's own start-time preference
-    away from them; so for a caller without the permission the body is narrowed
-    to the fields the registry already declares personal, and the rest is
-    dropped rather than written. Dropping, not refusing, because the frontend
-    sends a whole section at once and a non-Admin saving their preferences
-    should not be told the save failed when the half that is theirs succeeded.
+    `sync` and `retention` cannot be gated that way, because each is a facade:
+    one body carries deployment policy and the caller's own preferences at the
+    same time. `sync` mixes scheduler policy, the runtime counters the Pause
+    button writes, and a person's start-time defaults; `retention` mixes the
+    corpus window — `postRetentionDays`, which deletes every account's Posts on
+    the next sweep, table clearing on a timer — with that person's own log and
+    report windows. Refusing the whole request would take their own settings
+    away from them, so for a caller without the permission the body is narrowed
+    to the fields the registry declares personal and the rest is dropped rather
+    than written. Dropping, not refusing, because the frontend sends a whole
+    section at once and a non-Admin saving their preferences should not be told
+    the save failed when the half that is theirs succeeded.
     """
-    if key == SYNC_KEY:
-        # The three-row carve is invisible from here: the body arrives in the
-        # old blob shape and `save_sync_settings` routes each field to the table
-        # that owns it, so the response is still the whole reassembled blob.
-        save_sync_settings(
-            session,
-            _writable_sync_fields(body, session, current_user),
-            user_id=current_user.id,
-        )
-        value = load_sync_settings(session, user_id=current_user.id)
+    if key in _FACADE_PREF_FIELDS:
+        # The carve is invisible from here: the body arrives in the old blob
+        # shape and the save routes each field to the table that owns it, so
+        # the response is still the whole reassembled blob.
+        writable = _writable_facade_fields(key, body, session, current_user)
+        if key == SYNC_KEY:
+            save_sync_settings(session, writable, user_id=current_user.id)
+            value = load_sync_settings(session, user_id=current_user.id)
+        else:
+            save_retention_settings(session, writable, user_id=current_user.id)
+            value = load_retention_settings(session, user_id=current_user.id)
     elif _home_of(key) is Home.USER:
         value = put_user_setting(session, key, body, user_id=current_user.id)
     else:
@@ -248,18 +269,19 @@ def put_setting(
     return AppSettingResponse(key=key, value=value)
 
 
-def _writable_sync_fields(
-    body: dict[str, Any], session: Session, current_user: User
+def _writable_facade_fields(
+    key: str, body: dict[str, Any], session: Session, current_user: User
 ) -> dict[str, Any]:
     """`body` as-is for an Admin; only the personal fields for anyone else.
 
-    `SYNC_PREF_FIELDS` is the registry's own answer to which half of the blob
+    The registry's field sets are the answer to which half of a facade blob
     belongs to the person rather than the deployment, so this invents no new
     knowledge — the day a field moves between halves, it moves here with it.
     """
     if rbac.has_permission(session, current_user.id, Permission.DATA_ADMIN):
         return body
-    return {k: v for k, v in body.items() if k in SYNC_PREF_FIELDS}
+    personal = _FACADE_PREF_FIELDS[key]
+    return {k: v for k, v in body.items() if k in personal}
 
 
 @router.post("/import", dependencies=ADMIN_ONLY)

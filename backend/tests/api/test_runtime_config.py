@@ -45,10 +45,15 @@ def test_runtime_config_effective_values(client: TestClient, db: Session) -> Non
         },
         user_id=get_operator_user_id(db),
     )
+    # `logRetentionDays` is per-User after ticket 20 and the request below is
+    # made as the operator, so it has to be written as them — `postRetentionDays`
+    # in the same call still lands in the global row, the way `syncConcurrency`
+    # does above.
     save_settings_section(
         db,
         "retention",
         {"postRetentionDays": 30, "logRetentionDays": 14},
+        user_id=get_operator_user_id(db),
     )
 
     headers = _auth(client)

@@ -1,28 +1,62 @@
-"""Server-side data retention cleanup (replaces App.tsx 6h interval)."""
+"""Server-side data retention cleanup (replaces App.tsx 6h interval).
+
+## Four windows, because there are four kinds of row (ticket 20)
+
+Retention used to run entirely on one blob of settings any account could write,
+narrowed by `user_id == operator OR IS NULL` — a filter that looked like
+scoping and was not: it protected nobody's rows once a second account existed,
+and `postRetentionDays` was a live way for any account to destroy every
+account's Posts on the next sweep. Ticket 18 gated the write. This job is the
+other half, and it splits by what the rows *are*:
+
+* **The corpus** — Posts and the embeddings, translations and sync state keyed
+  to them — is shared: one scrape serves every follower. It runs on the
+  deployment's `postRetentionDays` with **no owner filter at all**, because
+  there is no owner to filter on. `Post.user_id` is a "who scraped this first"
+  stamp that ticket 22 drops, and filtering on it deleted the first follower's
+  rows while leaving the second follower's identical ones behind.
+* **Personal logs** — publish, LLM and embedding rows stamped with an account's
+  id — run on **that account's** `logRetentionDays`. Accounts that chose the
+  same window are swept together, so the query count does not grow with
+  signups.
+* **Shared and ownerless logs** — the sync family (Channel telemetry since
+  ticket 19), the network family (proxy behaviour, Admin-only), and any row of
+  the three personal families whose `user_id` is NULL because a background job
+  wrote it — run on the deployment's `sharedLogRetentionDays`. Without this
+  window those rows are reachable by no window at all.
+* **Discover reports** are artifacts an account produced, so each account's own
+  age and count caps apply to its own reports. Applying one account's count cap
+  across the whole table is how the newest report of every *other* account got
+  pruned by somebody generating a burst of their own.
+
+Channel collection and the asset sweeps stay deployment-wide and are not
+windows at all: a Channel is collected when nobody follows it, and an orphaned
+avatar is garbage by definition rather than by age.
+"""
 
 from __future__ import annotations
 
 import logging
+import uuid
 from typing import Any, cast
 
 from sqlalchemy import delete as sa_delete
-from sqlmodel import Session, col, func, or_, select
+from sqlmodel import Session, col, func, select
 
-# Aliased: `run_retention_cleanup` binds a local `settings` to the operator's
-# runtime retention values, which would shadow the process settings object.
+# Aliased for symmetry with the rest of `app/jobs`, where a local `settings`
+# holding stored values would otherwise shadow the process settings object.
 from app.core.config import settings as app_settings
-from app.jobs.settings import load_media_settings, load_retention_settings
+from app.jobs.settings import (
+    load_media_settings,
+    load_retention_policy,
+    load_retention_prefs_by_user,
+)
 from app.models_tg import (
     Channel,
     DiscoverReport,
-    EmbeddingLog,
-    LLMLog,
-    NetworkLog,
     Post,
     PostEmbedding,
     PostTranslation,
-    PublishLog,
-    SyncLog,
     utc_now,
 )
 from app.services.channel_photos import (
@@ -32,8 +66,16 @@ from app.services.channel_photos import (
 )
 from app.services.channels import collect_unfollowed_channel
 from app.services.follows import channel_ids_without_follows, follows_backfilled
-from app.services.logs import expire_sync_payloads_stmt
-from app.services.operator import get_operator_user_id
+from app.services.logs import (
+    LOG_MODELS,
+    PERSONAL_LOG_TYPES,
+    SHARED_LOG_TYPES,
+    LogSweep,
+    delete_logs_before,
+    delete_owned_logs_before,
+    delete_unowned_logs_before,
+    expire_sync_payloads_stmt,
+)
 from app.services.post_sync_state import (
     prune_sync_state_below,
     prune_sync_state_for_post_ids,
@@ -56,12 +98,36 @@ POST_DELETE_BATCH = 500
 COLLECT_LIMIT = 100
 
 
-def _prune_discover_reports(session: Session, *, max_days: int, max_count: int) -> int:
-    """Trim saved Discover reports by age, then by count.
+def _cutoff_ms(days: int) -> int:
+    """The epoch-millisecond timestamp `days` before now."""
+    return int(utc_now().timestamp() * 1000) - days * 24 * 60 * 60 * 1000
+
+
+def _ordered(log_types: frozenset[str]) -> list[str]:
+    """`log_types` in `LOG_MODELS` declaration order.
+
+    A frozenset iterates in whatever order the hashes fall, which would make
+    the sweep's per-type commits — and so the log line and the test fixtures —
+    reorder between runs for no reason. Declaration order costs nothing.
+    """
+    return [log_type for log_type in LOG_MODELS if log_type in log_types]
+
+
+def _prune_discover_reports(
+    session: Session, *, user_id: uuid.UUID, max_days: int, max_count: int
+) -> int:
+    """Trim one account's saved Discover reports by age, then by count.
 
     Reports are the one table that grows per user action with no natural bound:
-    each Generate stores its whole candidate list, single-reference tail included,
-    as a JSON blob. Nothing else prunes them.
+    each Generate stores its whole candidate list, single-reference tail
+    included, as a JSON blob. Nothing else prunes them.
+
+    **Per account, both caps, since ticket 20.** Applied across the whole table
+    the count cap was the sharper edge of the two: one account generating fifty
+    reports in an afternoon pushed every other account's newest report past the
+    offset and deleted it, and the age window did the same on a shorter horizon.
+    A report is an artifact its account produced (ticket 17), so its account's
+    caps are the ones that decide.
 
     Both caps apply and 0 disables either, matching the post and log windows. The
     count cap is what actually bounds size — an age window alone lets a burst of
@@ -70,22 +136,41 @@ def _prune_discover_reports(session: Session, *, max_days: int, max_count: int) 
     There is deliberately no floor: if the policy says the newest report goes, it
     goes, and Discover shows its empty state prompting a Generate. Setting the
     values to 0 is how you opt out, rather than the job second-guessing them.
+
+    **Per account rather than grouped, unlike the log sweep**, which costs at
+    most two indexed statements per account per hour. The log families are
+    grouped because `delete_owned_logs_before` already took a list of owners;
+    grouping the count cap here would mean ranking with `row_number() OVER
+    (PARTITION BY user_id)`, which is real complexity bought against a cost
+    nobody has measured. The trigger for changing that is account count, not
+    taste: at a few hundred accounts this is still noise, and at a few thousand
+    the age half groups exactly like the logs do and the count half needs the
+    window function.
+
+    **A report with no owner is reached by nothing here**, by construction —
+    every cap is somebody's. The ticket 20 migration adopts the legacy ones
+    once, and every report written since ticket 17 carries an owner, so the
+    only way to hold an unreachable report is to have migrated a database that
+    had saved reports and no account at all.
     """
     deleted = 0
+    mine = col(DiscoverReport.user_id) == user_id
 
     if max_days > 0:
-        cutoff = int(utc_now().timestamp() * 1000) - max_days * 24 * 60 * 60 * 1000
         result = session.execute(
-            sa_delete(DiscoverReport).where(col(DiscoverReport.timestamp) < cutoff)
+            sa_delete(DiscoverReport).where(
+                mine, col(DiscoverReport.timestamp) < _cutoff_ms(max_days)
+            )
         )
         session.commit()
         deleted += cast(Any, result).rowcount or 0
 
     if max_count > 0:
-        # Ids of everything past the newest N, then one bulk delete. The blob
-        # column is never loaded — only the ids are selected.
+        # Ids of everything past this account's newest N, then one bulk delete.
+        # The blob column is never loaded — only the ids are selected.
         stale = session.exec(
             select(DiscoverReport.id)
+            .where(mine)
             .order_by(col(DiscoverReport.timestamp).desc(), col(DiscoverReport.id))
             .offset(max_count)
         ).all()
@@ -161,63 +246,101 @@ def _collect_unfollowed_channels(session: Session) -> tuple[int, int]:
     return collected, posts
 
 
-def run_retention_cleanup(session: Session) -> dict[str, int]:
-    settings = load_retention_settings(session)
-    post_days = int(settings.get("postRetentionDays") or 0)
-    log_days = int(settings.get("logRetentionDays") or 0)
-    payload_days = int(settings.get("payloadRetentionDays") or 0)
-    operator_id = get_operator_user_id(session)
+def _sweep_logs(
+    session: Session,
+    *,
+    shared_days: int,
+    prefs_by_user: dict[uuid.UUID, dict[str, Any]],
+) -> tuple[int, int]:
+    """Delete expired log rows, each family on the window that decides for it.
 
-    deleted_posts = 0
+    Returns (log rows, sync payload rows). The payload count comes back
+    separately because the shared sweep takes payloads with their parent — a
+    payload whose log row is gone is unreachable, which is the stranding ticket
+    19's review caught — and `run_retention_cleanup` reports the two numbers
+    apart. Dropping it on the floor here is what made `deletedPayloads`
+    under-report everything the log window removed.
+
+    Logs first in the run: they are the heaviest tables (tg_sync_logs
+    full_response is ~17KB/row, up to 3MB) and the cheapest to clear, so they go
+    before the slower per-post work in case the latter is interrupted.
+
+    Two passes. The deployment's window takes the families no account owns and
+    the ownerless rows of the ones that are otherwise personal. Then each
+    distinct personal window takes the rows of every account that chose it —
+    grouped, so a deployment with fifty accounts on the default runs one DELETE
+    per log type rather than fifty, and a single-operator deployment runs
+    exactly the query it ran before ticket 20.
+    """
     deleted_logs = 0
     deleted_payloads = 0
+    swept: set[str] = set()
 
-    # Logs first: they are the heaviest tables (tg_sync_logs full_response is
-    # ~17KB/row, up to 3MB) and the cheapest to clear, so do them before the
-    # slower per-post work in case the latter is interrupted.
-    if log_days > 0:
-        cutoff = int(utc_now().timestamp() * 1000) - log_days * 24 * 60 * 60 * 1000
-        for model_cls, resource in (
-            (PublishLog, "publish_logs"),
-            (SyncLog, "sync_logs"),
-            (LLMLog, "llm_logs"),
-            (EmbeddingLog, "embedding_logs"),
-            (NetworkLog, "network_logs"),
-        ):
-            timestamp_col = cast(Any, model_cls).timestamp
-            # Bulk SQL DELETE, not select-all-then-ORM-delete: materialising
-            # every expired row pulled gigabytes into the worker and OOM-killed
-            # it. This deletes in the database without loading any row.
-            del_stmt = sa_delete(model_cls).where(col(timestamp_col) < cutoff)
-            if operator_id is not None:
-                user_id_col = cast(Any, model_cls).user_id
-                del_stmt = del_stmt.where(
-                    or_(col(user_id_col) == operator_id, col(user_id_col).is_(None))
-                )
-            result = session.execute(del_stmt)
-            if model_cls is SyncLog:
-                # tg_sync_log_payloads has no FK to cascade from, so sweep it at
-                # the log cutoff too. Without this, an operator who disables
-                # payload retention (0 = never) while keeping a finite log
-                # window would strand payloads whose log row is already gone.
-                payload_result = session.execute(
-                    expire_sync_payloads_stmt(cutoff, operator_id)
-                )
-                deleted_payloads += cast(Any, payload_result).rowcount or 0
-            session.commit()
-            deleted = cast(Any, result).rowcount or 0
-            if deleted:
-                deleted_logs += deleted
-                touch_sync(session, resource)
+    def record(sweep: LogSweep) -> None:
+        nonlocal deleted_logs, deleted_payloads
+        deleted_payloads += sweep.payloads
+        for log_type, count in sweep.counts.items():
+            if count:
+                deleted_logs += count
+                swept.add(LOG_MODELS[log_type][1])
+
+    if shared_days > 0:
+        cutoff = _cutoff_ms(shared_days)
+        record(
+            delete_logs_before(session, cutoff, log_types=_ordered(SHARED_LOG_TYPES))
+        )
+        # The same window reaches the rows of the *personal* families that no
+        # account owns. Nothing else can: a per-account sweep filters on an id
+        # these rows do not carry, so before ticket 20 they were deleted only by
+        # the operator's own window happening to include `user_id IS NULL`.
+        record(
+            delete_unowned_logs_before(
+                session, cutoff, log_types=_ordered(PERSONAL_LOG_TYPES)
+            )
+        )
+
+    owners_by_window: dict[int, list[uuid.UUID]] = {}
+    for user_id, prefs in prefs_by_user.items():
+        days = int(prefs.get("logRetentionDays") or 0)
+        if days > 0:
+            owners_by_window.setdefault(days, []).append(user_id)
+
+    for days in sorted(owners_by_window):
+        record(
+            delete_owned_logs_before(
+                session,
+                _cutoff_ms(days),
+                log_types=_ordered(PERSONAL_LOG_TYPES),
+                user_ids=owners_by_window[days],
+            )
+        )
+
+    for resource in sorted(swept):
+        touch_sync(session, resource)
+    return deleted_logs, deleted_payloads
+
+
+def run_retention_cleanup(session: Session) -> dict[str, int]:
+    policy = load_retention_policy(session)
+    post_days = int(policy.get("postRetentionDays") or 0)
+    shared_log_days = int(policy.get("sharedLogRetentionDays") or 0)
+    payload_days = int(policy.get("payloadRetentionDays") or 0)
+    prefs_by_user = load_retention_prefs_by_user(session)
+
+    deleted_posts = 0
+
+    deleted_logs, deleted_payloads = _sweep_logs(
+        session, shared_days=shared_log_days, prefs_by_user=prefs_by_user
+    )
 
     # Payloads expire on their own, shorter horizon: the bodies are the bulk of
     # a sync log, so discarding them early keeps a long audit trail cheap.
+    # Deployment policy like the log rows they hang off — ticket 19 made the
+    # parent Channel telemetry, and a body cannot be more personal than the row
+    # it belongs to.
     if payload_days > 0:
-        payload_cutoff = (
-            int(utc_now().timestamp() * 1000) - payload_days * 24 * 60 * 60 * 1000
-        )
         payload_result = session.execute(
-            expire_sync_payloads_stmt(payload_cutoff, operator_id)
+            expire_sync_payloads_stmt(_cutoff_ms(payload_days))
         )
         session.commit()
         expired = cast(Any, payload_result).rowcount or 0
@@ -226,7 +349,11 @@ def run_retention_cleanup(session: Session) -> dict[str, int]:
             touch_sync(session, "sync_logs")
 
     if post_days > 0:
-        cutoff = int(utc_now().timestamp() * 1000) - post_days * 24 * 60 * 60 * 1000
+        # No owner filter. The corpus is shared — one scrape serves every
+        # follower — so there is no account whose Posts these are, and the
+        # `user_id` the sweep used to narrow on is the stamp of whoever
+        # scraped the row first, which ticket 22 drops.
+        cutoff = _cutoff_ms(post_days)
         affected_channels: set[str] = set()
         # Page through the backlog: select a bounded batch, delete it and its
         # dependents in bulk, commit, repeat. Memory stays flat regardless of
@@ -236,10 +363,6 @@ def run_retention_cleanup(session: Session) -> dict[str, int]:
                 col(Post.timestamp) < cutoff,
                 col(Post.is_anchor) == False,  # noqa: E712
             )
-            if operator_id is not None:
-                batch_stmt = batch_stmt.where(
-                    or_(Post.user_id == operator_id, col(Post.user_id).is_(None))
-                )
             batch = session.exec(batch_stmt.limit(POST_DELETE_BATCH)).all()
             if not batch:
                 break
@@ -312,11 +435,17 @@ def run_retention_cleanup(session: Session) -> dict[str, int]:
     deleted_channels, collected_posts = _collect_unfollowed_channels(session)
     deleted_posts += collected_posts
 
-    deleted_reports = _prune_discover_reports(
-        session,
-        max_days=int(settings.get("reportRetentionDays") or 0),
-        max_count=int(settings.get("reportRetentionMax") or 0),
-    )
+    # Per account, on that account's caps. A report belongs to whoever
+    # generated it, so one person's count cap must not decide how many reports
+    # anybody else keeps.
+    deleted_reports = 0
+    for user_id, prefs in prefs_by_user.items():
+        deleted_reports += _prune_discover_reports(
+            session,
+            user_id=user_id,
+            max_days=int(prefs.get("reportRetentionDays") or 0),
+            max_count=int(prefs.get("reportRetentionMax") or 0),
+        )
     if deleted_reports:
         touch_sync(session, "discover_reports")
 
@@ -347,7 +476,8 @@ def run_retention_cleanup(session: Session) -> dict[str, int]:
     logger.info(
         "Retention cleanup: deleted %s posts, %s log rows, %s sync payloads, "
         "%s reports, %s sync jobs, %s unfollowed channels, %s orphaned avatars "
-        "(postDays=%s, logDays=%s, payloadDays=%s, syncJobDays=%s)",
+        "(postDays=%s, sharedLogDays=%s, payloadDays=%s, syncJobDays=%s, "
+        "accounts=%s)",
         deleted_posts,
         deleted_logs,
         deleted_payloads,
@@ -356,9 +486,10 @@ def run_retention_cleanup(session: Session) -> dict[str, int]:
         deleted_channels,
         deleted_photos,
         post_days,
-        log_days,
+        shared_log_days,
         payload_days,
         app_settings.SYNC_JOB_RETENTION_DAYS,
+        len(prefs_by_user),
     )
     return {
         "deletedPosts": deleted_posts,

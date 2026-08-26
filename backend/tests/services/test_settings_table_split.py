@@ -76,6 +76,8 @@ from sqlmodel import Session
 
 from app.core.db import engine
 from app.jobs.settings import (
+    _default_retention_policy,
+    _default_retention_prefs,
     _default_sync,
     load_sync_settings,
     save_sync_settings,
@@ -83,6 +85,8 @@ from app.jobs.settings import (
 from app.models_tg import AppSetting, UserSetting
 from app.services.settings_registry import (
     GLOBAL_KEYS,
+    RETENTION_POLICY_FIELDS,
+    RETENTION_PREF_FIELDS,
     SYNC_KEY,
     SYNC_POLICY_FIELDS,
     SYNC_PREF_FIELDS,
@@ -242,6 +246,39 @@ def test_every_sync_field_has_exactly_one_home() -> None:
             assert not first & second, (
                 f"sync field(s) in two homes: {sorted(first & second)}"
             )
+
+
+def test_every_retention_field_has_exactly_one_home() -> None:
+    """The ticket 20 carve is a partition too, for the same two reasons.
+
+    A field in neither set is dropped silently by the facade on the first
+    write, and the window it names goes on running at its default. A field in
+    both is written twice, and which copy the reassembled blob shows depends on
+    merge order.
+    """
+    homes = [RETENTION_POLICY_FIELDS, RETENTION_PREF_FIELDS]
+    declared = set().union(*homes)
+    on_disk = set(_default_retention_policy()) | set(_default_retention_prefs())
+
+    assert declared == on_disk, (
+        f"retention field(s) with no home: {sorted(on_disk - declared)}; "
+        f"declared but not a retention field: {sorted(declared - on_disk)}"
+    )
+    assert not RETENTION_POLICY_FIELDS & RETENTION_PREF_FIELDS, (
+        f"retention field(s) in two homes: "
+        f"{sorted(RETENTION_POLICY_FIELDS & RETENTION_PREF_FIELDS)}"
+    )
+
+
+def test_the_two_retention_defaults_do_not_overlap() -> None:
+    """Each loader owns its own half of the blob and no key of the other's.
+
+    The partition above is about the declared sets; this is about the two
+    functions that actually produce the values. They could agree with the sets
+    and still both emit `logRetentionDays`, at which point the reassembled
+    facade would answer with whichever ran last.
+    """
+    assert not set(_default_retention_policy()) & set(_default_retention_prefs())
 
 
 # --------------------------------------------------------------------------

@@ -2329,21 +2329,22 @@ export const dataGetSetting = <ThrowOnError extends boolean = true>(options: Opt
  * Put Setting
  * Write one settings section, refusing deployment policy to a non-Admin.
  *
- * The route stays open because the *key* decides, not the path.
- * `retention` sets `postRetentionDays`, which deletes every account's Posts on
- * the next sweep — table clearing on a timer, and the ticket's own goal is
- * that a new account cannot reach table clearing. `jobs` turns the scheduler
- * off for everybody. Those are `DATA_ADMIN`, and so is every other global key.
+ * The route stays open because the *key* decides, not the path. `jobs` turns
+ * the scheduler off for everybody, and so on for every other global key:
+ * those are `DATA_ADMIN`.
  *
- * `sync` cannot be gated the same way, because it is a facade: one body
- * carries deployment policy, scheduler runtime, and the caller's own
- * preferences, and the Pause button writes a runtime field through it.
- * Refusing the whole request would take a person's own start-time preference
- * away from them; so for a caller without the permission the body is narrowed
- * to the fields the registry already declares personal, and the rest is
- * dropped rather than written. Dropping, not refusing, because the frontend
- * sends a whole section at once and a non-Admin saving their preferences
- * should not be told the save failed when the half that is theirs succeeded.
+ * `sync` and `retention` cannot be gated that way, because each is a facade:
+ * one body carries deployment policy and the caller's own preferences at the
+ * same time. `sync` mixes scheduler policy, the runtime counters the Pause
+ * button writes, and a person's start-time defaults; `retention` mixes the
+ * corpus window — `postRetentionDays`, which deletes every account's Posts on
+ * the next sweep, table clearing on a timer — with that person's own log and
+ * report windows. Refusing the whole request would take their own settings
+ * away from them, so for a caller without the permission the body is narrowed
+ * to the fields the registry declares personal and the rest is dropped rather
+ * than written. Dropping, not refusing, because the frontend sends a whole
+ * section at once and a non-Admin saving their preferences should not be told
+ * the save failed when the half that is theirs succeeded.
  */
 export const dataPutSetting = <ThrowOnError extends boolean = true>(options: Options<DataPutSettingData, ThrowOnError>) => {
     return (options.client ?? _heyApiClient).put<DataPutSettingResponses, DataPutSettingErrors, ThrowOnError, 'data'>({

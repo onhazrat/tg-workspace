@@ -15,6 +15,7 @@ import {
   RETENTION_LOG_DAYS_DEFAULT,
   RETENTION_PAYLOAD_DAYS_DEFAULT,
   RETENTION_POST_DAYS_DEFAULT,
+  RETENTION_SHARED_LOG_DAYS_DEFAULT,
 } from "@/constants"
 import type {
   DiscoverFollowState,
@@ -100,6 +101,8 @@ interface SettingsContextType {
   setPostRetentionDays: (days: number) => void
   logRetentionDays: number
   setLogRetentionDays: (days: number) => void
+  sharedLogRetentionDays: number
+  setSharedLogRetentionDays: (days: number) => void
   payloadRetentionDays: number
   setPayloadRetentionDays: (days: number) => void
   reportRetentionDays: number
@@ -235,6 +238,7 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({
           ...decodeServerSection("retention", {
             postRetentionDays: RETENTION_POST_DAYS_DEFAULT,
             logRetentionDays: RETENTION_LOG_DAYS_DEFAULT,
+            sharedLogRetentionDays: RETENTION_SHARED_LOG_DAYS_DEFAULT,
             payloadRetentionDays: RETENTION_PAYLOAD_DAYS_DEFAULT,
             ...retention,
             ...legacyRetention,

@@ -61,7 +61,7 @@ def test_delete_old_logs_removes_only_expired() -> None:
     _seed([("old", now - 10 * DAY_MS, None), ("fresh", now - 1 * DAY_MS, None)])
 
     with Session(engine) as session:
-        deleted = delete_old_logs(session, older_than_days=5, operator_id=None)
+        deleted = delete_old_logs(session, older_than_days=5)
 
     assert deleted["sync"] == 1
     assert _ids() == {"fresh"}
@@ -69,14 +69,20 @@ def test_delete_old_logs_removes_only_expired() -> None:
 
 def test_delete_old_logs_returns_a_count_per_log_type() -> None:
     with Session(engine) as session:
-        deleted = delete_old_logs(session, older_than_days=5, operator_id=None)
+        deleted = delete_old_logs(session, older_than_days=5)
 
     assert set(deleted) == {"publish", "sync", "llm", "embedding", "network"}
     assert all(isinstance(v, int) for v in deleted.values())
 
 
-def test_delete_old_logs_respects_operator_scoping() -> None:
-    """Rows owned by another operator must survive; unowned rows are shared."""
+def test_delete_old_logs_sweeps_every_account() -> None:
+    """The Admin purge crosses accounts, which is why it is Admin-gated.
+
+    It used to narrow itself to `user_id == operator OR IS NULL`, so an
+    administrative sweep quietly skipped every other account's rows while its
+    own docstring said it swept them all. Ticket 19 took sync logs off any
+    account's books and ticket 20 removed the filter.
+    """
     now = _now_ms()
     mine = uuid.uuid4()
     theirs = uuid.uuid4()
@@ -85,11 +91,12 @@ def test_delete_old_logs_respects_operator_scoping() -> None:
             ("mine-old", now - 10 * DAY_MS, mine),
             ("theirs-old", now - 10 * DAY_MS, theirs),
             ("unowned-old", now - 10 * DAY_MS, None),
+            ("fresh", now - 1 * DAY_MS, theirs),
         ]
     )
 
     with Session(engine) as session:
-        deleted = delete_old_logs(session, older_than_days=5, operator_id=mine)
+        deleted = delete_old_logs(session, older_than_days=5)
 
-    assert deleted["sync"] == 2
-    assert _ids() == {"theirs-old"}
+    assert deleted["sync"] == 3
+    assert _ids() == {"fresh"}

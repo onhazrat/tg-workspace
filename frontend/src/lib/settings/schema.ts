@@ -11,6 +11,7 @@ import {
   RETENTION_POST_DAYS_DEFAULT,
   RETENTION_REPORT_DAYS_DEFAULT,
   RETENTION_REPORT_MAX_DEFAULT,
+  RETENTION_SHARED_LOG_DAYS_DEFAULT,
 } from "@/constants"
 import type {
   DiscoverFollowState,
@@ -224,9 +225,22 @@ export const appSettingsSpec = {
       section: "retention",
     },
   ),
+  // Your own publish/LLM/embedding rows. Personal since ticket 20: the server
+  // stores it per account, so a short window here never reaches anybody else's
+  // evidence. The wire shape is unchanged — the endpoint is a facade.
   logRetentionDays: intSetting("logRetentionDays", RETENTION_LOG_DAYS_DEFAULT, {
     section: "retention",
   }),
+  // The log rows no account owns: sync (Channel telemetry), network (proxy
+  // behaviour), and anything a background job wrote with no user behind it.
+  // Deployment policy, so only an Admin's save of it is honoured.
+  sharedLogRetentionDays: intSetting(
+    "sharedLogRetentionDays",
+    RETENTION_SHARED_LOG_DAYS_DEFAULT,
+    {
+      section: "retention",
+    },
+  ),
   // Sync log request/response bodies live in their own table so they can be
   // reclaimed without touching the log rows, which is why they get a shorter
   // window than logRetentionDays above: a long audit trail stays cheap.

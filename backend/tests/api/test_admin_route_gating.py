@@ -296,12 +296,16 @@ def test_a_write_to_a_new_id_still_creates(
 # ------------------------------------------------- deployment policy settings
 
 
-#: Global settings keys a plain user must not be able to write. `retention` is
-#: the one that matters most: `postRetentionDays: 1` deletes every account's
-#: Posts on the next sweep, which is table clearing on a timer — and "cannot
-#: reach table clearing" is this ticket's stated goal.
+#: Global settings keys a plain user must not be able to write.
+#:
+#: `retention` is not here since ticket 20 made it a facade over both tables,
+#: the way `sync` already was — a plain user's PUT succeeds and writes only
+#: their own log and report windows. The assertion that matters,
+#: `postRetentionDays` staying put, is
+#: `test_the_retention_facade_keeps_a_persons_own_windows` below. It is a
+#: stronger check than the 403 was: a 403 says the request was refused, and
+#: what this ticket needs to know is that the number did not move.
 GLOBAL_SETTING_WRITES: list[tuple[str, dict[str, Any]]] = [
-    ("retention", {"postRetentionDays": 1}),
     ("jobs", {"auto_sync": False}),
     ("sync_runtime", {"autoSyncPauseUntil": 99999999999999}),
     ("translation", {"enabled": False}),
@@ -359,6 +363,33 @@ def test_the_sync_facade_keeps_a_persons_own_preferences(
     assert value["globalStartTimeMode"] == "days"
     assert value["syncConcurrency"] != 99, (
         "a plain user set the deployment's sync concurrency through the facade"
+    )
+
+
+@pytest.mark.security
+def test_the_retention_facade_keeps_a_persons_own_windows(
+    client: TestClient, normal_user_token_headers: dict[str, str]
+) -> None:
+    """`retention` is the same shape as `sync` since ticket 20.
+
+    `postRetentionDays: 1` deletes every account's Posts on the next sweep —
+    table clearing on a timer, and "a new account cannot reach table clearing"
+    is ticket 18's stated goal. But the same body carries this person's own log
+    window, and refusing outright would mean nobody but an Admin can say how
+    long to keep their own logs. So the policy half is dropped and the personal
+    half is written, and this asserts both halves of that.
+    """
+    response = client.put(
+        f"{PREFIX}/data/settings/retention",
+        json={"logRetentionDays": 3, "postRetentionDays": 1},
+        headers=normal_user_token_headers,
+    )
+    assert response.status_code == 200, response.text[:200]
+    value = response.json()["value"]
+    assert value["logRetentionDays"] == 3
+    assert value["postRetentionDays"] != 1, (
+        "a plain user set the deployment's post retention window through the "
+        "facade — that is table clearing on a timer"
     )
 
 
@@ -709,11 +740,12 @@ UNGATED_ADMIN_MODULE_ROUTES: dict[tuple[str, str], str] = {
     ("PUT", f"{PREFIX}/data/settings/{{key}}"): (
         "Gated per *key* inside the handler rather than on the route, which is "
         "why no dependency is visible here. A global key demands DATA_ADMIN; "
-        "the `sync` facade cannot, because one body carries deployment policy, "
-        "scheduler runtime and the caller's own preferences, so it is narrowed "
-        "to the registry's per-User fields instead. "
-        "`test_a_plain_user_cannot_write_deployment_policy` and "
-        "`test_the_sync_facade_keeps_a_persons_own_preferences` are the checks "
+        "the `sync` and `retention` facades cannot, because one body carries "
+        "deployment policy and the caller's own preferences at once, so each is "
+        "narrowed to the registry's per-User fields instead. "
+        "`test_a_plain_user_cannot_write_deployment_policy`, "
+        "`test_the_sync_facade_keeps_a_persons_own_preferences` and "
+        "`test_the_retention_facade_keeps_a_persons_own_windows` are the checks "
         "this structural guard cannot make."
     ),
 }

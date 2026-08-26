@@ -228,7 +228,7 @@ def purge_logs(
     """
     if older_than_days is not None and older_than_days > 0:
         ADMIN_ONLY(session, current_user)
-        deleted = delete_old_logs(session, older_than_days, operator_id=current_user.id)
+        deleted = delete_old_logs(session, older_than_days)
         for resource in {LOG_MODELS[k][1] for k in deleted if deleted[k]}:
             touch_sync(session, resource)
         return PurgeLogsResponse.model_validate(

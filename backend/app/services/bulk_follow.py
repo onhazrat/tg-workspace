@@ -15,7 +15,7 @@ from app.core.db import engine
 from app.core.request_meter import metered
 from app.jobs.settings import (
     compute_effective_global_start_time_ms,
-    load_retention_settings,
+    load_retention_policy,
     load_sync_settings,
 )
 from app.services.async_db import run_db
@@ -228,7 +228,7 @@ def _load_effective_start_time(user_id: uuid.UUID | None) -> int:
     # difference. Now it does: `globalStartTimeMode`/`Value` are per-User.
     with Session(engine) as session:
         sync_settings = load_sync_settings(session, user_id=user_id)
-        retention_settings = load_retention_settings(session)
+        retention_settings = load_retention_policy(session)
         return compute_effective_global_start_time_ms(sync_settings, retention_settings)
 
 

@@ -57,15 +57,17 @@ def _retention_off(session: Session) -> None:
     Also records the follow backfill as complete, because collection refuses to
     run otherwise — see `test_collection_refuses_to_run_before_the_backfill`.
     """
+    # The deployment half only. Since ticket 20 the log and report windows are
+    # per-account and cannot be written without an owner, and nothing in this
+    # file owns a log row — the sync logs here are Channel telemetry, swept on
+    # `sharedLogRetentionDays`, which is why that one has to be turned off.
     save_settings_section(
         session,
         "retention",
         {
             "postRetentionDays": 0,
-            "logRetentionDays": 0,
+            "sharedLogRetentionDays": 0,
             "payloadRetentionDays": 0,
-            "reportRetentionDays": 0,
-            "reportRetentionMax": 0,
         },
     )
     save_settings_section(

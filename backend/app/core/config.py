@@ -207,6 +207,12 @@ class Settings(BaseSettings):
     # Retention defaults (AppSetting bootstrap)
     RETENTION_POST_DAYS_DEFAULT: int = 90
     RETENTION_LOG_DAYS_DEFAULT: int = 30
+    # The window for log rows no account owns: the sync family, which ticket 19
+    # made Channel telemetry, the Admin-only network family, and any publish,
+    # LLM or embedding row a background job wrote with no User behind it. Those
+    # cannot sit on a per-User window and would otherwise be swept by nobody.
+    # Same default as the personal window, so ticket 20 changed no behaviour.
+    RETENTION_SHARED_LOG_DAYS_DEFAULT: int = 30
     # Sync log request/response bodies are the bulk of a log (~17KB/row, up to
     # 3MB) and live in tg_sync_log_payloads so they can be reclaimed on their
     # own, much shorter horizon than the log metadata above. 0 = keep forever.

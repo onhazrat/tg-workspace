@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 import uuid
-from typing import Any, cast
+from collections.abc import Callable, Iterable, Sequence
+from typing import Any, NamedTuple, cast
 
 from fastapi import HTTPException
 from sqlalchemy import Text
@@ -92,6 +93,18 @@ def _shared_log_types() -> frozenset[str]:
 #: The answer, resolved once at import. `tenancy` is a pure transform with no
 #: database access, so classifying the five types costs nothing here.
 SHARED_LOG_TYPES = _shared_log_types()
+
+#: The types one account does own rows of, so the window that account sets is
+#: what sweeps them (ticket 20). The complement, derived for the same reason
+#: `SHARED_LOG_TYPES` is derived: two hand-written lists are two chances to
+#: disagree, and the disagreement here would be a family swept by nobody or by
+#: everybody.
+#:
+#: Membership is about the *family*, not about a given row: a publish log is
+#: personal, but `user_id` is nullable on all five tables and a background job
+#: writes rows with no owner at all. Those are swept on the deployment window
+#: with the shared families — see `delete_unowned_logs_before`.
+PERSONAL_LOG_TYPES = frozenset(LOG_MODELS) - SHARED_LOG_TYPES
 
 
 #: Why the reads below cross accounts for those types, in the one place
@@ -392,50 +405,145 @@ def clear_logs(session: Session, log_type: str) -> int:
     return cast(Any, result).rowcount or 0
 
 
-def delete_old_logs(
-    session: Session,
-    older_than_days: int,
-    *,
-    operator_id: uuid.UUID | None = None,
-) -> dict[str, int]:
-    from app.services.operator import get_operator_user_id
+class LogSweep(NamedTuple):
+    """What one sweep removed: rows per log type, and sync payload rows.
 
-    if operator_id is None:
-        operator_id = get_operator_user_id(session)
-    cutoff = int(utc_now().timestamp() * 1000) - older_than_days * 24 * 60 * 60 * 1000
+    The payload count is separate because `tg_sync_log_payloads` is not a log
+    type — it is the bodies hanging off one. Folding it into `counts` under a
+    sixth key would reach `routes/data/logs.py`, which maps every key through
+    `LOG_MODELS` and would raise on a key that is not a family.
+    """
+
+    counts: dict[str, int]
+    payloads: int
+
+
+def _delete_logs_before(
+    session: Session,
+    cutoff: int,
+    log_types: Iterable[str],
+    owner_clause: Callable[[type[SQLModel]], Any] | None,
+) -> LogSweep:
+    """Bulk-delete expired rows of `log_types`, one committed DELETE per type.
+
+    Bulk DELETE in the database, never select-all-then-ORM-delete: materialising
+    every expired row pulled gigabytes into the worker and OOM-killed it.
+
+    The sync payload table is swept alongside its parent whenever sync rows are
+    in scope, because `tg_sync_log_payloads` has no FK to cascade from — the
+    stranding ticket 19's review caught. `owner_clause` is `None` there and only
+    there: a payload row's owner column is a pre-ticket-19 stamp, so narrowing
+    the payload sweep by owner is what stranded the bodies in the first place.
+    """
     deleted: dict[str, int] = {}
-    for log_type, (model, _) in LOG_MODELS.items():
-        # Bulk DELETE in the database — see clear_logs above for why.
+    payloads = 0
+    for log_type in log_types:
+        model, _ = LOG_MODELS[log_type]
         stmt = sa_delete(model).where(col(cast(Any, model).timestamp) < cutoff)
-        if operator_id is not None and hasattr(model, "user_id"):
-            user_id_col = cast(Any, model).user_id
-            stmt = stmt.where(
-                or_(col(user_id_col) == operator_id, col(user_id_col).is_(None))
-            )
+        if owner_clause is not None:
+            stmt = stmt.where(owner_clause(model))
         result = session.execute(stmt)
         if log_type == "sync":
-            session.execute(expire_sync_payloads_stmt(cutoff, operator_id))
+            payload_result = session.execute(expire_sync_payloads_stmt(cutoff))
+            payloads += cast(Any, payload_result).rowcount or 0
         session.commit()
         deleted[log_type] = cast(Any, result).rowcount or 0
-    return deleted
+    return LogSweep(deleted, payloads)
 
 
-def expire_sync_payloads_stmt(cutoff: int, operator_id: uuid.UUID | None) -> Any:
+def delete_logs_before(
+    session: Session, cutoff: int, *, log_types: Iterable[str]
+) -> LogSweep:
+    """Every row of `log_types` older than `cutoff`, whoever owns it.
+
+    The deployment's own sweep. Used for the families no single account owns —
+    Channel telemetry and proxy behaviour — and by the Admin purge route, whose
+    whole point is that it crosses accounts.
+    """
+    return _delete_logs_before(session, cutoff, log_types, None)
+
+
+def delete_owned_logs_before(
+    session: Session,
+    cutoff: int,
+    *,
+    log_types: Iterable[str],
+    user_ids: Sequence[uuid.UUID],
+) -> LogSweep:
+    """Rows of `log_types` older than `cutoff` belonging to `user_ids`.
+
+    Takes a set of owners rather than one, so the retention job can sweep every
+    account that chose the same window in a single DELETE per type instead of
+    one per account per type. On a single-operator deployment that is exactly
+    the query it ran before ticket 20.
+
+    An empty `user_ids` returns early. SQLAlchemy renders an empty `IN` as a
+    false expression, so this is not what makes the call safe — it is what
+    stops five DELETE statements reaching the database to accomplish nothing,
+    and what makes "nobody chose this window" visible at the call site rather
+    than something you have to know a SQLAlchemy rendering rule to be sure of.
+    """
+    if not user_ids:
+        return LogSweep(dict.fromkeys(log_types, 0), 0)
+    owners = list(user_ids)
+    return _delete_logs_before(
+        session,
+        cutoff,
+        log_types,
+        lambda model: col(cast(Any, model).user_id).in_(owners),
+    )
+
+
+def delete_unowned_logs_before(
+    session: Session, cutoff: int, *, log_types: Iterable[str]
+) -> LogSweep:
+    """Rows of `log_types` older than `cutoff` that no account owns.
+
+    `user_id` is nullable on all five log tables and every `upsert_*` here
+    takes it as an optional argument, so a row written by a background job with
+    no User behind it is a routine occurrence rather than a legacy accident.
+    Once the personal families are swept on their owner's own window, those rows
+    are reachable by no window at all — this is the one that reaches them, and
+    it runs on the deployment's `sharedLogRetentionDays`.
+    """
+    return _delete_logs_before(
+        session,
+        cutoff,
+        log_types,
+        lambda model: col(cast(Any, model).user_id).is_(None),
+    )
+
+
+def delete_old_logs(session: Session, older_than_days: int) -> dict[str, int]:
+    """Every log row older than `older_than_days`, for every account.
+
+    The Admin purge route's sweep, which is Admin-gated precisely because it
+    crosses accounts. It used to narrow itself to `user_id == operator OR IS
+    NULL` — a filter that made an administrative sweep quietly skip every other
+    account's rows while its own docstring said it swept them all. Ticket 19
+    made sync logs Channel telemetry, which took the last argument for that
+    filter away; ticket 20 removed it.
+    """
+    cutoff = int(utc_now().timestamp() * 1000) - older_than_days * 24 * 60 * 60 * 1000
+    # `.counts` only: the route reports one number per log family and maps every
+    # key through `LOG_MODELS`. The payload rows go with their parent either
+    # way — see `LogSweep`.
+    return delete_logs_before(session, cutoff, log_types=LOG_MODELS).counts
+
+
+def expire_sync_payloads_stmt(cutoff: int) -> Any:
     """Bulk DELETE of sync payloads older than `cutoff`.
 
     Filters on the payload table's own denormalised timestamp so the sweep
     never joins back to tg_sync_logs. Shared by the log-deletion paths here and
     by `app.jobs.retention`, which also runs it on the shorter payload horizon.
+
+    No owner filter, and there is nothing to add one from: a sync log is
+    Channel telemetry after ticket 19 and `SyncLogPayload.user_id` is a stamp
+    ticket 22 drops. Narrowing this to the operator was how payloads outlived
+    the log rows they belonged to.
     """
-    stmt = sa_delete(SyncLogPayload).where(col(SyncLogPayload.timestamp) < cutoff)
-    if operator_id is not None:
-        stmt = stmt.where(
-            or_(
-                col(SyncLogPayload.user_id) == operator_id,
-                col(SyncLogPayload.user_id).is_(None),
-            )
-        )
-    return stmt
+    return sa_delete(SyncLogPayload).where(col(SyncLogPayload.timestamp) < cutoff)
 
 
 #: Columns a *list* page does not select, per log type.

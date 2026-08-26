@@ -19,7 +19,7 @@ from app.core.request_meter import metered
 from app.jobs.settings import (
     compute_scrape_cutoff_ms,
     load_media_settings,
-    load_retention_settings,
+    load_retention_policy,
     load_sync_settings,
 )
 from app.models_tg import Channel, Post, utc_now
@@ -437,7 +437,7 @@ def _prepare_channel_sync(
         # none would silently scrape from the default cutoff rather than the one
         # this follower asked for.
         sync_settings = load_sync_settings(session, user_id=effective_user_id)
-        retention_settings = load_retention_settings(session)
+        retention_settings = load_retention_policy(session)
         media_settings = load_media_settings(session)
         scrape_cutoff_ms = compute_scrape_cutoff_ms(sync_settings, retention_settings)
         has_existing_posts = (

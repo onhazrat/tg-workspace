@@ -16,7 +16,7 @@ from app.services.operator import get_operator_user_id
 def test_retention_keeps_anchor_posts() -> None:
     with Session(engine) as session:
         save_settings_section(
-            session, "retention", {"postRetentionDays": 30, "logRetentionDays": 0}
+            session, "retention", {"postRetentionDays": 30, "sharedLogRetentionDays": 0}
         )
         old_ts = 1_000_000_000_000
         anchor = Post(
@@ -58,7 +58,7 @@ def test_retention_batches_and_cascades(monkeypatch) -> None:
 
     with Session(engine) as session:
         save_settings_section(
-            session, "retention", {"postRetentionDays": 30, "logRetentionDays": 0}
+            session, "retention", {"postRetentionDays": 30, "sharedLogRetentionDays": 0}
         )
         operator_id = get_operator_user_id(session)
         for pid in range(1, 6):  # 5 expired posts -> 3 batches of size 2

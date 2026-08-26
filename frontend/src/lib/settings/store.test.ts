@@ -209,9 +209,13 @@ describe("backend sections", () => {
       "globalStartTimeMode",
       "globalStartTimeValue",
     ])
+    // One section on the wire, two rows behind it since ticket 20: the server
+    // routes each field to the table that owns it, so the browser sends the
+    // same blob it always sent and this list is what it has to contain.
     expect(Object.keys(buildSectionPayload("retention", settings))).toEqual([
       "postRetentionDays",
       "logRetentionDays",
+      "sharedLogRetentionDays",
       "payloadRetentionDays",
       "reportRetentionDays",
       "reportRetentionMax",

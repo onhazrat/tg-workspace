@@ -6,11 +6,13 @@ import { TgSettingsSection } from "@/components/ui/tg-settings-section"
 type RetentionPanelProps = {
   postRetentionDays: number
   logRetentionDays: number
+  sharedLogRetentionDays: number
   payloadRetentionDays: number
   reportRetentionDays: number
   reportRetentionMax: number
   onPostRetentionDaysChange: (days: number) => void
   onLogRetentionDaysChange: (days: number) => void
+  onSharedLogRetentionDaysChange: (days: number) => void
   onPayloadRetentionDaysChange: (days: number) => void
   onReportRetentionDaysChange: (days: number) => void
   onReportRetentionMaxChange: (count: number) => void
@@ -20,11 +22,13 @@ type RetentionPanelProps = {
 export const RetentionPanel: React.FC<RetentionPanelProps> = ({
   postRetentionDays,
   logRetentionDays,
+  sharedLogRetentionDays,
   payloadRetentionDays,
   reportRetentionDays,
   reportRetentionMax,
   onPostRetentionDaysChange,
   onLogRetentionDaysChange,
+  onSharedLogRetentionDaysChange,
   onPayloadRetentionDaysChange,
   onReportRetentionDaysChange,
   onReportRetentionMaxChange,
@@ -93,8 +97,46 @@ export const RetentionPanel: React.FC<RetentionPanelProps> = ({
           </p>
         )}
         <p className="text-[10px] opacity-40 italic serif">
-          Automatically delete system logs (sync, network, AI) older than the
-          selected timeframe.
+          Automatically delete your publish, AI and embedding logs older than
+          the selected timeframe. This window is yours alone — it never reaches
+          another account's logs.
+        </p>
+      </SettingAnchor>
+
+      <SettingAnchor
+        settingId="sharedLogRetentionDays"
+        highlighted={highlightId === "sharedLogRetentionDays"}
+        className="space-y-4"
+      >
+        <div className="flex items-center gap-2 opacity-60">
+          <Activity size={14} />
+          <span className="text-[10px] font-bold uppercase tracking-tight">
+            Shared Log Retention
+          </span>
+        </div>
+        <input
+          type="number"
+          min={0}
+          step={1}
+          value={sharedLogRetentionDays}
+          onChange={(e) => {
+            const val = Number.parseInt(e.target.value, 10)
+            onSharedLogRetentionDaysChange(
+              !Number.isNaN(val) && val >= 0 ? val : 0,
+            )
+          }}
+          className="w-full bg-app-bg border border-app-ink/20 p-2 text-[11px] font-mono focus:border-app-ink focus:outline-none transition-colors"
+        />
+        {sharedLogRetentionDays === 0 && (
+          <p className="text-[10px] opacity-60 italic serif">
+            Never Delete — shared logs are kept forever.
+          </p>
+        )}
+        <p className="text-[10px] opacity-40 italic serif">
+          Sync logs are telemetry about a channel and network logs record what
+          the proxies did, so neither belongs to an account — and a log written
+          by a background job has no owner either. They are swept on this
+          deployment-wide window instead. Admin only.
         </p>
       </SettingAnchor>
 
