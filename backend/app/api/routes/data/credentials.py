@@ -44,11 +44,11 @@ router = APIRouter()
 @router.get("/bot-credentials")
 def list_bot_credentials(
     session: SessionDep,
-    _current_user: CurrentUser,
+    current_user: CurrentUser,
 ) -> list[BotCredentialResponse]:
     return [
         BotCredentialResponse.model_validate(row)
-        for row in list_bot_credentials_impl(session)
+        for row in list_bot_credentials_impl(session, user_id=current_user.id)
     ]
 
 
@@ -88,11 +88,11 @@ def migrate_bot_credentials(
 @router.get("/chat-destinations")
 def list_chat_destinations(
     session: SessionDep,
-    _current_user: CurrentUser,
+    current_user: CurrentUser,
 ) -> list[ChatDestinationResponse]:
     return [
         ChatDestinationResponse.model_validate(row)
-        for row in list_chat_destinations_impl(session)
+        for row in list_chat_destinations_impl(session, user_id=current_user.id)
     ]
 
 

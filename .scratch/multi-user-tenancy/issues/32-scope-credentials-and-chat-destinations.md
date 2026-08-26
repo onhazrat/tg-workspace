@@ -7,17 +7,25 @@ endpoints stop returning every account's rows.
 
 **Blocks:** 21
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] `list_bot_credentials` and `list_chat_destinations` read through `scoped_select`
-- [ ] Both take a `user_id` with no default, so a caller cannot omit it
-- [ ] A second account's credentials and destinations are absent from both lists
-- [ ] Both flag states are green
+- [x] `list_bot_credentials` and `list_chat_destinations` read through `scoped_select`
+- [x] Both take a `user_id` with no default, so a caller cannot omit it
+- [x] A second account's credentials and destinations are absent from both lists
+- [x] Both flag states are green
 
 ## Why this is its own ticket
 
 Found by review during ticket 31, which closed the *writes* on these two families
-and left the reads open. It is the last unscoped read family in `app/`.
+and left the reads open.
+
+**Correction, from the review of this ticket's own implementation:** it is *not*
+"the last unscoped read family in `app/`", as this file originally claimed.
+`list_setting_groups` hand-rolls `user_id == me OR user_id IS NULL` over
+`ChannelSettingGroup`, `load_groups_by_id` reads that table unfiltered, and
+`_running_job_from_row` reads `SyncJob` across accounts for
+`GET /jobs/runtime-config`. All three are `USER_OWNED` and none is audited, so
+**ticket 21 must not treat this ticket as an all-clear for `app/`**.
 
 The shape is exactly what tickets 15 through 20 each did for one family, and the
 classification is already there — `tenancy.py` has held

@@ -12,7 +12,7 @@ from app.core.secrets import encrypt_token, is_encrypted
 from app.models_tg import BotCredential, ChatDestination, utc_now
 from app.services.serialization import bot_to_camel, chat_dest_to_camel, normalize_body
 from app.services.sync_meta import touch_sync
-from app.services.tenancy import assert_owner_on_write
+from app.services.tenancy import assert_owner_on_write, scoped_select
 
 #: The 404 each family answers for a row that is not there. Named rather
 #: than repeated so the owner checks below refuse a foreign row with the
@@ -30,8 +30,33 @@ def encrypt_bot_token(token: str) -> str:
     return encrypt_token(token)
 
 
-def list_bot_credentials(session: Session) -> list[dict[str, Any]]:
-    return [bot_to_camel(b) for b in session.exec(select(BotCredential)).all()]
+def list_bot_credentials(
+    session: Session, *, user_id: uuid.UUID
+) -> list[dict[str, Any]]:
+    """Return the credentials `user_id` may see.
+
+    This was a bare `select(BotCredential)` until ticket 32, while every write
+    on the same family had passed a `user_id` since ticket 31 — one family
+    answering two different questions about whose rows these are depending on
+    the verb.
+
+    **What leaked was the id, not the token.** `bot_to_camel` returns
+    `hasToken`, never `token_encrypted`, so be precise about the harm: this list
+    handed every account the other accounts' credential ids, names and bot
+    usernames. The ids are the part that matters, because they are
+    client-chosen through `PUT /data/bot-credentials/{bot_id}` and the
+    auto-publish path in `jobs/auto_summary.py` resolves `publishBotId` by id
+    with **no owner check at all** — so it will decrypt and send as another
+    account's bot. Scoping this read takes those ids out of the UI; it does not
+    take them out of reach, and overstating it here would point the next reader
+    away from the door that is still open.
+
+    `user_id` has no default for the reason `scoped_select` takes none: this
+    function took `(session)` alone, so an optional owner would leave every
+    existing caller passing nothing and still passing tests.
+    """
+    statement = scoped_select(select(BotCredential), BotCredential, user_id)
+    return [bot_to_camel(b) for b in session.exec(statement).all()]
 
 
 def upsert_bot_credential(
@@ -147,8 +172,17 @@ def migrate_bot_credentials(
     return {"migrated": len(migrated), "ids": migrated}
 
 
-def list_chat_destinations(session: Session) -> list[dict[str, Any]]:
-    return [chat_dest_to_camel(d) for d in session.exec(select(ChatDestination)).all()]
+def list_chat_destinations(
+    session: Session, *, user_id: uuid.UUID
+) -> list[dict[str, Any]]:
+    """Return the destinations `user_id` may see.
+
+    Same adoption as `list_bot_credentials`, and it belongs in the same change
+    for the twin-module reason: these two are the same list twice over, and a
+    fix applied to one of a pair is half a fix.
+    """
+    statement = scoped_select(select(ChatDestination), ChatDestination, user_id)
+    return [chat_dest_to_camel(d) for d in session.exec(statement).all()]
 
 
 def upsert_chat_destination(

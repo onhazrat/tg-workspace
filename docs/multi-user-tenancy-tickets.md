@@ -388,7 +388,9 @@ carry tokens.
 stop returning every account's rows.
 
 Found by review during ticket 31, which closed the writes on these two families and left the
-reads open. The last unscoped read family. `tenancy.py` has classified both as `USER_OWNED`
+reads open. (This ticket claimed to be the last unscoped read family in `app/`; the review of its
+implementation found that false — setting groups and `SyncJob` are still unaudited, so 21 must not
+read it as an all-clear.) `tenancy.py` has classified both as `USER_OWNED`
 since ticket 03; only the call sites never adopted it, so one family answers two different
 questions about whose rows these are depending on the verb. The flip does not fix it — these
 reads never call `scoped_select`, so enforcement changes nothing here.
