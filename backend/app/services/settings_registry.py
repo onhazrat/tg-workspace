@@ -41,6 +41,11 @@ SYNC_KEY = "sync"
 SYNC_RUNTIME_KEY = "sync_runtime"
 SYNC_PREFS_KEY = "sync_prefs"
 
+#: Ticket 12's lane control. Named here rather than spelled at its two call
+#: sites for the reason the three above are: the aggregate, the registry and
+#: the guard all have to agree on it.
+SYNC_LANES_KEY = "sync_lanes"
+
 #: Deployment scheduler policy: how often the tick runs, how many channels it
 #: syncs at once, how long it waits after a failure. One answer per deployment
 #: — the scheduler is a single process (see `test_worker_count.py`), so a
@@ -162,6 +167,12 @@ GLOBAL_KEYS: dict[str, str] = {
         "A marker recording that the ticket 04 backfill completed. A fact "
         "about the database, not about anybody — and retention reads it before "
         "collecting channels, with no User in hand."
+    ),
+    SYNC_LANES_KEY: (
+        "Which sync lanes an Admin has paused (ticket 12). A lane is a queue "
+        "the one worker drains, so pausing one is a fact about the deployment "
+        "in exactly the way `jobs` is; a per-account copy would mean the "
+        "worker honouring one account's pause on everybody's work."
     ),
 }
 

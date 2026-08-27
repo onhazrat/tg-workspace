@@ -55,3 +55,41 @@ class JobStatusEntry(BaseModel):
 
 class UpdateJobRequest(BaseModel):
     enabled: bool
+
+
+class SyncLaneEntry(BaseModel):
+    """One of the six sync lanes, as an Admin sees it (ticket 12)."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    lane: str
+    budget: str
+    tier: str
+    queued: int
+    paused: bool
+
+
+class SyncLaneListResponse(BaseModel):
+    """Every lane, in drain order.
+
+    A list rather than a mapping keyed by lane, because the *order* is part of
+    the answer: it is the order the worker serves them in, and a JSON object
+    would leave that to whatever the client does with key order.
+    """
+
+    lanes: list[SyncLaneEntry]
+
+
+class DrainLaneResponse(BaseModel):
+    """What purging a lane did.
+
+    `jobsCancelled` is not a detail: purging some of a job's messages leaves the
+    rest of its Channels unable to finish it, so a drain cancels the jobs it
+    orphans. An operator seeing a number here is seeing syncs that stopped.
+    """
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    lane: str
+    archived: int
+    jobs_cancelled: int = Field(alias="jobsCancelled")

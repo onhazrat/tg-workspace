@@ -4517,6 +4517,131 @@
         }
       }
     },
+    "/api/v1/jobs/lanes": {
+      "get": {
+        "tags": ["jobs"],
+        "summary": "List Sync Lanes",
+        "description": "The six lanes, in drain order, with their depth and paused state.",
+        "operationId": "jobs-list_sync_lanes",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SyncLaneListResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [{ "OAuth2PasswordBearer": [] }]
+      }
+    },
+    "/api/v1/jobs/lanes/{lane}/pause": {
+      "post": {
+        "tags": ["jobs"],
+        "summary": "Pause Sync Lane",
+        "description": "Stop the worker taking new messages from this lane.\n\nReversible and lossless: the messages stay queued and visible, and the next\ndrain after a resume picks them up. That is the difference from\n`drain_sync_lane` below, which is neither.",
+        "operationId": "jobs-pause_sync_lane",
+        "security": [{ "OAuth2PasswordBearer": [] }],
+        "parameters": [
+          {
+            "name": "lane",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "title": "Lane" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SyncLaneEntry" }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/jobs/lanes/{lane}/resume": {
+      "post": {
+        "tags": ["jobs"],
+        "summary": "Resume Sync Lane",
+        "operationId": "jobs-resume_sync_lane",
+        "security": [{ "OAuth2PasswordBearer": [] }],
+        "parameters": [
+          {
+            "name": "lane",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "title": "Lane" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SyncLaneEntry" }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/jobs/lanes/{lane}/drain": {
+      "post": {
+        "tags": ["jobs"],
+        "summary": "Drain Sync Lane",
+        "description": "Empty this lane now: archive every message and cancel the jobs behind it.\n\nDestructive, and gated on `JOBS_MANAGE` for the reason that permission\nalready gives for covering `POST /{job_id}/trigger`: triggering retention\ndeletes Posts, so this permission is not a read-only one and pausing or\ndiscarding queued work is the same audience and the same act.",
+        "operationId": "jobs-drain_sync_lane",
+        "security": [{ "OAuth2PasswordBearer": [] }],
+        "parameters": [
+          {
+            "name": "lane",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "title": "Lane" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/DrainLaneResponse" }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/jobs/sync": {
       "post": {
         "tags": ["jobs"],
@@ -6247,6 +6372,17 @@
         "type": "object",
         "required": ["id", "kind"],
         "title": "DiscoveryArtifactResponse"
+      },
+      "DrainLaneResponse": {
+        "properties": {
+          "lane": { "type": "string", "title": "Lane" },
+          "archived": { "type": "integer", "title": "Archived" },
+          "jobsCancelled": { "type": "integer", "title": "Jobscancelled" }
+        },
+        "type": "object",
+        "required": ["lane", "archived", "jobsCancelled"],
+        "title": "DrainLaneResponse",
+        "description": "What purging a lane did.\n\n`jobsCancelled` is not a detail: purging some of a job's messages leaves the\nrest of its Channels unable to finish it, so a drain cancels the jobs it\norphans. An operator seeing a number here is seeing syncs that stopped."
       },
       "EmbedRequest": {
         "properties": {
@@ -8239,6 +8375,32 @@
         "type": "object",
         "required": ["jobId", "status", "source", "channels", "createdAt"],
         "title": "SyncJobStatusResponse"
+      },
+      "SyncLaneEntry": {
+        "properties": {
+          "lane": { "type": "string", "title": "Lane" },
+          "budget": { "type": "string", "title": "Budget" },
+          "tier": { "type": "string", "title": "Tier" },
+          "queued": { "type": "integer", "title": "Queued" },
+          "paused": { "type": "boolean", "title": "Paused" }
+        },
+        "type": "object",
+        "required": ["lane", "budget", "tier", "queued", "paused"],
+        "title": "SyncLaneEntry",
+        "description": "One of the six sync lanes, as an Admin sees it (ticket 12)."
+      },
+      "SyncLaneListResponse": {
+        "properties": {
+          "lanes": {
+            "items": { "$ref": "#/components/schemas/SyncLaneEntry" },
+            "type": "array",
+            "title": "Lanes"
+          }
+        },
+        "type": "object",
+        "required": ["lanes"],
+        "title": "SyncLaneListResponse",
+        "description": "Every lane, in drain order.\n\nA list rather than a mapping keyed by lane, because the *order* is part of\nthe answer: it is the order the worker serves them in, and a JSON object\nwould leave that to whatever the client does with key order."
       },
       "SyncLogListItemResponse": {
         "properties": {

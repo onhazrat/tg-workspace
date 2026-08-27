@@ -213,11 +213,14 @@ def test_shutdown_hands_claimed_messages_back_to_the_lane() -> None:
         await asyncio.to_thread(
             sync_queue._send_batch, MANUAL_SINGLE_NORMAL_LANE, payloads
         )
-        claimed = await asyncio.to_thread(
-            sync_queue._read_batch, MANUAL_SINGLE_NORMAL_LANE
+        # `_read_interleaved` records the claim itself (ticket 12): a message
+        # sitting in a lane buffer is as invisible to every other worker as one
+        # being processed, and as lost if this process stops before dispatching
+        # it. So the test no longer adds to `_claimed_messages` by hand — doing
+        # so would hide a regression where the read stopped tracking them.
+        await asyncio.to_thread(
+            sync_queue._read_interleaved, MANUAL_SINGLE_NORMAL_LANE, 50
         )
-        for msg in claimed:
-            sync_queue._claimed_messages.add((MANUAL_SINGLE_NORMAL_LANE, msg.msg_id))
 
         with Session(engine) as session:
             still_hidden = len(

@@ -15,7 +15,13 @@ from app.jobs.scheduler import get_job_status, request_job_run, set_job_enabled_
 from app.jobs.settings import JOB_IDS
 from app.jobs.sync_queue import enqueue_sync_job
 from app.models import User
-from app.schemas.jobs import JobStatusEntry, UpdateJobRequest
+from app.schemas.jobs import (
+    DrainLaneResponse,
+    JobStatusEntry,
+    SyncLaneEntry,
+    SyncLaneListResponse,
+    UpdateJobRequest,
+)
 from app.schemas.runtime_config import RuntimeConfigResponse
 from app.schemas.sync_jobs import (
     CancelSyncJobResponse,
@@ -36,6 +42,14 @@ from app.services.scraper_jobs import (
     get_job,
     wait_job_update,
 )
+from app.services.sync_lane_control import (
+    LaneDepth,
+    drain_lane,
+    lane_depths,
+    require_lane,
+    set_lane_paused,
+)
+from app.services.sync_lanes import lane_budget, lane_tier
 from app.services.tenancy import assert_owner
 
 _TERMINAL_SYNC_STATUSES = frozenset({"completed", "failed", "cancelled"})
@@ -160,6 +174,80 @@ def update_scheduler_job(
         return JobStatusEntry.model_validate(set_job_enabled_flag(job_id, body.enabled))
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+def _lane_entry(depth: LaneDepth) -> SyncLaneEntry:
+    return SyncLaneEntry(
+        lane=depth.lane,
+        budget=lane_budget(depth.lane).value,
+        tier=lane_tier(depth.lane),
+        queued=depth.queued,
+        paused=depth.paused,
+    )
+
+
+def _known_lane(lane: str) -> str:
+    """404 on a lane that is not one of the six.
+
+    The name reaches SQL as an identifier further down, so this is also where a
+    path parameter stops being able to name a table. `require_lane` is the check
+    itself, in the service, because the worker validates against the same list.
+    """
+    try:
+        return require_lane(lane)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=f"Unknown lane: {lane}") from exc
+
+
+@router.get("/lanes", dependencies=SCHEDULER_ONLY, response_model=SyncLaneListResponse)
+def list_sync_lanes(session: SessionDep, _current_user: CurrentUser) -> Any:
+    """The six lanes, in drain order, with their depth and paused state."""
+    return SyncLaneListResponse(lanes=[_lane_entry(d) for d in lane_depths(session)])
+
+
+@router.post(
+    "/lanes/{lane}/pause", dependencies=SCHEDULER_ONLY, response_model=SyncLaneEntry
+)
+def pause_sync_lane(lane: str, session: SessionDep, _current_user: CurrentUser) -> Any:
+    """Stop the worker taking new messages from this lane.
+
+    Reversible and lossless: the messages stay queued and visible, and the next
+    drain after a resume picks them up. That is the difference from
+    `drain_sync_lane` below, which is neither.
+    """
+    set_lane_paused(session, _known_lane(lane), paused=True)
+    return _lane_entry(_depth_of(session, lane))
+
+
+@router.post(
+    "/lanes/{lane}/resume", dependencies=SCHEDULER_ONLY, response_model=SyncLaneEntry
+)
+def resume_sync_lane(lane: str, session: SessionDep, _current_user: CurrentUser) -> Any:
+    set_lane_paused(session, _known_lane(lane), paused=False)
+    return _lane_entry(_depth_of(session, lane))
+
+
+@router.post(
+    "/lanes/{lane}/drain", dependencies=SCHEDULER_ONLY, response_model=DrainLaneResponse
+)
+async def drain_sync_lane(lane: str, _current_user: CurrentUser) -> Any:
+    """Empty this lane now: archive every message and cancel the jobs behind it.
+
+    Destructive, and gated on `JOBS_MANAGE` for the reason that permission
+    already gives for covering `POST /{job_id}/trigger`: triggering retention
+    deletes Posts, so this permission is not a read-only one and pausing or
+    discarding queued work is the same audience and the same act.
+    """
+    result = await drain_lane(_known_lane(lane))
+    return DrainLaneResponse(
+        lane=result.lane,
+        archived=result.archived,
+        jobsCancelled=result.jobs_cancelled,
+    )
+
+
+def _depth_of(session: Session, lane: str) -> LaneDepth:
+    return next(d for d in lane_depths(session) if d.lane == lane)
 
 
 @router.post("/sync", response_model=StartSyncJobResponse)

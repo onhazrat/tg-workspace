@@ -1740,6 +1740,29 @@ export type DiscoveryArtifactResponse = {
 };
 
 /**
+ * DrainLaneResponse
+ * What purging a lane did.
+ *
+ * `jobsCancelled` is not a detail: purging some of a job's messages leaves the
+ * rest of its Channels unable to finish it, so a drain cancels the jobs it
+ * orphans. An operator seeing a number here is seeing syncs that stopped.
+ */
+export type DrainLaneResponse = {
+    /**
+     * Lane
+     */
+    lane: string;
+    /**
+     * Archived
+     */
+    archived: number;
+    /**
+     * Jobscancelled
+     */
+    jobsCancelled: number;
+};
+
+/**
  * EmbedRequest
  */
 export type EmbedRequest = {
@@ -3997,6 +4020,48 @@ export type SyncJobStatusResponse = {
      * Finishedat
      */
     finishedAt?: number | null;
+};
+
+/**
+ * SyncLaneEntry
+ * One of the six sync lanes, as an Admin sees it (ticket 12).
+ */
+export type SyncLaneEntry = {
+    /**
+     * Lane
+     */
+    lane: string;
+    /**
+     * Budget
+     */
+    budget: string;
+    /**
+     * Tier
+     */
+    tier: string;
+    /**
+     * Queued
+     */
+    queued: number;
+    /**
+     * Paused
+     */
+    paused: boolean;
+};
+
+/**
+ * SyncLaneListResponse
+ * Every lane, in drain order.
+ *
+ * A list rather than a mapping keyed by lane, because the *order* is part of
+ * the answer: it is the order the worker serves them in, and a JSON object
+ * would leave that to whatever the client does with key order.
+ */
+export type SyncLaneListResponse = {
+    /**
+     * Lanes
+     */
+    lanes: Array<SyncLaneEntry>;
 };
 
 /**
@@ -8174,6 +8239,112 @@ export type JobsUpdateSchedulerJobResponses = {
 };
 
 export type JobsUpdateSchedulerJobResponse = JobsUpdateSchedulerJobResponses[keyof JobsUpdateSchedulerJobResponses];
+
+export type JobsListSyncLanesData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/jobs/lanes';
+};
+
+export type JobsListSyncLanesResponses = {
+    /**
+     * Successful Response
+     */
+    200: SyncLaneListResponse;
+};
+
+export type JobsListSyncLanesResponse = JobsListSyncLanesResponses[keyof JobsListSyncLanesResponses];
+
+export type JobsPauseSyncLaneData = {
+    body?: never;
+    path: {
+        /**
+         * Lane
+         */
+        lane: string;
+    };
+    query?: never;
+    url: '/api/v1/jobs/lanes/{lane}/pause';
+};
+
+export type JobsPauseSyncLaneErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type JobsPauseSyncLaneError = JobsPauseSyncLaneErrors[keyof JobsPauseSyncLaneErrors];
+
+export type JobsPauseSyncLaneResponses = {
+    /**
+     * Successful Response
+     */
+    200: SyncLaneEntry;
+};
+
+export type JobsPauseSyncLaneResponse = JobsPauseSyncLaneResponses[keyof JobsPauseSyncLaneResponses];
+
+export type JobsResumeSyncLaneData = {
+    body?: never;
+    path: {
+        /**
+         * Lane
+         */
+        lane: string;
+    };
+    query?: never;
+    url: '/api/v1/jobs/lanes/{lane}/resume';
+};
+
+export type JobsResumeSyncLaneErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type JobsResumeSyncLaneError = JobsResumeSyncLaneErrors[keyof JobsResumeSyncLaneErrors];
+
+export type JobsResumeSyncLaneResponses = {
+    /**
+     * Successful Response
+     */
+    200: SyncLaneEntry;
+};
+
+export type JobsResumeSyncLaneResponse = JobsResumeSyncLaneResponses[keyof JobsResumeSyncLaneResponses];
+
+export type JobsDrainSyncLaneData = {
+    body?: never;
+    path: {
+        /**
+         * Lane
+         */
+        lane: string;
+    };
+    query?: never;
+    url: '/api/v1/jobs/lanes/{lane}/drain';
+};
+
+export type JobsDrainSyncLaneErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type JobsDrainSyncLaneError = JobsDrainSyncLaneErrors[keyof JobsDrainSyncLaneErrors];
+
+export type JobsDrainSyncLaneResponses = {
+    /**
+     * Successful Response
+     */
+    200: DrainLaneResponse;
+};
+
+export type JobsDrainSyncLaneResponse = JobsDrainSyncLaneResponses[keyof JobsDrainSyncLaneResponses];
 
 export type JobsStartSyncJobData = {
     body: StartSyncJobRequest;

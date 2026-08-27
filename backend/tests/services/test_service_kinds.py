@@ -130,6 +130,10 @@ INVENTORY: dict[str, str] = {
     "bulk_follow.py": ORCHESTRATOR,
     "data_import_export.py": ORCHESTRATOR,
     "sync_orchestrator.py": ORCHESTRATOR,
+    # One workflow — an Admin operating a lane (ticket 12) — coordinating the
+    # modules that own the pieces: `settings_store` for the paused set,
+    # `pgmq` for the messages, `scraper_jobs` for the jobs a purge cancels.
+    "sync_lane_control.py": ORCHESTRATOR,
 }
 
 #: Modules that do not fit a kind, and why. Adding to this needs a reason.

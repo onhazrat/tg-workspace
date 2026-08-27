@@ -7,9 +7,11 @@ import contextlib
 import logging
 import time
 import uuid
+from collections.abc import AsyncIterator
+from contextlib import AbstractAsyncContextManager
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any, Literal
+from typing import Any, Literal, Protocol
 
 import httpx
 from sqlmodel import Session, col, func, select
@@ -24,6 +26,7 @@ from app.jobs.settings import (
     load_retention_policy,
     load_sync_settings,
 )
+from app.jobs.sync_queue import SlotLost
 from app.models_tg import Channel, Post, utc_now
 from app.services.async_db import run_db
 from app.services.channel_photos import resolve_cached_photo_url
@@ -1279,23 +1282,69 @@ async def _walk_channel_pages(
 #: poll is what makes it correct.
 CHANNEL_SYNC_RELEASE_CHANNEL = "channel_sync_release"
 
+
+class ReleasableSlot(Protocol):
+    """The half of `sync_queue.SyncSlot` this module needs (ticket 12).
+
+    A `Protocol` rather than the class, because `sync_queue` imports this module
+    and importing it back would be a cycle at startup. It is also the honest
+    dependency: what a sync needs to know about its permit is only that it can
+    put it down while it waits for somebody else's Channel.
+    """
+
+    def released(
+        self, *, reacquire_within: float | None = None
+    ) -> AbstractAsyncContextManager[None]: ...
+
+
 #: How long a coalesced request waits before giving up and reporting a skip.
 #:
-#: A bound is needed because the waiter is holding a slot in the worker's
-#: concurrency gate while it waits (see `_claim_or_coalesce`). Without one, a
-#: Channel in a multi-hour backfill would park every other request for it, and
-#: those requests hold permits that other Channels could be using.
+#: **Ticket 12 removed this constant's original reason and it still earns its
+#: place, on a different one.** Ticket 11 justified the bound by the waiter
+#: holding a slot in the worker's concurrency gate; ticket 12 made the permit
+#: releasable (`sync_queue.SyncSlot`), so a waiter now scrapes nobody's slot.
+#: What remains is that the waiter's *message* is claimed from PGMQ under a
+#: visibility timeout of about 2.4 hours: a waiter that outlasted it would have
+#: its own message redelivered and processed a second time while the first was
+#: still waiting. And a person is on the other end of the SSE stream, for whom
+#: an answer of "still running" beats an open connection.
 #:
 #: Fifteen minutes is a judgement, not a derivation, and worth naming as such:
 #: long enough that an ordinary sync -- seconds to a couple of minutes -- is
-#: always ridden rather than skipped, short enough that a pathological backfill
-#: cannot hold the gate for the length of the visibility timeout.
+#: always ridden rather than skipped, short enough to stay well inside the
+#: visibility timeout.
 COALESCE_MAX_WAIT_SECONDS = 900
 
 #: How often a waiter re-checks the claim when no notification arrives. Small,
 #: because it is only reached when a ring was lost or the holder died, and both
 #: of those should resolve in seconds rather than at the next sweep.
 _COALESCE_POLL_SECONDS = 2.0
+
+
+@contextlib.asynccontextmanager
+async def _put_slot_down(
+    slot: ReleasableSlot | None, *, deadline: float
+) -> AsyncIterator[None]:
+    """Release the concurrency permit for the body, if there is one to release.
+
+    A separate helper only so the `slot is None` case reads as one thing at the
+    call site rather than as two copies of the wait, one per branch — the
+    duplicate is how the two would come to differ.
+
+    **Taking the permit back is bounded by the caller's own deadline**, and that
+    is not a detail. The drain loop is sitting on `gate.acquire()`, so the
+    moment a waiter releases, a fresh Channel takes the permit and holds it for
+    its entire walk. An unbounded re-acquire would park the waiter there,
+    evaluating neither `COALESCE_MAX_WAIT_SECONDS` nor its job's cancellation,
+    so a coalesced request could outlive the cap by a whole page walk — and the
+    cap's remaining job is to keep the waiter inside the visibility timeout of
+    its own message, which a redelivery would then process a second time.
+    """
+    if slot is None:
+        yield
+        return
+    async with slot.released(reacquire_within=max(0.0, deadline - time.monotonic())):
+        yield
 
 
 def _still_holds_claim(channel_id: str, holder: str) -> bool:
@@ -1523,7 +1572,11 @@ def _outcome_from_row(ch_state: ChannelSyncState, since_ms: int) -> dict[str, An
 
 
 async def _claim_or_coalesce(
-    job: SyncJobState, ch_state: ChannelSyncState, holder: str
+    job: SyncJobState,
+    ch_state: ChannelSyncState,
+    holder: str,
+    *,
+    slot: ReleasableSlot | None = None,
 ) -> bool:
     """Take the Channel's claim, or ride the sync that already has it.
 
@@ -1543,13 +1596,21 @@ async def _claim_or_coalesce(
     lost-wakeup the `_ensure_running`/`subscribe` ordering in `pg_notify`
     documents one level down.
 
-    *One cost, stated rather than glossed:* the waiter is inside
-    `sync_queue._run_channel`'s concurrency gate, so a coalesced request holds a
-    permit while it waits. It cannot deadlock -- the holder acquired its own
-    permit before it could claim, so it is always able to finish -- but N
-    requests for one busy Channel do occupy N slots. Draining as slots free is
-    ticket 12's, which owns the draining strategy; this is the same head-of-line
-    shape `sync_queue._batch_size` already documents.
+    **The waiter puts its concurrency permit down while it waits** (ticket 12).
+    Ticket 11 left it holding one, so N requests for one busy Channel occupied N
+    scraping slots to scrape nothing; `slot.released()` hands it back for the
+    duration of each wait and re-takes it before the next claim attempt, which
+    is why the attempt is inside the loop and the wait is not.
+
+    That the permit moves does not reintroduce a deadlock. The claim *holder*
+    never releases -- it took its permit before it could claim and keeps it for
+    the whole walk -- so it can always finish and free the Channel. Only a
+    waiter releases, and a waiter holds no claim, so no permit is ever held by
+    something waiting for a claim held by something waiting for a permit.
+
+    `slot` is optional because `run_sync_job` and its `auto_summary` caller run
+    outside the lane consumer and manage their own concurrency; with no slot the
+    waits simply run as they did before.
     """
     if await run_db(try_claim_channel_sync, ch_state.channel_id, holder=holder):
         return True
@@ -1574,9 +1635,16 @@ async def _claim_or_coalesce(
                 return True
 
             try:
-                payload = await asyncio.wait_for(
-                    queue.get(), timeout=_COALESCE_POLL_SECONDS
-                )
+                # The permit is down for exactly this wait. Re-taken on the way
+                # out, before the next pass re-attempts the claim.
+                async with _put_slot_down(slot, deadline=deadline):
+                    payload = await asyncio.wait_for(
+                        queue.get(), timeout=_COALESCE_POLL_SECONDS
+                    )
+            except SlotLost:
+                # Out of time *and* out of a permit. Same answer as running out
+                # of deadline below, reached one step earlier.
+                break
             except TimeoutError:
                 # No ring arrived. If the claim is *gone*, the holder finished
                 # and its announcement never reached us — a lost `NOTIFY`, or a
@@ -1636,6 +1704,7 @@ async def sync_single_channel(
     ch_state: ChannelSyncState,
     *,
     user_id: uuid.UUID | None,
+    slot: ReleasableSlot | None = None,
 ) -> None:
     """Sync one channel: claim it, prepare, walk its pages, finalise.
 
@@ -1656,7 +1725,7 @@ async def sync_single_channel(
         return
 
     holder = f"{job.job_id}:{uuid.uuid4().hex[:8]}"
-    if not await _claim_or_coalesce(job, ch_state, holder):
+    if not await _claim_or_coalesce(job, ch_state, holder, slot=slot):
         return
 
     heartbeat = asyncio.create_task(_heartbeat_channel_claim(ch_state, holder))
