@@ -882,9 +882,10 @@ def test_only_reads_use_the_gated_ownership_guard() -> None:
     root = pathlib.Path(data_import_export.__file__).parents[1]
 
     for path in sorted(root.rglob("*.py")):
-        # `tenancy.py` declares both primitives, and the ungated one delegates
-        # to the gated one to pick up its NULL rule under enforcement. That
-        # composition is the design, not a call site.
+        # `tenancy.py` declares both primitives. Ticket 33 moved the shared rule
+        # into `may_act_on`, so the ungated one no longer calls the gated one —
+        # the skip stays because declaring a guard must never be mistaken for
+        # taking one, whichever way the two are composed next.
         if "alembic" in path.parts or path.name == "tenancy.py":
             continue
         tree = ast.parse(path.read_text())

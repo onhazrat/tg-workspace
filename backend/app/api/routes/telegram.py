@@ -27,6 +27,7 @@ from app.schemas.telegram_ops import (
     ScrapeChannelResponse,
 )
 from app.services.channel_photos import read_cached_photo
+from app.services.credentials import BOT_CREDENTIAL_NOT_FOUND
 from app.services.network import fetch_with_retry, parse_telegram_entities
 from app.services.network_settings import (
     load_network_settings,
@@ -40,6 +41,7 @@ from app.services.scraper import (
     scrape_channel,
 )
 from app.services.telegram_web import TelegramWebViewUnavailable
+from app.services.tenancy import may_act_on
 
 router = APIRouter(prefix="/telegram", tags=["telegram"])
 logger = logging.getLogger(__name__)
@@ -92,14 +94,21 @@ def _resolve_bot_token(
 ) -> str:
     if credential_id:
         bot = session.get(BotCredential, credential_id)
-        if not bot:
-            raise HTTPException(status_code=404, detail="Bot credential not found")
-        if (
-            current_user is not None
-            and bot.user_id is not None
-            and bot.user_id != current_user.id
-        ):
-            raise HTTPException(status_code=403, detail="Bot credential not accessible")
+        actor = current_user.id if current_user is not None else None
+        if not bot or not may_act_on(owner_id=bot.user_id, user_id=actor):
+            # **404, and the same string an absent row gets.** This hand-rolled
+            # the rule until ticket 33 and diverged from the seam in both
+            # directions. It answered 403 "Bot credential not accessible" for a
+            # foreign row and 404 "Bot credential not found" for an absent one,
+            # which is a working enumeration oracle over ids that are
+            # client-chosen — taken from the path of
+            # `PUT /data/bot-credentials/{bot_id}` — and therefore guessable
+            # rather than random. Any signed-in account could walk them here.
+            # It also refused only a *stamped* foreign row, so once enforcement
+            # lands this door would still publish with an unstamped credential
+            # that the scheduler refuses. `may_act_on` is the one spelling of
+            # the rule; two of them drift on the NULL branch first.
+            raise HTTPException(status_code=404, detail=BOT_CREDENTIAL_NOT_FOUND)
         try:
             return decrypt_token(bot.token_encrypted)
         except ValueError as exc:

@@ -356,6 +356,59 @@ def assert_owner(
         raise HTTPException(status_code=404, detail=detail)
 
 
+def may_act_on(*, owner_id: uuid.UUID | None, user_id: uuid.UUID | None) -> bool:
+    """Whether `user_id` may use a row owned by `owner_id`, as a boolean.
+
+    The same rule `assert_owner_on_write` raises on, for the callers that
+    cannot raise an `HTTPException`. Ticket 33 has two of them and neither is
+    serving a request: `publish_summary_text` runs in the scheduler and answers
+    an unusable credential with `ValueError`, and `_auto_publish` has to write a
+    publish log rather than propagate, because the scheduler is unattended and a
+    refusal nobody records is a message that silently never arrives. Both would
+    otherwise hand-roll `owner is not None and owner != actor`, which is the
+    duplicated owner filter ticket 32 found three of.
+
+    **A NULL on either side is unanswerable, so it is permitted while the flag
+    is off and refused under enforcement.** For the row that is
+    `assert_owner_on_write`'s existing asymmetry: legacy rows and anything a
+    background job wrote carry no stamp, and refusing those fails closed against
+    the only account a single-operator install has. For the *actor* it is the
+    same argument from the other side — `run_auto_summary` deliberately picks up
+    `Summary.user_id IS NULL` rows, so a send with no attributable owner is a
+    live case today rather than a hypothetical. Under enforcement every row is
+    stamped and neither NULL is legitimate, which makes ticket 21's owner
+    backfill a prerequisite of the flip rather than a tidy-up after it.
+
+    Note this is *not* the rule ticket 32 applied to the credential **lists**,
+    which refuse to match a NULL owner as "mine". Handing every account the
+    deployment's stored credential is a leak; declining to use one is not.
+
+    **Both parameters are keyword-only.** They are the same type and the
+    function is symmetric in them, so a transposed call site would compile, pass
+    every test, and answer the wrong question — the names are the only thing
+    distinguishing "whose row is this" from "who is asking", and a positional
+    call throws that away.
+    """
+    if owner_id is None:
+        # Nobody owns the row. Legacy rows and anything a background job wrote
+        # carry no stamp, so refusing them fails closed against the only
+        # account a single-operator install has.
+        return not tenancy_enforced()
+
+    if user_id is None:
+        # Nobody is asking — an unattributed actor, which today means a Summary
+        # written before the stamp existed and still picked up by
+        # `run_auto_summary`. Deliberately the *same* answer as the branch
+        # above and not the same reason: an unowned row is safe for anyone to
+        # use, while an unattributed actor is merely impossible to refuse
+        # without breaking the legacy operator's own auto-publish. The two are
+        # written apart because they part company the moment ticket 21's
+        # backfill removes one of them and not the other.
+        return not tenancy_enforced()
+
+    return owner_id == user_id
+
+
 def assert_owner_on_write(
     owner_id: uuid.UUID | None,
     user_id: uuid.UUID,
@@ -389,17 +442,21 @@ def assert_owner_on_write(
     anything a background job wrote — every log `upsert_*` takes `user_id` as
     optional. Refusing those would fail closed against the only account a
     single-operator install has, which is the trap `assert_owner`'s own
-    docstring names. Under enforcement `assert_owner` adds that rule back,
-    because a row nobody can read and anybody can overwrite is the worst of both.
+    docstring names. Under enforcement that flips, because a row nobody can read
+    and anybody can overwrite is the worst of both.
+
+    Both halves live in `may_act_on`, which is this function without the raise —
+    ticket 33's two callers run in the scheduler and have no response to put a
+    404 in. Stating the rule once is the point: two spellings of "is this row
+    mine" is the drift the module exists to prevent, and they would diverge on
+    the NULL branch first.
 
     `detail` carries the same requirement it does on `assert_owner`: the exact
     string this family answers for a row that is not there, so that "somebody
     else owns it" and "there is nothing here" stay indistinguishable.
     """
-    if owner_id is not None and owner_id != user_id:
+    if not may_act_on(owner_id=owner_id, user_id=user_id):
         raise HTTPException(status_code=404, detail=detail)
-
-    assert_owner(owner_id, user_id, detail=detail)
 
 
 def unscoped_select[StatementT: Select[Any]](

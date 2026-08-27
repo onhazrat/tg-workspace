@@ -4,12 +4,12 @@
 
 **Blocked by:** None (can start immediately)
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] `_auto_publish` refuses a credential and a chat destination the Summary's owner does not own
-- [ ] `publish_summary_text` takes the acting owner and applies the check itself, so a second caller cannot skip it
-- [ ] A Summary naming a foreign `publishBotId` publishes nothing and says why in the publish log
-- [ ] Both flag states are green
+- [x] `_auto_publish` refuses a credential and a chat destination the Summary's owner does not own
+- [x] `publish_summary_text` takes the acting owner and applies the check itself, so a second caller cannot skip it
+- [x] A Summary naming a foreign `publishBotId` publishes nothing and says why in the publish log
+- [x] Both flag states are green
 
 ## The hole
 

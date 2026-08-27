@@ -18,6 +18,7 @@ from app.core.db import engine
 from app.models_tg import ChatDestination, Post, Summary, utc_now
 from app.prompts.summary import format_summary_prompt
 from app.services.channel_setting_groups import channel_is_frozen, load_groups_by_id
+from app.services.credentials import CHAT_DESTINATION_NOT_FOUND
 from app.services.logs import upsert_llm_log, upsert_publish_log
 from app.services.network_settings import (
     load_network_settings,
@@ -30,11 +31,49 @@ from app.services.scraper_jobs import create_job, has_active_sync_job
 from app.services.summaries import apply_summary_payload
 from app.services.sync_meta import touch_sync
 from app.services.sync_orchestrator import run_sync_job
+from app.services.tenancy import may_act_on
 
 logger = logging.getLogger(__name__)
 
 _regenerating: set[str] = set()
+
+
 _CITATION_RE = re.compile(r"\[([^\]]+?)\s*#(\d+)\]")
+
+
+def _log_publish_failure(
+    session: Session,
+    summary: Summary,
+    *,
+    bot_id: str,
+    chat_id: str,
+    chat_name: str,
+    error: str,
+    text_sent: str,
+) -> None:
+    """Record an auto-publish that produced no message, and commit it.
+
+    The scheduler has no response to fail; the publish log is the only place a
+    person sees that a configured auto-publish did nothing.
+    """
+    upsert_publish_log(
+        session,
+        {
+            "id": str(uuid.uuid4()),
+            "summary_id": summary.id,
+            "bot_id": bot_id,
+            "bot_name": bot_id,
+            "chat_id": chat_id,
+            "chat_name": chat_name,
+            "status": "failed",
+            "error": error,
+            "timestamp": int(time.time() * 1000),
+            "text_sent": text_sent,
+        },
+        summary.user_id,
+    )
+    session.commit()
+    touch_sync(session, "publish_logs")
 
 
 def _extract_cited_posts(text: str, posts: Sequence[Post]) -> dict[str, dict[str, Any]]:
@@ -244,11 +283,51 @@ async def _auto_publish(
     extra: dict[str, Any],
     full_text: str,
 ) -> None:
+    """Publish a regenerated Summary, as its own owner and nobody else.
+
+    Both ids come out of `Summary.extra`, which `upsert_summary` fills from
+    unknown keys in the request body — so they are whatever the account that
+    saved the Summary typed, not something the server chose. Resolving either by
+    primary key alone let a Summary name another account's credential and
+    destination, and the scheduler would decrypt that account's token and send
+    as its bot (ticket 33).
+
+    The acting owner is `summary.user_id`, because there is no `current_user`
+    out here. The credential half is checked inside `publish_summary_text`,
+    where the token is decrypted; this function owns the destination half,
+    which never reaches that service — only the `chat_id` string does.
+
+    A refusal writes a **failed publish log** rather than returning quietly.
+    Nobody is watching the scheduler, so a silent return makes "auto-publish is
+    misconfigured" and "auto-publish is off" the same observation. An absent
+    destination used to do exactly that; it now answers as the foreign one does,
+    with the same text, which is `assert_owner`'s rule that the body is the
+    other half of the answer.
+    """
     bot_id = str(extra.get("publishBotId"))
     chat_dest_id = str(extra.get("publishChatId"))
     dest = session.get(ChatDestination, chat_dest_id)
-    if not dest:
-        logger.warning("Chat destination %s not found for auto-publish", chat_dest_id)
+    if not dest or not may_act_on(owner_id=dest.user_id, user_id=summary.user_id):
+        logger.warning(
+            "Chat destination %s not available for auto-publish", chat_dest_id
+        )
+        _log_publish_failure(
+            session,
+            summary,
+            bot_id=bot_id,
+            # `chat_id` holds a **Telegram** chat id everywhere else in this
+            # function, and it is one of the columns the publish-log search
+            # covers. Putting the `ChatDestination` row id here instead would
+            # hide these refusals from an operator filtering by their real chat
+            # id, and hand anyone who did match one a value that looks like a
+            # chat id and is not. There is no Telegram chat id to record — that
+            # is the whole failure — so both columns stay empty and the row id
+            # travels in the error, where nothing parses it.
+            chat_id="",
+            chat_name="",
+            error=f"{CHAT_DESTINATION_NOT_FOUND}: {chat_dest_id}",
+            text_sent=full_text,
+        )
         return
 
     network = load_network_settings(session, summary.user_id)
@@ -261,6 +340,7 @@ async def _auto_publish(
     try:
         result = await publish_summary_text(
             session,
+            acting_user_id=summary.user_id,
             credential_id=bot_id,
             chat_id=dest.chat_id,
             text=full_text,
@@ -291,24 +371,15 @@ async def _auto_publish(
         touch_sync(session, "publish_logs")
     except Exception as exc:  # noqa: BLE001
         logger.exception("Auto-publish failed for summary %s", summary.id)
-        upsert_publish_log(
+        _log_publish_failure(
             session,
-            {
-                "id": str(uuid.uuid4()),
-                "summary_id": summary.id,
-                "bot_id": bot_id,
-                "bot_name": bot_id,
-                "chat_id": dest.chat_id,
-                "chat_name": dest.name,
-                "status": "failed",
-                "error": str(exc),
-                "timestamp": int(time.time() * 1000),
-                "text_sent": full_text,
-            },
-            summary.user_id,
+            summary,
+            bot_id=bot_id,
+            chat_id=dest.chat_id,
+            chat_name=dest.name,
+            error=str(exc),
+            text_sent=full_text,
         )
-        session.commit()
-        touch_sync(session, "publish_logs")
 
 
 async def run_auto_summary() -> dict[str, Any]:
