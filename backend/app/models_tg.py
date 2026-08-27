@@ -87,6 +87,41 @@ class Channel(SQLModel, table=True):
     oldest_stored_post_timestamp: int | None = Field(
         default=None, sa_column=_ms_ts(nullable=True)
     )
+
+    #: When the sync currently in flight for this Channel took its claim, and
+    #: which runner holds it (ticket 11, decision 33).
+    #:
+    #: **The claim is not the deadline.** `next_regular_sync_at` and
+    #: `next_dynamic_sync_at` say when this Channel should next run and are
+    #: advanced only by `_finalize_channel_success`; these two say that a run is
+    #: happening *now*. Overloading one field on the other is what decision 33
+    #: refuses: a claim that doubles as a deadline cannot expire on its own
+    #: without moving the schedule, and advancing the deadline at enqueue would
+    #: conflate "enqueued" with "synced" — stranding a Channel silently the
+    #: moment a message exceeds `read_ct` and is archived.
+    #:
+    #: What they protect is the four cursors directly above: `last_updated`,
+    #: `anchor_post_id`, `oldest_stored_post_timestamp` and
+    #: `history_complete_to_cutoff`. Posts are safe without a claim
+    #: (`bulk_upsert_posts_impl` upserts on the unique constraint); those are
+    #: not, because two backward walks of one Channel interleave their writes.
+    #:
+    #: A claim **expires on its own** rather than being a flag someone must
+    #: remember to clear: `sync_claimed_at` older than
+    #: `CHANNEL_CLAIM_LEASE_SECONDS` is stealable, which is what makes a crashed
+    #: worker's Channel picked up again without intervention. A live sync keeps
+    #: its lease by heartbeat (`services/channels.py`), so the lease bounds how
+    #: long a *dead* holder blocks the Channel, never how long a live one may
+    #: legitimately take.
+    #:
+    #: `sync_claimed_by` is the job id holding it. Release is conditional on it,
+    #: so a runner whose lease lapsed and was stolen cannot clear the new
+    #: holder's claim on its way out — an unconditional release would hand a
+    #: second walk into cursors the first is still writing, which is the exact
+    #: interleaving the claim exists to prevent.
+    sync_claimed_at: int | None = Field(default=None, sa_column=_ms_ts(nullable=True))
+    sync_claimed_by: str | None = None
+
     updated_at: datetime = Field(default_factory=utc_now)
 
 

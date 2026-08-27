@@ -3,14 +3,19 @@
 `backend/Dockerfile` runs `--workers 1`. That is a correctness constraint, not a
 capacity judgement, and this is how to remove it.
 
-> **Status after ticket 10 (2026-08-25).** Steps 1 and 4 are done and step 2 is
-> half done. The scheduler and all scraping now run in a separate `worker`
+> **Status after ticket 11 (2026-08-27).** Steps 1 and 4 are done and step 2 is
+> half done -- the *channel* half of it now landed, the *job* half still open. The scheduler and all scraping now run in a separate `worker`
 > compose service (`app/worker.py`, `python -m app.worker`, one replica);
 > progress fans out over `LISTEN`/`NOTIFY` (`app/core/pg_notify.py`); every sync
 > mode enqueues one message per Channel onto a PGMQ lane. **Step 3 is the one
 > that still binds** — `proxy_pool`'s semaphores are per-process, which is why
 > the sync tier is pinned to one replica. Ticket 13 is that step. The API tier
 > still runs `--workers 1` because the job registry (step 2) is still a dict.
+> Ticket 11 moved the **per-channel** claim out of memory onto `tg_channels`
+> (`sync_claimed_at` / `sync_claimed_by`, leased and heartbeated), so two
+> processes racing to sync one Channel now produce one sync wherever they run;
+> `_channel_locks` is gone. The job registry is a separate question and is what
+> step 2 has left.
 > The order below is the original plan; the argument in each step is still the
 > argument, and `tests/deployment/test_worker_count.py` tracks which reasons
 > survive.
@@ -92,15 +97,26 @@ that only checked "progress arrives" would pass on the broken version.
 ### 2. Move the job claim into the database
 
 `has_active_sync_job()` reads a dict. Replace with a real claim — a row-level
-`SELECT ... FOR UPDATE SKIP LOCKED` on `tg_sync_jobs`, or a Postgres advisory lock
-keyed by channel to replace `_channel_locks`.
+`SELECT ... FOR UPDATE SKIP LOCKED` on `tg_sync_jobs`.
 
-This also fixes the 711 rows stranded in `running`: a claim that can expire is a claim
-that can be reconciled on startup. Today nothing does, because the truth was in memory
-and memory is gone after a restart.
+**The per-channel half is done (ticket 11).** `_channel_locks` was an
+`asyncio.Lock` per channel name; it is now `sync_claimed_at` / `sync_claimed_by`
+on `tg_channels`, taken by a conditional `UPDATE ... RETURNING`, renewed by a
+heartbeat, and expiring on its own after `CHANNEL_CLAIM_LEASE_SECONDS`. A
+second request for a Channel already syncing coalesces onto the first and
+reports its result rather than scraping again. Deliberately **not** a Postgres
+advisory lock, which this step originally suggested: an advisory lock dies with
+its session, so it cannot be inspected, cannot carry who holds it, and gives a
+crashed holder no expiry a *different* process can reason about. A row can be
+read by anyone, which is what coalescing needs.
 
-**Done when:** two processes racing to sync the same channel produce one sync, and a
-killed process's jobs are recoverable rather than stuck.
+What remains is the **job** claim. That is the one still holding `--workers 1`
+on the API tier, and it also fixes the 711 rows stranded in `running`: a claim
+that can expire is a claim that can be reconciled on startup.
+
+**Done when:** two processes racing to sync the same channel produce one sync
+*(done)*, and a killed process's jobs are recoverable rather than stuck
+*(per-channel: done, via the lease; per-job: open)*.
 
 ### 3. Share the proxy budget
 

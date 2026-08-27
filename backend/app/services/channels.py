@@ -10,9 +10,11 @@ from sqlalchemy import String, bindparam, true
 from sqlalchemy import cast as sa_cast
 from sqlalchemy import delete as sa_delete
 from sqlalchemy import select as sa_select
+from sqlalchemy import text as sa_text
 from sqlalchemy.dialects.postgresql import ARRAY
 from sqlmodel import Session, col, func, select
 
+from app.core.db import engine
 from app.models_tg import (
     Channel,
     Post,
@@ -47,7 +49,22 @@ from app.services.sync_schedule import (
 )
 from app.services.tenancy import scoped_select
 
-SERVER_MANAGED_CHANNEL_FIELDS = frozenset({"telegram_chat_id"})
+#: Columns the server owns outright. A request naming one is refused, and an
+#: import silently strips it rather than trusting a document.
+#:
+#: The two claim columns are here because `apply_channel_fields` writes any key
+#: that exists in `Channel.model_fields`, `ChannelUpsertRequest` is
+#: `extra="allow"`, and `normalize_body` snake-cases whatever arrives. Without
+#: them, `PUT /data/channels/{id}` with `{"syncClaimedBy": null}` clears a live
+#: holder's claim mid-walk and the next request starts the second concurrent
+#: backward walk that ticket 11 exists to prevent — and the other direction is
+#: worse for being quiet: writing a fresh `syncClaimedAt` with a holder nobody
+#: owns parks that Channel until the lease lapses, every few minutes, for ever,
+#: with no log line saying why. A claim is only an invariant if the only thing
+#: that can write it is the code that reasons about it.
+SERVER_MANAGED_CHANNEL_FIELDS = frozenset(
+    {"telegram_chat_id", "sync_claimed_at", "sync_claimed_by"}
+)
 
 
 def update_channel_coverage(
@@ -671,3 +688,195 @@ def bulk_update_channel_tags(
     session.commit()
     touch_sync(session, "channels")
     return {"updated": len(updated_rows), "channels": updated_rows}
+
+
+# --------------------------------------------------------------------------
+# Per-Channel sync claim (ticket 11)
+# --------------------------------------------------------------------------
+#
+# Mutual exclusion for one Channel's sync, held in the database rather than in
+# process memory. `scraper_jobs._channel_locks` was an `asyncio.Lock` per
+# channel name, which stopped being sufficient the moment the scheduler left
+# the web process (ticket 10): a lock in the worker says nothing to the API,
+# and after ticket 13 it will say nothing to the worker beside it either.
+#
+# These four functions are the only writers of `sync_claimed_at` /
+# `sync_claimed_by`, and each is **its own transaction**. They deliberately do
+# not take the caller's `Session`: a claim that has not committed is not a
+# claim -- nobody else can see it -- so joining a caller's transaction would
+# make mutual exclusion depend on when that caller happens to commit, which is
+# a decision made for unrelated reasons. It is also what keeps them off the
+# path `CLAUDE.md` warns about: a session held open across the awaited sync
+# would sit `idle in transaction` for the length of a backfill and pin the xmin
+# horizon while it did.
+#
+# None of the four touches `updated_at` or `touch_sync`. A claim is not a
+# change to the Channel as the API describes it, and bumping the etag on every
+# claim, heartbeat and release would invalidate the channel list for every
+# connected browser several times per sync -- for a field the list does not
+# render.
+
+#: How long a claim stays valid without a heartbeat.
+#:
+#: This bounds one thing only: how long a **dead** holder blocks its Channel. A
+#: live sync renews well inside it (`CHANNEL_CLAIM_HEARTBEAT_SECONDS`), so a
+#: deep backfill running for an hour is never at risk of having its claim
+#: stolen mid-walk -- which would put a second backward walk into the cursors
+#: the first is still writing, the precise interleaving this exists to prevent.
+#:
+#: Five minutes rather than the visibility timeout's ~2.4 hours, and the
+#: difference is the point. The VT decides when a crashed worker's *message*
+#: comes back; the lease decides when its *Channel* does. Sizing the lease off
+#: the VT would mean a Channel that crashed at 12:00 refusing every sync until
+#: 14:24 -- including the ones a person is sitting in front of.
+CHANNEL_CLAIM_LEASE_SECONDS = 300
+
+#: How often a running sync renews its lease. A third of the lease, so two
+#: consecutive missed heartbeats (a slow database, a GC pause) still leave the
+#: claim standing: at one half the first miss is already fatal, and at one
+#: tenth the renewals cost more than the protection is worth.
+CHANNEL_CLAIM_HEARTBEAT_SECONDS = CHANNEL_CLAIM_LEASE_SECONDS // 3
+
+
+#: "Now", in epoch milliseconds, **as the database sees it**.
+#:
+#: Every one of these statements times the lease against `now()` rather than
+#: against the calling process's `time.time()`. With one worker the two agree
+#: and it looks like a distinction without a difference; ticket 13 puts a second
+#: worker beside the first, and then a host clock five minutes fast steals a live
+#: claim on its first attempt and starts the concurrent walk this whole file
+#: exists to prevent — while a slow one refuses to reclaim a genuinely dead
+#: holder. The comparison already runs inside Postgres, so taking both sides of
+#: it from the same clock costs nothing and removes the assumption entirely.
+#:
+#: `now()` is transaction start time, so it is stable across the statement.
+_DB_NOW_MS = "(EXTRACT(EPOCH FROM now()) * 1000)::bigint"
+
+#: The instant before which a claim is stale and may be taken, in SQL.
+_CLAIM_CUTOFF_MS = f"({_DB_NOW_MS} - :lease_ms)"
+
+
+def try_claim_channel_sync(channel_id: str, *, holder: str) -> bool:
+    """Take this Channel's sync claim for `holder`. True if it is now ours.
+
+    One conditional `UPDATE ... RETURNING`, which is what makes it atomic
+    against every other worker: PostgreSQL takes a row lock for the duration,
+    so of two callers racing on an unclaimed Channel exactly one matches the
+    predicate and the other finds it already set.
+
+    The answer comes from `RETURNING` rather than from `rowcount`. On this
+    statement the two agree -- a plain conditional `UPDATE` through
+    `session.execute` does report an accurate `rowcount`, and a mutation
+    swapping them was run and caught nothing. `RETURNING` is here as the
+    spelling that survives the statement becoming an upsert, which is where
+    `rowcount` has already lied in this repo: through `session.exec`, and on
+    `ON CONFLICT DO NOTHING`, where it reports a write for a conflict that
+    wrote nothing.
+
+    An expired claim is taken rather than waited on, which is the whole of
+    "a crashed worker's Channel is picked up again without intervention": there
+    is no reaper to run and nothing for an operator to clear.
+    """
+    with Session(engine) as session:
+        row = session.execute(
+            sa_text(
+                f"""
+                UPDATE tg_channels
+                   SET sync_claimed_at = {_DB_NOW_MS},
+                       sync_claimed_by = :holder
+                 WHERE id = :channel_id
+                   AND (
+                        sync_claimed_at IS NULL
+                     OR sync_claimed_at < {_CLAIM_CUTOFF_MS}
+                   )
+             RETURNING id
+                """  # noqa: S608
+            ),
+            {
+                "holder": holder,
+                "channel_id": channel_id,
+                "lease_ms": CHANNEL_CLAIM_LEASE_SECONDS * 1000,
+            },
+        ).first()
+        session.commit()
+        return row is not None
+
+
+def renew_channel_sync_claim(channel_id: str, *, holder: str) -> bool:
+    """Push this claim's expiry out. False if we no longer hold it.
+
+    Conditional on `sync_claimed_by`, so a runner whose lease lapsed and was
+    stolen cannot renew its way back on top of the new holder. A False here
+    means the sync is running without protection and its caller must stop --
+    see `_heartbeat_channel_claim`.
+    """
+    with Session(engine) as session:
+        row = session.execute(
+            sa_text(
+                f"""
+                UPDATE tg_channels
+                   SET sync_claimed_at = {_DB_NOW_MS}
+                 WHERE id = :channel_id
+                   AND sync_claimed_by = :holder
+             RETURNING id
+                """  # noqa: S608
+            ),
+            {"holder": holder, "channel_id": channel_id},
+        ).first()
+        session.commit()
+        return row is not None
+
+
+def release_channel_sync_claim(channel_id: str, *, holder: str) -> bool:
+    """Give the claim up. False if it was not ours to give.
+
+    Conditional on the holder for the same reason `renew` is, and it matters
+    more here: an unconditional release runs at the end of every sync, so a
+    runner that overran its lease and had the Channel taken from it would clear
+    the *new* holder's claim on its way out and hand a third walk into cursors
+    the second is mid-write.
+    """
+    with Session(engine) as session:
+        row = session.execute(
+            sa_text(
+                """
+                UPDATE tg_channels
+                   SET sync_claimed_at = NULL,
+                       sync_claimed_by = NULL
+                 WHERE id = :channel_id
+                   AND sync_claimed_by = :holder
+             RETURNING id
+                """
+            ),
+            {"channel_id": channel_id, "holder": holder},
+        ).first()
+        session.commit()
+        return row is not None
+
+
+def channel_sync_claim_holder(channel_id: str) -> str | None:
+    """Who holds a *live* claim on this Channel, if anyone.
+
+    Expiry is applied here rather than left to the caller, so "is this Channel
+    being synced" has one answer. A caller comparing `sync_claimed_at` itself
+    is a second copy of the lease rule, and the two would disagree about a
+    stale claim first -- reporting a crashed worker's Channel as busy for ever.
+    """
+    with Session(engine) as session:
+        row = session.execute(
+            sa_text(
+                f"""
+                SELECT sync_claimed_by
+                  FROM tg_channels
+                 WHERE id = :channel_id
+                   AND sync_claimed_by IS NOT NULL
+                   AND sync_claimed_at IS NOT NULL
+                   AND sync_claimed_at >= {_CLAIM_CUTOFF_MS}
+                """  # noqa: S608
+            ),
+            {
+                "channel_id": channel_id,
+                "lease_ms": CHANNEL_CLAIM_LEASE_SECONDS * 1000,
+            },
+        ).first()
+        return str(row[0]) if row else None

@@ -12,12 +12,20 @@ and they *will*, since the plan is to serve many users. So this asserts the
 **reason** rather than the number, following `client-split.conform.ts`:
 
 1. the worker count is 1, **and**
-2. the three pieces of per-process state that make >1 wrong are still
-   per-process.
+2. the pieces of per-process state that make >1 wrong are still per-process.
 
 Externalise them and (2) fails, which is the point: the failure message is the
 notification that the constraint is lifted, not an obstacle to lifting it. The
 sequenced plan is `docs/scaling-to-multiple-workers.md`.
+
+Two have now been externalised, and each left a guard pointing the other way
+rather than an absence. The scheduler moved to its own process in ticket 10, so
+`test_the_scheduler_has_left_the_api_process` asserts the API does *not* start
+it. The per-channel lock became a claim on `tg_channels` in ticket 11, so
+`test_the_per_channel_claim_is_no_longer_in_process_memory` asserts the lock
+has not come back beside it. What remains genuinely per-process is the job
+registry and the proxy pool's semaphores — and the second is why the sync tier
+is pinned to one replica until ticket 13.
 """
 
 from __future__ import annotations
@@ -211,17 +219,55 @@ def test_the_sync_tier_is_a_single_replica() -> None:
 
 
 def test_the_job_registry_is_still_a_dict_in_one_process() -> None:
-    """Reason 2. `has_active_sync_job` and the SSE stream both read this.
+    """Reason 2, now half of what it was. `has_active_sync_job` and the SSE
+    stream both read this.
 
     Across processes it silently answers for one worker only: the scheduler
     cannot tell that a manual sync is already running, and a progress stream
     served by a different worker sees nothing to push.
+
+    **The per-channel half of this reason is gone** (ticket 11). It used to
+    assert `scraper_jobs._channel_locks` too — an `asyncio.Lock` per channel
+    name, which was the only thing stopping two syncs of one Channel from
+    interleaving their cursor writes. That moved to a claim on `tg_channels`,
+    so it now holds across processes and the lock was deleted rather than left
+    beside it: two answers to "is this Channel being synced" diverge the moment
+    the second worker arrives, and which one a call site consulted would decide
+    whether the cursors were protected.
+
+    So this guard shrank on purpose, and the test below is what it shrank into.
+    The job *registry* is still per-process and still a reason.
     """
     assert isinstance(scraper_jobs._active_jobs, dict)
-    assert isinstance(scraper_jobs._channel_locks, dict)
     assert "_active_jobs" in inspect.getsource(scraper_jobs.has_active_sync_job), (
         "`has_active_sync_job` no longer reads in-process state — if the claim "
         f"moved to the database, see {_PLAN.name} step 2"
+    )
+
+
+def test_the_per_channel_claim_is_no_longer_in_process_memory() -> None:
+    """The other half of reason 2, asserted from the other side (ticket 11).
+
+    Deleting the `_channel_locks` assertion above without putting anything in
+    its place would quietly drop a documented reason: the file would still list
+    three, and only two would be checked. This is the replacement, and it fails
+    in the direction that matters — if somebody reintroduces an in-process lock
+    beside the database claim, the drift is caught here rather than discovered
+    when a second worker interleaves a backfill.
+    """
+    assert not hasattr(scraper_jobs, "_channel_locks"), (
+        "an in-process per-channel lock is back alongside the database claim; "
+        "see tests/services/test_channel_mutual_exclusion.py"
+    )
+
+    from app.models_tg import Channel
+
+    assert hasattr(Channel, "sync_claimed_at") and hasattr(
+        Channel, "sync_claimed_by"
+    ), (
+        "the per-Channel sync claim is not on the row any more — mutual "
+        "exclusion is back to being per-process, and the sync tier cannot be "
+        f"scaled at all until it returns (see {_PLAN.name})"
     )
 
 

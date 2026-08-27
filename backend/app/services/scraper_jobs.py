@@ -26,7 +26,6 @@ from app.services.channel_setting_groups import SyncOperationMode
 #: `LISTEN`/`UNLISTEN` race on a shared one. See `core/pg_notify.py`.
 SYNC_JOB_PROGRESS_CHANNEL = "sync_job_progress"
 
-_channel_locks: dict[str, asyncio.Lock] = {}
 _cancel_events: dict[str, asyncio.Event] = {}
 _active_jobs: dict[str, SyncJobState] = {}
 _jobs_lock = asyncio.Lock()
@@ -45,12 +44,6 @@ logger = logging.getLogger(__name__)
 SYNC_JOB_DELETE_BATCH = 1000
 
 _TERMINAL_JOB_STATUSES = frozenset({"completed", "failed", "cancelled"})
-
-
-def _channel_lock(channel_name: str) -> asyncio.Lock:
-    if channel_name not in _channel_locks:
-        _channel_locks[channel_name] = asyncio.Lock()
-    return _channel_locks[channel_name]
 
 
 @dataclass
@@ -615,10 +608,6 @@ async def cancel_job(job_id: str) -> SyncJobState | None:
     return job
 
 
-def acquire_channel(channel_name: str) -> asyncio.Lock:
-    return _channel_lock(channel_name)
-
-
 def deactivate_job(job_id: str) -> None:
     """Drop in-memory handles after a job finishes."""
     _active_jobs.pop(job_id, None)
@@ -849,7 +838,6 @@ def clear_jobs_for_tests() -> None:
     """Test helper — reset registry and delete persisted rows."""
     _active_jobs.clear()
     _cancel_events.clear()
-    _channel_locks.clear()
     _mirrored_jobs.clear()
     with Session(engine) as session:
         session.exec(delete(SyncJobRow))

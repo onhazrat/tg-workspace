@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
 import time
 import uuid
@@ -13,6 +14,7 @@ from typing import Any, Literal
 import httpx
 from sqlmodel import Session, col, func, select
 
+from app.core import pg_notify
 from app.core.config import settings
 from app.core.db import engine
 from app.core.request_meter import metered
@@ -35,7 +37,15 @@ from app.services.channel_setting_groups import (
     move_channel_from_restricted_to_default,
     move_channel_to_restricted_group,
 )
-from app.services.channels import _velocity_from_timestamps, update_channel_coverage
+from app.services.channels import (
+    CHANNEL_CLAIM_HEARTBEAT_SECONDS,
+    _velocity_from_timestamps,
+    channel_sync_claim_holder,
+    release_channel_sync_claim,
+    renew_channel_sync_claim,
+    try_claim_channel_sync,
+    update_channel_coverage,
+)
 from app.services.followed_channels import (
     create_followed_channel,
     normalize_channel_name,
@@ -64,7 +74,6 @@ from app.services.scraper import get_channel_info, scrape_channel_page
 from app.services.scraper_jobs import (
     ChannelSyncState,
     SyncJobState,
-    acquire_channel,
     deactivate_job,
     persist_job,
     touch_job,
@@ -1259,116 +1268,547 @@ async def _walk_channel_pages(
         before_id = page_result.next_before_id
 
 
+#: Announced when a Channel's claim is given up, carrying the outcome so a
+#: coalesced request can report it without re-reading anything.
+#:
+#: A `NOTIFY` and not a shared `asyncio.Event`, for the reason ticket 10 already
+#: had to learn: the waiter and the holder are not guaranteed to be in the same
+#: process, and after ticket 13 they routinely will not be. Delivery is
+#: best-effort by construction -- `NOTIFY` has no replay -- so the waiter also
+#: polls the claim. The notification is what makes coalescing feel instant; the
+#: poll is what makes it correct.
+CHANNEL_SYNC_RELEASE_CHANNEL = "channel_sync_release"
+
+#: How long a coalesced request waits before giving up and reporting a skip.
+#:
+#: A bound is needed because the waiter is holding a slot in the worker's
+#: concurrency gate while it waits (see `_claim_or_coalesce`). Without one, a
+#: Channel in a multi-hour backfill would park every other request for it, and
+#: those requests hold permits that other Channels could be using.
+#:
+#: Fifteen minutes is a judgement, not a derivation, and worth naming as such:
+#: long enough that an ordinary sync -- seconds to a couple of minutes -- is
+#: always ridden rather than skipped, short enough that a pathological backfill
+#: cannot hold the gate for the length of the visibility timeout.
+COALESCE_MAX_WAIT_SECONDS = 900
+
+#: How often a waiter re-checks the claim when no notification arrives. Small,
+#: because it is only reached when a ring was lost or the holder died, and both
+#: of those should resolve in seconds rather than at the next sweep.
+_COALESCE_POLL_SECONDS = 2.0
+
+
+def _still_holds_claim(channel_id: str, holder: str) -> bool:
+    """Whether `holder` still owns this Channel's live claim.
+
+    A thin wrapper so the check reads as a question at its two call sites rather
+    than as a string comparison that could be spelled three subtly different
+    ways. `channel_sync_claim_holder` already applies the lease, so an expired
+    claim answers False here — which is correct: a lease we let lapse is one we
+    no longer hold, whether or not anybody has taken it yet.
+    """
+    return channel_sync_claim_holder(channel_id) == holder
+
+
+async def _heartbeat_channel_claim(ch_state: ChannelSyncState, holder: str) -> None:
+    """Renew this Channel's claim until the sync finishes or we lose it.
+
+    Cancelled by `sync_single_channel`'s `finally`, so the normal exit is a
+    `CancelledError` rather than a return.
+
+    Losing the claim mid-sync -- `renew` returning False -- is logged and then
+    dropped, deliberately. It means another runner already believes it owns the
+    Channel, and the useful response to that is not to tear this sync down
+    half-written: the walk holds no transaction, and its finaliser writes the
+    cursors in one. Tearing down would leave the same interleaving risk while
+    also losing the pages already fetched. What it must not do is keep
+    renewing, which would take the Channel back from the new holder.
+    """
+    while True:
+        await asyncio.sleep(CHANNEL_CLAIM_HEARTBEAT_SECONDS)
+        renewed = await run_db(
+            renew_channel_sync_claim, ch_state.channel_id, holder=holder
+        )
+        if not renewed:
+            logger.warning(
+                "lost the sync claim on @%s mid-sync; another runner holds it",
+                ch_state.channel_name,
+            )
+            return
+
+
+#: The Channel statuses a job can finish on. Mirrors `sync_queue`'s own set,
+#: which cannot be imported here — `sync_queue` imports this module.
+#:
+#: Duplicated deliberately and asserted equal by the guard, because the failure
+#: of letting them drift is silent and unbounded: `_finalize_if_complete` waits
+#: for every Channel to reach one of these, so a coalesced request that adopted
+#: a status missing from that set would leave its job `running` for ever, with
+#: no `[DONE]` on the stream and nothing in error.
+_ANNOUNCEABLE_STATUSES = frozenset({"success", "failed", "skipped", "cancelled"})
+
+
+async def _release_and_announce(
+    ch_state: ChannelSyncState, holder: str, *, walked: bool
+) -> None:
+    """Announce how it went, then give the claim back. In that order.
+
+    **Announce first, release second.** The other order leaves a window between
+    the release committing and the notification going out, and a waiter whose
+    poll brings it back to the top of its loop inside that window finds the
+    claim free, takes it, and walks the Channel that was just walked — the
+    double work coalescing exists to prevent, arrived at through the one path
+    nobody is watching. Announcing while the claim is still held means the
+    waiter's next claim attempt fails and it finds the outcome already sitting
+    in its queue.
+
+    **Neither half runs if we are not the holder any more.** A runner whose
+    heartbeat failed and whose lease lapsed still reaches this function, and by
+    then somebody else is walking the Channel. Announcing there would answer for
+    *their* run: a waiter riding the new holder would match on the channel id,
+    adopt this stale outcome, and report a finished sync while the real one is
+    still fetching pages. The release is conditional on the holder and would be
+    a no-op anyway, but the announcement is not, so the check has to come first
+    and cover both.
+
+    Both halves are best-effort and neither may fail the sync it is closing: the
+    pages are fetched and the cursors written by the time this runs, so an
+    exception here would turn a completed sync into a failed one over
+    bookkeeping. A release that does not happen still expires on its own.
+    """
+    try:
+        current = await run_db(channel_sync_claim_holder, ch_state.channel_id)
+    except Exception:  # noqa: BLE001
+        logger.warning("could not read the sync claim on @%s", ch_state.channel_name)
+        current = holder  # assume ours: the release is conditional regardless
+
+    if current != holder:
+        logger.warning(
+            "the sync claim on @%s is held by %r, not us; announcing nothing",
+            ch_state.channel_name,
+            current,
+        )
+        return
+
+    # A status that is not terminal must never leave this function. Every path
+    # through `_sync_claimed_channel` sets one, so reaching here with `running`
+    # means something escaped its handlers — and announcing that verbatim would
+    # hand a waiter a status its job can never finish on. Reported as a failure,
+    # which is what an escaped exception is.
+    status = ch_state.status
+    error = ch_state.error
+    if status not in _ANNOUNCEABLE_STATUSES:
+        logger.warning(
+            "sync of @%s finished in non-terminal state %r; announcing a failure",
+            ch_state.channel_name,
+            status,
+        )
+        status = "failed"
+        error = error or "Sync ended unexpectedly"
+
+    try:
+        await run_db(
+            pg_notify.publish,
+            CHANNEL_SYNC_RELEASE_CHANNEL,
+            {
+                "channelId": ch_state.channel_id,
+                "status": status,
+                "error": error,
+                "postsFetched": ch_state.posts_fetched,
+                "newLatestId": ch_state.new_latest_id,
+                # Whether this outcome is a fact about the *Channel* or about
+                # the holder's *job*. See `_apply_coalesced_outcome`.
+                "walked": walked,
+            },
+        )
+    except Exception:  # noqa: BLE001
+        logger.warning(
+            "could not announce the sync release for @%s", ch_state.channel_name
+        )
+
+    try:
+        await run_db(release_channel_sync_claim, ch_state.channel_id, holder=holder)
+    except Exception:  # noqa: BLE001
+        logger.warning("could not release the sync claim on @%s", ch_state.channel_name)
+
+
+def _is_channel_outcome(payload: dict[str, Any]) -> bool:
+    """Whether this outcome is a fact about the Channel or about the holder's job.
+
+    Only a run that entered `_walk_channel_pages` says something about the
+    Channel. The two that do not are both live cases, not hypotheticals:
+
+    * **Denied.** `_prepare_channel_sync` refuses on the holder's `sync_mode`
+      against the Channel's setting group. A `sync_all` on a Channel with
+      `include_in_sync_all=False` claims it, is denied, and announces `skipped`
+      — and an `individual` request riding that, which
+      `allow_individual_sync` permits, would adopt the skip and silently never
+      sync. It would even be told "Sync not allowed for group ..." about a mode
+      that *is* allowed.
+    * **Cancelled.** Cancelling job A would make job B's Channel `cancelled`
+      and, through `_recompute_job_status`, job B terminal as cancelled —
+      although nobody cancelled B and nothing was fetched.
+
+    So a rider only adopts an outcome the walk produced. Anything else sends it
+    back round to claim the Channel and run the sync itself, which is what it
+    asked for.
+
+    Absent `walked` is read as True for the rolling-deploy case: a payload
+    published by the previous version carries no such key, and treating those as
+    job-scoped would make every coalesced request during a deploy re-scrape.
+    """
+    return bool(payload.get("walked", True))
+
+
+def _apply_coalesced_outcome(
+    ch_state: ChannelSyncState, payload: dict[str, Any]
+) -> None:
+    """Report the running sync's result as this request's result.
+
+    Copied rather than summarised: the point of coalescing is that the second
+    request gets the answer it would have got by doing the work, so a caller
+    reading `posts_fetched` or `new_latest_id` sees what the sync found. The
+    status is taken verbatim too -- if the sync it rode failed, this request
+    failed, and reporting a success because *this* request had no error of its
+    own would be the coalescing lying about what happened.
+
+    Only reached for outcomes `_is_channel_outcome` accepts.
+    """
+    status = str(payload.get("status") or "success")
+    # Defended on both sides. `_release_and_announce` already refuses to publish
+    # a non-terminal status, but this also reads payloads written by another
+    # process — during a rolling deploy, by a version that did not.
+    ch_state.status = status if status in _ANNOUNCEABLE_STATUSES else "failed"
+    error = payload.get("error")
+    ch_state.error = str(error) if error else None
+    posts = payload.get("postsFetched")
+    ch_state.posts_fetched = int(posts) if isinstance(posts, int) else 0
+    latest = payload.get("newLatestId")
+    ch_state.new_latest_id = int(latest) if isinstance(latest, int) else None
+
+
+def _outcome_from_row(ch_state: ChannelSyncState, since_ms: int) -> dict[str, Any]:
+    """What a sync we never heard from left behind.
+
+    The fallback when a holder released without a notification reaching us -- a
+    lost ring, or a process that died between announcing and releasing.
+
+    `last_updated` is the evidence, and it is actually *read* rather than merely
+    cited: `_finalize_channel_success` is the only thing that advances it, so a
+    value newer than the moment this request started waiting means the sync it
+    rode completed. Without that, the honest answer is a failure. The first cut
+    returned success for any row that existed, which reported a completed sync
+    to a caller whose Channel had just failed on a dead handle -- with a
+    `newLatestId` off a row nothing had advanced.
+    """
+    with Session(engine) as session:
+        channel = session.get(Channel, ch_state.channel_id)
+        if channel is None:
+            return {"status": "failed", "error": "Channel not found", "walked": True}
+        if (channel.last_updated or 0) >= since_ms:
+            return {
+                "status": "success",
+                "error": None,
+                "postsFetched": 0,
+                "newLatestId": channel.anchor_post_id,
+                "walked": True,
+            }
+        return {
+            "status": "failed",
+            "error": "The sync this request waited on did not complete",
+            "postsFetched": 0,
+            "newLatestId": None,
+            "walked": True,
+        }
+
+
+async def _claim_or_coalesce(
+    job: SyncJobState, ch_state: ChannelSyncState, holder: str
+) -> bool:
+    """Take the Channel's claim, or ride the sync that already has it.
+
+    Returns True when this runner owns the claim and should sync, False when it
+    reported somebody else's result (or a skip) and is done.
+
+    The loop exists because "somebody holds it" and "somebody is making
+    progress" are different facts. A holder that died stops publishing and stops
+    renewing, so a waiter that only ever waited would wait for ever; instead
+    every pass re-attempts the claim, and once the dead holder's lease lapses
+    the waiter simply becomes the holder. That is checkbox 4 satisfied without a
+    reaper, a sweep, or anything for an operator to run.
+
+    **The subscription is taken before the second claim attempt, not after the
+    first fails.** Subscribing after losing the race is how a waiter misses the
+    release that happened in between and then sits until its poll -- the
+    lost-wakeup the `_ensure_running`/`subscribe` ordering in `pg_notify`
+    documents one level down.
+
+    *One cost, stated rather than glossed:* the waiter is inside
+    `sync_queue._run_channel`'s concurrency gate, so a coalesced request holds a
+    permit while it waits. It cannot deadlock -- the holder acquired its own
+    permit before it could claim, so it is always able to finish -- but N
+    requests for one busy Channel do occupy N slots. Draining as slots free is
+    ticket 12's, which owns the draining strategy; this is the same head-of-line
+    shape `sync_queue._batch_size` already documents.
+    """
+    if await run_db(try_claim_channel_sync, ch_state.channel_id, holder=holder):
+        return True
+
+    queue = pg_notify.listener(CHANNEL_SYNC_RELEASE_CHANNEL).subscribe()
+    deadline = time.monotonic() + COALESCE_MAX_WAIT_SECONDS
+    #: When the wait began, in wall-clock ms. `_outcome_from_row` compares
+    #: `Channel.last_updated` against it to decide whether the sync this request
+    #: rode actually completed, so it has to be taken before the first wait
+    #: rather than at the moment of the fallback.
+    waiting_since_ms = int(time.time() * 1000)
+    try:
+        while time.monotonic() < deadline:
+            if job.cancel_event.is_set():
+                ch_state.status = "cancelled"
+                await touch_job(job, ch_state)
+                return False
+
+            # Re-attempted every pass, which is both the lost-wakeup fix and
+            # the crashed-holder takeover.
+            if await run_db(try_claim_channel_sync, ch_state.channel_id, holder=holder):
+                return True
+
+            try:
+                payload = await asyncio.wait_for(
+                    queue.get(), timeout=_COALESCE_POLL_SECONDS
+                )
+            except TimeoutError:
+                # No ring arrived. If the claim is *gone*, the holder finished
+                # and its announcement never reached us — a lost `NOTIFY`, or a
+                # process that died between releasing and publishing. Report
+                # what the row now says rather than looping round to claim it
+                # ourselves: re-claiming here would scrape a Channel that was
+                # just scraped, which is the double work coalescing exists to
+                # avoid, reached through the one path where nobody is watching.
+                still_held = await run_db(
+                    channel_sync_claim_holder, ch_state.channel_id
+                )
+                if still_held is None:
+                    row_outcome = await run_db(
+                        _outcome_from_row, ch_state, waiting_since_ms
+                    )
+                    _apply_coalesced_outcome(ch_state, row_outcome)
+                    await touch_job(job, ch_state)
+                    return False
+                continue
+
+            if payload.get("channelId") != ch_state.channel_id:
+                continue
+
+            if not _is_channel_outcome(payload):
+                # The holder stopped for a reason of its own — its job's
+                # `sync_mode` was denied, or its job was cancelled. Neither
+                # says anything about this request, so go round and claim the
+                # Channel rather than adopting an answer to a different
+                # question. See `_is_channel_outcome`.
+                logger.info(
+                    "the sync holding @%s ended without walking it; claiming it "
+                    "rather than riding that outcome",
+                    ch_state.channel_name,
+                )
+                continue
+
+            logger.info(
+                "coalesced a sync request for @%s onto the one already running",
+                ch_state.channel_name,
+            )
+            _apply_coalesced_outcome(ch_state, payload)
+            await touch_job(job, ch_state)
+            return False
+
+        # The holder is still going after the cap. Skipped rather than failed:
+        # nothing went wrong, and this Channel is demonstrably being synced.
+        ch_state.status = "skipped"
+        ch_state.error = "Another sync of this channel is still running"
+        await touch_job(job, ch_state)
+        return False
+    finally:
+        pg_notify.listener(CHANNEL_SYNC_RELEASE_CHANNEL).unsubscribe(queue)
+
+
 async def sync_single_channel(
     job: SyncJobState,
     ch_state: ChannelSyncState,
     *,
     user_id: uuid.UUID | None,
 ) -> None:
-    """Sync one channel: guard, prepare, walk its pages, finalise.
+    """Sync one channel: claim it, prepare, walk its pages, finalise.
 
     Everything specific to *how* pages are walked lives in
-    `_walk_channel_pages`; this function owns the channel lock, the cancellation
-    checks, and deciding which of the three finalisers runs.
+    `_walk_channel_pages`; this function owns the channel claim, the
+    cancellation checks, and deciding which of the three finalisers runs.
+
+    **The claim goes here rather than in the callers.** Two of them exist today
+    -- `sync_queue._run_channel` and `run_sync_job` -- and `auto_summary` will
+    reach the second one to get a Channel synced before it summarises. Guarding
+    a caller leaves the next caller unguarded, which is the shape ticket 33
+    names and `/password-recovery` demonstrated for months. This is the function
+    that walks the pages, so this is the function that claims.
     """
     if job.cancel_event.is_set():
         ch_state.status = "cancelled"
         await touch_job(job, ch_state)
         return
 
-    lock = acquire_channel(ch_state.channel_name)
-    async with lock:
-        if job.cancel_event.is_set():
-            ch_state.status = "cancelled"
-            await touch_job(job, ch_state)
-            return
+    holder = f"{job.job_id}:{uuid.uuid4().hex[:8]}"
+    if not await _claim_or_coalesce(job, ch_state, holder):
+        return
 
-        ch_state.status = "running"
+    heartbeat = asyncio.create_task(_heartbeat_channel_claim(ch_state, holder))
+    walked = False
+    try:
+        walked = await _sync_claimed_channel(
+            job, ch_state, user_id=user_id, holder=holder
+        )
+    finally:
+        heartbeat.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await heartbeat
+        await _release_and_announce(ch_state, holder, walked=walked)
+
+
+async def _sync_claimed_channel(
+    job: SyncJobState,
+    ch_state: ChannelSyncState,
+    *,
+    user_id: uuid.UUID | None,
+    holder: str,
+) -> bool:
+    """The body of one channel sync, run while this runner holds the claim.
+
+    Returns whether the Channel was actually walked. A run that never got that
+    far ended for a reason that belongs to *this job* rather than to the
+    Channel, and `_apply_coalesced_outcome` refuses to hand those to a rider.
+    """
+    if job.cancel_event.is_set():
+        ch_state.status = "cancelled"
+        await touch_job(job, ch_state)
+        return False
+
+    ch_state.status = "running"
+    await touch_job(job, ch_state)
+
+    prep_status, ctx, deny_reason = await run_db(
+        _prepare_channel_sync,
+        ch_state.channel_id,
+        user_id,
+        sync_mode=job.sync_mode,
+    )
+    if prep_status == "missing":
+        ch_state.status = "failed"
+        ch_state.error = "Channel not found"
+        await touch_job(job, ch_state)
+        return False
+    if prep_status == "denied" or ctx is None:
+        # Denied by *this job's* `sync_mode` against the Channel's setting
+        # group — a `sync_all` on a channel excluded from sync-all, say. That
+        # says nothing about whether an `individual` sync of the same Channel is
+        # allowed, which is why this returns False and the rider re-claims.
+        ch_state.status = "skipped"
+        ch_state.error = deny_reason or "Sync not allowed for this channel"
+        await touch_job(job, ch_state)
+        return False
+
+    walk = _ChannelWalk()
+    due_reason = (
+        ch_state.metadata.get("dueReason")
+        if isinstance(ch_state.metadata, dict)
+        else None
+    )
+
+    try:
+        await _walk_channel_pages(job, ch_state, ctx, walk, user_id=user_id)
+
+        if walk.failed_error is not None:
+            ch_state.status = "failed"
+            ch_state.error = walk.failed_error
+            ch_state.posts_fetched = walk.total_new_posts
+            await touch_job(job, ch_state)
+            return True
+
+        # The last thing before the cursors are written: do we still hold the
+        # claim? `_heartbeat_channel_claim` gives up quietly when it loses the
+        # lease, and the walk carries on — but carrying on to `_finalize` means
+        # writing `last_updated`, `anchor_post_id`,
+        # `oldest_stored_post_timestamp` and `history_complete_to_cutoff` while
+        # the new holder is mid-walk and about to write the same four. That is
+        # the interleaving the claim exists to prevent, reached through the one
+        # path the design admits can happen.
+        #
+        # Asked of the database rather than of the heartbeat's own flag: the
+        # heartbeat only learns it lost the lease on its next tick, so its flag
+        # can be up to `CHANNEL_CLAIM_HEARTBEAT_SECONDS` stale exactly when it
+        # matters. The Posts are already durable — `bulk_upsert_posts_impl`
+        # upserts on the unique constraint — so nothing fetched is lost; only
+        # the cursor write is skipped, and the new holder writes it correctly.
+        if not await run_db(_still_holds_claim, ch_state.channel_id, holder):
+            logger.warning(
+                "lost the sync claim on @%s before finalising; skipping the "
+                "cursor write and leaving it to the holder",
+                ch_state.channel_name,
+            )
+            ch_state.status = "failed"
+            ch_state.error = "Lost the sync claim for this channel mid-sync"
+            ch_state.posts_fetched = walk.total_new_posts
+            await touch_job(job, ch_state)
+            return True
+
+        await run_db(
+            _finalize_channel_success,
+            ctx,
+            job=job,
+            user_id=user_id,
+            total_new_posts=walk.total_new_posts,
+            final_latest_id=walk.final_latest_id,
+            requests_log=walk.requests_log,
+            responses_log=walk.responses_log,
+            reached_channel_start=walk.reached_channel_start,
+        )
+        ch_state.status = "success"
+        ch_state.new_latest_id = walk.final_latest_id or None
         await touch_job(job, ch_state)
 
-        prep_status, ctx, deny_reason = await run_db(
-            _prepare_channel_sync,
-            ch_state.channel_id,
-            user_id,
-            sync_mode=job.sync_mode,
+    except SyncScrapeError as exc:
+        await run_db(
+            _finalize_channel_scrape_error,
+            ctx,
+            exc,
+            job=job,
+            user_id=user_id,
+            total_new_posts=walk.total_new_posts,
+            requests_log=walk.requests_log,
+            responses_log=walk.responses_log,
+            due_reason=due_reason,
         )
-        if prep_status == "missing":
-            ch_state.status = "failed"
-            ch_state.error = "Channel not found"
-            await touch_job(job, ch_state)
-            return
-        if prep_status == "denied" or ctx is None:
-            ch_state.status = "skipped"
-            ch_state.error = deny_reason or "Sync not allowed for this channel"
-            await touch_job(job, ch_state)
-            return
+        ch_state.status = "failed"
+        ch_state.error = str(exc)
+        ch_state.posts_fetched = walk.total_new_posts
+        await touch_job(job, ch_state)
 
-        walk = _ChannelWalk()
-        due_reason = (
-            ch_state.metadata.get("dueReason")
-            if isinstance(ch_state.metadata, dict)
-            else None
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("Sync failed for @%s", ch_state.channel_name)
+        await run_db(
+            _finalize_channel_error,
+            ctx,
+            str(exc),
+            job=job,
+            user_id=user_id,
+            total_new_posts=walk.total_new_posts,
+            requests_log=walk.requests_log,
+            responses_log=walk.responses_log,
+            due_reason=due_reason,
         )
+        ch_state.status = "failed"
+        ch_state.error = str(exc)
+        ch_state.posts_fetched = walk.total_new_posts
+        await touch_job(job, ch_state)
 
-        try:
-            await _walk_channel_pages(job, ch_state, ctx, walk, user_id=user_id)
-
-            if walk.failed_error is not None:
-                ch_state.status = "failed"
-                ch_state.error = walk.failed_error
-                ch_state.posts_fetched = walk.total_new_posts
-                await touch_job(job, ch_state)
-                return
-
-            await run_db(
-                _finalize_channel_success,
-                ctx,
-                job=job,
-                user_id=user_id,
-                total_new_posts=walk.total_new_posts,
-                final_latest_id=walk.final_latest_id,
-                requests_log=walk.requests_log,
-                responses_log=walk.responses_log,
-                reached_channel_start=walk.reached_channel_start,
-            )
-            ch_state.status = "success"
-            ch_state.new_latest_id = walk.final_latest_id or None
-            await touch_job(job, ch_state)
-
-        except SyncScrapeError as exc:
-            await run_db(
-                _finalize_channel_scrape_error,
-                ctx,
-                exc,
-                job=job,
-                user_id=user_id,
-                total_new_posts=walk.total_new_posts,
-                requests_log=walk.requests_log,
-                responses_log=walk.responses_log,
-                due_reason=due_reason,
-            )
-            ch_state.status = "failed"
-            ch_state.error = str(exc)
-            ch_state.posts_fetched = walk.total_new_posts
-            await touch_job(job, ch_state)
-
-        except Exception as exc:  # noqa: BLE001
-            logger.exception("Sync failed for @%s", ch_state.channel_name)
-            await run_db(
-                _finalize_channel_error,
-                ctx,
-                str(exc),
-                job=job,
-                user_id=user_id,
-                total_new_posts=walk.total_new_posts,
-                requests_log=walk.requests_log,
-                responses_log=walk.responses_log,
-                due_reason=due_reason,
-            )
-            ch_state.status = "failed"
-            ch_state.error = str(exc)
-            ch_state.posts_fetched = walk.total_new_posts
-            await touch_job(job, ch_state)
+    return True
 
 
 def _load_sync_job_concurrency(user_id: uuid.UUID | None) -> tuple[int, int | None]:
