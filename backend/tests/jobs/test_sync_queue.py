@@ -70,7 +70,7 @@ def _drain_queue(queue_name: str) -> None:
 @pytest.fixture(autouse=True)
 def _clean_lanes() -> None:
     clear_jobs_for_tests()
-    sync_queue.reset_concurrency_gate_for_tests()
+    sync_queue.reset_worker_partition_for_tests()
     sync_queue.stop_lane_consumer()
     pg_notify.reset_listeners_for_tests()
     for lane in DRAIN_ORDER:

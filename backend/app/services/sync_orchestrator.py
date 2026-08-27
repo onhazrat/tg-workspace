@@ -1880,6 +1880,34 @@ async def _sync_claimed_channel(
     return True
 
 
+def _load_partition_inputs(
+    user_id: uuid.UUID | None,
+) -> tuple[int, list[str], int, dict[str, int]]:
+    """What `sync_queue._partition` needs to size the worker partition.
+
+    Returns the configured `syncConcurrency` **uncapped**, plus the proxy list
+    and slot configuration. Deliberately not `_load_sync_job_concurrency`,
+    which returns `min(configured, capacity)`: the partition derives its own
+    count from the lanes, so it needs the operator's number as a *truncation*
+    and the capacity as the thing being truncated. Handing it a pre-mixed
+    minimum would make "one worker per proxy slot" unexpressible — with four
+    proxies and a setting of ten it would build four workers and believe that
+    was the setting.
+    """
+    with Session(engine) as session:
+        sync_settings = load_sync_settings(session)
+        network = load_network_settings(session, user_id)
+        configured = max(
+            1,
+            int(
+                sync_settings.get("syncConcurrency")
+                or settings.SYNC_CONCURRENCY_DEFAULT
+            ),
+        )
+        default_slots, overrides = resolve_proxy_concurrency(network)
+        return configured, resolve_proxies(network), default_slots, overrides
+
+
 def _load_sync_job_concurrency(user_id: uuid.UUID | None) -> tuple[int, int | None]:
     with Session(engine) as session:
         sync_settings = load_sync_settings(session)

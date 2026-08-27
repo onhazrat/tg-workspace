@@ -3,14 +3,18 @@
 `backend/Dockerfile` runs `--workers 1`. That is a correctness constraint, not a
 capacity judgement, and this is how to remove it.
 
-> **Status after ticket 11 (2026-08-27).** Steps 1 and 4 are done and step 2 is
-> half done -- the *channel* half of it now landed, the *job* half still open. The scheduler and all scraping now run in a separate `worker`
-> compose service (`app/worker.py`, `python -m app.worker`, one replica);
-> progress fans out over `LISTEN`/`NOTIFY` (`app/core/pg_notify.py`); every sync
-> mode enqueues one message per Channel onto a PGMQ lane. **Step 3 is the one
-> that still binds** — `proxy_pool`'s semaphores are per-process, which is why
-> the sync tier is pinned to one replica. Ticket 13 is that step. The API tier
-> still runs `--workers 1` because the job registry (step 2) is still a dict.
+> **Status after ticket 13 (2026-08-27).** Steps 1 and 4 are done, step 2 is
+> half done -- the *channel* half landed, the *job* half is still open -- and
+> step 3 is **partly** done. The scheduler and all scraping now run in a
+> separate `worker` compose service (`app/worker.py`, `python -m app.worker`,
+> one replica); progress fans out over `LISTEN`/`NOTIFY`
+> (`app/core/pg_notify.py`); every sync mode enqueues one message per Channel
+> onto a PGMQ lane. Ticket 13 replaced the consumer's shared `syncConcurrency`
+> gate with a per-proxy worker partition, so the rate at any one proxy is now
+> predictable *within* a process -- but `proxy_pool`'s semaphores and the
+> partition itself are still per-process, which is why the sync tier is still
+> pinned to one replica. The API tier still runs `--workers 1` because the job
+> registry (step 2) is still a dict.
 > Ticket 11 moved the **per-channel** claim out of memory onto `tg_channels`
 > (`sync_claimed_at` / `sync_claimed_by`, leased and heartbeated), so two
 > processes racing to sync one Channel now produce one sync wherever they run;
@@ -131,6 +135,36 @@ have to have; "one process owns the proxies" is a constraint you can simply keep
 
 **Done when:** the total request rate at each proxy is independent of how many
 processes are running.
+
+**What ticket 13 actually did, and what it did not.** It took neither option.
+It partitioned instead: the queue consumer's single `syncConcurrency` semaphore
+is gone, replaced by one worker per proxy slot, each pinned to its proxy for
+the whole of one message and fetching through it on every attempt including
+retries (`docs/one-worker-per-proxy-plan.md`). That was the half worth having
+first, because the semaphore was never the thing that made the rate at a proxy
+predictable — dispatch was. A walk hopped proxies page by page and a burst of
+syncs piled onto whichever lane was least loaded at that instant.
+
+The **"done when" above is still not met**, and the guard still fails in the
+direction that says so. The partition is built from this process's view of the
+configured proxies, so two replicas would each build the whole partition and
+each own every proxy. Recommendation unchanged, and now cheaper to act on: keep
+scraping in the single-replica sync tier. If that ever has to change, the
+partition is the natural seam — assigning *which* proxies a process owns is a
+claim, in the shape ticket 11 already uses for Channels, rather than a shared
+token bucket.
+
+**One thing it did not close, contrary to what this document said first.**
+`sync_queue`'s docstring says the partition is what makes
+`auto_summary._sync_channels_for_summary`'s separate semaphore stop mattering.
+It is not, and the claim was wrong in both directions: the per-proxy *rate* was
+already bounded for that path, because every proxied `fetch_with_retry` has
+always taken a lane permit, `auto_summary` included — and its *channel*
+concurrency is still its own semaphore, outside the partition, because it calls
+`run_sync_job` directly rather than enqueueing. So the forward reference in that
+docstring is not discharged. Bringing it inside means giving it a worker, which
+means enqueueing, which inverts its control flow — it needs the sync finished
+before it can summarise. That is a ticket of its own.
 
 ### 4. Split the tiers, then scale the API — **the split is done (ticket 10)**
 

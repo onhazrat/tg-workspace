@@ -78,6 +78,13 @@ from app.core.config import settings
 from app.core.db import engine
 from app.core.request_meter import metered
 from app.services import pgmq
+from app.services.proxy_pool import (
+    ProxyWorker,
+    ProxyWorkerPool,
+    bound_to,
+    build_workers,
+    ensure_pool_configured,
+)
 from app.services.quota import budget_for_sync_mode, charge_sync_job
 from app.services.scraper_jobs import (
     SyncJobState,
@@ -126,11 +133,19 @@ _in_flight: set[tuple[str, str | None]] = set()
 #: Read only by `_release_claimed_messages` on shutdown — see that function.
 _claimed_messages: set[tuple[str, int]] = set()
 
-#: One semaphore for the whole worker, built on first use because its size
-#: comes from settings and the proxy pool rather than from a constant.
-_concurrency_gate: asyncio.Semaphore | None = None
-_concurrency_value = 0
-_gate_lock = asyncio.Lock()
+#: The worker's scraping partition, built on first use because it derives from
+#: the configured proxies rather than from a constant (ticket 13).
+_worker_partition: ProxyWorkerPool | None = None
+_partition_signature: tuple[int, tuple[tuple[str, int], ...]] = (0, ())
+_partition_width = 0
+_partition_lock = asyncio.Lock()
+
+#: How long the drain waits for a healthy worker before concluding that every
+#: proxy is parked. Only reached when no worker is free *and* none can become
+#: free by a release — which is either "everything is busy" (resolved by
+#: waiting on the running tasks) or "every proxy is in cooldown" (resolved by
+#: giving up and letting the 30-second sweep come back).
+_NO_HEALTHY_WORKER_WAIT_SECONDS = 5.0
 
 
 def _worst_case_fetch_seconds() -> float:
@@ -193,42 +208,67 @@ def visibility_timeout_seconds() -> int:
     return int(2 * _worst_case_channel_sync_seconds())
 
 
-async def _gate() -> asyncio.Semaphore:
-    """The worker's one concurrency gate, built once and refreshed on change.
+async def _partition() -> ProxyWorkerPool:
+    """The worker's scraping partition, built once and refreshed on change.
 
-    **The check-then-await is the bug this guards.** `drain_sync_lanes` gathers
-    a whole batch of `_run_channel` coroutines; without the lock every one of
-    them saw `_concurrency_gate is None`, awaited the settings read, and then
-    assigned its *own* `Semaphore`. Ten Channels would scrape at once whatever
-    `syncConcurrency` said — silently, only under concurrency, and pointed at
-    the proxies this deployment is trying to be polite to.
+    **This replaced a single `asyncio.Semaphore`** (ticket 13). The gate said
+    how many Channels could be walked at once and nothing about which proxy any
+    of them used, so a burst of syncs piled onto whichever lane happened to be
+    least loaded and one Channel's backward walk hopped proxies page by page.
+    The partition is one worker per proxy slot, each pinned to its proxy for
+    the whole message: the count now *derives* from the proxies rather than
+    being a number that has to be kept plausible against them.
+
+    `syncConcurrency` still truncates the list. An operator lowering it is
+    asking for less parallelism, and `build_workers` deals round-robin so that
+    a cut list is spread across distinct proxies rather than stacked on the
+    first one.
+
+    **The check-then-await is the bug the lock guards**, and it predates this
+    ticket: `drain_sync_lanes` used to gather a whole batch of coroutines, and
+    without the lock every one of them saw an unbuilt gate, awaited the
+    settings read, and then assigned its *own*. Ten Channels would scrape at
+    once whatever the setting said — silently, only under concurrency, and
+    pointed at the proxies this deployment is trying to be polite to.
     """
-    global _concurrency_gate, _concurrency_value
-    async with _gate_lock:
-        from app.services.sync_orchestrator import _load_sync_job_concurrency
+    global _worker_partition, _partition_signature, _partition_width
+    async with _partition_lock:
+        from app.services.sync_orchestrator import _load_partition_inputs
 
-        concurrency, _capacity = await asyncio.to_thread(
-            _load_sync_job_concurrency, None
+        concurrency, proxies, default_slots, overrides = await asyncio.to_thread(
+            _load_partition_inputs, None
         )
-        concurrency = max(1, concurrency)
-        if _concurrency_gate is None:
-            _concurrency_value = concurrency
-            _concurrency_gate = asyncio.Semaphore(concurrency)
-        elif concurrency != _concurrency_value and not _in_flight:
-            # Rebuilt only while nothing holds a permit, because replacing a
-            # semaphore mid-flight loses the count of what is outstanding. An
-            # operator's change therefore lands on the next idle drain rather
-            # than needing a restart, which is what `run_sync_job` gave them
-            # when it read this per job.
-            _concurrency_value = concurrency
-            _concurrency_gate = asyncio.Semaphore(concurrency)
-        return _concurrency_gate
+        pool = await ensure_pool_configured(proxies, default_slots, overrides)
+        lanes = pool.lanes()
+        signature = (
+            concurrency,
+            tuple((lane.url, lane.max_parallel) for lane in lanes),
+        )
+
+        current = _worker_partition
+        rebuild = current is None or (
+            signature != _partition_signature
+            # Rebuilt only while nothing holds a worker, because replacing the
+            # partition mid-flight loses track of what is outstanding: the
+            # in-flight messages would release into an object nobody reads and
+            # the new one would believe itself idle. An operator's change lands
+            # on the next idle drain rather than needing a restart.
+            and not any(worker.busy for worker in current.workers)
+        )
+        if rebuild:
+            current = ProxyWorkerPool(build_workers(lanes, concurrency))
+            _worker_partition = current
+            _partition_signature = signature
+            _partition_width = len(current)
+        assert current is not None
+        return current
 
 
-def reset_concurrency_gate_for_tests() -> None:
-    global _concurrency_gate, _concurrency_value
-    _concurrency_gate = None
-    _concurrency_value = 0
+def reset_worker_partition_for_tests() -> None:
+    global _worker_partition, _partition_signature, _partition_width
+    _worker_partition = None
+    _partition_signature = (0, ())
+    _partition_width = 0
 
 
 def _send(lane: str, payload: dict[str, Any]) -> int:
@@ -290,73 +330,89 @@ class SlotLost(Exception):
 
 
 class SyncSlot:
-    """One permit on the worker's concurrency gate, which can be handed back.
+    """One worker out of the partition, which can be handed back.
 
-    The gate is meant to mean "how many Channels this deployment scrapes at
-    once". It stopped meaning that when ticket 11 added coalescing: a request
-    that finds another sync already running its Channel waits *inside* the
-    permit, so N requests for one busy Channel occupied N scraping slots while
-    scraping nothing. Ticket 11 capped the wait rather than restructure the
-    gate and left this here.
+    Before ticket 13 this wrapped a permit on a single shared semaphore. It now
+    wraps a `ProxyWorker` — the same lifecycle, plus the proxy that worker is
+    bound to, which is what `_handle_one` installs for the fetches underneath.
 
-    So a permit becomes an object that can be put down. `released()` hands it
-    back for the duration of a wait and re-takes it before the caller does
-    anything that needs it. Nothing else about the gate changes.
+    The releasable shape is ticket 12's and the reason is ticket 11's: a
+    request that finds another sync already running its Channel waits *inside*
+    its slot, so N requests for one busy Channel occupied N scraping slots
+    while scraping nothing. `released()` hands the worker back for the duration
+    of a wait and takes one again before the caller does anything that needs
+    it. The worker it gets back may be a different one, which is fine and is
+    the reason binding happens per message rather than per job: a waiter has
+    not fetched anything yet.
 
     **Why this still cannot deadlock.** Ticket 11's argument was "the holder
-    acquires its permit before it can claim, so it is always able to finish",
-    and that half is untouched — a runner that holds a Channel's claim holds its
-    permit for as long as it walks, and never releases mid-walk. Only a
-    *waiter* releases, and a waiter holds no claim. So there is no permit held
-    by something waiting for a claim held by something waiting for a permit,
-    which is the only cycle available here. The change removes contention; it
-    adds no ordering.
+    acquires its slot before it can claim, so it is always able to finish", and
+    that half is untouched — a runner holding a Channel's claim holds its
+    worker for as long as it walks and never releases mid-walk. Only a *waiter*
+    releases, and a waiter holds no claim. So there is no slot held by
+    something waiting for a claim held by something waiting for a slot, which
+    is the only cycle available here.
     """
 
-    def __init__(self, gate: asyncio.Semaphore) -> None:
-        self._gate = gate
-        self._held = False
+    def __init__(self, pool: ProxyWorkerPool) -> None:
+        self._pool = pool
+        self._worker: ProxyWorker | None = None
 
     @classmethod
-    def holding(cls, gate: asyncio.Semaphore) -> SyncSlot:
-        """Wrap a permit the caller has *already* acquired.
+    def holding(cls, pool: ProxyWorkerPool, worker: ProxyWorker) -> SyncSlot:
+        """Wrap a worker the caller has *already* acquired.
 
         The dispatcher acquires before it knows whether there is a message to
         put in the slot, because that wait is its backpressure. This is how the
-        permit it is holding becomes the slot it hands over, without the object
-        acquiring a second one.
+        worker it is holding becomes the slot it hands over, without the object
+        taking a second one.
         """
-        slot = cls(gate)
-        slot._held = True
+        slot = cls(pool)
+        slot._worker = worker
         return slot
 
+    @property
+    def worker(self) -> ProxyWorker | None:
+        return self._worker
+
+    @property
+    def proxy_url(self) -> str | None:
+        """The proxy this slot's fetches must use — satisfies `ProxyBinding`.
+
+        Read live rather than captured, because `released()` can hand back one
+        worker and take a different one. See `ProxyBinding`.
+        """
+        return self._worker.proxy_url if self._worker is not None else None
+
     async def acquire(self) -> None:
-        if not self._held:
-            await self._gate.acquire()
-            self._held = True
+        if self._worker is None:
+            worker = await self._pool.acquire()
+            if worker is None:  # pragma: no cover - unbounded acquire waits
+                raise SlotLost
+            self._worker = worker
 
     def release(self) -> None:
-        if self._held:
-            self._held = False
-            self._gate.release()
+        if self._worker is not None:
+            worker, self._worker = self._worker, None
+            self._pool.release(worker)
 
     async def acquire_within(self, timeout: float) -> bool:
-        """Take the permit, giving up after `timeout` seconds. True if taken.
+        """Take a worker, giving up after `timeout` seconds. True if taken.
 
         The bounded form exists because the unbounded one is not bounded by
-        anything the caller can see: the dispatcher is sitting on
-        `gate.acquire()` and takes the freed permit at once, so a waiter handing
-        its permit back can be parked here for the length of somebody else's
-        whole page walk — during which it evaluates neither its own deadline nor
-        its job's cancellation. See `sync_orchestrator._put_slot_down`.
+        anything the caller can see: the dispatcher is sitting on the
+        partition's own `acquire()` and takes the freed worker at once, so a
+        waiter handing its worker back can be parked here for the length of
+        somebody else's whole page walk — during which it evaluates neither its
+        own deadline nor its job's cancellation. See
+        `sync_orchestrator._put_slot_down`.
         """
-        if self._held:
+        if self._worker is not None:
             return True
-        try:
-            await asyncio.wait_for(self._gate.acquire(), timeout)
-        except TimeoutError:
+        worker = await self._pool.acquire(timeout=timeout)
+        if worker is None:
             return False
-        self._held = True
+        self._worker = worker
         return True
 
     @contextlib.asynccontextmanager
@@ -371,8 +427,8 @@ class SyncSlot:
         cap the gate exists to enforce, quietly exceeded.
 
         If the body is cancelled the re-acquire raises `CancelledError` too and
-        `_held` stays False, which is correct: a cancelled runner wants the
-        permit gone, and the dispatcher's own `release()` is then a no-op.
+        the slot stays empty, which is correct: a cancelled runner wants its
+        worker gone, and the dispatcher's own `release()` is then a no-op.
         """
         self.release()
         try:
@@ -397,7 +453,7 @@ def _batch_size() -> int:
     dispatched is one message at a time into a slot that has just come free
     (`drain_sync_lanes`), so a slow Channel delays nothing but itself.
     """
-    return max(settings.SYNC_QUEUE_BATCH_SIZE, _concurrency_value)
+    return max(settings.SYNC_QUEUE_BATCH_SIZE, _partition_width)
 
 
 #: How many accounts one lane read will interleave between. A bound because
@@ -847,6 +903,13 @@ async def _process_message(msg: pgmq.PgmqMessage, slot: SyncSlot) -> None:
             # Pre-ticket-10 message. `run_sync_job` opens and charges its own
             # meter, so this path must not open a second one around it — that
             # would bill the same Requests twice.
+            #
+            # Every Channel in it runs under this message's single binding
+            # (ticket 13), so a fifty-Channel legacy job goes out one proxy and
+            # its own semaphore serialises it against that lane's slots. Left
+            # alone deliberately: this branch exists only for messages already
+            # on a lane across a deploy, and slow-but-correct beats giving the
+            # one shape that predates the partition a way around it.
             await _run_whole_job(job, user_id)
             return
         # One meter per message: the Requests this Channel actually made,
@@ -941,12 +1004,26 @@ def _release_claimed_messages() -> None:
 async def _handle_one(lane: str, msg: pgmq.PgmqMessage, slot: SyncSlot) -> str:
     """Process (or exhaust) one claimed message. Returns an outcome tag.
 
-    Owns the slot from here on: whatever happens inside, the permit goes back
-    to the gate on the way out, which is what lets `drain_sync_lanes` treat a
-    completed task as a free slot without tracking permits itself.
+    Owns the slot from here on: whatever happens inside, the worker goes back
+    to the partition on the way out, which is what lets `drain_sync_lanes`
+    treat a completed task as a free slot without tracking workers itself.
+
+    **This is where the proxy binding is installed** (ticket 13). Every fetch
+    underneath — pages, media, the channel-info probe — goes out the worker's
+    proxy and no other. It is set here rather than in `drain_sync_lanes`
+    because `asyncio` copies the context when a task is created: setting it in
+    the dispatcher would put every worker's binding in the *same* context and
+    the last one to dispatch would win for all of them. Set inside the task, it
+    is per-task by construction.
+
+    The **slot** is bound, not the worker inside it: a coalesced waiter puts
+    its worker down while it waits and may take a different one back, and a
+    captured worker would leave the walk fetching through a proxy that now
+    belongs to another message. See `ProxyBinding`.
     """
     try:
-        return await _handle_one_inner(lane, msg, slot)
+        with bound_to(slot):
+            return await _handle_one_inner(lane, msg, slot)
     finally:
         slot.release()
         _claimed_messages.discard((lane, msg.msg_id))
@@ -1037,7 +1114,7 @@ async def drain_sync_lanes() -> dict[str, int]:
     of 300 handles idling for a quarter of an hour. Nothing failed; it was just
     slow in a way no log line would explain.
     """
-    gate = await _gate()
+    partition = await _partition()
     scheduler = LaneScheduler()
     paused = frozenset(await asyncio.to_thread(_paused_lanes))
     buffers = _LaneBuffers(paused)
@@ -1056,8 +1133,8 @@ async def drain_sync_lanes() -> dict[str, int]:
 
     try:
         while True:
-            if not running and gate.locked():
-                # Every permit is held by another drain, which loops until its
+            if not running and partition.all_busy():
+                # Every worker is held by another drain, which loops until its
                 # lanes are empty — so this one would block until that finished
                 # and then find nothing. Returning matters because the 30-second
                 # sweep is a scheduled job with APScheduler's default
@@ -1066,8 +1143,47 @@ async def drain_sync_lanes() -> dict[str, int]:
                 # `_consume_wakes` drains sequentially, so the sweep is the only
                 # drain that can overlap another in the first place.
                 break
-            await gate.acquire()
-            slot = SyncSlot.holding(gate)
+            worker = await partition.acquire(timeout=_NO_HEALTHY_WORKER_WAIT_SECONDS)
+            if worker is None:
+                # No worker is free *and* healthy. Two different situations,
+                # and the running set tells them apart — which is the whole of
+                # "a parked worker must not look like a hung one".
+                if running:
+                    done, running = await asyncio.wait(
+                        running, return_when=asyncio.FIRST_COMPLETED
+                    )
+                    _reap(done)
+                    continue
+                # Nothing *this drain* started is running, so it has nothing to
+                # wait on. Give up rather than block — the sweep comes back in
+                # `SYNC_QUEUE_POLL_INTERVAL_SECONDS` and the messages stay
+                # queued and visible.
+                #
+                # **The reason is reported, not assumed.** The first cut logged
+                # "every proxy is parked" here unconditionally, which is wrong
+                # in the ordinary case: the `all_busy()` break above misses a
+                # partition where one worker is parked and the rest are held by
+                # *another* drain, so this branch is reached with workers
+                # happily scraping and told the operator they were all in
+                # cooldown. That is the parked-versus-hung confusion this
+                # ticket exists to end, restated one level up.
+                busy, parked, total = partition.capacity_report()
+                if parked:
+                    logger.warning(
+                        "no proxy worker available: %d of %d busy, %d parked "
+                        "on proxies in cooldown; queued syncs wait for the "
+                        "next sweep",
+                        busy,
+                        total,
+                        parked,
+                    )
+                else:
+                    # Every worker is busy in another drain. Ordinary
+                    # backpressure, not a fault — the `all_busy()` break above
+                    # is the same condition observed a moment earlier.
+                    logger.debug("no proxy worker available: all %d are busy", total)
+                break
+            slot = SyncSlot.holding(partition, worker)
             # **The permit is taken before the thing that can fail**, so every
             # path out of here that does not hand it to a task has to give it
             # back. `_next_message` opens a `Session` and runs up to

@@ -23,9 +23,21 @@ rather than an absence. The scheduler moved to its own process in ticket 10, so
 `test_the_scheduler_has_left_the_api_process` asserts the API does *not* start
 it. The per-channel lock became a claim on `tg_channels` in ticket 11, so
 `test_the_per_channel_claim_is_no_longer_in_process_memory` asserts the lock
-has not come back beside it. What remains genuinely per-process is the job
-registry and the proxy pool's semaphores — and the second is why the sync tier
-is pinned to one replica until ticket 13.
+has not come back beside it.
+
+**Ticket 13 reshaped the third reason without removing it**, and that is worth
+being exact about because the ticket's own title suggests otherwise. The queue
+consumer's one shared `syncConcurrency` semaphore is gone, replaced by a
+partition of one worker per proxy slot, each pinned to its proxy for a whole
+message — so the rate at any one proxy is now predictable and capacity derives
+from the proxies rather than from a number kept plausible against them. What
+did *not* change is that the partition and the lane semaphores are both built
+from this process's memory: two worker replicas would each own every proxy, at
+N times the request rate. So the pin survives, and
+`test_proxy_concurrency_is_still_capped_per_process` says why, while
+`test_the_shared_sync_concurrency_gate_became_a_partition` says what replaced
+the half that did change. What remains per-process is the job registry and the
+proxy pool.
 """
 
 from __future__ import annotations
@@ -38,6 +50,7 @@ import re
 import pytest
 
 from app.core.config import settings
+from app.jobs import sync_queue
 from app.services import proxy_pool, scraper_jobs
 
 _BACKEND = pathlib.Path(__file__).resolve().parents[2]
@@ -271,19 +284,69 @@ def test_the_per_channel_claim_is_no_longer_in_process_memory() -> None:
     )
 
 
-def test_proxy_concurrency_is_still_capped_per_process() -> None:
-    """Reason 3, and the one with teeth.
+def test_the_shared_sync_concurrency_gate_became_a_partition() -> None:
+    """Reason 3, **reshaped by ticket 13** — so this asserts the new shape.
 
-    The other two cost duplicated work. This one changes behaviour *at Telegram*:
-    the lane semaphores are `asyncio.Semaphore`, so N workers permit N times the
-    configured requests through the same proxy. Scaling out without a shared
-    limiter does not slow the system down, it gets the proxies blocked.
+    The queue consumer held one `asyncio.Semaphore` sized
+    `min(syncConcurrency, total proxy slots)`. It said how many Channels could
+    be walked at once and nothing about *which* proxy any of them used, so a
+    burst of syncs piled onto whichever lane was least loaded at that instant
+    and one Channel's walk hopped proxies page by page.
+
+    It is now a partition: one worker per proxy slot, each pinned to its proxy
+    for the whole message (`docs/one-worker-per-proxy-plan.md`). Asserted from
+    both sides for ticket 11's reason — deleting the old assertion and adding
+    nothing would leave this file naming a reason nothing checks, and leaving
+    the gate *beside* the partition would give two answers to "how many
+    Channels may run", which diverge the moment somebody reads the wrong one.
+    """
+    assert not hasattr(sync_queue, "_concurrency_gate"), (
+        "the shared syncConcurrency semaphore is back alongside the worker "
+        "partition; two answers to how many Channels may run at once diverge "
+        "the moment a call site consults the wrong one"
+    )
+    # `_called_names`, not a substring of `inspect.getsource(_partition)`: that
+    # function's own docstring explains at length why it deals round-robin
+    # through `build_workers`, so a substring check passes on the explanation
+    # of the thing it is meant to require. Which is exactly the trap this
+    # file's `_called_names` helper was written for, walked into anyway, and
+    # caught by mutating the call out and watching the guard stay green.
+    consumer_calls = _called_names(pathlib.Path(inspect.getfile(sync_queue)))
+    assert "build_workers" in consumer_calls, (
+        "the queue consumer no longer derives its worker list from the proxy "
+        "lanes, so capacity has stopped reflecting the proxies available"
+    )
+    assert "bound_to" in consumer_calls, (
+        "the consumer dispatches without binding the worker's proxy, so every "
+        "fetch underneath picks a lane freely again and the partition is "
+        "decoration"
+    )
+
+
+def test_proxy_concurrency_is_still_capped_per_process() -> None:
+    """Reason 3, and the one with teeth. **It survives ticket 13.**
+
+    The other two cost duplicated work. This one changes behaviour *at
+    Telegram*: the lane semaphores are `asyncio.Semaphore` and the partition is
+    built from this process's view of the configured proxies, so two worker
+    replicas would each build the whole partition and each own every proxy —
+    N times the configured request rate through the same egress. Scaling out
+    without externalising this does not slow the system down, it gets the
+    proxies blocked.
+
+    So ticket 13 changed the *shape* of this reason and not its force, which is
+    why it is still a reason and the sync tier is still one replica.
     """
     source = inspect.getsource(proxy_pool)
 
     assert "asyncio.Semaphore" in source, (
         "proxy lanes are no longer gated by an in-process semaphore — if the "
         f"limit is now shared across processes, {_PLAN.name} step 3 is done"
+    )
+    assert "contextvars" in source, (
+        "the proxy binding is no longer a contextvar — a module-level one "
+        "would hand two concurrent workers each other's proxy, and only under "
+        "concurrency"
     )
 
 

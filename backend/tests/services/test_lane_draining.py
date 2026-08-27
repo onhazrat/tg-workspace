@@ -32,6 +32,7 @@ from app.models import User
 from app.models_tg import Channel
 from app.services import pgmq, sync_lane_control, sync_orchestrator
 from app.services.channels import try_claim_channel_sync
+from app.services.proxy_pool import ProxyWorkerPool, build_workers
 from app.services.scraper_jobs import (
     ChannelSyncState,
     SyncJobState,
@@ -69,7 +70,7 @@ def _empty(lane: str) -> None:
 @pytest.fixture(autouse=True)
 def _clean() -> Iterator[None]:
     clear_jobs_for_tests()
-    sync_queue.reset_concurrency_gate_for_tests()
+    sync_queue.reset_worker_partition_for_tests()
     sync_queue.stop_lane_consumer()
     sync_queue._claimed_messages.clear()
     for lane in DRAIN_ORDER:
@@ -139,20 +140,32 @@ class _Recorder:
         monkeypatch.setattr(sync_queue, "_handle_one", wrapper)
 
 
-def _pin_concurrency(monkeypatch: pytest.MonkeyPatch, value: int) -> asyncio.Semaphore:
-    """Replace the gate with one of a known size.
+def _direct_partition(width: int) -> ProxyWorkerPool:
+    """A partition of `width` workers with no proxy behind them.
 
-    The real `_gate` reads settings and the proxy pool. Sizing it here is what
-    lets a test say "one slot" and mean it, which is the only way to observe
-    dispatch *order* rather than the order N concurrent tasks happen to finish.
+    The proxy-less shape (ticket 13): with nothing configured there is nothing
+    to partition, so the worker list is just `syncConcurrency` wide and behaves
+    exactly as the semaphore it replaced. That is what these tests want — they
+    are about dispatch *order*, not about which egress a message went out of.
     """
-    gate = asyncio.Semaphore(value)
+    return ProxyWorkerPool(build_workers([], width))
 
-    async def fake_gate() -> asyncio.Semaphore:
-        return gate
 
-    monkeypatch.setattr(sync_queue, "_gate", fake_gate)
-    return gate
+def _pin_concurrency(monkeypatch: pytest.MonkeyPatch, value: int) -> ProxyWorkerPool:
+    """Replace the partition with one of a known width.
+
+    The real `_partition` reads settings and the proxy pool. Sizing it here is
+    what lets a test say "one slot" and mean it, which is the only way to
+    observe dispatch *order* rather than the order N concurrent tasks happen to
+    finish.
+    """
+    partition = _direct_partition(value)
+
+    async def fake_partition() -> ProxyWorkerPool:
+        return partition
+
+    monkeypatch.setattr(sync_queue, "_partition", fake_partition)
+    return partition
 
 
 # --- checkbox 2: strict between tiers, weighted within one ----------------
@@ -360,13 +373,14 @@ def test_a_slot_put_down_is_available_to_someone_else_and_taken_back() -> None:
     `syncConcurrency` the moment a coalesced request resumed."""
 
     async def run() -> tuple[bool, bool, bool]:
-        gate = asyncio.Semaphore(1)
-        await gate.acquire()
-        slot = sync_queue.SyncSlot.holding(gate)
-        held_before = gate.locked()
+        partition = _direct_partition(1)
+        worker = await partition.acquire()
+        assert worker is not None
+        slot = sync_queue.SyncSlot.holding(partition, worker)
+        held_before = partition.all_busy()
         async with slot.released():
-            free_during = not gate.locked()
-        held_after = gate.locked()
+            free_during = not partition.all_busy()
+        held_after = partition.all_busy()
         slot.release()
         return held_before, free_during, held_after
 
@@ -387,9 +401,10 @@ def test_a_coalesced_waiter_frees_its_slot_for_another_channel(
     assert try_claim_channel_sync(CHANNEL_ID, holder="somebody-else") is True
 
     async def run() -> bool:
-        gate = asyncio.Semaphore(1)
-        await gate.acquire()
-        slot = sync_queue.SyncSlot.holding(gate)
+        partition = _direct_partition(1)
+        worker = await partition.acquire()
+        assert worker is not None
+        slot = sync_queue.SyncSlot.holding(partition, worker)
         ch_state = ChannelSyncState(channel_id=CHANNEL_ID, channel_name=CHANNEL_NAME)
         job = SyncJobState(
             job_id="t12-coalesce",
@@ -402,7 +417,7 @@ def test_a_coalesced_waiter_frees_its_slot_for_another_channel(
             sync_orchestrator._claim_or_coalesce(job, ch_state, "mine", slot=slot)
         )
         await asyncio.sleep(0.4)
-        free_while_waiting = not gate.locked()
+        free_while_waiting = not partition.all_busy()
         waiter.cancel()
         with pytest.raises(asyncio.CancelledError):
             await waiter
@@ -604,17 +619,22 @@ def test_a_second_drain_returns_instead_of_parking_on_a_busy_gate(
 def test_a_failing_lane_read_does_not_leak_a_concurrency_permit(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """The permit is taken before the read that can fail, so every path out has
+    """The worker is taken before the read that can fail, so every path out has
     to give it back.
 
     `_next_message` opens a `Session` and runs several queries; one connection
-    blip would otherwise leak a permit, and the gate is module-global and
-    rebuilt only when the configured value changes, so the loss never heals.
-    After `syncConcurrency` blips the worker parks on `acquire()` for ever — and
-    the busy-gate break then reports every sweep as an empty queue, so nothing
-    anywhere says why syncing stopped.
+    blip would otherwise leak a worker, and the partition is module-global and
+    rebuilt only when the configuration changes, so the loss never heals. After
+    `syncConcurrency` blips the worker process parks on `acquire()` for ever —
+    and the all-busy break then reports every sweep as an empty queue, so
+    nothing anywhere says why syncing stopped.
+
+    Ticket 13 replaced the semaphore with the partition and this guard came
+    with it: a worker left `busy` is exactly the same leak, reached through the
+    same path. It reads `worker.busy` rather than a private counter, so it
+    also names *which* worker was lost.
     """
-    gate = _pin_concurrency(monkeypatch, 2)
+    partition = _pin_concurrency(monkeypatch, 2)
 
     async def boom(*_args: Any, **_kwargs: Any) -> None:
         raise RuntimeError("connection reset")
@@ -627,9 +647,10 @@ def test_a_failing_lane_read_does_not_leak_a_concurrency_permit(
 
     asyncio.run(run())
 
-    assert gate._value == 2, (
-        f"the gate has {gate._value} of 2 permits left after a failed read; a "
-        "leaked permit never comes back and the worker eventually deadlocks"
+    stuck = [w.index for w in partition.workers if w.busy]
+    assert not stuck, (
+        f"workers {stuck} are still marked busy after a failed read; a leaked "
+        "worker never comes back and the partition eventually deadlocks"
     )
 
 
@@ -720,9 +741,10 @@ def test_a_waiter_that_cannot_get_its_permit_back_gives_up_rather_than_scrape(
     assert try_claim_channel_sync(CHANNEL_ID, holder="somebody-else") is True
 
     async def run() -> tuple[str, bool]:
-        gate = asyncio.Semaphore(1)
-        await gate.acquire()
-        slot = sync_queue.SyncSlot.holding(gate)
+        partition = _direct_partition(1)
+        worker = await partition.acquire()
+        assert worker is not None
+        slot = sync_queue.SyncSlot.holding(partition, worker)
         ch_state = ChannelSyncState(channel_id=CHANNEL_ID, channel_name=CHANNEL_NAME)
         job = SyncJobState(
             job_id="t12-slot-lost",
@@ -733,12 +755,12 @@ def test_a_waiter_that_cannot_get_its_permit_back_gives_up_rather_than_scrape(
         )
 
         async def hog() -> None:
-            """Stands in for the drain loop, which sits on `gate.acquire()` and
-            spends a freed permit on a fresh Channel immediately. Without
-            something taking the permit, the waiter re-acquires its own permit
-            instantly and the bound is never exercised — which is how this test
-            passed against an unbounded re-acquire."""
-            await gate.acquire()
+            """Stands in for the drain loop, which sits on the partition's own
+            `acquire()` and spends a freed worker on a fresh Channel
+            immediately. Without something taking the worker, the waiter
+            re-acquires its own instantly and the bound is never exercised —
+            which is how this test passed against an unbounded re-acquire."""
+            await partition.acquire()
             await asyncio.sleep(3600)
 
         competitor = asyncio.create_task(hog())

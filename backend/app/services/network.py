@@ -148,10 +148,45 @@ async def _proxy_acquire(
     *,
     proxy_concurrency: tuple[int, dict[str, int]] | None,
 ) -> AsyncIterator[ProxyLane]:
-    from app.services.proxy_pool import ProxyPoolExhausted, ensure_pool_configured
+    from app.services.proxy_pool import (
+        ProxyPoolExhausted,
+        bound_proxy_url,
+        ensure_pool_configured,
+    )
 
     default_slots, overrides = proxy_concurrency if proxy_concurrency else (1, {})
     pool = await ensure_pool_configured(proxies, default_slots, overrides)
+
+    # **A bound worker does not hop, including on retry** (ticket 13). The
+    # partition assigns one proxy per queued message, so every attempt this
+    # call makes goes out the same egress: that is the whole of "the rate any
+    # one proxy sees is predictable".
+    #
+    # The fallback a reader will want to add here — try another lane when this
+    # one fails — is the mechanism that turns one bad proxy into several. It
+    # moves a dead proxy's load onto the healthy ones at the exact moment
+    # Telegram is already pushing back. Capacity is supposed to *drop* when a
+    # proxy dies; redistributing hides the number this ticket exists to make
+    # honest, and the Channel is picked up next sweep by a worker bound to a
+    # proxy that works.
+    bound = bound_proxy_url()
+    if bound is not None:
+        lane = pool.lane_by_url(bound)
+        if lane is not None:
+            # Same translation as the free-choice path below: a saturated bound
+            # lane is a network fault from the caller's point of view, so it
+            # goes round the retry loop and ends up in the sync log rather than
+            # escaping as a type nothing above here handles.
+            try:
+                async with pool.hold(lane) as held:
+                    yield held
+            except ProxyPoolExhausted as exc:
+                raise ConnectionError(str(exc)) from exc
+            return
+        # The operator removed this proxy while the walk was in flight. Falling
+        # through to free choice is right: the alternative fails a sync for a
+        # settings edit, and there is no longer a lane to be predictable about.
+
     try:
         async with pool.acquire(exclude=tried) as lane:
             tried.add(lane.url)
