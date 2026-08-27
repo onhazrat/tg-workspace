@@ -399,3 +399,21 @@ reads never call `scoped_select`, so enforcement changes nothing here.
 - [ ] Both take a `user_id` with no default, so a caller cannot omit it
 - [ ] A second account's credentials and destinations are absent from both lists
 - [ ] Both flag states are green
+
+## 33. Scope the auto-publish path
+**Blocked by:** none
+
+**What to build:** The scheduler stops sending Telegram messages as another account's bot.
+
+Found by review during ticket 32; pre-existing and not closed by it. `_auto_publish` resolves
+`publishBotId` and `publishChatId` by id with no ownership check, and `publish_summary_text`
+decrypts that credential's token and sends. `upsert_summary` passes unknown body keys straight
+into `Summary.extra`, so an account can name another account's credential in its own summary and
+the scheduler publishes as their bot. Credential ids are client-chosen strings, so they are
+guessable. `routes/telegram.py::_resolve_bot_token` already implements the intended check for the
+interactive path — this is the same rule on the scheduled one, keyed on the Summary's owner.
+
+- [ ] `_auto_publish` refuses a credential and a chat destination the Summary's owner does not own
+- [ ] `publish_summary_text` takes the acting owner and applies the check itself
+- [ ] A Summary naming a foreign `publishBotId` publishes nothing and says why in the publish log
+- [ ] Both flag states are green
