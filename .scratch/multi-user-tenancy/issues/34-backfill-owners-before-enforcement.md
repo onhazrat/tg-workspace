@@ -7,13 +7,13 @@ enforcement hides nothing and refuses nothing that a person legitimately owns.
 
 **Blocks:** 21
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] Every `USER_OWNED` table with a nullable `user_id` is backfilled or excused, from an inventory derived from `SCOPES`
-- [ ] The backfill is an Alembic migration, not a script somebody has to remember to run
-- [ ] It resolves the owner through `resolve_follow_owner`'s rule, so it cannot disagree with tickets 04, 06, 20 and 30
-- [ ] It completes in one pass, and says what it did when there is no account to adopt to
-- [ ] A guard proves no ownerless `USER_OWNED` row survives it
+- [x] Every `USER_OWNED` table with a nullable `user_id` is backfilled or excused, from an inventory derived from `SCOPES`
+- [x] The backfill is an Alembic migration, not a script somebody has to remember to run
+- [x] It resolves the owner through `resolve_follow_owner`'s rule, so it cannot disagree with tickets 04, 06, 20 and 30
+- [x] It completes in one pass, and says what it did when there is no account to adopt to
+- [x] A guard proves no ownerless `USER_OWNED` row survives it
 
 ## Why this is its own ticket
 
@@ -94,3 +94,66 @@ these tables, so decide deliberately rather than copying.
 
 Dropping the superseded columns is ticket 22. Flipping the flag is ticket 21.
 This ticket only makes the flip survivable.
+
+## What landed
+
+Migration `c0d1e2f3a4b5_backfill_owners_ticket_34`, the derivation
+`tenancy.owner_backfill_inventory()`, and the guard
+`tests/services/test_owner_backfill.py` (12 tests, each mutation-tested).
+
+Three things the ticket did not anticipate. Two were found by the guard, and the
+third — the worst of them — by `/code-review` after the first cut had a green
+suite and an open PR:
+
+* **A payload row must inherit its parent's owner**, not be adopted by the
+  operator. `tg_summary_payloads` and `tg_chat_session_payloads` are reachable
+  only through the row that names them, so the naive version leaves a detail
+  view whose body is invisible to the one account that can reach its parent. The
+  mutation is undetectable on a single-account database, because there the
+  parent's owner *is* the operator; the guard seeds a second account for it.
+* **A fresh install has unowned rows before it has accounts.** The
+  setting-group migrations seed three global presets when they find no user, so
+  the first cut — which refused any database with unowned rows and no operator —
+  broke `alembic upgrade head` on an empty database and errored the whole suite.
+  The two no-account cases are now separated: no accounts at all completes and
+  logs, accounts with no resolvable superuser is refused.
+
+* **One table cannot be stamped at all.** `tg_channel_setting_groups` carries a
+  unique index on `(COALESCE(user_id::text, 'global'), lower(name))` — the only
+  non-key unique index on any of the fourteen. Every database ever migrated from
+  empty holds global-scope presets and the operator holds identically-named
+  copies, so `SET user_id = operator` raises `UniqueViolation`, and because the
+  statements share one transaction the revision fails and `prestart.sh` stops
+  the deploy. Reproducible in three statements. Those rows are now reconciled
+  one at a time — merged into the operator's same-named group with
+  `tg_channels` and `tg_channel_follows` repointed first, or adopted where the
+  operator has no counterpart. The guard could not have caught it as written:
+  its seeding helper invents a unique name for every row, so the index was
+  structurally unreachable.
+
+Review also found that two guard tests only passed because an earlier test in
+the file happened to truncate the seeded presets first. They now run in any
+order.
+
+`backend/scripts/backfill_user_id.py` is **kept**, not deleted: it is wrong for
+this purpose for the reasons above, but `scripts/cleanup_test_channels.py`
+shells out to its `--reassign-all` mode.
+
+## Left for ticket 21
+
+Two preconditions this migration cannot close, both stated in its docstring
+rather than left to be discovered:
+
+* **The columns stay nullable, so new unowned rows keep appearing.** Every log
+  `upsert_*` takes `user_id` as optional and the scheduler creates `SyncJob`
+  rows with none. `NOT NULL` here would trade a data gap for an outage.
+* **A fresh install keeps its global setting-group presets.** With no account
+  in existence there is nothing to adopt them to, and alembic will not re-run
+  the revision. An earlier draft claimed nothing could reference them; that was
+  wrong and review corrected it — `channels.py` and `followed_channels.py` both
+  call `ensure_default_group(session, user_id=user_id)` with a
+  `uuid.UUID | None`, and `sync_orchestrator`'s auto-follow passes
+  `user_id or channel.user_id`.
+
+Both reduce to the same requirement: **ticket 21 has to eliminate the
+`user_id=None` creation paths before it flips the flag**, not merely flip it.

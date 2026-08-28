@@ -52,9 +52,10 @@ from __future__ import annotations
 
 import uuid
 from enum import StrEnum
-from typing import Any
+from typing import Any, NamedTuple, cast
 
 from fastapi import HTTPException
+from sqlalchemy import Table
 from sqlalchemy.sql import Select
 from sqlmodel import SQLModel, col, select
 
@@ -223,6 +224,117 @@ OUT_OF_SCOPE: dict[type[SQLModel], str] = {
         "the seam to scope; the lookup already names whose roles it wants."
     ),
 }
+
+
+class OwnerBackfill(NamedTuple):
+    """One table ticket 34's backfill has to stamp, and where its owner comes from.
+
+    `parent_table` is set only for a payload row, whose owner is its parent's
+    owner rather than the deployment's. The other fields name the columns that
+    join the two, because the child spells the key for its parent
+    (`summary_id`) and the parent spells it `id` — a single name would be
+    wrong at one end and still compile.
+    """
+
+    table: str
+    parent_table: str | None = None
+    child_key: str | None = None
+    parent_key: str | None = None
+
+
+#: Child tables whose owner is **their parent's owner**, never the operator's.
+#:
+#: Both are payload halves split off a parent row for the TOAST reason their
+#: model docstrings give. A payload has no independent existence: it is read
+#: only through the `Summary` or `ChatSession` that names it, so stamping it
+#: with the deployment operator while its parent belongs to somebody else
+#: produces a row that is invisible to the one account that can reach it. Under
+#: enforcement that is a detail view whose body is gone and whose parent is
+#: still listed — the shape CLAUDE.md already names for `SyncLogPayload`: "a
+#: child claiming an owner its parent does not have would make the bodies
+#: searchable and the log unreadable".
+#:
+#: The naive backfill — every ownerless row to the operator — gets this wrong
+#: and passes every test written on a single-account database, because there
+#: the parent's owner *is* the operator. It takes a second account to tell the
+#: two apart, which is why the guard for it seeds one.
+OWNER_INHERITED_FROM: dict[type[SQLModel], tuple[type[SQLModel], str, str]] = {
+    SummaryPayload: (Summary, "summary_id", "id"),
+    ChatSessionPayload: (ChatSession, "chat_session_id", "id"),
+}
+
+
+def mapped_table(model: type[SQLModel]) -> Table:
+    """The `Table` behind a model class.
+
+    `model.__table__` is the obvious spelling and mypy rejects it under strict:
+    SQLModel's class-level attribute is not on the `type[SQLModel]` it sees.
+    Narrowed here once, so the cast is written down in one place with a reason
+    instead of appearing at each of the four call sites as a bare
+    `type: ignore` nobody can evaluate later.
+    """
+    return cast(Table, cast(Any, model).__table__)
+
+
+def owner_backfill_inventory() -> tuple[OwnerBackfill, ...]:
+    """Every table ticket 34 has to stamp, derived rather than listed.
+
+    A `USER_OWNED` table with a nullable `user_id` is a table that can hold a
+    row nobody owns, and under enforcement such a row is invisible to every
+    account and refused to every writer. Ticket 34's migration stamps them all
+    before ticket 21 flips the flag.
+
+    **Derived from `SCOPES`, the way `SHARED_LOG_TYPES` and `IMPORT_WRITES`
+    are.** A hand-written list is the failure the ticket exists to prevent: a
+    `USER_OWNED` table added next month and forgotten here surfaces as rows
+    that vanish on the flip, which looks exactly like the seam working.
+
+    Three groups fall out without needing an excuse written for each:
+
+    * **Follow-scoped and corpus tables are not here.** Their `user_id` is a
+      "who scraped this first" stamp that ticket 22 drops, and the seam
+      deliberately never filters on it — stamping it would be work ticket 22
+      deletes.
+    * **The four composite-key tables excuse themselves.** `ChannelFollow`,
+      `DiscoverIgnoredChannel`, `QuotaUsage` and `UserSetting` carry `user_id`
+      in a `NOT NULL` primary key, so a row without an owner cannot be
+      expressed. That is a stronger excuse than any sentence: the database
+      refuses the state rather than a guard asserting nobody reached it.
+    * **A payload row is included, but not as an operator adoption** — see
+      `OWNER_INHERITED_FROM`.
+
+    The migration holds a **frozen** copy of this inventory rather than calling
+    this function, and `test_owner_backfill.py` asserts the two agree. A
+    migration is an artifact that must mean the same thing on every database
+    for ever, so importing live app code into one makes an already-applied
+    revision change meaning as the app moves, and a later rename breaks
+    `alembic upgrade head` from an empty database. Deriving it live would not
+    help the case the ticket cares about either — a table added after the
+    revision has run is not reached by re-deriving, it needs a migration of its
+    own. So the derivation lives in the guard, where "somebody added a table
+    and forgot" is a red test instead of a silent gap.
+    """
+    inventory: list[OwnerBackfill] = []
+    for model, scope in SCOPES.items():
+        if scope is not Scope.USER_OWNED:
+            continue
+        column = mapped_table(model).columns.get(OWNER_COLUMN)
+        if column is None or not column.nullable:
+            continue
+        parent = OWNER_INHERITED_FROM.get(model)
+        if parent is None:
+            inventory.append(OwnerBackfill(table=mapped_table(model).name))
+        else:
+            parent_model, child_key, parent_key = parent
+            inventory.append(
+                OwnerBackfill(
+                    table=mapped_table(model).name,
+                    parent_table=mapped_table(parent_model).name,
+                    child_key=child_key,
+                    parent_key=parent_key,
+                )
+            )
+    return tuple(sorted(inventory))
 
 
 def tenancy_enforced() -> bool:
