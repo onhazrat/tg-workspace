@@ -417,3 +417,42 @@ interactive path — this is the same rule on the scheduled one, keyed on the Su
 - [ ] `publish_summary_text` takes the acting owner and applies the check itself
 - [ ] A Summary naming a foreign `publishBotId` publishes nothing and says why in the publish log
 - [ ] Both flag states are green
+
+## 34. Backfill owners before enforcement
+**Blocked by:** none — **blocks 21**
+
+**What to build:** Every user-owned row has a real owner before the flag flips, so enforcement
+hides nothing and refuses nothing that a person legitimately owns.
+
+Reached independently by tickets 31, 32 and 33, each of which left it for 21 rather than widening
+its own scope. Under enforcement `assert_owner_on_write` refuses an ownerless row and an import is
+one transaction, so the first ownerless row aborts a whole restore; an ownerless credential is
+visible today and invisible after the flip, and treating NULL as "mine" instead would hand every
+account the deployment's stored bot token. `backend/scripts/backfill_user_id.py` exists but is a
+manual script nothing runs, and its table list predates `SCOPES` — five of its thirteen models are
+now follow-scoped or corpus, and ten user-owned tables are missing.
+
+- [ ] Every `USER_OWNED` table with a nullable `user_id` is backfilled or excused, from an inventory derived from `SCOPES`
+- [ ] The backfill is an Alembic migration, not a script somebody has to remember to run
+- [ ] It resolves the owner through `resolve_follow_owner`'s rule
+- [ ] It completes in one pass, and says what it did when there is no account to adopt to
+- [ ] A guard proves no ownerless `USER_OWNED` row survives it
+
+## 35. Scope setting groups and sync jobs
+**Blocked by:** 3 — **blocks 21**
+
+**What to build:** The last three unaudited `USER_OWNED` reads go through the seam, so the flag
+decides what they return rather than a hand-rolled filter.
+
+Ticket 32's file claimed it closed the last unscoped read family; that was wrong and its author
+corrected it in four places. `list_setting_groups` hand-rolls `user_id == me OR user_id IS NULL`
+over `ChannelSettingGroup` and that filter narrows in **both** flag states, which is the
+changed-response-while-off failure the seam's batches forbid. `load_groups_by_id` reads the same
+table with no filter. `_running_job_from_row` reads `SyncJob` across accounts to serve
+`GET /jobs/runtime-config`.
+
+- [ ] `list_setting_groups` reads through `scoped_select` instead of its own owner filter
+- [ ] `load_groups_by_id` is scoped, or excused at the call site with a written reason
+- [ ] `_running_job_from_row` answers for the caller, not across accounts
+- [ ] Each takes a `user_id` with no default
+- [ ] Both flag states are green — and the flag-off responses are byte-identical to today's

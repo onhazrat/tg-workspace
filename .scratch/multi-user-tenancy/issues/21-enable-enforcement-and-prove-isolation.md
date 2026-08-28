@@ -2,7 +2,7 @@
 
 **What to build:** Two real accounts genuinely cannot see each other. This is the acceptance gate for the whole tenancy programme.
 
-**Blocked by:** 15, 16, 17, 18, 19, 20, 30, 32
+**Blocked by:** 15, 16, 17, 18, 19, 20, 30, 32, 34, 35
 
 **Status:** ready-for-agent
 
