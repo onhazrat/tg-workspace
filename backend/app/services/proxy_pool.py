@@ -203,6 +203,27 @@ class ProxyPoolManager:
                 lane.sem.release()
             return
 
+    def peek_lane_url(self, exclude: set[str] | None = None) -> str | None:
+        """Which lane `acquire()` would pick right now, without taking a permit.
+
+        Exists so the adaptive wait can be served *before* the permit rather
+        than while holding it (ticket 14). The pace needs to know which egress
+        it is pacing, and `acquire()` only reveals that after it has already
+        taken the slot — so without this the sleep had to happen inside the
+        hold, where it parks every other kind of traffic pointed at that proxy
+        and can push a queued thumbnail past `ACQUIRE_TIMEOUT_SECONDS`.
+
+        Advisory, not a reservation. Between this and `acquire()` the ranking
+        can change and a different lane can be chosen, in which case the wait
+        was served against a neighbouring lane's cursor. That costs one
+        mistimed request and nothing else — the alternative, holding the permit
+        to make it exact, is the starvation this call exists to remove.
+        """
+        ranked = self._rank_lanes(exclude or set())
+        if not ranked:
+            return None
+        return ranked[self._rr_counter % len(ranked)].url
+
     def lane_client(self, proxy_url: str) -> httpx.AsyncClient | None:
         lane = self._lanes.get(normalize_proxy_url(proxy_url))
         return lane.client if lane else None
@@ -261,13 +282,27 @@ class ProxyPoolManager:
     def total_capacity(self) -> int:
         return sum(lane.max_parallel for lane in self._lanes.values())
 
+    def _pace_ms(self, url: str) -> int:
+        from app.services.network import proxy_pace_ms
+
+        return proxy_pace_ms(url)
+
     def snapshot(self) -> list[dict[str, Any]]:
+        """Per-lane state for the operator panel and `/jobs/runtime-config`.
+
+        `paceMs` sits beside `inCooldown` rather than in a telemetry block of
+        its own (ticket 14). They are two rungs of one ladder — a widening wait
+        and, at the top of it, a parked lane — and an operator reading
+        "capacity is 7 of 8" needs both in the same place to tell a deployment
+        that is deliberately slow from one that is broken.
+        """
         return [
             {
                 "proxyUrl": lane.url,
                 "maxParallel": lane.max_parallel,
                 "inUse": lane.in_use,
                 "inCooldown": self._proxy_in_cooldown(lane.url),
+                "paceMs": self._pace_ms(lane.url),
             }
             for lane in self._lanes.values()
         ]

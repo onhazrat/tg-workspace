@@ -78,6 +78,7 @@ from app.core.config import settings
 from app.core.db import engine
 from app.core.request_meter import metered
 from app.services import pgmq
+from app.services.proxy_pacing import PACE_MAX_MS
 from app.services.proxy_pool import (
     ProxyWorker,
     ProxyWorkerPool,
@@ -145,6 +146,17 @@ _partition_lock = asyncio.Lock()
 #: free by a release — which is either "everything is busy" (resolved by
 #: waiting on the running tasks) or "every proxy is in cooldown" (resolved by
 #: giving up and letting the 30-second sweep come back).
+#:
+#: **Ticket 14's per-proxy wait does not feed into this, and that is a claim
+#: worth stating rather than assuming.** Ticket 13's handover asked that if
+#: deliberate waits longer than this constant appeared, it be re-derived from
+#: them instead of left a literal. They appeared, and the two still do not
+#: meet: this bounds the wait for a *free and healthy worker*, and a worker
+#: serving a paced fetch is `busy` — not free, not parked. Pacing lengthens the
+#: message a worker is already running, which the drain sees through
+#: `all_busy()` as ordinary backpressure. Deriving this from `PACE_MAX_MS`
+#: would make every empty-queue sweep block for thirty seconds to no purpose.
+#: `tests/services/test_adaptive_proxy_wait.py` holds the guard.
 _NO_HEALTHY_WORKER_WAIT_SECONDS = 5.0
 
 
@@ -154,12 +166,25 @@ def _worst_case_fetch_seconds() -> float:
     up to `NETWORK_FETCH_TIMEOUT_SECONDS` each, plus the backoff between them
     (`network.py`'s `(2**i) * initial_delay_ms`, ignoring the sub-second jitter
     and the 429 floor — both smaller than what this already rounds up to).
+
+    **Plus the adaptive per-proxy wait** (ticket 14). Every attempt may sleep up
+    to `PACE_MAX_MS` before it goes out, so a call against a proxy paced to the
+    ceiling is `NETWORK_FETCH_RETRIES x PACE_MAX_MS` longer than the arithmetic
+    above — 240s at current defaults, about +28%. Ticket 13's handover asked
+    that constants be re-derived when deliberate waits appeared, and this is
+    the constant that needed it: `visibility_timeout_seconds` is built on this
+    number, and a VT that under-counts is PGMQ redelivering a message a live
+    worker is still walking, which is the double-scrape decision 32 sizes it
+    against. The 2x factor was absorbing this, so the cost of leaving it out
+    was a silently shrinking margin rather than a live overflow — which is
+    exactly the kind that is discovered by the failure it was meant to prevent.
     """
     retries = settings.NETWORK_FETCH_RETRIES
     timeout = settings.NETWORK_FETCH_TIMEOUT_SECONDS
     delay_ms = settings.NETWORK_FETCH_INITIAL_DELAY_MS
     backoff_ms: int = sum((2**i) * delay_ms for i in range(retries - 1))
-    return float(retries * timeout + backoff_ms / 1000)
+    pace_ms: float = retries * PACE_MAX_MS
+    return float(retries * timeout + (backoff_ms + pace_ms) / 1000)
 
 
 def _worst_case_channel_sync_seconds() -> float:

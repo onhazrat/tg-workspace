@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import random
 import re
 import time
@@ -17,6 +18,15 @@ from stem.control import Controller
 from app.core.config import settings
 from app.core.request_meter import record_telegram_request
 from app.services.network_settings import normalize_proxy_url
+from app.services.proxy_pacing import (
+    FetchOutcome,
+    ProxyLaneUnavailable,
+    ProxyPace,
+    classify_failure,
+    observe_failure,
+    observe_success,
+    should_arm_cooldown,
+)
 from app.services.proxy_pool import ProxyLane
 from app.services.telegram_web import (
     TelegramWebViewUnavailable,
@@ -25,10 +35,35 @@ from app.services.telegram_web import (
     telegram_channel_post_url,
 )
 
+logger = logging.getLogger(__name__)
+
 _bad_proxies: dict[str, float] = {}
 _tor_counter_lock = asyncio.Lock()
 _tor_request_counter = 0
 _is_rotating_tor = False
+
+#: The adaptive wait each egress is currently keeping, keyed by proxy URL —
+#: `"direct"` for a deployment with no proxies, which is the same key the
+#: attempt telemetry has always used (ticket 14).
+#:
+#: **Keyed by proxy, not by worker**, although ticket 13 binds one worker to one
+#: lane so the two coincide today. The partition is per-process and that pin
+#: survives; a dict keyed by worker object would not cross a future
+#: multi-process partition, and it would silently stop being per-proxy the first
+#: time one worker was replaced with another on the same lane.
+_proxy_pace: dict[str, ProxyPace] = {}
+
+#: The earliest wall-clock moment (monotonic, ms) the next request on each
+#: egress may start. Separate from `_proxy_pace` because it is a *cursor* rather
+#: than a policy: every request pushes it forward as it reserves its turn, which
+#: is what spaces concurrent requests on a multi-slot lane out instead of
+#: letting them all read the same wait and then leave together.
+_pace_next_allowed_ms: dict[str, float] = {}
+
+#: The key an unproxied fetch paces under. A single-IP deployment is the one
+#: most likely to be rate limited, so it is paced too — and this is already the
+#: string `telemetry["attempts"][].proxyUrl` uses for it.
+DIRECT_EGRESS_KEY = "direct"
 
 
 def _prune_expired_cooldowns(now_ms: float) -> None:
@@ -53,6 +88,181 @@ def get_bad_proxies() -> list[dict[str, Any]]:
 def proxy_in_cooldown(proxy_url: str) -> bool:
     now = time.time() * 1000
     return _bad_proxies.get(proxy_url, 0) > now
+
+
+# --------------------------------------------------------------------------
+# The adaptive per-proxy wait (ticket 14)
+# --------------------------------------------------------------------------
+
+
+def proxy_pace_ms(proxy_url: str) -> int:
+    """The wait this egress is currently keeping between requests, in ms.
+
+    Zero on a deployment nothing is pushing back on, which is every deployment
+    most of the time — read by `ProxyPoolManager.snapshot()` and so by
+    `/jobs/runtime-config`.
+    """
+    return int(_proxy_pace.get(proxy_url, ProxyPace()).wait_ms)
+
+
+def reset_proxy_pacing_for_tests() -> None:
+    _proxy_pace.clear()
+    _pace_next_allowed_ms.clear()
+
+
+def _store_pace(key: str, pace: ProxyPace) -> None:
+    """Write the new pace back, logging only the transitions.
+
+    Entering and leaving pacing log once each — the same shape as ticket 13's
+    parked/resumed lines, and for the same reason. A line per widening would be
+    a line per request under sustained rejection, which is how the signal that
+    matters gets buried in the one that does not.
+    """
+    previous = _proxy_pace.get(key, ProxyPace())
+    if previous.is_healthy and not pace.is_healthy:
+        logger.warning(
+            "proxy pacing engaged: %s is now waiting %dms between requests "
+            "after Telegram pushed back",
+            key,
+            int(pace.wait_ms),
+        )
+    elif not previous.is_healthy and pace.is_healthy:
+        logger.info("proxy pacing cleared: %s is back to full rate", key)
+
+    if pace.is_healthy and pace.latency_ema_ms is None:
+        # Nothing worth remembering: no wait and no latency history.
+        #
+        # This is **not** a general leak guard, and an earlier comment here
+        # claimed it was. `observe_success` always sets an EMA, so any egress
+        # that has ever succeeded keeps its entry for the life of the process —
+        # deliberately, because the EMA is what drift is measured against and
+        # discarding it would make every recovered proxy cold again. What the
+        # dict is bounded by is the configured proxy list plus `"direct"`, not
+        # by this branch, which only ever removes a key that failed before it
+        # ever worked.
+        _proxy_pace.pop(key, None)
+        return
+    _proxy_pace[key] = pace
+
+
+def _reserve_pace_turn(key: str) -> float:
+    """Claim this request's slot on the egress timeline. Returns ms to sleep.
+
+    Synchronous by construction, and that is the whole correctness argument:
+    there is no `await` between reading the cursor and writing it back, so two
+    requests on a multi-slot lane cannot both read the same "next allowed"
+    moment and then leave together. Each one pushes the cursor forward as it
+    takes its turn, so a lane with four slots and a 2s pace still emits one
+    request every 2s rather than four every 2s.
+    """
+    pace = _proxy_pace.get(key)
+    wait_ms = pace.wait_ms if pace is not None else 0.0
+    now_ms = time.monotonic() * 1000
+    start_at = max(now_ms, _pace_next_allowed_ms.get(key, 0.0))
+
+    if wait_ms <= 0 and start_at <= now_ms:
+        _pace_next_allowed_ms.pop(key, None)
+        return 0.0
+
+    _pace_next_allowed_ms[key] = start_at + wait_ms
+    return max(0.0, start_at - now_ms)
+
+
+def _release_pace_turn(key: str, reserved_until: float, wait_ms: float) -> None:
+    """Give back a turn that was reserved and never used.
+
+    Only when the cursor is still where this reservation left it — anything
+    later has already booked its turn behind ours and moving the cursor under
+    it would double-book that moment.
+    """
+    if _pace_next_allowed_ms.get(key) != reserved_until:
+        return
+    rolled_back = reserved_until - wait_ms
+    if rolled_back <= time.monotonic() * 1000:
+        _pace_next_allowed_ms.pop(key, None)
+    else:
+        _pace_next_allowed_ms[key] = rolled_back
+
+
+async def _wait_for_pace(key: str) -> int:
+    """Sleep this request's share of the egress's wait. Returns the ms slept.
+
+    Taken **before** the lane permit, not while holding it. Holding it was the
+    first implementation and it was wrong twice over: `_reserve_pace_turn`
+    already spaces the starts, so the permit added no pacing at all, while it
+    did park every *other* kind of traffic pointed at that proxy behind the
+    sleep — at `PACE_MAX_MS` on a one-slot lane that is four requests per
+    `ACQUIRE_TIMEOUT_SECONDS`, so thumbnails and bot publishes would start
+    failing with `ProxyLaneUnavailable`. Exactly what ticket 13's `hold()`
+    docstring forbids, reintroduced by the sleep instead of by the walk.
+
+    A cancelled sleep gives its turn back. Cancellation reaches a running sync
+    (`POST /jobs/sync/{id}/cancel` travels over `LISTEN`/`NOTIFY`), and the
+    cursor is the one piece of state here with no self-correcting path — a
+    reservation nobody used would make the next request wait for a turn that
+    never happened.
+    """
+    pace_wait = _proxy_pace.get(key, ProxyPace()).wait_ms
+    delay_ms = _reserve_pace_turn(key)
+    if delay_ms <= 0:
+        return 0
+    reserved_until = _pace_next_allowed_ms.get(key)
+    try:
+        await asyncio.sleep(delay_ms / 1000)
+    except asyncio.CancelledError:
+        if reserved_until is not None:
+            _release_pace_turn(key, reserved_until, pace_wait)
+        raise
+    return int(delay_ms)
+
+
+async def _resolve_pace_key(
+    proxies: list[str] | None,
+    tried: set[str],
+    proxy_concurrency: tuple[int, dict[str, int]] | None,
+) -> str | None:
+    """Which egress this attempt will use, resolved *before* the permit.
+
+    The wait has to know what it is pacing, and `acquire()` only reveals that
+    after it has taken the slot — so this answers the same question without
+    one. `None` means "do not pre-wait": every lane is excluded or in cooldown,
+    and there is nothing to be timely about.
+
+    A bound worker (ticket 13) is exact, because the binding *is* the answer.
+    Free choice is advisory: `peek_lane_url` reports the lane the pool would
+    pick right now, and the ranking can move before `acquire()` runs. The cost
+    of being wrong is one request paced against a neighbouring lane's cursor.
+    """
+    if not proxies:
+        return DIRECT_EGRESS_KEY
+
+    from app.services.proxy_pool import bound_proxy_url, ensure_pool_configured
+
+    bound = bound_proxy_url()
+    if bound is not None:
+        return bound
+
+    default_slots, overrides = proxy_concurrency if proxy_concurrency else (1, {})
+    pool = await ensure_pool_configured(proxies, default_slots, overrides)
+    return pool.peek_lane_url(exclude=tried)
+
+
+def _record_pace_success(key: str, latency_ms: float) -> None:
+    _store_pace(key, observe_success(_proxy_pace.get(key, ProxyPace()), latency_ms))
+
+
+def _record_pace_failure(key: str, outcome: FetchOutcome) -> ProxyPace:
+    """Fold a failure in and return the pace **as it was before** it.
+
+    The caller needs the previous value, not the new one: `should_arm_cooldown`
+    asks whether the wait had already reached the ceiling when this rejection
+    arrived, and the widened value is at the ceiling by construction — reading
+    it after the fold would arm cooldown on the *first* rejection that reached
+    the top, one step earlier than the rule says.
+    """
+    previous = _proxy_pace.get(key, ProxyPace())
+    _store_pace(key, observe_failure(previous, outcome))
+    return previous
 
 
 def _validate_telegram_web_view_page(
@@ -177,11 +387,19 @@ async def _proxy_acquire(
             # lane is a network fault from the caller's point of view, so it
             # goes round the retry loop and ends up in the sync log rather than
             # escaping as a type nothing above here handles.
+            #
+            # `ProxyLaneUnavailable` rather than a bare `ConnectionError`
+            # (ticket 14). It is still a `ConnectionError`, so nothing above
+            # notices — but the old bare type was indistinguishable from a proxy
+            # that failed to deliver, so a full lane queue armed the ten-minute
+            # cooldown. That became self-reinforcing the moment pacing landed: a
+            # paced lane is exactly what makes its own queue deep enough to hit
+            # `ACQUIRE_TIMEOUT_SECONDS`.
             try:
                 async with pool.hold(lane) as held:
                     yield held
             except ProxyPoolExhausted as exc:
-                raise ConnectionError(str(exc)) from exc
+                raise ProxyLaneUnavailable(str(exc)) from exc
             return
         # The operator removed this proxy while the walk was in flight. Falling
         # through to free choice is right: the alternative fails a sync for a
@@ -192,7 +410,7 @@ async def _proxy_acquire(
             tried.add(lane.url)
             yield lane
     except ProxyPoolExhausted as exc:
-        raise ConnectionError(str(exc)) from exc
+        raise ProxyLaneUnavailable(str(exc)) from exc
 
 
 async def fetch_with_retry(
@@ -225,9 +443,18 @@ async def fetch_with_retry(
     is decision 15's "a flaky proxy is not the User's doing". An attempt that
     came back with a status code, any status code, is charged, because Telegram
     spent the same resources on it that it spends on a 200 (decision 20). The
-    two rules meet here rather than at the exit: a 404 satisfies `is_network`
+    two rules meet here rather than at the exit: a 404 satisfies `retryable`
     and so goes round the retry branch up to `NETWORK_FETCH_RETRIES` times, and
     charging once per call would bill eight real round trips as one.
+
+    **Two different questions are asked about the same failure** (ticket 14).
+    `retryable` decides whether to go round again, and it is the old
+    `is_network` under a name that does not claim more than it knows.
+    `classify_failure` decides what the failure *meant* — whether the proxy is
+    dead, whether Telegram is refusing this egress, or whether it simply
+    answered about a channel that is gone. Cooldown and the adaptive wait both
+    read the second; only the retry branch and the quota charge read the first.
+    Collapsing them is the bug this ticket fixed.
     """
     global _tor_request_counter
     effective_retries = (
@@ -247,10 +474,34 @@ async def fetch_with_retry(
     telemetry: dict[str, Any] = {"attempts": []}
     start_total = time.time() * 1000
     counts_towards_quota = is_telegram_web_url(url)
+    # The same predicate gates pacing, and that is not a coincidence worth
+    # collapsing: an egress paces itself against the service whose pushback it
+    # is reading. The Bot API and the media CDNs travel the same proxies and
+    # answer to different limits, so making a publish wait thirty seconds
+    # because the web view is throttled would punish the wrong request — and
+    # taking a *signal* from one would file another service's 429 against this
+    # one's pace.
+    paced = counts_towards_quota
 
     for i in range(effective_retries):
         attempt_start = time.time() * 1000
         proxy_url: str | None = None
+        waited_ms = 0
+        fetch_started = attempt_start
+
+        # Resolved **before** the acquire, which fixes two things at once. The
+        # wait is then served outside the lane permit (see `_wait_for_pace`),
+        # and the key is right even when the acquire itself fails — it used to
+        # be assigned inside the `async with` body, so a `ProxyLaneUnavailable`
+        # was folded against the `"direct"` egress and reported as
+        # `"proxyUrl": "direct"` in the sync log of a proxied deployment.
+        pace_key = (
+            await _resolve_pace_key(proxies, tried, proxy_concurrency)
+            if paced
+            else None
+        )
+        if pace_key is not None:
+            waited_ms = await _wait_for_pace(pace_key)
 
         try:
             if proxies:
@@ -260,6 +511,12 @@ async def fetch_with_retry(
                     proxy_concurrency=proxy_concurrency,
                 ) as lane:
                     proxy_url = lane.url
+                    # The lane that was actually taken, which `peek_lane_url`
+                    # only predicted. Telemetry and the outcome signals answer
+                    # for the egress that served the request, never the one the
+                    # wait was timed against.
+                    if paced:
+                        pace_key = proxy_url
                     pool_client = lane.client
                     is_local_tor = proxy_url and (
                         "127.0.0.1" in proxy_url or "localhost" in proxy_url
@@ -272,6 +529,7 @@ async def fetch_with_retry(
                             )
                         if due:
                             await rotate_tor_identity(tor_control_port)
+                    fetch_started = time.time() * 1000
                     data = await _fetch_once(
                         url,
                         proxy_url,
@@ -281,6 +539,7 @@ async def fetch_with_retry(
                         binary=binary,
                     )
             else:
+                fetch_started = time.time() * 1000
                 data = await _fetch_once(
                     url, None, method=method, json_body=json_body, binary=binary
                 )
@@ -288,12 +547,29 @@ async def fetch_with_retry(
             if proxy_url:
                 _bad_proxies.pop(proxy_url, None)
 
+            # `latency` is the **request**, timed from just before it goes out.
+            #
+            # Not from the top of the attempt, which is what it used to be and
+            # is now wrong in two ways: it would include the deliberate pace
+            # sleep, and — the one that bites on a healthy deployment — the
+            # time spent queued for the lane permit. `hold()`'s own docstring
+            # notes a page fetch routinely waits behind ~20 thumbnails at the
+            # default of one slot, so ordinary contention would read as a
+            # latency spike, trip `_is_drifting`, and throttle a proxy Telegram
+            # never pushed back on. The pace feeds on this number; it must
+            # measure only what Telegram did.
+            latency_ms = max(0, int(time.time() * 1000 - fetch_started))
+            if pace_key is not None:
+                _record_pace_success(pace_key, latency_ms)
+
             telemetry["attempts"].append(
                 {
                     "attempt": i + 1,
-                    "proxyUrl": proxy_url or "direct",
+                    "proxyUrl": proxy_url or DIRECT_EGRESS_KEY,
                     "success": True,
-                    "latency": int(time.time() * 1000 - attempt_start),
+                    "latency": latency_ms,
+                    "waitedMs": waited_ms,
+                    "paceMs": proxy_pace_ms(pace_key) if pace_key else 0,
                 }
             )
             telemetry["totalDuration"] = int(time.time() * 1000 - start_total)
@@ -303,8 +579,23 @@ async def fetch_with_retry(
             return data, telemetry
 
         except Exception as exc:  # noqa: BLE001
-            is_soft_block = isinstance(exc, TelegramWebViewUnavailable)
-            is_network = (
+            outcome = classify_failure(exc)
+            is_soft_block = outcome is FetchOutcome.SOFT_BLOCK
+            # **`retryable` is not the cooldown rule any more** (ticket 14).
+            #
+            # It was, and that was the bug: `httpx.HTTPStatusError` subclasses
+            # `httpx.HTTPError`, so a 404 from one deleted channel put its proxy
+            # in cooldown — and since ticket 13 a cooldown parks the worker
+            # bound to that lane, so on a single-proxy deployment one dead
+            # handle stopped dispatch for ten minutes.
+            #
+            # The predicate itself is **unchanged on purpose**, because it also
+            # decides how many attempts a status code gets, and that is ticket
+            # 08's charging contract: one Request per answered attempt, eight
+            # attempts at the production setting. Narrowing it here would
+            # quietly re-price the quota ledger while fixing something else.
+            # What changed is that cooldown now reads `outcome` instead.
+            retryable = (
                 isinstance(exc, (httpx.HTTPError, ConnectionError, OSError))
                 or is_soft_block
             )
@@ -332,7 +623,17 @@ async def fetch_with_retry(
             ):
                 record_telegram_request()
 
-            if proxy_url and is_network and not is_soft_block:
+            # The wait reacts to what Telegram said; cooldown reacts to the
+            # proxy failing to deliver. `should_arm_cooldown` reads the pace as
+            # it was *before* this failure, so the ceiling rung fires on the
+            # rejection after the wait maxed out rather than on the one that
+            # maxed it.
+            pace_before = (
+                _record_pace_failure(pace_key, outcome)
+                if pace_key is not None
+                else ProxyPace()
+            )
+            if proxy_url and should_arm_cooldown(pace_before, outcome, paced=paced):
                 now_ms = time.time() * 1000
                 _prune_expired_cooldowns(now_ms)
                 _bad_proxies[proxy_url] = now_ms + settings.NETWORK_PROXY_COOLDOWN_MS
@@ -340,17 +641,26 @@ async def fetch_with_retry(
             telemetry["attempts"].append(
                 {
                     "attempt": i + 1,
-                    "proxyUrl": proxy_url or "direct",
+                    "proxyUrl": proxy_url or DIRECT_EGRESS_KEY,
                     "success": False,
                     "error": str(exc),
-                    "latency": int(time.time() * 1000 - attempt_start),
+                    "outcome": str(outcome),
+                    # Same clock as the success path: from just before the
+                    # request, so a failure that spent two minutes queued for a
+                    # permit is not reported as a two-minute request. Falls
+                    # back to the top of the attempt when the failure happened
+                    # before a request was ever made, which is the honest
+                    # number for a `LOCAL_CONGESTION`.
+                    "latency": max(0, int(time.time() * 1000 - fetch_started)),
+                    "waitedMs": waited_ms,
+                    "paceMs": proxy_pace_ms(pace_key) if pace_key else 0,
                 }
             )
 
             if (
                 i < effective_retries - 1
                 and not is_soft_block
-                and (is_network or is_rate_limit)
+                and (retryable or is_rate_limit)
             ):
                 backoff = (2**i) * effective_initial_delay_ms + random.randint(0, 1000)
                 if is_rate_limit:

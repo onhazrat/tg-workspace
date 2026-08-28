@@ -71,18 +71,32 @@ def _network_runtime_payload(
     pool = get_proxy_pool()
     lane_snapshot = pool.snapshot()
     if not lane_snapshot and resolved:
-        from app.services.network import proxy_in_cooldown
+        from app.services.network import proxy_in_cooldown, proxy_pace_ms
         from app.services.network_settings import normalize_proxy_url
 
+        # Keyed to `ProxyPoolManager.snapshot()` field for field. This branch is
+        # the same payload built from settings when the pool has no lanes yet,
+        # so a key added to one and not the other makes a lane's shape depend on
+        # whether anything has fetched through it — the twin-module trap the
+        # photo caches wrote down.
         lane_snapshot = [
             {
                 "proxyUrl": normalize_proxy_url(proxy),
                 "maxParallel": overrides.get(normalize_proxy_url(proxy), default_slots),
                 "inUse": 0,
                 "inCooldown": proxy_in_cooldown(normalize_proxy_url(proxy)),
+                "paceMs": proxy_pace_ms(normalize_proxy_url(proxy)),
             }
             for proxy in resolved
         ]
+    # `inCooldown` and `paceMs` are **this process's** view. Both live in
+    # `network.py` module state and this endpoint is served by the API, so
+    # neither reports what the worker's egress is doing — the same limit ticket
+    # 13 gave for not putting a `parked` flag here at all. They are still worth
+    # serving, because the API fetches Telegram itself (channel-info probes,
+    # thumbnails) and this is the honest answer for that traffic. The
+    # cross-process record is the per-attempt `waitedMs`/`paceMs`/`outcome` in
+    # the sync log payload, written by whichever process did the work.
     proxy_lanes = [
         {
             **lane,

@@ -112,6 +112,7 @@ INVENTORY: dict[str, str] = {
     "serialization.py": PURE_TRANSFORM,
     # PGMQ lane naming (ticket 09) — string constants and one function, no
     # Session, no network. See its module docstring.
+    "proxy_pacing.py": PURE_TRANSFORM,
     "sync_lanes.py": PURE_TRANSFORM,
     "sync_schedule.py": PURE_TRANSFORM,
     # The tenancy seam. Builds scoped select statements and compares owner ids, executes
@@ -218,13 +219,54 @@ def test_pure_transforms_do_no_io(name: str) -> None:
     database to test. A first draft of this check banned the import outright and
     flagged it; that was the check being wrong, not the module. **`Session` is
     the load-bearing signal**, because without one nothing can be executed.
+
+    `httpx` is the same story, arrived at from the other side (ticket 14).
+    `proxy_pacing.py` names it for `httpx.HTTPStatusError` — an *exception
+    taxonomy*, the thing that whole module exists to get right — and builds no
+    client, opens no connection and needs no network to test. Banning the
+    import would have forced the classification of a fetch outcome to live
+    apart from the outcomes it produces, which is worse code to protect a
+    check. So the ban moved to what actually performs I/O: constructing a
+    client. `test_pure_transforms_construct_no_client` below is the half that
+    still bites, and it catches both spellings — `httpx.AsyncClient(...)` and a
+    bare `AsyncClient(...)` imported from it.
     """
     imported = _imported_names(_parse(name))
-    forbidden = imported & {"Session", "httpx", "aiohttp", "requests", "engine"}
+    forbidden = imported & {"Session", "aiohttp", "requests", "engine"}
 
     assert not forbidden, (
         f"{name} is declared a pure transform but imports {sorted(forbidden)}. "
         f"Either drop the dependency or reclassify it in INVENTORY."
+    )
+
+
+_CLIENT_NAMES = frozenset({"AsyncClient", "Client"})
+
+
+@pytest.mark.parametrize(
+    "name", sorted(n for n, k in INVENTORY.items() if k == PURE_TRANSFORM)
+)
+def test_pure_transforms_construct_no_client(name: str) -> None:
+    """Naming `httpx` is allowed; building something that can fetch is not.
+
+    The half of the I/O ban that survives for `httpx`. A pure transform may
+    reference the exception types a client raises — it cannot own the client,
+    because that is the line between describing a request and making one.
+    """
+    tree = _parse(name)
+    built: set[str] = set()
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call):
+            continue
+        func = node.func
+        if isinstance(func, ast.Attribute) and func.attr in _CLIENT_NAMES:
+            built.add(func.attr)
+        elif isinstance(func, ast.Name) and func.id in _CLIENT_NAMES:
+            built.add(func.id)
+
+    assert not built, (
+        f"{name} is declared a pure transform but constructs {sorted(built)}. "
+        f"A module that can make a request is an integration — reclassify it."
     )
 
 

@@ -4,12 +4,16 @@
 
 **Blocked by:** 13
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] Wait state is held per proxy and survives across requests
-- [ ] Explicit rejection or soft block widens it multiplicatively; sustained success narrows it gradually
-- [ ] Latency drift contributes as a weak signal
-- [ ] Behaviour is observable in telemetry
+- [x] Wait state is held per proxy and survives across requests
+- [x] Explicit rejection or soft block widens it multiplicatively; sustained success narrows it gradually
+- [x] Latency drift contributes as a weak signal
+- [x] Behaviour is observable in telemetry
+- [x] The inherited `is_network` misclassification is fixed: a status code no longer arms cooldown
+
+Implemented in `docs/adaptive-per-proxy-wait-plan.md`; guards in
+`backend/tests/services/test_adaptive_proxy_wait.py`, all 27 mutations killed.
 
 ## Comments
 
