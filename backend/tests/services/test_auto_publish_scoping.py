@@ -124,6 +124,17 @@ MAY_ACT_ON_CALLERS: dict[str, str] = {
         "with the same absence of a response. Writes a failed publish log "
         "instead of raising."
     ),
+    "data_import_export._import_channels": (
+        "Resolves the setting group an import document names for a Channel it "
+        "is creating. Ticket 35: without it an import attaches the caller's new "
+        "channel to another account's policy row, which is "
+        "`bulk_assign_setting_group`'s hole reached through the import door. It "
+        "is here rather than on `assert_owner_on_write` because the refusal is "
+        "not a raise — an import is one transaction, so it falls through to the "
+        "caller's default group exactly as it already does for an absent id, "
+        "instead of aborting a whole restore over a field a document can simply "
+        "be wrong about."
+    ),
     "telegram._resolve_bot_token": (
         "The interactive twin of the same decision, ported onto the shared "
         "rule by ticket 33. It has a response and does raise a 404; it is here "

@@ -194,10 +194,17 @@ def _constants_payload() -> dict[str, Any]:
 def build_runtime_config(
     session: Session,
     *,
-    user_id: uuid.UUID | None = None,
+    user_id: uuid.UUID,
     now_ms: int | None = None,
 ) -> dict[str, Any]:
-    """Return effective runtime settings merged from DB AppSettings and env defaults."""
+    """Return effective runtime settings merged from DB AppSettings and env defaults.
+
+    `user_id` lost its `None` default in ticket 35. It always had exactly one
+    caller and that caller always passed `current_user.id`, but the default made
+    the owner look optional to everything downstream — and `activeSyncJob` now
+    reports the caller's own sync rather than the deployment's oldest, which is
+    a question `None` has no answer to.
+    """
     now = now_ms if now_ms is not None else int(time.time() * 1000)
     # This payload carries all three halves of the old `sync` blob back to the
     # browser — policy, the scheduler's counters, and this account's start-time
@@ -226,6 +233,7 @@ def build_runtime_config(
     active_sync_job = get_active_sync_job_summary(
         allowed_concurrency=allowed_concurrency,
         effective_proxy_capacity=effective_capacity,
+        user_id=user_id,
     )
 
     return {

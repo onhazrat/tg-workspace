@@ -104,7 +104,7 @@ from app.services.summaries import (
     summary_to_camel,
 )
 from app.services.sync_meta import touch_sync
-from app.services.tenancy import Scope, assert_owner_on_write, scope_of
+from app.services.tenancy import Scope, assert_owner_on_write, may_act_on, scope_of
 
 logger = logging.getLogger(__name__)
 
@@ -160,7 +160,11 @@ IMPORT_WRITES: dict[type[Any], str] = {
     ChannelSettingGroup: (
         "Excused: never merged by an id the document supplies. "
         "`ensure_default_group` resolves the caller's own group by a derived id "
-        "and creates it if absent, so there is no foreign row to land on."
+        "and creates it if absent, so there is no foreign row to land on. The "
+        "document *does* supply an id for the Channel to point at, and ticket 35 "
+        "made that read owner-checked — a foreign group is treated as absent and "
+        "falls through to the default, rather than governing the caller's new "
+        "channel by another account's policy row."
     ),
 }
 
@@ -284,6 +288,19 @@ def _import_channels(
                 if setting_group_id
                 else None
             )
+            # A group the caller may not act on is treated as absent, not as a
+            # refusal (ticket 35). `setting_group_id` here is an id the
+            # *document* supplies, so without this an import attaches the
+            # caller's new Channel to another account's policy row — the same
+            # hole `bulk_assign_setting_group` had, reached through the import
+            # door. Falling through to the default group rather than raising,
+            # because the branch below already exists for exactly this shape and
+            # an import is one transaction: refusing would abort a whole restore
+            # over a field the document can simply be wrong about.
+            if group is not None and not may_act_on(
+                owner_id=group.user_id, user_id=user_id
+            ):
+                group = None
             if group is None:
                 is_restricted = bool(
                     normalized.get("is_unavailable_on_web_view")

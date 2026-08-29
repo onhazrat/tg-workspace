@@ -82,7 +82,7 @@ def test_ensure_reserved_groups_and_list_empty() -> None:
         assert frozen_group_id_for_user(user_id) == frozen_group.id
         assert restricted_group_id_for_user(user_id) == restricted_group.id
 
-        listed = list_setting_groups(session, operator_id=user_id)
+        listed = list_setting_groups(session, user_id=user_id)
         names = {group["name"] for group in listed}
         assert names == {
             "default",
@@ -141,6 +141,7 @@ def test_update_setting_group_rejects_duplicate_names() -> None:
                 session,
                 second["id"],
                 {"name": "alpha"},
+                user_id=user_id,
             )
         assert exc_info.value.status_code == 409
 
@@ -167,7 +168,7 @@ def test_list_setting_groups_includes_empty_custom_groups() -> None:
     user_id = uuid.uuid4()
     with Session(engine) as session:
         create_setting_group(session, {"name": "Weekend digest"}, user_id=user_id)
-        listed = list_setting_groups(session, operator_id=user_id)
+        listed = list_setting_groups(session, user_id=user_id)
         names = {group["name"] for group in listed}
         assert "Weekend digest" in names
         custom_group = next(
@@ -187,7 +188,7 @@ def test_consolidate_legacy_duplicate_frozen_groups() -> None:
         session.commit()
 
         assert merged == 0
-        listed = list_setting_groups(session, operator_id=user_id)
+        listed = list_setting_groups(session, user_id=user_id)
         frozen_names = [group["name"] for group in listed if group["name"] == "Frozen"]
         assert frozen_names == ["Frozen"]
         assert default_group.id in {group["id"] for group in listed}
@@ -200,7 +201,7 @@ def test_list_setting_groups_avoids_loading_operator_channel_rows() -> None:
         with patch(
             "app.services.operator.select_operator_channels"
         ) as mock_select_operator_channels:
-            listed = list_setting_groups(session, operator_id=user_id)
+            listed = list_setting_groups(session, user_id=user_id)
             mock_select_operator_channels.assert_not_called()
         assert len(listed) >= 5
 
@@ -236,6 +237,6 @@ def test_list_setting_groups_includes_orphan_group_from_distinct_query() -> None
         )
         session.commit()
 
-        listed = list_setting_groups(session, operator_id=user_id)
+        listed = list_setting_groups(session, user_id=user_id)
         listed_ids = {group["id"] for group in listed}
         assert orphan_group.id in listed_ids

@@ -19,6 +19,7 @@ from app.core.db import engine
 from app.models_tg import SyncJob as SyncJobRow
 from app.models_tg import utc_now
 from app.services.channel_setting_groups import SyncOperationMode
+from app.services.tenancy import scoped_select, tenancy_enforced
 
 #: The one `LISTEN`/`NOTIFY` channel every sync job's progress travels on
 #: (ticket 10). One channel rather than one per job: `LISTEN` is per-connection,
@@ -651,8 +652,8 @@ def has_active_sync_job() -> bool:
     return found is not None
 
 
-def _running_job_from_row() -> SyncJobState | None:
-    """The oldest non-terminal job row, for a process that runs none itself.
+def _running_job_from_row(*, user_id: uuid.UUID) -> SyncJobState | None:
+    """The caller's oldest non-terminal job row, for a process that runs none.
 
     `GET /jobs/runtime-config` is served by the API, which after ticket 10 never
     calls `claim_job` — so a summary read only from `_active_jobs` is `None`
@@ -660,26 +661,78 @@ def _running_job_from_row() -> SyncJobState | None:
     exactly the moments they describe something. The row is the cross-process
     answer, at the flush interval's freshness, which is the right granularity
     for a diagnostics panel.
+
+    Scoped in ticket 35. `SyncJob` is `USER_OWNED`, and this read had no owner
+    predicate at all — so the panel described whichever sync happened to be
+    oldest anywhere in the deployment, including its channel names and counts.
+    `user_id` is a required keyword: it took no arguments before, so an optional
+    one would leave the only call site passing nothing and still passing.
     """
     with Session(engine) as session:
         row = session.exec(
-            select(SyncJobRow)
-            .where(col(SyncJobRow.status).in_(("pending", "running")))
+            scoped_select(
+                select(SyncJobRow).where(
+                    col(SyncJobRow.status).in_(("pending", "running"))
+                ),
+                SyncJobRow,
+                user_id,
+            )
             .order_by(col(SyncJobRow.created_at))
             .limit(1)
         ).first()
         return _row_to_state(row) if row is not None else None
 
 
+def _job_is_visible_to(job: SyncJobState, user_id: uuid.UUID) -> bool:
+    """`scoped_select`'s `USER_OWNED` rule, applied to a dict instead of a table.
+
+    `_active_jobs` is process memory, so the seam cannot reach it — this is the
+    one place a `SyncJob` owner filter is spelled out by hand, and it is spelled
+    to match what `scoped_select` does to the row two functions below: a no-op
+    while the flag is off, `user_id == me` when it is on, and a row with no owner
+    excluded under enforcement rather than matched as "mine".
+
+    That last part is on ticket 21's bill and not a decision made here. The
+    scheduler still creates `SyncJob` rows with no `user_id`, so under
+    enforcement `activeSyncJob` would report nothing for an auto-sync — which is
+    the same answer the scoped row read gives, deliberately, because two
+    spellings of the rule that disagree about NULL is the drift the seam exists
+    to prevent.
+    """
+    if not tenancy_enforced():
+        return True
+    return job.user_id is not None and uuid.UUID(job.user_id) == user_id
+
+
 def get_active_sync_job_summary(
-    *, allowed_concurrency: int, effective_proxy_capacity: int | None = None
+    *,
+    allowed_concurrency: int,
+    effective_proxy_capacity: int | None = None,
+    user_id: uuid.UUID,
 ) -> dict[str, Any] | None:
-    """Snapshot of the in-flight sync job for runtime config / diagnostics."""
+    """Snapshot of the caller's in-flight sync job for runtime config.
+
+    Both candidate sources are scoped, not just the row read. `_active_jobs` is
+    *preferred* over the row, so scoping only `_running_job_from_row` — the
+    function ticket 35 names — would leave the path that actually answers on the
+    worker reading across accounts. Guarding the named function and leaving its
+    caller unguarded is the shape ticket 33 had to fix in `publish_summary_text`
+    and the two auth gates kept re-finding before that.
+
+    The in-memory half is filtered by `_job_is_visible_to`, which restates
+    `scoped_select`'s `USER_OWNED` rule rather than borrowing `may_act_on`.
+    `may_act_on` does not consult the flag on its non-NULL branch, so using it
+    here would narrow a *response* while enforcement is off — the one thing no
+    seam adoption may do, and `test_auto_publish_scoping.py`'s caller list says
+    so out loud.
+    """
     candidates: list[SyncJobState] = [
-        job for job in _active_jobs.values() if job.status in ("pending", "running")
+        job
+        for job in _active_jobs.values()
+        if job.status in ("pending", "running") and _job_is_visible_to(job, user_id)
     ]
     if not candidates:
-        from_row = _running_job_from_row()
+        from_row = _running_job_from_row(user_id=user_id)
         candidates = [from_row] if from_row is not None else []
 
     for job in candidates:

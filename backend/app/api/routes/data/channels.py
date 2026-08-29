@@ -396,7 +396,7 @@ def list_setting_groups(
 ) -> list[SettingGroupResponse]:
     return [
         SettingGroupResponse.model_validate(row)
-        for row in list_setting_groups_impl(session, operator_id=current_user.id)
+        for row in list_setting_groups_impl(session, user_id=current_user.id)
     ]
 
 
@@ -420,12 +420,13 @@ def update_setting_group(
     group_id: str,
     body: SettingGroupWriteRequest,
     session: SessionDep,
-    _current_user: CurrentUser,
+    current_user: CurrentUser,
 ) -> SettingGroupResponse:
     result = update_setting_group_impl(
         session,
         group_id,
         body.model_dump(by_alias=False, exclude_none=True),
+        user_id=current_user.id,
     )
     touch_sync(session, "channels")
     return SettingGroupResponse.model_validate(result)
@@ -435,9 +436,9 @@ def update_setting_group(
 def delete_setting_group(
     group_id: str,
     session: SessionDep,
-    _current_user: CurrentUser,
+    current_user: CurrentUser,
 ) -> StatusResponse:
-    delete_setting_group_impl(session, group_id)
+    delete_setting_group_impl(session, group_id, user_id=current_user.id)
     touch_sync(session, "channels")
     return StatusResponse(status="deleted")
 
@@ -452,7 +453,7 @@ def bulk_assign_setting_group(
         session,
         channel_ids=body.channel_ids,
         setting_group_id=body.setting_group_id,
-        operator_id=current_user.id,
+        user_id=current_user.id,
     )
     touch_sync(session, "channels")
     return BulkSettingGroupResponse.model_validate(result)

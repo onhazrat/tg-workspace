@@ -17,6 +17,11 @@ from app.services.sync_schedule import (
     compute_next_dynamic_sync_at_from_last_updated,
     compute_next_regular_sync_at_from_last_updated,
 )
+from app.services.tenancy import (
+    assert_owner_on_write,
+    scoped_select,
+    unscoped_select,
+)
 
 SyncOperationMode = Literal[
     "sync_all", "bulk", "individual", "recheck_restricted", "auto"
@@ -185,13 +190,36 @@ def is_reserved_group_id(group_id: str) -> bool:
     )
 
 
-def _operator_group_scope_filter(
-    operator_id: uuid.UUID | None,
+def _name_collision_scope_filter(
+    user_id: uuid.UUID | None,
 ) -> ColumnElement[bool]:
-    if operator_id is None:
+    """The rows a *name* can collide with — identity, not visibility.
+
+    This helper used to be named for the operator and did two jobs. Ticket 35
+    took the visibility one away: `list_setting_groups` goes through
+    `scoped_select` now, and two owner filters with different NULL handling is
+    the drift `tenancy.py` exists to prevent. The old name is deliberately not
+    written out anywhere in this module — the guard for its removal is a
+    substring scan, and prose naming it would keep the scan red.
+
+    What is left answers "is this name already taken", which mirrors the unique
+    index `(COALESCE(user_id::text, 'global'), lower(name))`. Ticket 30's rule
+    applies: the owner in a key answers *which row is yours*, and a flag cannot
+    gate identity — so this deliberately does not consult `tenancy_enforced()`
+    and deliberately is not `scoped_select`. Adopting the seam here would make a
+    duplicate name stop being rejected while enforcement is off and start
+    arriving as a Postgres `UniqueViolation` instead of the route's 409.
+
+    It stays *wider* than the index — `me OR NULL` rather than exactly my
+    scope — because that is what it has always been, and narrowing it to match
+    the index would start allowing names the operator has been prevented from
+    using since the presets were seeded. Ticket 22 can reconcile the two once
+    the global rows are gone.
+    """
+    if user_id is None:
         return col(ChannelSettingGroup.user_id).is_(None)
     return or_(
-        cast(ColumnElement[bool], ChannelSettingGroup.user_id == operator_id),
+        cast(ColumnElement[bool], ChannelSettingGroup.user_id == user_id),
         col(ChannelSettingGroup.user_id).is_(None),
     )
 
@@ -211,7 +239,7 @@ def _legacy_duplicate_reserved_groups(
                 ~col(ChannelSettingGroup.id).like("default-%"),
                 ~col(ChannelSettingGroup.id).like("restricted-%"),
                 ~col(ChannelSettingGroup.id).like("frozen-%"),
-                _operator_group_scope_filter(user_id),
+                _name_collision_scope_filter(user_id),
             )
         ).all()
     )
@@ -520,9 +548,33 @@ def get_group_for_channel(session: Session, channel: Channel) -> ChannelSettingG
 
 
 def load_groups_by_id(session: Session) -> dict[str, ChannelSettingGroup]:
-    return {
-        group.id: group for group in session.exec(select(ChannelSettingGroup)).all()
-    }
+    """Every group, keyed by id — a resolution map, deliberately unscoped.
+
+    Ticket 35 audited this and left it reading across accounts, which is a
+    decision rather than an omission, so it says so through the seam's own
+    escape hatch instead of a bare `select`.
+
+    Every one of the seven call sites does `groups_by_id.get(
+    channel.setting_group_id)` for a channel it has *already* been allowed to
+    see. The id therefore comes from a scoped row, and a second filter here
+    cannot hide anything from anybody — it can only blank the policy attached to
+    a channel the caller legitimately follows. That matters because three call
+    sites read a missing group as "skip this channel": `auto_sync` continues past
+    it, `bulk_channels` refuses the reset, and `get_group_for_channel` raises a
+    500. Auto-follow files a Channel under whoever scraped it first, so under
+    enforcement a scoped map would quietly stop syncing channels the second
+    follower watches.
+    """
+    statement = unscoped_select(
+        select(ChannelSettingGroup),
+        reason=(
+            "A resolution map for setting-group ids the caller already holds "
+            "from rows it may see. Scoping it hides no row from anyone and "
+            "instead drops the sync policy of a followed channel, which "
+            "auto_sync and bulk reset both read as 'skip this channel'."
+        ),
+    )
+    return {group.id: group for group in session.exec(statement).all()}
 
 
 def channel_counts_by_group(session: Session) -> dict[str, int]:
@@ -552,7 +604,7 @@ def _find_group_by_name_ci(
     if not normalized:
         return None
     groups = session.exec(
-        select(ChannelSettingGroup).where(_operator_group_scope_filter(user_id))
+        select(ChannelSettingGroup).where(_name_collision_scope_filter(user_id))
     ).all()
     for group in groups:
         if exclude_id and group.id == exclude_id:
@@ -707,7 +759,7 @@ def _legacy_reserved_duplicates_exist(
     duplicate = session.exec(
         select(ChannelSettingGroup.id)
         .where(
-            _operator_group_scope_filter(user_id),
+            _name_collision_scope_filter(user_id),
             or_(
                 cast(
                     ColumnElement[bool],
@@ -726,28 +778,62 @@ def _legacy_reserved_duplicates_exist(
     return duplicate is not None
 
 
-def list_setting_groups(
-    session: Session, *, operator_id: uuid.UUID | None
-) -> list[dict[str, Any]]:
-    from app.services.operator import distinct_operator_setting_group_ids
+def _referenced_group_ids(session: Session, *, user_id: uuid.UUID) -> set[str]:
+    """Group ids named by the Channels `user_id` may see.
 
-    ensure_builtin_groups(session, user_id=operator_id)
-    if _legacy_reserved_duplicates_exist(session, user_id=operator_id):
-        consolidate_legacy_duplicate_reserved_groups(session, user_id=operator_id)
+    The orphan rescue behind `list_setting_groups`: a channel can name a group
+    the caller does not own, because auto-follow files the Channel under whoever
+    scraped the handle first. Dropping that group from the list leaves the
+    channel showing a policy the settings screen cannot explain, so it is added
+    back.
+
+    This replaces `operator.distinct_operator_setting_group_ids`, which
+    hand-rolled `Channel.user_id == me OR IS NULL`. `Channel` is `FOLLOW_SCOPED`
+    — its `user_id` is a "who scraped this first" stamp that ticket 22 drops —
+    so the seam answers this with an EXISTS against `tg_channel_follows`, and
+    the hand-rolled version was asking a question whose column is going away.
+    """
+    rows = session.exec(
+        scoped_select(select(Channel.setting_group_id).distinct(), Channel, user_id)
+    ).all()
+    return {  # ty: ignore[invalid-return-type]
+        group_id for group_id in rows if group_id
+    }
+
+
+def list_setting_groups(
+    session: Session, *, user_id: uuid.UUID
+) -> list[dict[str, Any]]:
+    """The groups `user_id` may see (ticket 35).
+
+    This is the one adoption in the programme that **changes a response while
+    the flag is off**, and it does so deliberately. The filter it replaces was
+    `user_id == me OR user_id IS NULL`, which narrowed in *both* states — the
+    thing the seam's batches are forbidden to do, and the reason every other
+    read path could adopt the seam without moving a response. Keeping it would
+    have left a fifth NULL rule for ticket 21 to reconcile against four that
+    already disagree with it. Ticket 17 made the same call on `/data/artifacts`
+    for the same reason: a single-operator deployment has one account, so the
+    widening is invisible where it ships and the rule gets simpler where it does
+    not.
+
+    `user_id` is required and not nullable. `None` used to mean "the global
+    scope", which is precisely the meaning the seam refuses to invent.
+    """
+    ensure_builtin_groups(session, user_id=user_id)
+    if _legacy_reserved_duplicates_exist(session, user_id=user_id):
+        consolidate_legacy_duplicate_reserved_groups(session, user_id=user_id)
     # ensure_builtin_groups uses flush(); session.new is empty afterward, so always
     # commit so built-in rows survive when the request-scoped session closes.
     session.commit()
 
     groups = list(
         session.exec(
-            select(ChannelSettingGroup).where(_operator_group_scope_filter(operator_id))
+            scoped_select(select(ChannelSettingGroup), ChannelSettingGroup, user_id)
         ).all()
     )
     known_ids = {group.id for group in groups}
-    orphan_ids = (
-        distinct_operator_setting_group_ids(session, operator_id=operator_id)
-        - known_ids
-    )
+    orphan_ids = _referenced_group_ids(session, user_id=user_id) - known_ids
     if orphan_ids:
         extra_groups = session.exec(
             select(ChannelSettingGroup).where(
@@ -801,10 +887,25 @@ def update_setting_group(
     session: Session,
     group_id: str,
     body: dict[str, Any],
+    *,
+    user_id: uuid.UUID,
 ) -> dict[str, Any]:
+    """Rewrite one group. Refuses a group that is already somebody else's.
+
+    Found by ticket 35 while auditing the reads on this table: the route is a
+    plain `CurrentUser` with no permission gate, `group_id` is client-visible,
+    and there was no owner check at all — so any signed-in account could rename
+    another account's group and, through `recompute_channels_for_group`, move
+    `next_regular_sync_at` on every channel in it.
+
+    `assert_owner_on_write` rather than `assert_owner`: this is a write, so it
+    is not gated on the flag. Ticket 31 found nine by-id writes sitting on the
+    gated guard and still clobbering foreign rows on the shipping config.
+    """
     group = session.get(ChannelSettingGroup, group_id)
     if not group:
         raise HTTPException(status_code=404, detail="Setting group not found")
+    assert_owner_on_write(group.user_id, user_id, detail="Setting group not found")
 
     previous_interval_minutes = group.auto_sync_interval_minutes
     previous_expected_posts = group.dynamic_sync_expected_posts
@@ -833,10 +934,20 @@ def update_setting_group(
     return setting_group_to_camel(group, channel_count=counts.get(group.id, 0))
 
 
-def delete_setting_group(session: Session, group_id: str) -> dict[str, str]:
+def delete_setting_group(
+    session: Session, group_id: str, *, user_id: uuid.UUID
+) -> dict[str, str]:
+    """Delete one group. Refuses one that is already somebody else's.
+
+    The owner check goes **before** the built-in and channel-count refusals, so
+    a foreign group answers the same 404 whether or not it is deletable —
+    otherwise the 400s would confirm its existence and the oracle the 404 closes
+    would move into the payload.
+    """
     group = session.get(ChannelSettingGroup, group_id)
     if not group:
         raise HTTPException(status_code=404, detail="Setting group not found")
+    assert_owner_on_write(group.user_id, user_id, detail="Setting group not found")
     if group.is_default:
         raise HTTPException(
             status_code=400,
@@ -873,8 +984,16 @@ def bulk_assign_setting_group(
     *,
     channel_ids: list[str],
     setting_group_id: str,
-    operator_id: uuid.UUID | None,
+    user_id: uuid.UUID,
 ) -> dict[str, Any]:
+    """Move channels onto a group. Refuses a group that is somebody else's.
+
+    The leak here was the *read*: the target group was resolved by
+    client-visible id with no owner check, and its
+    `auto_sync_interval_minutes` and `dynamic_sync_expected_posts` were then
+    copied onto the caller's channels — so a stranger's policy row governed your
+    syncs, and the 404-for-missing made the id space walkable besides.
+    """
     if not channel_ids:
         raise HTTPException(status_code=400, detail="channelIds is required")
 
@@ -883,10 +1002,11 @@ def bulk_assign_setting_group(
     group = session.get(ChannelSettingGroup, setting_group_id)
     if not group:
         raise HTTPException(status_code=404, detail="Setting group not found")
+    assert_owner_on_write(group.user_id, user_id, detail="Setting group not found")
 
     operator_channels = {
         channel.id: channel
-        for channel in select_operator_channels(session, operator_id=operator_id)
+        for channel in select_operator_channels(session, operator_id=user_id)
     }
     missing = sorted(
         channel_id for channel_id in channel_ids if channel_id not in operator_channels
@@ -899,34 +1019,56 @@ def bulk_assign_setting_group(
 
     now_ms = int(time.time() * 1000)
     for channel_id in channel_ids:
-        channel = operator_channels[channel_id]
-        channel.setting_group_id = setting_group_id
-        if not group.regular_sync_enabled:
-            channel.next_regular_sync_at = None
-        else:
-            recompute_next_regular_sync_at_on_interval_change(
-                channel,
-                previous_interval_minutes=group.auto_sync_interval_minutes,
-                now_ms=now_ms,
-                regular_sync_enabled=group.regular_sync_enabled,
-                auto_sync_interval_minutes=group.auto_sync_interval_minutes,
-            )
-        if not group.dynamic_sync_enabled:
-            channel.next_dynamic_sync_at = None
-        else:
-            recompute_next_dynamic_sync_at_on_expected_posts_change(
-                session,
-                channel,
-                previous_expected_posts=group.dynamic_sync_expected_posts,
-                now_ms=now_ms,
-                dynamic_sync_enabled=group.dynamic_sync_enabled,
-                dynamic_sync_expected_posts=group.dynamic_sync_expected_posts,
-            )
-        channel.updated_at = utc_now()
-        session.add(channel)
+        apply_group_to_channel(session, operator_channels[channel_id], group, now_ms)
 
     session.commit()
     return {"updated": len(channel_ids), "settingGroupId": setting_group_id}
+
+
+def apply_group_to_channel(
+    session: Session,
+    channel: Channel,
+    group: ChannelSettingGroup,
+    now_ms: int,
+) -> None:
+    """Move one Channel onto `group` and settle its two sync deadlines.
+
+    Extracted from `bulk_assign_setting_group` in ticket 35 so the system paths
+    can reach it without going through that function's owner check. **That is
+    not a hole in the check**: the check exists because `bulk_assign` takes a
+    *client-chosen* group id, and the callers here resolve the group from the
+    Channel's own owner (`get_or_create_frozen_group(user_id=channel.user_id)`),
+    so there is no id for a stranger to name. `move_channel_to_restricted_group`
+    is the same shape and predates this.
+
+    Clearing the deadlines is the part worth keeping together with the move:
+    a channel parked in Frozen with `next_regular_sync_at` still set stays in
+    the scheduler's due list and syncs anyway.
+    """
+    channel.setting_group_id = group.id
+    if not group.regular_sync_enabled:
+        channel.next_regular_sync_at = None
+    else:
+        recompute_next_regular_sync_at_on_interval_change(
+            channel,
+            previous_interval_minutes=group.auto_sync_interval_minutes,
+            now_ms=now_ms,
+            regular_sync_enabled=group.regular_sync_enabled,
+            auto_sync_interval_minutes=group.auto_sync_interval_minutes,
+        )
+    if not group.dynamic_sync_enabled:
+        channel.next_dynamic_sync_at = None
+    else:
+        recompute_next_dynamic_sync_at_on_expected_posts_change(
+            session,
+            channel,
+            previous_expected_posts=group.dynamic_sync_expected_posts,
+            now_ms=now_ms,
+            dynamic_sync_enabled=group.dynamic_sync_enabled,
+            dynamic_sync_expected_posts=group.dynamic_sync_expected_posts,
+        )
+    channel.updated_at = utc_now()
+    session.add(channel)
 
 
 def move_channel_to_restricted_group(

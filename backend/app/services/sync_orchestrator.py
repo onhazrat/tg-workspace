@@ -32,7 +32,7 @@ from app.services.async_db import run_db
 from app.services.channel_photos import resolve_cached_photo_url
 from app.services.channel_setting_groups import (
     SyncOperationMode,
-    bulk_assign_setting_group,
+    apply_group_to_channel,
     channel_allows_sync_operation,
     get_group_for_channel,
     get_or_create_frozen_group,
@@ -517,12 +517,13 @@ def _freeze_channel_for_chat_id_problem(
     resolve automatically.
     """
     freeze_group = get_or_create_frozen_group(session, user_id=channel_owner_id)
-    bulk_assign_setting_group(
-        session,
-        channel_ids=[channel.id],
-        setting_group_id=freeze_group.id,
-        operator_id=channel_owner_id,
-    )
+    # Not `bulk_assign_setting_group`: ticket 35 gave that an owner check,
+    # because it takes a client-chosen group id. This one is derived from the
+    # Channel's own owner one line above, so there is nothing for a stranger to
+    # name — and routing a scraper-internal freeze through the user-facing door
+    # would make it raise 404 whenever the channel is not operator-scoped.
+    apply_group_to_channel(session, channel, freeze_group, int(time.time() * 1000))
+    session.commit()
     upsert_sync_log(
         session,
         {
