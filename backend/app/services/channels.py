@@ -269,13 +269,31 @@ def list_all_channel_stats(
     return compute_channel_stats_batch(session, names)
 
 
-def channel_names_for_operator(
-    session: Session, operator_id: uuid.UUID | None
-) -> set[str]:
-    from app.services.operator import select_operator_channels
+def channel_names_for_user(session: Session, user_id: uuid.UUID) -> set[str]:
+    """The Channel names `user_id` follows.
+
+    Was `channel_names_for_operator`, over `Channel.user_id == operator OR
+    NULL` (ticket 21). Two callers, and both are answering "which channels may
+    this account's search or backfill touch": RAG's `IN` predicate on
+    `PostEmbedding.channel_name`, and the embedding backfill's post selection.
+
+    Follows rather than `scoped_select`, and the distinction matters. The seam's
+    `Channel` branch consults `tenancy_enforced()`, so while the flag is off it
+    returns **every** Channel in the corpus — which for RAG would mean one
+    account's semantic search reading another account's posts right up until PR
+    4 flipped the flag. This is not a visibility question the flag may defer; it
+    is which channels the caller actually has, so it reads the follow table
+    directly and answers the same in both flag states.
+
+    Ticket 16 deferred this conversion here on the reasoning that
+    `select_operator_channels` was shared with the scheduler and sync paths.
+    Those callers are gone now, which is what makes the narrowing safe.
+    """
+    from app.services.follows import followed_channels_for
 
     return {
-        ch.name for ch in select_operator_channels(session, operator_id=operator_id)
+        channel.name
+        for channel, _follow in followed_channels_for(session, user_id=user_id)
     }
 
 
@@ -638,12 +656,12 @@ def bulk_update_channel_tags(
     session: Session,
     *,
     updates: list[dict[str, Any]],
-    operator_id: uuid.UUID | None,
+    operator_id: uuid.UUID,
 ) -> dict[str, Any]:
     if not updates:
         raise HTTPException(status_code=400, detail="No tag updates provided")
 
-    from app.services.operator import select_operator_channels
+    from app.services.follows import followed_channels_for
 
     deduped_updates: dict[str, list[Any]] = {}
     for update in updates:
@@ -654,8 +672,10 @@ def bulk_update_channel_tags(
             )
         deduped_updates[channel_id] = update.get("tags", [])
 
-    operator_channels = select_operator_channels(session, operator_id=operator_id)
-    by_id = {channel.id: channel for channel in operator_channels}
+    by_id = {
+        channel.id: channel
+        for channel, _follow in followed_channels_for(session, user_id=operator_id)
+    }
 
     missing = sorted(
         channel_id for channel_id in deduped_updates if channel_id not in by_id

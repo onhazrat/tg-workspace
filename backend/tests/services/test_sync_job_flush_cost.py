@@ -23,6 +23,7 @@ what a broken flush does, so the durability half is pinned just as hard.
 from __future__ import annotations
 
 import time
+import uuid
 
 import pytest
 
@@ -36,7 +37,9 @@ from app.services.scraper_jobs import (
 
 
 def _job(channel_count: int = 3, status: str = "running") -> SyncJobState:
-    job = SyncJobState(job_id="flush-cost", source="test", status=status)
+    job = SyncJobState(
+        user_id=str(uuid.uuid4()), job_id="flush-cost", source="test", status=status
+    )
     job.channels = {
         f"c{i}": ChannelSyncState(channel_id=f"c{i}", channel_name=f"c{i}")
         for i in range(channel_count)

@@ -33,7 +33,7 @@ from app.services.channel_setting_groups import (
     channel_allows_sync_operation,
     load_groups_by_id,
 )
-from app.services.operator import get_operator_user_id, select_operator_channels
+from app.services.follows import followed_channels_for
 from app.services.runtime_config import build_runtime_config
 from app.services.scraper_jobs import (
     SyncJobState,
@@ -91,7 +91,10 @@ def _visible_job(
     """
     if not job:
         raise HTTPException(status_code=404, detail=_JOB_NOT_FOUND)
-    if job.user_id is None:
+    # Falsy, not `is None`: a legacy row with a NULL owner hydrates as `""`
+    # since ticket 21 made `SyncJobState.user_id` required. See
+    # `scraper_jobs._job_is_visible_to`, which makes the same check.
+    if not job.user_id:
         require_permission(Permission.JOBS_MANAGE)(session, current_user)
         return job
     assert_owner(uuid.UUID(job.user_id), current_user.id, detail=_JOB_NOT_FOUND)
@@ -101,11 +104,15 @@ def _visible_job(
 def _resolve_sync_entries(
     session: Session,
     channel_ids: list[str] | None,
-    operator_id: uuid.UUID | None,
+    operator_id: uuid.UUID,
     sync_mode: Literal["sync_all", "bulk", "individual", "recheck_restricted"],
 ) -> list[tuple[str, str]]:
+    # The Channels this account follows, not `Channel.user_id == operator OR
+    # NULL` (ticket 21). Same set on a single-account deployment, and the right
+    # one as soon as there are two.
     operator_channels = {
-        ch.id: ch for ch in select_operator_channels(session, operator_id=operator_id)
+        channel.id: channel
+        for channel, _follow in followed_channels_for(session, user_id=operator_id)
     }
     groups_by_id = load_groups_by_id(session)
 
@@ -256,7 +263,7 @@ async def start_sync_job(
     session: SessionDep,
     current_user: CurrentUser,
 ) -> StartSyncJobResponse:
-    operator_id = current_user.id or get_operator_user_id(session)
+    operator_id = current_user.id
     sync_mode = body.resolved_sync_mode
     entries = _resolve_sync_entries(session, body.channel_ids, operator_id, sync_mode)
     if not entries:

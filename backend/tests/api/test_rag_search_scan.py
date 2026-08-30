@@ -20,7 +20,7 @@ from app.ai.models import EmbeddingResult
 from app.core.config import settings
 from app.core.db import engine
 from app.models_tg import Channel, PostEmbedding
-from app.services.operator import get_operator_user_id
+from app.services.follows import get_operator_user_id
 
 PREFIX = f"{settings.API_V1_STR}/rag"
 DATA = f"{settings.API_V1_STR}/data"

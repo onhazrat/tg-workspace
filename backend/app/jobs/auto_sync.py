@@ -4,11 +4,11 @@ from __future__ import annotations
 
 import logging
 import time
+import uuid
 from types import SimpleNamespace
-from typing import Any, cast
+from typing import Any, NamedTuple
 
-from sqlalchemy import ColumnElement, func, or_
-from sqlmodel import Session, col, select
+from sqlmodel import Session
 
 from app.core.config import settings
 from app.core.db import engine
@@ -17,8 +17,13 @@ from app.jobs.sync_queue import enqueue_sync_job
 from app.models_tg import Channel
 from app.services.channel_setting_groups import load_groups_by_id
 from app.services.channels import compute_channel_stats_batch
-from app.services.network_settings import get_network_setting_row
-from app.services.operator import get_operator_user_id, select_operator_channels
+from app.services.follows import (
+    FollowedChannel,
+    accounts_with_follows,
+    count_followed_channels,
+    followed_channels_for,
+    schedule_group_id,
+)
 from app.services.scraper_jobs import SyncJobState, create_job, has_active_sync_job
 from app.services.sync_schedule import due_reason, is_channel_due, needs_dynamic_stats
 
@@ -61,11 +66,28 @@ def _schedule_view(
     )
 
 
+class _OwnerPlan(NamedTuple):
+    """What one account's tick decided, before any of it is enqueued.
+
+    A record rather than four parallel dicts, because the planning loop now runs
+    once per account and the four values have to stay together per account — the
+    shape where a stray `[owner]` lookup silently reads another account's due
+    reasons.
+    """
+
+    owner_id: uuid.UUID
+    entries: list[tuple[str, str]]
+    reasons: dict[str, str]
+    due_count: int
+    partial_count: int
+
+
 def _stats_for_scheduling(
     session: Session,
     channels: list[Channel],
     groups_by_id: dict[str, Any],
     now_ms: int,
+    pairs: list[FollowedChannel] | None = None,
 ) -> dict[str, dict[str, Any]]:
     """Post stats for the channels whose due-ness can actually depend on them.
 
@@ -78,11 +100,24 @@ def _stats_for_scheduling(
 
     `needs_dynamic_stats` decides, not this function: the condition belongs next
     to the rule it mirrors, in `sync_schedule`.
+
+    `pairs` carries each Channel's follow so the narrowing asks the *follower's*
+    setting group, matching the planning loop. Without it this would decide
+    which channels need stats from the Channel's shared group while the loop
+    decided due-ness from the follow's — two different groups, so the narrowing
+    would withhold stats from exactly the channels whose answer depends on them
+    and every dynamic sync would quietly stop firing.
     """
+    group_ids = (
+        {channel.id: schedule_group_id(channel, follow) for channel, follow in pairs}
+        if pairs is not None
+        else {ch.id: ch.setting_group_id for ch in channels}
+    )
     wanted = [
         ch.name
         for ch in channels
-        if (group := groups_by_id.get(ch.setting_group_id)) is not None
+        if (group := groups_by_id.get(group_ids.get(ch.id, ch.setting_group_id)))
+        is not None
         and needs_dynamic_stats(_schedule_view(ch, group, None), now_ms)
     ]
     if not wanted:
@@ -108,6 +143,10 @@ async def run_auto_sync() -> dict[str, Any]:
     `entries` and `due_reason_by_id` are deliberately plain tuples and strings.
     """
     now = int(time.time() * 1000)
+    plans: list[_OwnerPlan] = []
+    checked = 0
+    partial_candidate_count = 0
+
     with Session(engine) as session:
         sync_cfg = load_sync_settings(session)
         pause_until = sync_cfg.get("autoSyncPauseUntil")
@@ -121,121 +160,154 @@ async def run_auto_sync() -> dict[str, Any]:
         if has_active_sync_job():
             return {"skipped": True, "reason": "sync_job_active"}
 
-        net_row = get_network_setting_row(session)
-        owner_id = (net_row.user_id if net_row else None) or get_operator_user_id(
-            session
-        )
-        if owner_id is None:
-            # The job this tick would create is `USER_OWNED`, and `create_job`
-            # no longer accepts "nobody" (ticket 21). Writing one unowned is
-            # what this used to do, and ticket 35 pinned the consequence:
-            # `activeSyncJob` reports nothing for an auto-sync once the flag
-            # flips, so the deployment looks idle while the worker is busy.
-            #
-            # Declining costs nothing real. `owner_id` is None only when the
-            # network-settings row names no account *and* no user matches
-            # `FIRST_SUPERUSER` — which is a deployment with no accounts, where
-            # there is nobody to sync for and nobody to charge the Requests to.
-            return {"skipped": True, "reason": "no_account_to_attribute_to"}
-        channels = select_operator_channels(session, operator_id=owner_id)
-        groups_by_id = load_groups_by_id(session)
-        stats_by_channel = _stats_for_scheduling(session, channels, groups_by_id, now)
-        due_channels: list[Channel] = []
-        due_reason_by_id: dict[str, str] = {}
-        for channel in channels:
-            group = groups_by_id.get(channel.setting_group_id)
-            if group is None:
-                continue
-            schedule_view = _schedule_view(
-                channel, group, stats_by_channel.get(channel.name)
-            )
-            if not is_channel_due(schedule_view, now):
-                continue
-            reason = due_reason(schedule_view, now)
-            if reason is None:
-                continue
-            due_channels.append(channel)
-            due_reason_by_id[channel.id] = reason
+        owners = accounts_with_follows(session)
+        if not owners:
+            # Nobody follows anything, so there is nothing to sync and no
+            # account to attribute a job to. Distinct from "no channels are
+            # due", which is the ordinary quiet tick below.
+            return {"skipped": True, "reason": "no_followed_channels"}
 
-        due_ids = {ch.id for ch in due_channels}
-        partial_candidates = [
-            ch
-            for ch in channels
-            if (
-                groups_by_id.get(ch.setting_group_id) is not None
-                and not groups_by_id[ch.setting_group_id].is_frozen
-                and not ch.history_complete_to_cutoff
-                and ch.id not in due_ids
+        groups_by_id = load_groups_by_id(session)
+        due_by_owner: dict[uuid.UUID, list[Channel]] = {}
+        reason_by_owner: dict[uuid.UUID, dict[str, str]] = {}
+        partial_candidates: list[tuple[uuid.UUID, Channel]] = []
+
+        for owner_id in owners:
+            pairs = followed_channels_for(session, user_id=owner_id)
+            checked += len(pairs)
+            owner_due: list[Channel] = []
+            owner_reasons: dict[str, str] = {}
+
+            # Stats are per Channel, not per follower, so they are fetched once
+            # for this owner's set. Two accounts following the same Channel each
+            # pay for it, which is the cost of asking the question per owner —
+            # and `needs_dynamic_stats` still narrows it to the handful whose
+            # answer can actually turn on the numbers.
+            owner_channels = [channel for channel, _follow in pairs]
+            stats_by_channel = _stats_for_scheduling(
+                session, owner_channels, groups_by_id, now, pairs
             )
-        ]
-        partial_batch: list[Channel] = []
+
+            for channel, follow in pairs:
+                group = groups_by_id.get(schedule_group_id(channel, follow))
+                if group is None:
+                    continue
+                schedule_view = _schedule_view(
+                    channel, group, stats_by_channel.get(channel.name)
+                )
+                if is_channel_due(schedule_view, now):
+                    reason = due_reason(schedule_view, now)
+                    if reason is not None:
+                        owner_due.append(channel)
+                        owner_reasons[channel.id] = reason
+                        continue
+                if not group.is_frozen and not channel.history_complete_to_cutoff:
+                    partial_candidates.append((owner_id, channel))
+
+            due_by_owner[owner_id] = owner_due
+            reason_by_owner[owner_id] = owner_reasons
+
+        partial_candidate_count = len(partial_candidates)
+        partial_by_owner: dict[uuid.UUID, list[Channel]] = {}
         if partial_candidates:
-            partial_sorted = sorted(partial_candidates, key=lambda ch: ch.id)
+            # One cursor for the whole deployment, over the union of every
+            # owner's candidates. Per-owner cursors would be the obvious move
+            # and would change what `autoSyncPartialCursor` means, splitting one
+            # setting into N pieces of scheduler state nothing reads back — so
+            # the rotation stays global and only the *attribution* is per owner.
+            # Sorted by `(channel id, owner)` so the order is stable across
+            # ticks, which is what makes the rotation a rotation.
+            partial_sorted = sorted(
+                partial_candidates, key=lambda pair: (pair[1].id, str(pair[0]))
+            )
             cursor = int(sync_cfg.get("autoSyncPartialCursor") or 0)
             batch_size = max(1, int(sync_cfg.get("autoSyncPartialBatchSize") or 1))
+            taken = 0
             for i in range(min(batch_size, len(partial_sorted))):
                 idx = (cursor + i) % len(partial_sorted)
-                partial_batch.append(partial_sorted[idx])
-            _update_sync_state(
-                session, {"autoSyncPartialCursor": cursor + len(partial_batch)}
+                owner_id, channel = partial_sorted[idx]
+                partial_by_owner.setdefault(owner_id, []).append(channel)
+                taken += 1
+            _update_sync_state(session, {"autoSyncPartialCursor": cursor + taken})
+
+        for owner_id in owners:
+            to_sync: list[Channel] = []
+            seen_ids: set[str] = set()
+            for channel in due_by_owner.get(owner_id, []) + partial_by_owner.get(
+                owner_id, []
+            ):
+                if channel.id in seen_ids:
+                    continue
+                seen_ids.add(channel.id)
+                to_sync.append(channel)
+            if not to_sync:
+                continue
+            plans.append(
+                _OwnerPlan(
+                    owner_id=owner_id,
+                    entries=[(ch.id, ch.name) for ch in to_sync],
+                    reasons=reason_by_owner.get(owner_id, {}),
+                    due_count=len(due_by_owner.get(owner_id, [])),
+                    partial_count=len(partial_by_owner.get(owner_id, [])),
+                )
             )
 
-        to_sync: list[Channel] = []
-        seen_ids: set[str] = set()
-        for channel in due_channels + partial_batch:
-            if channel.id in seen_ids:
-                continue
-            seen_ids.add(channel.id)
-            to_sync.append(channel)
+    if not plans:
+        return {
+            "skipped": True,
+            "reason": "no_due_channels",
+            "checked": checked,
+            "partialCandidates": partial_candidate_count,
+        }
 
-        if not to_sync:
-            return {
-                "skipped": True,
-                "reason": "no_due_channels",
-                "checked": len(channels),
-                "partialCandidates": len(partial_candidates),
-            }
-
-        entries = [(ch.id, ch.name) for ch in to_sync]
-        checked = len(channels)
-        due_count = len(due_channels)
-        partial_count = len(partial_batch)
-
-    job = await create_job(
-        channel_entries=entries,
-        source=CHECK_SOURCE,
-        user_id=str(owner_id),
-        channel_meta_by_id={
-            cid: {"dueReason": due_reason_by_id.get(cid)} for cid, _ in entries
-        },
-    )
     # Ticket 10: enqueued, one message per Channel, and drained by whichever
-    # process is running the worker — which after this ticket is never the API
+    # process is running the worker — which after that ticket is never the API
     # process. `run_auto_sync` therefore returns as soon as the messages are on
     # the lane, and the counters below it moved to `record_auto_sync_outcome`,
     # because there is no longer a point in this function where the sync is
     # finished.
-    await enqueue_sync_job(job, owner_id)
+    #
+    # One job per owner (ticket 21). A Channel two accounts both follow is
+    # enqueued twice and scraped once: ticket 11's per-Channel claim coalesces
+    # the second onto the first, which reports the first one's outcome and is
+    # not charged for it.
+    job_ids: list[str] = []
+    statuses: list[str] = []
+    for plan in plans:
+        job = await create_job(
+            channel_entries=plan.entries,
+            source=CHECK_SOURCE,
+            user_id=str(plan.owner_id),
+            channel_meta_by_id={
+                cid: {"dueReason": plan.reasons.get(cid)} for cid, _ in plan.entries
+            },
+        )
+        await enqueue_sync_job(job, plan.owner_id)
+        job_ids.append(job.job_id)
+        statuses.append(job.status)
 
+    all_reasons = [r for plan in plans for r in plan.reasons.values()]
     return {
-        "jobId": job.job_id,
-        "channels": len(entries),
+        # `jobId` stays singular and names the first job, because the Jobs panel
+        # and `test_scheduler_jobs.py` both read it and a tick still produces
+        # one job on the single-account deployment this ships to. `jobIds` is
+        # the honest answer once there are two accounts.
+        "jobId": job_ids[0],
+        "jobIds": job_ids,
+        "owners": len(plans),
+        "channels": sum(len(plan.entries) for plan in plans),
         "checked": checked,
-        "dueChannels": due_count,
-        "partialChannels": partial_count,
-        "dueRegular": sum(
-            1 for reason in due_reason_by_id.values() if reason == "regular"
-        ),
-        "dueDynamic": sum(
-            1 for reason in due_reason_by_id.values() if reason == "dynamic"
-        ),
-        "dueBoth": sum(1 for reason in due_reason_by_id.values() if reason == "both"),
-        "status": job.status,
+        "dueChannels": sum(plan.due_count for plan in plans),
+        "partialChannels": sum(plan.partial_count for plan in plans),
+        "dueRegular": sum(1 for reason in all_reasons if reason == "regular"),
+        "dueDynamic": sum(1 for reason in all_reasons if reason == "dynamic"),
+        "dueBoth": sum(1 for reason in all_reasons if reason == "both"),
+        "status": statuses[0],
     }
 
 
-def _operator_channel_count(session: Session) -> int:
-    """How many Channels this tick could have considered.
+def _schedulable_channel_count(session: Session) -> int:
+    """How many Channels a tick could have considered, across every account.
 
     `run_auto_sync` used to have this in hand as `len(channels)` and pass it
     straight into the threshold. It is recomputed here rather than smuggled
@@ -245,22 +317,19 @@ def _operator_channel_count(session: Session) -> int:
     most once a tick — against the per-tick cost this ticket's predecessors
     spent months removing, is not the expensive part of anything.
 
-    An actual `count(*)`, not `len(select_operator_channels(...))`. That spelling
-    hydrates every operator Channel — ~2,077 ORM rows on this deployment — to
-    produce one integer, which is the same "compute it for everything, read one
-    field" shape `needs_dynamic_stats` exists to have removed.
+    Ticket 21 replaced the `Channel.user_id == operator OR NULL` filter with
+    "distinct Channels anybody follows". The counter this feeds is the
+    consecutive-failure threshold, which is **global scheduler state** — one
+    pause for the whole deployment — so the denominator has to be the whole
+    deployment's schedulable set, not one account's. Counting only one owner's
+    channels would pause every account's auto-sync after that owner's share of
+    failures.
+
+    Distinct Channels rather than follows: two accounts following one dead
+    handle is one Channel that can fail, and counting it twice would raise the
+    threshold for a deployment that did not get bigger.
     """
-    net_row = get_network_setting_row(session)
-    owner_id = (net_row.user_id if net_row else None) or get_operator_user_id(session)
-    stmt = select(func.count()).select_from(Channel)
-    if owner_id is not None:
-        stmt = stmt.where(
-            or_(
-                cast(ColumnElement[bool], Channel.user_id == owner_id),
-                col(Channel.user_id).is_(None),
-            )
-        )
-    return int(session.exec(stmt).one())
+    return count_followed_channels(session)
 
 
 def record_auto_sync_outcome(job: SyncJobState) -> None:
@@ -290,7 +359,7 @@ def record_auto_sync_outcome(job: SyncJobState) -> None:
             updates: dict[str, Any] = {"consecutiveFailures": next_failures}
             threshold = max(
                 settings.AUTO_SYNC_FAILURE_THRESHOLD_MIN,
-                _operator_channel_count(session),
+                _schedulable_channel_count(session),
             )
             if next_failures >= threshold:
                 updates["autoSyncPauseUntil"] = (

@@ -28,7 +28,7 @@ from app.models_tg import (
     Summary,
     SyncLog,
 )
-from app.services.operator import get_operator_user_id
+from app.services.follows import get_operator_user_id
 
 TABLES = (
     Channel,

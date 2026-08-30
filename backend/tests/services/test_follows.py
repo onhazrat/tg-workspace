@@ -40,10 +40,10 @@ from app.services.follows import (
     ensure_follow_for_channel,
     follow_exists,
     follows_for_channels,
+    get_operator_user_id,
     orphan_follow_channel_ids,
     resolve_follow_owner,
 )
-from app.services.operator import get_operator_user_id
 from app.services.tenancy import scoped_select
 from tests.utils.user import create_random_user
 

@@ -619,7 +619,7 @@ def test_sync_backfill_completes_partial_history_in_multiple_passes(
 
     with Session(engine) as session:
         from app.jobs.settings import save_settings_section
-        from app.services.operator import get_operator_user_id
+        from app.services.follows import get_operator_user_id
 
         # The start-time mode is per-User after ticket 06, and the requests
         # below are made as the operator, so it has to be written as them.
@@ -793,7 +793,7 @@ def test_sync_marks_channel_younger_than_cutoff_complete(client: TestClient) -> 
 
     with Session(engine) as session:
         from app.jobs.settings import save_settings_section
-        from app.services.operator import get_operator_user_id
+        from app.services.follows import get_operator_user_id
 
         # The start-time mode is per-User after ticket 06, and the requests
         # below are made as the operator, so it has to be written as them.

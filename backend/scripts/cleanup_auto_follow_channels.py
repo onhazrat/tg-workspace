@@ -19,7 +19,7 @@ load_dotenv(_REPO_ROOT / ".env")
 from app.core.db import engine
 from app.models_tg import Channel, Post, PostEmbedding, PostTranslation
 from app.services.bulk_channels import is_auto_followed_channel, select_bulk_channels
-from app.services.operator import get_operator_user_id
+from app.services.follows import get_operator_user_id
 from app.services.sync_meta import touch_sync
 
 

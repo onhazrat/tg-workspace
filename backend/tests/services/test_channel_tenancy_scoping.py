@@ -228,7 +228,7 @@ def test_upsert_channel_does_not_reset_next_sync_at_on_an_edit(
 def test_bulk_update_channel_tags_mirrors_into_the_operators_follow(
     session: Session,
 ) -> None:
-    from app.services.operator import get_operator_user_id
+    from app.services.follows import get_operator_user_id
 
     add_test_channel(session, "bulk-tag-me", tags=["old"])
     operator_id = get_operator_user_id(session)
@@ -276,7 +276,7 @@ def test_bulk_update_channel_tags_does_not_touch_the_follows_start_time(
     """Bulk tag update only ever changes tags — it must not also force-sync
     start_id/start_time/followed_at/discovered_via onto the operator's Follow,
     reverting a divergence that path never touched."""
-    from app.services.operator import get_operator_user_id
+    from app.services.follows import get_operator_user_id
 
     add_test_channel(session, "bulk-start-time", start_time=111)
     operator_id = get_operator_user_id(session)

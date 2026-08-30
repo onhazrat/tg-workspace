@@ -26,7 +26,6 @@ from app.models_tg import (
     SyncLog,
     SyncLogPayload,
 )
-from app.services.operator import get_operator_user_id
 
 
 def _scoped_count(
@@ -43,11 +42,12 @@ def _scoped_count(
     return session.exec(stmt).one()
 
 
-def get_db_stats(
-    session: Session, operator_id: uuid.UUID | None = None
-) -> dict[str, Any]:
-    if operator_id is None:
-        operator_id = get_operator_user_id(session)
+def get_db_stats(session: Session, operator_id: uuid.UUID) -> dict[str, Any]:
+    # `operator_id: uuid.UUID | None = None` with a `get_operator_user_id`
+    # fallback until ticket 21. All three of this module's entry points are
+    # called from `routes/data/admin.py` with `_current_user.id` behind an
+    # authenticated dependency, so the fallback was unreachable and the default
+    # only made the parameter look optional to the next caller.
 
     embedded = session.exec(select(func.count()).select_from(PostEmbedding)).one()
 
@@ -93,18 +93,13 @@ def _table_size_bytes(session: Session, model: type[Any]) -> int:
     return int(result)
 
 
-def get_table_sizes(
-    session: Session, operator_id: uuid.UUID | None = None
-) -> list[dict[str, Any]]:
+def get_table_sizes(session: Session, operator_id: uuid.UUID) -> list[dict[str, Any]]:
     """Row count and on-disk footprint for every exportable table.
 
     Size is the whole physical footprint (heap + TOAST + indexes) straight
     from Postgres, not an estimate: JSON payload columns (e.g. sync log
     responses) can dwarf what row count alone suggests.
     """
-    if operator_id is None:
-        operator_id = get_operator_user_id(session)
-
     return [
         {
             "name": name,
@@ -127,9 +122,7 @@ def _scoped_delete(
     return cast(Any, session.execute(stmt)).rowcount or 0
 
 
-def clear_table(
-    session: Session, name: str, operator_id: uuid.UUID | None = None
-) -> int:
+def clear_table(session: Session, name: str, operator_id: uuid.UUID) -> int:
     """Delete every row of one exportable table, scoped to the operator.
 
     A bulk SQL DELETE, not a fetch-then-loop: several of these tables run
@@ -143,9 +136,6 @@ def clear_table(
     model = dict(_TABLE_SECTIONS).get(name)
     if model is None:
         raise ValueError(f"Unknown table: {name}")
-    if operator_id is None:
-        operator_id = get_operator_user_id(session)
-
     deleted = _scoped_delete(session, model, operator_id)
 
     if name == "posts":

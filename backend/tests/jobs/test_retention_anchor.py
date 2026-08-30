@@ -10,7 +10,7 @@ from app.core.db import engine
 from app.jobs.retention import run_retention_cleanup
 from app.jobs.settings import save_settings_section
 from app.models_tg import Post, PostEmbedding, PostSyncState, PostTranslation
-from app.services.operator import get_operator_user_id
+from app.services.follows import get_operator_user_id
 
 
 def test_retention_keeps_anchor_posts() -> None:

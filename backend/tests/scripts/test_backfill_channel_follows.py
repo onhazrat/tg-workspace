@@ -28,8 +28,7 @@ from sqlmodel import Session, col, delete, select
 from app.core.db import engine
 from app.models import User
 from app.models_tg import Channel, ChannelFollow
-from app.services.follows import ensure_follow
-from app.services.operator import get_operator_user_id
+from app.services.follows import ensure_follow, get_operator_user_id
 from tests.utils.user import create_random_user
 
 _SCRIPTS_DIR = Path(__file__).resolve().parents[2] / "scripts"

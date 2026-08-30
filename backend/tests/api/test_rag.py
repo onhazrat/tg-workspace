@@ -39,7 +39,7 @@ def _seed_posts_and_embeddings(client: TestClient) -> None:
 
     from app.core.db import engine
     from app.models_tg import Channel
-    from app.services.operator import get_operator_user_id
+    from app.services.follows import get_operator_user_id
     from tests.utils.setting_groups import add_test_channel
 
     with Session(engine) as session:
@@ -225,7 +225,7 @@ def test_backfill_embeddings_mocked_provider(
 
     from app.core.db import engine
     from app.models_tg import Channel, PostEmbedding
-    from app.services.operator import get_operator_user_id
+    from app.services.follows import get_operator_user_id
 
     with Session(engine) as session:
         operator_id = get_operator_user_id(session)
@@ -349,7 +349,7 @@ def test_rag_search_scoped_to_operator_channels(
     mock_get_provider.return_value = _mock_provider([[1.0, 0.0, 0.0]])
 
     with patch(
-        "app.api.routes.rag.channel_names_for_operator",
+        "app.api.routes.rag.channel_names_for_user",
         return_value={"op-ch"},
     ):
         r = client.post(
@@ -409,7 +409,7 @@ def test_rag_status_scoped_to_operator_channels(client: TestClient) -> None:
 
     try:
         with patch(
-            "app.api.routes.rag.channel_names_for_operator",
+            "app.api.routes.rag.channel_names_for_user",
             return_value={op_ch},
         ):
             r = client.get(f"{PREFIX}/status", headers=headers)

@@ -7,7 +7,7 @@ from sqlmodel import Session
 
 from app.core.config import settings
 from app.jobs.settings import save_settings_section
-from app.services.operator import get_operator_user_id
+from app.services.follows import get_operator_user_id
 from app.services.scraper_jobs import clear_active_jobs_for_tests
 
 PREFIX = f"{settings.API_V1_STR}/jobs"

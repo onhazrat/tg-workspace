@@ -80,7 +80,9 @@ def test_finalize_channel_success_recomputes_deadlines() -> None:
 
     _finalize_channel_success(
         _ctx(channel_id, channel_id),
-        job=SyncJobState(job_id="job-success", source="Manual"),
+        job=SyncJobState(
+            user_id=str(uuid.uuid4()), job_id="job-success", source="Manual"
+        ),
         user_id=None,
         total_new_posts=2,
         final_latest_id=2,
@@ -139,7 +141,9 @@ def test_scheduler_failure_backoff_updates_due_schedule_only() -> None:
     _finalize_channel_error(
         _ctx(channel_id, channel_id),
         "boom",
-        job=SyncJobState(job_id="job-fail", source=CHECK_SOURCE),
+        job=SyncJobState(
+            user_id=str(uuid.uuid4()), job_id="job-fail", source=CHECK_SOURCE
+        ),
         user_id=None,
         total_new_posts=0,
         requests_log=[],
@@ -175,7 +179,9 @@ def test_manual_failure_does_not_apply_backoff() -> None:
     _finalize_channel_error(
         _ctx(channel_id, channel_id),
         "boom",
-        job=SyncJobState(job_id="job-manual", source="Manual sync"),
+        job=SyncJobState(
+            user_id=str(uuid.uuid4()), job_id="job-manual", source="Manual sync"
+        ),
         user_id=None,
         total_new_posts=0,
         requests_log=[],

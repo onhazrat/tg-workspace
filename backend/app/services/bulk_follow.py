@@ -253,7 +253,7 @@ async def _process_one_channel(
     job: FollowJobState,
     result: FollowChannelResult,
     *,
-    user_uuid: uuid.UUID | None,
+    user_uuid: uuid.UUID,
     effective_start_time: int,
     proxy_concurrency: tuple[int, dict[str, int]] | None,
 ) -> None:
@@ -378,7 +378,13 @@ async def run_follow_job(job: FollowJobState) -> None:
         job.status = "running"
         await touch_follow_job(job)
 
-        user_uuid = uuid.UUID(job.user_id) if job.user_id else None
+        # `uuid.UUID(job.user_id) if job.user_id else None` until ticket 21.
+        # `FollowJobState.user_id` is now a required `str`, so the else branch
+        # was dead by construction and alive in the type — which is what let a
+        # `None` reach `create_followed_channel` through `run_db`, whose
+        # `Callable[..., T]` signature checks nothing. Same shape as the
+        # auto-follow hole `/code-review` found in `sync_orchestrator.py`.
+        user_uuid = uuid.UUID(job.user_id)
         effective_start_time = await run_db(_load_effective_start_time, user_uuid)
         proxy_concurrency = await run_db(_load_proxy_concurrency, user_uuid)
         sem = asyncio.Semaphore(FOLLOW_SCRAPE_CONCURRENCY)

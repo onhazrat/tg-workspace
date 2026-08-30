@@ -19,6 +19,7 @@ from app.services.channel_setting_groups import (
     is_restricted_group,
     move_channel_from_restricted_to_default,
 )
+from app.services.follows import ensure_follow_for_channel, get_operator_user_id
 from app.services.scraper_jobs import clear_jobs_for_tests
 
 PREFIX = f"{settings.API_V1_STR}/jobs"
@@ -35,6 +36,14 @@ def _wait_for_job(client: TestClient, job_id: str, headers: dict[str, str]) -> d
             break
         time.sleep(0.1)
     return data
+
+
+def _operator_id() -> uuid.UUID:
+    """The bootstrap superuser `_auth` signs in as."""
+    with Session(engine) as session:
+        found = get_operator_user_id(session)
+    assert found is not None
+    return found
 
 
 def _auth(client: TestClient) -> dict[str, str]:
@@ -125,7 +134,12 @@ def test_move_channel_from_restricted_to_default() -> None:
 def test_sync_all_excludes_restricted_and_frozen(client: TestClient) -> None:
     clear_jobs_for_tests()
     headers = _auth(client)
-    user_id = uuid.uuid4()
+    # The *authenticated* account, not a random uuid. `POST /jobs/sync` now
+    # resolves its candidates from `tg_channel_follows` (ticket 21) rather than
+    # from `Channel.user_id == operator OR NULL`, so a channel nobody follows is
+    # correctly not syncable and the route answers 400. Seeding under a stranger
+    # was invisible while the operator filter also matched unowned rows.
+    user_id = _operator_id()
 
     with Session(engine) as session:
         default_group, _, _, frozen, restricted = ensure_builtin_groups(
@@ -137,14 +151,15 @@ def test_sync_all_excludes_restricted_and_frozen(client: TestClient) -> None:
             ("sync-all-restricted", restricted.id),
             ("sync-all-frozen", frozen.id),
         ):
-            session.add(
-                Channel(
-                    id=cid,
-                    name=cid,
-                    user_id=user_id,
-                    setting_group_id=group_id,
-                )
+            channel = Channel(
+                id=cid,
+                name=cid,
+                user_id=user_id,
+                setting_group_id=group_id,
             )
+            session.add(channel)
+            session.flush()
+            ensure_follow_for_channel(session, channel, user_id=user_id)
         session.commit()
 
     with patch(
@@ -174,29 +189,31 @@ def test_sync_all_excludes_restricted_and_frozen(client: TestClient) -> None:
 def test_recheck_restricted_targets_unavailable_channels(client: TestClient) -> None:
     clear_jobs_for_tests()
     headers = _auth(client)
-    user_id = uuid.uuid4()
+    # The *authenticated* account, not a random uuid. `POST /jobs/sync` now
+    # resolves its candidates from `tg_channel_follows` (ticket 21) rather than
+    # from `Channel.user_id == operator OR NULL`, so a channel nobody follows is
+    # correctly not syncable and the route answers 400. Seeding under a stranger
+    # was invisible while the operator filter also matched unowned rows.
+    user_id = _operator_id()
 
     with Session(engine) as session:
         default_group, _, _, _, restricted = ensure_builtin_groups(
             session, user_id=user_id
         )
         session.commit()
-        session.add(
-            Channel(
-                id="recheck-restricted",
-                name="recheck-restricted",
+        for cid, group_id in (
+            ("recheck-restricted", restricted.id),
+            ("recheck-default", default_group.id),
+        ):
+            channel = Channel(
+                id=cid,
+                name=cid,
                 user_id=user_id,
-                setting_group_id=restricted.id,
+                setting_group_id=group_id,
             )
-        )
-        session.add(
-            Channel(
-                id="recheck-default",
-                name="recheck-default",
-                user_id=user_id,
-                setting_group_id=default_group.id,
-            )
-        )
+            session.add(channel)
+            session.flush()
+            ensure_follow_for_channel(session, channel, user_id=user_id)
         session.commit()
 
     with patch(

@@ -12,8 +12,7 @@ from app.services.channel_setting_groups import (
     ensure_default_group,
     get_or_create_restricted_group,
 )
-from app.services.follows import ensure_follow_for_channel
-from app.services.operator import get_operator_user_id
+from app.services.follows import ensure_follow_for_channel, get_operator_user_id
 
 
 def freeze_channels_except(session: Session, keep_ids: set[str]) -> None:

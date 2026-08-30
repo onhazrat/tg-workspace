@@ -83,7 +83,7 @@ from sqlmodel import Session, SQLModel, col, delete
 from app.core.db import engine
 from app.models import User
 from app.models_tg import Channel, Post
-from app.services.operator import get_operator_user_id
+from app.services.follows import get_operator_user_id
 from app.services.tenancy import (
     OWNER_COLUMN,
     SCOPES,

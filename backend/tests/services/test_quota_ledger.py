@@ -53,7 +53,7 @@ from app.models import User
 from app.models_tg import QuotaUsage
 from app.services import network
 from app.services.channel_setting_groups import SyncOperationMode
-from app.services.operator import get_operator_user_id
+from app.services.follows import get_operator_user_id
 from app.services.quota import (
     Budget,
     budget_for_sync_mode,

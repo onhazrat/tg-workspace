@@ -1000,7 +1000,7 @@ def bulk_assign_setting_group(
     if not channel_ids:
         raise HTTPException(status_code=400, detail="channelIds is required")
 
-    from app.services.operator import select_operator_channels
+    from app.services.follows import followed_channels_for
 
     group = session.get(ChannelSettingGroup, setting_group_id)
     if not group:
@@ -1009,7 +1009,7 @@ def bulk_assign_setting_group(
 
     operator_channels = {
         channel.id: channel
-        for channel in select_operator_channels(session, operator_id=user_id)
+        for channel, _follow in followed_channels_for(session, user_id=user_id)
     }
     missing = sorted(
         channel_id for channel_id in channel_ids if channel_id not in operator_channels

@@ -137,9 +137,9 @@ async def backfill_embeddings(
     if not settings.GEMINI_API_KEY:
         raise ValueError("GEMINI_API_KEY not configured")
 
-    from app.services.channels import channel_names_for_operator
+    from app.services.channels import channel_names_for_user
 
-    operator_channels = channel_names_for_operator(session, user_id)
+    operator_channels = channel_names_for_user(session, user_id)
     posts = session.exec(
         _posts_without_embeddings_stmt(limit, channel_names=operator_channels or None)
     ).all()

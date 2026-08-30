@@ -398,12 +398,22 @@ def test_clearing_the_summaries_table_clears_payloads(client: TestClient) -> Non
     has no foreign key."""
     from app.core.db import engine
     from app.models_tg import SummaryPayload
+    from app.services.follows import get_operator_user_id
     from app.services.stats import clear_table
+
+    def _operator_uuid():
+        # 's owner is required since ticket 21: its three callers
+        # are all admin routes holding an authenticated id, so the optional
+        # parameter and its operator fallback were unreachable there.
+        with Session(engine) as s:
+            found = get_operator_user_id(s)
+        assert found is not None
+        return found
 
     headers = _auth(client)
     _seed(client, headers, count=2)
 
     with Session(engine) as session:
-        clear_table(session, "summaries")
+        clear_table(session, "summaries", operator_id=_operator_uuid())
         assert session.get(SummaryPayload, "sum-0") is None
         assert session.get(SummaryPayload, "sum-1") is None

@@ -19,13 +19,13 @@ from app.models_tg import ChatDestination, Post, Summary, utc_now
 from app.prompts.summary import format_summary_prompt
 from app.services.channel_setting_groups import channel_is_frozen, load_groups_by_id
 from app.services.credentials import CHAT_DESTINATION_NOT_FOUND
+from app.services.follows import followed_channels_for
 from app.services.logs import upsert_llm_log, upsert_publish_log
 from app.services.network_settings import (
     load_network_settings,
     resolve_proxies,
     resolve_proxy_concurrency,
 )
-from app.services.operator import select_operator_channels
 from app.services.publish import publish_summary_text
 from app.services.scraper_jobs import create_job, has_active_sync_job
 from app.services.summaries import apply_summary_payload
@@ -140,7 +140,8 @@ async def _sync_channels_for_summary(
     if has_active_sync_job():
         return
     operator_channels = {
-        ch.name: ch for ch in select_operator_channels(session, operator_id=owner_id)
+        channel.name: channel
+        for channel, _follow in followed_channels_for(session, user_id=owner_id)
     }
     groups_by_id = load_groups_by_id(session)
     stale = []

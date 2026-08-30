@@ -73,12 +73,23 @@ class ChannelSyncState:
 class SyncJobState:
     job_id: str
     source: str
+    #: Who this job belongs to. **Required, with no default**, and declared here
+    #: beside the other two required fields because a dataclass cannot put an
+    #: undefaulted attribute after a defaulted one.
+    #:
+    #: `SyncJob` is `USER_OWNED`, and `user_id: str | None = None` is how the
+    #: scheduler minted a job nobody owns on every tick (ticket 21). Ticket 21's
+    #: first cut narrowed `create_job` and stopped there; `/code-review` pointed
+    #: out that the narrowing has to reach the statement that writes the column,
+    #: since this dataclass is what `_persist_job` reads. An empty-string
+    #: default was the intermediate fix and is the same trap one step removed —
+    #: it type-checks, and only fails later inside `uuid.UUID("")`.
+    user_id: str
     status: str = "pending"
     channels: dict[str, ChannelSyncState] = field(default_factory=dict)
     created_at: int = field(default_factory=lambda: int(time.time() * 1000))
     finished_at: int | None = None
     cancel_event: asyncio.Event = field(default_factory=asyncio.Event)
-    user_id: str | None = None
     sync_mode: SyncOperationMode = "auto"
     _update_condition: asyncio.Condition = field(
         default_factory=asyncio.Condition, repr=False
@@ -199,7 +210,11 @@ def _row_to_state(row: SyncJobRow) -> SyncJobState:
         created_at=row.created_at,
         finished_at=row.finished_at,
         cancel_event=cancel_event,
-        user_id=str(row.user_id) if row.user_id else None,
+        # `""` for a legacy row whose owner predates ticket 21. Hydrating a
+        # row is not creating one, so this never reaches `_persist_job`'s
+        # create branch — the row it came from already exists. PR 3 makes the
+        # column `NOT NULL` and this branch stops being reachable at all.
+        user_id=str(row.user_id) if row.user_id else "",
         sync_mode=cast(SyncOperationMode, row.sync_mode or "auto"),
     )
     _mark_flushed(job)
@@ -210,7 +225,23 @@ def _persist_job(job: SyncJobState) -> None:
     with Session(engine) as session:
         row = session.get(SyncJobRow, job.job_id)
         if row is None:
-            uid = uuid.UUID(job.user_id) if job.user_id else None
+            # `uuid.UUID(job.user_id) if job.user_id else None` until ticket
+            # 21. `create_job` now requires an owner, but the narrowing stopped
+            # at its signature: this is the statement that actually writes the
+            # column, and a falsy `user_id` — an empty string type-checks —
+            # still put NULL in a `USER_OWNED` row. `/code-review` caught that
+            # the guard's claim rested on `create_job` being the only path here,
+            # which is true and was unenforced.
+            if not job.user_id:
+                # Loud rather than NULL. Reaching here means a job was built
+                # without an owner and is being written for the first time,
+                # which `create_job`'s required argument is supposed to make
+                # impossible — and writing the row anyway is the silent failure
+                # ticket 21 exists to close. A hydrated legacy job cannot get
+                # here: its row already exists, so this branch is not taken.
+                msg = f"refusing to persist sync job {job.job_id} with no owner"
+                raise ValueError(msg)
+            uid = uuid.UUID(job.user_id)
             row = SyncJobRow(
                 id=job.job_id,
                 user_id=uid,
@@ -717,7 +748,12 @@ def _job_is_visible_to(job: SyncJobState, user_id: uuid.UUID) -> bool:
     """
     if not tenancy_enforced():
         return True
-    return job.user_id is not None and uuid.UUID(job.user_id) == user_id
+    # Falsy rather than `is not None`. `SyncJobState.user_id` became a required
+    # `str` in ticket 21, so a legacy row whose column is NULL hydrates as `""`
+    # — see `_row_to_state`. Testing `is None` here would miss that and hand
+    # `uuid.UUID("")` a string it cannot parse, turning "this job has no owner"
+    # into a 500. PR 3's `NOT NULL` removes the state entirely.
+    return bool(job.user_id) and uuid.UUID(job.user_id) == user_id
 
 
 def get_active_sync_job_summary(

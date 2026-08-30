@@ -37,7 +37,7 @@ from app.jobs.settings import (
 from app.jobs.sync_queue import job_sync_queue
 from app.jobs.translation_batch import run_translation_batch
 from app.services.embeddings import backfill_embeddings
-from app.services.operator import get_operator_user_id
+from app.services.follows import resolve_follow_owner
 
 logger = logging.getLogger(__name__)
 
@@ -195,7 +195,7 @@ async def job_embeddings() -> None:
             #
             # Which account an unattended job acts as is deliberately still the
             # operator here; ticket 21's PR 2 is where that resolution changes.
-            actor_id = get_operator_user_id(session)
+            actor_id = resolve_follow_owner(session, None)
             if actor_id is None:
                 return {"skipped": True, "reason": "no_account_to_attribute_to"}
             return await backfill_embeddings(session, limit=100, user_id=actor_id)

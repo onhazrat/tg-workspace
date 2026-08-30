@@ -58,9 +58,11 @@ it excused.
 from __future__ import annotations
 
 import ast
+import asyncio
 import pathlib
 import uuid
 from collections.abc import Iterator
+from unittest.mock import patch
 
 import pytest
 from sqlmodel import Session, col, delete, select
@@ -89,11 +91,11 @@ USER_OWNED_MODELS = frozenset(
 #: *existing* payload row fetched by id, so the assignment cannot live in the
 #: constructor call without being written twice.
 OWNER_SET_AFTER_CONSTRUCTION: dict[str, str] = {
-    "summaries.SummaryPayload": (
+    "services/summaries.py.SummaryPayload": (
         "apply_summary_payload builds or reuses the row, then assigns "
         "row.user_id from its required `user_id` parameter two lines later."
     ),
-    "chat_sessions.ChatSessionPayload": (
+    "services/chat_sessions.py.ChatSessionPayload": (
         "apply_chat_session_payload, same shape as its Summary twin above."
     ),
 }
@@ -106,10 +108,10 @@ OWNER_SET_AFTER_CONSTRUCTION: dict[str, str] = {
 #: proves is non-optional, which is what makes the unpacking safe to allow:
 #: `test_owner_taking_writers_require_a_non_optional_user_id`.
 OWNER_IN_UNPACKED_FIELDS: dict[str, str] = {
-    "logs.PublishLog": "upsert_publish_log's `fields` dict carries user_id.",
-    "logs.LLMLog": "upsert_llm_log, same shape.",
-    "logs.EmbeddingLog": "upsert_embedding_log, same shape.",
-    "logs.NetworkLog": "upsert_network_log, same shape.",
+    "services/logs.py.PublishLog": "upsert_publish_log's `fields` dict carries user_id.",
+    "services/logs.py.LLMLog": "upsert_llm_log, same shape.",
+    "services/logs.py.EmbeddingLog": "upsert_embedding_log, same shape.",
+    "services/logs.py.NetworkLog": "upsert_network_log, same shape.",
 }
 
 #: Every writer that had an optional owner before this ticket, and must not get
@@ -120,27 +122,38 @@ OWNER_IN_UNPACKED_FIELDS: dict[str, str] = {
 #: exact producer this ticket closed, and the suite would stay green because
 #: nothing else asserts on a stamp.
 OWNER_TAKING_WRITERS: dict[str, str] = {
-    "logs.upsert_publish_log": "PublishLog is USER_OWNED (ticket 20 sweeps it per owner).",
-    "logs.upsert_llm_log": "LLMLog, same.",
-    "logs.upsert_embedding_log": "EmbeddingLog, same.",
-    "logs.upsert_network_log": "NetworkLog, same — decision 23 keeps it Admin-read, not ownerless.",
-    "embeddings.backfill_embeddings": (
+    "services/logs.py.upsert_publish_log": "PublishLog is USER_OWNED (ticket 20 sweeps it per owner).",
+    "services/logs.py.upsert_llm_log": "LLMLog, same.",
+    "services/logs.py.upsert_embedding_log": "EmbeddingLog, same.",
+    "services/logs.py.upsert_network_log": "NetworkLog, same — decision 23 keeps it Admin-read, not ownerless.",
+    "services/embeddings.py.backfill_embeddings": (
         "Built both EmbeddingLog rows with no owner at all; the parameter was "
         "`operator_id: UUID | None = None` and was never threaded through."
     ),
-    "scraper_jobs.create_job": (
+    "services/scraper_jobs.py.create_job": (
         "SyncJob is USER_OWNED. The default was how the scheduler minted a job "
         "nobody owns on every tick — ticket 35 pinned that `activeSyncJob` then "
         "reports nothing for an auto-sync once the flag flips."
     ),
-    "channel_setting_groups.ensure_default_group": (
+    "services/channel_setting_groups.py.ensure_default_group": (
         "user_id=None meant the `-global` scope key, which is the ownerless "
         "preset row ticket 34's backfill could not adopt on a fresh install."
     ),
-    "channel_setting_groups.get_or_create_restricted_group": "Same scope key.",
-    "channel_setting_groups.get_or_create_frozen_group": "Same scope key.",
-    "channel_setting_groups.get_or_create_slow_feed_group": "Same scope key.",
-    "channel_setting_groups.get_or_create_high_velocity_group": "Same scope key.",
+    "services/channel_setting_groups.py.get_or_create_restricted_group": "Same scope key.",
+    "services/channel_setting_groups.py.get_or_create_frozen_group": "Same scope key.",
+    "services/channel_setting_groups.py.get_or_create_slow_feed_group": "Same scope key.",
+    "services/channel_setting_groups.py.get_or_create_high_velocity_group": "Same scope key.",
+    "services/followed_channels.py.create_followed_channel": (
+        "Creates a Channel and reaches `ensure_default_group`. Its one risky "
+        "caller is `sync_orchestrator._maybe_add_forwarded_channel`, which "
+        "reaches it through `run_db` — a `Callable[..., T]` with `*args: Any`, "
+        "so mypy checks nothing across that boundary and the narrowed signature "
+        "alone did not close the auto-follow path. Found by `/code-review` "
+        "after ticket 21's first cut."
+    ),
+    "services/bulk_follow.py._process_one_channel": (
+        "The other `run_db` caller of `create_followed_channel`, same shape."
+    ),
 }
 
 
@@ -164,8 +177,16 @@ def _model_aliases(tree: ast.Module) -> dict[str, str]:
 def _construction_sites() -> list[tuple[str, str, set[str | None], int, str]]:
     """Every `Model(...)` call in `app/` for a `USER_OWNED` model.
 
-    Returns `(module_stem, model_name, keyword_names, lineno, path)`. A `None`
-    in the keyword set is a `**` unpacking.
+    Returns `(relative_path, model_name, keyword_names, lineno, path)`. A
+    `None` in the keyword set is a `**` unpacking.
+
+    Keyed on the path relative to `app/`, **not** on `path.stem`: three stems
+    exist twice in this tree — `summaries`, `channels` and `logs`, once under
+    `services/` and once under `api/routes/data/` — so a stem key written for
+    the service silently excuses a same-named route module, and `sorted(rglob)`
+    puts the route first. Found by `/code-review` on the first version of this
+    guard, which is the failure mode the guard is about: an exemption that
+    covers more than it was written for.
     """
     sites: list[tuple[str, str, set[str | None], int, str]] = []
     for path in sorted(APP_ROOT.rglob("*.py")):
@@ -181,7 +202,7 @@ def _construction_sites() -> list[tuple[str, str, set[str | None], int, str]]:
                 continue
             sites.append(
                 (
-                    path.stem,
+                    str(path.relative_to(APP_ROOT)),
                     model,
                     {kw.arg for kw in node.keywords},
                     node.lineno,
@@ -221,8 +242,8 @@ def test_no_user_owned_model_is_constructed_without_an_owner() -> None:
     used_after: set[str] = set()
     used_unpacked: set[str] = set()
 
-    for stem, model, kwargs, lineno, path in _construction_sites():
-        key = f"{stem}.{model}"
+    for rel, model, kwargs, lineno, path in _construction_sites():
+        key = f"{rel}.{model}"
         if "user_id" in kwargs:
             continue
         if key in OWNER_SET_AFTER_CONSTRUCTION:
@@ -254,11 +275,22 @@ def test_no_user_owned_model_is_constructed_without_an_owner() -> None:
     )
 
 
+#: What this codebase calls "the account acting or being written for".
+#:
+#: Four spellings, and the guard has to know all of them: `_process_one_channel`
+#: says `user_uuid`, `_regenerate_one` says `owner_id`, the bulk paths say
+#: `operator_id`, everything else says `user_id`. Matching only `user_id` made
+#: the guard report "no annotation" for a function that has a perfectly good
+#: one, which reads as a failure and would have been silenced by deleting the
+#: entry — the opposite of what it is for.
+OWNER_PARAM_NAMES = ("user_id", "owner_id", "user_uuid", "operator_id")
+
+
 def _annotation_of(func: ast.FunctionDef | ast.AsyncFunctionDef) -> str | None:
-    """The source text of this function's `user_id` annotation, if it has one."""
+    """The source text of this function's owner-parameter annotation, if any."""
     args = func.args
     for arg in [*args.posonlyargs, *args.args, *args.kwonlyargs]:
-        if arg.arg == "user_id" and arg.annotation is not None:
+        if arg.arg in OWNER_PARAM_NAMES and arg.annotation is not None:
             return ast.unparse(arg.annotation)
     return None
 
@@ -282,7 +314,7 @@ def test_owner_taking_writers_require_a_non_optional_user_id() -> None:
         for node in ast.walk(tree):
             if not isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef):
                 continue
-            key = f"{path.stem}.{node.name}"
+            key = f"{path.relative_to(APP_ROOT)!s}.{node.name}"
             if key in OWNER_TAKING_WRITERS:
                 found[key] = _annotation_of(node)
 
@@ -362,21 +394,37 @@ def test_an_unowned_summary_is_not_picked_up_for_regeneration(
     unowned = _due_summary(session, None)
     owned = _due_summary(session, user.id)
 
-    picked = session.exec(
-        select(Summary).where(col(Summary.user_id).is_not(None))
-    ).all()
-    picked_ids = {row.id for row in picked}
+    # Run the real thing. `_regenerate_one` is stubbed out because regenerating
+    # calls an AI provider — but everything above it, including the query whose
+    # predicate is the whole fix, is the production code path.
+    #
+    # The first version of this test re-implemented that query in the test body
+    # and then grepped the module source for the predicate. `/code-review`
+    # pointed out that between the two, nothing actually executed the fix — and
+    # that the grep is the very thing the sibling test twenty lines below
+    # rejects. Calling the function closes both halves.
+    seen: list[uuid.UUID | None] = []
 
-    assert owned.id in picked_ids
-    assert unowned.id not in picked_ids, (
-        "an unowned Summary is still reachable by the auto-summary query; "
-        "regenerating it mints another unowned Summary, payload and log rows"
+    async def _fake_regenerate(
+        _session: Session, summary: Summary, *, owner_id: uuid.UUID
+    ) -> str | None:
+        seen.append(owner_id)
+        return None
+
+    with patch.object(auto_summary, "_regenerate_one", _fake_regenerate):
+        asyncio.run(auto_summary.run_auto_summary())
+
+    assert user.id in seen, (
+        f"the owned Summary {owned.id} was not picked up; the query narrowed "
+        f"too far and auto-regeneration is now off for everybody"
     )
+    assert None not in seen, "an unowned Summary reached _regenerate_one"
 
-    source = pathlib.Path(auto_summary.__file__).read_text()
-    assert "col(Summary.user_id).is_not(None)" in source, (
-        "run_auto_summary no longer filters on ownership; the `OR user_id IS "
-        "NULL` branch is what made _regenerate_one a producer of unowned rows"
+    with Session(engine) as check:
+        rows = check.exec(select(Summary).where(col(Summary.user_id).is_(None))).all()
+    assert {row.id for row in rows} == {unowned.id}, (
+        "the unowned Summary was regenerated into another unowned Summary, "
+        "which is the refill loop this ticket closed"
     )
 
 
@@ -419,7 +467,9 @@ def test_regenerating_stamps_the_summarys_own_owner_not_the_deployments(
     )
 
     owner_param = _annotation_of(regenerate)
-    assert owner_param is None, "the owner arrives as `owner_id`, not `user_id`"
+    assert owner_param == "uuid.UUID", (
+        f"_regenerate_one's owner must be a plain uuid.UUID, got {owner_param}"
+    )
     assert any(arg.arg == "owner_id" for arg in regenerate.args.kwonlyargs), (
         "`owner_id` must be keyword-only, so a positional call cannot transpose "
         "it with the Summary it belongs to"

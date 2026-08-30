@@ -195,14 +195,21 @@ def test_consolidate_legacy_duplicate_frozen_groups() -> None:
         assert canonical_frozen.id in {group["id"] for group in listed}
 
 
-def test_list_setting_groups_avoids_loading_operator_channel_rows() -> None:
+def test_list_setting_groups_avoids_loading_channel_rows() -> None:
+    """Listing groups must not hydrate the caller's Channels to do it.
+
+    The mocked target moved with ticket 21: this used to patch
+    `services.operator.select_operator_channels`, and that module is gone —
+    `followed_channels_for` is the function that now hydrates Channel rows, so
+    it is the one that must not be reached from here.
+    """
     user_id = uuid.uuid4()
     with Session(engine) as session:
         with patch(
-            "app.services.operator.select_operator_channels"
-        ) as mock_select_operator_channels:
+            "app.services.follows.followed_channels_for"
+        ) as mock_followed_channels_for:
             listed = list_setting_groups(session, user_id=user_id)
-            mock_select_operator_channels.assert_not_called()
+            mock_followed_channels_for.assert_not_called()
         assert len(listed) >= 5
 
 

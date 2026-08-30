@@ -18,7 +18,7 @@ from app.schemas.rag import (
     RagSearchResponse,
     RagStatusResponse,
 )
-from app.services.channels import channel_names_for_operator
+from app.services.channels import channel_names_for_user
 from app.services.embeddings import backfill_embeddings, get_embedding_status
 from app.services.serialization import post_to_camel
 
@@ -39,7 +39,7 @@ def _effective_operator_channels(
     current_user: CurrentUser,
     requested: list[str] | None,
 ) -> set[str]:
-    operator_channels = channel_names_for_operator(session, current_user.id)
+    operator_channels = channel_names_for_user(session, current_user.id)
     if requested:
         return operator_channels.intersection(requested)
     return operator_channels
@@ -47,7 +47,7 @@ def _effective_operator_channels(
 
 @router.get("/status")
 def rag_status(session: SessionDep, current_user: CurrentUser) -> RagStatusResponse:
-    operator_channels = channel_names_for_operator(session, current_user.id)
+    operator_channels = channel_names_for_user(session, current_user.id)
     return RagStatusResponse.model_validate(
         get_embedding_status(session, channel_names=operator_channels)
     )

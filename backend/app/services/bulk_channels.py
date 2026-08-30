@@ -10,7 +10,7 @@ from sqlmodel import Session, col, delete, func, select
 
 from app.models_tg import Channel, Post, PostEmbedding, PostTranslation, utc_now
 from app.services.channel_setting_groups import channel_allows_reset, load_groups_by_id
-from app.services.operator import select_operator_channels
+from app.services.follows import followed_channels_for
 from app.services.post_sync_state import clear_channel_sync_state
 from app.services.sync_meta import touch_sync
 
@@ -45,12 +45,15 @@ def is_auto_followed_channel(channel: Channel) -> bool:
 def select_bulk_channels(
     session: Session,
     *,
-    operator_id: uuid.UUID | None,
+    operator_id: uuid.UUID,
     channel_ids: list[str] | None = None,
     auto_follow_only: bool = False,
     limit: int | None = None,
 ) -> list[Channel]:
-    channels = select_operator_channels(session, operator_id=operator_id)
+    channels = [
+        channel
+        for channel, _follow in followed_channels_for(session, user_id=operator_id)
+    ]
     if channel_ids:
         wanted = set(channel_ids)
         channels = [ch for ch in channels if ch.id in wanted]
@@ -64,7 +67,7 @@ def select_bulk_channels(
 async def bulk_reresolve_start_ids(
     session: Session,
     *,
-    operator_id: uuid.UUID | None,
+    operator_id: uuid.UUID,
     dry_run: bool = False,
     limit: int | None = None,
     channel_ids: list[str] | None = None,

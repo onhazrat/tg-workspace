@@ -19,8 +19,8 @@ from app.jobs.settings import default_job_enabled, save_settings_section
 from app.jobs.translation_batch import run_translation_batch
 from app.models_tg import Channel, Post, Summary, SyncLog, SyncLogPayload
 from app.models_tg import SyncJob as SyncJobRow
+from app.services.follows import get_operator_user_id
 from app.services.network_settings import get_network_setting_row
-from app.services.operator import get_operator_user_id
 from app.services.scraper_jobs import clear_jobs_for_tests
 from tests.utils.setting_groups import freeze_channels_except, upsert_sync_test_channel
 

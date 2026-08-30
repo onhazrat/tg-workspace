@@ -304,6 +304,21 @@ async def _scrape_page_with_retry(
 # blocks here are sync-only helpers — never held across await I/O in async paths.
 
 
+def _resolve_auto_follow_owner(user_id: uuid.UUID | None) -> uuid.UUID | None:
+    """`resolve_follow_owner` with its own session, for `run_db`.
+
+    `run_db` does **not** inject a Session — it is
+    `asyncio.to_thread(fn, *args)` and nothing more — so every helper handed to
+    it opens its own, the way `_channel_name_exists` below does. Passing
+    `resolve_follow_owner` directly type-checks (`run_db` takes
+    `Callable[..., T]`) and fails at runtime with a missing `user_id`, which is
+    the same type-erasure that let this whole call site keep creating unowned
+    rows in the first place.
+    """
+    with Session(engine) as session:
+        return resolve_follow_owner(session, user_id)
+
+
 def _channel_name_exists(channel_name: str) -> bool:
     with Session(engine) as session:
         return (
@@ -329,6 +344,27 @@ async def _maybe_add_forwarded_channel(
     if not clean:
         return
     if await run_db(_channel_name_exists, clean):
+        return
+
+    # Resolve the owner *before* anything is created, because `run_db` erases
+    # types: its signature is `Callable[..., T]` with `*args: Any`, so passing
+    # this `user_id` straight through to `create_followed_channel` type-checks
+    # whatever it holds. Ticket 21 narrowed that function's `user_id` to a real
+    # `uuid.UUID` and mypy could not see this call site at all — so `None` still
+    # reached `ensure_default_group`, resolved to the `default-global` scope key,
+    # and auto-follow went on creating an unowned Channel and an unowned setting
+    # group. Found by `/code-review`, and it is the exact producer this ticket
+    # exists to close, left open on the one path a type-checker cannot follow.
+    #
+    # Reachable today rather than in theory: `enqueue_sync_job` still accepts an
+    # optional owner, so a message enqueued by the pre-deploy `run_auto_sync`
+    # carries `"userId": null` across the upgrade and is drained afterwards.
+    owner_id = await run_db(_resolve_auto_follow_owner, user_id)
+    if owner_id is None:
+        logger.warning(
+            "Not auto-following @%s: no account to own the Channel or its follow",
+            clean,
+        )
         return
 
     display_name = clean
@@ -357,7 +393,7 @@ async def _maybe_add_forwarded_channel(
         photo_url=photo_url,
         is_unavailable=is_unavailable,
         discovered_via=discovered_via,
-        user_id=user_id,
+        user_id=owner_id,
         effective_start_time=effective_start_time,
         telemetry_url=telegram_web_view_channel_url(clean),
         telemetry=telemetry,
@@ -552,20 +588,30 @@ def _freeze_channel_for_chat_id_problem(
     # rows that finds.
     freeze_owner_id = resolve_follow_owner(session, channel_owner_id)
     if freeze_owner_id is None:
+        # No account exists to own a Frozen group, so the channel cannot be
+        # parked — but the failure is still recorded below.
+        #
+        # The first cut returned here, which skipped the `upsert_sync_log` and
+        # left a chat-id collision neither frozen *nor* written down, with one
+        # WARNING as its only trace. `/code-review` caught it. That is the same
+        # mistake `_auto_publish` documents at length in `auto_summary.py`: a
+        # refusal nobody records is indistinguishable from the feature being
+        # off, and this runs unattended where nothing else will say so.
         logger.warning(
             "Cannot freeze channel %s for a chat-id problem: no account to own "
-            "the Frozen setting group",
+            "the Frozen setting group. Recording the failure without freezing.",
             channel.id,
         )
-        return
-    freeze_group = get_or_create_frozen_group(session, user_id=freeze_owner_id)
-    # Not `bulk_assign_setting_group`: ticket 35 gave that an owner check,
-    # because it takes a client-chosen group id. This one is derived from the
-    # Channel's own owner one line above, so there is nothing for a stranger to
-    # name — and routing a scraper-internal freeze through the user-facing door
-    # would make it raise 404 whenever the channel is not operator-scoped.
-    apply_group_to_channel(session, channel, freeze_group, int(time.time() * 1000))
-    session.commit()
+    else:
+        freeze_group = get_or_create_frozen_group(session, user_id=freeze_owner_id)
+        # Not `bulk_assign_setting_group`: ticket 35 gave that an owner check,
+        # because it takes a client-chosen group id. This one is derived from
+        # the Channel's own owner one line above, so there is nothing for a
+        # stranger to name — and routing a scraper-internal freeze through the
+        # user-facing door would make it raise 404 whenever the channel is not
+        # the caller's.
+        apply_group_to_channel(session, channel, freeze_group, int(time.time() * 1000))
+        session.commit()
     upsert_sync_log(
         session,
         {

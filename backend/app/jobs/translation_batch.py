@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import logging
 import time
-import uuid
 from typing import Any
 
 from sqlmodel import Session, col, select
@@ -14,8 +13,7 @@ from app.core.config import settings
 from app.core.db import engine
 from app.jobs.settings import load_translation_settings
 from app.models_tg import Post, PostTranslation, utc_now
-from app.services.channels import channel_names_for_operator
-from app.services.operator import get_operator_user_id
+from app.services.follows import followed_channel_names
 from app.services.sync_meta import touch_sync
 
 logger = logging.getLogger(__name__)
@@ -25,10 +23,23 @@ def _posts_needing_translation(
     session: Session,
     language: str,
     limit: int,
-    *,
-    operator_id: uuid.UUID | None,
 ) -> list[Post]:
-    channel_names = channel_names_for_operator(session, operator_id)
+    """Posts on any followed Channel that still lack a translation.
+
+    **Not scoped to an account, and that is the answer rather than an
+    omission** (ticket 21). `PostTranslation` is `FOLLOW_SCOPED` in `SCOPES`:
+    a translation is corpus, produced once and served to every follower of the
+    Channel, exactly like the Post it translates. Translating per account would
+    mean paying a provider twice for the same text to store two identical rows.
+
+    This used to select `Channel.user_id == operator OR NULL` through
+    `channel_names_for_operator`, which is the Mode-A shape ticket 21 removes.
+    The honest replacement is the union: every Channel somebody follows. A
+    Channel nobody follows is excluded because it is retention's queue (ticket
+    05) — spending provider quota translating posts that are about to be
+    collected is the one case worth filtering out.
+    """
+    channel_names = followed_channel_names(session)
     if not channel_names:
         return []
     stmt = (
@@ -57,12 +68,10 @@ async def run_translation_batch() -> dict[str, Any]:
         target_language = str(cfg.get("translationTargetLanguage") or "English")
         model = str(cfg.get("translationModel") or default_model())
 
-        operator_id = get_operator_user_id(session)
         posts = _posts_needing_translation(
             session,
             target_language,
             settings.TRANSLATION_BATCH_LIMIT,
-            operator_id=operator_id,
         )
         if not posts:
             return {"skipped": True, "reason": "no_posts", "translated": 0}

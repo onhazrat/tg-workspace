@@ -83,7 +83,6 @@ INVENTORY: dict[str, str] = {
     "artifacts.py": READ_MODEL,
     "discover.py": READ_MODEL,
     "network_settings.py": READ_MODEL,
-    "operator.py": READ_MODEL,
     "prompt_assembly.py": READ_MODEL,
     # Resolves a User's permissions from their role assignments. Reads
     # rbac_user_roles joined to rbac_roles and never commits; seeding is done by

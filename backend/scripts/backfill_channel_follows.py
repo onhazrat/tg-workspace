@@ -49,9 +49,9 @@ from app.models_tg import Channel, utc_now
 from app.services.follows import (
     ensure_follow_for_channel,
     follow_exists,
+    get_operator_user_id,
     resolve_follow_owner,
 )
-from app.services.operator import get_operator_user_id
 from app.services.settings_store import get_global_setting, put_global_setting
 
 #: Channels per transaction. Large enough that the run is a handful of round

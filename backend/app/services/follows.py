@@ -35,12 +35,13 @@ from collections.abc import Iterable, Sequence
 from typing import Any
 
 from sqlalchemy import delete as sa_delete
+from sqlalchemy import distinct
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlmodel import Session, col, func, select
 
+from app.core.config import settings
 from app.models import User
 from app.models_tg import Channel, ChannelFollow, utc_now
-from app.services.operator import get_operator_user_id
 from app.services.settings_store import get_global_setting
 from app.services.tenancy import scoped_select
 
@@ -67,6 +68,30 @@ def follows_backfilled(session: Session) -> bool:
     missing follow has to check this first.
     """
     return bool(get_global_setting(session, FOLLOWS_BACKFILL_KEY).get("completedAt"))
+
+
+def get_operator_user_id(session: Session) -> uuid.UUID | None:
+    """The bootstrap superuser's id, or None when no such account exists.
+
+    Moved here from `services/operator.py` when ticket 21 deleted that module.
+    It is not the Mode-A helper that went with it: `select_operator_channels`
+    answered "what may this account see" with a `Channel.user_id == operator OR
+    NULL` filter, which is a read-scoping question the tenancy seam now owns.
+    This answers "which account do I stamp on a row whose caller named nobody",
+    which is a write-time question that survives enforcement — and it lives
+    beside `resolve_follow_owner`, its only real consumer, so the rule and its
+    fallback cannot drift apart.
+
+    Four migrations state that they resolve a missing owner "matching
+    `services/operator.get_operator_user_id`" — `c0d1e2f3a4b5` (ticket 34),
+    `d7e8f9a0b1c2` (06), `f7a8b9c0d1e2` (30) and `e6f7a8b9c0d1` (20). They
+    hardcode the rule rather than importing it, deliberately, so this move does
+    not break them; the name is kept so those references still find something.
+    """
+    user = session.exec(
+        select(User).where(User.email == settings.FIRST_SUPERUSER)
+    ).first()
+    return user.id if user else None
 
 
 def resolve_follow_owner(
@@ -300,6 +325,126 @@ def follows_for_user(
         )
     ).all()
     return {f.channel_id: f for f in rows}
+
+
+#: One Channel and the caller's own follow of it.
+#:
+#: Named here so a caller can hold the pair without importing `ChannelFollow`.
+#: That is not cosmetic: `test_channel_creation_paths.py` enforces "one writer
+#: for this table" by matching the *identifier* anywhere in a module — its own
+#: comment accepts a false positive on a type annotation as the price of
+#: catching `delete(ChannelFollow)` and `update(ChannelFollow)`, which are not
+#: constructor calls. Exempting the scheduler would have said it writes follows,
+#: which is false; this keeps the guard strict and the claim true.
+FollowedChannel = tuple[Channel, ChannelFollow]
+
+
+def schedule_group_id(channel: Channel, follow: ChannelFollow) -> str:
+    """Which setting group decides this follower's schedule for this Channel.
+
+    **The follow's, when it has one.** `Channel.setting_group_id` is a single
+    value shared by every follower; `ChannelFollow.setting_group_id` is the
+    per-account copy ticket 04 moved off the Channel precisely so the second
+    follower would not have to overwrite the first's settings to have any of
+    their own. Reading the Channel's copy would decide "is this due" from
+    whichever account edited it last, which is the bug the follow table exists
+    to prevent.
+
+    Falls back to the Channel's while ticket 22 has not dropped that column:
+    `ensure_follow_for_channel` copies `setting_group_id` across at creation
+    time, but a follow written before that mirroring existed can still hold
+    NULL, and a channel with no resolvable group is skipped by the caller rather
+    than silently treated as unfrozen.
+
+    Lives in the follow aggregate rather than in `jobs/auto_sync.py` because it
+    is a fact about the pair, and this module is the one that knows the follow's
+    copy shadows the Channel's.
+    """
+    return follow.setting_group_id or channel.setting_group_id
+
+
+def accounts_with_follows(session: Session) -> list[uuid.UUID]:
+    """Every account that follows at least one Channel, oldest id order.
+
+    The scheduler's replacement for "who is the operator" (ticket 21). Auto-sync
+    used to pick one owner — the network-settings row's, else the first
+    superuser — and sync every Channel under `Channel.user_id == owner OR NULL`.
+    That question has no answer once two accounts follow the same handle, and
+    the stamp it read is one ticket 22 drops.
+
+    **Deliberately not gated on the enforcement flag.** It decides what an
+    account may *see*; which Channels it follows is a fact about the follow
+    table, and the scheduler is not serving a response to anybody. Ticket 30
+    made the same call from the other side: a flag cannot gate identity.
+
+    Sorted so a tick's work is dealt in a stable order rather than whatever
+    order the planner returns — two ticks that find the same due set enqueue it
+    the same way, which is what makes a duplicate diagnosable.
+    """
+    rows = session.exec(
+        select(ChannelFollow.user_id).distinct().order_by(col(ChannelFollow.user_id))
+    ).all()
+    return [row for row in rows if row is not None]
+
+
+def followed_channels_for(
+    session: Session, *, user_id: uuid.UUID
+) -> list[FollowedChannel]:
+    """The Channels `user_id` follows, each paired with *their own* follow row.
+
+    The pair is the point. `Channel.setting_group_id` is one value shared by
+    every follower, and `ChannelFollow.setting_group_id` is the per-account one
+    ticket 04 moved off the Channel precisely so a second follower would not
+    have to overwrite the first's settings to have any of their own. A
+    scheduler reading the Channel's copy decides "is this due" from whichever
+    account last edited it, which is the bug the follow table exists to prevent
+    — so the caller gets both and takes the follow's when it is set.
+
+    An inner join, so a follow pointing at a Channel that no longer exists
+    simply drops out; `orphan_follow_channel_ids` is what reports those, and it
+    is the audit's job rather than the scheduler's.
+    """
+    rows = session.exec(
+        select(Channel, ChannelFollow)
+        .join(ChannelFollow, col(Channel.id) == col(ChannelFollow.channel_id))
+        .where(ChannelFollow.user_id == user_id)
+        .order_by(col(Channel.id))
+    ).all()
+    return [(channel, follow) for channel, follow in rows]
+
+
+def followed_channel_names(session: Session) -> set[str]:
+    """The names of every Channel *somebody* follows, across all accounts.
+
+    The corpus-wide counterpart to `visible_channel_names`, for the work that is
+    genuinely deployment-level rather than per account: translation (ticket 21).
+    A `PostTranslation` is `FOLLOW_SCOPED` — produced once, served to every
+    follower — so translating per account would pay a provider twice to store
+    two identical rows.
+
+    The union is not the same as "every Channel": one nobody follows is
+    retention's queue (ticket 05), and spending provider quota on posts about to
+    be collected is the case worth excluding.
+    """
+    rows = session.exec(
+        select(Channel.name)
+        .join(ChannelFollow, col(Channel.id) == col(ChannelFollow.channel_id))
+        .distinct()
+    ).all()
+    return {str(name) for name in rows}
+
+
+def count_followed_channels(session: Session) -> int:
+    """How many distinct Channels anybody follows.
+
+    One `count(*)`, never `len(followed_channels_for(...))`. That spelling
+    hydrates every Channel — ~2,077 ORM rows on this deployment — to produce one
+    integer, which is the "compute it for everything, read one field" shape
+    `needs_dynamic_stats` exists to have removed.
+    """
+    return int(
+        session.exec(select(func.count(distinct(col(ChannelFollow.channel_id))))).one()
+    )
 
 
 def visible_channel_names(session: Session, *, user_id: uuid.UUID) -> set[str]:
