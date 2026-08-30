@@ -10,9 +10,12 @@ from __future__ import annotations
 import time
 
 from fastapi.testclient import TestClient
+from sqlmodel import Session
 
 from app.core.config import settings
+from app.core.db import engine
 from app.services.logs import DEFAULT_LOG_PAGE_SIZE, MAX_LOG_PAGE_SIZE
+from tests.utils.tenancy import follow_channels
 
 PREFIX = f"{settings.API_V1_STR}/data"
 
@@ -31,6 +34,13 @@ def _auth(client: TestClient) -> dict[str, str]:
 def _seed(
     client: TestClient, headers: dict[str, str], count: int, base_ts: int
 ) -> None:
+    # Ticket 21: a sync log is `FOLLOW_SCOPED` Channel telemetry (ticket 19), so
+    # under enforcement these pages are empty without a follow — and the POST
+    # below needs it too, because `create_logs` refuses telemetry for a Channel
+    # the caller does not follow. Hence *before* the write, not after. No
+    # `user_id`: the client reads as `FIRST_SUPERUSER`, the operator default.
+    with Session(engine) as session:
+        follow_channels(session, "ch")
     client.post(
         f"{PREFIX}/logs/sync",
         json=[

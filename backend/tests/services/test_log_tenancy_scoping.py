@@ -99,6 +99,21 @@ def enforced(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(config.settings, "TENANCY_ENFORCED", True)
 
 
+@pytest.fixture
+def unenforced(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Turn the seam off for one test — the rollback state, since PR 4.
+
+    The flag-off tests below used to read the ambient default and needed no
+    fixture at all. Ticket 21 PR 4 flipped that default, so what they describe
+    is now what an operator gets by setting `TENANCY_ENFORCED=false` in `.env`.
+    That is still worth asserting: it is the programme's rollback, and a revert
+    that only half-reverts is worse than none.
+    """
+    from app.core import config
+
+    monkeypatch.setattr(config.settings, "TENANCY_ENFORCED", False)
+
+
 def _write(
     session: Session, log_type: str, log_id: str, owner: uuid.UUID, timestamp: int = 1
 ) -> str:
@@ -139,6 +154,7 @@ def test_with_the_flag_off_the_page_is_what_it_always_was(
     session: Session,
     user: User,
     other_user: User,
+    unenforced: None,
     log_type: str,
 ) -> None:
     """The promise of every batch: adopting the seam changes no response yet."""

@@ -8,6 +8,7 @@ path and operation id is unchanged.
 import asyncio
 import json
 import time
+import uuid
 from collections.abc import AsyncIterator
 from typing import Any
 
@@ -17,6 +18,7 @@ from fastapi.responses import StreamingResponse
 from app.api.deps import CurrentUser, SessionDep
 from app.api.http_cache import json_response_with_etag
 from app.core.config import settings
+from app.models import User
 from app.schemas.channels import (
     BulkChannelTagsResponse,
     BulkReresolveStartIdsResponse,
@@ -47,6 +49,7 @@ from app.services.bulk_channels import (
     bulk_reset_and_queue_sync,
 )
 from app.services.bulk_follow import (
+    FollowJobState,
     cancel_follow_job,
     create_follow_job,
     get_follow_job,
@@ -91,6 +94,7 @@ from app.services.channels import (
     upsert_channel as upsert_channel_impl,
 )
 from app.services.sync_meta import get_sync_meta, touch_sync
+from app.services.tenancy import assert_owner, assert_owner_on_write
 
 _TERMINAL_FOLLOW_STATUSES = frozenset({"completed", "failed", "cancelled"})
 
@@ -244,26 +248,75 @@ async def start_bulk_follow(
     return BulkFollowStartResponse(followJobId=job.follow_job_id)
 
 
+#: What the three bulk-follow routes answer for a job the caller may not see.
+#: The same string an absent job gets, because the two must be
+#: indistinguishable — a distinguishable refusal over a client-visible id is the
+#: enumeration oracle `assert_owner` exists to close.
+_FOLLOW_JOB_NOT_FOUND = "Follow job not found"
+
+
+def _visible_follow_job(follow_job_id: str, current_user: User) -> FollowJobState:
+    """The follow job, if this caller is allowed to know about it.
+
+    Found by review of ticket 21 PR 4. All three routes took `_current_user`,
+    resolved the job out of `_active_jobs` by id, and returned it — so any
+    signed-in account holding an id read another account's job: the handles
+    being added, the per-channel progress, and the errors. `FollowJobState`
+    has carried a required `user_id` since PR 2, which is what makes the check
+    possible; carrying an owner was never the same thing as checking it.
+
+    Gated, like every other by-id read: refusing to *show* a row is a
+    visibility change, which is what the seam's flag defers.
+    """
+    job = get_follow_job(follow_job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail=_FOLLOW_JOB_NOT_FOUND)
+    if not job.user_id:
+        # No owner is not a state `create_follow_job` can produce since PR 2.
+        # A job from a process that predates it would be unattributable, and an
+        # unattributable job is not one to hand a stranger.
+        raise HTTPException(status_code=404, detail=_FOLLOW_JOB_NOT_FOUND)
+    assert_owner(uuid.UUID(job.user_id), current_user.id, detail=_FOLLOW_JOB_NOT_FOUND)
+    return job
+
+
+def _assert_may_cancel_follow_job(follow_job_id: str, current_user: User) -> None:
+    """Refuse to cancel somebody else's bulk follow — ungated.
+
+    `/jobs/sync/{id}/cancel`'s rule, reached again here: a read may be gated and
+    a write may not, and stopping a job is a write. Ungated means a second
+    account cannot cancel your follow job on the shipping config either, which
+    is the state the hole actually lived in.
+
+    **Checked before the cancel, not after.** The route used to call
+    `cancel_follow_job` and *then* raise 404 if it returned nothing — so a
+    foreign cancel took effect and was reported as a missing job. Order is the
+    fix, not the status code.
+    """
+    job = get_follow_job(follow_job_id)
+    if job is None or not job.user_id:
+        raise HTTPException(status_code=404, detail=_FOLLOW_JOB_NOT_FOUND)
+    assert_owner_on_write(
+        uuid.UUID(job.user_id), current_user.id, detail=_FOLLOW_JOB_NOT_FOUND
+    )
+
+
 @router.get(
     "/channels/bulk-follow/{follow_job_id}",
     response_model=BulkFollowJobStatusResponse,
 )
 def get_bulk_follow_status(
-    follow_job_id: str, _current_user: CurrentUser
+    follow_job_id: str, current_user: CurrentUser
 ) -> BulkFollowJobStatusResponse:
-    job = get_follow_job(follow_job_id)
-    if job is None:
-        raise HTTPException(status_code=404, detail="Follow job not found")
+    job = _visible_follow_job(follow_job_id, current_user)
     return BulkFollowJobStatusResponse(**job.to_camel())
 
 
 @router.get("/channels/bulk-follow/{follow_job_id}/events")
 async def bulk_follow_events(
-    follow_job_id: str, _current_user: CurrentUser
+    follow_job_id: str, current_user: CurrentUser
 ) -> StreamingResponse:
-    job = get_follow_job(follow_job_id)
-    if job is None:
-        raise HTTPException(status_code=404, detail="Follow job not found")
+    job = _visible_follow_job(follow_job_id, current_user)
 
     throttle_ms = settings.SYNC_JOB_SSE_THROTTLE_MS
     throttle_s = max(throttle_ms, 1) / 1000
@@ -308,11 +361,14 @@ async def bulk_follow_events(
     response_model=CancelBulkFollowResponse,
 )
 async def cancel_bulk_follow(
-    follow_job_id: str, _current_user: CurrentUser
+    follow_job_id: str, current_user: CurrentUser
 ) -> CancelBulkFollowResponse:
+    # Before the cancel. See `_assert_may_cancel_follow_job`: this used to
+    # cancel and then answer 404, so a foreign cancel took effect.
+    _assert_may_cancel_follow_job(follow_job_id, current_user)
     job = await cancel_follow_job(follow_job_id)
     if job is None:
-        raise HTTPException(status_code=404, detail="Follow job not found")
+        raise HTTPException(status_code=404, detail=_FOLLOW_JOB_NOT_FOUND)
     return CancelBulkFollowResponse(followJobId=job.follow_job_id, status=job.status)
 
 

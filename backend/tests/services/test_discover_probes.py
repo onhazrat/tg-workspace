@@ -26,7 +26,7 @@ from app.services.discover_probes import (
 )
 from app.services.discover_reports import create_report, get_report
 from app.services.post_filters import PostFilters
-from tests.utils.tenancy import ANY_READER
+from tests.utils.tenancy import ANY_READER, follow_channels
 
 OK_PAGE = {
     "isTelegramPage": True,
@@ -57,6 +57,10 @@ def _seed(session: Session, sources: list[str]) -> None:
             )
         )
     session.commit()
+    # Ticket 21: the carrier is `FOLLOW_SCOPED`, so under enforcement none of
+    # these posts is readable without a follow. `ANY_READER` is the account
+    # every `compute_discover_candidates` call in this file passes.
+    follow_channels(session, "carrier", user_id=ANY_READER)
 
 
 # --------------------------------------------------------------------------- #

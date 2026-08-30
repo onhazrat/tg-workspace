@@ -78,3 +78,49 @@ def any_reader_account() -> Iterator[None]:
             )
             session.commit()
     yield
+
+
+def follow_channels(
+    session: Session,
+    *channel_names: str,
+    user_id: uuid.UUID | None = None,
+) -> None:
+    """Give an account a Channel and a Follow for each name, so it can read them.
+
+    Ticket 21 PR 4 flips `TENANCY_ENFORCED`, and `Post` is `FOLLOW_SCOPED` — a
+    scoped read correlates an `EXISTS` against `tg_channel_follows` on
+    `channel_name`. So a test that seeds bare `Post` rows, or posts them through
+    `POST /data/posts/bulk`, writes rows **no account can see**: there is no
+    Channel and no follow, and the EXISTS finds nothing.
+
+    That is the seam working rather than a bug in it. The corpus is shared and
+    reachable through a follow; posts belonging to a handle nobody follows are
+    exactly the rows ticket 05 made retention collect. What these tests were
+    asserting was pre-tenancy behaviour, and this is what says so out loud
+    instead of leaving thirty files quietly reading an empty list.
+
+    **The owner defaults to the operator, not to `ANY_READER`.** The failing
+    tests are overwhelmingly API tests reading as `FIRST_SUPERUSER` through the
+    test client, and a follow owned by the any-reader account would leave them
+    exactly as invisible as no follow at all — passing for a new wrong reason.
+    Service tests that read as `ANY_READER` pass it explicitly.
+
+    An existing Channel is left alone: several callers seed one with fields they
+    then assert on, and overwriting it here would make this helper the thing
+    that broke them.
+    """
+    from app.models_tg import Channel
+    from app.services.channel_setting_groups import ensure_default_group
+    from app.services.follows import ensure_follow_for_channel, get_operator_user_id
+
+    owner = user_id or get_operator_user_id(session) or ANY_READER
+    group = ensure_default_group(session, user_id=owner)
+    session.flush()
+    for name in channel_names:
+        channel = session.get(Channel, name)
+        if channel is None:
+            channel = Channel(id=name, name=name, setting_group_id=group.id)
+            session.add(channel)
+            session.flush()
+        ensure_follow_for_channel(session, channel, user_id=owner)
+    session.commit()

@@ -25,6 +25,7 @@ from app.core.config import settings
 from app.core.db import engine
 from app.models_tg import Post
 from app.services.discover_probes import record_probe_result
+from tests.utils.tenancy import follow_channels
 
 DATA = f"{settings.API_V1_STR}/data"
 
@@ -104,6 +105,11 @@ def _seed_forward() -> None:
             )
         )
         session.commit()
+        # Ticket 21: the carrier is `FOLLOW_SCOPED`, so under enforcement the
+        # Discover routes below aggregate nothing from it. No `user_id` here —
+        # these read through the test client as `FIRST_SUPERUSER`, which is the
+        # operator `follow_channels` defaults to.
+        follow_channels(session, CARRIER)
 
 
 def _candidates(client: TestClient, headers: dict[str, str]) -> list[dict[str, Any]]:

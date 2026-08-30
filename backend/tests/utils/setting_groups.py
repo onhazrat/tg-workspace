@@ -43,14 +43,27 @@ def add_test_channel(
 ) -> Channel:
     """Insert a channel with a valid default setting group for service tests.
 
-    An omitted `user_id` means `ANY_READER`, not "nobody". Ticket 21 made
-    `tg_channel_setting_groups.user_id` `NOT NULL` with a foreign key, so a
-    channel seeded with no owner now fails at the setting group before it ever
-    reaches the Channel row — and a fabricated uuid fails at the key. The
-    any-reader account is real, which makes it the one honest default.
+    An omitted `user_id` means **the operator**, falling back to `ANY_READER`
+    on a database whose first superuser does not exist yet. Neither half is
+    arbitrary.
+
+    *Not "nobody"*: ticket 21 PR 3 made `tg_channel_setting_groups.user_id`
+    `NOT NULL` with a foreign key, so a channel seeded with no owner fails at
+    the setting group before it ever reaches the Channel row, and a fabricated
+    uuid fails at the key.
+
+    *The operator rather than `ANY_READER`*: PR 4 flips `TENANCY_ENFORCED`, and
+    this helper writes the **Follow** as well as the Channel. The great majority
+    of callers are API tests reading back through the test client as
+    `FIRST_SUPERUSER`, so a follow owned by the any-reader account leaves them
+    exactly as empty as no follow at all — passing for a new wrong reason rather
+    than an old one. Twelve tests moved on this one line. Service tests that
+    read as `ANY_READER` pass it explicitly, which is the readable half anyway:
+    the owner a test seeds should be the account it then reads as, and where
+    those differ the test is usually about that difference.
     """
     if user_id is None:
-        user_id = ANY_READER
+        user_id = get_operator_user_id(session) or ANY_READER
     return upsert_sync_test_channel(
         session,
         channel_id=channel_id,

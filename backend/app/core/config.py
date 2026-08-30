@@ -106,19 +106,30 @@ class Settings(BaseSettings):
     # defaults to true at the column level, so existing users stay approved.
     USERS_REQUIRE_APPROVAL: bool = False
 
-    # The tenancy seam's one switch (ticket 03). Off means `scoped_select`
-    # returns the caller's statement untouched, so every query is byte-identical
-    # to the single-operator behaviour that shipped. It stays off until the
-    # follow table is backfilled and every read path has adopted the seam.
-    # Flipping it before then does not thin the lists, it breaks them: the
-    # follow-scoped branch has no table to query yet and raises, so the first
-    # request touching a channel or a post answers 500. That is deliberate --
-    # the alternatives were leaking another account's corpus or silently
-    # emptying it, and a crash is the only one of the three you notice.
+    # The tenancy seam's one switch (ticket 03), **on** since ticket 21 PR 4.
+    # On means `scoped_select` filters: a user-owned row by its owner, a
+    # follow-scoped one by an EXISTS against `tg_channel_follows`, and corpus
+    # not at all. Two accounts genuinely cannot see each other, which is the
+    # acceptance gate the whole tenancy programme was built toward.
+    #
+    # It shipped off for eighteen tickets so that ~40 read paths could adopt
+    # the seam one batch at a time without any batch changing a response, and
+    # the flip waited on three things that each had to be true first: every
+    # `user_id=None` creation path closed (PR 1), the single-operator model
+    # gone (PR 2), and every user-owned column `NOT NULL` with a real key
+    # (PR 3). Flipping before those did not thin the lists, it emptied them —
+    # an unowned row is invisible to every account, and a Channel with no
+    # follow takes its Posts with it.
+    #
+    # **Off is now the rollback**, not the default, and it is a real one: the
+    # disabled branch is still asserted byte-identical to the pre-seam queries
+    # for all 27 models. Setting `TENANCY_ENFORCED=false` in `.env` reverts
+    # every read path at once, with no deploy of different code.
+    #
     # Read in exactly one place — `services/tenancy.py::tenancy_enforced`.
     # The failure mode of a flag is always the fourteenth place it got read,
     # so `tests/services/test_tenancy_seam.py` asserts that count stays at one.
-    TENANCY_ENFORCED: bool = False
+    TENANCY_ENFORCED: bool = True
 
     # TG Summarizer
     GEMINI_API_KEY: str = ""

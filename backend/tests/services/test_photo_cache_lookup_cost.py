@@ -32,6 +32,14 @@ from app.models_tg import Channel
 from app.services import channel_photos, post_thumbnails
 from app.services.channels import list_channels
 from tests.utils.setting_groups import add_test_channel
+from tests.utils.tenancy import ANY_READER
+
+
+def _operator_id(session: Session) -> uuid.UUID:
+    """Whoever `add_test_channel` files its follows under. See its docstring."""
+    from app.services.follows import get_operator_user_id
+
+    return get_operator_user_id(session) or ANY_READER
 
 
 class _ScanCounter:
@@ -171,10 +179,13 @@ def test_channel_list_lookup_cost_does_not_scale_with_channel_count(
             _populate(tmp_path, [cid for cid in new_ids if int(cid[5:]) % 2 == 0])
 
             with count_directory_scans() as counter:
-                # `TENANCY_ENFORCED` is off by default, so scoping is a no-op
-                # and any user id sees every channel — this test is about
-                # avatar-lookup cost, not the seam.
-                rows = list_channels(session, user_id=uuid.uuid4())
+                # Reads as the operator, which is who `add_test_channel` files
+                # the follows under. It used to pass `uuid.uuid4()` on the
+                # reasoning that the flag was off and scoping was a no-op; PR 4
+                # flipped it, and a stranger's id now returns nothing. Passing a
+                # real follower is also the better measurement — this then times
+                # the query production actually runs, EXISTS join included.
+                rows = list_channels(session, user_id=_operator_id(session))
 
         assert len(rows) == target
         observed.append(counter.count)

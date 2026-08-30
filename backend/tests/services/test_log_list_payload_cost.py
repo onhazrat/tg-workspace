@@ -41,7 +41,7 @@ from app.services.logs import (
     upsert_sync_log,
 )
 from app.services.serialization import to_camel
-from tests.utils.tenancy import ANY_READER
+from tests.utils.tenancy import ANY_READER, follow_channels
 
 PAYLOAD_TABLE = "tg_sync_log_payloads"
 
@@ -83,6 +83,12 @@ def captured_sql() -> Iterator[list[str]]:
 def _seed(session: Session, log_id: str, log_type: str) -> None:
     common = {"id": log_id, "timestamp": 1_700_000_000_000, "status": "success"}
     if log_type == "sync":
+        # Ticket 21: a sync log is Channel telemetry (ticket 19) and so
+        # `FOLLOW_SCOPED` — under enforcement it is readable by the Channel's
+        # followers and nobody else. The follow belongs to `VIEWER`, which is
+        # the account every `list_logs` call below reads as; an operator-owned
+        # one would leave these pages just as empty.
+        follow_channels(session, "ch", user_id=VIEWER)
         upsert_sync_log(
             session,
             {

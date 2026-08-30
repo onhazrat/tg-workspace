@@ -18,12 +18,17 @@ from sqlmodel import Session
 
 from app.core.config import settings
 from app.models_tg import Post
+from tests.utils.tenancy import follow_channels
 
 POSTS_URL = f"{settings.API_V1_STR}/data/posts"
 CANDIDATES_URL = f"{settings.API_V1_STR}/data/discover/candidates"
 
 
 def _seed(db: Session, channel: str, post_id: int, timestamp: int) -> None:
+    # Ticket 21: `Post` is `FOLLOW_SCOPED`, so under enforcement a bare row with
+    # no Channel and no Follow is invisible. These read back through the client
+    # as the superuser, which is the operator `follow_channels` defaults to.
+    follow_channels(db, channel)
     db.add(
         Post(
             channel_name=channel,

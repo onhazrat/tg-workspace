@@ -28,6 +28,7 @@ from app.services.channel_setting_groups import (
     slow_feed_group_id_for_user,
     update_setting_group,
 )
+from app.services.follows import ensure_follow_for_channel
 from tests.utils.user import create_random_user
 
 
@@ -248,14 +249,21 @@ def test_list_setting_groups_includes_orphan_group_from_distinct_query() -> None
             is_unavailable_on_web_view=False,
         )
         session.add(orphan_group)
-        session.add(
-            Channel(
-                id="orphan-channel",
-                name="orphan-channel",
-                user_id=user_id,
-                setting_group_id=orphan_group.id,
-            )
+        channel = Channel(
+            id="orphan-channel",
+            name="orphan-channel",
+            user_id=user_id,
+            setting_group_id=orphan_group.id,
         )
+        session.add(channel)
+        session.flush()
+        # Ticket 35 scopes the orphan rescue through the **follow**, not through
+        # `Channel.user_id` — that column is a "who scraped this first" stamp
+        # ticket 22 drops. So the follow is what makes the channel visible once
+        # ticket 21 PR 4 flips the flag, and without it the rescue has nothing
+        # to reach the group through. Writing it is also what every production
+        # channel-creation path does.
+        ensure_follow_for_channel(session, channel, user_id=user_id)
         session.commit()
 
         listed = list_setting_groups(session, user_id=user_id)

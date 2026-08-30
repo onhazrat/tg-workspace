@@ -331,7 +331,7 @@ shimmed, along with its NULL-inclusive predicate (`operator.py:46`) and its `ENV
 fallback returning all rows (`:52-74`). Both existed to make a single-operator DB with stale stamps
 behave; after the backfill neither is true, and keeping them leaks rows across users.
 
-**`TENANCY_ENFORCED: bool = False`**, read in exactly one place, `tenancy.py::tenancy_enforced()`.
+**`TENANCY_ENFORCED: bool = True`** since ticket 21 PR 4, read in exactly one place, `tenancy.py::tenancy_enforced()`. It shipped `False` for the eighteen tickets of adoption; off is now the rollback rather than the default.
 A guard greps for the symbol elsewhere: the failure mode of a flag is always the fourteenth place it
 got read.
 

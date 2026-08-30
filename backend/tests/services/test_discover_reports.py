@@ -23,7 +23,7 @@ from app.services.discover_reports import (
 )
 from app.services.post_filters import PostFilters
 from tests.utils.setting_groups import add_test_channel
-from tests.utils.tenancy import ANY_READER
+from tests.utils.tenancy import ANY_READER, follow_channels
 
 
 def _post(
@@ -47,6 +47,12 @@ def _seed(session: Session, posts: list[Post]) -> None:
     for p in posts:
         session.add(p)
     session.commit()
+    # Ticket 21: the carriers these posts belong to are `FOLLOW_SCOPED`, so
+    # under enforcement a report aggregates nothing without a follow.
+    # `ANY_READER` is the account `_create` and `get_report` pass.
+    follow_channels(
+        session, *{p.channel_name for p in posts}, "carrier", user_id=ANY_READER
+    )
 
 
 def _create(session: Session, **overrides: Any) -> dict[str, Any]:
@@ -130,7 +136,8 @@ def test_is_followed_is_live_not_frozen() -> None:
         assert created["candidates"][0]["isFollowed"] is False
 
         # Follow the candidate *after* the report was saved.
-        add_test_channel(session, "alpha_news", name="alpha_news")
+        # `isFollowed` answers for the viewer; see test_discover_candidates.
+        add_test_channel(session, "alpha_news", name="alpha_news", user_id=ANY_READER)
         session.commit()
 
         refetched = get_report(session, created["id"], user_id=ANY_READER)
@@ -141,7 +148,8 @@ def test_is_followed_matches_case_insensitively() -> None:
     with Session(engine) as session:
         _seed(session, [_post(1, "carrier", 1000, forwarded_from="Alpha_News")])
         created = _create(session)
-        add_test_channel(session, "alpha_news", name="alpha_news")
+        # `isFollowed` answers for the viewer; see test_discover_candidates.
+        add_test_channel(session, "alpha_news", name="alpha_news", user_id=ANY_READER)
         session.commit()
 
         refetched = get_report(session, created["id"], user_id=ANY_READER)

@@ -29,6 +29,7 @@ from app.core.config import settings
 from app.core.db import engine
 from app.models_tg import Post
 from app.prompts.posts import format_posts_for_prompt
+from tests.utils.tenancy import follow_channels
 from tests.utils.utils import get_superuser_token_headers
 
 PREFIX = settings.API_V1_STR
@@ -47,6 +48,10 @@ def _seed(rows: list[tuple[str, int, str, int]], **extra: Any) -> None:
                 )
             )
         session.commit()
+        # Ticket 21: `Post` is `FOLLOW_SCOPED`, so a bare row with no Channel
+        # and no Follow is invisible under enforcement. These read back through
+        # the client as `FIRST_SUPERUSER`, the operator this defaults to.
+        follow_channels(session, *{row[0] for row in rows})
 
 
 def _date_range_read(

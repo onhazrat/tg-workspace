@@ -67,7 +67,6 @@ from app.services.tenancy import (
     assert_owner_on_write,
     scope_of,
     scoped_select,
-    tenancy_enforced,
     unscoped_select,
 )
 
@@ -218,37 +217,82 @@ def test_user_owned_models_all_have_a_user_id_column() -> None:
 
 
 # --------------------------------------------------------------------------
-# Disabled: byte-identical to what shipped
+# Disabled: byte-identical to what shipped — now the rollback switch
 # --------------------------------------------------------------------------
+#
+# These four used to describe the shipping configuration. Ticket 21 PR 4 flips
+# the flag, so they describe what an operator gets by setting
+# `TENANCY_ENFORCED=false` in `.env` — which is the rollback, and the whole
+# reason the seam was built as a flag rather than as a rewrite.
+#
+# They therefore pin the flag off explicitly rather than reading the ambient
+# default. Leaving them on the default is what made them fail the moment it
+# moved, and it would have hidden the fact that the disabled path still has to
+# be inert: a rollback that only half-reverts is worse than no rollback.
 
 
-def test_the_flag_ships_off() -> None:
-    """Ticket 21 flips it. Until then a fresh checkout must behave as it did."""
-    assert settings.TENANCY_ENFORCED is False
-    assert tenancy_enforced() is False
+def test_the_flag_ships_on() -> None:
+    """Inverted by ticket 21 PR 4, deliberately, rather than deleted.
+
+    This asserted `False` from the day the seam was built — it was the promise
+    that adopting `scoped_select` in forty read paths changed no response until
+    somebody decided otherwise. PR 4 is that decision, and the assertion flips
+    with it.
+
+    Kept because the value is a shipped default that a bad merge or a stray
+    `.env.example` edit could quietly move back, and the failure mode of that is
+    silent: every account sees every other account's rows again, and every test
+    in this file still passes because they pin their own state.
+
+    It reads the **field default** rather than `settings.TENANCY_ENFORCED`,
+    which is the resolved value and therefore whatever the environment says.
+    That distinction is the whole point here: the suite is run in both states
+    (`TENANCY_ENFORCED=false pytest` is the rollback rehearsal), and a test
+    asserting the resolved value would fail that run for the one reason that is
+    not a defect. The default in the code is what ships.
+    """
+    default = type(settings).model_fields["TENANCY_ENFORCED"].default
+
+    assert default is True, (
+        "the seam's shipped default moved back to off. Ticket 21 PR 4 turned it "
+        "on; if that is being reverted deliberately, this assertion is the "
+        "place to say so."
+    )
 
 
 @pytest.mark.parametrize("model", sorted(SCOPES, key=lambda m: m.__name__))
-def test_disabled_scoping_changes_no_query(model: type[SQLModel]) -> None:
+def test_disabled_scoping_changes_no_query(
+    monkeypatch: pytest.MonkeyPatch, model: type[SQLModel]
+) -> None:
     """Every branch returns the unscoped select while the flag is off.
 
     Compiled SQL, not object identity: the point is that the database receives
-    the same text it received before the seam existed, for every model,
-    including the follow-scoped ones whose real branch is not written yet.
+    the same text it received before the seam existed, for every model.
+
+    Now the rollback contract rather than the shipping one. If an operator turns
+    enforcement off, every one of the ~40 adopted reads has to go back to the
+    query it used to send — a partial revert would leave some paths filtering
+    and some not, which is the drift the single flag reader exists to prevent.
     """
+    monkeypatch.setattr(settings, "TENANCY_ENFORCED", False)
     plain = select(model)
     scoped = scoped_select(plain, model, uuid.uuid4())
 
     assert str(scoped.compile()) == str(plain.compile())
 
 
-def test_disabled_ownership_assertion_never_raises() -> None:
-    """Adopting `assert_owner` early must not start rejecting today's requests.
+def test_disabled_ownership_assertion_never_raises(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """With enforcement off, the read guard admits everything, NULL included.
 
-    Every row in a single-operator database was written by the operator, but
-    plenty carry a NULL `user_id` from before the stamp existed. Enforcing on
-    those would fail closed against the only account there is.
+    The rollback half of `assert_owner`. It used to describe the shipping
+    default; after PR 4 it describes what an operator gets by turning the flag
+    back off, and both cases still matter — a foreign owner and no owner at all
+    are the two shapes a by-id read can meet, and a revert that admitted one and
+    not the other would fail closed against a database restored from a backup.
     """
+    monkeypatch.setattr(settings, "TENANCY_ENFORCED", False)
     assert_owner(uuid.uuid4(), uuid.uuid4(), detail="Summary not found")
     assert_owner(None, uuid.uuid4(), detail="Summary not found")
 
@@ -281,16 +325,24 @@ def test_write_assertion_refuses_a_foreign_row_in_either_flag_state(
     assert_owner_on_write(mine, mine, detail="Summary not found")
 
 
-def test_disabled_write_assertion_still_admits_an_unstamped_row() -> None:
+def test_disabled_write_assertion_still_admits_an_unstamped_row(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """The one half of the write guard that *is* flag-dependent.
 
-    A NULL owner stays writable while the flag is off, for the reason
-    `test_disabled_ownership_assertion_never_raises` gives directly above: rows
-    predating the stamp are the operator's own, and refusing them would fail
-    closed against the only account a single-operator install has. This one
-    belongs to that group and fails when the flag is forced on globally, exactly
-    as its neighbours do.
+    A NULL owner stays writable with enforcement off, for the reason
+    `test_disabled_ownership_assertion_never_raises` gives above. PR 3 made that
+    row unreachable through the fourteen `USER_OWNED` tables, so what this
+    covers now is the primitive rather than a row shape the database will hand
+    you — `SyncLog` genuinely has no owner, and a rollback must not start
+    refusing writes over it.
+
+    The old docstring said this test "fails when the flag is forced on
+    globally, exactly as its neighbours do". That was true and is no longer
+    acceptable: after PR 4 the flag *is* on, so it pins its own state like the
+    rest of the group.
     """
+    monkeypatch.setattr(settings, "TENANCY_ENFORCED", False)
     assert_owner_on_write(None, uuid.uuid4(), detail="Summary not found")
 
 
@@ -553,7 +605,37 @@ def test_module_is_registered_as_a_pure_transform() -> None:
     assert INVENTORY.get("tenancy.py") == PURE_TRANSFORM
 
 
-def test_docstring_names_the_disabled_default() -> None:
-    """Whoever opens this module next must learn the flag is off before reading on."""
-    assert tenancy.__doc__ is not None
-    assert "TENANCY_ENFORCED" in tenancy.__doc__
+def test_the_docstring_describes_the_state_the_module_actually_ships() -> None:
+    """The file every reader of the seam opens first must not lie about the flag.
+
+    This asserted only that the substring `TENANCY_ENFORCED` appeared, and it
+    stayed green through ticket 21 PR 4 over a docstring that still opened
+    "**This module is inert today** ... `TENANCY_ENFORCED` ships `False`" —
+    the exact prose decay the guard table's preamble was written about, in the
+    guard that existed to prevent it. Review caught it; a substring check
+    cannot.
+
+    So it now checks the *direction*. The claim a reader takes away has to
+    match the default the module ships, and the phrases that would only be true
+    of the other state are named so they cannot survive a flip in either
+    direction.
+    """
+    from pydantic_core import PydanticUndefined
+
+    doc = tenancy.__doc__
+    assert doc is not None
+    assert "TENANCY_ENFORCED" in doc
+
+    default = type(settings).model_fields["TENANCY_ENFORCED"].default
+    assert default is not PydanticUndefined
+
+    stale_when_on = ("module is inert", "ships `False`", "flag is off")
+    stale_when_off = ("module is live", "ships `True`")
+
+    forbidden = stale_when_on if default else stale_when_off
+    found = [phrase for phrase in forbidden if phrase in doc]
+    assert not found, (
+        f"`services/tenancy.py`'s docstring still says {found} while the flag "
+        f"ships {default}. It is the first thing anyone reading the seam sees; "
+        "a stale opener there is worse than none."
+    )

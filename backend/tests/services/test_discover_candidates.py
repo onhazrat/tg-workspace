@@ -18,7 +18,7 @@ from app.services.discover import (
     post_references,
 )
 from tests.utils.setting_groups import add_test_channel
-from tests.utils.tenancy import ANY_READER
+from tests.utils.tenancy import ANY_READER, follow_channels
 
 
 def _post(
@@ -56,10 +56,26 @@ def _run(
             session.add(p)
         session.commit()
         for name in followed or []:
-            add_test_channel(session, name, name=name)
+            # `user_id=ANY_READER`: `isFollowed` answers for the viewer,
+            # and that is the account this file reads as. `add_test_channel`
+            # defaults its follow to the operator (ticket 21 PR 4), which
+            # would report every candidate as unfollowed here.
+            add_test_channel(session, name, name=name, user_id=ANY_READER)
         session.commit()
 
         scope = channels if channels is not None else ["carrier"]
+        # Ticket 21: `Post` is `FOLLOW_SCOPED`, so under enforcement Discover
+        # reads nothing from a carrier channel the reader does not follow — and
+        # the carrier is the channel whose posts *make* the candidates, not a
+        # candidate itself. Followed as `ANY_READER` because that is the account
+        # `compute_discover_candidates` is called as below; the operator's follow
+        # would leave the aggregation just as empty.
+        follow_channels(
+            session,
+            *{p.channel_name for p in posts},
+            *scope,
+            user_id=ANY_READER,
+        )
         return compute_discover_candidates(
             session,
             user_id=ANY_READER,
@@ -295,6 +311,9 @@ def test_date_scope_excludes_out_of_range_posts() -> None:
         session.add(_post(1, "carrier", 1000, text="see @alpha_news"))
         session.add(_post(2, "carrier", 9000, text="see @beta_news"))
         session.commit()
+        # This test builds its scope directly rather than through `_run`, so it
+        # needs the carrier follow of its own. See `_run` for why.
+        follow_channels(session, "carrier", user_id=ANY_READER)
         result = compute_discover_candidates(
             session,
             channel_names=["carrier"],

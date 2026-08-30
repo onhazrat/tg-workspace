@@ -843,6 +843,14 @@ GATED_READS: dict[str, str] = {
     "tag_runs.get_tag_run": "Reads one tag run.",
     "discover_reports.get_report": "Reads one Discover report.",
     "logs.get_log": "Reads one log row in full.",
+    "channels._visible_follow_job": (
+        "Resolves one bulk-follow job for a caller to *read* — the status route "
+        "and its SSE stream. A read, so gated. Its cancel sibling is "
+        "`_assert_may_cancel_follow_job` on the ungated primitive, for the "
+        "reason `_cancellable_job` gives one family over: stopping a job is a "
+        "write. Both were added by review of ticket 21 PR 4, which found all "
+        "three routes taking `_current_user` and never using it."
+    ),
     "jobs._visible_job": (
         "Resolves one sync job for a caller to *read* — `GET /jobs/sync/{id}` "
         "and the SSE stream. The cancel route used to share it and no longer "

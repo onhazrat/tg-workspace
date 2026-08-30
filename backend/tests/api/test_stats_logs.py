@@ -5,8 +5,11 @@ from __future__ import annotations
 import time
 
 from fastapi.testclient import TestClient
+from sqlmodel import Session
 
 from app.core.config import settings
+from app.core.db import engine
+from tests.utils.tenancy import follow_channels
 
 PREFIX = f"{settings.API_V1_STR}/data"
 
@@ -41,6 +44,11 @@ def test_db_stats_returns_counts(client: TestClient) -> None:
 
 def test_table_sizes_reports_every_export_section(client: TestClient) -> None:
     headers = _auth(client)
+    # Ticket 21: a sync log is `FOLLOW_SCOPED` Channel telemetry (ticket 19),
+    # so under enforcement `create_logs` refuses one for a Channel the caller
+    # does not follow — and the stats below count rows that were never written.
+    with Session(engine) as session:
+        follow_channels(session, "stats-ch", "cascade-ch", "ch")
     client.post(
         f"{PREFIX}/logs/sync",
         json=[
@@ -88,6 +96,11 @@ def test_table_sizes_reports_every_export_section(client: TestClient) -> None:
 
 def test_clear_table_deletes_all_rows(client: TestClient) -> None:
     headers = _auth(client)
+    # Ticket 21: a sync log is `FOLLOW_SCOPED` Channel telemetry (ticket 19),
+    # so under enforcement `create_logs` refuses one for a Channel the caller
+    # does not follow — and the stats below count rows that were never written.
+    with Session(engine) as session:
+        follow_channels(session, "stats-ch", "cascade-ch", "ch")
     client.post(
         f"{PREFIX}/logs/sync",
         json=[
@@ -244,6 +257,11 @@ def test_delete_log_by_id_and_clear(client: TestClient) -> None:
 def test_delete_old_logs(client: TestClient) -> None:
     headers = _auth(client)
     old_ts = int(time.time() * 1000) - 40 * 24 * 60 * 60 * 1000
+    # Ticket 21: a sync log is `FOLLOW_SCOPED` Channel telemetry (ticket 19),
+    # so under enforcement `create_logs` refuses one for a Channel the caller
+    # does not follow — and the stats below count rows that were never written.
+    with Session(engine) as session:
+        follow_channels(session, "stats-ch", "cascade-ch", "ch")
     client.post(
         f"{PREFIX}/logs/sync",
         json=[

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import uuid
 from datetime import datetime
 from unittest.mock import patch
 
@@ -18,11 +17,16 @@ from app.services.channels import (
     get_channel_stats,
 )
 from tests.utils.setting_groups import add_test_channel
+from tests.utils.tenancy import ANY_READER
 
 # `get_channel_stats` requires a real `user_id` to scope against, but scoping
 # is a no-op while `TENANCY_ENFORCED` is off (the default here) — these tests
 # are about the stats math, not the seam, so any UUID does.
-_SOME_USER = uuid.uuid4()
+#: The account these two tests read as. `ANY_READER` rather than a fresh
+#: `uuid4()` since ticket 21 PR 4: the channel has to be *followed* by whoever
+#: asks for its stats, and a fabricated id follows nothing — `get_channel_stats`
+#: then answers "Channel not found" for a channel the test just seeded.
+_SOME_USER = ANY_READER
 
 
 def _hourly_timestamps(count: int) -> list[int]:
@@ -149,7 +153,7 @@ def test_batch_stats_timestamp_zero_excluded() -> None:
 def test_single_channel_stats_delegates_to_batch() -> None:
     timestamps = _hourly_timestamps(4)
     with Session(engine) as session:
-        add_test_channel(session, "delegate-ch")
+        add_test_channel(session, "delegate-ch", user_id=_SOME_USER)
         for idx, ts in enumerate(timestamps, start=1):
             session.add(
                 Post(
@@ -173,7 +177,7 @@ def test_single_channel_stats_delegates_to_batch() -> None:
 
 def test_get_channel_stats_no_posts_raises() -> None:
     with Session(engine) as session:
-        add_test_channel(session, "no-posts-ch")
+        add_test_channel(session, "no-posts-ch", user_id=_SOME_USER)
         session.commit()
 
         try:

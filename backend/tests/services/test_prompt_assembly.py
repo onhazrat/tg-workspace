@@ -17,10 +17,14 @@ from app.models_tg import Post
 from app.prompts.posts import format_posts_for_prompt
 from app.services import prompt_assembly
 from app.services.prompt_assembly import PromptScope, assemble_posts_text
-from tests.utils.tenancy import ANY_READER
+from tests.utils.tenancy import ANY_READER, follow_channels
 
 
 def _add(session: Session, channel: str, post_id: int, **kw: Any) -> None:
+    # Ticket 21: `Post` is `FOLLOW_SCOPED`. `ANY_READER` because that is the
+    # account every `assemble_prompt` call below passes — an operator-owned
+    # follow would leave the prompt just as empty.
+    follow_channels(session, channel, user_id=ANY_READER)
     session.add(
         Post(
             channel_name=channel,

@@ -14,13 +14,18 @@ from app.core.db import engine
 from app.models_tg import Post
 from app.services.discover import compute_discover_candidates
 from app.services.post_filters import PostFilters
-from tests.utils.tenancy import ANY_READER
+from tests.utils.tenancy import ANY_READER, follow_channels
 
 
 def _add(session: Session, post_id: int, **kw: Any) -> None:
+    channel_name = kw.pop("channel_name", "carrier")
+    # Ticket 21: the carrier is `FOLLOW_SCOPED`, so without a follow Discover
+    # reads none of these posts under enforcement. `ANY_READER` is the account
+    # every call in this file passes.
+    follow_channels(session, channel_name, user_id=ANY_READER)
     session.add(
         Post(
-            channel_name=kw.pop("channel_name", "carrier"),
+            channel_name=channel_name,
             post_id=post_id,
             text=kw.pop("text", f"post {post_id}"),
             timestamp=kw.pop("timestamp", 1000 + post_id),

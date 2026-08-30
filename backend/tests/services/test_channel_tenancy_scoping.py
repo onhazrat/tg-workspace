@@ -18,9 +18,10 @@ from sqlmodel import Session, col, delete
 
 from app.core.db import engine
 from app.models import User
-from app.models_tg import ChannelFollow
+from app.models_tg import Channel, ChannelFollow
 from app.services.channels import (
     bulk_update_channel_tags,
+    channel_to_camel,
     get_channel_stats,
     list_all_channel_stats,
     list_channel_bios,
@@ -62,6 +63,21 @@ def enforced(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(config.settings, "TENANCY_ENFORCED", True)
 
 
+@pytest.fixture
+def unenforced(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Turn the seam off for one test — the rollback state, since PR 4.
+
+    The flag-off tests here used to read the ambient default and needed no
+    fixture. Ticket 21 PR 4 flipped that default, so what they describe is what
+    an operator gets by setting `TENANCY_ENFORCED=false` in `.env`. Still worth
+    asserting: it is the programme's rollback, and a revert that only
+    half-reverts is worse than none.
+    """
+    from app.core import config
+
+    monkeypatch.setattr(config.settings, "TENANCY_ENFORCED", False)
+
+
 # --------------------------------------------------------------------------
 # Visibility
 # --------------------------------------------------------------------------
@@ -78,7 +94,10 @@ def test_list_channels_hides_a_channel_you_do_not_follow(
 
 
 def test_list_channels_is_unfiltered_while_the_flag_is_off(
-    session: Session, user: User, other_user: User
+    session: Session,
+    user: User,
+    other_user: User,
+    unenforced: None,
 ) -> None:
     """The one thing this ticket promises not to change yet."""
     add_test_channel(session, "unenforced-mine", user_id=user.id)
@@ -173,22 +192,71 @@ def test_channel_list_reads_tags_from_the_callers_own_follow(
     assert [t["name"] for t in theirs["tags"]] == ["theirs"]
 
 
-def test_channel_list_falls_back_to_the_channel_when_no_follow_exists(
+def test_the_no_follow_fallback_is_unreachable_through_the_list(
     session: Session, user: User
 ) -> None:
-    """A channel nobody has a Follow row for yet (pre-backfill) still shows its
-    own values rather than turning up empty."""
-    add_test_channel(session, "no-follow-yet", user_id=user.id, tags=["channel-tag"])
+    """Where the old "falls back when no follow exists" test went.
+
+    `channel_to_camel` takes a channel's tags/startId/startTime/followedAt/
+    discoveredVia from the caller's Follow when there is one, and from the
+    Channel when there is not. This file used to test that second branch through
+    `list_channels`, by deleting the follow and asserting the row still appeared
+    with the Channel's own values.
+
+    Ticket 21 PR 4 makes that unreachable from here, and not by accident:
+    `list_channels` scopes on an EXISTS against `tg_channel_follows`, so a
+    Channel is *visible* only to accounts that follow it — and `follows_for_user`
+    then finds the very row whose absence the branch is about. Visible and
+    unfollowed is not a state this route can produce any more.
+
+    Asserted rather than dropped, because the branch is still live on the
+    single-channel path (`PUT /channels/{id}` serialises one Channel and may
+    legitimately have no Follow in hand), and this is the line between the two.
+    `channel_to_camel` is a pure transform, so the branch is tested where it
+    actually runs.
+    """
+    add_test_channel(session, "no-follow-tags", user_id=user.id, tags=["channel-tag"])
+    channel = session.get(Channel, "no-follow-tags")
+    assert channel is not None
+
+    assert [t["name"] for t in channel_to_camel(channel, follow=None)["tags"]] == [
+        "channel-tag"
+    ]
+
+    listed = next(
+        c
+        for c in list_channels(session, user_id=user.id)
+        if c["id"] == "no-follow-tags"
+    )
+    assert [t["name"] for t in listed["tags"]] == ["channel-tag"], (
+        "the follow mirrors the Channel's tags at creation, so the listed row "
+        "agrees with the fallback here — they diverge only after an edit"
+    )
+
+
+def test_a_channel_nobody_follows_is_not_listed(
+    session: Session, user: User, enforced: None
+) -> None:
+    """The other half, and the one the flip actually created.
+
+    Takes `enforced` rather than the ambient default, so it keeps saying this
+    when an operator rolls the flag back — with enforcement off an unfollowed
+    channel is listed, which is the pre-seam behaviour the disabled branch
+    promises to restore byte for byte.
+
+    Written where the test above stopped making its old claim, because dropping
+    an assertion without replacing it is how a behaviour change goes unrecorded.
+    A Channel with no follow row is unreachable under enforcement — that is what
+    makes `tg_channel_follows` the thing that decides visibility, and it is also
+    why `collect_unfollowed_channel` can reclaim such a row.
+    """
+    add_test_channel(session, "orphaned", user_id=user.id)
     session.exec(
-        delete(ChannelFollow).where(col(ChannelFollow.channel_id) == "no-follow-yet")
+        delete(ChannelFollow).where(col(ChannelFollow.channel_id) == "orphaned")
     )
     session.commit()
 
-    row = next(
-        c for c in list_channels(session, user_id=user.id) if c["id"] == "no-follow-yet"
-    )
-
-    assert [t["name"] for t in row["tags"]] == ["channel-tag"]
+    assert "orphaned" not in {c["id"] for c in list_channels(session, user_id=user.id)}
 
 
 def test_upsert_channel_mirrors_an_edit_into_the_actors_follow(

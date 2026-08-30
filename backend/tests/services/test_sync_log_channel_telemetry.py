@@ -117,6 +117,21 @@ def enforced(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(config.settings, "TENANCY_ENFORCED", True)
 
 
+@pytest.fixture
+def unenforced(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Turn the seam off for one test — the rollback state, since PR 4.
+
+    The flag-off tests below used to read the ambient default and needed no
+    fixture at all. Ticket 21 PR 4 flipped that default, so what they describe
+    is now what an operator gets by setting `TENANCY_ENFORCED=false` in `.env`.
+    That is still worth asserting: it is the programme's rollback, and a revert
+    that only half-reverts is worse than none.
+    """
+    from app.core import config
+
+    monkeypatch.setattr(config.settings, "TENANCY_ENFORCED", False)
+
+
 def _split_corpus(session: Session, user: User, other_user: User) -> None:
     """One Channel each, followed by its creator only.
 
@@ -560,7 +575,7 @@ def test_writing_telemetry_for_a_channel_you_follow_is_allowed(
 
 @pytest.mark.security
 def test_with_the_flag_off_the_page_is_what_it_always_was(
-    session: Session, user: User, other_user: User
+    session: Session, user: User, other_user: User, unenforced: None
 ) -> None:
     """The promise every migrate ticket in this programme makes."""
     _split_corpus(session, user, other_user)
@@ -576,7 +591,7 @@ def test_with_the_flag_off_the_page_is_what_it_always_was(
 
 @pytest.mark.security
 def test_with_the_flag_off_the_write_is_what_it_always_was(
-    session: Session, user: User, other_user: User
+    session: Session, user: User, other_user: User, unenforced: None
 ) -> None:
     _split_corpus(session, user, other_user)
 

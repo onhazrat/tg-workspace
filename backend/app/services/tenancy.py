@@ -1,11 +1,24 @@
 """The one place that decides which rows a User may see (ticket 03, plan step A2).
 
-**This module is inert today, with one deliberate exception.**
-`TENANCY_ENFORCED` ships `False`, and while it is off `scoped_select` hands back
-the statement it was given, unchanged. That is the point: the ~40 read paths
-that have never had an owner filter can adopt the seam one batch at a time, and
-no batch changes a single response until ticket 21 flips the flag with an
-isolation guard behind it.
+**This module is live.** `TENANCY_ENFORCED` ships `True` since ticket 21 PR 4,
+so `scoped_select` filters: a user-owned row by its owner, a follow-scoped one
+by an `EXISTS` against `tg_channel_follows`, and corpus not at all.
+
+It was inert for eighteen tickets, and that is why the adoption reads the way it
+does — with the flag off `scoped_select` handed back the statement it was given,
+unchanged, so ~40 read paths could take the seam one batch at a time without any
+batch changing a response. Two adoptions changed one deliberately, and both say
+so where they are made.
+
+**Off is now the rollback**, not the default. The disabled branch is still
+asserted byte-identical to the pre-seam queries for all 27 models
+(`test_tenancy_seam.py`), so an operator can revert every read path at once by
+setting the flag false — at the cost of every account seeing every account's
+rows again, which `test_account_isolation.py` states outright.
+
+The one deliberate exception to the flag was and remains
+`assert_owner_on_write`, which is ungated: refusing to overwrite a row that is
+already somebody else's is not a response anybody was reading
 
 The exception is `assert_owner_on_write`, which refuses a foreign row whichever
 way the flag points (ticket 31). The flag gates *visibility*, and the reason it

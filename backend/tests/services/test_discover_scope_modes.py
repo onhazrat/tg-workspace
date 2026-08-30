@@ -16,7 +16,7 @@ from app.models_tg import Post
 from app.services.discover import compute_discover_candidates
 from app.services.discover_reports import create_report
 from app.services.post_filters import PostFilters
-from tests.utils.tenancy import ANY_READER
+from tests.utils.tenancy import ANY_READER, follow_channels
 
 
 def _post(post_id: int, forwarded_from: str, timestamp: int) -> Post:
@@ -33,11 +33,22 @@ def _seed_posts(session: Session, count: int = 12) -> None:
     for i in range(count):
         session.add(_post(i, f"source_{i:02d}", 1000 + i))
     session.commit()
+    # Ticket 21: `Post` is `FOLLOW_SCOPED`, so under enforcement every carrier
+    # here is unreadable without a follow. `ANY_READER`, because that is the
+    # account `_run` reads as — an operator-owned follow leaves it just as empty.
+    follow_channels(
+        session,
+        "carrier",
+        *(f"source_{i:02d}" for i in range(count)),
+        user_id=ANY_READER,
+    )
 
 
 def _run(session: Session, **kwargs: Any) -> dict[str, Any]:
     base: dict[str, Any] = {"channel_names": ["carrier"]}
     base.update(kwargs)
+    names = base.get("channel_names") or []
+    follow_channels(session, *names, user_id=ANY_READER)
     return compute_discover_candidates(session, **base, user_id=ANY_READER)
 
 

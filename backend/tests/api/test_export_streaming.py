@@ -13,8 +13,10 @@ from fastapi.testclient import TestClient
 from sqlmodel import Session
 
 from app.core.config import settings
+from app.core.db import engine
 from app.services.data_import_export import stream_export_data
 from app.services.logs import DEFAULT_LOG_PAGE_SIZE
+from tests.utils.tenancy import follow_channels
 
 PREFIX = f"{settings.API_V1_STR}/data"
 
@@ -31,6 +33,11 @@ def _auth(client: TestClient) -> dict[str, str]:
 
 
 def _seed_logs(client: TestClient, headers: dict[str, str], count: int) -> None:
+    # Ticket 21: a sync log is `FOLLOW_SCOPED` Channel telemetry (ticket 19), so
+    # `create_logs` refuses one for a Channel the caller does not follow. Before
+    # the write, not after — the refusal is what would leave the export empty.
+    with Session(engine) as session:
+        follow_channels(session, "ch")
     client.post(
         f"{PREFIX}/logs/sync",
         json=[

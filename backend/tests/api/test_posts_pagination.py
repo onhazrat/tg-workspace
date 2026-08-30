@@ -14,9 +14,12 @@ from __future__ import annotations
 import time
 
 from fastapi.testclient import TestClient
+from sqlmodel import Session
 
 from app.core.config import settings
+from app.core.db import engine
 from app.services.posts import DEFAULT_POST_PAGE_SIZE, MAX_POST_PAGE_SIZE
+from tests.utils.tenancy import follow_channels
 
 PREFIX = f"{settings.API_V1_STR}/data"
 CHANNEL = "pagination_ch"
@@ -62,6 +65,11 @@ def _seed(
         ],
         headers=headers,
     )
+    # Ticket 21: `POST /data/posts/bulk` creates no Channel and no Follow, so
+    # under enforcement the rows it writes are invisible — `Post` is
+    # `FOLLOW_SCOPED` and the EXISTS has nothing to correlate against.
+    with Session(engine) as session:
+        follow_channels(session, channel)
 
 
 def test_returns_newest_first(client: TestClient) -> None:

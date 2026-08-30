@@ -240,7 +240,7 @@ stay personal. One person's settings can never delete another's evidence.
 - [ ] Channels with no Followers are collected
 - [ ] Asset pruning stays global
 
-## 21. Enable enforcement and prove isolation (integrate)
+## 21. Enable enforcement and prove isolation (integrate) — DONE
 **Blocked by:** none — 15, 16, 17, 18, 19, 20, 30, 32, 34 and 35 all done as of 2026-08-29 (`258b7b9`).
 **Blocks 22, 26, 28, 29.**
 
@@ -260,36 +260,50 @@ regenerates, so the population refills rather than shrinking.
 Ships as four PRs, flag last, so the flip lands on ground that is already clean:
 
 **PR 1 — close the creation paths.** No behaviour change on a single-account deployment.
-- [ ] The four log `upsert_*` take a required, non-optional `user_id`
-- [ ] `EmbeddingLog` is stamped at both `embeddings.py` call sites, with the id the caller already holds
-- [ ] `create_job`'s `user_id` is required, and no call site spells `str(x) if x else None`
-- [ ] The six `ChannelSettingGroup` constructors require an owner, and the `user_id or channel.user_id` fallbacks are gone
-- [ ] `_regenerate_one` cannot mint an unowned Summary, payload, or log
-- [ ] The sync `user_id` chain carries a real account from the queue message to `_save_network_telemetry`
-- [ ] `scripts/audit_tenancy_drift.py` derives its owner tables from `owner_backfill_inventory()`, so it stops counting ticket 19's deliberately ownerless sync logs as drift
-- [ ] A guard proves no `USER_OWNED` row can be created without an owner, walked from the AST
+- [x] The four log `upsert_*` take a required, non-optional `user_id`
+- [x] `EmbeddingLog` is stamped at both `embeddings.py` call sites, with the id the caller already holds
+- [x] `create_job`'s `user_id` is required, and no call site spells `str(x) if x else None`
+- [x] The six `ChannelSettingGroup` constructors require an owner, and the `user_id or channel.user_id` fallbacks are gone
+- [x] `_regenerate_one` cannot mint an unowned Summary, payload, or log
+- [x] The sync `user_id` chain carries a real account from the queue message to `_save_network_telemetry`
+- [x] `scripts/audit_tenancy_drift.py` derives its owner tables from `owner_backfill_inventory()`, so it stops counting ticket 19's deliberately ownerless sync logs as drift
+- [x] A guard proves no `USER_OWNED` row can be created without an owner, walked from the AST
 
 **PR 2 — delete the single-operator helper.** The behaviour change.
-- [ ] `services/operator.py` is deleted, with its local-dev "no scoped channels, use all channels" fallback
-- [ ] The call sites that already hold a real `current_user.id` go through `scoped_select`
-- [ ] RAG's vector search takes the seam instead of `channel_names_for_operator`
-- [ ] `run_auto_sync` loops per owner, each account's due set computed from **its own follow's** setting group
-- [ ] `run_auto_summary` regenerates each due Summary as its own owner
-- [ ] `run_translation_batch` selects over the channels anyone follows, because a translation is corpus
-- [ ] `resolve_follow_owner` survives — it answers a different question, and four migrations document parity with its rule
-- [ ] `test_auto_sync_scopes_to_operator_channels` is inverted, not deleted
+- [x] `services/operator.py` is deleted, with its local-dev "no scoped channels, use all channels" fallback
+- [x] The call sites that already hold a real `current_user.id` go through `scoped_select`
+- [x] RAG's vector search takes the seam instead of `channel_names_for_operator`
+- [x] `run_auto_sync` loops per owner, each account's due set computed from **its own follow's** setting group
+- [x] `run_auto_summary` regenerates each due Summary as its own owner
+- [x] `run_translation_batch` selects over the channels anyone follows, because a translation is corpus
+- [x] `resolve_follow_owner` survives — it answers a different question, and four migrations document parity with its rule
+- [x] `test_auto_sync_scopes_to_operator_channels` is inverted, not deleted
 
 **PR 3 — the columns stop permitting it.**
-- [ ] Owner columns are non-null with real cascading keys, added without exclusive locks on large tables
-- [ ] The residual global setting-group presets are reconciled first, against the unique index rather than only the `UPDATE`'s predicate
-- [ ] The guard has been watched to fail
+- [x] Owner columns are non-null with real cascading keys, added without exclusive locks on large tables
+- [x] The residual global setting-group presets are reconciled first, against the unique index rather than only the `UPDATE`'s predicate
+- [x] The guard has been watched to fail
 
 **PR 4 — the flip.**
-- [ ] An isolation test parametrised over the whole mounted route inventory passes for two accounts
-- [ ] Another account's row returns not-found on read, update, and delete
-- [ ] Deleting an account cascades its rows while shared Channels and Posts survive
-- [ ] `test_the_flag_ships_off` is inverted, not deleted
-- [ ] The suite is green with enforcement both off and on — measured at **159 failed, 1753 passed** with the flag on before any of this work
+- [x] An isolation test parametrised over the whole mounted route inventory passes for two accounts
+- [x] Another account's row returns not-found on read, update, and delete
+- [x] Deleting an account cascades its rows while shared Channels and Posts survive
+- [x] `test_the_flag_ships_off` is inverted, not deleted
+- [x] The suite is green with enforcement both off and on — measured at **159 failed, 1753 passed** with the flag on before any of this work
+
+**Shipped as four PRs** — #156 `ba01586`, #157 `5376f4c`, #158 `0f7f91e`, and the flip. Each landed
+on `main` and on staging before the next began. **The suite is green in both flag states, 1947 tests
+each way.** `TENANCY_ENFORCED` now ships **on**; off is the rollback, and
+`test_account_isolation.py` states what that costs — pre-seam means every account sees every
+account's rows, because that is what a single-operator deployment's queries did.
+
+Three things the flip found that no note predicted, all now recorded in the ticket file: the sync
+**cancel** route let any account stop any other's sync on the shipping config (the regression arrived
+by making a row *better* owned); PR 3's cascading key **orphaned `tg_channels.setting_group_id`**,
+which has no key of its own, so `DELETE /users/me` could 500 a channel another account follows; and
+the migration's lock-avoidance recipe **did nothing**, because alembic wraps a revision in one
+transaction. `POST /data/posts/bulk` writes rows nobody can read until the handle is followed — left
+for **ticket 28**, which is where import learns to carry a subject.
 
 ## 22. Drop the superseded columns (contract)
 **Blocked by:** 21

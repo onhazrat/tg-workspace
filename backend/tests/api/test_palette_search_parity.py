@@ -26,6 +26,7 @@ from sqlmodel import Session
 from app.core.config import settings
 from app.core.db import engine
 from app.models_tg import Post
+from tests.utils.tenancy import follow_channels
 
 PREFIX = f"{settings.API_V1_STR}/data"
 
@@ -53,6 +54,11 @@ def _seed(rows: list[tuple[str, int, str, int]]) -> None:
                 )
             )
         session.commit()
+        # Ticket 21: `Post` is `FOLLOW_SCOPED`, so under enforcement a bare
+        # row with no Channel and no Follow is invisible to everybody. These
+        # read back through the test client as `FIRST_SUPERUSER`, which is the
+        # operator `follow_channels` defaults to.
+        follow_channels(session, *{row[0] for row in rows})
 
 
 def _search(

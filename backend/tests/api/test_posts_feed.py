@@ -16,8 +16,11 @@ import time
 from typing import Any
 
 from fastapi.testclient import TestClient
+from sqlmodel import Session
 
 from app.core.config import settings
+from app.core.db import engine
+from tests.utils.tenancy import follow_channels
 
 PREFIX = f"{settings.API_V1_STR}/data"
 
@@ -43,6 +46,15 @@ def _feed(
 
 def _bulk(client: TestClient, headers: dict[str, str], posts: list[dict]) -> None:
     client.post(f"{PREFIX}/posts/bulk", json=posts, headers=headers)
+    # Ticket 21: `POST /data/posts/bulk` writes Posts and creates no Channel and
+    # no Follow, so under enforcement every row it writes is invisible — `Post`
+    # is `FOLLOW_SCOPED` and the EXISTS has nothing to correlate against. The
+    # follow is seeded here rather than in each test because every test in this
+    # file reads back what it just posted, which is the case that stops working.
+    with Session(engine) as session:
+        follow_channels(
+            session, *{str(p["channelName"]) for p in posts if p.get("channelName")}
+        )
 
 
 def _seed_channel(

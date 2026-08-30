@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import time
 
+import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import delete as sa_delete
 from sqlmodel import Session
@@ -25,6 +26,8 @@ from sqlmodel import Session
 from app.core.config import settings
 from app.core.db import engine
 from app.models_tg import SyncLog, SyncLogPayload
+from app.services.logs import upsert_sync_log
+from tests.utils.tenancy import follow_channels
 
 PREFIX = f"{settings.API_V1_STR}/data"
 
@@ -61,6 +64,12 @@ def _post_log(
     if with_payload:
         body["fullRequest"] = {"url": f"https://t.me/s/ch?before={log_id}"}
         body["fullResponse"] = _body(log_id)
+    # Ticket 21: a sync log is Channel telemetry (ticket 19), so it is
+    # `FOLLOW_SCOPED` — under enforcement it is readable by the followers of the
+    # Channel it names and by nobody else. No `user_id`: these read through the
+    # client as `FIRST_SUPERUSER`, the operator `follow_channels` defaults to.
+    with Session(engine) as session:
+        follow_channels(session, "ch")
     client.post(f"{PREFIX}/logs/sync", json=[body], headers=headers)
 
 
@@ -156,17 +165,99 @@ def test_log_without_bodies_stores_no_payload_row(client: TestClient) -> None:
         assert session.get(SyncLogPayload, log_id) is None
 
 
-def test_reimport_without_bodies_clears_a_stale_payload(client: TestClient) -> None:
-    headers = _auth(client)
+def test_reimport_without_bodies_clears_a_stale_payload() -> None:
+    """The clear branch, exercised through the door that still allows a rewrite.
+
+    This used to POST the same log id twice through `/data/logs/sync`. Ticket 19
+    made that door **create-only** for follow-scoped telemetry — an id that
+    already names a row is refused outright, because `upsert_sync_log`
+    overwrites `status`, `error`, `posts_count` and the bodies, so a merge lets
+    one Follower rewrite telemetry every other Follower reads. That refusal is
+    gated on the flag, so it began applying when ticket 21 PR 4 flipped it, and
+    this test started asserting a rewrite the API is meant to refuse.
+
+    The behaviour under test is unchanged and still reachable: `upsert_sync_log`
+    has other callers, and `data_import_export` is the one that legitimately
+    re-imports arbitrary history. So the test calls the service the importer
+    calls, rather than asking the API for something ticket 19 decided it should
+    not do. `test_the_api_door_refuses_a_second_write_to_one_log_id` below is
+    the other half.
+    """
     log_id = "payload-cleared"
     ts = int(time.time() * 1000)
+    with Session(engine) as session:
+        follow_channels(session, "ch")
+        upsert_sync_log(
+            session,
+            {
+                "id": log_id,
+                "channelName": "ch",
+                "status": "success",
+                "timestamp": ts,
+                "fullRequest": {"url": "https://t.me/s/ch"},
+                "fullResponse": _body(log_id),
+            },
+        )
+        session.commit()
+        assert session.get(SyncLogPayload, log_id) is not None
+
+    with Session(engine) as session:
+        upsert_sync_log(
+            session,
+            {
+                "id": log_id,
+                "channelName": "ch",
+                "status": "success",
+                "timestamp": ts,
+            },
+        )
+        session.commit()
+        assert session.get(SyncLogPayload, log_id) is None
+
+
+def test_the_api_door_refuses_a_second_write_to_one_log_id(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Ticket 19's create-only rule, now that the flag makes it apply.
+
+    Pinned on rather than left to the default: the rule is gated, so with
+    enforcement off this door still merges and the test would describe the
+    rollback state while claiming to describe this one.
+
+    Written when the test above moved off the API, because the reason it moved
+    is itself a claim nothing was asserting: a Follower may append telemetry for
+    a Channel they watch and may not rewrite what another Follower already
+    recorded. 404 rather than 409, with the string an absent row gets — a
+    distinguishable refusal would move the enumeration oracle into the payload.
+    """
+    monkeypatch.setattr(settings, "TENANCY_ENFORCED", True)
+    headers = _auth(client)
+    log_id = "payload-create-only"
+    ts = int(time.time() * 1000)
     _post_log(client, headers, log_id, timestamp=ts)
+
     with Session(engine) as session:
         assert session.get(SyncLogPayload, log_id) is not None
 
-    _post_log(client, headers, log_id, timestamp=ts, with_payload=False)
+    second = client.post(
+        f"{PREFIX}/logs/sync",
+        json=[
+            {
+                "id": log_id,
+                "channelName": "ch",
+                "status": "failed",
+                "timestamp": ts,
+            }
+        ],
+        headers=headers,
+    )
+
+    assert second.status_code == 404, second.text
     with Session(engine) as session:
-        assert session.get(SyncLogPayload, log_id) is None
+        assert session.get(SyncLogPayload, log_id) is not None, (
+            "the refused rewrite still cleared the payload it was not allowed to touch"
+        )
 
 
 def test_deleting_a_log_deletes_its_payload(client: TestClient) -> None:

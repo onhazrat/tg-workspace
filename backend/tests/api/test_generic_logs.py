@@ -19,9 +19,12 @@ from typing import Any
 
 import pytest
 from fastapi.testclient import TestClient
+from sqlmodel import Session
 
 from app.core.config import settings
+from app.core.db import engine
 from app.services.logs import LOG_MODELS
+from tests.utils.tenancy import follow_channels
 
 PREFIX = f"{settings.API_V1_STR}/data"
 
@@ -51,6 +54,15 @@ FIXTURES: dict[str, tuple[str, dict[str, Any]]] = {
         {"url": "https://t.me/x", "method": "GET", "status": "ok", "duration": 0.2},
     ),
 }
+
+
+@pytest.fixture(autouse=True)
+def _follow_the_telemetry_channel() -> None:
+    # Ticket 21: a sync log is `FOLLOW_SCOPED` Channel telemetry (ticket 19), so
+    # under enforcement `create_logs` refuses one for a Channel the caller does
+    # not follow, and a by-id read of it answers 404.
+    with Session(engine) as session:
+        follow_channels(session, "ch")
 
 
 def _auth(client: TestClient) -> dict[str, str]:

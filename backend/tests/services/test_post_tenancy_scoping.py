@@ -82,6 +82,21 @@ def enforced(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(config.settings, "TENANCY_ENFORCED", True)
 
 
+@pytest.fixture
+def unenforced(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Turn the seam off for one test — the rollback state, since PR 4.
+
+    The flag-off tests here used to read the ambient default and needed no
+    fixture. Ticket 21 PR 4 flipped that default, so what they describe is what
+    an operator gets by setting `TENANCY_ENFORCED=false` in `.env`. Still worth
+    asserting: it is the programme's rollback, and a revert that only
+    half-reverts is worse than none.
+    """
+    from app.core import config
+
+    monkeypatch.setattr(config.settings, "TENANCY_ENFORCED", False)
+
+
 def _post(
     session: Session,
     channel_name: str,
@@ -129,7 +144,10 @@ def test_feed_hides_posts_from_a_channel_you_do_not_follow(
 
 
 def test_feed_is_unfiltered_while_the_flag_is_off(
-    session: Session, user: User, other_user: User
+    session: Session,
+    user: User,
+    other_user: User,
+    unenforced: None,
 ) -> None:
     """The one thing this ticket promises not to change yet."""
     _split_corpus(session, user, other_user)
@@ -201,7 +219,10 @@ def test_lookup_omits_a_post_you_may_not_see(
 
 
 def test_lookup_is_unfiltered_while_the_flag_is_off(
-    session: Session, user: User, other_user: User
+    session: Session,
+    user: User,
+    other_user: User,
+    unenforced: None,
 ) -> None:
     mine, theirs = _split_corpus(session, user, other_user)
 
@@ -225,7 +246,10 @@ def test_counts_exclude_a_channel_you_do_not_follow(
 
 
 def test_counts_are_unfiltered_while_the_flag_is_off(
-    session: Session, user: User, other_user: User
+    session: Session,
+    user: User,
+    other_user: User,
+    unenforced: None,
 ) -> None:
     mine, theirs = _split_corpus(session, user, other_user)
 
@@ -331,7 +355,10 @@ def test_discover_aggregates_only_posts_you_may_see(
 
 
 def test_discover_is_unfiltered_while_the_flag_is_off(
-    session: Session, user: User, other_user: User
+    session: Session,
+    user: User,
+    other_user: User,
+    unenforced: None,
 ) -> None:
     add_test_channel(session, "t16-carrier", user_id=user.id)
     add_test_channel(session, "t16-hidden", user_id=other_user.id)

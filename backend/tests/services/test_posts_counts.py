@@ -10,10 +10,16 @@ from app.core.db import engine
 from app.models_tg import Post
 from app.services.post_filters import PostFilters
 from app.services.posts import count_posts_in_scope
-from tests.utils.tenancy import ANY_READER
+from tests.utils.tenancy import ANY_READER, follow_channels
 
 
 def _add(session: Session, channel: str, post_id: int, **kw: Any) -> None:
+    # Ticket 21: `Post` is `FOLLOW_SCOPED`, so under enforcement a bare row with
+    # no Channel and no Follow is invisible to everybody. These tests read as
+    # `ANY_READER`, so that is the account the follow belongs to — one owned by
+    # the operator would leave them exactly as empty, passing for a new wrong
+    # reason.
+    follow_channels(session, channel, user_id=ANY_READER)
     session.add(
         Post(
             channel_name=channel,

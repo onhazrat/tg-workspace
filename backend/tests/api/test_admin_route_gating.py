@@ -58,6 +58,7 @@ from app.services.logs import (
 )
 from app.services.scraper_jobs import SyncJobState
 from app.services.tenancy import Scope, scope_of
+from tests.utils.tenancy import follow_channels
 from tests.utils.user import create_random_user
 
 PREFIX = settings.API_V1_STR
@@ -515,6 +516,10 @@ def test_the_owned_types_did_not_join_the_admin_gate(
 # ------------------------------------------------- the job nobody owns (23)
 
 
+#: The Channel the seeded telemetry names. See `_seed_log`.
+_LOG_CHANNEL = "gate-telemetry-ch"
+
+
 def _seed_log(log_type: str, log_id: str, owner: uuid.UUID) -> None:
     """Write one log row and close the session before the request goes out.
 
@@ -525,7 +530,19 @@ def _seed_log(log_type: str, log_id: str, owner: uuid.UUID) -> None:
     is the only version of this that cannot do that.
     """
     with Session(engine) as session:
-        _UPSERTS[log_type](session, {"id": log_id, "timestamp": 1}, owner)
+        # Ticket 21: a sync log is `FOLLOW_SCOPED` Channel telemetry (ticket
+        # 19), so under enforcement it is reachable only through a follow — and
+        # a row with no `channelName` at all is reachable by nobody, because
+        # `""` is not a handle anyone can follow. The Channel is named and
+        # followed by the operator, which is the account these routes are
+        # called as.
+        if log_type in SHARED_LOG_TYPES:
+            follow_channels(session, _LOG_CHANNEL)
+        _UPSERTS[log_type](
+            session,
+            {"id": log_id, "timestamp": 1, "channel_name": _LOG_CHANNEL},
+            owner,
+        )
         session.commit()
 
 
