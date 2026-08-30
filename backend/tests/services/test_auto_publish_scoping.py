@@ -26,17 +26,22 @@ scheduler goes on publishing as somebody else's bot until ticket 21 flips the
 flag, which is the half-fix shape ticket 30 named — so every battery below is
 parametrised, and gating the check fails only the flag-off half.
 
-**A NULL owner on either side is permitted while the flag is off and refused
-under enforcement**, which is `assert_owner_on_write`'s existing asymmetry
-reached from a third direction. `user_id` is nullable on `tg_bot_credentials`,
-`tg_chat_destinations` *and* `tg_summaries`, so the credential a single-operator
-deployment has been publishing with since before the stamp existed still works
-today and stops the moment enforcement arrives. That is **ticket 21's bill**,
-pinned here rather than left for an operator to discover as a publish that
-silently stopped. It is also where this path parts from ticket 32: that ticket
-refused to match NULL as "mine" for the *list*, because handing every account
-the deployment's own credential is a leak. Refusing to *use* one is not a leak,
-so the asymmetry is deliberate on both sides.
+**The NULL-owner batteries are gone, and ticket 21 is why.** They used to pin
+`assert_owner_on_write`'s one asymmetry from a third direction: `user_id` was
+nullable on `tg_bot_credentials`, `tg_chat_destinations` *and* `tg_summaries`,
+so the credential a single-operator deployment had been publishing with since
+before the stamp existed still worked with the flag off and stopped the moment
+enforcement arrived. That was **ticket 21's bill**, pinned here rather than left
+for an operator to discover as a publish that silently stopped.
+
+PR 3 of ticket 21 paid it: those three columns are `NOT NULL` with cascading
+keys, so the row shape is impossible rather than hidden. What is left in its
+place asserts the database refuses the seed. The branch survives in `may_act_on`
+and is still gated, because the seam's primitives take `uuid.UUID | None` and
+`SyncLog` genuinely has no owner. Where this path parted from ticket 32 is
+unchanged and still worth knowing: that ticket refused to match NULL as "mine"
+for the *list*, because handing every account the deployment's own credential is
+a leak, while refusing to *use* one is not.
 
 **The refusal is visible in the publish log.** The scheduler is unattended;
 nobody is watching a 403 that never renders. An absent destination used to
@@ -73,12 +78,28 @@ lives at anyway.
 * have a by-id read call `may_act_on` → the declared-caller guard fails
 * make `may_act_on`'s arguments positional → the keyword guard fails
 
-**One mutation was watched passing, and it changed the work.** Attributing the
-send to `dest.user_id` instead of `summary.user_id` passed all nineteen tests,
-because every one of them gave the Summary and the destination the same owner —
-so the wrong id and the right id were the same id. The wiring guard now runs
-against an *ownerless* destination, the one row shape where the two answers
-differ, and that shape pins the destination side of the NULL rule as well.
+**One mutation was watched passing, and it changed the work twice.**
+Attributing the send to `dest.user_id` instead of `summary.user_id` passed all
+nineteen tests, because every one of them gave the Summary and the destination
+the same owner — so the wrong id and the right id were the same id. The wiring
+guard was rewritten to run against an *ownerless* destination, the one row shape
+where the two answers differed.
+
+Ticket 21 PR 3 then made that shape impossible, so the guard was re-cut a second
+time onto the shape that still separates them: a Summary belonging to one
+account naming **another account's** credential and destination, which is ticket
+33's own exploit rather than a legacy artefact. Correct code acts as the
+Summary's owner and refuses; code deriving the actor from the destination finds
+both rows to be that account's own and publishes. Watched failing in both flag
+states.
+
+The narrow version of that mutation — swapping only the `acting_user_id`
+argument at the `publish_summary_text` call — is now **equivalent**, because
+reaching that line means the destination check one branch above has just
+compared those two values. Watched passing, and left that way deliberately: the
+check is what makes the attribution safe, so the guard belongs on the check.
+The success path carries the one positive assertion on the actor, in
+`test_your_own_destination_still_publishes`.
 """
 
 from __future__ import annotations
@@ -92,6 +113,7 @@ from collections.abc import Iterator
 from typing import Any
 
 import pytest
+from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, col, delete, select
 
 from app.core.db import engine
@@ -408,47 +430,25 @@ def test_your_own_credential_still_publishes(
     assert len(no_network.calls) == 1
 
 
-@BOTH_FLAG_STATES
-def test_an_ownerless_credential_is_ticket_21s_bill(
-    session: Session,
-    user: User,
-    monkeypatch: pytest.MonkeyPatch,
-    no_network: _Spy,
-    decrypt: _Spy,
-    enforced: bool,
-) -> None:
-    """Usable now, refused under enforcement — pinned in both directions.
+def test_an_ownerless_credential_can_no_longer_exist(session: Session) -> None:
+    """Ticket 21 paid the bill, so the row shape is gone rather than pinned.
 
-    `user_id` is nullable on `tg_bot_credentials`, so the credential a
-    single-operator deployment has been publishing with since before the stamp
-    existed carries no owner. Refusing it today would fail closed against the
-    only account that install has, which is the trap `assert_owner`'s docstring
-    names. Under enforcement it becomes nobody's and auto-publish stops until
-    ticket 21's owner backfill runs — that is a prerequisite of the flag flip,
-    not a surprise for whoever throws the switch.
+    This used to assert both directions over a credential with no owner: usable
+    with the flag off, because refusing it would fail closed against the only
+    account a single-operator install has, and refused under enforcement,
+    because a row nobody can read must not be one anybody can publish with. The
+    second half was explicitly ticket 21's precondition — auto-publish would
+    have stopped the moment the flag was thrown.
+
+    PR 3 settles it by making the column `NOT NULL` with a cascading key, after
+    ticket 34's migration gives every existing row an owner. Asserted rather
+    than deleted: this is a *token decryption reached by a guessable id*, and a
+    later migration that quietly relaxed the constraint would put the unowned
+    credential back with nothing left to complain.
     """
-    _set_flag(monkeypatch, enforced)
-    _seed_bot(session, "bot-ownerless", None)
-
-    if enforced:
-        with pytest.raises(ValueError):
-            _publish(
-                session,
-                acting_user_id=user.id,
-                credential_id="bot-ownerless",
-                chat_id="chat-1",
-                text="hello",
-            )
-        assert decrypt.calls == []
-    else:
-        result = _publish(
-            session,
-            acting_user_id=user.id,
-            credential_id="bot-ownerless",
-            chat_id="chat-1",
-            text="hello",
-        )
-        assert result["success"] is True
+    with pytest.raises(IntegrityError):
+        _seed_bot(session, "bot-ownerless", None)
+    session.rollback()
 
 
 @BOTH_FLAG_STATES
@@ -701,43 +701,60 @@ def test_a_foreign_credential_says_why_in_the_publish_log(
 def test_the_summarys_owner_is_who_the_send_is_attributed_to(
     session: Session,
     user: User,
+    other_user: User,
     monkeypatch: pytest.MonkeyPatch,
     no_send: _Spy,
     enforced: bool,
 ) -> None:
-    """The wiring, pinned — on the one row shape that can tell the two apart.
+    """The wiring, pinned — on a row shape that can still tell the two apart.
 
     `_auto_publish` has no `current_user`, so the acting owner must be the
-    Summary's. Every other test here gives the Summary and the destination the
-    same owner, which means passing `dest.user_id` by mistake reaches the
-    identical answer: this guard was **watched passing that mutation** before it
-    was written this way. An *ownerless* destination separates them — the
-    Summary's owner is an id and the destination's is `None`, and only the
-    first is who the send is on behalf of.
+    Summary's. Most tests here give the Summary and the destination the same
+    owner, which means passing `dest.user_id` by mistake reaches the identical
+    answer: this guard was **watched passing that mutation** before it was
+    written to separate them.
 
-    The same row shape pins the destination side of the NULL rule, which is the
-    other half of ticket 21's bill: a legacy destination carrying no stamp is
-    usable now and refused once enforcement arrives.
+    It used to separate them with an *ownerless* destination — an id on one side
+    and `None` on the other. PR 3 of ticket 21 makes that row unrepresentable,
+    so the separator is now the exploit ticket 33 actually closed: a Summary
+    belonging to one account naming **another account's** credential and
+    destination, which `upsert_summary` allows because `publishBotId` is a
+    client-chosen string it passes straight into `extra`.
+
+    Correct code acts as the Summary's owner, so the bot check refuses before
+    `decrypt_token` and nothing is sent. Code that acted as the destination's
+    owner would find both rows to be that account's own, pass both checks, and
+    publish — so a send here is the mutation, and the assertion is that there
+    is none.
+
+    Ungated on purpose, hence both flag states: two non-NULL owners that differ
+    is `may_act_on`'s identity branch, which never consults the flag.
+
+    One mutation this deliberately does **not** catch, because it is no longer a
+    mutation: swapping `acting_user_id=owner_id` for `acting_user_id=dest.user_id`
+    at the `publish_summary_text` call alone. Reaching that line means the
+    destination check one branch above already accepted, and it accepted by
+    comparing those two values — so at that point they are equal and the swap is
+    equivalent. Watched passing, and left that way on purpose: the check is what
+    makes the attribution safe, so the guard belongs on the check. Move the
+    check and this test has to move with it.
     """
     _set_flag(monkeypatch, enforced)
     _seed_bot(session, "bot-of-mine", user.id)
-    _seed_dest(session, "dest-ownerless", None)
-    extra = _extra("bot-of-mine", "dest-ownerless")
-    summary = _seed_summary(session, user.id, extra)
+    _seed_dest(session, "dest-of-mine", user.id)
+    extra = _extra("bot-of-mine", "dest-of-mine")
+    summary = _seed_summary(session, other_user.id, extra)
 
     _auto_publish(session, summary, extra)
 
+    assert no_send.calls == [], (
+        "the send was attributed to the credential's owner rather than the "
+        "Summary's — that is ticket 33's exploit, reached through the actor "
+        "argument instead of through the id"
+    )
     logs = _publish_logs(session, summary.id)
     assert len(logs) == 1
-
-    if enforced:
-        assert no_send.calls == []
-        assert logs[0].status == "failed"
-        return
-
-    assert len(no_send.calls) == 1
-    assert no_send.calls[0]["kwargs"]["acting_user_id"] == user.id
-    assert logs[0].status == "success"
+    assert logs[0].status == "failed"
 
 
 @BOTH_FLAG_STATES
@@ -748,7 +765,16 @@ def test_your_own_destination_still_publishes(
     no_send: _Spy,
     enforced: bool,
 ) -> None:
-    """The half that would make a fail-closed bug look like a fix."""
+    """The half that would make a fail-closed bug look like a fix.
+
+    It also carries the one *positive* assertion on the actor. The attribution
+    guard above can only refuse — every successful publish now requires the
+    Summary, the credential and the destination to share an owner, so the three
+    ids coincide on the success path and no arrangement of rows separates them
+    there. Restored after review pointed out the rewrite had dropped it: the
+    refusing direction alone would be satisfied by a `publish_summary_text` that
+    was handed `None` and declined everything.
+    """
     _set_flag(monkeypatch, enforced)
     _seed_bot(session, "bot-of-mine", user.id)
     _seed_dest(session, "dest-of-mine", user.id)
@@ -758,6 +784,10 @@ def test_your_own_destination_still_publishes(
     _auto_publish(session, summary, extra)
 
     assert len(no_send.calls) == 1
+    assert no_send.calls[0]["kwargs"]["acting_user_id"] == user.id, (
+        "the send went out attributed to somebody other than the Summary's "
+        "owner, or to nobody at all"
+    )
 
     logs = _publish_logs(session, summary.id)
     assert len(logs) == 1

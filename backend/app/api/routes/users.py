@@ -26,6 +26,7 @@ from app.models import (
     UserUpdateMe,
 )
 from app.services import rbac
+from app.services.channel_setting_groups import release_groups_of_deleted_account
 from app.utils import generate_new_account_email, send_email
 
 router = APIRouter(prefix="/users", tags=["users"])
@@ -154,6 +155,11 @@ def delete_user_me(session: SessionDep, current_user: CurrentUser) -> Any:
             status_code=403,
             detail="Account administrators are not allowed to delete themselves",
         )
+    # Before the delete, not after: ticket 21's cascading key takes this
+    # account's setting groups with it, and the two columns that name a group by
+    # id have no key of their own. See `release_groups_of_deleted_account` — a
+    # Channel another account still follows would otherwise answer 500.
+    release_groups_of_deleted_account(session, current_user.id)
     session.delete(current_user)
     session.commit()
     return Message(message="User deleted successfully")
@@ -267,6 +273,8 @@ def delete_user(
         )
     statement = delete(Item).where(col(Item.owner_id) == user_id)
     session.exec(statement)
+    # See `delete_user_me`: the same repoint, because the same cascade runs.
+    release_groups_of_deleted_account(session, user_id)
     session.delete(user)
     session.commit()
     return Message(message="User deleted successfully")

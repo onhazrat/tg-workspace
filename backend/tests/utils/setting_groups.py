@@ -13,10 +13,15 @@ from app.services.channel_setting_groups import (
     get_or_create_restricted_group,
 )
 from app.services.follows import ensure_follow_for_channel, get_operator_user_id
+from tests.utils.tenancy import ANY_READER
 
 
 def freeze_channels_except(session: Session, keep_ids: set[str]) -> None:
-    operator_id = get_operator_user_id(session)
+    # `ensure_default_group` requires a real owner since ticket 21, and the
+    # bootstrap lookup answers None on a database whose superuser has not been
+    # created yet. `ANY_READER` is a real seeded account, so it is a truthful
+    # fallback rather than a placeholder the foreign key would reject.
+    operator_id = get_operator_user_id(session) or ANY_READER
     default_group = ensure_default_group(session, user_id=operator_id)
     frozen_group = get_or_create_restricted_group(session, user_id=operator_id)
     for channel in session.exec(select(Channel)).all():
@@ -36,7 +41,16 @@ def add_test_channel(
     user_id: uuid.UUID | None = None,
     **channel_fields,
 ) -> Channel:
-    """Insert a channel with a valid default setting group for service tests."""
+    """Insert a channel with a valid default setting group for service tests.
+
+    An omitted `user_id` means `ANY_READER`, not "nobody". Ticket 21 made
+    `tg_channel_setting_groups.user_id` `NOT NULL` with a foreign key, so a
+    channel seeded with no owner now fails at the setting group before it ever
+    reaches the Channel row — and a fabricated uuid fails at the key. The
+    any-reader account is real, which makes it the one honest default.
+    """
+    if user_id is None:
+        user_id = ANY_READER
     return upsert_sync_test_channel(
         session,
         channel_id=channel_id,
@@ -55,6 +69,9 @@ def upsert_sync_test_channel(
     group_fields: dict | None = None,
     channel_fields: dict | None = None,
 ) -> Channel:
+    # See `add_test_channel`: an absent owner means the any-reader account.
+    if user_id is None:
+        user_id = ANY_READER
     default_group = ensure_default_group(session, user_id=user_id)
     if group_fields:
         for key, value in group_fields.items():

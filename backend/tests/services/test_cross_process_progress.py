@@ -31,6 +31,10 @@ from app.services.scraper_jobs import (
     get_job,
 )
 
+# A real account: ticket 21's foreign key rejects a fabricated owner uuid.
+# These tests are about progress freshness, not about who owns the job.
+from tests.utils.tenancy import ANY_READER
+
 
 async def _await_channel_status(
     job_id: str, channel_id: str, wanted: str, timeout_s: float = 5.0
@@ -76,7 +80,7 @@ def test_a_watcher_sees_progress_the_row_does_not_have_yet() -> None:
         job = await create_job(
             channel_entries=[("chan-1", "chan-1")],
             source="Test",
-            user_id=str(uuid.uuid4()),
+            user_id=str(ANY_READER),
             sync_mode="individual",
         )
         # No `_active_jobs.clear()` here, deliberately. `create_job` does not
@@ -145,7 +149,7 @@ def test_creating_a_job_does_not_claim_it() -> None:
         job = await create_job(
             channel_entries=[("chan-1", "chan-1")],
             source="Test",
-            user_id=str(uuid.uuid4()),
+            user_id=str(ANY_READER),
             sync_mode="individual",
         )
         created_unclaimed = job.job_id not in scraper_jobs._active_jobs
@@ -177,7 +181,7 @@ def test_an_unclaimed_job_still_takes_progress_from_elsewhere() -> None:
         job = await create_job(
             channel_entries=[("chan-1", "chan-1")],
             source="Test",
-            user_id=str(uuid.uuid4()),
+            user_id=str(ANY_READER),
             sync_mode="individual",
         )
         await scraper_jobs.apply_progress_event(
@@ -223,7 +227,7 @@ def test_a_terminal_status_from_elsewhere_reaches_the_watcher() -> None:
         job = await create_job(
             channel_entries=[("chan-1", "chan-1")],
             source="Test",
-            user_id=str(uuid.uuid4()),
+            user_id=str(ANY_READER),
             sync_mode="individual",
         )
         assert get_job(job.job_id) is not None  # seed the mirror
@@ -268,7 +272,7 @@ def test_a_row_reread_cannot_walk_a_channel_backwards() -> None:
         job = await create_job(
             channel_entries=[("chan-1", "chan-1")],
             source="Test",
-            user_id=str(uuid.uuid4()),
+            user_id=str(ANY_READER),
             sync_mode="individual",
         )
         mirror = get_job(job.job_id)
@@ -301,7 +305,7 @@ def test_a_cancel_reaches_the_process_actually_running_the_sync() -> None:
         job = await create_job(
             channel_entries=[("chan-1", "chan-1")],
             source="Test",
-            user_id=str(uuid.uuid4()),
+            user_id=str(ANY_READER),
             sync_mode="individual",
         )
         # This process *is* the runner — which after ticket 10 means it said

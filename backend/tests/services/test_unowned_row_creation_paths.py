@@ -86,19 +86,18 @@ USER_OWNED_MODELS = frozenset(
 #: Construction sites that set the owner on the row **after** `__init__`, and
 #: why that is honest rather than a loophole.
 #:
-#: Both are payload halves, and both assign `row.user_id = user_id` on the very
-#: next statements — they have to, because the same code path also updates an
-#: *existing* payload row fetched by id, so the assignment cannot live in the
-#: constructor call without being written twice.
-OWNER_SET_AFTER_CONSTRUCTION: dict[str, str] = {
-    "services/summaries.py.SummaryPayload": (
-        "apply_summary_payload builds or reuses the row, then assigns "
-        "row.user_id from its required `user_id` parameter two lines later."
-    ),
-    "services/chat_sessions.py.ChatSessionPayload": (
-        "apply_chat_session_payload, same shape as its Summary twin above."
-    ),
-}
+#: Empty, and the emptiness is load-bearing. Both payload halves were listed
+#: here in PR 1 on the reasoning that they assign `row.user_id` a line later and
+#: share the statement with the *existing*-row branch. PR 3 made the column
+#: `NOT NULL`, and `ty` then rejected both constructor calls for the missing
+#: required argument — so the owner moved into the call and this guard failed on
+#: its own stale exemptions, which is what it is for. The assignment stayed,
+#: because it is what makes an existing payload follow its parent's owner.
+#:
+#: Kept as an empty mapping rather than deleted: the next model that genuinely
+#: needs deferred construction should land here with a reason, not as a new
+#: mechanism somebody invents under time pressure.
+OWNER_SET_AFTER_CONSTRUCTION: dict[str, str] = {}
 
 #: Construction sites that pass the owner inside a `**` unpacking, and why.
 #:
@@ -377,7 +376,7 @@ def _due_summary(session: Session, owner: uuid.UUID | None) -> Summary:
 
 
 def test_an_unowned_summary_is_not_picked_up_for_regeneration(
-    session: Session, user: User
+    legacy_owner_schema: None, session: Session, user: User
 ) -> None:
     """The refill loop, closed.
 
@@ -386,8 +385,13 @@ def test_an_unowned_summary_is_not_picked_up_for_regeneration(
     unowned payload and two unowned log rows. Ticket 34's backfill could never
     catch up with that, because it ran once and this runs every tick.
 
-    Asserted at the query rather than by running the job, because regenerating
-    calls an AI provider. The predicate is the whole fix.
+    Needs `legacy_owner_schema`, and that is worth reading as a result rather
+    than as plumbing: PR 3 makes an unowned Summary **unrepresentable**, so the
+    row this test is about can no longer be created against the shipping schema
+    and has to be constructed against the pre-migration one. The guard keeps its
+    value in the other direction — it now proves the query still filters if
+    somebody ever relaxes the column again, which is the regression a schema
+    constraint cannot catch on its own.
     """
     from app.jobs import auto_summary
 

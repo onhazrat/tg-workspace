@@ -190,7 +190,7 @@ def apply_chat_session_payload(
     session: Session,
     chat_session_id: str,
     *,
-    user_id: uuid.UUID | None,
+    user_id: uuid.UUID,
     updates: dict[str, Any],
     removals: set[str] | None = None,
 ) -> ChatSessionPayload | None:
@@ -209,7 +209,9 @@ def apply_chat_session_payload(
     if not updates and not removals:
         return existing
 
-    row = existing or ChatSessionPayload(chat_session_id=chat_session_id)
+    row = existing or ChatSessionPayload(
+        chat_session_id=chat_session_id, user_id=user_id
+    )
     for column in removals:
         setattr(row, column, None)
     for column, value in updates.items():

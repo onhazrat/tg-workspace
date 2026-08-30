@@ -45,6 +45,8 @@ from __future__ import annotations
 import time
 import uuid
 
+import pytest
+from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, select
 
 from app.core.db import engine
@@ -455,28 +457,28 @@ def test_network_logs_run_on_the_deployment_window() -> None:
         assert check.get(NetworkLog, "proxy-old") is None
 
 
-def test_a_log_nobody_owns_is_still_swept() -> None:
-    """`user_id` is nullable on all five tables and jobs write rows without one.
+def test_a_personal_log_nobody_owns_can_no_longer_be_written() -> None:
+    """The third thing `sharedLogRetentionDays` was for is gone; two remain.
 
-    Once the personal families moved to per-account windows those rows were
-    reachable by no window at all — a slow leak that looks exactly like
-    retention working.
+    Ticket 20 gave the deployment window three jobs: sync logs, which store no
+    owner at all (ticket 19); network logs, whose stamp is who triggered the
+    request rather than who owns the row; and **any log of the other three
+    families written with no owner**, because every `upsert_*` took `user_id` as
+    optional and background jobs routinely passed nothing. That third group was
+    reachable by no window once the personal families moved to per-account ones
+    — a leak that looks exactly like retention working.
+
+    PR 1 of ticket 21 made `user_id` required on the four personal upserts and
+    PR 3 makes the column `NOT NULL`, so the group is empty rather than swept.
+    The window keeps its other two jobs, which the two tests around this one
+    cover; this asserts the premise that went away, so that a later migration
+    relaxing the constraint fails here instead of leaking quietly for a month.
     """
     now = _now()
     old = now - 10 * DAY_MS
-    with Session(engine) as session:
-        me = _account(session)
-        _policy(session, sharedLogRetentionDays=7)
-        _prefs(session, me, logRetentionDays=0)
+    with Session(engine) as session, pytest.raises(IntegrityError):
         session.add(_llm("orphan", timestamp=old, user_id=None))
-        session.add(_publish("orphan-p", timestamp=old, user_id=None))
         session.commit()
-
-        run_retention_cleanup(session)
-
-    with Session(engine) as check:
-        assert check.get(LLMLog, "orphan") is None
-        assert check.get(PublishLog, "orphan-p") is None
 
 
 def test_the_deployment_window_does_not_reach_an_owned_personal_log() -> None:

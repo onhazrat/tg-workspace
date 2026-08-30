@@ -31,7 +31,7 @@ would put a fabricated uuid behind a foreign key.
 from __future__ import annotations
 
 import uuid
-from collections.abc import Iterable, Sequence
+from collections.abc import Callable, Iterable, Sequence
 from typing import Any
 
 from sqlalchemy import delete as sa_delete
@@ -237,6 +237,48 @@ def remove_follow(
         .returning(col(ChannelFollow.channel_id))
     )
     return session.execute(statement).first() is not None
+
+
+def repoint_follows_off_groups(
+    session: Session,
+    group_ids: set[str],
+    *,
+    except_user_id: uuid.UUID,
+    group_for: Callable[[uuid.UUID], str],
+) -> int:
+    """Move every follow naming one of `group_ids` onto its own owner's group.
+
+    Ticket 21 gave `tg_channel_setting_groups` a cascading key, so deleting an
+    account takes its setting groups with it — and `ChannelFollow.setting_group_id`
+    is a plain string with no key of its own. `ensure_follow_for_channel` copies
+    the Channel's group id onto each follow, and auto-follow files a Channel under
+    whoever scraped the handle first, so a second follower's row routinely names
+    the first follower's group. Left alone it names a row that is gone, and
+    `schedule_group_id` then resolves to nothing.
+
+    **The repointing lives here because this module is the table's only writer**
+    — `test_channel_creation_paths.py::test_the_follow_table_has_one_writer`. The
+    caller is `channel_setting_groups.release_groups_of_deleted_account`, which
+    owns the group half and passes `group_for` rather than being imported from
+    here, so the two aggregates stay one-directional.
+
+    A follow that belongs to the departing account is skipped: it cascades with
+    the account, and repointing it would write a row the delete is about to
+    remove. Does not commit — the delete route owns the transaction.
+    """
+    if not group_ids:
+        return 0
+    moved = 0
+    rows = session.exec(
+        select(ChannelFollow).where(col(ChannelFollow.setting_group_id).in_(group_ids))
+    ).all()
+    for follow in rows:
+        if follow.user_id == except_user_id:
+            continue
+        follow.setting_group_id = group_for(follow.user_id)
+        session.add(follow)
+        moved += 1
+    return moved
 
 
 def follow_exists(

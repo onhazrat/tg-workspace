@@ -43,6 +43,7 @@ from dataclasses import dataclass
 from typing import Any
 
 import pytest
+from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, col, delete
 
 from app.core.db import engine
@@ -216,31 +217,23 @@ def test_user_id_is_a_required_keyword(func: Callable[..., Any]) -> None:
     assert parameter.default is inspect.Parameter.empty
 
 
-@pytest.mark.usefixtures("unenforced")
 @pytest.mark.parametrize("family", FAMILIES, ids=lambda f: f.kind)
-def test_an_ownerless_row_is_visible_while_the_flag_is_off(
-    session: Session, user: User, family: Family
-) -> None:
-    family.seed(session, f"t32-{family.kind}-legacy", None)
+def test_an_ownerless_row_can_no_longer_exist(session: Session, family: Family) -> None:
+    """Ticket 21 paid the bill the pair of tests here used to record.
 
-    assert f"t32-{family.kind}-legacy" in _ids(family.list_(session, user.id))
+    Ticket 32 pinned an unowned credential from both sides: visible with the
+    flag off, invisible under enforcement — and said out loud that the second
+    half was a *defect waiting for an owner backfill*, because a row nobody can
+    read is a credential the deployment silently stops being able to publish
+    with. Matching NULL as "mine" was never the answer; it would hand every
+    account the deployment's own bot.
 
-
-@pytest.mark.usefixtures("enforced")
-@pytest.mark.parametrize("family", FAMILIES, ids=lambda f: f.kind)
-def test_an_ownerless_row_needs_ticket_21s_backfill(
-    session: Session, user: User, family: Family
-) -> None:
-    """Pinned, not fixed here — the fix is an owner backfill, which is 21's.
-
-    `user_id` is nullable on both tables, so a row written before the stamp
-    existed belongs to nobody and enforcement hides it from everybody. Matching
-    NULL as "mine" is the fallback the seam refuses by construction: it would
-    hand every account the deployment's own credential — its id, and with it the
-    auto-publish path that sends as that bot. So the row stays hidden and this
-    test says so out loud, which is what stops ticket 21 from flipping the flag
-    and discovering it in production.
+    PR 3 of ticket 21 is the answer instead: `user_id` is `NOT NULL` with a
+    cascading key on both tables, so the row shape is gone rather than hidden.
+    Asserted rather than deleted, because the whole hazard was a `NULL` nobody
+    noticed — one dropped constraint and the invisible-credential bug is back
+    with no test to say so.
     """
-    family.seed(session, f"t32-{family.kind}-legacy", None)
-
-    assert _ids(family.list_(session, user.id)) == set()
+    with pytest.raises(IntegrityError):
+        family.seed(session, f"t32-{family.kind}-legacy", None)
+    session.rollback()

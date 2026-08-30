@@ -21,6 +21,7 @@ from app.services.channel_setting_groups import (
 )
 from app.services.follows import ensure_follow_for_channel, get_operator_user_id
 from app.services.scraper_jobs import clear_jobs_for_tests
+from tests.utils.tenancy import ANY_READER
 
 PREFIX = f"{settings.API_V1_STR}/jobs"
 DATA = f"{settings.API_V1_STR}/data"
@@ -59,7 +60,7 @@ def _auth(client: TestClient) -> dict[str, str]:
 
 
 def test_builtin_group_sync_permission_defaults() -> None:
-    user_id = uuid.uuid4()
+    user_id = ANY_READER
     with Session(engine) as session:
         _, _, _, frozen, restricted = ensure_builtin_groups(session, user_id=user_id)
         session.commit()
@@ -76,7 +77,7 @@ def test_builtin_group_sync_permission_defaults() -> None:
 
 
 def test_channel_allows_sync_operation_matrix() -> None:
-    user_id = uuid.uuid4()
+    user_id = ANY_READER
     with Session(engine) as session:
         _, _, _, frozen, restricted = ensure_builtin_groups(session, user_id=user_id)
         session.commit()
@@ -92,7 +93,7 @@ def test_channel_allows_sync_operation_matrix() -> None:
 
 
 def test_channel_allows_reset_requires_bulk_flag_for_bulk() -> None:
-    user_id = uuid.uuid4()
+    user_id = ANY_READER
     with Session(engine) as session:
         _, _, _, frozen, restricted = ensure_builtin_groups(session, user_id=user_id)
         session.commit()
@@ -104,7 +105,7 @@ def test_channel_allows_reset_requires_bulk_flag_for_bulk() -> None:
 
 
 def test_move_channel_from_restricted_to_default() -> None:
-    user_id = uuid.uuid4()
+    user_id = ANY_READER
     with Session(engine) as session:
         default_group, _, _, _, restricted = ensure_builtin_groups(
             session, user_id=user_id

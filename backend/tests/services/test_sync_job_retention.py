@@ -43,6 +43,7 @@ from app.services.scraper_jobs import (
     prune_finished_jobs,
     reconcile_interrupted_jobs,
 )
+from tests.utils.tenancy import ANY_READER
 
 DAY_MS = 24 * 60 * 60 * 1000
 
@@ -56,6 +57,10 @@ def _job(session: Session, job_id: str, *, status: str, age_days: float) -> None
     session.add(
         SyncJobRow(
             id=job_id,
+            # A real account: ticket 21's foreign key rejects a fabricated uuid,
+            # and its NOT NULL rejects no owner at all. Retention is not about
+            # who owns the row, so any seeded account will do.
+            user_id=ANY_READER,
             status=status,
             source="test",
             channels=[],

@@ -279,10 +279,18 @@ def mapped_table(model: type[SQLModel]) -> Table:
 def owner_backfill_inventory() -> tuple[OwnerBackfill, ...]:
     """Every table ticket 34 has to stamp, derived rather than listed.
 
-    A `USER_OWNED` table with a nullable `user_id` is a table that can hold a
-    row nobody owns, and under enforcement such a row is invisible to every
-    account and refused to every writer. Ticket 34's migration stamps them all
-    before ticket 21 flips the flag.
+    A `USER_OWNED` table whose `user_id` is not part of its primary key is a
+    table that *could* hold a row nobody owns, and under enforcement such a row
+    is invisible to every account and refused to every writer. Ticket 34's
+    migration stamped them all; ticket 21's `d2e3f4a5b6c7` then made the columns
+    `NOT NULL` with cascading keys, so the state is now unrepresentable rather
+    than merely absent.
+
+    **The criterion is primary-key membership, not nullability**, and the
+    difference matters because the obvious version deletes itself: once ticket
+    21 succeeds, "nullable `user_id`" matches nothing and this returns an empty
+    inventory — silently un-guarding all fourteen tables and, in ticket 34's
+    guard, reducing a `TRUNCATE {tables} CASCADE` to `TRUNCATE  CASCADE`.
 
     **Derived from `SCOPES`, the way `SHARED_LOG_TYPES` and `IMPORT_WRITES`
     are.** A hand-written list is the failure the ticket exists to prevent: a
@@ -319,7 +327,20 @@ def owner_backfill_inventory() -> tuple[OwnerBackfill, ...]:
         if scope is not Scope.USER_OWNED:
             continue
         column = mapped_table(model).columns.get(OWNER_COLUMN)
-        if column is None or not column.nullable:
+        # `not column.nullable` until ticket 21, and that criterion *deleted
+        # itself*: PR 3 makes all fourteen non-null, so a nullability test
+        # returns an empty inventory the moment it succeeds — taking ticket
+        # 34's guard with it, and turning its `TRUNCATE {tables} CASCADE`
+        # into `TRUNCATE  CASCADE`, which PostgreSQL reads as a table named
+        # "cascade".
+        #
+        # Primary-key membership is the property that was doing the work all
+        # along. The four excused tables — ChannelFollow, DiscoverIgnoredChannel,
+        # QuotaUsage, UserSetting — carry `user_id` inside a composite primary
+        # key, so they could never express an unowned row and never needed a
+        # backfill. That is true before and after the columns become non-null,
+        # which is what makes it the right question to ask.
+        if column is None or column.primary_key:
             continue
         parent = OWNER_INHERITED_FROM.get(model)
         if parent is None:

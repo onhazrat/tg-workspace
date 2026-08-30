@@ -50,6 +50,7 @@ from app.services.sync_lanes import (
     MANUAL_SINGLE_NORMAL_LANE,
 )
 from tests.utils.setting_groups import add_test_channel
+from tests.utils.tenancy import ANY_READER
 from tests.utils.user import create_random_user
 
 CHANNEL_ID = "t12-shared"
@@ -517,7 +518,7 @@ def test_draining_a_lane_archives_its_messages_and_finishes_their_jobs() -> None
         job = await create_job(
             channel_entries=[("c1", "c1"), ("c2", "c2"), ("c3", "c3")],
             source="Test",
-            user_id=str(uuid.uuid4()),
+            user_id=str(ANY_READER),
             sync_mode="individual",
         )
         await sync_queue.enqueue_sync_job(job, None)
@@ -547,7 +548,7 @@ def test_draining_finishes_a_job_whose_messages_are_only_partly_purged() -> None
         job = await create_job(
             channel_entries=[("d1", "d1"), ("d2", "d2")],
             source="Test",
-            user_id=str(uuid.uuid4()),
+            user_id=str(ANY_READER),
             sync_mode="individual",
         )
         await sync_queue.enqueue_sync_job(job, None)

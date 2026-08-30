@@ -50,7 +50,7 @@ from app.services.sync_lane_control import (
     set_lane_paused,
 )
 from app.services.sync_lanes import lane_budget, lane_tier
-from app.services.tenancy import assert_owner
+from app.services.tenancy import assert_owner, assert_owner_on_write
 
 _TERMINAL_SYNC_STATUSES = frozenset({"completed", "failed", "cancelled"})
 
@@ -98,6 +98,44 @@ def _visible_job(
         require_permission(Permission.JOBS_MANAGE)(session, current_user)
         return job
     assert_owner(uuid.UUID(job.user_id), current_user.id, detail=_JOB_NOT_FOUND)
+    return job
+
+
+def _cancellable_job(
+    job: SyncJobState | None,
+    session: Session,
+    current_user: User,
+) -> SyncJobState:
+    """The job, if this caller may **stop** it — which is not a visibility question.
+
+    Same three cases as `_visible_job` and one different guard, for the rule
+    `test_import_write_scoping.py` states: a read may be gated, a write may not.
+    Cancelling is a write — it signals a sync another process is running — so it
+    takes `assert_owner_on_write`, which is the ungated one. The seam's flag is
+    deliberately not named here, for the reason `_visible_job` gives above.
+
+    Split out rather than shared because ticket 21 changed what the shared
+    version protected. Every sync job used to be either the caller's or
+    **nobody's**: the scheduler's carried a NULL owner, so a job that was not
+    yours was ownerless, and the `JOBS_MANAGE` branch above refused it whatever
+    the flag said. PR 1 gives the scheduler's jobs a real owner, and a foreign
+    job then fell through to the gated `assert_owner` alone — which on the
+    shipping config is a no-op, so any signed-in account could cancel any
+    other's in-flight sync by id. The regression arrived by making a row
+    *better* owned, which is the shape worth remembering.
+
+    A `JOBS_MANAGE` holder still reaches an ownerless job through the branch
+    above; what they do not get is a licence over other people's, because that
+    permission is about the scheduler rather than about other accounts.
+    """
+    if not job:
+        raise HTTPException(status_code=404, detail=_JOB_NOT_FOUND)
+    if not job.user_id:
+        require_permission(Permission.JOBS_MANAGE)(session, current_user)
+        return job
+    assert_owner_on_write(
+        uuid.UUID(job.user_id), current_user.id, detail=_JOB_NOT_FOUND
+    )
     return job
 
 
@@ -363,11 +401,12 @@ async def sync_job_events(
 async def cancel_sync_job(
     job_id: str, session: SessionDep, current_user: CurrentUser
 ) -> CancelSyncJobResponse:
-    # Visibility is decided *before* the cancel, not after. `cancel_job` writes
-    # a cancellation another process acts on, so checking its return value
-    # would mean stopping someone else's sync and then explaining that it could
-    # not be found.
-    _visible_job(get_job(job_id), session, current_user)
+    # Decided *before* the cancel, not after. `cancel_job` writes a cancellation
+    # another process acts on, so checking its return value would mean stopping
+    # someone else's sync and then explaining that it could not be found. And it
+    # goes through the ungated guard, because stopping a sync is a write — see
+    # `_cancellable_job`.
+    _cancellable_job(get_job(job_id), session, current_user)
     job = await cancel_job(job_id)
     if not job:
         raise HTTPException(status_code=404, detail=_JOB_NOT_FOUND)

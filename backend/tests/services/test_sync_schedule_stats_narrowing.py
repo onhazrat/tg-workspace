@@ -53,6 +53,7 @@ from app.services.sync_schedule import (
     is_channel_due,
     needs_dynamic_stats,
 )
+from tests.utils.tenancy import ANY_READER
 
 NOW = 1_700_000_000_000
 
@@ -243,6 +244,7 @@ def _group(session: Session, group_id: str, *, dynamic: bool) -> ChannelSettingG
     group = ChannelSettingGroup(
         id=group_id,
         name=group_id,
+        user_id=ANY_READER,
         is_frozen=False,
         regular_sync_enabled=True,
         dynamic_sync_enabled=dynamic,

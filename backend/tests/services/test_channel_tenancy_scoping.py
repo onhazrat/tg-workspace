@@ -230,9 +230,11 @@ def test_bulk_update_channel_tags_mirrors_into_the_operators_follow(
 ) -> None:
     from app.services.follows import get_operator_user_id
 
-    add_test_channel(session, "bulk-tag-me", tags=["old"])
     operator_id = get_operator_user_id(session)
     assert operator_id is not None
+    # Seeded as the operator explicitly: since ticket 21 an omitted owner means
+    # `ANY_READER`, and the Follow this test is about is the operator's.
+    add_test_channel(session, "bulk-tag-me", user_id=operator_id, tags=["old"])
 
     bulk_update_channel_tags(
         session,
@@ -278,9 +280,9 @@ def test_bulk_update_channel_tags_does_not_touch_the_follows_start_time(
     reverting a divergence that path never touched."""
     from app.services.follows import get_operator_user_id
 
-    add_test_channel(session, "bulk-start-time", start_time=111)
     operator_id = get_operator_user_id(session)
     assert operator_id is not None
+    add_test_channel(session, "bulk-start-time", user_id=operator_id, start_time=111)
     follow = session.get(ChannelFollow, (operator_id, "bulk-start-time"))
     assert follow is not None
     follow.start_time = 999

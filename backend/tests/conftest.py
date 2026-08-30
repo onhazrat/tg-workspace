@@ -36,6 +36,15 @@ from app.core.db import engine, init_db
 from app.main import app
 from app.models import Item, User
 from app.models_tg import Channel, ChannelSettingGroup
+
+# Re-exported so tests can request it by name. Ticket 21's guards need the
+# pre-NOT-NULL schema, and the fixture has to depend on `db` to release the
+# session-scoped transaction holding locks on those tables.
+from tests.utils.legacy_owner_schema import legacy_owner_schema  # noqa: F401
+
+# Autouse: gives `ANY_READER` a real "user" row. Ticket 21's foreign key stops
+# a fabricated owner uuid from being merely meaningless and starts rejecting it.
+from tests.utils.tenancy import ANY_READER, any_reader_account  # noqa: F401
 from tests.utils.tg_cleanup import (
     cleanup_channel_keys,
     purge_all_sync_lanes,
@@ -115,7 +124,16 @@ def _clean_tg_tables_after_test() -> Generator[None]:
 
 @pytest.fixture
 def tg_test_channel() -> Generator:
-    """Create a channel for the current test and delete it (and dependents) afterward."""
+    """Create a channel for the current test and delete it (and dependents) afterward.
+
+    An omitted `user_id` means `ANY_READER`, not "nobody" — the same rule
+    `tests/utils/setting_groups.py::add_test_channel` follows, and for the same
+    reason. This fixture reaches `ensure_default_group`, and ticket 21 made
+    `tg_channel_setting_groups.user_id` `NOT NULL` with a key to `"user"(id)`,
+    so an unowned seed now fails at the group before it reaches the Channel.
+    Fixing one of the two helpers and leaving the other is the half-fix this
+    repo names; they are the same helper twice over.
+    """
     created: list[str] = []
 
     def _create(
@@ -126,11 +144,11 @@ def tg_test_channel() -> Generator:
         is_frozen: bool = False,
         **kwargs,
     ) -> str:
+        if user_id is None:
+            user_id = ANY_READER
         ch_name = name or channel_id
         with Session(engine) as session:
-            group = session.get(
-                ChannelSettingGroup, f"default-{user_id if user_id else 'global'}"
-            )
+            group = session.get(ChannelSettingGroup, f"default-{user_id}")
             if group is None:
                 from app.services.channel_setting_groups import ensure_default_group
 

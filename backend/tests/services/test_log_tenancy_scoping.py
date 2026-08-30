@@ -224,12 +224,21 @@ def test_a_full_page_of_other_peoples_rows_does_not_crowd_yours_out(
 
 @pytest.mark.security
 def test_network_logs_are_not_narrowed_to_the_caller(
-    session: Session, user: User, other_user: User, enforced: None
+    legacy_owner_schema: None,
+    session: Session,
+    user: User,
+    other_user: User,
+    enforced: None,
 ) -> None:
     """Admin-only, and therefore read across accounts on purpose.
 
     Scoping them to the caller would hand an Admin an empty proxy log for
     requests the scheduler made, which is the one view they are for.
+
+    The ownerless row is the whole point of that sentence, and ticket 21 made it
+    unrepresentable against the shipping schema — so it is built against the
+    pre-migration one. Requested first: the fixture takes `ACCESS EXCLUSIVE`, and
+    any session opened before it would make the `ALTER TABLE` wait.
     """
     assert "network" in ADMIN_ONLY_LOG_TYPES
 

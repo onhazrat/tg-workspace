@@ -202,7 +202,7 @@ def apply_summary_payload(
     session: Session,
     summary_id: str,
     *,
-    user_id: uuid.UUID | None,
+    user_id: uuid.UUID,
     updates: dict[str, Any],
     removals: set[str] | None = None,
 ) -> SummaryPayload | None:
@@ -221,7 +221,7 @@ def apply_summary_payload(
     if not updates and not removals:
         return existing
 
-    row = existing or SummaryPayload(summary_id=summary_id)
+    row = existing or SummaryPayload(summary_id=summary_id, user_id=user_id)
     for column in removals:
         setattr(row, column, None)
     for column, value in updates.items():

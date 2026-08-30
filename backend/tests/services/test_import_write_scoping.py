@@ -113,6 +113,7 @@ from typing import Any
 
 import pytest
 from fastapi import HTTPException
+from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, SQLModel, col, delete
 
 from app import models_tg
@@ -585,48 +586,30 @@ def test_an_absent_id_still_creates(
 
 
 @pytest.mark.parametrize("family", FAMILIES, ids=_ids(FAMILIES))
-def test_an_ownerless_row_is_still_writable_while_the_flag_is_off(
+def test_an_ownerless_row_can_no_longer_be_written_at_all(
     session: Session,
-    user: User,
-    monkeypatch: pytest.MonkeyPatch,
     family: Family,
 ) -> None:
-    """NULL is not "somebody else's" yet, and refusing it would break restore.
+    """Ticket 21 removed the row shape these two tests were about.
 
-    Rows written before the stamp existed carry no owner, and so does anything a
-    background job wrote — every log `upsert_*` takes `user_id` as optional. This
-    is the one asymmetry between the two flag states, and it is why the check is
-    not simply `owner != caller`.
+    There used to be a pair here — `..._is_still_writable_while_the_flag_is_off`
+    and `..._is_refused_under_enforcement` — pinning `assert_owner_on_write`'s
+    one asymmetry between the flag states from both sides. That asymmetry
+    existed for legacy rows and for anything a background job wrote, and PR 3 of
+    ticket 21 makes `user_id` `NOT NULL` on all fourteen `USER_OWNED` tables, so
+    an import can no longer *find* such a row to overwrite: the database refuses
+    to hold one.
+
+    The branch is still in `may_act_on` and still gated, because the seam's
+    primitives take `uuid.UUID | None` and the sync-log family below genuinely
+    has no owner. What changed is that it is unreachable through these seven
+    sections — and an inverted assertion is worth more here than a deleted one,
+    because a `NOT NULL` quietly dropped in a later migration would put the
+    clobber back exactly where ticket 31 found it.
     """
-    _set_flag(monkeypatch, False)
-    row_id = _seed(session, family, None)
-
-    import_data(session, {family.section: [family.attack(row_id)]}, user_id=user.id)
-
-    assert family.probe(_reread(session, family, row_id)) == family.attacked
-
-
-@pytest.mark.parametrize("family", FAMILIES, ids=_ids(FAMILIES))
-def test_an_ownerless_row_is_refused_under_enforcement(
-    session: Session,
-    user: User,
-    monkeypatch: pytest.MonkeyPatch,
-    family: Family,
-) -> None:
-    """Under enforcement nobody can read it, so nobody may overwrite it.
-
-    `assert_owner` already refuses a NULL owner; this is the import path
-    inheriting that rather than inventing a laxer rule of its own.
-    """
-    _set_flag(monkeypatch, True)
-    row_id = _seed(session, family, None)
-
-    with pytest.raises(HTTPException) as excinfo:
-        import_data(session, {family.section: [family.attack(row_id)]}, user_id=user.id)
-
-    assert excinfo.value.status_code == 404
+    with pytest.raises(IntegrityError):
+        _seed(session, family, None)
     session.rollback()
-    assert family.probe(_reread(session, family, row_id)) == family.original
 
 
 # --------------------------------------------------------------------------
@@ -861,9 +844,15 @@ GATED_READS: dict[str, str] = {
     "discover_reports.get_report": "Reads one Discover report.",
     "logs.get_log": "Reads one log row in full.",
     "jobs._visible_job": (
-        "Resolves one sync job for a caller — the SSE reconnect fallback and "
-        "the cancel route both go through it. It reads; the cancel it feeds "
-        "signals a running job rather than writing the row."
+        "Resolves one sync job for a caller to *read* — `GET /jobs/sync/{id}` "
+        "and the SSE stream. The cancel route used to share it and no longer "
+        "does: `_cancellable_job` is the same three cases on "
+        "`assert_owner_on_write`, because stopping a sync is a write. Review "
+        "of ticket 21 PR 3 caught that, and the reason is worth keeping — "
+        "before PR 1 a job that was not yours was *nobody's*, so the "
+        "`JOBS_MANAGE` branch refused it whatever the flag said. Giving the "
+        "scheduler's jobs a real owner is what dropped a foreign one onto the "
+        "gated guard alone."
     ),
 }
 

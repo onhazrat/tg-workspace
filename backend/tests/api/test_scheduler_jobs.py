@@ -23,6 +23,7 @@ from app.services.follows import get_operator_user_id
 from app.services.network_settings import get_network_setting_row
 from app.services.scraper_jobs import clear_jobs_for_tests
 from tests.utils.setting_groups import freeze_channels_except, upsert_sync_test_channel
+from tests.utils.tenancy import ANY_READER
 
 PREFIX = f"{settings.API_V1_STR}/jobs"
 
@@ -435,6 +436,9 @@ def test_retention_prunes_old_sync_jobs() -> None:
         session.add(
             SyncJobRow(
                 id="retention-old-job",
+                # A real account: ticket 21's foreign key rejects a fabricated
+                # uuid. Retention does not care whose job it is.
+                user_id=ANY_READER,
                 status="completed",
                 source="test",
                 channels=[],
@@ -457,6 +461,7 @@ def test_retention_leaves_a_running_sync_job_alone() -> None:
         session.add(
             SyncJobRow(
                 id="retention-live-job",
+                user_id=ANY_READER,
                 status="running",
                 source="test",
                 channels=[],

@@ -60,6 +60,7 @@ from typing import Any
 import pytest
 from fastapi import HTTPException
 from sqlalchemy import text
+from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, col, delete
 
 from app.core.db import engine
@@ -300,30 +301,25 @@ def test_a_group_only_a_stranger_follows_is_not_rescued(
     assert "t35-theirs" not in _ids(list_setting_groups(session, user_id=user.id))
 
 
-@pytest.mark.usefixtures("unenforced")
-def test_an_ownerless_group_is_visible_while_the_flag_is_off(
-    session: Session, user: User
-) -> None:
-    _group(session, "t35-global", None)
+def test_an_ownerless_group_can_no_longer_exist(session: Session) -> None:
+    """Ticket 21 paid the bill this pair of tests recorded.
 
-    assert "t35-global" in _ids(list_setting_groups(session, user_id=user.id))
+    Ticket 35 pinned a global preset from both sides — listed with the flag off,
+    hidden under enforcement — and named the second half as ticket 21's
+    precondition rather than a bug it could fix: a fresh install migrates before
+    its first superuser exists, so the presets the setting-group migrations seed
+    have nobody to belong to, and alembic never revisits a revision it stamped.
 
-
-@pytest.mark.usefixtures("enforced")
-def test_an_ownerless_group_needs_ticket_21s_backfill(
-    session: Session, user: User
-) -> None:
-    """Pinned, not fixed here — ticket 34 could not adopt these and said so.
-
-    A fresh install migrates before its first superuser exists, so the three
-    built-in presets the setting-group migrations seed carry no owner and alembic
-    will never revisit them. Matching NULL as "mine" is the fallback the seam
-    refuses by construction. So ticket 21's precondition is a red test rather
-    than an operator's missing group.
+    PR 3 settles it at the source. Its migration merges a duplicate preset into
+    the operator's own group (repointing `tg_channels` and `tg_channel_follows`
+    first), adopts one with no counterpart, and drops what is left unreferenced
+    on a fresh install — then makes the column `NOT NULL`. So an unowned group
+    stops being hidden and starts being impossible, which is the only version of
+    this that a later `upgrade head` cannot silently undo.
     """
-    _group(session, "t35-global", None)
-
-    assert "t35-global" not in _ids(list_setting_groups(session, user_id=user.id))
+    with pytest.raises(IntegrityError):
+        _group(session, "t35-global", None)
+    session.rollback()
 
 
 # --------------------------------------------------------------------------
@@ -649,38 +645,28 @@ def test_an_import_cannot_attach_a_channel_to_another_accounts_group(
     assert landed.user_id == user.id
 
 
-@pytest.mark.usefixtures("unenforced")
-def test_an_ownerless_group_stays_writable_while_the_flag_is_off(
+def test_the_write_guards_no_longer_have_an_ownerless_case(
     session: Session, user: User
 ) -> None:
-    """The one asymmetry, and the reason this is not `owner_id != user_id`.
+    """The other half of the same removal, kept for the same reason.
 
-    The built-in presets a fresh install seeds carry no owner and ticket 34 could
-    not adopt them. Refusing those would fail closed against the only account a
-    single-operator install has — an operator unable to edit their own default
-    group. Under enforcement it flips, which is ticket 21's bill.
+    `assert_owner_on_write`'s one asymmetry between the flag states is the NULL
+    owner: writable while enforcement is off, refused under it. Ticket 35 pinned
+    both directions over `update_setting_group`. Neither is reachable through
+    this table any more, so what is left worth asserting is that the guard is
+    still a guard — a foreign group is refused, which
+    `test_a_foreign_group_is_refused_in_both_flag_states` covers, and the row
+    the asymmetry was about cannot be constructed to begin with.
+
+    Written against the *door* rather than the model, because that is what the
+    deleted tests were about: a `_group(..., None)` that the database refuses
+    means `update_setting_group` never sees a NULL owner, whatever the flag says.
     """
-    _group(session, "t35-global", None)
+    with pytest.raises(IntegrityError):
+        _group(session, "t35-global", None)
+    session.rollback()
 
-    result = update_setting_group(
-        session, "t35-global", {"name": "renamed"}, user_id=user.id
-    )
-
-    assert result["name"] == "renamed"
-
-
-@pytest.mark.usefixtures("enforced")
-def test_an_ownerless_group_is_refused_under_enforcement(
-    session: Session, user: User
-) -> None:
-    _group(session, "t35-global", None)
-
-    with pytest.raises(HTTPException) as excinfo:
-        update_setting_group(
-            session, "t35-global", {"name": "renamed"}, user_id=user.id
-        )
-
-    assert excinfo.value.status_code == 404
+    assert session.get(ChannelSettingGroup, "t35-global") is None
 
 
 @pytest.mark.parametrize("flag_state", ["enforced", "unenforced"])

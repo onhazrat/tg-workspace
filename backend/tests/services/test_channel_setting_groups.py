@@ -28,10 +28,24 @@ from app.services.channel_setting_groups import (
     slow_feed_group_id_for_user,
     update_setting_group,
 )
+from tests.utils.user import create_random_user
+
+
+def _real_user() -> uuid.UUID:
+    """A live account id.
+
+    `uuid.uuid4()` until ticket 21, which is what these tests used to pass as an
+    owner. PR 3 gave `tg_channel_setting_groups.user_id` a foreign key to
+    `"user"(id)`, so a fabricated uuid is no longer merely meaningless — the
+    insert is rejected. Each call makes a distinct account, which is what the
+    tests comparing two owners need.
+    """
+    with Session(engine) as session:
+        return create_random_user(session).id
 
 
 def test_effective_settings_and_frozen_group() -> None:
-    user_id = uuid.uuid4()
+    user_id = _real_user()
     with Session(engine) as session:
         default_group = ensure_default_group(session, user_id=user_id)
         restricted_group = get_or_create_restricted_group(session, user_id=user_id)
@@ -63,7 +77,7 @@ def test_effective_settings_and_frozen_group() -> None:
 
 
 def test_ensure_reserved_groups_and_list_empty() -> None:
-    user_id = uuid.uuid4()
+    user_id = _real_user()
     with Session(engine) as session:
         default_group, restricted_group, frozen_group = ensure_reserved_groups(
             session, user_id=user_id
@@ -96,7 +110,7 @@ def test_ensure_reserved_groups_and_list_empty() -> None:
 
 
 def test_builtin_preset_groups_have_expected_sync_values() -> None:
-    user_id = uuid.uuid4()
+    user_id = _real_user()
     with Session(engine) as session:
         _, slow_feed, high_velocity, _, _ = ensure_builtin_groups(
             session, user_id=user_id
@@ -123,7 +137,7 @@ def test_builtin_preset_groups_have_expected_sync_values() -> None:
 
 
 def test_create_setting_group_rejects_duplicate_names_case_insensitive() -> None:
-    user_id = uuid.uuid4()
+    user_id = _real_user()
     with Session(engine) as session:
         create_setting_group(session, {"name": "My Group"}, user_id=user_id)
         with pytest.raises(HTTPException) as exc_info:
@@ -132,7 +146,7 @@ def test_create_setting_group_rejects_duplicate_names_case_insensitive() -> None
 
 
 def test_update_setting_group_rejects_duplicate_names() -> None:
-    user_id = uuid.uuid4()
+    user_id = _real_user()
     with Session(engine) as session:
         create_setting_group(session, {"name": "Alpha"}, user_id=user_id)
         second = create_setting_group(session, {"name": "Beta"}, user_id=user_id)
@@ -147,7 +161,7 @@ def test_update_setting_group_rejects_duplicate_names() -> None:
 
 
 def test_create_setting_group_rejects_reserved_preset_names() -> None:
-    user_id = uuid.uuid4()
+    user_id = _real_user()
     with Session(engine) as session:
         for reserved_name in ("Slow feed", "High velocity"):
             with pytest.raises(HTTPException) as exc_info:
@@ -156,7 +170,7 @@ def test_create_setting_group_rejects_reserved_preset_names() -> None:
 
 
 def test_get_or_create_frozen_group_is_idempotent() -> None:
-    user_id = uuid.uuid4()
+    user_id = _real_user()
     with Session(engine) as session:
         first = get_or_create_frozen_group(session, user_id=user_id)
         session.commit()
@@ -165,7 +179,7 @@ def test_get_or_create_frozen_group_is_idempotent() -> None:
 
 
 def test_list_setting_groups_includes_empty_custom_groups() -> None:
-    user_id = uuid.uuid4()
+    user_id = _real_user()
     with Session(engine) as session:
         create_setting_group(session, {"name": "Weekend digest"}, user_id=user_id)
         listed = list_setting_groups(session, user_id=user_id)
@@ -178,7 +192,7 @@ def test_list_setting_groups_includes_empty_custom_groups() -> None:
 
 
 def test_consolidate_legacy_duplicate_frozen_groups() -> None:
-    user_id = uuid.uuid4()
+    user_id = _real_user()
     with Session(engine) as session:
         default_group = ensure_default_group(session, user_id=user_id)
         canonical_frozen = get_or_create_frozen_group(session, user_id=user_id)
@@ -203,7 +217,7 @@ def test_list_setting_groups_avoids_loading_channel_rows() -> None:
     `followed_channels_for` is the function that now hydrates Channel rows, so
     it is the one that must not be reached from here.
     """
-    user_id = uuid.uuid4()
+    user_id = _real_user()
     with Session(engine) as session:
         with patch(
             "app.services.follows.followed_channels_for"
@@ -216,8 +230,8 @@ def test_list_setting_groups_avoids_loading_channel_rows() -> None:
 def test_list_setting_groups_includes_orphan_group_from_distinct_query() -> None:
     from app.models_tg import ChannelSettingGroup
 
-    user_id = uuid.uuid4()
-    other_user_id = uuid.uuid4()
+    user_id = _real_user()
+    other_user_id = _real_user()
     with Session(engine) as session:
         ensure_default_group(session, user_id=user_id)
         orphan_group = ChannelSettingGroup(

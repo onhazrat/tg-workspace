@@ -24,7 +24,6 @@ the bodies, so each type asserts:
 from __future__ import annotations
 
 import json
-import uuid
 from collections.abc import Iterator
 from contextlib import contextmanager
 
@@ -42,6 +41,7 @@ from app.services.logs import (
     upsert_sync_log,
 )
 from app.services.serialization import to_camel
+from tests.utils.tenancy import ANY_READER
 
 PAYLOAD_TABLE = "tg_sync_log_payloads"
 
@@ -53,7 +53,10 @@ BODY = {"messages": ["x" * 512 for _ in range(20)]}
 #: (ticket 18), on the reasoning that a caller who has not decided whose rows it
 #: wants should have to say so. Which rows come back for which account is
 #: `test_log_tenancy_scoping.py`'s subject, not this one's.
-VIEWER = uuid.uuid4()
+#:
+#: `ANY_READER` rather than a fresh `uuid4()`: ticket 21 gave the log tables a
+#: foreign key, so an invented owner is now rejected at the insert.
+VIEWER = ANY_READER
 
 
 @contextmanager

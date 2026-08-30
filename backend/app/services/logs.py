@@ -101,10 +101,19 @@ SHARED_LOG_TYPES = _shared_log_types()
 #: disagree, and the disagreement here would be a family swept by nobody or by
 #: everybody.
 #:
-#: Membership is about the *family*, not about a given row: a publish log is
-#: personal, but `user_id` is nullable on all five tables and a background job
-#: writes rows with no owner at all. Those are swept on the deployment window
-#: with the shared families — see `delete_unowned_logs_before`.
+#: Membership is about the *family*, not about a given row, and ticket 21
+#: narrowed what that distinction covers. It used to be that `user_id` was
+#: nullable on all five tables and a background job wrote rows with no owner as
+#: a matter of course, so a *personal* family still had rows reachable only by
+#: the deployment window. PR 1 made the four personal `upsert_*` take a required
+#: owner and PR 3 made those four columns `NOT NULL`, so the only family that
+#: can still hold an unowned row is `sync` — which stores no owner by design
+#: (ticket 19) and is shared anyway.
+#:
+#: `delete_unowned_logs_before` therefore now reaches sync-log rows and nothing
+#: else. It is kept rather than folded into the shared sweep because a database
+#: restored from before those PRs still holds unowned personal rows, and they
+#: would otherwise be swept by no window at all — the leak ticket 20 closed.
 PERSONAL_LOG_TYPES = frozenset(LOG_MODELS) - SHARED_LOG_TYPES
 
 
@@ -520,12 +529,22 @@ def delete_unowned_logs_before(
 ) -> LogSweep:
     """Rows of `log_types` older than `cutoff` that no account owns.
 
-    `user_id` is nullable on all five log tables and every `upsert_*` here
-    takes it as an optional argument, so a row written by a background job with
-    no User behind it is a routine occurrence rather than a legacy accident.
-    Once the personal families are swept on their owner's own window, those rows
-    are reachable by no window at all — this is the one that reaches them, and
-    it runs on the deployment's `sharedLogRetentionDays`.
+    Once the personal families are swept on their owner's own window, an
+    unowned row is reachable by no window at all. This is the sweep that reaches
+    them, on the deployment's `sharedLogRetentionDays`.
+
+    **Ticket 21 shrank what it finds, and deliberately did not delete it.** When
+    ticket 20 wrote this, `user_id` was nullable on all five log tables and
+    every `upsert_*` took it as optional, so a background job writing an
+    ownerless row was routine. PR 1 made the four personal writers require an
+    owner and PR 3 made their columns `NOT NULL`, so on a database migrated to
+    head the only rows here are sync logs, which carry no owner by design.
+
+    It stays because a database restored from a backup taken before those PRs
+    still holds unowned publish, LLM, embedding and network rows, and those are
+    exactly the rows nothing else sweeps. A predicate that matches nothing on a
+    current database and everything that matters on an old one is not dead code;
+    it is the compatibility this function was written for in the first place.
     """
     return _delete_logs_before(
         session,

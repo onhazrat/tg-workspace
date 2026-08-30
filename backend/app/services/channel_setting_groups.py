@@ -857,8 +857,17 @@ def create_setting_group(
     session: Session,
     body: dict[str, Any],
     *,
-    user_id: uuid.UUID | None,
+    user_id: uuid.UUID,
 ) -> dict[str, Any]:
+    """Create a custom group owned by `user_id`.
+
+    The owner is non-optional for the reason the five constructors above are:
+    ticket 21 makes `tg_channel_setting_groups.user_id` `NOT NULL`, so `None`
+    stopped being "the global scope" and started being an `IntegrityError`. Its
+    one caller is a route with a `CurrentUser` in hand and always passed one —
+    this narrows the signature to the only value it ever receives, so a second
+    caller that has no account fails at the call rather than at the insert.
+    """
     normalized = normalize_body(body)
     name = str(normalized.get("name", "")).strip()
     if not name:
@@ -1133,3 +1142,95 @@ def update_default_group_sync_settings(
     )
     session.commit()
     return {"updated": updated}
+
+
+def release_groups_of_deleted_account(session: Session, user_id: uuid.UUID) -> int:
+    """Repoint everything naming `user_id`'s groups, before the account goes.
+
+    **Call this before `session.delete(user)`, not after.** Ticket 21 gave
+    `tg_channel_setting_groups.user_id` a real `ON DELETE CASCADE` key, so
+    deleting an account now takes its setting groups with it — and the two
+    columns that reference a group by id, `tg_channels.setting_group_id` and
+    `tg_channel_follows.setting_group_id`, are plain strings with no foreign key
+    of their own. Nothing repoints them, so they are left naming a row that is
+    gone.
+
+    That is reachable without an Admin. Auto-follow files a Channel under
+    whoever scraped the handle first, and `ensure_follow_for_channel` copies the
+    Channel's group id onto the follow — so account A's group is named by a
+    Channel account B still follows, and by B's own follow row. When A deletes
+    itself through `DELETE /users/me`, B's channel starts answering **500** from
+    `get_group_for_channel`, is silently skipped by `auto_sync`, and has its
+    reset refused by `bulk_channels` — the three consequences
+    `load_groups_by_id`'s docstring already enumerates for a group that will not
+    resolve.
+
+    The migration knew: `_GROUP_REFERENCES` repoints exactly these two columns
+    before it deletes a merged group. This is that rule at runtime, which is
+    where it was missing.
+
+    **A follow goes to its own owner's default**, because a follow's group is
+    that account's policy and naming somebody else's was drift from the copy
+    above. **A Channel goes to a surviving follower's default**, and to the
+    operator's when nobody follows it any more — such a Channel is due for
+    retention collection, but `get_group_for_channel` runs long before the next
+    sweep and a 500 in the meantime is the failure this exists to prevent.
+
+    Returns the number of rows repointed, so a caller can log it.
+    """
+    doomed = {
+        group.id
+        for group in session.exec(
+            select(ChannelSettingGroup).where(ChannelSettingGroup.user_id == user_id)
+        ).all()
+    }
+    if not doomed:
+        return 0
+
+    from app.services.follows import (
+        follows_for_channels,
+        get_operator_user_id,
+        repoint_follows_off_groups,
+    )
+
+    def _default_group_id(owner: uuid.UUID) -> str:
+        return ensure_default_group(session, user_id=owner).id
+
+    # Delegated rather than written here: `follows.py` is the only writer of
+    # `tg_channel_follows`, which `test_channel_creation_paths.py` enforces.
+    repointed = repoint_follows_off_groups(
+        session,
+        doomed,
+        except_user_id=user_id,
+        group_for=_default_group_id,
+    )
+
+    channels = session.exec(
+        select(Channel).where(col(Channel.setting_group_id).in_(doomed))
+    ).all()
+    if channels:
+        heirs_by_channel: dict[str, list[uuid.UUID]] = {}
+        for follow in follows_for_channels(
+            session, [channel.id for channel in channels]
+        ):
+            if follow.user_id != user_id:
+                heirs_by_channel.setdefault(follow.channel_id, []).append(
+                    follow.user_id
+                )
+        operator_id = get_operator_user_id(session)
+        for channel in channels:
+            heirs = heirs_by_channel.get(channel.id, [])
+            heir = heirs[0] if heirs else operator_id
+            if heir is None:
+                # No account left to own a group at all. Only reachable if the
+                # last account deletes itself, which both delete routes refuse
+                # — `DELETE /users/me` for an account that can manage accounts,
+                # and `DELETE /users/{id}` for the caller's own. Left alone
+                # rather than guessed at.
+                continue
+            channel.setting_group_id = ensure_default_group(session, user_id=heir).id
+            session.add(channel)
+            repointed += 1
+
+    session.flush()
+    return repointed

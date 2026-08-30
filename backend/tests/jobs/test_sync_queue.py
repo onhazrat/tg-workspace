@@ -14,7 +14,6 @@ because that is the piece with no `run_sync_job` above it any more.
 from __future__ import annotations
 
 import asyncio
-import uuid
 
 import pytest
 from sqlmodel import Session
@@ -40,6 +39,10 @@ from app.services.sync_lanes import (
     MANUAL_BULK_NORMAL_LANE,
     MANUAL_SINGLE_NORMAL_LANE,
 )
+
+# A real account: ticket 21's foreign key rejects a fabricated owner uuid.
+# None of these tests is about who owns a job.
+from tests.utils.tenancy import ANY_READER
 
 
 def _stub_sync_single_channel(
@@ -107,7 +110,7 @@ def test_a_sync_mode_picks_its_lane() -> None:
             job = await create_job(
                 channel_entries=[("c", "c")],
                 source="Test",
-                user_id=str(uuid.uuid4()),
+                user_id=str(ANY_READER),
                 sync_mode=mode,  # type: ignore[arg-type]
             )
             lanes.append(sync_queue.lane_for_job(job))
@@ -145,7 +148,7 @@ def test_the_sync_mode_survives_rehydration_in_another_process() -> None:
             job = await create_job(
                 channel_entries=[("c", "c")],
                 source="Test",
-                user_id=str(uuid.uuid4()),
+                user_id=str(ANY_READER),
                 sync_mode=mode,  # type: ignore[arg-type]
             )
             clear_active_jobs_for_tests()  # simulate the worker's fresh process
@@ -173,7 +176,7 @@ def test_a_rehydrated_job_still_picks_its_own_lane() -> None:
         job = await create_job(
             channel_entries=[("c", "c")],
             source="Test",
-            user_id=str(uuid.uuid4()),
+            user_id=str(ANY_READER),
             sync_mode="individual",
         )
         at_enqueue = sync_queue.lane_for_job(job)
@@ -269,13 +272,13 @@ def test_a_queued_job_survives_a_worker_restart() -> None:
         queued = await create_job(
             channel_entries=[("q1", "q1")],
             source="Test",
-            user_id=str(uuid.uuid4()),
+            user_id=str(ANY_READER),
             sync_mode="individual",
         )
         stranded = await create_job(
             channel_entries=[("s1", "s1")],
             source="Test",
-            user_id=str(uuid.uuid4()),
+            user_id=str(ANY_READER),
             sync_mode="individual",
         )
         # Only the first has a message on a lane.
@@ -327,7 +330,7 @@ def test_a_queued_job_counts_as_active_for_the_scheduler() -> None:
         job = await create_job(
             channel_entries=[("qa1", "qa1")],
             source="Test",
-            user_id=str(uuid.uuid4()),
+            user_id=str(ANY_READER),
             sync_mode="auto",
         )
         clear_active_jobs_for_tests()
@@ -363,7 +366,7 @@ def test_one_message_per_channel_never_one_per_job(
         job = await create_job(
             channel_entries=[("a", "a"), ("b", "b"), ("c", "c")],
             source="Test",
-            user_id=str(uuid.uuid4()),
+            user_id=str(ANY_READER),
             sync_mode="bulk",
         )
         await asyncio.to_thread(
@@ -412,7 +415,7 @@ def test_a_bulk_job_is_terminal_only_when_its_last_channel_finishes(
         job = await create_job(
             channel_entries=[("a", "a"), ("b", "b")],
             source="Test",
-            user_id=str(uuid.uuid4()),
+            user_id=str(ANY_READER),
             sync_mode="bulk",
         )
         lane = MANUAL_BULK_NORMAL_LANE
@@ -449,7 +452,7 @@ def test_enqueue_drains_and_completes_the_job(
         job = await create_job(
             channel_entries=[("chan-1", "chan-1")],
             source="Test",
-            user_id=str(uuid.uuid4()),
+            user_id=str(ANY_READER),
             sync_mode="individual",
         )
         # Ticket 10: an enqueue rings the worker rather than draining locally,
@@ -498,7 +501,7 @@ def test_drain_skips_a_job_already_terminal() -> None:
         job = await create_job(
             channel_entries=[("chan-2", "chan-2")],
             source="Test",
-            user_id=str(uuid.uuid4()),
+            user_id=str(ANY_READER),
             sync_mode="individual",
         )
         job.status = "failed"
@@ -527,7 +530,7 @@ def test_exhausted_redelivery_is_archived_and_job_marked_failed() -> None:
         job = await create_job(
             channel_entries=[("chan-3", "chan-3")],
             source="Test",
-            user_id=str(uuid.uuid4()),
+            user_id=str(ANY_READER),
             sync_mode="individual",
         )
         with Session(engine) as session:
@@ -568,7 +571,7 @@ def test_exhausting_one_channel_does_not_fail_its_siblings() -> None:
         job = await create_job(
             channel_entries=[("x", "x"), ("y", "y")],
             source="Test",
-            user_id=str(uuid.uuid4()),
+            user_id=str(ANY_READER),
             sync_mode="bulk",
         )
         with Session(engine) as session:
@@ -611,7 +614,7 @@ def test_a_message_without_a_channel_id_still_runs_the_whole_job(
         job = await create_job(
             channel_entries=[("legacy", "legacy")],
             source="Test",
-            user_id=str(uuid.uuid4()),
+            user_id=str(ANY_READER),
             sync_mode="individual",
         )
         with Session(engine) as session:
@@ -647,7 +650,7 @@ def test_redelivery_while_still_running_is_not_reprocessed(
         job = await create_job(
             channel_entries=[("chan-4", "chan-4")],
             source="Test",
-            user_id=str(uuid.uuid4()),
+            user_id=str(ANY_READER),
             sync_mode="individual",
         )
         payload = {"jobId": job.job_id, "channelId": "chan-4"}

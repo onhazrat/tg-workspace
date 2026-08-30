@@ -27,7 +27,11 @@ class ChannelSettingGroup(SQLModel, table=True):
     __tablename__ = "tg_channel_setting_groups"
 
     id: str = Field(primary_key=True)
-    user_id: uuid.UUID | None = Field(default=None, index=True)
+    user_id: uuid.UUID = Field(
+        foreign_key="user.id",
+        index=True,
+        ondelete="CASCADE",
+    )
     name: str
     is_default: bool = False
     regular_sync_enabled: bool = True
@@ -235,7 +239,11 @@ class Summary(SQLModel, table=True):
     __tablename__ = "tg_summaries"
 
     id: str = Field(primary_key=True)
-    user_id: uuid.UUID | None = Field(default=None, index=True)
+    user_id: uuid.UUID = Field(
+        foreign_key="user.id",
+        index=True,
+        ondelete="CASCADE",
+    )
     text: str = Field(sa_column=Column(Text))
     channels: list[str] = Field(default_factory=list, sa_column=Column(JSON))
     start_date: int = Field(default=0, sa_column=_ms_ts())
@@ -281,7 +289,11 @@ class SummaryPayload(SQLModel, table=True):
     __tablename__ = "tg_summary_payloads"
 
     summary_id: str = Field(primary_key=True)
-    user_id: uuid.UUID | None = Field(default=None, index=True)
+    user_id: uuid.UUID = Field(
+        foreign_key="user.id",
+        index=True,
+        ondelete="CASCADE",
+    )
     cited_posts: dict[str, Any] | list[Any] | None = Field(
         default=None, sa_column=Column(JSON)
     )
@@ -322,7 +334,11 @@ class ChatSession(SQLModel, table=True):
     __tablename__ = "tg_chat_sessions"
 
     id: str = Field(primary_key=True)
-    user_id: uuid.UUID | None = Field(default=None, index=True)
+    user_id: uuid.UUID = Field(
+        foreign_key="user.id",
+        index=True,
+        ondelete="CASCADE",
+    )
     #: Derived from the first user message on write. A column rather than a
     #: computed-on-read value so the list projection never opens the payload
     #: table for it. This is what replaces the `"Chat: "` prefix — it stores the
@@ -377,7 +393,11 @@ class ChatSessionPayload(SQLModel, table=True):
     __tablename__ = "tg_chat_session_payloads"
 
     chat_session_id: str = Field(primary_key=True)
-    user_id: uuid.UUID | None = Field(default=None, index=True)
+    user_id: uuid.UUID = Field(
+        foreign_key="user.id",
+        index=True,
+        ondelete="CASCADE",
+    )
     #: `[{"role": "user" | "model", "text": str, "sources"?: [...]}]`
     messages: list[Any] | None = Field(default=None, sa_column=Column(JSON))
     updated_at: datetime = Field(default_factory=utc_now)
@@ -403,7 +423,11 @@ class DiscoverReport(SQLModel, table=True):
     __tablename__ = "tg_discover_reports"
 
     id: str = Field(primary_key=True)
-    user_id: uuid.UUID | None = Field(default=None, index=True)
+    user_id: uuid.UUID = Field(
+        foreign_key="user.id",
+        index=True,
+        ondelete="CASCADE",
+    )
 
     # --- scope snapshot (inputs, frozen at generate time) ---
     channels: list[str] = Field(default_factory=list, sa_column=Column(JSON))
@@ -586,7 +610,11 @@ class TagRun(SQLModel, table=True):
     __tablename__ = "tg_tag_runs"
 
     id: str = Field(primary_key=True)
-    user_id: uuid.UUID | None = Field(default=None, index=True)
+    user_id: uuid.UUID = Field(
+        foreign_key="user.id",
+        index=True,
+        ondelete="CASCADE",
+    )
     status: str = "pending"
     source: str = "generated"
     mode: str = "add"
@@ -618,7 +646,11 @@ class BotCredential(SQLModel, table=True):
     __tablename__ = "tg_bot_credentials"
 
     id: str = Field(primary_key=True)
-    user_id: uuid.UUID | None = Field(default=None, index=True)
+    user_id: uuid.UUID = Field(
+        foreign_key="user.id",
+        index=True,
+        ondelete="CASCADE",
+    )
     name: str
     token_encrypted: str
     username: str | None = None
@@ -631,7 +663,11 @@ class ChatDestination(SQLModel, table=True):
     __tablename__ = "tg_chat_destinations"
 
     id: str = Field(primary_key=True)
-    user_id: uuid.UUID | None = Field(default=None, index=True)
+    user_id: uuid.UUID = Field(
+        foreign_key="user.id",
+        index=True,
+        ondelete="CASCADE",
+    )
     name: str
     chat_id: str
     updated_at: datetime = Field(default_factory=utc_now)
@@ -723,7 +759,11 @@ class PublishLog(SQLModel, table=True):
     __tablename__ = "tg_publish_logs"
 
     id: str = Field(primary_key=True)
-    user_id: uuid.UUID | None = Field(default=None, index=True)
+    user_id: uuid.UUID = Field(
+        foreign_key="user.id",
+        index=True,
+        ondelete="CASCADE",
+    )
     summary_id: str
     bot_id: str
     bot_name: str
@@ -803,7 +843,11 @@ class LLMLog(SQLModel, table=True):
     __tablename__ = "tg_llm_logs"
 
     id: str = Field(primary_key=True)
-    user_id: uuid.UUID | None = Field(default=None, index=True)
+    user_id: uuid.UUID = Field(
+        foreign_key="user.id",
+        index=True,
+        ondelete="CASCADE",
+    )
     model: str
     prompt: str = Field(sa_column=Column(Text))
     response: str = Field(sa_column=Column(Text))
@@ -830,7 +874,11 @@ class EmbeddingLog(SQLModel, table=True):
     __tablename__ = "tg_embedding_logs"
 
     id: str = Field(primary_key=True)
-    user_id: uuid.UUID | None = Field(default=None, index=True)
+    user_id: uuid.UUID = Field(
+        foreign_key="user.id",
+        index=True,
+        ondelete="CASCADE",
+    )
     text_count: int = 0
     tokens_estimated: int | None = None
     duration: float = 0
@@ -844,7 +892,11 @@ class NetworkLog(SQLModel, table=True):
     __tablename__ = "tg_network_logs"
 
     id: str = Field(primary_key=True)
-    user_id: uuid.UUID | None = Field(default=None, index=True)
+    user_id: uuid.UUID = Field(
+        foreign_key="user.id",
+        index=True,
+        ondelete="CASCADE",
+    )
     url: str
     method: str
     status: str
@@ -863,7 +915,11 @@ class SyncJob(SQLModel, table=True):
     __tablename__ = "tg_sync_jobs"
 
     id: str = Field(primary_key=True)
-    user_id: uuid.UUID | None = Field(default=None, index=True)
+    user_id: uuid.UUID = Field(
+        foreign_key="user.id",
+        index=True,
+        ondelete="CASCADE",
+    )
     status: str = "pending"
     source: str = ""
     #: Which shape of sync this is — `individual`, `bulk`, `sync_all`,

@@ -34,11 +34,14 @@ import uuid
 from typing import Any
 
 import pytest
+from fastapi import HTTPException
 from fastapi.routing import APIRoute, _IncludedRouter
 from fastapi.testclient import TestClient
-from sqlmodel import Session
+from sqlalchemy.exc import IntegrityError
+from sqlmodel import Session, col, select
 
 from app.api.deps import require_permission
+from app.api.routes.jobs import _visible_job
 from app.core.config import settings
 from app.core.db import engine
 from app.core.permissions import Permission
@@ -53,6 +56,7 @@ from app.services.logs import (
     upsert_publish_log,
     upsert_sync_log,
 )
+from app.services.scraper_jobs import SyncJobState
 from app.services.tenancy import Scope, scope_of
 from tests.utils.user import create_random_user
 
@@ -562,6 +566,22 @@ def _insert_job(db: Session, job_id: str, owner: uuid.UUID | None) -> str:
     return job_id
 
 
+def _superuser(db: Session) -> Any:
+    """The deployment's own account, which holds every seeded permission.
+
+    `_visible_job`'s permitting branch runs `require_permission`, so it needs a
+    User the RBAC read model answers for — not a freshly built row, which has
+    no roles.
+    """
+    from app.models import User
+
+    found = db.exec(
+        select(User).where(col(User.email) == settings.FIRST_SUPERUSER)
+    ).first()
+    assert found is not None, "the first superuser is seeded by `init_db`"
+    return found
+
+
 #: The sync-job routes exercised through the client. `/events` is deliberately
 #: absent: it is an SSE stream, and if the gate on it ever *fails* the test
 #: client has no way to bound the read, so this test would hang instead of
@@ -572,21 +592,56 @@ JOB_ROUTE_SUFFIXES = [("", "GET"), ("/cancel", "POST")]
 
 
 @pytest.mark.security
+def test_a_sync_job_nobody_owns_can_no_longer_be_created(db: Session) -> None:
+    """Decision 23's null owner is gone, and that is what ticket 21 bought.
+
+    A scheduled job used to keep `user_id IS NULL`, which is why the route
+    answers 403 rather than 404 for one: there was no account it could belong
+    to, so there was nothing for a 404 to protect. PR 1 of ticket 21 makes
+    `create_job`'s `user_id` required and gives auto-sync a per-owner loop, so
+    every scheduled job now belongs to the account it was planned for; PR 3
+    makes the column `NOT NULL` so no other kind can be written.
+
+    The branch survives in `_visible_job` and is covered below at the function
+    level, because `_row_to_state` still maps a NULL to `""` and a database
+    restored from before this revision could still hand one over.
+    """
+    with pytest.raises(IntegrityError):
+        _insert_job(db, "gate-scheduled-null", None)
+    db.rollback()
+
+
+@pytest.mark.security
+@pytest.mark.parametrize("enforced", [False, True], ids=["unenforced", "enforced"])
 @pytest.mark.parametrize("suffix,method", JOB_ROUTE_SUFFIXES)
-def test_a_sync_job_nobody_owns_is_admin_only(
+def test_another_accounts_sync_job_is_hidden_once_the_flag_is_on(
     client: TestClient,
     db: Session,
+    monkeypatch: pytest.MonkeyPatch,
     normal_user_token_headers: dict[str, str],
     suffix: str,
     method: str,
+    enforced: bool,
 ) -> None:
-    """Decision 23: a scheduled job keeps a null owner and leaks only to an Admin.
+    """What the ownerless case became: someone else's job, hidden under the flag.
 
-    The null owner is what makes this an authorisation question rather than a
-    row-visibility one — there is no account it could belong to, so there is
-    nothing for a 404 to protect and 403 is the honest answer.
+    A scheduled job is owned by whoever it was planned for since ticket 21, so
+    a foreign job is now the shape a plain user can encounter — and it is a
+    *visibility* question, which is exactly what `TENANCY_ENFORCED` gates.
+
+    Both states are asserted because each is a promise. With the flag off the
+    answer is 200: the seam's whole contract is that adopting it changes no
+    response until the flip, and a test asserting 404 here would be asserting
+    the bug the flag exists to defer. Under enforcement it is 404 and not 403,
+    because a 403 confirms the job exists — the enumeration oracle `assert_owner`
+    refuses over client-visible ids.
     """
-    job_id = _insert_job(db, f"gate-scheduled{suffix.replace('/', '-')}", None)
+    monkeypatch.setattr(settings, "TENANCY_ENFORCED", enforced)
+    other = create_random_user(db)
+    job_id = _insert_job(
+        db, f"gate-foreign{suffix.replace('/', '-')}-{enforced}", other.id
+    )
+
     response = _call(
         client,
         method,
@@ -594,9 +649,76 @@ def test_a_sync_job_nobody_owns_is_admin_only(
         None,
         normal_user_token_headers,
     )
-    assert response.status_code == 403, (
-        f"a plain user reached a scheduled job at {suffix or '/'}: "
+
+    # The read routes are a visibility question and move with the flag; the
+    # cancel is a write and is refused in both states. See
+    # `test_cancelling_another_accounts_sync_is_refused_with_the_flag_off`.
+    expected = 404 if (enforced or method == "POST") else 200
+    assert response.status_code == expected, (
+        f"a plain user got {response.status_code} for another account's job at "
+        f"{suffix or '/'} with enforcement {enforced}: {response.text[:200]}"
+    )
+
+
+@pytest.mark.security
+def test_cancelling_another_accounts_sync_is_refused_with_the_flag_off(
+    client: TestClient,
+    db: Session,
+    monkeypatch: pytest.MonkeyPatch,
+    normal_user_token_headers: dict[str, str],
+) -> None:
+    """Stopping somebody's sync is a write, so no flag gates it.
+
+    Found by review of PR 3, and it arrived by making a row *better* owned. Every
+    sync job used to be the caller's or **nobody's** — the scheduler's carried a
+    NULL owner, so `_visible_job`'s `JOBS_MANAGE` branch refused a job that was
+    not yours whatever the flag said. PR 1 gives scheduler jobs a real owner, and
+    a foreign job then fell through to the gated `assert_owner` alone, which on
+    the shipping config is a no-op: any signed-in account could cancel any
+    other's in-flight sync by guessing an id.
+
+    Pinned with the flag explicitly **off**, because that is the state the
+    regression lived in and the one PR 4 does not change. 404 rather than 403,
+    matching the family's own string for a job that is not there.
+    """
+    monkeypatch.setattr(settings, "TENANCY_ENFORCED", False)
+    other = create_random_user(db)
+    job_id = _insert_job(db, "gate-foreign-cancel-unenforced", other.id)
+
+    response = client.post(
+        f"{PREFIX}/jobs/sync/{job_id}/cancel", headers=normal_user_token_headers
+    )
+
+    assert response.status_code == 404, (
+        "a plain user cancelled another account's sync with enforcement off: "
         f"{response.status_code} {response.text[:200]}"
+    )
+
+
+@pytest.mark.security
+def test_a_legacy_null_owner_still_reaches_only_an_admin(db: Session) -> None:
+    """The 403 branch, exercised where the row shape can still be built.
+
+    `_visible_job` keeps this case for a database restored from before PR 3, and
+    a branch nothing runs is a branch that quietly stops working. Called
+    directly rather than through the client because the table now refuses the
+    row — the argument is the state, and `SyncJobState.user_id` is `""` for a
+    NULL exactly as `_row_to_state` produces it.
+    """
+    plain = create_random_user(db)
+    orphan = SyncJobState(
+        job_id="gate-legacy-null",
+        source="test",
+        user_id="",
+    )
+
+    with pytest.raises(HTTPException) as excinfo:
+        _visible_job(orphan, db, plain)
+
+    assert excinfo.value.status_code == 403, (
+        "a job with no owner answered "
+        f"{excinfo.value.status_code} to a plain account; decision 23 keeps it "
+        "an authorisation answer, not a claim about whether a row exists"
     )
 
 
@@ -626,9 +748,16 @@ def test_every_sync_job_route_checks_visibility() -> None:
 
     Reads the module rather than calling it, because the SSE route cannot be
     refused-and-bounded through the test client. The check is "this handler
-    calls `_visible_job`", which is coarse — but the alternative is a fourth
-    route on this path appearing with no check at all, and nothing noticing
-    until a person can watch somebody else's sync.
+    calls one of the two job guards", which is coarse — but the alternative is a
+    fourth route on this path appearing with no check at all, and nothing
+    noticing until a person can watch somebody else's sync.
+
+    **Which guard matters, so the two reads and the one write are named apart.**
+    A read may be gated and a write may not, and this guard passing on the wrong
+    one is precisely how the cancel route spent PR 1 to PR 3 letting any
+    signed-in account stop another's sync: it went on calling `_visible_job`,
+    the name here matched, and the check underneath had quietly become a no-op
+    for a foreign job.
     """
     import ast
     import pathlib
@@ -653,29 +782,46 @@ def test_every_sync_job_route_checks_visibility() -> None:
         "this guard is looking at the wrong thing"
     )
 
-    unchecked = [
-        handler.name
-        for handler in handlers
-        if not any(
-            isinstance(node, ast.Name) and node.id == "_visible_job"
-            for node in ast.walk(handler)
-        )
-    ]
-    assert not unchecked, (
-        f"these sync-job handlers never ask whether the caller may see the "
-        f"job: {unchecked}"
+    #: The guard each handler must call, by what the handler does to the job.
+    #: `cancel_sync_job` writes and the other two read.
+    EXPECTED_GUARD = {
+        "get_sync_job_status": "_visible_job",
+        "sync_job_events": "_visible_job",
+        "cancel_sync_job": "_cancellable_job",
+    }
+    assert {handler.name for handler in handlers} == set(EXPECTED_GUARD), (
+        "the /sync/{job_id} handlers are not the three this guard knows about: "
+        f"{sorted(handler.name for handler in handlers)}"
+    )
+
+    wrong = []
+    for handler in handlers:
+        called = {node.id for node in ast.walk(handler) if isinstance(node, ast.Name)}
+        expected = EXPECTED_GUARD[handler.name]
+        if expected not in called:
+            wrong.append(f"{handler.name} does not call {expected}")
+
+    assert not wrong, (
+        "these sync-job handlers do not ask the right question about the "
+        f"caller: {wrong}. A read takes the flag-gated `_visible_job`; a write "
+        "takes `_cancellable_job`, which does not consult the flag."
     )
 
 
 @pytest.mark.security
-def test_an_admin_reaches_the_scheduled_job(
-    client: TestClient, db: Session, superuser_token_headers: dict[str, str]
-) -> None:
-    job_id = _insert_job(db, "gate-scheduled-for-admin", None)
-    response = client.get(
-        f"{PREFIX}/jobs/sync/{job_id}", headers=superuser_token_headers
-    )
-    assert response.status_code == 200, response.text[:200]
+def test_an_admin_reaches_a_legacy_null_owner_job(db: Session) -> None:
+    """The permitting half of the 403 branch, and it moved for the same reason.
+
+    This used to insert an ownerless row and read it back through the client.
+    PR 3 makes that row impossible, so the branch is exercised where it can
+    still be reached — a `SyncJobState` hydrated the way `_row_to_state` builds
+    one from a pre-revision database. Kept because a gate tested only in its
+    refusing direction is how a door that rejects everybody passes its suite.
+    """
+    admin = _superuser(db)
+    orphan = SyncJobState(job_id="gate-legacy-for-admin", source="test", user_id="")
+
+    assert _visible_job(orphan, db, admin) is orphan
 
 
 # ------------------------------------------------------------- the structural

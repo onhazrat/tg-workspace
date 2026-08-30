@@ -147,6 +147,18 @@ def migration() -> types.ModuleType:
 
 
 @pytest.fixture(autouse=True)
+def _legacy_owner_schema(legacy_owner_schema: None) -> None:
+    """Ticket 21 made these columns NOT NULL; this guard needs them nullable.
+
+    Its subject is a backfill, so every fixture here seeds a row with no owner —
+    which `d2e3f4a5b6c7` now refuses. Kept rather than deleted because the
+    migration still runs on every database upgrading from before it, and its
+    setting-group reconciliation is the piece `/code-review` caught ticket 34
+    getting wrong. See `tests/utils/legacy_owner_schema.py`.
+    """
+
+
+@pytest.fixture(autouse=True)
 def _clean_backfill_tables() -> Iterator[None]:
     """Empty the fourteen tables *before* each test, not only after.
 
@@ -313,7 +325,14 @@ def test_the_inventory_covers_every_table_that_can_hold_an_unowned_row() -> None
         if scope is not Scope.USER_OWNED:
             continue
         column = mapped_table(model).columns[OWNER_COLUMN]
-        (expected if column.nullable else excused).add(mapped_table(model).name)
+        # Primary-key membership, not nullability. Ticket 21's `d2e3f4a5b6c7`
+        # makes all fourteen `NOT NULL`, so the nullability form of this test
+        # starts expecting an empty set the moment that migration succeeds —
+        # and would then agree with an inventory that had silently stopped
+        # covering anything. The four excused tables carry `user_id` inside a
+        # composite primary key, which is what made an unowned row
+        # inexpressible for them before and after.
+        (excused if column.primary_key else expected).add(mapped_table(model).name)
 
     assert covered == expected
 
