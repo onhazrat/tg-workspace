@@ -109,9 +109,26 @@ async def backfill_embeddings(
     session: Session,
     *,
     limit: int | None = None,
-    operator_id: UUID | None = None,
+    user_id: UUID,
 ) -> dict[str, Any]:
-    """Embed up to *limit* posts that lack a PostEmbedding row."""
+    """Embed up to *limit* posts that lack a PostEmbedding row.
+
+    `user_id` is a **required keyword with no default**, and it names the
+    account this run is attributed to — both for choosing which posts to embed
+    and for stamping the `EmbeddingLog` rows below.
+
+    It used to be `operator_id: UUID | None = None`, which is ticket 32's
+    lesson arriving late: an optional actor leaves every existing call site
+    passing nothing and still passing its tests. Both `EmbeddingLog`
+    constructors below were built with **no `user_id` argument at all**, so
+    every scheduler tick and every `POST /rag/embed` wrote a row nobody owns —
+    unconditionally, not as an edge case, and the route path had
+    `current_user.id` in hand and dropped it on the way. Under enforcement such
+    a row is invisible to every account, refused to every reader by id, and
+    unwritable; `EmbeddingLog` is `USER_OWNED` in `SCOPES` and ticket 20 runs it
+    on its owner's `logRetentionDays`, so an unowned one is also reachable by no
+    retention window at all.
+    """
     global _last_backfill_run_ms
 
     if limit is None:
@@ -122,7 +139,7 @@ async def backfill_embeddings(
 
     from app.services.channels import channel_names_for_operator
 
-    operator_channels = channel_names_for_operator(session, operator_id)
+    operator_channels = channel_names_for_operator(session, user_id)
     posts = session.exec(
         _posts_without_embeddings_stmt(limit, channel_names=operator_channels or None)
     ).all()
@@ -180,6 +197,7 @@ async def backfill_embeddings(
         session.add(
             EmbeddingLog(
                 id=str(uuid.uuid4()),
+                user_id=user_id,
                 text_count=upserted,
                 duration=round(duration, 3),
                 status="success",
@@ -194,6 +212,7 @@ async def backfill_embeddings(
         session.add(
             EmbeddingLog(
                 id=str(uuid.uuid4()),
+                user_id=user_id,
                 text_count=0,
                 duration=round(duration, 3),
                 status="failed",

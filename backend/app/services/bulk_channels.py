@@ -121,7 +121,7 @@ def _reset_channel_coverage_fields(channel: Channel) -> None:
 async def bulk_reset_and_queue_sync(
     session: Session,
     *,
-    operator_id: uuid.UUID | None,
+    operator_id: uuid.UUID,
     channel_ids: list[str] | None = None,
     auto_follow_only: bool = False,
     source: str = "Bulk Reset & Sync",
@@ -177,7 +177,7 @@ async def bulk_reset_and_queue_sync(
         job = await create_job(
             channel_entries=entries,
             source=source,
-            user_id=str(operator_id) if operator_id else None,
+            user_id=str(operator_id),
             sync_mode="bulk" if is_bulk else "individual",
         )
         result.job_id = job.job_id

@@ -228,7 +228,26 @@ def _publish(session: Session, **kwargs: Any) -> dict[str, Any]:
 
 
 def _auto_publish(session: Session, summary: Summary, extra: dict[str, Any]) -> None:
-    asyncio.run(auto_summary._auto_publish(session, summary, extra, "body"))
+    """Call the real thing the way `_regenerate_one` does.
+
+    `owner_id` became a required keyword in ticket 21, when the resolution moved
+    out of `_auto_publish` and up into `run_auto_summary`'s query — which now
+    selects only Summaries that have an owner, so the unowned ones stop being
+    regenerated into more unowned ones.
+
+    Derived from the Summary here rather than taken as a parameter, because
+    that is what the production caller does and this file's whole point is the
+    wiring. Hard-coding an id would let
+    `test_the_summarys_owner_is_who_the_send_is_attributed_to` pass while
+    `_regenerate_one` handed the real function somebody else's — the mutation
+    that guard was written to catch, moved one frame up. That frame is covered
+    by `test_unowned_row_creation_paths.py`.
+    """
+    owner_id = summary.user_id
+    assert owner_id is not None, "the caller selects only owned Summaries"
+    asyncio.run(
+        auto_summary._auto_publish(session, summary, extra, "body", owner_id=owner_id)
+    )
 
 
 def _extra(bot_id: str, chat_id: str) -> dict[str, Any]:

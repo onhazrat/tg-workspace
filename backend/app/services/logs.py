@@ -118,8 +118,30 @@ _ADMIN_LOG_REASON = (
 
 
 def upsert_publish_log(
-    session: Session, item: dict[str, Any], user_id: uuid.UUID | None = None
+    session: Session, item: dict[str, Any], user_id: uuid.UUID
 ) -> None:
+    """Write a publish log for `user_id`.
+
+    **`user_id` is required and non-optional**, as it is on the three personal
+    log families below. It was `uuid.UUID | None = None` until ticket 21, and
+    the default was doing real damage rather than sitting unused: `PublishLog`,
+    `LLMLog`, `EmbeddingLog` and `NetworkLog` are all `USER_OWNED` in `SCOPES`,
+    so a row written with no owner is invisible to every account under
+    enforcement — and ticket 20 runs these four on *their owner's*
+    `logRetentionDays`, which means an unowned one is also reachable by no
+    retention window at all. It leaks by never being swept.
+
+    Ticket 34's migration backfilled the rows that existed and deliberately left
+    the column nullable, so these four signatures are what kept producing more.
+    Removing the default is what makes the callers say who they are: `mypy`
+    names every one of them rather than leaving the gap to be found on the day
+    the flag flips.
+
+    `upsert_sync_log` keeps an optional `user_id` it ignores, and that asymmetry
+    is deliberate — see its own docstring. All five still accept
+    `(session, item, user_id)`, so `data_import_export._LOG_IMPORTERS` can go on
+    dispatching them through one uniform signature.
+    """
     normalized = normalize_body(item)
     log_id = normalized.get("id") or str(uuid.uuid4())
     existing = session.get(PublishLog, log_id)
@@ -255,9 +277,7 @@ def _upsert_sync_log_payload(
     )
 
 
-def upsert_llm_log(
-    session: Session, item: dict[str, Any], user_id: uuid.UUID | None = None
-) -> None:
+def upsert_llm_log(session: Session, item: dict[str, Any], user_id: uuid.UUID) -> None:
     normalized = normalize_body(item)
     log_id = normalized.get("id") or str(uuid.uuid4())
     existing = session.get(LLMLog, log_id)
@@ -287,7 +307,7 @@ def upsert_llm_log(
 
 
 def upsert_embedding_log(
-    session: Session, item: dict[str, Any], user_id: uuid.UUID | None = None
+    session: Session, item: dict[str, Any], user_id: uuid.UUID
 ) -> None:
     normalized = normalize_body(item)
     log_id = normalized.get("id") or str(uuid.uuid4())
@@ -311,7 +331,7 @@ def upsert_embedding_log(
 
 
 def upsert_network_log(
-    session: Session, item: dict[str, Any], user_id: uuid.UUID | None = None
+    session: Session, item: dict[str, Any], user_id: uuid.UUID
 ) -> None:
     normalized = normalize_body(item)
     log_id = normalized.get("id") or str(uuid.uuid4())

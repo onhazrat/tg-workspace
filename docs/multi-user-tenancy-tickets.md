@@ -241,18 +241,55 @@ stay personal. One person's settings can never delete another's evidence.
 - [ ] Asset pruning stays global
 
 ## 21. Enable enforcement and prove isolation (integrate)
-**Blocked by:** 15, 16, 17, 18, 19, 20
+**Blocked by:** none — 15, 16, 17, 18, 19, 20, 30, 32, 34 and 35 all done as of 2026-08-29 (`258b7b9`).
+**Blocks 22, 26, 28, 29.**
 
 **What to build:** Two real accounts genuinely cannot see each other. This is the acceptance gate for
 the whole tenancy programme.
 
+**The checkbox list below was rewritten before starting**, and the ticket file
+(`.scratch/multi-user-tenancy/issues/21-enable-enforcement-and-prove-isolation.md`) carries the
+argument. In short: the seven boxes this was filed with describe a flag flip and an isolation proof,
+and never name the larger half. Tickets 34 and 35 each handed this ticket preconditions; all of them
+reduce to **eliminate the `user_id=None` creation paths before flipping the flag**. Ticket 34
+backfilled the rows that existed and left the columns nullable, so the producers are still producing.
+The audit found two nobody had named — `EmbeddingLog` is constructed with no owner at all on every
+scheduler tick, and `_regenerate_one` mints a *new* unowned Summary from each unowned one it
+regenerates, so the population refills rather than shrinking.
+
+Ships as four PRs, flag last, so the flip lands on ground that is already clean:
+
+**PR 1 — close the creation paths.** No behaviour change on a single-account deployment.
+- [ ] The four log `upsert_*` take a required, non-optional `user_id`
+- [ ] `EmbeddingLog` is stamped at both `embeddings.py` call sites, with the id the caller already holds
+- [ ] `create_job`'s `user_id` is required, and no call site spells `str(x) if x else None`
+- [ ] The six `ChannelSettingGroup` constructors require an owner, and the `user_id or channel.user_id` fallbacks are gone
+- [ ] `_regenerate_one` cannot mint an unowned Summary, payload, or log
+- [ ] The sync `user_id` chain carries a real account from the queue message to `_save_network_telemetry`
+- [ ] `scripts/audit_tenancy_drift.py` derives its owner tables from `owner_backfill_inventory()`, so it stops counting ticket 19's deliberately ownerless sync logs as drift
+- [ ] A guard proves no `USER_OWNED` row can be created without an owner, walked from the AST
+
+**PR 2 — delete the single-operator helper.** The behaviour change.
+- [ ] `services/operator.py` is deleted, with its local-dev "no scoped channels, use all channels" fallback
+- [ ] The call sites that already hold a real `current_user.id` go through `scoped_select`
+- [ ] RAG's vector search takes the seam instead of `channel_names_for_operator`
+- [ ] `run_auto_sync` loops per owner, each account's due set computed from **its own follow's** setting group
+- [ ] `run_auto_summary` regenerates each due Summary as its own owner
+- [ ] `run_translation_batch` selects over the channels anyone follows, because a translation is corpus
+- [ ] `resolve_follow_owner` survives — it answers a different question, and four migrations document parity with its rule
+- [ ] `test_auto_sync_scopes_to_operator_channels` is inverted, not deleted
+
+**PR 3 — the columns stop permitting it.**
 - [ ] Owner columns are non-null with real cascading keys, added without exclusive locks on large tables
+- [ ] The residual global setting-group presets are reconciled first, against the unique index rather than only the `UPDATE`'s predicate
+- [ ] The guard has been watched to fail
+
+**PR 4 — the flip.**
 - [ ] An isolation test parametrised over the whole mounted route inventory passes for two accounts
 - [ ] Another account's row returns not-found on read, update, and delete
 - [ ] Deleting an account cascades its rows while shared Channels and Posts survive
-- [ ] The single-operator helper and its null-owner fallback are deleted
-- [ ] Two existing tests encoding single-operator behaviour are inverted, not deleted
-- [ ] The suite is green with enforcement both off and on
+- [ ] `test_the_flag_ships_off` is inverted, not deleted
+- [ ] The suite is green with enforcement both off and on — measured at **159 failed, 1753 passed** with the flag on before any of this work
 
 ## 22. Drop the superseded columns (contract)
 **Blocked by:** 21
@@ -418,8 +455,8 @@ interactive path — this is the same rule on the scheduled one, keyed on the Su
 - [ ] A Summary naming a foreign `publishBotId` publishes nothing and says why in the publish log
 - [ ] Both flag states are green
 
-## 34. Backfill owners before enforcement
-**Blocked by:** none — **blocks 21**
+## 34. Backfill owners before enforcement — DONE
+**Blocked by:** none — **blocks 21**. Landed 2026-08-28 (PR #151, `3f4386e`): migration `c0d1e2f3a4b5`, inventory from `tenancy.owner_backfill_inventory()`, guard `tests/services/test_owner_backfill.py`.
 
 **What to build:** Every user-owned row has a real owner before the flag flips, so enforcement
 hides nothing and refuses nothing that a person legitimately owns.
@@ -432,14 +469,14 @@ account the deployment's stored bot token. `backend/scripts/backfill_user_id.py`
 manual script nothing runs, and its table list predates `SCOPES` — five of its thirteen models are
 now follow-scoped or corpus, and ten user-owned tables are missing.
 
-- [ ] Every `USER_OWNED` table with a nullable `user_id` is backfilled or excused, from an inventory derived from `SCOPES`
-- [ ] The backfill is an Alembic migration, not a script somebody has to remember to run
-- [ ] It resolves the owner through `resolve_follow_owner`'s rule
-- [ ] It completes in one pass, and says what it did when there is no account to adopt to
-- [ ] A guard proves no ownerless `USER_OWNED` row survives it
+- [x] Every `USER_OWNED` table with a nullable `user_id` is backfilled or excused, from an inventory derived from `SCOPES`
+- [x] The backfill is an Alembic migration, not a script somebody has to remember to run
+- [x] It resolves the owner through `resolve_follow_owner`'s rule
+- [x] It completes in one pass, and says what it did when there is no account to adopt to
+- [x] A guard proves no ownerless `USER_OWNED` row survives it
 
-## 35. Scope setting groups and sync jobs
-**Blocked by:** 3 — **blocks 21**
+## 35. Scope setting groups and sync jobs — DONE
+**Blocked by:** 3 — **blocks 21**. Landed 2026-08-29 (PR #154, `258b7b9`): the three reads onto the seam, four previously-unguarded by-id writes closed, guard `tests/services/test_setting_group_and_job_scoping.py`.
 
 **What to build:** The last three unaudited `USER_OWNED` reads go through the seam, so the flag
 decides what they return rather than a hand-rolled filter.
@@ -451,8 +488,9 @@ changed-response-while-off failure the seam's batches forbid. `load_groups_by_id
 table with no filter. `_running_job_from_row` reads `SyncJob` across accounts to serve
 `GET /jobs/runtime-config`.
 
-- [ ] `list_setting_groups` reads through `scoped_select` instead of its own owner filter
-- [ ] `load_groups_by_id` is scoped, or excused at the call site with a written reason
-- [ ] `_running_job_from_row` answers for the caller, not across accounts
-- [ ] Each takes a `user_id` with no default
-- [ ] Both flag states are green — and the flag-off responses are byte-identical to today's
+- [x] `list_setting_groups` reads through `scoped_select` instead of its own owner filter
+- [x] `load_groups_by_id` is scoped, or excused at the call site with a written reason
+- [x] `_running_job_from_row` answers for the caller, not across accounts
+- [x] Each takes a `user_id` with no default
+- [x] Both flag states are green — **but the flag-off response deliberately changed**, decided with the user before implementing: `list_setting_groups` returns unfiltered, because its old `me OR NULL` filter narrowed in both states. Second adoption in the programme to change a flag-off response, and the first where the *old* code was the violation rather than the new one (ticket 17's `/data/artifacts` is the precedent)
+- [x] Beyond the ticket: four by-id writes that had no owner check at all — `update_setting_group`, `delete_setting_group`, `bulk_assign_setting_group` behind plain `CurrentUser` routes, and `_import_channels`

@@ -68,6 +68,14 @@ class FollowChannelResult:
 @dataclass
 class FollowJobState:
     follow_job_id: str
+    #: Who started this follow job. Declared here beside the other required
+    #: field rather than left where it was, because a dataclass cannot put an
+    #: undefaulted attribute after a defaulted one — and giving it a default is
+    #: the thing being removed. Not optional: the sync this chains creates a
+    #: `USER_OWNED` SyncJob, and the one route that builds a follow job already
+    #: holds an authenticated `current_user.id`, so the `str(x) if x else None`
+    #: it replaces was a `None` no caller could reach (ticket 21).
+    user_id: str
     source: str = FOLLOW_JOB_SOURCE
     status: str = "pending"
     results: list[FollowChannelResult] = field(default_factory=list)
@@ -75,7 +83,6 @@ class FollowJobState:
     created_at: int = field(default_factory=lambda: int(time.time() * 1000))
     finished_at: int | None = None
     cancel_event: asyncio.Event = field(default_factory=asyncio.Event)
-    user_id: str | None = None
     proxies: list[str] = field(default_factory=list)
     tor_auto_rotate: bool = False
     tor_rotation_threshold: int = 10
@@ -168,7 +175,7 @@ def get_follow_job(follow_job_id: str) -> FollowJobState | None:
 async def create_follow_job(
     *,
     channels: list[dict[str, Any]],
-    user_id: str | None,
+    user_id: str,
     proxies: list[str] | None = None,
     tor_auto_rotate: bool = False,
     tor_rotation_threshold: int = 10,

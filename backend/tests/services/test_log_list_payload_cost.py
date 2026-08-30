@@ -103,6 +103,7 @@ def _seed(session: Session, log_id: str, log_type: str) -> None:
                 "full_response": BODY,
                 "text_sent": "x" * 4000,
             },
+            VIEWER,
         )
     else:
         upsert_llm_log(
@@ -116,6 +117,7 @@ def _seed(session: Session, log_id: str, log_type: str) -> None:
                 "full_request": {"u": 1},
                 "full_response": BODY,
             },
+            VIEWER,
         )
     session.commit()
 

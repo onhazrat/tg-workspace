@@ -53,6 +53,7 @@ from app.services.followed_channels import (
     create_followed_channel,
     normalize_channel_name,
 )
+from app.services.follows import resolve_follow_owner
 from app.services.language import detect_language_from_posts
 from app.services.logs import upsert_network_log, upsert_sync_log
 from app.services.network import rotate_tor_identity
@@ -127,6 +128,27 @@ def _save_network_telemetry(
     user_id: uuid.UUID | None,
     status_code: int = 200,
 ) -> None:
+    """Record what the network did, attributed to a real account or not at all.
+
+    `user_id` stays optional because the sync walk above it still is — the queue
+    message carries `userId` and `run_auto_sync` can fail to resolve one — but a
+    `NetworkLog` is `USER_OWNED`, so writing the row with that `None` is what
+    made this the busiest unowned-row producer in the codebase: one per scraped
+    page of every sync (ticket 21).
+
+    `resolve_follow_owner` is the rule the rest of the programme already uses for
+    "who owns this row when the caller named nobody": the caller's id if it names
+    a live account, otherwise the operator. It returns `None` only when no
+    account exists at all, and a deployment with no accounts has nobody to
+    attribute a scrape to — so the telemetry is dropped rather than written
+    unowned. Dropping is the lesser loss: ticket 20 runs this family on its
+    owner's `logRetentionDays`, so an unowned row is swept by no window and the
+    leak looks exactly like retention working.
+    """
+    owner_id = resolve_follow_owner(session, user_id)
+    if owner_id is None:
+        return
+
     logs = telemetry if isinstance(telemetry, list) else [telemetry]
     for t in logs:
         if not t:
@@ -148,7 +170,7 @@ def _save_network_telemetry(
                 "attempts": len(attempts) if attempts else 1,
                 "telemetry": t,
             },
-            user_id,
+            owner_id,
         )
 
 
@@ -516,7 +538,27 @@ def _freeze_channel_for_chat_id_problem(
     write another channel's posts into this one, and that is not something to
     resolve automatically.
     """
-    freeze_group = get_or_create_frozen_group(session, user_id=channel_owner_id)
+    # `channel_owner_id` is `user_id or channel.user_id`, either of which can
+    # be None — and passing that straight in is how a frozen `-global` group
+    # nobody owns got created (ticket 21). `resolve_follow_owner` is the rule
+    # the rest of the programme uses for "who owns this row when the caller
+    # named nobody": the candidate if it names a live account, else the
+    # operator. It answers None only when the deployment has no accounts, and
+    # such a deployment is not running a sync.
+    #
+    # Deliberately not reusing `channel_owner_id` itself: it is also the
+    # predicate of the duplicate-chat-id query above, where None genuinely
+    # means "match the unowned channels" and narrowing it would change which
+    # rows that finds.
+    freeze_owner_id = resolve_follow_owner(session, channel_owner_id)
+    if freeze_owner_id is None:
+        logger.warning(
+            "Cannot freeze channel %s for a chat-id problem: no account to own "
+            "the Frozen setting group",
+            channel.id,
+        )
+        return
+    freeze_group = get_or_create_frozen_group(session, user_id=freeze_owner_id)
     # Not `bulk_assign_setting_group`: ticket 35 gave that an owner check,
     # because it takes a client-chosen group id. This one is derived from the
     # Channel's own owner one line above, so there is nothing for a stranger to
@@ -981,11 +1023,17 @@ def _finalize_channel_success(
         channel.updated_at = utc_now()
         session.add(channel)
         if was_restricted:
-            move_channel_from_restricted_to_default(
-                session,
-                channel,
-                user_id=user_id or channel.user_id,
-            )
+            # Resolved rather than passed through: `user_id or channel.user_id`
+            # is None for an unowned channel synced by the scheduler, and the
+            # default group it reached for then was the `-global` one nobody
+            # owns (ticket 21).
+            restore_owner_id = resolve_follow_owner(session, user_id or channel.user_id)
+            if restore_owner_id is not None:
+                move_channel_from_restricted_to_default(
+                    session,
+                    channel,
+                    user_id=restore_owner_id,
+                )
         touch_sync(session, "channels", commit=False)
         session.commit()
 
@@ -1025,11 +1073,16 @@ def _finalize_channel_scrape_error(
             return
 
         if exc.is_unavailable:
-            move_channel_to_restricted_group(
-                session,
-                channel,
-                user_id=user_id or channel.user_id,
+            # See the restore path above for why this is resolved.
+            restrict_owner_id = resolve_follow_owner(
+                session, user_id or channel.user_id
             )
+            if restrict_owner_id is not None:
+                move_channel_to_restricted_group(
+                    session,
+                    channel,
+                    user_id=restrict_owner_id,
+                )
             touch_sync(session, "channels", commit=False)
             session.commit()
 

@@ -14,7 +14,7 @@ from app.services.channel_setting_groups import (
     ensure_default_group,
     get_or_create_restricted_group,
 )
-from app.services.follows import ensure_follow_for_channel
+from app.services.follows import ensure_follow_for_channel, resolve_follow_owner
 from app.services.logs import upsert_network_log
 from app.services.network_settings import redact_proxy_url
 from app.services.sync_meta import touch_sync
@@ -29,6 +29,27 @@ def _save_network_telemetry(
     user_id: uuid.UUID | None,
     status_code: int = 200,
 ) -> None:
+    """Record what the network did, attributed to a real account or not at all.
+
+    `user_id` stays optional because the sync walk above it still is — the queue
+    message carries `userId` and `run_auto_sync` can fail to resolve one — but a
+    `NetworkLog` is `USER_OWNED`, so writing the row with that `None` is what
+    made this the busiest unowned-row producer in the codebase: one per scraped
+    page of every sync (ticket 21).
+
+    `resolve_follow_owner` is the rule the rest of the programme already uses for
+    "who owns this row when the caller named nobody": the caller's id if it names
+    a live account, otherwise the operator. It returns `None` only when no
+    account exists at all, and a deployment with no accounts has nobody to
+    attribute a scrape to — so the telemetry is dropped rather than written
+    unowned. Dropping is the lesser loss: ticket 20 runs this family on its
+    owner's `logRetentionDays`, so an unowned row is swept by no window and the
+    leak looks exactly like retention working.
+    """
+    owner_id = resolve_follow_owner(session, user_id)
+    if owner_id is None:
+        return
+
     logs = telemetry if isinstance(telemetry, list) else [telemetry]
     for t in logs:
         if not t:
@@ -50,7 +71,7 @@ def _save_network_telemetry(
                 "attempts": len(attempts) if attempts else 1,
                 "telemetry": t,
             },
-            user_id,
+            owner_id,
         )
 
 
@@ -77,7 +98,7 @@ def create_followed_channel(
     photo_url: str | None,
     is_unavailable: bool,
     discovered_via: dict[str, Any] | None,
-    user_id: uuid.UUID | None,
+    user_id: uuid.UUID,
     effective_start_time: int,
     telemetry_url: str | None = None,
     telemetry: Any = None,

@@ -90,7 +90,6 @@ from app.services.channels import (
 from app.services.channels import (
     upsert_channel as upsert_channel_impl,
 )
-from app.services.operator import get_operator_user_id
 from app.services.sync_meta import get_sync_meta, touch_sync
 
 _TERMINAL_FOLLOW_STATUSES = frozenset({"completed", "failed", "cancelled"})
@@ -233,7 +232,7 @@ async def start_bulk_follow(
     ]
     job = await create_follow_job(
         channels=channel_payloads,
-        user_id=str(current_user.id) if current_user.id else None,
+        user_id=str(current_user.id),
         proxies=list(body.proxies or []) if body.proxy_enabled else [],
         tor_auto_rotate=body.tor_auto_rotate,
         tor_rotation_threshold=body.tor_rotation_threshold,
@@ -325,7 +324,7 @@ async def bulk_reresolve_start_ids_endpoint(
         default_factory=BulkReresolveStartIdsRequest
     ),
 ) -> BulkReresolveStartIdsResponse:
-    operator_id = _current_user.id or get_operator_user_id(session)
+    operator_id = _current_user.id
     result = await bulk_reresolve_start_ids(
         session,
         operator_id=operator_id,
@@ -355,7 +354,7 @@ async def bulk_reset_sync_endpoint(
             status_code=400,
             detail="Set confirm=true to clear posts and queue sync for selected channels.",
         )
-    operator_id = _current_user.id or get_operator_user_id(session)
+    operator_id = _current_user.id
     result = await bulk_reset_and_queue_sync(
         session,
         operator_id=operator_id,

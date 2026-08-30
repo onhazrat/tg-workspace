@@ -13,7 +13,11 @@ cause it, against a live database, before anything is enforced:
 
 * **NULL owners.** A row written before the `user_id` stamp existed. Under
   enforcement `scoped_select` filters these out of their own owner's results —
-  `assert_owner` is explicit that NULL fails closed.
+  `assert_owner` is explicit that NULL fails closed. Counted on every table
+  that has the column, but **drift only on the `USER_OWNED` ones**: ticket 19
+  made sync logs Channel telemetry whose rows carry no owner on purpose, so
+  before ticket 21 this reported 5,880 findings on a healthy dev database and
+  `--strict` exited 1 on all of them. See `_shared_null_owner_keys`.
 * **Orphan owners.** A `user_id` naming an account that no longer exists. The
   TG tables have no foreign key to `user.id`, so a deleted account leaves its
   rows behind pointing at nothing; nothing has ever noticed.
@@ -57,7 +61,7 @@ from app.services.follows import (
     orphan_follow_channel_ids,
 )
 from app.services.settings_registry import GLOBAL_KEYS, USER_KEYS
-from app.services.tenancy import OWNER_COLUMN, SCOPES
+from app.services.tenancy import OWNER_COLUMN, SCOPES, Scope
 
 
 def _owner_column_models() -> list[type[SQLModel]]:
@@ -83,7 +87,44 @@ def _count(session: Session, statement) -> int:
 #: assertable, and out of the strict gate so a healthy database still exits 0 —
 #: a key that is merely printed cannot be tested in either direction.
 AWAITING_COLLECTION = "channels_awaiting_collection"
-NON_DRIFT_KEYS = frozenset({AWAITING_COLLECTION})
+
+
+def _shared_null_owner_keys() -> frozenset[str]:
+    """`<table>.null_owner` keys where a NULL owner is the correct state.
+
+    Ticket 19 made a sync log Channel telemetry: `upsert_sync_log` accepts a
+    `user_id` and deliberately does not write it, so **every** row of
+    `tg_sync_logs` and `tg_sync_log_payloads` carries NULL by design. The other
+    follow-scoped and corpus tables are the same fact from the other side —
+    their `user_id` is a "who scraped this first" stamp the seam never filters
+    on, and ticket 22 drops it.
+
+    They stay counted and printed, for the reason `_owner_column_models` gives:
+    the count is how you tell whether anything still depends on the stamp before
+    ticket 22 removes it. What changes here is that they no longer fail
+    `--strict`, which is a bug rather than a policy call. This script is the
+    pre-flight gate for ticket 21's flip, and on the dev database it reported
+    **5,880 findings, every one of them a row behaving exactly as ticket 19
+    specified**. A gate that fails on a correct database is a gate nobody runs,
+    and the real drift it exists to catch was sitting underneath that noise.
+
+    Derived from `SCOPES` rather than naming the two log tables, the way
+    `SHARED_LOG_TYPES` and `owner_backfill_inventory` are: a table reclassified
+    in the seam moves in and out of this set on its own, and a hand-written
+    second list is the drift this whole programme keeps finding.
+    """
+    return frozenset(
+        f"{model.__tablename__!s}.null_owner"
+        for model, scope in SCOPES.items()
+        if scope is not Scope.USER_OWNED and hasattr(model, OWNER_COLUMN)
+    )
+
+
+#: A NULL owner is drift only where the seam would have filtered on it — which
+#: is exactly the `USER_OWNED` tables. An **orphan** owner stays drift
+#: everywhere, including on these tables: a stamp naming a deleted account is
+#: wrong whoever reads it, and unlike a NULL it was never intended.
+NON_DRIFT_KEYS = frozenset({AWAITING_COLLECTION}) | _shared_null_owner_keys()
 
 
 def _misfiled_settings_keys(session: Session) -> list[str]:

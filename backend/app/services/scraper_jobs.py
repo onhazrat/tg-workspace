@@ -404,10 +404,26 @@ async def create_job(
     *,
     channel_entries: list[tuple[str, str]],
     source: str,
-    user_id: str | None = None,
+    user_id: str,
     channel_meta_by_id: dict[str, dict[str, Any]] | None = None,
     sync_mode: SyncOperationMode = "auto",
 ) -> SyncJobState:
+    """Create a sync job owned by `user_id`.
+
+    **`user_id` is required with no default**, which is ticket 21 closing the
+    sharpest of the unowned-row producers. `SyncJob` is `USER_OWNED`, and this
+    parameter defaulted to `None` while `_persist_job` wrote it straight through
+    as the row's owner — so the scheduler minted a job nobody owns on every
+    tick, indefinitely, rather than leaving a fixed legacy set a backfill could
+    settle. Ticket 35 pinned the consequence: `activeSyncJob` reports nothing
+    for an auto-sync once the flag flips.
+
+    The callers that could reach the default were the two scheduler paths, and
+    both now resolve a real account or decline to run. Every other caller was
+    already passing `str(current_user.id)` behind an authenticated dependency,
+    so the default was unreachable there and only ever served the two that
+    should not have had it.
+    """
     job_id = str(uuid.uuid4())
     channels = {
         cid: ChannelSyncState(

@@ -379,7 +379,7 @@ def upsert_channel(
     channel_id: str,
     body: dict[str, Any],
     *,
-    user_id: uuid.UUID | None,
+    user_id: uuid.UUID,
 ) -> dict[str, Any]:
     normalized = normalize_body(body)
     _reject_server_managed_channel_fields(normalized)
@@ -607,7 +607,7 @@ def bulk_update_sync_settings(
     dynamic_sync_enabled: bool | None,
     auto_sync_interval_minutes: int | None,
     dynamic_sync_expected_posts: int | None,
-    operator_id: uuid.UUID | None = None,
+    operator_id: uuid.UUID,
 ) -> dict[str, int]:
     if channel_ids is not None:
         raise HTTPException(
@@ -618,12 +618,13 @@ def bulk_update_sync_settings(
                 "or PATCH /data/setting-groups/{id} to update a group."
             ),
         )
-    from app.services.operator import get_operator_user_id
-
-    owner_id = operator_id or get_operator_user_id(session)
+    # `operator_id or get_operator_user_id(session)` until ticket 21. The one
+    # caller is a route holding an authenticated `current_user.id`, so the
+    # fallback was unreachable — and the default was what made the parameter
+    # look optional to anyone adding a second caller.
     result = update_default_group_sync_settings(
         session,
-        user_id=owner_id,
+        user_id=operator_id,
         regular_sync_enabled=regular_sync_enabled,
         dynamic_sync_enabled=dynamic_sync_enabled,
         auto_sync_interval_minutes=auto_sync_interval_minutes,

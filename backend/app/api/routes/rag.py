@@ -64,7 +64,7 @@ async def rag_embed(
     try:
         return RagEmbedResponse.model_validate(
             await backfill_embeddings(
-                session, limit=body.limit, operator_id=current_user.id
+                session, limit=body.limit, user_id=current_user.id
             )
         )
     except ValueError as exc:

@@ -10,7 +10,7 @@ from collections.abc import Sequence
 from datetime import datetime
 from typing import Any
 
-from sqlmodel import Session, col, or_, select
+from sqlmodel import Session, col, select
 
 from app.ai.registry import default_model, get_provider
 from app.core.config import settings
@@ -25,7 +25,7 @@ from app.services.network_settings import (
     resolve_proxies,
     resolve_proxy_concurrency,
 )
-from app.services.operator import get_operator_user_id, select_operator_channels
+from app.services.operator import select_operator_channels
 from app.services.publish import publish_summary_text
 from app.services.scraper_jobs import create_job, has_active_sync_job
 from app.services.summaries import apply_summary_payload
@@ -45,6 +45,7 @@ def _log_publish_failure(
     session: Session,
     summary: Summary,
     *,
+    owner_id: uuid.UUID,
     bot_id: str,
     chat_id: str,
     chat_name: str,
@@ -70,7 +71,7 @@ def _log_publish_failure(
             "timestamp": int(time.time() * 1000),
             "text_sent": text_sent,
         },
-        summary.user_id,
+        owner_id,
     )
     session.commit()
     touch_sync(session, "publish_logs")
@@ -128,12 +129,18 @@ async def _sync_channels_for_summary(
     session: Session,
     channel_names: list[str],
     end_ts: int,
-    operator_id: uuid.UUID | None,
+    owner_id: uuid.UUID,
 ) -> None:
+    """Sync the stale channels this Summary reads, as the Summary's owner.
+
+    `owner_id` is non-optional because its only caller now has a narrowed one:
+    the `SyncJob` this creates is `USER_OWNED`, and `str(x) if x else None` was
+    the spelling that let the scheduler mint one nobody owns (ticket 21).
+    """
     if has_active_sync_job():
         return
     operator_channels = {
-        ch.name: ch for ch in select_operator_channels(session, operator_id=operator_id)
+        ch.name: ch for ch in select_operator_channels(session, operator_id=owner_id)
     }
     groups_by_id = load_groups_by_id(session)
     stale = []
@@ -150,21 +157,36 @@ async def _sync_channels_for_summary(
     job = await create_job(
         channel_entries=[(ch.id, ch.name) for ch in stale],
         source="Auto-Regenerate Summary (scheduler)",
-        user_id=str(operator_id) if operator_id else None,
+        user_id=str(owner_id),
     )
-    await run_sync_job(job, operator_id)
+    await run_sync_job(job, owner_id)
 
 
-async def _regenerate_one(session: Session, summary: Summary) -> str | None:
+async def _regenerate_one(
+    session: Session, summary: Summary, *, owner_id: uuid.UUID
+) -> str | None:
+    """Regenerate `summary` into a new Summary owned by `owner_id`.
+
+    **`owner_id` is a required keyword, and it is the Summary's own owner.** It
+    used to be `summary.user_id or get_operator_user_id(session)`, computed
+    here, and the `or` was load-bearing in the wrong direction: `run_auto_summary`
+    selected `Summary.user_id IS NULL` rows on purpose, so every unowned Summary
+    that came due was regenerated into a **brand new** unowned Summary, with its
+    `SummaryPayload`, its `LLMLog` and its `PublishLog` stamped the same way.
+    The unowned population did not shrink as ticket 34's backfill implied — it
+    was topped up every tick, which is why closing the creation path matters
+    more than the backfill that preceded it.
+
+    Taking it as an argument rather than resolving it is what moves the decision
+    to the one place that can make it: the caller's query, which now selects
+    only Summaries that have an owner.
+    """
     extra = _summary_extra(summary)
     duration_ms = summary.end_date - summary.start_date
     new_start = summary.end_date
     new_end = summary.end_date + duration_ms
 
-    operator_id = summary.user_id or get_operator_user_id(session)
-    await _sync_channels_for_summary(
-        session, summary.channels or [], new_end, operator_id
-    )
+    await _sync_channels_for_summary(session, summary.channels or [], new_end, owner_id)
 
     posts = session.exec(
         select(Post)
@@ -216,7 +238,7 @@ async def _regenerate_one(session: Session, summary: Summary) -> str | None:
                 "duration": duration,
                 "type": "summary",
             },
-            summary.user_id,
+            owner_id,
         )
 
     cited = _extract_cited_posts(full_text, posts)
@@ -238,7 +260,7 @@ async def _regenerate_one(session: Session, summary: Summary) -> str | None:
 
     new_summary = Summary(
         id=new_id,
-        user_id=summary.user_id,
+        user_id=owner_id,
         text=full_text,
         channels=summary.channels,
         start_date=new_start,
@@ -256,7 +278,7 @@ async def _regenerate_one(session: Session, summary: Summary) -> str | None:
     apply_summary_payload(
         session,
         new_id,
-        user_id=new_summary.user_id,
+        user_id=owner_id,
         updates={"cited_posts": cited},
     )
 
@@ -272,7 +294,9 @@ async def _regenerate_one(session: Session, summary: Summary) -> str | None:
         and extra.get("publishChatId")
         and posts
     ):
-        await _auto_publish(session, new_summary, new_extra, full_text)
+        await _auto_publish(
+            session, new_summary, new_extra, full_text, owner_id=owner_id
+        )
 
     return new_id
 
@@ -282,6 +306,8 @@ async def _auto_publish(
     summary: Summary,
     extra: dict[str, Any],
     full_text: str,
+    *,
+    owner_id: uuid.UUID,
 ) -> None:
     """Publish a regenerated Summary, as its own owner and nobody else.
 
@@ -292,8 +318,11 @@ async def _auto_publish(
     destination, and the scheduler would decrypt that account's token and send
     as its bot (ticket 33).
 
-    The acting owner is `summary.user_id`, because there is no `current_user`
-    out here. The credential half is checked inside `publish_summary_text`,
+    The acting owner is `owner_id`, the Summary's own owner, because there is
+    no `current_user` out here. It arrives as a required keyword rather than
+    being read off the row: ticket 21 made the caller's query select only owned
+    Summaries, and passing the narrowed id is what carries that guarantee here
+    instead of re-deriving it from a column the type still calls optional. The credential half is checked inside `publish_summary_text`,
     where the token is decrypted; this function owns the destination half,
     which never reaches that service — only the `chat_id` string does.
 
@@ -307,13 +336,14 @@ async def _auto_publish(
     bot_id = str(extra.get("publishBotId"))
     chat_dest_id = str(extra.get("publishChatId"))
     dest = session.get(ChatDestination, chat_dest_id)
-    if not dest or not may_act_on(owner_id=dest.user_id, user_id=summary.user_id):
+    if not dest or not may_act_on(owner_id=dest.user_id, user_id=owner_id):
         logger.warning(
             "Chat destination %s not available for auto-publish", chat_dest_id
         )
         _log_publish_failure(
             session,
             summary,
+            owner_id=owner_id,
             bot_id=bot_id,
             # `chat_id` holds a **Telegram** chat id everywhere else in this
             # function, and it is one of the columns the publish-log search
@@ -330,7 +360,7 @@ async def _auto_publish(
         )
         return
 
-    network = load_network_settings(session, summary.user_id)
+    network = load_network_settings(session, owner_id)
     proxies = resolve_proxies(network)
     proxy_concurrency = resolve_proxy_concurrency(network)
     metadata = None
@@ -340,7 +370,7 @@ async def _auto_publish(
     try:
         result = await publish_summary_text(
             session,
-            acting_user_id=summary.user_id,
+            acting_user_id=owner_id,
             credential_id=bot_id,
             chat_id=dest.chat_id,
             text=full_text,
@@ -365,7 +395,7 @@ async def _auto_publish(
                 "full_response": result,
                 "text_sent": text_sent,
             },
-            summary.user_id,
+            owner_id,
         )
         session.commit()
         touch_sync(session, "publish_logs")
@@ -374,6 +404,7 @@ async def _auto_publish(
         _log_publish_failure(
             session,
             summary,
+            owner_id=owner_id,
             bot_id=bot_id,
             chat_id=dest.chat_id,
             chat_name=dest.name,
@@ -388,12 +419,20 @@ async def run_auto_summary() -> dict[str, Any]:
     errors: list[str] = []
 
     with Session(engine) as session:
-        operator_id = get_operator_user_id(session)
-        stmt = select(Summary)
-        if operator_id is not None:
-            stmt = stmt.where(
-                or_(Summary.user_id == operator_id, col(Summary.user_id).is_(None))
-            )
+        # Owned Summaries only. The `OR user_id IS NULL` branch this replaces is
+        # what made `_regenerate_one` a producer of unowned rows rather than
+        # merely a consumer of them: an unowned Summary coming due was
+        # regenerated into a new unowned Summary, so ticket 34's backfill could
+        # never catch up with it.
+        #
+        # Nothing is stranded by the narrowing. Ticket 34's migration
+        # (`c0d1e2f3a4b5`) stamped every `tg_summaries` row that existed, and
+        # PR 1 of this ticket closes the writers that could add another, so on
+        # any migrated database this selects exactly what the old predicate did.
+        # The operator filter is deliberately gone with it — a Summary
+        # regenerates as *its own* owner, which is the question this job was
+        # answering with the deployment's identity instead.
+        stmt = select(Summary).where(col(Summary.user_id).is_not(None))
         summaries = session.exec(stmt).all()
         due = [s for s in summaries if _is_due(s, now) and s.id not in _regenerating]
 
@@ -404,7 +443,13 @@ async def run_auto_summary() -> dict[str, Any]:
                 row = session.get(Summary, summary.id)
                 if not row or not _is_due(row, now):
                     continue
-                new_id = await _regenerate_one(session, row)
+                if row.user_id is None:
+                    # Re-read in its own session, so the ownership the query
+                    # above selected on is asserted again rather than assumed.
+                    # Narrowing here is also what lets `_regenerate_one` take a
+                    # non-optional owner without a cast.
+                    continue
+                new_id = await _regenerate_one(session, row, owner_id=row.user_id)
                 if new_id:
                     regenerated.append(new_id)
         except Exception as exc:  # noqa: BLE001

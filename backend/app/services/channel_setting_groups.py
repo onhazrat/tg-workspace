@@ -246,7 +246,7 @@ def _legacy_duplicate_reserved_groups(
 
 
 def consolidate_legacy_duplicate_reserved_groups(
-    session: Session, *, user_id: uuid.UUID | None
+    session: Session, *, user_id: uuid.UUID
 ) -> int:
     """Merge legacy user-created reserved-name groups into canonical reserved ids."""
     merged = 0
@@ -341,12 +341,17 @@ def move_channel_from_restricted_to_default(
     session: Session,
     channel: Channel,
     *,
-    user_id: uuid.UUID | None,
+    user_id: uuid.UUID,
 ) -> ChannelSettingGroup | None:
     group = session.get(ChannelSettingGroup, channel.setting_group_id)
     if not group or not is_restricted_group(group):
         return None
-    default_group = ensure_default_group(session, user_id=user_id or channel.user_id)
+    # `user_id or channel.user_id` until ticket 21, and the `or` could only
+    # ever reach `channel.user_id` when `user_id` was None — which is how a
+    # channel with no owner got its caller a `-global` setting group nobody
+    # owns. `user_id` is now required, and a UUID is always truthy, so the
+    # second operand was unreachable the moment the signature narrowed.
+    default_group = ensure_default_group(session, user_id=user_id)
     channel.setting_group_id = default_group.id
     channel.updated_at = utc_now()
     now_ms = int(time.time() * 1000)
@@ -376,7 +381,7 @@ def move_channel_from_restricted_to_default(
 
 
 def ensure_default_group(
-    session: Session, *, user_id: uuid.UUID | None
+    session: Session, *, user_id: uuid.UUID
 ) -> ChannelSettingGroup:
     group_id = default_group_id_for_user(user_id)
     existing = session.get(ChannelSettingGroup, group_id)
@@ -396,7 +401,7 @@ def ensure_default_group(
 
 
 def get_or_create_restricted_group(
-    session: Session, *, user_id: uuid.UUID | None
+    session: Session, *, user_id: uuid.UUID
 ) -> ChannelSettingGroup:
     group_id = restricted_group_id_for_user(user_id)
     existing = session.get(ChannelSettingGroup, group_id)
@@ -426,7 +431,7 @@ def get_or_create_restricted_group(
 
 
 def get_or_create_frozen_group(
-    session: Session, *, user_id: uuid.UUID | None
+    session: Session, *, user_id: uuid.UUID
 ) -> ChannelSettingGroup:
     group_id = frozen_group_id_for_user(user_id)
     existing = session.get(ChannelSettingGroup, group_id)
@@ -456,7 +461,7 @@ def get_or_create_frozen_group(
 
 
 def get_or_create_slow_feed_group(
-    session: Session, *, user_id: uuid.UUID | None
+    session: Session, *, user_id: uuid.UUID
 ) -> ChannelSettingGroup:
     group_id = slow_feed_group_id_for_user(user_id)
     existing = session.get(ChannelSettingGroup, group_id)
@@ -481,7 +486,7 @@ def get_or_create_slow_feed_group(
 
 
 def get_or_create_high_velocity_group(
-    session: Session, *, user_id: uuid.UUID | None
+    session: Session, *, user_id: uuid.UUID
 ) -> ChannelSettingGroup:
     group_id = high_velocity_group_id_for_user(user_id)
     existing = session.get(ChannelSettingGroup, group_id)
@@ -506,7 +511,7 @@ def get_or_create_high_velocity_group(
 
 
 def ensure_builtin_groups(
-    session: Session, *, user_id: uuid.UUID | None
+    session: Session, *, user_id: uuid.UUID
 ) -> tuple[
     ChannelSettingGroup,
     ChannelSettingGroup,
@@ -529,7 +534,7 @@ def ensure_builtin_groups(
 
 
 def ensure_reserved_groups(
-    session: Session, *, user_id: uuid.UUID | None
+    session: Session, *, user_id: uuid.UUID
 ) -> tuple[ChannelSettingGroup, ChannelSettingGroup, ChannelSettingGroup]:
     default_group, _, _, frozen_group, restricted_group = ensure_builtin_groups(
         session, user_id=user_id
@@ -751,9 +756,7 @@ def recompute_channels_for_group(
     return len(channels)
 
 
-def _legacy_reserved_duplicates_exist(
-    session: Session, *, user_id: uuid.UUID | None
-) -> bool:
+def _legacy_reserved_duplicates_exist(session: Session, *, user_id: uuid.UUID) -> bool:
     canonical_frozen = frozen_group_id_for_user(user_id)
     canonical_restricted = restricted_group_id_for_user(user_id)
     duplicate = session.exec(
@@ -1075,9 +1078,12 @@ def move_channel_to_restricted_group(
     session: Session,
     channel: Channel,
     *,
-    user_id: uuid.UUID | None,
+    user_id: uuid.UUID,
 ) -> ChannelSettingGroup:
-    group = get_or_create_restricted_group(session, user_id=user_id or channel.user_id)
+    # See `move_channel_from_restricted_to_default`: the `or channel.user_id`
+    # this replaces was reachable only through a None `user_id`, which is the
+    # thing ticket 21 removed.
+    group = get_or_create_restricted_group(session, user_id=user_id)
     channel.setting_group_id = group.id
     channel.updated_at = utc_now()
     session.add(channel)
@@ -1087,7 +1093,7 @@ def move_channel_to_restricted_group(
 def update_default_group_sync_settings(
     session: Session,
     *,
-    user_id: uuid.UUID | None,
+    user_id: uuid.UUID,
     regular_sync_enabled: bool | None,
     dynamic_sync_enabled: bool | None,
     auto_sync_interval_minutes: int | None,

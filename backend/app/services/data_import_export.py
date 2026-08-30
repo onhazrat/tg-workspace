@@ -250,9 +250,7 @@ def unwrap_import_body(body: dict[str, Any]) -> dict[str, Any]:
     return body
 
 
-def _import_channels(
-    session: Session, items: list[Any], *, user_id: uuid.UUID | None
-) -> int:
+def _import_channels(session: Session, items: list[Any], *, user_id: uuid.UUID) -> int:
     """Upsert exported channels, preserving server-managed state.
 
     `SERVER_MANAGED_CHANNEL_FIELDS` are stripped rather than trusted: an export

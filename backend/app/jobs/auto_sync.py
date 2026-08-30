@@ -125,6 +125,18 @@ async def run_auto_sync() -> dict[str, Any]:
         owner_id = (net_row.user_id if net_row else None) or get_operator_user_id(
             session
         )
+        if owner_id is None:
+            # The job this tick would create is `USER_OWNED`, and `create_job`
+            # no longer accepts "nobody" (ticket 21). Writing one unowned is
+            # what this used to do, and ticket 35 pinned the consequence:
+            # `activeSyncJob` reports nothing for an auto-sync once the flag
+            # flips, so the deployment looks idle while the worker is busy.
+            #
+            # Declining costs nothing real. `owner_id` is None only when the
+            # network-settings row names no account *and* no user matches
+            # `FIRST_SUPERUSER` — which is a deployment with no accounts, where
+            # there is nobody to sync for and nobody to charge the Requests to.
+            return {"skipped": True, "reason": "no_account_to_attribute_to"}
         channels = select_operator_channels(session, operator_id=owner_id)
         groups_by_id = load_groups_by_id(session)
         stats_by_channel = _stats_for_scheduling(session, channels, groups_by_id, now)
@@ -192,7 +204,7 @@ async def run_auto_sync() -> dict[str, Any]:
     job = await create_job(
         channel_entries=entries,
         source=CHECK_SOURCE,
-        user_id=str(owner_id) if owner_id else None,
+        user_id=str(owner_id),
         channel_meta_by_id={
             cid: {"dueReason": due_reason_by_id.get(cid)} for cid, _ in entries
         },
