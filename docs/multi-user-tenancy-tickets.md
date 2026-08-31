@@ -508,3 +508,30 @@ table with no filter. `_running_job_from_row` reads `SyncJob` across accounts to
 - [x] Each takes a `user_id` with no default
 - [x] Both flag states are green — **but the flag-off response deliberately changed**, decided with the user before implementing: `list_setting_groups` returns unfiltered, because its old `me OR NULL` filter narrowed in both states. Second adoption in the programme to change a flag-off response, and the first where the *old* code was the violation rather than the new one (ticket 17's `/data/artifacts` is the precedent)
 - [x] Beyond the ticket: four by-id writes that had no owner check at all — `update_setting_group`, `delete_setting_group`, `bulk_assign_setting_group` behind plain `CurrentUser` routes, and `_import_channels`
+
+## 37. Reconcile the name-collision filter with its unique index
+**Blocked by:** none
+
+**What to build:** `_name_collision_scope_filter` and the unique index it mirrors answer the same
+question the same way, so a duplicate name is refused by the route's 409 rather than arriving as a
+Postgres `UniqueViolation`.
+
+The filter is deliberately wider than the index — `me OR NULL` rather than exactly the caller's
+scope — and its docstring says ticket 22 would reconcile them "once the global rows are gone".
+Ticket 22 dropped the *Channel's* `setting_group_id`, not the global `tg_channel_setting_groups`
+rows, which ticket 34 deliberately left because a fresh install migrates before its first superuser
+exists. So the forward reference expired the way ticket 13's did in `sync_queue.py`, and
+`channel_setting_groups.py:236` still names ticket 22.
+
+Currently masked: the wider filter catches the collision first and answers 409 correctly. Narrowing
+it without settling the rows would unmask the problem rather than fix it.
+
+Also carries ticket 22's review finding that `PUT /data/channels/{id}` is also the
+follow-an-existing-channel path — it reads as an edit and is also a create, and nothing says so at
+the handler.
+
+- [ ] The filter and the index agree, or the docstring records why they permanently do not
+- [ ] The alternative is written down with why it lost
+- [ ] `channel_setting_groups.py:236` no longer names ticket 22
+- [ ] A guard proves a duplicate name answers 409, never a `UniqueViolation`
+- [ ] `PUT /data/channels/{id}` says at the handler that it is also a create
