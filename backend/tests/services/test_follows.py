@@ -69,10 +69,11 @@ def user(session: Session) -> User:
 
 
 def _channel(session: Session, channel_id: str, **kwargs) -> Channel:
+    # No `setting_group_id`: ticket 22 dropped it from the Channel, and a caller
+    # that wants one now puts it on the follow.
     channel = Channel(
         id=channel_id,
         name=kwargs.pop("name", channel_id),
-        setting_group_id=kwargs.pop("setting_group_id", "default-global"),
         **kwargs,
     )
     session.add(channel)
@@ -189,30 +190,38 @@ def test_a_live_owner_is_not_reassigned(session: Session, user: User) -> None:
     assert resolve_follow_owner(session, user.id) == user.id
 
 
-def test_ensure_follow_for_channel_copies_the_per_user_columns(
+def test_ensure_follow_for_channel_takes_the_caller_s_per_user_values(
     session: Session, user: User
 ) -> None:
-    """The follow carries what the Channel carries, including its schedule.
+    """The follow carries what the *caller* supplies, not what the Channel has.
 
-    `next_sync_at` seeded from the Channel's regular deadline rather than left
-    NULL: a backfilled follow with no deadline reads as "due now" to the
-    scheduler that adopts this column later, which would stampede every channel
-    on the first tick after the flip.
+    Ticket 22 dropped the Channel's copies, so there is nothing left to copy —
+    and that is a fix rather than a mechanical change. Reading `setting_group_id`
+    off the Channel handed the second follower of a handle whichever group the
+    first follower picked, including one belonging to another account.
+
+    `next_sync_at` is still seeded from the Channel's regular deadline rather
+    than left NULL: a follow with no deadline reads as "due now" to the
+    scheduler, which would stampede every channel on the first tick.
     """
-    channel = _channel(
-        session,
-        "ch_copy",
-        user_id=user.id,
-        setting_group_id="default-global",
-        followed_at=111,
-        tags=["a", "b"],
-        start_id=7,
-        start_time=222,
-        discovered_via={"source": "discover"},
-        next_regular_sync_at=999,
-    )
+    channel = _channel(session, "ch_copy", next_regular_sync_at=999)
 
-    assert ensure_follow_for_channel(session, channel) is True
+    assert (
+        ensure_follow_for_channel(
+            session,
+            channel,
+            user_id=user.id,
+            values={
+                "setting_group_id": "default-global",
+                "followed_at": 111,
+                "tags": ["a", "b"],
+                "start_id": 7,
+                "start_time": 222,
+                "discovered_via": {"source": "discover"},
+            },
+        )
+        is True
+    )
     session.commit()
 
     follow = session.get(ChannelFollow, (user.id, "ch_copy"))
@@ -224,6 +233,31 @@ def test_ensure_follow_for_channel_copies_the_per_user_columns(
     assert follow.start_time == 222
     assert follow.discovered_via == {"source": "discover"}
     assert follow.next_sync_at == 999
+
+
+def test_a_follow_with_no_supplied_values_is_empty_rather_than_inherited(
+    session: Session, user: User
+) -> None:
+    """A caller that names nothing gets unset fields, not the Channel's.
+
+    The honest row: `schedule_group_id` then reports "no resolvable group" and
+    the scheduler skips the channel, rather than scheduling it off settings that
+    belong to somebody else. Pinned because "fall back to something" is exactly
+    what a later reader would add back.
+    """
+    channel = _channel(session, "ch_empty", next_regular_sync_at=5)
+
+    assert ensure_follow_for_channel(session, channel, user_id=user.id) is True
+    session.commit()
+
+    follow = session.get(ChannelFollow, (user.id, "ch_empty"))
+    assert follow is not None
+    assert follow.setting_group_id is None
+    assert follow.followed_at is None
+    assert follow.tags == []
+    assert follow.start_id is None
+    assert follow.start_time is None
+    assert follow.discovered_via is None
 
 
 def test_deleting_the_channel_takes_its_follows(session: Session, user: User) -> None:

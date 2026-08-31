@@ -135,3 +135,90 @@ def legacy_owner_schema(db: Session | None) -> Iterator[None]:
     finally:
         _clear_unowned()
         _ddl(_restore())
+
+
+@pytest.fixture
+def legacy_channel_group_column(db: Session | None) -> Iterator[None]:
+    """Put `tg_channels.setting_group_id` back, for one test.
+
+    The same argument as `legacy_owner_schema` above, one ticket later. Ticket
+    22 dropped that column — the setting group is per-User and lives on
+    `tg_channel_follows` — but tickets 21 and 34 both *repoint* it while merging
+    duplicate setting groups, so re-running either migration function against
+    today's schema fails on a column that existed when it actually ran.
+
+    On a real deployment the order is never wrong: `alembic upgrade head` from
+    empty runs 21 and 34 while the column is there, then 22 drops it. Only a
+    test replaying an old revision out of order needs this.
+
+    Restored here rather than by making the applied revisions tolerate the
+    column's absence, for the reason those revisions state themselves: an
+    applied migration must keep meaning what it meant.
+
+    **Request it first in the parameter list**, exactly as `legacy_owner_schema`
+    requires and for the same reason: `ALTER TABLE` takes `ACCESS EXCLUSIVE` on
+    `tg_channels`, so a `session` fixture set up before it is already holding a
+    transaction the DDL then waits on until `lock_timeout`. Written first as a
+    plain context manager wrapped around the migration call, which deadlocked
+    against exactly that open transaction.
+    """
+    if db is not None:
+        db.commit()
+    with Session(engine) as ddl:
+        ddl.execute(
+            sa.text("ALTER TABLE tg_channels ADD COLUMN setting_group_id VARCHAR")
+        )
+        ddl.commit()
+    try:
+        yield
+    finally:
+        with Session(engine) as ddl:
+            ddl.execute(sa.text("ALTER TABLE tg_channels DROP COLUMN setting_group_id"))
+            ddl.commit()
+
+
+#: The six per-User columns ticket 22 dropped from `tg_channels`, with the SQL
+#: type each one had. Not derived from `ChannelFollow` — the follow's copies are
+#: what survived, and a test that restored *those* types would pass while the
+#: rescue it exercises read a column shaped differently from the one that
+#: actually existed.
+_CHANNEL_PER_USER_COLUMN_TYPES: tuple[tuple[str, str], ...] = (
+    ("setting_group_id", "VARCHAR"),
+    ("followed_at", "BIGINT"),
+    ("tags", "JSON"),
+    ("start_id", "INTEGER"),
+    ("start_time", "BIGINT"),
+    ("discovered_via", "JSON"),
+)
+
+
+@pytest.fixture
+def legacy_channel_per_user_columns(db: Session | None) -> Iterator[None]:
+    """Put all six per-User `tg_channels` columns back, for one test.
+
+    `legacy_channel_group_column` restores the one column tickets 21 and 34
+    repoint. This restores the whole set, which is what ticket 22's own
+    `rescue_null_follow_fields` needs to run against: it reads every column it
+    is about to drop, so a fixture giving it only the group would exercise a
+    sixth of it and pass.
+
+    **Request it first in the parameter list**, for the reason its sibling
+    states: `ALTER TABLE` takes `ACCESS EXCLUSIVE` on `tg_channels`, and a
+    `session` fixture set up before it is already holding a transaction the DDL
+    would wait on until `lock_timeout`.
+    """
+    if db is not None:
+        db.commit()
+    with Session(engine) as ddl:
+        for name, sql_type in _CHANNEL_PER_USER_COLUMN_TYPES:
+            ddl.execute(
+                sa.text(f"ALTER TABLE tg_channels ADD COLUMN {name} {sql_type}")
+            )
+        ddl.commit()
+    try:
+        yield
+    finally:
+        with Session(engine) as ddl:
+            for name, _sql_type in _CHANNEL_PER_USER_COLUMN_TYPES:
+                ddl.execute(sa.text(f"ALTER TABLE tg_channels DROP COLUMN {name}"))
+            ddl.commit()

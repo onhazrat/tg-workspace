@@ -35,7 +35,6 @@ def test_record_gaps_between_page_neighbors() -> None:
             "gap-ch",
             [100, 103],
             job_id="job-1",
-            user_id=None,
             session_seen_ids=seen,
         )
         session.commit()

@@ -23,6 +23,8 @@ load_dotenv(_REPO_ROOT / ".env")
 from app.core.db import engine
 from app.jobs.settings import load_media_settings
 from app.models_tg import Channel, Post
+from app.services.channel_setting_groups import find_group_for_channel
+from app.services.follows import get_operator_user_id
 from app.services.network import fetch_with_retry
 from app.services.post_media_parser import finalize_post_media_paths, parse_widget_media
 from app.services.post_thumbnails import (
@@ -90,7 +92,7 @@ def _select_posts(
         .where(
             col(Post.channel_name).in_(channels),
             or_(
-                Post.text == MEDIA_ONLY_PLACEHOLDER,
+                col(Post.text) == MEDIA_ONLY_PLACEHOLDER,
                 col(Post.media).is_(None),
             ),
         )
@@ -101,10 +103,28 @@ def _select_posts(
 
 
 def _exclude_unavailable_channels(session: Session, channels: list[str]) -> list[str]:
+    """Drop the handles Telegram will not serve on the web view.
+
+    The flag is a `ChannelSettingGroup` column and always has been, so
+    `channel.is_unavailable_on_web_view` read an attribute `Channel` does not
+    have and this raised `AttributeError` on the first channel it was given.
+    Nothing type-checked `scripts/` until ticket 22 put it in `lint.sh`.
+
+    Resolved through the operator's follow, since ticket 22 moved the group
+    there. A channel the operator does not follow has no group to ask and is
+    kept: this excludes what is known to be unavailable, and "unknown" is not
+    that.
+    """
+    operator_id = get_operator_user_id(session)
     available: list[str] = []
     for name in channels:
-        channel = session.exec(select(Channel).where(Channel.name == name)).first()
-        if channel and channel.is_unavailable_on_web_view:
+        channel = session.exec(select(Channel).where(col(Channel.name) == name)).first()
+        group = (
+            find_group_for_channel(session, channel, user_id=operator_id)
+            if channel is not None and operator_id is not None
+            else None
+        )
+        if group is not None and group.is_unavailable_on_web_view:
             print(f"Skipping unavailable channel @{name}")
             continue
         available.append(name)

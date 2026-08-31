@@ -52,8 +52,25 @@ class ChannelSettingGroup(SQLModel, table=True):
 class Channel(SQLModel, table=True):
     __tablename__ = "tg_channels"
 
+    #: The shared corpus row for one handle. **No owner and no per-User
+    #: fields** — both were dropped in ticket 22.
+    #:
+    #: `user_id` was a "who scraped this first" stamp, never a visibility
+    #: filter: `Channel` is `FOLLOW_SCOPED` in `tenancy.SCOPES`, so what an
+    #: account may see is decided by `tg_channel_follows`, and filtering on the
+    #: stamp handed the second follower of a handle an empty page for posts
+    #: sitting right there.
+    #:
+    #: `setting_group_id`, `followed_at`, `tags`, `start_id`, `start_time` and
+    #: `discovered_via` moved to `ChannelFollow` in ticket 04 and live only
+    #: there now. They are what one account chose about watching this handle,
+    #: and on this row the second follower had to overwrite the first one's
+    #: values to have any of their own.
+    #:
+    #: The four sync cursors below stayed, and that is the line: they describe
+    #: the shared backward walk over one handle's history, which is the same
+    #: walk however many people follow it.
     id: str = Field(primary_key=True)
-    user_id: uuid.UUID | None = Field(default=None, index=True)
     name: str
     display_name: str | None = None
     photo_url: str | None = None
@@ -63,11 +80,7 @@ class Channel(SQLModel, table=True):
     videos: str | None = None
     files: str | None = None
     links: str | None = None
-    start_id: int | None = None
-    start_time: int | None = Field(default=None, sa_column=_ms_ts(nullable=True))
-    tags: list[Any] = Field(default_factory=list, sa_column=Column(JSON))
     last_updated: int | None = Field(default=None, sa_column=_ms_ts(nullable=True))
-    setting_group_id: str = Field(index=True)
     next_regular_sync_at: int | None = Field(
         default=None, sa_column=_ms_ts(nullable=True)
     )
@@ -75,11 +88,9 @@ class Channel(SQLModel, table=True):
         default=None, sa_column=_ms_ts(nullable=True)
     )
     language: str | None = None
-    followed_at: int | None = Field(default=None, sa_column=_ms_ts(nullable=True))
     telegram_chat_id: int | None = Field(
         default=None, sa_column=Column(BigInteger, nullable=True)
     )
-    discovered_via: dict[str, Any] | None = Field(default=None, sa_column=Column(JSON))
     history_complete_to_cutoff: bool = True
     # Set once a backward walk paginates off the beginning of the channel. Such
     # a channel is fully covered even when its oldest post is newer than the
@@ -136,9 +147,9 @@ class ChannelFollow(SQLModel, table=True):
     and `Post` is unique per `(channel_name, post_id)`, so one scrape serves
     every follower. What is *not* shared is the relation: which Channels you
     watch, what you tagged them, when you started, and when yours next syncs.
-    Those columns sit on `tg_channels` today, where a second follower of the
-    same handle would have to overwrite the first one's values to have any of
-    their own.
+    Those columns used to sit on `tg_channels`, where a second follower of the
+    same handle had to overwrite the first one's values to have any of their
+    own. Ticket 22 dropped them there, so this table is now their only home.
 
     Composite natural key `(user_id, channel_id)`, so following twice is
     impossible by construction rather than by a check somebody remembers, and
@@ -148,10 +159,10 @@ class ChannelFollow(SQLModel, table=True):
     serves the other direction — "who follows this channel", which retention and
     the scheduler ask and which the PK's leading column cannot answer.
 
-    **Nothing reads this table yet.** Ticket 04 creates it, backfills it, and
-    dual-writes it from every Channel-creation path; the read paths adopt it in
-    tickets 15-16 and `Channel`'s copies of these columns are dropped in ticket
-    22. Until then both rows carry the value and the Channel's is authoritative.
+    Ticket 04 created it, backfilled it, and dual-wrote it from every
+    Channel-creation path; the read paths adopted it in tickets 15-16, and
+    ticket 22 dropped `Channel`'s copies. There is no dual write and no
+    fallback any more: a value that does not reach this row does not exist.
 
     `next_sync_at` has no counterpart on `Channel` and is deliberately here from
     day one. The most-eager-wins scheduling the plan defers (decision 39) needs
@@ -173,10 +184,12 @@ class ChannelFollow(SQLModel, table=True):
         ondelete="CASCADE",
     )
 
-    #: The per-User fields currently duplicated on `Channel`, dropped there in
-    #: ticket 22. `setting_group_id` is nullable here and not on `Channel`:
-    #: a follow created before its group is resolved is a real state, and
-    #: inventing a group id to satisfy a NOT NULL would put a lie in the row.
+    #: The per-User fields, which ticket 22 dropped from `Channel` so that this
+    #: is the only copy. `setting_group_id` is nullable — a follow created
+    #: before its group is resolved is a real state, and inventing a group id to
+    #: satisfy a NOT NULL would put a lie in the row. The readers treat a NULL
+    #: group as "skip this channel" rather than falling back to anything, since
+    #: there is no longer anything to fall back to.
     setting_group_id: str | None = Field(default=None)
     followed_at: int | None = Field(default=None, sa_column=_ms_ts(nullable=True))
     tags: list[Any] = Field(default_factory=list, sa_column=Column(JSON))
@@ -196,7 +209,6 @@ class Post(SQLModel, table=True):
     __table_args__ = (UniqueConstraint("channel_name", "post_id"),)
 
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
-    user_id: uuid.UUID | None = Field(default=None, index=True)
     channel_name: str = Field(index=True)
     post_id: int
     text: str = Field(sa_column=Column(Text))
@@ -226,7 +238,6 @@ class PostSyncState(SQLModel, table=True):
     __table_args__ = (UniqueConstraint("channel_name", "post_id"),)
 
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
-    user_id: uuid.UUID | None = Field(default=None, index=True)
     channel_name: str = Field(index=True)
     post_id: int
     state: str = "confirmed_gap"
@@ -677,7 +688,6 @@ class PostEmbedding(SQLModel, table=True):
     __tablename__ = "tg_post_embeddings"
 
     id: str = Field(primary_key=True)
-    user_id: uuid.UUID | None = Field(default=None, index=True)
     channel_name: str
     post_id: int
     vector: list[float] = Field(sa_column=Column(JSON))
@@ -692,7 +702,6 @@ class PostTranslation(SQLModel, table=True):
     __tablename__ = "tg_post_translations"
 
     id: str = Field(primary_key=True)
-    user_id: uuid.UUID | None = Field(default=None, index=True)
     channel_name: str
     post_id: int
     language: str
@@ -710,16 +719,17 @@ class AppSetting(SQLModel, table=True):
     may set for itself lives in `UserSetting` instead, and
     `services/settings_registry.py` says which key is which.
 
-    `user_id` survives as a "last written by" stamp and no longer scopes
-    anything; ticket 22 drops it. It was never a scope: `key` being the whole
+    **There is no `user_id`.** It survived ticket 06 as a "last written by"
+    stamp and ticket 22 dropped it. It was never a scope: `key` being the whole
     primary key meant two accounts could not hold different values, so the
-    column only ever recorded who saved last.
+    column only ever recorded who saved last — and a column that reads like an
+    owner without being one is the `operator.py` ambiguity this split exists to
+    remove.
     """
 
     __tablename__ = "tg_app_settings"
 
     key: str = Field(primary_key=True)
-    user_id: uuid.UUID | None = Field(default=None, index=True)
     value: dict[str, Any] = Field(sa_column=Column(JSON))
     updated_at: datetime = Field(default_factory=utc_now)
 
@@ -786,7 +796,6 @@ class SyncLog(SQLModel, table=True):
     __tablename__ = "tg_sync_logs"
 
     id: str = Field(primary_key=True)
-    user_id: uuid.UUID | None = Field(default=None, index=True)
     channel_name: str
     status: str
     posts_count: int = 0
@@ -818,7 +827,6 @@ class SyncLogPayload(SQLModel, table=True):
     __tablename__ = "tg_sync_log_payloads"
 
     sync_log_id: str = Field(primary_key=True)
-    user_id: uuid.UUID | None = Field(default=None, index=True)
     # Denormalised from tg_sync_logs: payloads expire on their own, shorter
     # horizon, and carrying the age here keeps that sweep a single-table bulk
     # DELETE rather than a join across the whole log table.

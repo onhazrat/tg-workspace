@@ -10,7 +10,7 @@ from sqlmodel import Session, col, delete, func, select
 
 from app.models_tg import Channel, Post, PostEmbedding, PostTranslation, utc_now
 from app.services.channel_setting_groups import channel_allows_reset, load_groups_by_id
-from app.services.follows import followed_channels_for
+from app.services.follows import FollowedChannel, followed_channels_for
 from app.services.post_sync_state import clear_channel_sync_state
 from app.services.sync_meta import touch_sync
 
@@ -37,9 +37,20 @@ class BulkResetSyncResult:
     errors: list[dict[str, str]] = field(default_factory=list)
 
 
-def is_auto_followed_channel(channel: Channel) -> bool:
-    """Channels added via auto-follow carry a non-null discovered_via payload."""
-    return channel.discovered_via is not None
+def is_auto_followed_channel(pair: FollowedChannel) -> bool:
+    """Whether this follow was created by auto-follow rather than by hand.
+
+    Reads `discovered_via` off the follow since ticket 22 dropped the Channel's
+    copy. That is also the more honest question: how *you* came to follow a
+    handle is yours, and on the Channel it reported a channel as auto-followed
+    for everybody because one account happened to reach it that way.
+
+    Takes the `(Channel, follow)` pair rather than the follow alone so this
+    module never names `ChannelFollow` — `test_channel_creation_paths.py` reads
+    any mention of that identifier outside the aggregate as a second writer, and
+    `FollowedChannel` is the alias declared for exactly this.
+    """
+    return pair[1].discovered_via is not None
 
 
 def select_bulk_channels(
@@ -49,19 +60,22 @@ def select_bulk_channels(
     channel_ids: list[str] | None = None,
     auto_follow_only: bool = False,
     limit: int | None = None,
-) -> list[Channel]:
-    channels = [
-        channel
-        for channel, _follow in followed_channels_for(session, user_id=operator_id)
-    ]
+) -> list[FollowedChannel]:
+    """The Channels a bulk operation should act on, each with its own follow.
+
+    Returns pairs rather than bare Channels since ticket 22: both filters below
+    and both callers' group lookups read fields that now live on the follow, and
+    re-fetching it per channel afterwards would be a query per row.
+    """
+    pairs = followed_channels_for(session, user_id=operator_id)
     if channel_ids:
         wanted = set(channel_ids)
-        channels = [ch for ch in channels if ch.id in wanted]
+        pairs = [pair for pair in pairs if pair[0].id in wanted]
     if auto_follow_only:
-        channels = [ch for ch in channels if is_auto_followed_channel(ch)]
+        pairs = [pair for pair in pairs if is_auto_followed_channel(pair)]
     if limit is not None and limit > 0:
-        channels = channels[:limit]
-    return channels
+        pairs = pairs[:limit]
+    return pairs
 
 
 async def bulk_reresolve_start_ids(
@@ -143,8 +157,14 @@ async def bulk_reset_and_queue_sync(
     groups_by_id = load_groups_by_id(session)
     is_bulk = channel_ids is None or len(channel_ids) != 1
 
-    for channel in channels:
-        group = groups_by_id.get(channel.setting_group_id)
+    for channel, follow in channels:
+        # The follow names the group since ticket 22, so a reset is judged
+        # against this account's own policy for the channel.
+        group = (
+            groups_by_id.get(follow.setting_group_id)
+            if follow.setting_group_id is not None
+            else None
+        )
         if group is None or not channel_allows_reset(group, bulk=is_bulk):
             result.errors.append(
                 {

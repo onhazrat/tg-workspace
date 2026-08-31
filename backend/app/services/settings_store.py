@@ -14,7 +14,6 @@ default for an unclassified key, deliberately — see `home_for`.
 from __future__ import annotations
 
 from typing import Any
-from uuid import UUID
 
 from sqlmodel import Session
 
@@ -33,16 +32,18 @@ def put_global_setting(
     session: Session,
     key: str,
     body: dict[str, Any],
-    *,
-    user_id: UUID | None = None,
 ) -> dict[str, Any]:
     """Merge `body` into the stored value and return the result.
 
     Merge rather than replace, because callers PUT the fields they changed —
     `data/admin.py` forwards a browser body and the scheduler updates one
-    counter. `user_id` is the "last written by" stamp `AppSetting` still
-    carries; it scopes nothing, and it is optional because the scheduler
-    genuinely has no account behind its writes.
+    counter.
+
+    **No `user_id`.** It was the "last written by" stamp on `AppSetting`, and
+    ticket 22 dropped both. `tg_app_settings` is keyed by `key` alone, so there
+    is one value per deployment and no account it could belong to — a column
+    that reads like an owner without being one is the `operator.py` ambiguity
+    the ticket 06 split exists to remove.
     """
     require_home(key, Home.GLOBAL)
     row = session.get(AppSetting, key)
@@ -50,10 +51,8 @@ def put_global_setting(
     if row:
         row.value = merged
         row.updated_at = utc_now()
-        if user_id is not None:
-            row.user_id = user_id
     else:
-        row = AppSetting(key=key, value=merged, user_id=user_id)
+        row = AppSetting(key=key, value=merged)
     session.add(row)
     session.commit()
     # `merged`, not `row.value`. Reading an attribute back after a commit
@@ -68,24 +67,22 @@ def replace_global_setting(
     session: Session,
     key: str,
     value: dict[str, Any],
-    *,
-    user_id: UUID | None = None,
 ) -> dict[str, Any]:
     """Store `value` as the whole row, dropping any key not in it.
 
     The `network` settings path needs this: `merge_network_put` has already
     done a merge that understands proxy lists and Tor modes, so a second blind
     merge here would resurrect proxy URLs the operator just removed.
+
+    Lost its `user_id` with `put_global_setting` above, for the same reason.
     """
     require_home(key, Home.GLOBAL)
     row = session.get(AppSetting, key)
     if row:
         row.value = value
         row.updated_at = utc_now()
-        if user_id is not None:
-            row.user_id = user_id
     else:
-        row = AppSetting(key=key, value=value, user_id=user_id)
+        row = AppSetting(key=key, value=value)
     session.add(row)
     session.commit()
     return value  # not `row.value` — see `put_global_setting`.

@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 from collections.abc import Generator
 from pathlib import Path
+from typing import Any
 
 import pytest
 from dotenv import load_dotenv
@@ -36,11 +37,16 @@ from app.core.db import engine, init_db
 from app.main import app
 from app.models import Item, User
 from app.models_tg import Channel, ChannelSettingGroup
+from app.services.follows import FOLLOW_OWNED_FIELDS, sync_follow_settings
 
 # Re-exported so tests can request it by name. Ticket 21's guards need the
 # pre-NOT-NULL schema, and the fixture has to depend on `db` to release the
 # session-scoped transaction holding locks on those tables.
-from tests.utils.legacy_owner_schema import legacy_owner_schema  # noqa: F401
+from tests.utils.legacy_owner_schema import (  # noqa: F401
+    legacy_channel_group_column,
+    legacy_channel_per_user_columns,
+    legacy_owner_schema,
+)
 
 # Autouse: gives `ANY_READER` a real "user" row. Ticket 21's foreign key stops
 # a fabricated owner uuid from being merely meaningless and starts rejecting it.
@@ -154,44 +160,44 @@ def tg_test_channel() -> Generator:
 
                 group = ensure_default_group(session, user_id=user_id)
                 session.commit()
+            # Ticket 22 split what this fixture writes in two. The Channel is
+            # the shared corpus row and carries no owner and no per-User field;
+            # the group, the tags and the start time go on the caller's follow,
+            # which is where every read now looks for them. A fixture that wrote
+            # only the Channel would seed a row the scheduler skips and the
+            # channel list renders with empty tags.
+            follow_values: dict[str, Any] = {
+                k: v for k, v in kwargs.items() if k in FOLLOW_OWNED_FIELDS
+            }
+            channel_kwargs = {
+                k: v
+                for k, v in kwargs.items()
+                if k in Channel.model_fields and k not in FOLLOW_OWNED_FIELDS
+            }
+            if kwargs.get("is_frozen"):
+                from app.services.channel_setting_groups import (
+                    get_or_create_restricted_group,
+                )
+
+                restricted = get_or_create_restricted_group(session, user_id=user_id)
+                follow_values["setting_group_id"] = restricted.id
+            else:
+                follow_values.setdefault("setting_group_id", group.id)
+
             existing = session.get(Channel, channel_id)
             if existing:
                 existing.name = ch_name
-                existing.user_id = user_id
-                if existing.setting_group_id != group.id and not kwargs.get(
-                    "is_frozen", False
-                ):
-                    existing.setting_group_id = group.id
-                for key, value in kwargs.items():
-                    if key in Channel.model_fields and key != "setting_group_id":
-                        setattr(existing, key, value)
+                for key, value in channel_kwargs.items():
+                    setattr(existing, key, value)
                 session.add(existing)
+                channel = existing
             else:
-                channel_kwargs = {
-                    k: v
-                    for k, v in kwargs.items()
-                    if k in Channel.model_fields and k != "setting_group_id"
-                }
-                if kwargs.get("is_frozen"):
-                    from app.services.channel_setting_groups import (
-                        get_or_create_restricted_group,
-                    )
-
-                    restricted = get_or_create_restricted_group(
-                        session, user_id=user_id
-                    )
-                    group_id = restricted.id
-                else:
-                    group_id = group.id
-                session.add(
-                    Channel(
-                        id=channel_id,
-                        name=ch_name,
-                        user_id=user_id,
-                        setting_group_id=group_id,
-                        **channel_kwargs,
-                    )
-                )
+                channel = Channel(id=channel_id, name=ch_name, **channel_kwargs)
+                session.add(channel)
+            session.flush()
+            sync_follow_settings(
+                session, channel, user_id=user_id, values=follow_values
+            )
             session.commit()
         created.append(channel_id)
         if ch_name != channel_id:

@@ -73,6 +73,7 @@ from app.services.channel_setting_groups import (
     load_groups_by_id,
     update_setting_group,
 )
+from app.services.follows import get_follow
 from app.services.scraper_jobs import _running_job_from_row
 from tests.utils.user import create_random_user
 
@@ -179,11 +180,13 @@ def _group(
 def _followed_channel(
     session: Session, channel_id: str, owner: uuid.UUID, *, group_id: str
 ) -> Channel:
-    channel = Channel(
-        id=channel_id, name=channel_id, user_id=owner, setting_group_id=group_id
-    )
+    # The group hangs off the follow since ticket 22 — the Channel is the shared
+    # corpus row and names no group at all.
+    channel = Channel(id=channel_id, name=channel_id)
     session.add(channel)
-    session.add(ChannelFollow(user_id=owner, channel_id=channel_id))
+    session.add(
+        ChannelFollow(user_id=owner, channel_id=channel_id, setting_group_id=group_id)
+    )
     session.commit()
     return channel
 
@@ -638,9 +641,16 @@ def test_an_import_cannot_attach_a_channel_to_another_accounts_group(
 
     channel = session.get(Channel, "t35-imported")
     assert channel is not None
-    assert channel.setting_group_id != "t35-theirs"
 
-    landed = session.get(ChannelSettingGroup, channel.setting_group_id)
+    # The group lands on the *caller's follow* since ticket 22, not on the
+    # Channel — which is a stronger version of the same rule: even if a document
+    # could name a stranger's group, it could now only reach the importer's own
+    # follow row.
+    follow = get_follow(session, user_id=user.id, channel_id="t35-imported")
+    assert follow is not None
+    assert follow.setting_group_id != "t35-theirs"
+
+    landed = session.get(ChannelSettingGroup, follow.setting_group_id)
     assert landed is not None
     assert landed.user_id == user.id
 

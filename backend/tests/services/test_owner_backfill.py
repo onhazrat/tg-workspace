@@ -238,9 +238,22 @@ def insert_row(
     owner: uuid.UUID | None,
     **overrides: Any,
 ) -> dict[str, Any]:
-    """Insert one row into `table` owned by `owner`, filling what it must."""
+    """Insert one row into `table` owned by `owner`, filling what it must.
+
+    A table with no owner column takes no owner: ticket 22 dropped `user_id`
+    from the shared corpus, so `Channel` and `Post` are seeded here without one
+    rather than the caller having to know which is which. `owner` must be None
+    for those — passing a real id would silently do nothing, which is the shape
+    of an ignored argument this programme keeps removing.
+    """
     model = MODELS_BY_TABLE[table]
-    values: dict[str, Any] = {OWNER_COLUMN: owner}
+    has_owner = OWNER_COLUMN in mapped_table(model).columns
+    if not has_owner and owner is not None:
+        raise AssertionError(
+            f"{table} has no {OWNER_COLUMN} column (ticket 22 dropped it), so it "
+            f"cannot be seeded with one."
+        )
+    values: dict[str, Any] = {OWNER_COLUMN: owner} if has_owner else {}
     for column in mapped_table(model).columns:
         if column.name in values or column.name in overrides:
             continue
@@ -348,26 +361,38 @@ def test_the_inventory_covers_every_table_that_can_hold_an_unowned_row() -> None
 def test_the_backfill_never_reaches_a_shared_table(
     session: Session, migration: types.ModuleType
 ) -> None:
-    """A follow-scoped or corpus row keeps its NULL owner.
+    """A follow-scoped or corpus row has no owner for the backfill to reach.
 
-    `Channel.user_id` and `Post.user_id` are "who scraped this first" stamps.
-    The seam never filters on them and ticket 22 drops them, so stamping them
-    would be work ticket 22 deletes — and it would suggest to the next reader
-    that those columns mean something.
+    `Channel.user_id` and `Post.user_id` were "who scraped this first" stamps.
+    The seam never filtered on them, so stamping them would have been work with
+    no reader — and it would have suggested to the next person that the columns
+    meant something. **Ticket 22 dropped them**, which turns this from a rule
+    about what the backfill declines to do into one it could not do if it tried.
+
+    Both halves still matter. The inventory must not name these tables, and the
+    tables must not have the column: the first alone would pass if the column
+    came back with a different writer, and the second alone would pass if the
+    inventory grew an entry that then failed at runtime.
     """
     assert {entry.table for entry in owner_backfill_inventory()}.isdisjoint(
         {mapped_table(Channel).name, mapped_table(Post).name}
     )
+    for model in (Channel, Post):
+        assert OWNER_COLUMN not in mapped_table(model).columns, (
+            f"{mapped_table(model).name} has an owner column again. It is "
+            f"follow-scoped: visibility is answered by `tg_channel_follows`, and "
+            f"a stamp here is the thing ticket 22 removed."
+        )
 
     channel = insert_row(session, mapped_table(Channel).name, owner=None)
     post = insert_row(session, mapped_table(Post).name, owner=None)
 
+    # The rows survive the backfill untouched, which is the observable half:
+    # a migration that reached them at all would fail on the missing column.
     run_backfill(session, migration)
 
-    assert owner_of(session, mapped_table(Channel).name, "id", channel["id"]) is None
-    assert (
-        owner_of(session, mapped_table(Post).name, "post_id", post["post_id"]) is None
-    )
+    assert session.get(Channel, channel["id"]) is not None
+    assert post["post_id"] is not None
 
 
 # --------------------------------------------------------------------------
@@ -587,7 +612,9 @@ def test_no_account_and_nothing_to_adopt_is_silent(
 
 
 def test_a_duplicate_setting_group_is_merged_rather_than_stamped(
-    session: Session, migration: types.ModuleType
+    legacy_channel_group_column: None,
+    session: Session,
+    migration: types.ModuleType,
 ) -> None:
     """The collision that would abort `alembic upgrade head`.
 
@@ -625,10 +652,16 @@ def test_a_duplicate_setting_group_is_merged_rather_than_stamped(
         id=f"default-{operator}",
         name="Default",  # the index folds case; the merge must too
     )
-    channel = insert_row(
+    # The referrer is the **follow**, which is the only one left: ticket 22
+    # dropped `tg_channels.setting_group_id`, so a Channel names no group at
+    # all. `tg_channel_follows` is what would be stranded on a deleted group,
+    # and it is what `m5n6o7p8q9r0` could not have known to repoint.
+    channel = insert_row(session, mapped_table(Channel).name, owner=None)
+    insert_row(
         session,
-        mapped_table(Channel).name,
-        owner=None,
+        "tg_channel_follows",
+        owner=operator,
+        channel_id=channel["id"],
         setting_group_id="default-global",
     )
     session.commit()
@@ -647,9 +680,13 @@ def test_a_duplicate_setting_group_is_merged_rather_than_stamped(
     assert survivors == [(f"default-{operator}", operator)]
 
     assert (
-        owner_of_column(
-            session, mapped_table(Channel).name, "setting_group_id", "id", channel["id"]
-        )
+        session.execute(
+            sa.text(
+                "SELECT setting_group_id FROM tg_channel_follows "
+                "WHERE channel_id = :channel_id"
+            ),
+            {"channel_id": channel["id"]},
+        ).scalar()
         == f"default-{operator}"
     )
 

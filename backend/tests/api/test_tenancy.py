@@ -180,14 +180,14 @@ def test_an_unfollowed_channel_is_synced_for_nobody(
     )
 
     _seed_due_channel(session, "kept-ch", "kept-channel", first.id, now)
-    orphan = session.get(Channel, "kept-ch")
-    assert orphan is not None
+    # Deliberately no follow — that is the whole subject of this test. Since
+    # ticket 22 the Channel carries neither an owner nor a setting group, so
+    # "unfollowed" is the only thing left that could make it syncable, which is
+    # exactly the property being asserted.
     session.add(
         Channel(
             id="orphan-ch",
             name="orphan-channel",
-            user_id=first.id,
-            setting_group_id=orphan.setting_group_id,
             last_updated=now - 120 * 60 * 1000,
             next_regular_sync_at=now - 1_000,
         )

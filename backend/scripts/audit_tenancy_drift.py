@@ -44,6 +44,7 @@ from __future__ import annotations
 import argparse
 import sys
 from pathlib import Path
+from typing import Any
 
 from dotenv import load_dotenv
 
@@ -68,17 +69,21 @@ def _owner_column_models() -> list[type[SQLModel]]:
     """Every classified table that stamps an owner, in a stable order.
 
     Driven off `SCOPES` rather than a list of its own, so a table added to the
-    seam is audited without anyone remembering to add it here. Follow-scoped
-    tables are included deliberately: their `user_id` columns are dropped in
-    ticket 22, and until then a NULL there is still worth counting — it is how
-    you tell whether anything still depends on the stamp.
+    seam is audited without anyone remembering to add it here.
+
+    The `hasattr` is what makes it self-adjusting in the other direction too:
+    ticket 22 dropped `user_id` from the follow-scoped and corpus tables, and
+    they left this report on their own rather than needing to be removed from a
+    list. They used to be counted deliberately — a NULL stamp was how you told
+    whether anything still depended on it — and there is now no stamp to depend
+    on.
     """
     models = [m for m in SCOPES if hasattr(m, OWNER_COLUMN)]
     return sorted(models, key=lambda m: str(m.__tablename__))
 
 
-def _count(session: Session, statement) -> int:
-    return session.exec(statement).one()
+def _count(session: Session, statement: Any) -> int:
+    return int(session.exec(statement).one())
 
 
 #: Reported by the audit but not drift. `channels_awaiting_collection` counts

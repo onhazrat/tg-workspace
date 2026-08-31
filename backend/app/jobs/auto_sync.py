@@ -87,7 +87,7 @@ def _stats_for_scheduling(
     channels: list[Channel],
     groups_by_id: dict[str, Any],
     now_ms: int,
-    pairs: list[FollowedChannel] | None = None,
+    pairs: list[FollowedChannel],
 ) -> dict[str, dict[str, Any]]:
     """Post stats for the channels whose due-ness can actually depend on them.
 
@@ -107,17 +107,22 @@ def _stats_for_scheduling(
     decided due-ness from the follow's — two different groups, so the narrowing
     would withhold stats from exactly the channels whose answer depends on them
     and every dynamic sync would quietly stop firing.
+
+    **Required, with no default, since ticket 22.** It was optional, falling
+    back to `Channel.setting_group_id` — a column this ticket dropped. Leaving
+    the parameter optional would have turned that fallback into "no group at
+    all", so a caller that forgot it would silently flag nothing and every
+    dynamic sync would stop firing, which is the exact failure the paragraph
+    above describes. Its only caller already passes it.
     """
-    group_ids = (
-        {channel.id: schedule_group_id(channel, follow) for channel, follow in pairs}
-        if pairs is not None
-        else {ch.id: ch.setting_group_id for ch in channels}
-    )
+    group_ids: dict[str, str | None] = {
+        channel.id: schedule_group_id(follow) for channel, follow in pairs
+    }
     wanted = [
         ch.name
         for ch in channels
-        if (group := groups_by_id.get(group_ids.get(ch.id, ch.setting_group_id)))
-        is not None
+        if (group_id := group_ids.get(ch.id)) is not None
+        and (group := groups_by_id.get(group_id)) is not None
         and needs_dynamic_stats(_schedule_view(ch, group, None), now_ms)
     ]
     if not wanted:
@@ -189,7 +194,8 @@ async def run_auto_sync() -> dict[str, Any]:
             )
 
             for channel, follow in pairs:
-                group = groups_by_id.get(schedule_group_id(channel, follow))
+                group_id = schedule_group_id(follow)
+                group = groups_by_id.get(group_id) if group_id is not None else None
                 if group is None:
                     continue
                 schedule_view = _schedule_view(

@@ -204,7 +204,7 @@ def save_settings_section(
             )
         replace_user_setting(session, key, value, user_id=user_id)
         return
-    replace_global_setting(session, key, value, user_id=user_id)
+    replace_global_setting(session, key, value)
 
 
 def save_sync_settings(
@@ -229,7 +229,7 @@ def save_sync_settings(
             if user_id is not None:
                 put_user_setting(session, key, section, user_id=user_id)
             continue
-        put_global_setting(session, key, section, user_id=user_id)
+        put_global_setting(session, key, section)
 
 
 def load_jobs_settings(session: Session) -> dict[str, Any]:
@@ -388,7 +388,7 @@ def save_retention_settings(
         if key == RETENTION_PREFS_KEY:
             put_user_setting(session, key, section, user_id=cast(uuid.UUID, user_id))
             continue
-        put_global_setting(session, key, section, user_id=user_id)
+        put_global_setting(session, key, section)
 
 
 def load_media_settings(session: Session) -> dict[str, Any]:

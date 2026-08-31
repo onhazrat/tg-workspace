@@ -19,7 +19,11 @@ from app.services.channel_setting_groups import (
     is_restricted_group,
     move_channel_from_restricted_to_default,
 )
-from app.services.follows import ensure_follow_for_channel, get_operator_user_id
+from app.services.follows import (
+    get_follow,
+    get_operator_user_id,
+    sync_follow_settings,
+)
 from app.services.scraper_jobs import clear_jobs_for_tests
 from tests.utils.tenancy import ANY_READER
 
@@ -112,13 +116,18 @@ def test_move_channel_from_restricted_to_default() -> None:
         )
         session.commit()
 
-        channel = Channel(
-            id="restricted-move",
-            name="restricted-move",
-            user_id=user_id,
-            setting_group_id=restricted.id,
-        )
+        # The group is on the follow since ticket 22, so being "in the
+        # Restricted group" is a fact about this account's follow rather than
+        # about the shared Channel.
+        channel = Channel(id="restricted-move", name="restricted-move")
         session.add(channel)
+        session.flush()
+        sync_follow_settings(
+            session,
+            channel,
+            user_id=user_id,
+            values={"setting_group_id": restricted.id},
+        )
         session.commit()
 
         assert is_restricted_group(restricted) is True
@@ -128,8 +137,9 @@ def test_move_channel_from_restricted_to_default() -> None:
         session.commit()
         assert moved is not None
         assert moved.id == default_group.id
-        session.refresh(channel)
-        assert channel.setting_group_id == default_group.id
+        follow = get_follow(session, user_id=user_id, channel_id=channel.id)
+        assert follow is not None
+        assert follow.setting_group_id == default_group.id
 
 
 def test_sync_all_excludes_restricted_and_frozen(client: TestClient) -> None:
@@ -152,15 +162,15 @@ def test_sync_all_excludes_restricted_and_frozen(client: TestClient) -> None:
             ("sync-all-restricted", restricted.id),
             ("sync-all-frozen", frozen.id),
         ):
-            channel = Channel(
-                id=cid,
-                name=cid,
-                user_id=user_id,
-                setting_group_id=group_id,
-            )
+            channel = Channel(id=cid, name=cid)
             session.add(channel)
             session.flush()
-            ensure_follow_for_channel(session, channel, user_id=user_id)
+            sync_follow_settings(
+                session,
+                channel,
+                user_id=user_id,
+                values={"setting_group_id": group_id},
+            )
         session.commit()
 
     with patch(
@@ -206,15 +216,15 @@ def test_recheck_restricted_targets_unavailable_channels(client: TestClient) -> 
             ("recheck-restricted", restricted.id),
             ("recheck-default", default_group.id),
         ):
-            channel = Channel(
-                id=cid,
-                name=cid,
-                user_id=user_id,
-                setting_group_id=group_id,
-            )
+            channel = Channel(id=cid, name=cid)
             session.add(channel)
             session.flush()
-            ensure_follow_for_channel(session, channel, user_id=user_id)
+            sync_follow_settings(
+                session,
+                channel,
+                user_id=user_id,
+                values={"setting_group_id": group_id},
+            )
         session.commit()
 
     with patch(

@@ -47,7 +47,8 @@ from sqlmodel import Session
 
 from app.core.db import engine
 from app.jobs.auto_sync import _schedule_view, _stats_for_scheduling
-from app.models_tg import Channel, ChannelSettingGroup, Post
+from app.models_tg import Channel, ChannelFollow, ChannelSettingGroup, Post
+from app.services.follows import FollowedChannel
 from app.services.sync_schedule import (
     due_reason,
     is_channel_due,
@@ -56,6 +57,10 @@ from app.services.sync_schedule import (
 from tests.utils.tenancy import ANY_READER
 
 NOW = 1_700_000_000_000
+
+#: Whose follows the seeded channels belong to. Any real account will do — the
+#: narrowing reads the group off the follow it is handed, not off the owner.
+_STATS_OWNER = ANY_READER
 
 #: Straddles `now` in both directions, plus the "never scheduled" case.
 DEADLINES = (None, NOW - 60_000, NOW + 60_000)
@@ -255,16 +260,24 @@ def _group(session: Session, group_id: str, *, dynamic: bool) -> ChannelSettingG
 
 def _channel(
     session: Session, name: str, group_id: str, deadline: int | None
-) -> Channel:
-    channel = Channel(
-        id=name,
-        name=name,
-        setting_group_id=group_id,
-        next_dynamic_sync_at=deadline,
-    )
+) -> FollowedChannel:
+    """Seed one Channel and the follow that names its setting group.
+
+    Returns the pair since ticket 22: the group moved to `ChannelFollow`, and
+    `_stats_for_scheduling` now requires the pairs rather than falling back to a
+    Channel column that no longer exists. Building the follow here rather than
+    in each test is what keeps the seeding honest — the narrowing reads the
+    *follower's* group, so a test that seeded only Channels would be exercising
+    an empty flag set and passing for the wrong reason.
+    """
+    channel = Channel(id=name, name=name, next_dynamic_sync_at=deadline)
     session.add(channel)
     session.add(Post(channel_name=name, post_id=1, text=name, timestamp=NOW))
-    return channel
+    follow = ChannelFollow(
+        user_id=_STATS_OWNER, channel_id=name, setting_group_id=group_id
+    )
+    session.add(follow)
+    return channel, follow
 
 
 @pytest.mark.parametrize("noise", [0, 25])
@@ -297,7 +310,8 @@ def test_the_tick_only_asks_the_database_about_the_channels_it_flagged(
         ]
         session.commit()
 
-        channels = live + others
+        pairs = live + others
+        channels = [channel for channel, _follow in pairs]
         groups_by_id = {
             g.id: g
             for g in (
@@ -308,7 +322,7 @@ def test_the_tick_only_asks_the_database_about_the_channels_it_flagged(
         }
 
         with captured_sql() as statements:
-            stats = _stats_for_scheduling(session, channels, groups_by_id, NOW)
+            stats = _stats_for_scheduling(session, channels, groups_by_id, NOW, pairs)
 
     assert set(stats) == {"narrow-live-past", "narrow-live-null"}, (
         "the fetch covered channels whose answer was already fixed"
@@ -327,16 +341,19 @@ def test_no_channel_flagged_means_no_query_at_all() -> None:
     the future. It must cost zero queries, not one over an empty list."""
     with Session(engine) as session:
         _group(session, "narrow-none", dynamic=True)
-        channels = [
+        pairs = [
             _channel(session, f"narrow-quiet-{i}", "narrow-none", NOW + 60_000)
             for i in range(3)
         ]
+        channels = [channel for channel, _follow in pairs]
         session.commit()
         group = session.get(ChannelSettingGroup, "narrow-none")
         assert group is not None
 
         with captured_sql() as statements:
-            stats = _stats_for_scheduling(session, channels, {group.id: group}, NOW)
+            stats = _stats_for_scheduling(
+                session, channels, {group.id: group}, NOW, pairs
+            )
 
     assert stats == {}
     assert not [s for s in statements if "tg_posts" in s]

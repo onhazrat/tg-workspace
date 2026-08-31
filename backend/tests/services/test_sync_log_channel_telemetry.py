@@ -147,7 +147,6 @@ def _log(
     log_id: str,
     channel_name: str,
     *,
-    owner: uuid.UUID | None = None,
     timestamp: int = 1,
     error: str | None = None,
     response: object = None,
@@ -161,7 +160,6 @@ def _log(
             "error": error,
             "fullResponse": response,
         },
-        owner,
     )
     session.commit()
     return log_id
@@ -209,7 +207,7 @@ def test_a_second_follower_sees_telemetry_the_first_one_produced(
     _split_corpus(session, user, other_user)
     ensure_follow(session, channel_id=THEIRS, user_id=user.id)
     session.commit()
-    shared = _log(session, "t19-shared", THEIRS, owner=other_user.id)
+    shared = _log(session, "t19-shared", THEIRS)
 
     assert shared in _ids(session, user.id)
 
@@ -220,8 +218,8 @@ def test_a_channel_you_do_not_follow_is_not_on_your_page(
     session: Session, user: User, other_user: User
 ) -> None:
     _split_corpus(session, user, other_user)
-    mine = _log(session, "t19-list-mine", MINE, owner=user.id)
-    theirs = _log(session, "t19-list-theirs", THEIRS, owner=other_user.id)
+    mine = _log(session, "t19-list-mine", MINE)
+    theirs = _log(session, "t19-list-theirs", THEIRS)
 
     visible = _ids(session, user.id)
     assert mine in visible
@@ -243,7 +241,7 @@ def test_the_stamp_is_not_what_makes_it_visible(
     nothing else in this file separates them.
     """
     add_test_channel(session, MINE, user_id=user.id)
-    stamped_elsewhere = _log(session, "t19-stamp", MINE, owner=other_user.id)
+    stamped_elsewhere = _log(session, "t19-stamp", MINE)
 
     assert stamped_elsewhere in _ids(session, user.id)
 
@@ -257,7 +255,7 @@ def test_a_row_on_a_followed_channel_is_reachable_by_id(
     _split_corpus(session, user, other_user)
     ensure_follow(session, channel_id=THEIRS, user_id=user.id)
     session.commit()
-    shared = _log(session, "t19-byid-shared", THEIRS, owner=other_user.id)
+    shared = _log(session, "t19-byid-shared", THEIRS)
 
     assert get_log(session, "sync", shared, user_id=user.id)["id"] == shared
 
@@ -268,7 +266,7 @@ def test_a_row_on_an_unfollowed_channel_is_not_found_by_id(
     session: Session, user: User, other_user: User
 ) -> None:
     _split_corpus(session, user, other_user)
-    theirs = _log(session, "t19-byid-theirs", THEIRS, owner=other_user.id)
+    theirs = _log(session, "t19-byid-theirs", THEIRS)
 
     with pytest.raises(HTTPException) as raised:
         get_log(session, "sync", theirs, user_id=user.id)
@@ -287,7 +285,7 @@ def test_the_refusal_is_indistinguishable_from_an_absent_row(
     defaulting it.
     """
     _split_corpus(session, user, other_user)
-    theirs = _log(session, "t19-oracle", THEIRS, owner=other_user.id)
+    theirs = _log(session, "t19-oracle", THEIRS)
 
     with pytest.raises(HTTPException) as on_foreign:
         get_log(session, "sync", theirs, user_id=user.id)
@@ -314,10 +312,8 @@ def test_search_does_not_reach_past_the_follow(
     one returns the followed channel's row alone.
     """
     _split_corpus(session, user, other_user)
-    mine = _log(session, "t19-find-mine", MINE, owner=user.id, error="pelican")
-    theirs = _log(
-        session, "t19-find-theirs", THEIRS, owner=other_user.id, error="pelican"
-    )
+    mine = _log(session, "t19-find-mine", MINE, error="pelican")
+    theirs = _log(session, "t19-find-theirs", THEIRS, error="pelican")
 
     found = _ids(session, user.id, search="pelican")
     assert mine in found
@@ -336,14 +332,11 @@ def test_searching_the_bodies_does_not_reach_past_the_follow(
     exists on a Channel the caller cannot see.
     """
     _split_corpus(session, user, other_user)
-    mine = _log(
-        session, "t19-body-mine", MINE, owner=user.id, response={"note": "capybara"}
-    )
+    mine = _log(session, "t19-body-mine", MINE, response={"note": "capybara"})
     theirs = _log(
         session,
         "t19-body-theirs",
         THEIRS,
-        owner=other_user.id,
         response={"note": "capybara"},
     )
 
@@ -369,7 +362,6 @@ def test_the_bodies_are_still_findable_for_a_channel_you_follow(
         session,
         "t19-body-shared",
         THEIRS,
-        owner=other_user.id,
         response={"note": "axolotl"},
     )
 
@@ -381,24 +373,37 @@ def test_the_bodies_are_still_findable_for_a_channel_you_follow(
 # --------------------------------------------------------------------------
 
 
-def test_a_sync_log_stores_no_owner_even_when_handed_one(
-    session: Session, user: User
-) -> None:
-    """Decision 22: sync logs carry no owner.
+def test_a_sync_log_has_no_owner_to_store(session: Session, user: User) -> None:
+    """Decision 22: sync logs carry no owner — now by construction.
 
-    `upsert_sync_log` keeps the parameter because `_LOG_IMPORTERS` dispatches
-    five types through one signature, so nothing at a call site shows that it is
-    ignored. This is what stops it from quietly becoming written again.
+    Ticket 19 could only assert that a handed-in owner was *thrown away*, because
+    `_LOG_IMPORTERS` dispatched five families through one signature and the
+    parameter had to stay. It said ticket 22 would drop the column and the
+    parameter together, and this is that assertion restated: there is no column
+    to write and no argument to write it from.
+
+    Both halves, because either alone is weak. The absent column would be
+    satisfied by a table that never existed; the absent parameter would be
+    satisfied by a function that stamped the row from somewhere else.
     """
+    import inspect
+
     add_test_channel(session, MINE, user_id=user.id)
-    _log(session, "t19-stampless", MINE, owner=user.id, response={"body": 1})
+    _log(session, "t19-stampless", MINE, response={"body": 1})
 
     row = session.get(SyncLog, "t19-stampless")
     payload = session.get(SyncLogPayload, "t19-stampless")
     assert row is not None
     assert payload is not None
-    assert row.user_id is None
-    assert payload.user_id is None
+    assert "user_id" not in type(row).model_fields
+    assert "user_id" not in type(payload).model_fields
+
+    params = inspect.signature(upsert_sync_log).parameters
+    assert "user_id" not in params, (
+        "`upsert_sync_log` takes an owner again. It has nowhere to put one, so "
+        "the argument can only be ignored — which is the state ticket 19 "
+        "accepted temporarily and this ticket removed."
+    )
 
 
 def test_the_payload_row_records_its_channel(session: Session, user: User) -> None:
@@ -408,7 +413,7 @@ def test_the_payload_row_records_its_channel(session: Session, user: User) -> No
     scope both have to answer without joining the whole log table back in.
     """
     add_test_channel(session, MINE, user_id=user.id)
-    _log(session, "t19-payload-key", MINE, owner=user.id, response={"body": 1})
+    _log(session, "t19-payload-key", MINE, response={"body": 1})
 
     payload = session.get(SyncLogPayload, "t19-payload-key")
     assert payload is not None
@@ -450,7 +455,7 @@ def test_overwriting_a_row_on_a_channel_you_do_not_follow_is_refused(
 ) -> None:
     """The takeover shape itself: an existing row, named by a guessed id."""
     _split_corpus(session, user, other_user)
-    _log(session, "t19-takeover", THEIRS, owner=other_user.id, error="original")
+    _log(session, "t19-takeover", THEIRS, error="original")
 
     with pytest.raises(HTTPException) as raised:
         create_logs(
@@ -486,7 +491,7 @@ def test_a_follower_cannot_rewrite_telemetry_another_follower_reads(
     _split_corpus(session, user, other_user)
     ensure_follow(session, channel_id=THEIRS, user_id=user.id)
     session.commit()
-    _log(session, "t19-rewrite", THEIRS, owner=other_user.id, error="the real failure")
+    _log(session, "t19-rewrite", THEIRS, error="the real failure")
 
     with pytest.raises(HTTPException) as raised:
         create_logs(
@@ -579,10 +584,8 @@ def test_with_the_flag_off_the_page_is_what_it_always_was(
 ) -> None:
     """The promise every migrate ticket in this programme makes."""
     _split_corpus(session, user, other_user)
-    mine = _log(session, "t19-off-mine", MINE, owner=user.id, error="pelican")
-    theirs = _log(
-        session, "t19-off-theirs", THEIRS, owner=other_user.id, error="pelican"
-    )
+    mine = _log(session, "t19-off-mine", MINE, error="pelican")
+    theirs = _log(session, "t19-off-theirs", THEIRS, error="pelican")
 
     assert {mine, theirs} <= _ids(session, user.id)
     assert {mine, theirs} <= _ids(session, user.id, search="pelican")

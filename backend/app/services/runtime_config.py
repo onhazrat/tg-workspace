@@ -60,9 +60,8 @@ def _sync_runtime_payload(sync_settings: dict[str, Any]) -> dict[str, Any]:
 
 def _network_runtime_payload(
     session: Session,
-    user_id: uuid.UUID | None,
 ) -> dict[str, Any]:
-    network = load_network_settings(session, user_id)
+    network = load_network_settings(session)
     resolved = resolve_proxies(network)
     default_slots, overrides = resolve_proxy_concurrency(network)
     effective_capacity = compute_proxy_pool_capacity(resolved, default_slots, overrides)
@@ -222,7 +221,7 @@ def build_runtime_config(
         sync_settings, retention_settings, now_ms=now
     )
     sync_payload = _sync_runtime_payload(sync_settings)
-    network_payload = _network_runtime_payload(session, user_id)
+    network_payload = _network_runtime_payload(session)
     configured_concurrency = sync_payload["syncConcurrency"]
     effective_capacity = network_payload.get("effectiveProxyCapacity")
     allowed_concurrency = (

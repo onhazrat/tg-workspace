@@ -69,9 +69,11 @@ PREFIX = settings.API_V1_STR
 #: deleted from an unapproved account's route.
 NO_PRIVILEGES = "The user doesn't have enough privileges"
 
+#: The four families that take an owner. `sync` is deliberately absent: ticket
+#: 22 dropped its column and its `user_id` parameter together, so it no longer
+#: shares this signature and `_seed_log` branches on it explicitly.
 _UPSERTS = {
     "publish": upsert_publish_log,
-    "sync": upsert_sync_log,
     "llm": upsert_llm_log,
     "embedding": upsert_embedding_log,
     "network": upsert_network_log,
@@ -538,18 +540,29 @@ def _seed_log(log_type: str, log_id: str, owner: uuid.UUID) -> None:
         # called as.
         if log_type in SHARED_LOG_TYPES:
             follow_channels(session, _LOG_CHANNEL)
-        _UPSERTS[log_type](
-            session,
-            {"id": log_id, "timestamp": 1, "channel_name": _LOG_CHANNEL},
-            owner,
-        )
+        body = {"id": log_id, "timestamp": 1, "channel_name": _LOG_CHANNEL}
+        # Sync logs take no owner since ticket 22 — the column and the parameter
+        # went together, so there is nothing to hand them.
+        if log_type == "sync":
+            upsert_sync_log(session, body)
+        else:
+            _UPSERTS[log_type](session, body, owner)
         session.commit()
 
 
 def _owner_of(log_type: str, log_id: str) -> uuid.UUID | None:
+    """The row's owner, or None — including when the family has no owner at all.
+
+    Sync logs stopped having a `user_id` column in ticket 22, and "no owner" is
+    the same answer this returned for them before, when the column existed and
+    was deliberately left NULL.
+    """
+    model = LOG_MODELS[log_type][0]
     with Session(engine) as session:
-        row = session.get(LOG_MODELS[log_type][0], log_id)
-        return None if row is None else row.user_id
+        row = session.get(model, log_id)
+        if row is None or "user_id" not in type(row).model_fields:
+            return None
+        return row.user_id
 
 
 def _row_field(log_type: str, log_id: str, field: str) -> Any:

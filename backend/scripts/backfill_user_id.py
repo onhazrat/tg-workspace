@@ -1,5 +1,19 @@
 #!/usr/bin/env python3
-"""One-off: set user_id to first superuser on TG rows where NULL (Mode A). Idempotent."""
+"""One-off: set user_id to first superuser on TG rows where NULL (Mode A). Idempotent.
+
+**Superseded by ticket 34's migration** (`c0d1e2f3a4b5_backfill_owners_ticket_34`),
+which does this for all fourteen user-owned tables on every deploy. What is left
+here is the `--reassign-all` mode, which the migration deliberately does not do:
+it takes rows that already belong to somebody else. `cleanup_test_channels.py` is
+the only caller.
+
+`TABLES` lost `Channel`, `Post`, `PostEmbedding`, `PostTranslation` and `SyncLog`
+in ticket 22: those tables are `FOLLOW_SCOPED` in `services/tenancy.SCOPES` and
+their owner stamp is dropped, so `col(model.user_id)` on the first of them raised
+`AttributeError` and the script failed before touching anything. It is typed now
+— `scripts/lint.sh` checks this directory — which is what makes the next such
+drop a lint failure rather than a script that dies on its first run.
+"""
 
 from __future__ import annotations
 
@@ -11,35 +25,27 @@ from dotenv import load_dotenv
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 load_dotenv(_REPO_ROOT / ".env")
 
-from sqlmodel import Session, col, or_, select
+from sqlmodel import Session, SQLModel, col, or_, select
 
 from app.core.db import engine
 from app.models_tg import (
     BotCredential,
-    Channel,
     ChatDestination,
     EmbeddingLog,
     LLMLog,
     NetworkLog,
-    Post,
-    PostEmbedding,
-    PostTranslation,
     PublishLog,
     Summary,
-    SyncLog,
 )
 from app.services.follows import get_operator_user_id
 
-TABLES = (
-    Channel,
-    Post,
+#: Only tables that still carry an owner. Ticket 22 dropped `user_id` from the
+#: follow-scoped ones; naming them here is an `AttributeError`, not a no-op.
+TABLES: tuple[type[SQLModel], ...] = (
     Summary,
     BotCredential,
     ChatDestination,
-    PostEmbedding,
-    PostTranslation,
     PublishLog,
-    SyncLog,
     LLMLog,
     EmbeddingLog,
     NetworkLog,
@@ -57,20 +63,14 @@ def backfill(dry_run: bool = False, reassign_all: bool = False) -> dict[str, int
             sys.exit(1)
 
         for model in TABLES:
-            name = model.__tablename__  # type: ignore[attr-defined]
+            name: str = model.__tablename__  # type: ignore[assignment]
+            owner = col(model.user_id)  # type: ignore[attr-defined]
             if reassign_all:
                 rows = session.exec(
-                    select(model).where(  # type: ignore[attr-defined]
-                        or_(
-                            col(model.user_id).is_(None),  # type: ignore[attr-defined]
-                            col(model.user_id) != operator_id,  # type: ignore[attr-defined]
-                        )
-                    )
+                    select(model).where(or_(owner.is_(None), owner != operator_id))
                 ).all()
             else:
-                rows = session.exec(
-                    select(model).where(col(model.user_id).is_(None))  # type: ignore[attr-defined]
-                ).all()
+                rows = session.exec(select(model).where(owner.is_(None))).all()
             counts[name] = len(rows)
             if not dry_run:
                 for row in rows:

@@ -261,7 +261,7 @@ async def _partition() -> ProxyWorkerPool:
         from app.services.sync_orchestrator import _load_partition_inputs
 
         concurrency, proxies, default_slots, overrides = await asyncio.to_thread(
-            _load_partition_inputs, None
+            _load_partition_inputs
         )
         pool = await ensure_pool_configured(proxies, default_slots, overrides)
         lanes = pool.lanes()

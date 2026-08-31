@@ -4,10 +4,16 @@
     uv run python backend/scripts/backfill_channel_follows.py --dry-run
     uv run python backend/scripts/backfill_channel_follows.py
 
-Owner is `Channel.user_id` where it is set, and the first superuser where it is
-NULL — the rule `services/follows.py::resolve_follow_owner` applies to new
-writes, so a channel created during the backfill and one created a minute after
-it end up owned by the same account.
+Owner is the first superuser, through `services/follows.py::resolve_follow_owner`
+— the same rule that applies to new writes, so a channel created during the
+backfill and one created a minute after it end up owned by the same account.
+
+It used to prefer `Channel.user_id` and fall back to the superuser. Ticket 22
+dropped that column: it recorded who scraped a handle first, which was never the
+same question as who follows it. Nothing is lost in practice, because ticket 21
+closed every path that creates a Channel without a Follow before flipping
+enforcement — so a Channel this script still finds unfollowed can only come from
+a backup predating ticket 04, which has one account's data in it.
 
 Runs unattended from `prestart.sh` as `--if-needed`, after `initial_data.py`
 has created the first superuser this falls back to. An operator can still run it
@@ -46,6 +52,7 @@ from sqlmodel import Session, col, func, select
 
 from app.core.db import engine
 from app.models_tg import Channel, utc_now
+from app.services.channel_setting_groups import ensure_default_group
 from app.services.follows import (
     ensure_follow_for_channel,
     follow_exists,
@@ -132,13 +139,30 @@ def backfill(
             for channel in batch:
                 stats["channels"] += 1
 
-                # `resolve_follow_owner`, not `channel.user_id or operator_id`:
-                # the aggregate also redirects an owner naming a deleted
-                # account, and probing on the ghost id would look up a key that
-                # can never exist. One rule, one place.
-                owner_id = resolve_follow_owner(session, channel.user_id)
-                if owner_id != channel.user_id:
-                    stats["reassigned_to_operator"] += 1
+                # The operator, because ticket 22 dropped `Channel.user_id` and
+                # there is nothing else left to ask. That stamp said who scraped
+                # a handle first, which was never the same question as who
+                # follows it, and it is now gone.
+                #
+                # This does not change what the script produces on any database
+                # that reaches it. Ticket 21 closed every path that creates a
+                # Channel without a Follow and then flipped enforcement, so a
+                # Channel with no follow is only reachable from a backup taken
+                # before ticket 04 — which by definition has one account's data
+                # in it. `resolve_follow_owner` is still the call rather than
+                # `get_operator_user_id`, so this and the dual-write cannot
+                # disagree about who the operator is.
+                owner_id = resolve_follow_owner(session, None)
+                if owner_id is None:
+                    # No account exists to own a follow. `ensure_follow` writes
+                    # a real foreign key, so there is nothing to write rather
+                    # than a row to write with a NULL owner.
+                    print(
+                        "ERROR: no account to own the follows — run init_db first",
+                        file=sys.stderr,
+                    )
+                    sys.exit(1)
+                stats["reassigned_to_operator"] += 1
                 if follow_exists(session, user_id=owner_id, channel_id=channel.id):
                     stats["already_present"] += 1
                     continue
@@ -147,7 +171,25 @@ def backfill(
                     stats["created"] += 1
                     continue
 
-                if ensure_follow_for_channel(session, channel, user_id=owner_id):
+                # **With the group, not bare.** Before ticket 22
+                # `ensure_follow_for_channel` copied the per-User fields off the
+                # Channel; those columns are gone, so a bare call now writes
+                # `setting_group_id=None` — and this script's only remaining
+                # caller is `prestart.sh --if-needed` against a restored
+                # pre-ticket-04 backup, where that would leave *every* channel
+                # group-less. The scheduler skips a group-less follow silently
+                # and the channel page 500s on it, so the whole install would
+                # come up syncing nothing.
+                if ensure_follow_for_channel(
+                    session,
+                    channel,
+                    user_id=owner_id,
+                    values={
+                        "setting_group_id": ensure_default_group(
+                            session, user_id=owner_id
+                        ).id
+                    },
+                ):
                     stats["created"] += 1
                 else:
                     # Lost a race with the dual-write between the check above
@@ -168,7 +210,6 @@ def backfill(
                 session,
                 COMPLETION_KEY,
                 {"completedAt": int(utc_now().timestamp() * 1000)},
-                user_id=operator_id,
             )
 
     print(

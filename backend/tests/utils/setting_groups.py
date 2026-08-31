@@ -7,12 +7,16 @@ from typing import Any
 
 from sqlmodel import Session, select
 
-from app.models_tg import Channel, ChannelSettingGroup
+from app.models_tg import Channel, ChannelFollow, ChannelSettingGroup
 from app.services.channel_setting_groups import (
     ensure_default_group,
     get_or_create_restricted_group,
 )
-from app.services.follows import ensure_follow_for_channel, get_operator_user_id
+from app.services.follows import (
+    FOLLOW_OWNED_FIELDS,
+    get_operator_user_id,
+    sync_follow_settings,
+)
 from tests.utils.tenancy import ANY_READER
 
 
@@ -24,12 +28,17 @@ def freeze_channels_except(session: Session, keep_ids: set[str]) -> None:
     operator_id = get_operator_user_id(session) or ANY_READER
     default_group = ensure_default_group(session, user_id=operator_id)
     frozen_group = get_or_create_restricted_group(session, user_id=operator_id)
-    for channel in session.exec(select(Channel)).all():
-        if channel.id in keep_ids:
-            channel.setting_group_id = default_group.id
-        else:
-            channel.setting_group_id = frozen_group.id
-        session.add(channel)
+    # Every *follow*, not every Channel: ticket 22 moved the group off the
+    # Channel, so freezing is now something an account does to its own list.
+    # Walking follows rather than channels also means a deliberately unfollowed
+    # channel stays unfollowed — several tests seed one to prove it is synced
+    # for nobody, and re-grouping it here would have written a follow they
+    # depend on not existing.
+    for follow in session.exec(select(ChannelFollow)).all():
+        follow.setting_group_id = (
+            default_group.id if follow.channel_id in keep_ids else frozen_group.id
+        )
+        session.add(follow)
     session.commit()
 
 
@@ -91,13 +100,22 @@ def upsert_sync_test_channel(
             setattr(default_group, key, value)
         session.add(default_group)
 
+    # Ticket 22 split the payload: the Channel keeps the corpus fields, and the
+    # group plus anything per-User goes on the follow. A helper that kept
+    # writing them to the Channel would raise, and one that simply dropped them
+    # would seed a channel with no resolvable group — which every scheduler test
+    # reads as "skip this channel", passing for the wrong reason.
+    supplied = dict(channel_fields or {})
+    follow_values: dict[str, Any] = {
+        key: supplied.pop(key) for key in list(supplied) if key in FOLLOW_OWNED_FIELDS
+    }
+    follow_values.setdefault("setting_group_id", default_group.id)
+
     channel = session.get(Channel, channel_id)
     payload: dict[str, Any] = {
         "id": channel_id,
         "name": name or channel_id,
-        "user_id": user_id,
-        "setting_group_id": default_group.id,
-        **(channel_fields or {}),
+        **supplied,
     }
     if channel:
         for key, value in payload.items():
@@ -112,7 +130,7 @@ def upsert_sync_test_channel(
     # fixture channel would vanish mid-test the moment a retention run happened
     # to touch it.
     session.flush()
-    ensure_follow_for_channel(session, channel, user_id=user_id)
+    sync_follow_settings(session, channel, user_id=user_id, values=follow_values)
     session.commit()
     session.refresh(channel)
     return channel

@@ -4,12 +4,12 @@ from __future__ import annotations
 
 import time
 import uuid
-from typing import Any, Literal, cast
+from typing import TYPE_CHECKING, Any, Literal, cast
 
 from fastapi import HTTPException
 from sqlalchemy import or_
 from sqlalchemy.sql.elements import ColumnElement
-from sqlmodel import Session, col, func, select
+from sqlmodel import Session, col, select
 
 from app.models_tg import Channel, ChannelSettingGroup, utc_now
 from app.services.serialization import normalize_body, to_camel, to_snake
@@ -22,6 +22,11 @@ from app.services.tenancy import (
     scoped_select,
     unscoped_select,
 )
+
+if TYPE_CHECKING:
+    # Type-only: this module reaches the follow table through `follows.py`'s
+    # helpers at runtime, and the aggregate is its only writer.
+    from app.services.follows import FollowedChannel
 
 SyncOperationMode = Literal[
     "sync_all", "bulk", "individual", "recheck_restricted", "auto"
@@ -150,9 +155,24 @@ BUILTIN_GROUP_SORT_ORDER: dict[str, int] = {
 
 
 def channel_is_frozen(
-    channel: Channel, groups_by_id: dict[str, ChannelSettingGroup]
+    pair: FollowedChannel, groups_by_id: dict[str, ChannelSettingGroup]
 ) -> bool:
-    group = groups_by_id.get(channel.setting_group_id)
+    """Whether this follower has parked this Channel in a frozen group.
+
+    Takes the `(Channel, follow)` pair rather than the Channel since ticket 22:
+    freezing is one account's judgement about its own list, and reading it off
+    the Channel reported every follower as frozen because one of them was. The
+    pair rather than the bare follow so this module never names `ChannelFollow`
+    — see `bulk_channels.is_auto_followed_channel` for why that matters.
+
+    A follow naming no group is **not** frozen. That matches the old behaviour
+    for an unresolvable group id and is the safe direction: treating it as
+    frozen would silently stop summarising a channel over missing data.
+    """
+    group_id = pair[1].setting_group_id
+    if group_id is None:
+        return False
+    group = groups_by_id.get(group_id)
     return bool(group and group.is_frozen)
 
 
@@ -261,13 +281,18 @@ def consolidate_legacy_duplicate_reserved_groups(
             reserved_name=reserved_name,
             canonical_id=canonical.id,
         ):
-            channels = session.exec(
-                select(Channel).where(Channel.setting_group_id == legacy.id)
-            ).all()
-            for channel in channels:
-                channel.setting_group_id = canonical.id
-                channel.updated_at = utc_now()
-                session.add(channel)
+            # Ticket 22: the follows name the group, not the Channels.
+            # Delegated because `follows.py` is the table's only writer, which
+            # `test_channel_creation_paths.py` enforces by refusing any mention
+            # of `ChannelFollow` outside it.
+            from app.services.follows import repoint_follows_between_groups
+
+            repoint_follows_between_groups(
+                session,
+                user_id=user_id,
+                from_group_id=legacy.id,
+                to_group_id=canonical.id,
+            )
             session.delete(legacy)
             merged += 1
     if merged:
@@ -343,7 +368,16 @@ def move_channel_from_restricted_to_default(
     *,
     user_id: uuid.UUID,
 ) -> ChannelSettingGroup | None:
-    group = session.get(ChannelSettingGroup, channel.setting_group_id)
+    # Ticket 22: which group this channel is in is a fact about the *caller's*
+    # follow now, not about the Channel. An account with no follow has no group
+    # to move off, which is not the same as "not restricted" — but it reaches
+    # the same answer here, and inventing one would move a stranger's channel.
+    from app.services.follows import get_follow
+
+    follow = get_follow(session, user_id=user_id, channel_id=channel.id)
+    if follow is None:
+        return None
+    group = session.get(ChannelSettingGroup, follow.setting_group_id)
     if not group or not is_restricted_group(group):
         return None
     # `user_id or channel.user_id` until ticket 21, and the `or` could only
@@ -352,7 +386,9 @@ def move_channel_from_restricted_to_default(
     # owns. `user_id` is now required, and a UUID is always truthy, so the
     # second operand was unreachable the moment the signature narrowed.
     default_group = ensure_default_group(session, user_id=user_id)
-    channel.setting_group_id = default_group.id
+    follow.setting_group_id = default_group.id
+    follow.updated_at = utc_now()
+    session.add(follow)
     channel.updated_at = utc_now()
     now_ms = int(time.time() * 1000)
     if not default_group.regular_sync_enabled:
@@ -542,8 +578,48 @@ def ensure_reserved_groups(
     return default_group, restricted_group, frozen_group
 
 
-def get_group_for_channel(session: Session, channel: Channel) -> ChannelSettingGroup:
-    group = session.get(ChannelSettingGroup, channel.setting_group_id)
+def find_group_for_channel(
+    session: Session, channel: Channel, *, user_id: uuid.UUID
+) -> ChannelSettingGroup | None:
+    """The group governing `user_id`'s follow of `channel`, or None.
+
+    The non-raising half of `get_group_for_channel`, split out in ticket 22 for
+    the background callers. A follow with no group is what `ChannelFollow`'s
+    docstring calls "skip this channel", and the schedulers act on exactly that
+    — so a caller with no HTTP response to put a status code in needs the answer
+    as a value, not as an `HTTPException` escaping into a queue consumer.
+    """
+    from app.services.follows import get_follow
+
+    follow = get_follow(session, user_id=user_id, channel_id=channel.id)
+    if follow is None or follow.setting_group_id is None:
+        return None
+    return session.get(ChannelSettingGroup, follow.setting_group_id)
+
+
+def get_group_for_channel(
+    session: Session, channel: Channel, *, user_id: uuid.UUID
+) -> ChannelSettingGroup:
+    """The group governing `user_id`'s follow of `channel`.
+
+    `user_id` became required in ticket 22. The group id used to sit on the
+    Channel, so this took no account at all and every follower of a handle got
+    whichever group the first follower picked; it lives on `ChannelFollow` now,
+    so the answer depends on who is asking.
+
+    Still a 500 rather than a 404 when it does not resolve, and for both the
+    missing-follow and missing-group cases. The callers have already established
+    that this account may see the channel, so either state is a broken invariant
+    rather than a request for something that is not there — which is what a 500
+    says and a 404 would not.
+
+    **Only for callers that have a response to put the 500 in.** Ticket 22 made
+    a NULL group reachable — it used to fall back to the Channel's copy — and
+    the scraper called this before its own `try`, so an unschedulable follow
+    aborted the message instead of skipping the channel. Those callers take
+    `find_group_for_channel` instead.
+    """
+    group = find_group_for_channel(session, channel, user_id=user_id)
     if not group:
         raise HTTPException(
             status_code=500,
@@ -583,12 +659,18 @@ def load_groups_by_id(session: Session) -> dict[str, ChannelSettingGroup]:
 
 
 def channel_counts_by_group(session: Session) -> dict[str, int]:
-    rows = session.exec(
-        select(Channel.setting_group_id, func.count()).group_by(
-            Channel.setting_group_id
-        )
-    ).all()
-    return dict(rows)  # ty: ignore[invalid-return-type]
+    """How many channels sit in each group, counted over follows (ticket 22).
+
+    `Channel` no longer names a group, so this counts `tg_channel_follows`
+    instead. The number it returns is the same one the UI has always shown on a
+    single-account deployment, and the right one as soon as there are two: a
+    group belongs to one account, so only that account's follows can be in it.
+    Counting Channels would have meant counting a shared row once per group it
+    appeared in, which stopped being expressible when the column moved.
+    """
+    from app.services.follows import follow_counts_by_group
+
+    return follow_counts_by_group(session)
 
 
 def _group_sort_key(group: ChannelSettingGroup) -> tuple[int, str]:
@@ -714,9 +796,12 @@ def recompute_channels_for_group(
     previous_interval_minutes: int | None = None,
     previous_expected_posts: int | None = None,
 ) -> int:
-    channels = session.exec(
-        select(Channel).where(Channel.setting_group_id == group_id)
-    ).all()
+    # Reached through the follows since ticket 22, which is where the group id
+    # lives now. The Channels are still what gets recomputed — the two sync
+    # deadlines are columns on `tg_channels`, shared by every follower.
+    from app.services.follows import channels_in_group
+
+    channels = channels_in_group(session, group_id)
     if not channels:
         return 0
     group = session.get(ChannelSettingGroup, group_id)
@@ -782,26 +867,24 @@ def _legacy_reserved_duplicates_exist(session: Session, *, user_id: uuid.UUID) -
 
 
 def _referenced_group_ids(session: Session, *, user_id: uuid.UUID) -> set[str]:
-    """Group ids named by the Channels `user_id` may see.
+    """Group ids named by `user_id`'s own follows.
 
-    The orphan rescue behind `list_setting_groups`: a channel can name a group
-    the caller does not own, because auto-follow files the Channel under whoever
-    scraped the handle first. Dropping that group from the list leaves the
-    channel showing a policy the settings screen cannot explain, so it is added
-    back.
+    The orphan rescue behind `list_setting_groups`: a follow can name a group
+    the caller does not own, because before ticket 22 the follow copied its
+    group id off a Channel filed under whoever scraped the handle first.
+    Dropping that group from the list leaves the channel showing a policy the
+    settings screen cannot explain, so it is added back.
 
     This replaces `operator.distinct_operator_setting_group_ids`, which
-    hand-rolled `Channel.user_id == me OR IS NULL`. `Channel` is `FOLLOW_SCOPED`
-    — its `user_id` is a "who scraped this first" stamp that ticket 22 drops —
-    so the seam answers this with an EXISTS against `tg_channel_follows`, and
-    the hand-rolled version was asking a question whose column is going away.
+    hand-rolled `Channel.user_id == me OR IS NULL`, and then a `scoped_select`
+    over `Channel.setting_group_id` — a column ticket 22 dropped. The follow
+    table is where the id lives now, and reading it directly needs no seam:
+    `(user_id, channel_id)` is the primary key, so filtering on the owner is
+    identity rather than visibility, which is ticket 30's rule.
     """
-    rows = session.exec(
-        scoped_select(select(Channel.setting_group_id).distinct(), Channel, user_id)
-    ).all()
-    return {  # ty: ignore[invalid-return-type]
-        group_id for group_id in rows if group_id
-    }
+    from app.services.follows import group_ids_for_user
+
+    return group_ids_for_user(session, user_id=user_id)
 
 
 def list_setting_groups(
@@ -971,11 +1054,11 @@ def delete_setting_group(
             detail=f"The built-in '{group.name}' setting group cannot be deleted",
         )
 
-    channel_count = session.exec(
-        select(func.count())
-        .select_from(Channel)
-        .where(Channel.setting_group_id == group_id)
-    ).one()
+    # Counted over follows since ticket 22: "is anything still in this group"
+    # is a question about the rows that name it, and Channels stopped doing so.
+    from app.services.follows import count_follows_in_group
+
+    channel_count = count_follows_in_group(session, group_id)
     if channel_count:
         raise HTTPException(
             status_code=400,
@@ -1031,7 +1114,9 @@ def bulk_assign_setting_group(
 
     now_ms = int(time.time() * 1000)
     for channel_id in channel_ids:
-        apply_group_to_channel(session, operator_channels[channel_id], group, now_ms)
+        apply_group_to_channel(
+            session, operator_channels[channel_id], group, now_ms, user_id=user_id
+        )
 
     session.commit()
     return {"updated": len(channel_ids), "settingGroupId": setting_group_id}
@@ -1042,22 +1127,42 @@ def apply_group_to_channel(
     channel: Channel,
     group: ChannelSettingGroup,
     now_ms: int,
+    *,
+    user_id: uuid.UUID,
 ) -> None:
-    """Move one Channel onto `group` and settle its two sync deadlines.
+    """Move one account's follow of a Channel onto `group`, and settle the
+    Channel's two sync deadlines.
+
+    **The move lands on the Follow, the deadlines on the Channel**, and ticket
+    22 is what separated them. `setting_group_id` was a Channel column, so
+    reassigning a group moved it for every follower of the handle; it now lives
+    only on `ChannelFollow`. The two `next_*_sync_at` cursors stayed on the
+    Channel, because they describe the shared backward walk rather than one
+    account's preference, so this function writes to both rows.
+
+    `user_id` is required and names whose follow moves. A caller with no follow
+    for this Channel moves nothing — the deadlines are still settled, because
+    they belong to the Channel and the group that decides them was resolved by
+    the caller either way.
 
     Extracted from `bulk_assign_setting_group` in ticket 35 so the system paths
     can reach it without going through that function's owner check. **That is
     not a hole in the check**: the check exists because `bulk_assign` takes a
     *client-chosen* group id, and the callers here resolve the group from the
-    Channel's own owner (`get_or_create_frozen_group(user_id=channel.user_id)`),
-    so there is no id for a stranger to name. `move_channel_to_restricted_group`
-    is the same shape and predates this.
+    follows already on the row, so there is no id for a stranger to name.
+    `move_channel_to_restricted_group` is the same shape and predates this.
 
     Clearing the deadlines is the part worth keeping together with the move:
     a channel parked in Frozen with `next_regular_sync_at` still set stays in
     the scheduler's due list and syncs anyway.
     """
-    channel.setting_group_id = group.id
+    from app.services.follows import get_follow
+
+    follow = get_follow(session, user_id=user_id, channel_id=channel.id)
+    if follow is not None:
+        follow.setting_group_id = group.id
+        follow.updated_at = utc_now()
+        session.add(follow)
     if not group.regular_sync_enabled:
         channel.next_regular_sync_at = None
     else:
@@ -1092,8 +1197,18 @@ def move_channel_to_restricted_group(
     # See `move_channel_from_restricted_to_default`: the `or channel.user_id`
     # this replaces was reachable only through a None `user_id`, which is the
     # thing ticket 21 removed.
+    #
+    # Ticket 22: the group lands on the follow, not the Channel. Freezing a
+    # handle is one account's judgement about its own list, and on the Channel
+    # it froze the handle for every follower.
     group = get_or_create_restricted_group(session, user_id=user_id)
-    channel.setting_group_id = group.id
+    from app.services.follows import get_follow
+
+    follow = get_follow(session, user_id=user_id, channel_id=channel.id)
+    if follow is not None:
+        follow.setting_group_id = group.id
+        follow.updated_at = utc_now()
+        session.add(follow)
     channel.updated_at = utc_now()
     session.add(channel)
     return group
@@ -1149,32 +1264,33 @@ def release_groups_of_deleted_account(session: Session, user_id: uuid.UUID) -> i
 
     **Call this before `session.delete(user)`, not after.** Ticket 21 gave
     `tg_channel_setting_groups.user_id` a real `ON DELETE CASCADE` key, so
-    deleting an account now takes its setting groups with it — and the two
-    columns that reference a group by id, `tg_channels.setting_group_id` and
-    `tg_channel_follows.setting_group_id`, are plain strings with no foreign key
-    of their own. Nothing repoints them, so they are left naming a row that is
-    gone.
+    deleting an account now takes its setting groups with it — and
+    `tg_channel_follows.setting_group_id` is a plain string with no foreign key
+    of its own. Nothing repoints it, so it is left naming a row that is gone.
 
     That is reachable without an Admin. Auto-follow files a Channel under
-    whoever scraped the handle first, and `ensure_follow_for_channel` copies the
-    Channel's group id onto the follow — so account A's group is named by a
-    Channel account B still follows, and by B's own follow row. When A deletes
-    itself through `DELETE /users/me`, B's channel starts answering **500** from
-    `get_group_for_channel`, is silently skipped by `auto_sync`, and has its
-    reset refused by `bulk_channels` — the three consequences
-    `load_groups_by_id`'s docstring already enumerates for a group that will not
-    resolve.
+    whoever scraped the handle first, and before ticket 22 the follow copied
+    that Channel's group id — so account A's group could be named by account B's
+    own follow row. When A deletes itself through `DELETE /users/me`, B's
+    channel starts answering **500** from `get_group_for_channel`, is silently
+    skipped by `auto_sync`, and has its reset refused by `bulk_channels` — the
+    three consequences `load_groups_by_id`'s docstring already enumerates for a
+    group that will not resolve.
 
-    The migration knew: `_GROUP_REFERENCES` repoints exactly these two columns
-    before it deletes a merged group. This is that rule at runtime, which is
-    where it was missing.
+    The migration knew: `_GROUP_REFERENCES` repoints these columns before it
+    deletes a merged group. This is that rule at runtime, which is where it was
+    missing.
 
     **A follow goes to its own owner's default**, because a follow's group is
     that account's policy and naming somebody else's was drift from the copy
-    above. **A Channel goes to a surviving follower's default**, and to the
-    operator's when nobody follows it any more — such a Channel is due for
-    retention collection, but `get_group_for_channel` runs long before the next
-    sweep and a 500 in the meantime is the failure this exists to prevent.
+    above.
+
+    **There is no Channel half any more.** Ticket 22 dropped
+    `tg_channels.setting_group_id`, so a Channel names no group and cannot be
+    left pointing at a deleted one. The loop that repointed Channels to a
+    surviving follower's default went with the column: every remaining follower
+    already carries their own group id, which is the answer that loop was
+    approximating.
 
     Returns the number of rows repointed, so a caller can log it.
     """
@@ -1187,11 +1303,7 @@ def release_groups_of_deleted_account(session: Session, user_id: uuid.UUID) -> i
     if not doomed:
         return 0
 
-    from app.services.follows import (
-        follows_for_channels,
-        get_operator_user_id,
-        repoint_follows_off_groups,
-    )
+    from app.services.follows import repoint_follows_off_groups
 
     def _default_group_id(owner: uuid.UUID) -> str:
         return ensure_default_group(session, user_id=owner).id
@@ -1204,33 +1316,5 @@ def release_groups_of_deleted_account(session: Session, user_id: uuid.UUID) -> i
         except_user_id=user_id,
         group_for=_default_group_id,
     )
-
-    channels = session.exec(
-        select(Channel).where(col(Channel.setting_group_id).in_(doomed))
-    ).all()
-    if channels:
-        heirs_by_channel: dict[str, list[uuid.UUID]] = {}
-        for follow in follows_for_channels(
-            session, [channel.id for channel in channels]
-        ):
-            if follow.user_id != user_id:
-                heirs_by_channel.setdefault(follow.channel_id, []).append(
-                    follow.user_id
-                )
-        operator_id = get_operator_user_id(session)
-        for channel in channels:
-            heirs = heirs_by_channel.get(channel.id, [])
-            heir = heirs[0] if heirs else operator_id
-            if heir is None:
-                # No account left to own a group at all. Only reachable if the
-                # last account deletes itself, which both delete routes refuse
-                # — `DELETE /users/me` for an account that can manage accounts,
-                # and `DELETE /users/{id}` for the caller's own. Left alone
-                # rather than guessed at.
-                continue
-            channel.setting_group_id = ensure_default_group(session, user_id=heir).id
-            session.add(channel)
-            repointed += 1
-
     session.flush()
     return repointed

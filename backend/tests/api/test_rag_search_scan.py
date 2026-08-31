@@ -19,8 +19,7 @@ from sqlmodel import Session
 from app.ai.models import EmbeddingResult
 from app.core.config import settings
 from app.core.db import engine
-from app.models_tg import Channel, PostEmbedding
-from app.services.follows import get_operator_user_id
+from app.models_tg import PostEmbedding
 
 PREFIX = f"{settings.API_V1_STR}/rag"
 DATA = f"{settings.API_V1_STR}/data"
@@ -58,14 +57,10 @@ def _seed(client: TestClient) -> None:
     headers = _auth(client)
     client.put(f"{DATA}/channels/{CHANNEL}", json={"name": CHANNEL}, headers=headers)
 
-    with Session(engine) as session:
-        operator_id = get_operator_user_id(session)
-        ch = session.get(Channel, CHANNEL)
-        if ch and operator_id:
-            ch.user_id = operator_id
-            session.add(ch)
-            session.commit()
-
+    # The PUT above already creates the Channel *and* the caller's follow, which
+    # is what makes the channel visible under enforcement. This used to stamp
+    # `Channel.user_id` by hand afterwards; ticket 22 dropped that column, and
+    # the stamp was never what decided visibility anyway.
     client.post(
         f"{DATA}/posts/bulk",
         json=[

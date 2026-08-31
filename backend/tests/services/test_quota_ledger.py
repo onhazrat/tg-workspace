@@ -544,8 +544,12 @@ def _run_job(
     monkeypatch.setattr(sync_orchestrator, "touch_job", noop)
     monkeypatch.setattr(sync_orchestrator, "persist_job", noop)
     monkeypatch.setattr(sync_orchestrator, "deactivate_job", lambda _job_id: None)
+    # No argument since ticket 22: the function reads only deployment-wide
+    # settings and the `user_id` it took was passed straight through to nothing.
+    # This stub is why the stale call site survived — a `lambda _uid` accepts
+    # whatever `run_db` hands it, and `run_db` was typed `Callable[..., T]`.
     monkeypatch.setattr(
-        sync_orchestrator, "_load_sync_job_concurrency", lambda _uid: (4, None)
+        sync_orchestrator, "_load_sync_job_concurrency", lambda: (4, None)
     )
 
     job = SyncJobState(

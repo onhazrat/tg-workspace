@@ -146,10 +146,12 @@ def upsert_publish_log(
     names every one of them rather than leaving the gap to be found on the day
     the flag flips.
 
-    `upsert_sync_log` keeps an optional `user_id` it ignores, and that asymmetry
-    is deliberate — see its own docstring. All five still accept
-    `(session, item, user_id)`, so `data_import_export._LOG_IMPORTERS` can go on
-    dispatching them through one uniform signature.
+    `upsert_sync_log` takes **no** owner at all since ticket 22, which is where
+    the five families stopped sharing one signature — see its docstring for why
+    a parameter that is accepted and ignored had to go rather than stay. The
+    dispatch tables in `create_logs` and `data_import_export._import_logs` name
+    that asymmetry in a visible branch instead of hiding it behind a signature
+    that lies.
     """
     normalized = normalize_body(item)
     log_id = normalized.get("id") or str(uuid.uuid4())
@@ -177,31 +179,26 @@ def upsert_publish_log(
         session.add(PublishLog(id=log_id, **cast(Any, fields)))
 
 
-def upsert_sync_log(
-    session: Session,
-    item: dict[str, Any],
-    user_id: uuid.UUID | None = None,  # noqa: ARG001 — ticket 19; see the docstring
-) -> None:
+def upsert_sync_log(session: Session, item: dict[str, Any]) -> None:
     """Write a sync log, routing its bulk bodies to `SyncLogPayload`.
 
     The caller still passes one flat dict — the split is an implementation
     detail of how the rows are stored, not of the API.
 
-    **`user_id` is accepted and deliberately not written** (ticket 19, plan
-    decision 22). A sync log is channel telemetry: it answers "did this Channel
-    deliver Posts, and if not why not", which is a fact about the Channel rather
-    than about whoever triggered the scrape, so `tenancy.SCOPES` makes it
-    follow-scoped and nothing reads an owner off it. Keeping a nullable owner
-    that means "the scheduler wrote this" is the `operator.py` ambiguity, and it
-    fails open on a forgotten stamp.
+    **There is no owner to pass** (ticket 19, plan decision 22; column and
+    parameter dropped in ticket 22). A sync log is channel telemetry: it answers
+    "did this Channel deliver Posts, and if not why not", which is a fact about
+    the Channel rather than about whoever triggered the scrape, so
+    `tenancy.SCOPES` makes it follow-scoped and nothing reads an owner off it.
+    Keeping a nullable owner that means "the scheduler wrote this" is the
+    `operator.py` ambiguity, and it fails open on a forgotten stamp.
 
-    The parameter stays because `data_import_export._LOG_IMPORTERS` dispatches
-    all five log types through one uniform `(session, item, user_id)` signature,
-    and `create_logs` below calls the five the same way. Ticket 22 drops the
-    column and the parameter together. Until then nothing at a call site shows
-    that it is ignored, which is why
-    `tests/services/test_sync_log_channel_telemetry.py` hands it a real account
-    and requires the stored row to carry `None`.
+    Ticket 19 kept a `user_id` parameter it deliberately ignored, so the five
+    log families could share one dispatch signature, and said this ticket would
+    drop it with the column. It is dropped: an ignored parameter decays into a
+    written one the first time somebody tidies it, and the two dispatch tables
+    now name the asymmetry explicitly instead of hiding it behind a signature
+    that lies.
     """
     normalized = normalize_body(item)
     log_id = normalized.get("id") or str(uuid.uuid4())
@@ -209,7 +206,6 @@ def upsert_sync_log(
     timestamp = normalized.get("timestamp", 0)
     channel_name = normalized.get("channel_name", "")
     fields = {
-        "user_id": None,
         "channel_name": channel_name,
         "status": normalized.get("status", "success"),
         "posts_count": normalized.get("posts_count", 0),
@@ -265,7 +261,6 @@ def _upsert_sync_log_payload(
         return
 
     if existing:
-        existing.user_id = None
         existing.channel_name = channel_name
         existing.timestamp = timestamp
         existing.full_request = full_request
@@ -277,7 +272,6 @@ def _upsert_sync_log_payload(
     session.add(
         SyncLogPayload(
             sync_log_id=log_id,
-            user_id=None,
             channel_name=channel_name,
             timestamp=timestamp,
             full_request=full_request,
@@ -971,16 +965,22 @@ def create_logs(
                     detail=f"{log_type} log not found",
                 )
 
-    upsert_fn = {
+    # Sync logs are out of this table rather than in it with a signature that
+    # lies. They store no owner at all (ticket 19), so ticket 22 dropped the
+    # column and the `user_id` parameter together; the four that remain all take
+    # an owner and genuinely write it, which is what lets them share a type.
+    owner_upserts: dict[str, Callable[[Session, dict[str, Any], uuid.UUID], None]] = {
         "publish": upsert_publish_log,
-        "sync": upsert_sync_log,
         "llm": upsert_llm_log,
         "embedding": upsert_embedding_log,
         "network": upsert_network_log,
-    }[log_type]
+    }
     resource = LOG_MODELS[log_type][1]
     for item in body:
-        upsert_fn(session, item, user_id)
+        if log_type == "sync":
+            upsert_sync_log(session, item)
+        else:
+            owner_upserts[log_type](session, item, user_id)
     session.commit()
     from app.services.sync_meta import touch_sync
 

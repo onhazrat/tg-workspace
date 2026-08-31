@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import sys
+import time
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -18,7 +19,11 @@ load_dotenv(_REPO_ROOT / ".env")
 
 from app.core.db import engine
 from app.models_tg import Channel, Post, PostEmbedding, PostTranslation
-from app.services.bulk_channels import is_auto_followed_channel, select_bulk_channels
+from app.services.bulk_channels import select_bulk_channels
+from app.services.channel_setting_groups import (
+    apply_group_to_channel,
+    get_or_create_frozen_group,
+)
 from app.services.follows import get_operator_user_id
 from app.services.sync_meta import touch_sync
 
@@ -58,17 +63,26 @@ def main() -> None:
 
     with Session(engine) as session:
         operator_id = get_operator_user_id(session)
-        channels = select_bulk_channels(
+        if operator_id is None:
+            print(
+                "ERROR: first superuser not found — run init_db first", file=sys.stderr
+            )
+            sys.exit(1)
+        # Pairs since ticket 22, and the `auto_follow_only` filter is the whole
+        # selection — `discovered_via` moved to the follow, so the second filter
+        # this used to apply on top read a Channel attribute that no longer
+        # exists and the script died on its first line of output, dry run
+        # included.
+        targets = select_bulk_channels(
             session,
             operator_id=operator_id,
             auto_follow_only=True,
             limit=args.limit,
         )
-        targets = [ch for ch in channels if is_auto_followed_channel(ch)]
         print(f"Auto-followed channels in scope: {len(targets)}")
-        for ch in targets[:15]:
-            via = ch.discovered_via or {}
-            print(f"  @{ch.name} via @{via.get('channelName', '?')}")
+        for channel, follow in targets[:15]:
+            via = follow.discovered_via or {}
+            print(f"  @{channel.name} via @{via.get('channelName', '?')}")
         if len(targets) > 15:
             print(f"  ... and {len(targets) - 15} more")
 
@@ -76,11 +90,28 @@ def main() -> None:
             print(f"\n[dry-run] would {action}: {len(targets)}")
             return
 
+        # Freezing is a group move, not a flag. `Channel.is_frozen` never
+        # existed — it is a `ChannelSettingGroup` column — so the assignment
+        # this replaces set a stray Python attribute and committed nothing,
+        # which is how `--freeze` was a silent no-op for as long as it has been
+        # here. `apply_group_to_channel` also clears the sync deadlines, without
+        # which a frozen channel stays in the scheduler's due list and syncs
+        # anyway.
+        frozen_group = (
+            get_or_create_frozen_group(session, user_id=operator_id)
+            if action == "freeze"
+            else None
+        )
         affected = 0
-        for channel in targets:
-            if action == "freeze":
-                channel.is_frozen = True
-                session.add(channel)
+        for channel, _follow in targets:
+            if frozen_group is not None:
+                apply_group_to_channel(
+                    session,
+                    channel,
+                    frozen_group,
+                    int(time.time() * 1000),
+                    user_id=operator_id,
+                )
             else:
                 _delete_channel(session, channel)
             affected += 1

@@ -101,21 +101,36 @@ def get_network_setting_row(session: Session) -> AppSetting | None:
 
 
 def load_network_settings(
-    session: Session, user_id: uuid.UUID | None = None
+    session: Session,
 ) -> dict[str, Any]:
-    """Load merged network settings for proxy resolution (includes server env metadata)."""
+    """Load merged network settings for proxy resolution (includes server env metadata).
+
+    Took a `user_id` until ticket 22, and it only ever fed the `ownerUserId`
+    field this ticket removed. `tg_app_settings` is keyed by `key` alone, so
+    there is one network configuration per deployment and no account to load it
+    *for*; the parameter said otherwise at every call site.
+    """
     row = get_network_setting_row(session)
     stored = row.value if row else {}
-    return network_settings_payload(
-        stored, owner_user_id=row.user_id if row else user_id
-    )
+    return network_settings_payload(stored)
 
 
 def network_settings_payload(
     stored: dict[str, Any] | None,
-    *,
-    owner_user_id: uuid.UUID | None = None,
 ) -> dict[str, Any]:
+    """The network settings as the admin screen renders them.
+
+    **`ownerUserId` is gone** (ticket 22). It reported `AppSetting.user_id`, the
+    "last written by" stamp this ticket dropped, and there is no honest
+    replacement: `tg_app_settings` is keyed by `key` alone, so a network
+    settings row is the deployment's and has no owner to name. Substituting the
+    caller's id would have kept the key alive while silently changing what it
+    means, from "who saved this" to "who is asking".
+
+    Safe to drop rather than null out: nothing read it. No frontend module and
+    no test names `ownerUserId`, which was checked rather than assumed — it
+    existed only because the column did.
+    """
     stored = stored or {}
     ui = {k: stored[k] for k in NETWORK_UI_KEYS if k in stored}
     proxy_urls = _stored_proxy_urls(stored)
@@ -135,8 +150,6 @@ def network_settings_payload(
         "torControlPortDefault": settings.TOR_CONTROL_PORT,
         "torSocksProxy": settings.TOR_SOCKS_PROXY,
     }
-    if owner_user_id is not None:
-        payload["ownerUserId"] = str(owner_user_id)
     return payload
 
 
@@ -234,4 +247,4 @@ def resolve_proxies(network: dict[str, Any]) -> list[str]:
 def resolve_proxies_for_user(session: Session, user_id: uuid.UUID | None) -> list[str]:
     """Load network settings and resolve proxies for a user (or global row)."""
     _ = user_id  # reserved for per-user rows when composite PK lands
-    return resolve_proxies(load_network_settings(session, user_id))
+    return resolve_proxies(load_network_settings(session))

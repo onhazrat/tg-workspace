@@ -53,10 +53,11 @@ def session() -> Session:
 
 
 def _channel(session: Session, channel_id: str, **kwargs) -> Channel:
+    # No `setting_group_id`: ticket 22 dropped it from the Channel, and the
+    # backfill no longer has one to copy.
     channel = Channel(
         id=channel_id,
         name=channel_id,
-        setting_group_id="default-global",
         **kwargs,
     )
     session.add(channel)
@@ -98,45 +99,67 @@ def test_running_it_twice_creates_nothing_new(session: Session) -> None:
     assert len(session.exec(select(ChannelFollow)).all()) == 1
 
 
-def test_an_ownerless_channel_goes_to_the_operator(session: Session) -> None:
-    """`Channel.user_id` is nullable and plenty of rows predate the stamp."""
+def test_every_backfilled_channel_goes_to_the_operator(session: Session) -> None:
+    """There is no per-Channel owner left to prefer (ticket 22).
+
+    This used to be two tests — an unowned Channel went to the operator and an
+    owned one kept its stamp. `Channel.user_id` recorded who scraped a handle
+    first, which was never the same question as who follows it, and it is gone.
+
+    Nothing is lost in practice: ticket 21 closed every path that creates a
+    Channel without a Follow before flipping enforcement, so a Channel this
+    script still finds unfollowed can only come from a backup predating ticket
+    04 — which has one account's data in it. A second account is seeded here
+    anyway, because it is the only thing that could show the operator rule being
+    applied to somebody else's row.
+    """
     operator_id = get_operator_user_id(session)
-    _channel(session, "bf_null", user_id=None)
+    stranger = create_random_user(session)
+    _channel(session, "bf_null")
 
     stats = backfill()
 
     assert stats["reassigned_to_operator"] == 1
-    follow = session.get(ChannelFollow, (operator_id, "bf_null"))
-    assert follow is not None
+    assert session.get(ChannelFollow, (operator_id, "bf_null")) is not None
+    assert session.get(ChannelFollow, (stranger.id, "bf_null")) is None
 
-
-def test_an_owned_channel_keeps_its_owner(session: Session) -> None:
-    account = create_random_user(session)
-    _channel(session, "bf_owned", user_id=account.id)
-
-    backfill()
-
-    assert session.get(ChannelFollow, (account.id, "bf_owned")) is not None
-    session.exec(delete(User).where(col(User.id) == account.id))
+    session.exec(delete(User).where(col(User.id) == stranger.id))
     session.commit()
 
 
-def test_the_backfill_copies_the_per_user_columns(session: Session) -> None:
+def test_the_backfilled_follow_starts_empty_but_keeps_the_schedule(
+    session: Session,
+) -> None:
+    """There are no per-User columns on the Channel left to copy (ticket 22).
+
+    The follow is created with unset tags, follow date and start id, which is
+    the honest row: those were one account's choices and the Channel never held
+    anyone's but the first scraper's.
+
+    **The setting group is the exception, and it is resolved rather than left
+    unset.** It was copied off the Channel before ticket 22, so a bare
+    `ensure_follow_for_channel` now writes NULL — and a group-less follow is
+    silently unschedulable: `run_auto_sync` skips the channel for ever and
+    `get_group_for_channel` answers 500. This script's only remaining caller is
+    `prestart.sh --if-needed` against a restored pre-ticket-04 backup, so that
+    would be every channel in the database. `/code-review` caught it; the
+    behaviour is pinned in `test_follow_always_has_a_group.py` as well, from the
+    other side.
+
+    `next_sync_at` is the other survivor. It is seeded from
+    `Channel.next_regular_sync_at`, a column ticket 22 keeps because the
+    backward walk is shared — and a follow with no deadline reads as "due now",
+    which would stampede every channel on the first tick after a backfill.
+    """
     operator_id = get_operator_user_id(session)
-    _channel(
-        session,
-        "bf_copy",
-        tags=["x"],
-        followed_at=42,
-        start_id=3,
-        next_regular_sync_at=777,
-    )
+    _channel(session, "bf_copy", next_regular_sync_at=777)
 
     backfill()
 
     follow = session.get(ChannelFollow, (operator_id, "bf_copy"))
     assert follow is not None
-    assert (follow.tags, follow.followed_at, follow.start_id) == (["x"], 42, 3)
+    assert (follow.tags, follow.followed_at, follow.start_id) == ([], None, None)
+    assert follow.setting_group_id is not None
     assert follow.next_sync_at == 777
 
 
@@ -181,17 +204,35 @@ def test_the_audit_is_clean_after_the_backfill(session: Session) -> None:
     assert AWAITING_COLLECTION not in findings
 
 
-def test_the_audit_counts_a_null_owner_as_drift(session: Session) -> None:
-    """The old `Channel.user_id` stamp, which ticket 22 drops.
+def test_the_audit_no_longer_counts_a_channel_owner(session: Session) -> None:
+    """Ticket 22 dropped the stamp, and the audit dropped it too — on its own.
 
-    Still worth counting until then: it is how you tell whether anything still
-    depends on the column before dropping it.
+    This used to assert that an unowned Channel showed up as
+    `tg_channels.null_owner`, which was how you told whether anything still
+    depended on the column before removing it. Nothing does, and the column is
+    gone.
+
+    The assertion that earns its place now is about the *derivation*:
+    `_owner_column_models` filters `SCOPES` with `hasattr`, so a table stops
+    being audited for owners the moment its column goes rather than when
+    somebody remembers to edit a list. A hard-coded list would still be
+    reporting a key for a column that does not exist.
     """
-    _channel(session, "audit_null", user_id=None)
+    _channel(session, "audit_null")
 
     findings = audit()
 
-    assert findings["tg_channels.null_owner"] == 1
+    assert "tg_channels.null_owner" not in findings
+    assert "tg_posts.null_owner" not in findings
+
+    # Both directions, so this cannot pass because the owner scan broke
+    # altogether: the tables that still stamp an owner are still audited.
+    from scripts.audit_tenancy_drift import _owner_column_models
+
+    audited = {str(model.__tablename__) for model in _owner_column_models()}
+    assert "tg_summaries" in audited
+    assert "tg_channels" not in audited
+    assert "tg_posts" not in audited
 
 
 def test_a_channel_followed_by_someone_else_is_still_unfollowed_by_you(

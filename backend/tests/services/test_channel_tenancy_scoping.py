@@ -195,33 +195,33 @@ def test_channel_list_reads_tags_from_the_callers_own_follow(
 def test_the_no_follow_fallback_is_unreachable_through_the_list(
     session: Session, user: User
 ) -> None:
-    """Where the old "falls back when no follow exists" test went.
+    """There is no no-follow fallback any more, and that is ticket 22's change.
 
-    `channel_to_camel` takes a channel's tags/startId/startTime/followedAt/
-    discoveredVia from the caller's Follow when there is one, and from the
-    Channel when there is not. This file used to test that second branch through
-    `list_channels`, by deleting the follow and asserting the row still appeared
-    with the Channel's own values.
+    `channel_to_camel` used to take tags/startId/startTime/followedAt/
+    discoveredVia from the caller's Follow when there was one and from the
+    **Channel** when there was not. Ticket 22 dropped the Channel's copies, so
+    the second branch has nothing to read: `follow=None` now means "this account
+    does not follow the channel", and the honest answer is the empty one rather
+    than whichever values another account chose.
 
-    Ticket 21 PR 4 makes that unreachable from here, and not by accident:
-    `list_channels` scopes on an EXISTS against `tg_channel_follows`, so a
-    Channel is *visible* only to accounts that follow it — and `follows_for_user`
-    then finds the very row whose absence the branch is about. Visible and
-    unfollowed is not a state this route can produce any more.
+    Both halves are asserted, because either alone would pass for the wrong
+    reason. The serialiser must return empty for no follow — a fallback added
+    back would fail here — and the *list* must still show the real tags, which
+    is what proves the values did not simply disappear when the column did.
 
-    Asserted rather than dropped, because the branch is still live on the
-    single-channel path (`PUT /channels/{id}` serialises one Channel and may
-    legitimately have no Follow in hand), and this is the line between the two.
-    `channel_to_camel` is a pure transform, so the branch is tested where it
-    actually runs.
+    Ticket 21 PR 4 already made "visible but unfollowed" unreachable through
+    `list_channels`: it scopes on an EXISTS against `tg_channel_follows`, so a
+    Channel is visible only to accounts that follow it. That is why the empty
+    branch has to be tested directly on the transform.
     """
     add_test_channel(session, "no-follow-tags", user_id=user.id, tags=["channel-tag"])
     channel = session.get(Channel, "no-follow-tags")
     assert channel is not None
 
-    assert [t["name"] for t in channel_to_camel(channel, follow=None)["tags"]] == [
-        "channel-tag"
-    ]
+    assert channel_to_camel(channel, follow=None)["tags"] == []
+    assert channel_to_camel(channel, follow=None)["startTime"] is None
+    assert channel_to_camel(channel, follow=None)["followedAt"] is None
+    assert channel_to_camel(channel, follow=None)["discoveredVia"] is None
 
     listed = next(
         c
@@ -229,8 +229,8 @@ def test_the_no_follow_fallback_is_unreachable_through_the_list(
         if c["id"] == "no-follow-tags"
     )
     assert [t["name"] for t in listed["tags"]] == ["channel-tag"], (
-        "the follow mirrors the Channel's tags at creation, so the listed row "
-        "agrees with the fallback here — they diverge only after an edit"
+        "the tags live on the follow now, and the list reads them from there — "
+        "if this is empty the values were lost rather than moved"
     )
 
 

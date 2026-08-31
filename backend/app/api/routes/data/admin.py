@@ -165,10 +165,7 @@ def get_network_settings(
     _current_user: CurrentUser,
 ) -> AppSettingResponse:
     row = get_network_setting_row(session)
-    value = network_settings_payload(
-        row.value if row else None,
-        owner_user_id=row.user_id if row else _current_user.id,
-    )
+    value = network_settings_payload(row.value if row else None)
     return AppSettingResponse.model_validate({"key": "network", "value": value})
 
 
@@ -183,12 +180,12 @@ def put_network_settings(
     # Replace rather than merge: `merge_network_put` has already merged with the
     # rules that understand proxy lists and Tor modes, so a second blind merge
     # in the store would resurrect proxy URLs the operator just removed.
-    replace_global_setting(session, "network", merged, user_id=_current_user.id)
+    replace_global_setting(session, "network", merged)
     touch_sync(session, "settings")
     return AppSettingResponse.model_validate(
         {
             "key": "network",
-            "value": network_settings_payload(merged, owner_user_id=_current_user.id),
+            "value": network_settings_payload(merged),
         }
     )
 
@@ -264,7 +261,7 @@ def put_setting(
         value = put_user_setting(session, key, body, user_id=current_user.id)
     else:
         ADMIN_ONLY_CALLABLE(session, current_user)
-        value = put_global_setting(session, key, body, user_id=current_user.id)
+        value = put_global_setting(session, key, body)
     touch_sync(session, "settings")
     return AppSettingResponse(key=key, value=value)
 
@@ -306,6 +303,6 @@ def export_data(
     row, which is far more than a worker can hold at once.
     """
     return StreamingResponse(
-        stream_export_data(session),
+        stream_export_data(session, user_id=_current_user.id),
         media_type="application/json",
     )

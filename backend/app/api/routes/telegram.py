@@ -58,7 +58,7 @@ def _resolve_proxy_concurrency(
     user_id: uuid.UUID | None = None,
 ) -> tuple[int, dict[str, int]] | None:
     if session is not None and user_id is not None:
-        network = load_network_settings(session, user_id)
+        network = load_network_settings(session)
         return resolve_proxy_concurrency(network)
     return None
 

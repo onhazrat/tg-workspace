@@ -173,17 +173,23 @@ def test_a_surviving_channel_still_resolves_its_group_after_its_scraper_leaves()
 ):
     """The other half of the cascade, and the half review found missing.
 
-    A surviving Channel is not enough — it has to still *work*. Auto-follow files
-    a Channel under whoever scraped the handle first and
-    `ensure_follow_for_channel` copies the Channel's group id onto each follow,
-    so the second follower's channel and follow both name the **first**
-    follower's setting group. Ticket 21's cascading key then takes that group
-    with the account, and `tg_channels.setting_group_id` has no key of its own to
-    repoint it: the row is left naming a group that is gone, and
-    `get_group_for_channel` answers 500 for a channel B legitimately follows.
+    A surviving Channel is not enough — it has to still *work*. Before ticket 22
+    a follow copied its group id off the Channel, which auto-follow files under
+    whoever scraped the handle first, so the second follower's row named the
+    **first** follower's setting group. Ticket 21's cascading key then takes
+    that group with the account and leaves the follow naming a group that is
+    gone, so `schedule_group_id` resolves to nothing and auto-sync skips a
+    channel B legitimately follows.
 
     Reachable by a plain user through `DELETE /users/me`, not only by an Admin,
     which is why `release_groups_of_deleted_account` runs on both delete paths.
+
+    **Ticket 22 removed one of the two stranded rows and left the other.** The
+    Channel names no group at all now, so it cannot be stranded and cannot need
+    repointing; the follow still can, and still does. The scenario is therefore
+    set up explicitly — a follow pointing at another account's group is the
+    legacy state this repointing exists for, and it is no longer something a
+    creation path will produce on its own.
 
     The two accounts are what make this test able to fail at all — with one
     account there is no survivor to strand, which is how the first version of
@@ -192,7 +198,7 @@ def test_a_surviving_channel_still_resolves_its_group_after_its_scraper_leaves()
     from app.models import User
     from app.models_tg import Channel, ChannelFollow
     from app.services.channel_setting_groups import (
-        get_group_for_channel,
+        ensure_default_group,
         release_groups_of_deleted_account,
     )
     from app.services.follows import ensure_follow_for_channel
@@ -206,16 +212,18 @@ def test_a_surviving_channel_still_resolves_its_group_after_its_scraper_leaves()
         channel = add_test_channel(
             session, "orphan-group-ch", name="orphan-group-ch", user_id=scraper.id
         )
-        # The second follower inherits the Channel's group id, exactly as
-        # auto-follow leaves it.
-        ensure_follow_for_channel(session, channel, user_id=follower.id)
+        doomed_group = ensure_default_group(session, user_id=scraper.id).id
+        # The second follower pointed at the scraper's group, exactly as a
+        # pre-ticket-22 auto-follow left it.
+        ensure_follow_for_channel(
+            session,
+            channel,
+            user_id=follower.id,
+            values={"setting_group_id": doomed_group},
+        )
         session.commit()
 
-        doomed_group = channel.setting_group_id
-        assert doomed_group.endswith(str(scraper.id)), (
-            "the fixture no longer files the Channel under the scraper's group, "
-            "so this test cannot strand anything"
-        )
+        assert doomed_group.endswith(str(scraper.id))
 
         release_groups_of_deleted_account(session, scraper.id)
         session.delete(session.get(User, scraper.id))
@@ -224,12 +232,6 @@ def test_a_surviving_channel_still_resolves_its_group_after_its_scraper_leaves()
         session.expire_all()
         survivor = session.get(Channel, "orphan-group-ch")
         assert survivor is not None
-        assert survivor.setting_group_id != doomed_group, (
-            "the Channel still names the deleted account's group"
-        )
-        # The assertion that would have caught it: not "is the id different"
-        # but "does it resolve" — `get_group_for_channel` is the 500.
-        assert get_group_for_channel(session, survivor) is not None
 
         their_follow = session.exec(
             select(ChannelFollow).where(
@@ -241,10 +243,17 @@ def test_a_surviving_channel_still_resolves_its_group_after_its_scraper_leaves()
             "the surviving follow still names the deleted account's group, so "
             "`schedule_group_id` resolves to nothing and auto-sync skips it"
         )
+        # Not "is the id different" but "does it resolve" — the assertion that
+        # would have caught the original bug.
+        assert their_follow.setting_group_id is not None
+        assert (
+            session.get(ChannelSettingGroup, their_follow.setting_group_id) is not None
+        )
 
 
 def test_a_colliding_setting_group_is_merged_rather_than_stamped(
     legacy_owner_schema: None,
+    legacy_channel_group_column: None,
 ) -> None:
     """The trap ticket 34 fell into, exercised against the constraint.
 
@@ -316,6 +325,7 @@ def test_a_colliding_setting_group_is_merged_rather_than_stamped(
 
 def test_an_unowned_group_with_no_counterpart_is_adopted(
     legacy_owner_schema: None,
+    legacy_channel_group_column: None,
 ) -> None:
     """The other branch: nothing to merge into, so the operator takes it.
 

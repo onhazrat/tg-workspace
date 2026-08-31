@@ -35,8 +35,9 @@ from app.services.channel_tags import (
     reject_reserved_virtual_group_tags,
 )
 from app.services.follows import (
-    MIRRORED_CHANNEL_FIELDS,
+    follow_values_from_body,
     follows_for_user,
+    get_follow,
     remove_follow,
     sync_follow_settings,
 )
@@ -383,8 +384,16 @@ def list_channels(
         stats_map = compute_channel_stats_batch(session, [c.name for c in channels])
     result: list[dict[str, Any]] = []
     for ch in channels:
-        group = groups_by_id.get(ch.setting_group_id)
-        row = channel_to_camel(ch, group=group, follow=follows_by_channel_id.get(ch.id))
+        # The group comes off this account's follow since ticket 22, so the
+        # grid renders each follower's own sync policy rather than whichever
+        # one the first follower of the handle picked.
+        follow = follows_by_channel_id.get(ch.id)
+        group = (
+            groups_by_id.get(follow.setting_group_id)
+            if follow is not None and follow.setting_group_id is not None
+            else None
+        )
+        row = channel_to_camel(ch, group=group, follow=follow)
         row.pop("bio", None)
         if include_stats and ch.name in stats_map:
             row["stats"] = stats_map[ch.name]
@@ -406,15 +415,26 @@ def upsert_channel(
         reject_inherited_channel_fields(body)
         apply_channel_fields(ch, normalized, session=session)
         ch.updated_at = utc_now()
-        group = get_group_for_channel(session, ch)
         # Only the fields this particular edit touched — see
-        # `sync_follow_settings` for why mirroring the full set on every call
-        # is wrong. `setting_group_id` can never be one of these:
+        # `sync_follow_settings` for why writing the full set on every call is
+        # wrong. `setting_group_id` can never be one of these:
         # `apply_channel_fields` above already rejected it with a 400 if the
-        # body carried it.
-        touched_follow_fields = [
-            field for field in MIRRORED_CHANNEL_FIELDS if field in normalized
-        ]
+        # body carried it, and `follow_values_from_body` refuses it besides.
+        follow_values = follow_values_from_body(normalized)
+        # **This route is also how a second account follows an existing
+        # Channel.** A `Channel` is shared corpus that anybody may follow, so a
+        # PUT from an account with no follow yet is a *create* of the relation,
+        # not an edit of one — and since ticket 22 moved the group onto the
+        # follow, that account has no group here to read. Resolving their own
+        # default is what the create branch below does; asking
+        # `get_group_for_channel` first answered 500 instead, which turned
+        # "follow a handle somebody else scraped" into an error.
+        existing_follow = get_follow(session, user_id=user_id, channel_id=ch.id)
+        if existing_follow is None or existing_follow.setting_group_id is None:
+            group = ensure_default_group(session, user_id=user_id)
+            follow_values["setting_group_id"] = group.id
+        else:
+            group = get_group_for_channel(session, ch, user_id=user_id)
     else:
         name = normalized.get("name", channel_id)
         is_restricted = bool(
@@ -429,12 +449,9 @@ def upsert_channel(
             k: v
             for k, v in normalized.items()
             if k in Channel.model_fields
-            and k not in ("id", "name", "user_id", "setting_group_id")
+            and k not in ("id", "name")
             and k not in SERVER_MANAGED_CHANNEL_FIELDS
         }
-        if "tags" in extras:
-            reject_reserved_virtual_group_tags(extras["tags"])
-            extras["tags"] = normalize_channel_tags(extras["tags"])
         if group.regular_sync_enabled:
             extras.setdefault(
                 "next_regular_sync_at",
@@ -450,14 +467,16 @@ def upsert_channel(
         ch = Channel(
             id=channel_id,
             name=name,
-            user_id=user_id,
-            setting_group_id=group.id,
             **extras,
         )
         # A brand-new Channel has no existing Follow to leave alone, so its
-        # first Follow mirrors every field ticket 22 will drop from Channel —
-        # matching what `ensure_follow_for_channel` would have written.
-        touched_follow_fields = list(MIRRORED_CHANNEL_FIELDS)
+        # first Follow takes every follow-owned field the body named, plus the
+        # group resolved for *this* account just above. `setting_group_id` is
+        # added here rather than coming through the body, which
+        # `follow_values_from_body` refuses on purpose.
+        follow_values = follow_values_from_body(normalized) | {
+            "setting_group_id": group.id
+        }
     session.add(ch)
     # The follow is a Core INSERT that executes immediately, so the Channel has
     # to reach the database before it — but in the *same* transaction, or a
@@ -466,16 +485,23 @@ def upsert_channel(
     #
     # `sync_follow_settings` rather than `ensure_follow_for_channel`: this is
     # the endpoint an edit reaches through, so an existing Follow's tags/start
-    # time/etc. are meant to move with the new values, not survive them. See
-    # `channel_to_camel`, which is why this has to stay current: it reads
-    # these fields off the Follow, not `ch`.
+    # time/etc. are meant to move with the new values, not survive them. Since
+    # ticket 22 that Follow is the *only* place they land — `ch` no longer has
+    # these columns, so a value that does not reach the follow is simply lost.
     session.flush()
-    sync_follow_settings(session, ch, user_id=user_id, fields=touched_follow_fields)
+    sync_follow_settings(session, ch, user_id=user_id, values=follow_values)
     session.commit()
     session.refresh(ch)
     touch_sync(session, "channels")
-    group = get_group_for_channel(session, ch)
-    return channel_to_camel(ch, group=group)
+    group = get_group_for_channel(session, ch, user_id=user_id)
+    # The Follow has to be re-read and handed to the serialiser: it now carries
+    # every per-User field in the response, so returning without it would answer
+    # this edit with empty tags and no start time.
+    return channel_to_camel(
+        ch,
+        group=group,
+        follow=get_follow(session, user_id=user_id, channel_id=ch.id),
+    )
 
 
 def unfollow_channel(
@@ -672,10 +698,9 @@ def bulk_update_channel_tags(
             )
         deduped_updates[channel_id] = update.get("tags", [])
 
-    by_id = {
-        channel.id: channel
-        for channel, _follow in followed_channels_for(session, user_id=operator_id)
-    }
+    followed = followed_channels_for(session, user_id=operator_id)
+    by_id = {channel.id: channel for channel, _follow in followed}
+    follows_by_id = {channel.id: follow for channel, follow in followed}
 
     missing = sorted(
         channel_id for channel_id in deduped_updates if channel_id not in by_id
@@ -691,19 +716,37 @@ def bulk_update_channel_tags(
     for channel_id, raw_tags in deduped_updates.items():
         channel = by_id[channel_id]
         reject_reserved_virtual_group_tags(raw_tags)
-        channel.tags = normalize_channel_tags(raw_tags)
         channel.updated_at = utc_now()
         session.add(channel)
-        # Tags are read from the Follow now (ticket 15) — see
-        # `channel_to_camel` — so the edit has to reach the operator's Follow
-        # row too, or `list_channels` would keep showing the old tags.
-        # `fields=["tags"]`, not the full mirrored set: this endpoint only
-        # ever changes tags, and mirroring the rest too would overwrite a
-        # Follow's own start time/discovered-via with the Channel's, on a
-        # request that never touched either.
-        sync_follow_settings(session, channel, user_id=operator_id, fields=["tags"])
+        # Tags live only on the Follow since ticket 22, so this write *is* the
+        # edit rather than a mirror of one made on the Channel. Just `tags`,
+        # not the full follow-owned set: this endpoint only ever changes tags,
+        # and writing the rest would overwrite a Follow's own start time and
+        # discovered-via on a request that never touched either.
+        sync_follow_settings(
+            session,
+            channel,
+            user_id=operator_id,
+            values={"tags": normalize_channel_tags(raw_tags)},
+        )
+        # `sync_follow_settings` is a Core INSERT, so the ORM's identity map
+        # still holds the row `followed_channels_for` loaded a few lines up,
+        # with the *old* tags. Expiring it makes the read below reload inside
+        # this transaction — without it the endpoint answers every edit with the
+        # tags it just replaced.
+        follow = follows_by_id.get(channel.id)
+        if follow is not None:
+            session.expire(follow)
         updated_rows.append(
-            channel_to_camel(channel, group=groups_by_id.get(channel.setting_group_id))
+            channel_to_camel(
+                channel,
+                group=(
+                    groups_by_id.get(follow.setting_group_id)
+                    if follow is not None and follow.setting_group_id is not None
+                    else None
+                ),
+                follow=follow,
+            )
         )
 
     session.commit()

@@ -5,10 +5,14 @@ deployment scheduler policy stays in `tg_app_settings.sync`, the scheduler's own
 counters move to `tg_app_settings.sync_runtime`, and the per-channel defaults a
 person picks move to `tg_user_settings.sync_prefs`.
 
-**Idempotent, because it runs on every deploy.** `scripts/prestart.sh` calls
-`alembic upgrade head`, and the carve is written so a second pass over an
-already-carved row does nothing: once the `sync` row holds only policy fields
-there is nothing left to extract, and both inserts are `ON CONFLICT DO NOTHING`.
+**Re-runnable, but it does not re-run.** The carve is a no-op over an
+already-carved row: once the `sync` row holds only policy fields there is
+nothing left to extract, and both inserts are `ON CONFLICT DO NOTHING`. What an
+earlier version of this docstring claimed on top of that was wrong, and the
+correction matters more than the property does. `scripts/prestart.sh` calls
+`alembic upgrade head` on every deploy, but alembic skips every revision already
+stamped in `alembic_version`, so this one runs **exactly once per database**.
+Nothing it leaves undone is picked up later.
 
 **Behaviour-neutral.** `jobs/settings.load_sync_settings` reassembles the three
 rows into the dict callers saw before, so `GET`/`PUT /data/settings/sync` keep
@@ -19,9 +23,23 @@ there is none — a fresh install migrated before its first superuser is created
 The rule is the one `services/follows.resolve_follow_owner` already uses so the
 two cannot disagree: the settings row's own `user_id` stamp, else the account
 matching `FIRST_SUPERUSER`, else the oldest superuser. If there is no account at
-all the preference fields are **left in the `sync` row** rather than dropped, so
-the next deploy — by which time the bootstrap superuser exists — completes the
-move. Deleting them would lose real settings to save one query.
+all the preference fields are **left in the `sync` row** rather than dropped,
+and they stay there for good: this revision is stamped and never runs again, so
+there is no later pass to finish the move.
+
+That is untidy rather than lossy, which is why it is still the right trade.
+`jobs/settings.load_sync_settings` merges the whole global `sync` row *before*
+the per-User one, so a stranded preference is read exactly as it was, and the
+first `save_sync_settings` splits it out to `tg_user_settings.sync_prefs` and
+rewrites the global row with the policy fields alone. The account that did not
+exist at migration time therefore adopts them the first time somebody saves.
+Deleting them here would lose real settings to save one query.
+
+Reachable only by a database that holds a carved `sync` row and has **no account
+at all** — not a fresh install, which has no `sync` row to carve and returns
+early. Tickets 20 and 34 each cite "a migration that leaves work for the next
+deploy leaves it undone for ever" as the mistake they refuse to copy; this is
+the paragraph that made it.
 
 Revision ID: d7e8f9a0b1c2
 Revises: c1d2e3f4a5b6
@@ -145,9 +163,11 @@ def _carve_sync_blob() -> None:
             )
         )
     elif prefs:
-        # No account to own them yet. Keep them where they are so the next
-        # deploy finishes the job; the reader falls back to defaults meanwhile,
-        # which is what an install with no users would show anyway.
+        # No account to own them yet, so keep them where they are. This is the
+        # end of the line, not a deferral: alembic stamps the revision and never
+        # runs it again. They stay readable because `load_sync_settings` merges
+        # this row first, and the first save routes them to `sync_prefs`. See
+        # the module docstring.
         policy = {k: v for k, v in policy.items() if k not in PREF_FIELDS} | prefs
         _replace_sync(bind, policy)
         return

@@ -50,7 +50,7 @@ import json
 import re
 import sys
 from collections import defaultdict
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
 
 # Traefik's CLF line, e.g.
@@ -212,7 +212,7 @@ def _parse_clf(line: str) -> tuple[str, float, float | None, int, int, str] | No
 
 
 def render(buckets: dict[str, Bucket], by: str, top: int) -> str:
-    keys = {
+    keys: dict[str, Callable[[Bucket], float]] = {
         "total": lambda b: b.total_ms,
         "mean": lambda b: b.total_ms / b.count,
         "max": lambda b: b.max_ms,

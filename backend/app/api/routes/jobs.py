@@ -15,6 +15,7 @@ from app.jobs.scheduler import get_job_status, request_job_run, set_job_enabled_
 from app.jobs.settings import JOB_IDS
 from app.jobs.sync_queue import enqueue_sync_job
 from app.models import User
+from app.models_tg import ChannelSettingGroup
 from app.schemas.jobs import (
     DrainLaneResponse,
     JobStatusEntry,
@@ -148,22 +149,36 @@ def _resolve_sync_entries(
     # The Channels this account follows, not `Channel.user_id == operator OR
     # NULL` (ticket 21). Same set on a single-account deployment, and the right
     # one as soon as there are two.
+    # Paired with each follow since ticket 22: the setting group moved onto the
+    # follow, so which group governs a channel is a question about this
+    # account's row rather than about the shared Channel.
     operator_channels = {
-        channel.id: channel
-        for channel, _follow in followed_channels_for(session, user_id=operator_id)
+        channel.id: (channel, follow)
+        for channel, follow in followed_channels_for(session, user_id=operator_id)
     }
     groups_by_id = load_groups_by_id(session)
 
-    if sync_mode == "sync_all":
-        candidates = list(operator_channels.values())
-    elif sync_mode == "recheck_restricted":
+    # Keyed by channel id rather than carrying the follow row around: naming
+    # `ChannelFollow` in this module would trip the one-writer guard in
+    # `test_channel_creation_paths.py`, which matches the identifier anywhere
+    # in a file and accepts that false positive on purpose.
+    group_ids = {
+        channel_id: follow.setting_group_id
+        for channel_id, (_channel, follow) in operator_channels.items()
+    }
+
+    def _group_of(channel_id: str) -> ChannelSettingGroup | None:
+        group_id = group_ids.get(channel_id)
+        return groups_by_id.get(group_id) if group_id is not None else None
+
+    if sync_mode == "recheck_restricted":
         candidates = [
-            ch
-            for ch in operator_channels.values()
-            if groups_by_id.get(ch.setting_group_id) is not None
-            and groups_by_id[ch.setting_group_id].is_unavailable_on_web_view
+            pair
+            for channel_id, pair in operator_channels.items()
+            if (group := _group_of(channel_id)) is not None
+            and group.is_unavailable_on_web_view
         ]
-    elif channel_ids:
+    elif sync_mode != "sync_all" and channel_ids:
         candidates = [
             operator_channels[cid] for cid in channel_ids if cid in operator_channels
         ]
@@ -171,8 +186,8 @@ def _resolve_sync_entries(
         candidates = list(operator_channels.values())
 
     entries: list[tuple[str, str]] = []
-    for ch in candidates:
-        group = groups_by_id.get(ch.setting_group_id)
+    for ch, _follow in candidates:
+        group = _group_of(ch.id)
         if group is None:
             continue
         if channel_allows_sync_operation(group, sync_mode):

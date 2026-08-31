@@ -116,7 +116,29 @@ def create_followed_channel(
             # just asked to follow once enforcement is on. The early return
             # here used to skip it, which the dual-write guard cannot see —
             # the module does call a follow writer, on the other branch.
-            if ensure_follow_for_channel(session, existing, user_id=user_id):
+            #
+            # Ticket 22: the follow gets *this* account's own values rather
+            # than a copy of the Channel's. That is the point of the column
+            # move — the first follower's start time and discovery provenance
+            # are theirs, and inheriting them would tell this account it began
+            # following at a moment it did not. The setting group has to be
+            # resolved from this account's own groups for the same reason;
+            # copying the Channel's handed over a group belonging to whoever
+            # scraped the handle first.
+            if ensure_follow_for_channel(
+                session,
+                existing,
+                user_id=user_id,
+                values={
+                    "setting_group_id": ensure_default_group(
+                        session, user_id=user_id
+                    ).id,
+                    "followed_at": int(time.time() * 1000),
+                    "tags": [],
+                    "start_time": effective_start_time,
+                    "discovered_via": discovered_via,
+                },
+            ):
                 session.commit()
             return False
         if telemetry_url and telemetry:
@@ -131,12 +153,7 @@ def create_followed_channel(
             name=clean,
             display_name=display_name,
             photo_url=photo_url,
-            start_time=effective_start_time,
             last_updated=now,
-            followed_at=now,
-            tags=[],
-            setting_group_id=group.id,
-            discovered_via=discovered_via,
             next_regular_sync_at=(
                 compute_next_regular_sync_at_from_last_updated(
                     now,
@@ -147,13 +164,23 @@ def create_followed_channel(
                 else None
             ),
             next_dynamic_sync_at=None,
-            user_id=user_id,
         )
         session.add(channel)
         # Same transaction as the Channel it belongs to: see the comment in
         # `channels.py`.
         session.flush()
-        ensure_follow_for_channel(session, channel, user_id=user_id)
+        ensure_follow_for_channel(
+            session,
+            channel,
+            user_id=user_id,
+            values={
+                "setting_group_id": group.id,
+                "followed_at": now,
+                "tags": [],
+                "start_time": effective_start_time,
+                "discovered_via": discovered_via,
+            },
+        )
         session.commit()
         touch_sync(session, "channels")
         return True

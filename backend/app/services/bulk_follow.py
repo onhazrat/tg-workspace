@@ -245,7 +245,7 @@ def _load_proxy_concurrency(
     if user_id is None:
         return None
     with Session(engine) as session:
-        network = load_network_settings(session, user_id)
+        network = load_network_settings(session)
         return resolve_proxy_concurrency(network)
 
 

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import time
-import uuid
 from collections.abc import Iterable
 from typing import Any, cast
 
@@ -35,8 +34,18 @@ def _confirm_gap(
     channel_name: str,
     post_id: int,
     job_id: str | None,
-    user_id: uuid.UUID | None,
 ) -> None:
+    """Record one confirmed gap.
+
+    Took a `user_id` until ticket 22, and wrote it — `tg_post_sync_state` is
+    `FOLLOW_SCOPED`, so the stamp said who happened to be syncing when the gap
+    was noticed and never decided who could see it. It is dropped here rather
+    than ignored: ticket 19 had to guard an ignored `user_id` on
+    `upsert_sync_log` because a uniform importer signature required one, and
+    nothing requires one on this path. SQLModel drops an unknown keyword
+    without complaining, so the four signatures that threaded it here would
+    have gone on claiming to record an owner while writing nothing.
+    """
     existing = session.exec(
         select(PostSyncState).where(
             PostSyncState.channel_name == channel_name,
@@ -52,7 +61,6 @@ def _confirm_gap(
             state="confirmed_gap",
             confirmed_at=int(time.time() * 1000),
             confirmed_job_id=job_id,
-            user_id=user_id,
         )
     )
 
@@ -65,7 +73,6 @@ def _gaps_between_neighbors(
     high_id: int,
     session_seen_ids: set[int],
     job_id: str | None,
-    user_id: uuid.UUID | None,
 ) -> None:
     if high_id <= low_id + 1:
         return
@@ -81,7 +88,6 @@ def _gaps_between_neighbors(
             channel_name=channel_name,
             post_id=gap_id,
             job_id=job_id,
-            user_id=user_id,
         )
 
 
@@ -91,7 +97,6 @@ def record_gaps_from_page(
     page_post_ids: list[int],
     *,
     job_id: str | None,
-    user_id: uuid.UUID | None,
     session_seen_ids: set[int],
 ) -> None:
     """Mark confirmed_gap for IDs between visible neighbors on a page fetch."""
@@ -107,7 +112,6 @@ def record_gaps_from_page(
             high_id=high_id,
             session_seen_ids=session_seen_ids,
             job_id=job_id,
-            user_id=user_id,
         )
 
 
@@ -118,7 +122,6 @@ def record_gaps_to_existing_post(
     existing_post_id: int,
     *,
     job_id: str | None,
-    user_id: uuid.UUID | None,
     session_seen_ids: set[int],
 ) -> None:
     """On incremental sync, evaluate gaps between new head posts and a known DB post."""
@@ -136,7 +139,6 @@ def record_gaps_to_existing_post(
         high_id=high_id,
         session_seen_ids=session_seen_ids,
         job_id=job_id,
-        user_id=user_id,
     )
 
 

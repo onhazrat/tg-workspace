@@ -137,13 +137,22 @@ def channel_to_camel(
 
     `follow` is the caller's `ChannelFollow` row for this channel, when the
     caller has one (ticket 15). `tags`, `startId`, `startTime`, `followedAt`
-    and `discoveredVia` are the per-User columns ticket 04 copied onto
-    `ChannelFollow` and ticket 22 drops from `Channel` — while both tables
-    carry them, the Follow is the one to read, because it is the copy a second
-    follower of the same handle can have its own values in. `Channel`'s own
-    values are the fallback for a channel nobody has a Follow row for yet
-    (pre-backfill, or the flag-off callers that still pass none), so this never
-    turns a present value into a missing one.
+    and `discoveredVia` are the per-User fields ticket 04 copied onto
+    `ChannelFollow` and ticket 22 dropped from `Channel`, so the Follow is now
+    the only place they exist: it is the copy a second follower of the same
+    handle can have its own values in.
+
+    **No follow means no per-User values**, not a fall back to the Channel's —
+    there is nothing left to fall back to. A caller passing `follow=None` is
+    describing a channel this account does not follow, and the honest answer is
+    the empty one rather than whichever values another account chose. Every
+    caller that serves an account's own channel passes its Follow; the ones
+    that legitimately pass none (an Admin export walking the corpus) get empty
+    per-User fields, which is what those fields mean for a row nobody follows.
+
+    The keys are always present, with `null`/`[]` values, because the payload
+    shape is what `ChannelResponse` declares and dropping a key would change the
+    wire format for a case that used to carry one.
     """
     from app.services.channel_setting_groups import effective_channel_fields
 
@@ -161,18 +170,16 @@ def channel_to_camel(
         "videos": ch.videos,
         "files": ch.files,
         "links": ch.links,
-        "startId": follow.start_id if follow is not None else ch.start_id,
-        "startTime": follow.start_time if follow is not None else ch.start_time,
-        "tags": normalize_channel_tags(follow.tags if follow is not None else ch.tags),
+        "startId": follow.start_id if follow is not None else None,
+        "startTime": follow.start_time if follow is not None else None,
+        "tags": normalize_channel_tags(follow.tags if follow is not None else []),
         "lastUpdated": ch.last_updated,
         "nextRegularSyncAt": ch.next_regular_sync_at,
         "nextDynamicSyncAt": ch.next_dynamic_sync_at,
         "language": ch.language,
-        "followedAt": follow.followed_at if follow is not None else ch.followed_at,
+        "followedAt": follow.followed_at if follow is not None else None,
         "telegramChatId": ch.telegram_chat_id,
-        "discoveredVia": (
-            follow.discovered_via if follow is not None else ch.discovered_via
-        ),
+        "discoveredVia": follow.discovered_via if follow is not None else None,
         "historyCompleteToCutoff": ch.history_complete_to_cutoff,
         "historyReachedChannelStart": ch.history_reached_channel_start,
         "anchorPostId": ch.anchor_post_id,

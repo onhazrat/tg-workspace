@@ -18,6 +18,7 @@ from app.services.bulk_follow import (
     clear_follow_jobs_for_tests,
     get_follow_job,
 )
+from app.services.follows import get_follow, get_operator_user_id
 from app.services.scraper_jobs import clear_jobs_for_tests, get_job
 
 DATA = f"{settings.API_V1_STR}/data"
@@ -170,17 +171,24 @@ def test_bulk_follow_mixed_results_and_discovered_via(client: TestClient) -> Non
         assert set(sync_job.channels.keys()) == {"new-ok"}
 
     with Session(engine) as session:
+        operator_id = get_operator_user_id(session)
+        assert operator_id is not None
         ok = session.get(Channel, "new-ok")
         assert ok is not None
-        assert ok.discovered_via == {
+        # Ticket 22: provenance, the follow timestamp and the setting group all
+        # live on the follow now. How *you* came to follow a handle is yours —
+        # on the Channel it reported one account's discovery for everybody.
+        ok_follow = get_follow(session, user_id=operator_id, channel_id="new-ok")
+        assert ok_follow is not None
+        assert ok_follow.discovered_via == {
             "channelName": "source-ch",
             "postId": 42,
             "timestamp": 1_700_000_000_000,
         }
-        assert ok.followed_at is not None
+        assert ok_follow.followed_at is not None
         default_group = session.exec(
             select(ChannelSettingGroup).where(
-                ChannelSettingGroup.id == ok.setting_group_id
+                ChannelSettingGroup.id == ok_follow.setting_group_id
             )
         ).first()
         assert default_group is not None
@@ -188,9 +196,13 @@ def test_bulk_follow_mixed_results_and_discovered_via(client: TestClient) -> Non
 
         restricted = session.get(Channel, "new-restricted")
         assert restricted is not None
+        restricted_follow = get_follow(
+            session, user_id=operator_id, channel_id="new-restricted"
+        )
+        assert restricted_follow is not None
         group = session.exec(
             select(ChannelSettingGroup).where(
-                ChannelSettingGroup.id == restricted.setting_group_id
+                ChannelSettingGroup.id == restricted_follow.setting_group_id
             )
         ).first()
         assert group is not None

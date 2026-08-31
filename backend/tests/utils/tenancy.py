@@ -119,8 +119,16 @@ def follow_channels(
     for name in channel_names:
         channel = session.get(Channel, name)
         if channel is None:
-            channel = Channel(id=name, name=name, setting_group_id=group.id)
+            channel = Channel(id=name, name=name)
             session.add(channel)
             session.flush()
-        ensure_follow_for_channel(session, channel, user_id=owner)
+        # The group goes on the follow since ticket 22 — the Channel no longer
+        # names one, so a follow written without it resolves to no group and
+        # every scheduler-facing test would skip the channel it just seeded.
+        ensure_follow_for_channel(
+            session,
+            channel,
+            user_id=owner,
+            values={"setting_group_id": group.id},
+        )
     session.commit()

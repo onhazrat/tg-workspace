@@ -38,18 +38,17 @@ def _seed_posts_and_embeddings(client: TestClient) -> None:
     from sqlmodel import Session
 
     from app.core.db import engine
-    from app.models_tg import Channel
     from app.services.follows import get_operator_user_id
     from tests.utils.setting_groups import add_test_channel
 
     with Session(engine) as session:
         operator_id = get_operator_user_id(session)
-        ch = session.get(Channel, "rag-ch")
-        if ch and operator_id:
-            ch.user_id = operator_id
-            session.add(ch)
-            session.commit()
-        elif operator_id:
+        # `add_test_channel` is idempotent on the Channel and writes the
+        # operator's follow either way, which is what makes the channel visible
+        # under enforcement. The branch this replaces stamped
+        # `Channel.user_id` when the row already existed — a column ticket 22
+        # dropped, and never what decided visibility.
+        if operator_id:
             add_test_channel(session, "rag-ch", user_id=operator_id)
     posts = [
         {
@@ -224,15 +223,12 @@ def test_backfill_embeddings_mocked_provider(
     from sqlmodel import Session, select
 
     from app.core.db import engine
-    from app.models_tg import Channel, PostEmbedding
-    from app.services.follows import get_operator_user_id
+    from app.models_tg import PostEmbedding
 
     with Session(engine) as session:
-        operator_id = get_operator_user_id(session)
-        ch = session.get(Channel, "backfill-ch")
-        if ch and operator_id:
-            ch.user_id = operator_id
-            session.add(ch)
+        # The stamp this dropped was `Channel.user_id` (ticket 22). The channel
+        # is created by the route below, which writes the caller's follow — the
+        # thing that actually decides visibility.
         for emb in session.exec(
             select(PostEmbedding).where(PostEmbedding.channel_name == "backfill-ch")
         ).all():

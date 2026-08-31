@@ -28,7 +28,11 @@ from app.services.channel_setting_groups import (
     slow_feed_group_id_for_user,
     update_setting_group,
 )
-from app.services.follows import ensure_follow_for_channel
+from app.services.follows import (
+    ensure_follow_for_channel,
+    get_follow,
+    sync_follow_settings,
+)
 from tests.utils.user import create_random_user
 
 
@@ -52,27 +56,34 @@ def test_effective_settings_and_frozen_group() -> None:
         restricted_group = get_or_create_restricted_group(session, user_id=user_id)
         session.commit()
 
-        channel = Channel(
-            id="eff-test",
-            name="eff-test",
-            user_id=user_id,
-            setting_group_id=default_group.id,
-        )
+        # Ticket 22: the group is the follow's, so "is this channel frozen" is a
+        # question about this account's follow rather than about the Channel
+        # every follower shares.
+        channel = Channel(id="eff-test", name="eff-test")
         session.add(channel)
+        session.flush()
+        sync_follow_settings(
+            session,
+            channel,
+            user_id=user_id,
+            values={"setting_group_id": default_group.id},
+        )
         session.commit()
+        follow = get_follow(session, user_id=user_id, channel_id=channel.id)
+        assert follow is not None
 
         groups_by_id = load_groups_by_id(session)
-        effective = effective_channel_fields(groups_by_id[channel.setting_group_id])
+        effective = effective_channel_fields(groups_by_id[follow.setting_group_id])
         assert effective["regularSyncEnabled"] is True
         assert effective["isFrozen"] is False
-        assert channel_is_frozen(channel, groups_by_id) is False
+        assert channel_is_frozen((channel, follow), groups_by_id) is False
 
-        channel.setting_group_id = restricted_group.id
-        session.add(channel)
+        follow.setting_group_id = restricted_group.id
+        session.add(follow)
         session.commit()
         groups_by_id = load_groups_by_id(session)
-        assert channel_is_frozen(channel, groups_by_id) is True
-        effective = effective_channel_fields(groups_by_id[channel.setting_group_id])
+        assert channel_is_frozen((channel, follow), groups_by_id) is True
+        effective = effective_channel_fields(groups_by_id[follow.setting_group_id])
         assert effective["isFrozen"] is True
         assert effective["isUnavailableOnWebView"] is True
 
@@ -249,21 +260,22 @@ def test_list_setting_groups_includes_orphan_group_from_distinct_query() -> None
             is_unavailable_on_web_view=False,
         )
         session.add(orphan_group)
-        channel = Channel(
-            id="orphan-channel",
-            name="orphan-channel",
-            user_id=user_id,
-            setting_group_id=orphan_group.id,
-        )
+        channel = Channel(id="orphan-channel", name="orphan-channel")
         session.add(channel)
         session.flush()
-        # Ticket 35 scopes the orphan rescue through the **follow**, not through
-        # `Channel.user_id` — that column is a "who scraped this first" stamp
-        # ticket 22 drops. So the follow is what makes the channel visible once
-        # ticket 21 PR 4 flips the flag, and without it the rescue has nothing
-        # to reach the group through. Writing it is also what every production
-        # channel-creation path does.
-        ensure_follow_for_channel(session, channel, user_id=user_id)
+        # Ticket 35 scoped the orphan rescue through the **follow** rather than
+        # `Channel.user_id`, a "who scraped this first" stamp; ticket 22 dropped
+        # that column and `setting_group_id` with it, so the follow is now both
+        # what makes the channel visible *and* the only thing naming the group.
+        # The rescue exists for exactly this row: a follow of yours pointing at
+        # a group somebody else owns, which the settings screen must still be
+        # able to explain.
+        ensure_follow_for_channel(
+            session,
+            channel,
+            user_id=user_id,
+            values={"setting_group_id": orphan_group.id},
+        )
         session.commit()
 
         listed = list_setting_groups(session, user_id=user_id)

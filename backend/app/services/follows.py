@@ -31,7 +31,7 @@ would put a fabricated uuid behind a foreign key.
 from __future__ import annotations
 
 import uuid
-from collections.abc import Callable, Iterable, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from typing import Any
 
 from sqlalchemy import delete as sa_delete
@@ -42,6 +42,10 @@ from sqlmodel import Session, col, func, select
 from app.core.config import settings
 from app.models import User
 from app.models_tg import Channel, ChannelFollow, utc_now
+from app.services.channel_tags import (
+    normalize_channel_tags,
+    reject_reserved_virtual_group_tags,
+)
 from app.services.settings_store import get_global_setting
 from app.services.tenancy import scoped_select
 
@@ -185,25 +189,44 @@ def ensure_follow_for_channel(
     session: Session,
     channel: Channel,
     *,
-    user_id: uuid.UUID | None = None,
+    user_id: uuid.UUID | None,
+    values: Mapping[str, Any] | None = None,
 ) -> bool:
     """Create the follow implied by an existing Channel row.
 
-    The per-User values are copied off the Channel, which is still the
-    authoritative copy until ticket 22 drops those columns. `next_sync_at`
-    starts from the Channel's regular schedule: it is the follower's own
-    deadline from here on, but seeding it to `None` would make every backfilled
-    follow look due immediately to the scheduler that reads it later.
+    `values` carries this follower's own per-User fields; anything it does not
+    name gets the empty default. Ticket 04 copied them off the Channel instead,
+    and ticket 22 dropped the Channel's copies, so there is nothing left to copy
+    — the caller is now the only one who knows what this follower chose.
+
+    **That is a fix, not only a mechanical change.** `setting_group_id` has to
+    come from the *following* account's own groups, and copying it off the
+    Channel handed the second follower of a handle whichever group the first
+    follower happened to pick, including a group belonging to another account.
+    A caller with nothing to say gets a follow with unset fields, which is the
+    honest row: `schedule_group_id` reports "no resolvable group" and the
+    scheduler skips the channel, rather than scheduling it off a stranger's
+    settings.
+
+    `user_id` is a required keyword with no default. It used to fall back to
+    `channel.user_id`, a column this ticket drops, and an optional owner would
+    have left every existing call site passing nothing and still passing its
+    tests.
+
+    `next_sync_at` starts from the Channel's regular schedule: it is the
+    follower's own deadline from here on, but seeding it to `None` would make
+    every backfilled follow look due immediately to the scheduler that reads it
+    later.
 
     Used by both the dual-write and the backfill, so the two cannot disagree
-    about what a follow copied from a Channel contains.
+    about what a follow for a Channel contains.
     """
     return ensure_follow(
         session,
         channel_id=channel.id,
-        user_id=user_id if user_id is not None else channel.user_id,
+        user_id=user_id,
         next_sync_at=channel.next_regular_sync_at,
-        **_channel_field_values(channel, MIRRORED_CHANNEL_FIELDS),
+        **follow_field_values(values),
     )
 
 
@@ -291,9 +314,117 @@ def follow_exists(
     return session.get(ChannelFollow, (user_id, channel_id)) is not None
 
 
+def get_follow(
+    session: Session,
+    *,
+    user_id: uuid.UUID,
+    channel_id: str,
+) -> ChannelFollow | None:
+    """One account's follow row for one Channel, or None. A primary-key hit.
+
+    Ticket 22 needs this where `follow_exists` used to be enough: the setting
+    group moved off `Channel`, so a caller that reassigns a channel's group now
+    has to reach the row that holds it rather than a boolean about whether it
+    exists.
+    """
+    return session.get(ChannelFollow, (user_id, channel_id))
+
+
 def count_follows(session: Session) -> int:
     """Total follows, for the audit."""
     return session.exec(select(func.count()).select_from(ChannelFollow)).one()
+
+
+# --- Setting-group membership -------------------------------------------------
+#
+# Ticket 22 dropped `Channel.setting_group_id`, so "which channels are in this
+# group" became a question about `tg_channel_follows`. These four live here
+# rather than in `channel_setting_groups.py` because that module may not name
+# `ChannelFollow` at all — `test_channel_creation_paths.py` fails any module
+# outside this aggregate that mentions the identifier, reads included. That is
+# the one-writer rule doing its job: the consolidation helper below is a real
+# write, and it would have landed in the group module without it.
+
+
+def follow_counts_by_group(session: Session) -> dict[str, int]:
+    """How many follows name each setting group."""
+    rows = session.exec(
+        select(ChannelFollow.setting_group_id, func.count())
+        .where(col(ChannelFollow.setting_group_id).is_not(None))
+        .group_by(col(ChannelFollow.setting_group_id))
+    ).all()
+    return {group_id: count for group_id, count in rows if group_id is not None}
+
+
+def count_follows_in_group(session: Session, group_id: str) -> int:
+    """How many follows name `group_id`. Answers "is this group still in use"."""
+    return session.exec(
+        select(func.count())
+        .select_from(ChannelFollow)
+        .where(col(ChannelFollow.setting_group_id) == group_id)
+    ).one()
+
+
+def group_ids_for_user(session: Session, *, user_id: uuid.UUID) -> set[str]:
+    """The distinct setting-group ids `user_id`'s own follows name.
+
+    No `scoped_select`: `(user_id, channel_id)` is the primary key here, so
+    filtering on the owner answers *which rows are mine* rather than what this
+    account may see. Ticket 30's rule — a flag cannot gate identity.
+    """
+    rows = session.exec(
+        select(ChannelFollow.setting_group_id)
+        .where(col(ChannelFollow.user_id) == user_id)
+        .distinct()
+    ).all()
+    return {group_id for group_id in rows if group_id}
+
+
+def channels_in_group(session: Session, group_id: str) -> Sequence[Channel]:
+    """The Channels followed under `group_id`, deduplicated.
+
+    Joins rather than switching tables: the two sync deadlines this feeds are
+    columns on `tg_channels`, shared by every follower, so the Channel is still
+    what gets recomputed. `distinct` because two accounts can follow one handle
+    under the same group id only when it is theirs — but the join would repeat
+    the row per follow regardless, and recomputing one Channel twice is wasted
+    work rather than a wrong answer.
+    """
+    return session.exec(
+        select(Channel)
+        .join(ChannelFollow, col(ChannelFollow.channel_id) == col(Channel.id))
+        .where(col(ChannelFollow.setting_group_id) == group_id)
+        .distinct()
+    ).all()
+
+
+def repoint_follows_between_groups(
+    session: Session,
+    *,
+    user_id: uuid.UUID,
+    from_group_id: str,
+    to_group_id: str,
+) -> int:
+    """Move one account's follows from one of its groups onto another.
+
+    The duplicate-reserved-group merge in `channel_setting_groups.py`, which
+    used to repoint Channels. Scoped to `user_id` because only that account's
+    duplicate groups are being merged: a second follower of the same handle
+    keeps whatever group they chose, which is the whole reason the column moved.
+
+    Does not commit — the caller owns the transaction, matching `ensure_follow`.
+    """
+    rows = session.exec(
+        select(ChannelFollow).where(
+            col(ChannelFollow.user_id) == user_id,
+            col(ChannelFollow.setting_group_id) == from_group_id,
+        )
+    ).all()
+    for follow in rows:
+        follow.setting_group_id = to_group_id
+        follow.updated_at = utc_now()
+        session.add(follow)
+    return len(rows)
 
 
 def channel_ids_without_follows(session: Session) -> list[str]:
@@ -347,7 +478,7 @@ def follows_for_user(
     session: Session,
     *,
     user_id: uuid.UUID,
-    channel_ids: Iterable[str],
+    channel_ids: Iterable[str] | None = None,
 ) -> dict[str, ChannelFollow]:
     """One User's follows of the given channels, keyed by channel id.
 
@@ -356,16 +487,21 @@ def follows_for_user(
     answers "what does *this* user's follow of this channel say" — the
     question the channel list (ticket 15) asks once it stops reading the
     per-User fields off `Channel` itself.
+
+    `channel_ids=None` means every follow this account holds, which the export
+    needs (ticket 22) because it walks the whole Channel table and cannot build
+    the id list first without a second pass. An **empty** iterable still means
+    "none of them" and returns nothing — the two are deliberately different, and
+    collapsing them would make a caller that legitimately narrowed to zero
+    channels export every one instead.
     """
-    ids = list(channel_ids)
-    if not ids:
-        return {}
-    rows = session.exec(
-        select(ChannelFollow).where(
-            ChannelFollow.user_id == user_id,
-            col(ChannelFollow.channel_id).in_(ids),
-        )
-    ).all()
+    statement = select(ChannelFollow).where(ChannelFollow.user_id == user_id)
+    if channel_ids is not None:
+        ids = list(channel_ids)
+        if not ids:
+            return {}
+        statement = statement.where(col(ChannelFollow.channel_id).in_(ids))
+    rows = session.exec(statement).all()
     return {f.channel_id: f for f in rows}
 
 
@@ -381,28 +517,27 @@ def follows_for_user(
 FollowedChannel = tuple[Channel, ChannelFollow]
 
 
-def schedule_group_id(channel: Channel, follow: ChannelFollow) -> str:
+def schedule_group_id(follow: ChannelFollow) -> str | None:
     """Which setting group decides this follower's schedule for this Channel.
 
-    **The follow's, when it has one.** `Channel.setting_group_id` is a single
-    value shared by every follower; `ChannelFollow.setting_group_id` is the
-    per-account copy ticket 04 moved off the Channel precisely so the second
+    **The follow's, and now only the follow's.** `Channel.setting_group_id` was
+    a single value shared by every follower; `ChannelFollow.setting_group_id` is
+    the per-account one ticket 04 moved off the Channel precisely so the second
     follower would not have to overwrite the first's settings to have any of
-    their own. Reading the Channel's copy would decide "is this due" from
-    whichever account edited it last, which is the bug the follow table exists
-    to prevent.
+    their own. Reading the Channel's copy decided "is this due" from whichever
+    account edited it last, which is the bug the follow table exists to prevent.
 
-    Falls back to the Channel's while ticket 22 has not dropped that column:
-    `ensure_follow_for_channel` copies `setting_group_id` across at creation
-    time, but a follow written before that mirroring existed can still hold
-    NULL, and a channel with no resolvable group is skipped by the caller rather
-    than silently treated as unfrozen.
+    Ticket 22 dropped that column and with it this function's fallback, so the
+    return type is now honestly `str | None`. A follow written before the
+    mirroring existed can still hold NULL, and the callers skip a channel with
+    no resolvable group rather than silently treating it as unfrozen — which is
+    what a fallback to a stranger's group amounted to.
 
-    Lives in the follow aggregate rather than in `jobs/auto_sync.py` because it
-    is a fact about the pair, and this module is the one that knows the follow's
-    copy shadows the Channel's.
+    Kept as a named function rather than inlined to `follow.setting_group_id`
+    because the reason the follow's copy wins is the whole point, and it is the
+    kind of thing a later reader "simplifies" back into a Channel read.
     """
-    return follow.setting_group_id or channel.setting_group_id
+    return follow.setting_group_id
 
 
 def accounts_with_follows(session: Session) -> list[uuid.UUID]:
@@ -514,12 +649,15 @@ def visible_channel_names(session: Session, *, user_id: uuid.UUID) -> set[str]:
     return {str(name).lower() for name in names}
 
 
-#: The per-User columns `ensure_follow_for_channel` copies off a Channel at
-#: creation time, and the ones `sync_follow_settings` below mirrors after an
-#: edit. The one place both read from, so a seventh mirrored column is a diff
-#: to this tuple rather than to two call sites that would otherwise have to be
-#: kept in step by memory.
-MIRRORED_CHANNEL_FIELDS = (
+#: The per-User fields that live on the Follow and nowhere else.
+#:
+#: Ticket 04 copied these off `Channel`, where a second follower of a handle
+#: would have had to overwrite the first one's values to have any of their own;
+#: ticket 22 dropped `Channel`'s copies, so this table is now the only home.
+#: The one place every writer reads from, so a seventh field is a diff to this
+#: tuple rather than to the call sites that would otherwise be kept in step by
+#: memory.
+FOLLOW_OWNED_FIELDS = (
     "setting_group_id",
     "followed_at",
     "tags",
@@ -529,17 +667,60 @@ MIRRORED_CHANNEL_FIELDS = (
 )
 
 
-def _channel_field_values(channel: Channel, fields: Iterable[str]) -> dict[str, Any]:
-    """`fields`' current values on `channel`.
+def follow_field_values(values: Mapping[str, Any] | None) -> dict[str, Any]:
+    """`values` filled out to the complete set of follow-owned fields.
 
-    `tags` is copied to a fresh list rather than referenced: `Channel.tags` is
-    a JSON column backed by a mutable list, and writing the same list object
-    into a `ChannelFollow` row would let a later mutation of one show up on
-    the other through the shared reference.
+    Every field the caller does not name gets its empty default, so an insert
+    always writes the whole row and a caller cannot leave a column silently
+    absent. Keys that are not follow-owned are dropped rather than passed
+    through: callers hand this a normalised request body, which carries plenty
+    of Channel fields too, and forwarding one would raise on a column
+    `ChannelFollow` does not have.
+
+    `tags` defaults to a fresh list per call and is copied rather than
+    referenced. It is a JSON column backed by a mutable list, and writing one
+    shared list object into two rows lets a later mutation of either show up on
+    the other.
     """
-    values = {field: getattr(channel, field) for field in fields}
-    if "tags" in values:
-        values["tags"] = list(channel.tags or [])
+    filled: dict[str, Any] = dict.fromkeys(FOLLOW_OWNED_FIELDS)
+    filled["tags"] = []
+    for field in FOLLOW_OWNED_FIELDS:
+        if values is not None and field in values:
+            filled[field] = values[field]
+    filled["tags"] = list(filled["tags"] or [])
+    return filled
+
+
+def follow_values_from_body(body: Mapping[str, Any]) -> dict[str, Any]:
+    """The follow-owned fields a normalised request body actually names.
+
+    The counterpart to `channels.apply_channel_fields`, which writes a body's
+    *Channel* fields onto the Channel. Ticket 22 dropped these from `Channel`,
+    so `key in Channel.model_fields` is simply false for them now and that path
+    would **silently discard** an edit to `tags` or `startTime` rather than fail
+    it. This is where they land instead.
+
+    Tag validation moved here with the write, for the same reason: it sat next
+    to the `setattr` in `apply_channel_fields`, and moving the write without the
+    check would have let a reserved virtual-group tag through into a Follow.
+
+    `setting_group_id` is deliberately **not** taken from a body. It is resolved
+    from the caller's own setting groups — `PUT /data/channels/{id}` answers 400
+    for a body that names it and points at the bulk endpoint — so accepting it
+    here would reopen by the back door the reassignment that route refuses.
+
+    Returns only the keys present, so the result can go straight to
+    `sync_follow_settings`, whose contract is "the fields this edit touched".
+    """
+    values: dict[str, Any] = {}
+    for field in FOLLOW_OWNED_FIELDS:
+        if field == "setting_group_id" or field not in body:
+            continue
+        value = body[field]
+        if field == "tags":
+            reject_reserved_virtual_group_tags(value)
+            value = normalize_channel_tags(value)
+        values[field] = value
     return values
 
 
@@ -548,30 +729,31 @@ def sync_follow_settings(
     channel: Channel,
     *,
     user_id: uuid.UUID | None,
-    fields: Iterable[str] = MIRRORED_CHANNEL_FIELDS,
+    values: Mapping[str, Any],
 ) -> None:
-    """Mirror a just-edited Channel's per-User fields onto its owner's Follow.
+    """Write an explicit edit's per-User fields onto the caller's Follow.
 
     `ensure_follow`/`ensure_follow_for_channel` are additive on purpose — a
     second follower of an already-scraped channel must not have their tags
     reset by somebody else re-creating it. An explicit edit through
     `PUT /data/channels/{id}`, the bulk-tags endpoint, or an import overwriting
-    an existing channel is the opposite case: the caller means for the value
-    to change, `Channel` stays authoritative until ticket 22 drops these
-    columns from it, so its Follow has to move with it — otherwise the channel
-    list (ticket 15), which reads these fields off the Follow, would keep
-    showing the value from before the edit.
+    an existing channel is the opposite case: the caller means for the value to
+    change, and since ticket 22 dropped these columns from `Channel` this row is
+    the only place the new value can land.
 
-    `fields` is the subset of `MIRRORED_CHANNEL_FIELDS` this particular edit
-    actually touched, and only that subset is written to an *existing* Follow.
-    Mirroring the full set unconditionally was the first cut here, and it was
-    wrong: an edit to one field (say `bio`, which is not even mirrored) would
-    still overwrite every other follower field with the Channel's current
-    values, clobbering a Follow that had legitimately diverged from the
-    Channel — exactly the per-User state ticket 15 exists to preserve. A
-    brand-new Follow still needs the complete row, so the *insert* side always
-    uses every mirrored field regardless of `fields`; only the conflict
-    *update* is narrowed.
+    `values` is the subset of `FOLLOW_OWNED_FIELDS` this particular edit
+    actually touched, carrying the new values, and only that subset is written
+    to an *existing* Follow. Writing the full set unconditionally was the first
+    cut here, and it was wrong: an edit to one field (say `bio`, which is not
+    follow-owned at all) would still overwrite every other follower field,
+    clobbering a Follow that had legitimately diverged — exactly the per-User
+    state ticket 15 exists to preserve. A brand-new Follow still needs the
+    complete row, so the *insert* side fills the untouched fields with their
+    empty defaults; only the conflict *update* is narrowed.
+
+    Ticket 22 changed where the values come from, not the rule. They used to be
+    read back off the just-written Channel, which worked only because `Channel`
+    was still authoritative; the caller now passes what it means to write.
 
     Resolves the owner the same way `ensure_follow` does, so the two writers
     can never disagree about whose row an edit lands on. A no-op when there is
@@ -580,7 +762,7 @@ def sync_follow_settings(
     `ON CONFLICT DO UPDATE` rather than `ensure_follow`'s `DO NOTHING` — this
     is the one write path that means to overwrite an existing Follow's values.
     `next_sync_at` is seeded on insert (a fresh Follow needs a schedule) but
-    never part of `fields`: it is the follower's own next-sync deadline, not
+    never part of `values`: it is the follower's own next-sync deadline, not
     something a Channel edit should reset.
     """
     owner_id = resolve_follow_owner(session, user_id)
@@ -588,8 +770,8 @@ def sync_follow_settings(
         return
 
     now = utc_now()
-    insert_values = _channel_field_values(channel, MIRRORED_CHANNEL_FIELDS)
-    update_values = _channel_field_values(channel, fields)
+    update_values = {k: v for k, v in values.items() if k in FOLLOW_OWNED_FIELDS}
+    insert_values = follow_field_values(update_values)
 
     statement = (
         pg_insert(ChannelFollow)

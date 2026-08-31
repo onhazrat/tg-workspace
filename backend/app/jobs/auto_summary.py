@@ -139,17 +139,21 @@ async def _sync_channels_for_summary(
     """
     if has_active_sync_job():
         return
+    # Paired with the follow since ticket 22: "is this channel frozen" is a
+    # question about this account's follow, not about the shared Channel.
     operator_channels = {
-        channel.name: channel
-        for channel, _follow in followed_channels_for(session, user_id=owner_id)
+        channel.name: (channel, follow)
+        for channel, follow in followed_channels_for(session, user_id=owner_id)
     }
     groups_by_id = load_groups_by_id(session)
     stale = []
     for name in channel_names:
-        ch = operator_channels.get(name)
+        pair = operator_channels.get(name)
+        if pair is None:
+            continue
+        ch = pair[0]
         if (
-            ch
-            and not channel_is_frozen(ch, groups_by_id)
+            not channel_is_frozen(pair, groups_by_id)
             and (ch.last_updated or 0) < end_ts
         ):
             stale.append(ch)
@@ -361,7 +365,7 @@ async def _auto_publish(
         )
         return
 
-    network = load_network_settings(session, owner_id)
+    network = load_network_settings(session)
     proxies = resolve_proxies(network)
     proxy_concurrency = resolve_proxy_concurrency(network)
     metadata = None

@@ -34,7 +34,7 @@ from app.services.channel_setting_groups import (
     SyncOperationMode,
     apply_group_to_channel,
     channel_allows_sync_operation,
-    get_group_for_channel,
+    find_group_for_channel,
     get_or_create_frozen_group,
     is_restricted_group,
     move_channel_from_restricted_to_default,
@@ -53,7 +53,7 @@ from app.services.followed_channels import (
     create_followed_channel,
     normalize_channel_name,
 )
-from app.services.follows import resolve_follow_owner
+from app.services.follows import follows_for_channels, resolve_follow_owner
 from app.services.language import detect_language_from_posts
 from app.services.logs import upsert_network_log, upsert_sync_log
 from app.services.network import rotate_tor_identity
@@ -489,7 +489,21 @@ def _prepare_channel_sync(
         channel = session.get(Channel, channel_id)
         if not channel:
             return "missing", None, None
-        group = get_group_for_channel(session, channel)
+        # The setting group hangs off the follow since ticket 22, so resolving
+        # it needs an account. `resolve_follow_owner` is the rule the rest of
+        # the programme uses for a caller that named none.
+        group_owner_id = resolve_follow_owner(session, user_id)
+        if group_owner_id is None:
+            return "missing", None, None
+        # `find_*`, not `get_*`: the raising version answers 500, and this runs
+        # in a queue consumer with no response to put that in. A follow with no
+        # group is unschedulable rather than broken — `run_auto_sync` skips it
+        # for the same reason — so it comes back as a value the caller reports
+        # as a failed channel, instead of an `HTTPException` escaping the
+        # message.
+        group = find_group_for_channel(session, channel, user_id=group_owner_id)
+        if group is None:
+            return "missing", None, None
         if sync_mode != "auto" and not channel_allows_sync_operation(
             group,
             sync_mode,
@@ -500,8 +514,11 @@ def _prepare_channel_sync(
                 (f"Sync not allowed for group '{group.name}' (mode={sync_mode})"),
             )
 
-        effective_user_id = user_id or channel.user_id
-        network = load_network_settings(session, effective_user_id)
+        # `user_id or channel.user_id` until ticket 22 dropped that stamp. The
+        # group above was already resolved for `group_owner_id`, so this is the
+        # same account by construction rather than a second guess at one.
+        effective_user_id = user_id or group_owner_id
+        network = load_network_settings(session)
         # The owner matters here: `compute_scrape_cutoff_ms` below reads
         # `globalStartTimeMode`/`Value`, which ticket 06 made per-User. Passing
         # none would silently scrape from the default cutoff rather than the one
@@ -564,7 +581,6 @@ def _freeze_channel_for_chat_id_problem(
     error: str,
     response: dict[str, Any],
     job_source: str,
-    user_id: uuid.UUID | None,
     channel_owner_id: uuid.UUID | None,
 ) -> None:
     """Park a channel in the Frozen group and record why.
@@ -603,14 +619,46 @@ def _freeze_channel_for_chat_id_problem(
             channel.id,
         )
     else:
-        freeze_group = get_or_create_frozen_group(session, user_id=freeze_owner_id)
+        # **Every follower is frozen, not just the resolved owner.** A chat-id
+        # collision means this Channel may be about to receive another channel's
+        # posts, which is true of the handle rather than of one account's view
+        # of it — the same argument that widened the uniqueness index in ticket
+        # 22's migration. It used to be automatic: `setting_group_id` was a
+        # Channel column, so one write froze the handle for everybody. Once it
+        # moved to the follow, freezing `freeze_owner_id` alone left every other
+        # follower syncing a channel the scraper had just declared unsafe, and
+        # left it *silently* — `apply_group_to_channel` moves nothing when the
+        # named account has no follow, so on a deployment where the operator
+        # does not follow the channel this froze nobody at all and said so
+        # nowhere. `/code-review` caught that.
+        #
+        # Each account is parked in **its own** Frozen group: ticket 21's
+        # cascading key would delete another account's group out from under
+        # them, and ticket 35's owner checks are written on the same rule.
+        #
         # Not `bulk_assign_setting_group`: ticket 35 gave that an owner check,
-        # because it takes a client-chosen group id. This one is derived from
-        # the Channel's own owner one line above, so there is nothing for a
-        # stranger to name — and routing a scraper-internal freeze through the
-        # user-facing door would make it raise 404 whenever the channel is not
-        # the caller's.
-        apply_group_to_channel(session, channel, freeze_group, int(time.time() * 1000))
+        # because it takes a client-chosen group id. These are derived from the
+        # follows on the row, so there is nothing for a stranger to name — and
+        # routing a scraper-internal freeze through the user-facing door would
+        # make it raise 404 whenever the channel is not the caller's.
+        now_ms = int(time.time() * 1000)
+        follower_ids = [
+            follow.user_id for follow in follows_for_channels(session, [channel.id])
+        ]
+        # The resolved owner is included even with no follow of their own, so a
+        # Channel nobody follows still has its deadlines settled — that half of
+        # `apply_group_to_channel` writes to the Channel and is what keeps a
+        # frozen handle out of the scheduler's due list.
+        if freeze_owner_id not in follower_ids:
+            follower_ids.append(freeze_owner_id)
+        for follower_id in follower_ids:
+            apply_group_to_channel(
+                session,
+                channel,
+                get_or_create_frozen_group(session, user_id=follower_id),
+                now_ms,
+                user_id=follower_id,
+            )
         session.commit()
     upsert_sync_log(
         session,
@@ -625,7 +673,6 @@ def _freeze_channel_for_chat_id_problem(
             "fullRequest": response.get("fullRequest"),
             "fullResponse": response,
         },
-        user_id,
     )
     touch_sync(session, "channels", commit=False)
     touch_sync(session, "sync_logs", commit=False)
@@ -658,17 +705,21 @@ def _reconcile_telegram_chat_id(
     if scraped_chat_id is None:
         return None
 
-    channel_owner_id = user_id or channel.user_id
+    channel_owner_id = user_id
 
     if channel.telegram_chat_id is None:
+        # Ticket 22: no owner filter, because `Channel.user_id` is gone and the
+        # question was never really about ownership. A chat id belongs to the
+        # handle, not to whoever scraped it first, so two Channel rows claiming
+        # one chat id is a corpus-level collision — the posts of one chat would
+        # be filed under two channels whoever follows them. The old filter asked
+        # "does *this operator* already have that chat id", which missed the
+        # collision entirely when the other handle had been scraped by somebody
+        # else, and that is the case a shared corpus makes ordinary.
         duplicate_stmt = select(Channel).where(
             Channel.id != channel.id,
             Channel.telegram_chat_id == scraped_chat_id,
         )
-        if channel_owner_id is None:
-            duplicate_stmt = duplicate_stmt.where(col(Channel.user_id).is_(None))
-        else:
-            duplicate_stmt = duplicate_stmt.where(Channel.user_id == channel_owner_id)
         duplicate_channel = session.exec(duplicate_stmt).first()
 
         if duplicate_channel is None:
@@ -686,7 +737,6 @@ def _reconcile_telegram_chat_id(
             ),
             response=response,
             job_source=job_source,
-            user_id=user_id,
             channel_owner_id=channel_owner_id,
         )
         # Deliberately not a stop: the conflict is logged and the channel frozen,
@@ -707,7 +757,6 @@ def _reconcile_telegram_chat_id(
         error=mismatch_error,
         response=response,
         job_source=job_source,
-        user_id=user_id,
         channel_owner_id=channel_owner_id,
     )
     return mismatch_error
@@ -802,7 +851,6 @@ def _persist_page_posts(
     *,
     job_id: str,
     job_source: str,
-    user_id: uuid.UUID | None,
     session_seen_ids: set[int],
 ) -> None:
     """Save the page's new posts, and decide whether an incremental pass is done.
@@ -828,7 +876,6 @@ def _persist_page_posts(
                 new_on_page,
                 min(existing_on_page),
                 job_id=job_id,
-                user_id=user_id,
                 session_seen_ids=session_seen_ids,
             )
         result.stop_sync = True
@@ -930,7 +977,6 @@ def _apply_scrape_page(
             channel.name,
             page_ids,
             job_id=job_id,
-            user_id=user_id,
             session_seen_ids=session_seen_ids,
         )
 
@@ -954,7 +1000,6 @@ def _apply_scrape_page(
             result,
             job_id=job_id,
             job_source=job_source,
-            user_id=user_id,
             session_seen_ids=session_seen_ids,
         )
 
@@ -994,7 +1039,18 @@ def _finalize_channel_success(
         if not channel:
             return
 
-        group = get_group_for_channel(session, channel)
+        # See `_prepare_channel_sync`: the group is the follow's since ticket 22,
+        # and `find_*` for the same reason — nothing here can answer a 500. The
+        # group resolved in `_prepare_channel_sync` for this same owner, so None
+        # means the follow went away mid-walk; that skips the schedule advance
+        # exactly as the branch above does, rather than failing a sync that
+        # succeeded.
+        group_owner_id = resolve_follow_owner(session, user_id)
+        if group_owner_id is None:
+            return
+        group = find_group_for_channel(session, channel, user_id=group_owner_id)
+        if group is None:
+            return
         was_restricted = is_restricted_group(group)
         update_channel_coverage(
             session,
@@ -1069,11 +1125,11 @@ def _finalize_channel_success(
         channel.updated_at = utc_now()
         session.add(channel)
         if was_restricted:
-            # Resolved rather than passed through: `user_id or channel.user_id`
-            # is None for an unowned channel synced by the scheduler, and the
-            # default group it reached for then was the `-global` one nobody
-            # owns (ticket 21).
-            restore_owner_id = resolve_follow_owner(session, user_id or channel.user_id)
+            # Resolved rather than passed through: `user_id` is None for a
+            # channel synced by the scheduler, and the default group it reached
+            # for then was the `-global` one nobody owns (ticket 21). The
+            # `or channel.user_id` half went with the column in ticket 22.
+            restore_owner_id = resolve_follow_owner(session, user_id)
             if restore_owner_id is not None:
                 move_channel_from_restricted_to_default(
                     session,
@@ -1096,7 +1152,6 @@ def _finalize_channel_success(
                 "fullRequest": requests_log,
                 "fullResponse": responses_log,
             },
-            user_id,
         )
         touch_sync(session, "sync_logs", commit=False)
         session.commit()
@@ -1120,9 +1175,7 @@ def _finalize_channel_scrape_error(
 
         if exc.is_unavailable:
             # See the restore path above for why this is resolved.
-            restrict_owner_id = resolve_follow_owner(
-                session, user_id or channel.user_id
-            )
+            restrict_owner_id = resolve_follow_owner(session, user_id)
             if restrict_owner_id is not None:
                 move_channel_to_restricted_group(
                     session,
@@ -1158,7 +1211,6 @@ def _finalize_channel_scrape_error(
                 "fullRequest": requests_log,
                 "fullResponse": responses_log,
             },
-            user_id,
         )
         touch_sync(session, "sync_logs", commit=False)
         session.commit()
@@ -1169,7 +1221,6 @@ def _finalize_channel_error(
     error: str,
     *,
     job: SyncJobState,
-    user_id: uuid.UUID | None,
     total_new_posts: int,
     requests_log: list[Any],
     responses_log: list[Any],
@@ -1203,7 +1254,6 @@ def _finalize_channel_error(
                 "fullRequest": requests_log,
                 "fullResponse": responses_log,
             },
-            user_id,
         )
         touch_sync(session, "sync_logs", commit=False)
         session.commit()
@@ -1966,7 +2016,6 @@ async def _sync_claimed_channel(
             ctx,
             str(exc),
             job=job,
-            user_id=user_id,
             total_new_posts=walk.total_new_posts,
             requests_log=walk.requests_log,
             responses_log=walk.responses_log,
@@ -1980,9 +2029,7 @@ async def _sync_claimed_channel(
     return True
 
 
-def _load_partition_inputs(
-    user_id: uuid.UUID | None,
-) -> tuple[int, list[str], int, dict[str, int]]:
+def _load_partition_inputs() -> tuple[int, list[str], int, dict[str, int]]:
     """What `sync_queue._partition` needs to size the worker partition.
 
     Returns the configured `syncConcurrency` **uncapped**, plus the proxy list
@@ -1996,7 +2043,7 @@ def _load_partition_inputs(
     """
     with Session(engine) as session:
         sync_settings = load_sync_settings(session)
-        network = load_network_settings(session, user_id)
+        network = load_network_settings(session)
         configured = max(
             1,
             int(
@@ -2008,10 +2055,10 @@ def _load_partition_inputs(
         return configured, resolve_proxies(network), default_slots, overrides
 
 
-def _load_sync_job_concurrency(user_id: uuid.UUID | None) -> tuple[int, int | None]:
+def _load_sync_job_concurrency() -> tuple[int, int | None]:
     with Session(engine) as session:
         sync_settings = load_sync_settings(session)
-        network = load_network_settings(session, user_id)
+        network = load_network_settings(session)
         configured = max(
             1,
             int(
@@ -2046,7 +2093,7 @@ async def run_sync_job(job: SyncJobState, user_id: uuid.UUID | None) -> None:
     with metered() as meter:
         job.status = "running"
         await touch_job(job)
-        concurrency, _proxy_capacity = await run_db(_load_sync_job_concurrency, user_id)
+        concurrency, _proxy_capacity = await run_db(_load_sync_job_concurrency)
 
         sem = asyncio.Semaphore(concurrency)
 

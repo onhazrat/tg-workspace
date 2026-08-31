@@ -64,14 +64,18 @@ from app.services.channel_setting_groups import (
     load_groups_by_id,
     setting_group_to_camel,
 )
-from app.services.channel_tags import normalize_channel_tags
 from app.services.channels import SERVER_MANAGED_CHANNEL_FIELDS, apply_channel_fields
 from app.services.credentials import (
     BOT_CREDENTIAL_NOT_FOUND,
     CHAT_DESTINATION_NOT_FOUND,
     encrypt_bot_token,
 )
-from app.services.follows import MIRRORED_CHANNEL_FIELDS, sync_follow_settings
+from app.services.follows import (
+    follow_values_from_body,
+    follows_for_user,
+    get_follow,
+    sync_follow_settings,
+)
 from app.services.logs import (
     LOG_MODELS,
     upsert_embedding_log,
@@ -262,7 +266,7 @@ def _import_channels(session: Session, items: list[Any], *, user_id: uuid.UUID) 
     the export marks it unavailable or frozen, and in the default group
     otherwise — never left group-less, which nothing downstream tolerates.
     """
-    touched: list[tuple[Channel, list[str]]] = []
+    touched: list[tuple[Channel, dict[str, Any]]] = []
     for item in items:
         normalized = normalize_body(item)
         for field in SERVER_MANAGED_CHANNEL_FIELDS:
@@ -273,12 +277,25 @@ def _import_channels(session: Session, items: list[Any], *, user_id: uuid.UUID) 
             apply_channel_fields(ch, normalized, session=session)
             ch.updated_at = utc_now()
             # Only what this item actually carries — see
-            # `sync_follow_settings` for why mirroring the full set on every
-            # import would clobber a Follow that has legitimately diverged
-            # from the Channel for a field this item never mentions.
-            touched_follow_fields = [
-                field for field in MIRRORED_CHANNEL_FIELDS if field in normalized
-            ]
+            # `sync_follow_settings` for why writing the full set on every
+            # import would clobber a Follow that has legitimately diverged for
+            # a field this item never mentions.
+            follow_values = follow_values_from_body(normalized)
+            # **An existing Channel does not imply an existing Follow.** A
+            # restore into a deployment where another account scraped the handle
+            # first lands here with nothing of this account's on the row, so
+            # `sync_follow_settings` below would *create* the follow — and
+            # `follow_values_from_body` deliberately never carries
+            # `setting_group_id`, so it would create it group-less. That is the
+            # state this function's own docstring says nothing downstream
+            # tolerates: `run_auto_sync` skips such a channel silently and
+            # `get_group_for_channel` answers 500 for it. `channels.upsert_channel`
+            # took this same fix; the import door is the other half of it.
+            existing_follow = get_follow(session, user_id=user_id, channel_id=ch.id)
+            if existing_follow is None or existing_follow.setting_group_id is None:
+                follow_values["setting_group_id"] = ensure_default_group(
+                    session, user_id=user_id
+                ).id
         else:
             setting_group_id = normalized.get("setting_group_id")
             group = (
@@ -311,7 +328,6 @@ def _import_channels(session: Session, items: list[Any], *, user_id: uuid.UUID) 
                 )
             ch = Channel(
                 id=channel_id,
-                user_id=user_id,
                 name=normalized.get("name", ""),
                 display_name=normalized.get("display_name"),
                 photo_url=normalized.get("photo_url"),
@@ -321,31 +337,27 @@ def _import_channels(session: Session, items: list[Any], *, user_id: uuid.UUID) 
                 videos=normalized.get("videos"),
                 files=normalized.get("files"),
                 links=normalized.get("links"),
-                start_id=normalized.get("start_id"),
-                start_time=normalized.get("start_time"),
-                tags=normalize_channel_tags(normalized.get("tags", [])),
                 last_updated=normalized.get("last_updated"),
-                setting_group_id=group.id,
                 language=normalized.get("language"),
-                followed_at=normalized.get("followed_at"),
-                discovered_via=normalized.get("discovered_via"),
             )
-            # A brand-new Channel has no existing Follow to leave alone, so
-            # its first Follow mirrors every field ticket 22 will drop from
-            # Channel.
-            touched_follow_fields = list(MIRRORED_CHANNEL_FIELDS)
+            # A brand-new Channel has no existing Follow to leave alone, so its
+            # first Follow takes every follow-owned field the document carries,
+            # plus the group resolved above. Ticket 22 dropped these columns
+            # from Channel, so the Follow is where an imported tag or start
+            # time now lands — and the only place it can.
+            follow_values = follow_values_from_body(normalized) | {
+                "setting_group_id": group.id
+            }
         session.add(ch)
-        touched.append((ch, touched_follow_fields))
+        touched.append((ch, follow_values))
 
     # One flush for the batch, still inside the document's single transaction:
     # `sync_follow_settings` is a Core INSERT that executes immediately, so
     # the ORM adds above have to reach the database before the foreign key is
     # checked.
     session.flush()
-    for channel, touched_follow_fields in touched:
-        sync_follow_settings(
-            session, channel, user_id=user_id, fields=touched_follow_fields
-        )
+    for channel, follow_values in touched:
+        sync_follow_settings(session, channel, user_id=user_id, values=follow_values)
     return len(items)
 
 
@@ -571,7 +583,14 @@ def _import_logs(
                         detail=f"{log_type} log not found",
                         section=section,
                     )
-            upsert_fn(session, item, user_id)
+            # Sync logs carry no owner (ticket 19), so ticket 22 dropped the
+            # parameter with the column. Same asymmetry as `logs.create_logs`,
+            # and named here for the same reason: better a visible branch than a
+            # signature that accepts an id it discards.
+            if log_type == "sync":
+                upsert_sync_log(session, item)
+            else:
+                upsert_fn(session, item, user_id)
         if items:
             counts[section] = len(items)
     return counts
@@ -708,22 +727,36 @@ def _stream_rows(
         result.close()
 
 
-def stream_export_data(session: Session) -> Iterator[str]:
+def stream_export_data(session: Session, *, user_id: uuid.UUID) -> Iterator[str]:
     """Serialise a full export incrementally as JSON.
 
     Emits the same document export_data() built in memory, so clients and the
     import path see no difference.
+
+    `user_id` is the account whose per-User channel fields the document carries,
+    and ticket 22 is why it is needed at all: `tags`, `startId`, `startTime`,
+    `followedAt` and `discoveredVia` moved off `Channel` onto `ChannelFollow`,
+    so "this channel's tags" stopped having one answer and started having one
+    per follower. The caller's own follows are the answer here, which keeps a
+    backup round-trippable — `_import_channels` already writes an imported tag
+    onto the *caller's* follow, so exporting anyone else's would restore values
+    the exporter never had.
+
+    That is deliberately **not** the admin-scoped export of ticket 28, which is
+    about naming a subject other than yourself. This exports your own view and
+    nobody else's, which is what it did before the columns moved.
     """
     try:
-        yield from _stream_export_body(session)
+        yield from _stream_export_body(session, user_id=user_id)
     finally:
         # End the long read transaction so a big export cannot block DDL
         # or hold back autovacuum for its whole duration.
         session.rollback()
 
 
-def _stream_export_body(session: Session) -> Iterator[str]:
+def _stream_export_body(session: Session, *, user_id: uuid.UUID) -> Iterator[str]:
     groups_by_id = load_groups_by_id(session)
+    export_follows = follows_for_user(session, user_id=user_id)
 
     yield '{"version":2,"timestamp":'
     yield str(int(utc_now().timestamp() * 1000))
@@ -741,7 +774,16 @@ def _stream_export_body(session: Session) -> Iterator[str]:
     yield json.dumps(
         jsonable_encoder(
             [
-                channel_to_camel(c, group=groups_by_id.get(c.setting_group_id))
+                channel_to_camel(
+                    c,
+                    group=(
+                        groups_by_id.get(follow.setting_group_id)
+                        if (follow := export_follows.get(c.id)) is not None
+                        and follow.setting_group_id is not None
+                        else None
+                    ),
+                    follow=follow,
+                )
                 for c in session.exec(select(Channel)).all()
             ],
         ),

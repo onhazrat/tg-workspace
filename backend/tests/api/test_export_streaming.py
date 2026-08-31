@@ -15,6 +15,7 @@ from sqlmodel import Session
 from app.core.config import settings
 from app.core.db import engine
 from app.services.data_import_export import stream_export_data
+from app.services.follows import get_operator_user_id
 from app.services.logs import DEFAULT_LOG_PAGE_SIZE
 from tests.utils.tenancy import follow_channels
 
@@ -72,7 +73,12 @@ EXPECTED_SECTIONS = {
 
 def test_streamed_export_is_a_complete_document(db: Session) -> None:
     """Concatenated chunks must parse, and carry every section."""
-    document = json.loads("".join(stream_export_data(db)))
+    operator_id = get_operator_user_id(db)
+    assert operator_id is not None
+    # Ticket 22: the export carries the *caller's* per-User channel fields,
+    # because tags and start times moved onto `tg_channel_follows` and
+    # "this channel's tags" stopped having one answer.
+    document = json.loads("".join(stream_export_data(db, user_id=operator_id)))
 
     assert document["version"] == 2
     assert isinstance(document["timestamp"], int)
@@ -110,7 +116,9 @@ def test_export_is_not_truncated_by_the_log_page_size(client: TestClient) -> Non
 
 def test_export_streams_incrementally(db: Session) -> None:
     """Chunks arrive progressively rather than as one buffered blob."""
-    chunks = list(stream_export_data(db))
+    operator_id = get_operator_user_id(db)
+    assert operator_id is not None
+    chunks = list(stream_export_data(db, user_id=operator_id))
     assert len(chunks) > 1
     assert chunks[0].startswith('{"version":2')
     assert chunks[-1].endswith("}}")

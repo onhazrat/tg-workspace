@@ -7,6 +7,7 @@ from sqlmodel import Session, select
 from app.core.db import engine
 from app.jobs.auto_sync import CHECK_SOURCE
 from app.models_tg import Channel, ChannelSettingGroup, Post, SyncLog
+from app.services.follows import get_follow, get_operator_user_id
 from app.services.scraper_jobs import SyncJobState
 from app.services.sync_orchestrator import (
     _apply_scrape_page,
@@ -49,10 +50,16 @@ def test_finalize_channel_success_recomputes_deadlines() -> None:
     now_ms = 1_725_000_000_000
 
     with Session(engine) as session:
+        # Seeded under the operator, because that is who `user_id=None`
+        # resolves to below. The setting group hangs off the follow since
+        # ticket 22, so the follow the orchestrator looks for has to be the
+        # one this seeds — under `ANY_READER` there would be no follow for the
+        # resolved account and the group lookup answers 500.
+        operator_id = get_operator_user_id(session)
         upsert_sync_test_channel(
             session,
             channel_id=channel_id,
-            user_id=None,
+            user_id=operator_id,
             group_fields={
                 "regular_sync_enabled": True,
                 "dynamic_sync_enabled": True,
@@ -93,7 +100,9 @@ def test_finalize_channel_success_recomputes_deadlines() -> None:
     with Session(engine) as session:
         channel = session.get(Channel, channel_id)
         assert channel is not None
-        group = session.get(ChannelSettingGroup, channel.setting_group_id)
+        follow = get_follow(session, user_id=operator_id, channel_id=channel_id)
+        assert follow is not None
+        group = session.get(ChannelSettingGroup, follow.setting_group_id)
         assert group is not None
         assert channel.last_updated is not None
         assert (
@@ -144,7 +153,6 @@ def test_scheduler_failure_backoff_updates_due_schedule_only() -> None:
         job=SyncJobState(
             user_id=str(uuid.uuid4()), job_id="job-fail", source=CHECK_SOURCE
         ),
-        user_id=None,
         total_new_posts=0,
         requests_log=[],
         responses_log=[],
@@ -182,7 +190,6 @@ def test_manual_failure_does_not_apply_backoff() -> None:
         job=SyncJobState(
             user_id=str(uuid.uuid4()), job_id="job-manual", source="Manual sync"
         ),
-        user_id=None,
         total_new_posts=0,
         requests_log=[],
         responses_log=[],
@@ -199,10 +206,13 @@ def test_manual_failure_does_not_apply_backoff() -> None:
 def test_apply_scrape_page_mismatch_freezes_channel_and_logs_failure() -> None:
     channel_id = f"orchestrator-mismatch-{uuid.uuid4()}"
     with Session(engine) as session:
+        # Seeded under the operator: the freeze resolves its owner through
+        # `resolve_follow_owner(None)` and lands on that account's follow, so
+        # the follow being asserted on below has to be theirs.
         channel = upsert_sync_test_channel(
             session,
             channel_id=channel_id,
-            user_id=None,
+            user_id=get_operator_user_id(session),
             channel_fields={"telegram_chat_id": -1001},
         )
         channel_name = channel.name
@@ -229,7 +239,14 @@ def test_apply_scrape_page_mismatch_freezes_channel_and_logs_failure() -> None:
     with Session(engine) as session:
         channel = session.get(Channel, channel_id)
         assert channel is not None
-        group = session.get(ChannelSettingGroup, channel.setting_group_id)
+        # The freeze lands on the follow since ticket 22: parking a handle is
+        # one account's judgement, and on the Channel it froze the handle for
+        # every follower.
+        freeze_owner = get_operator_user_id(session)
+        assert freeze_owner is not None
+        follow = get_follow(session, user_id=freeze_owner, channel_id=channel_id)
+        assert follow is not None
+        group = session.get(ChannelSettingGroup, follow.setting_group_id)
         assert group is not None
         assert group.name == "Frozen"
         log = session.exec(
