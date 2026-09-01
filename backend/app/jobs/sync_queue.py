@@ -46,6 +46,17 @@ this same worker process and opens its own semaphore, so the gate below is the
 cap on *lane* work, not on every scrape the worker performs. Ticket 13's
 one-worker-per-proxy partitioning is what makes that distinction stop mattering.
 
+**The lane is chosen from the ledger** (ticket 23). `lane_for_job` reads what
+the account that will be charged has already spent on this Budget today and
+answers with the normal or the best-effort lane for it. Once per enqueue call
+rather than once per message, which is decision 19's "enforce at enqueue"
+followed exactly: choosing per message would mean projecting the spend of a sync
+that has not happened, and one sync is anywhere between one Request and fifty.
+The consequence is that a batch enqueued while an account is inside its Budget
+runs entirely at normal priority however far past the line it takes the account,
+and the ladder meets it on the *next* enqueue. The absolute ceiling that bounds
+that is ticket 24's.
+
 **A message charges its own quota meter.** `run_sync_job` opened one meter per
 job and charged once at the end; now each message opens its own. The day's total
 is unchanged — `tg_quota_usage` accumulates on `(user_id, day, budget)` — and a
@@ -86,7 +97,12 @@ from app.services.proxy_pool import (
     build_workers,
     ensure_pool_configured,
 )
-from app.services.quota import budget_for_sync_mode, charge_sync_job
+from app.services.quota import (
+    budget_for_sync_mode,
+    charge_sync_job,
+    resolve_charge_owner,
+    usage_for_user,
+)
 from app.services.scraper_jobs import (
     SyncJobState,
     claim_job,
@@ -101,6 +117,7 @@ from app.services.sync_lanes import (
     TIER_ORDER,
     LaneScheduler,
     lane_for_budget,
+    lane_for_spend,
     lanes_in_tier,
 )
 
@@ -712,15 +729,50 @@ def _archive(lane: str, msg_id: int) -> None:
         session.commit()
 
 
-def lane_for_job(job: SyncJobState) -> str:
-    """The lane a job's Channels are enqueued to.
+def lane_for_job(job: SyncJobState, user_id: uuid.UUID | None) -> str:
+    """The lane a job's Channels are enqueued to. Reads the quota ledger.
 
     Routed through `budget_for_sync_mode` rather than a second mapping of its
     own, so "which Budget is this charged against" and "which lane does it
     queue on" cannot drift apart — they are the same question about the same
     `sync_mode`, and ticket 12's weighting is defined in terms of the Budgets.
+
+    **The tier is ticket 23's half** (decision 19: enforce at enqueue, account
+    at completion). An account inside its allowance on this Budget gets the
+    normal lane; over it, the best-effort lane for the *same* Budget, so its
+    other two are untouched.
+
+    The usage is read for the account the sync will be **charged** to, not for
+    the id the caller passed. `resolve_charge_owner` is the same function
+    `charge_sync_job` uses, called rather than restated: an ownerless job is
+    billed to the operator, so reading `None`'s usage would let every ownerless
+    enqueue run at normal priority forever while the operator paid for it.
+
+    Blocking — it opens a `Session`. `enqueue_sync_job` calls it in a thread,
+    beside the batch send it already does that for.
     """
-    return lane_for_budget(budget_for_sync_mode(job.sync_mode))
+    budget = budget_for_sync_mode(job.sync_mode)
+    try:
+        with Session(engine) as session:
+            owner_id = resolve_charge_owner(session, user_id)
+            if owner_id is None:
+                # No account exists at all, so nobody can be over anything.
+                # `charge_sync_job` logs and drops the charge in the same case.
+                return lane_for_budget(budget)
+            spent = usage_for_user(session, owner_id)[budget]
+    except Exception:
+        # Fail open, and it is the narrower of the two answers: at this rung
+        # nothing is refused, so being wrong costs one batch at the wrong
+        # priority, against degrading somebody's foreground sync because the
+        # database hiccuped. Ticket 24's ceiling is where the cost of being
+        # wrong is unbounded work instead, and may want the other answer.
+        logger.exception(
+            "Quota: could not read usage for %s; enqueueing %s at normal priority",
+            user_id,
+            budget.value,
+        )
+        return lane_for_budget(budget)
+    return lane_for_spend(budget, spent)
 
 
 async def enqueue_sync_job(job: SyncJobState, user_id: uuid.UUID | None) -> None:
@@ -731,7 +783,7 @@ async def enqueue_sync_job(job: SyncJobState, user_id: uuid.UUID | None) -> None
     so the SSE stream sees the same "pending" -> "running" -> terminal sequence
     it always has.
     """
-    lane = lane_for_job(job)
+    lane = await asyncio.to_thread(lane_for_job, job, user_id)
     payloads = [
         {
             "jobId": job.job_id,

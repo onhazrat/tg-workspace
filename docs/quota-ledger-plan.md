@@ -150,24 +150,25 @@ All thirteen were watched to fail. Two more live in
 `tests/api/test_quota_usage_route.py`: an ordinary account is refused with 403,
 and a malformed `day` is 422 rather than silently meaning today.
 
-## What ticket 23 has to revisit
+## What ticket 23 revisited
 
-- `charge_sync_job` swallows and logs its own failures. Correct while nothing
-  reads the ledger; **wrong once a charge gates work**, because a silently
-  failed charge is then free.
-- **`jobs/discover_probe.py` is uncounted, and it is a scheduled job hitting the
-  web view every tick** — exactly the background load the `auto_sync` Budget
-  exists to throttle. It is uncharged because `DiscoverHandleProbe` is
-  corpus-scoped: the probe queue is deployment-wide and no account owns an
-  entry, so there is nobody to charge without inventing an owner. Deciding
-  whether the operator wears it is 23's call, not something to guess here.
-- The handle probes in `routes/telegram.py` are likewise unmetered.
-- **`/admin` still gates on `is_superuser` in `beforeLoad`**, so an account
-  holding the `admin` role with `is_superuser=False` passes `QUOTA_READ_ANY` at
-  the endpoint and can never reach the page. Pre-existing template code that
-  ticket 07 did not reach, and a real contradiction of its "name a permission,
-  never a flag" rule — but fixing it needs `/users/me` to expose permissions,
-  which is a contract change affecting the whole admin surface rather than this
-  panel. It bites nobody today, because the only Admin is also the superuser.
-- `usage_for_user` already returns every Budget at zero rather than omitting it,
-  so the enqueue check cannot `KeyError` on an account that has not synced yet.
+All four, in `docs/quota-lane-selection-plan.md`. In short:
+
+- `charge_sync_job` still swallows and logs its own failures, and the reasoning
+  is now written down rather than left as a flag: raising would turn a completed
+  sync into a failed one to report an accounting problem, and the cost of the
+  swallow is one message's Requests unbilled against a database that is by then
+  unreachable for the enqueue read and the sync itself too. The log line names
+  the Budget as well as the count.
+- **`jobs/discover_probe.py` stays uncharged**, and the question is closed. It
+  does not enqueue onto a lane, so the ladder has nothing to deprioritize, and
+  the probe queue is deployment background work every account benefits from —
+  billing one account for it makes that account's Budget a proxy for deployment
+  load, which is what decision 16 split the Budgets to stop. The
+  `routes/telegram.py` probes go the same way.
+- `/admin`'s `is_superuser` gate is untouched. It is a contract change across
+  the whole admin surface (`/users/me` has to expose permissions) and still
+  bites nobody, because the only Admin is also the superuser.
+- `usage_for_user` returning every Budget at zero is what `lane_for_job` relies
+  on: `usage_for_user(session, owner)[budget]` cannot `KeyError` on an account
+  that has not synced today.

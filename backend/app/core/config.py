@@ -184,6 +184,30 @@ class Settings(BaseSettings):
     #: a channel cleanly, which those inner retries already turned into a
     #: normal "failed" job.
     SYNC_QUEUE_MAX_READ_COUNT: int = 3
+    #: The daily Request allowance each account gets on each Budget, before
+    #: its work drops to the best-effort tier (ticket 23, decisions 16-18).
+    #: Compared against `tg_quota_usage` at enqueue; nothing is refused at this
+    #: rung, and the absolute ceiling that does refuse is ticket 24's.
+    #:
+    #: **Zero means always best-effort, never blocked** (decision 18) and falls
+    #: out of the comparison rather than being a special case: the ladder is
+    #: `spent >= allowance`. **Negative means unlimited** — the escape hatch for
+    #: a default that turns out wrong, and the one value that cannot be confused
+    #: with a real limit.
+    #:
+    #: Deployment configuration rather than an Admin setting, because the
+    #: settings-backed default and the per-User override are ticket 24's first
+    #: checkbox. The numbers come from staging's own ledger after ticket 08 ran
+    #: for a week: auto-sync spent 22,500-33,700 Requests a day, manual bulk
+    #: 150-1,130, manual single 1-410. `auto_sync` is set *below* that on
+    #: purpose — an account following ~2,000 Channels is the shape the ladder
+    #: exists for, and a default nobody ever crosses is a mechanism with no
+    #: caller. The two manual defaults sit above observed usage, because they
+    #: bound a runaway rather than ordinary work and somebody is waiting on the
+    #: other end of a manual sync. See `docs/quota-lane-selection-plan.md`.
+    QUOTA_DEFAULT_AUTO_SYNC_REQUESTS: int = 10_000
+    QUOTA_DEFAULT_MANUAL_BULK_REQUESTS: int = 3_000
+    QUOTA_DEFAULT_MANUAL_SINGLE_REQUESTS: int = 1_000
     AUTO_SYNC_CHECK_INTERVAL_SECONDS: int = 60
     AUTO_SYNC_INTERVAL_MINUTES_DEFAULT: int = 60
     AUTO_SYNC_PAUSE_DURATION_MS: int = 10 * 60 * 1000

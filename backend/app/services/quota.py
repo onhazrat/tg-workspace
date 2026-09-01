@@ -2,12 +2,18 @@
 
 Aggregate. It owns one table, and nothing else writes it.
 
-**Observe only.** Ticket 08 records what each account spent; nothing here refuses
-anything, and no caller asks it whether it may proceed. Ticket 23 reads the
-ledger at enqueue to choose between the normal and best-effort lanes, ticket 24
-adds the ceiling and the Admin overrides. Building the measurement first is
-deliberate: the defaults those tickets need are a guess until there is a week of
-real numbers to set them from.
+**Nothing here refuses anything, and that is still true.** Ticket 08 recorded
+what each account spent; ticket 23 reads it at enqueue and turns it into a lane,
+which degrades work rather than blocking it. The refusal — the absolute ceiling
+— is ticket 24's, and this module gains no ability to say no until then.
+
+`budget_allowance` is where the three daily limits come from. It is here rather
+than beside the lane names because an allowance is a fact about a Budget, and
+`sync_lanes.py` is about which queue a message goes on; the ladder that joins
+them (`sync_lanes.tier_for_spend`) reads this and stays a pure transform.
+Building the measurement a ticket ahead of the enforcement was the point: the
+defaults below are set from a week of the deployment's own numbers instead of
+from a guess.
 
 ## Three Budgets, from the one field that already distinguishes them
 
@@ -35,7 +41,7 @@ from __future__ import annotations
 
 import logging
 import uuid
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from datetime import UTC, date, datetime
 from enum import StrEnum
@@ -43,6 +49,7 @@ from enum import StrEnum
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlmodel import Session, col, select
 
+from app.core.config import settings
 from app.core.db import engine
 from app.models import User
 from app.models_tg import QuotaUsage, utc_now
@@ -94,6 +101,44 @@ def budget_for_sync_mode(sync_mode: SyncOperationMode) -> Budget:
         ) from None
 
 
+#: An allowance of this or less is unlimited. Negative rather than a sentinel
+#: object because the setting is an integer an operator types into `.env`, and
+#: this is the one value that cannot collide with a real limit — zero already
+#: means something specific (decision 18: always best-effort, never blocked).
+UNLIMITED = -1
+
+#: Where each Budget's daily allowance comes from. Keyed by Budget rather than
+#: resolved in an `if`/`elif`, so a fourth Budget fails the guard rather than
+#: falling through to whichever branch came last — and read through a callable
+#: rather than `getattr(settings, "...")`, so renaming a setting is a
+#: type error here instead of an `AttributeError` at the next enqueue.
+#:
+#: Deployment configuration, because ticket 24 owns the Admin-settable default
+#: and the per-User override; a settings row here would be that ticket built
+#: early and in the wrong table.
+_ALLOWANCE_SETTINGS: dict[Budget, Callable[[], int]] = {
+    Budget.AUTO_SYNC: lambda: settings.QUOTA_DEFAULT_AUTO_SYNC_REQUESTS,
+    Budget.MANUAL_BULK: lambda: settings.QUOTA_DEFAULT_MANUAL_BULK_REQUESTS,
+    Budget.MANUAL_SINGLE: lambda: settings.QUOTA_DEFAULT_MANUAL_SINGLE_REQUESTS,
+}
+
+
+def budget_allowance(budget: Budget) -> int | None:
+    """How many Requests this Budget grants an account per day, or None for unlimited.
+
+    Read live rather than captured at import, because a test that pins a limit
+    and a deployment that changes one both expect the next enqueue to see it.
+
+    Ticket 24 is where this stops being one number for everybody: it gains an
+    Admin-settable default and a per-User override, and the signature grows a
+    `user_id`. Until then every account gets the same allowance, which is a
+    smaller claim than it sounds — the *usage* it is compared against has always
+    been per account.
+    """
+    configured = _ALLOWANCE_SETTINGS[budget]()
+    return None if configured <= UNLIMITED else configured
+
+
 def resolve_charge_owner(
     session: Session, user_id: uuid.UUID | None
 ) -> uuid.UUID | None:
@@ -124,11 +169,17 @@ def charge_sync_job(
     a worker thread and so this module — not `sync_orchestrator.py` — owns the
     decision about what happens when there is nobody to charge.
 
-    Swallows its own failures deliberately. This runs after the sync has
-    finished and its posts are committed; an accounting write that fails must
-    not turn a completed sync into a failed one while nothing reads the ledger.
-    It is logged, which is how it gets noticed before ticket 23 starts depending
-    on the numbers.
+    Swallows its own failures deliberately — **all** of them, including the
+    Budget lookup, which is why nothing here is resolved outside the `try`.
+    Ticket 23 revisited the swallow rather than inheriting it. This runs after the sync has finished and its Posts are
+    committed, so raising would turn a completed sync into a failed one to
+    report an accounting problem. Now that the numbers gate a lane, the cost of
+    the swallow is bounded and worth stating: one message's Requests go
+    unbilled, the account stays on the normal tier marginally longer than it
+    earned, and the next charge succeeds. Under-billing repeatedly needs the
+    database to be persistently unreachable, and by then the enqueue read, the
+    lane read and the sync itself have all stopped too. The log line names the
+    `sync_mode` as well as the count, so the unbilled work is attributable.
     """
     if requests <= 0:
         return
@@ -147,7 +198,18 @@ def charge_sync_job(
                 session, owner_id, budget_for_sync_mode(sync_mode), requests
             )
     except Exception:
-        logger.exception("Quota: failed to charge %s Requests", requests)
+        # `sync_mode` rather than the Budget, because resolving the Budget is
+        # itself one of the things that can fail here — `budget_for_sync_mode`
+        # raises for a mode nobody mapped — and a log line that raises while
+        # reporting a failure would carry it out of this `except` and into the
+        # `finally` in `sync_queue._process_message` that called us. The mapping
+        # is one line away in this module, so naming the mode names the Budget.
+        logger.exception(
+            "Quota: failed to charge %s Requests for %s (sync_mode=%s)",
+            requests,
+            user_id,
+            sync_mode,
+        )
 
 
 def today_utc() -> date:

@@ -24,7 +24,11 @@ from app.services.follows import (
     followed_channels_for,
     schedule_group_id,
 )
-from app.services.scraper_jobs import SyncJobState, create_job, has_active_sync_job
+from app.services.scraper_jobs import (
+    SyncJobState,
+    active_sync_job_owners,
+    create_job,
+)
 from app.services.sync_schedule import due_reason, is_channel_due, needs_dynamic_stats
 
 logger = logging.getLogger(__name__)
@@ -162,15 +166,32 @@ async def run_auto_sync() -> dict[str, Any]:
                 session, {"autoSyncPauseUntil": None, "consecutiveFailures": 0}
             )
 
-        if has_active_sync_job():
-            return {"skipped": True, "reason": "sync_job_active"}
-
         owners = accounts_with_follows(session)
         if not owners:
             # Nobody follows anything, so there is nothing to sync and no
             # account to attribute a job to. Distinct from "no channels are
             # due", which is the ordinary quiet tick below.
             return {"skipped": True, "reason": "no_followed_channels"}
+
+        # **Per owner, not per deployment** (ticket 23). The gate stops this
+        # tick stacking a second batch on top of one that has not finished, and
+        # since ticket 21 a tick creates one job *per owner* — so asking the
+        # question deployment-wide made every account wait for the slowest one.
+        #
+        # Ticket 23 is what turned that from untidy into a real stall: an
+        # account over its `auto_sync` Budget now enqueues onto the best-effort
+        # tier, which is served only when every normal lane is empty, so its job
+        # can stay non-terminal for as long as manual work keeps arriving. Under
+        # the old gate that one account's backlog silently stopped the scheduler
+        # for everybody, and the daily reset would not have rescued it — a
+        # message's lane is fixed at enqueue.
+        #
+        # All owners busy still answers `sync_job_active`, which is the reason
+        # the Jobs panel has always shown for a tick that did nothing.
+        busy = active_sync_job_owners()
+        owners = [owner for owner in owners if owner not in busy]
+        if not owners:
+            return {"skipped": True, "reason": "sync_job_active"}
 
         groups_by_id = load_groups_by_id(session)
         due_by_owner: dict[uuid.UUID, list[Channel]] = {}

@@ -29,15 +29,20 @@ caller stays uncounted:
 
 * Not `t.me` at all, so never counted wherever they run — the Bot API
   (`publish.py`), thumbnail and avatar CDNs, proxy health checks.
-* Genuinely `t.me`, and deliberately uncharged for now: the handle probes in
-  `routes/telegram.py`, and `jobs/discover_probe.py`. The probe queue is the
-  awkward one — it is a *scheduled* job fetching the web view every tick, which
-  is exactly the background load the `auto_sync` Budget exists to throttle. It
-  is uncharged because `DiscoverHandleProbe` is corpus-scoped (see
-  `services/tenancy.py`): the queue is deployment-wide and no account owns an
-  entry, so there is nobody to charge without inventing an owner. Ticket 23 has
-  to decide whether the operator wears it; `docs/quota-ledger-plan.md` records
-  the question.
+* Genuinely `t.me`, and uncharged on purpose: the handle probes in
+  `routes/telegram.py`, and `jobs/discover_probe.py`. Ticket 08 left the probe
+  sweep open — it is a *scheduled* job fetching the web view every tick, which
+  looks exactly like the background load the `auto_sync` Budget exists to
+  throttle — and **ticket 23 closed it as uncharged**, for two reasons that
+  point the same way. It does not enqueue onto a lane, so there is nothing for
+  the ladder to deprioritize: charging it would take Budget away from the
+  operator's own syncs and change nothing about the sweep. And
+  `DiscoverHandleProbe` is corpus-scoped (see `services/tenancy.py`), so the
+  queue is deployment-wide work every account benefits from — billing one
+  account for it makes that account's Budget a proxy for deployment load, which
+  is what decision 16 split the three Budgets to stop. Deployment-wide load is
+  bounded by the proxy partition and the adaptive wait (tickets 13 and 14),
+  which is the tier that owns it.
 
 This lives in `core/` rather than `services/` for the reason `async_db.py` is a
 declared exception in `test_service_kinds.py`: it is infrastructure with no

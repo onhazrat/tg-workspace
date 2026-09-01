@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
 import time
 import uuid
@@ -663,6 +664,56 @@ def deactivate_job(job_id: str) -> None:
     _cancel_events.pop(job_id, None)
 
 
+def active_sync_job_owners() -> set[uuid.UUID]:
+    """Accounts with a sync job pending or running — running *or still queued*.
+
+    `has_active_sync_job`'s question, asked per account, because since ticket 21
+    `run_auto_sync` creates **one job per owner** and the deployment-wide answer
+    made every owner wait for the slowest one. Account A's two-thousand-Channel
+    backlog stopped account B's scheduler, for as long as A's job stayed
+    non-terminal, and B had no way to see why.
+
+    Ticket 23 is what made that worth fixing rather than noting. Before it,
+    auto-sync always held weight 1 in the round-robin, so A's job made steady
+    progress whatever else was queued. Now an account over its `auto_sync`
+    Budget enqueues onto the best-effort tier, which is served **only** when
+    every normal lane is empty — so A's job can sit unfinished for as long as
+    manual work keeps arriving, and under the old gate it took the whole
+    deployment's scheduler with it.
+
+    Per *owner* rather than per job: the gate exists to stop a tick enqueueing a
+    second batch on top of the first, and that is a question about the account,
+    not about the job id.
+
+    Same two-step as `has_active_sync_job` — the in-memory jobs are free, and
+    the row read happens only for the ids that are still queued. An id whose row
+    names an owner this build cannot parse is skipped rather than guessed at;
+    it can only come from a hand-edited row, and the alternative is a `ValueError`
+    inside the scheduler tick.
+    """
+    owners: set[uuid.UUID] = set()
+    for job in _active_jobs.values():
+        if job.status in ("pending", "running") and job.user_id:
+            with contextlib.suppress(ValueError):
+                owners.add(uuid.UUID(job.user_id))
+
+    # Imported lazily: `sync_queue` imports this module.
+    from app.jobs.sync_queue import queued_job_ids
+
+    queued = queued_job_ids()
+    if not queued:
+        return owners
+    with Session(engine) as session:
+        rows = session.exec(
+            select(SyncJobRow.user_id).where(
+                col(SyncJobRow.status).in_(("pending", "running")),
+                col(SyncJobRow.id).in_(tuple(queued)),
+            )
+        ).all()
+    owners.update(row for row in rows if row is not None)
+    return owners
+
+
 def has_active_sync_job() -> bool:
     """True when a sync job is pending or running — running *or still queued*.
 
@@ -677,6 +728,9 @@ def has_active_sync_job() -> bool:
 
     So a queued-but-unclaimed job counts as active. The row check runs only when
     the cheap in-memory answer is negative, and at most once a tick.
+
+    **Deployment-wide, which is right for `run_auto_summary` and was wrong for
+    `run_auto_sync`.** See `active_sync_job_owners`.
     """
     if any(j.status in ("pending", "running") for j in _active_jobs.values()):
         return True

@@ -113,7 +113,7 @@ def test_a_sync_mode_picks_its_lane() -> None:
                 user_id=str(ANY_READER),
                 sync_mode=mode,  # type: ignore[arg-type]
             )
-            lanes.append(sync_queue.lane_for_job(job))
+            lanes.append(sync_queue.lane_for_job(job, ANY_READER))
         return lanes
 
     assert asyncio.run(run()) == [
@@ -179,11 +179,11 @@ def test_a_rehydrated_job_still_picks_its_own_lane() -> None:
             user_id=str(ANY_READER),
             sync_mode="individual",
         )
-        at_enqueue = sync_queue.lane_for_job(job)
+        at_enqueue = sync_queue.lane_for_job(job, ANY_READER)
         clear_active_jobs_for_tests()
         rehydrated = get_job(job.job_id)
         assert rehydrated is not None
-        return at_enqueue, sync_queue.lane_for_job(rehydrated)
+        return at_enqueue, sync_queue.lane_for_job(rehydrated, ANY_READER)
 
     at_enqueue, after_reload = asyncio.run(run())
     assert at_enqueue == after_reload == MANUAL_SINGLE_NORMAL_LANE
@@ -377,7 +377,7 @@ def test_one_message_per_channel_never_one_per_job(
         # Read what `enqueue_sync_job` itself wrote, without the kick draining
         # it first: send directly, then inspect.
         _drain_queue(MANUAL_BULK_NORMAL_LANE)
-        lane = sync_queue.lane_for_job(job)
+        lane = sync_queue.lane_for_job(job, ANY_READER)
         for channel_id in job.channels:
             await asyncio.to_thread(
                 sync_queue._send,
