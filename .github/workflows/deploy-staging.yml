@@ -44,7 +44,7 @@ jobs:
       TOR_CONTROL_PASSWORD: ${{ secrets.TOR_CONTROL_PASSWORD }}
       DOCKER_IMAGE_BACKEND: backend
       DOCKER_IMAGE_FRONTEND: frontend
-      USERS_OPEN_REGISTRATION: "false"
+      USERS_OPEN_REGISTRATION: "true"
       # Optional. Unset is the common case, so it is defaulted where the
       # .env is written rather than here — see the note beside that line.
       USERS_REQUIRE_APPROVAL: ${{ secrets.USERS_REQUIRE_APPROVAL }}
