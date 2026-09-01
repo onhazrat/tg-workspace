@@ -128,6 +128,11 @@ RETENTION_PREF_FIELDS = frozenset(
 )
 
 
+#: Ticket 24's deployment-wide Budget defaults. Named here for the reason the
+#: lane key is: the aggregate, the registry and the guard all have to agree on
+#: the spelling.
+QUOTA_KEY = "quota"
+
 #: Deployment-wide keys: one row, shared by every account.
 GLOBAL_KEYS: dict[str, str] = {
     "jobs": (
@@ -167,6 +172,14 @@ GLOBAL_KEYS: dict[str, str] = {
         "A marker recording that the ticket 04 backfill completed. A fact "
         "about the database, not about anybody — and retention reads it before "
         "collecting channels, with no User in hand."
+    ),
+    QUOTA_KEY: (
+        "The default Request allowance and ceiling for each of the three "
+        "Budgets (ticket 24). Deployment policy because it is the number every "
+        "account gets before an Admin says otherwise; the per-account override "
+        "is `tg_quota_limits`, which is a table rather than a per-User settings "
+        "key because an Admin sets it *about* an account instead of the "
+        "account setting it for itself."
     ),
     SYNC_LANES_KEY: (
         "Which sync lanes an Admin has paused (ticket 12). A lane is a queue "

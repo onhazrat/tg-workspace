@@ -54,6 +54,14 @@ export const queryKeys = {
    * for a past day is immutable — yesterday cached forever is correct.
    */
   quotaUsage: (day: string) => ["quotaUsage", day] as const,
+  /**
+   * The signed-in account's own Budgets (ticket 24). Not keyed on a day: it
+   * always answers for today, and a key holding a date would go stale across a
+   * UTC midnight while the cache still thought it was fresh.
+   */
+  myQuota: () => ["myQuota"] as const,
+  /** The deployment's Budget defaults and every per-account override. */
+  quotaLimits: () => ["quotaLimits"] as const,
 } as const
 
 export const SUMMARIZER_STALE_TIME = env.queryStaleTimeMs

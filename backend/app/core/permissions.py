@@ -50,6 +50,15 @@ class Permission(StrEnum):
     role the spec keeps in view might want one without the other.
     """
 
+    QUOTA_MANAGE = "quota:manage"
+    """Set Budget defaults and per-account overrides, and lift a ceiling.
+
+    Separate from `QUOTA_READ_ANY` for the reason that one is separate from
+    `USERS_READ`: reading what an account spent and deciding what it may spend
+    are different acts, and the auditor role the spec keeps in view is exactly
+    somebody who should have the first and not the second.
+    """
+
     DATA_ADMIN = "data:admin"
     """Administer the database itself: statistics, table sizes, clearing a
     table, import, export, the log purge, and the deployment's network settings.
@@ -120,6 +129,7 @@ SEEDED_ROLES: tuple[RoleSeed, ...] = (
             Permission.ITEMS_MANAGE_ANY,
             Permission.UTILS_ADMIN,
             Permission.QUOTA_READ_ANY,
+            Permission.QUOTA_MANAGE,
             Permission.DATA_ADMIN,
             Permission.LOGS_READ_ANY,
             Permission.JOBS_MANAGE,
@@ -134,6 +144,7 @@ SEEDED_ROLES: tuple[RoleSeed, ...] = (
             Permission.ITEMS_MANAGE_ANY,
             Permission.UTILS_ADMIN,
             Permission.QUOTA_READ_ANY,
+            Permission.QUOTA_MANAGE,
             Permission.DATA_ADMIN,
             Permission.LOGS_READ_ANY,
             Permission.JOBS_MANAGE,

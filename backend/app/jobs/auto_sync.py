@@ -15,6 +15,7 @@ from app.core.db import engine
 from app.jobs.settings import load_sync_settings, save_sync_settings
 from app.jobs.sync_queue import enqueue_sync_job
 from app.models_tg import Channel
+from app.services.async_db import run_db
 from app.services.channel_setting_groups import load_groups_by_id
 from app.services.channels import compute_channel_stats_batch
 from app.services.follows import (
@@ -24,6 +25,7 @@ from app.services.follows import (
     followed_channels_for,
     schedule_group_id,
 )
+from app.services.quota import Budget, QuotaCeilingReached, assert_within_ceiling
 from app.services.scraper_jobs import (
     SyncJobState,
     active_sync_job_owners,
@@ -298,9 +300,31 @@ async def run_auto_sync() -> dict[str, Any]:
     # enqueued twice and scraped once: ticket 11's per-Channel claim coalesces
     # the second onto the first, which reports the first one's outcome and is
     # not charged for it.
+    # **The ceiling is checked before the job row exists, not after** (ticket
+    # 24). `enqueue_sync_job` also refuses, and letting it do so here would be
+    # correct and unusable: this tick runs every 60 seconds, `_refuse_at_ceiling`
+    # makes the job terminal immediately, so `active_sync_job_owners` never sees
+    # the owner as busy and the next tick plans and creates another one. An
+    # account past its `auto_sync` ceiling would file ~1,400 `failed` job rows a
+    # day and fill the Jobs panel with red for a condition that is not a
+    # failure. Skipping the owner before `create_job` costs one ledger read and
+    # produces nothing.
     job_ids: list[str] = []
     statuses: list[str] = []
+    skipped_owners = 0
     for plan in plans:
+        try:
+            await run_db(assert_within_ceiling, plan.owner_id, Budget.AUTO_SYNC)
+        except QuotaCeilingReached:
+            # One owner past its ceiling must not stop the tick for the others —
+            # the same shape as ticket 23's per-owner gate above.
+            skipped_owners += 1
+            logger.info(
+                "Auto sync: %s is at its auto_sync ceiling; skipping this tick",
+                plan.owner_id,
+            )
+            continue
+
         job = await create_job(
             channel_entries=plan.entries,
             source=CHECK_SOURCE,
@@ -309,9 +333,28 @@ async def run_auto_sync() -> dict[str, Any]:
                 cid: {"dueReason": plan.reasons.get(cid)} for cid, _ in plan.entries
             },
         )
-        await enqueue_sync_job(job, plan.owner_id)
+        try:
+            await enqueue_sync_job(job, plan.owner_id)
+        except QuotaCeilingReached:
+            # Reachable in the window between the check above and this line —
+            # another process charging the last Requests of the day. Rare, and
+            # the job row is already marked terminal with the reason.
+            skipped_owners += 1
+            logger.info(
+                "Auto sync: %s reached its auto_sync ceiling mid-tick",
+                plan.owner_id,
+            )
         job_ids.append(job.job_id)
         statuses.append(job.status)
+
+    if not job_ids:
+        # Every owner was over. Distinct from "no channels are due": the work
+        # exists and is refused, which is what an operator needs to be told.
+        return {
+            "skipped": True,
+            "reason": "quota_ceiling",
+            "owners": skipped_owners,
+        }
 
     all_reasons = [r for plan in plans for r in plan.reasons.values()]
     return {

@@ -98,8 +98,12 @@ from app.services.proxy_pool import (
     ensure_pool_configured,
 )
 from app.services.quota import (
+    Budget,
+    QuotaCeilingReached,
+    assert_within_ceiling,
     budget_for_sync_mode,
     charge_sync_job,
+    resolve_budget_limits,
     resolve_charge_owner,
     usage_for_user,
 )
@@ -760,6 +764,12 @@ def lane_for_job(job: SyncJobState, user_id: uuid.UUID | None) -> str:
                 # `charge_sync_job` logs and drops the charge in the same case.
                 return lane_for_budget(budget)
             spent = usage_for_user(session, owner_id)[budget]
+            # Ticket 24: the allowance is resolved rather than read off
+            # `config.py`, because an Admin can now set a deployment-wide
+            # default and a per-User override. Read in the same session as the
+            # spend, so a save landing between the two cannot measure one
+            # afternoon's usage against the next one's limit.
+            allowance = resolve_budget_limits(session, budget, owner_id).allowance
     except Exception:
         # Fail open, and it is the narrower of the two answers: at this rung
         # nothing is refused, so being wrong costs one batch at the wrong
@@ -772,7 +782,24 @@ def lane_for_job(job: SyncJobState, user_id: uuid.UUID | None) -> str:
             budget.value,
         )
         return lane_for_budget(budget)
-    return lane_for_spend(budget, spent)
+    return lane_for_spend(budget, spent, allowance)
+
+
+async def _refuse_at_ceiling(job: SyncJobState, budget: Budget) -> None:
+    """Mark every Channel of a refused job, then make the job terminal.
+
+    Called before anything is sent, so the job row is the whole record of what
+    happened. Written here rather than left to each caller because three of the
+    four callers are unattended: a job row stuck at `pending` for ever is what
+    `has_active_sync_job` reads, and ticket 12 already had to fix one of those.
+    """
+    for ch_state in job.channels.values():
+        ch_state.status = "failed"
+        ch_state.error = f"Daily {budget.value} request ceiling reached"
+    job.status = "failed"
+    job.finished_at = int(time.time() * 1000)
+    await persist_job(job)
+    deactivate_job(job.job_id)
 
 
 async def enqueue_sync_job(job: SyncJobState, user_id: uuid.UUID | None) -> None:
@@ -782,7 +809,22 @@ async def enqueue_sync_job(job: SyncJobState, user_id: uuid.UUID | None) -> None
     /jobs/sync`, `run_auto_sync`, and bulk follow. The job row already exists,
     so the SSE stream sees the same "pending" -> "running" -> terminal sequence
     it always has.
+
+    **Raises `QuotaCeilingReached` past the ceiling** (ticket 24), before it
+    sends anything. This is the half of the ceiling a person sees: `POST
+    /jobs/sync` answers 429 rather than creating a job whose fifty Channels each
+    fail separately a minute later. It is *not* the half that bounds anything —
+    the tier and the ceiling are both read once per enqueue call, so the batch
+    that crosses the ceiling was enqueued while the account was still under it.
+    `sync_orchestrator.sync_single_channel` is where that is caught, per
+    Channel, and it is also where the two syncs that never enqueue are caught.
     """
+    budget = budget_for_sync_mode(job.sync_mode)
+    try:
+        await asyncio.to_thread(assert_within_ceiling, user_id, budget)
+    except QuotaCeilingReached:
+        await _refuse_at_ceiling(job, budget)
+        raise
     lane = await asyncio.to_thread(lane_for_job, job, user_id)
     payloads = [
         {

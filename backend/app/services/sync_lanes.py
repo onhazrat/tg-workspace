@@ -29,7 +29,7 @@ from __future__ import annotations
 
 from collections.abc import Container
 
-from app.services.quota import Budget, budget_allowance
+from app.services.quota import Budget
 
 TIER_NORMAL = "normal"
 TIER_BEST_EFFORT = "best_effort"
@@ -134,47 +134,50 @@ def lane_for_budget(budget: Budget, tier: str = TIER_NORMAL) -> str:
     return lane_name(budget, tier)
 
 
-def tier_for_spend(budget: Budget, spent: int) -> str:
-    """Which tier an account gets on this Budget, having spent `spent` today.
+def tier_for_spend(spent: int, allowance: int | None) -> str:
+    """Which tier an account gets, having spent `spent` against `allowance`.
 
     Decision 17's ladder, and the whole of it: **inside the allowance is normal,
     at or past it is best-effort, and nothing is refused.** The refusal is the
-    absolute ceiling, which is ticket 24's and is not expressible here — a lane
-    is a priority, and every lane runs.
+    absolute ceiling, which lives in `quota.assert_within_ceiling` and is not
+    expressible here — a lane is a priority, and every lane runs.
 
-    Pure, and takes the spend rather than a `Session` and a user id, so the rule
-    can be driven as arithmetic. The read that produces `spent` is
-    `quota.usage_for_user`, and the join between them is
-    `sync_queue.lane_for_job`, which is the only thing here that needs a
-    database.
+    Pure, and takes the two numbers rather than a `Session` and a user id, so
+    the rule can be driven as arithmetic. **Ticket 24 moved the allowance into
+    the signature**: it used to call `budget_allowance(budget)`, which read one
+    number out of `config.py` for everybody, and once an Admin can set a
+    deployment default and a per-User override that answer needs a database.
+    Reaching for one here would make this module the thing it is defined not to
+    be; `sync_queue.lane_for_job` resolves the limits and passes them, which is
+    the same shape as the `spent` beside them.
 
-    The comparison is `>=`, and that is load-bearing rather than a rounding
-    choice: it makes **an allowance of zero mean "always best-effort"**
+    `allowance is None` is unlimited, which is what a negative setting resolves
+    to. The comparison is otherwise `>=`, and that is load-bearing rather than a
+    rounding choice: it makes **an allowance of zero mean "always best-effort"**
     (decision 18) by arithmetic instead of by a special case, because zero spent
     is already not less than zero allowed. A `>` would give an account with a
     zero Budget exactly one free batch at normal priority a day, which is the
     shape of thing nobody notices until they are reading a ledger and cannot
     make it add up.
 
-    Only *this* Budget is consulted. Exhausting one leaves the other two on the
-    normal tier, which is decision 16's reason for splitting them at all —
-    reading a day's total here would collapse the three back into one and do it
-    invisibly, since every lane would still be a valid lane.
+    Only one Budget's numbers reach this function, which is decision 16's reason
+    for splitting them at all — exhausting one leaves the other two on the
+    normal tier, and a day's total passed in here would collapse the three back
+    into one invisibly, since every lane would still be a valid lane.
     """
-    allowance = budget_allowance(budget)
     if allowance is None:
         return TIER_NORMAL
     return TIER_BEST_EFFORT if spent >= allowance else TIER_NORMAL
 
 
-def lane_for_spend(budget: Budget, spent: int) -> str:
-    """The lane this Budget's work goes on for an account that has spent `spent`.
+def lane_for_spend(budget: Budget, spent: int, allowance: int | None) -> str:
+    """The lane `budget`'s work goes on for an account in this position.
 
     `lane_for_budget` composed with `tier_for_spend`, named because that pair is
     what every enqueue wants and spelling it out at the call site is how the two
     halves end up applied in one place and not the other.
     """
-    return lane_for_budget(budget, tier_for_spend(budget, spent))
+    return lane_for_budget(budget, tier_for_spend(spent, allowance))
 
 
 class LaneScheduler:

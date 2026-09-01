@@ -4,10 +4,10 @@
 
 **Blocked by:** 23
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] Defaults and per-User overrides exist for each of the three Budgets independently
-- [ ] A Budget of zero means always best-effort, never blocked
-- [ ] An absolute per-Budget ceiling stops work entirely, lifts at the daily reset, and can be lifted early
-- [ ] A User sees per-Budget usage and a persistent warning when exhausted
-- [ ] A guard asserts zero does not mean blocked
+- [x] Defaults and per-User overrides exist for each of the three Budgets independently
+- [x] A Budget of zero means always best-effort, never blocked
+- [x] An absolute per-Budget ceiling stops work entirely, lifts at the daily reset, and can be lifted early
+- [x] A User sees per-Budget usage and a persistent warning when exhausted
+- [x] A guard asserts zero does not mean blocked

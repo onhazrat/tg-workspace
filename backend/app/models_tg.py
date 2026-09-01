@@ -995,5 +995,70 @@ class QuotaUsage(SQLModel, table=True):
 
     requests: int = 0
 
+    #: When an Admin lifted this account's ceiling on this Budget for this day
+    #: (ticket 24). Null is the normal state; a timestamp means the ceiling is
+    #: not enforced against this row.
+    #:
+    #: **The lift lives on the ledger row because the row is already keyed the
+    #: way a lift needs to be.** `(user_id, day, budget)` is exactly "this
+    #: account, this Budget, today", and decision 18's "auto-lifts at the daily
+    #: reset" then costs nothing to implement: tomorrow is a different row, so
+    #: the lift expires by arithmetic rather than by a job that has to run. The
+    #: alternative — raising the account's ceiling override — is a different
+    #: thing that also applies tomorrow, silently.
+    #:
+    #: A lift is the one thing that writes a row with `requests = 0`. That is
+    #: deliberate: `charge_requests` refuses a zero charge because a row of zero
+    #: is indistinguishable from a real quiet day, and a row carrying a lift is
+    #: distinguishable — it records an administrative act on a table that is
+    #: kept forever.
+    ceiling_lifted_at: datetime | None = None
+
+    created_at: datetime = Field(default_factory=utc_now)
+    updated_at: datetime = Field(default_factory=utc_now)
+
+
+class QuotaLimit(SQLModel, table=True):
+    """One account's override of one Budget's allowance and ceiling (ticket 24).
+
+    The per-User half of decision 16's "independent defaults and independent
+    per-user Admin overrides". `services/quota_limits.py` is the sole writer.
+
+    **A row is an override, and an absent row is not a limit of zero** — both
+    columns are nullable and null means "inherit". That distinction is the whole
+    reason this is three nullable columns rather than a JSON blob or a
+    `NOT NULL` copy of the defaults: an Admin who caps one account's bulk
+    Budget must not thereby freeze that account's other two at whatever the
+    deployment default happened to be on the day they clicked.
+
+    Set by an Admin *about* an account rather than by the account about itself,
+    which is why it is a table of its own and not a `tg_user_settings` key.
+    `tg_user_settings` is personal preference (ticket 06); filing an imposed
+    limit there would put it under the nearer wrong heading, the way RBAC would
+    have gone under template auth.
+
+    The primary key carries `user_id`, so `tenancy.owner_backfill_inventory`
+    excuses this table the way it excuses `QuotaUsage`: a row without an owner
+    cannot be expressed.
+    """
+
+    __tablename__ = "tg_quota_limits"
+
+    user_id: uuid.UUID = Field(
+        foreign_key="user.id",
+        primary_key=True,
+        ondelete="CASCADE",
+    )
+    #: One of `services/quota.Budget`, stored as its string value — a persisted
+    #: format, exactly as in `QuotaUsage.budget`.
+    budget: str = Field(primary_key=True)
+
+    #: Requests per day before this account's work on this Budget drops to the
+    #: best-effort tier. Null inherits the deployment default.
+    allowance: int | None = None
+    #: Requests per day before this account's work on this Budget stops
+    #: entirely. Null inherits the deployment default.
+    ceiling: int | None = None
+
     created_at: datetime = Field(default_factory=utc_now)
     updated_at: datetime = Field(default_factory=utc_now)

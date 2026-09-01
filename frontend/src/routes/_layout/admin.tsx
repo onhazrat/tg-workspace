@@ -5,6 +5,7 @@ import { Suspense } from "react"
 import { type UserPublic, usersReadUserMe, usersReadUsers } from "@/client"
 import AddUser from "@/components/Admin/AddUser"
 import { columns, type UserTableData } from "@/components/Admin/columns"
+import QuotaLimits from "@/components/Admin/QuotaLimits"
 import QuotaUsage from "@/components/Admin/QuotaUsage"
 import { DataTable } from "@/components/Common/DataTable"
 import PendingUsers from "@/components/Pending/PendingUsers"
@@ -69,6 +70,7 @@ function Admin() {
         <AddUser />
       </div>
       <UsersTable />
+      <QuotaLimits />
       <QuotaUsage />
     </div>
   )

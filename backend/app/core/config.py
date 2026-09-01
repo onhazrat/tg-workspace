@@ -208,6 +208,28 @@ class Settings(BaseSettings):
     QUOTA_DEFAULT_AUTO_SYNC_REQUESTS: int = 10_000
     QUOTA_DEFAULT_MANUAL_BULK_REQUESTS: int = 3_000
     QUOTA_DEFAULT_MANUAL_SINGLE_REQUESTS: int = 1_000
+
+    #: The absolute daily ceiling per Budget: at or past it, an account's work
+    #: on that Budget does not run at all until UTC midnight (ticket 24,
+    #: decision 18). Unlike the allowance above, this refuses.
+    #:
+    #: **Ten times the allowance default, computed once here and never again.**
+    #: Decision 18 says the ceiling is an absolute number rather than a
+    #: multiple, and the reason is the zero case: a multiple evaluated at
+    #: resolution time turns a zero allowance — which must mean "always
+    #: best-effort" — into a zero ceiling, which means blocked. So the multiple
+    #: lives in these three literals and nowhere in the code.
+    #:
+    #: **Negative is unlimited**, as above. **Zero blocks**, which is the one
+    #: place the two differ and is deliberate: "this account runs nothing on
+    #: this Budget" is a thing an Admin may want and is not otherwise sayable.
+    #:
+    #: These are the shipped floor of a three-layer resolution — the
+    #: deployment-wide `quota` settings row and the per-User `tg_quota_limits`
+    #: override both sit above them. See `docs/quota-ceilings-plan.md`.
+    QUOTA_DEFAULT_AUTO_SYNC_CEILING_REQUESTS: int = 100_000
+    QUOTA_DEFAULT_MANUAL_BULK_CEILING_REQUESTS: int = 30_000
+    QUOTA_DEFAULT_MANUAL_SINGLE_CEILING_REQUESTS: int = 10_000
     AUTO_SYNC_CHECK_INTERVAL_SECONDS: int = 60
     AUTO_SYNC_INTERVAL_MINUTES_DEFAULT: int = 60
     AUTO_SYNC_PAUSE_DURATION_MS: int = 10 * 60 * 1000

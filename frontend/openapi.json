@@ -4820,6 +4820,165 @@
           }
         }
       }
+    },
+    "/api/v1/quota/me": {
+      "get": {
+        "tags": ["quota"],
+        "summary": "Read My Quota",
+        "description": "Where the calling account stands on each Budget today (ticket 24).\n\nThe fourth checkbox: a User sees per-Budget usage, and the browser turns\n`status` into the persistent warning. `status` is computed here rather than\nin the browser because the derivation is three comparisons in which zero\nmeans opposite things on the two rungs, and getting it wrong client-side\nwould show \"blocked\" to somebody whose work is running.",
+        "operationId": "quota-read_my_quota",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/MyQuotaResponse" }
+              }
+            }
+          }
+        },
+        "security": [{ "OAuth2PasswordBearer": [] }]
+      }
+    },
+    "/api/v1/quota/limits": {
+      "get": {
+        "tags": ["quota"],
+        "summary": "Read Quota Limits",
+        "description": "The deployment's defaults and every per-account override.\n\nBoth in one response: an override field rendered blank has to say which\nnumber it inherits, so a screen that fetched them separately would be\nbriefly and visibly wrong.\n\n**Both the resolved defaults and the stored ones**, which is not\nredundancy. The resolved pair is what is in force, `config.py` fallback\nincluded, and is what a form should show as *placeholder* text. The stored\npair is what an Admin has actually saved, `null` where they never have, and\nis what the form's input *value* must be. Sending only the resolved numbers\nmakes a form seed every box with the shipped value, so the first save writes\nall six into the settings row and `QUOTA_DEFAULT_*` in `.env` goes silently\ndead for that deployment \u2014 and \"leave it empty to inherit\" stops being\nsayable, because no box is ever empty.",
+        "operationId": "quota-read_quota_limits",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/QuotaLimitsResponse" }
+              }
+            }
+          }
+        },
+        "security": [{ "OAuth2PasswordBearer": [] }]
+      }
+    },
+    "/api/v1/quota/limits/defaults": {
+      "put": {
+        "tags": ["quota"],
+        "summary": "Set Quota Defaults",
+        "description": "Set the deployment-wide default allowance and ceiling per Budget.\n\nWritten to the global `quota` settings row through `settings_store`, which\nis the sole writer of `tg_app_settings` \u2014 a second writer here would be the\nsecond opinion about where a key belongs that the ticket 06 split exists to\nremove.\n\nA `null` field clears that default, dropping back to `config.py`. It is\nstored as a null rather than deleted, which `stored_default` reads as\nabsent either way.",
+        "operationId": "quota-set_quota_defaults",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/SetQuotaLimitsRequest" }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/QuotaLimitsResponse" }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        },
+        "security": [{ "OAuth2PasswordBearer": [] }]
+      }
+    },
+    "/api/v1/quota/limits/{user_id}": {
+      "put": {
+        "tags": ["quota"],
+        "summary": "Set Quota Limits For User",
+        "description": "Override one account's allowance and ceiling on the Budgets named.\n\nA Budget the body omits keeps whatever override it had, so a screen editing\none row does not have to echo the other two back to preserve them. Sending\nboth numbers as `null` removes the override entirely, which is the only way\nto put an account back on the deployment default.",
+        "operationId": "quota-set_quota_limits_for_user",
+        "security": [{ "OAuth2PasswordBearer": [] }],
+        "parameters": [
+          {
+            "name": "user_id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid", "title": "User Id" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/SetQuotaLimitsRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/QuotaLimitsResponse" }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/quota/lifts/{user_id}": {
+      "post": {
+        "tags": ["quota"],
+        "summary": "Lift Quota Ceiling",
+        "description": "Stop enforcing this account's ceilings for the current UTC day.\n\nDecision 18's \"an Admin can lift early\". The auto-lift needs no route: the\nledger is keyed by day, so a ceiling stops applying at the same UTC midnight\nthe spend resets at.\n\nAn empty `budgets` lifts all three, which is what an Admin unblocking\nsomebody in a hurry means. `lifted: false` takes it back.",
+        "operationId": "quota-lift_quota_ceiling",
+        "security": [{ "OAuth2PasswordBearer": [] }],
+        "parameters": [
+          {
+            "name": "user_id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid", "title": "User Id" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/LiftCeilingRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/StatusResponse" }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -4995,6 +5154,23 @@
         "type": "object",
         "title": "BotInfoResponse",
         "description": "A proxied Telegram Bot API reply.\n\nOpen by necessity: the caller picks the Bot API method, so the keys are\nwhatever that method returns. Only `telemetry` is ours."
+      },
+      "BudgetLimitsPayload": {
+        "properties": {
+          "budget": { "type": "string", "title": "Budget" },
+          "allowance": {
+            "anyOf": [{ "type": "integer" }, { "type": "null" }],
+            "title": "Allowance"
+          },
+          "ceiling": {
+            "anyOf": [{ "type": "integer" }, { "type": "null" }],
+            "title": "Ceiling"
+          }
+        },
+        "type": "object",
+        "required": ["budget"],
+        "title": "BudgetLimitsPayload",
+        "description": "One Budget's two numbers, as an Admin sets them or a User reads them.\n\n`null` means unlimited on the wire, which is what a negative setting\nresolves to \u2014 the negative spelling is the `.env` escape hatch and does not\nleave the backend. A number of zero is a real limit and is sent as zero."
       },
       "BulkChannelSettingGroupRequest": {
         "properties": {
@@ -6804,6 +6980,19 @@
         "title": "LLMLogResponse",
         "description": "One model call: the prompt, the response, and what it cost.\n\n`protected_namespaces=()` is required, not decorative. Pydantic v2 reserves\nthe `model_` prefix for its own API, and this table has both a `model` column\nand a `model_config_json` one \u2014 the latter collides with `BaseModel.model_config`\nitself. Without the override, declaring these fields raises at class-creation\ntime. Renaming the columns is not an option: they are the wire format."
       },
+      "LiftCeilingRequest": {
+        "properties": {
+          "budgets": {
+            "items": { "type": "string" },
+            "type": "array",
+            "title": "Budgets"
+          },
+          "lifted": { "type": "boolean", "title": "Lifted", "default": true }
+        },
+        "type": "object",
+        "title": "LiftCeilingRequest",
+        "description": "Lift (or restore) this account's ceilings for the current UTC day.\n\n`budgets` empty means all three, which is what an Admin unblocking somebody\nin a hurry means. The day is not a parameter: a lift is for today, because\nlifting a ceiling on a day that is already over changes nothing and lifting\none in advance is a limit change rather than a lift."
+      },
       "LogDetailResponse": {
         "anyOf": [
           { "$ref": "#/components/schemas/PublishLogResponse" },
@@ -6878,6 +7067,40 @@
         "type": "object",
         "title": "ModelListResponse",
         "description": "Every model the configured providers expose, plus the current default.\n\n`default` is shipped alongside rather than flagged on an entry so a caller\ncan render the selector without scanning the list \u2014 and so a default that is\nno longer offered still round-trips instead of silently vanishing."
+      },
+      "MyBudgetUsage": {
+        "properties": {
+          "budget": { "type": "string", "title": "Budget" },
+          "allowance": {
+            "anyOf": [{ "type": "integer" }, { "type": "null" }],
+            "title": "Allowance"
+          },
+          "ceiling": {
+            "anyOf": [{ "type": "integer" }, { "type": "null" }],
+            "title": "Ceiling"
+          },
+          "spent": { "type": "integer", "title": "Spent" },
+          "status": { "type": "string", "title": "Status" },
+          "lifted": { "type": "boolean", "title": "Lifted" }
+        },
+        "type": "object",
+        "required": ["budget", "spent", "status", "lifted"],
+        "title": "MyBudgetUsage",
+        "description": "What the calling account has spent on one Budget today, and what follows.\n\n`status` is computed on the server rather than derived in the browser from\nthe three numbers beside it. The derivation is three comparisons with two\ndifferent meanings for zero, and a browser that got one of them wrong would\nshow \"you are blocked\" to somebody whose work is running \u2014 the failure the\nticket's fifth checkbox exists to prevent, moved to the other side of the\nwire."
+      },
+      "MyQuotaResponse": {
+        "properties": {
+          "day": { "type": "string", "format": "date", "title": "Day" },
+          "budgets": {
+            "items": { "$ref": "#/components/schemas/MyBudgetUsage" },
+            "type": "array",
+            "title": "Budgets"
+          }
+        },
+        "type": "object",
+        "required": ["day"],
+        "title": "MyQuotaResponse",
+        "description": "The calling account's three Budgets for one UTC day.\n\nAll three are always present, even untouched: the panel renders three rows\nand an absent Budget there reads as a bug rather than as a zero."
       },
       "NetworkLogResponse": {
         "properties": {
@@ -7481,6 +7704,47 @@
         "title": "PurgeLogsResponse",
         "description": "Result of `DELETE /data/logs`.\n\nThree call shapes share one response. A retention sweep (`olderThanDays`)\ndeletes across every table and reports the per-type breakdown plus a\n`total`; deleting one entry or clearing one type reports a bare `deleted`\ncount and no breakdown. `deleted` is therefore declared loose \u2014 it is an\n`int` in two of the three cases and a `dict[str, int]` in the third \u2014 and\n`total` is genuinely absent rather than null for the other two, so it stays\nundeclared and travels through `extra`."
       },
+      "QuotaLimitOverride": {
+        "properties": {
+          "budget": { "type": "string", "title": "Budget" },
+          "allowance": {
+            "anyOf": [{ "type": "integer" }, { "type": "null" }],
+            "title": "Allowance"
+          },
+          "ceiling": {
+            "anyOf": [{ "type": "integer" }, { "type": "null" }],
+            "title": "Ceiling"
+          },
+          "userId": { "type": "string", "format": "uuid", "title": "Userid" },
+          "email": { "type": "string", "title": "Email", "default": "" }
+        },
+        "type": "object",
+        "required": ["budget", "userId"],
+        "title": "QuotaLimitOverride",
+        "description": "One account's override of one Budget."
+      },
+      "QuotaLimitsResponse": {
+        "properties": {
+          "defaults": {
+            "items": { "$ref": "#/components/schemas/BudgetLimitsPayload" },
+            "type": "array",
+            "title": "Defaults"
+          },
+          "storedDefaults": {
+            "items": { "$ref": "#/components/schemas/BudgetLimitsPayload" },
+            "type": "array",
+            "title": "Storeddefaults"
+          },
+          "overrides": {
+            "items": { "$ref": "#/components/schemas/QuotaLimitOverride" },
+            "type": "array",
+            "title": "Overrides"
+          }
+        },
+        "type": "object",
+        "title": "QuotaLimitsResponse",
+        "description": "Everything an Admin needs to set limits: the defaults and every override.\n\nOne response rather than two endpoints, because the browser cannot render an\noverride without the default it overrides \u2014 a blank field has to say what\nnumber it inherits, and fetching that separately means a screen that is\nbriefly wrong."
+      },
       "QuotaUsageEntry": {
         "properties": {
           "userId": { "type": "string", "format": "uuid", "title": "Userid" },
@@ -7496,7 +7760,22 @@
             "title": "Manualsingle",
             "default": 0
           },
-          "total": { "type": "integer", "title": "Total", "default": 0 }
+          "total": { "type": "integer", "title": "Total", "default": 0 },
+          "autoSyncLifted": {
+            "type": "boolean",
+            "title": "Autosynclifted",
+            "default": false
+          },
+          "manualBulkLifted": {
+            "type": "boolean",
+            "title": "Manualbulklifted",
+            "default": false
+          },
+          "manualSingleLifted": {
+            "type": "boolean",
+            "title": "Manualsinglelifted",
+            "default": false
+          }
         },
         "type": "object",
         "required": ["userId", "email"],
@@ -7933,6 +8212,18 @@
         "type": "object",
         "required": ["maxPostsPerChannel", "iterationLimit"],
         "title": "ScraperRuntimeSettings"
+      },
+      "SetQuotaLimitsRequest": {
+        "properties": {
+          "budgets": {
+            "items": { "$ref": "#/components/schemas/BudgetLimitsPayload" },
+            "type": "array",
+            "title": "Budgets"
+          }
+        },
+        "type": "object",
+        "title": "SetQuotaLimitsRequest",
+        "description": "An Admin setting one account's overrides, or the deployment's defaults.\n\nEvery field of every entry is optional and `null` is meaningful: it puts\nthat half back on the layer underneath. There is no other way to say \"stop\noverriding this\", and a sentinel number would collide with the negative that\nalready means unlimited.\n\nA Budget the body omits is left alone, so a screen that edits one row does\nnot have to send the other two back to keep them."
       },
       "SettingGroupResponse": {
         "properties": {

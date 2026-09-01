@@ -73,7 +73,12 @@ from app.services.post_thumbnails import (
     enforce_thumb_cache_size_limit_throttled,
 )
 from app.services.posts import bulk_upsert_posts_impl
-from app.services.quota import charge_sync_job
+from app.services.quota import (
+    QuotaCeilingReached,
+    assert_within_ceiling,
+    budget_for_sync_mode,
+    charge_sync_job,
+)
 from app.services.scraper import get_channel_info, scrape_channel_page
 from app.services.scraper_jobs import (
     ChannelSyncState,
@@ -1868,9 +1873,33 @@ async def sync_single_channel(
     a caller leaves the next caller unguarded, which is the shape ticket 33
     names and `/password-recovery` demonstrated for months. This is the function
     that walks the pages, so this is the function that claims.
+
+    **The quota ceiling goes here for the same reason, and it is the half that
+    bounds anything** (ticket 24). `enqueue_sync_job` also refuses, but it reads
+    the ledger once for the whole batch, so the 2,000-Channel `sync_all` that
+    crosses the ceiling was enqueued while the account was still under it —
+    ticket 23 named that overshoot and handed it here. Checking per Channel is
+    also what reaches the two syncs that never enqueue at all:
+    `auto_summary._sync_stale_channels` and the legacy `_run_whole_job` both
+    arrive through `run_sync_job`, and both land in this function.
+
+    The refusal is a **skip**, not a failure. Nothing went wrong with the
+    Channel, the account is out of Requests until UTC midnight, and marking
+    fifty Channels `failed` would put a red job in front of somebody whose only
+    problem is a number an Admin can raise. `_finalize_if_complete` already
+    treats `skipped` as a completed outcome.
     """
     if job.cancel_event.is_set():
         ch_state.status = "cancelled"
+        await touch_job(job, ch_state)
+        return
+
+    budget = budget_for_sync_mode(job.sync_mode)
+    try:
+        await run_db(assert_within_ceiling, user_id, budget)
+    except QuotaCeilingReached:
+        ch_state.status = "skipped"
+        ch_state.error = f"Daily {budget.value} request ceiling reached"
         await touch_job(job, ch_state)
         return
 

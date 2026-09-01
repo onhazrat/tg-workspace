@@ -12,6 +12,7 @@ from app.models_tg import Channel, Post, PostEmbedding, PostTranslation, utc_now
 from app.services.channel_setting_groups import channel_allows_reset, load_groups_by_id
 from app.services.follows import FollowedChannel, followed_channels_for
 from app.services.post_sync_state import clear_channel_sync_state
+from app.services.quota import QuotaCeilingReached
 from app.services.sync_meta import touch_sync
 
 logger = logging.getLogger(__name__)
@@ -204,6 +205,17 @@ async def bulk_reset_and_queue_sync(
             sync_mode="bulk" if is_bulk else "individual",
         )
         result.job_id = job.job_id
-        await enqueue_sync_job(job, operator_id)
+        try:
+            await enqueue_sync_job(job, operator_id)
+        except QuotaCeilingReached:
+            # The reset half of "reset and sync" has already committed, so this
+            # cannot raise past here without reporting a whole failed operation
+            # for a sync that is merely postponed. `enqueue_sync_job` marked the
+            # job terminal with the reason, and `result.job_id` still names it,
+            # so the caller's job view carries the answer.
+            logger.info(
+                "Bulk channels: %s is at its request ceiling; sync not queued",
+                operator_id,
+            )
 
     return result

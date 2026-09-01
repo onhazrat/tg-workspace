@@ -28,7 +28,12 @@ from app.services.network_settings import (
     load_network_settings,
     resolve_proxy_concurrency,
 )
-from app.services.quota import charge_sync_job
+from app.services.quota import (
+    Budget,
+    QuotaCeilingReached,
+    assert_within_ceiling,
+    charge_sync_job,
+)
 from app.services.scraper import get_channel_info
 from app.services.telegram_web import (
     TelegramWebViewUnavailable,
@@ -373,6 +378,15 @@ async def run_follow_job(job: FollowJobState) -> None:
     conclusion survives, the mechanism changed, and a docstring describing a
     mechanism that no longer exists is how a true statement becomes a false
     invariant.
+
+    **The `manual_bulk` ceiling is checked once, before the first probe**
+    (ticket 24). The probe phase is on no lane, so ticket 23's ladder cannot
+    reach it and an account over its bulk allowance still probes at full speed;
+    a ceiling can refuse it, because a refusal needs no lane. Once at the top
+    rather than per handle because the whole batch is one metered block charged
+    to one Budget, and a batch of hundreds of probes is exactly the runaway the
+    ceiling exists for — the chained sync it would have queued is refused
+    separately, by `enqueue_sync_job`.
     """
     with metered() as meter:
         job.status = "running"
@@ -385,6 +399,16 @@ async def run_follow_job(job: FollowJobState) -> None:
         # `Callable[..., T]` signature checks nothing. Same shape as the
         # auto-follow hole `/code-review` found in `sync_orchestrator.py`.
         user_uuid = uuid.UUID(job.user_id)
+        try:
+            await run_db(assert_within_ceiling, user_uuid, Budget.MANUAL_BULK)
+        except QuotaCeilingReached:
+            for result in job.results:
+                result.status = "error"
+                result.error = "Daily manual_bulk request ceiling reached"
+            job.status = "failed"
+            job.finished_at = int(time.time() * 1000)
+            await touch_follow_job(job)
+            return
         effective_start_time = await run_db(_load_effective_start_time, user_uuid)
         proxy_concurrency = await run_db(_load_proxy_concurrency, user_uuid)
         sem = asyncio.Semaphore(FOLLOW_SCRAPE_CONCURRENCY)
@@ -418,6 +442,16 @@ async def run_follow_job(job: FollowJobState) -> None:
                 syncable_names = [r.name for r in job.results if r.status == "added"]
                 try:
                     await _chain_sync_job(job, syncable_names, user_uuid)
+                except QuotaCeilingReached:
+                    # Expected, not a fault: the probes ran and the follows
+                    # landed, and the account hit its `manual_bulk` ceiling
+                    # before the sync could be queued. A traceback at error
+                    # level here would report a refusal as a crash — the same
+                    # distinction `bulk_channels` and `auto_sync` make.
+                    logger.info(
+                        "Follow job %s: at the manual_bulk ceiling, sync not queued",
+                        job.follow_job_id,
+                    )
                 except Exception:  # noqa: BLE001
                     logger.exception(
                         "Failed to chain sync job after follow job %s",

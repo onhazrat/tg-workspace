@@ -52,9 +52,12 @@ import type {
   DiscoverReportResponse,
   DiscoveryArtifactResponse,
   JobStatusEntry,
+  MyBudgetUsage,
+  MyQuotaResponse,
   PostResponse,
   ProxyHealthResponse,
   PublishResponse,
+  QuotaLimitsResponse,
   QuotaUsageEntry,
   QuotaUsageResponse,
   RagEmbedResponse,
@@ -160,6 +163,29 @@ export type QuotaUsageEntryIsClosed = Assert<IsClosed<QuotaUsageEntry>>
 export type QuotaUsageEntryIdentifiesItsAccount = Assert<
   QuotaUsageEntry extends { userId: string; email: string } ? true : false
 >
+
+// ---------------------------------------------------------------------------
+// The limits and the account's own view (ticket 24): generated for the same
+// reason, plus one the ledger did not have.
+//
+// `status` decides which persistent banner the app shows, and the three values
+// it can take are the whole of the ticket's fourth checkbox. It is **required**
+// on the wire, which took removing its server-side default: OpenAPI marks a
+// defaulted field optional, so the browser would have had to invent a fallback
+// for a missing key — and the only sane fallback is "normal", which is "your
+// work is running" shown to an account whose work has stopped.
+//
+// That is the assertion below. It is not decoration: adding `= "normal"` back
+// to the backend model breaks this line, which is the only place that would
+// notice.
+// ---------------------------------------------------------------------------
+
+export type MyQuotaIsClosed = Assert<IsClosed<MyQuotaResponse>>
+export type MyBudgetUsageIsClosed = Assert<IsClosed<MyBudgetUsage>>
+export type MyBudgetUsageStatesItself = Assert<
+  MyBudgetUsage extends { budget: string; status: string } ? true : false
+>
+export type QuotaLimitsIsClosed = Assert<IsClosed<QuotaLimitsResponse>>
 
 // ---------------------------------------------------------------------------
 // The unified artifact list: closed on purpose, so it stays generated.

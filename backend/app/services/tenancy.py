@@ -95,6 +95,7 @@ from app.models_tg import (
     PostSyncState,
     PostTranslation,
     PublishLog,
+    QuotaLimit,
     QuotaUsage,
     Summary,
     SummaryPayload,
@@ -162,6 +163,11 @@ SCOPES: dict[type[SQLModel], Scope] = {
     # through `unscoped_select` — an escape hatch is only meaningful where the
     # default would have scoped.
     QuotaUsage: Scope.USER_OWNED,
+    # The limits an Admin set for you are yours to see, for the same reason the
+    # spend is: a warning that says "you are out" is unreadable without the
+    # number you are out of. `GET /quota/me` reads this account's rows through
+    # the seam; the Admin view crosses accounts through `unscoped_select`.
+    QuotaLimit: Scope.USER_OWNED,
     # --- Follow-scoped: one scrape serves every follower.
     Channel: Scope.FOLLOW_SCOPED,
     Post: Scope.FOLLOW_SCOPED,
@@ -316,10 +322,10 @@ def owner_backfill_inventory() -> tuple[OwnerBackfill, ...]:
       "who scraped this first" stamp that ticket 22 drops, and the seam
       deliberately never filters on it — stamping it would be work ticket 22
       deletes.
-    * **The four composite-key tables excuse themselves.** `ChannelFollow`,
-      `DiscoverIgnoredChannel`, `QuotaUsage` and `UserSetting` carry `user_id`
-      in a `NOT NULL` primary key, so a row without an owner cannot be
-      expressed. That is a stronger excuse than any sentence: the database
+    * **The composite-key tables excuse themselves.** `ChannelFollow`,
+      `DiscoverIgnoredChannel`, `QuotaUsage`, `QuotaLimit` and `UserSetting`
+      carry `user_id` in a `NOT NULL` primary key, so a row without an owner
+      cannot be expressed. That is a stronger excuse than any sentence: the database
       refuses the state rather than a guard asserting nobody reached it.
     * **A payload row is included, but not as an operator adoption** — see
       `OWNER_INHERITED_FROM`.

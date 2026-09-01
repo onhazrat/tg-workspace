@@ -141,6 +141,7 @@ PROBED: dict[tuple[str, str], str] = {
     ("POST", f"{V1}/data/channels/bulk-follow/{{follow_job_id}}/cancel"): (
         "follow job cancel — a write, so ungated"
     ),
+    ("GET", f"{V1}/quota/me"): "the caller's own spend and limits (ticket 24)",
 }
 
 #: Routes with no probe of their own, each with the reason and, where one
@@ -378,6 +379,22 @@ EXCUSED: dict[tuple[str, str], tuple[Reason, str]] = {
     ("GET", f"{V1}/quota/usage"): (
         Reason.COVERED_ELSEWHERE,
         "PK carries user_id; test_quota_usage_route.py",
+    ),
+    ("GET", f"{V1}/quota/limits"): (
+        Reason.DEPLOYMENT_WIDE,
+        "QUOTA_MANAGE reads every account's limits; that is the screen",
+    ),
+    ("PUT", f"{V1}/quota/limits/defaults"): (
+        Reason.DEPLOYMENT_WIDE,
+        "QUOTA_MANAGE sets one number for the whole deployment",
+    ),
+    ("PUT", f"{V1}/quota/limits/{{user_id}}"): (
+        Reason.DEPLOYMENT_WIDE,
+        "QUOTA_MANAGE sets another account's limits; the id is the argument",
+    ),
+    ("POST", f"{V1}/quota/lifts/{{user_id}}"): (
+        Reason.DEPLOYMENT_WIDE,
+        "QUOTA_MANAGE lifts another account's ceiling; the id is the argument",
     ),
     # --- AI, RAG, network, telegram ------------------------------------------
     ("POST", f"{V1}/ai/chat/stream"): (Reason.EXTERNAL, "provider call"),
@@ -798,6 +815,56 @@ def test_credentials_and_destinations_are_isolated(
         assert row is not None and row.name == "a", (
             "another account replaced a stored bot token by naming its id"
         )
+
+
+@pytest.mark.security
+def test_my_quota_answers_for_the_caller_and_nobody_else(
+    client: TestClient,
+    alice: tuple[User, dict[str, str]],
+    bob: tuple[User, dict[str, str]],
+) -> None:
+    """`GET /quota/me` reports this account's spend and this account's limits.
+
+    Ticket 24's fourth checkbox, and the two halves fail differently. A spend
+    read across accounts shows somebody a warning about work they did not do; a
+    *limit* read across accounts is worse, because it is what the ceiling is
+    then enforced against — the account with the tighter override would be
+    refused on the other one's numbers, or let through on them.
+
+    Mutation for either half: drop the `user_id` from the ledger read, or
+    resolve the limits for `None`.
+    """
+    from app.services.quota import Budget, charge_requests
+    from app.services.quota_limits import set_limit
+
+    with Session(engine) as session:
+        charge_requests(session, alice[0].id, Budget.MANUAL_SINGLE, 7)
+        set_limit(
+            session,
+            alice[0].id,
+            Budget.MANUAL_SINGLE.value,
+            allowance=11,
+            ceiling=22,
+        )
+
+    def _single(headers: dict[str, str]) -> dict[str, Any]:
+        response = client.get(f"{V1}/quota/me", headers=headers)
+        assert response.status_code == 200, response.text[:200]
+        rows = {row["budget"]: row for row in response.json()["budgets"]}
+        assert set(rows) == {budget.value for budget in Budget}, (
+            "every Budget is rendered, even an untouched one"
+        )
+        return rows[Budget.MANUAL_SINGLE.value]
+
+    mine = _single(alice[1])
+    assert mine["spent"] == 7
+    assert (mine["allowance"], mine["ceiling"]) == (11, 22)
+
+    theirs = _single(bob[1])
+    assert theirs["spent"] == 0, "another account's Requests were reported as mine"
+    assert (theirs["allowance"], theirs["ceiling"]) != (11, 22), (
+        "another account's Budget override was resolved as mine"
+    )
 
 
 @pytest.mark.security

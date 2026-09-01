@@ -95,6 +95,13 @@ TG_TABLES: tuple[str, ...] = (
     # by one test is another test's "this account has already spent something",
     # and the accounts are recycled by email while the ledger keys on id.
     "tg_quota_usage",
+    # Ticket 24's per-account Budget overrides. Listed for the reason its
+    # sibling above is, with one twist: an override row survives its account
+    # only until the cascade fires, so a test that sets a limit and leaves the
+    # User behind hands the next test an account that is silently capped — and
+    # the symptom is a sync that was refused, which reads as a defect in
+    # whatever that test was actually about.
+    "tg_quota_limits",
 )
 
 

@@ -35,6 +35,7 @@ from app.services.channel_setting_groups import (
     load_groups_by_id,
 )
 from app.services.follows import followed_channels_for
+from app.services.quota import QuotaCeilingReached
 from app.services.runtime_config import build_runtime_config
 from app.services.scraper_jobs import (
     SyncJobState,
@@ -339,7 +340,20 @@ async def start_sync_job(
     # a deploy or a restart interrupted. The job row already exists
     # (`create_job` above), so `GET /jobs/sync/{id}/events` sees the same
     # "pending" -> "running" -> terminal sequence it always has.
-    await enqueue_sync_job(job, user_uuid)
+    try:
+        await enqueue_sync_job(job, user_uuid)
+    except QuotaCeilingReached as exc:
+        # 429, not 403: the account is not forbidden from syncing, it has spent
+        # its day's Requests and the ceiling lifts at UTC midnight. That is what
+        # `Too Many Requests` means, and it is what tells the browser to show
+        # the persistent banner rather than a permissions error.
+        raise HTTPException(
+            status_code=429,
+            detail=(
+                f"Daily {exc.budget.value} request ceiling reached. "
+                "It resets at UTC midnight, or an admin can lift it."
+            ),
+        ) from exc
     return StartSyncJobResponse(jobId=job.job_id)
 
 

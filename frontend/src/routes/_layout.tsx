@@ -2,6 +2,7 @@ import { createFileRoute, Outlet, redirect } from "@tanstack/react-router"
 
 import { usersReadUserMe } from "@/client"
 import { Footer } from "@/components/Common/Footer"
+import QuotaWarning from "@/components/QuotaWarning"
 import AppSidebar from "@/components/Sidebar/AppSidebar"
 import {
   SidebarInset,
@@ -57,6 +58,10 @@ function Layout() {
         </header>
         <main className="flex-1 p-6 md:p-8">
           <div className="app-shell">
+            {/* In the shell rather than on the pages that start syncs, because
+                a Budget running out is a fact about the account and not about
+                the screen it was noticed on (ticket 24). */}
+            <QuotaWarning />
             <Outlet />
           </div>
         </main>

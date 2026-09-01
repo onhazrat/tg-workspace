@@ -194,6 +194,29 @@ export type BotInfoResponse = {
 };
 
 /**
+ * BudgetLimitsPayload
+ * One Budget's two numbers, as an Admin sets them or a User reads them.
+ *
+ * `null` means unlimited on the wire, which is what a negative setting
+ * resolves to — the negative spelling is the `.env` escape hatch and does not
+ * leave the backend. A number of zero is a real limit and is sent as zero.
+ */
+export type BudgetLimitsPayload = {
+    /**
+     * Budget
+     */
+    budget: string;
+    /**
+     * Allowance
+     */
+    allowance?: number | null;
+    /**
+     * Ceiling
+     */
+    ceiling?: number | null;
+};
+
+/**
  * BulkChannelSettingGroupRequest
  */
 export type BulkChannelSettingGroupRequest = {
@@ -2232,6 +2255,26 @@ export type LlmLogResponse = {
     type?: string;
 };
 
+/**
+ * LiftCeilingRequest
+ * Lift (or restore) this account's ceilings for the current UTC day.
+ *
+ * `budgets` empty means all three, which is what an Admin unblocking somebody
+ * in a hurry means. The day is not a parameter: a lift is for today, because
+ * lifting a ceiling on a day that is already over changes nothing and lifting
+ * one in advance is a limit change rather than a lift.
+ */
+export type LiftCeilingRequest = {
+    /**
+     * Budgets
+     */
+    budgets?: Array<string>;
+    /**
+     * Lifted
+     */
+    lifted?: boolean;
+};
+
 export type LogDetailResponse = PublishLogResponse | SyncLogResponse | LlmLogResponse | EmbeddingLogResponse | NetworkLogResponse;
 
 export type LogEntryResponse = PublishLogListItemResponse | SyncLogListItemResponse | LlmLogListItemResponse | EmbeddingLogResponse | NetworkLogResponse;
@@ -2315,6 +2358,62 @@ export type ModelListResponse = {
      * Default
      */
     default?: string;
+};
+
+/**
+ * MyBudgetUsage
+ * What the calling account has spent on one Budget today, and what follows.
+ *
+ * `status` is computed on the server rather than derived in the browser from
+ * the three numbers beside it. The derivation is three comparisons with two
+ * different meanings for zero, and a browser that got one of them wrong would
+ * show "you are blocked" to somebody whose work is running — the failure the
+ * ticket's fifth checkbox exists to prevent, moved to the other side of the
+ * wire.
+ */
+export type MyBudgetUsage = {
+    /**
+     * Budget
+     */
+    budget: string;
+    /**
+     * Allowance
+     */
+    allowance?: number | null;
+    /**
+     * Ceiling
+     */
+    ceiling?: number | null;
+    /**
+     * Spent
+     */
+    spent: number;
+    /**
+     * Status
+     */
+    status: string;
+    /**
+     * Lifted
+     */
+    lifted: boolean;
+};
+
+/**
+ * MyQuotaResponse
+ * The calling account's three Budgets for one UTC day.
+ *
+ * All three are always present, even untouched: the panel renders three rows
+ * and an absent Budget there reads as a bug rather than as a zero.
+ */
+export type MyQuotaResponse = {
+    /**
+     * Day
+     */
+    day: string;
+    /**
+     * Budgets
+     */
+    budgets?: Array<MyBudgetUsage>;
 };
 
 /**
@@ -3021,6 +3120,57 @@ export type PurgeLogsResponse = {
 };
 
 /**
+ * QuotaLimitOverride
+ * One account's override of one Budget.
+ */
+export type QuotaLimitOverride = {
+    /**
+     * Budget
+     */
+    budget: string;
+    /**
+     * Allowance
+     */
+    allowance?: number | null;
+    /**
+     * Ceiling
+     */
+    ceiling?: number | null;
+    /**
+     * Userid
+     */
+    userId: string;
+    /**
+     * Email
+     */
+    email?: string;
+};
+
+/**
+ * QuotaLimitsResponse
+ * Everything an Admin needs to set limits: the defaults and every override.
+ *
+ * One response rather than two endpoints, because the browser cannot render an
+ * override without the default it overrides — a blank field has to say what
+ * number it inherits, and fetching that separately means a screen that is
+ * briefly wrong.
+ */
+export type QuotaLimitsResponse = {
+    /**
+     * Defaults
+     */
+    defaults?: Array<BudgetLimitsPayload>;
+    /**
+     * Storeddefaults
+     */
+    storedDefaults?: Array<BudgetLimitsPayload>;
+    /**
+     * Overrides
+     */
+    overrides?: Array<QuotaLimitOverride>;
+};
+
+/**
  * QuotaUsageEntry
  * What one account spent on one day.
  *
@@ -3053,6 +3203,18 @@ export type QuotaUsageEntry = {
      * Total
      */
     total?: number;
+    /**
+     * Autosynclifted
+     */
+    autoSyncLifted?: boolean;
+    /**
+     * Manualbulklifted
+     */
+    manualBulkLifted?: boolean;
+    /**
+     * Manualsinglelifted
+     */
+    manualSingleLifted?: boolean;
 };
 
 /**
@@ -3536,6 +3698,25 @@ export type ScraperRuntimeSettings = {
      * Iterationlimit
      */
     iterationLimit: number;
+};
+
+/**
+ * SetQuotaLimitsRequest
+ * An Admin setting one account's overrides, or the deployment's defaults.
+ *
+ * Every field of every entry is optional and `null` is meaningful: it puts
+ * that half back on the layer underneath. There is no other way to say "stop
+ * overriding this", and a sentinel number would collide with the negative that
+ * already means unlimited.
+ *
+ * A Budget the body omits is left alone, so a screen that edits one row does
+ * not have to send the other two back to keep them.
+ */
+export type SetQuotaLimitsRequest = {
+    /**
+     * Budgets
+     */
+    budgets?: Array<BudgetLimitsPayload>;
 };
 
 /**
@@ -8488,6 +8669,123 @@ export type QuotaReadQuotaUsageResponses = {
 };
 
 export type QuotaReadQuotaUsageResponse = QuotaReadQuotaUsageResponses[keyof QuotaReadQuotaUsageResponses];
+
+export type QuotaReadMyQuotaData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/quota/me';
+};
+
+export type QuotaReadMyQuotaResponses = {
+    /**
+     * Successful Response
+     */
+    200: MyQuotaResponse;
+};
+
+export type QuotaReadMyQuotaResponse = QuotaReadMyQuotaResponses[keyof QuotaReadMyQuotaResponses];
+
+export type QuotaReadQuotaLimitsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/quota/limits';
+};
+
+export type QuotaReadQuotaLimitsResponses = {
+    /**
+     * Successful Response
+     */
+    200: QuotaLimitsResponse;
+};
+
+export type QuotaReadQuotaLimitsResponse = QuotaReadQuotaLimitsResponses[keyof QuotaReadQuotaLimitsResponses];
+
+export type QuotaSetQuotaDefaultsData = {
+    body: SetQuotaLimitsRequest;
+    path?: never;
+    query?: never;
+    url: '/api/v1/quota/limits/defaults';
+};
+
+export type QuotaSetQuotaDefaultsErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type QuotaSetQuotaDefaultsError = QuotaSetQuotaDefaultsErrors[keyof QuotaSetQuotaDefaultsErrors];
+
+export type QuotaSetQuotaDefaultsResponses = {
+    /**
+     * Successful Response
+     */
+    200: QuotaLimitsResponse;
+};
+
+export type QuotaSetQuotaDefaultsResponse = QuotaSetQuotaDefaultsResponses[keyof QuotaSetQuotaDefaultsResponses];
+
+export type QuotaSetQuotaLimitsForUserData = {
+    body: SetQuotaLimitsRequest;
+    path: {
+        /**
+         * User Id
+         */
+        user_id: string;
+    };
+    query?: never;
+    url: '/api/v1/quota/limits/{user_id}';
+};
+
+export type QuotaSetQuotaLimitsForUserErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type QuotaSetQuotaLimitsForUserError = QuotaSetQuotaLimitsForUserErrors[keyof QuotaSetQuotaLimitsForUserErrors];
+
+export type QuotaSetQuotaLimitsForUserResponses = {
+    /**
+     * Successful Response
+     */
+    200: QuotaLimitsResponse;
+};
+
+export type QuotaSetQuotaLimitsForUserResponse = QuotaSetQuotaLimitsForUserResponses[keyof QuotaSetQuotaLimitsForUserResponses];
+
+export type QuotaLiftQuotaCeilingData = {
+    body: LiftCeilingRequest;
+    path: {
+        /**
+         * User Id
+         */
+        user_id: string;
+    };
+    query?: never;
+    url: '/api/v1/quota/lifts/{user_id}';
+};
+
+export type QuotaLiftQuotaCeilingErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type QuotaLiftQuotaCeilingError = QuotaLiftQuotaCeilingErrors[keyof QuotaLiftQuotaCeilingErrors];
+
+export type QuotaLiftQuotaCeilingResponses = {
+    /**
+     * Successful Response
+     */
+    200: StatusResponse;
+};
+
+export type QuotaLiftQuotaCeilingResponse = QuotaLiftQuotaCeilingResponses[keyof QuotaLiftQuotaCeilingResponses];
 
 export type ClientOptions = {
     baseUrl: `${string}://${string}` | (string & {});

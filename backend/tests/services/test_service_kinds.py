@@ -67,6 +67,12 @@ INVENTORY: dict[str, str] = {
     # itself is not here — `core/request_meter.py` does that, because a
     # ContextVar tally has no table and no domain in it.
     "quota.py": AGGREGATE,
+    # Owns `tg_quota_limits` (ticket 24) and is its only writer. A module of its
+    # own rather than more of `quota.py`, because an aggregate owns one table:
+    # what an Admin allowed and what an account then spent are two facts with
+    # two lifetimes, and one module writing both is the second opinion the rule
+    # exists to prevent.
+    "quota_limits.py": AGGREGATE,
     "scraper_jobs.py": AGGREGATE,
     # The two halves of the ticket 06 settings split, one aggregate each. Not
     # one module owning both tables: the whole point of the split is that a key

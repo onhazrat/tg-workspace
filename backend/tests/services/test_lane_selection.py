@@ -215,7 +215,7 @@ def test_inside_the_allowance_is_the_normal_tier(
 ) -> None:
     """Mutation: return `TIER_BEST_EFFORT` unconditionally."""
     _pin_allowance(monkeypatch, budget, 100)
-    assert tier_for_spend(budget, 99) == TIER_NORMAL
+    assert tier_for_spend(99, budget_allowance(budget)) == TIER_NORMAL
 
 
 @pytest.mark.parametrize("budget", list(Budget))
@@ -224,7 +224,7 @@ def test_past_the_allowance_is_the_best_effort_tier(
 ) -> None:
     """Mutation: return `TIER_NORMAL` unconditionally."""
     _pin_allowance(monkeypatch, budget, 100)
-    assert tier_for_spend(budget, 101) == TIER_BEST_EFFORT
+    assert tier_for_spend(101, budget_allowance(budget)) == TIER_BEST_EFFORT
 
 
 def test_the_boundary_is_spent_at_least_allowance(
@@ -238,8 +238,8 @@ def test_the_boundary_is_spent_at_least_allowance(
     of defect nobody notices until they cannot make a ledger add up.
     """
     _pin_allowance(monkeypatch, Budget.AUTO_SYNC, 100)
-    assert tier_for_spend(Budget.AUTO_SYNC, 99) == TIER_NORMAL
-    assert tier_for_spend(Budget.AUTO_SYNC, 100) == TIER_BEST_EFFORT
+    assert tier_for_spend(99, budget_allowance(Budget.AUTO_SYNC)) == TIER_NORMAL
+    assert tier_for_spend(100, budget_allowance(Budget.AUTO_SYNC)) == TIER_BEST_EFFORT
 
 
 def test_an_allowance_of_zero_is_always_best_effort_and_never_refuses(
@@ -253,17 +253,20 @@ def test_an_allowance_of_zero_is_always_best_effort_and_never_refuses(
     editing at the time.
     """
     _pin_allowance(monkeypatch, Budget.MANUAL_SINGLE, 0)
-    assert tier_for_spend(Budget.MANUAL_SINGLE, 0) == TIER_BEST_EFFORT
+    assert tier_for_spend(0, budget_allowance(Budget.MANUAL_SINGLE)) == TIER_BEST_EFFORT
     # A lane, not an exception and not `None`: every lane runs, so this is
     # degraded rather than blocked.
-    assert lane_for_spend(Budget.MANUAL_SINGLE, 0) in DRAIN_ORDER
+    assert (
+        lane_for_spend(Budget.MANUAL_SINGLE, 0, budget_allowance(Budget.MANUAL_SINGLE))
+        in DRAIN_ORDER
+    )
 
 
 def test_a_negative_allowance_is_unlimited(monkeypatch: pytest.MonkeyPatch) -> None:
     """The operator's escape hatch. Mutation: treat it as a limit of zero."""
     _pin_allowance(monkeypatch, Budget.AUTO_SYNC, UNLIMITED)
     assert budget_allowance(Budget.AUTO_SYNC) is None
-    assert tier_for_spend(Budget.AUTO_SYNC, 10**9) == TIER_NORMAL
+    assert tier_for_spend(10**9, budget_allowance(Budget.AUTO_SYNC)) == TIER_NORMAL
 
 
 def test_every_budget_reads_its_own_setting(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -288,8 +291,9 @@ def test_the_selector_can_only_name_a_lane_that_exists(
     """
     for budget in Budget:
         _pin_allowance(monkeypatch, budget, 10)
-        assert lane_for_spend(budget, 0) in DRAIN_ORDER
-        assert lane_for_spend(budget, 10) in DRAIN_ORDER
+        allowance = budget_allowance(budget)
+        assert lane_for_spend(budget, 0, allowance) in DRAIN_ORDER
+        assert lane_for_spend(budget, 10, allowance) in DRAIN_ORDER
 
 
 # --------------------------------------------------------------------------
