@@ -977,6 +977,10 @@ export type ChatArtifactResponse = {
      */
     note?: string | null;
     /**
+     * Actedbyemail
+     */
+    actedByEmail?: string | null;
+    /**
      * Kind
      */
     kind: 'chat';
@@ -1752,6 +1756,10 @@ export type DiscoveryArtifactResponse = {
      * Note
      */
     note?: string | null;
+    /**
+     * Actedbyemail
+     */
+    actedByEmail?: string | null;
     /**
      * Kind
      */
@@ -3969,6 +3977,10 @@ export type SummaryArtifactResponse = {
      */
     note?: string | null;
     /**
+     * Actedbyemail
+     */
+    actedByEmail?: string | null;
+    /**
      * Kind
      */
     kind: 'summary';
@@ -4453,6 +4465,10 @@ export type TagArtifactResponse = {
      * Note
      */
     note?: string | null;
+    /**
+     * Actedbyemail
+     */
+    actedByEmail?: string | null;
     /**
      * Kind
      */
@@ -8921,6 +8937,41 @@ export type ViewAsStartViewAsResponses = {
 };
 
 export type ViewAsStartViewAsResponse = ViewAsStartViewAsResponses[keyof ViewAsStartViewAsResponses];
+
+export type ViewAsElevateViewAsData = {
+    body?: never;
+    path: {
+        /**
+         * User Id
+         */
+        user_id: string;
+    };
+    query?: {
+        /**
+         * Minutes
+         */
+        minutes?: number | null;
+    };
+    url: '/api/v1/view-as/{user_id}/elevate';
+};
+
+export type ViewAsElevateViewAsErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type ViewAsElevateViewAsError = ViewAsElevateViewAsErrors[keyof ViewAsElevateViewAsErrors];
+
+export type ViewAsElevateViewAsResponses = {
+    /**
+     * Successful Response
+     */
+    200: ViewAsSessionResponse;
+};
+
+export type ViewAsElevateViewAsResponse = ViewAsElevateViewAsResponses[keyof ViewAsElevateViewAsResponses];
 
 export type ViewAsReadViewAsSessionsData = {
     body?: never;

@@ -34,6 +34,13 @@ export function configureGeneratedClient(): void {
     for (const [key, value] of Object.entries(
       headers(false) as Record<string, string>,
     )) {
+      // A header the caller set explicitly wins. `headers()` supplies the
+      // browser's *default* identity — the View-as token when one is live —
+      // and exactly one call needs a different one: elevating a session
+      // (ticket 27) is authorised by the Owner's own token, not by the session
+      // it widens, and clobbering that here made the request refuse itself with
+      // the read-only 403.
+      if (request.headers.has(key)) continue
       request.headers.set(key, value)
     }
     return request

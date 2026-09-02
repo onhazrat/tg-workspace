@@ -10,6 +10,7 @@ from fastapi import HTTPException
 from sqlalchemy import select as sa_select
 from sqlmodel import Session, col
 
+from app.core import acting_owner
 from app.models_tg import TagRun, utc_now
 from app.services.serialization import to_snake
 from app.services.tenancy import (
@@ -280,6 +281,7 @@ def upsert_tag_run(
             updated_at_ms=body.get("updatedAt", body.get("updated_at_ms", now_ms)),
             extra=_extra_from_body(body, known),
         )
+    acting_owner.stamp(session, tag_run)
     session.add(tag_run)
     session.commit()
     session.refresh(tag_run)

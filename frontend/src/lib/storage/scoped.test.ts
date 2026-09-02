@@ -7,9 +7,11 @@ import {
   decodeJwtSubject,
   enterViewAs,
   exitViewAs,
+  ownerToken,
   scopedKey,
   scopedStorage,
   TOKEN_STORAGE_KEY,
+  VIEW_AS_ELEVATED,
   VIEW_AS_ENDED_DETAILS,
   VIEW_AS_TOKEN_STORAGE_KEY,
   viewAsClaims,
@@ -443,6 +445,39 @@ describe("View-as sessions", () => {
     ])
     expect(VIEW_AS_ENDED_DETAILS).not.toContain("User not found")
     expect(VIEW_AS_ENDED_DETAILS).not.toContain("Inactive user")
+  })
+
+  /**
+   * Elevation (ticket 27) is authorised by the Owner's own credentials, not by
+   * the session it widens — which is what makes self-escalation impossible,
+   * since the server refuses every POST carrying an `act` claim. So the one
+   * request that starts an elevation has to carry the Owner's token while a
+   * View-as session is live, and `ownerToken` is the named exception that lets
+   * it.
+   *
+   * Without this the ribbon's own button refuses itself with the read-only 403,
+   * and the feature is unreachable from the screen it was built for — a failure
+   * no backend test can see, because every one of them sets its own header.
+   */
+  it("still hands back the owner's own token during a session", () => {
+    signIn(OWNER)
+    enterViewAs(viewAsToken({ mode: "elevated" }))
+
+    expect(ownerToken()).toBe(tokenFor(OWNER))
+    expect(ownerToken()).not.toBe(activeToken())
+    expect(activeToken()).toBe(localStorage.getItem(VIEW_AS_TOKEN_STORAGE_KEY))
+  })
+
+  it("reads the mode off the token, and falls back to the narrower one", () => {
+    signIn(OWNER)
+    enterViewAs(viewAsToken({ mode: "elevated" }))
+    expect(viewAsClaims()?.mode).toBe(VIEW_AS_ELEVATED)
+
+    // An unrecognised mode must read as read-only, never as elevated: the
+    // ribbon would otherwise tell somebody they may write when they may not,
+    // and the server compares against `elevated` for the same reason.
+    enterViewAs(viewAsToken({ mode: "something-new" }))
+    expect(viewAsClaims()?.mode).not.toBe(VIEW_AS_ELEVATED)
   })
 
   it("is a device-scoped key, so it is not namespaced by the account it names", () => {

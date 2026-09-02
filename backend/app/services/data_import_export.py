@@ -40,6 +40,7 @@ from fastapi import HTTPException
 from fastapi.encoders import jsonable_encoder
 from sqlmodel import Session, col, select
 
+from app.core import acting_owner
 from app.models_tg import (
     BotCredential,
     Channel,
@@ -436,6 +437,15 @@ def _import_summaries(session: Session, items: list[Any], *, user_id: uuid.UUID)
                 timestamp=item.get("timestamp", 0),
                 extra={k: v for k, v in item.items() if k not in _SUMMARY_KNOWN_FIELDS},
             )
+        # Ticket 27: an import is a write door onto `tg_summaries` that is not
+        # `upsert_summary`, and `POST /data/import` is reachable during an
+        # elevation. Without this an Owner importing on somebody's behalf leaves
+        # every new row claiming the User made it, and every updated row
+        # carrying whoever touched it last — the exact lie the column exists to
+        # stop. Summaries are the only one of the four artifact families this
+        # importer writes; the guard in `test_view_as_elevation.py` asserts that
+        # rather than trusting it.
+        acting_owner.stamp(session, summary)
         session.add(summary)
 
         payload = apply_summary_payload(

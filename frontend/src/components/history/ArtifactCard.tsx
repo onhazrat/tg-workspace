@@ -4,6 +4,7 @@ import {
   MessageSquare,
   RefreshCw,
   Send,
+  ShieldCheck,
   Star,
   StickyNote,
   Tag,
@@ -110,6 +111,27 @@ export const ArtifactCard: React.FC<ArtifactCardProps> = ({
         <span className="truncate">{artifactDetail(artifact)}</span>
         <RelativeTime timestamp={artifact.timestamp} />
       </div>
+
+      {/*
+       * Ticket 27. Present on the card rather than only on the detail view,
+       * because the question this answers — "did I make this?" — is asked while
+       * scanning the list, and an artifact somebody else wrote on your behalf
+       * is exactly the one you would not remember making.
+       *
+       * Null for almost every row, so it costs nothing to render conditionally
+       * and would cost a line of dead chrome on every card if it did not.
+       */}
+      {artifact.actedByEmail && (
+        <p
+          data-testid="artifact-acted-by"
+          className="flex min-w-0 items-center gap-1.5 text-[11px] text-app-ink/60"
+        >
+          <ShieldCheck size={12} className="shrink-0 opacity-60" />
+          <span className="truncate">
+            Last changed by {artifact.actedByEmail} on your behalf
+          </span>
+        </p>
+      )}
 
       {artifact.note && (
         <p className="break-words rounded-md border border-app-ink/10 bg-app-muted/30 px-3 py-2 text-[11px] italic text-app-ink/70">

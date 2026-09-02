@@ -56,6 +56,19 @@ export const THEME_STORAGE_KEY = "vite-ui-theme"
 export const VIEW_AS_TOKEN_STORAGE_KEY = "view_as_token"
 
 /**
+ * The two modes a View-as session runs in, mirroring `app/core/security.py`.
+ *
+ * `read_only` is the default the decoder falls back to, and that fallback is
+ * the safe direction: a token with a mode nobody recognises must read as the
+ * narrower session, never as the wider one. The server takes the same view —
+ * `deps.view_as_allows` compares against `elevated` rather than against "not
+ * read-only" — so an old or forged token cannot talk either side into
+ * believing it may write.
+ */
+export const VIEW_AS_READ_ONLY = "read_only"
+export const VIEW_AS_ELEVATED = "elevated"
+
+/**
  * Keys that intentionally belong to the browser rather than to an account.
  *
  * Adding to this list re-opens the leak for that key, so the guard asserts the
@@ -135,6 +148,26 @@ function readKey(key: string): string | null {
 /** The Owner's own session. Never replaced by a View-as exchange. */
 function readToken(): string | null {
   return readKey(TOKEN_STORAGE_KEY)
+}
+
+/**
+ * The signed-in person's **own** token, whatever session is layered over it.
+ *
+ * There is exactly one request in this application that has to be made as the
+ * Owner while a View-as session is live: elevating one (ticket 27). Elevation
+ * is authorised by the Owner's own credentials rather than by the session it
+ * widens — which is what makes self-escalation impossible, since the server
+ * refuses every POST carrying an `act` claim — so the request must carry the
+ * token that proves it.
+ *
+ * Deliberately **not** the default. `activeToken` stays the one answer to
+ * "which identity is this browser acting as", and this is a named exception to
+ * it rather than a second opinion: a call site that reached for this without
+ * meaning "as the Owner, on purpose" would be sending the wrong identity in the
+ * one direction that widens access.
+ */
+export function ownerToken(): string | null {
+  return readToken()
 }
 
 /**
@@ -233,7 +266,7 @@ export function viewAsClaims(): ViewAsClaims | null {
     subjectEmail,
     actorUserId,
     actorEmail,
-    mode: asString(claims.mode) ?? "read_only",
+    mode: asString(claims.mode) ?? VIEW_AS_READ_ONLY,
     expiresAt,
   }
 }

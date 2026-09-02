@@ -31,6 +31,7 @@ from sqlalchemy import cast as sa_cast
 from sqlalchemy import select as sa_select
 from sqlmodel import Session, col
 
+from app.core import acting_owner
 from app.models_tg import DiscoverReport, utc_now
 from app.services.discover import SignalKind, compute_discover_candidates
 from app.services.discover_ignored import ignored_handles
@@ -309,6 +310,7 @@ def update_report_flags(
             merged[key] = value
     report.extra = merged
     report.updated_at = utc_now()
+    acting_owner.stamp(session, report)
     session.add(report)
     session.commit()
     session.refresh(report)
@@ -394,6 +396,7 @@ def create_report(
         timestamp=_now_ms(),
         updated_at=utc_now(),
     )
+    acting_owner.stamp(session, report)
     session.add(report)
     session.commit()
     session.refresh(report)

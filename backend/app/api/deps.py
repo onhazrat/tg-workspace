@@ -1,3 +1,4 @@
+import uuid
 from collections.abc import Generator
 from typing import Annotated
 
@@ -9,6 +10,8 @@ from pydantic import ValidationError
 from sqlmodel import Session
 
 from app.core import security
+from app.core.acting_owner import ActingOwner
+from app.core.acting_owner import bind as bind_acting_owner
 from app.core.config import settings
 from app.core.db import engine
 from app.core.permissions import Permission
@@ -77,6 +80,50 @@ VIEW_AS_READ_ONLY_PATHS: dict[str, str] = {
 #: explain rather than showing a bare permission error on a button click.
 VIEW_AS_READ_ONLY_DETAIL = "This View-as session is read-only"
 
+#: Refused even while elevated, matched as a **prefix** because the routes
+#: underneath take path parameters and there is nothing literal to compare.
+#:
+#: Ticket 26 left `routes/view_as.py` with no nesting check of its own, on the
+#: ground that the read-only gate made the branch unreachable — and said in as
+#: many words that ticket 27 is where it stops being unreachable. It is here
+#: rather than in the route for `view_as_allows`'s reason: a rule enforced by
+#: the route that starts a session covers exactly the routes somebody
+#: remembered.
+VIEW_AS_ELEVATED_REFUSED_PREFIXES: dict[str, str] = {
+    f"{settings.API_V1_STR}/view-as": (
+        "an elevated session starting another one writes an audit row naming "
+        "the *target* as the Owner who looked — the one lie the table exists "
+        "to prevent — and hands the second session a lifetime measured from "
+        "the first, which is a session that renews itself"
+    ),
+}
+
+#: Refused even while elevated, matched exactly.
+#:
+#: These are not about trusting the Owner. An Owner can already reset any
+#: account's password through `/users/{id}` **under their own name**, and that
+#: is exactly the point: that act is attributable and this one would not be.
+#: Changing the target's credentials from inside an elevation means signing in
+#: as them afterwards with no `act` claim, no audit row and no `acted_by` stamp
+#: on anything done next, while every guard in this ticket still passes.
+VIEW_AS_ELEVATED_REFUSED_PATHS: dict[str, str] = {
+    f"{settings.API_V1_STR}/users/me": (
+        "changing the address the target signs in with, or deleting the "
+        "account being acted for"
+    ),
+    f"{settings.API_V1_STR}/users/me/password": (
+        "the password is how somebody proves they are the target; setting it "
+        "here is acquiring a way to act as them outside this audit trail"
+    ),
+}
+
+#: What a write refused *during an elevation* says. Distinct from the read-only
+#: string because it is a different fact and the browser has different advice
+#: for it: read-only ends by elevating, and this one does not end at all.
+VIEW_AS_ELEVATED_DETAIL = (
+    "This action is not available while acting for another account"
+)
+
 #: The target was deleted mid-session (ticket 26's last checkbox).
 #:
 #: **Deliberately not `"User not found"`.** `api/base.ts::isAuthFailure` reads
@@ -98,13 +145,20 @@ VIEW_AS_ENDED_DETAILS = frozenset(
 )
 
 
-def view_as_allows(method: str, path: str) -> bool:
-    """Whether a read-only View-as session may make this request.
+def view_as_allows(method: str, path: str, *, mode: str | None) -> bool:
+    """Whether a View-as session in this mode may make this request.
 
     The one function that answers it, for the reason `tenancy.tenancy_enforced`
     is the one reader of its flag: the failure mode of a rule like this is
     always the second place it got asked, and the two spellings disagreeing is
-    how a write gets through while every test still passes.
+    how a write gets through while every test still passes. Ticket 27 widened
+    it rather than adding a sibling for the elevated case, which would have been
+    that second place.
+
+    `mode` is compared against `security.VIEW_AS_ELEVATED` rather than against
+    "not read-only": an unrecognised mode — an old token after a rename, a
+    hand-rolled one — falls through to the narrowest behaviour instead of to the
+    widest.
 
     Matched on the **raw path**, not on a route template, because that is what
     exists here — and because every allowlisted path is literal, with no
@@ -115,7 +169,27 @@ def view_as_allows(method: str, path: str) -> bool:
     """
     if method.upper() in SAFE_METHODS:
         return True
+    if mode == security.VIEW_AS_ELEVATED:
+        return not view_as_elevation_refuses(path)
     return path in VIEW_AS_READ_ONLY_PATHS or f"{path}/" in VIEW_AS_READ_ONLY_PATHS
+
+
+def view_as_elevation_refuses(path: str) -> bool:
+    """Whether this path stays refused however the session was elevated.
+
+    Two inventories rather than one because they are matched differently and
+    the difference is load-bearing: the `/view-as` family takes path parameters,
+    so only a prefix can name it, while the credential routes are literal and a
+    prefix over `/users/me` would silently swallow anything mounted beneath it
+    later.
+    """
+    trimmed = path.rstrip("/") or path
+    if trimmed in VIEW_AS_ELEVATED_REFUSED_PATHS:
+        return True
+    return any(
+        trimmed == prefix or trimmed.startswith(f"{prefix}/")
+        for prefix in VIEW_AS_ELEVATED_REFUSED_PREFIXES
+    )
 
 
 def get_current_user(request: Request, session: SessionDep, token: TokenDep) -> User:
@@ -142,10 +216,19 @@ def get_current_user(request: Request, session: SessionDep, token: TokenDep) -> 
     # kept in step with this one, which is exactly the drift that left
     # `/password-recovery` unreachable for months.
     is_view_as = token_data.act is not None
-    if is_view_as and not view_as_allows(request.method, request.url.path):
+    if is_view_as and not view_as_allows(
+        request.method, request.url.path, mode=token_data.mode
+    ):
+        # Two strings, because they are two different facts and the browser has
+        # different advice for each: a read-only refusal ends by elevating, and
+        # an elevated one does not end at all.
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail=VIEW_AS_READ_ONLY_DETAIL,
+            detail=(
+                VIEW_AS_ELEVATED_DETAIL
+                if token_data.mode == security.VIEW_AS_ELEVATED
+                else VIEW_AS_READ_ONLY_DETAIL
+            ),
         )
 
     user = session.get(User, token_data.sub)
@@ -172,7 +255,50 @@ def get_current_user(request: Request, session: SessionDep, token: TokenDep) -> 
             detail="Inactive user",
         )
 
+    # Ticket 27. `user` is the **target** — that is the whole of ticket 26 — so
+    # every row an elevated session writes is stamped with the target's id and
+    # nothing anywhere would say an Owner did it. Binding here means the one
+    # gate that decides who this request is also answers on whose behalf, and
+    # the four aggregates read it off the `Session` they already take.
+    #
+    # Bound unconditionally, the clearing case included: `SessionDep` is
+    # per-request today, but a reused `Session` whose binding could only be set
+    # would carry one request's Owner into the next.
+    bind_acting_owner(session, acting_owner_for(token_data))
+
     return user
+
+
+def acting_owner_for(token_data: TokenPayload) -> ActingOwner | None:
+    """The Owner a token attributes writes to, or `None` for every other token.
+
+    The **mode check lives here**, not at the call site, so that "which tokens
+    attribute a write" is one testable answer rather than a condition inlined in
+    a dependency no unit test can reach. It matters because the mistake it
+    guards against is invisible from outside: a read-only session cannot write,
+    so binding one would move no artifact test at all — and would mean that the
+    day an allowlisted read-only POST grew a write, it was attributed to an
+    Owner who had explicitly declined to elevate.
+
+    Compared against `VIEW_AS_ELEVATED` rather than "not read-only", for
+    `view_as_allows`'s reason: an unrecognised mode must fall through to the
+    narrower behaviour.
+
+    A token carrying `mode=elevated` with an unparsable `act`, or no
+    `act_email`, names nobody rather than raising. The write then lands
+    unattributed, which is the same outcome as an ordinary session — a 500 here
+    would take down a read the target is entitled to make, over a claim only the
+    audit trail cares about.
+    """
+    if token_data.act is None or not token_data.act_email:
+        return None
+    if token_data.mode != security.VIEW_AS_ELEVATED:
+        return None
+    try:
+        actor_id = uuid.UUID(token_data.act)
+    except ValueError:
+        return None
+    return ActingOwner(user_id=actor_id, email=token_data.act_email)
 
 
 CurrentUser = Annotated[User, Depends(get_current_user)]

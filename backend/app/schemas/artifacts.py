@@ -39,6 +39,16 @@ class ArtifactBase(BaseModel):
     post_count: int | None = Field(default=None, alias="postCount")
     is_starred: bool = Field(default=False, alias="isStarred")
     note: str | None = None
+    #: The Owner who made the last write, when it was not the account that owns
+    #: the row (ticket 27). `null` for almost every artifact, exactly like
+    #: `note` and `model` beside it.
+    #:
+    #: On the base rather than per kind, deliberately: "an Owner wrote this on
+    #: your behalf" is a fact about an artifact, and a field only some kinds
+    #: carried would be one that narrowing by `kind` tells the caller nothing
+    #: about — which is the failure this module's discriminated union exists to
+    #: avoid, pointed the other way.
+    acted_by_email: str | None = Field(default=None, alias="actedByEmail")
 
 
 class SummaryArtifactResponse(ArtifactBase):

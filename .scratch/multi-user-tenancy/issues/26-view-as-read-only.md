@@ -52,12 +52,16 @@ Migration `d3e4f5a6b7c8` promotes existing superusers.
 The old test named `admin` and would have failed on a change that took nothing
 away.
 
-## Left for 27
+## Left for 27 — done
 
 Elevation to read-write, and the acted-by column on the four Artifact tables.
-`mode` is already a string rather than a boolean on both the token and the audit
-row, so a second value is a value rather than a second field. `routes/view_as.py`
-carries no nesting check on purpose — the read-only gate refuses the POST today,
-so a branch there could not fail — and
-`test_a_view_as_session_cannot_start_another_one` is where that requirement
-lives instead.
+`mode` was already a string rather than a boolean on both the token and the
+audit row, so the second value was a value rather than a second field.
+
+The nesting hand-off landed where this said it would. `routes/view_as.py` still
+carries no check of its own: elevation turned out to be a *second exchange*
+authorised by the Owner's own token, so the read-only gate keeps a session from
+reaching either route, and the refusal that widened is in `deps` — one gate,
+still. `test_a_view_as_session_cannot_start_another_one` held throughout, and
+`test_view_as_elevation.py::test_an_elevated_session_cannot_start_or_elevate_another`
+is its elevated twin.

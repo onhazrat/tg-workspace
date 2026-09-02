@@ -5,6 +5,10 @@ A **read model**: takes a `Session`, never commits, owns no table. It aggregates
 a single newest-first page so History can show all four kinds interleaved
 instead of a summary list with two other kinds bolted on beside it.
 
+Each leg also carries `acted_by_email` (ticket 27), which is what makes "the
+acting Owner is visible in that User's History" true — History is the one screen
+that lists every kind, so it is the one place the answer has to be.
+
 ## The one rule this module exists to keep
 
 **Every leg selects named columns. None of them selects an entity.**
@@ -148,6 +152,7 @@ def _summary_leg(user_id: uuid.UUID) -> Any:
             col(Summary.language).label("language"),
             _starred(Summary).label("is_starred"),
             _text_flag(Summary, "note").label("note"),
+            col(Summary.acted_by_email).label("acted_by_email"),
             _flag(Summary, "autoRegenerate").label("auto_regenerate"),
             _flag(Summary, "autoPublish").label("auto_publish"),
         ),
@@ -175,6 +180,7 @@ def _chat_leg(user_id: uuid.UUID) -> Any:
             col(ChatSession.language).label("language"),
             _starred(ChatSession).label("is_starred"),
             _text_flag(ChatSession, "note").label("note"),
+            col(ChatSession.acted_by_email).label("acted_by_email"),
             literal(False).label("auto_regenerate"),
             literal(False).label("auto_publish"),
         ),
@@ -206,6 +212,7 @@ def _tag_leg(user_id: uuid.UUID) -> Any:
             _null(String).label("language"),
             _starred(TagRun).label("is_starred"),
             _text_flag(TagRun, "note").label("note"),
+            col(TagRun.acted_by_email).label("acted_by_email"),
             literal(False).label("auto_regenerate"),
             literal(False).label("auto_publish"),
         ),
@@ -236,6 +243,7 @@ def _discovery_leg(user_id: uuid.UUID) -> Any:
             _null(String).label("language"),
             _starred(DiscoverReport).label("is_starred"),
             _text_flag(DiscoverReport, "note").label("note"),
+            col(DiscoverReport.acted_by_email).label("acted_by_email"),
             literal(False).label("auto_regenerate"),
             literal(False).label("auto_publish"),
         ),
@@ -323,6 +331,11 @@ def _row_to_camel(row: Any) -> dict[str, Any]:
         "postCount": row["post_count"],
         "isStarred": bool(row["is_starred"]),
         "note": row["note"],
+        # Ticket 27. Emitted for every kind rather than as a per-kind extra:
+        # "an Owner wrote this on your behalf" is a fact about an artifact, not
+        # about a summary, and a field only some kinds carried would be one
+        # narrowing by `kind` could not tell you about.
+        "actedByEmail": row["acted_by_email"],
     }
     if kind == "summary":
         out["status"] = row["status"]

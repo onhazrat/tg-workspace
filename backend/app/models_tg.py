@@ -271,6 +271,20 @@ class Summary(SQLModel, table=True):
     # ever showed a count and a truncated preview.
     chat_message_count: int = 0
     prompt_excerpt: str | None = None
+    #: The Owner who made the last write, when it was not the account above
+    #: (ticket 27). `NULL` for everything a User did themselves, which is almost
+    #: every row.
+    #:
+    #: **`SET NULL`, where `user_id` one field up cascades.** Deleting an
+    #: account deletes what it owns; deleting the *Owner* who once fixed
+    #: somebody's summary must leave that summary alone, and the record of who
+    #: wrote it is exactly what a reader wants afterwards. So the address is
+    #: denormalised beside the key — the same design, and the same reason, as
+    #: `view_as_sessions`.
+    acted_by_user_id: uuid.UUID | None = Field(
+        default=None, foreign_key="user.id", ondelete="SET NULL"
+    )
+    acted_by_email: str | None = Field(default=None, max_length=255)
     updated_at: datetime = Field(default_factory=utc_now)
 
 
@@ -376,6 +390,14 @@ class ChatSession(SQLModel, table=True):
     #: projection never has to open the payload table. Mirrors
     #: `Summary.chat_message_count`.
     message_count: int = 0
+    #: The Owner who made the last write, when it was not the account above
+    #: (ticket 27). `NULL` for everything a User did themselves, which is almost
+    #: every row. `SET NULL` where `user_id` cascades, and the address
+    #: denormalised beside it, for the reason `Summary.acted_by_user_id` gives.
+    acted_by_user_id: uuid.UUID | None = Field(
+        default=None, foreign_key="user.id", ondelete="SET NULL"
+    )
+    acted_by_email: str | None = Field(default=None, max_length=255)
     updated_at: datetime = Field(default_factory=utc_now)
 
 
@@ -478,6 +500,14 @@ class DiscoverReport(SQLModel, table=True):
     #: worked on summaries and chats but silently skipped tag runs and reports
     #: is worse than either having the filter or not.
     extra: dict[str, Any] = Field(default_factory=dict, sa_column=Column(JSON))
+    #: The Owner who made the last write, when it was not the account above
+    #: (ticket 27). `NULL` for everything a User did themselves, which is almost
+    #: every row. `SET NULL` where `user_id` cascades, and the address
+    #: denormalised beside it, for the reason `Summary.acted_by_user_id` gives.
+    acted_by_user_id: uuid.UUID | None = Field(
+        default=None, foreign_key="user.id", ondelete="SET NULL"
+    )
+    acted_by_email: str | None = Field(default=None, max_length=255)
     updated_at: datetime = Field(default_factory=utc_now)
 
 
@@ -650,6 +680,14 @@ class TagRun(SQLModel, table=True):
     extra: dict[str, Any] = Field(default_factory=dict, sa_column=Column(JSON))
     created_at: int = Field(default=0, sa_column=_ms_ts())
     updated_at_ms: int = Field(default=0, sa_column=_ms_ts())
+    #: The Owner who made the last write, when it was not the account above
+    #: (ticket 27). `NULL` for everything a User did themselves, which is almost
+    #: every row. `SET NULL` where `user_id` cascades, and the address
+    #: denormalised beside it, for the reason `Summary.acted_by_user_id` gives.
+    acted_by_user_id: uuid.UUID | None = Field(
+        default=None, foreign_key="user.id", ondelete="SET NULL"
+    )
+    acted_by_email: str | None = Field(default=None, max_length=255)
     updated_at: datetime = Field(default_factory=utc_now)
 
 

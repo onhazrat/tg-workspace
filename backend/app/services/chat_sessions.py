@@ -20,6 +20,7 @@ from fastapi import HTTPException
 from sqlalchemy import Text, cast, or_
 from sqlmodel import Session, col, select
 
+from app.core import acting_owner
 from app.models_tg import ChatSession, ChatSessionPayload, utc_now
 from app.services.serialization import to_snake
 from app.services.tenancy import (
@@ -347,6 +348,7 @@ def upsert_chat_session(
         removals=payload_removals,
     )
     refresh_chat_session_derived_columns(row, payload)
+    acting_owner.stamp(session, row)
     session.add(row)
     session.commit()
     session.refresh(row)

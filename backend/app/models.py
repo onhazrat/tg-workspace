@@ -147,6 +147,10 @@ class TokenPayload(SQLModel):
     act: str | None = None
     act_email: str | None = None
     sub_email: str | None = None
+    #: `read_only` or `elevated` (`security.VIEW_AS_MODES`). Read only to widen
+    #: what the session may do — never to decide whether it *is* one, which is
+    #: `act`'s job, so an unrecognised value falls through to the narrowest
+    #: behaviour instead of to no gate at all.
     mode: str | None = None
 
 

@@ -121,6 +121,103 @@ def start_view_as(
     )
 
 
+#: What an elevation refuses a target for. Separate from `_NOT_VIEWABLE`
+#: because the two rules are deliberately different and a shared string would
+#: hide that: *looking* at an Admin's screen to reproduce their problem is
+#: legitimate, and *writing* to their account under their name is not.
+#:
+#: Still one message for "no such account" and "not an account you may act
+#: for", for `_NOT_VIEWABLE`'s reason: which accounts hold which permissions is
+#: not this route's fact to publish.
+_NOT_ELEVATABLE = "No account to act for"
+
+
+@router.post(
+    "/{user_id}/elevate",
+    dependencies=[Depends(require_permission(Permission.VIEW_AS))],
+    response_model=ViewAsSessionResponse,
+)
+def elevate_view_as(
+    session: SessionDep,
+    current_user: CurrentUser,
+    user_id: uuid.UUID,
+    minutes: Annotated[
+        int | None,
+        Query(ge=1, le=settings.VIEW_AS_ELEVATED_MAX_MINUTES),
+    ] = None,
+) -> ViewAsSessionResponse:
+    """Exchange the Owner's token for a short session that may *write* (27).
+
+    **A second exchange, not a flag flipped on the first.** It is authorised by
+    the Owner's own token exactly as `start_view_as` is, which is what makes
+    self-escalation impossible without a check of its own: `get_current_user`
+    refuses every POST from an `act`-bearing token, so a live session cannot
+    reach this route at all, whichever mode it is in. `deps` refuses the whole
+    `/view-as` family for an elevated session on top of that, and
+    `test_view_as_elevation.py` asserts both — the belt is structural and the
+    braces are the inventory.
+
+    **Refused for a target holding any permission at all.** The ticket says
+    "refused when the target is an Admin" and `role == "admin"` is the spelling
+    `CLAUDE.md` forbids: a fourth privileged role added as a row walks straight
+    past it. The seeded `user` role holds nothing and
+    `tests/core/test_permissions.py` asserts the default role stays that way, so
+    "holds no permission" *is* "is an ordinary User", derived rather than
+    listed — and it refuses a future read-only auditor too, which it should.
+
+    `minutes` is chosen per exchange because elevation is not one activity with
+    one shape: a stuck setting is thirty seconds and walking somebody's import
+    is ten minutes, and an Owner forced to re-elevate repeatedly asks for the
+    maximum every time. The ceiling is validated at boot to be strictly shorter
+    than the read-only session (`Settings._enforce_elevation_is_shorter_than_looking`),
+    so the ticket's "shorter-lived than" holds for every value reachable here
+    rather than for the default alone.
+    """
+    actor = current_user
+    target = session.get(User, user_id)
+    if target is None or not target.is_active or target.id == actor.id:
+        raise HTTPException(status_code=404, detail=_NOT_ELEVATABLE)
+    if rbac.permissions_for(session, target.id):
+        raise HTTPException(status_code=404, detail=_NOT_ELEVATABLE)
+
+    lifetime = timedelta(
+        minutes=minutes
+        if minutes is not None
+        else settings.VIEW_AS_ELEVATED_DEFAULT_MINUTES
+    )
+    expires_at = datetime.now(UTC) + lifetime
+    # Recorded before the token is minted, for `start_view_as`'s reason — and
+    # the row is a *new* one rather than an update to the read-only session it
+    # replaces. "Looked" and "changed" are different acts, they happened at
+    # different times, and an auditor asking "when did an Owner gain write
+    # access to this account" needs a row whose `created_at` answers it.
+    record = record_session(
+        session,
+        actor=actor,
+        subject=target,
+        expires_at=expires_at,
+        mode=security.VIEW_AS_ELEVATED,
+    )
+    token = security.create_view_as_token(
+        subject_id=target.id,
+        subject_email=target.email,
+        actor_id=actor.id,
+        actor_email=actor.email,
+        expires_delta=expires_at - datetime.now(UTC),
+        mode=security.VIEW_AS_ELEVATED,
+    )
+    return ViewAsSessionResponse(
+        accessToken=token,
+        sessionId=record.id,
+        subjectUserId=target.id,
+        subjectEmail=target.email,
+        actorUserId=actor.id,
+        actorEmail=actor.email,
+        mode=record.mode,
+        expiresAt=expires_at,
+    )
+
+
 @router.get(
     "/sessions",
     dependencies=[Depends(require_permission(Permission.VIEW_AS))],

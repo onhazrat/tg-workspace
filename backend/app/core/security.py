@@ -26,11 +26,25 @@ def create_access_token(subject: str | Any, expires_delta: timedelta) -> str:
     return encoded_jwt
 
 
-#: The mode a View-as session runs in. `read_only` is the whole of ticket 26;
-#: ticket 27 adds an elevated one, which is why this is a string rather than a
-#: boolean — a second answer to "what may this session do" would have to be a
-#: second field, and two fields that must agree eventually do not.
+#: The mode a View-as session runs in. A string rather than a boolean — a second
+#: answer to "what may this session do" would have to be a second field, and two
+#: fields that must agree eventually do not.
 VIEW_AS_READ_ONLY = "read_only"
+
+#: An Owner making a change on somebody's behalf (ticket 27). A *separate*
+#: exchange rather than a flag flipped on a live session: `POST /view-as/{id}`
+#: and `POST /view-as/{id}/elevate` are both authorised by the Owner's own
+#: token, which is what makes self-escalation impossible without a single check
+#: — the read-only gate refuses every POST from an `act`-bearing token, so a
+#: session cannot reach either route.
+VIEW_AS_ELEVATED = "elevated"
+
+#: Every mode this application mints, so a reader of the audit table has one
+#: place to look up what a value means. Unrecognised values are deliberately
+#: **not** rejected downstream: `act` alone decides whether a token is a View-as
+#: session, and a mode nobody recognises must fall through to the narrowest
+#: behaviour rather than to "not a View-as session at all".
+VIEW_AS_MODES = frozenset({VIEW_AS_READ_ONLY, VIEW_AS_ELEVATED})
 
 
 def create_view_as_token(

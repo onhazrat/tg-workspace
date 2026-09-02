@@ -17,6 +17,7 @@ from sqlalchemy import Text, cast, or_
 from sqlalchemy import select as sa_select
 from sqlmodel import Session, col, select
 
+from app.core import acting_owner
 from app.models_tg import Summary, SummaryPayload, utc_now
 from app.services.serialization import to_snake
 from app.services.tenancy import (
@@ -361,6 +362,11 @@ def upsert_summary(
         removals=payload_removals,
     )
     refresh_summary_derived_columns(summary, payload)
+    # Ticket 27: who wrote this, when it was not the account that owns it.
+    # On the merge branch too, not only on creation — the column answers
+    # "who made the *last* write", so a User editing their own row
+    # afterwards has to clear an Owner's name off it.
+    acting_owner.stamp(session, summary)
     session.add(summary)
     session.commit()
     session.refresh(summary)

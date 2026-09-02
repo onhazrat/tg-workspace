@@ -39,6 +39,16 @@ class Settings(BaseSettings):
     # minutes is long enough to walk a whole account's screens and short enough
     # that a forgotten tab is closed by lunchtime.
     VIEW_AS_TOKEN_EXPIRE_MINUTES: int = 30
+    # Elevation (ticket 27) is a different activity from looking, so it gets a
+    # lifetime chosen per exchange rather than a second constant. Fixing a stuck
+    # setting is thirty seconds and walking somebody's import is ten minutes; an
+    # Owner forced to re-elevate four times will ask for the longest lifetime on
+    # offer every time, which is how a ceiling turns into a floor.
+    VIEW_AS_ELEVATED_DEFAULT_MINUTES: int = 5
+    #: The most an Owner may ask for. Validated below to be strictly shorter
+    #: than the read-only session, which is the ticket's "shorter-lived than"
+    #: made true of every reachable value rather than of the default.
+    VIEW_AS_ELEVATED_MAX_MINUTES: int = 15
     FRONTEND_HOST: str = "http://localhost:5173"
     ENVIRONMENT: Literal["local", "staging", "production"] = "local"
 
@@ -364,6 +374,36 @@ class Settings(BaseSettings):
             if self.ENVIRONMENT == "production" and not self.API_KEY.strip():
                 raise ValueError("API_KEY must be set when ENVIRONMENT is 'production'")
 
+        return self
+
+    @model_validator(mode="after")
+    def _enforce_elevation_is_shorter_than_looking(self) -> Self:
+        """Ticket 27's "shorter-lived than the read-only session", as a rule.
+
+        Asserted on the **ceiling** rather than on the default, because the
+        default is not what a caller gets — `minutes` is chosen per exchange and
+        bounded by the ceiling, so a deployment that raised the ceiling above
+        `VIEW_AS_TOKEN_EXPIRE_MINUTES` would hand out a write session outliving
+        the read-only one it replaced, and nothing downstream would notice.
+
+        A `ValueError` at boot rather than a clamp at the route: clamping is a
+        deployment quietly getting a different number than it configured, which
+        is the shape of thing nobody discovers until they are reading an audit
+        trail that does not add up.
+        """
+        if not 0 < self.VIEW_AS_ELEVATED_DEFAULT_MINUTES:
+            raise ValueError("VIEW_AS_ELEVATED_DEFAULT_MINUTES must be positive")
+        if self.VIEW_AS_ELEVATED_DEFAULT_MINUTES > self.VIEW_AS_ELEVATED_MAX_MINUTES:
+            raise ValueError(
+                "VIEW_AS_ELEVATED_DEFAULT_MINUTES must not exceed "
+                "VIEW_AS_ELEVATED_MAX_MINUTES"
+            )
+        if self.VIEW_AS_ELEVATED_MAX_MINUTES >= self.VIEW_AS_TOKEN_EXPIRE_MINUTES:
+            raise ValueError(
+                "VIEW_AS_ELEVATED_MAX_MINUTES must be strictly shorter than "
+                "VIEW_AS_TOKEN_EXPIRE_MINUTES: an elevated session that outlives "
+                "the read-only one is not an elevation, it is a second login"
+            )
         return self
 
 

@@ -5017,6 +5017,55 @@
         }
       }
     },
+    "/api/v1/view-as/{user_id}/elevate": {
+      "post": {
+        "tags": ["view-as"],
+        "summary": "Elevate View As",
+        "description": "Exchange the Owner's token for a short session that may *write* (27).\n\n**A second exchange, not a flag flipped on the first.** It is authorised by\nthe Owner's own token exactly as `start_view_as` is, which is what makes\nself-escalation impossible without a check of its own: `get_current_user`\nrefuses every POST from an `act`-bearing token, so a live session cannot\nreach this route at all, whichever mode it is in. `deps` refuses the whole\n`/view-as` family for an elevated session on top of that, and\n`test_view_as_elevation.py` asserts both \u2014 the belt is structural and the\nbraces are the inventory.\n\n**Refused for a target holding any permission at all.** The ticket says\n\"refused when the target is an Admin\" and `role == \"admin\"` is the spelling\n`CLAUDE.md` forbids: a fourth privileged role added as a row walks straight\npast it. The seeded `user` role holds nothing and\n`tests/core/test_permissions.py` asserts the default role stays that way, so\n\"holds no permission\" *is* \"is an ordinary User\", derived rather than\nlisted \u2014 and it refuses a future read-only auditor too, which it should.\n\n`minutes` is chosen per exchange because elevation is not one activity with\none shape: a stuck setting is thirty seconds and walking somebody's import\nis ten minutes, and an Owner forced to re-elevate repeatedly asks for the\nmaximum every time. The ceiling is validated at boot to be strictly shorter\nthan the read-only session (`Settings._enforce_elevation_is_shorter_than_looking`),\nso the ticket's \"shorter-lived than\" holds for every value reachable here\nrather than for the default alone.",
+        "operationId": "view-as-elevate_view_as",
+        "security": [{ "OAuth2PasswordBearer": [] }],
+        "parameters": [
+          {
+            "name": "user_id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid", "title": "User Id" }
+          },
+          {
+            "name": "minutes",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                { "type": "integer", "maximum": 15, "minimum": 1 },
+                { "type": "null" }
+              ],
+              "title": "Minutes"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ViewAsSessionResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/view-as/sessions": {
       "get": {
         "tags": ["view-as"],
@@ -5924,6 +5973,10 @@
             "anyOf": [{ "type": "string" }, { "type": "null" }],
             "title": "Note"
           },
+          "actedByEmail": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Actedbyemail"
+          },
           "kind": { "type": "string", "const": "chat", "title": "Kind" },
           "messageCount": {
             "type": "integer",
@@ -6617,6 +6670,10 @@
           "note": {
             "anyOf": [{ "type": "string" }, { "type": "null" }],
             "title": "Note"
+          },
+          "actedByEmail": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Actedbyemail"
           },
           "kind": { "type": "string", "const": "discovery", "title": "Kind" },
           "candidateCount": {
@@ -8529,6 +8586,10 @@
             "anyOf": [{ "type": "string" }, { "type": "null" }],
             "title": "Note"
           },
+          "actedByEmail": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Actedbyemail"
+          },
           "kind": { "type": "string", "const": "summary", "title": "Kind" },
           "status": {
             "type": "string",
@@ -8948,6 +9009,10 @@
           "note": {
             "anyOf": [{ "type": "string" }, { "type": "null" }],
             "title": "Note"
+          },
+          "actedByEmail": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Actedbyemail"
           },
           "kind": { "type": "string", "const": "tag", "title": "Kind" },
           "status": {

@@ -397,6 +397,13 @@ EXCUSED: dict[tuple[str, str], tuple[Reason, str]] = {
         "crosses accounts on purpose — that is the feature — gated on VIEW_AS "
         "and refused for a peer holding it; test_view_as.py",
     ),
+    ("POST", f"{V1}/view-as/{{user_id}}/elevate"): (
+        Reason.COVERED_ELSEWHERE,
+        "crosses accounts on purpose, one rung further than the exchange above "
+        "— gated on VIEW_AS, refused for any target holding a permission, and "
+        "every row it then writes is stamped with the acting Owner; "
+        "test_view_as_elevation.py (ticket 27)",
+    ),
     ("GET", f"{V1}/view-as/sessions"): (
         Reason.DEPLOYMENT_WIDE,
         "the audit trail across every Owner; an answer that covered only the "

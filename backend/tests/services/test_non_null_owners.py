@@ -98,12 +98,22 @@ def test_every_owner_column_is_not_null_with_a_cascading_key() -> None:
             if nullable[0] != "NO":
                 missing_not_null.append(table)
 
+            # Matched on the **constrained column**, not on the constraint's
+            # name. `LIKE '%user_id%'` was the first spelling and it was a
+            # latent false pass: ticket 27 added `acted_by_user_id` to four of
+            # these tables, whose key is deliberately `SET NULL`, and its name
+            # matches that pattern too — so `.first()` returned whichever of the
+            # two Postgres felt like, and the guard failed or passed at random
+            # while the schema was entirely correct. A guard that reads a name
+            # to find out about a column eventually finds the wrong one.
             fk = session.exec(
                 sa.text(  # ty: ignore[invalid-argument-type]
                     "SELECT c.confdeltype FROM pg_constraint c "
                     "JOIN pg_class t ON t.oid = c.conrelid "
+                    "JOIN pg_attribute a "
+                    "  ON a.attrelid = t.oid AND a.attnum = ANY(c.conkey) "
                     "WHERE t.relname = :t AND c.contype = 'f' "
-                    "AND c.conname LIKE '%user_id%'"
+                    "AND a.attname = 'user_id'"
                 ).bindparams(t=table)
             ).first()
             # 'c' is ON DELETE CASCADE. A key that merely exists is not the
