@@ -4,7 +4,7 @@ from sqlmodel import Session, create_engine, select
 
 from app import crud
 from app.core.config import settings
-from app.core.permissions import ROLE_ADMIN, SEEDED_ROLES
+from app.core.permissions import ROLE_OWNER, SEEDED_ROLES
 from app.models import User, UserCreate
 from app.models_rbac import Role, UserRole
 
@@ -83,12 +83,21 @@ def init_db(session: Session) -> None:
         user = crud.create_user(session=session, user_create=user_in)
         logger.info("Created bootstrap superuser %s", settings.FIRST_SUPERUSER)
 
-    # Assigned here as well as in migration b0c1d2e3f4a5, because the two cover
-    # different cases: the migration promotes superusers that already existed,
-    # this covers a superuser bootstrapped into an empty database afterwards.
-    # Authorisation reads roles only, so a bootstrap superuser without this row
-    # would come up unable to manage anything.
-    if not session.get(UserRole, (user.id, ROLE_ADMIN)):
-        session.add(UserRole(user_id=user.id, role_id=ROLE_ADMIN))
+    # Assigned here as well as in migrations b0c1d2e3f4a5 and d3e4f5a6b7c8,
+    # because the two cover different cases: the migrations promote superusers
+    # that already existed, this covers a superuser bootstrapped into an empty
+    # database afterwards. Authorisation reads roles only, so a bootstrap
+    # superuser without this row would come up unable to manage anything.
+    #
+    # **Owner, not Admin, since ticket 26.** `Permission.VIEW_AS` is held by the
+    # Owner role alone — the spec's "View as is a permission, not a role. Owner
+    # holds it by default" — so a deployment whose only privileged account is an
+    # Admin ships View-as as code nobody can reach. Owner is a strict superset
+    # of Admin today, so this takes nothing away from the bootstrap account; the
+    # `admin` row it may already hold is left alone, because roles are a set and
+    # reaching in to delete an assignment an operator can see is not this
+    # function's business.
+    if not session.get(UserRole, (user.id, ROLE_OWNER)):
+        session.add(UserRole(user_id=user.id, role_id=ROLE_OWNER))
         session.commit()
-        logger.info("Granted %s the %s role", settings.FIRST_SUPERUSER, ROLE_ADMIN)
+        logger.info("Granted %s the %s role", settings.FIRST_SUPERUSER, ROLE_OWNER)

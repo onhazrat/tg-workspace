@@ -137,6 +137,18 @@ class Token(SQLModel):
 class TokenPayload(SQLModel):
     sub: str | None = None
 
+    # The View-as claims (ticket 26). All optional, because an ordinary token
+    # carries none of them, and `act` alone decides whether this is a View-as
+    # session: `mode` is what the session may *do*, and an unrecognised value
+    # there must not read as "not a View-as session at all".
+    #
+    # `sub` is the account being viewed — see `security.create_view_as_token`
+    # for why the target rather than the Owner sits in the standard claim.
+    act: str | None = None
+    act_email: str | None = None
+    sub_email: str | None = None
+    mode: str | None = None
+
 
 class NewPassword(SQLModel):
     token: str

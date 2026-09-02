@@ -106,6 +106,7 @@ from app.models_tg import (
     TagRun,
     UserSetting,
 )
+from app.models_view_as import ViewAsSession
 
 #: Every user-owned table stamps its owner in the same column. Named once
 #: rather than repeated, because the day one table spells it differently is
@@ -241,6 +242,17 @@ OUT_OF_SCOPE: dict[type[SQLModel], str] = {
         "A User's role assignments, read only by `services/rbac.py` for one "
         "explicit user id and never listed. There is no unscoped query here for "
         "the seam to scope; the lookup already names whose roles it wants."
+    ),
+    ViewAsSession: (
+        "An audit record of an administrative act (ticket 26), not something "
+        "either account it names owns. Scoping it to the subject would hide "
+        "from an Owner exactly the trail the table exists to keep, and scoping "
+        "it to the actor would answer 'who has been looking at accounts' with "
+        "'only you'. Who may read it is a permission question — `VIEW_AS`, the "
+        "same one that lets somebody start a session — which is the argument "
+        "`Role` makes. It is also the one table here whose foreign keys do not "
+        "cascade, so a deleted account leaves rows the seam could not scope "
+        "even if it wanted to."
     ),
 }
 

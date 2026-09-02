@@ -392,6 +392,16 @@ EXCUSED: dict[tuple[str, str], tuple[Reason, str]] = {
         Reason.DEPLOYMENT_WIDE,
         "QUOTA_MANAGE sets another account's limits; the id is the argument",
     ),
+    ("POST", f"{V1}/view-as/{{user_id}}"): (
+        Reason.COVERED_ELSEWHERE,
+        "crosses accounts on purpose — that is the feature — gated on VIEW_AS "
+        "and refused for a peer holding it; test_view_as.py",
+    ),
+    ("GET", f"{V1}/view-as/sessions"): (
+        Reason.DEPLOYMENT_WIDE,
+        "the audit trail across every Owner; an answer that covered only the "
+        "person asking would not be one (ticket 26)",
+    ),
     ("POST", f"{V1}/quota/lifts/{{user_id}}"): (
         Reason.DEPLOYMENT_WIDE,
         "QUOTA_MANAGE lifts another account's ceiling; the id is the argument",

@@ -70,6 +70,8 @@ import type {
   TestProxyResponse,
   TorIpResponse,
   TorStatusResponse,
+  ViewAsSessionEntry,
+  ViewAsSessionResponse,
 } from "@/client"
 import type { Post } from "@/types"
 
@@ -221,4 +223,29 @@ export type DiscoveryArtifactIsClosed = Assert<
  */
 export type PostResponseIsNotAPost = Assert<
   PostResponse extends Post ? false : true
+>
+
+// ---------------------------------------------------------------------------
+// View-as (ticket 26): generated, and every field the ribbon needs is required.
+//
+// `MyBudgetUsage`'s reason, sharpened. OpenAPI marks a defaulted field
+// optional, so a server-side default on any of these would make the browser
+// invent a fallback — and there is no honest fallback for "which account am I
+// looking at". "Viewing as someone, we are not sure who" is worse than no
+// ribbon, because it claims a session is active and refuses to say whose.
+//
+// That is what the second assertion pins, and it is the only place that would
+// notice a `= ""` appearing on the backend model.
+// ---------------------------------------------------------------------------
+
+export type ViewAsSessionIsClosed = Assert<IsClosed<ViewAsSessionResponse>>
+export type ViewAsSessionEntryIsClosed = Assert<IsClosed<ViewAsSessionEntry>>
+export type ViewAsSessionNamesBothAccounts = Assert<
+  ViewAsSessionResponse extends {
+    accessToken: string
+    subjectEmail: string
+    actorEmail: string
+  }
+    ? true
+    : false
 >

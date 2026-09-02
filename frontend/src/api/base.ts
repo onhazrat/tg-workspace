@@ -1,5 +1,10 @@
 import { queryClient } from "@/lib/queryClient"
-import { TOKEN_STORAGE_KEY } from "@/lib/storage/scoped"
+import {
+  activeToken,
+  exitViewAs,
+  TOKEN_STORAGE_KEY,
+  VIEW_AS_ENDED_DETAILS,
+} from "@/lib/storage/scoped"
 
 export const API_BASE = import.meta.env.VITE_API_URL || ""
 const API_KEY = import.meta.env.VITE_API_KEY || ""
@@ -34,7 +39,10 @@ export function headers(json = true): HeadersInit {
   const h: Record<string, string> = {}
   if (json) h["Content-Type"] = "application/json"
   if (API_KEY) h["X-API-Key"] = API_KEY
-  const token = localStorage.getItem(TOKEN_STORAGE_KEY)
+  // The View-as token when there is one, the Owner's own otherwise. Read
+  // through `activeToken` rather than here, so "which identity is this browser
+  // acting as" has one answer rather than one per call site (ticket 26).
+  const token = activeToken()
   if (token) h.Authorization = `Bearer ${token}`
   return h
 }
@@ -91,6 +99,10 @@ export function isAuthFailure(status: number, detail: string): boolean {
 export function clearStaleSession(): void {
   if (!localStorage.getItem(TOKEN_STORAGE_KEY)) return
   localStorage.removeItem(TOKEN_STORAGE_KEY)
+  // A View-as session is a session, so it goes when the session does. Leaving
+  // it behind would outlive the token it was layered on and be preferred again
+  // by the next person to sign in at this browser (ticket 26).
+  exitViewAs()
   queryClient.clear()
   if (!window.location.pathname.startsWith("/login")) {
     window.location.href = "/login"
@@ -104,7 +116,32 @@ export async function parseErrorDetail(response: Response): Promise<string> {
   return typeof err.detail === "string" ? err.detail : JSON.stringify(err)
 }
 
+/**
+ * The account being viewed has gone away, so put the session down.
+ *
+ * Ticket 26's last checkbox: a deleted or disabled target must return the Owner
+ * to **their own account**, not to a login screen. That works because the
+ * Owner's token was never replaced — dropping the View-as one is the whole of
+ * it — and because the backend answers these two with their own detail strings
+ * rather than the `"User not found"` / `"Inactive user"` that `isAuthFailure`
+ * reads as a dead session.
+ *
+ * The reload is deliberate and is not decoration. Every query in the cache
+ * holds the *viewed* account's rows, and the storage namespace changes back
+ * under the app the moment the token goes; re-rendering in place would leave
+ * one person's channels on screen under another person's name.
+ */
+function endViewAsSession(): void {
+  if (!exitViewAs()) return
+  queryClient.clear()
+  window.location.reload()
+}
+
 export function handleAuthError(status: number, detail: string): void {
+  if (VIEW_AS_ENDED_DETAILS.includes(detail)) {
+    endViewAsSession()
+    return
+  }
   if (isAuthFailure(status, detail)) {
     clearStaleSession()
   }

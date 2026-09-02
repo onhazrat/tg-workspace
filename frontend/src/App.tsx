@@ -241,7 +241,7 @@ export default function App() {
 
   return (
     <div
-      className={`tg-wcag-floor h-svh overflow-hidden bg-app-bg text-app-ink font-sans selection:bg-app-ink selection:text-app-bg transition-colors duration-300 flex flex-col`}
+      className={`tg-wcag-floor h-[calc(100svh-var(--view-as-offset))] overflow-hidden bg-app-bg text-app-ink font-sans selection:bg-app-ink selection:text-app-bg transition-colors duration-300 flex flex-col`}
     >
       <a
         href="#main-content"

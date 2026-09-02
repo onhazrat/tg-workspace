@@ -4979,6 +4979,86 @@
           }
         }
       }
+    },
+    "/api/v1/view-as/{user_id}": {
+      "post": {
+        "tags": ["view-as"],
+        "summary": "Start View As",
+        "description": "Exchange the caller's token for a read-only look at one account.\n\nRefused for a target that holds `VIEW_AS` themselves \u2014 the ticket's \"viewing\nas another holder of the permission is refused\", and the reason is that a\npeer's account is the one place the permission could be used to acquire more\nof itself. Refused for the caller's own account too: a View-as session that\nis read-only over your *own* data is a downgrade nobody asked for, and it\nwould be indistinguishable in the audit trail from the real thing.\n\nBoth refusals, and \"no such account\", answer with **one message**. A caller\nholding `VIEW_AS` also holds `USERS_READ` and can already list every\naccount, so there is no enumeration to protect \u2014 but which accounts hold\nwhich permissions is a different fact, and this route is not the place to\npublish it.\n\n**Nesting needs no check of its own here, and adding one would be a guard\nthat cannot fail.** This is a POST, and `deps.view_as_allows` does not\nallowlist it, so a View-as token is refused by `get_current_user` before the\nhandler runs. `test_view_as.py` asserts that at the HTTP level rather than\nhere \u2014 which is the assertion that survives ticket 27 widening what an\nelevated session may do, where an unreachable branch in this file would\nsilently become the only thing standing between an audit row and a lie.",
+        "operationId": "view-as-start_view_as",
+        "security": [{ "OAuth2PasswordBearer": [] }],
+        "parameters": [
+          {
+            "name": "user_id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid", "title": "User Id" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ViewAsSessionResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/view-as/sessions": {
+      "get": {
+        "tags": ["view-as"],
+        "summary": "Read View As Sessions",
+        "description": "Recent View-as sessions across every Owner, newest first.\n\nEvery Owner's, not the caller's own. \"There is an answer to who looked at\nwhat\" is the ticket's checkbox, and an answer that only covers the person\nasking is not one.",
+        "operationId": "view-as-read_view_as_sessions",
+        "security": [{ "OAuth2PasswordBearer": [] }],
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 500,
+              "minimum": 1,
+              "default": 100,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ViewAsSessionsResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -9409,6 +9489,104 @@
         "type": "object",
         "title": "VectorWriteResponse",
         "description": "How many rows a bulk embedding or translation write accepted."
+      },
+      "ViewAsSessionEntry": {
+        "properties": {
+          "id": { "type": "string", "format": "uuid", "title": "Id" },
+          "actorUserId": {
+            "anyOf": [
+              { "type": "string", "format": "uuid" },
+              { "type": "null" }
+            ],
+            "title": "Actoruserid"
+          },
+          "actorEmail": { "type": "string", "title": "Actoremail" },
+          "subjectUserId": {
+            "anyOf": [
+              { "type": "string", "format": "uuid" },
+              { "type": "null" }
+            ],
+            "title": "Subjectuserid"
+          },
+          "subjectEmail": { "type": "string", "title": "Subjectemail" },
+          "mode": { "type": "string", "title": "Mode" },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Createdat"
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Expiresat"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "actorUserId",
+          "actorEmail",
+          "subjectUserId",
+          "subjectEmail",
+          "mode",
+          "createdAt",
+          "expiresAt"
+        ],
+        "title": "ViewAsSessionEntry",
+        "description": "One row of the audit trail: who, whom, when.\n\nThe two ids are nullable and the two addresses are not, which is the table's\ndesign showing through on the wire: the foreign keys are `SET NULL` so a\ndeleted account cannot take the record of having been viewed with it, and\nthe denormalised address is what still answers afterwards."
+      },
+      "ViewAsSessionResponse": {
+        "properties": {
+          "accessToken": { "type": "string", "title": "Accesstoken" },
+          "sessionId": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Sessionid"
+          },
+          "subjectUserId": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Subjectuserid"
+          },
+          "subjectEmail": { "type": "string", "title": "Subjectemail" },
+          "actorUserId": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Actoruserid"
+          },
+          "actorEmail": { "type": "string", "title": "Actoremail" },
+          "mode": { "type": "string", "title": "Mode" },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Expiresat"
+          }
+        },
+        "type": "object",
+        "required": [
+          "accessToken",
+          "sessionId",
+          "subjectUserId",
+          "subjectEmail",
+          "actorUserId",
+          "actorEmail",
+          "mode",
+          "expiresAt"
+        ],
+        "title": "ViewAsSessionResponse",
+        "description": "The short-lived session an Owner just started.\n\nThe token is returned in the body rather than set as a cookie because this\napplication's transport is a bearer header (`api/base.ts`), and a session\nthat lived in a cookie would be sent by every tab in the browser \u2014 the\nOwner's other tabs included, which is the opposite of a session you can put\ndown.\n\nEvery field is **required, with no default**, for `MyBudgetUsage`'s reason:\nOpenAPI marks a defaulted field optional, and the ribbon that names the\naccount being viewed cannot have a fallback. \"Viewing as someone, we are not\nsure who\" is worse than not shipping the ribbon at all."
+      },
+      "ViewAsSessionsResponse": {
+        "properties": {
+          "sessions": {
+            "items": { "$ref": "#/components/schemas/ViewAsSessionEntry" },
+            "type": "array",
+            "title": "Sessions"
+          }
+        },
+        "type": "object",
+        "title": "ViewAsSessionsResponse",
+        "description": "Recent View-as sessions, newest first."
       }
     },
     "securitySchemes": {

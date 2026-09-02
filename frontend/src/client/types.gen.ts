@@ -5032,6 +5032,111 @@ export type VectorWriteResponse = {
     upserted?: number;
 };
 
+/**
+ * ViewAsSessionEntry
+ * One row of the audit trail: who, whom, when.
+ *
+ * The two ids are nullable and the two addresses are not, which is the table's
+ * design showing through on the wire: the foreign keys are `SET NULL` so a
+ * deleted account cannot take the record of having been viewed with it, and
+ * the denormalised address is what still answers afterwards.
+ */
+export type ViewAsSessionEntry = {
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Actoruserid
+     */
+    actorUserId: string | null;
+    /**
+     * Actoremail
+     */
+    actorEmail: string;
+    /**
+     * Subjectuserid
+     */
+    subjectUserId: string | null;
+    /**
+     * Subjectemail
+     */
+    subjectEmail: string;
+    /**
+     * Mode
+     */
+    mode: string;
+    /**
+     * Createdat
+     */
+    createdAt: string;
+    /**
+     * Expiresat
+     */
+    expiresAt: string;
+};
+
+/**
+ * ViewAsSessionResponse
+ * The short-lived session an Owner just started.
+ *
+ * The token is returned in the body rather than set as a cookie because this
+ * application's transport is a bearer header (`api/base.ts`), and a session
+ * that lived in a cookie would be sent by every tab in the browser — the
+ * Owner's other tabs included, which is the opposite of a session you can put
+ * down.
+ *
+ * Every field is **required, with no default**, for `MyBudgetUsage`'s reason:
+ * OpenAPI marks a defaulted field optional, and the ribbon that names the
+ * account being viewed cannot have a fallback. "Viewing as someone, we are not
+ * sure who" is worse than not shipping the ribbon at all.
+ */
+export type ViewAsSessionResponse = {
+    /**
+     * Accesstoken
+     */
+    accessToken: string;
+    /**
+     * Sessionid
+     */
+    sessionId: string;
+    /**
+     * Subjectuserid
+     */
+    subjectUserId: string;
+    /**
+     * Subjectemail
+     */
+    subjectEmail: string;
+    /**
+     * Actoruserid
+     */
+    actorUserId: string;
+    /**
+     * Actoremail
+     */
+    actorEmail: string;
+    /**
+     * Mode
+     */
+    mode: string;
+    /**
+     * Expiresat
+     */
+    expiresAt: string;
+};
+
+/**
+ * ViewAsSessionsResponse
+ * Recent View-as sessions, newest first.
+ */
+export type ViewAsSessionsResponse = {
+    /**
+     * Sessions
+     */
+    sessions?: Array<ViewAsSessionEntry>;
+};
+
 export type LoginLoginAccessTokenData = {
     body: BodyLoginLoginAccessToken;
     path?: never;
@@ -8786,6 +8891,66 @@ export type QuotaLiftQuotaCeilingResponses = {
 };
 
 export type QuotaLiftQuotaCeilingResponse = QuotaLiftQuotaCeilingResponses[keyof QuotaLiftQuotaCeilingResponses];
+
+export type ViewAsStartViewAsData = {
+    body?: never;
+    path: {
+        /**
+         * User Id
+         */
+        user_id: string;
+    };
+    query?: never;
+    url: '/api/v1/view-as/{user_id}';
+};
+
+export type ViewAsStartViewAsErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type ViewAsStartViewAsError = ViewAsStartViewAsErrors[keyof ViewAsStartViewAsErrors];
+
+export type ViewAsStartViewAsResponses = {
+    /**
+     * Successful Response
+     */
+    200: ViewAsSessionResponse;
+};
+
+export type ViewAsStartViewAsResponse = ViewAsStartViewAsResponses[keyof ViewAsStartViewAsResponses];
+
+export type ViewAsReadViewAsSessionsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Limit
+         */
+        limit?: number;
+    };
+    url: '/api/v1/view-as/sessions';
+};
+
+export type ViewAsReadViewAsSessionsErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type ViewAsReadViewAsSessionsError = ViewAsReadViewAsSessionsErrors[keyof ViewAsReadViewAsSessionsErrors];
+
+export type ViewAsReadViewAsSessionsResponses = {
+    /**
+     * Successful Response
+     */
+    200: ViewAsSessionsResponse;
+};
+
+export type ViewAsReadViewAsSessionsResponse = ViewAsReadViewAsSessionsResponses[keyof ViewAsReadViewAsSessionsResponses];
 
 export type ClientOptions = {
     baseUrl: `${string}://${string}` | (string & {});

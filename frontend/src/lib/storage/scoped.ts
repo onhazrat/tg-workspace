@@ -15,13 +15,16 @@
  * data — every byte behind it still comes from a server that checks the
  * signature.
  *
- * Two keys stay device-scoped, and the reason is not "they are special":
+ * Three keys stay device-scoped, and the reason is not "they are special":
  *
  * - `access_token` **is** the session. Namespacing it by the id inside it is
  *   circular, and the transport has to read it before any user is known.
  * - `vite-ui-theme` is read by `ThemeProvider` at the app root, which mounts
  *   above the router and renders the login screen. Namespacing it would mean
  *   the wrong theme flashing on every visit to `/login`.
+ * - `view_as_token` is a session too (ticket 26), layered over the first so an
+ *   Owner looking at somebody else's account never loses their own. Scoping it
+ *   under the account it names would be the same circularity, one level up.
  *
  * `CLAUDE.md` and `src/lib/architecture-invariants.test.ts` hold the other half
  * of this: only this module, `theme-provider.tsx`, `api/base.ts` and
@@ -37,14 +40,31 @@ export const TOKEN_STORAGE_KEY = "access_token"
 export const THEME_STORAGE_KEY = "vite-ui-theme"
 
 /**
+ * A View-as session, layered **on top of** the token above (ticket 26).
+ *
+ * Device-scoped for `access_token`'s reason, and it is a second key rather than
+ * a replacement for a sharper one: the Owner's own session has to survive
+ * untouched, so that exiting — or a target that was deleted mid-session — is
+ * one `removeItem` and never a login screen. The ticket's last checkbox is
+ * "returns the Owner to their own account", and a design that overwrites the
+ * Owner's token can only approximate it.
+ *
+ * The *namespace* follows this one when it is present (see `activeToken`), so
+ * browser-side preferences are read under the account being viewed rather than
+ * the Owner's.
+ */
+export const VIEW_AS_TOKEN_STORAGE_KEY = "view_as_token"
+
+/**
  * Keys that intentionally belong to the browser rather than to an account.
  *
  * Adding to this list re-opens the leak for that key, so the guard asserts the
- * exact set: a third entry has to be argued for, not merged in passing.
+ * exact set: a further entry has to be argued for, not merged in passing.
  */
 export const DEVICE_SCOPED_KEYS: readonly string[] = [
   TOKEN_STORAGE_KEY,
   THEME_STORAGE_KEY,
+  VIEW_AS_TOKEN_STORAGE_KEY,
 ]
 
 const NAMESPACE_PREFIX = "u:"
@@ -98,26 +118,172 @@ export function decodeJwtSubject(token: string): string | null {
 }
 
 /**
- * The raw token, or null when there is none *or* storage cannot be read.
+ * One raw key, or null when it is absent *or* storage cannot be read.
  *
  * A browser set to block site data throws on access rather than reporting
  * `undefined`, so the `typeof` check alone is not enough.
  */
-function readToken(): string | null {
+function readKey(key: string): string | null {
   try {
     if (typeof localStorage === "undefined") return null
-    return localStorage.getItem(TOKEN_STORAGE_KEY)
+    return localStorage.getItem(key)
   } catch {
     return null
   }
 }
+
+/** The Owner's own session. Never replaced by a View-as exchange. */
+function readToken(): string | null {
+  return readKey(TOKEN_STORAGE_KEY)
+}
+
+/**
+ * The token every request should carry, and the one the namespace comes from.
+ *
+ * A View-as session wins **while it is live**, and the liveness check is what
+ * makes expiry safe rather than a trap. Returning the raw stored token would
+ * mean that thirty minutes in, the ribbon has already vanished (`viewAsClaims`
+ * refuses an expired one) while every request still carries the dead token —
+ * the server answers 401 `"Could not validate credentials"`, which is not one
+ * of `VIEW_AS_ENDED_DETAILS`, so the transport falls through to
+ * `clearStaleSession` and removes the **Owner's** token while leaving the dead
+ * View-as one in place. The next sign-in prefers it again: 401, `/login`,
+ * forever. Expiry is the ordinary way a session ends, so it has to behave
+ * exactly like exiting — fall back to the Owner's own token, silently.
+ *
+ * Both layers are read here rather than at the two call sites that need them,
+ * so "which identity is this browser acting as" has exactly one answer — the
+ * reason `tenancy.tenancy_enforced` is the single reader of its flag on the
+ * other side of the wire.
+ */
+export function activeToken(): string | null {
+  return viewAsClaims() === null
+    ? readToken()
+    : readKey(VIEW_AS_TOKEN_STORAGE_KEY)
+}
+
+/** The claims a View-as token carries, or null when this is an ordinary one. */
+export interface ViewAsClaims {
+  /** The account being viewed. */
+  subjectUserId: string
+  subjectEmail: string
+  /** The Owner doing the viewing. */
+  actorUserId: string
+  actorEmail: string
+  mode: string
+  /** Seconds since the epoch, as JWTs spell it. */
+  expiresAt: number
+}
+
+function decodeClaims(token: string): Record<string, unknown> | null {
+  const segments = token.split(".")
+  if (segments.length !== 3) return null
+  const payload = base64UrlDecode(segments[1])
+  if (payload === null) return null
+  try {
+    const claims: unknown = JSON.parse(payload)
+    if (typeof claims !== "object" || claims === null) return null
+    return claims as Record<string, unknown>
+  } catch {
+    return null
+  }
+}
+
+function asString(value: unknown): string | null {
+  return typeof value === "string" && value.length > 0 ? value : null
+}
+
+/**
+ * The current View-as session, read straight off the stored token.
+ *
+ * This is what makes the ribbon survive a reload with no state of its own —
+ * the spec's decision, and the reason both email addresses ride in the token
+ * rather than being fetched. Nothing is verified here, for the same reason
+ * `decodeJwtSubject` verifies nothing: a forged claim buys a misleading banner
+ * in your own browser, while every byte behind it still comes from a server
+ * that checks the signature.
+ *
+ * An expired token returns null, so a session that ran out while the tab was
+ * closed does not come back as a ribbon over an app that has stopped working.
+ */
+export function viewAsClaims(): ViewAsClaims | null {
+  const token = readKey(VIEW_AS_TOKEN_STORAGE_KEY)
+  if (token === null) return null
+  const claims = decodeClaims(token)
+  if (claims === null) return null
+
+  const subjectUserId = asString(claims.sub)
+  const actorUserId = asString(claims.act)
+  const subjectEmail = asString(claims.sub_email)
+  const actorEmail = asString(claims.act_email)
+  const expiresAt = typeof claims.exp === "number" ? claims.exp : null
+  if (
+    subjectUserId === null ||
+    actorUserId === null ||
+    subjectEmail === null ||
+    actorEmail === null ||
+    expiresAt === null
+  ) {
+    return null
+  }
+  if (expiresAt * 1000 <= Date.now()) return null
+
+  return {
+    subjectUserId,
+    subjectEmail,
+    actorUserId,
+    actorEmail,
+    mode: asString(claims.mode) ?? "read_only",
+    expiresAt,
+  }
+}
+
+/** Start viewing as another account. The Owner's own token is left alone. */
+export function enterViewAs(token: string): void {
+  try {
+    localStorage.setItem(VIEW_AS_TOKEN_STORAGE_KEY, token)
+  } catch {
+    /* the ribbon and the session both depend on this; the caller reloads */
+  }
+}
+
+/**
+ * Put the View-as session down and return to the Owner's own account.
+ *
+ * Returns whether there was one, so a caller can tell "I ended a session" from
+ * "there was nothing to end" — `api/base.ts` needs that difference to decide
+ * between exiting a session and dropping a stale one.
+ */
+export function exitViewAs(): boolean {
+  try {
+    if (localStorage.getItem(VIEW_AS_TOKEN_STORAGE_KEY) === null) return false
+    localStorage.removeItem(VIEW_AS_TOKEN_STORAGE_KEY)
+    return true
+  } catch {
+    return false
+  }
+}
+
+/**
+ * The `detail` strings that mean the account being viewed has gone away.
+ *
+ * Mirrors `VIEW_AS_ENDED_DETAILS` in `backend/app/api/deps.py`, which asserts
+ * the pair on its side. Neither is `"User not found"` or `"Inactive user"`,
+ * deliberately: `isAuthFailure` reads both of those as a dead session and signs
+ * the browser out, which over a *viewed* account would strand the Owner at a
+ * login screen for something that happened to somebody else.
+ */
+export const VIEW_AS_ENDED_DETAILS: readonly string[] = [
+  "Viewed account no longer exists",
+  "Viewed account has been disabled",
+]
 
 /** The signed-in account id, or null. Cached per token string. */
 let cachedToken: string | null = null
 let cachedUserId: string | null = null
 
 export function currentUserId(): string | null {
-  const token = readToken()
+  const token = activeToken()
   if (token === null) {
     cachedToken = null
     cachedUserId = null

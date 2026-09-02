@@ -9,7 +9,7 @@ import {
   usersReadUserMe,
   usersRegisterUser,
 } from "@/client"
-import { hasSession, TOKEN_STORAGE_KEY } from "@/lib/storage/scoped"
+import { exitViewAs, hasSession, TOKEN_STORAGE_KEY } from "@/lib/storage/scoped"
 import { handleError } from "@/utils"
 import useCustomToast from "./useCustomToast"
 
@@ -74,6 +74,10 @@ const useAuth = () => {
    */
   const logout = () => {
     localStorage.removeItem(TOKEN_STORAGE_KEY)
+    // A View-as session outliving the sign-out would leave the next person at
+    // this browser holding a live token for an account they never signed in to
+    // (ticket 26). It is a session, so it goes when the session does.
+    exitViewAs()
     queryClient.clear()
     navigate({ to: "/login" })
   }

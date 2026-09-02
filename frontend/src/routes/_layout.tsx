@@ -10,7 +10,9 @@ import {
   SidebarTrigger,
 } from "@/components/ui/sidebar"
 import { isLoggedIn } from "@/hooks/useAuth"
+import useViewAs from "@/hooks/useViewAs"
 import { queryClient } from "@/lib/queryClient"
+import { cn } from "@/lib/utils"
 
 export const Route = createFileRoute("/_layout")({
   component: Layout,
@@ -49,25 +51,41 @@ export const Route = createFileRoute("/_layout")({
 })
 
 function Layout() {
+  // Only to move the page header out from under the ribbon. The ribbon itself
+  // reads the token directly and needs nothing from here.
+  const { isViewingAs } = useViewAs()
+
   return (
-    <SidebarProvider>
-      <AppSidebar />
-      <SidebarInset>
-        <header className="sticky top-0 z-10 flex h-16 shrink-0 items-center gap-2 border-b px-4">
-          <SidebarTrigger className="-ml-1 text-muted-foreground" />
-        </header>
-        <main className="flex-1 p-6 md:p-8">
-          <div className="app-shell">
-            {/* In the shell rather than on the pages that start syncs, because
+    // `__root.tsx` renders the ribbon above every route; what is left here is
+    // the shell making room for it (ticket 26).
+    <div className="flex min-h-[calc(100svh-var(--view-as-offset))] w-full flex-col">
+      <SidebarProvider className="min-h-0 flex-1">
+        <AppSidebar />
+        <SidebarInset>
+          {/* Both stick to the top, so the header has to start below the
+            ribbon or it slides underneath it and takes the sidebar trigger
+            with it. */}
+          <header
+            className={cn(
+              "sticky z-10 flex h-16 shrink-0 items-center gap-2 border-b px-4",
+              isViewingAs ? "top-[var(--view-as-offset)]" : "top-0",
+            )}
+          >
+            <SidebarTrigger className="-ml-1 text-muted-foreground" />
+          </header>
+          <main className="flex-1 p-6 md:p-8">
+            <div className="app-shell">
+              {/* In the shell rather than on the pages that start syncs, because
                 a Budget running out is a fact about the account and not about
                 the screen it was noticed on (ticket 24). */}
-            <QuotaWarning />
-            <Outlet />
-          </div>
-        </main>
-        <Footer />
-      </SidebarInset>
-    </SidebarProvider>
+              <QuotaWarning />
+              <Outlet />
+            </div>
+          </main>
+          <Footer />
+        </SidebarInset>
+      </SidebarProvider>
+    </div>
   )
 }
 

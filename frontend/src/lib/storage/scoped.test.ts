@@ -1,12 +1,18 @@
 import { beforeEach, describe, expect, it } from "bun:test"
 
 import {
+  activeToken,
   currentUserId,
   DEVICE_SCOPED_KEYS,
   decodeJwtSubject,
+  enterViewAs,
+  exitViewAs,
   scopedKey,
   scopedStorage,
   TOKEN_STORAGE_KEY,
+  VIEW_AS_ENDED_DETAILS,
+  VIEW_AS_TOKEN_STORAGE_KEY,
+  viewAsClaims,
 } from "./scoped"
 
 /**
@@ -286,5 +292,161 @@ describe("the one-time migration into a namespace", () => {
 
     expect(localStorage.getItem(`u:${BOB}:selectedChannels`)).toBe('["beta"]')
     expect(scopedStorage.getItem("selectedChannels")).toBeNull()
+  })
+})
+
+/**
+ * Ticket 26 — an Owner is looking at somebody else's account.
+ *
+ * The failure these guard against is not a leak between two people's browsers;
+ * it is an Owner who cannot get back. Every assertion below is a variation on
+ * "the Owner's own session was never touched", which is what makes exiting —
+ * and a target deleted mid-session — one `removeItem` rather than a login
+ * screen.
+ */
+describe("View-as sessions", () => {
+  const OWNER = "3f9c1b2e-7a41-4c0d-9e88-5b6c7d8e3333"
+
+  function viewAsToken(
+    overrides: Record<string, unknown> = {},
+    expiresInSeconds = 1800,
+  ): string {
+    return tokenFor(BOB, {
+      act: OWNER,
+      sub_email: "bob@example.com",
+      act_email: "owner@example.com",
+      mode: "read_only",
+      exp: Math.floor(Date.now() / 1000) + expiresInSeconds,
+      ...overrides,
+    })
+  }
+
+  it("takes precedence over the owner's own token for requests", () => {
+    signIn(OWNER)
+    enterViewAs(viewAsToken())
+
+    expect(activeToken()).toBe(localStorage.getItem(VIEW_AS_TOKEN_STORAGE_KEY))
+    expect(localStorage.getItem(TOKEN_STORAGE_KEY)).toBe(tokenFor(OWNER))
+  })
+
+  /**
+   * The whole reason the Owner's token is layered rather than replaced: exiting
+   * is a removal, and there is nothing to restore that could fail to restore.
+   */
+  it("leaves the owner signed in when the session is put down", () => {
+    signIn(OWNER)
+    enterViewAs(viewAsToken())
+    expect(exitViewAs()).toBe(true)
+
+    expect(viewAsClaims()).toBeNull()
+    expect(activeToken()).toBe(tokenFor(OWNER))
+    expect(currentUserId()).toBe(OWNER)
+  })
+
+  it("says whether there was a session to put down", () => {
+    signIn(OWNER)
+    expect(exitViewAs()).toBe(false)
+  })
+
+  /**
+   * Browser storage follows the account being *viewed*, not the Owner. An Owner
+   * reproducing a filter problem has to see the app the way the person
+   * reporting it sees it, and half of that is which namespace the settings come
+   * out of.
+   */
+  it("moves the storage namespace to the account being viewed", () => {
+    signIn(OWNER)
+    scopedStorage.setItem("selectedChannels", "owners")
+    enterViewAs(viewAsToken())
+
+    expect(currentUserId()).toBe(BOB)
+    expect(scopedKey("selectedChannels")).toBe(`u:${BOB}:selectedChannels`)
+    expect(scopedStorage.getItem("selectedChannels")).toBeNull()
+
+    exitViewAs()
+    expect(scopedStorage.getItem("selectedChannels")).toBe("owners")
+  })
+
+  it("names both accounts, which is what the ribbon renders", () => {
+    signIn(OWNER)
+    enterViewAs(viewAsToken())
+
+    const claims = viewAsClaims()
+    expect(claims).not.toBeNull()
+    expect(claims?.subjectUserId).toBe(BOB)
+    expect(claims?.subjectEmail).toBe("bob@example.com")
+    expect(claims?.actorUserId).toBe(OWNER)
+    expect(claims?.actorEmail).toBe("owner@example.com")
+  })
+
+  /**
+   * A session that ran out while the tab was closed must not come back as a
+   * ribbon over an app that has stopped working. The server refuses the token
+   * either way; this is about what the Owner is told.
+   */
+  it("reports no session once the token has expired", () => {
+    signIn(OWNER)
+    enterViewAs(viewAsToken({}, -1))
+
+    expect(viewAsClaims()).toBeNull()
+  })
+
+  /**
+   * The sharpest thing review found, and it is a loop rather than a wrong
+   * answer. `activeToken` returning the raw stored token means that past `exp`
+   * the ribbon is already gone while every request still carries the dead
+   * token; the server answers 401 `"Could not validate credentials"`, which is
+   * not one of `VIEW_AS_ENDED_DETAILS`, so the transport clears the **Owner's**
+   * token and leaves the View-as one behind — and the next sign-in prefers it
+   * again. Expiry is the ordinary way a session ends, so it has to behave
+   * exactly like exiting.
+   */
+  it("falls back to the owner's own token once the session has expired", () => {
+    signIn(OWNER)
+    enterViewAs(viewAsToken({}, -1))
+
+    expect(activeToken()).toBe(tokenFor(OWNER))
+    expect(currentUserId()).toBe(OWNER)
+  })
+
+  /**
+   * Every claim the ribbon renders is required. A token missing one would
+   * otherwise produce "Viewing as undefined", which is worse than no ribbon:
+   * it says a session is active and refuses to say whose.
+   */
+  it("reports no session when a claim the ribbon needs is missing", () => {
+    signIn(OWNER)
+    enterViewAs(viewAsToken({ sub_email: undefined }))
+    expect(viewAsClaims()).toBeNull()
+
+    enterViewAs(viewAsToken({ act: undefined }))
+    expect(viewAsClaims()).toBeNull()
+  })
+
+  /** An ordinary token is not a View-as session, however it is read. */
+  it("does not mistake an ordinary token for a session", () => {
+    signIn(OWNER)
+    expect(viewAsClaims()).toBeNull()
+    expect(activeToken()).toBe(tokenFor(OWNER))
+  })
+
+  /**
+   * Mirrors `VIEW_AS_ENDED_DETAILS` in `backend/app/api/deps.py`, which asserts
+   * the same pair on its side. Neither string may be one `isAuthFailure`
+   * already treats as a dead session, or a target that went away would sign the
+   * Owner out instead of returning them to their own account.
+   */
+  it("knows the two ways a viewed account can go away", () => {
+    expect([...VIEW_AS_ENDED_DETAILS]).toEqual([
+      "Viewed account no longer exists",
+      "Viewed account has been disabled",
+    ])
+    expect(VIEW_AS_ENDED_DETAILS).not.toContain("User not found")
+    expect(VIEW_AS_ENDED_DETAILS).not.toContain("Inactive user")
+  })
+
+  it("is a device-scoped key, so it is not namespaced by the account it names", () => {
+    expect(DEVICE_SCOPED_KEYS).toContain(VIEW_AS_TOKEN_STORAGE_KEY)
+    expect(scopedKey(VIEW_AS_TOKEN_STORAGE_KEY)).toBe(VIEW_AS_TOKEN_STORAGE_KEY)
   })
 })

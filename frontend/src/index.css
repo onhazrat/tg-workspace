@@ -29,6 +29,19 @@
 }
 
 :root {
+  /*
+   * How much vertical space the View-as ribbon is taking (ticket 26).
+   *
+   * Zero except during a session, when `ViewAsRibbon` sets it. It exists
+   * because the ribbon sits in the normal flow at the very top of the document
+   * while two roots underneath declare a full-viewport height — `App.tsx`'s
+   * `h-svh overflow-hidden` and the shell's `min-h-svh`. Without subtracting
+   * it, the ribbon pushes the summarizer's bottom 40px off the screen, which is
+   * the one screen a reported problem is usually about.
+   *
+   * One producer, two consumers, and the number is written once.
+   */
+  --view-as-offset: 0px;
   color-scheme: light;
   --bg: #e4e3e0;
   --ink: #141414;

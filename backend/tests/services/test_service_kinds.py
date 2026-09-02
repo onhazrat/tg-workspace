@@ -82,6 +82,12 @@ INVENTORY: dict[str, str] = {
     "user_settings.py": AGGREGATE,
     "summaries.py": AGGREGATE,
     "sync_meta.py": AGGREGATE,
+    # Owns `view_as_sessions` (ticket 26) and is its only writer. Small on
+    # purpose: a View-as session *is* its token, so nothing here is consulted
+    # while one is in use. What this module holds is the answer to "who looked
+    # at whose account", which is asked long afterwards by somebody who was not
+    # there.
+    "view_as.py": AGGREGATE,
     "tag_runs.py": AGGREGATE,
     # 2. Read model — read-only aggregation across tables; never commits.
     # Unions four aggregates into one time-ordered page for History. Owns no

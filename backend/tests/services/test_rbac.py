@@ -125,16 +125,35 @@ def test_deleting_a_user_takes_their_assignments_with_them(
         assert left == []
 
 
-def test_the_bootstrap_superuser_is_an_admin() -> None:
-    """The "no loss of access" mapping, checked at the data layer."""
+def test_the_bootstrap_superuser_keeps_every_admin_permission() -> None:
+    """The "no loss of access" mapping, checked at the data layer.
+
+    Asserted on the **permissions**, not on the role id, and that is not a
+    stylistic preference — it is this module's own rule reached from the other
+    side. Ticket 26 grants the bootstrap account `owner` rather than `admin`,
+    because `VIEW_AS` is Owner-only and a deployment whose one privileged
+    account is an Admin cannot reach the feature at all. A test naming the role
+    would have failed on a change that took nothing away, which is exactly the
+    brittleness roles-as-data exists to avoid.
+
+    What has to stay true is that the account can still do everything it could,
+    so that is what is asserted. It also passes on a database migrated from
+    ticket 07, where the account holds both rows.
+    """
     from app.core.config import settings
+    from app.core.permissions import SEEDED_ROLES_BY_ID
 
     with Session(engine) as session:
         superuser = session.exec(
             select(User).where(User.email == settings.FIRST_SUPERUSER)
         ).first()
         assert superuser is not None
-        assert ROLE_ADMIN in rbac.role_ids_for(session, superuser.id)
+        held = rbac.permissions_for(session, superuser.id)
+        assert set(SEEDED_ROLES_BY_ID[ROLE_ADMIN].permissions) <= held
+        assert Permission.VIEW_AS in held, (
+            "the bootstrap account is the deployment's Owner since ticket 26; "
+            "without VIEW_AS nobody can start a View-as session"
+        )
 
 
 def test_the_approval_flag_is_separate_from_the_active_flag(

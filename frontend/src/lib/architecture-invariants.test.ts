@@ -331,10 +331,22 @@ describe("Ticket 02 — browser storage has four owners, and they are named", ()
 
   /**
    * Every entry here is a key that survives a sign-out and is readable by the
-   * next account, so the set is asserted exactly: a third one has to be argued
-   * for in a PR, not slipped in beside two that already look harmless.
+   * next account, so the set is asserted exactly: a further one has to be
+   * argued for in a PR, not slipped in beside two that already look harmless.
+   *
+   * `VIEW_AS_TOKEN_STORAGE_KEY` is the third, added by ticket 26 and argued for
+   * in `scoped.ts`: it is a session, layered over `access_token` rather than
+   * replacing it, so that an Owner looking at somebody else's account never
+   * loses their own. Namespacing a token by the account named inside it is the
+   * same circularity `access_token` has, one level up.
+   *
+   * It is also the one device-scoped key that `logout()` clears, which is a
+   * difference worth asserting: the theme is a preference and the access token
+   * is removed by name, while a live View-as session outliving a sign-out would
+   * hand the next person at this browser a working token for an account they
+   * never signed in to.
    */
-  it("keeps the device-scoped list to the two keys that earned it", () => {
+  it("keeps the device-scoped list to the three keys that earned it", () => {
     const src = readFileSync(join(SRC, "lib", "storage", "scoped.ts"), "utf8")
     const list =
       /DEVICE_SCOPED_KEYS: readonly string\[\] = \[([\s\S]*?)\]/.exec(src)?.[1]
@@ -345,7 +357,83 @@ describe("Ticket 02 — browser storage has four owners, and they are named", ()
       .map((e) => e.trim())
       .filter(Boolean)
 
-    expect(entries).toEqual(["TOKEN_STORAGE_KEY", "THEME_STORAGE_KEY"])
+    expect(entries).toEqual([
+      "TOKEN_STORAGE_KEY",
+      "THEME_STORAGE_KEY",
+      "VIEW_AS_TOKEN_STORAGE_KEY",
+    ])
+  })
+
+  /**
+   * The other half of the same failure. A session the server has stopped
+   * accepting has to take the View-as layer with it — otherwise the layer
+   * outlives the token it sat on and is preferred again by whoever signs in
+   * next at this browser.
+   */
+  it("puts a View-as session down when a stale session is dropped", () => {
+    const src = readFileSync(join(SRC, "api", "base.ts"), "utf8")
+    const clear = /export function clearStaleSession[\s\S]*?\n\}/.exec(src)?.[0]
+
+    expect(clear).toBeDefined()
+    expect(clear).toContain("exitViewAs()")
+  })
+
+  it("puts a View-as session down on logout", () => {
+    const src = readFileSync(join(SRC, "hooks", "useAuth.ts"), "utf8")
+    const logout = /const logout = \(\) => \{[\s\S]*?\n {2}\}/.exec(src)?.[0]
+
+    expect(logout).toBeDefined()
+    expect(logout).toContain("exitViewAs()")
+  })
+})
+
+describe("Ticket 26 — the View-as ribbon reaches every screen", () => {
+  /**
+   * It was mounted in `routes/_layout.tsx` first, and that missed the screen
+   * the whole feature exists for: `/summarizer` lives under `_tg`, a separate
+   * branch whose component is a bare `<Outlet />`, so the shell never wraps it.
+   * An Owner reproducing a reported problem spends the entire session there and
+   * would have seen no ribbon at all — spec 51, "an unmissable ribbon naming
+   * the account I am viewing, so that I never mistake it for my own".
+   *
+   * The root is the honest place: a View-as session is a property of the
+   * browser, not of a route subtree.
+   */
+  it("is mounted at the router root", () => {
+    const root = readFileSync(join(SRC, "routes", "__root.tsx"), "utf8")
+    expect(root).toContain("ViewAsRibbon")
+  })
+
+  /** One mount. Two would be two ribbons on the routes that share an ancestor. */
+  it("is mounted exactly once", () => {
+    const mounts = sourceFiles(SRC)
+      .filter((f) => !/\.test\.tsx?$/.test(f))
+      .filter((f) => !/ViewAsRibbon\.tsx$/.test(f))
+      .filter((f) => /<ViewAsRibbon\b/.test(readFileSync(f, "utf8")))
+      .map(rel)
+
+    expect(mounts).toEqual(["src/routes/__root.tsx"])
+  })
+
+  /**
+   * The ribbon takes a row of its own at the top of the document, and two roots
+   * underneath declare a full-viewport height. Without subtracting the offset,
+   * the summarizer's bottom 40px goes off the screen for the whole session —
+   * a layout regression visible only while somebody is viewing as another
+   * account, which is the hardest kind to notice.
+   */
+  it("has its height subtracted by every full-viewport root", () => {
+    const consumers = [join(SRC, "App.tsx"), join(SRC, "routes", "_layout.tsx")]
+    for (const file of consumers) {
+      expect(
+        readFileSync(file, "utf8"),
+        `${rel(file)} declares a full-viewport height and must subtract ` +
+          "--view-as-offset, or the ribbon pushes its last rows off screen",
+      ).toContain("100svh-var(--view-as-offset)")
+    }
+
+    const css = readFileSync(join(SRC, "index.css"), "utf8")
+    expect(css).toContain("--view-as-offset: 0px")
   })
 })
 

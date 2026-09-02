@@ -29,6 +29,7 @@ fileConfig(config.config_file_name, disable_existing_loggers=False)
 from app.models import SQLModel  # noqa
 from app import models_tg  # noqa: F401
 from app import models_rbac  # noqa: F401
+from app import models_view_as  # noqa: F401
 from app.core.config import settings  # noqa
 
 target_metadata = SQLModel.metadata
