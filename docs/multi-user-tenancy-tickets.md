@@ -535,3 +535,33 @@ the handler.
 - [ ] `channel_setting_groups.py:236` no longer names ticket 22
 - [ ] A guard proves a duplicate name answers 409, never a `UniqueViolation`
 - [ ] `PUT /data/channels/{id}` says at the handler that it is also a create
+
+## 36. One concurrency owner: fan `run_sync_job` out over the partition
+**Blocked by:** none
+
+**What to build:** The proxy partition is the only thing that decides how many Channels this process
+scrapes at once, so `syncConcurrency` describes the whole of the worker's outbound load rather than
+one half of it.
+
+Two independent answers to "how many Channels may this process scrape at once" read the same setting
+and add. The drain loop takes a bound worker from the partition per message (`sync_queue.py:1264`);
+`run_sync_job` opens its own `asyncio.Semaphore(concurrency)` (`sync_orchestrator.py:2127`) and
+gathers every Channel under it, dealt no worker, so those fetches pick a lane freely page by page —
+the hopping ticket 13 removed. `sync_queue.py:25` already states the rule ("concurrency belongs to
+the worker, not to the job"); it was applied to the queue path and not to `run_sync_job`.
+
+The codebase documents the consequence: `_run_whole_job` (`sync_queue.py:977`) holds its permit
+around a job that ignores it, so the worker runs **2N scrapes instead of 2N−1**, and the docstring
+adds "neither number is good". All three `RUN_SYNC_JOB_CALLERS` share the defect —
+`_run_whole_job`, `auto_summary._sync_channels_for_summary`, and `bulk_follow`'s probe phase.
+
+**Decided:** `run_sync_job` keeps the quota meter and loses the semaphore, fanning out by acquiring a
+partition worker per Channel. **Enqueue-and-await lost**: a lane subjects the work to ticket 23's
+tier ladder, so an over-Budget account's auto-summary sync would be deprioritised and the summary
+would regenerate on stale input — a behaviour change introduced while fixing an accounting bug.
+
+- [ ] `run_sync_job` fans out over the partition; the semaphore is gone
+- [ ] All three declared callers run under bound workers
+- [ ] `_run_whole_job` is deleted, or kept with a written argument
+- [ ] A guard proves total Channel concurrency is the partition's width, with a non-lane path running
+- [ ] `sync_queue.py:47` and `:977` lose the claims they carry
