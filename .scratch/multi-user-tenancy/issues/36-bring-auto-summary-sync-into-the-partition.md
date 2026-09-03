@@ -1,116 +1,84 @@
-# 36. One concurrency owner: fan `run_sync_job` out over the partition
+# 36. One egress seam: every request to Telegram leaves from an acquired Lane
 
 **Status:** ready-for-agent
-**Blocked by:** None (can start immediately)
+**Blocked by:** None
+**Design authority:** `docs/proxy-binding-seam-plan.md` — read it first. It
+carries every decision, the alternative that lost, and the reason. This file is
+the scope and the checkboxes only.
 
-**What to build:** The proxy partition is the only thing that decides how many
-Channels this process scrapes at once, so `syncConcurrency` describes the whole
-of the worker's outbound load rather than one half of it.
+## What changed about this ticket
 
-## What is open
+It was "One concurrency owner: fan `run_sync_job` out over the partition", and
+that named the wrong defect. Three of its factual claims did not hold:
 
-There are **two independent answers** to "how many Channels may this process
-scrape at once", they read the same setting, and they add.
+1. It named three `run_sync_job` callers. There are two — `RUN_SYNC_JOB_CALLERS`
+   already said so. `bulk_follow` holds a *separate* `asyncio.Semaphore(4)` and
+   has enqueued its chained sync since ticket 10.
+2. It said `_run_whole_job` hops proxies. It does not; `_process_message` binds
+   the whole legacy job to one Slot on purpose. Hopping is live on
+   `auto_summary` alone.
+3. It treated double-counted concurrency and proxy hopping as one defect. They
+   are two, with different victims.
 
-- **The drain loop** takes a bound worker from the partition per message
-  (`sync_queue.py:1264`, `partition.acquire(...)`) and runs one
-  `sync_single_channel` under it. Ticket 13's design: one worker per proxy lane
-  slot, pinned for the whole message, so a walk never hops proxies.
-- **`run_sync_job`** opens its own `asyncio.Semaphore(concurrency)`
-  (`sync_orchestrator.py:2127`) and `gather`s every Channel in the job under it.
-  Those fetches are dealt no worker, so each one picks a lane freely, page by
-  page — the hopping ticket 13 removed, still live on this path.
+The `2N` over-count is real and is the smaller half. The operator's actual goal
+is narrower to state and wider to reach: **one place in the code talks to
+proxies and Telegram.**
 
-`sync_queue.py:25` already states the rule this ticket enforces: *"Concurrency
-belongs to the worker, not to the job."* It was applied to the queue path and not
-to `run_sync_job`, which still sizes a semaphore per job.
+`bound_to` appears in exactly one place in the whole codebase. Eleven places
+reach Telegram or a proxy. That ratio is the ticket.
 
-**The codebase already documents the consequence.** `_run_whole_job`'s docstring
-(`sync_queue.py:977`) says it holds its partition permit while `run_sync_job`
-opens a semaphore "sized to the same `syncConcurrency` and so is not limited by
-ours", so the worker runs **`2N` scrapes against Telegram instead of `2N - 1`** —
-and adds, correctly, *"Neither number is good."* That note is the bug report; this
-ticket is the fix.
+## Scope
 
-## Three callers, one defect
-
-`RUN_SYNC_JOB_CALLERS` in `tests/services/test_lane_selection.py` declares every
-path that starts a sync outside `enqueue_sync_job`. All three have this defect,
-and the first cut of this ticket named only the second:
-
-1. **`sync_queue._run_whole_job`** — the pre-ticket-10 message shape, holding a
-   permit around a job that ignores it. Its own docstring calls it "live only for
-   the messages in flight across one deploy". Many deploys have passed.
-2. **`auto_summary._sync_channels_for_summary`** (`auto_summary.py:167`) — needs
-   the sync finished before it can summarise.
-3. **`bulk_follow.run_follow_job`**'s probe phase — the same exception in the
-   same words, metered and charged to `manual_bulk`.
-
-Fixing `auto_summary` alone leaves two paths doing the identical thing.
-
-## The design, and it is decided
-
-**`run_sync_job` stops owning concurrency.** It keeps what only it can do — open
-the quota meter and charge once at completion (decision 19) — and its fan-out
-becomes the same acquire-a-worker-per-Channel loop the drain uses, so
-`sync_single_channel` always runs under a bound worker whatever started it. The
-`asyncio.Semaphore` goes away, because the partition is then the single gate and
-a second one can only disagree with it.
-
-Consequences to expect rather than discover:
-
-- **Throughput on these paths becomes honest.** With no proxies configured the
-  partition is `syncConcurrency` direct workers, which is what the semaphore was
-  approximating. With proxies, a path that used to run `N` unbound scrapes now
-  competes for the same `N` workers as lane traffic — a **reduction** in peak
-  concurrency, and the point rather than a regression. Ticket 13: "capacity
-  honestly reflects available proxies."
-- **`_run_whole_job` should go rather than be converted.** It exists for messages
-  written before ticket 10 deployed. If the ticket keeps it, its permit-holding
-  docstring has to be rewritten; deleting it is cleaner and needs an argument
-  that no such message can still be queued.
-- **No deadlock.** These callers acquire workers and hold nothing the drain
-  needs, so a full partition means waiting, not a cycle. `partition.acquire`
-  already takes a timeout and answers `None`; the parked-versus-busy distinction
-  in `capacity_report()` is the existing vocabulary for reporting it.
-
-## The option that lost, and why
-
-**Enqueue onto a lane and await the job's completion.** It is the tidier story —
-one path for everything, and the machinery exists (`_finalize_if_complete`,
-`pg_notify`). It is rejected for a reason that is about behaviour, not effort:
-
-**A lane subjects the work to the tier ladder.** Ticket 23 puts an over-Budget
-account's syncs on a best-effort lane, served only when every normal lane is
-empty. `auto_summary`'s sync is a *prerequisite* for a scheduled summary, so
-deprioritising it means the summary regenerates on stale input or the job waits
-indefinitely — a behaviour change nobody asked for, introduced while fixing a
-concurrency-accounting bug. The same applies to bulk follow's probe phase, whose
-whole purpose is resolving handles the person is waiting on.
-
-The secondary reason is the shape ticket 11 already paid for: a waiter that holds
-what the drain needs is a deadlock, and `SyncSlot.released()` exists because that
-was got wrong once. Awaiting job completion from inside the worker process
-reintroduces exactly that question.
-
-Ticket 24's per-Channel `assert_within_ceiling` already reaches all three paths,
-so they are bounded in *volume* today. This ticket is about which worker performs
-the work, which the ceiling says nothing about.
+- Mandatory Lane binding, enforced by a runtime raise plus an exemption
+  inventory with reasons.
+- `syncConcurrency` removed end to end. Partition width becomes `sum(slots)`.
+  Database pool and thread executor derive from the width instead of silently
+  capping it.
+- `run_sync_job`'s semaphore deleted, fan-out acquires a Slot per Channel,
+  `_run_whole_job` deleted after a staging check.
+- `cache_channel_photo` through the Lane pool. It is a privacy bug: its twin
+  `cache_post_thumb` already argues the case in its own docstring.
+- `body.proxies` removed, so a request cannot choose its own egress.
+- Discover probes onto a lowest-priority lane; `tg_discover_probes` survives as
+  the backlog.
+- Bulk follow moves to the worker, which needs `tg_follow_jobs`, `pg_notify` and
+  a rewritten SSE. Largest piece, accepted knowingly.
 
 ## Checkboxes
 
-- [ ] `run_sync_job` fans out by acquiring a partition worker per Channel; the `asyncio.Semaphore` is gone
-- [ ] All three declared callers run under bound workers, not just `auto_summary`
-- [ ] `_run_whole_job` is deleted, or kept with a written argument for why a pre-ticket-10 message can still be queued
-- [ ] A guard proves the process's total Channel concurrency is the partition's width — asserted with a non-lane path running, since that is the case that used to add
-- [ ] A bound walk started by `auto_summary` does not hop proxies, the property `test_proxy_worker_partition.py` already asserts for lane work
-- [ ] `sync_queue.py:47` no longer claims ticket 13 made this stop mattering, and is deleted rather than re-pointed at a future ticket
-- [ ] `sync_queue.py:977`'s `2N` note goes with the behaviour it describes
-- [ ] `RUN_SYNC_JOB_CALLERS` reasons are rewritten or the guard is retired, whichever the new shape makes true
+- [ ] `fetch_with_retry` raises without a Lane; exemptions declared with reasons
+- [ ] Test fixture acquires a real Lane against a fake pool; no "skip when no
+      proxies configured" escape hatch
+- [ ] Synthetic direct Lane, so a proxy-less deployment still binds
+- [ ] Partition moved to `proxy_pool.py`; no bidirectional lazy import
+- [ ] `run_sync_job` fans out over Slots; `asyncio.Semaphore` gone
+- [ ] `_run_whole_job` deleted. **Staging verified 2026-09-03**: ticket 09's
+      lane was created 8.6 hours before ticket 10's migration, all six live
+      lanes are empty, and 229,759 archived messages contain zero with a null
+      `channelId`. Re-run the check against any other deployment
+- [ ] `syncConcurrency` gone from settings, registry, runtime config and
+      frontend, with a migration stripping the stored key
+- [ ] `build_workers`'s round-robin dealing deleted — nothing truncates now
+- [ ] Pool size and `to_thread` executor derive from Partition width
+- [ ] `cache_channel_photo` uses the Lane pool; its guard is parametrised over
+      **both** cache modules
+- [ ] `body.proxies` removed from three schemas, `FollowJobState`, three
+      frontend call sites; client regenerated
+- [ ] `discover_probe_background` lane created by migration; `DRAIN_ORDER` is
+      the Budget product plus declared extras; `is_sync_lane` added
+- [ ] Probes never drain while a sync lane has a message
+- [ ] `tg_follow_jobs` with `pg_notify`; bulk-follow SSE reads across processes
+- [ ] A walk started by `auto_summary` does not hop proxies
+- [ ] `sync_queue.py:47` deleted rather than re-pointed; `sync_queue.py:977`'s
+      `2N` note goes with the behaviour
+- [ ] `RUN_SYNC_JOB_CALLERS` and `sync_single_channel`'s docstring stop naming
+      `_sync_stale_channels`, which does not exist
 - [ ] `test_worker_count.py` and `test_proxy_worker_partition.py` stay green
+- [ ] Every new guard mutation-tested before it is trusted
 
 ## Not in scope
 
-The quota ladder still cannot see these paths, and that stays true: they are on
-no lane, so there is no tier to choose. This ticket makes them share the worker
-budget, not the ladder. Lane selection is ticket 23's and is done.
+The quota ladder still cannot see the non-lane paths. `auto_summary` stays
+outside it deliberately: its sync is a prerequisite for a scheduled summary, so a
+best-effort lane would regenerate the summary on stale input. The original
+ticket considered and rejected that, and the reasoning survives.

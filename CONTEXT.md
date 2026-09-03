@@ -24,6 +24,29 @@ made from, so reopening one restores that selection rather than reinterpreting
 it against today's.
 _Avoid_: selection, range, filter set, context
 
+### Scraping
+
+**Lane**:
+One proxy, with a limit on how many requests may pass through it at once. Every
+request to Telegram leaves through a Lane, whatever kind of work made it.
+_Avoid_: proxy pool, channel, connection
+
+**Slot**:
+One permit to scrape a Channel, pinned to a Lane for as long as it is held.
+Holding a Slot is what makes a Channel's whole page walk leave from one proxy.
+_Avoid_: worker, permit, gate
+
+**Partition**:
+Every Slot in one process, dealt across the Lanes. Its size comes from the
+proxies, not from a number somebody chose.
+_Avoid_: pool, gate, semaphore
+
+**Sync worker**:
+The process that runs the scheduler and drains the queue. It is never a Slot —
+unqualified "worker" has meant both, and that ambiguity is why these four
+entries exist.
+_Avoid_: worker (on its own), consumer, background job
+
 ### Artifacts
 
 **Artifact**:
