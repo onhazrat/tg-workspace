@@ -113,7 +113,6 @@ def test_an_unapproved_account_can_read_its_own_record(
         f"{PREFIX}/jobs/status",
         f"{PREFIX}/ai/models",
         f"{PREFIX}/rag/status",
-        f"{PREFIX}/items/",
     ],
 )
 def test_an_unapproved_account_reaches_no_data(

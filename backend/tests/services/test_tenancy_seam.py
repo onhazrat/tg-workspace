@@ -84,10 +84,11 @@ def _model_modules() -> list[str]:
 def _table_models() -> list[type[SQLModel]]:
     """Every mapped table class the app declares, from all three model modules.
 
-    Recursive on purpose: `User` and `Item` descend from `UserBase`/`ItemBase`,
-    so a single level of `__subclasses__()` misses exactly the two template
-    tables — and a classification guard that cannot see a table is the false
-    pass this file exists to avoid.
+    Recursive on purpose: `User` descends from `UserBase` rather than from
+    `SQLModel` directly, so a single level of `__subclasses__()` misses it —
+    and a classification guard that cannot see a table is the false pass this
+    file exists to avoid. (`Item` was the second such table until ticket 29
+    deleted it; one is still enough to need the recursion.)
     """
     # Discovered, not listed. A hardcoded trio is the same false pass one level
     # up: a table in a fourth module nothing else imports would be absent from

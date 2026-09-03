@@ -4,7 +4,6 @@ from app.api.deps import require_approved_user
 from app.api.routes import (
     ai_routes,
     data,
-    items,
     jobs,
     login,
     network,
@@ -36,7 +35,6 @@ api_router.include_router(utils.router)
 # asserts this list stays exhaustive, so a new data router that skips it fails.
 APPROVED_ONLY = [Depends(require_approved_user)]
 
-api_router.include_router(items.router, dependencies=APPROVED_ONLY)
 api_router.include_router(network.router, dependencies=APPROVED_ONLY)
 api_router.include_router(telegram.router, dependencies=APPROVED_ONLY)
 api_router.include_router(ai_routes.router, dependencies=APPROVED_ONLY)

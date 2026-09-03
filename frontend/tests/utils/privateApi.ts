@@ -7,7 +7,7 @@
  * `openapi.json` has no `/private` path and the generated client can never
  * contain a function for it. This file imported one anyway
  * (`OpenAPI` + `PrivateService.createUser`), so it threw at *import* time and
- * took `admin.spec.ts` and `items.spec.ts` down with it — a break that predates
+ * took `admin.spec.ts` down with it — a break that predates
  * F1b and that F1b only made louder, by removing `OpenAPI` too.
  *
  * Going through `fetch` makes the util independent of how the spec was

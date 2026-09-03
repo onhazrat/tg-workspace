@@ -1,16 +1,16 @@
 import { beforeEach, describe, expect, it } from "bun:test"
-import { itemsUpdateItem, usersUpdateUser } from "@/client"
+import { dataUpdateSettingGroup, usersUpdateUser } from "@/client"
 import { client } from "@/client/client.gen"
 import { configureGeneratedClient } from "./generated-client"
 
 /**
- * The two call sites that pass a path param *and* a body.
+ * Call sites that pass a path param *and* a body.
  *
  * `legacy/axios` took one flat bag (`{userId, requestBody}`); the fetch client
- * takes `{path: {...}, body: ...}`. Every other converted call site has only
- * one of the two, so these are the only places where the halves could be
- * swapped and still compile — `tsc` checks that the keys exist, not that the
- * value lands in the URL rather than the payload.
+ * takes `{path: {...}, body: ...}`. Wherever a call carries both, the halves
+ * could be swapped and still compile — `tsc` checks that the keys exist, not
+ * that the value lands in the URL rather than the payload. One from `users`
+ * and one from `data`, because the two routers generate independently.
  */
 
 let seen: { url: string; body: string; method: string } | undefined
@@ -46,14 +46,14 @@ describe("path and body land in the right halves of the request", () => {
     expect(JSON.parse(seen?.body ?? "{}")).toEqual({ email: "new@example.com" })
   })
 
-  it("itemsUpdateItem puts the id in the URL and the fields in the body", async () => {
-    await itemsUpdateItem({
-      path: { id: "item-9" },
-      body: { title: "Renamed" },
+  it("dataUpdateSettingGroup puts the id in the URL and the fields in the body", async () => {
+    await dataUpdateSettingGroup({
+      path: { group_id: "group-9" },
+      body: { name: "Renamed" },
     })
 
     expect(seen?.method).toBe("PUT")
-    expect(seen?.url).toBe("http://api.test/api/v1/items/item-9")
-    expect(JSON.parse(seen?.body ?? "{}")).toEqual({ title: "Renamed" })
+    expect(seen?.url).toBe("http://api.test/api/v1/data/setting-groups/group-9")
+    expect(JSON.parse(seen?.body ?? "{}")).toEqual({ name: "Renamed" })
   })
 })

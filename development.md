@@ -145,7 +145,7 @@ HTML report (local): `bunx playwright show-report`
 * Browser login: `/login` → JWT in `localStorage.access_token`
 * Scripts: optional `X-API-Key` header when `API_KEY` is set
 * Primary app: `/summarizer` (full-screen TG UI)
-* Admin dashboard: `/`, `/items`, `/admin`, `/settings`
+* Admin dashboard: `/`, `/admin`, `/settings`
 
 ### Local registration and login
 

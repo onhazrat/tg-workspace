@@ -182,8 +182,8 @@ This backend extends the FastAPI template with Telegram summarizer-specific mode
 
 ### Domain models
 
-- **`app/models_tg.py`** — Channels, posts, summaries, bot credentials, embeddings, logs, sync metadata, and `AppSetting` rows (not `models.py`, which holds template `User` / `Item`).
-- **`app/models.py`** — Template auth models (`User`, `Item`).
+- **`app/models_tg.py`** — Channels, posts, summaries, bot credentials, embeddings, logs, sync metadata, and `AppSetting` rows (not `models.py`, which holds the template `User`).
+- **`app/models.py`** — Template auth models (`User`). The template's demo `Item` resource was removed in ticket 29; `services/tenancy.py` is the worked example of owner-scoped access now.
 
 ### Key services
 

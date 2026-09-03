@@ -181,15 +181,6 @@ EXCUSED: dict[tuple[str, str], tuple[Reason, str]] = {
     ),
     ("GET", f"{V1}/utils/health-check/"): (Reason.NOT_ROW_ADDRESSED, "liveness"),
     ("POST", f"{V1}/utils/test-email/"): (Reason.DEPLOYMENT_WIDE, "superuser probe"),
-    # --- items: the template's own resource --------------------------------
-    ("GET", f"{V1}/items/"): (
-        Reason.COVERED_ELSEWHERE,
-        "template CRUD with its own owner_id check; tests/api/routes/test_items.py",
-    ),
-    ("POST", f"{V1}/items/"): (Reason.COVERED_ELSEWHERE, "see GET /items/"),
-    ("GET", f"{V1}/items/{{id}}"): (Reason.COVERED_ELSEWHERE, "see GET /items/"),
-    ("PUT", f"{V1}/items/{{id}}"): (Reason.COVERED_ELSEWHERE, "see GET /items/"),
-    ("DELETE", f"{V1}/items/{{id}}"): (Reason.COVERED_ELSEWHERE, "see GET /items/"),
     # --- the shared corpus --------------------------------------------------
     ("POST", f"{DATA}/posts"): (
         Reason.COVERED_ELSEWHERE,

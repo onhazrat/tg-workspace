@@ -74,7 +74,7 @@ from sqlalchemy.sql import Select
 from sqlmodel import SQLModel, col, select
 
 from app.core.config import settings
-from app.models import Item, User
+from app.models import User
 from app.models_rbac import Role, UserRole
 from app.models_tg import (
     AppSetting,
@@ -228,11 +228,6 @@ OUT_OF_SCOPE: dict[type[SQLModel], str] = {
         "The tenant itself, not something a tenant owns. Scoping the user table "
         "to a user is circular; who may list or edit accounts is an RBAC "
         "question answered by a permission constant, not by row visibility."
-    ),
-    Item: (
-        "Template scaffolding on its own `owner_id`, deleted in ticket 29. "
-        "Classifying it would teach the seam a second owner-column name for a "
-        "table that is on its way out."
     ),
     Role: (
         "Authorisation data, shared by definition — the three seeded roles are "

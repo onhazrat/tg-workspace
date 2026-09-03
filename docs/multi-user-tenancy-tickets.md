@@ -405,10 +405,10 @@ ticket 21 left here; `POST /data/posts/bulk` keeps raw ingest and says why.
 **What to build:** The template's demo resource is removed. It was kept as the reference implementation
 of owner-scoped access, and the tenancy seam has now replaced it.
 
-- [ ] Its routes, models, relationship, and interface are removed
-- [ ] Its table is dropped
-- [ ] Its tests go, including one of the three known-failing browser specs
-- [ ] Repository guidance no longer references it as the example
+- [x] Its routes, models, relationship, and interface are removed
+- [x] Its table is dropped
+- [x] Its tests go, including one of the three known-failing browser specs
+- [x] Repository guidance no longer references it as the example
 
 ## 30. Per-account Discover dismissals
 **Blocked by:** 3 — **blocks 21**

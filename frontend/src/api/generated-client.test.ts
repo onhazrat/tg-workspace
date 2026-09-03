@@ -215,7 +215,9 @@ describe("auth failures are handled at the transport", () => {
    */
   it("treats only the 'User not found' 404 as an auth failure", async () => {
     localStorage.setItem("access_token", "tok-123")
-    client.setConfig({ fetch: respondWith(404, { detail: "Item not found" }) })
+    client.setConfig({
+      fetch: respondWith(404, { detail: "Channel not found" }),
+    })
     await usersReadUserMe().catch(() => {})
     expect(localStorage.getItem("access_token")).toBe("tok-123")
 

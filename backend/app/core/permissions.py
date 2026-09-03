@@ -35,9 +35,6 @@ class Permission(StrEnum):
     USERS_MANAGE = "users:manage"
     """Create, update and delete any account, and mint its reset token."""
 
-    ITEMS_MANAGE_ANY = "items:manage_any"
-    """Read and write Items belonging to someone else."""
-
     UTILS_ADMIN = "utils:admin"
     """Operational endpoints with no per-user meaning, such as test email."""
 
@@ -126,7 +123,6 @@ SEEDED_ROLES: tuple[RoleSeed, ...] = (
         permissions=(
             Permission.USERS_READ,
             Permission.USERS_MANAGE,
-            Permission.ITEMS_MANAGE_ANY,
             Permission.UTILS_ADMIN,
             Permission.QUOTA_READ_ANY,
             Permission.QUOTA_MANAGE,
@@ -141,7 +137,6 @@ SEEDED_ROLES: tuple[RoleSeed, ...] = (
         permissions=(
             Permission.USERS_READ,
             Permission.USERS_MANAGE,
-            Permission.ITEMS_MANAGE_ANY,
             Permission.UTILS_ADMIN,
             Permission.QUOTA_READ_ANY,
             Permission.QUOTA_MANAGE,
