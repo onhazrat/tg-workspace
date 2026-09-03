@@ -78,15 +78,18 @@ export async function exportDatabaseBlob(
  * No table selection: this is the Admin answering "give me everything about
  * this person", and a partial answer to that is a worse artifact than a large
  * one. `subject` is a user id, or the literal `"all"`.
+ *
+ * Takes the response as a Blob rather than parsing it. `exportDatabaseBlob`
+ * above has to parse, because it filters the document by table; this one never
+ * looks inside, and parsing a whole account's export only to serialise it again
+ * holds it two or three times over in the tab — for a payload the server
+ * streams precisely so that it never holds it once.
  */
 export async function exportAccountBlob(
   subject: string,
-  fetchExport: (
-    subject?: string,
-  ) => Promise<Record<string, unknown>> = api.exportData,
+  fetchExport: (subject?: string) => Promise<Blob> = api.exportDataBlob,
 ): Promise<Blob> {
-  const doc = (await fetchExport(subject)) as unknown as ExportDocument
-  return new Blob([JSON.stringify(doc)], { type: "application/json" })
+  return fetchExport(subject)
 }
 
 /** Table names present in an export, in document order. */

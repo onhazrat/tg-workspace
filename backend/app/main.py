@@ -11,6 +11,7 @@ from starlette.middleware.cors import CORSMiddleware
 from starlette.responses import JSONResponse
 
 from app.api.main import api_router
+from app.api.routes.data.admin import EXPORT_ROWS_HEADER
 from app.core.config import settings
 from app.core.db import engine, init_db
 from app.core.startup_checks import run_startup_checks
@@ -78,6 +79,18 @@ app.add_middleware(APIKeyMiddleware)
 # a slow rejection is exactly the kind of thing that would otherwise go unseen.
 app.add_middleware(TimingMiddleware)
 
+#: Response headers a cross-origin browser may read.
+#:
+#: `allow_headers` is about the *request*; without this list, `fetch` sees only
+#: the handful of headers CORS exposes by default and every custom one reads
+#: back as `null`. The dashboard is on a different host from the API in the
+#: standard deployment, so that is the normal case rather than the exotic one —
+#: which made `X-Export-Rows`, a header whose whole purpose is telling a client
+#: how large a download is before it starts, unreadable by the only client
+#: there is. Named rather than `*`, because `*` is ignored outright when
+#: credentials are allowed.
+CORS_EXPOSED_HEADERS = [EXPORT_ROWS_HEADER]
+
 # CORS must be outermost so preflight OPTIONS is handled before API key auth.
 if settings.all_cors_origins:
     app.add_middleware(
@@ -86,6 +99,7 @@ if settings.all_cors_origins:
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
+        expose_headers=CORS_EXPOSED_HEADERS,
     )
 
 

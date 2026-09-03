@@ -59,7 +59,7 @@ from app.services.data_import_export import (
     EVERYONE,
     SUBJECT_NOT_FOUND,
     ExportSubject,
-    export_row_counts,
+    prepare_export,
     stream_export_data,
 )
 from app.services.data_import_export import import_data as import_data_impl
@@ -382,11 +382,14 @@ def export_data(
     from the same computation, so the header and the file cannot disagree.
     """
     resolved = _resolve_subject(session, subject, _current_user)
-    counts = export_row_counts(session, subject=resolved, viewer_id=_current_user.id)
+    prepared = prepare_export(session, subject=resolved, viewer_id=_current_user.id)
     return StreamingResponse(
         stream_export_data(
-            session, subject=resolved, viewer_id=_current_user.id, counts=counts
+            session,
+            subject=resolved,
+            viewer_id=_current_user.id,
+            prepared=prepared,
         ),
         media_type="application/json",
-        headers={EXPORT_ROWS_HEADER: str(sum(counts.values()))},
+        headers={EXPORT_ROWS_HEADER: str(prepared.total_rows)},
     )

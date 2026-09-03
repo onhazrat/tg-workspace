@@ -97,21 +97,21 @@ describe("fetchExportDocument", () => {
 })
 
 describe("exportAccountBlob", () => {
-  it("passes the subject through and applies no table filter", async () => {
+  it("passes the subject through and never parses the document", async () => {
     const asked: (string | undefined)[] = []
+    const body = JSON.stringify(doc({ channels: [1], summaries: [2] }))
 
     const blob = await exportAccountBlob("user-7", async (subject) => {
       asked.push(subject)
-      return doc({ channels: [1], summaries: [2] }) as never
+      return new Blob([body], { type: "application/json" })
     })
 
     // The subject is the server's question, not a shape the browser narrows:
-    // filtering here would mean the rows had already been sent.
+    // filtering here would mean the rows had already been sent. And the bytes
+    // come back untouched — a whole account's export is the one document this
+    // app must not hold three copies of.
     expect(asked).toEqual(["user-7"])
-    expect(Object.keys(JSON.parse(await blob.text()).data)).toEqual([
-      "channels",
-      "summaries",
-    ])
+    expect(await blob.text()).toBe(body)
   })
 })
 

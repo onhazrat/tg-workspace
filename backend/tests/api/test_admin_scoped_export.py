@@ -570,6 +570,110 @@ def test_the_counts_describe_the_document_that_follows(
         assert document["counts"][section] == len(rows), section
 
 
+def test_the_count_header_is_readable_cross_origin(
+    client: TestClient,
+    admin: tuple[User, dict[str, str]],
+) -> None:
+    """A header the browser cannot read is not a header.
+
+    The dashboard is on a different host from the API in the standard
+    deployment, so every custom response header reads back as `null` in `fetch`
+    unless CORS exposes it by name. `X-Export-Rows` exists to tell a client how
+    large a download is before it starts; it was set and not exposed on the
+    first cut, which made it true only for `curl`.
+    """
+    from app.main import CORS_EXPOSED_HEADERS
+
+    assert EXPORT_ROWS_HEADER in CORS_EXPOSED_HEADERS
+
+    _, headers = admin
+    origin = settings.all_cors_origins[0]
+    response = client.get(f"{DATA}/export", headers={**headers, "Origin": origin})
+    assert response.status_code == 200
+    exposed = response.headers.get("access-control-expose-headers", "")
+    assert EXPORT_ROWS_HEADER.lower() in exposed.lower(), (
+        f"the count header is not exposed cross-origin: {exposed!r}"
+    )
+
+
+def test_the_export_resolves_its_sections_once(
+    client: TestClient,
+    admin: tuple[User, dict[str, str]],
+    subject: tuple[User, dict[str, str]],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The header and the body come from one plan, not two.
+
+    `export_sections` reads the setting groups and the subject's follows, and
+    the first cut called it twice per download — once to count and once to
+    stream. Counted rather than argued, because "it is only two extra queries"
+    is how a per-request cost gets waved through twice.
+    """
+    from app.services import data_import_export as module
+
+    calls = 0
+    real = module.export_sections
+
+    def counting(*args: Any, **kwargs: Any) -> Any:
+        nonlocal calls
+        calls += 1
+        return real(*args, **kwargs)
+
+    monkeypatch.setattr(module, "export_sections", counting)
+
+    subject_user, _ = subject
+    _, headers = admin
+    assert (
+        client.get(
+            f"{DATA}/export", headers=headers, params={"subject": str(subject_user.id)}
+        ).status_code
+        == 200
+    )
+    assert calls == 1, f"export_sections ran {calls} times for one download"
+
+
+def test_a_restored_tag_run_keeps_the_clock_history_renders(
+    client: TestClient,
+    admin: tuple[User, dict[str, str]],
+    subject: tuple[User, dict[str, str]],
+) -> None:
+    """`updated_at_ms` round-trips; `updated_at` is stamped by this install.
+
+    The two live on the same table and mean different things, which is exactly
+    the pair a generic column mapper gets wrong. `updated_at_ms` is the clock
+    History sorts and shows, so a restored artifact has to keep the moment it
+    was made — `created_at` beside it makes the same claim. `updated_at` is
+    when this deployment last wrote the row, and a document cannot know that.
+    """
+    subject_user, _ = subject
+    _, headers = admin
+    made_at = 1_600_000_000_000
+    response = client.post(
+        f"{DATA}/import",
+        headers=headers,
+        params={"subject": str(subject_user.id)},
+        json={
+            "tag_runs": [
+                {
+                    "id": "restored-run",
+                    "status": "complete",
+                    "createdAt": made_at,
+                    "updatedAt": made_at,
+                }
+            ]
+        },
+    )
+    assert response.status_code == 200, response.text
+
+    with Session(engine) as session:
+        row = session.get(TagRun, "restored-run")
+        assert row is not None
+        assert row.created_at == made_at
+        assert row.updated_at_ms == made_at, "the artifact's own clock is the file's"
+        assert row.updated_at.year > 2020, "the row's write time is this install's"
+        assert int(row.updated_at.timestamp() * 1000) > made_at
+
+
 # --------------------------------------------------------------------------
 # Box 5: import routes Channel creation through the Follow path
 # --------------------------------------------------------------------------

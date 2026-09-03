@@ -31,7 +31,7 @@ import type {
   TagRun,
   TagRunSummary,
 } from "../types"
-import { request, sseJsonStream } from "./base"
+import { request, requestBlob, sseJsonStream } from "./base"
 
 export type DiscoveredViaPayload = {
   channelName: string
@@ -309,6 +309,19 @@ export type LogType = "publish" | "sync" | "llm" | "embedding" | "network"
  * they read fields the list still carries and cost nothing there.
  */
 export type LogSearch = { query: string; inDetails: boolean }
+
+/**
+ * `GET /data/export`, with the subject when there is one.
+ *
+ * One builder for the parsed and the Blob form, because two spellings of a
+ * query string is how the two calls come to disagree about what an absent
+ * subject means — and here that difference is "your rows" versus "everybody's".
+ */
+function exportPath(subject?: string): string {
+  return subject
+    ? `/api/v1/data/export?subject=${encodeURIComponent(subject)}`
+    : "/api/v1/data/export"
+}
 
 export const dataApi = {
   syncMeta: () =>
@@ -879,11 +892,18 @@ export const dataApi = {
    * asked for by name.
    */
   exportData: (subject?: string) =>
-    request<Record<string, unknown>>(
-      subject
-        ? `/api/v1/data/export?subject=${encodeURIComponent(subject)}`
-        : "/api/v1/data/export",
-    ),
+    request<Record<string, unknown>>(exportPath(subject)),
+
+  /**
+   * The same document, as a Blob, without parsing it.
+   *
+   * For the callers that only ever save the file. `exportData` parses the JSON
+   * and then the caller stringifies it again, so a whole-account export is
+   * held two or three times over in a tab — for a payload the server goes to
+   * real trouble never to hold at once. Nothing about a download inspects the
+   * document, so nothing has to parse it.
+   */
+  exportDataBlob: (subject?: string) => requestBlob(exportPath(subject)),
 
   bulkReresolveStartIds: (body?: {
     dryRun?: boolean

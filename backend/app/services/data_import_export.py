@@ -759,6 +759,14 @@ def _import_artifact_rows(
     generic mapper produces and a hand-written one never would, so it is named
     here instead of trusted.
 
+    **`updated_at_ms` therefore round-trips, and that is the intended answer
+    for it.** It is the clock History sorts and renders, so a restored tag run
+    keeps the moment it was made, exactly as `created_at` does. The `updated_at`
+    column beside it does not round-trip: it is when *this* install last touched
+    the row, and it is stamped below — on the tables that have one. `TagRun` has
+    both and they mean different things; the other two families have only the
+    second.
+
     `heavy` names fields that live in a companion payload table; they are
     recognised so they do not fall into `extra`, and left for the caller to
     route.
@@ -767,6 +775,7 @@ def _import_artifact_rows(
     needs both and the caller owns the transaction.
     """
     aliases = aliases or {}
+    table_columns = frozenset(c.key for c in typing_cast(Any, model).__table__.columns)
     columns = _importable_columns(model) - heavy
     written: list[tuple[Any, dict[str, Any]]] = []
 
@@ -786,7 +795,15 @@ def _import_artifact_rows(
             elif name not in heavy and name not in _NEVER_IMPORTED_COLUMNS:
                 extra[key] = value
         row.extra = extra
-        row.updated_at = utc_now()
+        # Guarded because SQLModel takes the assignment whether or not the
+        # column exists — it files an unmapped one on the instance and drops
+        # it — so a family added here without an `updated_at` would read as
+        # stamped and be silently unstamped. All three today have one; this is
+        # about the fourth. It is the same failure the constructor-keyword half
+        # of `test_superseded_columns.py` exists to catch, in the other
+        # direction.
+        if "updated_at" in table_columns:
+            row.updated_at = utc_now()
         # Ticket 27, and ticket 28 gives it a second reason to be here: an
         # Admin importing *for* somebody binds themselves as the acting Owner,
         # so a restore says who uploaded it rather than claiming the account
@@ -1300,30 +1317,60 @@ def _for_subject(statement: Any, model: type[Any], subject: ExportSubject) -> An
     return subject_select(statement, model, subject.user_id)
 
 
-def export_row_counts(
+@dataclass(frozen=True)
+class PreparedExport:
+    """Everything an export needs, resolved once.
+
+    The route reads `counts` for its header and hands the whole thing to the
+    streamer, so the sections are built once rather than once per caller —
+    `export_sections` reads the setting groups and the subject's follows, and
+    doing that twice for one download was a review finding on the first cut.
+
+    Frozen and holding no `Session`: it is the *plan*, and the queries run when
+    the streamer is iterated.
+    """
+
+    subject: ExportSubject
+    sections: tuple[ExportSection, ...]
+    counts: dict[str, int]
+
+    @property
+    def total_rows(self) -> int:
+        return sum(self.counts.values())
+
+
+def prepare_export(
     session: Session, *, subject: ExportSubject, viewer_id: uuid.UUID
-) -> dict[str, int]:
-    """How many rows each section will carry, per section, before it starts.
+) -> PreparedExport:
+    """Resolve the sections and count each one, before a byte is streamed.
 
     One `COUNT(*)` per section against the same narrowing the body uses, so the
     numbers cannot describe a different query from the one that streams.
 
+    **What it costs, measured rather than assumed.** On staging's 4.78M-row
+    corpus the whole pass is ~1s, essentially all of it `tg_posts`: 975ms
+    unscoped and 987ms through the follow `EXISTS`. Every other table is
+    single-digit milliseconds. So an export's time-to-first-byte goes from ~0
+    to ~1s, on a download that then streams for minutes — which is the trade
+    the count is worth making, and it is written down here because the next
+    person to read this will otherwise have to re-derive it before they dare
+    touch it.
+
     **A pre-count, not a manifest.** The counts and the body run in separate
     statements under READ COMMITTED, so a row written while a long export is
-    streaming appears in the document and not in the number. That is the right
-    trade for what this is for — an operator watching a multi-gigabyte dump
-    wants to know it is a multi-gigabyte dump before committing to it — and
-    pinning them together would mean holding a REPEATABLE READ snapshot open
-    for the whole transfer, which is the `idle in transaction` cost the
-    scheduler already paid for once.
+    streaming appears in the document and not in the number. Pinning them
+    together would mean holding a REPEATABLE READ snapshot open for the whole
+    transfer, which is the `idle in transaction` cost the scheduler already
+    paid for once.
     """
+    sections = export_sections(session, subject=subject, viewer_id=viewer_id)
     counts: dict[str, int] = {}
-    for section in export_sections(session, subject=subject, viewer_id=viewer_id):
+    for section in sections:
         statement = _for_subject(
             select(func.count()).select_from(section.model), section.model, subject
         )
         counts[section.key] = int(session.exec(statement).one())
-    return counts
+    return PreparedExport(subject=subject, sections=sections, counts=counts)
 
 
 def _stream_rows(
@@ -1360,7 +1407,7 @@ def stream_export_data(
     *,
     subject: ExportSubject,
     viewer_id: uuid.UUID,
-    counts: dict[str, int] | None = None,
+    prepared: PreparedExport | None = None,
 ) -> Iterator[str]:
     """Serialise one subject's export incrementally as JSON.
 
@@ -1376,47 +1423,37 @@ def stream_export_data(
     an imported tag onto the follow of whoever the import is *for*, so the two
     ends now name the same account instead of both meaning "me".
 
-    `counts` is the pre-count the route already computed for its header; it is
-    passed in rather than recomputed so the header and the document cannot
-    disagree. Omitted, the document carries the counts of this call.
+    `prepared` is the plan the route already built for its header; passing it
+    keeps the header and the document from disagreeing and keeps the section
+    resolution to one pass. Omitted, this builds its own.
     """
+    if prepared is None:
+        prepared = prepare_export(session, subject=subject, viewer_id=viewer_id)
     try:
-        yield from _stream_export_body(
-            session, subject=subject, viewer_id=viewer_id, counts=counts
-        )
+        yield from _stream_export_body(session, prepared)
     finally:
         # End the long read transaction so a big export cannot block DDL
         # or hold back autovacuum for its whole duration.
         session.rollback()
 
 
-def _stream_export_body(
-    session: Session,
-    *,
-    subject: ExportSubject,
-    viewer_id: uuid.UUID,
-    counts: dict[str, int] | None,
-) -> Iterator[str]:
-    sections = export_sections(session, subject=subject, viewer_id=viewer_id)
-    if counts is None:
-        counts = export_row_counts(session, subject=subject, viewer_id=viewer_id)
-
+def _stream_export_body(session: Session, prepared: PreparedExport) -> Iterator[str]:
     yield '{"version":2,"timestamp":'
     yield str(int(utc_now().timestamp() * 1000))
     # The counts lead the document for the reason the header exists: a reader
     # streaming this file learns its size before the first row rather than by
     # reaching the end.
     yield ',"counts":'
-    yield json.dumps(counts, separators=(",", ":"))
+    yield json.dumps(prepared.counts, separators=(",", ":"))
     yield ',"data":{'
 
     first = True
-    for section in sections:
+    for section in prepared.sections:
         yield ("" if first else ",") + f'"{section.key}":['
         first = False
         yield from _stream_rows(
             session,
-            _for_subject(section.statement(), section.model, subject),
+            _for_subject(section.statement(), section.model, prepared.subject),
             section.to_camel,
         )
         yield "]"
