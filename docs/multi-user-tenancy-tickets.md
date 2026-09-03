@@ -382,11 +382,22 @@ never claims that person asked for it.
 **What to build:** An Admin can export one User's data or everyone's, and an exported Summary still
 cites Posts the export contains.
 
-- [ ] Export is Admin-only and takes a subject
-- [ ] It covers the subject's Follows, Artifacts, and settings
-- [ ] It includes the Posts of Channels the subject Follows
-- [ ] It streams, and reports the row count before starting
-- [ ] Import routes Channel creation through the Follow path
+- [x] Export is Admin-only and takes a subject
+- [x] It covers the subject's Follows, Artifacts, and settings
+- [x] It includes the Posts of Channels the subject Follows
+- [x] It streams, and reports the row count before starting
+- [x] Import routes Channel creation through the Follow path
+
+`subject` absent is the caller, a user id is that account, `all` is everybody — and making the
+default the *narrow* one is the behaviour change: an endpoint that returned the deployment now
+returns you. Scoping is `tenancy.subject_select`, the **ungated** twin of `scoped_select`, because a
+flag may gate visibility and never identity. The three artifact families History lists beside
+summaries were missing from every backup and are now sections of their own, alongside the personal
+settings. `X-Export-Rows` carries the pre-count, which a `StreamingResponse` sends before the
+generator runs. Ticket 31's per-account import decision was **re-taken**: rows are stamped with the
+subject, an Admin importing for somebody is recorded as the acting Owner, and a third account's row
+is still refused. `POST /data/import` now follows the handles its Posts name, which closes the hole
+ticket 21 left here; `POST /data/posts/bulk` keeps raw ingest and says why.
 
 ## 29. Remove items
 **Blocked by:** 21

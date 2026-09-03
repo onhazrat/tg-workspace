@@ -4262,18 +4262,31 @@
       "post": {
         "tags": ["data"],
         "summary": "Import Data",
+        "description": "Restore a document into one account's rows.\n\n`subject` is the account the document lands under, defaulting to the caller\n\u2014 the same parameter the export takes, so a backup of one person restores\nas that person instead of as whoever ran it (ticket 28). `all` is refused:\nan import writes rows and a document carries no owners, so \"everybody\" has\nno meaning here that is not \"the caller\", which is what leaving it off\nalready says.\n\nImporting *for* somebody is a write on their behalf, so the acting Owner is\nbound for this session before anything is written and every artifact the\ndocument restores records who really uploaded it (ticket 27).",
         "operationId": "data-import_data",
+        "security": [{ "OAuth2PasswordBearer": [] }],
+        "parameters": [
+          {
+            "name": "subject",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [{ "type": "string" }, { "type": "null" }],
+              "title": "Subject"
+            }
+          }
+        ],
         "requestBody": {
+          "required": true,
           "content": {
             "application/json": {
               "schema": {
-                "additionalProperties": true,
                 "type": "object",
+                "additionalProperties": true,
                 "title": "Body"
               }
             }
-          },
-          "required": true
+          }
         },
         "responses": {
           "200": {
@@ -4292,23 +4305,41 @@
               }
             }
           }
-        },
-        "security": [{ "OAuth2PasswordBearer": [] }]
+        }
       }
     },
     "/api/v1/data/export": {
       "get": {
         "tags": ["data"],
         "summary": "Export Data",
-        "description": "Full export \u2014 never truncated.\n\nStreamed rather than built in memory: the payload spans every post and log\nrow, which is far more than a worker can hold at once.",
+        "description": "One account's export, or the whole deployment's \u2014 never truncated.\n\n`subject` is ticket 28: absent for the caller's own rows, a user id for that\naccount's, `all` for everybody's.\n\nStreamed rather than built in memory: the payload spans every post and log\nrow, which is far more than a worker can hold at once. The per-section row\ncounts are computed first and travel in `X-Export-Rows`, because a\n`StreamingResponse` sends its headers before the generator runs \u2014 which is\nwhat makes \"reports the row count before starting\" true for a client that\nhas not parsed a byte of the body yet. The same numbers lead the document,\nfrom the same computation, so the header and the file cannot disagree.",
         "operationId": "data-export_data",
+        "security": [{ "OAuth2PasswordBearer": [] }],
+        "parameters": [
+          {
+            "name": "subject",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [{ "type": "string" }, { "type": "null" }],
+              "title": "Subject"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful Response",
             "content": { "application/json": { "schema": {} } }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
           }
-        },
-        "security": [{ "OAuth2PasswordBearer": [] }]
+        }
       }
     },
     "/api/v1/rag/status": {

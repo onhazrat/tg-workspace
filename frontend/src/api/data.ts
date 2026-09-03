@@ -852,13 +852,38 @@ export const dataApi = {
   createNetworkLogs: (logs: NetworkLog[]) =>
     dataApi.createLogs("network", logs),
 
-  importData: (payload: Record<string, unknown>) =>
-    request<{ imported: Record<string, number> }>("/api/v1/data/import", {
-      method: "POST",
-      body: JSON.stringify(payload),
-    }),
+  /**
+   * Restore a document into one account's rows.
+   *
+   * `subject` is the account it lands under, defaulting to the caller
+   * (ticket 28). Admin-only either way; naming somebody else records the
+   * caller as the acting Owner on every artifact restored.
+   */
+  importData: (payload: Record<string, unknown>, subject?: string) =>
+    request<{ imported: Record<string, number> }>(
+      subject
+        ? `/api/v1/data/import?subject=${encodeURIComponent(subject)}`
+        : "/api/v1/data/import",
+      {
+        method: "POST",
+        body: JSON.stringify(payload),
+      },
+    ),
 
-  exportData: () => request<Record<string, unknown>>("/api/v1/data/export"),
+  /**
+   * Download an export document.
+   *
+   * `subject` is a user id, the literal `"all"` for every account, or omitted
+   * for the caller's own rows. Omitting it used to mean the whole deployment;
+   * ticket 28 made the default the narrow one, so the wide read has to be
+   * asked for by name.
+   */
+  exportData: (subject?: string) =>
+    request<Record<string, unknown>>(
+      subject
+        ? `/api/v1/data/export?subject=${encodeURIComponent(subject)}`
+        : "/api/v1/data/export",
+    ),
 
   bulkReresolveStartIds: (body?: {
     dryRun?: boolean

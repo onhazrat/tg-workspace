@@ -80,9 +80,36 @@ def replace_user_setting(
     return _write(session, key, value, user_id=user_id)
 
 
-def _write(
+def user_setting_to_camel(row: UserSetting) -> dict[str, Any]:
+    """One row as an export document carries it.
+
+    `key` and `value` and nothing else. The owner is not in the payload for the
+    reason no other section carries one either: a document names its subject
+    once, at the request that produced it, and a per-row owner would be a
+    second answer for an import to disagree with.
+    """
+    return {"key": row.key, "value": dict(row.value)}
+
+
+def write_user_setting(
     session: Session, key: str, value: dict[str, Any], *, user_id: UUID
-) -> dict[str, Any]:
+) -> None:
+    """Store `value` for `key` **without committing**.
+
+    The import path's door (ticket 28). `import_data` is one transaction for
+    the whole document — a partial restore leaves posts pointing at channels
+    that were never created — so a settings section cannot use
+    `replace_user_setting`, which commits per row and would land the first half
+    of a document that then fails on the second.
+
+    It stays inside this module rather than becoming a `session.add` at the
+    call site because `test_settings_table_split.py` counts the writers of
+    `tg_user_settings` and the answer has to stay one. `require_home` is the
+    reason that matters: it is what stops a document naming a deployment-policy
+    key from writing it into the personal table, where nothing would ever read
+    it back.
+    """
+    require_home(key, Home.USER)
     row = session.get(UserSetting, (key, user_id))
     if row:
         row.value = value
@@ -90,5 +117,11 @@ def _write(
     else:
         row = UserSetting(key=key, value=value, user_id=user_id)
     session.add(row)
+
+
+def _write(
+    session: Session, key: str, value: dict[str, Any], *, user_id: UUID
+) -> dict[str, Any]:
+    write_user_setting(session, key, value, user_id=user_id)
     session.commit()
     return value  # not `row.value` — see `settings_store.put_global_setting`.

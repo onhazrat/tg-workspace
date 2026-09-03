@@ -200,8 +200,12 @@ EXCUSED: dict[tuple[str, str], tuple[Reason, str]] = {
     ("POST", f"{DATA}/posts/bulk"): (
         Reason.CORPUS,
         "raw ingest; creates no Channel and no Follow, so what it writes is "
-        "reachable only once somebody follows the handle. See the ticket note "
-        "for ticket 28 — an import that carries a subject changes this.",
+        "reachable only once somebody follows the handle. Ticket 28 took that "
+        "decision and left this door alone: it is the scraper's, its caller "
+        "already holds the Follow, and following whatever an uploaded file "
+        "mentions belongs to the door that knows it is restoring a backup. "
+        "`POST /data/import` is that door and does follow them now — see "
+        "data_import_export._follow_handles_from_posts.",
     ),
     ("POST", f"{DATA}/discover/candidates"): (
         Reason.COVERED_ELSEWHERE,
@@ -318,9 +322,10 @@ EXCUSED: dict[tuple[str, str], tuple[Reason, str]] = {
         "the declared destructive admin operation on stats.py",
     ),
     ("GET", f"{DATA}/export"): (
-        Reason.DEPLOYMENT_WIDE,
-        "Admin export crosses accounts through unscoped_select(reason=...); "
-        "ticket 28 gives it a subject",
+        Reason.COVERED_ELSEWHERE,
+        "one subject per request since ticket 28, and crossing accounts is "
+        "`subject=all` through unscoped_select(reason=...); "
+        "test_admin_scoped_export.py probes both with three live accounts",
     ),
     ("POST", f"{DATA}/import"): (
         Reason.COVERED_ELSEWHERE,

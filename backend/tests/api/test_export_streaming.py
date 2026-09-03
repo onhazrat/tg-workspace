@@ -2,7 +2,12 @@
 
 The log viewers are capped, but an export is a backup: it may never be
 truncated. It is streamed only so a full dump does not have to fit in memory
-at once — the document itself must be unchanged.
+at once — streaming may not cost the document a single row.
+
+That is this file's whole subject, and it is deliberately *not* about who the
+document is for. Ticket 28 gave the export a subject, four more sections and a
+leading `counts` object; which rows a subject's document carries is
+`test_admin_scoped_export.py`'s question, and completeness is still this one's.
 """
 
 from __future__ import annotations
@@ -14,7 +19,7 @@ from sqlmodel import Session
 
 from app.core.config import settings
 from app.core.db import engine
-from app.services.data_import_export import stream_export_data
+from app.services.data_import_export import ExportSubject, stream_export_data
 from app.services.follows import get_operator_user_id
 from app.services.logs import DEFAULT_LOG_PAGE_SIZE
 from tests.utils.tenancy import follow_channels
@@ -68,6 +73,11 @@ EXPECTED_SECTIONS = {
     "network_logs",
     "embeddings",
     "translations",
+    # Ticket 28: the other three artifact families and the personal settings.
+    "chat_sessions",
+    "tag_runs",
+    "discover_reports",
+    "user_settings",
 }
 
 
@@ -78,7 +88,15 @@ def test_streamed_export_is_a_complete_document(db: Session) -> None:
     # Ticket 22: the export carries the *caller's* per-User channel fields,
     # because tags and start times moved onto `tg_channel_follows` and
     # "this channel's tags" stopped having one answer.
-    document = json.loads("".join(stream_export_data(db, user_id=operator_id)))
+    document = json.loads(
+        "".join(
+            stream_export_data(
+                db,
+                subject=ExportSubject.account(operator_id),
+                viewer_id=operator_id,
+            )
+        )
+    )
 
     assert document["version"] == 2
     assert isinstance(document["timestamp"], int)
@@ -118,7 +136,11 @@ def test_export_streams_incrementally(db: Session) -> None:
     """Chunks arrive progressively rather than as one buffered blob."""
     operator_id = get_operator_user_id(db)
     assert operator_id is not None
-    chunks = list(stream_export_data(db, user_id=operator_id))
+    chunks = list(
+        stream_export_data(
+            db, subject=ExportSubject.account(operator_id), viewer_id=operator_id
+        )
+    )
     assert len(chunks) > 1
     assert chunks[0].startswith('{"version":2')
     assert chunks[-1].endswith("}}")

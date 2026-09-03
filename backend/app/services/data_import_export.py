@@ -1,31 +1,47 @@
-"""IndexedDB export import and full data export (extracted from data routes).
+"""Export and import of a whole account, or of the whole deployment.
 
-## Whose rows an import may write (ticket 31)
+## Whose rows a document is about (tickets 31 and 28)
 
-**Per-account.** A row that already belongs to somebody else is refused with that
-family's own 404, exactly as its endpoint answers, and the refusal holds
-whichever way the tenancy flag points — see `tenancy.assert_owner_on_write`,
-which is where that exception is argued. `IMPORT_WRITES` below is the inventory:
-every table this module writes is either checked or excused, with the reason
-written next to it.
+**One subject per request, and it is the request that names it.** Ticket 31 made
+an import per-account: a row that already belongs to somebody else is refused
+with that family's own 404, whichever way the tenancy flag points — see
+`tenancy.assert_owner_on_write`, which is where that exception is argued.
+`IMPORT_WRITES` below is the inventory: every table this module writes is either
+checked or excused, with the reason written next to it.
 
-The ticket offered a second design — let an Admin write across accounts, since
-export is Admin-only "for themselves *or for all users*" and a restore that
-cannot restore is not a restore. It was not taken, and the reason is narrower
-than a preference: **an import cannot express another account's ownership in the
-first place.** Every importer here stamps a new row with the *caller's* id, and
-an export document carries no owner at all. So a restore into an empty database
-already files every account's rows under whoever ran it, and refusing to
-overwrite a foreign *existing* row takes away nothing that worked. Ticket 28 is
-where export and import learn to carry a subject; that is the ticket that gets
-to re-take this decision, and
-`tests/services/test_import_write_scoping.py::test_import_stamps_new_rows_with_the_caller_not_the_document`
-is what makes it come back and do so rather than inherit it silently.
+Ticket 31 recorded a second design it did *not* take — let an Admin write across
+accounts, since a restore that cannot restore is not a restore — and left the
+decision for ticket 28 to re-take rather than inherit, because ticket 31's own
+reason was that **an import could not express another account's ownership in the
+first place**: every importer stamped the *caller's* id, and an export document
+carries no owner at all.
+
+**Ticket 28 re-takes it, and the reason it can is that the subject moved into
+the request.** `GET /data/export?subject=X` and `POST /data/import?subject=X`
+name an account, so a restore no longer has to guess: new rows are stamped with
+the subject, which is the caller unless an Admin said otherwise. Nothing else
+about ticket 31's rule moves — a row owned by a *third* account is still refused
+with that family's 404, the document still names no owner anywhere, and the
+default subject is still the caller. What changed is that "the Admin who ran the
+restore" stopped being the only expressible answer.
+
+An Admin importing for somebody else is a write on another person's behalf, and
+ticket 27 already says what that must record: the route binds an `ActingOwner`
+so every artifact restored carries the Admin in `acted_by_*` and shows it in
+that account's History. A restore that silently claimed the User wrote the file
+is the lie that column exists to stop.
 
 The route's `Permission.DATA_ADMIN` gate (ticket 18) is not this answer. It
 decides who may call import; it says nothing about whose rows the call lands on,
 and an Admin restoring their own backup onto an id that has since been reused
 cannot tell. Capability is not intent.
+
+## What an export carries
+
+`export_sections` is the document, in order, and the streamer, the pre-count and
+the coverage guard all walk it. `EXPORT_OMISSIONS` is the other half: a table
+`tenancy.SCOPES` classifies that a backup deliberately does not carry, with the
+reason beside it.
 """
 
 from __future__ import annotations
@@ -34,10 +50,13 @@ import json
 import logging
 import uuid
 from collections.abc import Callable, Iterator
+from dataclasses import dataclass
 from typing import Any
+from typing import cast as typing_cast
 
 from fastapi import HTTPException
 from fastapi.encoders import jsonable_encoder
+from sqlalchemy import func
 from sqlmodel import Session, col, select
 
 from app.core import acting_owner
@@ -46,6 +65,9 @@ from app.models_tg import (
     Channel,
     ChannelSettingGroup,
     ChatDestination,
+    ChatSession,
+    ChatSessionPayload,
+    DiscoverReport,
     EmbeddingLog,
     LLMLog,
     NetworkLog,
@@ -57,6 +79,8 @@ from app.models_tg import (
     SummaryPayload,
     SyncLog,
     SyncLogPayload,
+    TagRun,
+    UserSetting,
     utc_now,
 )
 from app.services.channel_setting_groups import (
@@ -66,12 +90,24 @@ from app.services.channel_setting_groups import (
     setting_group_to_camel,
 )
 from app.services.channels import SERVER_MANAGED_CHANNEL_FIELDS, apply_channel_fields
+from app.services.chat_sessions import (
+    CHAT_SESSION_NOT_FOUND,
+    apply_chat_session_payload,
+    chat_session_to_camel,
+    refresh_chat_session_derived_columns,
+)
+from app.services.chat_sessions import PAYLOAD_COLUMNS as CHAT_PAYLOAD_COLUMNS
 from app.services.credentials import (
     BOT_CREDENTIAL_NOT_FOUND,
     CHAT_DESTINATION_NOT_FOUND,
     encrypt_bot_token,
 )
+from app.services.discover_reports import (
+    REPORT_NOT_FOUND,
+    report_export_to_camel,
+)
 from app.services.follows import (
+    ensure_follow_for_channel,
     follow_values_from_body,
     follows_for_user,
     get_follow,
@@ -98,8 +134,10 @@ from app.services.serialization import (
     post_to_camel,
     publish_log_to_camel,
     sync_log_to_camel,
+    to_snake,
     translation_to_camel,
 )
+from app.services.settings_registry import Home, home_for
 from app.services.summaries import (
     HEAVY_SUMMARY_FIELDS,
     PAYLOAD_COLUMNS,
@@ -109,7 +147,16 @@ from app.services.summaries import (
     summary_to_camel,
 )
 from app.services.sync_meta import touch_sync
-from app.services.tenancy import Scope, assert_owner_on_write, may_act_on, scope_of
+from app.services.tag_runs import TAG_RUN_NOT_FOUND, tag_run_to_camel
+from app.services.tenancy import (
+    Scope,
+    assert_owner_on_write,
+    may_act_on,
+    scope_of,
+    subject_select,
+    unscoped_select,
+)
+from app.services.user_settings import user_setting_to_camel, write_user_setting
 
 logger = logging.getLogger(__name__)
 
@@ -162,6 +209,23 @@ IMPORT_WRITES: dict[type[Any], str] = {
     Post: "Excused: follow-scoped corpus, unique per `(channel_name, post_id)`.",
     PostEmbedding: "Excused: follow-scoped corpus, keyed to the Post.",
     PostTranslation: "Excused: follow-scoped corpus, keyed to the Post.",
+    ChatSession: (
+        "Checked: user-owned artifact, refused with `Chat session not found`. "
+        "Ticket 28 put it on the export, and an exported family with no owner "
+        "check on the way back is the hole ticket 31 closed for summaries."
+    ),
+    TagRun: "Checked: user-owned artifact, refused with `Tag run not found`.",
+    DiscoverReport: "Checked: user-owned artifact, refused with `report not found`.",
+    ChatSessionPayload: (
+        "Excused: written only through `apply_chat_session_payload` for a chat "
+        "this module has already checked, exactly as `SummaryPayload` is."
+    ),
+    UserSetting: (
+        "Excused: the primary key is `(key, user_id)`, so the subject's id is "
+        "half of the address and a write cannot reach another account's row at "
+        "all. `write_user_setting` is still the one writer, and `require_home` "
+        "there refuses a deployment-policy key that a document names."
+    ),
     ChannelSettingGroup: (
         "Excused: never merged by an id the document supplies. "
         "`ensure_default_group` resolves the caller's own group by a derived id "
@@ -642,10 +706,278 @@ def _import_translations(session: Session, items: list[Any]) -> int:
     return len(items)
 
 
+#: Columns no imported row ever takes from the document, whatever the table.
+#:
+#: `id` and `user_id` are the row's identity and its subject, both decided by
+#: the request rather than by the file. `extra` is where the *unknown* keys go,
+#: so taking a literal `extra` from the document would let a crafted file
+#: shadow a column. `acted_by_*` is ticket 27's attribution: it says who wrote
+#: the row on this deployment, and a document cannot know that. `updated_at` is
+#: when this install last touched it.
+_NEVER_IMPORTED_COLUMNS = frozenset(
+    {"id", "user_id", "extra", "acted_by_user_id", "acted_by_email", "updated_at"}
+)
+
+
+def _importable_columns(model: type[Any]) -> frozenset[str]:
+    """The column names an imported row may set, read off the table itself.
+
+    Derived rather than listed, for the reason `owner_backfill_inventory` is:
+    a column added next quarter is carried by an export the moment it exists,
+    and a hand-written set here would silently drop it on the way back in.
+    """
+    return (
+        frozenset(c.key for c in typing_cast(Any, model).__table__.columns)
+        - _NEVER_IMPORTED_COLUMNS
+    )
+
+
+def _import_artifact_rows(
+    session: Session,
+    items: list[Any],
+    *,
+    model: type[Any],
+    detail: str,
+    section: str,
+    user_id: uuid.UUID,
+    aliases: dict[str, str] | None = None,
+    heavy: frozenset[str] = frozenset(),
+) -> list[tuple[Any, dict[str, Any]]]:
+    """Upsert one open artifact family, keeping unknown keys in `extra`.
+
+    The three families ticket 28 added to the export are `Summary`'s siblings —
+    same open `extra` column, same 404 detail rule, same attribution — so they
+    get one importer rather than three near-copies. `_import_summaries` keeps
+    its own because it is not quite this shape: its date fields accept both
+    spellings for backups written either side of a migration, and its payload
+    split predates the others.
+
+    `aliases` exists for one real collision: `tag_run_to_camel` emits the row's
+    millisecond clock as `updatedAt`, and `to_snake` turns that into
+    `updated_at`, which is a *`datetime`* column on the same table. Without the
+    alias an import writes an integer into a timestamp — the kind of failure a
+    generic mapper produces and a hand-written one never would, so it is named
+    here instead of trusted.
+
+    `heavy` names fields that live in a companion payload table; they are
+    recognised so they do not fall into `extra`, and left for the caller to
+    route.
+
+    Returns each row with the item it came from, because the payload write
+    needs both and the caller owns the transaction.
+    """
+    aliases = aliases or {}
+    columns = _importable_columns(model) - heavy
+    written: list[tuple[Any, dict[str, Any]]] = []
+
+    for item in items:
+        row_id = item.get("id") or normalize_body(item).get("id")
+        existing = session.get(model, row_id)
+        _assert_importable(existing, user_id, detail=detail, section=section)
+
+        row = existing if existing is not None else model(id=row_id, user_id=user_id)
+        extra: dict[str, Any] = {}
+        for key, value in item.items():
+            if key == "id":
+                continue
+            name = aliases.get(key, to_snake(key))
+            if name in columns:
+                setattr(row, name, value)
+            elif name not in heavy and name not in _NEVER_IMPORTED_COLUMNS:
+                extra[key] = value
+        row.extra = extra
+        row.updated_at = utc_now()
+        # Ticket 27, and ticket 28 gives it a second reason to be here: an
+        # Admin importing *for* somebody binds themselves as the acting Owner,
+        # so a restore says who uploaded it rather than claiming the account
+        # wrote every row in the file.
+        acting_owner.stamp(session, row)
+        session.add(row)
+        written.append((row, item))
+
+    return written
+
+
+def _import_chat_sessions(
+    session: Session, items: list[Any], *, user_id: uuid.UUID
+) -> int:
+    """Upsert chat sessions, routing the transcript to its companion table."""
+    for row, item in _import_artifact_rows(
+        session,
+        items,
+        model=ChatSession,
+        detail=CHAT_SESSION_NOT_FOUND,
+        section="chat_sessions",
+        user_id=user_id,
+        heavy=frozenset(CHAT_PAYLOAD_COLUMNS),
+    ):
+        # `chat_session_to_camel` always emits `messages`, as `[]` when there is
+        # no payload row — so an empty list here is "this chat has no
+        # transcript", not "leave the one it has alone". Writing it as an update
+        # would give every transcript-less chat a payload row on every restore,
+        # which is the empty-row accumulation `apply_chat_session_payload`
+        # deletes rows to avoid. Absent means untouched; that is a document from
+        # somewhere else, and it has nothing to say about the transcript.
+        messages = item.get("messages")
+        updates: dict[str, Any] = {}
+        removals: set[str] = set()
+        if isinstance(messages, list) and messages:
+            updates = {"messages": messages}
+        elif "messages" in item:
+            removals = {"messages"}
+        payload = apply_chat_session_payload(
+            session,
+            row.id,
+            user_id=row.user_id,
+            updates=updates,
+            removals=removals,
+        )
+        # `message_count` is a column the list reads instead of opening the
+        # payload table, so an import that skipped this would restore a
+        # transcript the history view reports as empty.
+        refresh_chat_session_derived_columns(row, payload)
+    return len(items)
+
+
+def _import_tag_runs(session: Session, items: list[Any], *, user_id: uuid.UUID) -> int:
+    _import_artifact_rows(
+        session,
+        items,
+        model=TagRun,
+        detail=TAG_RUN_NOT_FOUND,
+        section="tag_runs",
+        user_id=user_id,
+        aliases={"updatedAt": "updated_at_ms"},
+    )
+    return len(items)
+
+
+def _import_discover_reports(
+    session: Session, items: list[Any], *, user_id: uuid.UUID
+) -> int:
+    _import_artifact_rows(
+        session,
+        items,
+        model=DiscoverReport,
+        detail=REPORT_NOT_FOUND,
+        section="discover_reports",
+        user_id=user_id,
+    )
+    return len(items)
+
+
+def _import_user_settings(
+    session: Session, items: list[Any], *, user_id: uuid.UUID
+) -> int:
+    """Restore the subject's personal settings rows.
+
+    Keys this deployment does not classify as personal are **skipped, loudly**
+    rather than written or raised on. A document may legitimately carry a key a
+    later version retired, and aborting a whole restore over one is worse than
+    dropping it; writing it into `tg_user_settings` anyway would file a
+    deployment-policy value where nothing will ever read it back.
+    `write_user_setting` refuses that second one on its own, so this is the
+    branch that keeps the refusal from ending the transaction.
+    """
+    written = 0
+    for item in items:
+        key = item.get("key")
+        value = item.get("value")
+        if not isinstance(key, str) or not isinstance(value, dict):
+            continue
+        try:
+            home = home_for(key)
+        except KeyError:
+            home = None
+        if home is not Home.USER:
+            logger.warning("import skipped settings key %r: not a personal key", key)
+            continue
+        write_user_setting(session, key, value, user_id=user_id)
+        written += 1
+    return written
+
+
+def _follow_handles_from_posts(
+    session: Session, items: list[Any], *, user_id: uuid.UUID
+) -> None:
+    """Follow every handle the imported Posts name, creating Channels as needed.
+
+    **Ticket 28's decision, and ticket 21 left it here.** A posts section names
+    channels by handle and carries no Channel rows of its own, so a posts-only
+    import used to write corpus nobody could read: enforcement scopes Posts by
+    an `EXISTS` against `tg_channel_follows`, and there was no follow. The rows
+    were there, the restore reported them, and the account saw nothing.
+
+    A restore that leaves its own rows unreadable is not a restore, so an
+    import follows the handles its document mentions. It goes through
+    `ensure_follow_for_channel` like every other creation path (ticket 04),
+    inside the document's single transaction — `create_followed_channel` opens
+    its own `Session` and commits, which is why the shared helper is the
+    follow writer here and not the whole function.
+
+    `POST /data/posts/bulk` deliberately keeps the old behaviour. It is the
+    scraper's raw ingest door, its caller already holds the Follow, and
+    auto-following whatever a low-level bulk write happens to mention is a
+    decision that belongs to the door that knows it is restoring a backup.
+    """
+    handles = {
+        str(item.get("channelName") or item.get("channel_name") or "").strip()
+        for item in items
+    }
+    handles.discard("")
+    if not handles:
+        return
+
+    existing = {
+        channel.name: channel
+        for channel in session.exec(
+            select(Channel).where(col(Channel.name).in_(sorted(handles)))
+        ).all()
+    }
+    created: list[Channel] = []
+    for handle in sorted(handles - set(existing)):
+        # `Channel.id` is the handle by convention, and `name` is separately
+        # writable through `PUT /data/channels/{id}` — so the id can already be
+        # taken by a channel that has since been renamed. Inserting anyway is a
+        # primary-key violation that aborts the whole restore over a rescue
+        # this function is only attempting on the document's behalf. Skipped
+        # with a warning instead: the Posts still import, they are simply not
+        # reachable until somebody follows the handle, which is exactly where
+        # this door stood before.
+        if session.get(Channel, handle) is not None:
+            logger.warning(
+                "import did not follow %r: the channel id is taken by a "
+                "channel with a different name",
+                handle,
+            )
+            continue
+        # No document row to take a display name or photo from — this handle
+        # appears only as a post's `channelName`. The next sync fills the rest
+        # in; what matters now is that the Channel exists to be followed.
+        channel = Channel(id=handle, name=handle)
+        session.add(channel)
+        created.append(channel)
+    if created:
+        # `ensure_follow_for_channel` is a Core INSERT that executes
+        # immediately, so the ORM adds have to reach the database before its
+        # foreign key is checked — the same flush `_import_channels` makes.
+        session.flush()
+
+    now = int(utc_now().timestamp() * 1000)
+    group_id = ensure_default_group(session, user_id=user_id).id
+    for channel in [*existing.values(), *created]:
+        ensure_follow_for_channel(
+            session,
+            channel,
+            user_id=user_id,
+            values={"setting_group_id": group_id, "followed_at": now},
+        )
+
+
 def import_data(
     session: Session, body: dict[str, Any], *, user_id: uuid.UUID
 ) -> dict[str, Any]:
-    """Import an export document, section by section.
+    """Import an export document, section by section, for one account.
 
     One transaction for the whole document: a partial import would leave posts
     referencing channels that were never created. Each section reports how many
@@ -656,9 +988,11 @@ def import_data(
     to another account raises before anything commits, so the rest of the
     document goes with it rather than landing half-applied.
 
-    `user_id` is required rather than optional. It was `uuid.UUID | None` while
-    it only stamped new rows; ticket 31 makes it decide whether an existing row
-    may be rewritten, and "no caller" has no answer to that.
+    `user_id` is **the account the document lands under** — the subject, which
+    ticket 28 lets an Admin name and which is otherwise the caller. It is
+    required rather than optional. It was `uuid.UUID | None` while it only
+    stamped new rows; ticket 31 makes it decide whether an existing row may be
+    rewritten, and "no caller" has no answer to that.
     """
     payload = unwrap_import_body(body)
     counts: dict[str, int] = {}
@@ -670,10 +1004,31 @@ def import_data(
 
     if payload.get("posts"):
         counts["posts"] = bulk_upsert_posts_impl(payload["posts"], session)
+        _follow_handles_from_posts(session, payload["posts"], user_id=user_id)
 
     if payload.get("summaries"):
         counts["summaries"] = _import_summaries(
             session, payload["summaries"], user_id=user_id
+        )
+
+    if payload.get("chat_sessions"):
+        counts["chat_sessions"] = _import_chat_sessions(
+            session, payload["chat_sessions"], user_id=user_id
+        )
+
+    if payload.get("tag_runs"):
+        counts["tag_runs"] = _import_tag_runs(
+            session, payload["tag_runs"], user_id=user_id
+        )
+
+    if payload.get("discover_reports"):
+        counts["discover_reports"] = _import_discover_reports(
+            session, payload["discover_reports"], user_id=user_id
+        )
+
+    if payload.get("user_settings"):
+        counts["user_settings"] = _import_user_settings(
+            session, payload["user_settings"], user_id=user_id
         )
 
     if payload.get("bot_credentials"):
@@ -703,25 +1058,288 @@ def import_data(
 EXPORT_CHUNK_ROWS = 500
 
 
+@dataclass(frozen=True)
+class ExportSubject:
+    """Whose rows an export document carries.
+
+    Ticket 28's whole subject, in one value. `user_id is None` means *every*
+    account, and it is a constructor away rather than a bare `None` a caller
+    might have arrived at by accident — `tenancy.scoped_select` refuses an
+    optional id for exactly this reason, that "no user" invites a meaning
+    nobody chose. `everyone()` is a sentence; `ExportSubject(None)` is a
+    default that slipped.
+    """
+
+    user_id: uuid.UUID | None
+
+    @classmethod
+    def account(cls, user_id: uuid.UUID) -> ExportSubject:
+        return cls(user_id=user_id)
+
+    @classmethod
+    def everyone(cls) -> ExportSubject:
+        return cls(user_id=None)
+
+    @property
+    def is_everyone(self) -> bool:
+        return self.user_id is None
+
+
+#: The 404 body for a subject nobody can be shown.
+#:
+#: One string for "no such account" and for "that is not a user id", because
+#: telling them apart is an account oracle — the same argument
+#: `tenancy.assert_owner` makes about a row, one level up. It lives beside the
+#: subject rather than in the route so the guard asserting it can name it.
+SUBJECT_NOT_FOUND = "User not found"
+
+
+#: The literal a request spells to ask for every account.
+#:
+#: A word rather than an absent parameter, because the default has to be the
+#: *safe* one: an export is the widest read in the deployment and crossing
+#: accounts should be something somebody typed.
+EVERYONE = "all"
+
+
+@dataclass(frozen=True)
+class ExportSection:
+    """One key of the export document, and the query behind it.
+
+    The streamer, the pre-count and the coverage guard all walk this list, so
+    a section cannot appear in the body without being counted, and a table
+    cannot join the schema without somebody deciding whether a backup carries
+    it. Three readers of one inventory is the same shape `tenancy.SCOPES` uses
+    on the schema itself.
+    """
+
+    key: str
+    model: type[Any]
+    #: Takes whatever the statement yields — an entity, or the tuple an outer
+    #: join to a payload table produces.
+    to_camel: Callable[[Any], dict[str, Any]]
+    #: Overrides `select(model)`. A callable rather than a statement so the
+    #: inventory can be a module-level constant without building queries at
+    #: import time.
+    build: Callable[[], Any] | None = None
+
+    def statement(self) -> Any:
+        return select(self.model) if self.build is None else self.build()
+
+
+#: Sync logs keep their bodies in a companion table, so they stream over an
+#: outer join — an export must stay complete, and a log whose payload has been
+#: reclaimed still has to appear (with null bodies). Summaries and chat
+#: sessions have the same split for the same reason.
+def _sync_logs_statement() -> Any:
+    return select(SyncLog, SyncLogPayload).join(
+        SyncLogPayload,
+        col(SyncLogPayload.sync_log_id) == col(SyncLog.id),
+        isouter=True,
+    )
+
+
+def _summaries_statement() -> Any:
+    return select(Summary, SummaryPayload).join(
+        SummaryPayload,
+        col(SummaryPayload.summary_id) == col(Summary.id),
+        isouter=True,
+    )
+
+
+def _chat_sessions_statement() -> Any:
+    return select(ChatSession, ChatSessionPayload).join(
+        ChatSessionPayload,
+        col(ChatSessionPayload.chat_session_id) == col(ChatSession.id),
+        isouter=True,
+    )
+
+
+#: Tables the seam classifies that a backup deliberately does not carry, and
+#: why. Checked against `tenancy.SCOPES` by
+#: `test_admin_scoped_export.py::test_every_user_owned_table_is_exported_or_excused`,
+#: which is the only cheap moment to ask "does this belong in a backup?" — the
+#: same argument `IMPORT_WRITES` makes about the write door.
+EXPORT_OMISSIONS: dict[str, str] = {
+    "DiscoverIgnoredChannel": (
+        "A dismissal is a judgement about a candidate, not an artifact "
+        "(ticket 30). Restoring one would re-hide handles on a deployment "
+        "where the account never dismissed them, and the row comes back by "
+        "dismissing again."
+    ),
+    "SyncJob": (
+        "A write-only progress trail, pruned by age and only in a terminal "
+        "state. Restoring finished jobs would put rows back in a table whose "
+        "retention already decided they were gone."
+    ),
+    "PostSyncState": (
+        "Scrape bookkeeping about the shared corpus — the same reason "
+        "`SERVER_MANAGED_CHANNEL_FIELDS` are stripped from an imported "
+        "Channel: it describes the exporting install's walk, not the data."
+    ),
+    "QuotaUsage": (
+        "The Request ledger. It is the record of what an account spent on a "
+        "given day and nothing may edit it, so an import door onto it would "
+        "be a way to rewrite the meter."
+    ),
+    "QuotaLimit": (
+        "The allowance an Admin set for an account. Deployment policy about a "
+        "person rather than data of theirs, and restoring one would carry "
+        "another deployment's ceilings in."
+    ),
+    "ChannelFollow": (
+        "Carried inside the `channels` section, not beside it: ticket 22 moved "
+        "the six per-User fields onto the Follow and "
+        "`channel_to_camel(follow=...)` puts them back on the channel object, "
+        "which is the shape every export written since v2 has. A section of "
+        "its own would be the same rows twice. Keyed by name here for the "
+        "reason `INDIRECT_WRITES` is — naming the class would trip the "
+        "sole-writer guard in `test_channel_creation_paths.py`."
+    ),
+    "SummaryPayload": "Carried by the `summaries` join, as its own row's bodies.",
+    "ChatSessionPayload": "Carried by the `chat_sessions` join.",
+    "SyncLogPayload": "Carried by the `sync_logs` join.",
+    "DiscoverHandleProbe": (
+        "Corpus, and a fact about a handle rather than about anybody — "
+        "`tenancy.SCOPES` classifies it that way for the same reason."
+    ),
+    "SyncMeta": "Cache etags. Corpus, and meaningless in another install.",
+}
+
+
+def export_sections(
+    session: Session, *, subject: ExportSubject, viewer_id: uuid.UUID
+) -> tuple[ExportSection, ...]:
+    """The document's sections, in order, for one export.
+
+    Takes a `Session` because two of them serialise against a lookup the query
+    cannot carry: a Channel's per-User fields live on the Follow (ticket 22)
+    and its policy on the setting group, so both maps are read once here and
+    closed over rather than re-read per row.
+
+    Whose follows those are is the one place `viewer_id` and the subject can
+    differ. For `subject=all` there is no single answer — every follower of a
+    channel has their own tags and start id — so it stays the caller's, which
+    is exactly what this endpoint did before it took a subject.
+    """
+    groups_by_id = load_groups_by_id(session)
+    follow_owner = viewer_id if subject.is_everyone else subject.user_id
+    assert follow_owner is not None  # `is_everyone` is the only None case
+    follows = follows_for_user(session, user_id=follow_owner)
+
+    def channel_row(channel: Channel) -> dict[str, Any]:
+        follow = follows.get(channel.id)
+        group = (
+            groups_by_id.get(follow.setting_group_id)
+            if follow is not None and follow.setting_group_id is not None
+            else None
+        )
+        return channel_to_camel(channel, group=group, follow=follow)
+
+    return (
+        ExportSection("setting_groups", ChannelSettingGroup, setting_group_to_camel),
+        ExportSection("channels", Channel, channel_row),
+        ExportSection("posts", Post, post_to_camel),
+        ExportSection(
+            "summaries",
+            Summary,
+            lambda row: summary_to_camel(row[0], row[1]),
+            _summaries_statement,
+        ),
+        ExportSection("bot_credentials", BotCredential, bot_to_camel),
+        ExportSection("chat_destinations", ChatDestination, chat_dest_to_camel),
+        ExportSection("publish_logs", PublishLog, publish_log_to_camel),
+        ExportSection(
+            "sync_logs",
+            SyncLog,
+            lambda row: sync_log_to_camel(row[0], row[1]),
+            _sync_logs_statement,
+        ),
+        ExportSection("llm_logs", LLMLog, llm_log_to_camel),
+        ExportSection("embedding_logs", EmbeddingLog, embedding_log_to_camel),
+        ExportSection("network_logs", NetworkLog, network_log_to_camel),
+        ExportSection("embeddings", PostEmbedding, embedding_to_camel),
+        ExportSection("translations", PostTranslation, translation_to_camel),
+        # Ticket 28: the other three artifact families and the personal
+        # settings. Appended rather than interleaved so every key an existing
+        # backup file has keeps its position in the document.
+        ExportSection(
+            "chat_sessions",
+            ChatSession,
+            lambda row: chat_session_to_camel(row[0], row[1]),
+            _chat_sessions_statement,
+        ),
+        ExportSection("tag_runs", TagRun, tag_run_to_camel),
+        ExportSection("discover_reports", DiscoverReport, report_export_to_camel),
+        ExportSection("user_settings", UserSetting, user_setting_to_camel),
+    )
+
+
+def _for_subject(statement: Any, model: type[Any], subject: ExportSubject) -> Any:
+    """Narrow one section's query to the subject, or say why it is not narrowed.
+
+    `subject_select` rather than `scoped_select`, and the difference is the
+    whole of decision 3: the account was named by the request, so the answer
+    cannot depend on the tenancy flag — the seam names it, and `tenancy.py` is
+    the only module allowed to. The follow-scoped tables get box 3 of
+    the ticket out of this for nothing — the seam's `EXISTS` against
+    `tg_channel_follows` *is* "the Posts of Channels the subject Follows".
+    """
+    if subject.is_everyone:
+        return unscoped_select(
+            statement,
+            reason=(
+                "`GET /data/export?subject=all` — the deployment-wide backup, "
+                "asked for by name and gated on Permission.DATA_ADMIN. This is "
+                "the one read in the application that is supposed to cross "
+                "every account, which is why it has to be spelled out rather "
+                "than reached by leaving a parameter off."
+            ),
+        )
+    assert subject.user_id is not None
+    return subject_select(statement, model, subject.user_id)
+
+
+def export_row_counts(
+    session: Session, *, subject: ExportSubject, viewer_id: uuid.UUID
+) -> dict[str, int]:
+    """How many rows each section will carry, per section, before it starts.
+
+    One `COUNT(*)` per section against the same narrowing the body uses, so the
+    numbers cannot describe a different query from the one that streams.
+
+    **A pre-count, not a manifest.** The counts and the body run in separate
+    statements under READ COMMITTED, so a row written while a long export is
+    streaming appears in the document and not in the number. That is the right
+    trade for what this is for — an operator watching a multi-gigabyte dump
+    wants to know it is a multi-gigabyte dump before committing to it — and
+    pinning them together would mean holding a REPEATABLE READ snapshot open
+    for the whole transfer, which is the `idle in transaction` cost the
+    scheduler already paid for once.
+    """
+    counts: dict[str, int] = {}
+    for section in export_sections(session, subject=subject, viewer_id=viewer_id):
+        statement = _for_subject(
+            select(func.count()).select_from(section.model), section.model, subject
+        )
+        counts[section.key] = int(session.exec(statement).one())
+    return counts
+
+
 def _stream_rows(
     session: Session,
-    model: type[Any],
+    statement: Any,
     to_camel: Callable[[Any], dict[str, Any]],
-    *,
-    statement: Any = None,
 ) -> Iterator[str]:
-    """Yield a table as JSON array items, one row at a time.
+    """Yield a section as JSON array items, one row at a time.
 
     Exports must stay complete, so they cannot be capped like the log viewers.
     Streaming with a server-side cursor keeps peak memory flat instead of
     materialising every row (tg_posts alone is millions of rows) up front.
 
-    `statement` overrides the default select-one-table query — sync logs pass a
-    join so their payload rows stream alongside, and `to_camel` then receives
-    whatever tuple that statement yields.
+    `to_camel` receives whatever the statement yields — an entity for most
+    sections, a two-tuple for the three that outer-join a payload table.
     """
-    if statement is None:
-        statement = select(model)
     statement = statement.execution_options(yield_per=EXPORT_CHUNK_ROWS)
     result = session.exec(statement)
     try:
@@ -737,113 +1355,70 @@ def _stream_rows(
         result.close()
 
 
-def stream_export_data(session: Session, *, user_id: uuid.UUID) -> Iterator[str]:
-    """Serialise a full export incrementally as JSON.
+def stream_export_data(
+    session: Session,
+    *,
+    subject: ExportSubject,
+    viewer_id: uuid.UUID,
+    counts: dict[str, int] | None = None,
+) -> Iterator[str]:
+    """Serialise one subject's export incrementally as JSON.
 
-    Emits the same document export_data() built in memory, so clients and the
-    import path see no difference.
+    `subject` is ticket 28: an account, or every account. `viewer_id` is who
+    asked, and it decides only whose Follows dress the `channels` section when
+    the subject is everybody — see `export_sections`.
 
-    `user_id` is the account whose per-User channel fields the document carries,
-    and ticket 22 is why it is needed at all: `tags`, `startId`, `startTime`,
-    `followedAt` and `discoveredVia` moved off `Channel` onto `ChannelFollow`,
-    so "this channel's tags" stopped having one answer and started having one
-    per follower. The caller's own follows are the answer here, which keeps a
-    backup round-trippable — `_import_channels` already writes an imported tag
-    onto the *caller's* follow, so exporting anyone else's would restore values
-    the exporter never had.
+    Ticket 22 is why a subject was needed at all beyond the tenancy argument:
+    `tags`, `startId`, `startTime`, `followedAt` and `discoveredVia` moved off
+    `Channel` onto `ChannelFollow`, so "this channel's tags" stopped having one
+    answer and started having one per follower. Exporting the subject's own
+    follows is what keeps a backup round-trippable — `_import_channels` writes
+    an imported tag onto the follow of whoever the import is *for*, so the two
+    ends now name the same account instead of both meaning "me".
 
-    That is deliberately **not** the admin-scoped export of ticket 28, which is
-    about naming a subject other than yourself. This exports your own view and
-    nobody else's, which is what it did before the columns moved.
+    `counts` is the pre-count the route already computed for its header; it is
+    passed in rather than recomputed so the header and the document cannot
+    disagree. Omitted, the document carries the counts of this call.
     """
     try:
-        yield from _stream_export_body(session, user_id=user_id)
+        yield from _stream_export_body(
+            session, subject=subject, viewer_id=viewer_id, counts=counts
+        )
     finally:
         # End the long read transaction so a big export cannot block DDL
         # or hold back autovacuum for its whole duration.
         session.rollback()
 
 
-def _stream_export_body(session: Session, *, user_id: uuid.UUID) -> Iterator[str]:
-    groups_by_id = load_groups_by_id(session)
-    export_follows = follows_for_user(session, user_id=user_id)
+def _stream_export_body(
+    session: Session,
+    *,
+    subject: ExportSubject,
+    viewer_id: uuid.UUID,
+    counts: dict[str, int] | None,
+) -> Iterator[str]:
+    sections = export_sections(session, subject=subject, viewer_id=viewer_id)
+    if counts is None:
+        counts = export_row_counts(session, subject=subject, viewer_id=viewer_id)
 
     yield '{"version":2,"timestamp":'
     yield str(int(utc_now().timestamp() * 1000))
+    # The counts lead the document for the reason the header exists: a reader
+    # streaming this file learns its size before the first row rather than by
+    # reaching the end.
+    yield ',"counts":'
+    yield json.dumps(counts, separators=(",", ":"))
     yield ',"data":{'
 
-    # Small tables: already bounded, emit directly.
-    yield '"setting_groups":'
-    yield json.dumps(
-        jsonable_encoder(
-            [setting_group_to_camel(g) for g in groups_by_id.values()],
-        ),
-        separators=(",", ":"),
-    )
-    yield ',"channels":'
-    yield json.dumps(
-        jsonable_encoder(
-            [
-                channel_to_camel(
-                    c,
-                    group=(
-                        groups_by_id.get(follow.setting_group_id)
-                        if (follow := export_follows.get(c.id)) is not None
-                        and follow.setting_group_id is not None
-                        else None
-                    ),
-                    follow=follow,
-                )
-                for c in session.exec(select(Channel)).all()
-            ],
-        ),
-        separators=(",", ":"),
-    )
-
-    # Sync logs keep their bodies in a companion table, so they stream over an
-    # outer join — an export must stay complete, and a log whose payload has
-    # been reclaimed still has to appear (with null bodies).
-    sync_logs_statement = select(SyncLog, SyncLogPayload).join(
-        SyncLogPayload,
-        col(SyncLogPayload.sync_log_id) == col(SyncLog.id),
-        isouter=True,
-    )
-
-    # Same shape for summaries: citedPosts/promptText/chatMessages live in
-    # tg_summary_payloads, and a summary with none of them has no row there, so
-    # the join has to be outer or those summaries would vanish from the export.
-    summaries_statement = select(Summary, SummaryPayload).join(
-        SummaryPayload,
-        col(SummaryPayload.summary_id) == col(Summary.id),
-        isouter=True,
-    )
-
-    # Large tables: stream row by row.
-    for key, model, to_camel, statement in (
-        ("posts", Post, post_to_camel, None),
-        (
-            "summaries",
-            Summary,
-            lambda row: summary_to_camel(row[0], row[1]),
-            summaries_statement,
-        ),
-        ("bot_credentials", BotCredential, bot_to_camel, None),
-        ("chat_destinations", ChatDestination, chat_dest_to_camel, None),
-        ("publish_logs", PublishLog, publish_log_to_camel, None),
-        (
-            "sync_logs",
-            SyncLog,
-            lambda row: sync_log_to_camel(row[0], row[1]),
-            sync_logs_statement,
-        ),
-        ("llm_logs", LLMLog, llm_log_to_camel, None),
-        ("embedding_logs", EmbeddingLog, embedding_log_to_camel, None),
-        ("network_logs", NetworkLog, network_log_to_camel, None),
-        ("embeddings", PostEmbedding, embedding_to_camel, None),
-        ("translations", PostTranslation, translation_to_camel, None),
-    ):
-        yield f',"{key}":['
-        yield from _stream_rows(session, model, to_camel, statement=statement)
+    first = True
+    for section in sections:
+        yield ("" if first else ",") + f'"{section.key}":['
+        first = False
+        yield from _stream_rows(
+            session,
+            _for_subject(section.statement(), section.model, subject),
+            section.to_camel,
+        )
         yield "]"
 
     yield "}}"

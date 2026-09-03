@@ -1,6 +1,7 @@
 import { describe, expect, it } from "bun:test"
 import {
   type ExportDocument,
+  exportAccountBlob,
   exportDatabaseBlob,
   fetchExportDocument,
   importDatabaseFile,
@@ -92,6 +93,25 @@ describe("fetchExportDocument", () => {
 
     expect(blob.type).toBe("application/json")
     expect(JSON.parse(await blob.text()).data.channels).toEqual([1])
+  })
+})
+
+describe("exportAccountBlob", () => {
+  it("passes the subject through and applies no table filter", async () => {
+    const asked: (string | undefined)[] = []
+
+    const blob = await exportAccountBlob("user-7", async (subject) => {
+      asked.push(subject)
+      return doc({ channels: [1], summaries: [2] }) as never
+    })
+
+    // The subject is the server's question, not a shape the browser narrows:
+    // filtering here would mean the rows had already been sent.
+    expect(asked).toEqual(["user-7"])
+    expect(Object.keys(JSON.parse(await blob.text()).data)).toEqual([
+      "channels",
+      "summaries",
+    ])
   })
 })
 

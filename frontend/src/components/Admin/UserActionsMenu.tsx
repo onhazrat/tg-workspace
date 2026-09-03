@@ -11,6 +11,7 @@ import {
 import useAuth from "@/hooks/useAuth"
 import DeleteUser from "./DeleteUser"
 import EditUser from "./EditUser"
+import ExportUserData from "./ExportUserData"
 import ViewAsUser from "./ViewAsUser"
 
 interface UserActionsMenuProps {
@@ -35,6 +36,7 @@ export const UserActionsMenu = ({ user }: UserActionsMenuProps) => {
       <DropdownMenuContent align="end">
         <EditUser user={user} onSuccess={() => setOpen(false)} />
         <ViewAsUser user={user} />
+        <ExportUserData user={user} />
         <DeleteUser id={user.id} onSuccess={() => setOpen(false)} />
       </DropdownMenuContent>
     </DropdownMenu>

@@ -17,11 +17,18 @@ import { api } from "@/api"
  *
  * ## Why the table filter is applied client-side
  *
- * `GET /data/export` streams the whole corpus and takes no filter. Rather than
- * add one server-side — and lose streaming, or grow the endpoint for a UI
- * affordance — the selection is applied to the downloaded document. The
- * transfer is larger than strictly needed for a partial export, which is a fair
- * trade to keep the export path a single, always-complete, streamed read.
+ * `GET /data/export` streams the whole corpus and takes no table filter.
+ * Rather than add one server-side — and lose streaming, or grow the endpoint
+ * for a UI affordance — the selection is applied to the downloaded document.
+ * The transfer is larger than strictly needed for a partial export, which is a
+ * fair trade to keep the export path a single, always-complete, streamed read.
+ *
+ * ## The subject is not a filter, and is not applied here
+ *
+ * Ticket 28 gave the endpoint a `subject`, and it stays server-side for the
+ * reason the table selection does not: which account a document is about is an
+ * authorisation question, and narrowing it in the browser would mean the
+ * server had already sent the rows.
  */
 
 export interface ExportDocument {
@@ -41,7 +48,9 @@ const NON_TABLE_KEYS = new Set(["localStorage"])
  */
 export async function fetchExportDocument(
   selectedTables?: readonly string[],
-  fetchExport: () => Promise<Record<string, unknown>> = api.exportData,
+  fetchExport: (
+    subject?: string,
+  ) => Promise<Record<string, unknown>> = api.exportData,
 ): Promise<ExportDocument> {
   const doc = (await fetchExport()) as unknown as ExportDocument
   if (!selectedTables || selectedTables.length === 0) return doc
@@ -60,6 +69,23 @@ export async function exportDatabaseBlob(
   fetchExport?: () => Promise<Record<string, unknown>>,
 ): Promise<Blob> {
   const doc = await fetchExportDocument(selectedTables, fetchExport)
+  return new Blob([JSON.stringify(doc)], { type: "application/json" })
+}
+
+/**
+ * One account's whole export as a downloadable blob (ticket 28).
+ *
+ * No table selection: this is the Admin answering "give me everything about
+ * this person", and a partial answer to that is a worse artifact than a large
+ * one. `subject` is a user id, or the literal `"all"`.
+ */
+export async function exportAccountBlob(
+  subject: string,
+  fetchExport: (
+    subject?: string,
+  ) => Promise<Record<string, unknown>> = api.exportData,
+): Promise<Blob> {
+  const doc = (await fetchExport(subject)) as unknown as ExportDocument
   return new Blob([JSON.stringify(doc)], { type: "application/json" })
 }
 

@@ -38,6 +38,7 @@ from app.services.discover_ignored import ignored_handles
 from app.services.discover_probes import enqueue_handles, probe_map
 from app.services.follows import visible_channel_names
 from app.services.post_filters import PostFilters
+from app.services.serialization import model_to_camel
 from app.services.tenancy import (
     assert_owner,
     assert_owner_on_write,
@@ -241,6 +242,29 @@ def report_to_camel_light(report: DiscoverReport) -> dict[str, Any]:
     return _light_from_mapping(
         {c.key: getattr(report, c.key) for c in _light_columns()}
     )
+
+
+#: Columns an export leaves out of a report. `model_to_camel` already drops
+#: `id`, `user_id` and `updated_at`; these two are ticket 27's attribution,
+#: which describes who wrote the row *here* and would be a claim about an
+#: account the importing install may not have.
+_REPORT_EXPORT_SKIP = frozenset({"extra", "acted_by_user_id", "acted_by_email"})
+
+
+def report_export_to_camel(report: DiscoverReport) -> dict[str, Any]:
+    """Every stored column, with nothing derived and nothing dropped.
+
+    Neither of the two projections beside it will do for a backup.
+    `report_to_camel` resolves `isFollowed` and `isIgnored` against a *viewer*,
+    which is a fact about who is looking rather than about the report, and it
+    costs two queries a row. `report_to_camel_light` drops `candidates`, which
+    is the report.
+    """
+    return {
+        "id": report.id,
+        **model_to_camel(report, skip=_REPORT_EXPORT_SKIP),
+        **(report.extra or {}),
+    }
 
 
 def _search_clause(term: str) -> Any:

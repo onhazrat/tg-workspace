@@ -176,7 +176,11 @@ export function buildActionCommands(): CommandDef[] {
       keywords: ["export", "database", "backup", "jsonl", "download"],
       group: "Data",
       requiresConfirmation: true,
-      confirmDescription: "Download a full backup of the server database.",
+      // Ticket 28: this asks for the caller's own rows, not the deployment's.
+      // The old copy said "the server database" and was true when there was
+      // one account; an Admin exporting somebody else does it from the user
+      // menu, and everybody's at once is a deliberate `subject=all` call.
+      confirmDescription: "Download a full backup of your own data.",
       run: async () => {
         await runDatabaseExport()
       },

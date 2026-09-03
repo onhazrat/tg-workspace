@@ -122,14 +122,18 @@ from app.models import User
 from app.models_tg import (
     BotCredential,
     ChatDestination,
+    ChatSession,
+    DiscoverReport,
     EmbeddingLog,
     LLMLog,
     NetworkLog,
     PublishLog,
     Summary,
     SyncLog,
+    TagRun,
 )
 from app.services import data_import_export
+from app.services.chat_sessions import get_chat_session
 from app.services.credentials import (
     delete_bot_credential,
     delete_chat_destination,
@@ -143,8 +147,10 @@ from app.services.data_import_export import (
     INDIRECT_WRITES,
     import_data,
 )
+from app.services.discover_reports import get_report
 from app.services.logs import LOG_MODELS, get_log
 from app.services.summaries import get_summary
+from app.services.tag_runs import get_tag_run
 from app.services.tenancy import Scope, scope_of
 from tests.utils.user import create_random_user
 
@@ -240,6 +246,79 @@ FAMILIES: tuple[Family, ...] = (
         ),
         attack=lambda row_id: {"id": row_id, "text": "pwned"},
         probe=lambda row: row.text,
+        original="theirs",
+        attacked="pwned",
+    ),
+    # Ticket 28 put the other three artifact families on the export, so they
+    # gained an import door. Same shape as `summaries` above, and they are in
+    # the battery rather than trusted because a door that answers with a
+    # different 404 than its own endpoint is the enumeration oracle this file
+    # exists to keep shut.
+    Family(
+        section="chat_sessions",
+        model=ChatSession,
+        absent=lambda session, row_id, viewer: get_chat_session(
+            session, row_id, user_id=viewer
+        ),
+        seed=lambda row_id, owner: ChatSession(
+            id=row_id,
+            user_id=owner,
+            title="theirs",
+            channels=["alpha"],
+            start_date=0,
+            end_date=0,
+            language="English",
+            mode="full_scope",
+            timestamp=0,
+            extra={},
+        ),
+        attack=lambda row_id: {"id": row_id, "title": "pwned"},
+        probe=lambda row: row.title,
+        original="theirs",
+        attacked="pwned",
+    ),
+    Family(
+        section="tag_runs",
+        model=TagRun,
+        absent=lambda session, row_id, viewer: get_tag_run(
+            session, row_id, user_id=viewer
+        ),
+        seed=lambda row_id, owner: TagRun(
+            id=row_id,
+            user_id=owner,
+            status="theirs",
+            source="generated",
+            mode="add",
+            channels=["alpha"],
+            start_date=0,
+            end_date=0,
+            created_at=0,
+            updated_at_ms=0,
+            extra={},
+        ),
+        attack=lambda row_id: {"id": row_id, "status": "pwned"},
+        probe=lambda row: row.status,
+        original="theirs",
+        attacked="pwned",
+    ),
+    Family(
+        section="discover_reports",
+        model=DiscoverReport,
+        absent=lambda session, row_id, viewer: get_report(
+            session, row_id, user_id=viewer
+        ),
+        seed=lambda row_id, owner: DiscoverReport(
+            id=row_id,
+            user_id=owner,
+            channels=["alpha"],
+            start_date=0,
+            end_date=0,
+            keyword="theirs",
+            timestamp=0,
+            extra={},
+        ),
+        attack=lambda row_id: {"id": row_id, "keyword": "pwned"},
+        probe=lambda row: row.keyword,
         original="theirs",
         attacked="pwned",
     ),
@@ -386,25 +465,30 @@ def _reread(session: Session, family: Family, row_id: str) -> Any:
 # --------------------------------------------------------------------------
 
 
-def test_import_stamps_new_rows_with_the_caller_not_the_document(
+def test_import_stamps_new_rows_with_the_subject_not_the_document(
     session: Session, user: User, other_user: User
 ) -> None:
-    """Why a per-account import loses nothing: it never had another owner.
+    """The owner comes from the request, and never from the file.
 
-    The document names `other_user` every way it can and the row still comes out
-    owned by the caller, because no importer reads an owner off an item. That is
-    the whole argument for design (1) over design (2): a cross-account restore is
-    not being refused here, it does not exist yet. Ticket 28 is where it starts
-    to, and this guard is what stops that ticket inheriting the decision by
-    accident.
+    Ticket 31 wrote this as "the caller" and left ticket 28 to re-take the
+    decision rather than inherit it. Ticket 28 re-took it: the owner is now the
+    **subject**, which an Admin may name on the request and which is otherwise
+    the caller — so a backup of one account restores as that account instead of
+    as whoever happened to run it.
+
+    What did *not* move is the half this test is actually about. A document
+    still names no owner anywhere, however hard it tries, so a crafted file
+    cannot file rows under somebody it picks. The subject is a parameter of the
+    request, checked against an Admin permission before it is read; the
+    document is untrusted input.
     """
-    row_id = f"summaries-{uuid.uuid4()}"
+    from_document = f"summaries-{uuid.uuid4()}"
     import_data(
         session,
         {
             "summaries": [
                 {
-                    "id": row_id,
+                    "id": from_document,
                     "text": "mine",
                     "userId": str(other_user.id),
                     "user_id": str(other_user.id),
@@ -413,9 +497,23 @@ def test_import_stamps_new_rows_with_the_caller_not_the_document(
         },
         user_id=user.id,
     )
-    created = session.get(Summary, row_id)
+    created = session.get(Summary, from_document)
     assert created is not None
-    assert created.user_id == user.id
+    assert created.user_id == user.id, "the document's owner claim is not read"
+
+    # And the other half: naming the subject *is* how a row lands elsewhere.
+    for_subject = f"summaries-{uuid.uuid4()}"
+    import_data(
+        session,
+        {"summaries": [{"id": for_subject, "text": "theirs"}]},
+        user_id=other_user.id,
+    )
+    restored = session.get(Summary, for_subject)
+    assert restored is not None
+    assert restored.user_id == other_user.id, (
+        "ticket 28: an import carries a subject, so a restore for another "
+        "account files rows under that account"
+    )
 
 
 #: Models `data_import_export.py` names but never writes a row of. Two entries,

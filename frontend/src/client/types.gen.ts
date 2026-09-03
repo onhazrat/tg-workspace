@@ -8345,7 +8345,12 @@ export type DataImportDataData = {
         [key: string]: unknown;
     };
     path?: never;
-    query?: never;
+    query?: {
+        /**
+         * Subject
+         */
+        subject?: string | null;
+    };
     url: '/api/v1/data/import';
 };
 
@@ -8370,9 +8375,23 @@ export type DataImportDataResponse = DataImportDataResponses[keyof DataImportDat
 export type DataExportDataData = {
     body?: never;
     path?: never;
-    query?: never;
+    query?: {
+        /**
+         * Subject
+         */
+        subject?: string | null;
+    };
     url: '/api/v1/data/export';
 };
+
+export type DataExportDataErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type DataExportDataError = DataExportDataErrors[keyof DataExportDataErrors];
 
 export type DataExportDataResponses = {
     /**

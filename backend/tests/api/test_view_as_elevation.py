@@ -792,15 +792,26 @@ def test_the_admin_write_doors_are_closed_to_an_elevated_session(
     ), "the Owner may import under their own name, as before"
 
 
-def test_the_importer_writes_one_artifact_family_and_stamps_it() -> None:
+def test_the_importer_stamps_every_artifact_family_it_writes() -> None:
     """The stamp is asserted where the behavioural test cannot reach.
 
     `_import_summaries` is unreachable from an elevated session today, so a
     request-level assertion would be a guard that cannot fail. This one is
-    structural instead: the importer writes exactly one of the four artifact
-    families, and that one carries `acting_owner.stamp`. A chats, tag-runs or
-    reports section added later is a write door with no stamp and no coverage,
-    and fails here.
+    structural instead.
+
+    It used to read "the importer writes exactly *one* of the four artifact
+    families", with the other three asserted absent and a message telling
+    whoever added one to come back here. Ticket 28 added them: the export now
+    carries chats, tag runs and reports, so all four have an import door. The
+    guard keeps its job by changing shape rather than by being deleted — every
+    write door in the module has to be attributed, and there are four of them
+    now.
+
+    Summaries are stamped by name and the other three through the shared
+    importer, which is why this looks for the *call* rather than for a
+    spelling: `_import_artifact_rows` is one `acting_owner.stamp` covering
+    three families, and asserting a literal `stamp(session, chat)` would fail a
+    module that is right.
     """
     source = (
         Path(__file__).resolve().parents[2]
@@ -808,14 +819,31 @@ def test_the_importer_writes_one_artifact_family_and_stamps_it() -> None:
         / "services"
         / "data_import_export.py"
     ).read_text(encoding="utf-8")
+    tree = ast.parse(source)
 
     assert "acting_owner.stamp(session, summary)" in source, (
         "the importer stopped recording who wrote the summaries it overwrites"
     )
+
+    #: Every function in the module that constructs or merges an artifact row,
+    #: and whether it stamps. `_import_artifact_rows` is the door the other
+    #: three families go through.
+    doors = {"_import_summaries", "_import_artifact_rows"}
+    stamping = {
+        node.name
+        for node in ast.walk(tree)
+        if isinstance(node, _FUNCTION_NODES) and _stamps(node)
+    }
+    assert doors <= stamping, (
+        f"these artifact write doors do not call `acting_owner.stamp`: "
+        f"{sorted(doors - stamping)}"
+    )
+
     for model in ("ChatSession", "TagRun", "DiscoverReport"):
-        assert f"{model}(" not in source, (
-            f"the importer now writes {model}; give that branch "
-            "`acting_owner.stamp` and add it here"
+        assert f"model={model}," in source, (
+            f"{model} is no longer imported through `_import_artifact_rows`; "
+            "if it got its own branch, that branch needs its own stamp and a "
+            "line here"
         )
 
 

@@ -16,17 +16,18 @@ asserted byte-identical to the pre-seam queries for all 27 models
 setting the flag false — at the cost of every account seeing every account's
 rows again, which `test_account_isolation.py` states outright.
 
-The one deliberate exception to the flag was and remains
-`assert_owner_on_write`, which is ungated: refusing to overwrite a row that is
-already somebody else's is not a response anybody was reading
+**Two things here are ungated, and they are the same exception twice.** The flag
+gates *visibility*, and it can be off because a read answering differently would
+be a changed response. Neither of these is that read.
 
-The exception is `assert_owner_on_write`, which refuses a foreign row whichever
-way the flag points (ticket 31). The flag gates *visibility*, and the reason it
-can be off is that a read answering differently would be a changed response.
-Overwriting a row that is already somebody else's is not a read, and no response
-moves when it is refused on a deployment that has one account — so gating it
-would buy nothing and leave the clobber open on the deployment that has it.
-Ticket 30 made the same call for the same reason: a flag cannot gate identity.
+`assert_owner_on_write` refuses a foreign row whichever way the flag points
+(ticket 31). Overwriting a row that is already somebody else's is not a read,
+and no response moves when it is refused on a deployment that has one account —
+so gating it would buy nothing and leave the clobber open on the deployment that
+has it. `subject_select` narrows to an account the caller *named* rather than
+one derived from who is asking (ticket 28), and no state of the flag makes
+"export user X" honestly mean everybody. Ticket 30 made the same call for the
+same reason: a flag cannot gate identity.
 
 ## Why a classification and not a `user_id` filter
 
@@ -445,6 +446,48 @@ def scoped_select[StatementT: Select[Any]](
     if not tenancy_enforced():
         return statement
 
+    return _narrow_to_owner(statement, model, user_id)
+
+
+def subject_select[StatementT: Select[Any]](
+    statement: StatementT,
+    model: type[SQLModel],
+    user_id: uuid.UUID,
+) -> StatementT:
+    """Narrow `statement` to one **named** account's rows, in either flag state.
+
+    The ungated twin of `scoped_select`, and the difference is where the account
+    came from. `scoped_select` derives it from whoever is asking, so with the
+    flag off it hands the statement back and today's single-operator deployment
+    reads exactly what it always did. This one is *told* the account — ticket 28
+    asks `GET /data/export?subject=X` for X's rows — and there is no state of
+    the flag in which the honest answer to that is somebody else's data.
+
+    Same rule as `assert_owner_on_write`, one layer over: **a flag may gate
+    visibility and never identity.** Nothing here is a read anybody was already
+    getting, so gating it would buy no rollback safety and would leak every
+    account's rows into a document an Admin asked to be about one person.
+
+    Crossing accounts on purpose is `unscoped_select(reason=...)`, which is what
+    `subject=all` takes. Between them there is no third way to read these tables
+    without saying which of the two you meant.
+    """
+    return _narrow_to_owner(statement, model, user_id)
+
+
+def _narrow_to_owner[StatementT: Select[Any]](
+    statement: StatementT,
+    model: type[SQLModel],
+    user_id: uuid.UUID,
+) -> StatementT:
+    """The dispatch both public narrowings share.
+
+    Extracted rather than duplicated: two copies of "how a follow-scoped table
+    correlates to `tg_channel_follows`" is how the scoped and the subject read
+    come to disagree about what a Post belonging to somebody means, which is the
+    same failure `tenancy_enforced`'s single-reader rule exists to prevent one
+    level up.
+    """
     scope = scope_of(model)
 
     if scope is Scope.CORPUS:

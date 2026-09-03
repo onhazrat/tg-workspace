@@ -36,6 +36,8 @@ from fastapi.responses import StreamingResponse
 from sqlmodel import Session
 
 from app.api.deps import CurrentUser, SessionDep, require_permission
+from app.core.acting_owner import ActingOwner
+from app.core.acting_owner import bind as bind_acting_owner
 from app.core.permissions import Permission
 from app.jobs.settings import (
     load_jobs_settings,
@@ -53,8 +55,14 @@ from app.schemas.stats import (
     TableSizeResponse,
 )
 from app.services import rbac
+from app.services.data_import_export import (
+    EVERYONE,
+    SUBJECT_NOT_FOUND,
+    ExportSubject,
+    export_row_counts,
+    stream_export_data,
+)
 from app.services.data_import_export import import_data as import_data_impl
-from app.services.data_import_export import stream_export_data
 from app.services.network_settings import (
     get_network_setting_row,
     merge_network_put,
@@ -281,14 +289,76 @@ def _writable_facade_fields(
     return {k: v for k, v in body.items() if k in personal}
 
 
+#: The header carrying the pre-count, so a client knows the size of what it is
+#: about to download before the first row of it arrives. Named here because the
+#: route sets it and `test_admin_scoped_export.py` reads it, and two spellings
+#: of a header is how those two stop agreeing.
+EXPORT_ROWS_HEADER = "X-Export-Rows"
+
+
+def _resolve_subject(
+    session: Session, subject: str | None, caller: User
+) -> ExportSubject:
+    """Turn the `subject` parameter into the account an export is about.
+
+    Three answers, and the default is the narrow one: absent means the caller,
+    `all` means every account, and a user id means that account. An export is
+    the widest read in the deployment, so crossing accounts is something
+    somebody has to type — leaving a parameter off must not be the way to get
+    everybody's rows.
+
+    An unknown or malformed subject answers **404 with the same body a real
+    account would produce for a row that is not there**, for the reason
+    `tenancy.assert_owner` gives: this route is Admin-gated but it is still not
+    an account oracle, and "no such user" and "not a user you may name" should
+    not be distinguishable by reading the response.
+    """
+    if subject is None:
+        return ExportSubject.account(caller.id)
+    if subject == EVERYONE:
+        return ExportSubject.everyone()
+    try:
+        subject_id = uuid.UUID(subject)
+    except ValueError:
+        raise HTTPException(status_code=404, detail=SUBJECT_NOT_FOUND) from None
+    if session.get(User, subject_id) is None:
+        raise HTTPException(status_code=404, detail=SUBJECT_NOT_FOUND)
+    return ExportSubject.account(subject_id)
+
+
 @router.post("/import", dependencies=ADMIN_ONLY)
 def import_data(
     body: dict[str, Any],
     session: SessionDep,
     _current_user: CurrentUser,
+    subject: str | None = None,
 ) -> ImportDataResponse:
+    """Restore a document into one account's rows.
+
+    `subject` is the account the document lands under, defaulting to the caller
+    — the same parameter the export takes, so a backup of one person restores
+    as that person instead of as whoever ran it (ticket 28). `all` is refused:
+    an import writes rows and a document carries no owners, so "everybody" has
+    no meaning here that is not "the caller", which is what leaving it off
+    already says.
+
+    Importing *for* somebody is a write on their behalf, so the acting Owner is
+    bound for this session before anything is written and every artifact the
+    document restores records who really uploaded it (ticket 27).
+    """
+    resolved = _resolve_subject(session, subject, _current_user)
+    if resolved.is_everyone:
+        raise HTTPException(
+            status_code=422,
+            detail="An import has one subject; `all` is not one of them.",
+        )
+    assert resolved.user_id is not None
+    if resolved.user_id != _current_user.id:
+        bind_acting_owner(
+            session, ActingOwner(user_id=_current_user.id, email=_current_user.email)
+        )
     return ImportDataResponse.model_validate(
-        import_data_impl(session, body, user_id=_current_user.id)
+        import_data_impl(session, body, user_id=resolved.user_id)
     )
 
 
@@ -296,13 +366,27 @@ def import_data(
 def export_data(
     session: SessionDep,
     _current_user: CurrentUser,
+    subject: str | None = None,
 ) -> StreamingResponse:
-    """Full export — never truncated.
+    """One account's export, or the whole deployment's — never truncated.
+
+    `subject` is ticket 28: absent for the caller's own rows, a user id for that
+    account's, `all` for everybody's.
 
     Streamed rather than built in memory: the payload spans every post and log
-    row, which is far more than a worker can hold at once.
+    row, which is far more than a worker can hold at once. The per-section row
+    counts are computed first and travel in `X-Export-Rows`, because a
+    `StreamingResponse` sends its headers before the generator runs — which is
+    what makes "reports the row count before starting" true for a client that
+    has not parsed a byte of the body yet. The same numbers lead the document,
+    from the same computation, so the header and the file cannot disagree.
     """
+    resolved = _resolve_subject(session, subject, _current_user)
+    counts = export_row_counts(session, subject=resolved, viewer_id=_current_user.id)
     return StreamingResponse(
-        stream_export_data(session, user_id=_current_user.id),
+        stream_export_data(
+            session, subject=resolved, viewer_id=_current_user.id, counts=counts
+        ),
         media_type="application/json",
+        headers={EXPORT_ROWS_HEADER: str(sum(counts.values()))},
     )
