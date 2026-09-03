@@ -111,7 +111,7 @@ stops deferring and says that.
 
 ### Where the guards are
 
-`tests/api/test_admin_scoped_export.py`, 25 tests, the scoping ones parametrised
+`tests/api/test_admin_scoped_export.py`, 28 tests, the scoping ones parametrised
 over **both flag states** because `subject_select` is ungated and a single-state
 file would have passed the mutation that re-gates it. Seven mutations were run
 and all seven went red; the list is in the module docstring.
@@ -122,6 +122,38 @@ and its caller-stamping test became a subject-stamping one;
 `test_view_as_elevation.py`'s "the importer writes exactly one artifact family"
 became "every family it writes is attributed", which is what its own failure
 message told the next person to do.
+
+## What review changed afterwards
+
+`/code-review high` found five things (PR #170). Four were fixed; one was
+measured and kept, which is the interesting one.
+
+**The pre-count stays.** The finding was that counting every section before the
+stream turns time-to-first-byte from ~0 into a scan of the largest table.
+Measured on staging's 4.78M-row corpus it is **~1s**, essentially all of it
+`tg_posts` (975ms unscoped, 987ms through the follow `EXISTS`); every other
+table is single-digit milliseconds. A second in front of a download that then
+streams for minutes is the trade this ticket asked for, and moving the counts to
+the end of the document answers a question nobody still has by then. The number
+is in `prepare_export`'s docstring so nobody has to re-derive it before daring
+to touch the thing.
+
+The four fixes: `X-Export-Rows` was **not exposed to CORS**, so the header whose
+whole purpose is telling a browser the size of a download read back as `null` in
+`fetch` — true only for `curl`, on a deployment whose dashboard is on another
+host. The sections were **resolved twice** per download, once to count and once
+to stream; `PreparedExport` is now the plan, built once. `updated_at` is stamped
+only where the column exists, because SQLModel takes that assignment either way
+and a family added later without one would read as stamped and be silently
+unstamped. And `exportAccountBlob` **stopped parsing the document** — it took
+the response as JSON and stringified it again, two or three copies in the tab of
+a payload the server streams precisely so it never holds one.
+
+One of the five was wrong on its facts: the review read `TagRun` as having no
+`updated_at`. It has both that and `updated_at_ms`, and they mean different
+things — the millisecond clock is what History renders, so a restored artifact
+keeps the moment it was made, while `updated_at` records this install's write.
+The asymmetry was real and undocumented, so it is now written down and asserted.
 
 ## Not done here
 
