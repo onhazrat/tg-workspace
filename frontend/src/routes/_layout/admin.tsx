@@ -46,7 +46,14 @@ function UsersTableContent() {
     isCurrentUser: currentUser?.id === user.id,
   }))
 
-  return <DataTable columns={columns} data={tableData} />
+  // Scoped for the e2e specs: the admin page renders three tables, and
+  // `getByRole("row")` spans all of them. QuotaUsage lists the same
+  // addresses, so an unscoped row lookup matches two elements per user.
+  return (
+    <div data-testid="users-table">
+      <DataTable columns={columns} data={tableData} />
+    </div>
+  )
 }
 
 function UsersTable() {

@@ -39,7 +39,10 @@ test.describe("Admin user management", () => {
 
     await expect(page.getByRole("dialog")).not.toBeVisible()
 
-    const userRow = page.getByRole("row").filter({ hasText: email })
+    const userRow = page
+      .getByTestId("users-table")
+      .getByRole("row")
+      .filter({ hasText: email })
     await expect(userRow).toBeVisible()
   })
 
@@ -63,7 +66,10 @@ test.describe("Admin user management", () => {
 
     await expect(page.getByRole("dialog")).not.toBeVisible()
 
-    const userRow = page.getByRole("row").filter({ hasText: email })
+    const userRow = page
+      .getByTestId("users-table")
+      .getByRole("row")
+      .filter({ hasText: email })
     await expect(userRow.getByText("Superuser")).toBeVisible()
   })
 
@@ -85,7 +91,10 @@ test.describe("Admin user management", () => {
     await expect(page.getByText("User created successfully")).toBeVisible()
     await expect(page.getByRole("dialog")).not.toBeVisible()
 
-    const userRow = page.getByRole("row").filter({ hasText: email })
+    const userRow = page
+      .getByTestId("users-table")
+      .getByRole("row")
+      .filter({ hasText: email })
     await userRow.getByRole("button").click()
 
     await page.getByRole("menuitem", { name: "Edit User" }).click()
@@ -117,7 +126,10 @@ test.describe("Admin user management", () => {
 
     await expect(page.getByRole("dialog")).not.toBeVisible()
 
-    const userRow = page.getByRole("row").filter({ hasText: email })
+    const userRow = page
+      .getByTestId("users-table")
+      .getByRole("row")
+      .filter({ hasText: email })
     await userRow.getByRole("button").click()
 
     await page.getByRole("menuitem", { name: "Delete User" }).click()
@@ -129,7 +141,10 @@ test.describe("Admin user management", () => {
     ).toBeVisible()
 
     await expect(
-      page.getByRole("row").filter({ hasText: email }),
+      page
+        .getByTestId("users-table")
+        .getByRole("row")
+        .filter({ hasText: email }),
     ).not.toBeVisible()
   })
 
