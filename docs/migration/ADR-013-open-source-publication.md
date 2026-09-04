@@ -83,6 +83,14 @@ doing the containment.
   exists.
 - **Publication is irreversible.** Deleting a public repository does not retract
   what was cloned, cached or indexed.
+- **The rewrite strips every commit signature.** 99 of the last 100 commits on
+  `main` are GitHub-verified today, because squash-merging makes GitHub author
+  and sign the commit. Rewriting a commit changes the object it signs, so
+  `filter-repo` drops the signature rather than producing an invalid one. The
+  published repository therefore shows no verification badges at all unless the
+  rewritten history is re-signed afterwards, which is a scripted amend across
+  379 commits. This also means `main` temporarily stops satisfying the
+  "every commit that lands on `main` must be signed" rule in `CLAUDE.md`.
 - **The proxy credential must be rotated whatever else happens.** The rewrite
   removes it from what is published; it does not make an already-exposed secret
   safe.
