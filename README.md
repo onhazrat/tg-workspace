@@ -107,6 +107,7 @@ deploy workflow are in [deployment.md](deployment.md).
 | [docs/migration/](docs/migration/) | Architecture decision records |
 | [docs/](docs/) | Performance investigations and design plans |
 | [.scratch/](.scratch/) | The multi-account programme, ticket by ticket |
+| [docs/pr-archive/](docs/pr-archive/) | All 176 pull requests, one written rationale per change |
 
 The documentation still calls the product "TG Summarizer" in places. The repository
 was renamed because a summary is only one of the four artifacts; the docs will

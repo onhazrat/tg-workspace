@@ -37,19 +37,37 @@ considered and rejected: it defends against commercial exploitation nobody
 expects here, at the cost of making some legal teams flinch, and those legal
 teams belong to the exact audience this is aimed at.
 
-**The repository is renamed to `tg-workspace`.** The old name described a
+**The project is published as `tg-workspace`, in a new repository.** The old name described a
 migration that finished in July. `Workspace` is already a term in
 [`CONTEXT.md`](../../CONTEXT.md), so the repository name, the README and the
 glossary now agree on one word. Candidates naming a single output (`digest`,
 `summarizer`) were rejected for undercounting: the glossary defines four
 Artifact kinds and each of those names one of them.
 
-**History is rewritten exactly once, before the visibility flip**, with
-`git filter-repo --replace-text`, and it replaces two things: the proxy password,
-and three channel handles from the live staging instance that appear incidentally
-in investigation documents. Rotating the credential is required regardless and is
-not a substitute for the rewrite, because a credential that merely *looks* live
-still gets flagged by scanners.
+**History is rewritten, and the old repository is abandoned rather than
+force-pushed.** `git filter-repo --replace-text` removed the proxy password and
+three staging channel handles across all 381 commits, and every commit was then
+re-signed with the author's own SSH key so nothing lost the verification a
+squash merge used to supply.
+
+That alone was not enough, which is the reason this ADR exists in the shape it
+does. GitHub creates a permanent `refs/pull/<N>/head` for every pull request and
+gives the repository owner no way to delete one. A force-push writes only
+`refs/heads/main`, so all 176 of those refs would have kept pointing at the
+original commits: four blobs holding the unredacted audit document, fetchable by
+anyone with `git fetch origin 'refs/pull/*/head'` the moment the repository went
+public. Asking GitHub Support to purge them was the alternative, and it trades a
+support ticket and an unknown wait for keeping the pull request pages. Starting
+a new repository was chosen instead because it is certain and immediate, and
+because the writing those pages held could be preserved another way.
+
+Two smaller traps were found on the way and are recorded because they are easy
+to repeat. `filter-repo` silently skips refs that point at a tree rather than a
+commit, and eight `refs/codex/turn-diffs/*` refs left by editor tooling did
+exactly that, so the credential survived the first pass while every commit-borne
+copy was gone. And `main` carries 24 merge commits from the era before the
+squash-only convention, so re-signing used a `commit-tree` walk in topological
+order; `rebase --root --exec` would have flattened them.
 
 **Commit timestamps are not rewritten.** All 589 commits carry a `+0330` offset.
 Rewriting them was considered and rejected once the motive was examined: the
@@ -76,21 +94,27 @@ doing the containment.
 
 ## Consequences
 
-- **The 138 squash-merge commits on `main` all change SHA.** The pull request
-  pages and their diffs survive, but the merge commit each PR names is no longer
-  reachable from any branch. Someone reading the PR history later will find this
-  and have no way to derive why. That is the single strongest reason this ADR
-  exists.
+- **176 pull request pages are left behind with the old repository.** They held
+  about 566,000 characters of written rationale, roughly one essay per change,
+  which is a large part of what makes this repository worth reading. They are
+  exported to [`docs/pr-archive/`](../pr-archive/) rather than lost: verbatim
+  text under the same redactions, greppable, and carried by every clone. What
+  does not survive is the timeline itself. Recreating the pull requests in the
+  new repository was considered and refused, because GitHub cannot backdate one
+  and 176 PRs stamped with a single day would be a fabricated history.
+- **The staging deployment has to be rewired.** Nine secrets in the `staging`
+  environment, the environment itself, and the self-hosted runner registration on
+  the Hetzner box all belong to the old repository and do not travel. Staging
+  cannot deploy until they are recreated.
+
 - **Publication is irreversible.** Deleting a public repository does not retract
   what was cloned, cached or indexed.
-- **The rewrite strips every commit signature.** 99 of the last 100 commits on
-  `main` are GitHub-verified today, because squash-merging makes GitHub author
-  and sign the commit. Rewriting a commit changes the object it signs, so
-  `filter-repo` drops the signature rather than producing an invalid one. The
-  published repository therefore shows no verification badges at all unless the
-  rewritten history is re-signed afterwards, which is a scripted amend across
-  379 commits. This also means `main` temporarily stops satisfying the
-  "every commit that lands on `main` must be signed" rule in `CLAUDE.md`.
+- **Every signature on `main` is now the author's, not GitHub's.** 99 of the last
+  100 commits were GitHub-verified because squash-merging makes GitHub author and
+  sign the commit, and rewriting a commit invalidates the signature over it. All
+  381 commits were re-signed rather than published bare, which took 49 seconds
+  and preserves author dates, committer dates, parents and messages. The
+  `CLAUDE.md` signing rule is satisfied by a different party than before.
 - **The proxy credential must be rotated whatever else happens.** The rewrite
   removes it from what is published; it does not make an already-exposed secret
   safe.

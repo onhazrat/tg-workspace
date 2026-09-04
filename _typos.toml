@@ -1,6 +1,10 @@
 [files]
 extend-exclude = [
     ".cursor/",
+    # Verbatim export of 176 pull request descriptions. The text is a
+    # historical record, so it is not ours to correct; "UPDATEs" and
+    # friends stay as they were written.
+    "docs/pr-archive/",
     "backend/tests/fixtures/live/",
     "img/",
     "uv.lock",
