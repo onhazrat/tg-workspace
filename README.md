@@ -8,7 +8,10 @@ and discovery of channels you are not following yet.
 It reads Telegram's public web view (`t.me/s/<channel>`). No account, no API
 credentials, no MTProto.
 
-<!-- TODO: screenshot of the workspace here -->
+![The channels view, showing followed channels with their bios, post counts and sync state](docs/images/workspace-channels.png)
+
+<sub>Screenshots are a local instance seeded from the committed test fixtures, which
+are captures of Telegram's own public channels.</sub>
 
 **Not a supported product.** I built this for myself and I am not supporting
 deployments of it. Issues are open and I read them, but expect no SLA. It needs
@@ -29,6 +32,8 @@ crossed with a date range and a set of filters, and produce one of four
 | Chat | A conversation about those posts, either full-scope or retrieval-backed over embeddings |
 | Tag run | AI-proposed channel tags, with execution state, because it can fail |
 | Discovery report | Channels found by scanning your posts for outward references |
+
+![The posts view, filtering a corpus down to the slice an artifact will be built from](docs/images/workspace-posts.png)
 
 Every artifact freezes the scope it was made from, so reopening one restores that
 selection rather than reinterpreting it against today's data. The vocabulary above
