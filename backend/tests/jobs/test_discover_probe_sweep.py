@@ -28,7 +28,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 from sqlalchemy import text as sa_text
-from sqlmodel import Session
+from sqlmodel import Session, select
 
 from app.core.db import engine
 from app.jobs.discover_probe import (
@@ -36,6 +36,7 @@ from app.jobs.discover_probe import (
     probe_one_handle,
     run_discover_probe_sweep,
 )
+from app.models_tg import DiscoverHandleProbe
 from app.services.discover_probes import (
     dequeue_handles,
     enqueue_handles,
@@ -124,31 +125,86 @@ def test_the_sweep_finds_its_own_work_and_queues_it() -> None:
     assert result["remaining"] == 2
 
 
-def test_the_batch_is_bounded_and_the_rest_is_left_queued() -> None:
-    """A report wider than one batch drains over several ticks, losing nothing.
+def test_a_tick_enqueues_nothing_while_the_lane_still_holds_work() -> None:
+    """The gate that replaced the dequeue lease.
 
-    This is the bug that could not be fixed while the client chained the
-    batches: it stopped chaining the moment the tab closed.
+    Selecting work and doing it are separate steps now, so a handle keeps
+    `status="unknown"` for as long as it sits on the lane. A tick that topped
+    the lane up would re-select exactly those handles. Emptiness is what makes
+    that impossible.
     """
     _queue([f"h{i:02d}" for i in range(10)])
 
     async def _run() -> list[dict[str, Any]]:
         with patch("app.jobs.discover_probe.settings.DISCOVER_PROBE_BATCH_SIZE", 4):
-            return [await run_discover_probe_sweep() for _ in range(4)]
+            return [await run_discover_probe_sweep() for _ in range(3)]
 
-    first, second, third, fourth = asyncio.run(_run())
-    # Four ticks take ten handles in batches of four, then find nothing left to
-    # take. `remaining` stays ten throughout because none has a verdict yet —
-    # that is the consumer's to record, not this tick's.
+    first, second, third = asyncio.run(_run())
+
     assert first["enqueued"] == 4
-    assert second["enqueued"] == 4
-    assert third["enqueued"] == 2
-    assert fourth["skipped"] is True
-    # Ten messages, each handle once. Without the dequeue lease every tick
-    # would hand out the same first four for as long as the backlog took to
-    # drain, because the verdict that used to clear them now arrives from the
-    # consumer long after the tick has finished.
-    assert sorted(_lane_handles()) == [f"h{i:02d}" for i in range(10)]
+    assert second == {"skipped": True, "reason": "lane still draining"}
+    assert third == {"skipped": True, "reason": "lane still draining"}
+    assert sorted(_lane_handles()) == [f"h{i:02d}" for i in range(4)], (
+        "a tick queued more while the lane was still full, so the same handle "
+        "is on it twice and will be fetched twice"
+    )
+
+
+def test_the_batch_is_bounded_and_the_rest_is_left_queued() -> None:
+    """A report wider than one batch drains over several ticks, losing nothing.
+
+    This is the bug that could not be fixed while the client chained the
+    batches: it stopped chaining the moment the tab closed. It still holds, and
+    the thing that advances between ticks is the *lane emptying* rather than a
+    lease expiring.
+    """
+    _queue([f"h{i:02d}" for i in range(10)])
+    seen: list[int] = []
+
+    async def _run() -> None:
+        with (
+            patch("app.jobs.discover_probe.settings.DISCOVER_PROBE_BATCH_SIZE", 4),
+            _patch_fetch(side_effect=lambda handle, **_: _channel_page(handle)),
+        ):
+            for _ in range(4):
+                result = await run_discover_probe_sweep()
+                seen.append(int(result.get("enqueued", 0)))
+                # The consumer's half, run inline: drain what this tick queued
+                # so the next one sees an empty lane.
+                for handle in _lane_handles():
+                    await probe_one_handle(handle)
+                _purge()
+
+    asyncio.run(_run())
+
+    assert seen == [4, 4, 2, 0], f"ticks enqueued {seen}"
+    with Session(engine) as session:
+        assert queue_counts(session)["queued"] == 0
+        assert dequeue_handles(session, limit=10) == [], (
+            "handles were left without a verdict; the batches lost some"
+        )
+
+
+def test_a_drained_lane_lets_the_next_tick_refill_it() -> None:
+    """The other direction. Gating on emptiness must not mean gating for ever —
+    a sweep that never resumes is worse than one that duplicates."""
+    _queue(["first_batch", "second_batch"])
+
+    async def _run() -> tuple[dict[str, Any], dict[str, Any]]:
+        with (
+            patch("app.jobs.discover_probe.settings.DISCOVER_PROBE_BATCH_SIZE", 1),
+            _patch_fetch(side_effect=lambda handle, **_: _channel_page(handle)),
+        ):
+            one = await run_discover_probe_sweep()
+            for handle in _lane_handles():
+                await probe_one_handle(handle)
+            _purge()
+            two = await run_discover_probe_sweep()
+            return one, two
+
+    one, two = asyncio.run(_run())
+    assert one["enqueued"] == 1
+    assert two["enqueued"] == 1, "the sweep never resumed after the lane drained"
 
 
 def test_the_top_ranked_handles_go_first() -> None:
@@ -296,3 +352,73 @@ def test_resolved_handles_are_never_swept_again() -> None:
 
     assert asyncio.run(_run())["skipped"] is True
     assert fetch.await_count == 1
+
+
+def test_dequeue_is_a_pure_read_again() -> None:
+    """It briefly wrote a `retry_after` lease, and that column now means one
+    thing again: the failure backoff, set only by `record_probe_result`.
+
+    Asserted on the rows rather than on the source, because the failure this
+    prevents is a *write* sneaking back in — a lease, a claim flag, an
+    `attempts` bump — not any particular spelling of one.
+    """
+    _queue(["pure_read_one", "pure_read_two"])
+
+    def _rows() -> dict[str, dict[str, Any]]:
+        """Every column, straight off the model.
+
+        Not `probe_map`, which is a projection for the API and does not carry
+        `attempts` — the first version of this compared `None` to `None` and
+        stayed green when `dequeue_handles` was mutated to bump it. Snapshotting
+        the columns means *any* write fails this, which is the claim.
+        """
+        with Session(engine) as session:
+            return {
+                row.handle: {
+                    c.name: getattr(row, c.name)
+                    for c in DiscoverHandleProbe.__table__.columns  # type: ignore[attr-defined]
+                }
+                for row in session.exec(select(DiscoverHandleProbe)).all()
+            }
+
+    before = _rows()
+    with Session(engine) as session:
+        first = dequeue_handles(session, limit=10)
+        second = dequeue_handles(session, limit=10)
+    after = _rows()
+
+    assert first == second, (
+        "a second read returned something different, so the first one wrote"
+    )
+    assert before == after, "dequeue mutated the rows. Changed: " + str(
+        {
+            h: {k: (v, after[h][k]) for k, v in cols.items() if after[h][k] != v}
+            for h, cols in before.items()
+            if after.get(h) != cols
+        }
+    )
+
+
+def test_a_starved_lane_never_grows_a_duplicate() -> None:
+    """The defect this replaced the lease to fix, driven end to end.
+
+    A probe waiting behind sync work outlasted its 60-minute lease, became due
+    again, and the next tick queued a second copy. Time is not simulated here
+    and does not need to be: the gate makes the *lane* the answer, so a tick
+    cannot queue a duplicate however long the first copy has been sitting
+    there. Fifty ticks stand in for a long starvation.
+    """
+    _queue([f"starve{i:02d}" for i in range(3)])
+
+    async def _run() -> None:
+        with patch("app.jobs.discover_probe.settings.DISCOVER_PROBE_BATCH_SIZE", 3):
+            for _ in range(50):
+                await run_discover_probe_sweep()
+
+    asyncio.run(_run())
+
+    handles = _lane_handles()
+    assert sorted(handles) == ["starve00", "starve01", "starve02"], handles
+    assert len(handles) == len(set(handles)), (
+        f"the lane holds duplicates after a starvation: {handles}"
+    )

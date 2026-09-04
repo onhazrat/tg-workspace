@@ -35,6 +35,14 @@ So this tick only *enqueues*. The messages drain from
 sync lane, so a probe starts only when nothing else wants a Slot. `_sweep_lock`
 still makes an overlapping tick a no-op, though it matters far less now that
 the tick's work is one `send_batch`.
+
+**And it enqueues nothing while the lane still holds anything.** Selecting work
+and doing it are separate now, so the lane is the only record of what is already
+outstanding; a tick that topped it up would re-select the handles sitting on it.
+Emptiness is the gate. A `retry_after` lease was tried first and was the wrong
+shape: a queued message is claimed by nobody, so nothing could renew it, and a
+probe starved behind sync work for longer than the lease came back as a
+duplicate.
 """
 
 from __future__ import annotations
@@ -58,7 +66,9 @@ from app.services.network_settings import (
     resolve_proxies,
     resolve_proxy_concurrency,
 )
+from app.services.pgmq import queue_length
 from app.services.scraper import get_channel_info
+from app.services.sync_lanes import DISCOVER_PROBE_LANE
 from app.services.telegram_web import TelegramWebViewUnavailable
 
 logger = logging.getLogger(__name__)
@@ -85,6 +95,12 @@ def is_sweep_running() -> bool:
 def _dequeue(limit: int) -> list[str]:
     with Session(engine) as session:
         return dequeue_handles(session, limit=limit)
+
+
+def _lane_depth() -> int:
+    """Messages on the probe lane, due or in flight."""
+    with Session(engine) as session:
+        return queue_length(session, DISCOVER_PROBE_LANE)
 
 
 def _remaining() -> int:
@@ -190,6 +206,33 @@ async def run_discover_probe_sweep() -> dict[str, Any]:
         return {"skipped": True, "reason": "sweep already running"}
 
     async with _sweep_lock:
+        # **Nothing is enqueued while the lane still holds anything.**
+        #
+        # `dequeue_handles` is a pure read: a handle keeps `status='unknown'`
+        # until a verdict lands, and the verdict now arrives from the consumer
+        # long after this tick has returned. So the lane's own contents are the
+        # only record of what is already outstanding, and topping it up would
+        # re-select the handles sitting on it.
+        #
+        # A `retry_after` lease was the first answer and was the wrong one. It
+        # had no holder — a queued message is claimed by nobody — so nothing
+        # could renew it, and a probe starved behind sync work for longer than
+        # the lease was enqueued again. It also gave `retry_after` two meanings
+        # depending on which writer set it. Gating on emptiness needs no second
+        # copy of "what is outstanding" and cannot go stale.
+        #
+        # `queue_length` counts due **and** in-flight messages: a claimed one
+        # stays in `q_` with a future `vt`, so a probe being fetched right now
+        # keeps this above zero.
+        #
+        # The cost is a duty cycle. The lane drains, then waits up to
+        # `DISCOVER_PROBE_JOB_INTERVAL_SECONDS` for the next tick to refill it,
+        # so a large first-run backlog clears in roughly twice the time. That is
+        # the tick interval's to fix if it ever matters, and probing is the
+        # lowest-priority work on the deployment by construction.
+        if await run_db(_lane_depth) > 0:
+            return {"skipped": True, "reason": "lane still draining"}
+
         handles = await run_db(_dequeue, settings.DISCOVER_PROBE_BATCH_SIZE)
         if not handles:
             return {"skipped": True, "reason": "queue empty"}

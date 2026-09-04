@@ -128,9 +128,9 @@ have tests that go through the real loop. Details in the plan doc.
 
 ## Left open
 
-- The probe dequeue lease is not renewed. A probe that waits longer than
-  `DEQUEUE_LEASE_MINUTES` behind sync work is re-enqueued and fetched twice —
-  harmless, and worth knowing before anyone shortens the lease.
+- ~~The probe dequeue lease is not renewed.~~ Closed by deleting the lease: the
+  sweep gates on the probe lane being empty, so a queued handle cannot be
+  selected twice and `retry_after` means only the failure backoff again.
 - A Partition rebuilt mid-job leaves that job on the old one until it finishes.
   Bounded, and the fetch is unaffected because the lane is resolved live.
 - The direct Lane is one width for two processes with different traffic.

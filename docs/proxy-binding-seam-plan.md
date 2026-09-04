@@ -369,10 +369,15 @@ a page walk; `_cancelled` opened a session per checkpoint per handle; and
 
 ## What the ticket left open
 
-- **The dequeue lease is not renewed.** A probe message that waits longer than
-  `DEQUEUE_LEASE_MINUTES` behind sync work gets its handle re-enqueued, so the
-  fetch happens twice. Harmless — the second verdict overwrites the first with
-  the same answer — and worth knowing before somebody shortens the lease.
+- ~~The dequeue lease is not renewed.~~ **Closed**, and by deleting the lease
+  rather than renewing it. A queued message is claimed by nobody, so there was
+  no holder to renew from, and the lease made `retry_after` mean two things
+  depending on which writer set it. The sweep now enqueues nothing while the
+  lane holds anything: emptiness is the lane's own answer to "what is
+  outstanding", so a handle already queued cannot be selected however long it
+  has been waiting. Costs a duty cycle — the lane drains, then waits up to one
+  tick to refill — which is `DISCOVER_PROBE_JOB_INTERVAL_SECONDS`' to fix if it
+  ever matters.
 - **A Partition rebuilt mid-job leaves the job on the old one.** `run_sync_job`
   and `run_follow_job` capture the Partition once, and `get_partition` rebinds
   it when the proxy signature changes and nothing is busy — a window that

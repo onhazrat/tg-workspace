@@ -270,27 +270,10 @@ def enqueue_handles(session: Session, handles: list[str]) -> int:
     return queued
 
 
-#: How long a handle handed out by `dequeue_handles` stays out of the due set.
-#:
-#: **A lease, and it is what stops the sweep flooding its lane** (ticket 36).
-#: The sweep used to fetch each batch itself and record a verdict, so the
-#: handles left the due set within the same tick. Since ADR-012 the tick only
-#: enqueues and the verdict arrives later, from the lane consumer — so without a
-#: lease every tick would hand out the same first `DISCOVER_PROBE_BATCH_SIZE`
-#: handles again, at `DISCOVER_PROBE_JOB_INTERVAL_SECONDS` apart, for as long as
-#: the backlog took to drain.
-#:
-#: Generous, because the probe lane is drained strictly after every sync lane
-#: and a queued probe can legitimately wait behind a long backfill. A lease that
-#: lapses early costs a duplicate fetch; one that never lapses would strand a
-#: handle whose message was lost.
-DEQUEUE_LEASE_MINUTES = 60
-
-
 def dequeue_handles(
     session: Session, *, limit: int, now: datetime | None = None
 ) -> list[str]:
-    """The next batch to probe, best-ranked first, **leased for the caller**.
+    """The next batch to probe, best-ranked first. **A pure read.**
 
     Takes no candidate list: the queue answers this from the table alone, which
     is what lets a scheduled job drain it whether or not anyone has the Discover
@@ -298,10 +281,18 @@ def dequeue_handles(
     verdict is not pending, so both fall out of the WHERE rather than needing a
     second pass.
 
-    Handing a handle out **moves its `retry_after` forward by
-    `DEQUEUE_LEASE_MINUTES`**, which is the same column the failure backoff
-    uses and means the same thing: not due yet. It is not a second mechanism,
-    and a verdict clears it exactly as it clears a backoff.
+    **It briefly held a lease and does not any more.** Ticket 36 moved the fetch
+    out of the tick that selects the work, so for a while every tick re-selected
+    the handles the previous one had queued; a `retry_after` lease was the first
+    answer. The lease had no holder — a message sitting on a lane is claimed by
+    nobody — so it could not be renewed, and a probe starved behind sync work
+    for longer than the lease was enqueued a second time. It also made
+    `retry_after` mean two things depending on which writer set it.
+
+    The sweep gates on the lane being **empty** instead, so a handle that is
+    already queued or in flight cannot be selected at all: emptiness is the
+    lane's own answer to "what is outstanding", and it needs no second copy in
+    this table. See `discover_probe.run_discover_probe_sweep`.
     """
     if limit <= 0:
         return []
@@ -318,13 +309,7 @@ def dequeue_handles(
         .order_by(col(DiscoverHandleProbe.priority), col(DiscoverHandleProbe.handle))
         .limit(limit)
     )
-    rows = session.exec(statement).all()
-    lease_until = moment + timedelta(minutes=DEQUEUE_LEASE_MINUTES)
-    for row in rows:
-        row.retry_after = lease_until
-        session.add(row)
-    session.commit()
-    return [row.handle for row in rows]
+    return [row.handle for row in session.exec(statement).all()]
 
 
 def handles_needing_probe(
