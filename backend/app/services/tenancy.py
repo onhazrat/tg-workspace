@@ -89,6 +89,7 @@ from app.models_tg import (
     DiscoverIgnoredChannel,
     DiscoverReport,
     EmbeddingLog,
+    FollowJob,
     LLMLog,
     NetworkLog,
     Post,
@@ -160,6 +161,7 @@ SCOPES: dict[type[SQLModel], Scope] = {
     EmbeddingLog: Scope.USER_OWNED,
     NetworkLog: Scope.USER_OWNED,
     SyncJob: Scope.USER_OWNED,
+    FollowJob: Scope.USER_OWNED,
     # What you spent is yours to see. User-owned even though the only reader
     # today is the Admin view, which crosses accounts on purpose and says so
     # through `unscoped_select` — an escape hatch is only meaningful where the
@@ -303,6 +305,28 @@ def mapped_table(model: type[SQLModel]) -> Table:
     return cast(Table, cast(Any, model).__table__)
 
 
+#: `USER_OWNED` tables whose `CREATE TABLE` is **later** than ticket 34's
+#: backfill, with the revision that made them.
+#:
+#: The inventory below is "what revision `c0d1e2f3a4b5` had to stamp", and that
+#: is a fact about one moment: a table created afterwards had no rows for it to
+#: reach. Its `user_id` is `NOT NULL` from the first row, so an unowned row was
+#: never expressible in it — which is the same excuse the composite-key tables
+#: make, arrived at by a different route.
+#:
+#: Declared rather than derived, because the property that separates them is
+#: *when the table appeared*, and nothing in the models records that. An entry
+#: here is a claim that must be checked against the migration it names; the
+#: alternative is loosening the frozen-inventory guard, which is the guard that
+#: turns "somebody added a `USER_OWNED` table and forgot" into a red test.
+CREATED_AFTER_THE_BACKFILL: dict[type[SQLModel], str] = {
+    FollowJob: (
+        "a2b3c4d5e6f7 (ticket 36) creates `tg_follow_jobs` with a NOT NULL "
+        "`user_id`, so it has never held a row nobody owns"
+    ),
+}
+
+
 def owner_backfill_inventory() -> tuple[OwnerBackfill, ...]:
     """Every table ticket 34 has to stamp, derived rather than listed.
 
@@ -352,6 +376,8 @@ def owner_backfill_inventory() -> tuple[OwnerBackfill, ...]:
     inventory: list[OwnerBackfill] = []
     for model, scope in SCOPES.items():
         if scope is not Scope.USER_OWNED:
+            continue
+        if model in CREATED_AFTER_THE_BACKFILL:
             continue
         column = mapped_table(model).columns.get(OWNER_COLUMN)
         # `not column.nullable` until ticket 21, and that criterion *deleted

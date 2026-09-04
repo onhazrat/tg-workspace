@@ -305,16 +305,33 @@ def test_the_shared_sync_concurrency_gate_became_a_partition() -> None:
         "partition; two answers to how many Channels may run at once diverge "
         "the moment a call site consults the wrong one"
     )
-    # `_called_names`, not a substring of `inspect.getsource(_partition)`: that
-    # function's own docstring explains at length why it deals round-robin
-    # through `build_workers`, so a substring check passes on the explanation
-    # of the thing it is meant to require. Which is exactly the trap this
-    # file's `_called_names` helper was written for, walked into anyway, and
-    # caught by mutating the call out and watching the guard stay green.
+    # `_called_names`, not a substring of `inspect.getsource`: `get_partition`'s
+    # own docstring explains at length why it deals round-robin through
+    # `build_workers`, so a substring check passes on the explanation of the
+    # thing it is meant to require. Which is exactly the trap this file's
+    # `_called_names` helper was written for, walked into anyway, and caught by
+    # mutating the call out and watching the guard stay green.
+    #
+    # Read across **two** files since ADR-012 moved the Partition to
+    # `proxy_pool`, and the split is the point rather than an accident of where
+    # the code sits. The consumer must not build a Partition of its own — there
+    # is one per process and only the builder may size it — so what is asserted
+    # of the consumer is that it *asks* for the one Partition, and what is
+    # asserted of the builder is that the width still derives from the lanes.
     consumer_calls = _called_names(pathlib.Path(inspect.getfile(sync_queue)))
-    assert "build_workers" in consumer_calls, (
-        "the queue consumer no longer derives its worker list from the proxy "
-        "lanes, so capacity has stopped reflecting the proxies available"
+    builder_calls = _called_names(pathlib.Path(inspect.getfile(proxy_pool)))
+    assert "get_partition" in consumer_calls, (
+        "the queue consumer no longer takes the process's one partition, so it "
+        "is either building a second one or gating on something else"
+    )
+    assert "build_workers" in builder_calls, (
+        "the partition no longer derives its worker list from the proxy lanes, "
+        "so capacity has stopped reflecting the proxies available"
+    )
+    assert "build_workers" not in consumer_calls, (
+        "the queue consumer builds a worker list of its own beside the one "
+        "partition; two partitions in one process own every proxy twice, which "
+        "is the per-process cap this file's next test exists to protect"
     )
     assert "bound_to" in consumer_calls, (
         "the consumer dispatches without binding the worker's proxy, so every "

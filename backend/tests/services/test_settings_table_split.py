@@ -20,7 +20,7 @@ makes for tables.
 
 `sync` was three different things in one JSON blob: scheduler counters the app
 writes (`consecutiveFailures`, `autoSyncPauseUntil`, the partial-sweep cursor),
-deployment policy an Admin sets (`syncConcurrency`, the tick interval), and
+deployment policy an Admin sets (the tick interval, the failure backoff), and
 per-channel defaults a person picks (`globalStartTimeMode`, the dynamic-sync
 defaults). Every writer did a read-modify-write of the *whole* blob
 (`auto_sync._update_sync_state`), so a person saving their start-time
@@ -350,14 +350,14 @@ def test_a_write_lands_in_the_table_its_field_belongs_to(
     save_sync_settings(
         db,
         {
-            "syncConcurrency": 9,
+            "syncFailureBackoffMinutes": 9,
             "autoSyncPauseUntil": 1234,
             "globalStartTimeMode": "relative",
         },
         user_id=user_id,
     )
 
-    assert get_global_setting(db, SYNC_KEY)["syncConcurrency"] == 9
+    assert get_global_setting(db, SYNC_KEY)["syncFailureBackoffMinutes"] == 9
     assert get_global_setting(db, SYNC_RUNTIME_KEY)["autoSyncPauseUntil"] == 1234
     prefs = get_user_setting(db, SYNC_PREFS_KEY, user_id=user_id)
     assert prefs["globalStartTimeMode"] == "relative"
@@ -413,7 +413,7 @@ def test_one_persons_preference_does_not_move_the_scheduler(
     save_sync_settings(
         db,
         {
-            "syncConcurrency": 6,
+            "syncFailureBackoffMinutes": 6,
             "regularSyncIntervalMinutes": 45,
             "globalStartTimeMode": "absolute",
             "dynamicSyncEnabledDefault": True,
@@ -424,7 +424,7 @@ def test_one_persons_preference_does_not_move_the_scheduler(
     merged = load_sync_settings(db, user_id=user_id)
     assert merged["consecutiveFailures"] == 4
     assert merged["globalStartTimeMode"] == "absolute"
-    assert merged["syncConcurrency"] == 6
+    assert merged["syncFailureBackoffMinutes"] == 6
 
     # ...and the scheduler bumping its counter leaves the preference alone,
     # which is the same defect facing the other way.

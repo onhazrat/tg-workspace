@@ -76,8 +76,43 @@ BUDGET_WEIGHTS: dict[Budget, int] = {
 #: order `DRAIN_ORDER` presents the lanes in.
 BUDGET_DRAIN_ORDER = (Budget.MANUAL_SINGLE, Budget.MANUAL_BULK, Budget.AUTO_SYNC)
 
-#: Every lane the worker drains. Strict tier first, weight order within, which
-#: makes reading the tuple the same as reading the policy.
+#: The Discover handle probe's lane (ticket 36, ADR-012 D9).
+#:
+#: One `t.me/<handle>` fetch per candidate, so a report arrives triaged instead
+#: of asking the operator to sort bots and private channels out of it by hand.
+#: It ran on an `asyncio.Semaphore(2)` of its own, outside the Partition, which
+#: made it a second scraping budget nothing counted — the same defect as
+#: `run_sync_job`'s semaphore, reached from another direction.
+DISCOVER_PROBE_LANE = "discover_probe_background"
+
+#: Lanes that carry something other than a Channel sync, each with the reason
+#: it is not a `lane_name(budget, tier)`. Shaped like `EXPORT_OMISSIONS`: the
+#: exception states its own case, so nothing silently joins the list.
+#:
+#: **Drained strictly after every sync lane**, which is what makes this "lower
+#: priority than other requests to Telegram" without a priority-aware
+#: semaphore. `LaneScheduler` is already strict between tiers; these come after
+#: the last of them.
+#:
+#: *No Budget, deliberately.* Giving the probe one would make the name fit
+#: `lane_name`, and ticket 23 left probes uncharged on purpose —
+#: `DiscoverHandleProbe` is corpus-scoped, so billing one account for
+#: deployment-wide work is exactly what the three Budgets exist to prevent. A
+#: Budget on the ledger path that then has to be excluded from it is a special
+#: case pretending to be a rule.
+#:
+#: *And no `background` entry in `TIER_ORDER`*, which was the other obvious
+#: shape: a tier multiplies through the Budget product and creates three lanes
+#: where one is wanted.
+NON_SYNC_LANES: dict[str, str] = {
+    DISCOVER_PROBE_LANE: (
+        "Discover handle probes. One fetch each, charged to nobody because the "
+        "verdict is corpus-scoped, and drained only when no sync lane has work."
+    ),
+}
+
+#: Every lane the worker drains: the Budget x tier product, then the declared
+#: non-sync lanes.
 #:
 #: It is no longer the *drain sequence* — `LaneScheduler` is — but it is still
 #: the inventory: `queued_job_ids` scans it, `sync_lane_control` validates
@@ -85,7 +120,27 @@ BUDGET_DRAIN_ORDER = (Budget.MANUAL_SINGLE, Budget.MANUAL_BULK, Budget.AUTO_SYNC
 #: was created by a migration.
 DRAIN_ORDER = tuple(
     lane_name(budget, tier) for tier in TIER_ORDER for budget in BUDGET_DRAIN_ORDER
-)
+) + tuple(NON_SYNC_LANES)
+
+
+#: The non-sync lanes as an ordered tuple, for the drain to offer as one group.
+#:
+#: `lanes_in_tier` is the sync equivalent, and the drain iterates
+#: `(*tiers, NON_SYNC_GROUP)`. Without a group of their own these lanes are
+#: enqueued and never read: `_LaneBuffers.lanes_with_work` walks the lanes it is
+#: handed, and every caller handed it a *tier*.
+NON_SYNC_GROUP: tuple[str, ...] = tuple(NON_SYNC_LANES)
+
+
+def is_sync_lane(lane: str) -> bool:
+    """Whether `lane` carries Channel sync work.
+
+    The predicate callers check *before* `lane_budget` or `lane_tier`, both of
+    which still raise outside the product (ADR-012 D11). Returning `None` from
+    those instead was the alternative, and it converts a loud failure into a
+    value that flows somewhere else before it fails.
+    """
+    return lane not in NON_SYNC_LANES
 
 
 def lanes_in_tier(tier: str) -> tuple[str, ...]:
@@ -208,7 +263,12 @@ class LaneScheduler:
     """
 
     def __init__(self) -> None:
-        self._credit: dict[str, int] = dict.fromkeys(DRAIN_ORDER, 0)
+        # Sync lanes only. `_weighted_pick` reads `BUDGET_WEIGHTS[lane_budget(...)]`,
+        # which raises for a non-sync lane — and never sees one, because those
+        # are served by the unweighted pass below.
+        self._credit: dict[str, int] = {
+            lane: 0 for lane in DRAIN_ORDER if is_sync_lane(lane)
+        }
 
     def next_lane(self, available: Container[str]) -> str | None:
         """The lane to serve next, or None when nothing is available.
@@ -221,6 +281,14 @@ class LaneScheduler:
             candidates = [lane for lane in lanes_in_tier(tier) if lane in available]
             if candidates:
                 return self._weighted_pick(candidates)
+        # Strictly after every sync lane, and unweighted: there is one of them,
+        # and weighting a single candidate against nothing is arithmetic with
+        # no question in it. A probe waits behind a best-effort sync from an
+        # account over its Budget, which is the intended order — that account
+        # asked for something, and nobody asked for this.
+        for lane in NON_SYNC_LANES:
+            if lane in available:
+                return lane
         return None
 
     def _weighted_pick(self, candidates: list[str]) -> str:

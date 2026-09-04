@@ -26,7 +26,6 @@ from app.jobs.settings import (
     load_retention_policy,
     load_sync_settings,
 )
-from app.jobs.sync_queue import SlotLost
 from app.models_tg import Channel, Post, utc_now
 from app.services.async_db import run_db
 from app.services.channel_photos import resolve_cached_photo_url
@@ -58,7 +57,6 @@ from app.services.language import detect_language_from_posts
 from app.services.logs import upsert_network_log, upsert_sync_log
 from app.services.network import rotate_tor_identity
 from app.services.network_settings import (
-    compute_proxy_pool_capacity,
     load_network_settings,
     redact_proxy_url,
     resolve_proxies,
@@ -73,6 +71,13 @@ from app.services.post_thumbnails import (
     enforce_thumb_cache_size_limit_throttled,
 )
 from app.services.posts import bulk_upsert_posts_impl
+from app.services.proxy_pool import (
+    SLOT_WAIT_SECONDS,
+    SlotLost,
+    SyncSlot,
+    bound_to,
+    get_partition,
+)
 from app.services.quota import (
     QuotaCeilingReached,
     assert_within_ceiling,
@@ -1308,9 +1313,15 @@ async def _fetch_one_page(
         proxy_concurrency=ctx.proxy_concurrency,
     )
 
+    # Same proxy lane as the page fetch that named this avatar, exactly as the
+    # thumb caching below already did (ADR-012).
     response["photoUrl"] = await resolve_cached_photo_url(
         ctx.channel_id,
         response.get("photoUrl") or None,
+        proxies=ctx.proxies,
+        proxy_concurrency=ctx.proxy_concurrency,
+        tor_auto_rotate=ctx.tor_auto_rotate,
+        tor_rotation_threshold=ctx.tor_rotation_threshold,
     )
 
     await _cache_scraped_post_thumbs(
@@ -1879,9 +1890,11 @@ async def sync_single_channel(
     the ledger once for the whole batch, so the 2,000-Channel `sync_all` that
     crosses the ceiling was enqueued while the account was still under it —
     ticket 23 named that overshoot and handed it here. Checking per Channel is
-    also what reaches the two syncs that never enqueue at all:
-    `auto_summary._sync_stale_channels` and the legacy `_run_whole_job` both
-    arrive through `run_sync_job`, and both land in this function.
+    also what reaches the one sync that never enqueues at all:
+    `auto_summary._sync_channels_for_summary` arrives through `run_sync_job`
+    and lands in this function. (There were two. The legacy `_run_whole_job`
+    was deleted in ADR-012, and `RUN_SYNC_JOB_CALLERS` is the list that would
+    fail if a third appeared.)
 
     The refusal is a **skip**, not a failure. Nothing went wrong with the
     Channel, the account is out of Requests until UTC midnight, and marking
@@ -2058,51 +2071,6 @@ async def _sync_claimed_channel(
     return True
 
 
-def _load_partition_inputs() -> tuple[int, list[str], int, dict[str, int]]:
-    """What `sync_queue._partition` needs to size the worker partition.
-
-    Returns the configured `syncConcurrency` **uncapped**, plus the proxy list
-    and slot configuration. Deliberately not `_load_sync_job_concurrency`,
-    which returns `min(configured, capacity)`: the partition derives its own
-    count from the lanes, so it needs the operator's number as a *truncation*
-    and the capacity as the thing being truncated. Handing it a pre-mixed
-    minimum would make "one worker per proxy slot" unexpressible — with four
-    proxies and a setting of ten it would build four workers and believe that
-    was the setting.
-    """
-    with Session(engine) as session:
-        sync_settings = load_sync_settings(session)
-        network = load_network_settings(session)
-        configured = max(
-            1,
-            int(
-                sync_settings.get("syncConcurrency")
-                or settings.SYNC_CONCURRENCY_DEFAULT
-            ),
-        )
-        default_slots, overrides = resolve_proxy_concurrency(network)
-        return configured, resolve_proxies(network), default_slots, overrides
-
-
-def _load_sync_job_concurrency() -> tuple[int, int | None]:
-    with Session(engine) as session:
-        sync_settings = load_sync_settings(session)
-        network = load_network_settings(session)
-        configured = max(
-            1,
-            int(
-                sync_settings.get("syncConcurrency")
-                or settings.SYNC_CONCURRENCY_DEFAULT
-            ),
-        )
-        proxies = resolve_proxies(network)
-        if not proxies:
-            return configured, None
-        default_slots, overrides = resolve_proxy_concurrency(network)
-        capacity = compute_proxy_pool_capacity(proxies, default_slots, overrides)
-        return min(configured, capacity), capacity
-
-
 async def run_sync_job(job: SyncJobState, user_id: uuid.UUID | None) -> None:
     """Sync every Channel in the job, then charge what it spent (ticket 08).
 
@@ -2122,16 +2090,39 @@ async def run_sync_job(job: SyncJobState, user_id: uuid.UUID | None) -> None:
     with metered() as meter:
         job.status = "running"
         await touch_job(job)
-        concurrency, _proxy_capacity = await run_db(_load_sync_job_concurrency)
-
-        sem = asyncio.Semaphore(concurrency)
+        # **Slots out of the one Partition, not a semaphore of this job's own**
+        # (ADR-012). The semaphore that was here was sized to `syncConcurrency`
+        # and belonged to this call, so a job running beside a lane drain got a
+        # full second budget — the `2N` over-count ticket 36 was written for.
+        # Worse, it bounded *how many* walks ran and said nothing about which
+        # proxy each used, so an `auto_summary` sync hopped proxies page by
+        # page while every lane message stayed pinned. Taking a Slot answers
+        # both: the count comes from the fleet, and the binding follows.
+        partition = await get_partition()
 
         async def _run_one(ch_state: ChannelSyncState) -> None:
-            async with sem:
+            slot = SyncSlot(partition)
+            if not await slot.acquire_within(SLOT_WAIT_SECONDS):
+                # Every proxy is parked. Failing the Channel is the honest
+                # answer: an unbounded wait here never returns, and this
+                # function's caller is a scheduled summary that would then
+                # suppress every later tick.
+                ch_state.status = "failed"
+                ch_state.error = "No healthy proxy was available"
+                await touch_job(job, ch_state)
+                return
+            try:
                 if job.cancel_event.is_set():
                     ch_state.status = "cancelled"
                     return
-                await sync_single_channel(job, ch_state, user_id=user_id)
+                # Binds the **slot**, not the worker inside it: a coalesced
+                # waiter puts its worker down and may take a different one
+                # back, and `ProxyBinding` explains why reading it live is the
+                # difference between a pinned walk and a silently shared proxy.
+                with bound_to(slot):
+                    await sync_single_channel(job, ch_state, user_id=user_id, slot=slot)
+            finally:
+                slot.release()
 
         try:
             await asyncio.gather(*[_run_one(ch) for ch in job.channels.values()])

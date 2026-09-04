@@ -150,10 +150,6 @@ export type BotInfoRequest = {
      */
     proxyEnabled?: boolean;
     /**
-     * Proxies
-     */
-    proxies?: Array<string> | null;
-    /**
      * Torautorotate
      */
     torAutoRotate?: boolean;
@@ -345,6 +341,7 @@ export type BulkFollowJobStatusResponse = {
 
 /**
  * BulkFollowRequest
+ * No `proxies` field — see `schemas/telegram.ProxyConfig` (ADR-012).
  */
 export type BulkFollowRequest = {
     /**
@@ -355,10 +352,6 @@ export type BulkFollowRequest = {
      * Proxyenabled
      */
     proxyEnabled?: boolean;
-    /**
-     * Proxies
-     */
-    proxies?: Array<string> | null;
     /**
      * Torautorotate
      */
@@ -618,10 +611,6 @@ export type ChannelInfoRequest = {
      * Proxyenabled
      */
     proxyEnabled?: boolean;
-    /**
-     * Proxies
-     */
-    proxies?: Array<string> | null;
     /**
      * Torautorotate
      */
@@ -2980,10 +2969,6 @@ export type PublishRequest = {
      */
     proxyEnabled?: boolean;
     /**
-     * Proxies
-     */
-    proxies?: Array<string> | null;
-    /**
      * Torautorotate
      */
     torAutoRotate?: boolean;
@@ -3373,10 +3358,6 @@ export type ResolveStartTimeRequest = {
      */
     proxyEnabled?: boolean;
     /**
-     * Proxies
-     */
-    proxies?: Array<string> | null;
-    /**
      * Torautorotate
      */
     torAutoRotate?: boolean;
@@ -3596,10 +3577,6 @@ export type ScrapeRequest = {
      * Proxyenabled
      */
     proxyEnabled?: boolean;
-    /**
-     * Proxies
-     */
-    proxies?: Array<string> | null;
     /**
      * Torautorotate
      */
@@ -4308,10 +4285,6 @@ export type SyncRuntimeSettings = {
      * Syncfailurebackoffminutes
      */
     syncFailureBackoffMinutes: number;
-    /**
-     * Syncconcurrency
-     */
-    syncConcurrency: number;
     /**
      * Consecutivefailures
      */

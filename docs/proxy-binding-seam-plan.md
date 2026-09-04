@@ -105,9 +105,23 @@ concurrent walks against fifteen connections queue silently, and the symptom is
 undiagnosable after the fact. That is a reason to raise the pool, not to scrape
 slowly. See D8.
 
-*Consequence:* `build_workers`'s round-robin dealing exists only to spread a
-*truncated* list across distinct proxies. Nothing truncates any more, so it is
-dead and gets deleted rather than left as a loop whose reason has gone.
+*Consequence, and it was wrong:* this said `build_workers`'s round-robin
+dealing existed only to spread a *truncated* list, so nothing truncating made
+it dead. `ProxyWorkerPool._take_free` hands out the first idle worker in list
+order, so lane-by-lane dealing sends the first concurrent walks down one proxy
+on any deployment whose proxies have more than one slot. At the default of one
+slot the two orderings are identical — which is exactly why deleting it would
+have looked safe and shown up only on the deployments that had tuned up. Kept,
+with the reason written into `build_workers` and asserted in
+`test_proxy_worker_partition.py`.
+
+*Also removed here, and not in the plan:* `ProxyWorker.lane` was `ProxyLane |
+None`, None meaning direct egress. The synthetic Lane makes "a Slot always has
+a Lane" true by construction, so the optional is gone and `build_workers([])`
+now returns nothing rather than a list of Lane-less workers.
+
+- ~~The proxy panel's "keep Sync concurrency at or below this" copy.~~ Rewritten
+  to say the capacity *is* the number.
 
 ### D3. Per-proxy slots stay at 1 by default
 
@@ -283,23 +297,167 @@ exemption ever appears.
 
 ## Work, in dependency order
 
-1. Glossary entries in `CONTEXT.md`. Done this session.
-2. `cache_channel_photo` through the Lane pool. Small, and a privacy fix that
-   should not wait behind a refactor.
-3. Partition moves to `proxy_pool.py` (D14). Pure move, no behaviour.
-4. Synthetic direct Lane and derived pool sizing (D8).
-5. Mandatory Lane binding: the raise, the fixture, the inventory guard (D1, D15).
-   Everything below depends on the seam existing.
-6. `run_sync_job` fans out over Slots; semaphore deleted; `_run_whole_job`
-   deleted after the staging check (D4).
-7. `syncConcurrency` removed end to end, including the migration that strips the
-   key so `classify_setting_key` does not raise on a leftover (D2, D3).
-8. `body.proxies` removed, client regenerated (D6).
-9. Probe lane, new tier, `DRAIN_ORDER` reshaped, `is_sync_lane`, lane dispatch
-   (D9, D11, D12, D13).
-10. `tg_follow_jobs` table, `pg_notify`, SSE rewrite, `run_follow_job` moved to
-    the worker (D7). Largest piece; last, because it depends on the seam and the
-    lane work.
+1. ~~Glossary entries in `CONTEXT.md`.~~ Done.
+2. ~~`cache_channel_photo` through the Lane pool.~~ Done (`fd17bae`). Small, and
+   a privacy fix that should not wait behind a refactor.
+3. ~~Partition moves to `proxy_pool.py`~~ (D14). Done (`becc375`). Pure move,
+   no behaviour. `_load_partition_inputs` moved with it, out of
+   `sync_orchestrator`, which is what removed the lazy import in each direction.
+4. ~~Synthetic direct Lane and derived pool sizing~~ (D8). Done.
+5. ~~Mandatory Lane binding: the raise, the fixture, the inventory guard~~
+   (D1, D15). Done, and **the raise turned into a required argument** — see
+   below. Everything after this depends on the seam existing.
+6. ~~`run_sync_job` fans out over Slots; semaphore deleted; `_run_whole_job`
+   deleted after the staging check~~ (D4). Done. `SyncSlot` and `SlotLost`
+   moved to `proxy_pool` with it, which is what let `sync_orchestrator` drop
+   its top-level `sync_queue` import and leave that pair with one direction
+   instead of two.
+7. ~~`syncConcurrency` removed end to end, including the migration that strips
+   the key~~ (D2, D3). Done. The leftover would not have raised — unclassified
+   fields are dropped on the way *in* — it would have been served back to the
+   browser as a setting that changes nothing, which is why it is stripped.
+8. ~~`body.proxies` removed, client regenerated~~ (D6). Done. There were more
+   senders than the three D6 counted: `publishSummary` and `fetchBotInfo` took
+   the list as a positional argument from five call sites. `buildActiveProxies`
+   survives, computing a list nobody sends, because callers read its length as
+   "would anything actually be routed" — truer than `proxyEnabled`, which is
+   true with no URLs configured.
+9. ~~Probe lane, `DRAIN_ORDER` reshaped, `is_sync_lane`, lane dispatch~~
+   (D9, D11, D12, D13). Done. **No new tier**, in the end: `NON_SYNC_LANES` is
+   a declared list served by an unweighted pass after `TIER_ORDER`, which is
+   simpler than the "new lowest tier" the decision described and gives the same
+   ordering. It also needed a **dequeue lease** nobody had thought about — see
+   below.
+10. ~~`tg_follow_jobs` table, `pg_notify`, SSE rewrite, `run_follow_job` moved
+    to the worker~~ (D7). Done. **No queue**, in the end: a `pg_notify` trigger
+    the worker consumes, in `scheduler.request_job_run`'s shape, because a
+    follow job is one message that runs for minutes rather than N messages that
+    each want a Slot. Its probes take Slots from the Partition directly, which
+    is what removed `FOLLOW_SCRAPE_CONCURRENCY`.
+
+## What review found
+
+Eleven issues, three serious. Worth recording because two of them were guarded
+by tests that could not see them.
+
+1. **The probe lane was enqueued and never drained.** `_LaneBuffers` walked
+   `lanes_in_tier(tier)`, and the probe lane belongs to no tier. So the sweep
+   queued a batch every tick, nothing read it, every dequeue lease lapsed into a
+   duplicate, and no handle ever got a verdict. `test_probe_lane.py` asserted
+   the *policy* by calling `LaneScheduler.next_lane` with a hand-built
+   `available` set — it never asked whether the lane reached the scheduler at
+   all. Fixed with a `NON_SYNC_GROUP` the drain offers last, and two tests that
+   go through `drain_sync_lanes`.
+2. **The API answered with a permanently stale follow job.** `create_follow_job`
+   cached its state in `_active_jobs` in the API process, `get_follow_job`
+   prefers memory over the row, and the runner mutates a different copy in the
+   worker — so every `GET` said `pending` for ever and `/events` never emitted
+   `[DONE]`. Every test missed it because they all call
+   `clear_follow_jobs_for_tests()`, emptying the dict that was wrong.
+3. **Two unbounded `slot.acquire()` calls could hang for ever.** With every
+   proxy parked, `_take_free` never yields, and the fan-outs in `run_sync_job`
+   and `run_follow_job` had no deadline — a bulk follow's tasks would all park
+   with the row left `running`. `SLOT_WAIT_SECONDS` bounds both. The
+   `asyncio.Semaphore` they replaced always granted, so the Slots introduced it.
+
+Also fixed: a worker flush could un-cancel a job cancelled by the API; the
+direct Lane's width was argued from the worker's scraping needs while also
+capping the whole API tier at three concurrent requests; `tg_follow_jobs` had
+no retention; the probe lane inherited a 2.4-hour visibility timeout sized for
+a page walk; `_cancelled` opened a session per checkpoint per handle; and
+`start_bulk_follow` held the request's session open across two awaits.
+
+## What the ticket left open
+
+- **The dequeue lease is not renewed.** A probe message that waits longer than
+  `DEQUEUE_LEASE_MINUTES` behind sync work gets its handle re-enqueued, so the
+  fetch happens twice. Harmless — the second verdict overwrites the first with
+  the same answer — and worth knowing before somebody shortens the lease.
+- **A Partition rebuilt mid-job leaves the job on the old one.** `run_sync_job`
+  and `run_follow_job` capture the Partition once, and `get_partition` rebinds
+  it when the proxy signature changes and nothing is busy — a window that
+  exists between handles. The two pools then hand out their own Slots until the
+  job ends. Bounded (it needs an operator settings change mid-job) and it
+  matches the documented "an operator's change lands on the next idle drain";
+  the *fetch* is unaffected, because `_proxy_acquire` resolves the lane through
+  the live pool manager rather than through the captured Partition.
+- **The direct Lane is one width for two processes.** In the worker it is the
+  scraping width; in the API it bounds every outbound request the tier makes.
+  Splitting them needs the Lane to know which process it is in, which nothing
+  tells it today.
+
+## Found while doing it
+
+**Moving a call onto `fetch_with_retry` hands it the page-fetch retry budget,
+and that is wrong for anything cosmetic or anything on a per-page path.**
+`NETWORK_FETCH_RETRIES` is 8 attempts with a 3s escalating delay, sized for a
+page fetch where losing the page loses the sync. The avatar cache is re-resolved
+on every page of a walk, so at the default one dead avatar URL cost eight
+backed-off attempts per page: `tests/api/test_sync_jobs.py` went from 13 seconds
+to 8 minutes. `MEDIA_FETCH_RETRIES = 1` is the cap, shared by both image caches.
+
+Every remaining step that moves a call onto the seam inherits this question.
+Ask what the caller's retry budget should be *before* moving it, not after the
+suite slows down.
+
+**The direct Lane has to be exempt from cooldown, and nothing in D8 said so.**
+Cooldown steers new work away from a failing proxy and onto the healthy ones.
+There are no healthy ones when the fleet is one synthetic Lane, so arming it
+stops the whole deployment for ten minutes and reports every Slot as parked —
+strictly worse than the transient failure that armed it. The pace ladder below
+cooldown still applies, and that is the rung that can make a single-address
+deployment polite without stopping it.
+
+**D15's runtime raise is a required argument instead, and that is stronger.**
+The plan asked for `fetch_with_retry` to raise when no Lane is in context, with
+a `contextvar` carrying the fact and a fixture so tests could set it. What
+landed is `_fetch_once(*, client: httpx.AsyncClient)` — required, keyword-only,
+no default — because the only thing that produces a client is
+`build_lane_client`. A caller with no Lane cannot call it, so there is nothing
+to check at runtime and no fixture to write. The `contextvar` version would
+have been a rule the type checker could not see, enforced by a flag a test
+could set without acquiring anything.
+
+`_build_client` was the whole hole: `_fetch_once` fell back to it whenever no
+client was passed, which made "fetch without acquiring a Lane" a one-keyword
+change, and `fetch_with_retry` took it on every proxy-less deployment. It
+survives as `_build_diagnostic_client`, named for its exemption, because
+`test_proxy` and `get_tor_ip` ask ipify about one *named* proxy that may not be
+in the pool at all.
+
+**Moving a fetch out of the tick that dequeued it needs a lease.** The sweep
+used to dequeue a batch and fetch it in the same call, so each handle got a
+verdict before the tick returned and left the due set that way.
+`dequeue_handles` is a pure read, and once the tick only *enqueues*, every tick
+handed out the same first `DISCOVER_PROBE_BATCH_SIZE` handles again — one flood
+of duplicate messages every `DISCOVER_PROBE_JOB_INTERVAL_SECONDS` for as long
+as the backlog took to drain. `dequeue_handles` now moves `retry_after` forward
+by `DEQUEUE_LEASE_MINUTES`, which is the column the failure backoff already
+uses and means the same thing.
+
+**Moving a job to the worker moves its cancellation too, and an
+`asyncio.Event` does not cross a process.** The cancel arrives in the API and
+the runner is in the worker, so `cancel_requested` had to become a column: a
+ring alone would lose a cancel that arrived while the worker was restarting,
+and the batch would finish after being cancelled. The same fact reshaped the
+SSE stream — there is no `asyncio.Condition` in the API process to wait on any
+more, so it subscribes to `pg_notify` and re-reads the row.
+
+**A new `USER_OWNED` table trips four inventories, and that is the system
+working.** `SCOPES`, the test-cleanup `TG_TABLES`, `EXPORT_OMISSIONS`, and the
+frozen owner-backfill list all failed until `tg_follow_jobs` was placed in each
+with a reason. The backfill one needed a new concept: `CREATED_AFTER_THE_BACKFILL`,
+because "this table did not exist when revision `c0d1e2f3a4b5` ran" is a fact
+about a moment that nothing in the models records. It is declared, and the
+declaration is checked against the migration it names.
+
+**Two guards written for step 4 could not fail, and both were the same
+mistake.** One asserted `"db_pool_capacity()" in inspect.getsource(...)` and
+stayed green against a hard-coded thread count, because a *log line* below the
+sizing still named the function — the substring trap `test_worker_count.py`
+already documents. The other ordered call sites by `ast.walk`, which is
+breadth-first, so it reported the same sequence whichever statement came first.
+Read the expression you mean, and sort by `lineno` when you mean order.
 
 ## Guards this ticket owes
 
@@ -320,13 +478,13 @@ simplification programme, including one guard that could not fail at all.
 
 ## Stale references to fix while here
 
-- `sync_queue.py:47` claims ticket 13 made the `auto_summary` distinction stop
-  mattering. Delete it; do not re-point it at a future ticket.
-- `sync_queue.py:977`'s `2N` note goes with the behaviour it describes.
-- `RUN_SYNC_JOB_CALLERS`'s reason names `_sync_stale_channels`; the function is
-  `_sync_channels_for_summary`. `sync_single_channel`'s docstring has the same
-  stale name.
-- The proxy panel's "keep Sync concurrency at or below this" copy.
+- ~~`sync_queue.py:47`'s claim that ticket 13 made the `auto_summary`
+  distinction stop mattering.~~ Rewritten: it is inside the Partition now and
+  outside the lane ladder, which is the distinction that actually holds.
+- ~~`sync_queue.py:977`'s `2N` note.~~ Gone with the behaviour.
+- ~~`RUN_SYNC_JOB_CALLERS`'s reason naming `_sync_stale_channels`~~, and the
+  same stale name in `sync_single_channel`'s docstring. Both now say
+  `_sync_channels_for_summary`, and the inventory is down to one caller.
 
 ## Not in scope
 

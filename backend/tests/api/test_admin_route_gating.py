@@ -362,13 +362,13 @@ def test_the_sync_facade_keeps_a_persons_own_preferences(
     """
     response = client.put(
         f"{PREFIX}/data/settings/sync",
-        json={"globalStartTimeMode": "days", "syncConcurrency": 99},
+        json={"globalStartTimeMode": "days", "syncFailureBackoffMinutes": 99},
         headers=normal_user_token_headers,
     )
     assert response.status_code == 200, response.text[:200]
     value = response.json()["value"]
     assert value["globalStartTimeMode"] == "days"
-    assert value["syncConcurrency"] != 99, (
+    assert value["syncFailureBackoffMinutes"] != 99, (
         "a plain user set the deployment's sync concurrency through the facade"
     )
 

@@ -159,6 +159,22 @@ class Settings(BaseSettings):
     EMBEDDING_MODEL: str = "gemini-embedding-2-preview"
     DEFAULT_AI_MODEL: str = "gemini-3-flash-preview"
 
+    # Database connection pool
+    #
+    # Explicit because SQLAlchemy's defaults are 5 + 10 overflow, and the
+    # Partition outgrew them. A ten-proxy deployment walks ten Channels at
+    # once, each holding a session; add the scheduler, the drain, the retention
+    # sweeps and the `LISTEN`/`NOTIFY` subscribers and fifteen connections is a
+    # queue. It is an invisible one — nothing errors, nothing logs, sync just
+    # gets slower — which is the shape this repo has twice recorded as
+    # undiagnosable after the fact.
+    #
+    # **Both tiers read these**, so `replicas x (pool_size + max_overflow)` is
+    # what the Postgres server sees. At the defaults that is 30 per process,
+    # and a server left at `max_connections = 100` fits three processes.
+    DB_POOL_SIZE: int = 20
+    DB_MAX_OVERFLOW: int = 10
+
     # Sync & scraping
     SYNC_CONCURRENCY_DEFAULT: int = 3
     SYNC_MAX_RETRIES: int = 3
@@ -315,6 +331,40 @@ class Settings(BaseSettings):
 
     # Network / HTTP client
     PROXY_DEFAULT_CONCURRENCY_DEFAULT: int = 1
+    #: Slots on the synthetic **direct** Lane, used only when a deployment has
+    #: configured no proxies at all (ADR-012).
+    #:
+    #: Every request to Telegram leaves through an acquired Lane, so a
+    #: proxy-less deployment needs one too — exempting direct egress would
+    #: enforce the seam only on the deployments that already had egress
+    #: control. This is that Lane's width, and it is a separate number from
+    #: `PROXY_DEFAULT_CONCURRENCY_DEFAULT` because the two answer different
+    #: questions: how hard to lean on somebody else's proxy, and how hard to
+    #: lean on Telegram from this deployment's own address.
+    #:
+    #: **At least 3, because that is what a proxy-less deployment already had.**
+    #: Before ADR-012 its scraping width was `syncConcurrency`, whose default
+    #: is 3, so the guard in `tests/services/test_direct_lane.py` holds this at
+    #: or above `SYNC_CONCURRENCY_DEFAULT`: removing that setting must not
+    #: narrow anybody.
+    #:
+    #: **6 rather than 3, because this Lane is per *process* and the two
+    #: processes use it for different things** (found in review). In the worker
+    #: it is the scraping width. In the API it is every outbound request the
+    #: tier makes — add-channel, refresh-metadata, `/telegram/scrape`, publish,
+    #: `/telegram/bot-file` — and at 3, with `ACQUIRE_TIMEOUT_SECONDS` of 120
+    #: and fetches of up to `NETWORK_FETCH_TIMEOUT_SECONDS`, a fourth
+    #: interactive request could queue for two minutes and then fail. Before
+    #: ADR-012 the API had no bound at all here, so 3 was a regression dressed
+    #: as a fix.
+    #:
+    #: *Still one number for both, and that is a compromise rather than a
+    #: design.* Telegram meters the unproxied web view by IP and both processes
+    #: share the deployment's address, so widening for the API widens the
+    #: worker's scraping too. Splitting it needs the Lane to know which process
+    #: it is in, which nothing tells it today; 6 is small enough that the extra
+    #: scraping concurrency is not the thing that gets an address blocked.
+    DIRECT_LANE_CONCURRENCY_DEFAULT: int = 6
     NETWORK_PROXY_COOLDOWN_MS: int = 10 * 60 * 1000
     NETWORK_FETCH_RETRIES: int = 8
     NETWORK_FETCH_INITIAL_DELAY_MS: int = 3000

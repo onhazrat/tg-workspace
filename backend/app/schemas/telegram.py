@@ -4,8 +4,17 @@ from pydantic import BaseModel, Field, model_validator
 
 
 class ProxyConfig(BaseModel):
+    """The proxy knobs a request may still set.
+
+    **`proxies` is not among them** (ADR-012). A request must not choose its
+    own egress: the server resolves the fleet from settings it owns, and the
+    three browser call sites that sent this were sending `activeProxies`, which
+    is derived from `defaultProxyUrls` — the very setting the server was about
+    to read anyway. They were redundant rather than legitimate, and a field a
+    client can set is a field a client can set to something else.
+    """
+
     proxy_enabled: bool = Field(False, alias="proxyEnabled")
-    proxies: list[str] | None = None
     tor_auto_rotate: bool = Field(False, alias="torAutoRotate")
     tor_rotation_threshold: int = Field(10, alias="torRotationThreshold")
 

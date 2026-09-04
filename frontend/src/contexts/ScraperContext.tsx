@@ -29,7 +29,7 @@ import type {
   PostSortOrder,
   PostViewOptions,
 } from "../lib/posts/post-view"
-import { buildActiveProxies, isNetworkRoutingActive } from "../lib/syncSettings"
+import { isNetworkRoutingActive } from "../lib/syncSettings"
 import type { Channel, Post } from "../types"
 import { useData } from "./DataContext"
 import { useRAG } from "./RAGContext"
@@ -501,14 +501,6 @@ export const ScraperProvider: React.FC<{ children: React.ReactNode }> = ({
     let isUnavailableOnWebView = false
     const effectiveStartTime = getEffectiveGlobalStartTime()
 
-    const activeProxies = buildActiveProxies({
-      proxyEnabled,
-      defaultProxyUrls,
-      torEnabled,
-      torMode,
-      torProxyUrls,
-    })
-
     try {
       const data = await api.channelInfo({
         channelName: cleanName,
@@ -519,7 +511,6 @@ export const ScraperProvider: React.FC<{ children: React.ReactNode }> = ({
           torMode,
           torProxyUrls,
         }),
-        proxies: activeProxies,
         torAutoRotate,
         torRotationThreshold,
       })

@@ -225,8 +225,6 @@ export function useCommandRegistry(): {
         setTorAutoRotate: settings.setTorAutoRotate,
         torRotationThreshold: settings.torRotationThreshold,
         setTorRotationThreshold: settings.setTorRotationThreshold,
-        syncConcurrency: settings.syncConcurrency,
-        setSyncConcurrency: settings.setSyncConcurrency,
         embeddingsEnabled: settings.embeddingsEnabled,
         setEmbeddingsEnabled: settings.setEmbeddingsEnabled,
         embeddingsPaused: settings.embeddingsPaused,

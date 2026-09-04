@@ -33,7 +33,6 @@ describe("loadAppSettings", () => {
     expect(settings.aiTemperature).toBe(0.7)
     expect(settings.regularSyncIntervalMinutes).toBe(AUTO_SYNC_INTERVAL_DEFAULT)
     expect(settings.syncFailureBackoffMinutes).toBe(5)
-    expect(settings.syncConcurrency).toBe(3)
     expect(settings.showChannelBio).toBe(true)
     expect(settings.showChannelSubscribers).toBe(true)
     expect(settings.showChannelPhotos).toBe(false)
@@ -167,7 +166,6 @@ describe("persistAppSettings", () => {
       showChannelBio: false,
       regularSyncIntervalMinutes: 90,
       dynamicSyncEnabledDefault: true,
-      syncConcurrency: 7,
       globalStartTimeMode: "relative",
       globalStartTimeValue: 14,
       postRetentionDays: 45,
@@ -205,7 +203,6 @@ describe("backend sections", () => {
       "dynamicSyncEnabledDefault",
       "dynamicSyncExpectedPostsDefault",
       "syncFailureBackoffMinutes",
-      "syncConcurrency",
       "globalStartTimeMode",
       "globalStartTimeValue",
     ])
@@ -232,13 +229,13 @@ describe("backend sections", () => {
     const updates = decodeServerSection("sync", {
       regularSyncIntervalMinutes: 15,
       dynamicSyncEnabledDefault: "yes",
-      syncConcurrency: 4,
+      syncFailureBackoffMinutes: 4,
       globalStartTimeMode: "banana",
       globalStartTimeValue: 30,
     })
     expect(updates).toEqual({
       regularSyncIntervalMinutes: 15,
-      syncConcurrency: 4,
+      syncFailureBackoffMinutes: 4,
       globalStartTimeValue: 30,
     })
   })

@@ -54,6 +54,20 @@ def clamp_proxy_concurrency(value: int) -> int:
     return max(PROXY_CONCURRENCY_MIN, min(PROXY_CONCURRENCY_MAX, int(value)))
 
 
+#: The URL of the synthetic **direct** Lane, and the egress key it reports.
+#:
+#: One string doing two jobs, deliberately. It was the key attempt telemetry
+#: has always used for an unproxied fetch (`"proxyUrl": "direct"`), and ADR-012
+#: makes a proxy-less deployment fetch through a Lane like everybody else — so
+#: the Lane takes the name the telemetry already had rather than inventing a
+#: second one that would have to be mapped onto it.
+#:
+#: It lives here rather than in `network.py` because `proxy_pool` builds the
+#: Lane and `network` fetches through it, and this module is the one they both
+#: already import.
+DIRECT_EGRESS_KEY = "direct"
+
+
 def _parse_proxy_list(raw: str | list[str] | None) -> list[str]:
     if raw is None:
         return []
@@ -64,7 +78,7 @@ def _parse_proxy_list(raw: str | list[str] | None) -> list[str]:
 
 def redact_proxy_url(proxy_url: str | None) -> str | None:
     """Mask credentials in proxy URLs before logging or export."""
-    if not proxy_url or proxy_url == "direct":
+    if not proxy_url or proxy_url == DIRECT_EGRESS_KEY:
         return proxy_url
     try:
         parsed = urlparse(proxy_url)

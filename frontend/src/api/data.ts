@@ -207,7 +207,6 @@ export type BulkFollowChannelInput = {
 export type BulkFollowRequest = {
   channels: BulkFollowChannelInput[]
   proxyEnabled?: boolean
-  proxies?: string[]
   torAutoRotate?: boolean
   torRotationThreshold?: number
 }

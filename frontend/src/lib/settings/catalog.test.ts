@@ -122,9 +122,9 @@ describe("settings search", () => {
   })
 
   test("@id filters to one entry", () => {
-    const hits = searchSettings("@id:syncConcurrency")
+    const hits = searchSettings("@id:syncFailureBackoffMinutes")
     expect(hits).toHaveLength(1)
-    expect(hits[0]?.entry.id).toBe("syncConcurrency")
+    expect(hits[0]?.entry.id).toBe("syncFailureBackoffMinutes")
   })
 
   test("@feature:ai scopes flatten results", () => {

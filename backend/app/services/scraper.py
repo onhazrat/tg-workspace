@@ -395,8 +395,14 @@ async def get_channel_info(
     soup = make_soup(html)
     result = _parse_channel_meta(soup, channel_name)
     result["telemetry"] = telemetry
+    # Same lane as the page fetch above (ADR-012).
     result["photoUrl"] = await resolve_cached_photo_url(
-        channel_name, result.get("photoUrl")
+        channel_name,
+        result.get("photoUrl"),
+        proxies=proxies,
+        proxy_concurrency=proxy_concurrency,
+        tor_auto_rotate=tor_auto_rotate,
+        tor_rotation_threshold=tor_rotation_threshold,
     )
     return result
 

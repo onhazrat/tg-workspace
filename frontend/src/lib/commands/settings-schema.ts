@@ -457,7 +457,6 @@ export const LEGACY_SETTING_COMMAND_IDS = [
   "edit-post-retention-days",
   "edit-proxy-concurrency-overrides",
   "edit-proxy-default-concurrency",
-  "edit-sync-concurrency",
   "edit-tor-control-port",
   "edit-tor-proxy-urls",
   "edit-tor-rotation-threshold",

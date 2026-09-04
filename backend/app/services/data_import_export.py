@@ -1189,6 +1189,13 @@ EXPORT_OMISSIONS: dict[str, str] = {
         "state. Restoring finished jobs would put rows back in a table whose "
         "retention already decided they were gone."
     ),
+    "FollowJob": (
+        "`SyncJob`'s reason, and the same shape: a progress trail for one "
+        "batch of follows, which nothing reads once the batch is terminal. "
+        "What it *produced* travels — the Follows are in the `channels` "
+        "section — so exporting the job as well would carry a record of how "
+        "they were added, which means nothing on another install."
+    ),
     "PostSyncState": (
         "Scrape bookkeeping about the shared corpus — the same reason "
         "`SERVER_MANAGED_CHANNEL_FIELDS` are stripped from an imported "

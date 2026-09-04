@@ -21,12 +21,20 @@ orchestrate.
 
 ## Pacing
 
-Concurrency stays below `bulk_follow`'s: this runs unprompted and competes for
-the same proxy lanes, and a sweep finishing a minute later matters far less than
-a sync stalling behind it. A batch commonly outlasts the tick interval, which is
-fine — `_sweep_lock` turns the overlapping tick into an immediate no-op, so the
-effective pace self-limits to how fast Telegram answers rather than to the
-configured interval.
+**An ordering, not a number** (ticket 36, ADR-012 D9). This used to gather each
+batch behind an `asyncio.Semaphore(2)` of its own, chosen to stay below
+`bulk_follow`'s on the reasoning that a sweep finishing a minute later matters
+far less than a sync stalling behind it. That reasoning was right and the
+mechanism was wrong twice over: two concurrent fetches outside the Partition
+are a second scraping budget nothing counts, and a fetch that holds no Slot
+binds to no proxy, so each probe picked whichever lane was least loaded — the
+hopping the Partition exists to remove, in the one job that runs unprompted.
+
+So this tick only *enqueues*. The messages drain from
+`discover_probe_background`, which `LaneScheduler` serves strictly after every
+sync lane, so a probe starts only when nothing else wants a Slot. `_sweep_lock`
+still makes an overlapping tick a no-op, though it matters far less now that
+the tick's work is one `send_batch`.
 """
 
 from __future__ import annotations
@@ -59,9 +67,6 @@ logger = logging.getLogger(__name__)
 #: point: enable/disable, manual trigger and last-run status all come for free,
 #: and "pause probing" becomes durable server state rather than a browser ref.
 DISCOVER_PROBE_JOB_ID = "discover_probe"
-
-#: Deliberately below `FOLLOW_SCRAPE_CONCURRENCY` (4) — see the module docstring.
-PROBE_SCRAPE_CONCURRENCY = 2
 
 #: One sweep at a time.
 #:
@@ -137,12 +142,49 @@ async def _probe_one(
     return str(result["status"])
 
 
-async def run_discover_probe_sweep() -> dict[str, Any]:
-    """Probe one batch from the queue.
+async def probe_one_handle(handle: str) -> str:
+    """Probe one handle, reading the network settings for itself.
 
-    Returns a summary dict, which the scheduler surfaces as the job's `detail` —
-    the only progress reporting this job needs, since the verdicts themselves are
-    rows the report read already joins.
+    The entry point the lane consumer calls (ticket 36, ADR-012). The sweep
+    used to load the settings once and hand them to every probe in the batch;
+    a batch is now N independent messages that may be drained minutes apart, so
+    each reads them at the moment it runs. One extra settings read per probe,
+    against a fetch that takes seconds — and it means an operator's proxy edit
+    reaches the queued backlog instead of being fixed at enqueue time.
+
+    Swallows its own failures. A probe that raises would leave the message on
+    the lane to be redelivered up to `SYNC_QUEUE_MAX_READ_COUNT` times, which
+    is the wrong shape for this: the handle stays in `tg_discover_probes` and a
+    later sweep re-enqueues it, so the retry lives in the backlog table rather
+    than in the queue's redelivery count.
+    """
+    (
+        proxies,
+        proxy_concurrency,
+        tor_auto_rotate,
+        tor_rotation_threshold,
+    ) = await run_db(_load_network)
+    try:
+        return await _probe_one(
+            handle,
+            proxies=proxies,
+            proxy_concurrency=proxy_concurrency,
+            tor_auto_rotate=tor_auto_rotate,
+            tor_rotation_threshold=tor_rotation_threshold,
+        )
+    except Exception:  # noqa: BLE001
+        logger.exception("Discover probe failed for @%s", handle)
+        return "unknown"
+
+
+async def run_discover_probe_sweep() -> dict[str, Any]:
+    """Queue one batch of handles for probing.
+
+    Returns a summary dict, which the scheduler surfaces as the job's `detail`.
+    It reports what was **enqueued** rather than what was found: since ADR-012
+    the fetches happen in the lane consumer, so this function is finished long
+    before the verdicts are. The verdicts themselves are rows the report read
+    already joins, which is why that was never the interesting number.
     """
     if _sweep_lock.locked():
         return {"skipped": True, "reason": "sweep already running"}
@@ -152,40 +194,25 @@ async def run_discover_probe_sweep() -> dict[str, Any]:
         if not handles:
             return {"skipped": True, "reason": "queue empty"}
 
-        (
-            proxies,
-            proxy_concurrency,
-            tor_auto_rotate,
-            tor_rotation_threshold,
-        ) = await run_db(_load_network)
-        sem = asyncio.Semaphore(PROBE_SCRAPE_CONCURRENCY)
-        tally = {"ok": 0, "unavailable": 0, "unknown": 0}
+        # **Enqueued, not fetched here** (ticket 36, ADR-012 D9). This used to
+        # gather the batch behind an `asyncio.Semaphore(2)` of its own: a
+        # second scraping budget nothing counted, and fetches that took no Slot
+        # and so bound to no proxy — the walk-hopping defect the Partition
+        # exists to remove, in the one job that runs unprompted.
+        #
+        # The messages drain from `discover_probe_background`, strictly after
+        # every sync lane, so a probe starts only when nothing else wants a
+        # Slot. That is the pacing the old semaphore was approximating by being
+        # small, expressed as an ordering instead of a number.
+        # Imported here rather than at the top: `sync_queue` reaches back into
+        # this module for `probe_one_handle` when it drains one, and a pair of
+        # top-level imports would be a cycle. This direction is the lazy one
+        # because it runs once per tick, where the consumer's runs per message.
+        from app.jobs.sync_queue import enqueue_discover_probes
 
-        async def _run_one(handle: str) -> None:
-            async with sem:
-                try:
-                    status = await _probe_one(
-                        handle,
-                        proxies=proxies,
-                        proxy_concurrency=proxy_concurrency,
-                        tor_auto_rotate=tor_auto_rotate,
-                        tor_rotation_threshold=tor_rotation_threshold,
-                    )
-                except Exception:  # noqa: BLE001
-                    # A probe that blows up must not take the batch with it. The
-                    # handle stays queued and a later tick retries it; the only
-                    # cost of getting here is one wasted fetch.
-                    logger.exception("Discover probe failed for @%s", handle)
-                    tally["unknown"] += 1
-                    return
-            tally[status if status in tally else "unknown"] += 1
-
-        await asyncio.gather(*[_run_one(handle) for handle in handles])
+        enqueued = await enqueue_discover_probes(handles)
 
         return {
-            "probed": len(handles),
-            "resolved": tally["ok"],
-            "unavailable": tally["unavailable"],
-            "failed": tally["unknown"],
+            "enqueued": enqueued,
             "remaining": await run_db(_remaining),
         }

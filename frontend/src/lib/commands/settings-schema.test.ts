@@ -49,8 +49,6 @@ function makeContext(
     setTorAutoRotate: () => {},
     torRotationThreshold: 10,
     setTorRotationThreshold: () => {},
-    syncConcurrency: 3,
-    setSyncConcurrency: () => {},
     embeddingsEnabled: false,
     setEmbeddingsEnabled: () => {},
     embeddingsPaused: false,
@@ -267,21 +265,28 @@ describe("the catalog→settings binding actually fires", () => {
   })
 
   test("a numeric editor leaves an unbounded control unbounded", () => {
-    // `syncConcurrency` declares min but no max. Before G3 the clamp read
-    // `control.max ?? undefined`, so this already passed through — the point is
-    // that removing the `?? 0` / `?? 1` fallbacks did not change it.
+    // `syncFailureBackoffMinutes` declares min but no max. Before G3 the
+    // clamp read `control.max ?? undefined`, so this already passed through —
+    // the point is that removing the `?? 0` / `?? 1` fallbacks did not change
+    // it. It was `syncConcurrency` until ADR-012 deleted that setting; the
+    // example has to be *some* unbounded number editor and this is the nearest
+    // one, in the same section with the same control shape.
     const commands = buildSettingCommands()
-    const cmd = commands.find((c) => c.id === "edit-sync-concurrency")
+    const cmd = commands.find(
+      (c) => c.id === "edit-sync-failure-backoff-minutes",
+    )
     expect(cmd?.editorField?.max).toBeUndefined()
 
     const { ctx, calls } = spyContext()
     cmd?.editorField?.apply?.(ctx, "9999")
-    expect(calls).toEqual([["setSyncConcurrency", 9999]])
+    expect(calls).toEqual([["setSyncFailureBackoffMinutes", 9999]])
   })
 
   test("a numeric editor rejects input below the catalog's min", () => {
     const commands = buildSettingCommands()
-    const cmd = commands.find((c) => c.id === "edit-sync-concurrency")
+    const cmd = commands.find(
+      (c) => c.id === "edit-sync-failure-backoff-minutes",
+    )
 
     const { ctx, calls } = spyContext()
     cmd?.editorField?.apply?.(ctx, "-5")
@@ -290,7 +295,9 @@ describe("the catalog→settings binding actually fires", () => {
 
   test("a numeric editor ignores non-numeric input", () => {
     const commands = buildSettingCommands()
-    const cmd = commands.find((c) => c.id === "edit-sync-concurrency")
+    const cmd = commands.find(
+      (c) => c.id === "edit-sync-failure-backoff-minutes",
+    )
 
     const { ctx, calls } = spyContext()
     cmd?.editorField?.apply?.(ctx, "not a number")

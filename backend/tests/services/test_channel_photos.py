@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 import os
 import time
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
@@ -17,25 +17,22 @@ def isolated_photo_dir(tmp_path, monkeypatch):
     monkeypatch.setattr(channel_photos.settings, "CHANNEL_PHOTO_DIR", str(tmp_path))
 
 
-def _mock_http_client() -> MagicMock:
-    mock_client_cls = MagicMock()
-    mock_client = AsyncMock()
-    mock_client.__aenter__.return_value = mock_client
-    mock_client.__aexit__.return_value = None
-    mock_response = MagicMock()
-    mock_response.raise_for_status = MagicMock()
-    mock_response.content = b"fake-image-bytes"
-    mock_response.headers = {"content-type": "image/jpeg"}
-    mock_client.get = AsyncMock(return_value=mock_response)
-    mock_client_cls.return_value = mock_client
-    return mock_client_cls
+def _mock_fetch() -> AsyncMock:
+    """Stand in for `fetch_with_retry`, which is how this module fetches now.
+
+    It used to patch `channel_photos.httpx.AsyncClient`, because the module
+    opened a bare client and leaked the deployment's real IP past the proxy
+    lane. ADR-012 moved it onto `fetch_with_retry`; the module no longer names
+    `httpx`, and `test_image_cache_egress.py` fails if it ever does again.
+    """
+    return AsyncMock(return_value=((b"fake-image-bytes", "image/jpeg"), None))
 
 
 def test_cache_and_read_channel_photo() -> None:
     async def _run() -> None:
         with patch(
-            "app.services.channel_photos.httpx.AsyncClient",
-            _mock_http_client(),
+            "app.services.channel_photos.fetch_with_retry",
+            _mock_fetch(),
         ):
             cached = await channel_photos.cache_channel_photo(
                 "mychannel",
@@ -83,8 +80,8 @@ def test_resolve_cached_photo_url_returns_api_path() -> None:
 def test_delete_cached_photo_removes_files() -> None:
     async def _run() -> None:
         with patch(
-            "app.services.channel_photos.httpx.AsyncClient",
-            _mock_http_client(),
+            "app.services.channel_photos.fetch_with_retry",
+            _mock_fetch(),
         ):
             await channel_photos.cache_channel_photo(
                 "remove-me",

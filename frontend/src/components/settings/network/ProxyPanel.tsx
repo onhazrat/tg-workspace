@@ -274,8 +274,8 @@ export const ProxyPanel: React.FC<{
                   Effective parallel HTTP capacity ≈{" "}
                   {proxyCapacity || proxyDefaultConcurrency} slot
                   {(proxyCapacity || proxyDefaultConcurrency) === 1 ? "" : "s"}.
-                  Keep <strong>Sync concurrency</strong> (Scraping &amp; Sync)
-                  at or below this when using proxies.
+                  This is how many channels are scraped at once — there is no
+                  separate ceiling to keep below it any more.
                 </p>
               </div>
 

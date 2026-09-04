@@ -51,7 +51,6 @@ export const publishSummary = async (
   text: string,
   metadataText?: string,
   proxyEnabled?: boolean,
-  proxies?: string[],
   torAutoRotate?: boolean,
   torRotationThreshold?: number,
 ): Promise<PublishResult> => {
@@ -62,7 +61,6 @@ export const publishSummary = async (
       text,
       metadataText,
       proxyEnabled,
-      proxies,
       torAutoRotate,
       torRotationThreshold,
     }
@@ -129,7 +127,6 @@ export const fetchBotInfo = async (
   method: string,
   params?: Record<string, string | number>,
   proxyEnabled?: boolean,
-  proxies?: string[],
   torAutoRotate?: boolean,
   torRotationThreshold?: number,
 ): Promise<any> => {
@@ -137,7 +134,6 @@ export const fetchBotInfo = async (
     method,
     params,
     proxyEnabled,
-    proxies,
     torAutoRotate,
     torRotationThreshold,
   }

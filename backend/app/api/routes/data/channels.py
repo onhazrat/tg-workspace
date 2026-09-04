@@ -6,6 +6,7 @@ path and operation id is unchanged.
 """
 
 import asyncio
+import contextlib
 import json
 import time
 import uuid
@@ -17,6 +18,7 @@ from fastapi.responses import StreamingResponse
 
 from app.api.deps import CurrentUser, SessionDep
 from app.api.http_cache import json_response_with_etag
+from app.core import pg_notify
 from app.core.config import settings
 from app.models import User
 from app.schemas.channels import (
@@ -53,8 +55,7 @@ from app.services.bulk_follow import (
     cancel_follow_job,
     create_follow_job,
     get_follow_job,
-    run_follow_job,
-    wait_follow_job_update,
+    request_follow_job_run,
 )
 from app.services.channel_setting_groups import (
     bulk_assign_setting_group as bulk_assign_setting_group_impl,
@@ -93,6 +94,8 @@ from app.services.channels import (
 from app.services.channels import (
     upsert_channel as upsert_channel_impl,
 )
+from app.services.follow_jobs import FOLLOW_JOB_EVENTS_CHANNEL
+from app.services.network_settings import resolve_proxies_for_user
 from app.services.sync_meta import get_sync_meta, touch_sync
 from app.services.tenancy import assert_owner, assert_owner_on_write
 
@@ -218,6 +221,7 @@ def upsert_channel(
 @router.post("/channels/bulk-follow", response_model=BulkFollowStartResponse)
 async def start_bulk_follow(
     body: BulkFollowRequest,
+    session: SessionDep,
     current_user: CurrentUser,
 ) -> BulkFollowStartResponse:
     if not body.channels:
@@ -234,17 +238,36 @@ async def start_bulk_follow(
         }
         for entry in body.channels
     ]
+    # Resolved from settings, never from the body (ADR-012) — the browser used
+    # to send `activeProxies` here, derived from `defaultProxyUrls`, which is
+    # the setting this reads.
+    #
+    # Read and projected to a plain list **before** the awaits below, and the
+    # session closed by the `with`. Leaving the request's session open across
+    # `create_follow_job` (a thread hop and an insert) and the trigger's
+    # `NOTIFY` is the `idle in transaction` shape `CLAUDE.md` names: it pins
+    # the xmin horizon so autovacuum reclaims nothing. Found in review.
+    resolved_proxies: list[str] = []
+    if body.proxy_enabled:
+        resolved_proxies = list(resolve_proxies_for_user(session, current_user.id))
+    session.close()
+
     job = await create_follow_job(
         channels=channel_payloads,
         user_id=str(current_user.id),
-        proxies=list(body.proxies or []) if body.proxy_enabled else [],
+        proxies=resolved_proxies,
         tor_auto_rotate=body.tor_auto_rotate,
         tor_rotation_threshold=body.tor_rotation_threshold,
     )
     if not job.results:
         raise HTTPException(status_code=400, detail="No valid channel names provided")
 
-    asyncio.create_task(run_follow_job(job))
+    # **The worker runs it, not this process** (ADR-012 D7). It was
+    # `asyncio.create_task(run_follow_job(job))`, which put a `t.me` fetch per
+    # handle in the web tier — outside the scraping Partition, so four
+    # concurrent probes on a semaphore of their own, bound to no proxy, and
+    # lost entirely if the API restarted mid-batch.
+    await request_follow_job_run(job.follow_job_id)
     return BulkFollowStartResponse(followJobId=job.follow_job_id)
 
 
@@ -316,42 +339,59 @@ def get_bulk_follow_status(
 async def bulk_follow_events(
     follow_job_id: str, current_user: CurrentUser
 ) -> StreamingResponse:
-    job = _visible_follow_job(follow_job_id, current_user)
+    # Called for the refusal, not the value: the stream re-reads the job on
+    # every wakeup, and authorising once at the top is what keeps a foreign id
+    # out of the stream at all.
+    _visible_follow_job(follow_job_id, current_user)
 
     throttle_ms = settings.SYNC_JOB_SSE_THROTTLE_MS
     throttle_s = max(throttle_ms, 1) / 1000
 
     async def event_stream() -> AsyncIterator[str]:
-        seen_seq = job._update_seq
+        # **Subscribed before the first read**, so a job that finishes between
+        # the read and the subscribe is still seen: the loop re-reads the row
+        # on every wakeup, and a notification that arrives early is one wasted
+        # read rather than a stream that hangs to its timeout.
+        #
+        # The wait is a `pg_notify` queue since ticket 36, not the runner's own
+        # `asyncio.Condition`. The runner is in the worker now, so there is no
+        # condition in this process to wait on — every API replica would have
+        # sat on `throttle_s` polls of a dict that is always empty.
+        queue = pg_notify.listener(FOLLOW_JOB_EVENTS_CHANNEL).subscribe()
         last_sent_at = 0.0
         last_snapshot: dict[str, Any] | None = None
 
-        while True:
-            current_job = get_follow_job(follow_job_id)
-            if current_job is None:
-                break
+        try:
+            while True:
+                current_job = get_follow_job(follow_job_id)
+                if current_job is None:
+                    break
 
-            snapshot = current_job.to_camel()
-            now_ms = time.monotonic() * 1000
-            status_changed = _follow_status_changed(last_snapshot, snapshot)
-            should_send = (
-                last_snapshot is None
-                or status_changed
-                or now_ms - last_sent_at >= throttle_ms
-            )
+                snapshot = current_job.to_camel()
+                now_ms = time.monotonic() * 1000
+                status_changed = _follow_status_changed(last_snapshot, snapshot)
+                should_send = (
+                    last_snapshot is None
+                    or status_changed
+                    or now_ms - last_sent_at >= throttle_ms
+                )
 
-            if should_send:
-                yield f"data: {json.dumps(snapshot)}\n\n"
-                last_sent_at = now_ms
-                last_snapshot = snapshot
+                if should_send:
+                    yield f"data: {json.dumps(snapshot)}\n\n"
+                    last_sent_at = now_ms
+                    last_snapshot = snapshot
 
-            if snapshot["status"] in _TERMINAL_FOLLOW_STATUSES:
-                yield "data: [DONE]\n\n"
-                return
+                if snapshot["status"] in _TERMINAL_FOLLOW_STATUSES:
+                    yield "data: [DONE]\n\n"
+                    return
 
-            seen_seq = await wait_follow_job_update(
-                current_job, seen_seq=seen_seq, timeout_s=throttle_s
-            )
+                # The timeout is the fallback, not the mechanism: `NOTIFY` has
+                # no replay, so a ring lost to a reconnect must not leave the
+                # browser watching a spinner for ever.
+                with contextlib.suppress(TimeoutError):
+                    await asyncio.wait_for(queue.get(), timeout=throttle_s)
+        finally:
+            pg_notify.listener(FOLLOW_JOB_EVENTS_CHANNEL).unsubscribe(queue)
 
     return StreamingResponse(event_stream(), media_type="text/event-stream")
 

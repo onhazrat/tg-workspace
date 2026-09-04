@@ -22,12 +22,13 @@ this is safe by construction — asyncio gives it a consistent view of
 `_active_jobs` between awaits — and it is exactly the assumption ticket 11's
 database claim is what removes.
 
-**Concurrency belongs to the worker, not to the job.** `run_sync_job` sized an
-`asyncio.Semaphore` per job, which meant two jobs each got the full budget. One
-process-wide semaphore is both simpler and closer to what the number always
-meant: how many Channels this deployment may scrape at once. Sized from
-`_load_sync_job_concurrency`, which reads the operator's `syncConcurrency`
-against the proxy pool's real capacity.
+**Concurrency belongs to the process, not to the job or to this module.**
+`run_sync_job` sized an `asyncio.Semaphore` per job, so two jobs each got the
+full budget, and this module then held a second gate of its own — the `2N`
+over-count ticket 36 was written for. Both are gone. There is one Partition per
+process, it lives in `services/proxy_pool.py`, and its width derives from the
+proxy fleet rather than from a number an operator has to keep plausible against
+it (ADR-012).
 
 **A slot is filled the moment it frees, and one message goes in it** (ticket
 12). Ticket 10 read a batch per lane and awaited it as a unit, so a Channel in
@@ -41,10 +42,11 @@ needs to put it down while it waits.
 
 *One caveat, stated rather than glossed:* `auto_summary._sync_channels_for_summary`
 still calls `run_sync_job` directly, because it needs the sync finished before
-it can summarise — enqueueing there would invert its control flow. It runs in
-this same worker process and opens its own semaphore, so the gate below is the
-cap on *lane* work, not on every scrape the worker performs. Ticket 13's
-one-worker-per-proxy partitioning is what makes that distinction stop mattering.
+it can summarise — enqueueing there would invert its control flow. It stays
+outside the lane ladder for that reason. It is **not** outside the Partition
+any more: since ADR-012 its fan-out takes Slots from the same one this drain
+does, so it is counted where it used to be a second budget, and its walks are
+pinned where they used to hop proxies page by page.
 
 **The lane is chosen from the ledger** (ticket 23). `lane_for_job` reads what
 the account that will be charged has already spent on this Budget today and
@@ -78,7 +80,6 @@ import logging
 import time
 import uuid
 from collections import deque
-from collections.abc import AsyncIterator
 from typing import Any
 
 from sqlalchemy import text as sa_text
@@ -91,11 +92,10 @@ from app.core.request_meter import metered
 from app.services import pgmq
 from app.services.proxy_pacing import PACE_MAX_MS
 from app.services.proxy_pool import (
-    ProxyWorker,
-    ProxyWorkerPool,
+    SyncSlot,
     bound_to,
-    build_workers,
-    ensure_pool_configured,
+    get_partition,
+    partition_width,
 )
 from app.services.quota import (
     Budget,
@@ -117,9 +117,12 @@ from app.services.scraper_jobs import (
 )
 from app.services.sync_lane_control import paused_lanes
 from app.services.sync_lanes import (
+    DISCOVER_PROBE_LANE,
     DRAIN_ORDER,
+    NON_SYNC_GROUP,
     TIER_ORDER,
     LaneScheduler,
+    is_sync_lane,
     lane_for_budget,
     lane_for_spend,
     lanes_in_tier,
@@ -154,13 +157,6 @@ _in_flight: set[tuple[str, str | None]] = set()
 #: `(lane, msg_id)` for every message claimed from PGMQ and not yet resolved.
 #: Read only by `_release_claimed_messages` on shutdown — see that function.
 _claimed_messages: set[tuple[str, int]] = set()
-
-#: The worker's scraping partition, built on first use because it derives from
-#: the configured proxies rather than from a constant (ticket 13).
-_worker_partition: ProxyWorkerPool | None = None
-_partition_signature: tuple[int, tuple[tuple[str, int], ...]] = (0, ())
-_partition_width = 0
-_partition_lock = asyncio.Lock()
 
 #: How long the drain waits for a healthy worker before concluding that every
 #: proxy is parked. Only reached when no worker is free *and* none can become
@@ -246,75 +242,30 @@ def visibility_timeout_seconds() -> int:
     purpose: VT only bounds how long a genuinely crashed worker's message sits
     before redelivery, not how long the SSE stream takes to show progress.
 
-    One value for all three lanes, because after ticket 10 every message is the
-    same shape: one Channel. Decision 32's "generous on the bulk lane" was
-    written when a bulk message meant fifty Channels behind one timeout; a
-    per-lane VT would now be describing a difference that no longer exists.
+    One value for all six *sync* lanes, because after ticket 10 every message
+    on them is the same shape: one Channel. Decision 32's "generous on the bulk
+    lane" was written when a bulk message meant fifty Channels behind one
+    timeout; a per-lane VT would be describing a difference that no longer
+    exists.
+
+    **The probe lane is the exception, and it earns one** (ticket 36). Its
+    message is a single `t.me/<handle>` fetch, not a page walk, so the ~2.4
+    hours a Channel needs would leave a probe killed mid-flight invisible for
+    the rest of the afternoon — during which its `DEQUEUE_LEASE_MINUTES` lease
+    lapses and the sweep enqueues a duplicate. Found in review.
     """
     return int(2 * _worst_case_channel_sync_seconds())
 
 
-async def _partition() -> ProxyWorkerPool:
-    """The worker's scraping partition, built once and refreshed on change.
+def probe_visibility_timeout_seconds() -> int:
+    """How long a claimed probe message stays invisible. One fetch's worth.
 
-    **This replaced a single `asyncio.Semaphore`** (ticket 13). The gate said
-    how many Channels could be walked at once and nothing about which proxy any
-    of them used, so a burst of syncs piled onto whichever lane happened to be
-    least loaded and one Channel's backward walk hopped proxies page by page.
-    The partition is one worker per proxy slot, each pinned to its proxy for
-    the whole message: the count now *derives* from the proxies rather than
-    being a number that has to be kept plausible against them.
-
-    `syncConcurrency` still truncates the list. An operator lowering it is
-    asking for less parallelism, and `build_workers` deals round-robin so that
-    a cut list is spread across distinct proxies rather than stacked on the
-    first one.
-
-    **The check-then-await is the bug the lock guards**, and it predates this
-    ticket: `drain_sync_lanes` used to gather a whole batch of coroutines, and
-    without the lock every one of them saw an unbuilt gate, awaited the
-    settings read, and then assigned its *own*. Ten Channels would scrape at
-    once whatever the setting said — silently, only under concurrency, and
-    pointed at the proxies this deployment is trying to be polite to.
+    `_worst_case_fetch_seconds` is exactly the right size: a probe is one
+    `fetch_with_retry` call and nothing else. Doubled for the same reason the
+    sync timeout is — the walk is not the whole of the work, and a redelivery
+    that races a still-running handler is worse than one that waits.
     """
-    global _worker_partition, _partition_signature, _partition_width
-    async with _partition_lock:
-        from app.services.sync_orchestrator import _load_partition_inputs
-
-        concurrency, proxies, default_slots, overrides = await asyncio.to_thread(
-            _load_partition_inputs
-        )
-        pool = await ensure_pool_configured(proxies, default_slots, overrides)
-        lanes = pool.lanes()
-        signature = (
-            concurrency,
-            tuple((lane.url, lane.max_parallel) for lane in lanes),
-        )
-
-        current = _worker_partition
-        rebuild = current is None or (
-            signature != _partition_signature
-            # Rebuilt only while nothing holds a worker, because replacing the
-            # partition mid-flight loses track of what is outstanding: the
-            # in-flight messages would release into an object nobody reads and
-            # the new one would believe itself idle. An operator's change lands
-            # on the next idle drain rather than needing a restart.
-            and not any(worker.busy for worker in current.workers)
-        )
-        if rebuild:
-            current = ProxyWorkerPool(build_workers(lanes, concurrency))
-            _worker_partition = current
-            _partition_signature = signature
-            _partition_width = len(current)
-        assert current is not None
-        return current
-
-
-def reset_worker_partition_for_tests() -> None:
-    global _worker_partition, _partition_signature, _partition_width
-    _worker_partition = None
-    _partition_signature = (0, ())
-    _partition_width = 0
+    return int(2 * _worst_case_fetch_seconds())
 
 
 def _send(lane: str, payload: dict[str, Any]) -> int:
@@ -366,126 +317,6 @@ def queued_job_ids() -> set[str]:
     return ids
 
 
-class SlotLost(Exception):
-    """A released permit could not be taken back inside the caller's deadline.
-
-    Raised out of `SyncSlot.released(reacquire_within=...)`. It is not an error
-    condition so much as an answer: the waiter has run out of the time it was
-    given, and it must not proceed without a permit.
-    """
-
-
-class SyncSlot:
-    """One worker out of the partition, which can be handed back.
-
-    Before ticket 13 this wrapped a permit on a single shared semaphore. It now
-    wraps a `ProxyWorker` — the same lifecycle, plus the proxy that worker is
-    bound to, which is what `_handle_one` installs for the fetches underneath.
-
-    The releasable shape is ticket 12's and the reason is ticket 11's: a
-    request that finds another sync already running its Channel waits *inside*
-    its slot, so N requests for one busy Channel occupied N scraping slots
-    while scraping nothing. `released()` hands the worker back for the duration
-    of a wait and takes one again before the caller does anything that needs
-    it. The worker it gets back may be a different one, which is fine and is
-    the reason binding happens per message rather than per job: a waiter has
-    not fetched anything yet.
-
-    **Why this still cannot deadlock.** Ticket 11's argument was "the holder
-    acquires its slot before it can claim, so it is always able to finish", and
-    that half is untouched — a runner holding a Channel's claim holds its
-    worker for as long as it walks and never releases mid-walk. Only a *waiter*
-    releases, and a waiter holds no claim. So there is no slot held by
-    something waiting for a claim held by something waiting for a slot, which
-    is the only cycle available here.
-    """
-
-    def __init__(self, pool: ProxyWorkerPool) -> None:
-        self._pool = pool
-        self._worker: ProxyWorker | None = None
-
-    @classmethod
-    def holding(cls, pool: ProxyWorkerPool, worker: ProxyWorker) -> SyncSlot:
-        """Wrap a worker the caller has *already* acquired.
-
-        The dispatcher acquires before it knows whether there is a message to
-        put in the slot, because that wait is its backpressure. This is how the
-        worker it is holding becomes the slot it hands over, without the object
-        taking a second one.
-        """
-        slot = cls(pool)
-        slot._worker = worker
-        return slot
-
-    @property
-    def worker(self) -> ProxyWorker | None:
-        return self._worker
-
-    @property
-    def proxy_url(self) -> str | None:
-        """The proxy this slot's fetches must use — satisfies `ProxyBinding`.
-
-        Read live rather than captured, because `released()` can hand back one
-        worker and take a different one. See `ProxyBinding`.
-        """
-        return self._worker.proxy_url if self._worker is not None else None
-
-    async def acquire(self) -> None:
-        if self._worker is None:
-            worker = await self._pool.acquire()
-            if worker is None:  # pragma: no cover - unbounded acquire waits
-                raise SlotLost
-            self._worker = worker
-
-    def release(self) -> None:
-        if self._worker is not None:
-            worker, self._worker = self._worker, None
-            self._pool.release(worker)
-
-    async def acquire_within(self, timeout: float) -> bool:
-        """Take a worker, giving up after `timeout` seconds. True if taken.
-
-        The bounded form exists because the unbounded one is not bounded by
-        anything the caller can see: the dispatcher is sitting on the
-        partition's own `acquire()` and takes the freed worker at once, so a
-        waiter handing its worker back can be parked here for the length of
-        somebody else's whole page walk — during which it evaluates neither its
-        own deadline nor its job's cancellation. See
-        `sync_orchestrator._put_slot_down`.
-        """
-        if self._worker is not None:
-            return True
-        worker = await self._pool.acquire(timeout=timeout)
-        if worker is None:
-            return False
-        self._worker = worker
-        return True
-
-    @contextlib.asynccontextmanager
-    async def released(
-        self, *, reacquire_within: float | None = None
-    ) -> AsyncIterator[None]:
-        """Hand the permit back for the body, re-take it afterwards.
-
-        With `reacquire_within`, a re-acquire that does not complete in time
-        leaves the slot **not held** and raises `SlotLost`. The caller must then
-        stop rather than carry on: holding no permit and scraping anyway is the
-        cap the gate exists to enforce, quietly exceeded.
-
-        If the body is cancelled the re-acquire raises `CancelledError` too and
-        the slot stays empty, which is correct: a cancelled runner wants its
-        worker gone, and the dispatcher's own `release()` is then a no-op.
-        """
-        self.release()
-        try:
-            yield
-        finally:
-            if reacquire_within is None:
-                await self.acquire()
-            elif not await self.acquire_within(reacquire_within):
-                raise SlotLost
-
-
 def _batch_size() -> int:
     """How many messages one read claims into a lane's buffer.
 
@@ -499,7 +330,7 @@ def _batch_size() -> int:
     dispatched is one message at a time into a slot that has just come free
     (`drain_sync_lanes`), so a slow Channel delays nothing but itself.
     """
-    return max(settings.SYNC_QUEUE_BATCH_SIZE, _partition_width)
+    return max(settings.SYNC_QUEUE_BATCH_SIZE, partition_width())
 
 
 #: How many accounts one lane read will interleave between. A bound because
@@ -553,7 +384,13 @@ def _read_interleaved(lane: str, qty: int) -> list[pgmq.PgmqMessage]:
     the lowest-sorted ids keep refilling the window for as long as they have
     work, and the twenty-first account is never read at all.
     """
-    vt = visibility_timeout_seconds()
+    # Per lane, because the probe lane's message is one fetch rather than a
+    # page walk — see `probe_visibility_timeout_seconds`.
+    vt = (
+        visibility_timeout_seconds()
+        if is_sync_lane(lane)
+        else probe_visibility_timeout_seconds()
+    )
     with Session(engine) as session:
         cursor = _interleave_cursor.get(lane)
         owners = pgmq.distinct_due_values(
@@ -658,12 +495,26 @@ class _LaneBuffers:
         self._paused = frozenset(await asyncio.to_thread(_paused_lanes))
         self._paused_at = time.monotonic()
 
-    async def lanes_with_work(self, tier: str) -> set[str]:
-        """Which lanes of one tier can hand over a message now, refilling from
-        the queue where a buffer has run dry."""
+    async def lanes_with_work(self, group: tuple[str, ...]) -> set[str]:
+        """Which lanes of one group can hand over a message now, refilling from
+        the queue where a buffer has run dry.
+
+        Takes the lanes rather than a *tier*, which is what it took until
+        ticket 36. `DISCOVER_PROBE_LANE` belongs to no tier, so a
+        tier-shaped parameter made it unreachable: the sweep enqueued a batch
+        every tick, nothing ever read it, and every handle's dequeue lease
+        lapsed so the next sweep enqueued the same handles again. The queue
+        grew without bound and no handle ever got a verdict.
+
+        Caught in review, and it is worth saying why the guards missed it:
+        `test_probe_lane.py` drove `LaneScheduler.next_lane` with a hand-built
+        `available` set, so it asserted the *policy* while the lane was never
+        offered to it at all. `test_a_probe_drains_through_the_real_loop` goes
+        through `drain_sync_lanes` for that reason.
+        """
         await self._refresh_pauses()
         ready: set[str] = set()
-        for lane in lanes_in_tier(tier):
+        for lane in group:
             if lane in self._paused:
                 # Checked before the buffer, not after: a lane paused mid-drain
                 # may already have messages claimed into its buffer, and serving
@@ -707,6 +558,10 @@ async def _next_message(
     Re-evaluated on every call rather than latched, which is what makes normal
     work arriving mid-drain preempt the next best-effort pick.
 
+    Non-sync lanes are offered last, as their own group. They belong to no
+    tier, so a loop over `TIER_ORDER` alone never reaches them — which is
+    exactly what shipped and had to be fixed in review.
+
     **The tier rule itself is `LaneScheduler`'s, not this function's**, and it
     would still hold if this offered every lane at once — which is how it was
     mutation-tested, and the mutation there stays green on purpose. Offering one
@@ -716,8 +571,12 @@ async def _next_message(
     places would only be a second opinion if either could change the answer, and
     only one of them can.
     """
-    for tier in TIER_ORDER:
-        available = await buffers.lanes_with_work(tier)
+    # Sync tiers in order, then the declared non-sync lanes — the same
+    # sequence `LaneScheduler.next_lane` applies, offered one group at a time
+    # for the read-avoidance reason above. The probe group last is what makes
+    # a probe wait behind every sync lane including best-effort.
+    for group in (*(lanes_in_tier(tier) for tier in TIER_ORDER), NON_SYNC_GROUP):
+        available = await buffers.lanes_with_work(group)
         if not available:
             continue
         lane = scheduler.next_lane(available)
@@ -852,6 +711,31 @@ async def enqueue_sync_job(job: SyncJobState, user_id: uuid.UUID | None) -> None
         logger.warning("failed to ring the sync worker for lane %s", lane)
 
 
+async def enqueue_discover_probes(handles: list[str]) -> int:
+    """Queue one probe message per handle, then ring the worker.
+
+    The Discover sweep's whole job since ADR-012. It carries no `jobId` and no
+    `userId`: a probe answers a question about the corpus, and ticket 23 left
+    it charged to nobody for that reason — `DiscoverHandleProbe` is
+    corpus-scoped, so billing one account for deployment-wide work is what the
+    three Budgets exist to prevent.
+
+    No ceiling check either, and that is the same fact rather than an omission:
+    a ceiling is per account per Budget, and this has neither.
+    """
+    if not handles:
+        return 0
+    payloads = [{"handle": handle} for handle in handles]
+    await asyncio.to_thread(_send_batch, DISCOVER_PROBE_LANE, payloads)
+    try:
+        await asyncio.to_thread(
+            pg_notify.publish, SYNC_LANE_WAKE_CHANNEL, {"lane": DISCOVER_PROBE_LANE}
+        )
+    except Exception:  # noqa: BLE001
+        logger.warning("failed to ring the sync worker for the probe lane")
+    return len(payloads)
+
+
 async def _guarded_drain() -> None:
     try:
         await drain_sync_lanes()
@@ -971,25 +855,6 @@ async def _run_channel(
     await _finalize_if_complete(job)
 
 
-async def _run_whole_job(job: SyncJobState, user_id: uuid.UUID | None) -> None:
-    """The pre-ticket-10 path, for messages already on a lane at deploy time.
-
-    **Keeps its permit**, although `run_sync_job` opens a semaphore of its own
-    sized to the same `syncConcurrency` and so is not limited by ours. Releasing
-    it looks like the tidy thing and is the worse one: the drain is sitting on
-    `gate.acquire()`, so a freed permit is immediately spent on another
-    per-Channel sync and the worker runs `2N` scrapes against Telegram instead
-    of `2N - 1`. Neither number is good — this is the legacy path, live only for
-    the messages in flight across one deploy — but holding is the smaller of
-    them, and the gate exists to bound the request rate rather than to be
-    accounted for exactly.
-    """
-    from app.services.sync_orchestrator import run_sync_job
-
-    claim_job(job)
-    await run_sync_job(job, user_id)
-
-
 async def _process_message(msg: pgmq.PgmqMessage, slot: SyncSlot) -> None:
     job_id = msg.message.get("jobId")
     if not job_id:
@@ -1019,17 +884,27 @@ async def _process_message(msg: pgmq.PgmqMessage, slot: SyncSlot) -> None:
     _in_flight.add(key)
     try:
         if not channel_id:
-            # Pre-ticket-10 message. `run_sync_job` opens and charges its own
-            # meter, so this path must not open a second one around it — that
-            # would bill the same Requests twice.
+            # **The pre-ticket-10 shape, and it is gone** (ADR-012). A payload
+            # naming a whole job rather than a Channel could only have been
+            # written to `manual_single_normal`, which `pgmq.meta` dates to
+            # 2026-08-25 09:10 UTC — 8.6 hours before ticket 10's migration
+            # created the other lanes. Every one of the 229,759 messages since
+            # archived carries a `channelId`, all six `q_` tables are empty
+            # (which covers claimed messages, whose rows stay with a future
+            # `vt`), and the oldest surviving archive row postdates the window
+            # by three days. Checked on staging; any other deployment needs the
+            # same two queries before this ships to it.
             #
-            # Every Channel in it runs under this message's single binding
-            # (ticket 13), so a fifty-Channel legacy job goes out one proxy and
-            # its own semaphore serialises it against that lane's slots. Left
-            # alone deliberately: this branch exists only for messages already
-            # on a lane across a deploy, and slow-but-correct beats giving the
-            # one shape that predates the partition a way around it.
-            await _run_whole_job(job, user_id)
+            # What it ran was `run_sync_job` under this message's single
+            # binding, keeping its permit while opening a semaphore of its own —
+            # the `2N` over-count. Archived loudly rather than silently, because
+            # a message arriving here now means the check above was wrong
+            # somewhere and that is worth a line in the log.
+            logger.error(
+                "sync message %s names a job with no channelId, a shape that "
+                "has not been written since 2026-08-25; archiving",
+                msg.msg_id,
+            )
             return
         # One meter per message: the Requests this Channel actually made,
         # accumulating into the same daily row as its siblings. Charged from a
@@ -1120,6 +995,30 @@ def _release_claimed_messages() -> None:
         _claimed_messages.clear()
 
 
+async def _process_probe_message(msg: pgmq.PgmqMessage) -> None:
+    """One Discover handle probe, on the Slot its caller already holds.
+
+    **No meter around it**, unlike `_process_message`. Probes are charged to
+    nobody (ticket 23): the verdict is corpus-scoped, so there is no account to
+    bill, and opening a meter here would attribute deployment-wide work to
+    whoever happened to trigger the sweep.
+
+    It holds a Slot it did not ask for, and that is accepted rather than
+    designed around (ADR-012 D13). `drain_sync_lanes` takes a Slot *before* it
+    chooses a message, because that wait is its backpressure; restructuring the
+    loop to choose first would save holding one for a single HTTP request, at a
+    moment when strict tier ordering already means nothing else wants it.
+    """
+    handle = msg.message.get("handle")
+    if not isinstance(handle, str) or not handle:
+        logger.warning("probe message %s has no handle; archiving", msg.msg_id)
+        return
+
+    from app.jobs.discover_probe import probe_one_handle
+
+    await probe_one_handle(handle)
+
+
 async def _handle_one(lane: str, msg: pgmq.PgmqMessage, slot: SyncSlot) -> str:
     """Process (or exhaust) one claimed message. Returns an outcome tag.
 
@@ -1154,7 +1053,15 @@ async def _handle_one_inner(lane: str, msg: pgmq.PgmqMessage, slot: SyncSlot) ->
         await asyncio.to_thread(_archive, lane, msg.msg_id)
         return "exhausted"
     try:
-        await _process_message(msg, slot)
+        # **Dispatched on the lane it was read from** (ADR-012 D12). The lane
+        # name carries the message's meaning by construction, so a `kind` field
+        # in the payload would be a second source of truth that can disagree
+        # with the first — and the disagreement would be silent, since both
+        # answers name a real handler.
+        if is_sync_lane(lane):
+            await _process_message(msg, slot)
+        else:
+            await _process_probe_message(msg)
     except Exception:
         # Do not archive: leave it on the queue so PGMQ redelivers it once
         # `vt` lapses, up to `SYNC_QUEUE_MAX_READ_COUNT` reads.
@@ -1233,7 +1140,7 @@ async def drain_sync_lanes() -> dict[str, int]:
     of 300 handles idling for a quarter of an hour. Nothing failed; it was just
     slow in a way no log line would explain.
     """
-    partition = await _partition()
+    partition = await get_partition()
     scheduler = LaneScheduler()
     paused = frozenset(await asyncio.to_thread(_paused_lanes))
     buffers = _LaneBuffers(paused)

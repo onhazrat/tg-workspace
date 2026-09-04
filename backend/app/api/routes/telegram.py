@@ -73,8 +73,13 @@ def _resolve_proxies(
     session: Session | None = None,
     user_id: uuid.UUID | None = None,
 ) -> list[str] | None:
-    if body.proxies:
-        return body.proxies
+    """The fleet this request goes out through, resolved from **settings**.
+
+    A `body.proxies` branch came first and won. It is gone (ADR-012): a request
+    must not choose its own egress, and the three browser call sites that sent
+    the field were sending `activeProxies`, derived from `defaultProxyUrls` —
+    the setting the next branch reads anyway.
+    """
     if session is not None and user_id is not None and body.proxy_enabled:
         proxies = resolve_proxies_for_user(session, user_id)
         return proxies or None
@@ -369,12 +374,28 @@ async def api_bot_file(
     token = _resolve_bot_token(session, credential_id, None, current_user=current_user)
     file_url = f"https://api.telegram.org/file/bot{token}/{path}"
     try:
-        async with httpx.AsyncClient(timeout=60.0, follow_redirects=True) as client:
-            response = await client.get(file_url)
-            response.raise_for_status()
-            content = response.content
-        content_type = response.headers.get("content-type", "application/octet-stream")
-        return Response(content=content, media_type=content_type)
+        # Through the Lane, like everything else that leaves this process
+        # (ADR-012). It was the last bare `httpx.AsyncClient` in `app/`: a
+        # deployment scraping over Tor fetched its bot files from its real
+        # address, and with no retry ladder at all a single dropped connection
+        # was a 502 the operator saw.
+        #
+        # `TELEGRAM_API_RETRIES`, the ladder the other Bot API calls use, not
+        # the page-fetch default — losing a page loses a sync, whereas this is
+        # one interactive download the browser can ask for again.
+        payload, _telemetry = await fetch_with_retry(
+            file_url,
+            retries=settings.TELEGRAM_API_RETRIES,
+            initial_delay_ms=settings.TELEGRAM_API_INITIAL_DELAY_MS,
+            proxies=resolve_proxies_for_user(session, current_user.id) or None,
+            proxy_concurrency=resolve_proxy_concurrency(load_network_settings(session)),
+            binary=True,
+        )
+        content, raw_content_type = payload
+        return Response(
+            content=content,
+            media_type=raw_content_type or "application/octet-stream",
+        )
     except HTTPException:
         raise
     except Exception as exc:  # noqa: BLE001

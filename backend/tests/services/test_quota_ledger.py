@@ -54,6 +54,7 @@ from app.models_tg import QuotaUsage
 from app.services import network
 from app.services.channel_setting_groups import SyncOperationMode
 from app.services.follows import get_operator_user_id
+from app.services.proxy_pool import ProxyWorkerPool
 from app.services.quota import (
     Budget,
     budget_for_sync_mode,
@@ -62,6 +63,7 @@ from app.services.quota import (
     usage_rows,
 )
 from app.services.telegram_web import TelegramWebViewUnavailable
+from tests.utils.partition import direct_partition
 
 TELEGRAM_URL = "https://t.me/s/somechannel"
 NOT_TELEGRAM_URL = "https://api.telegram.org/bot123/sendMessage"
@@ -544,13 +546,17 @@ def _run_job(
     monkeypatch.setattr(sync_orchestrator, "touch_job", noop)
     monkeypatch.setattr(sync_orchestrator, "persist_job", noop)
     monkeypatch.setattr(sync_orchestrator, "deactivate_job", lambda _job_id: None)
-    # No argument since ticket 22: the function reads only deployment-wide
-    # settings and the `user_id` it took was passed straight through to nothing.
-    # This stub is why the stale call site survived — a `lambda _uid` accepts
-    # whatever `run_db` hands it, and `run_db` was typed `Callable[..., T]`.
-    monkeypatch.setattr(
-        sync_orchestrator, "_load_sync_job_concurrency", lambda: (4, None)
-    )
+    # The Partition, stubbed, because `run_sync_job` takes Slots out of it
+    # rather than sizing a semaphore of its own since ADR-012. Four wide, which
+    # is what the `_load_sync_job_concurrency` stub this replaced returned — the
+    # concurrency is incidental to the ledger, and keeping the number the same
+    # keeps the change to what it is.
+    partition = direct_partition(4)
+
+    async def fake_partition() -> ProxyWorkerPool:
+        return partition
+
+    monkeypatch.setattr(sync_orchestrator, "get_partition", fake_partition)
 
     job = SyncJobState(
         job_id=f"quota-job-{uuid.uuid4().hex[:8]}",

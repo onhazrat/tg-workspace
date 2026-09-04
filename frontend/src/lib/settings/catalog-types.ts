@@ -84,7 +84,7 @@ export interface SettingCatalogEntry {
   control: SettingControl
   defaultValue: unknown
   /**
-   * For number editors: explicit command id (e.g. `edit-sync-concurrency`).
+   * For number editors: explicit command id (e.g. `edit-post-retention-days`).
    * Required when control.kind === "number" and the setting is palette-editable.
    */
   editorCommandId?: string

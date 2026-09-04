@@ -53,7 +53,6 @@ SYNC_LANES_KEY = "sync_lanes"
 SYNC_POLICY_FIELDS = frozenset(
     {
         "regularSyncIntervalMinutes",
-        "syncConcurrency",
         "syncFailureBackoffMinutes",
     }
 )

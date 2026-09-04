@@ -16,7 +16,6 @@ import { CatalogSettingRow } from "./CommonlyUsedSection"
 import { SettingAnchor } from "./SettingAnchor"
 
 const SYNC_CATALOG_IDS = [
-  "syncConcurrency",
   "regularSyncIntervalMinutes",
   "dynamicSyncEnabledDefault",
   "dynamicSyncExpectedPostsDefault",

@@ -141,7 +141,7 @@ function makeSetter<K extends AppSettingKey>(
 }
 
 /**
- * Build one setter per setting (setAiLanguage, setSyncConcurrency, ...). Call once —
+ * Build one setter per setting (setAiLanguage, setPostRetentionDays, ...). Call once —
  * the returned functions have stable identity for the provider's lifetime.
  */
 export function createAppSettingSetters(

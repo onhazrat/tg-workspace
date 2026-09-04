@@ -85,6 +85,7 @@ from app.models import User
 from app.models_tg import Channel, Post
 from app.services.follows import get_operator_user_id
 from app.services.tenancy import (
+    CREATED_AFTER_THE_BACKFILL,
     OWNER_COLUMN,
     SCOPES,
     Scope,
@@ -321,14 +322,48 @@ def test_the_frozen_inventory_is_the_one_derived_from_scopes(
     assert migration.BACKFILL_TABLES == derived
 
 
+def test_a_table_created_after_the_backfill_names_the_revision_that_made_it() -> None:
+    """The declared excuse has to be true, and only the migrations can say so.
+
+    An entry here is "this table did not exist when the backfill ran". The
+    claim is checkable: the revision it names must exist, must create the
+    table, and must not be the backfill itself or anything before it. Without
+    that, the entry is a way to remove a table from the backfill's reach by
+    typing its name — which is precisely the failure the frozen inventory
+    exists to prevent, reintroduced through its exemption list.
+    """
+    versions = MIGRATION_PATH.parent
+    for model, reason in CREATED_AFTER_THE_BACKFILL.items():
+        table = mapped_table(model).name
+        revision = reason.split()[0]
+        matches = [p for p in versions.glob("*.py") if p.name.startswith(revision)]
+        assert matches, f"{table} names revision {revision}, which does not exist"
+        text = matches[0].read_text()
+        assert f'"{table}"' in text and "create_table" in text, (
+            f"revision {revision} does not create {table}, so the claim that "
+            "the table postdates the backfill is unsupported"
+        )
+        assert mapped_table(model).columns[OWNER_COLUMN].nullable is False, (
+            f"{table} has a nullable owner, so it *can* hold an unowned row "
+            "and being newer than the backfill does not excuse it"
+        )
+
+
 def test_the_inventory_covers_every_table_that_can_hold_an_unowned_row() -> None:
     """Nullable owner means it is in; a `NOT NULL` owner excuses itself.
 
-    The four excused tables carry `user_id` inside a `NOT NULL` primary key, so
-    an unowned row cannot be expressed at all. Asserting that property rather
-    than listing their names is the difference between an excuse and a claim —
-    if one of them ever loses that key, this fails instead of quietly dropping
-    the table from the backfill's reach.
+    The excused tables carry `user_id` inside a `NOT NULL` primary key, so an
+    unowned row cannot be expressed at all. Asserting that property rather than
+    listing their names is the difference between an excuse and a claim — if
+    one of them ever loses that key, this fails instead of quietly dropping the
+    table from the backfill's reach.
+
+    **`CREATED_AFTER_THE_BACKFILL` is a second, weaker kind of excuse**, and it
+    is checked separately below for that reason. A table whose `CREATE TABLE`
+    postdates revision `c0d1e2f3a4b5` had no rows for that revision to stamp,
+    which is a fact about a moment rather than a property of the schema —
+    nothing in the models records it, so it has to be declared, and a
+    declaration is only as good as the revision it names.
     """
     covered = {entry.table for entry in owner_backfill_inventory()}
 
@@ -336,6 +371,8 @@ def test_the_inventory_covers_every_table_that_can_hold_an_unowned_row() -> None
     excused: set[str] = set()
     for model, scope in SCOPES.items():
         if scope is not Scope.USER_OWNED:
+            continue
+        if model in CREATED_AFTER_THE_BACKFILL:
             continue
         column = mapped_table(model).columns[OWNER_COLUMN]
         # Primary-key membership, not nullability. Ticket 21's `d2e3f4a5b6c7`

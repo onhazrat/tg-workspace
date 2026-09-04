@@ -600,7 +600,6 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({
               ? newSummary.metadataText || generatedMetadata
               : undefined,
             activeProxies.length > 0,
-            activeProxies,
             torAutoRotate,
             torRotationThreshold,
           )

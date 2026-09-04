@@ -177,23 +177,28 @@ def test_fetch_with_retry_respects_pool_concurrency(monkeypatch) -> None:
 
     async def slow_fetch(
         url: str,
-        proxy_url: str | None,
         *,
-        client: httpx.AsyncClient | None = None,
+        client: httpx.AsyncClient,
         method: str = "GET",
         json_body: dict | None = None,
         binary: bool = False,
     ) -> str:
+        """Counts in flight **per client**, which is per lane.
+
+        It used to count per `proxy_url`, an argument `_fetch_once` no longer
+        takes: the client is a Lane's own and carries its proxy, so passing the
+        URL beside it was a second answer to the same question (ADR-012). One
+        client is one lane, so this counts exactly what the test claims to.
+        """
         nonlocal peak
-        assert proxy_url is not None
-        assert client is not None
+        key = str(id(client))
         seen_clients.append(client)
         async with lock:
-            in_flight[proxy_url] = in_flight.get(proxy_url, 0) + 1
-            peak = max(peak, in_flight[proxy_url])
+            in_flight[key] = in_flight.get(key, 0) + 1
+            peak = max(peak, in_flight[key])
         await asyncio.sleep(0.08)
         async with lock:
-            in_flight[proxy_url] -= 1
+            in_flight[key] -= 1
         return "<html></html>"
 
     monkeypatch.setattr(network, "_fetch_once", slow_fetch)

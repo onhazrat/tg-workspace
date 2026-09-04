@@ -47,7 +47,7 @@ def test_get_sync_settings_merges_defaults(client: TestClient) -> None:
     assert value["dynamicSyncEnabledDefault"] is False
     assert value["dynamicSyncExpectedPostsDefault"] == 15
     assert value["syncFailureBackoffMinutes"] == 5
-    assert value["syncConcurrency"] == settings.SYNC_CONCURRENCY_DEFAULT
+    assert value["syncFailureBackoffMinutes"] == 5
 
 
 def test_get_jobs_settings_merges_defaults(client: TestClient) -> None:
@@ -80,7 +80,7 @@ def test_sync_setting_migrates_legacy_auto_sync_interval(client: TestClient) -> 
         put_global_setting(
             session,
             "sync",
-            {"autoSyncInterval": 42, "syncConcurrency": 3},
+            {"autoSyncInterval": 42, "syncFailureBackoffMinutes": 3},
         )
     headers = _auth(client)
     r = client.get(f"{PREFIX}/settings/sync", headers=headers)

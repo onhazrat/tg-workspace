@@ -316,7 +316,6 @@ export const SummaryView: React.FC<SummaryViewProps> = () => {
         text,
         sendMetadata ? metadataText : undefined,
         activeProxies.length > 0,
-        activeProxies,
         torAutoRotate,
         torRotationThreshold,
       )

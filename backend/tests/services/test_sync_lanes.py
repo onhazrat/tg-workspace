@@ -31,15 +31,18 @@ from app.services.sync_lanes import (
     AUTO_SYNC_BEST_EFFORT_LANE,
     AUTO_SYNC_NORMAL_LANE,
     BUDGET_WEIGHTS,
+    DISCOVER_PROBE_LANE,
     DRAIN_ORDER,
     MANUAL_BULK_BEST_EFFORT_LANE,
     MANUAL_BULK_NORMAL_LANE,
     MANUAL_SINGLE_BEST_EFFORT_LANE,
     MANUAL_SINGLE_NORMAL_LANE,
+    NON_SYNC_LANES,
     TIER_BEST_EFFORT,
     TIER_NORMAL,
     TIER_ORDER,
     LaneScheduler,
+    is_sync_lane,
     lane_budget,
     lane_for_budget,
     lane_tier,
@@ -60,6 +63,11 @@ def _lanes_created_by_migrations() -> set[str]:
         if "_LANES = (" in text:
             block = text.split("_LANES = (", 1)[1].split(")", 1)[0]
             created.update(re.findall(r'"([a-z_]+)"', block))
+        # And ticket 36's, which creates one lane and so names it with a
+        # singular constant. Matched on the constant rather than on the `DO`
+        # block, because the block interpolates the name and a regex over the
+        # SQL would be reading `'{_LANE}'`.
+        created.update(re.findall(r'^_LANE = "([a-z_]+)"', text, re.MULTILINE))
     return created
 
 
@@ -94,6 +102,8 @@ def test_a_lane_name_is_its_budget_and_tier() -> None:
         == MANUAL_SINGLE_BEST_EFFORT_LANE
     )
     for lane in DRAIN_ORDER:
+        if not is_sync_lane(lane):
+            continue
         assert lane_name_roundtrips(lane), lane
 
 
@@ -114,14 +124,64 @@ def test_manual_single_survives_a_naive_underscore_split() -> None:
         lane_tier("manual_single")
 
 
-def test_six_lanes_exist_and_they_are_the_full_product() -> None:
-    """Checkbox 1. Every Budget in every tier, and nothing else."""
+def test_the_sync_lanes_are_the_full_budget_and_tier_product() -> None:
+    """Checkbox 1. Every Budget in every tier, and nothing else *is a sync lane*.
+
+    It read "and nothing else" against the whole of `DRAIN_ORDER` until ticket
+    36 put a seventh lane there. That lane is not a sync lane and deliberately
+    has no Budget — `is_sync_lane` is the line between them, so this asserts
+    the product on one side of it and `NON_SYNC_LANES` answers for the other.
+    """
     expected = {
         lane_for_budget(budget, tier) for budget in Budget for tier in TIER_ORDER
     }
-    assert set(DRAIN_ORDER) == expected
-    assert len(DRAIN_ORDER) == 6
-    assert len(set(DRAIN_ORDER)) == 6
+    sync_lanes = {lane for lane in DRAIN_ORDER if is_sync_lane(lane)}
+
+    assert sync_lanes == expected
+    assert len(sync_lanes) == 6
+    assert len(set(DRAIN_ORDER)) == len(DRAIN_ORDER), "a lane appears twice"
+
+
+def test_every_non_sync_lane_states_why_it_is_not_one() -> None:
+    """The `EXPORT_OMISSIONS` shape: an exception that argues for itself.
+
+    A lane in `DRAIN_ORDER` with no Budget and no reason is a queue the worker
+    drains and nobody can explain — and, because `lane_budget` raises on it,
+    one that would take the drain down the first time something asked.
+    """
+    unexplained = {lane for lane in DRAIN_ORDER if not is_sync_lane(lane)} - set(
+        NON_SYNC_LANES
+    )
+    assert not unexplained, f"{sorted(unexplained)} is drained with no reason given"
+
+    for lane, reason in NON_SYNC_LANES.items():
+        assert lane in DRAIN_ORDER, f"{lane} has a reason but is never drained"
+        assert len(reason) > 40, f"{lane}'s reason does not say what it carries"
+        with pytest.raises(ValueError):
+            lane_budget(lane)
+        with pytest.raises(ValueError):
+            lane_tier(lane)
+
+
+def test_a_probe_never_drains_while_a_sync_lane_has_work() -> None:
+    """D9's whole claim: "lower priority than other requests to Telegram",
+    using the strict tier ordering that already exists rather than a
+    priority-aware semaphore.
+
+    Including behind **best-effort** — an account past its Budget still asked
+    for something, and nobody asked for a probe.
+    """
+    scheduler = LaneScheduler()
+
+    assert scheduler.next_lane({MANUAL_SINGLE_NORMAL_LANE, DISCOVER_PROBE_LANE}) == (
+        MANUAL_SINGLE_NORMAL_LANE
+    )
+    assert (
+        scheduler.next_lane({MANUAL_SINGLE_BEST_EFFORT_LANE, DISCOVER_PROBE_LANE})
+        == MANUAL_SINGLE_BEST_EFFORT_LANE
+    )
+    assert scheduler.next_lane({DISCOVER_PROBE_LANE}) == DISCOVER_PROBE_LANE
+    assert scheduler.next_lane(set()) is None
 
 
 def test_every_budget_has_a_lane_in_the_drain_order() -> None:
@@ -134,8 +194,15 @@ def test_every_budget_has_a_lane_in_the_drain_order() -> None:
 
 
 def test_normal_tier_lanes_all_precede_best_effort_ones() -> None:
-    tiers = [lane_tier(lane) for lane in DRAIN_ORDER]
-    assert tiers == [TIER_NORMAL] * 3 + [TIER_BEST_EFFORT] * 3
+    """And the non-sync lanes come after both, which is their whole priority."""
+    sync_lanes = [lane for lane in DRAIN_ORDER if is_sync_lane(lane)]
+    assert [lane_tier(lane) for lane in sync_lanes] == (
+        [TIER_NORMAL] * 3 + [TIER_BEST_EFFORT] * 3
+    )
+    assert list(DRAIN_ORDER)[: len(sync_lanes)] == sync_lanes, (
+        "a non-sync lane sits among the sync ones; `DRAIN_ORDER` is the "
+        "inventory a reader takes the policy from"
+    )
 
 
 # --- the drain policy (ticket 12) ---------------------------------------

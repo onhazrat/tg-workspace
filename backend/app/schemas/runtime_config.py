@@ -16,7 +16,6 @@ class SyncRuntimeSettings(BaseModel):
         ..., alias="dynamicSyncExpectedPostsDefault"
     )
     sync_failure_backoff_minutes: int = Field(..., alias="syncFailureBackoffMinutes")
-    sync_concurrency: int = Field(..., alias="syncConcurrency")
     consecutive_failures: int = Field(..., alias="consecutiveFailures")
     auto_sync_pause_until: int | None = Field(None, alias="autoSyncPauseUntil")
     global_start_time_mode: str | None = Field(None, alias="globalStartTimeMode")

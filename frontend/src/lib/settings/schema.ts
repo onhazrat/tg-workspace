@@ -215,7 +215,6 @@ export const appSettingsSpec = {
   syncFailureBackoffMinutes: intSetting("syncFailureBackoffMinutes", 5, {
     section: "sync",
   }),
-  syncConcurrency: intSetting("syncConcurrency", 3, { section: "sync" }),
   globalStartTimeMode: globalStartTimeModeSetting,
   globalStartTimeValue: globalStartTimeValueSetting,
   postRetentionDays: intSetting(

@@ -983,6 +983,57 @@ class SyncJob(SQLModel, table=True):
     updated_at: datetime = Field(default_factory=utc_now)
 
 
+class FollowJob(SQLModel, table=True):
+    """A Discover bulk follow, durable because the worker runs it (ticket 36).
+
+    It was a dataclass in a module-global dict, created and run by
+    `asyncio.create_task` from the API route. That put the probe phase in the
+    web tier, outside the scraping Partition — four concurrent fetches on a
+    semaphore of their own, bound to no proxy, which is the second budget and
+    the walk-hopping ADR-012 exists to remove.
+
+    Moving the runner to the worker means the API can no longer see the job in
+    memory, so it needs a row: the status route reads it, the SSE stream
+    re-reads it on each notification, and cancel writes to it. Exactly the
+    shape tickets 10 and 11 built for `SyncJob`, for the same reason.
+
+    **Not a kind of `SyncJob`**, which was the tempting reuse. The terminal
+    states differ (`added`/`unavailable`/`skipped` against
+    `success`/`failed`/`skipped`) and so does the result shape, so the two
+    would share a table and disagree about what every column meant.
+    """
+
+    __tablename__ = "tg_follow_jobs"
+
+    id: str = Field(primary_key=True)
+    user_id: uuid.UUID = Field(
+        foreign_key="user.id",
+        index=True,
+        ondelete="CASCADE",
+    )
+    status: str = "pending"
+    source: str = ""
+    #: One entry per handle: `{name, status, reason?, error?}`. The whole array
+    #: is rewritten on each flush, which is why the flush is throttled — the
+    #: same measurement `scraper_jobs._should_flush_db` was written for.
+    results: list[dict[str, Any]] = Field(default_factory=list, sa_column=Column(JSON))
+    #: What the runner needs that is not a result: the resolved proxy fleet, the
+    #: Tor knobs, and the `discoveredVia` provenance per handle. One JSON column
+    #: rather than five, because nothing queries on any of them — they are
+    #: carried from the process that created the job to the one that runs it.
+    options: dict[str, Any] = Field(default_factory=dict, sa_column=Column(JSON))
+    sync_job_id: str | None = None
+    #: Set by `POST .../cancel` in the **API**, read by the runner in the
+    #: worker. A column rather than only a notification, because a ring has no
+    #: replay: a cancel that arrives while the worker is restarting would
+    #: otherwise be lost and the job would run to completion after being
+    #: cancelled.
+    cancel_requested: bool = False
+    created_at: int = Field(default=0, sa_column=_ms_ts())
+    finished_at: int | None = Field(default=None, sa_column=_ms_ts(nullable=True))
+    updated_at: datetime = Field(default_factory=utc_now)
+
+
 class SyncMeta(SQLModel, table=True):
     __tablename__ = "tg_sync_meta"
 

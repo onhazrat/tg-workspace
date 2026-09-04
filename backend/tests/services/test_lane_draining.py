@@ -30,9 +30,9 @@ from app.core.db import engine
 from app.jobs import sync_queue
 from app.models import User
 from app.models_tg import Channel
-from app.services import pgmq, sync_lane_control, sync_orchestrator
+from app.services import pgmq, proxy_pool, sync_lane_control, sync_orchestrator
 from app.services.channels import try_claim_channel_sync
-from app.services.proxy_pool import ProxyWorkerPool, build_workers
+from app.services.proxy_pool import ProxyWorkerPool
 from app.services.scraper_jobs import (
     ChannelSyncState,
     SyncJobState,
@@ -49,6 +49,7 @@ from app.services.sync_lanes import (
     MANUAL_SINGLE_BEST_EFFORT_LANE,
     MANUAL_SINGLE_NORMAL_LANE,
 )
+from tests.utils.partition import direct_partition
 from tests.utils.setting_groups import add_test_channel
 from tests.utils.tenancy import ANY_READER
 from tests.utils.user import create_random_user
@@ -71,7 +72,7 @@ def _empty(lane: str) -> None:
 @pytest.fixture(autouse=True)
 def _clean() -> Iterator[None]:
     clear_jobs_for_tests()
-    sync_queue.reset_worker_partition_for_tests()
+    proxy_pool.reset_worker_partition_for_tests()
     sync_queue.stop_lane_consumer()
     sync_queue._claimed_messages.clear()
     for lane in DRAIN_ORDER:
@@ -141,31 +142,20 @@ class _Recorder:
         monkeypatch.setattr(sync_queue, "_handle_one", wrapper)
 
 
-def _direct_partition(width: int) -> ProxyWorkerPool:
-    """A partition of `width` workers with no proxy behind them.
-
-    The proxy-less shape (ticket 13): with nothing configured there is nothing
-    to partition, so the worker list is just `syncConcurrency` wide and behaves
-    exactly as the semaphore it replaced. That is what these tests want — they
-    are about dispatch *order*, not about which egress a message went out of.
-    """
-    return ProxyWorkerPool(build_workers([], width))
-
-
 def _pin_concurrency(monkeypatch: pytest.MonkeyPatch, value: int) -> ProxyWorkerPool:
     """Replace the partition with one of a known width.
 
-    The real `_partition` reads settings and the proxy pool. Sizing it here is
+    The real `get_partition` reads settings and the proxy pool. Sizing it here is
     what lets a test say "one slot" and mean it, which is the only way to
     observe dispatch *order* rather than the order N concurrent tasks happen to
     finish.
     """
-    partition = _direct_partition(value)
+    partition = direct_partition(value)
 
     async def fake_partition() -> ProxyWorkerPool:
         return partition
 
-    monkeypatch.setattr(sync_queue, "_partition", fake_partition)
+    monkeypatch.setattr(sync_queue, "get_partition", fake_partition)
     return partition
 
 
@@ -374,7 +364,7 @@ def test_a_slot_put_down_is_available_to_someone_else_and_taken_back() -> None:
     `syncConcurrency` the moment a coalesced request resumed."""
 
     async def run() -> tuple[bool, bool, bool]:
-        partition = _direct_partition(1)
+        partition = direct_partition(1)
         worker = await partition.acquire()
         assert worker is not None
         slot = sync_queue.SyncSlot.holding(partition, worker)
@@ -402,7 +392,7 @@ def test_a_coalesced_waiter_frees_its_slot_for_another_channel(
     assert try_claim_channel_sync(CHANNEL_ID, holder="somebody-else") is True
 
     async def run() -> bool:
-        partition = _direct_partition(1)
+        partition = direct_partition(1)
         worker = await partition.acquire()
         assert worker is not None
         slot = sync_queue.SyncSlot.holding(partition, worker)
@@ -742,7 +732,7 @@ def test_a_waiter_that_cannot_get_its_permit_back_gives_up_rather_than_scrape(
     assert try_claim_channel_sync(CHANNEL_ID, holder="somebody-else") is True
 
     async def run() -> tuple[str, bool]:
-        partition = _direct_partition(1)
+        partition = direct_partition(1)
         worker = await partition.acquire()
         assert worker is not None
         slot = sync_queue.SyncSlot.holding(partition, worker)

@@ -26,11 +26,7 @@ import { getChannelStats } from "@/lib/channels/store"
 import { env } from "@/lib/env"
 import { createdChannelNamesFromResults } from "@/lib/posts/discover-selection"
 import { isTerminalSyncStatus } from "@/lib/sync/job-state"
-import {
-  buildActiveProxies,
-  isNetworkRoutingActive,
-  type ProxySettings,
-} from "@/lib/syncSettings"
+import { isNetworkRoutingActive, type ProxySettings } from "@/lib/syncSettings"
 import type { ChannelStats } from "@/types"
 
 /**
@@ -150,14 +146,6 @@ export function useFollowJob(deps: FollowJobDeps): FollowJob {
       }
       if (channelsToFollow.length === 0) return null
 
-      const activeProxies = buildActiveProxies({
-        proxyEnabled,
-        defaultProxyUrls,
-        torEnabled,
-        torMode,
-        torProxyUrls,
-      })
-
       const followingNames = channelsToFollow.map((c) => c.name)
       setScrapingChannels((prev) => {
         const next = new Set(prev)
@@ -175,7 +163,6 @@ export function useFollowJob(deps: FollowJobDeps): FollowJob {
             torMode,
             torProxyUrls,
           }),
-          proxies: activeProxies,
           torAutoRotate,
           torRotationThreshold,
         })

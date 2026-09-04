@@ -7,22 +7,65 @@ import json
 import time
 from unittest.mock import AsyncMock, patch
 
+import pytest
 from fastapi.testclient import TestClient
 from sqlmodel import Session, select
 
 from app.core.config import settings
 from app.core.db import engine
 from app.models_tg import Channel, ChannelSettingGroup
+from app.services import bulk_follow
 from app.services.bulk_follow import (
-    FOLLOW_SCRAPE_CONCURRENCY,
     clear_follow_jobs_for_tests,
     get_follow_job,
+    run_follow_job_by_id,
 )
 from app.services.follows import get_follow, get_operator_user_id
+from app.services.proxy_pool import ProxyWorkerPool
 from app.services.scraper_jobs import clear_jobs_for_tests, get_job
+from tests.utils.partition import direct_partition
 
 DATA = f"{settings.API_V1_STR}/data"
 PREFIX = f"{DATA}/channels/bulk-follow"
+
+
+#: How wide the Partition is for these tests. Two, so the concurrency
+#: assertion below has something to observe.
+FAKE_PARTITION_WIDTH = 2
+
+
+@pytest.fixture(autouse=True)
+def _worker(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Stand in for the sync worker, which is not running in this process.
+
+    `POST /channels/bulk-follow` used to `asyncio.create_task(run_follow_job)`
+    in the API. Ticket 36 moved the runner to the worker (ADR-012 D7) — the
+    route publishes a trigger and `bulk_follow._consume_follow_triggers`, which
+    only `app/worker.py` starts, picks it up. So in a `TestClient` process
+    nothing runs the job, and every test here would poll a `pending` row until
+    its timeout.
+
+    Running it from the trigger call rather than restoring the old
+    `create_task` keeps the route under test: it still creates the row first
+    and still hands off, and what this replaces is only the process boundary.
+    `test_the_worker_runs_a_triggered_follow_job` covers the real consumer.
+    """
+    partition = direct_partition(FAKE_PARTITION_WIDTH)
+
+    async def fake_partition() -> ProxyWorkerPool:
+        return partition
+
+    monkeypatch.setattr(bulk_follow, "get_partition", fake_partition)
+
+    async def run_here(follow_job_id: str) -> None:
+        task = asyncio.create_task(run_follow_job_by_id(follow_job_id))
+        _standin_tasks.add(task)
+        task.add_done_callback(_standin_tasks.discard)
+
+    monkeypatch.setattr("app.api.routes.data.channels.request_follow_job_run", run_here)
+
+
+_standin_tasks: set[asyncio.Task[None]] = set()
 
 
 def _auth(client: TestClient) -> dict[str, str]:
@@ -380,7 +423,7 @@ def test_bulk_follow_concurrency_bound(client: TestClient) -> None:
             in_flight -= 1
         return _info(channel_name)
 
-    names = [f"conc-{i}" for i in range(FOLLOW_SCRAPE_CONCURRENCY + 3)]
+    names = [f"conc-{i}" for i in range(FAKE_PARTITION_WIDTH + 3)]
 
     with (
         patch(
@@ -402,7 +445,10 @@ def test_bulk_follow_concurrency_bound(client: TestClient) -> None:
         final = _wait_follow_done(client, headers, job_id, timeout_s=15)
         assert final["status"] == "completed"
         assert final["added"] == len(names)
-        assert max_in_flight <= FOLLOW_SCRAPE_CONCURRENCY
+        # The Partition's width, not a semaphore of the job's own: the probe
+        # phase takes Slots since ADR-012, so this is the same number that
+        # bounds every other kind of scraping in the process.
+        assert max_in_flight <= FAKE_PARTITION_WIDTH
         assert max_in_flight >= 1
 
     for name in names:

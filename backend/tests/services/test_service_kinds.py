@@ -74,6 +74,7 @@ INVENTORY: dict[str, str] = {
     # exists to prevent.
     "quota_limits.py": AGGREGATE,
     "scraper_jobs.py": AGGREGATE,
+    "follow_jobs.py": AGGREGATE,
     # The two halves of the ticket 06 settings split, one aggregate each. Not
     # one module owning both tables: the whole point of the split is that a key
     # has one home, and a single module writing both is the one place that

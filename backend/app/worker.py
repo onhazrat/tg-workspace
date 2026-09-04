@@ -38,11 +38,12 @@ from __future__ import annotations
 import asyncio
 import logging
 import signal
+from concurrent.futures import ThreadPoolExecutor
 
 from sqlmodel import Session
 
 from app.core.config import settings
-from app.core.db import engine, init_db
+from app.core.db import db_pool_capacity, engine, init_db
 from app.core.startup_checks import run_startup_checks
 from app.jobs.scheduler import (
     start_job_trigger_consumer,
@@ -55,6 +56,11 @@ from app.jobs.sync_queue import (
     start_lane_consumer,
     stop_lane_consumer,
 )
+from app.services.bulk_follow import (
+    reconcile_interrupted_follow_jobs,
+    start_follow_job_consumer,
+    stop_follow_job_consumer,
+)
 from app.services.scraper_jobs import (
     reconcile_interrupted_jobs,
     start_progress_subscriber,
@@ -64,12 +70,53 @@ from app.services.scraper_jobs import (
 logger = logging.getLogger(__name__)
 
 
+#: Threads over and above the connection pool, for the `to_thread` calls that
+#: open no `Session` at all — `pg_notify` sends, file writes, the Tor control
+#: socket. Small on purpose: threads past the connection count are not more
+#: parallelism, they are the same queue one layer down.
+_NON_DB_THREAD_HEADROOM = 4
+
+
+def _size_the_thread_pool() -> None:
+    """Give `asyncio.to_thread` as many threads as there are connections.
+
+    Almost every `to_thread` call in this process opens a `Session` — reading a
+    lane, charging the ledger, persisting job progress — so the thread pool and
+    the database pool are two halves of one number. The default pool is
+    `min(32, cpu_count + 4)`, which on the two-core box this deployment runs on
+    is **six**. Six threads cannot use thirty connections, so raising
+    `DB_POOL_SIZE` alone would have moved the queue from the database pool to
+    the executor and changed nothing an operator could see (ADR-012).
+
+    Sized *from* the connection capacity rather than to a literal, because more
+    threads than connections is not more parallelism — it is the same queue one
+    layer down, minus the ability to say which layer it is in. The headroom is
+    for the `to_thread` calls that do no database work at all.
+    """
+    # Derived in the argument rather than through a local, so that the guard in
+    # `tests/deployment/test_pool_sizing.py` reads the number that is actually
+    # installed. Its first version read the function's source text, and stayed
+    # green against a hard-coded 34 because the log line below still named
+    # `db_pool_capacity`.
+    asyncio.get_running_loop().set_default_executor(
+        ThreadPoolExecutor(
+            max_workers=db_pool_capacity() + _NON_DB_THREAD_HEADROOM,
+            thread_name_prefix="worker-db",
+        )
+    )
+    logger.info(
+        "thread pool sized for %d database connections",
+        db_pool_capacity(),
+    )
+
+
 async def main() -> None:
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s %(levelname)s %(name)s %(message)s",
     )
     run_startup_checks()
+    _size_the_thread_pool()
 
     with Session(engine) as session:
         # `init_db` is idempotent and both processes call it. The worker may
@@ -85,8 +132,15 @@ async def main() -> None:
         # first, and those jobs are left alone.
         reconcile_interrupted_jobs(session, still_queued=queued_job_ids())
 
+    # No `still_queued` counterpart: a follow job has no queue behind it, so a
+    # non-terminal row is always a dead process's. See the function's docstring.
+    interrupted_follows = reconcile_interrupted_follow_jobs()
+    if interrupted_follows:
+        logger.info("failed %d interrupted follow jobs", interrupted_follows)
+
     start_progress_subscriber()
     start_lane_consumer()
+    start_follow_job_consumer()
     start_job_trigger_consumer()
     start_scheduler()
     logger.info(
@@ -108,6 +162,7 @@ async def main() -> None:
     logger.info("Sync worker shutting down")
     stop_scheduler()
     stop_job_trigger_consumer()
+    stop_follow_job_consumer()
     stop_lane_consumer()
     stop_progress_subscriber()
 

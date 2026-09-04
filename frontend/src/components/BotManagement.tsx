@@ -113,7 +113,6 @@ export const BotManagement: React.FC<BotManagementProps> = ({
         method,
         params,
         activeProxies.length > 0,
-        activeProxies,
         torAutoRotate,
         torRotationThreshold,
       )
@@ -386,7 +385,6 @@ export const BotManagement: React.FC<BotManagementProps> = ({
         testMessage,
         undefined,
         activeProxies.length > 0,
-        activeProxies,
         torAutoRotate,
         torRotationThreshold,
       )
@@ -432,7 +430,6 @@ export const BotManagement: React.FC<BotManagementProps> = ({
         text,
         undefined,
         activeProxies.length > 0,
-        activeProxies,
         torAutoRotate,
         torRotationThreshold,
       )

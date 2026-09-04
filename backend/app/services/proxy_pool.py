@@ -40,9 +40,18 @@ from dataclasses import dataclass, field
 from typing import Any, Protocol
 
 import httpx
+from sqlmodel import Session
 
 from app.core.config import settings
-from app.services.network_settings import clamp_proxy_concurrency, normalize_proxy_url
+from app.core.db import engine
+from app.services.network_settings import (
+    DIRECT_EGRESS_KEY,
+    clamp_proxy_concurrency,
+    load_network_settings,
+    normalize_proxy_url,
+    resolve_proxies,
+    resolve_proxy_concurrency,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -66,10 +75,18 @@ def clamp_proxy_slots(value: int) -> int:
 
 
 def build_lane_client(proxy_url: str, max_parallel: int) -> httpx.AsyncClient:
-    """One long-lived httpx client per proxy lane (connection reuse)."""
+    """One long-lived httpx client per lane (connection reuse).
+
+    `DIRECT_EGRESS_KEY` is not a proxy URL and gets a client with no proxy set.
+    That Lane is otherwise an ordinary one, which is the point of synthesising
+    it: a proxy-less deployment reuses connections and obeys a width the same
+    way a proxied one does, instead of building a fresh client per attempt.
+    """
     slots = clamp_proxy_slots(max_parallel)
     return httpx.AsyncClient(
-        proxy=normalize_proxy_url(proxy_url),
+        proxy=None
+        if proxy_url == DIRECT_EGRESS_KEY
+        else normalize_proxy_url(proxy_url),
         timeout=settings.NETWORK_FETCH_TIMEOUT_SECONDS,
         follow_redirects=True,
         limits=httpx.Limits(
@@ -91,6 +108,7 @@ class ProxyLane:
 class ProxyPoolManager:
     def __init__(self) -> None:
         self._lanes: dict[str, ProxyLane] = {}
+        self._direct: ProxyLane | None = None
         self._rr_counter = 0
         self._configured_default = 1
         self._configured_overrides: dict[str, int] = {}
@@ -237,6 +255,8 @@ class ProxyPoolManager:
         the next flush. Holding the object would keep a worker fetching through
         a closed client until its message finished.
         """
+        if proxy_url == DIRECT_EGRESS_KEY:
+            return self.direct_lane()
         return self._lanes.get(normalize_proxy_url(proxy_url))
 
     @asynccontextmanager
@@ -276,11 +296,43 @@ class ProxyPoolManager:
             lane.in_use -= 1
             lane.sem.release()
 
+    def direct_lane(self) -> ProxyLane:
+        """The Lane for egress that goes out this deployment's own address.
+
+        **A deployment with no proxies still fetches through a Lane**
+        (ADR-012). Exempting direct egress would enforce the seam only on the
+        deployments that already had egress control, which is the population
+        that needs it least; and it left a proxy-less deployment building a
+        fresh `httpx.AsyncClient` per attempt, with no connection reuse and no
+        bound on how many requests it put through its single address — the
+        deployment most likely to be rate limited.
+
+        **Built once and never reconfigured**, which is the whole reason it is
+        a field rather than an entry in `_lanes`. `configure()` replaces lanes
+        and closes the clients it drops. If the direct Lane lived in `_lanes`,
+        one caller resolving "no proxies" and the next resolving the fleet
+        would thrash the pool between two shapes, closing each other's live
+        clients on every call. Its width is its own setting, because "how hard
+        may I lean on my own address" is a different question from "how hard
+        may I lean on somebody else's proxy".
+        """
+        if self._direct is None:
+            slots = clamp_proxy_slots(settings.DIRECT_LANE_CONCURRENCY_DEFAULT)
+            self._direct = ProxyLane(
+                url=DIRECT_EGRESS_KEY,
+                max_parallel=slots,
+                sem=asyncio.Semaphore(slots),
+                client=build_lane_client(DIRECT_EGRESS_KEY, slots),
+            )
+        return self._direct
+
     def lanes(self) -> list[ProxyLane]:
-        return list(self._lanes.values())
+        """Every Lane work may be dealt to — the direct one when there are no
+        proxies, so `build_workers` sizes the Partition from it either way."""
+        return list(self._lanes.values()) or [self.direct_lane()]
 
     def total_capacity(self) -> int:
-        return sum(lane.max_parallel for lane in self._lanes.values())
+        return sum(lane.max_parallel for lane in self.lanes())
 
     def _pace_ms(self, url: str) -> int:
         from app.services.network import proxy_pace_ms
@@ -348,38 +400,39 @@ def configure_proxy_pool(
 class ProxyWorker:
     """One scraping slot, bound to one lane for the whole of one message.
 
-    `lane` is None only when the deployment has no proxies configured at all,
-    which is the direct-egress case: there is nothing to partition, so the
-    partition degenerates to `syncConcurrency` workers that fetch directly.
-    That is exactly the behaviour before this ticket, which is the point — a
-    proxy-less deployment should not notice the change.
+    **`lane` is never None.** It used to be, for the direct-egress case: a
+    deployment with no proxies had nothing to partition, so the partition
+    degenerated to `syncConcurrency` workers that fetched through a fresh
+    client each time. ADR-012 gives that deployment a synthetic direct Lane
+    instead, so "a Slot always has a Lane" is now true by construction rather
+    than almost-always true with one exception that every reader had to hold.
     """
 
     index: int
-    lane: ProxyLane | None
+    lane: ProxyLane
     busy: bool = False
 
     @property
-    def proxy_url(self) -> str | None:
-        return self.lane.url if self.lane is not None else None
+    def proxy_url(self) -> str:
+        return self.lane.url
 
 
-def build_workers(
-    lanes: list[ProxyLane], max_workers: int | None = None
-) -> list[ProxyWorker]:
+def build_workers(lanes: list[ProxyLane]) -> list[ProxyWorker]:
     """One worker per lane slot, dealt **round-robin across lanes**.
 
-    The dealing order is the whole of the difference when `max_workers` cuts
-    the list short. Filling lane by lane and then truncating would give a
-    deployment with ten proxies and `syncConcurrency` of three all three
-    workers on the *first* proxy — one proxy taking the entire scraping load
-    while nine sit idle, which is the concentration this ticket is removing,
-    reintroduced by the ordering of a loop.
-    """
-    if not lanes:
-        width = max(1, max_workers if max_workers is not None else 1)
-        return [ProxyWorker(index=i, lane=None) for i in range(width)]
+    `max_workers` is gone with `syncConcurrency` (ADR-012 D2). Nothing
+    truncates the list any more: the Partition is as wide as the fleet.
 
+    **The round-robin dealing stays, and the plan was wrong to call it dead.**
+    D2 reasoned that it existed only to spread a *truncated* list across
+    distinct proxies. It does more than that. `ProxyWorkerPool._take_free`
+    hands out the first idle worker in list order, so on a deployment whose
+    proxies have more than one slot each, filling lane by lane would send the
+    first two concurrent walks down proxy A while B sat idle. At the default of
+    one slot per proxy the two orderings are identical, which is exactly why
+    deleting it would have looked safe and shown up only on the deployments
+    that had tuned their slots up.
+    """
     workers: list[ProxyWorker] = []
     remaining = {lane.url: lane.max_parallel for lane in lanes}
     while any(count > 0 for count in remaining.values()):
@@ -388,9 +441,6 @@ def build_workers(
                 continue
             remaining[lane.url] -= 1
             workers.append(ProxyWorker(index=len(workers), lane=lane))
-
-    if max_workers is not None:
-        workers = workers[: max(1, max_workers)]
     return workers
 
 
@@ -582,3 +632,272 @@ def bound_proxy_url() -> str | None:
     """The proxy every fetch in this task must use, or None for free choice."""
     binding = _bound_proxy.get()
     return binding.proxy_url if binding is not None else None
+
+
+# --------------------------------------------------------------------------
+# The Slot: one permit out of the Partition, which can be handed back
+# --------------------------------------------------------------------------
+#
+# Moved here from `jobs/sync_queue.py` with the Partition it comes out of
+# (ADR-012). It was the queue consumer's because the consumer was the only
+# thing that took one; `sync_orchestrator.run_sync_job` takes them too now, and
+# that module importing `sync_queue` for a Partition concept is what kept the
+# two files in a cycle — `sync_queue` reaching lazily back into
+# `sync_orchestrator` for `sync_single_channel`, and `sync_orchestrator`
+# importing `SlotLost` at the top. `ReleasableSlot` there is a `Protocol` for
+# exactly that reason, and it can stay one: it is also the honest dependency.
+
+
+#: How long a fan-out waits for a healthy Slot before giving up on one Channel.
+#:
+#: **Unbounded is a hang, not patience** (found in review). `_take_free` skips
+#: a worker whose proxy is in cooldown, so with every proxy parked
+#: `acquire(timeout=None)` waits for ever — and the two fan-outs that take
+#: Slots outside the drain had no deadline at all. A bulk follow's three
+#: hundred tasks would all park with the row left `running`, the `finally` that
+#: charges the ledger never reached; an `auto_summary` walk would never return
+#: and, under APScheduler's `max_instances=1`, suppress every later tick.
+#:
+#: The old `asyncio.Semaphore` always granted, so this is a hazard the Slots
+#: introduced. `sync_queue` has always passed a deadline here, for exactly this
+#: reason; these two now do too.
+#:
+#: Sized like one whole fetch rather than like the drain's five seconds,
+#: because a cooldown is ten minutes and these callers have no sweep behind
+#: them to come back: giving up marks the Channel failed, which a person sees.
+SLOT_WAIT_SECONDS = 120.0
+
+
+class SlotLost(Exception):
+    """A released permit could not be taken back inside the caller's deadline.
+
+    Raised out of `SyncSlot.released(reacquire_within=...)`. It is not an error
+    condition so much as an answer: the waiter has run out of the time it was
+    given, and it must not proceed without a permit.
+    """
+
+
+class SyncSlot:
+    """One worker out of the partition, which can be handed back.
+
+    Before ticket 13 this wrapped a permit on a single shared semaphore. It now
+    wraps a `ProxyWorker` — the same lifecycle, plus the proxy that worker is
+    bound to, which is what `_handle_one` installs for the fetches underneath.
+
+    The releasable shape is ticket 12's and the reason is ticket 11's: a
+    request that finds another sync already running its Channel waits *inside*
+    its slot, so N requests for one busy Channel occupied N scraping slots
+    while scraping nothing. `released()` hands the worker back for the duration
+    of a wait and takes one again before the caller does anything that needs
+    it. The worker it gets back may be a different one, which is fine and is
+    the reason binding happens per message rather than per job: a waiter has
+    not fetched anything yet.
+
+    **Why this still cannot deadlock.** Ticket 11's argument was "the holder
+    acquires its slot before it can claim, so it is always able to finish", and
+    that half is untouched — a runner holding a Channel's claim holds its
+    worker for as long as it walks and never releases mid-walk. Only a *waiter*
+    releases, and a waiter holds no claim. So there is no slot held by
+    something waiting for a claim held by something waiting for a slot, which
+    is the only cycle available here.
+    """
+
+    def __init__(self, pool: ProxyWorkerPool) -> None:
+        self._pool = pool
+        self._worker: ProxyWorker | None = None
+
+    @classmethod
+    def holding(cls, pool: ProxyWorkerPool, worker: ProxyWorker) -> SyncSlot:
+        """Wrap a worker the caller has *already* acquired.
+
+        The dispatcher acquires before it knows whether there is a message to
+        put in the slot, because that wait is its backpressure. This is how the
+        worker it is holding becomes the slot it hands over, without the object
+        taking a second one.
+        """
+        slot = cls(pool)
+        slot._worker = worker
+        return slot
+
+    @property
+    def worker(self) -> ProxyWorker | None:
+        return self._worker
+
+    @property
+    def proxy_url(self) -> str | None:
+        """The proxy this slot's fetches must use — satisfies `ProxyBinding`.
+
+        Read live rather than captured, because `released()` can hand back one
+        worker and take a different one. See `ProxyBinding`.
+        """
+        return self._worker.proxy_url if self._worker is not None else None
+
+    async def acquire(self) -> None:
+        if self._worker is None:
+            worker = await self._pool.acquire()
+            if worker is None:  # pragma: no cover - unbounded acquire waits
+                raise SlotLost
+            self._worker = worker
+
+    def release(self) -> None:
+        if self._worker is not None:
+            worker, self._worker = self._worker, None
+            self._pool.release(worker)
+
+    async def acquire_within(self, timeout: float) -> bool:
+        """Take a worker, giving up after `timeout` seconds. True if taken.
+
+        The bounded form exists because the unbounded one is not bounded by
+        anything the caller can see: the dispatcher is sitting on the
+        partition's own `acquire()` and takes the freed worker at once, so a
+        waiter handing its worker back can be parked here for the length of
+        somebody else's whole page walk — during which it evaluates neither its
+        own deadline nor its job's cancellation. See
+        `sync_orchestrator._put_slot_down`.
+        """
+        if self._worker is not None:
+            return True
+        worker = await self._pool.acquire(timeout=timeout)
+        if worker is None:
+            return False
+        self._worker = worker
+        return True
+
+    @contextlib.asynccontextmanager
+    async def released(
+        self, *, reacquire_within: float | None = None
+    ) -> AsyncIterator[None]:
+        """Hand the permit back for the body, re-take it afterwards.
+
+        With `reacquire_within`, a re-acquire that does not complete in time
+        leaves the slot **not held** and raises `SlotLost`. The caller must then
+        stop rather than carry on: holding no permit and scraping anyway is the
+        cap the gate exists to enforce, quietly exceeded.
+
+        If the body is cancelled the re-acquire raises `CancelledError` too and
+        the slot stays empty, which is correct: a cancelled runner wants its
+        worker gone, and the dispatcher's own `release()` is then a no-op.
+        """
+        self.release()
+        try:
+            yield
+        finally:
+            if reacquire_within is None:
+                await self.acquire()
+            elif not await self.acquire_within(reacquire_within):
+                raise SlotLost
+
+
+# --------------------------------------------------------------------------
+# The one Partition (ticket 36, ADR-012)
+# --------------------------------------------------------------------------
+#
+# There is exactly one Partition in a process, and only the sync worker builds
+# one. It lived in `jobs/sync_queue.py` until ADR-012, which was right while the
+# queue consumer was the only thing that took a Slot. It is not any more: the
+# egress seam has `sync_orchestrator` taking Slots too, and that module already
+# imports this one at the top. Left where it was, the Partition would have been
+# reachable only through a lazy import in *each* direction — `sync_queue`
+# reaching into `sync_orchestrator` for its inputs, `sync_orchestrator` reaching
+# back into `sync_queue` for the Partition — which is how import order becomes
+# load-bearing and how a cycle stops being visible to anything that reads the
+# import block. Here the Partition is downstream of both and imports neither.
+
+#: The worker's scraping partition, built on first use because it derives from
+#: the configured proxies rather than from a constant (ticket 13).
+_worker_partition: ProxyWorkerPool | None = None
+_partition_signature: tuple[tuple[str, int], ...] = ()
+_partition_width = 0
+_partition_lock = asyncio.Lock()
+
+
+def _load_partition_inputs() -> tuple[list[str], int, dict[str, int]]:
+    """The proxy fleet and its slot configuration. That is the whole input.
+
+    It used to return `syncConcurrency` as well, and `get_partition` truncated
+    the worker list to it. ADR-012 removed the setting: the Partition's width
+    *is* the fleet's capacity, and a second number an operator had to keep
+    plausible against it was a way to be wrong, not a way to tune. The setting
+    even told them so — its own UI copy asked them to keep it at or below proxy
+    capacity, which is an invariant `min()` was already enforcing.
+
+    Moved here from `sync_orchestrator` with the Partition it feeds. It reads
+    settings and nothing else, so it is what makes the Partition's move a clean
+    one: keeping it in the orchestrator is what forced the lazy import the
+    section comment above argues against.
+    """
+    with Session(engine) as session:
+        network = load_network_settings(session)
+        default_slots, overrides = resolve_proxy_concurrency(network)
+        return resolve_proxies(network), default_slots, overrides
+
+
+async def get_partition() -> ProxyWorkerPool:
+    """The worker's scraping partition, built once and refreshed on change.
+
+    **This replaced a single `asyncio.Semaphore`** (ticket 13). The gate said
+    how many Channels could be walked at once and nothing about which proxy any
+    of them used, so a burst of syncs piled onto whichever lane happened to be
+    least loaded and one Channel's backward walk hopped proxies page by page.
+    The partition is one worker per proxy slot, each pinned to its proxy for
+    the whole message: the count now *derives* from the proxies rather than
+    being a number that has to be kept plausible against them.
+
+    **Nothing truncates it any more** (ADR-012). `syncConcurrency` did, and its
+    removal is monotonic: the width goes from `min(3, sum)` to `sum`, so one
+    proxy stays one and ten proxies go from three to ten. Telegram meters the
+    unauthenticated web view by IP — which is why cooldown and pacing are both
+    keyed by proxy URL — so a hand-set ceiling of three over ten proxies was
+    throwing away most of the fleet.
+
+    **The check-then-await is the bug the lock guards**, and it predates this
+    ticket: `drain_sync_lanes` used to gather a whole batch of coroutines, and
+    without the lock every one of them saw an unbuilt gate, awaited the
+    settings read, and then assigned its *own*. Ten Channels would scrape at
+    once whatever the setting said — silently, only under concurrency, and
+    pointed at the proxies this deployment is trying to be polite to.
+    """
+    global _worker_partition, _partition_signature, _partition_width
+    async with _partition_lock:
+        proxies, default_slots, overrides = await asyncio.to_thread(
+            _load_partition_inputs
+        )
+        pool = await ensure_pool_configured(proxies, default_slots, overrides)
+        lanes = pool.lanes()
+        signature = tuple((lane.url, lane.max_parallel) for lane in lanes)
+
+        current = _worker_partition
+        rebuild = current is None or (
+            signature != _partition_signature
+            # Rebuilt only while nothing holds a worker, because replacing the
+            # partition mid-flight loses track of what is outstanding: the
+            # in-flight messages would release into an object nobody reads and
+            # the new one would believe itself idle. An operator's change lands
+            # on the next idle drain rather than needing a restart.
+            and not any(worker.busy for worker in current.workers)
+        )
+        if rebuild:
+            current = ProxyWorkerPool(build_workers(lanes))
+            _worker_partition = current
+            _partition_signature = signature
+            _partition_width = len(current)
+        assert current is not None
+        return current
+
+
+def partition_width() -> int:
+    """How wide the Partition was when it was last built; 0 before the first.
+
+    A function rather than the module global it reads, because the global is
+    rebound by `get_partition` and an importer that had bound the name would
+    keep reading the width the Partition had at import time — which is zero,
+    for every caller that imports before the worker starts.
+    """
+    return _partition_width
+
+
+def reset_worker_partition_for_tests() -> None:
+    global _worker_partition, _partition_signature, _partition_width
+    _worker_partition = None
+    _partition_signature = ()
+    _partition_width = 0

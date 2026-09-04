@@ -14,6 +14,7 @@ because that is the piece with no `run_sync_job` above it any more.
 from __future__ import annotations
 
 import asyncio
+import logging
 
 import pytest
 from sqlmodel import Session
@@ -22,7 +23,7 @@ from app.core import pg_notify
 from app.core.config import settings
 from app.core.db import engine
 from app.jobs import sync_queue
-from app.services import pgmq, sync_orchestrator
+from app.services import pgmq, proxy_pool, sync_orchestrator
 from app.services.scraper_jobs import (
     ChannelSyncState,
     clear_active_jobs_for_tests,
@@ -73,7 +74,7 @@ def _drain_queue(queue_name: str) -> None:
 @pytest.fixture(autouse=True)
 def _clean_lanes() -> None:
     clear_jobs_for_tests()
-    sync_queue.reset_worker_partition_for_tests()
+    proxy_pool.reset_worker_partition_for_tests()
     sync_queue.stop_lane_consumer()
     pg_notify.reset_listeners_for_tests()
     for lane in DRAIN_ORDER:
@@ -594,21 +595,33 @@ def test_exhausting_one_channel_does_not_fail_its_siblings() -> None:
     )
 
 
-def test_a_message_without_a_channel_id_still_runs_the_whole_job(
+def test_a_message_without_a_channel_id_is_archived_loudly(
     monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
 ) -> None:
-    """Messages enqueued by ticket 09's code outlive the deploy that replaces it.
+    """The inverse of what this asserted until ADR-012, and the reason is dated.
 
-    A queue is durable, so the old job-shaped messages are still there when the
-    new worker starts. Treating them as malformed would strand exactly the
-    syncs someone triggered in the seconds before the restart.
+    A queue is durable, so ticket 09's job-shaped messages outlived the deploy
+    that replaced them, and running them was right for as long as any could
+    still exist. `pgmq.meta` says none can: `manual_single_normal` was created
+    2026-08-25 09:10 UTC and ticket 10's migration created the other lanes at
+    17:47 the same day, so every message of that shape was written inside one
+    8.6-hour window. All six `q_` tables are empty — which covers claimed
+    messages, whose rows stay with a future `vt` — 229,759 archived messages
+    all carry a `channelId`, and the oldest surviving archive row postdates the
+    window by three days.
+
+    What it ran, `_run_whole_job`, held one Slot for a whole job while
+    `run_sync_job` opened a full second budget inside it. So the shape is
+    archived now, and **loudly**: one arriving here means the dating above is
+    wrong somewhere, which is worth a line in the log rather than a silent drop.
     """
-    seen: list[str] = []
+    called: list[str] = []
 
-    async def fake_run_sync_job(job: object, _user_id: object) -> None:
-        seen.append(getattr(job, "job_id", ""))
+    async def fake_sync(_job: object, ch: ChannelSyncState, **_kw: object) -> None:
+        called.append(ch.channel_id)
 
-    monkeypatch.setattr(sync_orchestrator, "run_sync_job", fake_run_sync_job)
+    monkeypatch.setattr(sync_orchestrator, "sync_single_channel", fake_sync)
 
     async def run() -> str:
         job = await create_job(
@@ -621,11 +634,17 @@ def test_a_message_without_a_channel_id_still_runs_the_whole_job(
             # No `channelId` — exactly what ticket 09 wrote.
             pgmq.send(session, MANUAL_SINGLE_NORMAL_LANE, {"jobId": job.job_id})
             session.commit()
-        await sync_queue.drain_sync_lanes()
+        with caplog.at_level(logging.ERROR, logger="app.jobs.sync_queue"):
+            await sync_queue.drain_sync_lanes()
         return job.job_id
 
-    job_id = asyncio.run(run())
-    assert seen == [job_id], "a pre-ticket-10 message was dropped instead of run"
+    asyncio.run(run())
+
+    assert called == [], "a job-shaped message still ran a whole job"
+    assert any("no channelId" in record.message for record in caplog.records), (
+        "the shape was dropped in silence; an operator seeing a sync go missing "
+        "has nothing to search for"
+    )
 
 
 def test_redelivery_while_still_running_is_not_reprocessed(

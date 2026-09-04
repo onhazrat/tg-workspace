@@ -34,12 +34,12 @@ def test_runtime_config_effective_values(client: TestClient, db: Session) -> Non
     clear_active_jobs_for_tests()
     # `globalStartTimeMode`/`Value` are per-User after ticket 06, and the request
     # below is made as the operator, so they have to be written as them —
-    # `syncConcurrency` in the same call still lands in the global row.
+    # `syncFailureBackoffMinutes` in the same call still lands in the global row.
     save_settings_section(
         db,
         "sync",
         {
-            "syncConcurrency": 5,
+            "syncFailureBackoffMinutes": 5,
             "globalStartTimeMode": "relative",
             "globalStartTimeValue": 7,
         },
@@ -47,7 +47,7 @@ def test_runtime_config_effective_values(client: TestClient, db: Session) -> Non
     )
     # `logRetentionDays` is per-User after ticket 20 and the request below is
     # made as the operator, so it has to be written as them — `postRetentionDays`
-    # in the same call still lands in the global row, the way `syncConcurrency`
+    # in the same call still lands in the global row, the way
     # does above.
     save_settings_section(
         db,
@@ -61,7 +61,7 @@ def test_runtime_config_effective_values(client: TestClient, db: Session) -> Non
     assert r.status_code == 200
     data = r.json()
 
-    assert data["sync"]["syncConcurrency"] == 5
+    assert data["sync"]["syncFailureBackoffMinutes"] == 5
     assert (
         data["sync"]["regularSyncIntervalMinutes"]
         == settings.AUTO_SYNC_INTERVAL_MINUTES_DEFAULT

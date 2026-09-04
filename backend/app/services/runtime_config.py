@@ -44,13 +44,6 @@ def _sync_runtime_payload(sync_settings: dict[str, Any]) -> dict[str, Any]:
         "syncFailureBackoffMinutes": int(
             sync_settings.get("syncFailureBackoffMinutes") or 5
         ),
-        "syncConcurrency": max(
-            1,
-            int(
-                sync_settings.get("syncConcurrency")
-                or settings.SYNC_CONCURRENCY_DEFAULT
-            ),
-        ),
         "consecutiveFailures": int(sync_settings.get("consecutiveFailures") or 0),
         "autoSyncPauseUntil": sync_settings.get("autoSyncPauseUntil"),
         "globalStartTimeMode": sync_settings.get("globalStartTimeMode") or "retention",
@@ -222,12 +215,18 @@ def build_runtime_config(
     )
     sync_payload = _sync_runtime_payload(sync_settings)
     network_payload = _network_runtime_payload(session)
-    configured_concurrency = sync_payload["syncConcurrency"]
+    # **The proxy capacity is the answer now, not a ceiling on somebody else's**
+    # (ADR-012). This was `min(syncConcurrency, capacity)`, and the operator's
+    # number is gone: the Partition is as wide as the fleet, so the capacity
+    # *is* how many Channels may be walked at once. A deployment with no
+    # proxies has the synthetic direct Lane's width, which
+    # `effectiveProxyCapacity` reports as 0 because it counts proxies — so the
+    # fallback names the direct Lane's setting rather than repeating a literal.
     effective_capacity = network_payload.get("effectiveProxyCapacity")
     allowed_concurrency = (
-        min(configured_concurrency, effective_capacity)
+        effective_capacity
         if effective_capacity
-        else configured_concurrency
+        else settings.DIRECT_LANE_CONCURRENCY_DEFAULT
     )
     active_sync_job = get_active_sync_job_summary(
         allowed_concurrency=allowed_concurrency,

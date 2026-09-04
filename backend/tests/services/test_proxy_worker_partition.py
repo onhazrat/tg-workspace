@@ -28,6 +28,7 @@ from sqlmodel import Session
 from app.core.db import engine
 from app.jobs import sync_queue
 from app.services import pgmq, proxy_pool
+from app.services.network_settings import DIRECT_EGRESS_KEY
 from app.services.proxy_pool import (
     ProxyWorkerPool,
     bound_proxy_url,
@@ -35,6 +36,7 @@ from app.services.proxy_pool import (
     build_workers,
 )
 from app.services.sync_lanes import MANUAL_SINGLE_NORMAL_LANE
+from tests.utils.partition import direct_partition
 
 PROXY_A = "http://a.example:8080"
 PROXY_B = "http://b.example:8080"
@@ -43,9 +45,9 @@ PROXY_C = "http://c.example:8080"
 
 @pytest.fixture(autouse=True)
 def _clean_pool() -> Iterator[None]:
-    sync_queue.reset_worker_partition_for_tests()
+    proxy_pool.reset_worker_partition_for_tests()
     yield
-    sync_queue.reset_worker_partition_for_tests()
+    proxy_pool.reset_worker_partition_for_tests()
 
 
 def _lanes(*specs: tuple[str, int]) -> list[proxy_pool.ProxyLane]:
@@ -85,39 +87,68 @@ def test_a_proxy_with_more_slots_gets_more_workers() -> None:
     assert len(workers) == 4, "the worker count stopped deriving from the slots"
 
 
-def test_a_truncated_partition_spreads_across_proxies_rather_than_stacking() -> None:
-    """`syncConcurrency` below capacity must not put every worker on one proxy.
+def test_the_first_workers_dealt_land_on_distinct_proxies() -> None:
+    """The dealing order still matters, and ADR-012's plan said it would not.
 
-    **The mutation:** deal lane by lane (`for lane: for _ in range(slots)`) and
-    truncate afterwards, which is the obvious implementation. With three
-    proxies of four slots and a cap of three it hands all three workers to
-    proxy A — one proxy carrying the entire scraping load while two sit idle,
-    which is the concentration this ticket exists to remove, reintroduced by
-    the ordering of a loop. Watched failing.
+    D2 reasoned that round-robin existed only to spread a *truncated* list, so
+    removing `syncConcurrency` made it dead. It does more than that.
+    `ProxyWorkerPool._take_free` hands out the first idle worker in list order,
+    so with lane-by-lane dealing the first three concurrent walks on a fleet of
+    four-slot proxies all go down proxy A while B and C sit idle — the
+    concentration this partition exists to remove, reintroduced by the ordering
+    of a loop.
+
+    **The mutation:** deal lane by lane (`for lane: for _ in range(slots)`),
+    which is the obvious implementation. Watched failing.
+
+    At the default of one slot per proxy the two orderings are identical, which
+    is exactly why deleting it would have looked safe and shown up only on the
+    deployments that had tuned their slots up.
     """
-    workers = build_workers(
-        _lanes((PROXY_A, 4), (PROXY_B, 4), (PROXY_C, 4)), max_workers=3
+    workers = build_workers(_lanes((PROXY_A, 4), (PROXY_B, 4), (PROXY_C, 4)))
+
+    assert len(workers) == 12, "the worker count stopped deriving from the slots"
+    assert {w.proxy_url for w in workers[:3]} == {PROXY_A, PROXY_B, PROXY_C}, (
+        f"the first three workers are {[w.proxy_url for w in workers[:3]]} — "
+        "dealt lane by lane, so the first concurrent walks stack on one proxy"
     )
 
-    assert len(workers) == 3
-    assert {w.proxy_url for w in workers} == {PROXY_A, PROXY_B, PROXY_C}, (
-        f"three workers landed on {[w.proxy_url for w in workers]} — a cut "
-        "partition stacked on one proxy instead of spreading across them"
-    )
 
+def test_nothing_truncates_the_partition_any_more() -> None:
+    """`syncConcurrency` is gone and the width is the fleet's capacity.
 
-def test_no_proxies_means_one_direct_partition_the_width_of_the_setting() -> None:
-    """A proxy-less deployment must not notice this ticket at all.
-
-    There is nothing to partition, so the worker list is `syncConcurrency`
-    wide and fetches directly — exactly the semaphore it replaced. A partition
-    of zero workers would drain nothing, for ever, silently.
+    The removal is monotonic — `min(3, sum)` becomes `sum` — so one proxy stays
+    one and ten proxies go from three to ten. Telegram meters the
+    unauthenticated web view by IP, which is why cooldown and pacing are keyed
+    per proxy, so a hand-set ceiling of three over ten proxies was throwing
+    away most of the fleet.
     """
-    workers = build_workers([], max_workers=4)
+    import inspect
 
-    assert len(workers) == 4
-    assert all(w.proxy_url is None for w in workers)
-    assert build_workers([]), "an unconfigured partition has no workers at all"
+    assert "max_workers" not in inspect.signature(build_workers).parameters, (
+        "`build_workers` takes a cap again; the operator has a second number "
+        "that can only disagree with the fleet it is capping"
+    )
+    lanes = _lanes((PROXY_A, 4), (PROXY_B, 4), (PROXY_C, 2))
+    assert len(build_workers(lanes)) == 10
+
+
+def test_no_proxies_means_one_direct_partition() -> None:
+    """A proxy-less deployment is partitioned like any other since ADR-012.
+
+    It used to be the exception: `build_workers([])` returned `syncConcurrency`
+    workers with `lane=None`, which fetched through a fresh client each time.
+    It gets the synthetic direct Lane now, so **every** Slot has a Lane and the
+    seam has no population it does not cover.
+    """
+    partition = direct_partition(4)
+
+    assert len(partition.workers) == 4
+    assert all(w.proxy_url == DIRECT_EGRESS_KEY for w in partition.workers)
+    assert build_workers([]) == [], (
+        "a lane list with nothing in it produced workers; a Slot without a "
+        "Lane is a request that leaves outside the seam"
+    )
 
 
 # --- checkbox 2: a parked worker waits for its proxy to recover ----------
@@ -246,7 +277,7 @@ def test_a_drain_with_every_proxy_parked_returns_instead_of_blocking(
     async def fake_partition() -> ProxyWorkerPool:
         return parked
 
-    monkeypatch.setattr(sync_queue, "_partition", fake_partition)
+    monkeypatch.setattr(sync_queue, "get_partition", fake_partition)
 
     with Session(engine) as session:
         pgmq.send(

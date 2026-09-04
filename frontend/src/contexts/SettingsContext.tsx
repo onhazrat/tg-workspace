@@ -83,8 +83,6 @@ interface SettingsContextType {
   setTorAutoRotate: (enabled: boolean) => void
   torRotationThreshold: number
   setTorRotationThreshold: (threshold: number) => void
-  syncConcurrency: number
-  setSyncConcurrency: (count: number) => void
   embeddingsEnabled: boolean
   setEmbeddingsEnabled: (enabled: boolean) => void
   embeddingsPaused: boolean

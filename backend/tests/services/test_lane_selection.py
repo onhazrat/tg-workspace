@@ -57,7 +57,7 @@ from app.services import pgmq
 from app.services.channel_setting_groups import SyncOperationMode
 from app.services.follows import get_operator_user_id
 from app.services.network_settings import get_network_setting_row
-from app.services.proxy_pool import ProxyWorkerPool, build_workers
+from app.services.proxy_pool import ProxyWorkerPool
 from app.services.quota import (
     UNLIMITED,
     Budget,
@@ -78,6 +78,7 @@ from app.services.sync_lanes import (
     lane_for_spend,
     tier_for_spend,
 )
+from tests.utils.partition import direct_partition
 from tests.utils.setting_groups import add_test_channel, freeze_channels_except
 from tests.utils.user import create_random_user
 
@@ -524,13 +525,13 @@ def test_work_over_budget_is_degraded_rather_than_dropped(
     async def fake_process(msg: pgmq.PgmqMessage, _slot: object) -> None:
         dispatched.append(str(msg.message.get("channelId")))
 
-    partition = ProxyWorkerPool(build_workers([], 1))
+    partition = direct_partition(1)
 
     async def fake_partition() -> ProxyWorkerPool:
         return partition
 
     monkeypatch.setattr(sync_queue, "_process_message", fake_process)
-    monkeypatch.setattr(sync_queue, "_partition", fake_partition)
+    monkeypatch.setattr(sync_queue, "get_partition", fake_partition)
 
     async def run() -> None:
         job = await create_job(
@@ -565,14 +566,8 @@ def test_work_over_budget_is_degraded_rather_than_dropped(
 #: was looking at, while a second door stayed open. The declaration is what turns
 #: a third door into a red test instead of a discovery.
 RUN_SYNC_JOB_CALLERS: dict[str, str] = {
-    "app/jobs/sync_queue.py": (
-        "The pre-ticket-10 message shape, whose payload names a whole job "
-        "rather than a Channel. It arrived *through* a lane, so the ladder "
-        "already chose its tier at enqueue; running it here is how a message "
-        "written before the deploy is honoured rather than stranded."
-    ),
     "app/jobs/auto_summary.py": (
-        "`_sync_stale_channels` needs the sync finished before it can "
+        "`_sync_channels_for_summary` needs the sync finished before it can "
         "summarise, so enqueueing would invert its control flow — ticket 10 "
         "declined to build the probe-shaped message that would take, and "
         "ticket 13's docstring still carries the forward reference. It is "

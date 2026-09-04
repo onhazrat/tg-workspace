@@ -3,7 +3,7 @@ import { toast } from "sonner"
 import { api } from "@/api"
 import type { CommandContext } from "@/lib/commands/types"
 import { saveNetworkLog } from "@/lib/logs/write"
-import { buildActiveProxies, isNetworkRoutingActive } from "@/lib/syncSettings"
+import { isNetworkRoutingActive } from "@/lib/syncSettings"
 import { telegramWebViewChannelUrl } from "@/lib/telegram-web"
 import type { Channel, NetworkLog } from "@/types"
 import { upsertChannel } from "./store"
@@ -19,7 +19,6 @@ export async function refreshChannelMetadata(
     torMode: ctx.settings.torMode,
     torProxyUrls: ctx.settings.torProxyUrls,
   }
-  const activeProxies = buildActiveProxies(proxySettings)
 
   const startTime = Date.now()
   let status = 0
@@ -41,7 +40,6 @@ export async function refreshChannelMetadata(
     const data = await api.channelInfo({
       channelName: channel.name,
       proxyEnabled: isNetworkRoutingActive(proxySettings),
-      proxies: activeProxies,
       torAutoRotate: ctx.settings.torAutoRotate,
       torRotationThreshold: ctx.settings.torRotationThreshold,
     })

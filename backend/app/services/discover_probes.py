@@ -270,16 +270,38 @@ def enqueue_handles(session: Session, handles: list[str]) -> int:
     return queued
 
 
+#: How long a handle handed out by `dequeue_handles` stays out of the due set.
+#:
+#: **A lease, and it is what stops the sweep flooding its lane** (ticket 36).
+#: The sweep used to fetch each batch itself and record a verdict, so the
+#: handles left the due set within the same tick. Since ADR-012 the tick only
+#: enqueues and the verdict arrives later, from the lane consumer — so without a
+#: lease every tick would hand out the same first `DISCOVER_PROBE_BATCH_SIZE`
+#: handles again, at `DISCOVER_PROBE_JOB_INTERVAL_SECONDS` apart, for as long as
+#: the backlog took to drain.
+#:
+#: Generous, because the probe lane is drained strictly after every sync lane
+#: and a queued probe can legitimately wait behind a long backfill. A lease that
+#: lapses early costs a duplicate fetch; one that never lapses would strand a
+#: handle whose message was lost.
+DEQUEUE_LEASE_MINUTES = 60
+
+
 def dequeue_handles(
     session: Session, *, limit: int, now: datetime | None = None
 ) -> list[str]:
-    """The next batch to fetch, best-ranked first.
+    """The next batch to probe, best-ranked first, **leased for the caller**.
 
     Takes no candidate list: the queue answers this from the table alone, which
     is what lets a scheduled job drain it whether or not anyone has the Discover
     tab open. A handle whose backoff has not elapsed is not due, and one with a
     verdict is not pending, so both fall out of the WHERE rather than needing a
     second pass.
+
+    Handing a handle out **moves its `retry_after` forward by
+    `DEQUEUE_LEASE_MINUTES`**, which is the same column the failure backoff
+    uses and means the same thing: not due yet. It is not a second mechanism,
+    and a verdict clears it exactly as it clears a backoff.
     """
     if limit <= 0:
         return []
@@ -296,7 +318,13 @@ def dequeue_handles(
         .order_by(col(DiscoverHandleProbe.priority), col(DiscoverHandleProbe.handle))
         .limit(limit)
     )
-    return [row.handle for row in session.exec(statement).all()]
+    rows = session.exec(statement).all()
+    lease_until = moment + timedelta(minutes=DEQUEUE_LEASE_MINUTES)
+    for row in rows:
+        row.retry_after = lease_until
+        session.add(row)
+    session.commit()
+    return [row.handle for row in rows]
 
 
 def handles_needing_probe(

@@ -4,7 +4,7 @@ import { api } from "@/api"
 import { parseApiError, unavailableChannelToastMessage } from "@/lib/api-errors"
 import type { CommandContext } from "@/lib/commands/types"
 import { saveNetworkLog } from "@/lib/logs/write"
-import { buildActiveProxies, isNetworkRoutingActive } from "@/lib/syncSettings"
+import { isNetworkRoutingActive } from "@/lib/syncSettings"
 import { telegramWebViewChannelUrl } from "@/lib/telegram-web"
 import type { Channel, NetworkLog } from "@/types"
 import { upsertChannel } from "./store"
@@ -87,7 +87,6 @@ export async function addChannelByName(
     torMode: ctx.settings.torMode,
     torProxyUrls: ctx.settings.torProxyUrls,
   }
-  const activeProxies = buildActiveProxies(proxySettings)
 
   const startTime = Date.now()
   let status = 0
@@ -107,7 +106,6 @@ export async function addChannelByName(
     const data = await api.channelInfo({
       channelName,
       proxyEnabled: isNetworkRoutingActive(proxySettings),
-      proxies: activeProxies,
       torAutoRotate: ctx.settings.torAutoRotate,
       torRotationThreshold: ctx.settings.torRotationThreshold,
     })

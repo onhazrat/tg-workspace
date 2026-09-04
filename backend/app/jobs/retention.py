@@ -65,6 +65,7 @@ from app.services.channel_photos import (
     prune_orphaned_photos,
 )
 from app.services.channels import collect_unfollowed_channel
+from app.services.follow_jobs import prune_finished as prune_finished_follow_jobs
 from app.services.follows import channel_ids_without_follows, follows_backfilled
 from app.services.logs import (
     LOG_MODELS,
@@ -454,6 +455,12 @@ def run_retention_cleanup(session: Session) -> dict[str, int]:
     # `prune_finished_jobs` — terminal rows only, so a long sync is never
     # deleted out from under the client reading its progress.
     deleted_sync_jobs = prune_finished_jobs(
+        session, max_age_days=app_settings.SYNC_JOB_RETENTION_DAYS
+    )
+    # Follow jobs on the same window and for the same reason — nothing lists
+    # them either. Added in review: the table shipped with no retention at all,
+    # and each of its rows carries the whole `results` array.
+    deleted_sync_jobs += prune_finished_follow_jobs(
         session, max_age_days=app_settings.SYNC_JOB_RETENTION_DAYS
     )
 

@@ -5085,13 +5085,6 @@
             "title": "Proxyenabled",
             "default": false
           },
-          "proxies": {
-            "anyOf": [
-              { "items": { "type": "string" }, "type": "array" },
-              { "type": "null" }
-            ],
-            "title": "Proxies"
-          },
           "torAutoRotate": {
             "type": "boolean",
             "title": "Torautorotate",
@@ -5270,13 +5263,6 @@
             "title": "Proxyenabled",
             "default": false
           },
-          "proxies": {
-            "anyOf": [
-              { "items": { "type": "string" }, "type": "array" },
-              { "type": "null" }
-            ],
-            "title": "Proxies"
-          },
           "torAutoRotate": {
             "type": "boolean",
             "title": "Torautorotate",
@@ -5290,7 +5276,8 @@
         },
         "type": "object",
         "required": ["channels"],
-        "title": "BulkFollowRequest"
+        "title": "BulkFollowRequest",
+        "description": "No `proxies` field \u2014 see `schemas/telegram.ProxyConfig` (ADR-012)."
       },
       "BulkFollowStartResponse": {
         "properties": {
@@ -5504,13 +5491,6 @@
             "type": "boolean",
             "title": "Proxyenabled",
             "default": false
-          },
-          "proxies": {
-            "anyOf": [
-              { "items": { "type": "string" }, "type": "array" },
-              { "type": "null" }
-            ],
-            "title": "Proxies"
           },
           "torAutoRotate": {
             "type": "boolean",
@@ -7534,13 +7514,6 @@
             "title": "Proxyenabled",
             "default": false
           },
-          "proxies": {
-            "anyOf": [
-              { "items": { "type": "string" }, "type": "array" },
-              { "type": "null" }
-            ],
-            "title": "Proxies"
-          },
           "torAutoRotate": {
             "type": "boolean",
             "title": "Torautorotate",
@@ -7848,13 +7821,6 @@
             "title": "Proxyenabled",
             "default": false
           },
-          "proxies": {
-            "anyOf": [
-              { "items": { "type": "string" }, "type": "array" },
-              { "type": "null" }
-            ],
-            "title": "Proxies"
-          },
           "torAutoRotate": {
             "type": "boolean",
             "title": "Torautorotate",
@@ -8064,13 +8030,6 @@
             "type": "boolean",
             "title": "Proxyenabled",
             "default": false
-          },
-          "proxies": {
-            "anyOf": [
-              { "items": { "type": "string" }, "type": "array" },
-              { "type": "null" }
-            ],
-            "title": "Proxies"
           },
           "torAutoRotate": {
             "type": "boolean",
@@ -8690,7 +8649,6 @@
             "type": "integer",
             "title": "Syncfailurebackoffminutes"
           },
-          "syncConcurrency": { "type": "integer", "title": "Syncconcurrency" },
           "consecutiveFailures": {
             "type": "integer",
             "title": "Consecutivefailures"
@@ -8719,7 +8677,6 @@
           "dynamicSyncEnabledDefault",
           "dynamicSyncExpectedPostsDefault",
           "syncFailureBackoffMinutes",
-          "syncConcurrency",
           "consecutiveFailures"
         ],
         "title": "SyncRuntimeSettings"

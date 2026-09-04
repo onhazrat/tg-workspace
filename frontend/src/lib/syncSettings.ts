@@ -15,6 +15,16 @@ export function parseProxyList(raw: string): string[] {
     .filter(Boolean)
 }
 
+/**
+ * The proxies the *server* would resolve for these settings.
+ *
+ * It no longer travels: ADR-012 removed `proxies` from every request body,
+ * because a request must not choose its own egress and this list was derived
+ * from `defaultProxyUrls`, which the server reads for itself. What is left is
+ * callers asking whether it is non-empty, as a truer "would anything actually
+ * be routed" than `proxyEnabled` alone — which is true even with no URLs
+ * configured.
+ */
 export function buildActiveProxies(settings: ProxySettings): string[] {
   const proxies = parseProxyList(settings.defaultProxyUrls)
   const torPool = parseProxyList(settings.torProxyUrls)

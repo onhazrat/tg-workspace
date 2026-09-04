@@ -10,7 +10,32 @@ from app.models_rbac import Role, UserRole
 
 logger = logging.getLogger(__name__)
 
-engine = create_engine(str(settings.SQLALCHEMY_DATABASE_URI))
+#: The one engine, with its pool **sized rather than defaulted** (ADR-012).
+#:
+#: `create_engine` with no pool arguments is 5 connections plus 10 overflow,
+#: and that number was chosen by SQLAlchemy for a generic application rather
+#: than by anyone who had counted this one's concurrent sessions. The scraping
+#: Partition is as wide as the proxy fleet — ten proxies means ten Channel
+#: walks at once, each holding a session while it reads and writes — and once
+#: that exceeds fifteen the surplus waits inside the pool, which logs nothing
+#: and raises nothing. See `Settings.DB_POOL_SIZE` for what the numbers cost at
+#: the server.
+#:
+#: `pool_pre_ping` because the worker holds connections idle between sweeps and
+#: a proxy or a restarted database leaves them stale; without it the first
+#: query after an idle stretch fails once, on whichever caller happened to be
+#: next.
+engine = create_engine(
+    str(settings.SQLALCHEMY_DATABASE_URI),
+    pool_size=settings.DB_POOL_SIZE,
+    max_overflow=settings.DB_MAX_OVERFLOW,
+    pool_pre_ping=True,
+)
+
+
+def db_pool_capacity() -> int:
+    """Connections this process may hold at once, overflow included."""
+    return settings.DB_POOL_SIZE + settings.DB_MAX_OVERFLOW
 
 
 # make sure all SQLModel models are imported (app.models) before initializing DB

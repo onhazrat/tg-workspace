@@ -12,9 +12,8 @@ from contextlib import suppress
 from pathlib import Path
 from typing import Any
 
-import httpx
-
 from app.core.config import settings
+from app.services.network import MEDIA_FETCH_RETRIES, fetch_with_retry
 
 logger = logging.getLogger(__name__)
 
@@ -140,7 +139,19 @@ async def cache_channel_photo(
     source_url: str,
     *,
     force: bool = False,
+    proxies: list[str] | None = None,
+    proxy_concurrency: tuple[int, dict[str, int]] | None = None,
+    tor_auto_rotate: bool = False,
+    tor_rotation_threshold: int | None = None,
 ) -> bool:
+    """Fetch and cache one channel avatar, through the caller's proxy lane.
+
+    **The proxy arguments are the whole point of this signature.** See the
+    comment on the fetch below. The twin `post_thumbnails.cache_post_thumb` was
+    moved onto the lane pool on 2026-07-27, with the reasoning written into a
+    comment; this function kept its bare client for another five weeks, so the
+    argument for the fix and the code contradicting it sat two files apart.
+    """
     if not is_remote_photo_url(source_url):
         return has_cached_photo(channel_id)
 
@@ -154,19 +165,28 @@ async def cache_channel_photo(
             return True
 
     try:
-        async with httpx.AsyncClient(
-            timeout=settings.NETWORK_FETCH_TIMEOUT_SECONDS,
-            follow_redirects=True,
-        ) as client:
-            response = await client.get(
-                source_url,
-                headers={"User-Agent": "Mozilla/5.0 (compatible; TGSummarizer/1.0)"},
-            )
-            response.raise_for_status()
-            content = response.content
-            content_type = (
-                response.headers.get("content-type", "image/jpeg").split(";")[0].strip()
-            )
+        # Through the shared lane pool, not a bare client: page fetches and the
+        # media they reference must leave from the same egress, or scraping over
+        # Tor still hands Telegram's CDN the real IP. `cache_post_thumb` says the
+        # same thing in the same words. This twin kept a bare `httpx` client and
+        # fetched every channel avatar from the deployment's real address until
+        # ADR-012.
+        #
+        # The browser-ish `User-Agent` this used to send is dropped rather than
+        # threaded through `fetch_with_retry`: the thumb twin has never sent one
+        # and Telegram's CDN serves it regardless. Giving one of a pair a header
+        # the other lacks is how the pair came apart in the first place.
+        payload, _telemetry = await fetch_with_retry(
+            source_url,
+            proxies=proxies or None,
+            proxy_concurrency=proxy_concurrency,
+            tor_auto_rotate=tor_auto_rotate,
+            tor_rotation_threshold=tor_rotation_threshold,
+            binary=True,
+            retries=MEDIA_FETCH_RETRIES,
+        )
+        content, raw_content_type = payload
+        content_type = raw_content_type or "image/jpeg"
     except Exception as exc:  # noqa: BLE001
         logger.warning(
             "Failed to download channel photo for %s from %s: %s",
@@ -204,9 +224,27 @@ async def cache_channel_photo(
 async def resolve_cached_photo_url(
     channel_id: str,
     photo_url: str | None,
+    *,
+    proxies: list[str] | None = None,
+    proxy_concurrency: tuple[int, dict[str, int]] | None = None,
+    tor_auto_rotate: bool = False,
+    tor_rotation_threshold: int | None = None,
 ) -> str:
+    """The cached avatar path for a channel, fetching it first if need be.
+
+    Passes the caller's proxy settings down, because the avatar must leave from
+    the same egress as the page fetch that named it. Both call sites already
+    hold these; neither passed them before ADR-012.
+    """
     if photo_url is not None and is_remote_photo_url(photo_url):
-        await cache_channel_photo(channel_id, photo_url)
+        await cache_channel_photo(
+            channel_id,
+            photo_url,
+            proxies=proxies,
+            proxy_concurrency=proxy_concurrency,
+            tor_auto_rotate=tor_auto_rotate,
+            tor_rotation_threshold=tor_rotation_threshold,
+        )
     if has_cached_photo(channel_id):
         return channel_photo_api_path(channel_id)
     return photo_url or ""

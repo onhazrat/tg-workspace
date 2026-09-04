@@ -24,7 +24,6 @@ export const COMMONLY_USED_SETTING_IDS = [
   "theme",
   "selectedModel",
   "aiLanguage",
-  "syncConcurrency",
   "proxyEnabled",
   "postRetentionDays",
   "regularSyncIntervalMinutes",
@@ -151,24 +150,6 @@ export const SETTINGS_CATALOG: SettingCatalogEntry[] = [
   },
 
   // --- Channels & Sync ---
-  {
-    id: "syncConcurrency",
-    label: "Sync Concurrency",
-    description: "Number of channels to sync in parallel.",
-    keywords: ["sync", "concurrency", "parallel"],
-    group: "channels-sync",
-    source: "app",
-    defaultValue: appSettingsSpec.syncConcurrency.defaultValue,
-    editorCommandId: "edit-sync-concurrency",
-    editorFieldId: "syncConcurrency",
-    editorFieldLabel: "Sync Concurrency",
-    control: {
-      kind: "number",
-      min: 1,
-      integer: true,
-      formatBadge: (v) => String(v),
-    },
-  },
   {
     id: "regularSyncIntervalMinutes",
     label: "Regular Sync Interval",

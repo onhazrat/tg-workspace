@@ -42,8 +42,8 @@ const miniCatalog: SettingCatalogEntry[] = [
 
 describe("parseSettingsQuery", () => {
   test("extracts @id and remaining text", () => {
-    const parsed = parseSettingsQuery("@id:syncConcurrency foo")
-    expect(parsed.id).toBe("syncConcurrency")
+    const parsed = parseSettingsQuery("@id:syncFailureBackoffMinutes foo")
+    expect(parsed.id).toBe("syncFailureBackoffMinutes")
     expect(parsed.text).toBe("foo")
   })
 

@@ -74,6 +74,7 @@ TG_TABLES: tuple[str, ...] = (
     "tg_discover_ignored",
     "tg_discover_probes",
     "tg_sync_jobs",
+    "tg_follow_jobs",
     "tg_sync_meta",
     "tg_llm_logs",
     "tg_embedding_logs",

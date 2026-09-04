@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import Any, cast
 
 from app.core.config import settings
-from app.services.network import fetch_with_retry
+from app.services.network import MEDIA_FETCH_RETRIES, fetch_with_retry
 
 logger = logging.getLogger(__name__)
 
@@ -260,6 +260,7 @@ async def cache_post_thumb(
             tor_auto_rotate=tor_auto_rotate,
             tor_rotation_threshold=tor_rotation_threshold,
             binary=True,
+            retries=MEDIA_FETCH_RETRIES,
         )
         content, raw_content_type = payload
         content_type = raw_content_type or "image/jpeg"

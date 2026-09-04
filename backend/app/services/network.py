@@ -17,7 +17,7 @@ from stem.control import Controller
 
 from app.core.config import settings
 from app.core.request_meter import record_telegram_request
-from app.services.network_settings import normalize_proxy_url
+from app.services.network_settings import DIRECT_EGRESS_KEY, normalize_proxy_url
 from app.services.proxy_pacing import (
     FetchOutcome,
     ProxyLaneUnavailable,
@@ -59,11 +59,6 @@ _proxy_pace: dict[str, ProxyPace] = {}
 #: is what spaces concurrent requests on a multi-slot lane out instead of
 #: letting them all read the same wait and then leave together.
 _pace_next_allowed_ms: dict[str, float] = {}
-
-#: The key an unproxied fetch paces under. A single-IP deployment is the one
-#: most likely to be rate limited, so it is paced too — and this is already the
-#: string `telemetry["attempts"][].proxyUrl` uses for it.
-DIRECT_EGRESS_KEY = "direct"
 
 
 def _prune_expired_cooldowns(now_ms: float) -> None:
@@ -279,7 +274,21 @@ def _validate_telegram_web_view_page(
             raise TelegramWebViewUnavailable()
 
 
-def _build_client(proxy_url: str | None) -> httpx.AsyncClient:
+def _build_diagnostic_client(proxy_url: str | None) -> httpx.AsyncClient:
+    """A one-shot client for the two proxy **diagnostics**, and nothing else.
+
+    `test_proxy` and `get_tor_ip` ask `api.ipify.org` which address a given
+    proxy exits from. Neither reaches Telegram, and neither can use a Lane:
+    the operator is testing a URL that may not be in the pool at all, and
+    routing the test through whichever Lane the pool picked would answer about
+    the wrong proxy — which is worse than not answering.
+
+    Named for the exemption rather than left as a general builder. It was
+    `_build_client`, and `_fetch_once` fell back to it whenever no client was
+    passed, which made "fetch without acquiring a Lane" a one-keyword change
+    (ADR-012). `tests/services/test_egress_seam.py` holds the inventory of
+    every callable allowed to reach it.
+    """
     kwargs: dict[str, Any] = {
         "timeout": settings.NETWORK_FETCH_TIMEOUT_SECONDS,
         "follow_redirects": True,
@@ -291,13 +300,27 @@ def _build_client(proxy_url: str | None) -> httpx.AsyncClient:
 
 async def _fetch_once(
     url: str,
-    proxy_url: str | None,
     *,
-    client: httpx.AsyncClient | None = None,
+    client: httpx.AsyncClient,
     method: str = "GET",
     json_body: dict[str, Any] | None = None,
     binary: bool = False,
 ) -> Any:
+    """One request, through a Lane's client. **There is no other way out.**
+
+    `client` is required, and the only thing that produces one is
+    `proxy_pool.build_lane_client`. That is the runtime half of ADR-012's rule:
+    a caller with no Lane cannot reach the network from here, because it has
+    nothing to pass. The other half is the inventory in
+    `tests/services/test_egress_seam.py`, which fails any module in `app/` that
+    builds a client of its own.
+
+    It used to take `client=None` and fall back to `_build_client`, an
+    ephemeral client with the proxy set from the argument. That fallback was
+    the whole hole: it made "fetch without acquiring anything" a one-keyword
+    change, and `fetch_with_retry` took it on every proxy-less deployment.
+    """
+
     async def _request(http_client: httpx.AsyncClient) -> Any:
         if method == "POST":
             response = await http_client.post(url, json=json_body)
@@ -318,11 +341,7 @@ async def _fetch_once(
             )
         return data
 
-    if client is not None:
-        return await _request(client)
-
-    async with _build_client(proxy_url) as ephemeral:
-        return await _request(ephemeral)
+    return await _request(client)
 
 
 def _rotate_tor_identity_sync(control_port: int, password: str) -> None:
@@ -353,7 +372,7 @@ async def rotate_tor_identity(
 
 @asynccontextmanager
 async def _proxy_acquire(
-    proxies: list[str],
+    proxies: list[str] | None,
     tried: set[str],
     *,
     proxy_concurrency: tuple[int, dict[str, int]] | None,
@@ -362,9 +381,27 @@ async def _proxy_acquire(
         ProxyPoolExhausted,
         bound_proxy_url,
         ensure_pool_configured,
+        get_proxy_pool,
     )
 
     default_slots, overrides = proxy_concurrency if proxy_concurrency else (1, {})
+
+    if not proxies:
+        # **A caller with no proxies takes the direct Lane, and does not
+        # reconfigure the pool** (ADR-012). Passing the empty list on to
+        # `configure` would have this call *evict* the fleet somebody else
+        # resolved — closing live clients mid-request — and the next proxied
+        # caller would evict it straight back. The pool is one object shared by
+        # every caller in the process; an empty list is one caller's answer, not
+        # the deployment's.
+        pool = get_proxy_pool()
+        try:
+            async with pool.hold(pool.direct_lane()) as direct:
+                yield direct
+        except ProxyPoolExhausted as exc:
+            raise ProxyLaneUnavailable(str(exc)) from exc
+        return
+
     pool = await ensure_pool_configured(proxies, default_slots, overrides)
 
     # **A bound worker does not hop, including on retry** (ticket 13). The
@@ -411,6 +448,21 @@ async def _proxy_acquire(
             yield lane
     except ProxyPoolExhausted as exc:
         raise ProxyLaneUnavailable(str(exc)) from exc
+
+
+#: Attempts a media fetch gets. One, meaning no retry ladder at all.
+#:
+#: `retries=N` is N *attempts*, and the default 8 with a 3s escalating delay is
+#: sized for a page fetch, where losing the page loses the sync. Media is not
+#: that. An avatar is re-resolved on **every page** of a walk, so the page loop
+#: already is the retry, and a thumb is cosmetic. Left at the default, one dead
+#: avatar URL cost eight backed-off attempts per page: `tests/api/test_sync_jobs.py`
+#: went from 13 seconds to 8 minutes when the avatar cache first moved onto the
+#: lane pool, which is what surfaced this.
+#:
+#: Shared by both image caches rather than spelled twice, because they are twins
+#: and `test_image_cache_egress.py` asserts they stay that way.
+MEDIA_FETCH_RETRIES = 1
 
 
 async def fetch_with_retry(
@@ -504,48 +556,46 @@ async def fetch_with_retry(
             waited_ms = await _wait_for_pace(pace_key)
 
         try:
-            if proxies:
-                async with _proxy_acquire(
-                    proxies,
-                    tried,
-                    proxy_concurrency=proxy_concurrency,
-                ) as lane:
-                    proxy_url = lane.url
-                    # The lane that was actually taken, which `peek_lane_url`
-                    # only predicted. Telemetry and the outcome signals answer
-                    # for the egress that served the request, never the one the
-                    # wait was timed against.
-                    if paced:
-                        pace_key = proxy_url
-                    pool_client = lane.client
-                    is_local_tor = proxy_url and (
-                        "127.0.0.1" in proxy_url or "localhost" in proxy_url
-                    )
-                    if is_local_tor and tor_auto_rotate:
-                        async with _tor_counter_lock:
-                            _tor_request_counter += 1
-                            due = (
-                                _tor_request_counter >= effective_tor_rotation_threshold
-                            )
-                        if due:
-                            await rotate_tor_identity(tor_control_port)
-                    fetch_started = time.time() * 1000
-                    data = await _fetch_once(
-                        url,
-                        proxy_url,
-                        client=pool_client,
-                        method=method,
-                        json_body=json_body,
-                        binary=binary,
-                    )
-            else:
+            # **No fork on whether proxies are configured** (ADR-012). The pool
+            # synthesises a direct Lane when there are none, so this path is
+            # the only one and every request out of this process leaves through
+            # an acquired Lane. What the branch that used to be here did was
+            # build a fresh `httpx.AsyncClient` per attempt, outside any width
+            # at all: a proxy-less deployment had no connection reuse and no
+            # limit on how many requests it put through its single address,
+            # which is the deployment most likely to be rate limited.
+            async with _proxy_acquire(
+                proxies,
+                tried,
+                proxy_concurrency=proxy_concurrency,
+            ) as lane:
+                proxy_url = lane.url
+                # The lane that was actually taken, which `peek_lane_url`
+                # only predicted. Telemetry and the outcome signals answer
+                # for the egress that served the request, never the one the
+                # wait was timed against.
+                if paced:
+                    pace_key = proxy_url
+                pool_client = lane.client
+                is_local_tor = proxy_url != DIRECT_EGRESS_KEY and (
+                    "127.0.0.1" in proxy_url or "localhost" in proxy_url
+                )
+                if is_local_tor and tor_auto_rotate:
+                    async with _tor_counter_lock:
+                        _tor_request_counter += 1
+                        due = _tor_request_counter >= effective_tor_rotation_threshold
+                    if due:
+                        await rotate_tor_identity(tor_control_port)
                 fetch_started = time.time() * 1000
                 data = await _fetch_once(
-                    url, None, method=method, json_body=json_body, binary=binary
+                    url,
+                    client=pool_client,
+                    method=method,
+                    json_body=json_body,
+                    binary=binary,
                 )
 
-            if proxy_url:
-                _bad_proxies.pop(proxy_url, None)
+            _bad_proxies.pop(proxy_url, None)
 
             # `latency` is the **request**, timed from just before it goes out.
             #
@@ -633,7 +683,19 @@ async def fetch_with_retry(
                 if pace_key is not None
                 else ProxyPace()
             )
-            if proxy_url and should_arm_cooldown(pace_before, outcome, paced=paced):
+            # **The direct Lane is never parked** (ADR-012). Cooldown steers new
+            # work away from a bad proxy and onto the healthy ones; with one
+            # synthetic Lane there is nowhere to steer, so parking it stops the
+            # whole deployment for ten minutes and reports every worker as
+            # parked. The pace ladder below it still applies, which is the rung
+            # that can slow a single-address deployment without stopping it.
+            arms_cooldown = (
+                proxy_url is not None
+                and proxy_url != DIRECT_EGRESS_KEY
+                and should_arm_cooldown(pace_before, outcome, paced=paced)
+            )
+            if arms_cooldown:
+                assert proxy_url is not None
                 now_ms = time.time() * 1000
                 _prune_expired_cooldowns(now_ms)
                 _bad_proxies[proxy_url] = now_ms + settings.NETWORK_PROXY_COOLDOWN_MS
@@ -679,7 +741,7 @@ async def fetch_with_retry(
 async def test_proxy(proxy_url: str) -> dict[str, Any]:
     start = time.time() * 1000
     try:
-        async with _build_client(proxy_url) as client:
+        async with _build_diagnostic_client(proxy_url) as client:
             response = await client.get("https://api.ipify.org?format=json")
             response.raise_for_status()
             data = response.json()
@@ -695,7 +757,7 @@ async def test_proxy(proxy_url: str) -> dict[str, Any]:
 
 async def get_tor_ip() -> str:
     proxy = settings.TOR_SOCKS_PROXY
-    async with _build_client(proxy) as client:
+    async with _build_diagnostic_client(proxy) as client:
         response = await client.get("https://api.ipify.org?format=json")
         response.raise_for_status()
         data = response.json()

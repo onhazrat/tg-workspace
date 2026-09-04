@@ -91,7 +91,6 @@ def _default_sync() -> dict[str, Any]:
         "dynamicSyncEnabledDefault": False,
         "dynamicSyncExpectedPostsDefault": 15,
         "syncFailureBackoffMinutes": 5,
-        "syncConcurrency": settings.SYNC_CONCURRENCY_DEFAULT,
         # Declared here from ticket 06 on. They were always part of the blob —
         # the frontend writes them and `compute_effective_global_start_time_ms`
         # reads them — but only ever as `.get(...) or "retention"` fallbacks, so

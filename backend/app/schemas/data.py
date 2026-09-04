@@ -23,9 +23,10 @@ class BulkFollowChannelEntry(BaseModel):
 
 
 class BulkFollowRequest(BaseModel):
+    """No `proxies` field — see `schemas/telegram.ProxyConfig` (ADR-012)."""
+
     channels: list[BulkFollowChannelEntry]
     proxy_enabled: bool = Field(False, alias="proxyEnabled")
-    proxies: list[str] | None = None
     tor_auto_rotate: bool = Field(False, alias="torAutoRotate")
     tor_rotation_threshold: int = Field(10, alias="torRotationThreshold")
 

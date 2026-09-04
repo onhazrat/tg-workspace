@@ -1,6 +1,6 @@
 # 36. One egress seam: every request to Telegram leaves from an acquired Lane
 
-**Status:** ready-for-agent
+**Status:** done
 **Blocked by:** None
 **Design authority:** `docs/proxy-binding-seam-plan.md` — read it first. It
 carries every decision, the alternative that lost, and the reason. This file is
@@ -46,35 +46,95 @@ reach Telegram or a proxy. That ratio is the ticket.
 
 ## Checkboxes
 
-- [ ] `fetch_with_retry` raises without a Lane; exemptions declared with reasons
-- [ ] Test fixture acquires a real Lane against a fake pool; no "skip when no
-      proxies configured" escape hatch
-- [ ] Synthetic direct Lane, so a proxy-less deployment still binds
-- [ ] Partition moved to `proxy_pool.py`; no bidirectional lazy import
-- [ ] `run_sync_job` fans out over Slots; `asyncio.Semaphore` gone
-- [ ] `_run_whole_job` deleted. **Staging verified 2026-09-03**: ticket 09's
+- [x] `fetch_with_retry` raises without a Lane; exemptions declared with reasons
+      — **a required argument instead of a raise**, which is stronger.
+      `_fetch_once(*, client: httpx.AsyncClient)` has no default and only
+      `build_lane_client` produces one, so a caller with no Lane cannot call it
+      and the type checker says so. `test_egress_seam.py` is the inventory half
+- [x] Test fixture acquires a real Lane against a fake pool; no "skip when no
+      proxies configured" escape hatch — **no fixture needed** once the raise
+      became an argument: there is no flag a test could set without acquiring
+- [x] Synthetic direct Lane, so a proxy-less deployment still binds
+- [x] Partition moved to `proxy_pool.py`; no bidirectional lazy import
+- [x] `run_sync_job` fans out over Slots; `asyncio.Semaphore` gone
+- [x] `_run_whole_job` deleted. **Staging verified 2026-09-03**: ticket 09's
       lane was created 8.6 hours before ticket 10's migration, all six live
       lanes are empty, and 229,759 archived messages contain zero with a null
       `channelId`. Re-run the check against any other deployment
-- [ ] `syncConcurrency` gone from settings, registry, runtime config and
+- [x] `syncConcurrency` gone from settings, registry, runtime config and
       frontend, with a migration stripping the stored key
-- [ ] `build_workers`'s round-robin dealing deleted — nothing truncates now
-- [ ] Pool size and `to_thread` executor derive from Partition width
-- [ ] `cache_channel_photo` uses the Lane pool; its guard is parametrised over
-      **both** cache modules
-- [ ] `body.proxies` removed from three schemas, `FollowJobState`, three
-      frontend call sites; client regenerated
-- [ ] `discover_probe_background` lane created by migration; `DRAIN_ORDER` is
-      the Budget product plus declared extras; `is_sync_lane` added
-- [ ] Probes never drain while a sync lane has a message
-- [ ] `tg_follow_jobs` with `pg_notify`; bulk-follow SSE reads across processes
-- [ ] A walk started by `auto_summary` does not hop proxies
-- [ ] `sync_queue.py:47` deleted rather than re-pointed; `sync_queue.py:977`'s
-      `2N` note goes with the behaviour
-- [ ] `RUN_SYNC_JOB_CALLERS` and `sync_single_channel`'s docstring stop naming
+- [~] `build_workers`'s round-robin dealing deleted — **not done, and the plan
+      was wrong to ask for it**. `_take_free` hands out the first idle worker in
+      list order, so lane-by-lane dealing stacks the first concurrent walks on
+      one proxy wherever a proxy has more than one slot. Identical at the
+      default of one, which is why deleting it would have looked safe.
+      `max_workers` is gone; the dealing stays, with the reason written down
+- [x] Pool size and `to_thread` executor derive from Partition width
+- [x] `cache_channel_photo` uses the Lane pool; its guard is parametrised over
+      **both** cache modules. Media fetches capped at one attempt
+      (`MEDIA_FETCH_RETRIES`), because the page-fetch retry budget under a
+      per-page call took the sync-job suite from 13s to 8 minutes
+- [x] `body.proxies` removed from three schemas, `FollowJobState`, three
+      frontend call sites; client regenerated. **More senders than three**:
+      `publishSummary` and `fetchBotInfo` took the list positionally from five
+      more
+- [x] `discover_probe_background` lane created by migration; `DRAIN_ORDER` is
+      the Budget product plus declared extras; `is_sync_lane` added.
+      **No new tier** — `NON_SYNC_LANES` served by an unweighted pass after
+      `TIER_ORDER` gives the same ordering without multiplying through the
+      Budget product
+- [x] Probes never drain while a sync lane has a message
+- [x] `tg_follow_jobs` with `pg_notify`; bulk-follow SSE reads across processes.
+      **A trigger, not a lane**: a follow job is one message that runs for
+      minutes, so it takes `scheduler.request_job_run`'s shape
+- [x] A walk started by `auto_summary` does not hop proxies
+- [x] `sync_queue.py:47` deleted rather than re-pointed; the `2N` note goes with
+      the behaviour
+- [x] `RUN_SYNC_JOB_CALLERS` and `sync_single_channel`'s docstring stop naming
       `_sync_stale_channels`, which does not exist
-- [ ] `test_worker_count.py` and `test_proxy_worker_partition.py` stay green
-- [ ] Every new guard mutation-tested before it is trusted
+- [x] `test_worker_count.py` and `test_proxy_worker_partition.py` stay green
+- [x] Every new guard mutation-tested before it is trusted — 33 mutations, and
+      two of the guards written along the way could not fail until they were
+
+## Found while doing it
+
+Recorded in full in `docs/proxy-binding-seam-plan.md`. The three worth naming
+here, because each is a trap the next ticket can walk into:
+
+1. **Moving a call onto `fetch_with_retry` hands it the page-fetch retry
+   budget.** Eight attempts with a 3s escalating delay is right for a page and
+   wrong for anything cosmetic or on a per-page path. Decide the budget before
+   the move.
+2. **The synthetic direct Lane must not be built inside `configure()`.** The
+   pool is one object shared by every caller, so a caller resolving "no proxies"
+   replaced the fleet another had just configured, and the next call replaced it
+   back. Under the suite that deadlocked on `aclose()` of a client belonging to
+   a finished event loop, while holding `_pool_lock` — every later caller in the
+   process stopped, with no error and no log.
+3. **Moving a fetch out of the tick that dequeued it needs a lease.** The
+   Discover sweep recorded a verdict in the same call, which is what took a
+   handle out of the due set. Once the tick only enqueues, every tick handed out
+   the same first batch again.
+
+## Review
+
+`/code-review` found 11 issues, 3 serious, all fixed. The two that matter most
+were guarded by tests that could not see them: the probe lane was **enqueued
+and never drained** (the guard drove `LaneScheduler` directly and never asked
+whether the drain offered it the lane), and the API answered every follow-job
+read with a **permanently stale** in-memory copy (every test called
+`clear_follow_jobs_for_tests()`, emptying the dict that was wrong). Both now
+have tests that go through the real loop. Details in the plan doc.
+
+## Left open
+
+- The probe dequeue lease is not renewed. A probe that waits longer than
+  `DEQUEUE_LEASE_MINUTES` behind sync work is re-enqueued and fetched twice —
+  harmless, and worth knowing before anyone shortens the lease.
+- A Partition rebuilt mid-job leaves that job on the old one until it finishes.
+  Bounded, and the fetch is unaffected because the lane is resolved live.
+- The direct Lane is one width for two processes with different traffic.
+- The `_run_whole_job` deletion was cleared against **staging only**.
 
 ## Not in scope
 
