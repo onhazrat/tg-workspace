@@ -3,6 +3,11 @@
 **Date:** 2026-06-08
 **Status:** Locked — do not revisit without explicit stakeholder sign-off.
 
+**Scope note (2026-09-04):** this file records the *migration* decisions of
+June 2026. Everything decided since is an ADR. Decisions about the repository
+as a published artifact, rather than about the software in it, start at
+[ADR-013](./ADR-013-open-source-publication.md).
+
 ## Remediation deployment mode — **Mode A** (2026-06-09)
 
 **Choice:** Hardened single-operator ([REMEDIATION-PLAN.md](./REMEDIATION-PLAN.md) Phase 0.1).

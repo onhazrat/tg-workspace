@@ -70,7 +70,7 @@ class TestExtractBodyLinks:
     def test_resolves_relative_href(self) -> None:
         el = _widget(_message('<a href="/alpha_news">Alpha</a>'))
         assert extract_body_links(el) == [
-            {"url": "https://telegram.me/alpha_news", "channel": "alpha_news"}
+            {"url": "https://t.me/alpha_news", "channel": "alpha_news"}
         ]
 
     def test_dedupes_repeated_channel(self) -> None:

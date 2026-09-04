@@ -8,12 +8,10 @@ import {
 
 describe("telegram-web", () => {
   test("builds channel and post URLs with configured domain", () => {
-    expect(telegramWebBaseUrl()).toBe("https://telegram.me")
-    expect(telegramWebViewChannelUrl("durov")).toBe(
-      "https://telegram.me/s/durov",
-    )
+    expect(telegramWebBaseUrl()).toBe("https://t.me")
+    expect(telegramWebViewChannelUrl("durov")).toBe("https://t.me/s/durov")
     expect(telegramWebViewPostUrl("durov", 123)).toBe(
-      "https://telegram.me/s/durov/123",
+      "https://t.me/s/durov/123",
     )
   })
 })

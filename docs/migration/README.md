@@ -42,13 +42,17 @@ Documentation for migrating the browser-first TG-Summarizer app to the FastAPI +
 | [ADR-007](./ADR-007-tor-deployment.md) | Tor deployment |
 | [ADR-008](./ADR-008-ai-providers.md) | AI provider abstraction |
 | [ADR-009](./ADR-009-server-authoritative-data.md) | Server-authoritative data — supersedes ADR-003 and Decisions #4/#5 |
+| [ADR-010](./ADR-010-artifact-model.md) | The Artifact model — the four kinds and their frozen Scope |
+| [ADR-011](./ADR-011-multi-user-registration.md) | Multi-user registration and approval — supersedes the registration half of ADR-002 |
+| [ADR-012](./ADR-012-egress-seam.md) | The Lane is the egress seam — extends ADR-007 |
+| [ADR-013](./ADR-013-open-source-publication.md) | Publishing the repository as open source |
 
 ## Code references
 
 | Area | Path |
 |------|------|
-| Backend data API | `backend/app/api/routes/data.py` |
+| Backend data API | `backend/app/api/routes/data/` (one module per resource family) |
 | Domain models | `backend/app/models_tg.py` |
-| Hybrid sync (frontend) | `frontend/src/lib/repository.ts`, `frontend/src/lib/db.ts` |
+| Frontend API clients | `frontend/src/client/` (generated), `frontend/src/api/` (hand-written) |
 | Scheduler (placeholders) | `backend/app/jobs/scheduler.py` |
 | Original reference app | `TG-Summarizer/` (kept indefinitely) |

@@ -13,7 +13,7 @@ RUN bun install
 
 COPY ./frontend /app/frontend
 ARG VITE_API_URL
-ARG VITE_TELEGRAM_WEB_DOMAIN=telegram.me
+ARG VITE_TELEGRAM_WEB_DOMAIN=t.me
 ENV VITE_TELEGRAM_WEB_DOMAIN=$VITE_TELEGRAM_WEB_DOMAIN
 # Only "staging" emits sourcemaps (see frontend/vite.config.ts). The image never
 # copies the root .env, so this build arg is the sole way the value gets in.

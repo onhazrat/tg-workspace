@@ -7,11 +7,42 @@ for architecture and `docs/migration/` for decisions.
 
 ## Language
 
+### People
+
+**Account**:
+The thing that owns rows. Every user-owned row names exactly one, and an
+Account sees its own rows and no others. This is the unit of tenancy,
+quota and retention.
+_Avoid_: user, tenant, profile
+
+**Operator**:
+Whoever runs a deployment. An Operator sets deployment-wide policy (retention
+windows, quota ceilings, whether registration is open) and is not a role the
+data model knows about: authorisation names a Permission, never "the Operator".
+One person is usually both the Operator and an Account, and those are still two
+different hats.
+_Avoid_: admin, owner, superuser, host
+
+**Owner**:
+An Account acting on another Account's behalf through a View-as session. The
+word is deliberately narrow: an Account that merely owns its own rows is not an
+"Owner", it is just the Account those rows name.
+_Avoid_: admin, impersonator, delegate
+
 ### The corpus
 
 **Channel**:
-A public Telegram channel the operator follows. Identified by its handle.
+A public Telegram channel, identified by its handle. Shared corpus: one row
+serves every Account that follows it, and it lives until nobody does. The
+definition names no role on purpose, because who watches a Channel is the
+Follow's business, not the Channel's.
 _Avoid_: feed, source, subscription
+
+**Follow**:
+The relation between an Account and a Channel, carrying everything private
+about watching it. Following is what makes a Channel's Posts visible to an
+Account; unfollowing removes the relation and nothing else.
+_Avoid_: subscription, watch, membership
 
 **Post**:
 One message scraped from a Channel.

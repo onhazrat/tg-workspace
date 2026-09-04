@@ -6,7 +6,7 @@ Dev/investigation only — not wired into the sync pipeline.
 Examples:
   uv run python scripts/capture_scrape_html.py --channels durov,ReutersWorldChannel
   uv run python scripts/capture_scrape_html.py --posts durov/123
-  uv run python scripts/capture_scrape_html.py --urls 'https://telegram.me/s/durov?before=100'
+  uv run python scripts/capture_scrape_html.py --urls 'https://t.me/s/durov?before=100'
 """
 
 from __future__ import annotations

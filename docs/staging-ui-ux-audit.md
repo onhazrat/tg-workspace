@@ -252,7 +252,9 @@ plain text field:
 ```
 socks5h://proxyuser:hunter2@198.51.100.24:6328
 ```
-Note this is a **real staging credential** — treat it as exposed and rotate it.
+The value above is redacted. The original finding carried a **real staging
+credential** in this field, which is exactly the defect: the editor renders
+whatever is configured, unmasked.
 
 The **Network Telemetry** panel masks the same values correctly (`socks5h://***@…`), so the
 masking logic already exists in the codebase and is simply not used by the editor.

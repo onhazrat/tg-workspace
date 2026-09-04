@@ -82,9 +82,7 @@ export const env = {
     viteEnv?.VITE_COMMAND_PALETTE_RECENT_COUNT,
     5,
   ),
-  /** Telegram public web-view host for channel/post links (e.g. telegram.me, t.me). */
-  telegramWebDomain: parseStringEnv(
-    viteEnv?.VITE_TELEGRAM_WEB_DOMAIN,
-    "telegram.me",
-  ),
+  /** Telegram public web-view host for channel/post links. Override with
+   * telegram.me (the mirror) where t.me is blocked. */
+  telegramWebDomain: parseStringEnv(viteEnv?.VITE_TELEGRAM_WEB_DOMAIN, "t.me"),
 } as const

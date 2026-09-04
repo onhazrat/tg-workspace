@@ -14,25 +14,28 @@ from app.services.telegram_web import (
 )
 
 
-def test_default_domain_builds_telegram_me_urls() -> None:
-    assert telegram_web_view_channel_url("durov") == "https://telegram.me/s/durov"
+def test_default_domain_builds_t_me_urls() -> None:
+    assert telegram_web_view_channel_url("durov") == "https://t.me/s/durov"
     assert (
         telegram_web_view_channel_url("durov", before_id=100)
-        == "https://telegram.me/s/durov?before=100"
+        == "https://t.me/s/durov?before=100"
     )
     assert (
         telegram_web_view_channel_url("durov", after_id=99)
-        == "https://telegram.me/s/durov?after=99"
+        == "https://t.me/s/durov?after=99"
     )
-    assert telegram_web_view_post_url("durov", 123) == "https://telegram.me/s/durov/123"
-    assert telegram_channel_post_url("durov", 123) == "https://telegram.me/durov/123"
+    assert telegram_web_view_post_url("durov", 123) == "https://t.me/s/durov/123"
+    assert telegram_channel_post_url("durov", 123) == "https://t.me/durov/123"
 
 
 def test_resolve_relative_href_uses_configured_domain() -> None:
     assert resolve_telegram_href("/s/durov?before=50") == (
-        "https://telegram.me/s/durov?before=50"
+        "https://t.me/s/durov?before=50"
     )
-    assert resolve_telegram_href("https://t.me/s/durov") == "https://t.me/s/durov"
+    assert (
+        resolve_telegram_href("https://telegram.me/s/durov")
+        == "https://telegram.me/s/durov"
+    )
 
 
 def test_extract_channel_name_from_legacy_and_current_domains() -> None:

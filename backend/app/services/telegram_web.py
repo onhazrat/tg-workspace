@@ -30,7 +30,7 @@ class TelegramWebViewUnavailable(ConnectionError):
 
 def telegram_web_domain() -> str:
     domain = settings.TELEGRAM_WEB_DOMAIN.strip().lower()
-    return domain or "telegram.me"
+    return domain or "t.me"
 
 
 def telegram_web_base_url() -> str:

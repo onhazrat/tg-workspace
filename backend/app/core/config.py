@@ -372,8 +372,9 @@ class Settings(BaseSettings):
     NETWORK_TOR_ROTATION_THRESHOLD: int = 10
     TELEGRAM_API_RETRIES: int = 3
     TELEGRAM_API_INITIAL_DELAY_MS: int = 2000
-    # Public Telegram web-view host for scraping and deep links (e.g. telegram.me, t.me)
-    TELEGRAM_WEB_DOMAIN: str = "telegram.me"
+    # Public Telegram web-view host for scraping and deep links. Override with
+    # telegram.me (the mirror) where t.me is blocked.
+    TELEGRAM_WEB_DOMAIN: str = "t.me"
 
     # Cached channel avatar images (relative to repo root unless absolute)
     CHANNEL_PHOTO_DIR: str = "data/channel-photos"

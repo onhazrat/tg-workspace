@@ -17,15 +17,15 @@ describe("renderPostText", () => {
   test("links a valid @mention to its Telegram web view", () => {
     const links = anchors(renderPostText("see @durov for news", ""))
     expect(links).toHaveLength(1)
-    expect(links[0]?.props.href).toBe("https://telegram.me/s/durov")
+    expect(links[0]?.props.href).toBe("https://t.me/s/durov")
     expect(links[0]?.props["data-testid"]).toBe("post-mention-link-durov")
   })
 
   test("links every mention in the post", () => {
     const links = anchors(renderPostText("@alpha_one and @bravo_two", ""))
     expect(links.map((a) => a.props.href)).toEqual([
-      "https://telegram.me/s/alpha_one",
-      "https://telegram.me/s/bravo_two",
+      "https://t.me/s/alpha_one",
+      "https://t.me/s/bravo_two",
     ])
   })
 

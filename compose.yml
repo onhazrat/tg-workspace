@@ -315,7 +315,7 @@ services:
       args:
         - VITE_API_URL=https://api.${DOMAIN?Variable not set}
         - VITE_API_KEY=${VITE_API_KEY}
-        - VITE_TELEGRAM_WEB_DOMAIN=${TELEGRAM_WEB_DOMAIN:-telegram.me}
+        - VITE_TELEGRAM_WEB_DOMAIN=${TELEGRAM_WEB_DOMAIN:-t.me}
         # Gates sourcemap emission — only "staging" enables it. Defaults to
         # production so an unset ENVIRONMENT never leaks source.
         - VITE_ENVIRONMENT=${ENVIRONMENT:-production}
