@@ -16,7 +16,12 @@ permissions:
 jobs:
   test-backend:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    # The suite is ~9 minutes locally (548s for 2,243 tests) and a hosted
+    # runner is slower. The old 5 was never calibrated: it was written while
+    # CI was billing-blocked, so no run ever reached the test step to
+    # contradict it. A timeout reports as `cancelled`, not `failure`, which
+    # is why two runs looked like somebody had stopped them by hand.
+    timeout-minutes: 20
     permissions:
       contents: read
       actions: write
