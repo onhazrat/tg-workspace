@@ -107,6 +107,15 @@ doing the containment.
   the Hetzner box all belong to the old repository and do not travel. Staging
   cannot deploy until they are recreated.
 
+- **The old repository is kept, private, rather than deleted (2026-09-05).**
+  `onhazrat/tg_summarizer_migrate_to_fastapi` still holds the proxy credential
+  in four blobs across its 176 `refs/pull/*/head` refs, and nothing the owner
+  can do removes them. Keeping it is acceptable only because the credential was
+  rotated: what those refs hold is dead. The standing risk is a visibility flip.
+  That repository must never be made public, and if it ever should be deleted
+  instead, note that everything worth keeping from it already lives in
+  [`docs/pr-archive/`](../pr-archive/).
+
 - **Publication is irreversible.** Deleting a public repository does not retract
   what was cloned, cached or indexed.
 - **Every signature on `main` is now the author's, not GitHub's.** 99 of the last
