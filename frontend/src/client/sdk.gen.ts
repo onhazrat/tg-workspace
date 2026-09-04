@@ -884,6 +884,10 @@ export const dataDeleteChannel = <ThrowOnError extends boolean = true>(options: 
 
 /**
  * Upsert Channel
+ * Edit a Channel, or follow one that already exists.
+ *
+ * A `PUT` from an account that does not follow this Channel yet creates the
+ * follow; the Channel itself is shared corpus and is not re-created.
  */
 export const dataUpsertChannel = <ThrowOnError extends boolean = true>(options: Options<DataUpsertChannelData, ThrowOnError>) => {
     return (options.client ?? _heyApiClient).put<DataUpsertChannelResponses, DataUpsertChannelErrors, ThrowOnError, 'data'>({

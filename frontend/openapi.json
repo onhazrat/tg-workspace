@@ -1351,6 +1351,7 @@
       "put": {
         "tags": ["data"],
         "summary": "Upsert Channel",
+        "description": "Edit a Channel, or follow one that already exists.\n\nA `PUT` from an account that does not follow this Channel yet creates the\nfollow; the Channel itself is shared corpus and is not re-created.",
         "operationId": "data-upsert_channel",
         "security": [{ "OAuth2PasswordBearer": [] }],
         "parameters": [

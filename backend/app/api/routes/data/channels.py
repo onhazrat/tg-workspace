@@ -205,12 +205,34 @@ def list_channel_bios(
 
 
 @router.put("/channels/{channel_id}")
+# **This route is also how an account follows a Channel that already exists.**
+# The name says "upsert" and the method is `PUT`, so it reads as an edit, and
+# the create half is easy to miss: a `Channel` is shared corpus that anybody may
+# follow, so a request from an account with no `ChannelFollow` yet creates the
+# relation rather than editing it, and the thing created is the Follow, not the
+# Channel.
+#
+# That is not a detail of the service. Ticket 22 moved the setting group onto
+# the follow, and the first cut asked `get_group_for_channel` before the follow
+# existed, so following a handle somebody else scraped answered 500. Caught by
+# `tests/api/test_account_isolation.py`; the branch that fixes it is commented
+# in `services/channels.py::upsert_channel`.
+#
+# A comment rather than a docstring, because a handler docstring becomes the
+# operation's public `description` in `openapi.json` and in the generated
+# client, and ticket numbers and test paths are not API documentation. The
+# docstring below is the half a client reader wants. Found in review.
 def upsert_channel(
     channel_id: str,
     body: ChannelUpsertRequest,
     session: SessionDep,
     _current_user: CurrentUser,
 ) -> ChannelResponse:
+    """Edit a Channel, or follow one that already exists.
+
+    A `PUT` from an account that does not follow this Channel yet creates the
+    follow; the Channel itself is shared corpus and is not re-created.
+    """
     return ChannelResponse.model_validate(
         upsert_channel_impl(
             session, channel_id, body.to_service_body(), user_id=_current_user.id

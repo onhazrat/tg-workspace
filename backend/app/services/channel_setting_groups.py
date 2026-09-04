@@ -176,27 +176,40 @@ def channel_is_frozen(
     return bool(group and group.is_frozen)
 
 
-def scope_key(user_id: uuid.UUID | None) -> str:
-    return str(user_id) if user_id is not None else "global"
+def scope_key(user_id: uuid.UUID) -> str:
+    """The owner half of a reserved group id.
+
+    It used to answer `"global"` for `None`, which is where `default-global` and
+    its four siblings came from. Ticket 21 made
+    `tg_channel_setting_groups.user_id` `NOT NULL` with a cascading key, so that
+    scope stopped existing: `None` is an `IntegrityError` at the insert now, not
+    a row every account shares. Ticket 37 narrowed the signature so a caller
+    with no account fails at the call instead.
+
+    Kept as a function rather than inlined because the five id builders below
+    have to agree with each other, and `is_reserved_group_id` parses what they
+    produce.
+    """
+    return str(user_id)
 
 
-def default_group_id_for_user(user_id: uuid.UUID | None) -> str:
+def default_group_id_for_user(user_id: uuid.UUID) -> str:
     return f"default-{scope_key(user_id)}"
 
 
-def restricted_group_id_for_user(user_id: uuid.UUID | None) -> str:
+def restricted_group_id_for_user(user_id: uuid.UUID) -> str:
     return f"restricted-{scope_key(user_id)}"
 
 
-def frozen_group_id_for_user(user_id: uuid.UUID | None) -> str:
+def frozen_group_id_for_user(user_id: uuid.UUID) -> str:
     return f"frozen-{scope_key(user_id)}"
 
 
-def slow_feed_group_id_for_user(user_id: uuid.UUID | None) -> str:
+def slow_feed_group_id_for_user(user_id: uuid.UUID) -> str:
     return f"slow-feed-{scope_key(user_id)}"
 
 
-def high_velocity_group_id_for_user(user_id: uuid.UUID | None) -> str:
+def high_velocity_group_id_for_user(user_id: uuid.UUID) -> str:
     return f"high-velocity-{scope_key(user_id)}"
 
 
@@ -210,9 +223,7 @@ def is_reserved_group_id(group_id: str) -> bool:
     )
 
 
-def _name_collision_scope_filter(
-    user_id: uuid.UUID | None,
-) -> ColumnElement[bool]:
+def _name_collision_scope_filter(user_id: uuid.UUID) -> ColumnElement[bool]:
     """The rows a *name* can collide with — identity, not visibility.
 
     This helper used to be named for the operator and did two jobs. Ticket 35
@@ -223,31 +234,39 @@ def _name_collision_scope_filter(
     substring scan, and prose naming it would keep the scan red.
 
     What is left answers "is this name already taken", which mirrors the unique
-    index `(COALESCE(user_id::text, 'global'), lower(name))`. Ticket 30's rule
-    applies: the owner in a key answers *which row is yours*, and a flag cannot
-    gate identity — so this deliberately does not consult `tenancy_enforced()`
-    and deliberately is not `scoped_select`. Adopting the seam here would make a
-    duplicate name stop being rejected while enforcement is off and start
-    arriving as a Postgres `UniqueViolation` instead of the route's 409.
+    index `(COALESCE(user_id::text, 'global'), lower(name))`.
 
-    It stays *wider* than the index — `me OR NULL` rather than exactly my
-    scope — because that is what it has always been, and narrowing it to match
-    the index would start allowing names the operator has been prevented from
-    using since the presets were seeded. Ticket 22 can reconcile the two once
-    the global rows are gone.
+    **The `COALESCE` in that index is a fossil, and the two agree.** It was
+    written when an ownerless row meant "every account sees this", and this
+    filter was correspondingly *wider* than the index — `me OR user_id IS NULL`
+    — so that a custom group could not take a global preset's name. Ticket 21
+    deleted those rows and made the column `NOT NULL` with a cascading key, so
+    the wider leg stopped being able to match anything and the `COALESCE` stopped
+    being able to produce `'global'`. Ticket 37 dropped the leg.
+
+    The index was left as it is. Rewriting it to `(user_id, lower(name))` buys a
+    uuid comparison instead of a text one and removes a case that reads as live;
+    it costs a migration that drops and rebuilds a unique index under `ACCESS
+    EXCLUSIVE`, on a table whose correctness depends on that index being present,
+    for no change in behaviour. That is the losing argument, recorded here rather
+    than only in the ticket, because here is where the next reader is standing.
+
+    **Identity is ungated, and this now looks exactly like a scoped read.** With
+    the `IS NULL` leg gone the body is `user_id == me`, which is byte-for-byte
+    what `scoped_select` produces for a `USER_OWNED` table. Ticket 30's rule
+    says why it still must not adopt the seam: the owner in a key answers *which
+    row is yours*, and a flag may gate visibility but never identity. Gate this
+    one and a duplicate name stops being rejected while enforcement is off, then
+    arrives as a Postgres `UniqueViolation` instead of the route's 409.
+    `tests/services/test_setting_group_name_identity.py` fails on either half.
     """
-    if user_id is None:
-        return col(ChannelSettingGroup.user_id).is_(None)
-    return or_(
-        cast(ColumnElement[bool], ChannelSettingGroup.user_id == user_id),
-        col(ChannelSettingGroup.user_id).is_(None),
-    )
+    return cast(ColumnElement[bool], ChannelSettingGroup.user_id == user_id)
 
 
 def _legacy_duplicate_reserved_groups(
     session: Session,
     *,
-    user_id: uuid.UUID | None,
+    user_id: uuid.UUID,
     reserved_name: str,
     canonical_id: str,
 ) -> list[ChannelSettingGroup]:
@@ -684,7 +703,7 @@ def _find_group_by_name_ci(
     session: Session,
     *,
     name: str,
-    user_id: uuid.UUID | None,
+    user_id: uuid.UUID,
     exclude_id: str | None = None,
 ) -> ChannelSettingGroup | None:
     normalized = name.strip().lower()
@@ -705,7 +724,7 @@ def _reject_duplicate_group_name(
     session: Session,
     *,
     name: str,
-    user_id: uuid.UUID | None,
+    user_id: uuid.UUID,
     exclude_id: str | None = None,
 ) -> None:
     duplicate = _find_group_by_name_ci(
