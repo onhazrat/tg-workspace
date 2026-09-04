@@ -1,15 +1,10 @@
 name: pre-commit
 
 on:
-  # CI-DISABLED 2026-07-30: GitHub-hosted runners are billing-blocked, so every
-  # automatic run fails before its first step. Uncomment the trigger below to
-  # re-enable. See .github/workflows/DISABLED.md.
-  # pull_request:
-  #   types:
-  #     - opened
-  #     - synchronize
-  # `on:` cannot be empty, so this keeps the file valid. A manual run is not useful
-  # here — the job needs a PR context (github.head_ref / GITHUB_BASE_REF).
+  pull_request:
+    types:
+      - opened
+      - synchronize
   workflow_dispatch:
 
 permissions:
