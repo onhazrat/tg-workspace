@@ -4,7 +4,13 @@ import { createUser } from "./utils/privateApi.ts"
 import { randomEmail, randomPassword } from "./utils/random"
 import { logInUser, logOutUser } from "./utils/user"
 
-const tabs = ["My profile", "Password", "Danger zone"]
+// The stored session is `firstSuperuser`, and a superuser gets no Danger zone
+// (it cannot delete its own account). Asserting the *whole* tab set rather than
+// a subset is the point: this test read `["My profile", "Password", "Danger
+// zone"]` while `settings.tsx` hid the last one by index, so ticket 24's Usage
+// tab silently pushed Danger zone out of the slice for every superuser.
+const superuserTabs = ["My profile", "Password", "Usage"]
+const ordinaryUserTabs = [...superuserTabs, "Danger zone"]
 
 test("My profile tab is active by default", async ({ page }) => {
   await page.goto("/settings")
@@ -14,11 +20,23 @@ test("My profile tab is active by default", async ({ page }) => {
   )
 })
 
-test("All tabs are visible", async ({ page }) => {
+test("a superuser sees every tab but the Danger zone", async ({ page }) => {
   await page.goto("/settings")
-  for (const tab of tabs) {
-    await expect(page.getByRole("tab", { name: tab })).toBeVisible()
-  }
+  await expect(page.getByRole("tab")).toHaveText(superuserTabs)
+})
+
+test.describe("an ordinary account", () => {
+  test.use({ storageState: { cookies: [], origins: [] } })
+
+  test("also sees the Danger zone", async ({ page }) => {
+    const email = randomEmail()
+    const password = randomPassword()
+    await createUser({ email, password })
+    await logInUser(page, email, password)
+
+    await page.goto("/settings")
+    await expect(page.getByRole("tab")).toHaveText(ordinaryUserTabs)
+  })
 })
 
 test.describe("Edit user profile", () => {

@@ -54,11 +54,14 @@ test.describe("Settings Hub (VS Code-style)", () => {
   })
 
   test("deep-link ?setting= focuses a catalog row", async ({ page }) => {
-    await gotoSettings(page, "setting=syncConcurrency")
-    await expect(page).toHaveURL(/setting=syncConcurrency/)
-    const row = page.locator('[data-setting-id="syncConcurrency"]')
+    // Any catalog-rendered row in `channels-sync` does; this was
+    // `syncConcurrency` until ADR-012 deleted that setting and left the spec
+    // deep-linking to an id nothing renders.
+    await gotoSettings(page, "setting=syncFailureBackoffMinutes")
+    await expect(page).toHaveURL(/setting=syncFailureBackoffMinutes/)
+    const row = page.locator('[data-setting-id="syncFailureBackoffMinutes"]')
     await expect(row).toBeVisible({ timeout: 5_000 })
-    await expect(row).toHaveAttribute("id", "setting-syncConcurrency")
+    await expect(row).toHaveAttribute("id", "setting-syncFailureBackoffMinutes")
   })
 
   test("deep-link ?setting= focuses custom panel knobs", async ({ page }) => {
@@ -143,7 +146,12 @@ test.describe("Settings Hub (VS Code-style)", () => {
     await expect(results).toBeVisible({ timeout: 5_000 })
     await results.getByText("Diagnostics", { exact: true }).first().click()
     await expect(page).toHaveURL(/section=diagnostics/)
-    await expect(page.getByText("System Logs").first()).toBeVisible()
+    // The panel is titled "Diagnostics", matching the nav entry that leads
+    // here — see the comment in `LogsHeader.tsx`. It read "System Logs" when
+    // this assertion was written, and there is no System log tab any more.
+    await expect(
+      page.locator('[data-setting-id="panel-diagnostics"]'),
+    ).toBeVisible()
     await expect(
       page.locator('[data-setting-id="panel-network-telemetry"]'),
     ).toHaveCount(0)
