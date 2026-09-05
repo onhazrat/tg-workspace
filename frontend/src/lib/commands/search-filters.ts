@@ -1,6 +1,6 @@
 import { api } from "@/api"
 import type { CommandContext } from "@/lib/commands/types"
-import { listSummaries } from "@/lib/summaries/store"
+import { listSummaries, type SummariesApi } from "@/lib/summaries/store"
 import { searchSimilarPostsFromQuery } from "@/services/rag"
 import type { Post, SummaryListItem } from "@/types"
 
@@ -68,9 +68,14 @@ export async function searchPostsForPalette(
 export async function searchSummariesForPalette(
   _ctx: CommandContext,
   query: string,
+  // `listSummaries` already takes an injectable client; forwarding it is what
+  // lets the palette tests avoid `mock.module`, which is process-wide in Bun
+  // and leaks into every test file loaded after it.
+  api?: SummariesApi,
 ): Promise<SummaryListItem[]> {
   const results = await listSummaries(
     query.trim() ? { search: query.trim() } : {},
+    api,
   )
   return [...results]
     .sort((left, right) => right.timestamp - left.timestamp)
