@@ -57,7 +57,7 @@ INVENTORY: dict[str, str] = {
     "credentials.py": AGGREGATE,
     "data_vectors.py": AGGREGATE,
     "discover_ignored.py": AGGREGATE,
-    "discover_probes.py": AGGREGATE,
+    "channel_directory.py": AGGREGATE,
     "discover_reports.py": AGGREGATE,
     "follows.py": AGGREGATE,
     "logs.py": AGGREGATE,

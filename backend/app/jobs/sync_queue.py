@@ -711,12 +711,12 @@ async def enqueue_sync_job(job: SyncJobState, user_id: uuid.UUID | None) -> None
         logger.warning("failed to ring the sync worker for lane %s", lane)
 
 
-async def enqueue_discover_probes(handles: list[str]) -> int:
+async def enqueue_channel_directory(handles: list[str]) -> int:
     """Queue one probe message per handle, then ring the worker.
 
     The Discover sweep's whole job since ADR-012. It carries no `jobId` and no
     `userId`: a probe answers a question about the corpus, and ticket 23 left
-    it charged to nobody for that reason — `DiscoverHandleProbe` is
+    it charged to nobody for that reason — `DirectoryEntry` is
     corpus-scoped, so billing one account for deployment-wide work is what the
     three Budgets exist to prevent.
 

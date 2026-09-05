@@ -1,11 +1,21 @@
-"""Per-handle metadata probes for Discover candidates (IDEA-011 D9).
+"""The Channel Directory: what we know about a handle (IDEA-011 D9, D16).
 
-A Discover report surfaces every handle its posts point at, and most of those
-are not channels anyone could follow: bots, personal accounts, groups, and
-private or deleted channels are all referenced from posts exactly the way real
-channels are. This module records what one fetch of `t.me/<handle>` said, once
-per handle, so that triage happens automatically instead of by hand on every
-report.
+The corpus-wide map of every Channel anyone has seen referenced, followed or
+not. One row per handle, holding what a fetch of `t.me/s/<handle>` said about
+it: its followability verdict and its metadata.
+
+It began as a triage cache, and that is still its first job. A Discover report
+surfaces every handle its posts point at, and most of those are not channels
+anyone could follow — bots, personal accounts, groups, and private or deleted
+channels are all referenced from posts exactly the way real channels are. One
+fetch per handle answers that automatically instead of by hand on every report.
+
+Ticket 01 renamed it from `discover_probes`, because the table was named for the
+job that filled it rather than for what it holds. It is **corpus-scoped and
+outlives every Follow** (`tenancy.SCOPES`): what exists on Telegram is not a
+fact about anybody's reading, so nothing here is deleted because an account
+followed or unfollowed something. `tg_channels` remains the separate, follow-
+scoped record of a Channel somebody actually syncs.
 
 Deliberately kept apart from `discover_ignored`:
 
@@ -57,7 +67,7 @@ from typing import Any
 from sqlalchemy import and_, func, or_
 from sqlmodel import Session, col, select
 
-from app.models_tg import DiscoverHandleProbe, utc_now
+from app.models_tg import DirectoryEntry, utc_now
 from app.services.tenancy import unscoped_select
 
 #: Why the probe reads below do not go through `scoped_select` (ticket 16).
@@ -68,7 +78,7 @@ from app.services.tenancy import unscoped_select
 PROBE_SCOPE_REASON = (
     "A probe is a fact about a handle, not about an account: "
     "'@foo cannot be followed by anyone' has the same answer for every caller, "
-    "so `DiscoverHandleProbe` is classified `Scope.CORPUS` in "
+    "so `DirectoryEntry` is classified `Scope.CORPUS` in "
     "`services/tenancy.py`. Scoping it would make each account re-probe every "
     "handle, multiplying fetches at Telegram by the number of accounts to "
     "arrive at the same verdict — and the queue is drained by a scheduled job "
@@ -123,7 +133,7 @@ def _retry_deadline(attempts: int, *, now: datetime) -> datetime:
     return now + timedelta(minutes=minutes)
 
 
-def probe_to_camel(row: DiscoverHandleProbe) -> dict[str, Any]:
+def probe_to_camel(row: DirectoryEntry) -> dict[str, Any]:
     return {
         "handle": row.handle,
         "status": row.status,
@@ -131,6 +141,11 @@ def probe_to_camel(row: DiscoverHandleProbe) -> dict[str, Any]:
         "displayName": row.display_name,
         "bio": row.bio,
         "subscribers": row.subscribers,
+        "photos": row.photos,
+        "videos": row.videos,
+        "files": row.files,
+        "links": row.links,
+        "telegramChatId": row.telegram_chat_id,
         "photoUrl": row.photo_url,
         "attempts": row.attempts,
         "lastError": row.last_error,
@@ -156,9 +171,9 @@ def probe_map(session: Session, handles: set[str]) -> dict[str, dict[str, Any]]:
     if not handles:
         return {}
     statement = unscoped_select(
-        select(DiscoverHandleProbe).where(
-            col(DiscoverHandleProbe.handle).in_(handles),
-            col(DiscoverHandleProbe.attempted_at).is_not(None),
+        select(DirectoryEntry).where(
+            col(DirectoryEntry.handle).in_(handles),
+            col(DirectoryEntry.attempted_at).is_not(None),
         ),
         reason=PROBE_SCOPE_REASON,
     )
@@ -178,11 +193,11 @@ def list_probes(
     generated and is never pruned, so an unbounded select here would get slower
     for the lifetime of the install (`docs/unbounded-query-audit.md`).
     """
-    statement = unscoped_select(select(DiscoverHandleProbe), reason=PROBE_SCOPE_REASON)
+    statement = unscoped_select(select(DirectoryEntry), reason=PROBE_SCOPE_REASON)
     if status:
-        statement = statement.where(col(DiscoverHandleProbe.status) == status)
+        statement = statement.where(col(DirectoryEntry.status) == status)
     statement = (
-        statement.order_by(col(DiscoverHandleProbe.handle)).offset(offset).limit(limit)
+        statement.order_by(col(DirectoryEntry.handle)).offset(offset).limit(limit)
     )
     return [probe_to_camel(row) for row in session.exec(statement).all()]
 
@@ -200,12 +215,12 @@ def queue_counts(session: Session) -> dict[str, int]:
     never reach zero — a permanently unreachable handle keeps retrying at the
     backoff ceiling forever, by design.
     """
-    unknown = col(DiscoverHandleProbe.status) == "unknown"
-    attempts = col(DiscoverHandleProbe.attempts)
+    unknown = col(DirectoryEntry.status) == "unknown"
+    attempts = col(DirectoryEntry.attempts)
 
     def _count(clause: Any) -> int:
         statement = unscoped_select(
-            select(func.count()).select_from(DiscoverHandleProbe).where(clause),
+            select(func.count()).select_from(DirectoryEntry).where(clause),
             reason=PROBE_SCOPE_REASON,
         )
         return int(session.exec(statement).one())
@@ -213,8 +228,8 @@ def queue_counts(session: Session) -> dict[str, int]:
     return {
         "queued": _count(and_(unknown, attempts == 0)),
         "retrying": _count(and_(unknown, attempts > 0)),
-        "resolved": _count(col(DiscoverHandleProbe.status) == "ok"),
-        "unavailable": _count(col(DiscoverHandleProbe.status) == "unavailable"),
+        "resolved": _count(col(DirectoryEntry.status) == "ok"),
+        "unavailable": _count(col(DirectoryEntry.status) == "unavailable"),
     }
 
 
@@ -241,9 +256,7 @@ def enqueue_handles(session: Session, handles: list[str]) -> int:
     existing = {
         row.handle: row
         for row in session.exec(
-            select(DiscoverHandleProbe).where(
-                col(DiscoverHandleProbe.handle).in_(set(ranked))
-            )
+            select(DirectoryEntry).where(col(DirectoryEntry.handle).in_(set(ranked)))
         ).all()
     }
 
@@ -252,7 +265,7 @@ def enqueue_handles(session: Session, handles: list[str]) -> int:
         row = existing.get(handle)
         if row is None:
             session.add(
-                DiscoverHandleProbe(
+                DirectoryEntry(
                     handle=handle,
                     status="unknown",
                     priority=rank,
@@ -298,15 +311,15 @@ def dequeue_handles(
         return []
     moment = now or utc_now()
     statement = (
-        select(DiscoverHandleProbe)
+        select(DirectoryEntry)
         .where(
-            col(DiscoverHandleProbe.status) == "unknown",
+            col(DirectoryEntry.status) == "unknown",
             or_(
-                col(DiscoverHandleProbe.retry_after).is_(None),
-                col(DiscoverHandleProbe.retry_after) <= moment,
+                col(DirectoryEntry.retry_after).is_(None),
+                col(DirectoryEntry.retry_after) <= moment,
             ),
         )
-        .order_by(col(DiscoverHandleProbe.priority), col(DiscoverHandleProbe.handle))
+        .order_by(col(DirectoryEntry.priority), col(DirectoryEntry.handle))
         .limit(limit)
     )
     return [row.handle for row in session.exec(statement).all()]
@@ -332,9 +345,7 @@ def handles_needing_probe(
     existing = {
         row.handle: row
         for row in session.exec(
-            select(DiscoverHandleProbe).where(
-                col(DiscoverHandleProbe.handle).in_(set(wanted))
-            )
+            select(DirectoryEntry).where(col(DirectoryEntry.handle).in_(set(wanted)))
         ).all()
     }
 
@@ -355,10 +366,10 @@ def handles_needing_probe(
     return out
 
 
-def _get_or_create(session: Session, handle: str) -> DiscoverHandleProbe:
-    row = session.get(DiscoverHandleProbe, handle)
+def _get_or_create(session: Session, handle: str) -> DirectoryEntry:
+    row = session.get(DirectoryEntry, handle)
     if row is None:
-        row = DiscoverHandleProbe(handle=handle, created_at=utc_now())
+        row = DirectoryEntry(handle=handle, created_at=utc_now())
         session.add(row)
     return row
 
@@ -400,6 +411,31 @@ def record_probe_result(
     row.display_name = payload.get("displayName") or None
     row.bio = payload.get("bio") or None
     row.subscribers = payload.get("subscribers") or None
+    row.photos = payload.get("photos") or None
+    row.videos = payload.get("videos") or None
+    row.files = payload.get("files") or None
+    row.links = payload.get("links") or None
+    # `or None` on the four above collapses a missing counter and an empty
+    # string together, which is right: Telegram omits a counter it has none of,
+    # and `""` would make "no photos" and "we did not look" the same value.
+    # The chat id is an int, so it is checked by type instead — `or None` would
+    # turn a legitimate 0 into a missing one.
+    #
+    # **It is only ever written, never cleared**, which is the one place this
+    # function does not simply overwrite what it knows. The id is decoded from a
+    # message widget, so a page with no visible messages yields none — and an
+    # `unavailable` verdict is synthesized with no page at all
+    # (`jobs/discover_probe.py`). Overwriting would drop the id exactly when the
+    # channel went private or was renamed, which is the one case it is for: it
+    # is the only identity that survives a handle rename. A recheck still clears
+    # it, because `requeue_probes` discards the whole verdict deliberately.
+    #
+    # The four counters above are overwritten, and that asymmetry is the point.
+    # A counter is a snapshot of a page and a stale one is a lie; the chat id is
+    # immutable, so a remembered one stays true however the page changed.
+    chat_id = payload.get("telegramChatId")
+    if isinstance(chat_id, int):
+        row.telegram_chat_id = chat_id
     row.photo_url = payload.get("photoUrl") or None
     row.latest_id = int(payload.get("latestId") or 0)
     # A conclusive answer clears the failure history: the backoff exists to
@@ -439,6 +475,11 @@ def requeue_probes(
         row.display_name = None
         row.bio = None
         row.subscribers = None
+        row.photos = None
+        row.videos = None
+        row.files = None
+        row.links = None
+        row.telegram_chat_id = None
         row.photo_url = None
         row.latest_id = 0
         row.attempts = 0

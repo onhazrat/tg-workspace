@@ -1223,7 +1223,7 @@ EXPORT_OMISSIONS: dict[str, str] = {
     "SummaryPayload": "Carried by the `summaries` join, as its own row's bodies.",
     "ChatSessionPayload": "Carried by the `chat_sessions` join.",
     "SyncLogPayload": "Carried by the `sync_logs` join.",
-    "DiscoverHandleProbe": (
+    "DirectoryEntry": (
         "Corpus, and a fact about a handle rather than about anybody — "
         "`tenancy.SCOPES` classifies it that way for the same reason."
     ),

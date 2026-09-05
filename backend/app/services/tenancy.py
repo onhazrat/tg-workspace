@@ -85,7 +85,7 @@ from app.models_tg import (
     ChatDestination,
     ChatSession,
     ChatSessionPayload,
-    DiscoverHandleProbe,
+    DirectoryEntry,
     DiscoverIgnoredChannel,
     DiscoverReport,
     EmbeddingLog,
@@ -188,7 +188,7 @@ SCOPES: dict[type[SQLModel], Scope] = {
     SyncLog: Scope.FOLLOW_SCOPED,
     SyncLogPayload: Scope.FOLLOW_SCOPED,
     # --- Corpus: shared, and no follow can reach them.
-    DiscoverHandleProbe: Scope.CORPUS,
+    DirectoryEntry: Scope.CORPUS,
     SyncMeta: Scope.CORPUS,
 }
 

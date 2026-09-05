@@ -112,6 +112,14 @@ class HandleProbeResponse(BaseModel):
     bio: str | None = None
     # Raw text as Telegram renders it ("12.3K"), deliberately not parsed.
     subscribers: str | None = None
+    # The other four counters the preview page carries, same raw text, spelled
+    # as `Channel` spells them so a follow needs no translation (ticket 01).
+    photos: str | None = None
+    videos: str | None = None
+    files: str | None = None
+    links: str | None = None
+    # The only identity that survives a handle rename.
+    telegram_chat_id: int | None = Field(default=None, alias="telegramChatId")
     photo_url: str | None = Field(default=None, alias="photoUrl")
     attempts: int = 0
     last_error: str | None = Field(default=None, alias="lastError")

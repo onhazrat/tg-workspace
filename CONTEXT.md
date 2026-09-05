@@ -32,11 +32,30 @@ _Avoid_: admin, impersonator, delegate
 ### The corpus
 
 **Channel**:
-A public Telegram channel, identified by its handle. Shared corpus: one row
-serves every Account that follows it, and it lives until nobody does. The
-definition names no role on purpose, because who watches a Channel is the
+A public Telegram channel, identified by its handle, whether or not anyone
+follows it. Its Posts and its sync state live only while somebody follows it;
+what we know *about* it is its Directory entry, which outlives every Follow.
+The definition names no role on purpose, because who watches a Channel is the
 Follow's business, not the Channel's.
 _Avoid_: feed, source, subscription
+
+**Directory**:
+The corpus-wide map of every Channel anyone has seen referenced, followed or
+not. It outlives Follows and Posts deliberately, because it records what exists
+on Telegram rather than what anybody reads.
+_Avoid_: probe table, channel map, index, registry
+
+**Directory entry**:
+One Channel's row in the Directory: its metadata, its followability verdict,
+and a sample of its recent Posts. The sample is a snapshot of one preview page,
+replaced wholesale and never promoted into the corpus.
+_Avoid_: probe, probe row, map row
+
+**Candidate**:
+A Directory entry that a Discovery report's scan surfaced. The distinction is
+the Scope: every Candidate is a Directory entry, but a Directory entry only
+becomes a Candidate by turning up in the Posts somebody actually reads.
+_Avoid_: suggestion, recommendation, discovered channel
 
 **Follow**:
 The relation between an Account and a Channel, carrying everything private
@@ -61,6 +80,13 @@ _Avoid_: selection, range, filter set, context
 One proxy, with a limit on how many requests may pass through it at once. Every
 request to Telegram leaves through a Lane, whatever kind of work made it.
 _Avoid_: proxy pool, channel, connection
+
+**Queue lane**:
+One queue the Sync worker drains, ranked against the others by priority. Always
+qualified, never bare "lane": the code spells both this and the proxy sense
+`lane`, and the two are unrelated — a Queue lane decides what happens next, a
+Lane decides where it leaves from.
+_Avoid_: lane (unqualified), queue, tier, pipe
 
 **Slot**:
 One permit to scrape a Channel, pinned to a Lane for as long as it is held.

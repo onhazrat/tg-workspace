@@ -204,7 +204,7 @@ EXCUSED: dict[tuple[str, str], tuple[Reason, str]] = {
     ),
     ("GET", f"{DATA}/discover/probes"): (
         Reason.CORPUS,
-        "DiscoverHandleProbe is corpus: shared and unreachable through a "
+        "DirectoryEntry is corpus: shared and unreachable through a "
         "Follow, unscoped on purpose (tenancy.py::SCOPES)",
     ),
     ("GET", f"{DATA}/discover/probe/queue"): (Reason.CORPUS, "see GET probes"),

@@ -96,7 +96,7 @@ DISCOVER_PROBE_LANE = "discover_probe_background"
 #:
 #: *No Budget, deliberately.* Giving the probe one would make the name fit
 #: `lane_name`, and ticket 23 left probes uncharged on purpose —
-#: `DiscoverHandleProbe` is corpus-scoped, so billing one account for
+#: `DirectoryEntry` is corpus-scoped, so billing one account for
 #: deployment-wide work is exactly what the three Budgets exist to prevent. A
 #: Budget on the ledger path that then has to be excluded from it is a special
 #: case pretending to be a rule.

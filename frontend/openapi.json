@@ -6666,6 +6666,26 @@
             "anyOf": [{ "type": "string" }, { "type": "null" }],
             "title": "Subscribers"
           },
+          "photos": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Photos"
+          },
+          "videos": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Videos"
+          },
+          "files": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Files"
+          },
+          "links": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Links"
+          },
+          "telegramChatId": {
+            "anyOf": [{ "type": "integer" }, { "type": "null" }],
+            "title": "Telegramchatid"
+          },
           "photoUrl": {
             "anyOf": [{ "type": "string" }, { "type": "null" }],
             "title": "Photourl"

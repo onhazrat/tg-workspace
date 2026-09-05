@@ -556,8 +556,14 @@ class DiscoverIgnoredChannel(SQLModel, table=True):
     created_at: datetime = Field(default_factory=utc_now)
 
 
-class DiscoverHandleProbe(SQLModel, table=True):
-    """What one fetch of `t.me/<handle>` told us about a handle (IDEA-011 D9).
+class DirectoryEntry(SQLModel, table=True):
+    """One Channel's row in the Directory (IDEA-011 D9, D16).
+
+    What we know about a handle — its followability verdict and its metadata —
+    kept whether or not anyone follows it. Corpus-scoped and outliving every
+    Follow, because what exists on Telegram is not a fact about anybody's
+    reading. `Channel` is the separate, follow-scoped record of one we sync.
+
 
     Most Discover candidates cannot be followed at all: bots, personal
     accounts, groups, and private or deleted channels are all referenced from
@@ -594,7 +600,7 @@ class DiscoverHandleProbe(SQLModel, table=True):
     nothing on screen to suggest anything went wrong.
     """
 
-    __tablename__ = "tg_discover_probes"
+    __tablename__ = "tg_channel_directory"
 
     handle: str = Field(primary_key=True)
 
@@ -612,8 +618,24 @@ class DiscoverHandleProbe(SQLModel, table=True):
     #: Raw text as Telegram renders it ("12.3K"), not parsed into an int: the
     #: exact number is not worth a fragile locale-aware parse.
     subscribers: str | None = None
+    #: The other four counters the preview page carries, raw text for the same
+    #: reason `subscribers` is. Named and typed to match `Channel` so promoting
+    #: an entry into a followed Channel needs no translation. `None` means the
+    #: page did not show one, which is not the same as a count of zero.
+    photos: str | None = None
+    videos: str | None = None
+    files: str | None = None
+    links: str | None = None
     photo_url: str | None = None
     latest_id: int = 0
+
+    #: Decoded from the message widget's `data-view`. The only identity that
+    #: survives a handle rename, so it is the one stable thing recorded about
+    #: an entry — which is why this table is keyed by handle but does not
+    #: pretend the handle is permanent.
+    telegram_chat_id: int | None = Field(
+        default=None, sa_column=Column(BigInteger, nullable=True)
+    )
 
     #: Consecutive inconclusive fetches. Drives retry backoff and is reset on a
     #: conclusive answer.
@@ -628,7 +650,7 @@ class DiscoverHandleProbe(SQLModel, table=True):
     #: sorts ahead of rows that predate this column.
     #:
     #: Not indexed on its own — nothing queries priority alone. The composite
-    #: `ix_tg_discover_probes_queue` on `(status, priority)` is what serves the
+    #: `ix_tg_channel_directory_queue` on `(status, priority)` is what serves the
     #: dequeue, and it lives in the migration, as the other composite indexes in
     #: this schema do.
     priority: int = Field(default=1_000_000)

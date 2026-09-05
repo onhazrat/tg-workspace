@@ -31,6 +31,13 @@ from app.schemas.discover import (
     HandleProbeResponse,
     IgnoredChannelResponse,
 )
+from app.services.channel_directory import (
+    DEFAULT_PROBE_PAGE_SIZE,
+    MAX_PROBE_PAGE_SIZE,
+    list_probes,
+    queue_counts,
+    requeue_probes,
+)
 from app.services.discover import (
     SIGNAL_KINDS,
     SignalKind,
@@ -40,13 +47,6 @@ from app.services.discover_ignored import (
     ignore_channels,
     list_ignored,
     unignore_channels,
-)
-from app.services.discover_probes import (
-    DEFAULT_PROBE_PAGE_SIZE,
-    MAX_PROBE_PAGE_SIZE,
-    list_probes,
-    queue_counts,
-    requeue_probes,
 )
 from app.services.discover_reports import (
     DEFAULT_REPORT_PAGE_SIZE,
@@ -171,6 +171,11 @@ def remove_discover_ignored(
     )
 
 
+# Ticket 01 renamed the table and its service to the Channel Directory and
+# deliberately left these two function names alone. An operation id is
+# `data-<function_name>`, so renaming one moves a symbol in the generated client
+# and every caller of it — a frontend change riding along in a storage-only
+# migration. They move with the Directory's own UI, not before it.
 @router.get("/discover/probes")
 def list_discover_probes(
     session: SessionDep,

@@ -72,7 +72,7 @@ TG_TABLES: tuple[str, ...] = (
     "tg_tag_runs",
     "tg_discover_reports",
     "tg_discover_ignored",
-    "tg_discover_probes",
+    "tg_channel_directory",
     "tg_sync_jobs",
     "tg_follow_jobs",
     "tg_sync_meta",

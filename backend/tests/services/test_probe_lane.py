@@ -111,11 +111,11 @@ def test_the_sweep_no_longer_fetches_anything_itself() -> None:
         "the Partition does not know about"
     )
     assert "_probe_one" not in called, "the sweep fetches inline again"
-    assert "enqueue_discover_probes" in called
+    assert "enqueue_channel_directory" in called
 
 
 def test_a_probe_is_charged_to_nobody() -> None:
-    """Ticket 23 left probes uncharged because `DiscoverHandleProbe` is
+    """Ticket 23 left probes uncharged because `DirectoryEntry` is
     corpus-scoped: billing one account for deployment-wide work is exactly what
     the three Budgets exist to prevent. Putting them on a lane must not have
     quietly opened a meter around them."""

@@ -12,7 +12,7 @@ from sqlmodel import Session
 
 from app.core.config import settings
 from app.core.db import engine
-from app.services.discover_probes import enqueue_handles, record_probe_result
+from app.services.channel_directory import enqueue_handles, record_probe_result
 
 DATA = f"{settings.API_V1_STR}/data"
 
