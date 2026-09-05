@@ -24,7 +24,7 @@ from sqlmodel import Session
 from app.core.config import settings
 from app.core.db import engine
 from app.models_tg import Post
-from app.services.discover_probes import record_probe_result
+from app.services.channel_directory import record_probe_result
 from tests.utils.tenancy import follow_channels
 
 DATA = f"{settings.API_V1_STR}/data"
@@ -222,6 +222,11 @@ def test_a_resolved_probe_is_joined_into_the_report_read(client: TestClient) -> 
         "displayName",
         "bio",
         "subscribers",
+        "photos",
+        "videos",
+        "files",
+        "links",
+        "telegramChatId",
         "photoUrl",
         "attempts",
         "lastError",
@@ -310,6 +315,11 @@ def test_the_probe_listing_keeps_its_key_set(client: TestClient) -> None:
         "displayName",
         "bio",
         "subscribers",
+        "photos",
+        "videos",
+        "files",
+        "links",
+        "telegramChatId",
         "photoUrl",
         "attempts",
         "lastError",

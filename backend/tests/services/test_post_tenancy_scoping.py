@@ -43,8 +43,8 @@ from sqlmodel import Session, col, delete
 from app.core.db import engine
 from app.models import User
 from app.models_tg import Post
+from app.services.channel_directory import enqueue_handles, list_probes, queue_counts
 from app.services.discover import compute_discover_candidates
-from app.services.discover_probes import enqueue_handles, list_probes, queue_counts
 from app.services.follows import ensure_follow
 from app.services.post_filters import PostFilters
 from app.services.posts import count_posts_in_scope, list_feed, lookup_posts
@@ -434,7 +434,7 @@ def test_every_probe_read_states_its_reason_at_the_call_site() -> None:
     import pathlib
 
     backend_dir = pathlib.Path(__file__).resolve().parents[2]
-    source = (backend_dir / "app" / "services" / "discover_probes.py").read_text()
+    source = (backend_dir / "app" / "services" / "channel_directory.py").read_text()
     tree = ast.parse(source)
 
     marked = {
@@ -507,10 +507,10 @@ def test_saving_a_report_keeps_the_scoped_is_followed(
 
 def test_handle_probe_is_classified_as_corpus() -> None:
     """The claim above, asserted against the seam rather than a comment."""
-    from app.models_tg import DiscoverHandleProbe
+    from app.models_tg import DirectoryEntry
     from app.services.tenancy import Scope, scope_of
 
-    assert scope_of(DiscoverHandleProbe) is Scope.CORPUS
+    assert scope_of(DirectoryEntry) is Scope.CORPUS
 
 
 # --------------------------------------------------------------------------

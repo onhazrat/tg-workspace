@@ -174,14 +174,14 @@ def test_out_of_scope_entries_state_a_reason() -> None:
 def test_corpus_models_are_the_ones_the_plan_names() -> None:
     """The shared corpus is a decision, so it is pinned, not inferred.
 
-    `tg_discover_probes` and `tg_sync_meta` are shared *and* not reachable
+    `tg_channel_directory` and `tg_sync_meta` are shared *and* not reachable
     through a follow: a probe is a fact about a handle ("cannot be followed by
     anyone") and an etag is a cache marker. Everything else in the corpus hangs
     off a channel and is therefore follow-scoped. Widening this set is how the
     corpus quietly becomes a place to hide an unscoped read.
     """
     corpus = {cls.__name__ for cls, s in SCOPES.items() if s is Scope.CORPUS}
-    assert corpus == {"DiscoverHandleProbe", "SyncMeta"}
+    assert corpus == {"DirectoryEntry", "SyncMeta"}
 
 
 def test_every_follow_scoped_model_records_its_channel_key() -> None:

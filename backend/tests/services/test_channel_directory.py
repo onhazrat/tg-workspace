@@ -12,8 +12,8 @@ from datetime import timedelta
 from sqlmodel import Session, select
 
 from app.core.db import engine
-from app.models_tg import DiscoverHandleProbe, Post, utc_now
-from app.services.discover_probes import (
+from app.models_tg import DirectoryEntry, Post, utc_now
+from app.services.channel_directory import (
     DEFAULT_PROBE_PRIORITY,
     dequeue_handles,
     enqueue_handles,
@@ -35,6 +35,15 @@ OK_PAGE = {
     "displayName": "Alpha News",
     "subscribers": "12.3K",
     "latestId": 42,
+}
+
+RICH_PAGE = {
+    **OK_PAGE,
+    "photos": "1.2K",
+    "videos": "340",
+    "files": "12",
+    "links": "5.6K",
+    "telegramChatId": 1234567890123,
 }
 
 BOT_PAGE = {
@@ -257,14 +266,20 @@ def test_recheck_can_overturn_a_verdict() -> None:
 def test_recheck_clears_the_stale_metadata_too() -> None:
     """A cleared verdict must not leave the old display name behind."""
     with Session(engine) as session:
-        record_probe_result(session, "alpha_news", OK_PAGE)
+        record_probe_result(session, "alpha_news", RICH_PAGE)
         requeue_probes(session, ["alpha_news"])
-        row = session.get(DiscoverHandleProbe, "alpha_news")
+        row = session.get(DirectoryEntry, "alpha_news")
         assert row is not None
         assert row.status == "unknown"
         assert row.display_name is None
         assert row.subscribers is None
         assert row.checked_at is None
+        # Ticket 01: the counters and the chat id go with the rest of it.
+        assert row.photos is None
+        assert row.videos is None
+        assert row.files is None
+        assert row.links is None
+        assert row.telegram_chat_id is None
         # And the read-time join drops it, so the row goes back to reading as
         # "not checked yet" rather than as a fresh inconclusive verdict.
         assert probe_map(session, {"alpha_news"}) == {}
@@ -297,7 +312,7 @@ def test_enqueue_skips_handles_that_already_have_a_verdict() -> None:
 
 
 def _priority(session: Session, handle: str) -> int:
-    row = session.get(DiscoverHandleProbe, handle)
+    row = session.get(DirectoryEntry, handle)
     assert row is not None
     return row.priority
 
@@ -344,11 +359,11 @@ def test_dequeue_is_empty_once_everything_is_resolved() -> None:
 def test_rows_predating_the_queue_still_drain_last() -> None:
     """Migrated rows carry the sentinel priority, not rank 0."""
     with Session(engine) as session:
-        session.add(DiscoverHandleProbe(handle="legacy", status="unknown"))
+        session.add(DirectoryEntry(handle="legacy", status="unknown"))
         session.commit()
         enqueue_handles(session, ["ranked"])
         assert dequeue_handles(session, limit=10) == ["ranked", "legacy"]
-        legacy = session.get(DiscoverHandleProbe, "legacy")
+        legacy = session.get(DirectoryEntry, "legacy")
         assert legacy is not None
         assert legacy.priority == DEFAULT_PROBE_PRIORITY
 
@@ -530,6 +545,81 @@ def test_probe_rows_survive_being_written_twice() -> None:
     with Session(engine) as session:
         record_probe_result(session, "alpha_news", OK_PAGE)
         record_probe_result(session, "alpha_news", BOT_PAGE)
-        rows = session.exec(select(DiscoverHandleProbe)).all()
+        rows = session.exec(select(DirectoryEntry)).all()
         assert len(rows) == 1
         assert rows[0].status == "unavailable"
+
+
+# --- Ticket 01: the Directory keeps the metadata the probe already fetched ---
+
+
+def test_a_conclusive_probe_keeps_the_counters_and_chat_id() -> None:
+    """The preview page carries these already; dropping them re-fetches later.
+
+    They are named and typed to match `Channel`, so promoting an entry into a
+    followed Channel needs no translation.
+    """
+    with Session(engine) as session:
+        record_probe_result(session, "alpha_news", RICH_PAGE)
+        row = session.get(DirectoryEntry, "alpha_news")
+        assert row is not None
+        assert row.photos == "1.2K"
+        assert row.videos == "340"
+        assert row.files == "12"
+        assert row.links == "5.6K"
+        assert row.telegram_chat_id == 1234567890123
+
+
+def test_the_projection_carries_the_new_fields() -> None:
+    with Session(engine) as session:
+        camel = record_probe_result(session, "alpha_news", RICH_PAGE)
+    assert camel["photos"] == "1.2K"
+    assert camel["videos"] == "340"
+    assert camel["files"] == "12"
+    assert camel["links"] == "5.6K"
+    assert camel["telegramChatId"] == 1234567890123
+
+
+def test_a_page_without_counters_stores_none_rather_than_empty_string() -> None:
+    """`OK_PAGE` is a real shape: Telegram omits a counter it has none of.
+
+    Storing `""` would make "no photos" and "we did not look" the same value.
+    """
+    with Session(engine) as session:
+        record_probe_result(session, "alpha_news", OK_PAGE)
+        row = session.get(DirectoryEntry, "alpha_news")
+        assert row is not None
+        assert row.photos is None
+        assert row.telegram_chat_id is None
+
+
+def test_an_inconclusive_fetch_stores_no_metadata() -> None:
+    """Same rule the verdict already follows — a failed fetch tells us nothing."""
+    with Session(engine) as session:
+        record_probe_result(session, "alpha_news", RICH_PAGE)
+        record_probe_result(session, "alpha_news", None, error="timeout")
+        row = session.get(DirectoryEntry, "alpha_news")
+        assert row is not None
+        # The earlier conclusive answer is left alone, not overwritten with None.
+        assert row.photos == "1.2K"
+        assert row.telegram_chat_id == 1234567890123
+
+
+def test_an_unavailable_verdict_keeps_a_known_chat_id() -> None:
+    """The chat id is the one field a later probe may not overwrite.
+
+    It is decoded from a message widget, so a page with no visible messages
+    yields none, and an `unavailable` verdict is synthesized with no page at
+    all. Clearing it would drop the identity exactly when the handle went
+    private or was renamed — the one case it exists for.
+    """
+    with Session(engine) as session:
+        record_probe_result(session, "alpha_news", RICH_PAGE)
+        record_probe_result(session, "alpha_news", BOT_PAGE)
+        row = session.get(DirectoryEntry, "alpha_news")
+        assert row is not None
+        assert row.status == "unavailable"
+        # The counters are a snapshot of a page and go with it...
+        assert row.photos is None
+        # ...but the identity does not.
+        assert row.telegram_chat_id == 1234567890123

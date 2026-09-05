@@ -36,8 +36,8 @@ from app.jobs.discover_probe import (
     probe_one_handle,
     run_discover_probe_sweep,
 )
-from app.models_tg import DiscoverHandleProbe
-from app.services.discover_probes import (
+from app.models_tg import DirectoryEntry
+from app.services.channel_directory import (
     dequeue_handles,
     enqueue_handles,
     probe_map,
@@ -244,7 +244,7 @@ def test_only_one_sweep_runs_at_a_time() -> None:
             return len(handles)
 
         with patch(
-            "app.jobs.sync_queue.enqueue_discover_probes", side_effect=_blocking
+            "app.jobs.sync_queue.enqueue_channel_directory", side_effect=_blocking
         ):
             first = asyncio.create_task(run_discover_probe_sweep())
             await started.wait()
@@ -376,9 +376,9 @@ def test_dequeue_is_a_pure_read_again() -> None:
             return {
                 row.handle: {
                     c.name: getattr(row, c.name)
-                    for c in DiscoverHandleProbe.__table__.columns  # type: ignore[attr-defined]
+                    for c in DirectoryEntry.__table__.columns  # type: ignore[attr-defined]
                 }
-                for row in session.exec(select(DiscoverHandleProbe)).all()
+                for row in session.exec(select(DirectoryEntry)).all()
             }
 
     before = _rows()

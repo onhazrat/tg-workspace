@@ -33,9 +33,9 @@ from sqlmodel import Session, col
 
 from app.core import acting_owner
 from app.models_tg import DiscoverReport, utc_now
+from app.services.channel_directory import enqueue_handles, probe_map
 from app.services.discover import SignalKind, compute_discover_candidates
 from app.services.discover_ignored import ignored_handles
-from app.services.discover_probes import enqueue_handles, probe_map
 from app.services.follows import visible_channel_names
 from app.services.post_filters import PostFilters
 from app.services.serialization import model_to_camel

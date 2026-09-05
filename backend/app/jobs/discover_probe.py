@@ -56,7 +56,7 @@ from sqlmodel import Session
 from app.core.config import settings
 from app.core.db import engine
 from app.services.async_db import run_db
-from app.services.discover_probes import (
+from app.services.channel_directory import (
     dequeue_handles,
     queue_counts,
     record_probe_result,
@@ -170,7 +170,7 @@ async def probe_one_handle(handle: str) -> str:
 
     Swallows its own failures. A probe that raises would leave the message on
     the lane to be redelivered up to `SYNC_QUEUE_MAX_READ_COUNT` times, which
-    is the wrong shape for this: the handle stays in `tg_discover_probes` and a
+    is the wrong shape for this: the handle stays in `tg_channel_directory` and a
     later sweep re-enqueues it, so the retry lives in the backlog table rather
     than in the queue's redelivery count.
     """
@@ -251,9 +251,9 @@ async def run_discover_probe_sweep() -> dict[str, Any]:
         # this module for `probe_one_handle` when it drains one, and a pair of
         # top-level imports would be a cycle. This direction is the lazy one
         # because it runs once per tick, where the consumer's runs per message.
-        from app.jobs.sync_queue import enqueue_discover_probes
+        from app.jobs.sync_queue import enqueue_channel_directory
 
-        enqueued = await enqueue_discover_probes(handles)
+        enqueued = await enqueue_channel_directory(handles)
 
         return {
             "enqueued": enqueued,

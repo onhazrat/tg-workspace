@@ -250,7 +250,7 @@ def _parse_channel_meta(soup: BeautifulSoup, channel_name: str) -> dict[str, Any
     telegram_chat_id = _extract_telegram_chat_id(soup)
 
     # Did we get a Telegram page at all, or a proxy error page / captcha / empty
-    # body? Callers that cache a verdict indefinitely (`discover_probes`) must
+    # body? Callers that cache a verdict indefinitely (`channel_directory`) must
     # be able to tell "Telegram says this handle is not followable" apart from
     # "we never reached Telegram", because those look identical once reduced to
     # `isUnavailableOnWebView`.

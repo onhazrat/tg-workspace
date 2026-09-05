@@ -37,7 +37,7 @@ caller stays uncounted:
   point the same way. It does not enqueue onto a lane, so there is nothing for
   the ladder to deprioritize: charging it would take Budget away from the
   operator's own syncs and change nothing about the sweep. And
-  `DiscoverHandleProbe` is corpus-scoped (see `services/tenancy.py`), so the
+  `DirectoryEntry` is corpus-scoped (see `services/tenancy.py`), so the
   queue is deployment-wide work every account benefits from — billing one
   account for it makes that account's Budget a proxy for deployment load, which
   is what decision 16 split the three Budgets to stop. Deployment-wide load is

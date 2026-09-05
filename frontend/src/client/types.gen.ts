@@ -1941,6 +1941,26 @@ export type HandleProbeResponse = {
      */
     subscribers?: string | null;
     /**
+     * Photos
+     */
+    photos?: string | null;
+    /**
+     * Videos
+     */
+    videos?: string | null;
+    /**
+     * Files
+     */
+    files?: string | null;
+    /**
+     * Links
+     */
+    links?: string | null;
+    /**
+     * Telegramchatid
+     */
+    telegramChatId?: number | null;
+    /**
      * Photourl
      */
     photoUrl?: string | null;
