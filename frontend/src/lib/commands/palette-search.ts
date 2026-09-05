@@ -8,6 +8,7 @@ import type {
   CommandDef,
   SearchResultsState,
 } from "@/lib/commands/types"
+import type { SummariesApi } from "@/lib/summaries/store"
 
 /**
  * Runs the search an editor command requested and packages the results for
@@ -17,6 +18,7 @@ export async function buildSearchResultsState(
   command: CommandDef,
   ctx: CommandContext,
   rawQuery: string,
+  summariesApi?: SummariesApi,
 ): Promise<SearchResultsState | null> {
   if (command.searchResultsKind === "posts") {
     const query = rawQuery.trim()
@@ -29,7 +31,7 @@ export async function buildSearchResultsState(
 
   if (command.searchResultsKind === "summaries") {
     const query = rawQuery.trim()
-    const items = await searchSummariesForPalette(ctx, query)
+    const items = await searchSummariesForPalette(ctx, query, summariesApi)
     return { kind: "summaries", query, items, totalCount: items.length }
   }
 
