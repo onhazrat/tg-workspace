@@ -228,8 +228,28 @@ def test_individual_sync_travels_through_the_manual_single_lane(
 
     # The message actually round-tripped through the real lane rather than
     # bypassing it — nothing left claimed or due beyond what was already there.
-    with Session(engine) as session:
-        assert pgmq.queue_length(session, MANUAL_SINGLE_NORMAL_LANE) == before
+    #
+    # **Polled, not asserted outright.** A terminal job status does not mean the
+    # message is resolved: `_finalize_if_complete` recomputes and writes the
+    # job's status from inside `_process_message`, while `_archive` runs in
+    # `_handle_one_inner` after that returns. Between the two the message is
+    # claimed with a future `vt`, and `queue_length` counts claimed messages —
+    # so the loop above can see "completed" while the lane still reads 1.
+    #
+    # That window is microseconds on an idle laptop and wide enough on a loaded
+    # CI runner to fail about half of all runs, which is what it was doing.
+    # Waiting for the drain tests the same property — the message left the lane
+    # rather than bypassing it — without depending on which of the two writes
+    # lands first.
+    drained_deadline = time.time() + 10
+    depth = None
+    while time.time() < drained_deadline:
+        with Session(engine) as session:
+            depth = pgmq.queue_length(session, MANUAL_SINGLE_NORMAL_LANE)
+        if depth == before:
+            break
+        time.sleep(0.05)
+    assert depth == before
 
     client.delete(f"{DATA}/channels/individual-sync-ch", headers=headers)
     clear_jobs_for_tests()
