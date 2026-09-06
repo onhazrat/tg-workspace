@@ -141,12 +141,6 @@ QUOTA_KEY = "quota"
 #: default, the loader and the write path all have to agree on the spelling.
 DIRECTORY_KEY = "directory"
 
-#: Ticket 04's harvest cursor. A second key rather than a field in `directory`,
-#: for the reason `sync_runtime` is separate from `sync`: one is policy a person
-#: sets and the other is state the app writes about itself, and sharing a blob
-#: is how a person saving a preference comes to overwrite a cursor.
-DIRECTORY_RUNTIME_KEY = "directory_runtime"
-
 #: Deployment-wide keys: one row, shared by every account.
 GLOBAL_KEYS: dict[str, str] = {
     "jobs": (
@@ -204,13 +198,6 @@ GLOBAL_KEYS: dict[str, str] = {
         "which is one deployment's proxies and one deployment's standing with "
         "Telegram. A per-account copy would let the shortest window chosen by "
         "anyone set the load everybody pays for."
-    ),
-    DIRECTORY_RUNTIME_KEY: (
-        "How far the harvest sweep has walked the corpus (ticket 04). Written "
-        "by the scheduler and read by nothing a person edits, exactly like "
-        "`sync_runtime`. Deployment-wide because the walk is: it reads the "
-        "corpus with no account in hand, and a per-account cursor would make "
-        "the walk order a choice about whose handles get probed first."
     ),
     SYNC_LANES_KEY: (
         "Which sync lanes an Admin has paused (ticket 12). A lane is a queue "

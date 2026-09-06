@@ -358,38 +358,18 @@ class Settings(BaseSettings):
     # when Telegram pushes back.
     DISCOVER_PROBE_BATCH_SIZE: int = 600
 
-    # The harvest sweep (ticket 04)
+    # The harvest sweep (ticket 04, simplified by ticket 05)
     #
-    # How many *new* handles one tick may add to the Directory queue. This is
-    # the throttle the ticket asks for: it bounds how fast the backlog the probe
-    # lane drains can grow, and turning it down is the lever short of disabling
-    # the job. Deliberately counted in new handles rather than in Posts scanned,
-    # because a stretch of Posts referencing only handles already on the map is
-    # not work — a batch spent on those would throttle nothing.
-    DIRECTORY_HARVEST_BATCH_SIZE: int = 100
-
-    # How many Posts one tick may read while trying to fill that batch. The
-    # cost bound rather than the throttle, and it has to exist separately: once
-    # the corpus is harvested almost every Post references only known handles,
-    # so a tick chasing `DIRECTORY_HARVEST_BATCH_SIZE` new ones would otherwise
-    # walk the whole table before giving up.
+    # How many Posts one tick may read. The cost bound: once the corpus is
+    # harvested almost every Post references only known handles, so a tick
+    # chasing new ones would otherwise walk the whole table before giving up.
+    #
+    # It is the sweep's only rate dial. How many *new* handles a tick may add is
+    # not a setting — it is whatever is left under the ceiling below, so the two
+    # numbers cannot be set into disagreement. As separate settings they were:
+    # staging ran a batch of 1000 against a ceiling of 600 that is checked
+    # before the walk, so a tick starting at 599 pending ended at 1599.
     DIRECTORY_HARVEST_SCAN_LIMIT: int = 500
-
-    # Posts read per query inside one tick. Smaller than the scan limit so a
-    # tick that fills its batch early stops early, and large enough that filling
-    # it costs a handful of round trips rather than one per Post.
-    DIRECTORY_HARVEST_PAGE_SIZE: int = 100
-
-    # Posts the backfill leg may read per tick, on top of the limit above.
-    #
-    # That leg re-walks the history below the tail mark, which is the only way a
-    # Post stored by a *backward* sync is ever seen. Its own budget rather than
-    # the tail leg's leftovers, because leftovers starve it on any deployment
-    # busy enough to keep the tail leg saturated. Bounded separately because it
-    # never finishes — it wraps and starts again — so this is a cost paid on
-    # every tick for the life of the install, where the tail leg's is paid only
-    # while there is something new. A tick costs at most the two added together.
-    DIRECTORY_HARVEST_BACKFILL_SCAN_LIMIT: int = 100
 
     # Pending handles at which the harvest stops adding more.
     #

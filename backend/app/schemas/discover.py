@@ -311,19 +311,15 @@ class DiscoverProbeQueueResponse(BaseModel):
     requestsToday: int = 0
     requestsWeek: int = 0
 
-    #: The harvest sweep's switch, whether a tick is in flight, and where each
-    #: of its two legs has reached (ticket 04).
+    #: The harvest sweep's switch and whether a tick is in flight (ticket 04).
     #:
-    #: Both marks are `Post.timestamp` values in milliseconds. `harvestTail` is
-    #: the newest Post walked, so it reads as "references are harvested up to
-    #: this moment" and is the one that answers "is the map current".
-    #: `harvestCursor` is the backfill position in the history below it and
-    #: wraps, so it going backwards is the sweep working rather than a fault.
-    #: `-1` is a leg that has not started, or a backfill that has just wrapped.
+    #: Its two cursor marks went with ticket 05: the sweep tracks its progress
+    #: on `Post.harvested` rather than in the settings row, so there is no
+    #: position to report. "How much is left" is a count over the unharvested
+    #: set, which is a question nothing asks yet and which would cost a scan of
+    #: that index on every read of this dashboard.
     harvestEnabled: bool = False
     harvestRunning: bool = False
-    harvestTail: int = -1
-    harvestCursor: int = -1
 
 
 class DiscoverProbeRecheckResponse(BaseModel):

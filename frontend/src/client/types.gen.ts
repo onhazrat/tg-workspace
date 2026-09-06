@@ -1520,14 +1520,6 @@ export type DiscoverProbeQueueResponse = {
      * Harvestrunning
      */
     harvestRunning?: boolean;
-    /**
-     * Harvesttail
-     */
-    harvestTail?: number;
-    /**
-     * Harvestcursor
-     */
-    harvestCursor?: number;
 };
 
 /**

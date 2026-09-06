@@ -17,10 +17,7 @@ from app.jobs.directory_harvest import (
     is_harvest_running,
 )
 from app.jobs.discover_probe import DISCOVER_PROBE_JOB_ID, is_sweep_running
-from app.jobs.settings import (
-    is_job_enabled,
-    load_harvest_state,
-)
+from app.jobs.settings import is_job_enabled
 from app.schemas.common import StatusResponse
 from app.schemas.discover import (
     DiscoverCandidatesRequest,
@@ -227,7 +224,6 @@ def get_discover_probe_queue(
     quota, and reading them charges nobody.
     """
     counts = queue_counts(session)
-    harvest_tail, harvest_cursor = load_harvest_state(session)
     return DiscoverProbeQueueResponse(
         **counts,
         enabled=is_job_enabled(session, DISCOVER_PROBE_JOB_ID),
@@ -236,8 +232,6 @@ def get_discover_probe_queue(
         requestsWeek=requests_since(session, today_utc() - timedelta(days=6)),
         harvestEnabled=is_job_enabled(session, DIRECTORY_HARVEST_JOB_ID),
         harvestRunning=is_harvest_running(),
-        harvestTail=harvest_tail,
-        harvestCursor=harvest_cursor,
     )
 
 

@@ -36,10 +36,11 @@ Per `CLAUDE.md`, each assertion was mutation-tested:
   still drain first
 * count scanned Posts instead of new handles against the batch → the
   known-handles test fails
-* let `_enqueue` skip the cursor save when nothing was queued → the
+* let the sweep skip its own commit when nothing was queued → the
   no-progress test fails
 * charge the probe meter to `quota.charge_requests` → the ledger test fails
-* drop the wrap on exhaustion → the backward-sync test fails
+* walk ascending instead of newest-first → the prompt-Post test fails
+* mark the Posts in a transaction of their own → the atomicity test fails
 """
 
 from __future__ import annotations
@@ -55,7 +56,6 @@ from sqlmodel import Session, col, select
 from app.core.config import settings
 from app.core.db import engine
 from app.jobs.directory_harvest import run_directory_harvest_sweep
-from app.jobs.settings import HARVEST_START, load_harvest_state
 from app.models import User
 from app.models_tg import DirectoryEntry, DirectoryProbeUsage, Post
 from app.services.channel_directory import (
@@ -71,6 +71,7 @@ from app.services.directory_probe_usage import (
     today_utc,
 )
 from app.services.discover import harvest_page
+from app.services.posts import bulk_upsert_posts_impl, mark_harvested
 from tests.utils.setting_groups import add_test_channel
 from tests.utils.user import create_random_user
 
@@ -125,6 +126,16 @@ def _sweep() -> dict:
 def _entries() -> dict[str, DirectoryEntry]:
     with Session(engine) as session:
         return {row.handle: row for row in session.exec(select(DirectoryEntry)).all()}
+
+
+def _unharvested() -> int:
+    """Posts the sweep has not looked at — the whole of its progress state."""
+    with Session(engine) as session:
+        return len(
+            session.exec(
+                select(Post).where(col(Post.harvested) == False)  # noqa: E712
+            ).all()
+        )
 
 
 # --------------------------------------------------------------------------
@@ -241,54 +252,41 @@ def test_a_handle_already_on_the_map_is_not_harvested_again(
     assert _entries()["alreadyknown"].priority != HARVEST_PRIORITY
 
 
-def test_the_batch_bounds_the_new_handles_and_the_rest_wait(
+def test_the_posts_beyond_the_budget_are_reached_by_the_next_tick(
     session: Session, user: User, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """`DIRECTORY_HARVEST_BATCH_SIZE` is the throttle the ticket asks for."""
-    monkeypatch.setattr(settings, "DIRECTORY_HARVEST_BATCH_SIZE", 2)
-    monkeypatch.setattr(settings, "DIRECTORY_HARVEST_PAGE_SIZE", 1)
+    """Room under the ceiling stops the walk; it does not end it.
+
+    The Posts a tick did not reach are still unharvested, so they are simply
+    what the next tick with room reads first — no mark to leave behind and
+    nothing to re-lap.
+    """
+    monkeypatch.setattr(settings, "DIRECTORY_HARVEST_BACKLOG_CEILING", 50)
 
     add_test_channel(session, "t04-many", user_id=user.id)
-    for index in range(5):
+    for index in range(150):
         _post(
             session,
             "t04-many",
             index + 1,
             timestamp=(index + 1) * 10,
-            forwarded_from=f"harvested{index}",
+            forwarded_from=f"harvested{index:03d}",
         )
 
     first = _sweep()
-    assert first["queued"] == 2
+    # One page, because 100 new handles is already past a budget of 50.
+    assert first["scanned"] == 100
+    assert _unharvested() == 50
+
+    # Clear the queue so the next tick has room again.
+    with Session(engine) as fresh:
+        for row in fresh.exec(select(DirectoryEntry)).all():
+            fresh.delete(row)
+        fresh.commit()
 
     second = _sweep()
-    assert second["queued"] == 2
-    assert len(_entries()) == 4
-
-
-def test_the_scan_limit_bounds_a_tick_that_finds_nothing(
-    session: Session, user: User, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """The cost bound, which has to exist separately from the throttle.
-
-    Once the corpus is harvested almost every Post references only known
-    handles, so a tick chasing `DIRECTORY_HARVEST_BATCH_SIZE` new ones would
-    walk the whole table before giving up. This is the "a scheduled job pays its
-    cost every tick, forever" rule made into a number.
-    """
-    monkeypatch.setattr(settings, "DIRECTORY_HARVEST_BATCH_SIZE", 50)
-    monkeypatch.setattr(settings, "DIRECTORY_HARVEST_SCAN_LIMIT", 3)
-    monkeypatch.setattr(settings, "DIRECTORY_HARVEST_BACKFILL_SCAN_LIMIT", 0)
-    monkeypatch.setattr(settings, "DIRECTORY_HARVEST_PAGE_SIZE", 2)
-
-    add_test_channel(session, "t04-boring", user_id=user.id)
-    for index in range(10):
-        _post(session, "t04-boring", index + 1, timestamp=(index + 1) * 10)
-
-    result = _sweep()
-
-    assert result["queued"] == 0
-    assert result["scanned"] <= 3
+    assert second["scanned"] == 50
+    assert _unharvested() == 0
 
 
 # --------------------------------------------------------------------------
@@ -308,8 +306,6 @@ def test_one_accounts_corpus_does_not_starve_another_account(
     At one priority `dequeue_handles` falls through to its `handle` tiebreak,
     which cannot prefer an account.
     """
-    monkeypatch.setattr(settings, "DIRECTORY_HARVEST_PAGE_SIZE", 100)
-
     add_test_channel(session, "t04-loud", user_id=user.id)
     add_test_channel(session, "t04-modest", user_id=other_user.id)
     # The loud account's Posts are walked first and there are more of them.
@@ -351,170 +347,228 @@ def test_a_reports_candidates_still_drain_before_harvested_handles(
 
 
 # --------------------------------------------------------------------------
-# The cursor
+# The flag
 # --------------------------------------------------------------------------
 
 
-def test_the_tail_advances_so_the_next_tick_reads_new_posts(
+def test_a_walked_post_is_marked_and_not_walked_again(
     session: Session, user: User, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setattr(settings, "DIRECTORY_HARVEST_SCAN_LIMIT", 1)
-    monkeypatch.setattr(settings, "DIRECTORY_HARVEST_BACKFILL_SCAN_LIMIT", 0)
-    monkeypatch.setattr(settings, "DIRECTORY_HARVEST_PAGE_SIZE", 1)
+    """The mark is the whole progress mechanism (ticket 05).
 
-    add_test_channel(session, "t04-cursor", user_id=user.id)
-    _post(session, "t04-cursor", 1, timestamp=10, forwarded_from="firstfound")
-    _post(session, "t04-cursor", 2, timestamp=20, forwarded_from="secondfound")
+    Ticket 04 kept two `Post.timestamp` cursors in a settings row. A flag on the
+    row it describes cannot disagree with the corpus, cannot be outrun by a
+    commit landing behind it, and cannot skip a group of Posts sharing a value.
+    """
+    monkeypatch.setattr(settings, "DIRECTORY_HARVEST_SCAN_LIMIT", 1)
+
+    add_test_channel(session, "t05-mark", user_id=user.id)
+    _post(session, "t05-mark", 1, timestamp=20, forwarded_from="newerref")
+    _post(session, "t05-mark", 2, timestamp=10, forwarded_from="olderref")
 
     first = _sweep()
-    assert first["tail"] == 10
-    assert set(_entries()) == {"firstfound"}
+    assert first["scanned"] == 1
+    assert set(_entries()) == {"newerref"}
+    assert _unharvested() == 1
 
     second = _sweep()
-    assert second["tail"] == 20
-    assert set(_entries()) == {"firstfound", "secondfound"}
+    assert second["scanned"] == 1
+    assert set(_entries()) == {"newerref", "olderref"}
+    assert _unharvested() == 0
 
 
-def test_a_post_that_arrives_after_the_tail_is_harvested_on_the_next_tick(
-    session: Session, user: User, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """The property the single-mark first draft did not have.
+def test_a_post_a_backward_sync_stored_is_reached(session: Session, user: User) -> None:
+    """The property that cost ticket 04 a second mark, a wrap and a budget.
 
-    With one mark the walk wrapped the moment it reached the end, so a Post
-    stored today waited a full lap of the corpus — days on a large one — before
-    anything looked at it. The tail leg makes it the very next tick.
+    A backward sync stores Posts with *old* timestamps, which land below a
+    cursor that has already passed them — so the tail leg by construction never
+    saw them and a wrapping backfill leg had to exist. Unharvested is
+    unharvested whenever it arrived, so one query reaches it.
     """
-    monkeypatch.setattr(settings, "DIRECTORY_HARVEST_BACKFILL_SCAN_LIMIT", 0)
-
-    add_test_channel(session, "t04-tail", user_id=user.id)
-    _post(session, "t04-tail", 1, timestamp=100, forwarded_from="oldref")
-    _sweep()
-
-    _post(session, "t04-tail", 2, timestamp=200, forwarded_from="arrivedlater")
-
-    result = _sweep()
-    assert result["queued"] == 1
-    assert "arrivedlater" in _entries()
-
-
-def test_a_caught_up_tail_costs_one_empty_query(
-    session: Session, user: User, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """Steady state has to be cheap, or the job is the "pays its cost every
-    tick, forever" shape `CLAUDE.md` names.
-
-    With the backfill leg switched off, a tick with nothing new must read no
-    Posts at all — not re-read the corpus to discover that.
-    """
-    monkeypatch.setattr(settings, "DIRECTORY_HARVEST_BACKFILL_SCAN_LIMIT", 0)
-
-    add_test_channel(session, "t04-settled", user_id=user.id)
-    for index in range(5):
-        _post(session, "t04-settled", index + 1, timestamp=(index + 1) * 10)
+    add_test_channel(session, "t05-backward", user_id=user.id)
+    _post(session, "t05-backward", 2, timestamp=200, forwarded_from="recentref")
 
     _sweep()
-    assert _sweep()["scanned"] == 0
-
-
-def test_a_tick_that_finds_nothing_still_records_its_progress(
-    session: Session, user: User, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """Otherwise the sweep re-reads the same stretch on every tick for ever.
-
-    That is the shape of a job that costs the same every tick and achieves
-    nothing, which this repo has already paid for once.
-    """
-    monkeypatch.setattr(settings, "DIRECTORY_HARVEST_SCAN_LIMIT", 1)
-    monkeypatch.setattr(settings, "DIRECTORY_HARVEST_PAGE_SIZE", 1)
-
-    add_test_channel(session, "t04-silent", user_id=user.id)
-    _post(session, "t04-silent", 1, timestamp=42)
-
-    result = _sweep()
-
-    assert result["queued"] == 0
-    with Session(engine) as fresh:
-        assert load_harvest_state(fresh)[0] == 42
-
-
-def test_the_backfill_leg_reaches_a_post_a_backward_sync_stored(
-    session: Session, user: User, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """A backward walk stores Posts *below* a tail that has already passed.
-
-    The tail leg by construction never sees them, so without the backfill leg
-    every handle referenced in fetched history would be permanently invisible.
-    """
-    monkeypatch.setattr(settings, "DIRECTORY_HARVEST_PAGE_SIZE", 10)
-
-    add_test_channel(session, "t04-wrap", user_id=user.id)
-    _post(session, "t04-wrap", 2, timestamp=200, forwarded_from="recentref")
-
-    first = _sweep()
-    assert first["tail"] == 200
     assert "recentref" in _entries()
 
-    # A backward sync now stores an older Post. Its timestamp is below the tail.
-    _post(session, "t04-wrap", 1, timestamp=100, forwarded_from="historicref")
+    # A backward sync now stores an older Post, below everything already walked.
+    _post(session, "t05-backward", 1, timestamp=100, forwarded_from="historicref")
 
     _sweep()
     assert "historicref" in _entries()
 
 
-def test_the_backfill_wraps_and_the_tail_never_does(
+def test_a_new_post_is_harvested_before_an_old_backlog(
     session: Session, user: User, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Two marks, and only one of them goes backwards.
+    """Newest first, which is what makes a new reference prompt.
 
-    A tail that wrapped would re-walk the whole corpus to find new Posts; a
-    backfill that parked would stop seeing new history. Each leg's end is
-    handled the way that leg needs.
+    This is the tail leg's property without the tail leg. With a backlog still
+    outstanding and a budget that cannot clear it, a Post stored a moment ago
+    must still be the one the next tick reads.
     """
-    monkeypatch.setattr(settings, "DIRECTORY_HARVEST_PAGE_SIZE", 10)
+    monkeypatch.setattr(settings, "DIRECTORY_HARVEST_SCAN_LIMIT", 1)
 
-    add_test_channel(session, "t04-legs", user_id=user.id)
-    _post(session, "t04-legs", 1, timestamp=100, forwarded_from="onlyref")
+    add_test_channel(session, "t05-prompt", user_id=user.id)
+    for index in range(4):
+        _post(
+            session,
+            "t05-prompt",
+            index + 1,
+            timestamp=(index + 1) * 10,
+            forwarded_from=f"backlogref{index}",
+        )
+
+    _sweep()
+    assert _unharvested() == 3
+
+    _post(session, "t05-prompt", 99, timestamp=9999, forwarded_from="justarrived")
+
+    result = _sweep()
+    assert result["queued"] == 1
+    assert "justarrived" in _entries()
+
+
+def test_a_caught_up_tick_reads_no_posts(session: Session, user: User) -> None:
+    """Steady state has to be free, or the job is the "pays its cost every tick,
+    forever" shape `CLAUDE.md` names.
+
+    Ticket 04's backfill leg re-lapped history at 100 Posts a tick for the life
+    of the install. Here the index the tick scans is empty, not merely small.
+    """
+    add_test_channel(session, "t05-settled", user_id=user.id)
+    for index in range(5):
+        _post(session, "t05-settled", index + 1, timestamp=(index + 1) * 10)
+
+    _sweep()
+    assert _sweep()["scanned"] == 0
+    assert _unharvested() == 0
+
+
+def test_a_tick_that_finds_nothing_still_records_its_progress(
+    session: Session, user: User
+) -> None:
+    """Otherwise the sweep re-reads the same stretch on every tick for ever.
+
+    `enqueue_handles` commits, but returns early without doing so when handed
+    nothing — so a tick whose Posts referenced nothing new depends on the
+    sweep's own commit to keep its marks.
+    """
+    add_test_channel(session, "t05-silent", user_id=user.id)
+    _post(session, "t05-silent", 1, timestamp=42)
 
     result = _sweep()
 
-    assert result["tail"] == 100
-    assert result["wrapped"] is True
-    assert result["cursor"] == HARVEST_START
-
-
-def test_the_backfill_leg_has_its_own_budget(
-    session: Session, user: User, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """It never finishes, so its cost is paid on every tick for ever.
-
-    Letting it spend the whole scan limit is what made the single-mark draft
-    re-read the corpus every five minutes to find nothing.
-    """
-    monkeypatch.setattr(settings, "DIRECTORY_HARVEST_SCAN_LIMIT", 100)
-    monkeypatch.setattr(settings, "DIRECTORY_HARVEST_BACKFILL_SCAN_LIMIT", 2)
-    monkeypatch.setattr(settings, "DIRECTORY_HARVEST_PAGE_SIZE", 1)
-
-    add_test_channel(session, "t04-budget", user_id=user.id)
-    for index in range(10):
-        _post(session, "t04-budget", index + 1, timestamp=(index + 1) * 10)
-
-    # First tick: the tail leg walks all ten and the backfill has nothing below
-    # it yet. Second tick: the tail is caught up, so only the backfill runs.
-    _sweep()
-    assert _sweep()["scanned"] == 2
+    assert result["queued"] == 0
+    assert _unharvested() == 0
 
 
 def test_a_post_with_no_timestamp_is_still_walked(session: Session, user: User) -> None:
     """`Post.timestamp` defaults to 0 for a row stored with no usable date.
 
-    The mark is exclusive, so a sentinel of `0` would make those rows invisible
-    to every pass for ever. `HARVEST_START` is -1 for exactly this.
+    Ticket 04's exclusive cursor needed a sentinel of -1 so those rows were not
+    invisible for ever. A flag has no sentinel to get wrong, but the row still
+    has to come back — sorted last by `timestamp DESC`, not dropped.
     """
-    add_test_channel(session, "t04-zero", user_id=user.id)
-    _post(session, "t04-zero", 1, timestamp=0, forwarded_from="datelessref")
+    add_test_channel(session, "t05-zero", user_id=user.id)
+    _post(session, "t05-zero", 1, timestamp=0, forwarded_from="datelessref")
 
     _sweep()
     assert "datelessref" in _entries()
+
+
+def test_the_scan_limit_bounds_a_tick_that_finds_nothing(
+    session: Session, user: User, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The cost bound, which has to exist separately from the ceiling.
+
+    Once the corpus is harvested almost every Post references only known
+    handles, so a tick chasing new ones would walk the whole table before
+    giving up. This is the "a scheduled job pays its cost every tick, forever"
+    rule made into a number.
+    """
+    monkeypatch.setattr(settings, "DIRECTORY_HARVEST_SCAN_LIMIT", 3)
+
+    add_test_channel(session, "t05-boring", user_id=user.id)
+    for index in range(10):
+        _post(session, "t05-boring", index + 1, timestamp=(index + 1) * 10)
+
+    result = _sweep()
+
+    assert result["queued"] == 0
+    assert result["scanned"] <= 3
+
+
+@pytest.mark.parametrize(
+    ("already_pending", "expected_scanned"),
+    [(0, 200), (100, 100)],
+)
+def test_the_new_handle_budget_is_what_is_left_under_the_ceiling(
+    session: Session,
+    user: User,
+    monkeypatch: pytest.MonkeyPatch,
+    already_pending: int,
+    expected_scanned: int,
+) -> None:
+    """Derived from the ceiling, not a second setting that can disagree with it.
+
+    As `DIRECTORY_HARVEST_BATCH_SIZE` it did disagree: staging ran 1000 against
+    a ceiling of 600 that is checked *before* the walk, so a tick starting at
+    599 pending ended at 1599 — overshooting by 2.6x the bound that exists to
+    stop ticket 03's refresh starving.
+
+    Observed by how far the walk gets. At a ceiling of 150 with nothing pending
+    the budget is 150, so the walk needs a second page; with 100 already pending
+    it is 50 and the first page is already past it. A budget that ignored
+    `pending` would read the same distance both times.
+    """
+    monkeypatch.setattr(settings, "DIRECTORY_HARVEST_BACKLOG_CEILING", 150)
+
+    if already_pending:
+        with Session(engine) as fresh:
+            enqueue_handles(
+                fresh, [f"prefilled{i:03d}" for i in range(already_pending)]
+            )
+
+    add_test_channel(session, "t05-derived", user_id=user.id)
+    for index in range(250):
+        _post(
+            session,
+            "t05-derived",
+            index + 1,
+            timestamp=(index + 1) * 10,
+            forwarded_from=f"budgeted{index:03d}",
+        )
+
+    assert _sweep()["scanned"] == expected_scanned
+
+
+def test_a_tick_that_dies_mid_walk_loses_no_handles(
+    session: Session, user: User
+) -> None:
+    """The marks and the enqueue are one transaction.
+
+    Marking first and enqueueing after would make a crash between them drop
+    those handles permanently: the Posts would be harvested and nothing would
+    hold what they referenced.
+    """
+    add_test_channel(session, "t05-atomic", user_id=user.id)
+    _post(session, "t05-atomic", 1, timestamp=10, forwarded_from="mustsurvive")
+
+    with (
+        patch(
+            "app.jobs.directory_harvest.enqueue_handles",
+            side_effect=RuntimeError("died before the commit"),
+        ),
+        pytest.raises(RuntimeError),
+    ):
+        _sweep()
+
+    assert _unharvested() == 1
+    assert _entries() == {}
+
+    _sweep()
+    assert "mustsurvive" in _entries()
 
 
 def test_the_sweep_stops_adding_at_the_backlog_ceiling(
@@ -532,14 +586,15 @@ def test_the_sweep_stops_adding_at_the_backlog_ceiling(
     with Session(engine) as fresh:
         enqueue_handles(fresh, ["backlogone", "backlogtwo"])
 
-    add_test_channel(session, "t04-full", user_id=user.id)
-    _post(session, "t04-full", 1, timestamp=10, forwarded_from="wouldbeharvested")
+    add_test_channel(session, "t05-full", user_id=user.id)
+    _post(session, "t05-full", 1, timestamp=10, forwarded_from="wouldbeharvested")
 
     result = _sweep()
 
     assert result["skipped"] is True
     assert result["reason"] == "probe backlog at the ceiling"
     assert "wouldbeharvested" not in _entries()
+    assert _unharvested() == 1
 
 
 def test_a_refresh_is_dequeued_once_the_harvest_backlog_clears(
@@ -553,43 +608,22 @@ def test_a_refresh_is_dequeued_once_the_harvest_backlog_clears(
     """
     monkeypatch.setattr(settings, "DIRECTORY_HARVEST_BACKLOG_CEILING", 1)
 
-    add_test_channel(session, "t04-starve", user_id=user.id)
-    _post(session, "t04-starve", 1, timestamp=10, forwarded_from="harvestedref")
+    add_test_channel(session, "t05-starve", user_id=user.id)
+    _post(session, "t05-starve", 1, timestamp=10, forwarded_from="harvestedref")
     _sweep()
     assert "harvestedref" in _entries()
 
     # With one handle pending the sweep is already at the ceiling and adds none.
-    _post(session, "t04-starve", 2, timestamp=20, forwarded_from="wouldpileon")
+    _post(session, "t05-starve", 2, timestamp=20, forwarded_from="wouldpileon")
     assert _sweep()["skipped"] is True
     assert "wouldpileon" not in _entries()
-
-
-def test_a_corrupt_mark_restarts_rather_than_breaking_the_job(
-    session: Session, user: User
-) -> None:
-    """The sweep is idempotent, so restarting costs one cycle; raising costs the job."""
-    from app.jobs.settings import save_settings_section
-    from app.services.settings_registry import DIRECTORY_RUNTIME_KEY
-
-    with Session(engine) as fresh:
-        save_settings_section(
-            fresh,
-            DIRECTORY_RUNTIME_KEY,
-            {"harvestTail": "not a number", "harvestCursor": None},
-        )
-        assert load_harvest_state(fresh) == (HARVEST_START, HARVEST_START)
-
-    add_test_channel(session, "t04-corrupt", user_id=user.id)
-    _post(session, "t04-corrupt", 1, timestamp=10, forwarded_from="stillfound")
-
-    _sweep()
-    assert "stillfound" in _entries()
 
 
 def test_two_ticks_do_not_overlap() -> None:
     """The lock covers the manual trigger as well as the scheduled tick.
 
-    Two overlapping ticks would read the same cursor and harvest the same Posts.
+    Two overlapping ticks would read the same unharvested Posts and harvest them
+    twice — the marks are only visible to each other once committed.
     """
 
     async def _both() -> tuple[dict, dict]:
@@ -606,20 +640,35 @@ def test_two_ticks_do_not_overlap() -> None:
 # --------------------------------------------------------------------------
 
 
-def test_harvest_page_reports_the_end_of_the_corpus_as_no_cursor(
+def test_harvest_page_returns_the_rows_it_examined(
     session: Session, user: User
 ) -> None:
-    """`None` is "there is nothing after this", which is what decides the wrap.
+    """`post_ids` is what the caller marks, so it has to be exactly the page.
 
-    Distinct from "the cursor did not move", which is a page that read Posts
-    referencing nothing.
+    An empty one means there is nothing left to do — the condition that used to
+    be a `None` cursor and decided whether the backfill leg wrapped.
     """
     add_test_channel(session, "t04-page", user_id=user.id)
     _post(session, "t04-page", 1, timestamp=10)
 
     with Session(engine) as fresh:
-        assert harvest_page(fresh, after=0, limit=10).cursor == 10
-        assert harvest_page(fresh, after=10, limit=10).cursor is None
+        page = harvest_page(fresh, limit=10)
+        assert len(page.post_ids) == 1
+        mark_harvested(fresh, page.post_ids)
+        fresh.commit()
+        assert harvest_page(fresh, limit=10).post_ids == []
+
+
+def test_harvest_page_takes_the_newest_unharvested_post_first(
+    session: Session, user: User
+) -> None:
+    """Newest first is what makes a new reference prompt with a backlog behind it."""
+    add_test_channel(session, "t04-order", user_id=user.id)
+    _post(session, "t04-order", 1, timestamp=10, forwarded_from="olderref")
+    _post(session, "t04-order", 2, timestamp=20, forwarded_from="newerref")
+
+    with Session(engine) as fresh:
+        assert harvest_page(fresh, limit=1).handles == ["newerref"]
 
 
 def test_harvest_page_dedupes_within_a_page(session: Session, user: User) -> None:
@@ -628,7 +677,7 @@ def test_harvest_page_dedupes_within_a_page(session: Session, user: User) -> Non
     _post(session, "t04-dupe", 2, timestamp=20, forwarded_from="repeatedref")
 
     with Session(engine) as fresh:
-        assert harvest_page(fresh, after=0, limit=10).handles == ["repeatedref"]
+        assert harvest_page(fresh, limit=10).handles == ["repeatedref"]
 
 
 def test_known_handles_answers_for_every_verdict(session: Session) -> None:
@@ -765,66 +814,69 @@ def test_a_probe_that_raises_still_pays_for_what_it_fetched() -> None:
         assert requests_on(fresh) == 1
 
 
-def test_the_backfill_leg_never_reads_past_the_tail(
-    session: Session, user: User, monkeypatch: pytest.MonkeyPatch
+def test_an_edit_that_adds_a_reference_sends_the_post_back(
+    session: Session, user: User
 ) -> None:
-    """`until` is what keeps the two legs from doing each other's work.
+    """Ticket 04's wrapping backfill leg would have caught this on the next lap.
 
-    Unbounded, the backfill would walk to the end of the corpus every lap —
-    re-reading exactly the Posts the tail leg is there to reach, and spending
-    the budget that exists for history on the newest rows instead.
-
-    Observed by what it harvests rather than by a row count: with the tail
-    deliberately left behind, a Post above it must stay unharvested until the
-    tail leg gets to it.
+    Ticket 05 deleted that leg, so a channel editing an already-harvested Post
+    to add a `t.me` link would hide that handle for ever. `bulk_upsert_posts_impl`
+    clears the flag when a field `post_references` reads actually changed.
     """
-    monkeypatch.setattr(settings, "DIRECTORY_HARVEST_SCAN_LIMIT", 1)
-    monkeypatch.setattr(settings, "DIRECTORY_HARVEST_PAGE_SIZE", 1)
-    monkeypatch.setattr(settings, "DIRECTORY_HARVEST_BACKFILL_SCAN_LIMIT", 0)
+    add_test_channel(session, "t05-edit", user_id=user.id)
+    _post(session, "t05-edit", 1, timestamp=10, text="nothing here yet")
 
-    add_test_channel(session, "t04-until", user_id=user.id)
-    _post(session, "t04-until", 1, timestamp=10, forwarded_from="firstbelow")
-    _post(session, "t04-until", 2, timestamp=20, forwarded_from="secondbelow")
-    _post(session, "t04-until", 3, timestamp=30, forwarded_from="thirdabove")
-    _post(session, "t04-until", 4, timestamp=40, forwarded_from="fourthabove")
+    _sweep()
+    assert _unharvested() == 0
+    assert _entries() == {}
 
-    first = _sweep()
-    assert first["tail"] == 10
+    with Session(engine) as fresh:
+        bulk_upsert_posts_impl(
+            [
+                {
+                    "channelName": "t05-edit",
+                    "id": 1,
+                    "text": "now see https://t.me/editedinlater",
+                    "timestamp": 10,
+                }
+            ],
+            fresh,
+        )
+        fresh.commit()
 
-    # The tail is at 10 and the backfill now has a budget big enough for the
-    # whole corpus. Bounded by the tail it reaches nothing new; unbounded it
-    # would harvest both Posts above it.
-    monkeypatch.setattr(settings, "DIRECTORY_HARVEST_BACKFILL_SCAN_LIMIT", 10)
-    second = _sweep()
-    assert second["tail"] == 20
-
-    entries = _entries()
-    assert "thirdabove" not in entries
-    assert "fourthabove" not in entries
+    assert _unharvested() == 1
+    _sweep()
+    assert "editedinlater" in _entries()
 
 
-def test_the_backfill_makes_progress_while_the_tail_leg_is_saturated(
-    session: Session, user: User, monkeypatch: pytest.MonkeyPatch
+def test_an_unchanged_re_upsert_does_not_send_the_post_back(
+    session: Session, user: User
 ) -> None:
-    """The starvation the leftover budget caused, asserted directly.
+    """The condition is the whole point.
 
-    On a deployment where new Posts arrive faster than the tail leg's budget,
-    "whatever the tail leg did not use" is always nothing — so the backfill
-    would never run, and a handle referenced only in Posts a backward sync
-    fetched would never be seen at all. The leg has its own budget for that
-    reason, and here the tail leg is deliberately saturated.
+    Sync re-scrapes the newest page of every followed Channel on every run, so
+    clearing the flag unconditionally would hand the harvest thousands of
+    unchanged rows per sync round for ever — the "pays its cost every tick,
+    forever" shape, reintroduced by the fix for the test above.
     """
-    monkeypatch.setattr(settings, "DIRECTORY_HARVEST_SCAN_LIMIT", 1)
-    monkeypatch.setattr(settings, "DIRECTORY_HARVEST_BACKFILL_SCAN_LIMIT", 1)
-    monkeypatch.setattr(settings, "DIRECTORY_HARVEST_PAGE_SIZE", 1)
+    add_test_channel(session, "t05-noedit", user_id=user.id)
+    _post(session, "t05-noedit", 1, timestamp=10, text="stable body")
 
-    add_test_channel(session, "t04-saturated", user_id=user.id)
-    for index in range(5):
-        _post(session, "t04-saturated", index + 1, timestamp=(index + 1) * 10)
+    _sweep()
+    assert _unharvested() == 0
 
-    result = _sweep()
+    with Session(engine) as fresh:
+        bulk_upsert_posts_impl(
+            [
+                {
+                    "channelName": "t05-noedit",
+                    "id": 1,
+                    "text": "stable body",
+                    "timestamp": 10,
+                }
+            ],
+            fresh,
+        )
+        fresh.commit()
 
-    # The tail leg spent its whole budget on the first Post, so a leftover
-    # budget would be zero and the backfill mark would not have moved.
-    assert result["tail"] == 10
-    assert result["cursor"] != HARVEST_START
+    assert _unharvested() == 0

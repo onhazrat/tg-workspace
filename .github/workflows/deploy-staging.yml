@@ -93,25 +93,21 @@ jobs:
             echo "DOCKER_IMAGE_BACKEND=${DOCKER_IMAGE_BACKEND}"
             echo "DOCKER_IMAGE_FRONTEND=${DOCKER_IMAGE_FRONTEND}"
             echo "VITE_API_KEY=${API_KEY}"
-            # Staging-only overrides of the ticket 04 defaults (100 / 500).
+            # The DIRECTORY_HARVEST_SCAN_LIMIT=20000 override that sat here
+            # is deliberately withheld until somebody watches the disk.
             #
-            # This deployment has a 4.7M-post corpus, where the shipped
-            # defaults imply a ~33-day first pass. The two are raised together
-            # on purpose: the walk stops on whichever limit it reaches first,
-            # so raising the scan limit alone does nothing once the batch is
-            # full, and raising the batch alone just makes the walk re-read.
-            # At the observed density — roughly one new handle per 20 posts —
-            # 1000 handles is about 20,000 posts, so the two bind together.
+            # Ticket 05 marks each Post it walks. `harvested` sits in the
+            # partial index's predicate, so that update can never be HOT: it
+            # writes a new heap tuple and a new entry in every index on the
+            # table. Measured on this deployment on 2026-09-07, `tg_posts` is a
+            # 4.9 GB heap inside a 6.6 GB table, on a root filesystem with
+            # 5.5 GB free. At 20000/tick the whole 4.7M-row corpus is marked
+            # within a day, and the dead tuples autovacuum leaves behind are
+            # reusable but never returned to the OS.
             #
-            # The batch is what gates outbound Telegram traffic, so this does
-            # raise it. DIRECTORY_HARVEST_BACKLOG_CEILING is deliberately left
-            # at its default: it is what stops the queue outrunning the probe
-            # lane and starving the Directory refresh.
-            #
-            # The shipped defaults stay conservative because a small install
-            # wants nothing like this.
-            echo "DIRECTORY_HARVEST_BATCH_SIZE=1000"
-            echo "DIRECTORY_HARVEST_SCAN_LIMIT=20000"
+            # At the shipped 500 the first pass takes ~33 days and autovacuum
+            # keeps up between ticks, so the peak stays small. Raising it again
+            # is this one line, once free space is confirmed.
           } > .env
 
       - run: docker compose -f compose.yml --project-name ${{ secrets.STACK_NAME_STAGING }} build
