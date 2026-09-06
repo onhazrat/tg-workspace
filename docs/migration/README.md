@@ -46,6 +46,7 @@ Documentation for migrating the browser-first TG-Summarizer app to the FastAPI +
 | [ADR-011](./ADR-011-multi-user-registration.md) | Multi-user registration and approval — supersedes the registration half of ADR-002 |
 | [ADR-012](./ADR-012-egress-seam.md) | The Lane is the egress seam — extends ADR-007 |
 | [ADR-013](./ADR-013-open-source-publication.md) | Publishing the repository as open source |
+| [ADR-014](./ADR-014-channel-directory.md) | The probe cache becomes the Channel Directory — extends ADR-009 |
 
 ## Code references
 
