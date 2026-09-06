@@ -106,6 +106,10 @@ def test_an_empty_queue_is_not_an_error() -> None:
     assert asyncio.run(run_discover_probe_sweep()) == {
         "skipped": True,
         "reason": "queue empty",
+        # Ticket 03 puts the stale-entry backlog on every return, the skips
+        # included: it is the number an Operator watches when deciding whether
+        # to widen the refresh window, and the busy path is when they ask.
+        "refreshDue": 0,
     }
 
 
@@ -143,8 +147,9 @@ def test_a_tick_enqueues_nothing_while_the_lane_still_holds_work() -> None:
     first, second, third = asyncio.run(_run())
 
     assert first["enqueued"] == 4
-    assert second == {"skipped": True, "reason": "lane still draining"}
-    assert third == {"skipped": True, "reason": "lane still draining"}
+    drained = {"skipped": True, "reason": "lane still draining", "refreshDue": 0}
+    assert second == drained
+    assert third == drained
     assert sorted(_lane_handles()) == [f"h{i:02d}" for i in range(4)], (
         "a tick queued more while the lane was still full, so the same handle "
         "is on it twice and will be fetched twice"

@@ -531,7 +531,13 @@ def _apply_page_metadata(row: DirectoryEntry, payload: dict[str, Any]) -> None:
     row.latest_id = int(payload.get("latestId") or 0)
 
 
-def _schedule_refresh(session: Session, row: DirectoryEntry, *, now: datetime) -> None:
+def _schedule_refresh(
+    session: Session,
+    row: DirectoryEntry,
+    *,
+    now: datetime,
+    provisional: bool = False,
+) -> None:
     """Set when this answer goes stale, and where it will sit in the queue.
 
     Called only where a conclusive verdict has just been written. A dead one
@@ -540,10 +546,14 @@ def _schedule_refresh(session: Session, row: DirectoryEntry, *, now: datetime) -
     report or recheck first queued it and says nothing about how urgent a
     *refresh* is. Leaving it alone is what would put a rechecked handle at the
     front of the queue every week for ever.
+
+    `provisional` is the first `unavailable` on a handle that was live, which
+    stays due so the verdict can be confirmed rather than sealing a Channel on
+    one synthesized answer. See `record_probe_result`.
     """
     row.priority = REFRESH_PRIORITY
     window = resolve_refresh_window(session)
-    if window is None or not is_refreshable(row.status, row.kind):
+    if window is None or not (provisional or is_refreshable(row.status, row.kind)):
         row.refresh_due_at = None
         return
     row.refresh_due_at = now + window
@@ -599,7 +609,21 @@ def record_sync_metadata(
     row.attempts = 0
     row.last_error = None
     row.retry_after = None
-    _schedule_refresh(session, row, now=moment)
+    # **An outstanding refresh survives a sync.** `refresh_entries` marks a row
+    # due now at the front of the queue, and the probe lane drains strictly
+    # after every sync lane — so a sync of that same followed Channel usually
+    # lands first, and rescheduling here would push the request a week out at
+    # the back of the queue and lose it. Metadata is not the whole of what a
+    # refresh fetches: this path never writes samples, so the request has work
+    # left to do that a sync cannot perform.
+    #
+    # The priority is what tells the two apart, and it has to be — "already
+    # due" is also what an entry looks like when the window simply elapsed, and
+    # declining to reschedule *those* would leave a followed Channel queued for
+    # a probe the sync it just had made unnecessary. Only `RECHECK_PRIORITY`
+    # means somebody asked.
+    if row.priority != RECHECK_PRIORITY:
+        _schedule_refresh(session, row, now=moment)
     session.add(row)
 
 
@@ -637,6 +661,14 @@ def refresh_entries(
         row = _get_or_create(session, handle)
         if row.status in CONCLUSIVE_STATUSES:
             row.refresh_due_at = now
+        # **And the backoff goes**, exactly as `requeue_probes` drops it. A
+        # pending handle carrying a backoff from its last failure — up to
+        # `RETRY_BACKOFF_MAX_MINUTES`, a full day — fails the pending leg of the
+        # dequeue on `retry_after` and the stale leg on a `refresh_due_at` a row
+        # with no answer never gets. The route would have answered `refreshed`
+        # and nothing would have happened for a day. Somebody is looking at that
+        # row; the backoff is a throttle on unattended retries, not on them.
+        row.retry_after = None
         row.priority = priority
         session.add(row)
         refreshed.append(handle)
@@ -699,8 +731,32 @@ def record_probe_result(
         return probe_to_camel(row)
 
     payload: dict[str, Any] = info or {}
+    # **An `unavailable` that overturns an `ok` is provisional** (ticket 03).
+    #
+    # That verdict is synthesized in `jobs/discover_probe.py` with no page
+    # behind it: `fetch_with_retry` raises `TelegramWebViewUnavailable` for any
+    # response carrying a `tgme_page_action` and no message widgets, which is
+    # what a private or deleted handle looks like *and* what a sensitive-content
+    # interstitial or some regional variants look like. Sealing on the first one
+    # would blank a live Channel's entry and set `refresh_due_at` to `None`,
+    # which is dead — nothing would ever look at that handle again, and the
+    # Operator would have to know to press refresh on a row that no longer
+    # displays anything to suggest it was ever alive.
+    #
+    # Unreachable before this ticket, because an `ok` entry was never re-fetched
+    # without somebody asking. Refreshing makes it a weekly lottery over every
+    # live entry in the Directory, so the downgrade takes **two consecutive**
+    # answers: the first keeps the metadata and stays due, the second seals it
+    # exactly as before. A handle that was dead the first time we ever looked is
+    # sealed immediately — it never held `ok` — so "a dead verdict never becomes
+    # due again" still holds for every handle the rule was written about. The
+    # cost of the confirmation is one extra fetch, once, per Channel that
+    # genuinely goes dark.
+    was_live = row.status == "ok"
     row.status = "unavailable" if payload.get("isUnavailableOnWebView") else "ok"
-    _apply_page_metadata(row, payload)
+    provisional_downgrade = was_live and row.status == "unavailable"
+    if not provisional_downgrade:
+        _apply_page_metadata(row, payload)
     # **A payload with no `samples` key is not an empty sample set** (ticket 02).
     # It came from a fetch that never parsed the preview page's Posts, which
     # says nothing about them, so the existing snapshot is left alone. An empty
@@ -724,7 +780,7 @@ def record_probe_result(
     row.last_error = None
     row.retry_after = None
     row.checked_at = now
-    _schedule_refresh(session, row, now=now)
+    _schedule_refresh(session, row, now=now, provisional=provisional_downgrade)
     session.commit()
     session.refresh(row)
     return probe_to_camel(row)

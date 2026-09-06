@@ -77,6 +77,47 @@ This is where ticket 02's "payload with no samples key" rule becomes load-bearin
   a failure there until it is classified. `POST /discover/probe/refresh` is
   `Reason.CORPUS` beside the two probe routes it sits with.
 
+## Caught by `/code-review`
+
+- **A single `unavailable` answer was sealing a live entry, permanently.**
+  `fetch_with_retry` raises `TelegramWebViewUnavailable` for any response with a
+  `tgme_page_action` and no message widgets — a private handle, and also a
+  sensitive-content interstitial — and `jobs/discover_probe.py` turns that into a
+  synthesized verdict with no page behind it. Sealing on the first one blanked
+  the metadata, wiped the samples and set `refresh_due_at` to `None`, so nothing
+  would ever look at that handle again. Unreachable before this ticket, because
+  an `ok` entry was never re-fetched unprompted; refreshing made it a weekly
+  lottery over every live entry. The downgrade now takes **two consecutive**
+  answers. A handle dead the first time we ever looked is still sealed
+  immediately, so the exemption still means what the ticket says.
+- **The migration shipped the feature switched off.** Leaving existing rows
+  `NULL` looked like the conservative choice and was not: nothing re-probes a
+  conclusive row, so on any deployment that already had a Directory — every
+  deployment, after ticket 01's seed — the window would have refreshed nothing
+  until somebody pressed refresh by hand. Backfilled with a jittered due time
+  instead, which answers the thundering herd the `NULL` was guarding against and
+  turns the feature on at the same time. Verified on a throwaway database seeded
+  with a live, a bot, an unavailable and a pending row.
+- **`refresh_entries` left the retry backoff in place**, so a pending handle
+  inside a backoff — up to a day — failed both legs of the dequeue while the
+  route answered `refreshed`. It clears it now, as `requeue_probes` already did.
+- **A sync cancelled an Operator's refresh.** The probe lane drains strictly
+  after every sync lane, so a sync of a followed Channel usually landed first and
+  rescheduled the row a week out at the back of the queue. `RECHECK_PRIORITY` is
+  what tells an explicit request apart from an elapsed window — "already due"
+  alone is both.
+- **`refreshDue` was missing from the two skipped sweep returns**, hiding the
+  number an Operator watches exactly while the lane is draining.
+
+**One finding was wrong and is worth recording.** The review read
+`record_sync_metadata`'s unconditional `ok` as a hole, on the grounds that only
+`get_channel_info` raises `TelegramWebViewUnavailable`. The single `raise` in
+`scraper.py` is indeed in `scrape_channel`, but the one that matters is in
+`network._validate_telegram_web_view_page`, called from `_fetch_once` and so
+shared by `scrape_channel_page` too. A private followed Channel therefore raises
+inside the page fetch, becomes a `SyncScrapeError(is_unavailable=True)`, and
+never reaches `_apply_scrape_page`. The guard and its reasoning stand.
+
 ## Notes for the next ticket
 
 - **The sweep does not yet skip followed handles.** Ticket 04 owns that

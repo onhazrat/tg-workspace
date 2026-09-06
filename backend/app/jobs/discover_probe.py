@@ -117,6 +117,12 @@ def _refresh_due() -> int:
     different backlogs: `remaining` is handles with no answer and drains to
     zero, while this one refills every window by construction and is the number
     an Operator watches when deciding whether to widen it.
+
+    It counts rows whose due time has passed, which includes the ones already
+    sitting on the lane — so it does **not** fall as a sweep drains, and reads
+    high mid-drain. That is the honest number for the question it answers ("how
+    much of the map is out of date"), and the lane depth is the separate one for
+    "how much is in flight".
     """
     with Session(engine) as session:
         return refresh_due_count(session)
@@ -258,12 +264,24 @@ async def run_discover_probe_sweep() -> dict[str, Any]:
         # so a large first-run backlog clears in roughly twice the time. That is
         # the tick interval's to fix if it ever matters, and probing is the
         # lowest-priority work on the deployment by construction.
+        # `refreshDue` rides every return, including the two skips. It is the
+        # number an Operator watches when deciding whether to widen the window,
+        # and dropping it from the busy path would hide it exactly while the
+        # lane is draining — which is when they are asking.
         if await run_db(_lane_depth) > 0:
-            return {"skipped": True, "reason": "lane still draining"}
+            return {
+                "skipped": True,
+                "reason": "lane still draining",
+                "refreshDue": await run_db(_refresh_due),
+            }
 
         handles = await run_db(_dequeue, settings.DISCOVER_PROBE_BATCH_SIZE)
         if not handles:
-            return {"skipped": True, "reason": "queue empty"}
+            return {
+                "skipped": True,
+                "reason": "queue empty",
+                "refreshDue": await run_db(_refresh_due),
+            }
 
         # **Enqueued, not fetched here** (ticket 36, ADR-012 D9). This used to
         # gather the batch behind an `asyncio.Semaphore(2)` of its own: a

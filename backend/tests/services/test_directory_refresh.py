@@ -104,6 +104,19 @@ def _meta(**extra: Any) -> dict[str, Any]:
     }
 
 
+def _unavailable() -> dict[str, Any]:
+    """What `jobs/discover_probe.py` synthesizes for a `TelegramWebViewUnavailable`.
+
+    No page behind it: `fetch_with_retry` raised before anything was parsed, so
+    the payload carries the verdict, an empty sample list, and nothing else.
+    """
+    return {
+        "isTelegramPage": True,
+        "isUnavailableOnWebView": True,
+        "samples": [],
+    }
+
+
 def _entry(session: Session, handle: str = HANDLE) -> DirectoryEntry:
     row = session.get(DirectoryEntry, handle)
     assert row is not None
@@ -547,3 +560,122 @@ def test_a_failed_first_probe_still_has_no_answer_to_keep() -> None:
         assert row.status == "unknown"
         assert row.refresh_due_at is None
         assert dequeue_handles(session, limit=10) == []
+
+
+# --------------------------------------------------------------------------- #
+# A downgrade is confirmed before it is sealed                                  #
+# --------------------------------------------------------------------------- #
+
+
+def test_one_unavailable_answer_does_not_seal_a_live_entry() -> None:
+    """The weekly lottery ticket 03 would otherwise run over the whole map.
+
+    `fetch_with_retry` raises `TelegramWebViewUnavailable` for any response with
+    a `tgme_page_action` and no message widgets — which is a private handle, and
+    is also a sensitive-content interstitial. `jobs/discover_probe.py` turns that
+    into a synthesized verdict with no page behind it. Sealing on the first one
+    sets `refresh_due_at` to `None`, and nothing looks at that handle ever again.
+    """
+    with Session(engine) as session:
+        record_probe_result(session, HANDLE, _page())
+        record_probe_result(session, HANDLE, _unavailable())
+
+        row = _entry(session)
+        assert row.status == "unavailable"
+        assert row.refresh_due_at is not None, "a live entry gets a second look"
+        assert row.display_name == "Stale News", "and keeps what it knew"
+        assert row.subscribers == "12.3K"
+
+
+def test_a_live_entry_that_came_back_recovers_on_its_own() -> None:
+    """The point of not sealing: no Operator has to notice."""
+    with Session(engine) as session:
+        record_probe_result(session, HANDLE, _page())
+        record_probe_result(session, HANDLE, _unavailable())
+
+        later = utc_now() + timedelta(days=8)
+        assert dequeue_handles(session, limit=10, now=later) == [HANDLE]
+
+        record_probe_result(session, HANDLE, _page())
+        assert _entry(session).status == "ok"
+
+
+def test_a_second_unavailable_answer_seals_the_entry() -> None:
+    """Confirmed dead is dead. The exemption still bounds the crawl."""
+    with Session(engine) as session:
+        record_probe_result(session, HANDLE, _page())
+        record_probe_result(session, HANDLE, _unavailable())
+        record_probe_result(session, HANDLE, _unavailable())
+
+        row = _entry(session)
+        assert row.status == "unavailable"
+        assert row.refresh_due_at is None
+        far = utc_now() + timedelta(days=400)
+        assert dequeue_handles(session, limit=10, now=far) == []
+
+
+def test_a_handle_dead_the_first_time_is_sealed_immediately() -> None:
+    """No confirmation pass for a handle that never held `ok`.
+
+    "A dead verdict never becomes due again" is about bots and deleted channels,
+    and they are sealed on the answer that found them — the second look exists
+    only for an entry that had something to lose.
+    """
+    with Session(engine) as session:
+        record_probe_result(session, "never_alive", _unavailable())
+        row = session.get(DirectoryEntry, "never_alive")
+        assert row is not None
+        assert row.refresh_due_at is None
+
+
+# --------------------------------------------------------------------------- #
+# An explicit refresh is not lost                                              #
+# --------------------------------------------------------------------------- #
+
+
+def test_a_refresh_clears_a_backoff_it_would_otherwise_wait_out() -> None:
+    """The route said `refreshed`; the queue has to agree.
+
+    A pending handle carrying a backoff fails the pending leg on `retry_after`
+    and the stale leg on a due time a row with no answer never gets, so without
+    dropping the backoff nothing would happen for up to a day.
+    """
+    with Session(engine) as session:
+        for _ in range(4):
+            record_probe_result(session, HANDLE, None, error="boom")
+        assert dequeue_handles(session, limit=10) == []
+
+        assert refresh_entries(session, [HANDLE]) == [HANDLE]
+        assert dequeue_handles(session, limit=10) == [HANDLE]
+
+
+def test_a_sync_does_not_cancel_an_operator_s_refresh() -> None:
+    """The probe lane drains after every sync lane, so sync usually gets there first.
+
+    Rescheduling on that arrival would push the request a week out at the back
+    of the queue and lose it — and sync cannot do the request's whole job, since
+    this path never writes samples.
+    """
+    with Session(engine) as session:
+        record_probe_result(session, HANDLE, _page())
+        refresh_entries(session, [HANDLE])
+
+        record_sync_metadata(session, HANDLE, _meta())
+        session.commit()
+
+        row = _entry(session)
+        assert row.subscribers == "13.0K", "the metadata still lands"
+        assert dequeue_handles(session, limit=10) == [HANDLE], "and so does the refresh"
+
+
+def test_a_sync_still_reschedules_an_entry_with_nothing_outstanding() -> None:
+    """The ordinary case is unchanged: freshness for free."""
+    with Session(engine) as session:
+        record_probe_result(session, HANDLE, _page())
+        later = utc_now() + timedelta(days=8)
+        assert dequeue_handles(session, limit=10, now=later) == [HANDLE]
+
+        record_sync_metadata(session, HANDLE, _meta(), now=later)
+        session.commit()
+
+        assert dequeue_handles(session, limit=10, now=later) == []
