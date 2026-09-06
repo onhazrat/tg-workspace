@@ -340,10 +340,23 @@ class Settings(BaseSettings):
 
     # Discover handle probes
     #
-    # How many handles one sweep fetches. A batch commonly outlasts the interval
-    # above, which is fine: the sweep lock makes the overlapping tick a no-op, so
-    # the real pace is set by how fast Telegram answers.
-    DISCOVER_PROBE_BATCH_SIZE: int = 60
+    # How many handles one sweep enqueues onto the probe lane.
+    #
+    # **It is the refill size, not a concurrency limit.** Since ADR-012 the tick
+    # only enqueues, and it enqueues nothing at all while the lane still holds
+    # anything — so this number, the interval above and that emptiness gate
+    # together set a duty cycle: burst, drain, idle until a tick finds the lane
+    # empty. Too small a batch leaves the lane idle with work waiting in
+    # `tg_channel_directory`, which is what 60 was doing once ticket 04's
+    # harvest sweep began filling that table unprompted.
+    #
+    # Raised to 600 off measurement rather than feel: with a deep backlog the
+    # lane drained at ~2,340 requests/hour on a 20-proxy deployment whose sync
+    # lanes were empty, so 60 cleared in about 90 seconds and then waited. The
+    # ceiling on outbound traffic is not this number — it is the per-proxy
+    # Partition and the adaptive wait, both of which throttle by construction
+    # when Telegram pushes back.
+    DISCOVER_PROBE_BATCH_SIZE: int = 600
 
     # The harvest sweep (ticket 04)
     #
