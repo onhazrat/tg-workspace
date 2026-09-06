@@ -93,6 +93,25 @@ jobs:
             echo "DOCKER_IMAGE_BACKEND=${DOCKER_IMAGE_BACKEND}"
             echo "DOCKER_IMAGE_FRONTEND=${DOCKER_IMAGE_FRONTEND}"
             echo "VITE_API_KEY=${API_KEY}"
+            # Staging-only overrides of the ticket 04 defaults (100 / 500).
+            #
+            # This deployment has a 4.7M-post corpus, where the shipped
+            # defaults imply a ~33-day first pass. The two are raised together
+            # on purpose: the walk stops on whichever limit it reaches first,
+            # so raising the scan limit alone does nothing once the batch is
+            # full, and raising the batch alone just makes the walk re-read.
+            # At the observed density — roughly one new handle per 20 posts —
+            # 1000 handles is about 20,000 posts, so the two bind together.
+            #
+            # The batch is what gates outbound Telegram traffic, so this does
+            # raise it. DIRECTORY_HARVEST_BACKLOG_CEILING is deliberately left
+            # at its default: it is what stops the queue outrunning the probe
+            # lane and starving the Directory refresh.
+            #
+            # The shipped defaults stay conservative because a small install
+            # wants nothing like this.
+            echo "DIRECTORY_HARVEST_BATCH_SIZE=1000"
+            echo "DIRECTORY_HARVEST_SCAN_LIMIT=20000"
           } > .env
 
       - run: docker compose -f compose.yml --project-name ${{ secrets.STACK_NAME_STAGING }} build
