@@ -6,12 +6,23 @@ import {
 
 const HOUR = 60 * 60 * 1000
 
+/**
+ * The half-minute of slack on every exact-hour offset below is load-bearing.
+ *
+ * `getRelativeTime` calls `Date.now()` itself and floors the difference, so a
+ * target of exactly `Date.now() + 3 * HOUR` reads as "in 3h" only while both
+ * calls land in the same millisecond. One tick of the clock between them makes
+ * the gap 2h59m59.999s, which floors to "in 2h" and fails the assertion — a
+ * race that passes on a fast laptop and fails on a loaded CI runner.
+ */
+const SLACK = 30 * 1000
+
 describe("syncScheduleSummary", () => {
   it("uses relative times so the line fits the card", () => {
     expect(
       syncScheduleSummary({
         regularSyncEnabled: true,
-        nextRegularSyncAt: Date.now() + 3 * HOUR,
+        nextRegularSyncAt: Date.now() + 3 * HOUR + SLACK,
         dynamicSyncEnabled: false,
       }),
     ).toBe("Regular in 3h · Dynamic off")
