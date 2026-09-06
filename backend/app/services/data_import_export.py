@@ -1227,6 +1227,14 @@ EXPORT_OMISSIONS: dict[str, str] = {
         "Corpus, and a fact about a handle rather than about anybody — "
         "`tenancy.SCOPES` classifies it that way for the same reason."
     ),
+    "DirectorySample": (
+        "The snapshot hanging off a Directory entry (ticket 02), so it goes "
+        "where the entry goes. Doubly so: it is an unversioned copy of one "
+        "preview page that the next probe replaces wholesale, so a restored "
+        "one is a claim about what a Channel publishes *now* sourced from "
+        "another install weeks ago. Nothing is lost by omitting it — the "
+        "refresh window fills it back in."
+    ),
     "SyncMeta": "Cache etags. Corpus, and meaningless in another install.",
 }
 

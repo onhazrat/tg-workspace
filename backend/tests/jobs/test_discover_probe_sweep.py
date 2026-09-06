@@ -43,6 +43,7 @@ from app.services.channel_directory import (
     probe_map,
     queue_counts,
 )
+from app.services.channel_directory_samples import samples_for
 from app.services.sync_lanes import DISCOVER_PROBE_LANE
 from app.services.telegram_web import TelegramWebViewUnavailable
 
@@ -295,6 +296,59 @@ def test_a_handle_telegram_refuses_becomes_a_verdict() -> None:
     with Session(engine) as session:
         probe = probe_map(session, {"helper_bot"})["helper_bot"]
         assert probe["status"] == "unavailable"
+
+
+def test_the_probe_is_the_caller_that_asks_for_samples() -> None:
+    """The flag is opt-in, and this is the one path that opts in (ticket 02).
+
+    The page is already fetched and already parsed into a soup; its Posts are
+    the part every probe used to throw away. Asserted on the call rather than
+    on the stored rows, because the point is that *this* caller sets it —
+    `test_directory_samples.py` covers what the payload then does.
+    """
+    _queue(["alpha_news"])
+
+    async def _run() -> Any:
+        with _patch_fetch(
+            side_effect=lambda handle, **_: _channel_page(handle)
+        ) as fetch:
+            await probe_one_handle("alpha_news")
+            return fetch.await_args
+
+    assert asyncio.run(_run()).kwargs["with_samples"] is True
+
+
+def test_a_handle_telegram_refuses_has_its_samples_cleared() -> None:
+    """An empty sample set, not an absent one — the two are different answers.
+
+    The payload here is synthesized with no page behind it, and the temptation
+    is to leave `samples` off it entirely. But what Telegram just said is
+    precisely that there are no readable messages, so a handle that has gone
+    private must stop advertising Posts nobody can reach. An absent key would
+    mean "we did not look" and leave the stale snapshot in place.
+    """
+    _queue(["helper_bot"])
+
+    async def _first() -> None:
+        with _patch_fetch(
+            side_effect=lambda handle, **_: {
+                **_channel_page(handle),
+                "samples": [{"id": 5, "text": "still public", "timestamp": 1}],
+            }
+        ):
+            await probe_one_handle("helper_bot")
+
+    asyncio.run(_first())
+    with Session(engine) as session:
+        assert samples_for(session, "helper_bot")
+
+    async def _second() -> None:
+        with _patch_fetch(side_effect=TelegramWebViewUnavailable("no web view")):
+            await probe_one_handle("helper_bot")
+
+    asyncio.run(_second())
+    with Session(engine) as session:
+        assert samples_for(session, "helper_bot") == []
 
 
 def test_a_failed_fetch_leaves_the_handle_queued_without_a_verdict() -> None:

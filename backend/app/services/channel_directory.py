@@ -68,6 +68,7 @@ from sqlalchemy import and_, func, or_
 from sqlmodel import Session, col, select
 
 from app.models_tg import DirectoryEntry, utc_now
+from app.services.channel_directory_samples import replace_samples
 from app.services.tenancy import unscoped_select
 
 #: Why the probe reads below do not go through `scoped_select` (ticket 16).
@@ -438,6 +439,23 @@ def record_probe_result(
         row.telegram_chat_id = chat_id
     row.photo_url = payload.get("photoUrl") or None
     row.latest_id = int(payload.get("latestId") or 0)
+    # **A payload with no `samples` key is not an empty sample set** (ticket 02).
+    # It came from a fetch that never parsed the preview page's Posts, which
+    # says nothing about them, so the existing snapshot is left alone. An empty
+    # list *is* an answer and clears it — which is what an `unavailable` verdict
+    # looks like, since a page with no readable messages has no recent Posts.
+    #
+    # The distinction is the same shape as the chat id's above and becomes
+    # load-bearing for the same reason: sync fetches this metadata and never
+    # parses samples, so once it feeds the Directory every followed Channel
+    # would otherwise have its snapshot wiped on every sync.
+    #
+    # Replace rather than merge, inside this transaction rather than after it:
+    # a verdict stored without its samples is a row claiming `ok` beside the
+    # previous probe's snapshot. See `channel_directory_samples`.
+    samples = payload.get("samples")
+    if isinstance(samples, list):
+        replace_samples(session, key, samples, captured_at=now)
     # A conclusive answer clears the failure history: the backoff exists to
     # throttle retries of an unresolved handle, and this one is now resolved.
     row.attempts = 0
@@ -459,6 +477,11 @@ def requeue_probes(
     the handle out of the queue entirely and nothing would ever fetch it again.
     The row has to be reset in place: cleared of its verdict, and re-marked
     pending at `priority` so the next drain tick picks it up first.
+
+    **The samples are deliberately left alone.** A recheck says the verdict is
+    stale, not that the snapshot is wrong, and clearing it here would blank the
+    one part of the entry worth reading for however long the queue takes to
+    reach the handle. The next conclusive probe replaces them wholesale.
 
     Returns every handle now queued, including ones that had never been probed —
     the UI offers recheck on rows whose verdict has not arrived yet, and asking

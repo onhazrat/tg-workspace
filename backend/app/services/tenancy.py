@@ -86,6 +86,7 @@ from app.models_tg import (
     ChatSession,
     ChatSessionPayload,
     DirectoryEntry,
+    DirectorySample,
     DiscoverIgnoredChannel,
     DiscoverReport,
     EmbeddingLog,
@@ -189,6 +190,13 @@ SCOPES: dict[type[SQLModel], Scope] = {
     SyncLogPayload: Scope.FOLLOW_SCOPED,
     # --- Corpus: shared, and no follow can reach them.
     DirectoryEntry: Scope.CORPUS,
+    # The samples hanging off a Directory entry (ticket 02). Corpus for the
+    # reason the entry is: a copy of a public preview page answers "what does
+    # @foo publish" the same way for everybody, and the row carries no owner to
+    # scope by. Deliberately not `FOLLOW_SCOPED` — a sample exists precisely for
+    # Channels nobody follows yet, so scoping it by Follow would hide every row
+    # that has a reason to be there.
+    DirectorySample: Scope.CORPUS,
     SyncMeta: Scope.CORPUS,
 }
 

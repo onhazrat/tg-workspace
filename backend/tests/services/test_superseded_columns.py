@@ -241,10 +241,18 @@ def test_the_migrations_frozen_list_is_the_derived_one() -> None:
         model.__tablename__  # ty: ignore[unresolved-attribute]
         for model in _owner_free_models()
     }
-    # `DirectoryEntry` and `SyncMeta` are corpus and never had an owner
-    # column, so they are legitimately absent from the migration.
+    # `DirectoryEntry`, its samples and `SyncMeta` are corpus and never had an
+    # owner column, so they are legitimately absent from the migration.
+    # `DirectorySample` is the newest of the three and postdates the revision
+    # by two tickets, which is precisely the case the frozen list exists for: a
+    # table created after a migration ran cannot have had a column dropped by
+    # it, so it belongs here rather than in `OWNER_COLUMNS`.
     never_had_one = derived - frozen
-    assert never_had_one <= {"tg_channel_directory", "tg_sync_meta"}, (
+    assert never_had_one <= {
+        "tg_channel_directory",
+        "tg_channel_directory_samples",
+        "tg_sync_meta",
+    }, (
         f"{sorted(never_had_one)} are owner-free in `SCOPES` but the ticket 22 "
         f"migration does not drop a `user_id` from them. If one of these grew a "
         f"stamp, it needs its own revision — this one has already run."

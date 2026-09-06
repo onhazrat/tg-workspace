@@ -669,6 +669,81 @@ class DirectoryEntry(SQLModel, table=True):
     created_at: datetime = Field(default_factory=utc_now)
 
 
+class DirectorySample(SQLModel, table=True):
+    """One Post off a Directory entry's preview page (ticket 02, IDEA-011 D16).
+
+    A sample of what a Channel actually publishes, kept so an Operator can judge
+    it before following. Modelled on `Post` and deliberately **not** stored in
+    `tg_posts`.
+
+    ## Why not `tg_posts`
+
+    A `tg_posts` row belongs to a contiguous history the sync orchestrator
+    tracks with anchors and sync state. A sample is an unversioned snapshot of
+    one preview page, replaced wholesale on every conclusive probe. Sharing a
+    table would force every feed, search, summary, embedding, retention and
+    stats query to grow an exclusion predicate, and the first one that forgot
+    would mix Channels nobody follows into the corpus. Separating the tables
+    makes that impossible rather than merely disciplined.
+
+    For the same reason a sample is never promoted into `tg_posts` when somebody
+    follows the Channel: sync fetches the Channel properly instead.
+
+    ## What is dropped relative to `Post`
+
+    * The owner column. The Directory is corpus-wide, so there is no account
+      whose samples these are.
+    * The sync bookkeeping (`is_anchor`, the four `retrieval_*` fields). Keeping
+      them would invite sync logic to trust these rows as history.
+    * `updated_at`, in favour of `captured_at`: a row is replaced, never edited,
+      so the interesting timestamp is when the snapshot was taken. It is also
+      the clock the sample retention window runs on.
+
+    Keyed by `(handle, post_id)` — the handle rather than a channel id, because
+    the Directory is keyed by handle and a sampled Channel need not exist in
+    `tg_channels` at all.
+    """
+
+    __tablename__ = "tg_channel_directory_samples"
+
+    #: Normalized handle, matching `DirectoryEntry.handle`. Part of the key
+    #: rather than a surrogate id: the snapshot is replaced per handle, so the
+    #: pair is the identity and nothing else ever addresses one of these rows.
+    handle: str = Field(
+        primary_key=True,
+        foreign_key="tg_channel_directory.handle",
+        ondelete="CASCADE",
+    )
+    post_id: int = Field(primary_key=True)
+
+    #: `nullable=False` where `Post.text` is nullable. A sample is written in
+    #: one shot from a parsed widget, so "no text" is the empty string and there
+    #: is no half-built row for a NULL to describe.
+    text: str = Field(default="", sa_column=Column(Text, nullable=False))
+    date: str = ""
+    timestamp: int = Field(default=0, sa_column=_ms_ts())
+    forwarded_from: str | None = None
+    forwarded_from_name: str | None = None
+    #: The parsed media block, view and reaction counts included. No file is
+    #: ever downloaded for a sample and `thumbApiPath` is never rewritten to
+    #: the local cache, because a probe does not fill that cache and the
+    #: rewritten path would render a broken image.
+    media: dict[str, Any] | None = Field(default=None, sa_column=Column(JSON))
+    #: Telegram links found in the Post body, as `Post.links` holds them.
+    #: **Not `DirectoryEntry.links`**, which is the preview page's link *counter*
+    #: as raw text. The collision is inherited — `Channel.links` and `Post.links`
+    #: already mean these two different things — and it is worth knowing about
+    #: here, where both tables are "the Directory".
+    links: list[Any] | None = Field(default=None, sa_column=Column(JSON))
+    reply_to_post_id: int | None = None
+    reply_to: dict[str, Any] | None = Field(default=None, sa_column=Column(JSON))
+
+    #: When this snapshot was taken. The sample retention window is measured
+    #: from here, not from the Post's own date: a Channel that stopped posting
+    #: two years ago should keep the sample we captured last week.
+    captured_at: datetime = Field(default_factory=utc_now, index=True)
+
+
 class TagRun(SQLModel, table=True):
     __tablename__ = "tg_tag_runs"
 
