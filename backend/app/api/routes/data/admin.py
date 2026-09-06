@@ -40,6 +40,7 @@ from app.core.acting_owner import ActingOwner
 from app.core.acting_owner import bind as bind_acting_owner
 from app.core.permissions import Permission
 from app.jobs.settings import (
+    load_directory_settings,
     load_jobs_settings,
     load_retention_settings,
     load_sync_settings,
@@ -69,6 +70,7 @@ from app.services.network_settings import (
     network_settings_payload,
 )
 from app.services.settings_registry import (
+    DIRECTORY_KEY,
     RETENTION_KEY,
     RETENTION_PREF_FIELDS,
     SYNC_KEY,
@@ -96,6 +98,7 @@ _SETTING_LOADERS: dict[str, Callable[[Session, uuid.UUID], dict[str, Any]]] = {
         session, user_id=user_id
     ),
     "translation": lambda session, _user_id: load_translation_settings(session),
+    DIRECTORY_KEY: lambda session, _user_id: load_directory_settings(session),
 }
 
 #: The facade keys, and which of their fields the registry calls personal.

@@ -319,6 +319,19 @@ class Settings(BaseSettings):
     # month is not evidence of what a Channel publishes now. 0 = keep forever.
     RETENTION_DIRECTORY_SAMPLE_DAYS_DEFAULT: int = 30
 
+    # The Channel Directory's refresh window (ticket 03).
+    #
+    # How long a *live* entry's answer stays current before the handle becomes
+    # due for another fetch. Deployment policy rather than per-Account, because
+    # the Directory is corpus-wide — and it is the Operator's primary rate
+    # control: widening it is the lever when Telegram pushes back, short of
+    # turning probing off. A dead verdict is exempt and never comes due at all.
+    #
+    # Deliberately **not** the retry backoff above it in
+    # `services/channel_directory.py`. That means "this fetch failed"; this
+    # means "this answer is old". 0 = never refresh.
+    DIRECTORY_REFRESH_DAYS_DEFAULT: int = 7
+
     # Discover handle probes
     #
     # How many handles one sweep fetches. A batch commonly outlasts the interval

@@ -612,6 +612,14 @@ def test_an_unavailable_verdict_keeps_a_known_chat_id() -> None:
     yields none, and an `unavailable` verdict is synthesized with no page at
     all. Clearing it would drop the identity exactly when the handle went
     private or was renamed — the one case it exists for.
+
+    **The counters now go in two stages** (ticket 03). Overturning an `ok`
+    verdict takes two consecutive `unavailable` answers, because that verdict is
+    synthesized from an exception and a sensitive-content interstitial raises the
+    same one a private channel does. The first answer is provisional and changes
+    nothing but the verdict; the second is what a stale counter is a lie about,
+    and blanks them exactly as this asserted before. Asserted from the other side
+    in `test_directory_refresh.py`.
     """
     with Session(engine) as session:
         record_probe_result(session, "alpha_news", RICH_PAGE)
@@ -619,7 +627,12 @@ def test_an_unavailable_verdict_keeps_a_known_chat_id() -> None:
         row = session.get(DirectoryEntry, "alpha_news")
         assert row is not None
         assert row.status == "unavailable"
-        # The counters are a snapshot of a page and go with it...
+        # Provisional: the answer is not confirmed, so nothing is thrown away.
+        assert row.photos == "1.2K"
+
+        record_probe_result(session, "alpha_news", BOT_PAGE)
+        session.refresh(row)
+        # Confirmed. The counters are a snapshot of a page and go with it...
         assert row.photos is None
         # ...but the identity does not.
         assert row.telegram_chat_id == 1234567890123

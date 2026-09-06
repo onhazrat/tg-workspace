@@ -37,6 +37,7 @@ from sqlmodel import Session, select
 from app.core.config import settings
 from app.models import User
 from app.services.settings_registry import (
+    DIRECTORY_KEY,
     RETENTION_KEY,
     RETENTION_PREFS_KEY,
     SYNC_KEY,
@@ -130,6 +131,18 @@ def _default_retention_prefs() -> dict[str, Any]:
         "reportRetentionDays": settings.RETENTION_REPORT_DAYS_DEFAULT,
         "reportRetentionMax": settings.RETENTION_REPORT_MAX_DEFAULT,
     }
+
+
+def _default_directory() -> dict[str, Any]:
+    """The Channel Directory's refresh window (ticket 03).
+
+    One field, and it is deliberately its own section rather than a fourth
+    entry in `retention`: retention deletes rows, this decides when to fetch
+    one again. Filing it beside `directorySampleRetentionDays` would put the
+    lever that controls outbound traffic in the blob an Operator opens to
+    reclaim disk.
+    """
+    return {"directoryRefreshDays": settings.DIRECTORY_REFRESH_DAYS_DEFAULT}
 
 
 def _default_media() -> dict[str, Any]:
@@ -239,6 +252,11 @@ def save_sync_settings(
 
 def load_jobs_settings(session: Session) -> dict[str, Any]:
     return load_setting(session, "jobs", _default_jobs())
+
+
+def load_directory_settings(session: Session) -> dict[str, Any]:
+    """The Directory's refresh window, merged over its default (ticket 03)."""
+    return load_setting(session, DIRECTORY_KEY, _default_directory())
 
 
 def load_sync_settings(

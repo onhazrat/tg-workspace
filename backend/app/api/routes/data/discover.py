@@ -24,6 +24,7 @@ from app.schemas.discover import (
     DiscoverIgnoreRequest,
     DiscoverProbeQueueResponse,
     DiscoverProbeRecheckResponse,
+    DiscoverProbeRefreshResponse,
     DiscoverProbeRequest,
     DiscoverReportFlagsRequest,
     DiscoverReportListItemResponse,
@@ -36,6 +37,7 @@ from app.services.channel_directory import (
     MAX_PROBE_PAGE_SIZE,
     list_probes,
     queue_counts,
+    refresh_entries,
     requeue_probes,
 )
 from app.services.discover import (
@@ -232,6 +234,32 @@ def recheck_discover_probes(
     first, so the wait is bounded by the job interval.
     """
     return DiscoverProbeRecheckResponse(requeued=requeue_probes(session, body.handles))
+
+
+# Ticket 03. Guarded by `tests/services/test_directory_refresh.py`; the seam is
+# `channel_directory.refresh_entries`, and this route is glue over it.
+@router.post("/discover/probe/refresh")
+def refresh_discover_probes(
+    body: DiscoverProbeRequest,
+    session: SessionDep,
+    _current_user: CurrentUser,
+) -> DiscoverProbeRefreshResponse:
+    """Mark these Directory entries due now, keeping the answers they hold.
+
+    The on-demand half of the refresh window: an Operator deciding whether to
+    follow a Candidate should not be reading week-old data, and the window that
+    paces the crawl is measured in days.
+
+    Not a recheck. A recheck says the verdict is *wrong* and discards it, so the
+    row goes blank until the queue reaches it; this says the answer is *old*, so
+    the entry goes on rendering what it has while the fresh fetch is queued at
+    the front. A dead verdict is refreshed too when it is asked for by name —
+    never automatically due is not never due, and a channel that went private
+    and came back is exactly what this is pressed on.
+    """
+    return DiscoverProbeRefreshResponse(
+        refreshed=refresh_entries(session, body.handles)
+    )
 
 
 @router.post("/discover/reports")

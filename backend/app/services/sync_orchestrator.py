@@ -28,6 +28,7 @@ from app.jobs.settings import (
 )
 from app.models_tg import Channel, Post, utc_now
 from app.services.async_db import run_db
+from app.services.channel_directory import record_sync_metadata
 from app.services.channel_photos import resolve_cached_photo_url
 from app.services.channel_setting_groups import (
     SyncOperationMode,
@@ -980,6 +981,24 @@ def _apply_scrape_page(
             return result
 
         _refresh_channel_meta(channel, response, result)
+
+        # And the Directory's copy of the same page, for free (ticket 03).
+        #
+        # `_parse_channel_meta` has already reduced this response to exactly the
+        # fields a Directory entry holds, so a followed Channel's entry stays
+        # current without the probe queue ever fetching it — which is both the
+        # freshest half of the map and the half a weekly window would keep
+        # stalest. `record_sync_metadata` neither commits nor touches the
+        # samples; see its docstring for why each of those matters here.
+        #
+        # **Only the first page.** `before_id is None` is the top of the walk,
+        # and it is the page whose header describes the Channel now. Every later
+        # page carries the same header and would write the same row again, once
+        # per page of a backfill, for an answer that has not changed.
+        if before_id is None:
+            record_sync_metadata(
+                session, channel.name, response.get("channelMeta") or {}
+            )
 
         page_ids = [p["id"] for p in posts]
         record_gaps_from_page(

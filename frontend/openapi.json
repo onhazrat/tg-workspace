@@ -2335,6 +2335,43 @@
         "security": [{ "OAuth2PasswordBearer": [] }]
       }
     },
+    "/api/v1/data/discover/probe/refresh": {
+      "post": {
+        "tags": ["data"],
+        "summary": "Refresh Discover Probes",
+        "description": "Mark these Directory entries due now, keeping the answers they hold.\n\nThe on-demand half of the refresh window: an Operator deciding whether to\nfollow a Candidate should not be reading week-old data, and the window that\npaces the crawl is measured in days.\n\nNot a recheck. A recheck says the verdict is *wrong* and discards it, so the\nrow goes blank until the queue reaches it; this says the answer is *old*, so\nthe entry goes on rendering what it has while the fresh fetch is queued at\nthe front. A dead verdict is refreshed too when it is asked for by name \u2014\nnever automatically due is not never due, and a channel that went private\nand came back is exactly what this is pressed on.",
+        "operationId": "data-refresh_discover_probes",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/DiscoverProbeRequest" }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DiscoverProbeRefreshResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        },
+        "security": [{ "OAuth2PasswordBearer": [] }]
+      }
+    },
     "/api/v1/data/discover/reports": {
       "post": {
         "tags": ["data"],
@@ -6297,6 +6334,18 @@
         "type": "object",
         "title": "DiscoverProbeRecheckResponse",
         "description": "The handles now queued for a fresh probe.\n\nIncludes handles that had never been probed: the UI offers recheck on rows\nwhose verdict has not arrived yet, so asking for one nobody has looked at is\nreasonable rather than an error. A list, not a count \u2014 the caller needs to\nknow *which* rows to repaint as pending."
+      },
+      "DiscoverProbeRefreshResponse": {
+        "properties": {
+          "refreshed": {
+            "items": { "type": "string" },
+            "type": "array",
+            "title": "Refreshed"
+          }
+        },
+        "type": "object",
+        "title": "DiscoverProbeRefreshResponse",
+        "description": "The handles now due for a fresh fetch, verdict intact.\n\nA list rather than a count, for the reason the recheck response is one: the\ncaller needs to know *which* rows to mark as refreshing. Separate from\n`DiscoverProbeRecheckResponse` because the two operations answer differently\n\u2014 a recheck blanks the row it returns, a refresh leaves it readable until\nthe new answer lands \u2014 and one shared model would hide that."
       },
       "DiscoverProbeRequest": {
         "properties": {

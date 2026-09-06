@@ -177,12 +177,22 @@ def test_an_inconclusive_fetch_touches_neither_the_columns_nor_the_samples() -> 
 
     A timeout or a proxy block page is not evidence about the Channel, so
     nothing it could overwrite may be overwritten.
+
+    **The status is on that list from ticket 03 on**, and this assertion moved
+    with it. When it was written a resolved handle was never fetched again, so
+    the only row that could reach the inconclusive branch had no verdict to
+    keep and demoting it to `unknown` cost nothing. Refreshing re-fetches every
+    live entry on a window, which put one proxy timeout between a good answer
+    and every report that joins it — so the failure is recorded and the verdict
+    survives it, exactly as the metadata beside it already did. Asserted from
+    the other side in `test_directory_refresh.py`.
     """
     with Session(engine) as session:
         record_probe_result(session, HANDLE, _page(samples=[_post(11)]))
         after = record_probe_result(session, HANDLE, None, error="timeout")
 
-        assert after["status"] == "unknown"
+        assert after["status"] == "ok", "a failed fetch is not evidence of anything"
+        assert after["lastError"] == "timeout", "and the failure is still recorded"
         assert after["subscribers"] == "12.3K", "the metadata survives a failed fetch"
         assert _ids(session) == [11]
 

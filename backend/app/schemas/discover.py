@@ -311,6 +311,19 @@ class DiscoverProbeRecheckResponse(BaseModel):
     requeued: list[str] = Field(default_factory=list)
 
 
+class DiscoverProbeRefreshResponse(BaseModel):
+    """The handles now due for a fresh fetch, verdict intact.
+
+    A list rather than a count, for the reason the recheck response is one: the
+    caller needs to know *which* rows to mark as refreshing. Separate from
+    `DiscoverProbeRecheckResponse` because the two operations answer differently
+    — a recheck blanks the row it returns, a refresh leaves it readable until
+    the new answer lands — and one shared model would hide that.
+    """
+
+    refreshed: list[str] = Field(default_factory=list)
+
+
 class DiscoverPostRef(BaseModel):
     channel_name: str = PydanticField(alias="channelName")
     post_id: int = PydanticField(alias="postId")

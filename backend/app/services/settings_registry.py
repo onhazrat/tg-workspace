@@ -137,6 +137,10 @@ RETENTION_PREF_FIELDS = frozenset(
 #: the spelling.
 QUOTA_KEY = "quota"
 
+#: Ticket 03's Directory refresh window. Named here for the same reason: the
+#: default, the loader and the write path all have to agree on the spelling.
+DIRECTORY_KEY = "directory"
+
 #: Deployment-wide keys: one row, shared by every account.
 GLOBAL_KEYS: dict[str, str] = {
     "jobs": (
@@ -184,6 +188,16 @@ GLOBAL_KEYS: dict[str, str] = {
         "is `tg_quota_limits`, which is a table rather than a per-User settings "
         "key because an Admin sets it *about* an account instead of the "
         "account setting it for itself."
+    ),
+    DIRECTORY_KEY: (
+        "How long a live Channel Directory entry stays current before it is "
+        "fetched again (ticket 03). Deployment policy because the Directory "
+        "itself is: it records what exists on Telegram rather than what "
+        "anybody reads, so there is no account whose window it could be — and "
+        "because the window is the rate control on outbound probe traffic, "
+        "which is one deployment's proxies and one deployment's standing with "
+        "Telegram. A per-account copy would let the shortest window chosen by "
+        "anyone set the load everybody pays for."
     ),
     SYNC_LANES_KEY: (
         "Which sync lanes an Admin has paused (ticket 12). A lane is a queue "

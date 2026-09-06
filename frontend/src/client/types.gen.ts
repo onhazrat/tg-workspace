@@ -1523,6 +1523,23 @@ export type DiscoverProbeRecheckResponse = {
 };
 
 /**
+ * DiscoverProbeRefreshResponse
+ * The handles now due for a fresh fetch, verdict intact.
+ *
+ * A list rather than a count, for the reason the recheck response is one: the
+ * caller needs to know *which* rows to mark as refreshing. Separate from
+ * `DiscoverProbeRecheckResponse` because the two operations answer differently
+ * — a recheck blanks the row it returns, a refresh leaves it readable until
+ * the new answer lands — and one shared model would hide that.
+ */
+export type DiscoverProbeRefreshResponse = {
+    /**
+     * Refreshed
+     */
+    refreshed?: Array<string>;
+};
+
+/**
  * DiscoverProbeRequest
  * Handles whose cached verdict should be discarded and re-queued.
  */
@@ -6848,6 +6865,31 @@ export type DataRecheckDiscoverProbesResponses = {
 };
 
 export type DataRecheckDiscoverProbesResponse = DataRecheckDiscoverProbesResponses[keyof DataRecheckDiscoverProbesResponses];
+
+export type DataRefreshDiscoverProbesData = {
+    body: DiscoverProbeRequest;
+    path?: never;
+    query?: never;
+    url: '/api/v1/data/discover/probe/refresh';
+};
+
+export type DataRefreshDiscoverProbesErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type DataRefreshDiscoverProbesError = DataRefreshDiscoverProbesErrors[keyof DataRefreshDiscoverProbesErrors];
+
+export type DataRefreshDiscoverProbesResponses = {
+    /**
+     * Successful Response
+     */
+    200: DiscoverProbeRefreshResponse;
+};
+
+export type DataRefreshDiscoverProbesResponse = DataRefreshDiscoverProbesResponses[keyof DataRefreshDiscoverProbesResponses];
 
 export type DataListDiscoverReportsData = {
     body?: never;
