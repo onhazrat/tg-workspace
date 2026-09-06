@@ -22,6 +22,10 @@ from app.core.config import settings
 from app.core.db import engine
 from app.jobs.auto_summary import run_auto_summary
 from app.jobs.auto_sync import run_auto_sync
+from app.jobs.directory_harvest import (
+    DIRECTORY_HARVEST_JOB_ID,
+    run_directory_harvest_sweep,
+)
 from app.jobs.discover_probe import (
     DISCOVER_PROBE_JOB_ID,
     run_discover_probe_sweep,
@@ -223,6 +227,10 @@ async def job_discover_probe() -> None:
     await _run_guarded(DISCOVER_PROBE_JOB_ID, run_discover_probe_sweep)
 
 
+async def job_directory_harvest() -> None:
+    await _run_guarded(DIRECTORY_HARVEST_JOB_ID, run_directory_harvest_sweep)
+
+
 _JOB_RUNNERS: dict[str, Callable[[], Awaitable[None]]] = {
     "auto_sync": job_auto_sync,
     "embeddings": job_embeddings,
@@ -230,6 +238,7 @@ _JOB_RUNNERS: dict[str, Callable[[], Awaitable[None]]] = {
     "retention": job_retention,
     "translation_batch": job_translation_batch,
     DISCOVER_PROBE_JOB_ID: job_discover_probe,
+    DIRECTORY_HARVEST_JOB_ID: job_directory_harvest,
 }
 
 
@@ -486,6 +495,20 @@ def start_scheduler() -> None:
         # longer than APScheduler's 1s default grace, so a strict trigger would
         # drop ticks as misfires and defer a full interval. Running late is fine;
         # not running is not.
+        misfire_grace_time=None,
+        coalesce=True,
+    )
+    scheduler.add_job(
+        job_directory_harvest,
+        "interval",
+        seconds=settings.DIRECTORY_HARVEST_INTERVAL_SECONDS,
+        id=DIRECTORY_HARVEST_JOB_ID,
+        replace_existing=True,
+        # Same reasoning as the probe sweep above, from the database side rather
+        # than the network one: a tick reads up to
+        # `DIRECTORY_HARVEST_SCAN_LIMIT` Posts, which can outlast a 1s grace on
+        # a loaded deployment. Running late is fine; a dropped tick leaves the
+        # cursor where it was and the map that much staler.
         misfire_grace_time=None,
         coalesce=True,
     )

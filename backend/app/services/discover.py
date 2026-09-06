@@ -32,7 +32,7 @@ from app.services.post_filters import PostFilters, apply_post_filters
 from app.services.post_links_parser import channel_from_telegram_url
 from app.services.posts import random_cap_order
 from app.services.telegram_web import _all_web_domains, is_channel_handle
-from app.services.tenancy import scoped_select
+from app.services.tenancy import scoped_select, unscoped_select
 
 SignalKind = Literal["forward", "mention", "link"]
 SIGNAL_KINDS: tuple[SignalKind, ...] = ("forward", "mention", "link")
@@ -340,3 +340,118 @@ def _to_candidate(
             "timestamp": sample.timestamp,
         },
     }
+
+
+@dataclass(frozen=True)
+class HarvestPage:
+    """One page of the harvest walk (ticket 04).
+
+    `cursor` is where the next page starts, and `None` means the walk reached
+    the end of the corpus — see `harvest_page` for what the caller does with
+    that.
+    """
+
+    handles: list[str]
+    cursor: int | None
+    scanned: int
+
+
+#: Why the harvest walk does not go through `scoped_select`.
+#:
+#: The sweep is deployment-level work, like the corpus half of retention: the
+#: Directory it feeds is `Scope.CORPUS`, so there is no account asking the
+#: question and no response for a scope to narrow. Scoping it per account would
+#: also be the *unfair* implementation, since the walk would then have to pick
+#: whose corpus to read first — the ordering the sweep deliberately does not
+#: make. Fairness lives on the queue instead: every harvested handle carries one
+#: priority, so the drain order falls through to the handle itself.
+HARVEST_SCOPE_REASON = (
+    "The harvest sweep reads the whole corpus because the Directory it feeds "
+    "is corpus-wide: nobody is asking, so there is no account to scope to. "
+    "Reading it per account would make the walk order a choice about whose "
+    "handles get probed first, which is the starvation the one-priority "
+    "enqueue exists to avoid. See `jobs/directory_harvest.py`."
+)
+
+
+def harvest_page(
+    session: Session, *, after: int, limit: int, until: int | None = None
+) -> HarvestPage:
+    """Handles referenced by the next `limit` stored Posts after `after`.
+
+    The read half of the harvest sweep. It reuses `post_references`, so a
+    forward, a mention, a masked href and a cross-channel reply are found here
+    exactly as a Discovery report finds them — the sweep changes who asks, not
+    what counts as a reference.
+
+    **Ascending by `timestamp`, from a cursor.** Ascending because it makes the
+    walk self-terminating: once the cursor passes the newest Post, the same
+    query returns only what has arrived since, so following the tail costs one
+    empty indexed query per tick.
+
+    `timestamp` rather than `id`, because the primary key is a uuid and orders
+    by nothing. And rather than `updated_at`, which is the tempting choice —
+    ordering by it would be a true insertion-order walk that never misses a row
+    and needs no wrap at all. It loses on cost: `bulk_upsert_posts_impl` bumps
+    `updated_at` **unconditionally** on every re-upsert, and sync re-scrapes the
+    newest page of every followed Channel on every run, so a deployment with
+    thousands of Channels churns tens of thousands of rows to the end of that
+    ordering per sync round. The walk would fall permanently behind the churn
+    and genuinely new Posts would never be reached.
+
+    `until` bounds the walk from above, and only the backfill leg of the sweep
+    passes it. Without it that leg would run past the tail mark, duplicate the
+    tail leg's work, and never reach the end that tells it to wrap.
+
+    Ordering globally by `timestamp` is what `ix_tg_posts_timestamp` is for
+    (ticket 04's migration). `tg_posts` carried only `(channel_name, timestamp)`,
+    which a query with no channel equality cannot use, so this would have
+    seq-scanned and top-N sorted the table on every tick — the "a scheduled job
+    pays its cost every tick, forever" shape this repo has already paid for.
+
+    Handles are returned in the order the Posts referenced them, deduplicated.
+    The order is *not* a ranking and the caller must not treat it as one: it is
+    the order the cursor happened to walk, which is a fact about which Channels
+    were being synced, not about which handles are worth probing. See
+    `channel_directory.HARVEST_PRIORITY`.
+
+    **`after` is exclusive, so the sentinel is -1 and not 0.** `Post.timestamp`
+    defaults to `0` for a row the scraper stored with no usable date, and at a
+    sentinel of `0` those rows would be invisible to every pass for ever.
+
+    **The cursor is a scalar, so two Posts sharing a millisecond can straddle a
+    page boundary and the second one is skipped.** Stated rather than fixed: the
+    alternatives are a composite cursor threaded through the settings row or a
+    `>=` that cannot terminate when a whole page shares one timestamp, and both
+    buy more than the defect costs. A skipped Post's handles are almost always
+    referenced by its neighbours too, the sweep is a map that fills in rather
+    than a ledger that must balance, and the backfill leg gives every stretch
+    another pass with the boundaries in different places.
+    """
+    if limit <= 0:
+        return HarvestPage(handles=[], cursor=after, scanned=0)
+
+    statement = select(Post).where(col(Post.timestamp) > after)
+    if until is not None:
+        statement = statement.where(col(Post.timestamp) <= until)
+    statement = unscoped_select(
+        statement.order_by(col(Post.timestamp)).limit(limit),
+        reason=HARVEST_SCOPE_REASON,
+    )
+    posts = list(session.exec(statement).all())
+    if not posts:
+        # The walk is at the end of the corpus. `None` rather than `after` so
+        # the caller can tell "nothing new yet" from "there is more to come",
+        # which is what decides whether the cursor restarts.
+        return HarvestPage(handles=[], cursor=None, scanned=0)
+
+    found: dict[str, None] = {}
+    for post in posts:
+        for handle in post_references(post):
+            found.setdefault(handle, None)
+
+    return HarvestPage(
+        handles=list(found),
+        cursor=posts[-1].timestamp,
+        scanned=len(posts),
+    )

@@ -351,4 +351,13 @@ def test_the_queue_read_keeps_its_key_set(client: TestClient) -> None:
         "unavailable",
         "enabled",
         "running",
+        # Ticket 04. What the probe lane has *spent*, beside what it has left to
+        # do: the counts alone say nothing about cost, and the harvest sweep
+        # means handles now arrive without anybody asking for them.
+        "requestsToday",
+        "requestsWeek",
+        "harvestEnabled",
+        "harvestRunning",
+        "harvestTail",
+        "harvestCursor",
     }

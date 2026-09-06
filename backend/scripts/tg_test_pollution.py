@@ -77,6 +77,12 @@ TG_TABLES: tuple[str, ...] = (
     # cascades anyway.
     "tg_channel_directory_samples",
     "tg_channel_directory",
+    # Ticket 04's probe-lane tally. Truncated between tests for the reason
+    # `tg_quota_usage` is, despite production never pruning either: the row is
+    # keyed by day alone, so a count left behind by one test is the *same* row
+    # the next test asserts on, and the failure reads as a probe having made
+    # requests it never made.
+    "tg_directory_probe_usage",
     "tg_sync_jobs",
     "tg_follow_jobs",
     "tg_sync_meta",

@@ -86,6 +86,7 @@ from app.models_tg import (
     ChatSession,
     ChatSessionPayload,
     DirectoryEntry,
+    DirectoryProbeUsage,
     DirectorySample,
     DiscoverIgnoredChannel,
     DiscoverReport,
@@ -197,6 +198,14 @@ SCOPES: dict[type[SQLModel], Scope] = {
     # Channels nobody follows yet, so scoping it by Follow would hide every row
     # that has a reason to be there.
     DirectorySample: Scope.CORPUS,
+    # What the probe lane spent, one row per UTC day (ticket 04). Corpus
+    # because the work is: a probe answers a question about what exists on
+    # Telegram, so the row has no owner column to scope by and inventing one
+    # would be the fourth Budget the spec rules out. Deliberately not
+    # `USER_OWNED` like `QuotaUsage`, which it otherwise resembles — that
+    # table records what one account spent and this one records what the
+    # deployment spent on nobody's behalf.
+    DirectoryProbeUsage: Scope.CORPUS,
     SyncMeta: Scope.CORPUS,
 }
 

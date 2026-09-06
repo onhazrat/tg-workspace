@@ -38,6 +38,7 @@ from app.core.config import settings
 from app.models import User
 from app.services.settings_registry import (
     DIRECTORY_KEY,
+    DIRECTORY_RUNTIME_KEY,
     RETENTION_KEY,
     RETENTION_PREFS_KEY,
     SYNC_KEY,
@@ -67,6 +68,7 @@ JOB_IDS = (
     "retention",
     "translation_batch",
     "discover_probe",
+    "directory_harvest",
 )
 
 
@@ -78,6 +80,7 @@ def default_job_enabled(job_id: str) -> bool:
         "retention": settings.JOBS_RETENTION_ENABLED_DEFAULT,
         "translation_batch": settings.JOBS_TRANSLATION_BATCH_ENABLED_DEFAULT,
         "discover_probe": settings.JOBS_DISCOVER_PROBE_ENABLED_DEFAULT,
+        "directory_harvest": settings.JOBS_DIRECTORY_HARVEST_ENABLED_DEFAULT,
     }
     return defaults.get(job_id, True)
 
@@ -143,6 +146,33 @@ def _default_directory() -> dict[str, Any]:
     reclaim disk.
     """
     return {"directoryRefreshDays": settings.DIRECTORY_REFRESH_DAYS_DEFAULT}
+
+
+#: The sentinel both harvest marks start at, and the one the backfill wraps to.
+#:
+#: `-1`, not `0`. `after` is exclusive and `Post.timestamp` defaults to `0` for
+#: a row the scraper stored with no usable date, so a sentinel of `0` would make
+#: those rows invisible to every pass for ever.
+HARVEST_START = -1
+
+
+def _default_directory_runtime() -> dict[str, Any]:
+    """Where the harvest sweep has walked to (ticket 04).
+
+    State the job writes about itself, in its own key rather than beside
+    `directoryRefreshDays` — the same split `sync_runtime` makes from `sync`,
+    and for the same reason: a person saving the refresh window must not be
+    able to reset the marks by round-tripping a settings section.
+
+    **Two marks, because the sweep has two jobs.** `harvestTail` is the highest
+    `Post.timestamp` walked, and moving it forward is how new Posts are reached
+    promptly. `harvestCursor` is the backfill position inside the history below
+    that tail, and it exists because a backward sync stores Posts with *old*
+    timestamps: they land below the tail, so nothing that only moves forward
+    would ever see them. One mark doing both jobs was the first draft, and it
+    made every tick a full-corpus rescan — new references waited a whole cycle.
+    """
+    return {"harvestTail": HARVEST_START, "harvestCursor": HARVEST_START}
 
 
 def _default_media() -> dict[str, Any]:
@@ -257,6 +287,36 @@ def load_jobs_settings(session: Session) -> dict[str, Any]:
 def load_directory_settings(session: Session) -> dict[str, Any]:
     """The Directory's refresh window, merged over its default (ticket 03)."""
     return load_setting(session, DIRECTORY_KEY, _default_directory())
+
+
+def _harvest_mark(stored: dict[str, Any], field: str) -> int:
+    """One mark, or the sentinel if it is missing or unreadable.
+
+    A hand-edited or half-migrated row restarts that leg rather than raising.
+    The sweep is idempotent, so the cost of restarting is one pass over Posts
+    whose handles are already on the map; the cost of raising is a scheduled job
+    that stays broken until somebody reads a log line.
+    """
+    try:
+        value = int(stored.get(field, HARVEST_START))
+    except TypeError, ValueError:
+        return HARVEST_START
+    return max(HARVEST_START, value)
+
+
+def load_harvest_state(session: Session) -> tuple[int, int]:
+    """`(tail, cursor)` — where each leg of the harvest sweep left off."""
+    stored = load_setting(session, DIRECTORY_RUNTIME_KEY, _default_directory_runtime())
+    return _harvest_mark(stored, "harvestTail"), _harvest_mark(stored, "harvestCursor")
+
+
+def save_harvest_state(session: Session, *, tail: int, cursor: int) -> None:
+    """Record both marks. Replaces the whole section, which holds only these."""
+    save_settings_section(
+        session,
+        DIRECTORY_RUNTIME_KEY,
+        {"harvestTail": tail, "harvestCursor": cursor},
+    )
 
 
 def load_sync_settings(

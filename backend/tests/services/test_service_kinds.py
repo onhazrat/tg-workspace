@@ -80,6 +80,12 @@ INVENTORY: dict[str, str] = {
     # two lifetimes, and one module writing both is the second opinion the rule
     # exists to prevent.
     "quota_limits.py": AGGREGATE,
+    # Owns `tg_directory_probe_usage` (ticket 04) and is its only writer. It
+    # resembles `quota.py` and is deliberately not part of it: that table records
+    # what one account spent against a Budget, this one records what the probe
+    # lane spent on nobody's behalf. Folding them together is how a deployment
+    # tally becomes a fourth Budget by accident.
+    "directory_probe_usage.py": AGGREGATE,
     "scraper_jobs.py": AGGREGATE,
     "follow_jobs.py": AGGREGATE,
     # The two halves of the ticket 06 settings split, one aggregate each. Not

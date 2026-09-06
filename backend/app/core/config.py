@@ -280,6 +280,11 @@ class Settings(BaseSettings):
     RETENTION_JOB_STARTUP_DELAY_SECONDS: int = 60
     TRANSLATION_BATCH_JOB_INTERVAL_SECONDS: int = 30
     DISCOVER_PROBE_JOB_INTERVAL_SECONDS: int = 30
+    # Ten times the probe tick, and deliberately so. The probe sweep refills a
+    # lane and has to notice the moment it drains; the harvest fills a backlog
+    # that takes hours to work through, so a tighter tick would only re-read
+    # Posts nobody has probed the handles of yet.
+    DIRECTORY_HARVEST_INTERVAL_SECONDS: int = 300
 
     # Default enabled state when no jobs AppSetting row exists yet
     JOBS_EMBEDDINGS_ENABLED_DEFAULT: bool = False
@@ -288,6 +293,7 @@ class Settings(BaseSettings):
     JOBS_RETENTION_ENABLED_DEFAULT: bool = True
     JOBS_TRANSLATION_BATCH_ENABLED_DEFAULT: bool = False
     JOBS_DISCOVER_PROBE_ENABLED_DEFAULT: bool = True
+    JOBS_DIRECTORY_HARVEST_ENABLED_DEFAULT: bool = True
 
     # Embeddings backfill
     EMBEDDINGS_CHUNK_SIZE: int = 20
@@ -338,6 +344,49 @@ class Settings(BaseSettings):
     # above, which is fine: the sweep lock makes the overlapping tick a no-op, so
     # the real pace is set by how fast Telegram answers.
     DISCOVER_PROBE_BATCH_SIZE: int = 60
+
+    # The harvest sweep (ticket 04)
+    #
+    # How many *new* handles one tick may add to the Directory queue. This is
+    # the throttle the ticket asks for: it bounds how fast the backlog the probe
+    # lane drains can grow, and turning it down is the lever short of disabling
+    # the job. Deliberately counted in new handles rather than in Posts scanned,
+    # because a stretch of Posts referencing only handles already on the map is
+    # not work — a batch spent on those would throttle nothing.
+    DIRECTORY_HARVEST_BATCH_SIZE: int = 100
+
+    # How many Posts one tick may read while trying to fill that batch. The
+    # cost bound rather than the throttle, and it has to exist separately: once
+    # the corpus is harvested almost every Post references only known handles,
+    # so a tick chasing `DIRECTORY_HARVEST_BATCH_SIZE` new ones would otherwise
+    # walk the whole table before giving up.
+    DIRECTORY_HARVEST_SCAN_LIMIT: int = 500
+
+    # Posts read per query inside one tick. Smaller than the scan limit so a
+    # tick that fills its batch early stops early, and large enough that filling
+    # it costs a handful of round trips rather than one per Post.
+    DIRECTORY_HARVEST_PAGE_SIZE: int = 100
+
+    # Posts the backfill leg may read per tick, on top of the limit above.
+    #
+    # That leg re-walks the history below the tail mark, which is the only way a
+    # Post stored by a *backward* sync is ever seen. Its own budget rather than
+    # the tail leg's leftovers, because leftovers starve it on any deployment
+    # busy enough to keep the tail leg saturated. Bounded separately because it
+    # never finishes — it wraps and starts again — so this is a cost paid on
+    # every tick for the life of the install, where the tail leg's is paid only
+    # while there is something new. A tick costs at most the two added together.
+    DIRECTORY_HARVEST_BACKFILL_SCAN_LIMIT: int = 100
+
+    # Pending handles at which the harvest stops adding more.
+    #
+    # The sweep adds on a timer and the probe lane drains only when no sync
+    # wants a Slot, so nothing makes the two rates agree. Without a ceiling the
+    # backlog grows monotonically on a busy deployment — and since a harvested
+    # row sorts ahead of every refresh, ticket 03's staleness refresh then stops
+    # being dequeued at all. Roughly ten probe batches: deep enough that the
+    # lane always has work, shallow enough that a refresh waits minutes.
+    DIRECTORY_HARVEST_BACKLOG_CEILING: int = 600
 
     # Translation batch job
     TRANSLATION_BATCH_LIMIT: int = 20
