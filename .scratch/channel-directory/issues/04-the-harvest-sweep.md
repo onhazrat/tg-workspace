@@ -157,13 +157,13 @@ behaviour anyway, for the starvation reason above.
 
 ## Notes for the next ticket
 
-- **Ticket 05 removes the backfill leg entirely.** `Post.retrieved_at` is an
-  immutable insert stamp with a single writer, so walking *insertion* order sees
-  every Post exactly once whenever it arrived — including one a backward sync
-  stored — and needs no wrap, no second mark and no forever-cost. This ticket
-  rejected `updated_at` for churning on every re-upsert and did not go looking
-  for an insert stamp, which is the miss. The two notes below describe the
-  behaviour ticket 05 supersedes.
+- **Ticket 05 removes both marks entirely.** A `Post.harvested` flag makes the
+  sweep `WHERE NOT harvested`, so a Post stored by a *backward* sync is reached
+  by being unprocessed rather than by re-lapping history — no wrap, no second
+  mark, no forever-cost, and no ordering that can skip a row. This ticket
+  reached for a cursor without noticing that `translation_batch` and
+  `embeddings` both answer "which Posts still need work" without one, which is
+  the miss. The two notes below describe the behaviour ticket 05 supersedes.
 
 - **New references are prompt; historical ones have a cycle time.** The tail leg
   reaches a Post on the next tick after it is stored. The backfill leg re-walks
