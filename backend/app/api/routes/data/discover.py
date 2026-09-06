@@ -5,15 +5,21 @@ Split out of the former `routes/data.py` under C1. The parent router in
 path and operation id is unchanged.
 """
 
+from datetime import timedelta
 from typing import Any, cast
 
 from fastapi import APIRouter, HTTPException, Query
 
 from app.api.deps import CurrentUser, SessionDep
 from app.api.routes.data._shared import parse_post_filters
+from app.jobs.directory_harvest import (
+    DIRECTORY_HARVEST_JOB_ID,
+    is_harvest_running,
+)
 from app.jobs.discover_probe import DISCOVER_PROBE_JOB_ID, is_sweep_running
 from app.jobs.settings import (
     is_job_enabled,
+    load_harvest_state,
 )
 from app.schemas.common import StatusResponse
 from app.schemas.discover import (
@@ -39,6 +45,11 @@ from app.services.channel_directory import (
     queue_counts,
     refresh_entries,
     requeue_probes,
+)
+from app.services.directory_probe_usage import (
+    requests_on,
+    requests_since,
+    today_utc,
 )
 from app.services.discover import (
     SIGNAL_KINDS,
@@ -207,12 +218,26 @@ def get_discover_probe_queue(
 
     `enabled` reflects the operator's pause switch — the ordinary job toggle, so
     pausing is durable and every open tab agrees about it.
+
+    Ticket 04 added what the lane has *spent* beside what it has left to do. The
+    counts alone say nothing about cost, and the harvest sweep means handles now
+    arrive without anybody asking for them — so an Operator watching a queue
+    drain has no way to tell a healthy crawl from a runaway one until Telegram
+    says so. Deployment-wide numbers with no owner: these are a tally, not a
+    quota, and reading them charges nobody.
     """
     counts = queue_counts(session)
+    harvest_tail, harvest_cursor = load_harvest_state(session)
     return DiscoverProbeQueueResponse(
         **counts,
         enabled=is_job_enabled(session, DISCOVER_PROBE_JOB_ID),
         running=is_sweep_running(),
+        requestsToday=requests_on(session),
+        requestsWeek=requests_since(session, today_utc() - timedelta(days=6)),
+        harvestEnabled=is_job_enabled(session, DIRECTORY_HARVEST_JOB_ID),
+        harvestRunning=is_harvest_running(),
+        harvestTail=harvest_tail,
+        harvestCursor=harvest_cursor,
     )
 
 

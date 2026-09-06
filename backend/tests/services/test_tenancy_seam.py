@@ -185,9 +185,21 @@ def test_corpus_models_are_the_ones_the_plan_names() -> None:
     `FOLLOW_SCOPED`, since it names Posts. It must not be: a sample exists
     precisely for Channels nobody follows yet, so scoping it by Follow would
     hide every row that has a reason to be there (ticket 02).
+
+    `DirectoryProbeUsage` is the one that would most plausibly be argued into
+    `USER_OWNED`, since it looks exactly like `QuotaUsage` (ticket 04). It must
+    not be: that table records what one account spent against a Budget, this one
+    records what the probe lane spent on nobody's behalf. It has no owner column
+    to scope by, and giving it one would be the fourth Budget the spec rules
+    out.
     """
     corpus = {cls.__name__ for cls, s in SCOPES.items() if s is Scope.CORPUS}
-    assert corpus == {"DirectoryEntry", "DirectorySample", "SyncMeta"}
+    assert corpus == {
+        "DirectoryEntry",
+        "DirectorySample",
+        "DirectoryProbeUsage",
+        "SyncMeta",
+    }
 
 
 def test_every_follow_scoped_model_records_its_channel_key() -> None:

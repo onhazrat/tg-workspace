@@ -1407,6 +1407,13 @@ export const dataListDiscoverProbes = <ThrowOnError extends boolean = true>(opti
  *
  * `enabled` reflects the operator's pause switch — the ordinary job toggle, so
  * pausing is durable and every open tab agrees about it.
+ *
+ * Ticket 04 added what the lane has *spent* beside what it has left to do. The
+ * counts alone say nothing about cost, and the harvest sweep means handles now
+ * arrive without anybody asking for them — so an Operator watching a queue
+ * drain has no way to tell a healthy crawl from a runaway one until Telegram
+ * says so. Deployment-wide numbers with no owner: these are a tally, not a
+ * quota, and reading them charges nobody.
  */
 export const dataGetDiscoverProbeQueue = <ThrowOnError extends boolean = true>(options?: Options<DataGetDiscoverProbeQueueData, ThrowOnError>) => {
     return (options?.client ?? _heyApiClient).get<DataGetDiscoverProbeQueueResponses, unknown, ThrowOnError, 'data'>({

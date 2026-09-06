@@ -298,6 +298,33 @@ class DiscoverProbeQueueResponse(BaseModel):
     enabled: bool = False
     running: bool = False
 
+    #: What the probe lane has spent today, and over the last seven days
+    #: (ticket 04). Deployment-wide totals with no owner behind them: a probe
+    #: answers a question about the corpus, so these are not anybody's quota and
+    #: no account's ledger is touched to produce them.
+    #:
+    #: Here rather than on a route of their own because this read is already the
+    #: probe dashboard, and the number an Operator wants beside "how much is
+    #: queued" is "what has that been costing". The window is a total rather
+    #: than a series: a series is a chart nothing renders yet, and the question
+    #: this answers is whether the crawl has changed shape since yesterday.
+    requestsToday: int = 0
+    requestsWeek: int = 0
+
+    #: The harvest sweep's switch, whether a tick is in flight, and where each
+    #: of its two legs has reached (ticket 04).
+    #:
+    #: Both marks are `Post.timestamp` values in milliseconds. `harvestTail` is
+    #: the newest Post walked, so it reads as "references are harvested up to
+    #: this moment" and is the one that answers "is the map current".
+    #: `harvestCursor` is the backfill position in the history below it and
+    #: wraps, so it going backwards is the sweep working rather than a fault.
+    #: `-1` is a leg that has not started, or a backfill that has just wrapped.
+    harvestEnabled: bool = False
+    harvestRunning: bool = False
+    harvestTail: int = -1
+    harvestCursor: int = -1
+
 
 class DiscoverProbeRecheckResponse(BaseModel):
     """The handles now queued for a fresh probe.

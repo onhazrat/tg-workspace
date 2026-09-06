@@ -2281,7 +2281,7 @@
       "get": {
         "tags": ["data"],
         "summary": "Get Discover Probe Queue",
-        "description": "Probe queue state, for the progress display.\n\nThere is no job id to poll: probing is a scheduled backend job draining a\ndurable queue (`app.jobs.discover_probe`), not something a client starts.\nEverything the UI needs is a count, and the verdicts themselves arrive\nthrough the report read, which already joins the probe table.\n\n`enabled` reflects the operator's pause switch \u2014 the ordinary job toggle, so\npausing is durable and every open tab agrees about it.",
+        "description": "Probe queue state, for the progress display.\n\nThere is no job id to poll: probing is a scheduled backend job draining a\ndurable queue (`app.jobs.discover_probe`), not something a client starts.\nEverything the UI needs is a count, and the verdicts themselves arrive\nthrough the report read, which already joins the probe table.\n\n`enabled` reflects the operator's pause switch \u2014 the ordinary job toggle, so\npausing is durable and every open tab agrees about it.\n\nTicket 04 added what the lane has *spent* beside what it has left to do. The\ncounts alone say nothing about cost, and the harvest sweep means handles now\narrive without anybody asking for them \u2014 so an Operator watching a queue\ndrain has no way to tell a healthy crawl from a runaway one until Telegram\nsays so. Deployment-wide numbers with no owner: these are a tally, not a\nquota, and reading them charges nobody.",
         "operationId": "data-get_discover_probe_queue",
         "responses": {
           "200": {
@@ -6317,7 +6317,41 @@
             "title": "Enabled",
             "default": false
           },
-          "running": { "type": "boolean", "title": "Running", "default": false }
+          "running": {
+            "type": "boolean",
+            "title": "Running",
+            "default": false
+          },
+          "requestsToday": {
+            "type": "integer",
+            "title": "Requeststoday",
+            "default": 0
+          },
+          "requestsWeek": {
+            "type": "integer",
+            "title": "Requestsweek",
+            "default": 0
+          },
+          "harvestEnabled": {
+            "type": "boolean",
+            "title": "Harvestenabled",
+            "default": false
+          },
+          "harvestRunning": {
+            "type": "boolean",
+            "title": "Harvestrunning",
+            "default": false
+          },
+          "harvestTail": {
+            "type": "integer",
+            "title": "Harvesttail",
+            "default": -1
+          },
+          "harvestCursor": {
+            "type": "integer",
+            "title": "Harvestcursor",
+            "default": -1
+          }
         },
         "type": "object",
         "title": "DiscoverProbeQueueResponse",

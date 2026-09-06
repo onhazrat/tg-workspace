@@ -146,6 +146,23 @@ DEFAULT_PROBE_PRIORITY = 1_000_000
 #: — and the property has to hold by construction for both.
 RECHECK_PRIORITY = -1
 
+#: Priority for a handle the harvest sweep found in a stored Post (ticket 04).
+#:
+#: Behind `DEFAULT_PROBE_PRIORITY` and ahead of `REFRESH_PRIORITY`, which is the
+#: ladder's own argument applied once more: a handle somebody's report named is
+#: worth more than one nobody asked about, and one nobody asked about is still
+#: an answer we have never had, which beats re-fetching an answer we hold.
+#:
+#: **One number for every harvested handle, not a rank**, and that is the
+#: fairness mechanism the ticket asks for rather than a shrug. The sweep walks
+#: the corpus with a single cursor and no idea who follows what, so the handles
+#: it finds arrive in whatever order the Posts did; giving them all one priority
+#: makes `dequeue_handles` fall through to its `handle` tiebreak, and an
+#: alphabetical order cannot prefer one account's corpus over another's. Ranking
+#: them by discovery order would hand the queue to whichever account's Channels
+#: the cursor happened to be walking.
+HARVEST_PRIORITY = 1_500_000
+
 #: Priority for an entry that already has an answer and is only going stale.
 #:
 #: Larger than `DEFAULT_PROBE_PRIORITY`, so a scheduled refresh drains behind
@@ -316,13 +333,24 @@ def queue_counts(session: Session) -> dict[str, int]:
     }
 
 
-def enqueue_handles(session: Session, handles: list[str]) -> int:
+def enqueue_handles(
+    session: Session, handles: list[str], *, priority: int | None = None
+) -> int:
     """Queue `handles` for probing, in the order given, and return how many.
 
     Pass candidates ranked strongest-first: the index in the list becomes the
     row's `priority`, which is the drain order. A handle already queued from an
     earlier report keeps the *better* of the two ranks, so appearing near the top
     of any report is enough to be probed early.
+
+    `priority` overrides that ranking with one number for the whole batch, and
+    the harvest sweep is why it exists (ticket 04). A harvested handle came out
+    of a Post nobody asked a question about, so there is no rank to give it —
+    and taking the index would be worse than arbitrary, since `enumerate` starts
+    at zero and a report's strongest candidate is also zero. Every harvested
+    handle carrying `HARVEST_PRIORITY` is also what keeps one account's corpus
+    from starving another's out of the queue: at one priority the drain order
+    falls through to `handle`, which knows nothing about who follows what.
 
     Handles with a conclusive verdict are skipped entirely — that cache is the
     reason a second report over overlapping channels costs almost nothing.
@@ -332,7 +360,7 @@ def enqueue_handles(session: Session, handles: list[str]) -> int:
         handle = normalize_handle(raw)
         if not handle or handle in ranked:
             continue
-        ranked[handle] = rank
+        ranked[handle] = rank if priority is None else priority
     if not ranked:
         return 0
 
@@ -479,6 +507,29 @@ def handles_needing_probe(
         if row.retry_after is None or row.retry_after <= moment:
             out.append(handle)
     return out
+
+
+def known_handles(session: Session, handles: set[str]) -> set[str]:
+    """Which of `handles` the Directory already holds a row for (ticket 04).
+
+    Any row, whatever its verdict — the harvest sweep wants "is this handle
+    already on the map", not "does it have an answer". A pending row is already
+    queued and a conclusive one is already answered, so in both cases harvesting
+    it again would spend the sweep's batch on work that is not new.
+
+    Deliberately not `probe_map`, which builds a camelCase projection of every
+    row it touches. The caller wants a set membership test over a few hundred
+    handles per tick and would throw the projection away.
+    """
+    if not handles:
+        return set()
+    statement = unscoped_select(
+        select(col(DirectoryEntry.handle)).where(
+            col(DirectoryEntry.handle).in_(handles)
+        ),
+        reason=PROBE_SCOPE_REASON,
+    )
+    return {str(row) for row in session.exec(statement).all()}
 
 
 def _get_or_create(session: Session, handle: str) -> DirectoryEntry:

@@ -117,12 +117,31 @@ def test_the_sweep_no_longer_fetches_anything_itself() -> None:
 def test_a_probe_is_charged_to_nobody() -> None:
     """Ticket 23 left probes uncharged because `DirectoryEntry` is
     corpus-scoped: billing one account for deployment-wide work is exactly what
-    the three Budgets exist to prevent. Putting them on a lane must not have
-    quietly opened a meter around them."""
+    the three Budgets exist to prevent.
+
+    **Ticket 04 opened a meter here and this guard got narrower rather than
+    weaker.** The claim was never "no meter"; it was "no account's ledger". A
+    meter is a `contextvars` tally with no owner in it, and the harvest sweep
+    made probe traffic something that runs unprompted — so counting it became
+    the difference between hearing about a runaway crawl from a dashboard and
+    hearing about it from Telegram's response codes.
+
+    What must stay absent is every route to `tg_quota_usage`: the sync charge,
+    the ledger write, and the owner resolution that would have to happen first.
+    The meter's total goes to the deployment tally instead, and that is asserted
+    positively so the guard cannot pass on a probe that meters and then drops
+    the number on the floor.
+    """
     source = inspect.getsource(sync_queue._process_probe_message)
 
-    assert "metered" not in source and "charge_sync_job" not in source, (
-        "a probe now charges somebody's ledger for work nobody asked for"
+    for forbidden in ("charge_sync_job", "charge_requests(", "resolve_charge_owner"):
+        assert forbidden not in source, (
+            f"a probe reaches `{forbidden}` — it now charges somebody's ledger "
+            "for work nobody asked for"
+        )
+    assert "charge_probe_requests" in source, (
+        "the probe lane stopped counting what it spends; a crawler nothing "
+        "counts is one you hear about from Telegram"
     )
 
 

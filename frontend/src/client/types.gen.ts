@@ -1504,6 +1504,30 @@ export type DiscoverProbeQueueResponse = {
      * Running
      */
     running?: boolean;
+    /**
+     * Requeststoday
+     */
+    requestsToday?: number;
+    /**
+     * Requestsweek
+     */
+    requestsWeek?: number;
+    /**
+     * Harvestenabled
+     */
+    harvestEnabled?: boolean;
+    /**
+     * Harvestrunning
+     */
+    harvestRunning?: boolean;
+    /**
+     * Harvesttail
+     */
+    harvestTail?: number;
+    /**
+     * Harvestcursor
+     */
+    harvestCursor?: number;
 };
 
 /**

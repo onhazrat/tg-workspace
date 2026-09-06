@@ -247,10 +247,15 @@ def test_the_migrations_frozen_list_is_the_derived_one() -> None:
     # by two tickets, which is precisely the case the frozen list exists for: a
     # table created after a migration ran cannot have had a column dropped by
     # it, so it belongs here rather than in `OWNER_COLUMNS`.
+    # `tg_directory_probe_usage` (ticket 04) is the same case one ticket later,
+    # and it is the one worth reading twice: it looks exactly like
+    # `tg_quota_usage`, which *is* owned. It has no owner because the probe lane
+    # spends on nobody's behalf, so there is no stamp for a revision to drop.
     never_had_one = derived - frozen
     assert never_had_one <= {
         "tg_channel_directory",
         "tg_channel_directory_samples",
+        "tg_directory_probe_usage",
         "tg_sync_meta",
     }, (
         f"{sorted(never_had_one)} are owner-free in `SCOPES` but the ticket 22 "

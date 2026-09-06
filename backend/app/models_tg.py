@@ -1260,3 +1260,49 @@ class QuotaLimit(SQLModel, table=True):
 
     created_at: datetime = Field(default_factory=utc_now)
     updated_at: datetime = Field(default_factory=utc_now)
+
+
+class DirectoryProbeUsage(SQLModel, table=True):
+    """What the probe lane spent on one UTC day, for the whole deployment (ticket 04).
+
+    The harvest sweep feeds handles into the Directory queue on its own, without
+    anybody generating a Discovery report, so probe traffic stopped being
+    something an Operator triggers and started being something that just runs.
+    An uncounted crawler means learning about a problem from Telegram's response
+    codes rather than from a dashboard.
+
+    **One row per day and no owner column, which is the whole point.** A probe
+    answers a question about the corpus: `DirectoryEntry` is `Scope.CORPUS`, so
+    there is no account whose Request this is. Ticket 08 left probes uncharged
+    and ticket 23 closed that as deliberate; this table counts the same work
+    without reopening it, because a deployment-level tally is not a Budget. A
+    fourth Budget would be the mistake here — the three derive totally from
+    `SyncJobState.sync_mode`, so there is no mode to give a fourth, and charging
+    an account for deployment-wide work is exactly what splitting the three
+    exists to prevent.
+
+    `day` is a date rather than a timestamp for the reason `QuotaUsage.day` is:
+    the boundary is UTC midnight, and a timestamp moves that decision into every
+    reader.
+
+    **Never pruned**, like the quota ledger it is modelled on. 365 rows a year,
+    and it is the only record an Operator has of what the crawl cost;
+    `run_retention_cleanup` and `stats.clear_table` both work from explicit
+    inventories this table is deliberately absent from.
+    """
+
+    __tablename__ = "tg_directory_probe_usage"
+
+    #: UTC calendar day, and the whole primary key. There is nothing to key it
+    #: by beside the day — that is the deployment-level claim stated as a
+    #: schema constraint rather than as a comment.
+    day: date = Field(primary_key=True)
+
+    #: HTTP Requests to the Telegram web view made while draining the probe
+    #: lane. The same unit as `QuotaUsage.requests` and counted by the same
+    #: `core/request_meter.py`, so the two numbers are comparable — which is the
+    #: point of reusing the meter rather than incrementing a counter by hand.
+    requests: int = 0
+
+    created_at: datetime = Field(default_factory=utc_now)
+    updated_at: datetime = Field(default_factory=utc_now)
