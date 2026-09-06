@@ -38,15 +38,42 @@ actually parsed. Everything else — timeouts, HTTP errors, a proxy handing back
 a block page — records `unknown` and bumps `attempts`.
 
 This is the single most important rule here. Because a conclusive answer is
-cached indefinitely, writing a verdict from a failed fetch would permanently
-hide a real channel from every future report, with nothing on screen to hint
-that anything went wrong. An `unknown` costs a retry; a wrong `unavailable`
-costs a channel, silently.
+cached until its refresh window elapses — and for a dead verdict, for ever —
+writing a verdict from a failed fetch would hide a real channel from every
+report in between, with nothing on screen to hint that anything went wrong. An
+`unknown` costs a retry; a wrong `unavailable` costs a channel, silently.
+
+The rule now runs in both directions. A failed fetch of a handle we **already**
+have an answer for keeps that answer, because refreshing re-fetches every live
+entry on a window and one proxy timeout would otherwise blank a good entry
+everywhere it is joined.
+
+## An answer expires; the map does not
+
+Ticket 03 made a conclusive answer stop being permanent. A **live** entry comes
+due again after `directoryRefreshDays` — deployment policy, a week by default —
+and that window is the Operator's primary rate control on outbound probe
+traffic: widening it is the response to Telegram pushing back, short of turning
+probing off. A **dead** verdict never comes due at all (`is_refreshable`), so
+bots, groups, personal accounts and private or deleted channels stop costing
+requests the moment they are answered once, however long the deployment runs.
+
+`refresh_due_at` is a second column and deliberately not `retry_after`. That one
+means "this fetch failed, back off"; this one means "this answer is old". Same
+type, opposite cause, and the one time they were conflated it produced the
+starvation `dequeue_handles` still documents.
+
+The refresh has two other writers besides the window. `record_sync_metadata` is
+fed by the sync orchestrator from the page it already fetched, so a followed
+Channel stays current at zero extra requests; and `refresh_entries` marks an
+entry due on demand — a **refresh**, which keeps the answer it is replacing,
+as against a **recheck**, which discards it.
 
 ## The table is also the queue
 
 `enqueue_handles` / `dequeue_handles` treat a `status="unknown"` row as a pending
-work item. The cache and the queue are the same row on purpose: two tables could
+work item — and, since ticket 03, a row whose `refresh_due_at` has passed as a
+second kind of one. The cache and the queue are the same row on purpose: two tables could
 disagree about whether a handle still needs fetching, and the disagreement would
 show up as either a handle probed twice or a handle probed never.
 
@@ -67,6 +94,7 @@ from typing import Any
 from sqlalchemy import and_, func, or_
 from sqlmodel import Session, col, select
 
+from app.jobs.settings import load_directory_settings
 from app.models_tg import DirectoryEntry, utc_now
 from app.services.channel_directory_samples import replace_samples
 from app.services.tenancy import unscoped_select
@@ -107,9 +135,37 @@ RETRY_BACKOFF_MAX_MINUTES = 24 * 60
 #: enqueued with a real candidate rank always sorts ahead of one that was not.
 DEFAULT_PROBE_PRIORITY = 1_000_000
 
-#: A manual recheck jumps the queue. The operator is looking at that row, and a
-#: recheck that waited behind a freshly generated report would take minutes.
-RECHECK_PRIORITY = 0
+#: A manual recheck or refresh jumps the queue. The operator is looking at that
+#: row, and one that waited behind a freshly generated report would take minutes.
+#:
+#: **Negative, so it beats a rank rather than tying with one.** `enqueue_handles`
+#: numbers a report's candidates from zero, so at `0` this sorted level with the
+#: strongest candidate of the newest report and the tie fell to whichever handle
+#: was alphabetically first. `test_recheck_jumps_the_queue` passed on exactly
+#: that accident. Ticket 03 gave the constant a second caller — `refresh_entries`
+#: — and the property has to hold by construction for both.
+RECHECK_PRIORITY = -1
+
+#: Priority for an entry that already has an answer and is only going stale.
+#:
+#: Larger than `DEFAULT_PROBE_PRIORITY`, so a scheduled refresh drains behind
+#: every handle nobody has ever looked at: an answer we hold is worth less than
+#: one we have never had. Set on the conclusive branch of `record_probe_result`
+#: rather than left alone, because a row keeps the rank of whatever first
+#: enqueued it — and a handle rechecked once carries `RECHECK_PRIORITY`, which
+#: would put a week-old entry at the front of the queue for ever after.
+REFRESH_PRIORITY = 2_000_000
+
+#: Verdicts that never come due again (ticket 03).
+#:
+#: `status == "unavailable"` is private or deleted; these three are what the
+#: page turned out to be. Both are facts a timer cannot change, and re-probing
+#: them is the "bots and deleted channels cost requests forever" the refresh
+#: window exists to bound. `channel` and `unknown` are the live kinds — an
+#: unclassified page is refreshed on purpose, because the cost of being wrong is
+#: one fetch a week and the cost of the other mistake is a Channel frozen at
+#: whatever it looked like the first time.
+DEAD_KINDS = frozenset({"bot", "group", "user"})
 
 DEFAULT_PROBE_PAGE_SIZE = 200
 MAX_PROBE_PAGE_SIZE = 1000
@@ -132,6 +188,32 @@ def _retry_deadline(attempts: int, *, now: datetime) -> datetime:
         RETRY_BACKOFF_MAX_MINUTES,
     )
     return now + timedelta(minutes=minutes)
+
+
+def resolve_refresh_window(session: Session) -> timedelta | None:
+    """How long a live entry's answer stays current, or `None` for never.
+
+    Read from the settings row rather than `config.py` directly, because the
+    window is the Operator's lever: widening it is the documented response to
+    Telegram pushing back, and a lever that needs a redeploy is not one. Zero
+    disables refreshing entirely, which is the same convention every retention
+    window in this deployment already uses.
+    """
+    days = load_directory_settings(session).get("directoryRefreshDays")
+    if not isinstance(days, int) or days <= 0:
+        return None
+    return timedelta(days=days)
+
+
+def is_refreshable(status: str, kind: str) -> bool:
+    """Whether a verdict is one that can go stale.
+
+    A live channel's subscriber count, its counters and what it publishes all
+    move; whether a bot is a bot does not. Keeping the two apart is what makes
+    the window bound the crawl instead of merely pacing it — the dead half of
+    the Directory grows without ever costing another request.
+    """
+    return status == "ok" and kind not in DEAD_KINDS
 
 
 def probe_to_camel(row: DirectoryEntry) -> dict[str, Any]:
@@ -314,16 +396,48 @@ def dequeue_handles(
     statement = (
         select(DirectoryEntry)
         .where(
-            col(DirectoryEntry.status) == "unknown",
             or_(
-                col(DirectoryEntry.retry_after).is_(None),
-                col(DirectoryEntry.retry_after) <= moment,
+                # Pending: no answer yet, and any backoff from the last failure
+                # has elapsed.
+                and_(
+                    col(DirectoryEntry.status) == "unknown",
+                    or_(
+                        col(DirectoryEntry.retry_after).is_(None),
+                        col(DirectoryEntry.retry_after) <= moment,
+                    ),
+                ),
+                # Stale: an answer we hold that has gone old (ticket 03). A
+                # separate leg rather than a widened one, and it consults
+                # `retry_after` not at all — a backoff left over from failures
+                # *before* the handle resolved would otherwise hold its refresh
+                # for as long as a day, which is the exact conflation the two
+                # columns exist to prevent.
+                col(DirectoryEntry.refresh_due_at) <= moment,
             ),
         )
         .order_by(col(DirectoryEntry.priority), col(DirectoryEntry.handle))
         .limit(limit)
     )
     return [row.handle for row in session.exec(statement).all()]
+
+
+def refresh_due_count(session: Session, *, now: datetime | None = None) -> int:
+    """How many entries have gone stale — the refresh half of the backlog.
+
+    Kept out of `queue_counts` deliberately. Those four counts drive a progress
+    display for one report's candidates, where a refresh is not pending work:
+    the row has an answer, the report renders it, and folding refreshes in would
+    make a bar that never reaches the end. This is the deployment-level number
+    instead, and the sweep reports it beside what it enqueued.
+    """
+    moment = now or utc_now()
+    statement = unscoped_select(
+        select(func.count())
+        .select_from(DirectoryEntry)
+        .where(col(DirectoryEntry.refresh_due_at) <= moment),
+        reason=PROBE_SCOPE_REASON,
+    )
+    return int(session.exec(statement).one())
 
 
 def handles_needing_probe(
@@ -375,6 +489,161 @@ def _get_or_create(session: Session, handle: str) -> DirectoryEntry:
     return row
 
 
+def _apply_page_metadata(row: DirectoryEntry, payload: dict[str, Any]) -> None:
+    """Copy what a parsed Telegram page said onto the entry.
+
+    Shared by the two writers that hold a page — `record_probe_result` and
+    `record_sync_metadata` — because the fields are the same fields and a second
+    copy of this list is how one of them comes to miss a column. The *verdict*
+    is not here: each caller decides what its own fetch is evidence of, and
+    those two answers are deliberately different.
+
+    `or None` on the counters collapses a missing counter and an empty string
+    together, which is right: Telegram omits a counter it has none of, and `""`
+    would make "no photos" and "we did not look" the same value.
+
+    **The chat id is only ever written, never cleared**, which is the one place
+    this does not simply overwrite what it knows. It is decoded from a message
+    widget, so a page with no visible messages yields none — and an
+    `unavailable` verdict is synthesized with no page at all
+    (`jobs/discover_probe.py`). Overwriting would drop the id exactly when the
+    channel went private or was renamed, which is the one case it is for: it is
+    the only identity that survives a handle rename. A recheck still clears it,
+    because `requeue_probes` discards the whole verdict deliberately.
+
+    The four counters *are* overwritten, and that asymmetry is the point. A
+    counter is a snapshot of a page and a stale one is a lie; the chat id is
+    immutable, so a remembered one stays true however the page changed.
+    """
+    kind = str(payload.get("kind") or "unknown")
+    row.kind = kind if kind in PROBE_KINDS else "unknown"
+    row.display_name = payload.get("displayName") or None
+    row.bio = payload.get("bio") or None
+    row.subscribers = payload.get("subscribers") or None
+    row.photos = payload.get("photos") or None
+    row.videos = payload.get("videos") or None
+    row.files = payload.get("files") or None
+    row.links = payload.get("links") or None
+    chat_id = payload.get("telegramChatId")
+    if isinstance(chat_id, int):
+        row.telegram_chat_id = chat_id
+    row.photo_url = payload.get("photoUrl") or None
+    row.latest_id = int(payload.get("latestId") or 0)
+
+
+def _schedule_refresh(session: Session, row: DirectoryEntry, *, now: datetime) -> None:
+    """Set when this answer goes stale, and where it will sit in the queue.
+
+    Called only where a conclusive verdict has just been written. A dead one
+    gets `None` — never due — and a live one gets the window; both take
+    `REFRESH_PRIORITY`, because the rank a row is carrying belongs to whatever
+    report or recheck first queued it and says nothing about how urgent a
+    *refresh* is. Leaving it alone is what would put a rechecked handle at the
+    front of the queue every week for ever.
+    """
+    row.priority = REFRESH_PRIORITY
+    window = resolve_refresh_window(session)
+    if window is None or not is_refreshable(row.status, row.kind):
+        row.refresh_due_at = None
+        return
+    row.refresh_due_at = now + window
+
+
+def record_sync_metadata(
+    session: Session,
+    handle: str,
+    meta: dict[str, Any],
+    *,
+    now: datetime | None = None,
+) -> None:
+    """Update a followed Channel's entry from the page sync already fetched.
+
+    **No request is made here** (ticket 03, user story 26). Sync walks
+    `t.me/s/<handle>` on every run and `_parse_channel_meta` has already reduced
+    that page to exactly the fields the Directory wants, so the map stays
+    current on the Channels somebody actually reads for nothing — which is the
+    half of the Directory most likely to be browsed and the half a crawler paced
+    by a weekly window would keep stalest.
+
+    Pass the page's `channelMeta` dict. Three rules, each of them a way this
+    could go wrong:
+
+    * **It never writes an `unavailable` verdict.** `isUnavailableOnWebView` is
+      `latestId == 0 and a page action`, and a pagination window walked past a
+      Channel's first post satisfies both on a perfectly healthy handle. Sync
+      reaching this function *is* the evidence the page was readable, so the one
+      verdict this path may write is `ok`; a Channel that has genuinely gone
+      private fails the fetch and never arrives here.
+    * **It never touches the samples**, and structurally rather than by
+      convention — nothing in this function can reach `replace_samples`. Sync
+      does not parse the preview page's Posts, so it has nothing to say about
+      them, and an empty list here would blank every followed Channel's snapshot
+      on every sync. This is the moment ticket 02's absent-key rule becomes
+      load-bearing.
+    * **It does not commit.** `_apply_scrape_page` writes telemetry, gaps, the
+      page's Posts and this in one transaction; committing here would land a
+      Directory update from a page whose Posts then failed to persist, and would
+      commit the caller's half-written page along with it.
+    """
+    if not meta.get("isTelegramPage"):
+        return
+    key = normalize_handle(handle)
+    if not key:
+        return
+    moment = now or utc_now()
+    row = _get_or_create(session, key)
+    row.status = "ok"
+    _apply_page_metadata(row, meta)
+    row.attempted_at = moment
+    row.checked_at = moment
+    row.attempts = 0
+    row.last_error = None
+    row.retry_after = None
+    _schedule_refresh(session, row, now=moment)
+    session.add(row)
+
+
+def refresh_entries(
+    session: Session, handles: list[str], *, priority: int = RECHECK_PRIORITY
+) -> list[str]:
+    """Mark these entries due now, keeping the answer they already hold.
+
+    The on-demand half of ticket 03, and deliberately not `requeue_probes`. A
+    **recheck** says the verdict is *wrong* and discards it, which is right for
+    a handle misjudged during an outage. A **refresh** says it is *old*: the
+    Operator has the entry open and wants a current answer, so blanking the
+    metadata, the chat id and the samples they are reading — for however long
+    the queue takes to reach the handle — would take away the thing they opened.
+
+    Jumps the queue at `RECHECK_PRIORITY` for the same reason a recheck does:
+    somebody is looking at that row now.
+
+    A dead verdict is refreshed too when it is asked for explicitly. Never
+    *automatically* due is not never due — a channel that went private and came
+    back is exactly the row an Operator presses this on.
+
+    Returns every handle now due, including ones nobody has probed: asking for a
+    handle with no answer yet is reasonable, and it is already pending — such a
+    row is moved to the front and left alone otherwise, because a row with no
+    answer cannot have a stale one and stamping it would make it count against
+    `refresh_due_count`, which is meant to say how much of the *map* has aged.
+    """
+    now = utc_now()
+    refreshed: list[str] = []
+    for raw in handles:
+        handle = normalize_handle(raw)
+        if not handle or handle in refreshed:
+            continue
+        row = _get_or_create(session, handle)
+        if row.status in CONCLUSIVE_STATUSES:
+            row.refresh_due_at = now
+        row.priority = priority
+        session.add(row)
+        refreshed.append(handle)
+    session.commit()
+    return refreshed
+
+
 def record_probe_result(
     session: Session,
     handle: str,
@@ -388,6 +657,15 @@ def record_probe_result(
     `error` when the fetch raised. A payload that did not come from a Telegram
     page (`isTelegramPage` false) is treated as a failure regardless of what
     else it contains — see the module docstring.
+
+    **A failed fetch of a handle we already have an answer for keeps that
+    answer** (ticket 03). Before refreshing existed this branch could only be
+    reached by a handle with no verdict, so demoting the row to `unknown` cost
+    nothing. Now every live entry is re-fetched on a window, and one timeout
+    behind one proxy would blank a perfectly good Directory entry in every
+    report that joins it — the same "a wrong answer is permanent" failure the
+    verdict rule exists to prevent, arriving from the other direction. The
+    failure is still recorded; only the verdict survives it.
     """
     key = normalize_handle(handle)
     row = _get_or_create(session, key)
@@ -396,49 +674,33 @@ def record_probe_result(
 
     inconclusive = info is None or not info.get("isTelegramPage")
     if inconclusive:
-        row.status = "unknown"
+        held_a_verdict = row.status in CONCLUSIVE_STATUSES
+        if not held_a_verdict:
+            row.status = "unknown"
         row.attempts += 1
         row.last_error = error or "no telegram page in response"
         # Stays queued, but not due again until the backoff elapses.
         row.retry_after = _retry_deadline(row.attempts, now=now)
+        if held_a_verdict:
+            # The row keeps its verdict, so the *pending* leg of the dequeue
+            # will never hand it back — the refresh leg is the only way it
+            # returns, and it has to carry the backoff or a handle failing
+            # behind a dead proxy would be re-fetched on every single tick.
+            #
+            # This is the two clocks agreeing about one row, not merging into
+            # one: `retry_after` still answers "how long since this fetch
+            # failed" and is what computes the ladder, while `refresh_due_at`
+            # still answers "when is this handle wanted again". They are equal
+            # here because a failed refresh wants exactly the backoff, and they
+            # part company again the moment the fetch succeeds.
+            row.refresh_due_at = row.retry_after
         session.commit()
         session.refresh(row)
         return probe_to_camel(row)
 
     payload: dict[str, Any] = info or {}
     row.status = "unavailable" if payload.get("isUnavailableOnWebView") else "ok"
-    kind = str(payload.get("kind") or "unknown")
-    row.kind = kind if kind in PROBE_KINDS else "unknown"
-    row.display_name = payload.get("displayName") or None
-    row.bio = payload.get("bio") or None
-    row.subscribers = payload.get("subscribers") or None
-    row.photos = payload.get("photos") or None
-    row.videos = payload.get("videos") or None
-    row.files = payload.get("files") or None
-    row.links = payload.get("links") or None
-    # `or None` on the four above collapses a missing counter and an empty
-    # string together, which is right: Telegram omits a counter it has none of,
-    # and `""` would make "no photos" and "we did not look" the same value.
-    # The chat id is an int, so it is checked by type instead — `or None` would
-    # turn a legitimate 0 into a missing one.
-    #
-    # **It is only ever written, never cleared**, which is the one place this
-    # function does not simply overwrite what it knows. The id is decoded from a
-    # message widget, so a page with no visible messages yields none — and an
-    # `unavailable` verdict is synthesized with no page at all
-    # (`jobs/discover_probe.py`). Overwriting would drop the id exactly when the
-    # channel went private or was renamed, which is the one case it is for: it
-    # is the only identity that survives a handle rename. A recheck still clears
-    # it, because `requeue_probes` discards the whole verdict deliberately.
-    #
-    # The four counters above are overwritten, and that asymmetry is the point.
-    # A counter is a snapshot of a page and a stale one is a lie; the chat id is
-    # immutable, so a remembered one stays true however the page changed.
-    chat_id = payload.get("telegramChatId")
-    if isinstance(chat_id, int):
-        row.telegram_chat_id = chat_id
-    row.photo_url = payload.get("photoUrl") or None
-    row.latest_id = int(payload.get("latestId") or 0)
+    _apply_page_metadata(row, payload)
     # **A payload with no `samples` key is not an empty sample set** (ticket 02).
     # It came from a fetch that never parsed the preview page's Posts, which
     # says nothing about them, so the existing snapshot is left alone. An empty
@@ -462,6 +724,7 @@ def record_probe_result(
     row.last_error = None
     row.retry_after = None
     row.checked_at = now
+    _schedule_refresh(session, row, now=now)
     session.commit()
     session.refresh(row)
     return probe_to_camel(row)
@@ -510,6 +773,11 @@ def requeue_probes(
         row.checked_at = None
         row.attempted_at = None
         row.retry_after = None
+        # The due time goes with the verdict it belonged to (ticket 03). A row
+        # with no answer is *pending*, not stale, and leaving a due time on it
+        # would have the refresh leg of the dequeue hand back a handle the
+        # pending leg is already answering for.
+        row.refresh_due_at = None
         row.priority = priority
         session.add(row)
         requeued.append(handle)

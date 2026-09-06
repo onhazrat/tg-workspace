@@ -661,6 +661,18 @@ class DirectoryEntry(SQLModel, table=True):
     #: `None` means "due now".
     retry_after: datetime | None = None
 
+    #: When this entry's answer goes stale and the handle is due again
+    #: (ticket 03). `None` means never: a dead verdict — bot, group, user
+    #: account, private, deleted — is a fact that will not change on a timer,
+    #: and a handle with no answer yet is pending rather than stale.
+    #:
+    #: **Deliberately not `retry_after`.** That column means "this fetch
+    #: failed, back off"; this one means "this answer is old". Same type,
+    #: opposite cause, and the one time they were conflated it produced the
+    #: starvation the dequeue's docstring still documents — a probe waiting
+    #: behind sync work looked exactly like a probe that had failed.
+    refresh_due_at: datetime | None = None
+
     #: When a *conclusive* answer was last recorded. `None` while only failures
     #: have happened, which is what distinguishes "never resolved" from "known".
     checked_at: datetime | None = None

@@ -60,6 +60,7 @@ from app.services.channel_directory import (
     dequeue_handles,
     queue_counts,
     record_probe_result,
+    refresh_due_count,
 )
 from app.services.network_settings import (
     load_network_settings,
@@ -107,6 +108,18 @@ def _remaining() -> int:
     with Session(engine) as session:
         counts = queue_counts(session)
         return counts["queued"] + counts["retrying"]
+
+
+def _refresh_due() -> int:
+    """Entries whose answer has gone stale (ticket 03).
+
+    Reported beside `remaining` rather than folded into it. The two are
+    different backlogs: `remaining` is handles with no answer and drains to
+    zero, while this one refills every window by construction and is the number
+    an Operator watches when deciding whether to widen it.
+    """
+    with Session(engine) as session:
+        return refresh_due_count(session)
 
 
 def _load_network() -> tuple[list[str], tuple[int, dict[str, int]], bool, int]:
@@ -273,4 +286,5 @@ async def run_discover_probe_sweep() -> dict[str, Any]:
         return {
             "enqueued": enqueued,
             "remaining": await run_db(_remaining),
+            "refreshDue": await run_db(_refresh_due),
         }

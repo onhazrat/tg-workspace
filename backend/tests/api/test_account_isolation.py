@@ -209,6 +209,7 @@ EXCUSED: dict[tuple[str, str], tuple[Reason, str]] = {
     ),
     ("GET", f"{DATA}/discover/probe/queue"): (Reason.CORPUS, "see GET probes"),
     ("POST", f"{DATA}/discover/probe/recheck"): (Reason.CORPUS, "see GET probes"),
+    ("POST", f"{DATA}/discover/probe/refresh"): (Reason.CORPUS, "see GET probes"),
     ("GET", f"{DATA}/discover/ignored"): (
         Reason.COVERED_ELSEWHERE,
         "per-account by composite key; test_discover_dismissals_are_per_account.py",
