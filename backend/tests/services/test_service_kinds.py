@@ -58,6 +58,13 @@ INVENTORY: dict[str, str] = {
     "data_vectors.py": AGGREGATE,
     "discover_ignored.py": AGGREGATE,
     "channel_directory.py": AGGREGATE,
+    # Owns `tg_channel_directory_samples` (ticket 02) and is its only writer.
+    # A module of its own rather than more of `channel_directory.py`, for the
+    # reason `quota_limits.py` is separate from `quota.py`: an aggregate owns
+    # one table, and these two have different lifetimes — a Directory entry is
+    # kept indefinitely, its samples expire on their own window. One module
+    # writing both is the place that would quietly collect the map.
+    "channel_directory_samples.py": AGGREGATE,
     "discover_reports.py": AGGREGATE,
     "follows.py": AGGREGATE,
     "logs.py": AGGREGATE,

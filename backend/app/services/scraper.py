@@ -281,11 +281,21 @@ def _parse_channel_meta(soup: BeautifulSoup, channel_name: str) -> dict[str, Any
 
 
 def _enrich_posts_with_timestamps(
-    posts: list[dict[str, Any]], channel_name: str
+    posts: list[dict[str, Any]], channel_name: str, *, cache_media_paths: bool = True
 ) -> list[dict[str, Any]]:
+    """Attach the channel name and a millisecond timestamp to each parsed Post.
+
+    `cache_media_paths` defaults to the sync behaviour: point `thumbApiPath` at
+    our own thumb cache, which sync fills right after. **Directory samples pass
+    it off** (ticket 02). A probe downloads no media at all, so the rewritten
+    path would name a file that never arrives and render as a broken image;
+    leaving Telegram's own URL in place is the honest answer for a snapshot
+    nothing caches.
+    """
     for post in posts:
         post["channelName"] = channel_name
-        finalize_post_media_paths(post, channel_name)
+        if cache_media_paths:
+            finalize_post_media_paths(post, channel_name)
         if post.get("date"):
             try:
                 dt = datetime.fromisoformat(post["date"].replace("Z", "+00:00"))
@@ -383,7 +393,27 @@ async def get_channel_info(
     tor_auto_rotate: bool = False,
     tor_rotation_threshold: int | None = None,
     proxy_concurrency: tuple[int, dict[str, int]] | None = None,
+    *,
+    with_samples: bool = False,
 ) -> dict[str, Any]:
+    """One fetch of `t.me/s/<handle>`, reduced to what we know about the handle.
+
+    `with_samples` additionally parses the preview page's Posts into a
+    `samples` key (ticket 02). **Opt-in, and the Discover probe is the only
+    caller that opts in**: everything else here wants the meta dict and would
+    pay for a parse it discards.
+
+    The key is **absent** rather than empty when the flag is off, and the write
+    path leans on that: a missing key means "this fetch did not look", where an
+    empty list means "there are no recent Posts". A fetch that never parsed
+    them must leave an existing snapshot alone.
+
+    Latest-post-id derivation is untouched by the flag. It is computed inside
+    `_parse_channel_meta` by regex over the widget ids, not from the parsed
+    Posts, and it feeds both `_classify_handle_kind` and the unavailability
+    check — so perturbing it would change verdicts, which is a far more
+    expensive mistake than a missing sample.
+    """
     url = telegram_web_view_channel_url(channel_name)
     html, telemetry = await fetch_with_retry(
         url,
@@ -394,6 +424,13 @@ async def get_channel_info(
     )
     soup = make_soup(html)
     result = _parse_channel_meta(soup, channel_name)
+    if with_samples:
+        posts, _next_url = _parse_posts_from_html(soup, 0, set())
+        # No media is downloaded for a sample and no thumb path is rewritten —
+        # see `_enrich_posts_with_timestamps`.
+        result["samples"] = _enrich_posts_with_timestamps(
+            posts, channel_name, cache_media_paths=False
+        )
     result["telemetry"] = telemetry
     # Same lane as the page fetch above (ADR-012).
     result["photoUrl"] = await resolve_cached_photo_url(

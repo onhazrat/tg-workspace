@@ -145,11 +145,26 @@ async def _probe_one(
             tor_auto_rotate=tor_auto_rotate,
             tor_rotation_threshold=tor_rotation_threshold,
             proxy_concurrency=proxy_concurrency,
+            # The one caller that asks for samples (ticket 02). The page is
+            # already fetched and already parsed into a soup; the Posts on it
+            # are the part every probe used to throw away.
+            with_samples=True,
         )
     except TelegramWebViewUnavailable as exc:
         # Telegram itself said the handle has no readable web view. That is an
         # answer, not a failure, so it is recorded as a verdict.
-        info = {"isTelegramPage": True, "isUnavailableOnWebView": True}
+        #
+        # `samples: []` rather than no key at all, and the difference matters:
+        # this payload is synthesized with no page behind it, but the thing
+        # Telegram just said is precisely that there are no readable messages.
+        # An absent key would mean "we did not look" and leave a stale snapshot
+        # on a handle that has gone private — the entry would go on advertising
+        # Posts nobody can reach.
+        info = {
+            "isTelegramPage": True,
+            "isUnavailableOnWebView": True,
+            "samples": [],
+        }
         error = str(exc)
     except Exception as exc:  # noqa: BLE001
         error = str(exc)

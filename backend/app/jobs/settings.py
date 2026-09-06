@@ -112,6 +112,12 @@ def _default_retention_policy() -> dict[str, Any]:
         "postRetentionDays": settings.RETENTION_POST_DAYS_DEFAULT,
         "payloadRetentionDays": settings.RETENTION_PAYLOAD_DAYS_DEFAULT,
         "sharedLogRetentionDays": settings.RETENTION_SHARED_LOG_DAYS_DEFAULT,
+        # Ticket 02. The Directory's samples, on a window of their own — the
+        # metadata beside them is kept forever, so this is the only part of the
+        # map retention touches at all.
+        "directorySampleRetentionDays": (
+            settings.RETENTION_DIRECTORY_SAMPLE_DAYS_DEFAULT
+        ),
     }
 
 

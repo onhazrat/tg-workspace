@@ -44,6 +44,7 @@ from __future__ import annotations
 
 import time
 import uuid
+from datetime import timedelta
 
 import pytest
 from sqlalchemy.exc import IntegrityError
@@ -63,7 +64,10 @@ from app.models_tg import (
     PublishLog,
     SyncLog,
     SyncLogPayload,
+    utc_now,
 )
+from app.services.channel_directory import probe_map, record_probe_result
+from app.services.channel_directory_samples import replace_samples, samples_for
 from app.services.logs import (
     PERSONAL_LOG_TYPES,
     SHARED_LOG_TYPES,
@@ -87,6 +91,7 @@ def _policy(session: Session, **fields: int) -> None:
             "postRetentionDays": 0,
             "sharedLogRetentionDays": 0,
             "payloadRetentionDays": 0,
+            "directorySampleRetentionDays": 0,
             **fields,
         },
     )
@@ -602,6 +607,52 @@ def test_one_count_cap_does_not_prune_another_accounts_newest() -> None:
 # --------------------------------------------------------------------------
 # The two sweeps that are not windows at all
 # --------------------------------------------------------------------------
+
+
+def test_directory_samples_run_on_their_own_deployment_window() -> None:
+    """A fifth window, and the Directory's metadata is on none of them (ticket 02).
+
+    Deployment policy rather than anybody's: a sample is a copy of a public
+    preview page, so no account owns one. Driven through the job rather than
+    through `expire_samples_before`, because the thing worth asserting is that
+    the job reads *this* setting — a sweep wired to `postRetentionDays`, or not
+    wired in at all, passes every test that calls the aggregate directly.
+    """
+    with Session(engine) as session:
+        me = _account(session)
+        # Every other window off, so nothing else can account for the deletion.
+        _policy(session, directorySampleRetentionDays=30)
+        _prefs(session, me)
+
+        record_probe_result(
+            session,
+            "windowed_handle",
+            {
+                "isTelegramPage": True,
+                "isUnavailableOnWebView": False,
+                "kind": "channel",
+                "subscribers": "1.2K",
+                "samples": [{"id": 1, "text": "stale"}, {"id": 2, "text": "fresh"}],
+            },
+        )
+        replace_samples(
+            session,
+            "windowed_handle",
+            [{"id": 1, "text": "stale"}],
+            captured_at=utc_now() - timedelta(days=40),
+        )
+        session.commit()
+
+        result = run_retention_cleanup(session)
+
+        assert result["deletedDirectorySamples"] == 1
+        assert samples_for(session, "windowed_handle") == []
+        # The entry itself is on no retention inventory at all: collecting it
+        # would throw the map away, which is the point of the Directory.
+        assert (
+            probe_map(session, {"windowed_handle"})["windowed_handle"]["subscribers"]
+            == "1.2K"
+        )
 
 
 def test_asset_pruning_stays_deployment_wide() -> None:

@@ -100,11 +100,16 @@ RETENTION_PREFS_KEY = "retention_prefs"
 #: `payloadRetentionDays` is the sync log bodies, and `sharedLogRetentionDays`
 #: the log rows nobody owns — see `RETENTION_PREF_FIELDS` for where that line
 #: falls.
+#: `directorySampleRetentionDays` is deployment policy for the reason
+#: `postRetentionDays` is, one step further out: the Channel Directory is
+#: corpus-wide knowledge about what exists on Telegram, so no account owns a
+#: sample and there is nobody whose window it could be.
 RETENTION_POLICY_FIELDS = frozenset(
     {
         "postRetentionDays",
         "payloadRetentionDays",
         "sharedLogRetentionDays",
+        "directorySampleRetentionDays",
     }
 )
 

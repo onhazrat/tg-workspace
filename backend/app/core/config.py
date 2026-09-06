@@ -311,6 +311,13 @@ class Settings(BaseSettings):
     # apply; 0 disables either one, like the post/log windows above.
     RETENTION_REPORT_DAYS_DEFAULT: int = 90
     RETENTION_REPORT_MAX_DEFAULT: int = 50
+    # The Directory's sample Posts (ticket 02). Its own window, separate from
+    # the corpus and log ones, because the Directory is neither: its metadata is
+    # kept indefinitely — collecting it would throw the map away — while the
+    # samples are the half that grows per handle and has to be reclaimed.
+    # Longer than a log and shorter than the corpus: a snapshot older than a
+    # month is not evidence of what a Channel publishes now. 0 = keep forever.
+    RETENTION_DIRECTORY_SAMPLE_DAYS_DEFAULT: int = 30
 
     # Discover handle probes
     #

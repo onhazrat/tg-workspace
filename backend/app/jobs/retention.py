@@ -29,6 +29,12 @@ other half, and it splits by what the rows *are*:
   across the whole table is how the newest report of every *other* account got
   pruned by somebody generating a burst of their own.
 
+**The Channel Directory is the one thing here that is not swept by age**
+(ticket 02). Its metadata is cumulative on purpose — collecting an entry throws
+away the fact that the Channel exists, which is the whole map. Only its sample
+Posts expire, on `directorySampleRetentionDays`, a window of its own so that
+tuning the corpus or the log ones does not silently move it.
+
 Channel collection and the asset sweeps stay deployment-wide and are not
 windows at all: a Channel is collected when nobody follows it, and an orphaned
 avatar is garbage by definition rather than by age.
@@ -38,6 +44,7 @@ from __future__ import annotations
 
 import logging
 import uuid
+from datetime import timedelta
 from typing import Any, cast
 
 from sqlalchemy import delete as sa_delete
@@ -59,6 +66,7 @@ from app.models_tg import (
     PostTranslation,
     utc_now,
 )
+from app.services.channel_directory_samples import expire_samples_before
 from app.services.channel_photos import (
     delete_cached_photo,
     photo_stem,
@@ -326,6 +334,7 @@ def run_retention_cleanup(session: Session) -> dict[str, int]:
     post_days = int(policy.get("postRetentionDays") or 0)
     shared_log_days = int(policy.get("sharedLogRetentionDays") or 0)
     payload_days = int(policy.get("payloadRetentionDays") or 0)
+    sample_days = int(policy.get("directorySampleRetentionDays") or 0)
     prefs_by_user = load_retention_prefs_by_user(session)
 
     deleted_posts = 0
@@ -450,6 +459,26 @@ def run_retention_cleanup(session: Session) -> dict[str, int]:
     if deleted_reports:
         touch_sync(session, "discover_reports")
 
+    # The Directory's samples, and nothing else about the Directory (ticket 02).
+    # Deployment policy rather than anybody's window: a sample is a copy of a
+    # public preview page, so no account owns one. Measured on `captured_at`,
+    # so an entry keeps the snapshot we took of it rather than losing it because
+    # the Channel itself went quiet years ago.
+    #
+    # `tg_channel_directory` is deliberately absent from this job. The map is
+    # cumulative, and the expensive half is the only half that grows per handle.
+    #
+    # No `touch_sync` either, unlike every sweep above. Nothing reads samples
+    # yet — the browsing surface over the Directory is a separate feature — so
+    # there is no etag family to invalidate. The call belongs with the reader
+    # that eventually needs it, not here ahead of it.
+    deleted_samples = 0
+    if sample_days > 0:
+        deleted_samples = expire_samples_before(
+            session, utc_now() - timedelta(days=sample_days)
+        )
+        session.commit()
+
     # Sync jobs are the one table here with no operator-facing window: nothing
     # lists them, so the horizon is a deployment constant. See
     # `prune_finished_jobs` — terminal rows only, so a long sync is never
@@ -482,9 +511,10 @@ def run_retention_cleanup(session: Session) -> dict[str, int]:
 
     logger.info(
         "Retention cleanup: deleted %s posts, %s log rows, %s sync payloads, "
-        "%s reports, %s sync jobs, %s unfollowed channels, %s orphaned avatars "
-        "(postDays=%s, sharedLogDays=%s, payloadDays=%s, syncJobDays=%s, "
-        "accounts=%s)",
+        "%s reports, %s sync jobs, %s unfollowed channels, %s orphaned avatars, "
+        "%s directory samples "
+        "(postDays=%s, sharedLogDays=%s, payloadDays=%s, sampleDays=%s, "
+        "syncJobDays=%s, accounts=%s)",
         deleted_posts,
         deleted_logs,
         deleted_payloads,
@@ -492,9 +522,11 @@ def run_retention_cleanup(session: Session) -> dict[str, int]:
         deleted_sync_jobs,
         deleted_channels,
         deleted_photos,
+        deleted_samples,
         post_days,
         shared_log_days,
         payload_days,
+        sample_days,
         app_settings.SYNC_JOB_RETENTION_DAYS,
         len(prefs_by_user),
     )
@@ -506,4 +538,5 @@ def run_retention_cleanup(session: Session) -> dict[str, int]:
         "deletedSyncJobs": deleted_sync_jobs,
         "deletedChannels": deleted_channels,
         "deletedPhotos": deleted_photos,
+        "deletedDirectorySamples": deleted_samples,
     }

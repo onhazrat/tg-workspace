@@ -72,6 +72,10 @@ TG_TABLES: tuple[str, ...] = (
     "tg_tag_runs",
     "tg_discover_reports",
     "tg_discover_ignored",
+    # Ticket 02's samples before the entry they hang off, so the order reads
+    # child-then-parent like the rest of this list even though the TRUNCATE
+    # cascades anyway.
+    "tg_channel_directory_samples",
     "tg_channel_directory",
     "tg_sync_jobs",
     "tg_follow_jobs",

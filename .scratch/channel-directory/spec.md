@@ -140,9 +140,17 @@ stop being reported as recent.
 parsed them, and must leave an existing snapshot untouched. This distinction becomes load-bearing
 once sync feeds the Directory, and needs a test of its own.
 
-An inconclusive fetch touches nothing, matching the existing verdict rule. An `unavailable`
-verdict clears the samples, which falls out of the replace naturally. A recheck resets the verdict
-fields and leaves samples alone; the next conclusive probe replaces them.
+An inconclusive fetch touches nothing, matching the existing verdict rule. A recheck resets the
+verdict fields and leaves samples alone; the next conclusive probe replaces them.
+
+An `unavailable` verdict clears the samples, and **this does not fall out of the absent-key rule —
+it contradicts it.** An earlier draft of this spec claimed otherwise and was wrong. The probe job
+synthesizes that verdict for `TelegramWebViewUnavailable` with no page in hand, so the payload has
+no samples key, and "no key means the fetch never looked" would leave a now-private handle
+advertising the Posts from its last public probe. The synthesized payload therefore carries an
+explicit empty list: what Telegram just said *is* that there are no readable messages, which is a
+fact about the handle rather than a gap in what we fetched. The two rules only look alike; one is
+about our ignorance and the other is about Telegram's answer.
 
 ### Refresh is tiered
 
