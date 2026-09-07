@@ -93,21 +93,30 @@ jobs:
             echo "DOCKER_IMAGE_BACKEND=${DOCKER_IMAGE_BACKEND}"
             echo "DOCKER_IMAGE_FRONTEND=${DOCKER_IMAGE_FRONTEND}"
             echo "VITE_API_KEY=${API_KEY}"
-            # The DIRECTORY_HARVEST_SCAN_LIMIT=20000 override that sat here
-            # is deliberately withheld until somebody watches the disk.
+            # Staging-only override of the shipped default (500). This
+            # deployment has a 4.7M-post corpus, where the default implies a
+            # ~33-day first pass. It is the sweep's only rate dial since ticket
+            # 05: how many new handles a tick may add is derived from
+            # DIRECTORY_HARVEST_BACKLOG_CEILING, which stays at its default
+            # because it is what stops the queue outrunning the probe lane and
+            # starving the Directory refresh.
             #
-            # Ticket 05 marks each Post it walks. `harvested` sits in the
-            # partial index's predicate, so that update can never be HOT: it
-            # writes a new heap tuple and a new entry in every index on the
-            # table. Measured on this deployment on 2026-09-07, `tg_posts` is a
-            # 4.9 GB heap inside a 6.6 GB table, on a root filesystem with
-            # 5.5 GB free. At 20000/tick the whole 4.7M-row corpus is marked
-            # within a day, and the dead tuples autovacuum leaves behind are
-            # reusable but never returned to the OS.
+            # The number this has to clear is disk, not throughput. Ticket 05
+            # marks each Post it walks, and `harvested` sits in the partial
+            # index's predicate, so that update can never be HOT: it writes a
+            # new heap tuple and a new entry in every index on the table.
+            # Measured here on 2026-09-07 — 8.1 GB free; `tg_posts` a 4.9 GB
+            # heap with 988 MB of indexes; autovacuum on, scale factor 0.2 over
+            # 4.72M live rows, so it fires every ~944k dead tuples. At
+            # 20000/tick that is roughly every four hours, against a vacuum
+            # pass this table takes minutes to complete at cost_delay=2ms. Peak
+            # dead heap therefore stays around one threshold — ~1 GB, reused
+            # rather than returned — plus up to ~1 GB of index growth that is
+            # not reclaimed. Both fit inside the headroom with room to spare.
             #
-            # At the shipped 500 the first pass takes ~33 days and autovacuum
-            # keeps up between ticks, so the peak stays small. Raising it again
-            # is this one line, once free space is confirmed.
+            # Re-measure before raising it further. At 5.5 GB free this same
+            # line was withheld.
+            echo "DIRECTORY_HARVEST_SCAN_LIMIT=20000"
           } > .env
 
       - run: docker compose -f compose.yml --project-name ${{ secrets.STACK_NAME_STAGING }} build
