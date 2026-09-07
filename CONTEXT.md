@@ -46,9 +46,11 @@ on Telegram rather than what anybody reads.
 _Avoid_: probe table, channel map, index, registry
 
 **Directory entry**:
-One Channel's row in the Directory: its metadata, its followability verdict,
-and a sample of its recent Posts. The sample is a snapshot of one preview page,
-replaced wholesale and never promoted into the corpus.
+One Channel's row in the Directory: its metadata, its followability verdict, a
+sample of its recent Posts, and the statistics derived from that sample. The
+sample is a snapshot of one preview page, replaced wholesale and never promoted
+into the corpus; the statistics are kept once computed, so an entry that stops
+being probed still describes the Channel after its sample is collected.
 _Avoid_: probe, probe row, map row
 
 **Candidate**:
@@ -56,6 +58,13 @@ A Directory entry that a Discovery report's scan surfaced. The distinction is
 the Scope: every Candidate is a Directory entry, but a Directory entry only
 becomes a Candidate by turning up in the Posts somebody actually reads.
 _Avoid_: suggestion, recommendation, discovered channel
+
+**Reference**:
+The Post in a followed Channel that surfaced a Candidate, by forwarding it,
+linking to it or mentioning it. The arrow points the opposite way to a Directory
+entry's sample, which is a Post by the Channel itself, so the two never share a
+word.
+_Avoid_: sample post, source post, evidence
 
 **Follow**:
 The relation between an Account and a Channel, carrying everything private
