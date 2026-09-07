@@ -14,10 +14,19 @@ answer "follow this Channel or not" without a trip to Telegram: last post age, s
 posting rate, median views, forward share and script.
 
 Those six are the subject of this ADR. Two further values on the same row, the media mix and the
-media density, are **not**: they derive from the four media counters and the latest Post id, which
-are columns on the entry itself and are never pruned, so they are computed at read from data that
-is already selected. The distinction is the whole decision, so it is worth stating plainly. What
-follows applies to statistics derived from **sample Posts**, because sample Posts go away.
+media density, are **not**: they derive from the four media counters and the latest Post id,
+columns on the entry itself, so they are computed at read from data already selected. The
+distinction is the whole decision, so it is worth stating plainly. What follows applies to
+statistics derived from **sample Posts**.
+
+The two families also differ in how long they last, and the retention promise below covers only
+the first. The counters are overwritten on every write and an `unavailable` verdict is synthesised
+with no page, so a Channel Telegram stops serving loses its counters and its latest Post id, and
+with them the mix and the density. This matches what the deployment already does with the
+subscriber count on that same path. A counter is a snapshot of a page and a stale one is a lie,
+which is why the chat id is the single field that survives it. A sample-derived statistic makes a
+different kind of claim, about what the Channel *did*, and that stays true after the Channel is
+gone.
 
 The obvious place to compute them is the read. The samples are already in Postgres, the transform
 is pure, and computing on read means no schema change, no migration, no backfill, and no
@@ -55,8 +64,10 @@ The computation lives in a pure transform that takes **a list of Posts**, not a 
 The probe path is its only caller today.
 
 The media mix and the media density are **not** stored. They are computed at read from the four
-media counters and the latest Post id, columns that already sit on the row and that no retention
-sweep touches. Storing them would duplicate state that can drift from its own inputs.
+media counters and the latest Post id, columns that already sit on the row. Storing them would
+duplicate state that can drift from its own inputs. They live only as long as the page they
+describe, and are absent for an entry Telegram no longer serves, exactly as the subscriber count
+already is.
 
 An `unavailable` verdict **keeps** the statistics, unlike the samples, which that verdict clears.
 An entry that Telegram has stopped serving stops being refreshed and can therefore never recompute

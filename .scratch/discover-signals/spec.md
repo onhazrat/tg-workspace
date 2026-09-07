@@ -85,8 +85,10 @@ same screen, so the referencing Post becomes a **Reference** before anything els
     half a mixed-language report at a glance.
 16. As an Operator, I want to see how media-heavy a Channel is relative to its Post count, so
     that I can tell a text Channel from one that mostly posts images.
-17. As an Operator, I want a Channel that stopped being probed to keep the statistics from its
-    last probe, so that a long-dead Channel still reads as long dead rather than as unknown.
+17. As an Operator, I want a Channel that stopped being probed to keep what its sample Posts said
+    about it, so that a long-dead Channel still reads as long dead rather than as unknown.
+17a. As an Operator, I want a Channel Telegram no longer serves to stop claiming a subscriber
+    count and a media mix, so that I am not shown a page's numbers for a page that is gone.
 18. As an Operator, I want statistics computed for the entries that were probed before this
     feature shipped, so that the report is not empty for the first week.
 19. As an Operator, I want a Candidate that has never been probed to say so plainly, so that I do
@@ -97,8 +99,11 @@ same screen, so the referencing Post becomes a **Reference** before anything els
     week, so that I can tell whether the sweep is running away from me.
 22. As an Operator, I want to see whether the harvest is enabled and currently running, so that I
     can tell an idle queue from a stopped one.
-23. As a User who is not an Operator, I want to never see scraping errors or attempt counts, so
-    that the Discover tab reads as a product rather than as a job console.
+23. As a User who is not an Operator, I want to never see scraping errors, attempt counts or what
+    the deployment has spent, so that the Discover tab reads as a product rather than a job
+    console.
+23a. As a User without permission to manage jobs, I want not to be shown a pause button that
+    answers 403, so that the controls I can see are the controls I can use.
 24. As a User, I want the statistics on a Candidate to be about the Channel and not about the
     deployment's attempts to reach it, so that the row means something to me.
 25. As a Developer, I want the statistics computed by one pure function, so that I can test the
@@ -156,18 +161,43 @@ column on the entry:
 - **script** — which alphabet the sample *captions* are predominantly written in, by
   character-range heuristic. Not a language, and no language library.
 
-Two further values are computed **at read** rather than stored, because their inputs are columns
-on the same row that no retention sweep touches:
+Two further values are computed **at read** rather than stored, because their inputs are already
+columns on the same row:
 
 - **media mix** — the four counters as shares *of each other*, summing to 100%.
 - **media density** — the four counters summed and divided by the latest Post id.
 
 Storing those two would duplicate state that can drift from its own inputs, and buys nothing:
 the counters are already selected by any query that reads the entry, so the derivation costs no
-join. ADR-015 is about values derived from **sample Posts**, which go away. It does not reach
-values derived from columns that stay.
+join.
+
+**They do not outlive the page, and the promise is written accordingly.** The counters are
+overwritten on every write and an `unavailable` verdict is synthesised with no page at all, so a
+Channel Telegram stops serving loses its counters and has its latest Post id reset to zero. Mix and
+density vanish for exactly the entries whose sample-derived statistics persist.
+
+That asymmetry is deliberate and the codebase already commits to it: the **subscriber count is
+cleared on the same path today**, so a dead entry already loses it. A counter is a snapshot of a
+page and a stale one is a lie, which is why the chat id is the one field that survives. A
+sample-derived statistic is a different kind of claim, describing what the Channel *did*, which
+stays true after it goes away; "this Channel has 40,000 subscribers" does not.
+
+So a dead Channel's row keeps last post age, cadence, median views, forward share and script, and
+loses subscribers, mix and density. ADR-015 covers only the first group.
 
 Subscribers already exists on the entry and is not recomputed.
+
+### The median needs measured views, and it rounds
+
+A view count is optional on a sample Post, so twenty samples can carry one measured view between
+them. Gating the median on the *sample* count would let that single observation become the median
+and rank the Channel on it, which is the failure the threshold exists to prevent. The median needs
+five samples that carry a view count, counted separately from the sample count gating the other
+rates.
+
+It is rounded to an integer, because an even set has a fractional median that the column cannot
+hold. Rounding rather than widening the type: the counts are parsed from Telegram's abbreviated
+display strings, where `9.74K` becomes 9,740, so half a view sits below the precision of the input.
 
 ### Posts per week counts intervals, not Posts
 
@@ -344,6 +374,17 @@ not "is it moving". So the ticket changes when the bar renders and when its data
 the documented reasons those conditions exist have to survive the change rather than be deleted.
 The idle refresh is slow; a daily total does not need a fifteen-second poll.
 
+**A permanent bar needs a permission the transient one did not.** The queue route authenticates
+its caller and asks nothing else, so any signed-in account can read deployment-wide counts today.
+That is tolerable while the bar only appears during a drain, because it reports progress on work
+the reader is plausibly waiting for. A permanent spend total is a fact about the deployment's
+budget and no business of an ordinary account, so the figures and the pause control render only
+for an account that may manage jobs. Everyone else keeps today's bar exactly.
+
+That gate also closes a bug older than this spec: the pause control is rendered for every account
+while the toggle it drives is permission-gated server-side, so an ordinary account is shown a
+button that answers 403. The bar's usual absence is the only reason nobody has hit it.
+
 Attempts, last error and retry state stay off every user-facing surface. A Candidate row is about
 a Channel; it is not about the deployment's attempts to reach one.
 
@@ -396,7 +437,14 @@ an empty set returns absent statistics rather than zeroes, because zero Posts pe
 measurement are different claims.
 
 Through the read-time derivation: the mix sums to 100% and tolerates a missing counter; density
-is absent when the latest Post id is zero; neither reads a stored column, so neither can drift.
+is absent when the latest Post id is zero; neither reads a stored column, so neither can drift;
+**an entry marked unavailable has no mix and no density while keeping all six sample-derived
+statistics**, which is the seam between the two families and the assertion that keeps the
+retention promise honest.
+
+On the median specifically: twenty samples carrying one measured view yield **no** median, so the
+threshold cannot be bypassed by a mostly-unmeasured sample set; an even set of measured views
+rounds rather than failing to store.
 
 Through the probe write path: a conclusive probe stores all six; the next conclusive probe
 replaces them; an unavailable verdict **keeps** them while clearing the samples, which is the one

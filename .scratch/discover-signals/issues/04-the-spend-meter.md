@@ -12,7 +12,11 @@ running, so that a rate-limited Request budget stops being invisible.
 - [ ] **Spend is visible while the queue is idle**, which is when an Operator is most likely to be
       asking what the sweep cost
 - [ ] **The figures refresh while the queue is idle**, or they are stale every time they are read
-- [ ] A component or hook test covers the idle case specifically
+- [ ] **The spend figures and the pause control render only for an account that may manage jobs**,
+      since both are deployment telemetry and the pause is already gated server-side
+- [ ] An account without that permission sees the bar exactly as it behaves today: progress while
+      the queue is draining, and nothing when it is idle
+- [ ] Tests cover the idle case and the non-permitted account case specifically
 - [ ] Attempts, last error and retry state appear on no user-facing surface
 - [ ] No new route and no new screen
 
@@ -35,6 +39,26 @@ change when the bar renders and when its data refreshes, and the reason those co
 Refresh cadence when idle should be slow. A daily and weekly total does not need a fifteen-second
 poll, and the existing predicate's own docstring makes the argument for not polling to watch
 something that changes a few times a day.
+
+## Who sees it
+
+The queue route authenticates the caller and asks nothing else, so every signed-in account can
+read deployment-wide probe counts today. That is tolerable while the bar only appears during a
+drain, because what it shows is progress on work the reader is plausibly waiting for. It stops
+being tolerable when the bar is permanent and carries a spend total, which is a fact about the
+deployment's budget and no business of an ordinary account.
+
+So the spend figures render only for an account that may manage jobs. Everyone else keeps exactly
+today's bar: progress while draining, nothing when idle.
+
+**This also fixes a bug that predates the ticket.** The pause control is rendered for every
+account, and the toggle it drives requires the job-management permission server-side, so an
+ordinary account is currently shown a button that answers 403. Nobody noticed because the bar is
+usually absent. Making the bar permanent would make that permanent too, so the gate has to cover
+the control as well as the figures.
+
+Gating the display rather than the route is deliberate: the counts stay readable by anyone, which
+is today's behaviour and not this ticket's to change.
 
 ## Why this is the only probe machinery worth a pixel
 

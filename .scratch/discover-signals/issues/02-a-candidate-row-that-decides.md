@@ -41,22 +41,46 @@ aggregate that already writes the samples, in the same transaction:
 | last post at | timestamptz | no samples |
 | sample count | smallint | no samples |
 | posts per week | float | below the threshold, or the span is zero |
-| median views | int | below the threshold, or no sample carried a view count |
+| median views | int | fewer than five samples **carry a view count** |
 | forward share | float | below the threshold |
 | script | text | no sample carried non-placeholder text |
 
 A migration backfills every entry that already has samples. ADR-015 argues why these are stored.
 
 **The media mix and the media density are not stored.** They derive from the four counters and the
-latest Post id, which are already columns on the same row and are never pruned, so computing them
-at read costs no join and no extra query. ADR-015's argument is specifically about values derived
-from *sample Posts*, which retention collects; it does not reach values whose inputs sit on the
-row for ever. Storing them would be four columns of duplicated state that can disagree with their
-own inputs.
+latest Post id, columns already on the same row, so computing them at read costs no join and no
+extra query. Storing them would be duplicated state that can disagree with its own inputs.
+
+**They do not outlive the page, and that is deliberate.** The counters are overwritten on every
+write and an `unavailable` verdict is synthesised with no page, so a Channel Telegram stops
+serving loses its counters and has its latest Post id reset to zero. Mix and density therefore
+vanish for exactly the entries whose sample-derived statistics persist.
+
+That asymmetry is correct rather than an oversight, and the codebase already commits to it: the
+**subscriber count is cleared on the same path today**, so a dead entry already loses it. The rule
+is that a counter is a snapshot of a page and a stale one is a lie, which is why the chat id is the
+single field that survives. Sample-derived statistics are a different kind of claim: they describe
+what the Channel *did*, which stays true after it goes away, where "this Channel has 40,000
+subscribers" does not.
+
+So the promise is narrow and must be written that way. A dead Channel's row keeps last post age,
+cadence, median views, forward share and script. It loses subscribers, the media mix and density,
+as it already loses subscribers today.
 
 ## What the statistics are
 
 **Median, not mean**, so one viral Post cannot relabel a Channel nobody reads.
+
+**The threshold counts measured views, not samples.** A view count is optional on a sample Post,
+so twenty samples can carry one measured view between them. Applying the five-sample threshold to
+the sample count would let that single observation become a median and rank the Channel on it,
+which is the exact failure the threshold exists to prevent. The median needs five samples that
+actually carry a view count, counted separately from the sample count that gates the other rates.
+
+**The median is rounded to an integer**, because an even set has a fractional median (`[10, 11]`
+is 10.5) that the column cannot hold. Rounding rather than widening the type: the view counts are
+themselves parsed from Telegram's abbreviated display strings, where `9.74K` becomes 9,740, so
+half a view is noise below the precision of the input.
 
 **Posts per week counts intervals, not Posts.** N sample Posts spanning oldest to newest give
 **N-1** intervals, so the rate is `(N - 1) / span`, not `N / span`. Five Posts one week apart span
@@ -116,5 +140,11 @@ each guard before trusting it.
 Cases the transform's tests must carry, because each is a way the obvious implementation is wrong:
 five Posts one week apart give one per week and not 1.25; five Posts sharing a timestamp give no
 rate rather than a division by zero; a sample set of nothing but `[photo]` placeholders yields no
-script rather than Latin; one viral Post does not move the median; a set below the threshold still
+script rather than Latin; twenty samples carrying one measured view yield no median; an even set
+of measured views rounds; one viral Post does not move the median; a set below the threshold still
 reports its count.
+
+And through the write path, the seam between the two statistic families: an entry marked
+unavailable keeps all six sample-derived statistics and has no mix and no density, because its
+counters went with its page. That single test is what keeps the retention promise honest, since
+the two families are stored and derived respectively and nothing else asserts they part company.

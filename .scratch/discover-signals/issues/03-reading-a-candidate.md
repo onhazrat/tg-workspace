@@ -10,8 +10,10 @@ on a row, and the text of the Channel's recent Posts.
 
 - [ ] Opening a Candidate shows the same four statistics its row showed, so nothing has to be
       closed to recheck a number
-- [ ] The panel adds forward share, script and media density, which ticket 02 stored but showed
-      nowhere
+- [ ] The panel adds forward share and script, which ticket 02 stores but shows nowhere, and
+      media density, which ticket 02 derives at read from the counters
+- [ ] Media density is absent for an entry Telegram no longer serves, because the counters it
+      derives from are cleared with the page, exactly as the subscriber count already is
 - [ ] The Channel's recent Posts sit behind a disclosure, closed by default, so the panel does
       not open onto a wall of text
 - [ ] Each Post shows its text truncated, a relative date, its view count and a link to the
