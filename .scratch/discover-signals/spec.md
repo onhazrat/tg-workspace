@@ -111,7 +111,7 @@ same screen, so the referencing Post becomes a **Reference** before anything els
 28. As a Developer, I want the referencing Post called a Reference everywhere, so that the word
     "sample" means exactly one thing on a screen that now shows both.
 29. As a Developer, I want the rename to land as its own change, so that a mechanical wire rename
-    is reviewable on its own rather than buried in a feature that also adds nine columns.
+    is reviewable on its own rather than buried in a feature that also adds six columns.
 30. As a Developer, I want the sample Post bodies kept off the report response, so that a report
     with forty Candidates does not ship eight hundred Post bodies to the browser.
 31. As an Operator, I want a report to keep loading as fast as it does today, so that richer rows
@@ -130,21 +130,64 @@ It ships as the first change with nothing else in it. The exact-key-set projecti
 every miss, which is exactly the property that makes a rename safe and the property that gets
 lost when it is bundled with a change that also edits those key sets for other reasons.
 
-### Nine derived values, from a pure transform
+**It is not only a rename, because reports are saved.** A Discovery report is an Artifact whose
+Candidates are persisted as JSON at generate time; the read path spreads those stored dicts and
+overlays only follow state, dismissal state and the probe verdict. The response field is required
+with no default, so renaming the model without touching stored data makes every report saved
+before the change fail validation on read.
 
-The transform takes a list of sample Posts plus the entry's four counters and its latest Post id,
-and returns:
+The fix is a tolerant read at the seam that already normalises stored candidates, not a migration
+over the JSON. A migration repairs the rows in this database and does nothing for an old export
+imported next month, which the import path makes a real case. A regression test opens a fixture
+holding the pre-rename key.
+
+### Six stored values from a pure transform, two more derived at read
+
+The transform takes a list of sample Posts and returns six values, each stored in its own nullable
+column on the entry:
 
 - **last post at** — the timestamp of the newest sample Post.
-- **posts per week** — the sample Post count over the span the samples cover, expressed weekly.
+- **sample count** — how many Posts the statistics were computed from, so a suppressed rate can
+  explain itself.
+- **posts per week** — the intervals between the sample Posts over the span they cover, expressed
+  weekly. See below; it is not the Post count divided by the span.
 - **median views** — median, not mean, of the sample Posts' view counts.
 - **forward share** — the fraction of sample Posts carrying a forward attribution.
-- **script** — which alphabet the sample bodies are predominantly written in, by character-range
-  heuristic over the text. Not a language, and no language library.
+- **script** — which alphabet the sample *captions* are predominantly written in, by
+  character-range heuristic. Not a language, and no language library.
+
+Two further values are computed **at read** rather than stored, because their inputs are columns
+on the same row that no retention sweep touches:
+
 - **media mix** — the four counters as shares *of each other*, summing to 100%.
 - **media density** — the four counters summed and divided by the latest Post id.
 
+Storing those two would duplicate state that can drift from its own inputs, and buys nothing:
+the counters are already selected by any query that reads the entry, so the derivation costs no
+join. ADR-015 is about values derived from **sample Posts**, which go away. It does not reach
+values derived from columns that stay.
+
 Subscribers already exists on the entry and is not recomputed.
+
+### Posts per week counts intervals, not Posts
+
+N sample Posts spanning oldest to newest give **N-1** intervals, so the rate is `(N - 1) / span`.
+Dividing the Post count by the span inflates every Channel in the report: five Posts one week
+apart span four weeks and describe a weekly Channel, but `5 / 4` reports 1.25 per week, and the
+error grows as the sample shrinks.
+
+A **zero span** is reachable even above the sample threshold, because a Channel can post an album
+as several messages within the same second. It yields no rate rather than a division by zero.
+
+### Script reads captions, not placeholder text
+
+A media Post with no caption is stored with synthesised stand-in text: `[photo]`, `[video]`,
+`[photo album]`, `[voice]`. Those are ASCII. A character-range heuristic run over them would label
+a caption-less Persian or Russian photo Channel as Latin, and caption-less Channels are exactly
+the image-heavy ones this statistic would otherwise describe well.
+
+So the transform excludes the placeholders and reads captions only. A Channel whose every sample
+is a placeholder has **no** script rather than a wrong one.
 
 ### Media mix is a share of the counters, and density is a rate
 
@@ -160,18 +203,33 @@ entries whose latest Post id is zero. The **density** keeps the one insight the 
 Channel is media-heavy or text-heavy, and it is labelled as a rate, so a value above 1 reads
 correctly rather than as a broken percentage.
 
-### The statistics are stored, not derived on read
+### The sample-derived statistics are stored, not derived on read
 
-Nine columns on the Directory entry, written at probe time by the aggregate that already writes
+Six columns on the Directory entry, written at probe time by the aggregate that already writes
 the samples. Not a companion table: the list-vs-detail rule exists to keep large detoastable
-fields out of list reads, and these are eight small numbers and a timestamp that the list read
-specifically needs. A companion table would add a join to the one query that has to stay cheap.
+fields out of list reads, and these are four small numbers, a short string and a timestamp that
+the list read specifically needs. A companion table would add a join to the one query that has to
+stay cheap.
 
-Deriving on read from the samples would be less code and is wrong. Sample retention prunes
-entries that stopped being probed, which is precisely the dead ones, so a read-time derivation
-blanks the statistics on exactly the Channels whose deadness is the most useful thing the row
-could say. A stored value keeps reading "last posted fourteen months ago" after its evidence is
-collected. This is the spec's one ADR.
+Deriving on read from the samples would be less code and is wrong. An entry loses its samples in
+one of two ways, and both are terminal: an `unavailable` verdict clears them outright, and an
+entry that is not refreshable by verdict or by kind gets a null refresh date, is never probed
+again, and has its samples collected by retention. Either way the entry stops being visited, so
+there is nothing to derive from and no future event that fills the gap. A read-time derivation
+therefore blanks the statistics on exactly the Channels whose deadness is the most useful thing
+the row could say. A stored value keeps reading "last posted fourteen months ago" after its
+evidence is collected. This is the spec's one ADR.
+
+### An unavailable verdict keeps the statistics
+
+This is the one place the statistics and the samples part company, and it follows directly from
+the argument above. The existing code clears an entry's samples when Telegram stops serving the
+Channel; copying that for the statistics would delete the last known picture of exactly the row
+that can never rebuild it, since an unavailable entry is never refreshed again.
+
+The recheck path is the exception. It resets an entry to `unknown`, meaning the deployment holds
+no answer rather than a negative one, and already clears every other metadata field. The
+statistics go with them, because a row claiming no answer must not still show numbers.
 
 ### The probe path is the only writer, for now
 
@@ -278,6 +336,14 @@ existing probe bar. The queue route already returns them and the hand-written cl
 omits them, so nothing renders them today. The deployment is spending a rate-limited Request
 budget with no visible meter, and that is the one piece of probe machinery worth a pixel.
 
+**Widening the type is the easy half.** The bar returns null unless something is queued, running
+or retrying, and the poll predicate is false unless the queue is enabled and draining. Both are
+right for a bar reporting work in flight and both are wrong for a spend meter, because a budget
+total is most worth reading when nothing is running: the question is "what did the sweep cost",
+not "is it moving". So the ticket changes when the bar renders and when its data refreshes, and
+the documented reasons those conditions exist have to survive the change rather than be deleted.
+The idle refresh is slow; a daily total does not need a fifteen-second poll.
+
 Attempts, last error and retry state stay off every user-facing surface. A Candidate row is about
 a Channel; it is not about the deployment's attempts to reach one.
 
@@ -301,7 +367,7 @@ Four, one of them new.
 `tests/services/test_channel_directory.py`, `tests/services/test_directory_samples.py`.
 
 **The statistics transform** is the one new seam, and it is deliberately lower than the write
-path. Testing nine statistics through the write path means hand-building a full probe payload for
+path. Testing six statistics through the write path means hand-building a full probe payload for
 every arithmetic edge case; the transform is pure, so its tests are a list of Posts and an
 expected number. Prior art for a pure transform with its own module: the proxy pacing classifier
 and the queue lane policy.
@@ -320,18 +386,24 @@ or are wiring not worth its own test.
 ### What to cover
 
 Through the transform: median is the median and not the mean, and one outlier does not move it;
-the rate is computed over the sample span; a set below the threshold yields no rates but still
-yields a count; the mix sums to 100% and tolerates a missing counter; density is absent when the
-latest Post id is zero; forward share counts attributions and not forwards of forwards; the
-script heuristic separates the alphabets the corpus actually contains; an empty set returns
-absent statistics rather than zeroes, because zero Posts per week and no measurement are
-different claims.
+**five Posts one week apart give one per week and not 1.25**, which is the interval-versus-count
+error and the one every naive implementation makes; **a set whose Posts share a timestamp yields
+no rate rather than a division by zero**; a set below the threshold yields no rates but still
+yields a count; **a set of nothing but `[photo]` placeholders yields no script rather than
+Latin**, which is the caption-versus-placeholder error; forward share counts attributions and not
+forwards of forwards; the script heuristic separates the alphabets the corpus actually contains;
+an empty set returns absent statistics rather than zeroes, because zero Posts per week and no
+measurement are different claims.
 
-Through the probe write path: a conclusive probe stores all nine; the next conclusive probe
-replaces them; an unavailable verdict clears them alongside the samples it already clears; an
-inconclusive fetch touches neither; the metadata refresh on a followed Channel's sync updates
-counters and leaves statistics alone; the backfill migration computes statistics for an entry
-that already had samples and leaves an entry without samples blank.
+Through the read-time derivation: the mix sums to 100% and tolerates a missing counter; density
+is absent when the latest Post id is zero; neither reads a stored column, so neither can drift.
+
+Through the probe write path: a conclusive probe stores all six; the next conclusive probe
+replaces them; an unavailable verdict **keeps** them while clearing the samples, which is the one
+divergence and therefore the one most worth a test; a recheck clears them along with every other
+metadata field; an inconclusive fetch touches nothing; the metadata refresh on a followed
+Channel's sync updates counters and leaves statistics alone; the backfill migration computes
+statistics for an entry that already had samples and leaves an entry without samples blank.
 
 Through the API projection: the report Candidate carries exactly the expected key set including
 the new statistics; the stateless Candidate response still carries no probe field at all, so the
@@ -376,7 +448,7 @@ watched go red, which caught a false pass six times in the simplification progra
 The vocabulary change is recorded in `CONTEXT.md`: **Reference** is added, with `sample post`
 listed as the term to avoid, and **Directory entry** is sharpened to name the derived statistics
 alongside the metadata and the verdict. The individual statistic names stay out of the glossary,
-because a glossary of nine metrics is a spec rather than vocabulary.
+because a glossary of eight metrics is a spec rather than vocabulary.
 
 One decision earns an ADR: storing the statistics at probe time rather than deriving them on read
 from the samples. It is hard to reverse (a migration and a backfill), surprising to a reader who
