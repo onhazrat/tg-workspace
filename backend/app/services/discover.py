@@ -344,16 +344,14 @@ def _to_candidate(
 
 @dataclass(frozen=True)
 class HarvestPage:
-    """One page of the harvest walk (ticket 04).
+    """One page of the harvest walk (ticket 05).
 
-    `cursor` is where the next page starts, and `None` means the walk reached
-    the end of the corpus — see `harvest_page` for what the caller does with
-    that.
+    `post_ids` is what the page examined, and the caller marks exactly those
+    rows harvested. Empty means there is nothing left to do.
     """
 
     handles: list[str]
-    cursor: int | None
-    scanned: int
+    post_ids: list[uuid.UUID]
 
 
 #: Why the harvest walk does not go through `scoped_select`.
@@ -374,84 +372,60 @@ HARVEST_SCOPE_REASON = (
 )
 
 
-def harvest_page(
-    session: Session, *, after: int, limit: int, until: int | None = None
-) -> HarvestPage:
-    """Handles referenced by the next `limit` stored Posts after `after`.
+def harvest_page(session: Session, *, limit: int) -> HarvestPage:
+    """Handles referenced by the next `limit` Posts the harvest has not seen.
 
     The read half of the harvest sweep. It reuses `post_references`, so a
     forward, a mention, a masked href and a cross-channel reply are found here
     exactly as a Discovery report finds them — the sweep changes who asks, not
     what counts as a reference.
 
-    **Ascending by `timestamp`, from a cursor.** Ascending because it makes the
-    walk self-terminating: once the cursor passes the newest Post, the same
-    query returns only what has arrived since, so following the tail costs one
-    empty indexed query per tick.
+    **`WHERE NOT harvested`, and that is the whole walk (ticket 05).** Ticket 04
+    kept two `Post.timestamp` marks: a tail for new Posts and a wrapping
+    backfill for the history below it, because a *backward* sync stores Posts
+    with old timestamps that land beneath a mark which has already passed them.
+    A flag on the row answers that by construction — an unprocessed Post is
+    unprocessed whenever it arrived — so the second mark, the wrap, the `until`
+    bound and the re-lap they cost all go away.
 
-    `timestamp` rather than `id`, because the primary key is a uuid and orders
-    by nothing. And rather than `updated_at`, which is the tempting choice —
-    ordering by it would be a true insertion-order walk that never misses a row
-    and needs no wrap at all. It loses on cost: `bulk_upsert_posts_impl` bumps
-    `updated_at` **unconditionally** on every re-upsert, and sync re-scrapes the
-    newest page of every followed Channel on every run, so a deployment with
-    thousands of Channels churns tens of thousands of rows to the end of that
-    ordering per sync round. The walk would fall permanently behind the churn
-    and genuinely new Posts would never be reached.
+    It also removes a hazard rather than shrinking one. Any cursor over a
+    Python-assigned stamp can be outrun by commit order: a writer takes a lower
+    position and commits after the walk has passed it, and the row is skipped
+    with nothing to notice. A row that commits late is simply still
+    `harvested = false`.
 
-    `until` bounds the walk from above, and only the backfill leg of the sweep
-    passes it. Without it that leg would run past the tail mark, duplicate the
-    tail leg's work, and never reach the end that tells it to wrap.
+    `translation_batch` and `embeddings` pick their next batch the same way,
+    anti-joining the companion table that holds their output. The harvest
+    produces no per-post output, so the same idea is a column.
 
-    Ordering globally by `timestamp` is what `ix_tg_posts_timestamp` is for
-    (ticket 04's migration). `tg_posts` carried only `(channel_name, timestamp)`,
-    which a query with no channel equality cannot use, so this would have
-    seq-scanned and top-N sorted the table on every tick — the "a scheduled job
-    pays its cost every tick, forever" shape this repo has already paid for.
+    **Newest first**, served by the partial index `(timestamp DESC) WHERE NOT
+    harvested`. That index covers exactly the rows still to do, so it shrinks
+    toward empty as the corpus is processed instead of growing with it. The
+    ordering is what makes a new Post reach the Directory on the next tick even
+    with a large backlog outstanding — the property ticket 04 needed a whole
+    second leg, a second budget and a wrap to arrange.
 
     Handles are returned in the order the Posts referenced them, deduplicated.
     The order is *not* a ranking and the caller must not treat it as one: it is
-    the order the cursor happened to walk, which is a fact about which Channels
-    were being synced, not about which handles are worth probing. See
+    the order the walk happened to reach them, which is a fact about which
+    Channels were being synced, not about which handles are worth probing. See
     `channel_directory.HARVEST_PRIORITY`.
-
-    **`after` is exclusive, so the sentinel is -1 and not 0.** `Post.timestamp`
-    defaults to `0` for a row the scraper stored with no usable date, and at a
-    sentinel of `0` those rows would be invisible to every pass for ever.
-
-    **The cursor is a scalar, so two Posts sharing a millisecond can straddle a
-    page boundary and the second one is skipped.** Stated rather than fixed: the
-    alternatives are a composite cursor threaded through the settings row or a
-    `>=` that cannot terminate when a whole page shares one timestamp, and both
-    buy more than the defect costs. A skipped Post's handles are almost always
-    referenced by its neighbours too, the sweep is a map that fills in rather
-    than a ledger that must balance, and the backfill leg gives every stretch
-    another pass with the boundaries in different places.
     """
     if limit <= 0:
-        return HarvestPage(handles=[], cursor=after, scanned=0)
+        return HarvestPage(handles=[], post_ids=[])
 
-    statement = select(Post).where(col(Post.timestamp) > after)
-    if until is not None:
-        statement = statement.where(col(Post.timestamp) <= until)
     statement = unscoped_select(
-        statement.order_by(col(Post.timestamp)).limit(limit),
+        select(Post)
+        .where(col(Post.harvested) == False)  # noqa: E712
+        .order_by(col(Post.timestamp).desc())
+        .limit(limit),
         reason=HARVEST_SCOPE_REASON,
     )
     posts = list(session.exec(statement).all())
-    if not posts:
-        # The walk is at the end of the corpus. `None` rather than `after` so
-        # the caller can tell "nothing new yet" from "there is more to come",
-        # which is what decides whether the cursor restarts.
-        return HarvestPage(handles=[], cursor=None, scanned=0)
 
     found: dict[str, None] = {}
     for post in posts:
         for handle in post_references(post):
             found.setdefault(handle, None)
 
-    return HarvestPage(
-        handles=list(found),
-        cursor=posts[-1].timestamp,
-        scanned=len(posts),
-    )
+    return HarvestPage(handles=list(found), post_ids=[post.id for post in posts])

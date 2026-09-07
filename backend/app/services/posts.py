@@ -6,7 +6,7 @@ import time
 import uuid
 from typing import Any
 
-from sqlalchemy import func, literal, or_
+from sqlalchemy import func, literal, or_, update
 from sqlalchemy.orm import aliased
 from sqlmodel import Session, col, select
 
@@ -64,6 +64,18 @@ def bulk_upsert_posts_impl(
             select(Post).where(Post.channel_name == channel, Post.post_id == post_id)
         ).first()
         if existing:
+            # What `discover.post_references` reads, captured before the
+            # overwrite so an edit that changes a reference can send the row
+            # back to the harvest. Ticket 04's wrapping backfill leg re-lapped
+            # the corpus and would have caught it on the next pass; ticket 05
+            # deleted that leg, so without this a channel adding a `t.me` link
+            # to an already-harvested Post hides that handle for ever.
+            was_referencing = (
+                existing.text,
+                existing.forwarded_from,
+                existing.links,
+                existing.reply_to,
+            )
             existing.text = item.get("text", existing.text)
             existing.date = item.get("date", existing.date)
             existing.timestamp = item.get("timestamp", existing.timestamp)
@@ -80,6 +92,17 @@ def bulk_upsert_posts_impl(
                 existing.links = _post_links_from_item(item)
             if "replyTo" in item:
                 existing.reply_to = _post_reply_from_item(item)
+            # Conditional, and that is the whole point: sync re-scrapes the
+            # newest page of every followed Channel on every run, so clearing
+            # the flag unconditionally would hand the harvest thousands of
+            # unchanged rows per sync round for ever.
+            if was_referencing != (
+                existing.text,
+                existing.forwarded_from,
+                existing.links,
+                existing.reply_to,
+            ):
+                existing.harvested = False
             existing.updated_at = utc_now()
             session.add(existing)
         else:
@@ -121,6 +144,34 @@ def bulk_upsert_posts_impl(
             )
         count += 1
     return count
+
+
+def mark_harvested(session: Session, post_ids: list[uuid.UUID]) -> None:
+    """Record that the harvest sweep has extracted these Posts' references.
+
+    The write half of ticket 05's walk; `discover.harvest_page` is the read half
+    and lives there because that module is a read model and may not write. It is
+    a bulk `UPDATE` rather than a loop of ORM writes: a catch-up pass over a
+    large corpus issues one of these per page, and the rows are not otherwise
+    loaded for any purpose but this.
+
+    **Not committed here.** The caller marks and enqueues in one transaction, so
+    a tick that dies between the two re-reads the same Posts on the next tick
+    rather than losing their handles for ever.
+    """
+    if not post_ids:
+        return
+    session.exec(
+        update(Post)
+        .where(col(Post.id).in_(post_ids))
+        .values(harvested=True)
+        # `auto` resolves to `evaluate`, which walks the whole session
+        # identity map per call to re-check the criterion in Python. The
+        # harvest calls this once per page against a session holding every
+        # Post it has read this tick, so `auto` is quadratic in the scan
+        # limit. Nothing reads these objects after the page is extracted.
+        .execution_options(synchronize_session=False)
+    )
 
 
 def random_cap_order(seed: int) -> Any:

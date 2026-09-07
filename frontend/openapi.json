@@ -6341,16 +6341,6 @@
             "type": "boolean",
             "title": "Harvestrunning",
             "default": false
-          },
-          "harvestTail": {
-            "type": "integer",
-            "title": "Harvesttail",
-            "default": -1
-          },
-          "harvestCursor": {
-            "type": "integer",
-            "title": "Harvestcursor",
-            "default": -1
           }
         },
         "type": "object",

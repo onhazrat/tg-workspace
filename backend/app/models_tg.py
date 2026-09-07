@@ -4,7 +4,17 @@ import uuid
 from datetime import UTC, date, datetime
 from typing import Any
 
-from sqlalchemy import JSON, BigInteger, Column, Text, UniqueConstraint
+from sqlalchemy import (
+    JSON,
+    BigInteger,
+    Boolean,
+    Column,
+    Index,
+    Text,
+    UniqueConstraint,
+    false,
+    text,
+)
 from sqlmodel import Field, SQLModel
 
 
@@ -206,7 +216,22 @@ class ChannelFollow(SQLModel, table=True):
 
 class Post(SQLModel, table=True):
     __tablename__ = "tg_posts"
-    __table_args__ = (UniqueConstraint("channel_name", "post_id"),)
+    __table_args__ = (
+        UniqueConstraint("channel_name", "post_id"),
+        # Both are hand-written in migrations because autogenerate cannot
+        # express either — a DESC ordering or a partial predicate. Declared
+        # here anyway: autogenerate reads metadata, not intent, and an index it
+        # cannot see is one it emits a `drop_index` for on the next revision.
+        # `ix_tg_posts_timestamp` (ticket 04) serves retention's global
+        # `timestamp < cutoff` sweep; `ix_tg_posts_unharvested` (ticket 05)
+        # serves the harvest walk and covers only the rows still to do.
+        Index("ix_tg_posts_timestamp", "timestamp"),
+        Index(
+            "ix_tg_posts_unharvested",
+            text("timestamp DESC"),
+            postgresql_where=text("NOT harvested"),
+        ),
+    )
 
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
     channel_name: str = Field(index=True)
@@ -230,6 +255,13 @@ class Post(SQLModel, table=True):
     # Shape: {"channel": str, "authorName": str, "text": str, "url": str}
     reply_to_post_id: int | None = Field(default=None, index=True)
     reply_to: dict[str, Any] | None = Field(default=None, sa_column=Column(JSON))
+    # Whether the harvest sweep has extracted this Post's references into the
+    # Directory (ticket 05). The server default is declared so autogenerate does
+    # not read the migration's as drift and emit an `alter_column` dropping it.
+    harvested: bool = Field(
+        default=False,
+        sa_column=Column(Boolean, nullable=False, server_default=false()),
+    )
     updated_at: datetime = Field(default_factory=utc_now)
 
 
