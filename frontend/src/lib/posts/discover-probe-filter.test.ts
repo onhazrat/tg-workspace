@@ -40,7 +40,7 @@ function candidate(
             lastError: null,
             checkedAt: 1000,
           },
-    samplePost: { channelName: "carrier", postId: 1, timestamp: 100 },
+    reference: { channelName: "carrier", postId: 1, timestamp: 100 },
   }
 }
 

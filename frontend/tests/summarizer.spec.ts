@@ -243,7 +243,7 @@ async function mockDiscoverForwardPosts(
     seenInCount: 1,
     lastSeen: now - index * 1000,
     isFollowed: source.isFollowed,
-    samplePost: {
+    reference: {
       channelName: fixture.carrierName,
       postId: 900_000_000 + index,
       timestamp: now - index * 1000,

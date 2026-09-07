@@ -273,7 +273,7 @@ def test_is_followed_reflects_channel_membership() -> None:
     assert by_name["unknown_channel"]["isFollowed"] is False
 
 
-def test_last_seen_and_sample_post_track_the_newest() -> None:
+def test_last_seen_and_the_reference_track_the_newest() -> None:
     result = _run(
         [
             _post(1, "carrier", 1000, text="see @alpha_news"),
@@ -282,7 +282,7 @@ def test_last_seen_and_sample_post_track_the_newest() -> None:
     )
     candidate = result["candidates"][0]
     assert candidate["lastSeen"] == 5000
-    assert candidate["samplePost"]["postId"] == 2
+    assert candidate["reference"]["postId"] == 2
 
 
 def test_candidates_sort_by_total_desc() -> None:

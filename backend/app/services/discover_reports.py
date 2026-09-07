@@ -132,20 +132,30 @@ def _with_live_state(
     `probe` is `None` for a handle nothing has looked at yet, which the client
     renders as "not checked" rather than as a verdict — an unprobed handle and
     one confirmed unfollowable must not look the same.
+
+    This is also where the Reference is normalised. Ticket 01 of
+    discover-signals renamed `samplePost` to `reference`, and the response field
+    is required with no default, so a report generated before that rename would
+    fail validation on read if its stored key were passed through. A tolerant
+    read here rather than a migration over the JSON, because a migration repairs
+    this database and does nothing for an old export imported through
+    `POST /data/import` next month.
     """
     out: list[dict[str, Any]] = []
     for candidate in candidates:
         if not isinstance(candidate, dict):
             continue
         handle = _candidate_handle(candidate)
-        out.append(
-            {
-                **candidate,
-                "isFollowed": handle in followed,
-                "isIgnored": handle in ignored,
-                "probe": probes.get(handle),
-            }
-        )
+        row = {
+            **candidate,
+            "isFollowed": handle in followed,
+            "isIgnored": handle in ignored,
+            "probe": probes.get(handle),
+        }
+        stored_before_the_rename = row.pop("samplePost", None)
+        if "reference" not in row and stored_before_the_rename is not None:
+            row["reference"] = stored_before_the_rename
+        out.append(row)
     return out
 
 

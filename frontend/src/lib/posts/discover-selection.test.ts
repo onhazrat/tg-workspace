@@ -112,12 +112,12 @@ describe("createdChannelNamesFromResults", () => {
 })
 
 describe("buildBulkFollowChannels", () => {
-  test("attaches discoveredVia from samplePost when present", () => {
+  test("attaches discoveredVia from the reference when present", () => {
     const map = new Map([
       [
         "alpha",
         {
-          samplePost: {
+          reference: {
             channelName: "src",
             postId: 9,
             timestamp: 100,

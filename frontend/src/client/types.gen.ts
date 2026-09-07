@@ -565,14 +565,19 @@ export type CancelSyncJobResponse = {
 };
 
 /**
- * CandidateSamplePostResponse
- * Pointer to the most recent post that referenced a candidate.
+ * CandidateReferenceResponse
+ * The Reference: the most recent Post in a followed Channel that named a
+ * candidate.
  *
  * A pointer rather than the post body on purpose: retention may prune the post
  * later, and callers render a Telegram web-view link from these three fields so
  * the evidence stays reachable outside our corpus.
+ *
+ * It was a "sample post" until ticket 01 of discover-signals. The word now
+ * means only the Directory's snapshot of a Channel's *own* Posts, which points
+ * the opposite way: a Reference belongs to somebody else's Channel.
  */
-export type CandidateSamplePostResponse = {
+export type CandidateReferenceResponse = {
     /**
      * Channelname
      */
@@ -1336,7 +1341,7 @@ export type DiscoverCandidateResponse = {
      * Isignored
      */
     isIgnored?: boolean;
-    samplePost: CandidateSamplePostResponse;
+    reference: CandidateReferenceResponse;
 };
 
 /**
@@ -3398,7 +3403,7 @@ export type ReportCandidateResponse = {
      * Isignored
      */
     isIgnored?: boolean;
-    samplePost: CandidateSamplePostResponse;
+    reference: CandidateReferenceResponse;
     probe?: HandleProbeResponse | null;
 };
 

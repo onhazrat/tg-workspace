@@ -32,7 +32,7 @@ const candidate: DiscoveryCandidate = {
   seenInCount: 1,
   lastSeen: 1500,
   isFollowed: false,
-  samplePost: { channelName: "carrier", postId: 7, timestamp: 1500 },
+  reference: { channelName: "carrier", postId: 7, timestamp: 1500 },
 }
 
 const report: DiscoverReport = {

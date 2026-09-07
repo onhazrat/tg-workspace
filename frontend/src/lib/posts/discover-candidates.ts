@@ -95,7 +95,15 @@ export interface DiscoveryCandidate {
    * conflating them would let a misprobe pass for a deliberate choice.
    */
   probe?: DiscoveryProbe | null
-  samplePost: { channelName: string; postId: number; timestamp: number }
+  /**
+   * The Reference: the most recent Post in a followed Channel that named this
+   * handle. A pointer, never the body — retention may prune the Post, and the
+   * three fields still render a Telegram web-view link.
+   *
+   * Not a "sample": that word means the Directory's snapshot of a Channel's
+   * *own* Posts, which points the other way.
+   */
+  reference: { channelName: string; postId: number; timestamp: number }
 }
 
 export const DISCOVER_PROBE_KIND_LABELS: Record<DiscoverProbeKind, string> = {

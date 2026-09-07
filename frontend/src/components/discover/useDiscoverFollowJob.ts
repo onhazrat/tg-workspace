@@ -37,7 +37,7 @@ export function useDiscoverFollowJob({
   const candidatesByName = useMemo(
     () =>
       new Map(
-        candidates.map((row) => [row.name, { samplePost: row.samplePost }]),
+        candidates.map((row) => [row.name, { reference: row.reference }]),
       ),
     [candidates],
   )

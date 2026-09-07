@@ -160,7 +160,7 @@ export function buildBulkFollowChannels(
   candidatesByName: ReadonlyMap<
     string,
     {
-      samplePost?: {
+      reference?: {
         channelName: string
         postId: number
         timestamp: number
@@ -176,14 +176,14 @@ export function buildBulkFollowChannels(
   }
 }[] {
   return names.map((name) => {
-    const sample = candidatesByName.get(name)?.samplePost
-    return sample
+    const reference = candidatesByName.get(name)?.reference
+    return reference
       ? {
           name,
           discoveredVia: {
-            channelName: sample.channelName,
-            postId: sample.postId,
-            timestamp: sample.timestamp,
+            channelName: reference.channelName,
+            postId: reference.postId,
+            timestamp: reference.timestamp,
           },
         }
       : { name }
