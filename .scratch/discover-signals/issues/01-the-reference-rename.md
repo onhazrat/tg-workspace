@@ -6,25 +6,25 @@ show both it and the Directory's snapshot of a Channel's own Posts.
 
 **Blocked by:** None (can start immediately)
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] The report Candidate response names the field for a Reference, not a sample Post
-- [ ] **A report saved before this change still opens.** Candidates are persisted as JSON at
+- [x] The report Candidate response names the field for a Reference, not a sample Post
+- [x] **A report saved before this change still opens.** Candidates are persisted as JSON at
       generate time and the field is required with no default, so a renamed model would fail
       validation on every existing report
-- [ ] The stored key is normalised to the new name at the read seam that already overlays live
+- [x] The stored key is normalised to the new name at the read seam that already overlays live
       state onto stored candidates, so an old report and a new one read identically
-- [ ] An old export imported *after* this change reads correctly too, which is why the fix is a
+- [x] An old export imported *after* this change reads correctly too, which is why the fix is a
       tolerant read and not a one-time migration over the stored JSON
-- [ ] A regression test opens a report fixture holding the pre-rename key and asserts the
+- [x] A regression test opens a report fixture holding the pre-rename key and asserts the
       response carries the Reference
-- [ ] The hand-written client type, the component props and the query key follow the wire
-- [ ] The panel's UI copy calls it a Reference; no user-facing string says "sample post"
-- [ ] The projection test's expected key set is updated
-- [ ] `CONTEXT.md` gains **Reference** with `_Avoid_: sample post`, and **Directory entry** keeps
+- [x] The hand-written client type, the component props and the query key follow the wire
+- [x] The panel's UI copy calls it a Reference; no user-facing string says "sample post"
+- [x] The projection test's expected key set is updated
+- [x] `CONTEXT.md` gains **Reference** with `_Avoid_: sample post`, and **Directory entry** keeps
       its existing wording in this change
-- [ ] The generated client is regenerated and committed, because the wire changed
-- [ ] The route inventory guard stays green; no route function was renamed, only a field
+- [x] The generated client is regenerated and committed, because the wire changed
+- [x] The route inventory guard stays green; no route function was renamed, only a field
 
 ## The rename is not only a rename
 

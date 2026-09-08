@@ -60,9 +60,11 @@ import type {
   LlmLogResponse,
   NetworkLogResponse,
   PostResponse,
+  ReportCandidateResponse,
   SettingGroupResponse,
   SummaryResponse,
 } from "@/client"
+import type { DiscoveryCandidate } from "@/lib/posts/discover-candidates"
 import type {
   Channel,
   ChannelSettingGroup,
@@ -255,4 +257,45 @@ export type PostHasServerFields = NoMismatches<
 >
 export type ChannelHasServerFields = NoMismatches<
   MissingServerFields<ChannelResponse, "id" | "name" | "startTime">
+>
+
+/**
+ * The Discover UI's own type, pinned to the wire like `Post` and `Channel`.
+ *
+ * Added by ticket 01 of discover-signals, whose rename is exactly the change
+ * this catches. `api.getDiscoverCandidates` and `createDiscoverReport` reach
+ * the server through an unchecked `request<T>` cast, so renaming a field
+ * server-side and missing this type compiles, passes every unit test (they are
+ * written against the hand-written type), and then answers `undefined` at
+ * runtime: the panel renders "No reference recorded." and bulk follow drops
+ * `discoveredVia` for every candidate. Nothing throws.
+ *
+ * Three refinements, each checked the other way round rather than skipped.
+ * `probe` is an open verdict blob server-side, narrowed here to the fields the
+ * UI renders. `counts` and `seenIn` are the same refinement twice: the server
+ * declares every signal kind optional because pydantic gives each a default of
+ * zero, and the client relies on that default to treat all three as present, so
+ * `Record<DiscoverySignalKind, number>` is a promise the server keeps without
+ * declaring. `seenIn` carries a nested `counts` and inherits it.
+ */
+type DiscoveryCandidateRefined = "probe" | "counts" | "seenIn"
+export type DiscoveryCandidateConforms = NoMismatches<
+  UnrefinedMismatches<
+    ReportCandidateResponse,
+    DiscoveryCandidate,
+    DiscoveryCandidateRefined
+  >
+>
+export type DiscoveryCandidateRefinementsHold = NoMismatches<
+  BadRefinements<
+    ReportCandidateResponse,
+    DiscoveryCandidate,
+    DiscoveryCandidateRefined
+  >
+>
+export type DiscoveryCandidateHasServerFields = NoMismatches<
+  MissingServerFields<
+    ReportCandidateResponse,
+    "name" | "total" | "counts" | "reference"
+  >
 >

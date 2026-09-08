@@ -10,8 +10,8 @@ Two things are deliberately *not* frozen into the stored row:
 * **`isFollowed`** is derived against the live `tg_channels` set on every read,
   so a report self-corrects as its candidates get followed. Counts are
   historical; follow state is live.
-* **Sample post bodies.** Only the pointer (channel, post id, timestamp) is
-  stored. Retention may prune the post later; callers render a Telegram
+* **Reference bodies.** Only the pointer (channel, post id, timestamp) is
+  stored. Retention may prune the Post later; callers render a Telegram
   web-view link so the evidence stays investigable outside our corpus.
 
 Mirrors `app/services/summaries.py`, including its light-vs-full projection

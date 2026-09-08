@@ -2,7 +2,7 @@
 
 Fourth family converted under B4 of `docs/architecture-simplification-plan.md`,
 and the first one with real nesting: a candidate carries per-signal counts, a
-per-carrier breakdown, a sample-post pointer and an optional probe verdict. That
+per-carrier breakdown, a Reference pointer and an optional probe verdict. That
 nesting is exactly why it was worth typing — `dict[str, Any]` here erased four
 levels of structure at once, and the frontend hand-maintains all of it.
 
