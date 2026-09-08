@@ -208,6 +208,13 @@ EXCUSED: dict[tuple[str, str], tuple[Reason, str]] = {
         "Follow, unscoped on purpose (tenancy.py::SCOPES)",
     ),
     ("GET", f"{DATA}/discover/probe/queue"): (Reason.CORPUS, "see GET probes"),
+    ("GET", f"{DATA}/directory/{{handle}}/posts"): (
+        Reason.CORPUS,
+        "DirectorySample is corpus beside the DirectoryEntry it hangs off: a "
+        "sample is a copy of a public preview page, so '@foo publishes this' "
+        "has one answer for every caller and the rows carry no owner to scope "
+        "by (tenancy.py::SCOPES, ticket 03)",
+    ),
     ("POST", f"{DATA}/discover/probe/recheck"): (Reason.CORPUS, "see GET probes"),
     ("POST", f"{DATA}/discover/probe/refresh"): (Reason.CORPUS, "see GET probes"),
     ("GET", f"{DATA}/discover/ignored"): (

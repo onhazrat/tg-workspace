@@ -186,15 +186,23 @@ def _dominant_script(posts: Sequence[SamplePost]) -> str | None:
     return max(tally, key=lambda name: tally[name])
 
 
+def views_of(post: SamplePost) -> int | None:
+    """Telegram's view counter for one sample Post, `None` where it showed none.
+
+    Public because the panel shows the same number per Post that the median is
+    computed from (ticket 03), and the two must not disagree about where it
+    lives: `viewsCount` is a key inside the parsed media block, so a second
+    reader spelling it differently would show a blank beside a median derived
+    from a value it could not find.
+    """
+    if post.media is None:
+        return None
+    count = post.media.get("viewsCount")
+    return count if isinstance(count, int) else None
+
+
 def _measured_views(posts: Sequence[SamplePost]) -> list[int]:
-    out: list[int] = []
-    for post in posts:
-        if post.media is None:
-            continue
-        count = post.media.get("viewsCount")
-        if isinstance(count, int):
-            out.append(count)
-    return out
+    return [count for post in posts if (count := views_of(post)) is not None]
 
 
 def compute_sample_statistics(posts: Sequence[SamplePost]) -> SampleStatistics:

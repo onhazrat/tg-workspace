@@ -34,6 +34,8 @@ export const queryKeys = {
   /** Server-side probe queue counts. Polled while work is outstanding. */
   discoverProbeQueue: ["discoverProbeQueue"] as const,
   discoverReport: (id: string) => ["discoverReport", id] as const,
+  /** The Directory's sample Posts for one handle — corpus-wide, not a report's. */
+  directoryPosts: (handle: string) => ["directoryPosts", handle] as const,
   postsCounts: (scope: unknown) => ["postsCounts", scope] as const,
   /** The infinite Posts feed, keyed on scope + filters + cap + sort. */
   postsFeed: (scope: unknown) => ["postsFeed", scope] as const,

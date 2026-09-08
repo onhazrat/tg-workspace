@@ -49,6 +49,7 @@ import type {
   ChannelSyncProgress,
   ChatArtifactResponse,
   ChatSessionListItemResponse,
+  DirectorySamplePostResponse,
   DiscoverReportResponse,
   DiscoveryArtifactResponse,
   JobStatusEntry,
@@ -202,6 +203,34 @@ export type ChatArtifactIsClosed = Assert<IsClosed<ChatArtifactResponse>>
 export type TagArtifactIsClosed = Assert<IsClosed<TagArtifactResponse>>
 export type DiscoveryArtifactIsClosed = Assert<
   IsClosed<DiscoveryArtifactResponse>
+>
+
+// ---------------------------------------------------------------------------
+// The Directory's sample Posts (ticket 03): generated, and the three fields the
+// panel renders are required.
+//
+// This is the assertion the ticket asks for in both directions. Discover's
+// neighbouring calls are hand-written because *their* models are open or
+// all-optional, which is a property of those models and not of the tab — so
+// putting this one beside them for tidiness is how the split rots.
+//
+// `postId`, `text` and `timestamp` carry no server-side default on purpose. Add
+// one (`text: str = ""`) and OpenAPI marks the field optional, the second
+// assertion below breaks, and the panel would otherwise have had to narrow a
+// type that is never actually missing a body.
+// ---------------------------------------------------------------------------
+
+export type DirectorySamplePostIsClosed = Assert<
+  IsClosed<DirectorySamplePostResponse>
+>
+export type DirectorySamplePostIsNotAllOptional = Assert<
+  DirectorySamplePostResponse extends {
+    postId: number
+    text: string
+    timestamp: number
+  }
+    ? true
+    : false
 >
 
 // ---------------------------------------------------------------------------

@@ -1301,6 +1301,31 @@ export type DbStatsResponse = {
 };
 
 /**
+ * DirectorySamplePostResponse
+ * One Post off a Channel's preview page, as the last probe captured it.
+ *
+ * The text travels whole; truncation is the reader's.
+ */
+export type DirectorySamplePostResponse = {
+    /**
+     * Postid
+     */
+    postId: number;
+    /**
+     * Text
+     */
+    text: string;
+    /**
+     * Timestamp
+     */
+    timestamp: number;
+    /**
+     * Views
+     */
+    views?: number | null;
+};
+
+/**
  * DiscoverCandidateResponse
  * One discovered handle, as `_to_candidate` builds it.
  *
@@ -7129,6 +7154,37 @@ export type DataUpdateDiscoverReportFlagsResponses = {
 };
 
 export type DataUpdateDiscoverReportFlagsResponse = DataUpdateDiscoverReportFlagsResponses[keyof DataUpdateDiscoverReportFlagsResponses];
+
+export type DataGetDirectoryPostsData = {
+    body?: never;
+    path: {
+        /**
+         * Handle
+         */
+        handle: string;
+    };
+    query?: never;
+    url: '/api/v1/data/directory/{handle}/posts';
+};
+
+export type DataGetDirectoryPostsErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type DataGetDirectoryPostsError = DataGetDirectoryPostsErrors[keyof DataGetDirectoryPostsErrors];
+
+export type DataGetDirectoryPostsResponses = {
+    /**
+     * Response Data-Get Directory Posts
+     * Successful Response
+     */
+    200: Array<DirectorySamplePostResponse>;
+};
+
+export type DataGetDirectoryPostsResponse = DataGetDirectoryPostsResponses[keyof DataGetDirectoryPostsResponses];
 
 export type DataListSummariesData = {
     body?: never;

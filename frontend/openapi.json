@@ -2592,6 +2592,47 @@
         }
       }
     },
+    "/api/v1/data/directory/{handle}/posts": {
+      "get": {
+        "tags": ["data"],
+        "summary": "Get Directory Posts",
+        "description": "The Channel's recent Posts, as the last probe captured them.\n\nWhat a Channel actually publishes, read without leaving the app and without\nreaching Telegram. **This issues no fetch**: it serves the snapshot the\nprobe already stored, because a user-facing trigger on a rate-limited\nscraper would let a click jump the queue that exists to decide ordering. A\nstale answer is refreshed through `POST /discover/probe/refresh`, which goes\nthrough that queue.\n\nEmpty is a real answer and means the entry has no recent Posts \u2014 an\n`unavailable` verdict clears the snapshot outright, and retention collects\nit on the sample window. The 404 is the other absence: the deployment holds\nnothing about this handle, no verdict and no Posts.",
+        "operationId": "data-get_directory_posts",
+        "security": [{ "OAuth2PasswordBearer": [] }],
+        "parameters": [
+          {
+            "name": "handle",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "title": "Handle" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/DirectorySamplePostResponse"
+                  },
+                  "title": "Response Data-Get Directory Posts"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/data/summaries": {
       "get": {
         "tags": ["data"],
@@ -6131,6 +6172,21 @@
         "type": "object",
         "title": "DbStatsResponse",
         "description": "Row counts across the corpus, scoped to the operator.\n\n`embeddedPostCount` is deliberately **not** operator-scoped: embeddings are a\ncorpus-level artefact shared across users (see the multi-user seam note in\nthe plan), so it counts the whole table while the rest count the operator's\nrows."
+      },
+      "DirectorySamplePostResponse": {
+        "properties": {
+          "postId": { "type": "integer", "title": "Postid" },
+          "text": { "type": "string", "title": "Text" },
+          "timestamp": { "type": "integer", "title": "Timestamp" },
+          "views": {
+            "anyOf": [{ "type": "integer" }, { "type": "null" }],
+            "title": "Views"
+          }
+        },
+        "type": "object",
+        "required": ["postId", "text", "timestamp"],
+        "title": "DirectorySamplePostResponse",
+        "description": "One Post off a Channel's preview page, as the last probe captured it.\n\nThe text travels whole; truncation is the reader's."
       },
       "DiscoverCandidateResponse": {
         "properties": {

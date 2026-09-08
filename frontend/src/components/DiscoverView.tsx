@@ -24,7 +24,6 @@ import { useCanManageJobs } from "@/hooks/useJobsStatus"
 import {
   countUnfollowedCandidates,
   DISCOVERY_SIGNAL_KINDS,
-  type DiscoveryCandidate,
   type DiscoveryEmptyReason,
   type DiscoverySignalKind,
   deriveDiscoveryEmptyReason,
@@ -76,7 +75,20 @@ export const DiscoverView: React.FC = () => {
 
   // Ephemeral: a name filter is a per-visit refinement, not a durable preference.
   const [nameQuery, setNameQuery] = useState("")
-  const [inspecting, setInspecting] = useState<DiscoveryCandidate | null>(null)
+  /**
+   * The Candidate the panel is open on, held **by name**.
+   *
+   * Storing the object froze it. That was harmless while the panel showed only
+   * signal counts and a Reference pointer, neither of which changes — but since
+   * ticket 03 it renders probe-derived statistics, and those do. The sweep
+   * resolving the handle left an open panel reading "Not probed yet" for ever,
+   * and pressing Recheck left it showing a cadence the server had just disowned
+   * beside the words saying so.
+   *
+   * Looked up in `rawCandidates` rather than `candidates`: a filter or a
+   * threshold the operator changes while the panel is open must not close it.
+   */
+  const [inspectingName, setInspectingName] = useState<string | null>(null)
 
   const { reportId, openReport } = useDiscoverReportParam()
 
@@ -105,6 +117,11 @@ export const DiscoverView: React.FC = () => {
   }
 
   const rawCandidates = useMemo(() => view?.candidates ?? [], [view])
+
+  const inspecting = useMemo(
+    () => rawCandidates.find((row) => row.name === inspectingName) ?? null,
+    [rawCandidates, inspectingName],
+  )
 
   // Filtering and ranking are client-side over the saved report, so changing a
   // weight or a threshold re-ranks instantly instead of regenerating.
@@ -371,7 +388,7 @@ export const DiscoverView: React.FC = () => {
             activeFollowNames={follow.activeFollowNames}
             resultStatusByName={follow.resultStatusByName}
             onFollow={(name) => void follow.followOne(name)}
-            onInspect={setInspecting}
+            onInspect={(candidate) => setInspectingName(candidate.name)}
             onSetIgnored={(name, ignored) =>
               setIgnored.mutate({ handles: [name], ignored })
             }
@@ -385,10 +402,12 @@ export const DiscoverView: React.FC = () => {
 
       <DiscoverCandidatePanel
         candidate={inspecting}
-        onClose={() => setInspecting(null)}
+        onClose={() => setInspectingName(null)}
         isOffline={isOffline}
         isFollowJobRunning={follow.isFollowJobRunning}
         onFollow={(name) => void follow.followOne(name)}
+        onRecheck={(name) => probe.recheck([name])}
+        isRecheckPending={probe.isRecheckPending}
       />
 
       <TgConfirmDialog

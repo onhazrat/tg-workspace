@@ -21,6 +21,7 @@ from app.api.routes.data import (
     channels,
     chat_sessions,
     credentials,
+    directory,
     discover,
     logs,
     posts,
@@ -33,6 +34,7 @@ router = APIRouter(prefix="/data", tags=["data"])
 router.include_router(channels.router)
 router.include_router(posts.router)
 router.include_router(discover.router)
+router.include_router(directory.router)
 router.include_router(summaries.router)
 router.include_router(chat_sessions.router)
 router.include_router(artifacts.router)
