@@ -814,6 +814,13 @@
       "sensitive": false
     },
     {
+      "default": "playwright",
+      "name": "DOCKER_IMAGE_PLAYWRIGHT",
+      "required": false,
+      "scope": "compose",
+      "sensitive": false
+    },
+    {
       "default": null,
       "name": "DOMAIN",
       "required": false,
