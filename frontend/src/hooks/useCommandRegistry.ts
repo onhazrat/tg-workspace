@@ -9,7 +9,6 @@ import { useScraper } from "@/contexts/ScraperContext"
 import { useSettings } from "@/contexts/SettingsContext"
 import { useUI } from "@/contexts/UIContext"
 import { useApiStatus } from "@/hooks/useApiStatus"
-import useAuth from "@/hooks/useAuth"
 import { useConfigurationCatalog } from "@/hooks/useConfigurationCatalog"
 import { useGuidedTour } from "@/hooks/useGuidedTour"
 import { useJobToggles } from "@/hooks/useJobToggles"
@@ -44,10 +43,10 @@ export function useCommandRegistry(): {
   context: CommandContext
 } {
   const settings = useSettings()
-  const { user } = useAuth()
-  const { data: configurationCatalog } = useConfigurationCatalog(
-    Boolean(user?.is_superuser),
-  )
+  const palette = useCommandPaletteContext()
+  // This admin-only inventory is requested only while the palette is open.
+  // Its 403 response, not is_superuser, decides whether entries are available.
+  const { data: configurationCatalog } = useConfigurationCatalog(palette.open)
   const navigateWorkspace = workspaceRoute.useNavigate()
   const {
     channels,
@@ -112,7 +111,6 @@ export function useCommandRegistry(): {
   const { isOffline } = useApiStatus()
   const { startTour } = useGuidedTour()
   const jobToggles = useJobToggles()
-  const palette = useCommandPaletteContext()
   const { setChannelGroupFilter, setSelectedSettingGroup } =
     useWorkspaceGroupParams()
   const { data: settingGroups = [] } = useSettingGroupsQuery()
@@ -172,6 +170,7 @@ export function useCommandRegistry(): {
       setActiveTab,
       setActiveSection,
       openConfigurationEntry,
+      configurationCatalog,
       channels,
       channelStats,
       selectedChannels,
@@ -314,6 +313,7 @@ export function useCommandRegistry(): {
       channelStats,
       channels,
       completePendingSummary,
+      configurationCatalog,
       copySummaryPrompt,
       currentSummaryId,
       endDate,

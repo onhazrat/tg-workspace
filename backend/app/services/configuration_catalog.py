@@ -7,6 +7,7 @@ import os
 import re
 import uuid
 from enum import Enum
+from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
@@ -28,7 +29,7 @@ from app.schemas.configuration import (
     ConfigurationEntry,
     ConfigurationLayer,
 )
-from app.services.network_settings import load_network_settings
+from app.services.network_settings import load_network_settings, redact_proxy_url
 from app.services.quota_limits import all_limits
 from app.services.settings_registry import (
     GLOBAL_KEYS,
@@ -46,6 +47,8 @@ from app.services.user_settings import get_user_setting
 
 _CATALOG_PATH = Path(__file__).resolve().parents[1] / "core/env_catalog.generated.json"
 _REDACTED = "••••••"
+_SENSITIVE_SUFFIXES = ("_KEY", "_TOKEN", "_SECRET", "_PASSWORD", "_DSN")
+_SENSITIVE_WORDS = {"KEY", "TOKEN", "SECRET", "PASSWORD", "DSN"}
 
 
 def _label(key: str) -> str:
@@ -70,23 +73,30 @@ def _redact(value: Any, *, sensitive: bool = False) -> Any:
     if sensitive:
         return _REDACTED if value not in (None, "", [], {}) else value
     if isinstance(value, dict):
-        return {
-            key: _redact(
+        redacted: dict[str, Any] = {}
+        for raw_key, item in value.items():
+            key = str(raw_key)
+            normalized = re.sub(r"(?<=[a-z0-9])(?=[A-Z])", "_", key)
+            normalized = re.sub(r"[^A-Za-z0-9]+", "_", normalized).upper()
+            safe_key = redact_proxy_url(key) or key
+            redacted[safe_key] = _redact(
                 item,
                 sensitive=(
-                    key.upper().endswith(("_KEY", "_PASSWORD", "_TOKEN"))
-                    or "PROXYURL" in re.sub(r"[^A-Z]", "", key.upper())
+                    normalized in _SENSITIVE_WORDS
+                    or normalized.endswith(_SENSITIVE_SUFFIXES)
                 ),
             )
-            for key, item in value.items()
-        }
+        return redacted
     if isinstance(value, list):
         return [_redact(item) for item in value]
+    if isinstance(value, str):
+        return redact_proxy_url(value) or value
     return _jsonable(value)
 
 
-def _manifest() -> list[dict[str, Any]]:
-    return list(json.loads(_CATALOG_PATH.read_text())["variables"])
+@lru_cache(maxsize=1)
+def _manifest() -> tuple[dict[str, Any], ...]:
+    return tuple(json.loads(_CATALOG_PATH.read_text())["variables"])
 
 
 def _field_default(name: str) -> Any:
@@ -96,11 +106,12 @@ def _field_default(name: str) -> Any:
     return None
 
 
-def _dotenv_names() -> set[str]:
+@lru_cache(maxsize=1)
+def _dotenv_names() -> frozenset[str]:
     """Return names declared in configured dotenv files without loading values."""
     configured = Settings.model_config.get("env_file")
     if not configured:
-        return set()
+        return frozenset()
     paths = [configured] if isinstance(configured, (str, Path)) else list(configured)
     backend_root = Path(__file__).resolve().parents[2]
     names: set[str] = set()
@@ -118,7 +129,7 @@ def _dotenv_names() -> set[str]:
             match = re.match(r"^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=", line)
             if match:
                 names.add(match.group(1).upper())
-    return names
+    return frozenset(names)
 
 
 def _deployment_entries() -> list[ConfigurationEntry]:
@@ -183,15 +194,17 @@ def _deployment_entries() -> list[ConfigurationEntry]:
     return entries
 
 
-def _effective_global(session: Session, key: str) -> dict[str, Any]:
+def _effective_global(
+    session: Session, key: str, sync_settings: dict[str, Any]
+) -> dict[str, Any]:
     if key == "jobs":
         return load_jobs_settings(session)
     if key == "sync":
-        merged = load_sync_settings(session)
-        return {field: merged.get(field) for field in sorted(SYNC_POLICY_FIELDS)}
+        return {field: sync_settings.get(field) for field in sorted(SYNC_POLICY_FIELDS)}
     if key == SYNC_RUNTIME_KEY:
-        merged = load_sync_settings(session)
-        return {field: merged.get(field) for field in sorted(SYNC_RUNTIME_FIELDS)}
+        return {
+            field: sync_settings.get(field) for field in sorted(SYNC_RUNTIME_FIELDS)
+        }
     if key == "retention":
         return load_retention_policy(session)
     if key == "media":
@@ -207,9 +220,10 @@ def _effective_global(session: Session, key: str) -> dict[str, Any]:
 
 def _global_entries(session: Session) -> list[ConfigurationEntry]:
     entries: list[ConfigurationEntry] = []
+    sync_settings = load_sync_settings(session)
     for key, description in GLOBAL_KEYS.items():
         stored = get_global_setting(session, key)
-        value = _effective_global(session, key)
+        value = _effective_global(session, key, sync_settings)
         sensitive = key == "network"
         entries.append(
             ConfigurationEntry(

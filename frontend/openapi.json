@@ -4025,7 +4025,6 @@
       "get": {
         "tags": ["data"],
         "summary": "Get Configuration Catalog",
-        "description": "All five configuration layers, with secret values redacted.",
         "operationId": "data-get_configuration_catalog",
         "responses": {
           "200": {

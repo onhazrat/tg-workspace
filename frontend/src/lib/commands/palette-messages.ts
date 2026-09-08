@@ -56,12 +56,14 @@ export function getEntityGroupHeading(flow: EntityFlowType): string {
   if (flow === "delete-summary") return "Summaries"
   if (flow === "pick-post") return "Posts"
   if (flow === "clear-db-table") return "Tables"
+  if (flow === "open-configuration") return "Configuration"
   if (isSettingGroupEntityFlow(flow)) return "Setting Groups"
   return "Tags"
 }
 
 /** Search-input placeholder for the entity sub-view. */
 export function getEntityInputPlaceholder(flow: EntityFlowType): string {
+  if (flow === "open-configuration") return "Filter configuration keys..."
   return isNonChannelEntityFlow(flow)
     ? "Filter..."
     : "Name, display name, tag, #tag, or tag:tag..."

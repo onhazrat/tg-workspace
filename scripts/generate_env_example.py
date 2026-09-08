@@ -6,10 +6,10 @@ The application has three places that declare environment variables:
 * Vite/process environment reads in the frontend; and
 * Compose interpolation.
 
-This script discovers all three from source.  The existing example remains the
-home of the longer operational comments and safe deployment placeholders, while
-code defaults are authoritative and missing variables are appended to a clearly
-marked generated section.  ``--check`` makes drift a CI/pre-commit failure.
+This script discovers all three from source. The curated part of the example
+remains the home of operational comments, deploy-ready values, and deliberate
+default overrides. Missing variables are appended to a clearly marked generated
+section. ``--check`` makes drift a CI/pre-commit failure.
 """
 
 from __future__ import annotations
@@ -35,20 +35,10 @@ COMPOSE_SOURCES = (
 )
 GENERATED_MARKER = "# --- Auto-discovered variables (generated; do not reorder) ---"
 SENSITIVE_NAMES = {
-    "API_KEY",
-    "CF_DNS_API_TOKEN",
     "DEFAULT_PROXY_URLS",
-    "GEMINI_API_KEY",
-    "HASHED_PASSWORD",
-    "POSTGRES_PASSWORD",
-    "SECRET_KEY",
-    "SENTRY_DSN",
-    "SMTP_PASSWORD",
-    "TOKEN_ENCRYPTION_KEY",
-    "TOR_CONTROL_PASSWORD",
     "TOR_SOCKS_PROXY",
-    "VITE_API_KEY",
 }
+SENSITIVE_SUFFIXES = ("_KEY", "_TOKEN", "_SECRET", "_PASSWORD", "_DSN")
 VITE_BUILT_INS = {"BASE_URL", "DEV", "MODE", "PROD", "SSR"}
 
 
@@ -237,7 +227,7 @@ def compose_defaults() -> dict[str, str | None]:
 
 
 def is_sensitive(name: str) -> bool:
-    return name in SENSITIVE_NAMES or name.endswith("_PASSWORD")
+    return name in SENSITIVE_NAMES or name.endswith(SENSITIVE_SUFFIXES)
 
 
 def discovered_specs() -> list[EnvSpec]:
@@ -251,7 +241,10 @@ def discovered_specs() -> list[EnvSpec]:
                 name=name,
                 scope="frontend_build" if name.startswith("VITE_") else "tooling",
                 default=vite_defaults.get(name),
-                sensitive=is_sensitive(name),
+                # Every VITE_* value is public: Vite embeds it in the browser
+                # bundle. Calling one secret here would promise protection the
+                # build cannot provide.
+                sensitive=is_sensitive(name) and not name.startswith("VITE_"),
             ),
         )
     for name, default in sorted(compose_defaults().items()):
@@ -287,7 +280,6 @@ def render_value(value: str | float | bool | None) -> str:
 
 def synchronize_example(original: str, specs: list[EnvSpec]) -> str:
     lines = original.splitlines()
-    spec_by_name = {spec.name: spec for spec in specs}
     present: set[str] = set()
     output: list[str] = []
 
@@ -297,27 +289,15 @@ def synchronize_example(original: str, specs: list[EnvSpec]) -> str:
         len(lines),
     )
     for line in lines[:marker_index]:
-        match = re.match(r"^([A-Z][A-Z0-9_]*)=(.*)$", line)
-        if not match:
-            output.append(line)
-            continue
-        name = match.group(1)
-        present.add(name)
-        spec = spec_by_name.get(name)
-        # Only scalar Settings defaults replace curated values. Strings in the
-        # runnable template are often intentional deployment examples (for
-        # example POSTGRES_DB=app), while the generated catalog still records
-        # their exact code defaults.
-        if (
-            spec is not None
-            and spec.scope == "backend_runtime"
-            and spec.default is not None
-            and isinstance(spec.default, (bool, int, float))
-            and not spec.sensitive
-        ):
-            output.append(f"{name}={render_value(spec.default)}")
-        else:
-            output.append(line)
+        # A commented assignment is deliberately documented but inactive.
+        # Counting it prevents required Compose inputs such as Traefik's
+        # USERNAME/HASHED_PASSWORD from being re-added as empty active values.
+        match = re.match(r"^\s*(?:#\s*)?([A-Z][A-Z0-9_]*)=", line)
+        if match:
+            present.add(match.group(1))
+        # Never rewrite curated values. The existing default guard owns
+        # bool/int drift and its SKIP map owns intentional divergence.
+        output.append(line)
 
     missing = [spec for spec in specs if spec.name not in present]
     while output and not output[-1].strip():

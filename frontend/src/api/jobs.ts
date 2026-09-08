@@ -1,6 +1,5 @@
 import {
   jobsCancelSyncJob,
-  jobsGetRuntimeConfig,
   jobsGetSyncJobStatus,
   jobsStartSyncJob,
   type SyncJobStatusResponse,
@@ -18,11 +17,10 @@ import { request, sseJsonStream } from "./base"
  * riding in `extra` arrives typed as `unknown` — the generated type is then
  * strictly *worse* than the hand-written one. See ADR-006.
  *
- * The prize here was never the call wrappers; it was the four server response
- * shapes this file used to re-declare by hand (`RuntimeConfig`,
- * `SyncJobStatus`, `SyncJobChannelStatus`, and the two inline sync-job
- * envelopes). Those are now aliases onto the generated types, so the compiler
- * keeps them in step with the backend the way B7 did for domain types.
+ * The prize here was never the call wrappers; it was the sync-job response
+ * shapes this file used to re-declare by hand. Those are now aliases onto the
+ * generated types, so the compiler keeps them in step with the backend the way
+ * B7 did for domain types.
  */
 
 /**
@@ -46,14 +44,6 @@ export type JobStatusEntry = {
 export type {
   /** One channel's progress inside a sync job. */
   ChannelSyncProgress as SyncJobChannelStatus,
-  /**
-   * The resolved runtime configuration.
-   *
-   * The generated type is a large upgrade: `sync`, `scraper`, `network`,
-   * `jobs`, `retention` and `constants` were each `Record<string, unknown>`
-   * here and are now their own declared models.
-   */
-  RuntimeConfigResponse as RuntimeConfig,
   SyncJobStatusResponse as SyncJobStatus,
 } from "@/client"
 
@@ -87,8 +77,6 @@ export const jobsApi = {
     jobsCancelSyncJob({ path: { job_id: jobId } }),
 
   healthCheck: () => utilsHealthCheck(),
-
-  getRuntimeConfig: () => jobsGetRuntimeConfig(),
 }
 
 /**

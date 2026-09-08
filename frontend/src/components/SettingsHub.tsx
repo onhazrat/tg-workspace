@@ -7,7 +7,6 @@ import { ConfigurationCatalogView } from "@/components/ConfigurationCatalogView"
 import { DatabaseManagement } from "@/components/DatabaseManagement"
 import { DiagnosticsView } from "@/components/DiagnosticsView"
 import { NetworkTelemetry } from "@/components/NetworkTelemetry"
-import { RuntimeConfigView } from "@/components/RuntimeConfigView"
 import { SettingGroupsPanel } from "@/components/SettingGroupsPanel"
 import { SettingsView } from "@/components/SettingsView"
 import { CommonlyUsedSection } from "@/components/settings/CommonlyUsedSection"
@@ -250,15 +249,6 @@ export const SettingsHub: React.FC = () => {
             <NetworkTelemetry />
           </SettingAnchor>
         )
-      case "runtime-config":
-        return (
-          <SettingAnchor
-            settingId="panel-runtime-config"
-            highlighted={highlightId === "panel-runtime-config"}
-          >
-            <RuntimeConfigView />
-          </SettingAnchor>
-        )
       case "configuration":
         return <ConfigurationCatalogView focusId={deepLinkSetting} />
       default:
@@ -284,7 +274,6 @@ export const SettingsHub: React.FC = () => {
         className={`flex-1 flex flex-col min-w-0 overflow-hidden bg-app-card transition-colors ${
           activeSettingsTab === "diagnostics" ||
           activeSettingsTab === "network-telemetry" ||
-          activeSettingsTab === "runtime-config" ||
           activeSettingsTab === "configuration" ||
           activeSettingsTab === "tools"
             ? "terminal-theme text-app-ink"

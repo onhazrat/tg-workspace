@@ -61,7 +61,6 @@ describe("settings TOC", () => {
     expect(tools?.children?.map((c) => c.id)).toEqual([
       "diagnostics",
       "network-telemetry",
-      "runtime-config",
       "configuration",
     ])
   })

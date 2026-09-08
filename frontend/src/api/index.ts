@@ -30,10 +30,6 @@ export type {
   BulkFollowChannelInput,
   BulkFollowRequest,
   BulkSyncSettingsPatchBody,
-  ConfigurationCatalog,
-  ConfigurationEntry,
-  ConfigurationLayer,
-  ConfigurationLayerId,
   DiscoveredViaPayload,
   DiscoverProbeQueue,
   FollowChannelResult,
@@ -44,7 +40,6 @@ export type {
 export { dataApi, streamFollowJobEvents } from "./data"
 export type {
   JobStatusEntry,
-  RuntimeConfig,
   SyncJobChannelStatus,
   SyncJobStatus,
 } from "./jobs"

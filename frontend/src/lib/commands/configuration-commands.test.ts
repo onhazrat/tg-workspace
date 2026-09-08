@@ -1,9 +1,10 @@
 import { describe, expect, it } from "bun:test"
-import type { ConfigurationCatalog } from "@/api"
+import type { ConfigurationCatalogResponse } from "@/client"
+import { getExtendedEntityCandidates } from "@/lib/commands/entity-candidates"
 import type { CommandContext } from "@/lib/commands/types"
 import { buildConfigurationCommands } from "./configuration-commands"
 
-const catalog: ConfigurationCatalog = {
+const catalog: ConfigurationCatalogResponse = {
   schema_version: 1,
   layers: [
     {
@@ -32,16 +33,31 @@ const catalog: ConfigurationCatalog = {
 }
 
 describe("configuration palette commands", () => {
-  it("creates one searchable destination per catalog entry", async () => {
+  it("creates one lazy browser instead of flooding the root command list", async () => {
     const opened: string[] = []
     const commands = buildConfigurationCommands(catalog)
     expect(commands).toHaveLength(1)
-    expect(commands[0]?.label).toBe("Open config → POSTGRES_SERVER")
-    expect(commands[0]?.keywords).toContain("deployment")
+    expect(commands[0]?.label).toBe("Browse Configuration")
+    expect(commands[0]?.entityFlow).toBe("open-configuration")
+    expect(commands[0]?.keywords).toContain("POSTGRES_SERVER")
 
-    await commands[0]?.run({
-      openConfigurationEntry: (id) => opened.push(id),
-    } as CommandContext)
+    await commands[0]?.run(
+      {
+        openConfigurationEntry: (id) => opened.push(id),
+      } as CommandContext,
+      "deployment:POSTGRES_SERVER",
+    )
     expect(opened).toEqual(["deployment:POSTGRES_SERVER"])
+
+    expect(
+      getExtendedEntityCandidates("open-configuration", {
+        configurationCatalog: catalog,
+      } as CommandContext),
+    ).toEqual([
+      {
+        id: "deployment:POSTGRES_SERVER",
+        label: "[deployment] POSTGRES_SERVER",
+      },
+    ])
   })
 })

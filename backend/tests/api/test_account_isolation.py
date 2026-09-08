@@ -181,6 +181,11 @@ EXCUSED: dict[tuple[str, str], tuple[Reason, str]] = {
     ),
     ("GET", f"{V1}/utils/health-check/"): (Reason.NOT_ROW_ADDRESSED, "liveness"),
     ("POST", f"{V1}/utils/test-email/"): (Reason.DEPLOYMENT_WIDE, "superuser probe"),
+    ("GET", f"{DATA}/configuration"): (
+        Reason.DEPLOYMENT_WIDE,
+        "DATA_ADMIN inventory: the user layer is the caller's own settings, while "
+        "global settings and per-account quota overrides deliberately cross accounts",
+    ),
     # --- the shared corpus --------------------------------------------------
     ("POST", f"{DATA}/posts"): (
         Reason.COVERED_ELSEWHERE,

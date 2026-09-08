@@ -36,7 +36,6 @@ export type SettingsTocId =
   | "tools"
   | "diagnostics"
   | "network-telemetry"
-  | "runtime-config"
   | "configuration"
 
 export interface SettingsTocNode {
@@ -94,7 +93,6 @@ export const SETTINGS_TOC: SettingsTocNode[] = [
     children: [
       { id: "diagnostics", label: "Diagnostics", icon: Activity },
       { id: "network-telemetry", label: "Network Telemetry", icon: Globe },
-      { id: "runtime-config", label: "Runtime Config", icon: Braces },
       { id: "configuration", label: "Configuration Catalog", icon: Layers },
     ],
   },

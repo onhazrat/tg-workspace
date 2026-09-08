@@ -44,6 +44,7 @@ export const queryKeys = {
    * double as this client's reading of that permission (`useCanManageJobs`).
    */
   jobsStatus: ["jobsStatus"] as const,
+  configurationCatalog: ["configurationCatalog"] as const,
   logs: {
     publish: ["logs", "publish"] as const,
     sync: ["logs", "sync"] as const,

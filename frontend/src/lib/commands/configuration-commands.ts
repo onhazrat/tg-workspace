@@ -1,31 +1,32 @@
-import type { ConfigurationCatalog } from "@/api"
+import type { ConfigurationCatalogResponse } from "@/client"
 import type { CommandDef } from "@/lib/commands/types"
 
-/** One read-only palette destination per discovered configuration entry. */
+/** One lazy browser command whose searchable sub-view contains every entry. */
 export function buildConfigurationCommands(
-  catalog: ConfigurationCatalog | undefined,
+  catalog: ConfigurationCatalogResponse | undefined,
 ): CommandDef[] {
-  if (!catalog) return []
-  return catalog.layers.flatMap((layer) =>
-    layer.entries.map((entry) => ({
-      id: `open-${entry.id.replace(/[^a-zA-Z0-9_-]/g, "-")}`,
-      kind: "action" as const,
-      label: `Open config → ${entry.key}`,
+  const entries = catalog?.layers.flatMap((layer) => layer.entries ?? []) ?? []
+  return [
+    {
+      id: "browse-configuration",
+      kind: "entity-root",
+      label: "Browse Configuration",
       keywords: [
         "config",
         "configuration",
-        "setting",
-        layer.id,
-        layer.label,
-        entry.key,
-        entry.label,
-        entry.source,
-        entry.description,
-        entry.owner_id ?? "",
+        "settings",
+        "environment",
+        ...entries.flatMap((entry) => [entry.key, entry.label]),
       ],
       group: "Configuration",
-      getBadge: () => layer.id,
-      run: (ctx) => ctx.openConfigurationEntry(entry.id),
-    })),
-  )
+      entityFlow: "open-configuration",
+      disabled: () =>
+        entries.length > 0
+          ? { disabled: false }
+          : { disabled: true, reason: "Configuration unavailable" },
+      run: (ctx, payload) => {
+        if (typeof payload === "string") ctx.openConfigurationEntry(payload)
+      },
+    },
+  ]
 }

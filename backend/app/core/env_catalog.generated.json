@@ -867,7 +867,7 @@
       "name": "VITE_API_KEY",
       "required": false,
       "scope": "frontend_build",
-      "sensitive": true
+      "sensitive": false
     },
     {
       "default": "",

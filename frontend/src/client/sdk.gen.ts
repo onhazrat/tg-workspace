@@ -2248,7 +2248,6 @@ export const dataClearTableRoute = <ThrowOnError extends boolean = true>(options
 
 /**
  * Get Configuration Catalog
- * All five configuration layers, with secret values redacted.
  */
 export const dataGetConfigurationCatalog = <ThrowOnError extends boolean = true>(options?: Options<DataGetConfigurationCatalogData, ThrowOnError>) => {
     return (options?.client ?? _heyApiClient).get<DataGetConfigurationCatalogResponses, unknown, ThrowOnError, 'data'>({

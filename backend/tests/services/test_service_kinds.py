@@ -107,6 +107,9 @@ INVENTORY: dict[str, str] = {
     # Unions four aggregates into one time-ordered page for History. Owns no
     # table and never commits.
     "artifacts.py": READ_MODEL,
+    # Joins environment metadata with both settings aggregates and quota
+    # overrides for one read-only admin inventory; owns and commits nothing.
+    "configuration_catalog.py": READ_MODEL,
     "discover.py": READ_MODEL,
     "network_settings.py": READ_MODEL,
     "prompt_assembly.py": READ_MODEL,

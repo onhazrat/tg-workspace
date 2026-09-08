@@ -1,6 +1,7 @@
 import type { Dispatch, SetStateAction } from "react"
 
 import type { JobStatusEntry } from "@/api/jobs"
+import type { ConfigurationCatalogResponse } from "@/client"
 import type { SettingsSection } from "@/lib/settingsSection"
 import type {
   Channel,
@@ -59,6 +60,7 @@ export type EntityFlowType =
   | "filter-by-setting-group"
   | "move-to-setting-group"
   | "open-setting-group"
+  | "open-configuration"
 
 export interface CommandDisabledState {
   disabled: boolean
@@ -127,6 +129,7 @@ export interface CommandContext {
   setActiveTab: (tab: TabType) => void
   setActiveSection: (section: SettingsSection) => void
   openConfigurationEntry: (id: string) => void
+  configurationCatalog?: ConfigurationCatalogResponse
   channels: Channel[]
   channelStats: Record<string, ChannelStats>
   selectedChannels: Set<string>

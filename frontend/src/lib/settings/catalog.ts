@@ -784,16 +784,6 @@ export const SETTINGS_CATALOG: SettingCatalogEntry[] = [
     defaultValue: null,
     control: { kind: "panel", sectionId: "network-telemetry" },
   },
-  {
-    id: "panel-runtime-config",
-    label: "Runtime Config",
-    description: "Read-only runtime configuration dump.",
-    keywords: ["runtime", "config", "json", "tools"],
-    group: "tools",
-    source: "app",
-    defaultValue: null,
-    control: { kind: "panel", sectionId: "runtime-config" },
-  },
 ]
 
 const BY_ID = new Map(SETTINGS_CATALOG.map((e) => [e.id, e]))

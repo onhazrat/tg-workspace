@@ -181,7 +181,6 @@ def get_configuration_catalog(
     session: SessionDep,
     current_user: CurrentUser,
 ) -> ConfigurationCatalogResponse:
-    """All five configuration layers, with secret values redacted."""
     return build_configuration_catalog(session, user_id=current_user.id)
 
 

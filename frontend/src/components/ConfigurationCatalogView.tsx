@@ -1,21 +1,27 @@
 import { Check, Copy, Loader2, RefreshCw, Search } from "lucide-react"
 import { motion } from "motion/react"
 import { useEffect, useMemo, useState } from "react"
+import { ApiError } from "@/api/base"
 import type {
-  ConfigurationCatalog,
+  ConfigurationCatalogResponse,
   ConfigurationEntry,
   ConfigurationLayer,
-  ConfigurationLayerId,
-} from "@/api"
+} from "@/client"
 import { Badge } from "@/components/ui/badge"
 import { TgButton } from "@/components/ui/tg-button"
 import { TgInput } from "@/components/ui/tg-input"
-import useAuth from "@/hooks/useAuth"
 import { useConfigurationCatalog } from "@/hooks/useConfigurationCatalog"
 import { useCopyToClipboard } from "@/hooks/useCopyToClipboard"
 import { frontendBuildValue, hasFrontendBuildValue } from "@/lib/env"
 
 const REDACTED = "••••••"
+type ConfigurationLayerId = ConfigurationLayer["id"]
+type HydratedLayer = Omit<ConfigurationLayer, "entries"> & {
+  entries: ConfigurationEntry[]
+}
+type HydratedCatalog = Omit<ConfigurationCatalogResponse, "layers"> & {
+  layers: HydratedLayer[]
+}
 
 function displayValue(value: unknown): string {
   if (value === null || value === undefined || value === "") return "Not set"
@@ -23,14 +29,18 @@ function displayValue(value: unknown): string {
   return JSON.stringify(value, null, 2)
 }
 
-function hydrateFrontend(catalog: ConfigurationCatalog): ConfigurationCatalog {
+function hydrateFrontend(
+  catalog: ConfigurationCatalogResponse,
+): HydratedCatalog {
   return {
     ...catalog,
     layers: catalog.layers.map((layer) => {
-      if (layer.id !== "frontend") return layer
+      if (layer.id !== "frontend") {
+        return { ...layer, entries: layer.entries ?? [] }
+      }
       return {
         ...layer,
-        entries: layer.entries.map((entry) => {
+        entries: (layer.entries ?? []).map((entry) => {
           const value = frontendBuildValue(entry.key, entry.default_value)
           const configured = hasFrontendBuildValue(entry.key)
           return {
@@ -87,7 +97,7 @@ function ConfigRow({ entry }: { entry: ConfigurationEntry }) {
   )
 }
 
-function LayerSection({ layer }: { layer: ConfigurationLayer }) {
+function LayerSection({ layer }: { layer: HydratedLayer }) {
   return (
     <section className="space-y-3">
       <div className="flex items-baseline justify-between gap-3 border-b border-app-ink/10 pb-2">
@@ -117,9 +127,9 @@ export function ConfigurationCatalogView({
 }: {
   focusId?: string | null
 }) {
-  const { user } = useAuth()
-  const isAdmin = Boolean(user?.is_superuser)
-  const { data, isLoading, error, refetch } = useConfigurationCatalog(isAdmin)
+  // The backend's DATA_ADMIN gate is the only authority. A 403 is a valid
+  // permission answer; the browser must not invent a second is_superuser gate.
+  const { data, isLoading, error, refetch } = useConfigurationCatalog(true)
   const [query, setQuery] = useState("")
   const [layerFilter, setLayerFilter] = useState<ConfigurationLayerId | "all">(
     "all",
@@ -166,10 +176,10 @@ export function ConfigurationCatalogView({
 
   const copyPayload = hydrated ? JSON.stringify(hydrated, null, 2) : ""
 
-  if (!isAdmin) {
+  if (error instanceof ApiError && error.status === 403) {
     return (
       <p className="text-sm opacity-60">
-        The configuration inventory is available to administrators only.
+        You do not have permission to view the configuration catalog.
       </p>
     )
   }

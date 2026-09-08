@@ -61,7 +61,7 @@ a queue that drains late, not a request that fails.
 Under Docker there is nothing to do: `docker compose watch` starts the `worker`
 service with the same reload behaviour as `backend`.
 
-**Postgres schema (native dev)** — keep `POSTGRES_DB=app` in `.env` for the API (pytest uses `TEST_POSTGRES_DB=app_test` separately; do not point `POSTGRES_DB` at the test database). If only the Compose `db` container is running, apply migrations to `app` before startup:
+**Postgres schema (native dev)** — keep `POSTGRES_DB=app` in `.env` for the API (pytest uses `POSTGRES_DB_TEST=app_test` separately; do not point `POSTGRES_DB` at the test database). If only the Compose `db` container is running, apply migrations to `app` before startup:
 
 ```bash
 cd backend && uv run alembic upgrade head
@@ -254,7 +254,7 @@ docker compose exec db psql -U postgres -d app -c "CREATE DATABASE app_test;"
 docker compose run --rm prestart bash -c "POSTGRES_DB=app_test alembic upgrade head"
 ```
 
-Set `TEST_POSTGRES_DB=app_test` in `.env` (see `.env.example`). `conftest.py` overrides `POSTGRES_DB` to that value for every pytest run. `POSTGRES_DB_TEST` remains a legacy fallback only.
+Set `POSTGRES_DB_TEST=app_test` in `.env` (see `.env.example`). `conftest.py` overrides `POSTGRES_DB` to that value for every pytest run.
 
 ### Run tests
 
