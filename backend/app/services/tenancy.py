@@ -77,6 +77,7 @@ from app.core.config import settings
 from app.models import User
 from app.models_rbac import Role, UserRole
 from app.models_tg import (
+    AICredential,
     AppSetting,
     BotCredential,
     Channel,
@@ -156,6 +157,13 @@ SCOPES: dict[type[SQLModel], Scope] = {
     DiscoverIgnoredChannel: Scope.USER_OWNED,
     TagRun: Scope.USER_OWNED,
     BotCredential: Scope.USER_OWNED,
+    # An Account's AI Key. `USER_OWNED` for `BotCredential`'s reason and
+    # not a weaker one: the row holds a secret its owner pasted in, and
+    # the id is client-chosen through `PUT /data/ai-keys/{key_id}`, so a
+    # list that crossed accounts would hand out ids the Artifact routes
+    # then resolve by primary key. That is multi-user-tenancy ticket 33's
+    # defect, and BYOK-01 declines to reintroduce it under a new table.
+    AICredential: Scope.USER_OWNED,
     ChatDestination: Scope.USER_OWNED,
     UserSetting: Scope.USER_OWNED,
     PublishLog: Scope.USER_OWNED,
@@ -337,6 +345,10 @@ def mapped_table(model: type[SQLModel]) -> Table:
 #: alternative is loosening the frozen-inventory guard, which is the guard that
 #: turns "somebody added a `USER_OWNED` table and forgot" into a red test.
 CREATED_AFTER_THE_BACKFILL: dict[type[SQLModel], str] = {
+    AICredential: (
+        "e2f3a4b5c6d7 (BYOK-01) creates `tg_ai_credentials` with a NOT NULL "
+        "`user_id`, so it has never held a row nobody owns"
+    ),
     FollowJob: (
         "a2b3c4d5e6f7 (ticket 36) creates `tg_follow_jobs` with a NOT NULL "
         "`user_id`, so it has never held a row nobody owns"

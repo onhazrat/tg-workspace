@@ -48,7 +48,8 @@ from sqlmodel import Session, col, delete
 
 from app.core.db import engine
 from app.models import User
-from app.models_tg import BotCredential, ChatDestination
+from app.models_tg import AICredential, BotCredential, ChatDestination
+from app.services.ai_keys import list_ai_keys
 from app.services.credentials import list_bot_credentials, list_chat_destinations
 from tests.utils.user import create_random_user
 
@@ -124,6 +125,20 @@ def _seed_dest(session: Session, row_id: str, owner: uuid.UUID | None) -> None:
     session.commit()
 
 
+def _seed_ai_key(session: Session, row_id: str, owner: uuid.UUID | None) -> None:
+    session.add(
+        AICredential(id=row_id, user_id=owner, label=row_id, key_encrypted="enc:key")
+    )
+    session.commit()
+
+
+#: The third credential family arrived with BYOK-01, and it is **added to this
+#: battery rather than given a file of its own**. That is the twin-module rule
+#: this repo has already paid for once: `channel_photos.py` and
+#: `post_thumbnails.py` were the same module twice, one was fixed and the other
+#: kept the defect for two months. An AI Key is a bot token with a different
+#: vendor on the other end, so it gets the same tests by construction — a
+#: scoping bug found in one of the three now fails for all three.
 FAMILIES = (
     Family(
         kind="bot-credential",
@@ -135,9 +150,14 @@ FAMILIES = (
         seed=_seed_dest,
         list_=lambda s, u: list_chat_destinations(s, user_id=u),
     ),
+    Family(
+        kind="ai-key",
+        seed=_seed_ai_key,
+        list_=lambda s, u: list_ai_keys(s, user_id=u),
+    ),
 )
 
-LIST_FUNCTIONS = (list_bot_credentials, list_chat_destinations)
+LIST_FUNCTIONS = (list_bot_credentials, list_chat_destinations, list_ai_keys)
 
 
 def _ids(rows: list[dict[str, Any]]) -> set[str]:
@@ -230,6 +250,9 @@ def test_an_ownerless_row_can_no_longer_exist(session: Session, family: Family) 
 
     PR 3 of ticket 21 is the answer instead: `user_id` is `NOT NULL` with a
     cascading key on both tables, so the row shape is gone rather than hidden.
+    `tg_ai_credentials` was born that way (BYOK-01) and is here for the same
+    reason — the constraint is the assertion, and it is one `ALTER` from
+    being gone with nothing to say so.
     Asserted rather than deleted, because the whole hazard was a `NULL` nobody
     noticed — one dropped constraint and the invisible-credential bug is back
     with no test to say so.

@@ -90,6 +90,14 @@ VIEW_AS_READ_ONLY_DETAIL = "This View-as session is read-only"
 #: the route that starts a session covers exactly the routes somebody
 #: remembered.
 VIEW_AS_ELEVATED_REFUSED_PREFIXES: dict[str, str] = {
+    f"{settings.API_V1_STR}/data/ai-keys": (
+        "an AI Key is a credential the target pasted in, and an elevation is "
+        "for reproducing their broken Summary rather than acquiring their "
+        "provider account — the same argument the `/users/me` credential "
+        "routes make. BYOK-04's spend tier grants *use* without sight, so "
+        "these routes stay refused there too and this is the entry that will "
+        "already say so"
+    ),
     f"{settings.API_V1_STR}/view-as": (
         "an elevated session starting another one writes an audit row naming "
         "the *target* as the Owner who looked — the one lie the table exists "

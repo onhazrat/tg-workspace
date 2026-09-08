@@ -5,6 +5,7 @@ import {
   Cpu,
   Database,
   Globe,
+  KeyRound,
   Layers,
   Layout,
   MessageSquare,
@@ -21,6 +22,7 @@ export type SettingsTocId =
   | "channels-sync"
   | "setting-groups"
   | "ai"
+  | "ai-keys"
   | "network"
   | "proxy"
   | "tor"
@@ -55,7 +57,12 @@ export const SETTINGS_TOC: SettingsTocNode[] = [
     icon: RefreshCw,
     children: [{ id: "setting-groups", label: "Setting Groups", icon: Layers }],
   },
-  { id: "ai", label: "AI & Models", icon: Cpu },
+  {
+    id: "ai",
+    label: "AI & Models",
+    icon: Cpu,
+    children: [{ id: "ai-keys", label: "AI Keys", icon: KeyRound }],
+  },
   {
     id: "network",
     label: "Network",

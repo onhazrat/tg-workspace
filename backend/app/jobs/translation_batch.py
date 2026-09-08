@@ -13,6 +13,7 @@ from app.core.config import settings
 from app.core.db import engine
 from app.jobs.settings import load_translation_settings
 from app.models_tg import Post, PostTranslation, utc_now
+from app.services.ai_keys import Purpose, resolve_ai_key
 from app.services.follows import followed_channel_names
 from app.services.sync_meta import touch_sync
 
@@ -76,9 +77,6 @@ async def run_translation_batch() -> dict[str, Any]:
         if not posts:
             return {"skipped": True, "reason": "no_posts", "translated": 0}
 
-        if not settings.GEMINI_API_KEY:
-            raise ValueError("GEMINI_API_KEY not configured")
-
         selected: list[Post] = []
         char_count = 0
         for post in posts:
@@ -91,7 +89,16 @@ async def run_translation_batch() -> dict[str, Any]:
             selected.append(post)
             char_count += text_len
 
-        provider = get_provider("gemini")
+        # `TRANSLATE` on the Operator Key. This job has no Account at all —
+        # it reads deployment settings and writes `tg_post_translations`, one
+        # shared row per Post — so there is nobody whose Key could plausibly
+        # pay for it (ADR-016).
+        ai_key = resolve_ai_key(session, user_id=None, purpose=Purpose.TRANSLATE)
+        provider = get_provider(
+            provider=ai_key.provider,
+            api_key=ai_key.api_key,
+            base_url=ai_key.base_url,
+        )
         batch_input = [
             {"id": f"{p.channel_name}_{p.post_id}", "text": p.text or ""}
             for p in selected

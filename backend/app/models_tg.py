@@ -881,6 +881,53 @@ class BotCredential(SQLModel, table=True):
     updated_at: datetime = Field(default_factory=utc_now)
 
 
+class AICredential(SQLModel, table=True):
+    """An Account's own AI Key, which pays for that Account's Artifacts.
+
+    Modelled on `BotCredential` down to the Fernet-encrypted column and the
+    `last_validated` stamp, because it is the same object: a secret somebody
+    pasted in, stored so an unattended job can use it later, never shown back.
+    The two are twins deliberately, and `test_credential_tenancy_scoping.py` is
+    parametrised over both rather than copied — when you fix one of a pair,
+    guard the pair.
+
+    `provider` is here although BYOK-01 implements only Gemini, because BYOK-02
+    adds the OpenAI-compatible kind and a column added later would need a
+    backfill deciding what every existing row meant. `base_url` is what makes
+    that second kind one class rather than one per vendor; it is NULL for
+    Gemini.
+
+    **The model is not here.** One OpenRouter key reaches several hundred
+    models, so a default-model-per-Key is wrong-shaped for the case the feature
+    exists for; the model stays on the wire per call (ADR-016).
+
+    `last_validated` is NULL for a Key the Provider rejected as well as for one
+    never checked, and that is the signal the settings surface reads. Nothing
+    re-validates on a schedule: a job that spends people's money to check
+    whether they can still spend money is the cost this feature removes.
+    """
+
+    __tablename__ = "tg_ai_credentials"
+
+    id: str = Field(primary_key=True)
+    user_id: uuid.UUID = Field(
+        foreign_key="user.id",
+        index=True,
+        ondelete="CASCADE",
+    )
+    label: str
+    #: The Provider kind, `gemini` or `openai_compatible`. A string rather than
+    #: a database enum for the reason every other kind column here is one: a
+    #: third kind is a deploy, not a migration.
+    provider: str = Field(default="gemini")
+    #: Where the OpenAI-compatible Provider points. NULL for Gemini, which has
+    #: one address.
+    base_url: str | None = None
+    key_encrypted: str
+    last_validated: int | None = Field(default=None, sa_column=_ms_ts(nullable=True))
+    updated_at: datetime = Field(default_factory=utc_now)
+
+
 class ChatDestination(SQLModel, table=True):
     __tablename__ = "tg_chat_destinations"
 

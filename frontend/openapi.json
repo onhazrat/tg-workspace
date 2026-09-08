@@ -3510,6 +3510,107 @@
         }
       }
     },
+    "/api/v1/data/ai-keys": {
+      "get": {
+        "tags": ["data"],
+        "summary": "List Ai Credentials",
+        "operationId": "data-list_ai_credentials",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": { "$ref": "#/components/schemas/AIKeyResponse" },
+                  "type": "array",
+                  "title": "Response Data-List Ai Credentials"
+                }
+              }
+            }
+          }
+        },
+        "security": [{ "OAuth2PasswordBearer": [] }]
+      }
+    },
+    "/api/v1/data/ai-keys/{key_id}": {
+      "put": {
+        "tags": ["data"],
+        "summary": "Upsert Ai Credential",
+        "description": "Save an AI key and validate it against its provider.",
+        "operationId": "data-upsert_ai_credential",
+        "security": [{ "OAuth2PasswordBearer": [] }],
+        "parameters": [
+          {
+            "name": "key_id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "title": "Key Id" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": true,
+                "title": "Body"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/AIKeySaveResponse" }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": ["data"],
+        "summary": "Delete Ai Credential",
+        "operationId": "data-delete_ai_credential",
+        "security": [{ "OAuth2PasswordBearer": [] }],
+        "parameters": [
+          {
+            "name": "key_id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "title": "Key Id" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/StatusResponse" }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/data/embeddings": {
       "post": {
         "tags": ["data"],
@@ -5039,6 +5140,36 @@
   },
   "components": {
     "schemas": {
+      "AIKeyResponse": {
+        "properties": {
+          "id": { "type": "string", "title": "Id" },
+          "label": { "type": "string", "title": "Label" },
+          "provider": { "type": "string", "title": "Provider" },
+          "baseUrl": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Baseurl"
+          },
+          "hasKey": { "type": "boolean", "title": "Haskey", "default": false },
+          "lastValidated": {
+            "anyOf": [{ "type": "integer" }, { "type": "null" }],
+            "title": "Lastvalidated"
+          }
+        },
+        "type": "object",
+        "required": ["id", "label", "provider"],
+        "title": "AIKeyResponse",
+        "description": "A stored AI Key, without its secret."
+      },
+      "AIKeySaveResponse": {
+        "properties": {
+          "key": { "$ref": "#/components/schemas/AIKeyResponse" },
+          "validated": { "type": "boolean", "title": "Validated" }
+        },
+        "type": "object",
+        "required": ["key", "validated"],
+        "title": "AIKeySaveResponse",
+        "description": "A saved Key, plus what the save-time validation found.\n\n`validated` is redundant with `key.lastValidated` and is here anyway,\nbecause the form needs to say \"we tried and your provider said no\" in the\nmoment. A `null` timestamp alone cannot distinguish that from \"not checked\"."
+      },
       "ActiveSyncJobSummary": {
         "properties": {
           "jobId": { "type": "string", "title": "Jobid" },
@@ -5976,10 +6107,9 @@
             "title": "Ragmode",
             "default": false
           },
-          "provider": {
-            "type": "string",
-            "title": "Provider",
-            "default": "gemini"
+          "aiKeyId": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Aikeyid"
           }
         },
         "type": "object",
@@ -6665,11 +6795,6 @@
           "model": {
             "anyOf": [{ "type": "string" }, { "type": "null" }],
             "title": "Model"
-          },
-          "provider": {
-            "type": "string",
-            "title": "Provider",
-            "default": "gemini"
           }
         },
         "type": "object",
@@ -8627,10 +8752,9 @@
             "title": "Temperature",
             "default": 0.7
           },
-          "provider": {
-            "type": "string",
-            "title": "Provider",
-            "default": "gemini"
+          "aiKeyId": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Aikeyid"
           }
         },
         "type": "object",
@@ -8990,10 +9114,9 @@
             "title": "Temperature",
             "default": 0.7
           },
-          "provider": {
-            "type": "string",
-            "title": "Provider",
-            "default": "gemini"
+          "aiKeyId": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Aikeyid"
           },
           "tagsPerChannelMin": {
             "anyOf": [{ "type": "integer" }, { "type": "null" }],
@@ -9224,11 +9347,6 @@
           "model": {
             "anyOf": [{ "type": "string" }, { "type": "null" }],
             "title": "Model"
-          },
-          "provider": {
-            "type": "string",
-            "title": "Provider",
-            "default": "gemini"
           }
         },
         "type": "object",

@@ -511,6 +511,44 @@ def test_an_elevated_session_cannot_change_the_targets_credentials(
         assert session.get(User, subject_row.id) is not None
 
 
+def test_an_elevated_session_cannot_reach_the_targets_ai_keys(
+    client: TestClient,
+    owner: tuple[User, dict[str, str]],
+    subject: tuple[User, dict[str, str]],
+) -> None:
+    """BYOK-01's credential family, refused for the credential family's reason.
+
+    An elevation exists so an Owner can reproduce a target's broken Summary. It
+    is not a way to acquire their provider account, and the two are different
+    enough that the second must be refused explicitly — the read-only gate
+    already refuses these, so without this entry the *elevated* branch would
+    quietly be the first tier that could rewrite somebody's AI Key.
+
+    A prefix rather than exact paths, because `{key_id}` has nothing literal to
+    compare against — the same reason `/view-as` is one.
+
+    **Mutation:** drop the `/data/ai-keys` entry from
+    `VIEW_AS_ELEVATED_REFUSED_PREFIXES` and this goes red. BYOK-04 adds the
+    spend tier, which grants *use* without sight; this entry is what already
+    says so.
+    """
+    _, owner_headers = owner
+    subject_row, _ = subject
+    elevated = _headers(_elevate(client, owner_headers, subject_row))
+
+    attempts = [
+        client.put(
+            f"{V1}/data/ai-keys/anything",
+            headers=elevated,
+            json={"label": "mine now", "key": "sk-owner"},
+        ),
+        client.delete(f"{V1}/data/ai-keys/anything", headers=elevated),
+    ]
+    for response in attempts:
+        assert response.status_code == 403, response.text
+        assert response.json()["detail"] == VIEW_AS_ELEVATED_DETAIL
+
+
 def test_the_refusal_inventories_name_routes_that_exist() -> None:
     """An entry for a route that moved is a hole aimed at wherever it went.
 

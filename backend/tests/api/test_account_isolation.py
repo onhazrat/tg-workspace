@@ -52,6 +52,7 @@ from app.core.db import engine
 from app.main import app
 from app.models import User
 from app.models_tg import (
+    AICredential,
     BotCredential,
     ChannelSettingGroup,
     ChatDestination,
@@ -127,6 +128,9 @@ PROBED: dict[tuple[str, str], str] = {
     ("PUT", f"{V1}/data/bot-credentials/{{bot_id}}"): "credential write by id",
     ("DELETE", f"{V1}/data/bot-credentials/{{bot_id}}"): "credential delete",
     ("GET", f"{V1}/data/bot-credentials"): "credential list",
+    ("PUT", f"{V1}/data/ai-keys/{{key_id}}"): "credential write by id",
+    ("DELETE", f"{V1}/data/ai-keys/{{key_id}}"): "credential delete",
+    ("GET", f"{V1}/data/ai-keys"): "credential list",
     ("PUT", f"{V1}/data/chat-destinations/{{dest_id}}"): "destination write",
     ("DELETE", f"{V1}/data/chat-destinations/{{dest_id}}"): "destination delete",
     ("GET", f"{V1}/data/chat-destinations"): "destination list",
@@ -836,6 +840,75 @@ def test_credentials_and_destinations_are_isolated(
         assert row is not None and row.name == "a", (
             "another account replaced a stored bot token by naming its id"
         )
+
+
+@pytest.mark.security
+def test_ai_keys_are_isolated(
+    client: TestClient,
+    alice: tuple[User, dict[str, str]],
+    bob: tuple[User, dict[str, str]],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """BYOK-01's family, probed exactly as its twin above is.
+
+    The id is the leak here for a sharper reason than it is for a bot
+    credential: `SummaryRequest.aiKeyId` is client-supplied and names a row by
+    primary key, so an id that crosses accounts is a way to spend somebody
+    else's Provider balance. `resolve_ai_key` refuses that before
+    `decrypt_token`, and `test_ai_key_payment_rule.py` asserts the ordering; what
+    this probes is the door in front of it.
+
+    Save-time validation is stubbed. It is one outbound completion against a
+    real Provider, which is exactly right in production and is a network call
+    with a fabricated key in a test — slow, flaky, and testing Google rather
+    than us.
+    """
+    monkeypatch.setattr(
+        "app.api.routes.data.ai_keys.validate_credential",
+        _always_valid,
+    )
+    with Session(engine) as session:
+        session.add(
+            AICredential(
+                id="iso-ai-key",
+                user_id=alice[0].id,
+                label="alice work key",
+                key_encrypted="enc:key",
+            )
+        )
+        session.commit()
+
+    theirs = client.get(f"{DATA}/ai-keys", headers=bob[1]).json()
+    assert "iso-ai-key" not in {row["id"] for row in theirs}
+
+    mine = client.get(f"{DATA}/ai-keys", headers=alice[1]).json()
+    assert "iso-ai-key" in {row["id"] for row in mine}, (
+        "the owner cannot see their own AI key"
+    )
+    assert all("key" not in row and "keyEncrypted" not in row for row in mine), (
+        "an AI key's secret reached the wire"
+    )
+
+    overwrite = client.put(
+        f"{DATA}/ai-keys/iso-ai-key",
+        json={"label": "stolen", "key": "sk-theirs"},
+        headers=bob[1],
+    )
+    assert overwrite.status_code == 404, overwrite.text[:200]
+
+    removal = client.delete(f"{DATA}/ai-keys/iso-ai-key", headers=bob[1])
+    assert removal.status_code == 404, removal.text[:200]
+
+    with Session(engine) as session:
+        row = session.get(AICredential, "iso-ai-key")
+        assert row is not None and row.label == "alice work key", (
+            "another account rewrote a stored AI key by naming its id"
+        )
+
+
+async def _always_valid(**_kwargs: object) -> bool:
+    """Stand-in for the save-time Provider check. See its one caller above."""
+    return True
 
 
 @pytest.mark.security
