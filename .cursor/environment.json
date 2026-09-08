@@ -1,0 +1,27 @@
+{
+  "name": "TG Summarizer",
+  "install": "bash .cursor/install.sh",
+  "start": "bash .cursor/start.sh",
+  "chromeExecutablePath": "/opt/google/chrome/chrome",
+  "ports": [
+    { "name": "frontend", "port": 5173 },
+    { "name": "backend", "port": 8000 }
+  ],
+  "terminals": [
+    {
+      "name": "backend-api",
+      "command": "cd backend && uv run fastapi dev app/main.py --port 8000",
+      "description": "FastAPI backend (API only; schedules and scrapes nothing). Swagger at :8000/docs."
+    },
+    {
+      "name": "worker",
+      "command": "cd backend && uv run python -m app.worker",
+      "description": "Sync worker: APScheduler + PGMQ queue consumer. Without it, sync jobs sit pending forever."
+    },
+    {
+      "name": "frontend",
+      "command": "bun run dev",
+      "description": "Vite dev server on :5173, proxies /api to the backend on :8000."
+    }
+  ]
+}
