@@ -203,3 +203,5 @@ obvious implementation would have got wrong — belongs in `docs/*-plan.md` and
 - **Routing/tabs come from the URL.** TanStack Router. The active summarizer tab is the `?tab=` param on `/summarizer` (not localStorage); settings sub-sections use `?section=`.
 
 <!-- ci-docs-skip verification 2026-09-08T18:57:50Z -->
+
+<!-- path-filter re-verify 2026-09-08T18:59:09Z -->
