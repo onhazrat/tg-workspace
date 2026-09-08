@@ -5,20 +5,20 @@ running, so that a rate-limited Request budget stops being invisible.
 
 **Blocked by:** None (can start immediately)
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] The probe bar shows Requests spent today and this week
-- [ ] The probe bar shows whether the harvest is enabled and whether it is currently running
-- [ ] **Spend is visible while the queue is idle**, which is when an Operator is most likely to be
+- [x] The probe bar shows Requests spent today and this week
+- [x] The probe bar shows whether the harvest is enabled and whether it is currently running
+- [x] **Spend is visible while the queue is idle**, which is when an Operator is most likely to be
       asking what the sweep cost
-- [ ] **The figures refresh while the queue is idle**, or they are stale every time they are read
-- [ ] **The spend figures and the pause control render only for an account that may manage jobs**,
+- [x] **The figures refresh while the queue is idle**, or they are stale every time they are read
+- [x] **The spend figures and the pause control render only for an account that may manage jobs**,
       since both are deployment telemetry and the pause is already gated server-side
-- [ ] An account without that permission sees the bar exactly as it behaves today: progress while
+- [x] An account without that permission sees the bar exactly as it behaves today: progress while
       the queue is draining, and nothing when it is idle
-- [ ] Tests cover the idle case and the non-permitted account case specifically
-- [ ] Attempts, last error and retry state appear on no user-facing surface
-- [ ] No new route and no new screen
+- [x] Tests cover the idle case and the non-permitted account case specifically
+- [x] Attempts, last error and retry state appear on no user-facing surface
+- [x] No new route and no new screen
 
 ## This is not just widening a type
 

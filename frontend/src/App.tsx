@@ -55,6 +55,7 @@ import { useSettings } from "./contexts/SettingsContext"
 import { useUI } from "./contexts/UIContext"
 import { useApiStatus } from "./hooks/useApiStatus"
 import { useGuidedTour } from "./hooks/useGuidedTour"
+import { useJobsStatusQuery } from "./hooks/useJobsStatus"
 import { useScopedPostCounts } from "./hooks/usePostsView"
 import { useWorkspaceFullscreen } from "./hooks/useWorkspaceFullscreen"
 import { APP_VERSION } from "./lib/app-version"
@@ -107,24 +108,14 @@ export default function App() {
     <Maximize2 size={14} />
   )
 
-  // Poll server job status for auto-sync pause banner (Phase 6 scheduler).
+  // Server job status for the auto-sync pause banner (Phase 6 scheduler). The
+  // poll lives in `useJobsStatusQuery` so this and `useCanManageJobs` read one
+  // request rather than two, which is also what "server state is TanStack Query"
+  // asks for; this effect only mirrors the answer into shared UI state.
+  const { data: jobsStatus } = useJobsStatusQuery()
   useEffect(() => {
-    if (isOffline) return
-
-    const refreshPauseState = async () => {
-      try {
-        const status = await api.jobsStatus()
-        const pauseUntil = status.auto_sync?.pauseUntil ?? null
-        setAutoSyncPauseUntil(pauseUntil)
-      } catch (err) {
-        console.error("[App] Failed to fetch job status:", err)
-      }
-    }
-
-    refreshPauseState()
-    const intervalId = setInterval(refreshPauseState, 30_000)
-    return () => clearInterval(intervalId)
-  }, [isOffline, setAutoSyncPauseUntil])
+    setAutoSyncPauseUntil(jobsStatus?.auto_sync?.pauseUntil ?? null)
+  }, [jobsStatus, setAutoSyncPauseUntil])
 
   const toggleTheme = () => {
     setTheme(getNextTheme(theme))

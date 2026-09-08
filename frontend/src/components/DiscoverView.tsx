@@ -14,13 +14,13 @@ import { DiscoverWeightsEditor } from "@/components/discover/DiscoverWeightsEdit
 import { useDiscoverFollowJob } from "@/components/discover/useDiscoverFollowJob"
 import { GoToActionEmptyState } from "@/components/history/GoToActionEmptyState"
 import { TgConfirmDialog } from "@/components/ui/tg-confirm-dialog"
-import { useCanManageJobs } from "@/hooks/useCanManageJobs"
 import {
   useDiscoverIgnoreMutation,
   useDiscoverReportQuery,
 } from "@/hooks/useDiscover"
 import { useDiscoverProbeQueue } from "@/hooks/useDiscoverProbeQueue"
 import { useDiscoverReportParam } from "@/hooks/useDiscoverReportParam"
+import { useCanManageJobs } from "@/hooks/useJobsStatus"
 import {
   countUnfollowedCandidates,
   DISCOVERY_SIGNAL_KINDS,
