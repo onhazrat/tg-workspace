@@ -32,7 +32,7 @@ from sqlmodel import Session, col, delete
 
 from app.core import config
 from app.core.db import engine
-from app.core.secrets import encrypt_token
+from app.core.secrets import decrypt_token, encrypt_token
 from app.models import User
 from app.models_tg import AICredential, utc_now
 from app.services.ai_keys import (
@@ -44,6 +44,7 @@ from app.services.ai_keys import (
     OPERATOR_KEY_MISSING_DETAIL,
     Purpose,
     resolve_ai_key,
+    upsert_ai_key,
 )
 from tests.utils.user import create_random_user
 
@@ -178,32 +179,61 @@ def test_an_account_with_no_key_is_told_to_add_one(
     assert raised.value.detail == AI_KEY_MISSING_DETAIL
 
 
-def test_a_rejected_key_says_something_different_from_no_key(
-    session: Session, user: User, operator_key: str
-) -> None:
+def test_a_rejected_key_says_something_different_from_no_key() -> None:
     """The two failures the environment-key check used to answer as one.
 
     "Add a key" and "the key you added stopped working" send somebody to
-    different places. Today's single 503 sends the second person hunting for a
-    Key they can see in their own settings.
+    different places, and the single 503 this replaces sent the second person
+    hunting for a Key they could see in their own settings. Asserted on the
+    strings and their statuses, because that is the whole property — the *seam*
+    raises one of them and the *call site* raises the other, and a later
+    refactor that merged them would leave both raise sites looking fine.
     """
-    _seed_key(session, "byok-dead", user.id, validated=False)
+    assert AI_KEY_MISSING_DETAIL != AI_KEY_REJECTED_DETAIL
+    assert AI_KEY_REJECTED_DETAIL != OPERATOR_KEY_MISSING_DETAIL
+    assert AI_KEY_MISSING_DETAIL != OPERATOR_KEY_MISSING_DETAIL
 
-    with pytest.raises(HTTPException) as raised:
-        resolve_ai_key(session, user_id=user.id, purpose=Purpose.SUMMARY)
 
-    assert raised.value.status_code == 502
-    assert raised.value.detail == AI_KEY_REJECTED_DETAIL
-    assert raised.value.detail != AI_KEY_MISSING_DETAIL
+def test_a_key_that_failed_its_last_check_is_still_tried(
+    session: Session, user: User, operator_key: str
+) -> None:
+    """An unstamped Key resolves. It is not pre-judged, and that is deliberate.
+
+    `last_validated IS NULL` means "never successfully checked", which a
+    revoked key and a save-time network timeout produce identically —
+    `validate_credential` cannot tell them apart, and `registry.py` says why.
+    Refusing here read the NULL as "rejected", so **one timeout while somebody
+    saved a good key locked them out of the feature for ever**, with the
+    settings panel calling their key rejected and no edit affordance to fix it.
+
+    The rung that *can* tell them apart is `is_credential_rejection` at call
+    time: a genuinely dead Key fails immediately, answers
+    `AI_KEY_REJECTED_DETAIL`, and has its stamp cleared on the way out. Same
+    distinct status, by a route that cannot brick anybody.
+
+    **Mutation:** restore the `if not row.last_validated: raise` in
+    `resolve_ai_key` and this goes red.
+    """
+    _seed_key(session, "byok-unstamped", user.id, secret="maybe-fine", validated=False)
+
+    resolved = resolve_ai_key(session, user_id=user.id, purpose=Purpose.SUMMARY)
+
+    assert resolved.api_key == "maybe-fine"
+    assert resolved.credential_id == "byok-unstamped", (
+        "an unstamped Key resolved without naming its row, so a rejection "
+        "would have nothing to clear"
+    )
 
 
 def test_a_working_key_wins_over_a_rejected_one(
     session: Session, user: User, operator_key: str
 ) -> None:
-    """Holding two Keys and naming neither picks one that still works.
+    """Holding two Keys and naming neither prefers one that is known to work.
 
-    Otherwise an Account whose old Key was revoked has to delete it before the
-    new one is usable, which is a support ticket rather than a feature.
+    A preference rather than a filter: an unstamped Key is still usable on its
+    own (see above), so this only decides *which* to reach for first. Otherwise
+    an Account whose old Key was revoked would spend a doomed provider call on
+    every run despite holding a good Key.
     """
     _seed_key(session, "byok-dead", user.id, secret="dead", validated=False)
     _seed_key(session, "byok-live", user.id, secret="live", validated=True)
@@ -429,3 +459,53 @@ def test_the_guard_can_actually_see_the_call_sites() -> None:
     assert _modules_calling("resolve_ai_key"), (
         "the walk found no caller of resolve_ai_key at all"
     )
+
+
+# --------------------------------------------------------------------------
+# Keeping the secret
+# --------------------------------------------------------------------------
+
+
+def test_editing_a_label_does_not_require_re_entering_the_secret(
+    session: Session, user: User, operator_key: str
+) -> None:
+    """Fixing a typo must not mean fetching the key out of a password manager.
+
+    The failure this catches is not cosmetic: the obvious implementation writes
+    whatever `key` the body carried, so a save that omits it stores the empty
+    string — and because the plaintext is never sent back, the form has no way
+    to resend it. The account then holds a Key that looks fine in the list and
+    cannot pay for anything.
+    """
+    upsert_ai_key(
+        session,
+        "byok-edit",
+        {"label": "typoo", "key": "the-secret"},
+        user_id=user.id,
+    )
+
+    upsert_ai_key(session, "byok-edit", {"label": "typo"}, user_id=user.id)
+
+    row = session.get(AICredential, "byok-edit")
+    assert row is not None
+    assert row.label == "typo"
+    assert decrypt_token(row.key_encrypted) == "the-secret", (
+        "editing a label overwrote the stored key, and nothing can put it back "
+        "because the plaintext is returned by no route"
+    )
+
+
+def test_a_new_key_without_a_secret_is_refused(
+    session: Session, user: User, operator_key: str
+) -> None:
+    """The other half: an *absent* secret means "keep" only if there is one.
+
+    Without this, the merge above turns into a way to create a Key with no
+    credential at all, which is a row that resolves and then fails at the
+    provider with nothing in the UI to explain it.
+    """
+    with pytest.raises(HTTPException) as raised:
+        upsert_ai_key(session, "byok-empty", {"label": "no secret"}, user_id=user.id)
+
+    assert raised.value.status_code == 400
+    assert session.get(AICredential, "byok-empty") is None

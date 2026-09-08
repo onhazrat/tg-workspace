@@ -38,6 +38,9 @@ export const RunSettingsBar: React.FC = () => {
   }
   // A remembered id whose Key was deleted falls back to the first, rather than
   // leaving the chip showing a blank selection over a request that would 404.
+  // `useAiKeysQuery` has already cleared the stored id by the time this runs,
+  // so the fallback is what the request sends too — the chip and the wire
+  // cannot disagree.
   const activeAiKeyId =
     aiKeys.find((k) => k.id === aiKeyId)?.id ?? aiKeys[0]?.id ?? ""
 

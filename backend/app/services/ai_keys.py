@@ -43,9 +43,11 @@ AI_CREDENTIAL_NOT_FOUND = "AI key not found"
 #: check this replaces answered both with one string.
 AI_KEY_MISSING_DETAIL = "No AI key saved. Add one in Settings to create summaries."
 
-#: The Account holds a Key its Provider would not accept. `last_validated` is
-#: NULL for a Key that was never checked as well as for one that was rejected,
-#: and both mean the same thing to the person who has to fix it: re-save it.
+#: The Provider refused this Key on a call that was going to be made anyway.
+#: Raised by the call site (`api/routes/ai_routes.py`), never by
+#: `resolve_ai_key` — a stored Key is tried rather than pre-judged, because a
+#: NULL `last_validated` means "never successfully checked" and cannot
+#: distinguish a revoked key from a save-time timeout.
 AI_KEY_REJECTED_DETAIL = (
     "This AI key was rejected by its provider. Re-save it in Settings."
 )
@@ -171,8 +173,19 @@ def resolve_ai_key(
 
     An Account holding several Keys and naming none gets its most recently
     updated **validated** Key, falling back to its most recently updated Key at
-    all — so an Account whose only Key was rejected is told it was rejected
-    rather than told it has none.
+    all.
+
+    **A missing validation stamp does not refuse the call**, and that is a
+    correction rather than a shortcut. Refusing here read `last_validated IS
+    NULL` as "this Key was rejected", when it equally means "the check could not
+    be reached" — so one timeout while somebody was saving a *good* key locked
+    them out of the feature for ever, with the settings panel calling their key
+    rejected. `validate_credential` cannot tell those apart at save time
+    (`registry.py` says why), and the rung that can is `is_credential_rejection`
+    at call time. So an unstamped Key is *tried*: a genuinely dead one fails
+    immediately, answers `AI_KEY_REJECTED_DETAIL` with a 502, and has its stamp
+    cleared on the way out, which is the same distinct status by a route that
+    cannot brick anybody.
     """
     if purpose not in ACCOUNT_PAID:
         return _operator_key()
@@ -193,9 +206,6 @@ def resolve_ai_key(
             raise HTTPException(status_code=400, detail=AI_KEY_MISSING_DETAIL)
         validated = [r for r in rows if r.last_validated]
         row = (validated or rows)[0]
-
-    if not row.last_validated:
-        raise HTTPException(status_code=502, detail=AI_KEY_REJECTED_DETAIL)
 
     return ResolvedKey(
         provider=row.provider,
@@ -284,9 +294,9 @@ def upsert_ai_key(
             key_encrypted=encrypted,
         )
     session.add(row)
+    touch_sync(session, "ai_keys", commit=False)
     session.commit()
     session.refresh(row)
-    touch_sync(session, "ai_keys")
     return row
 
 
@@ -296,8 +306,8 @@ def delete_ai_key(session: Session, key_id: str, *, user_id: uuid.UUID) -> None:
         raise HTTPException(status_code=404, detail=AI_CREDENTIAL_NOT_FOUND)
     assert_owner_on_write(row.user_id, user_id, detail=AI_CREDENTIAL_NOT_FOUND)
     session.delete(row)
+    touch_sync(session, "ai_keys", commit=False)
     session.commit()
-    touch_sync(session, "ai_keys")
 
 
 def record_validation(session: Session, key_id: str, *, valid: bool) -> None:
@@ -319,5 +329,5 @@ def record_validation(session: Session, key_id: str, *, valid: bool) -> None:
         return
     row.last_validated = int(utc_now().timestamp() * 1000) if valid else None
     session.add(row)
+    touch_sync(session, "ai_keys", commit=False)
     session.commit()
-    touch_sync(session, "ai_keys")

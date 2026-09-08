@@ -224,8 +224,13 @@ async def api_summary_stream(
             ):
                 yield f"data: {json.dumps({'text': chunk})}\n\n"
         except Exception as exc:
-            if not _note_rejection(session, ai_key, exc):
-                raise
+            # Note the rejection, then let it propagate either way. Swallowing
+            # it fell through to the `[DONE]` below, which `sseTextStream`
+            # reads as a *clean* end — so a revoked key rendered an empty
+            # summary with no error anywhere, and a key revoked mid-run
+            # presented partial output as a finished Artifact.
+            _note_rejection(session, ai_key, exc)
+            raise
         yield "data: [DONE]\n\n"
 
     return StreamingResponse(event_stream(), media_type="text/event-stream")
@@ -267,8 +272,13 @@ async def api_chat_stream(
             ):
                 yield f"data: {json.dumps({'text': chunk})}\n\n"
         except Exception as exc:
-            if not _note_rejection(session, ai_key, exc):
-                raise
+            # Note the rejection, then let it propagate either way. Swallowing
+            # it fell through to the `[DONE]` below, which `sseTextStream`
+            # reads as a *clean* end — so a revoked key rendered an empty
+            # summary with no error anywhere, and a key revoked mid-run
+            # presented partial output as a finished Artifact.
+            _note_rejection(session, ai_key, exc)
+            raise
         yield "data: [DONE]\n\n"
 
     return StreamingResponse(event_stream(), media_type="text/event-stream")
@@ -332,8 +342,13 @@ async def api_tag_stream(
             ):
                 yield f"data: {json.dumps({'text': chunk})}\n\n"
         except Exception as exc:
-            if not _note_rejection(session, ai_key, exc):
-                raise
+            # Note the rejection, then let it propagate either way. Swallowing
+            # it fell through to the `[DONE]` below, which `sseTextStream`
+            # reads as a *clean* end — so a revoked key rendered an empty
+            # summary with no error anywhere, and a key revoked mid-run
+            # presented partial output as a finished Artifact.
+            _note_rejection(session, ai_key, exc)
+            raise
         yield "data: [DONE]\n\n"
 
     return StreamingResponse(event_stream(), media_type="text/event-stream")

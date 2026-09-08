@@ -16,6 +16,7 @@ from fastapi import APIRouter
 from app.ai.registry import validate_credential
 from app.api.deps import CurrentUser, SessionDep
 from app.core.secrets import decrypt_token
+from app.models_tg import AICredential
 from app.schemas.ai_keys import AIKeyResponse, AIKeySaveResponse
 from app.schemas.common import StatusResponse
 from app.services.ai_keys import (
@@ -60,15 +61,29 @@ async def upsert_ai_credential(
 ) -> AIKeySaveResponse:
     """Save an AI key and validate it against its provider."""
     row = upsert_ai_key(session, key_id, body, user_id=current_user.id)
-    valid = await validate_credential(
-        provider=row.provider,
-        api_key=decrypt_token(row.key_encrypted),
-        base_url=row.base_url,
+    # Read every attribute the provider call needs into plain values *before*
+    # awaiting it. `expire_on_commit` is on, so touching `row.provider` after
+    # the save's commit re-opens a transaction — which would then sit `idle in
+    # transaction` for the whole network round-trip, pinning the xmin horizon.
+    # That is the invariant CLAUDE.md states, and the one that left
+    # `tg_sync_meta` with 10 live rows and 4,743 dead.
+    stored_id, provider, secret, base_url = (
+        row.id,
+        row.provider,
+        decrypt_token(row.key_encrypted),
+        row.base_url,
     )
-    record_validation(session, row.id, valid=valid)
-    session.refresh(row)
+    session.close()
+
+    valid = await validate_credential(
+        provider=provider, api_key=secret, base_url=base_url
+    )
+
+    record_validation(session, stored_id, valid=valid)
+    saved = session.get(AICredential, stored_id)
+    assert saved is not None  # noqa: S101  (just written, in this transaction)
     return AIKeySaveResponse(
-        key=AIKeyResponse.model_validate(key_to_camel(row)), validated=valid
+        key=AIKeyResponse.model_validate(key_to_camel(saved)), validated=valid
     )
 
 

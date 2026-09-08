@@ -30,3 +30,23 @@ export function rememberAiKeyId(id: string | null): void {
     scopedStorage.removeItem(SELECTED_AI_KEY)
   }
 }
+
+/**
+ * Forget a remembered id that no longer names one of the account's Keys.
+ *
+ * Without this the fallback above is a comment rather than behaviour, and the
+ * failure is total: delete the Key you had selected and every summary, chat and
+ * tag request sends its id for ever, because `withAiKey` reads storage and
+ * cannot see the list. Worse, dropping to one Key hides the chooser, so there
+ * is no control left to select something else with — the account simply cannot
+ * make an Artifact again.
+ *
+ * Called from the query that fetches the list, so it runs wherever the Keys are
+ * loaded rather than only where a chooser happens to be mounted.
+ */
+export function reconcileAiKeySelection(ids: readonly string[]): void {
+  const remembered = selectedAiKeyId()
+  if (remembered && !ids.includes(remembered)) {
+    rememberAiKeyId(null)
+  }
+}

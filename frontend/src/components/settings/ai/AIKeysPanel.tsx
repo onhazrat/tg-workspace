@@ -51,12 +51,14 @@ export const AIKeysPanel: React.FC = () => {
         label: label.trim() || "My key",
         key: secret.trim(),
       })
-      // The row is stored either way; only the message changes. Telling
-      // somebody "saved but your provider rejected it" is the whole reason
-      // save-time validation exists.
+      // The row is stored and used either way; only the message changes. A
+      // failed check does not mean a bad key — the provider may simply have
+      // been unreachable — so this says what happened rather than passing a
+      // verdict the check cannot actually reach.
       if (!saved.validated) {
         setError(
-          "Saved, but the provider rejected this key. Check and re-save.",
+          "Saved, but we could not verify it with the provider just now. " +
+            "It will still be used; check the key if runs start failing.",
         )
       }
       setLabel("")
@@ -134,8 +136,8 @@ export const AIKeysPanel: React.FC = () => {
                       <RelativeTime timestamp={key.lastValidated} />
                     </span>
                   ) : (
-                    <span className="flex items-center gap-1 text-[9px] font-mono text-red-500">
-                      <AlertTriangle size={10} /> Rejected — re-save this key
+                    <span className="flex items-center gap-1 text-[9px] font-mono text-amber-500">
+                      <AlertTriangle size={10} /> Not verified — still used
                     </span>
                   )}
                 </div>

@@ -135,5 +135,5 @@ def test_the_split_did_not_change_the_route_count() -> None:
         (m, p) for m, p in _mounted_routes() if p.startswith("/api/v1/data/")
     }
     assert len(data_routes) == 78, (
-        f"expected 75 /data endpoints, found {len(data_routes)}"
+        f"expected 78 /data endpoints, found {len(data_routes)}"
     )

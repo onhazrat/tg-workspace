@@ -1,5 +1,6 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query"
 
+import { reconcileAiKeySelection } from "@/lib/aiKeys/selection"
 import { type AiKey, listAiKeys } from "@/lib/aiKeys/store"
 
 import { queryKeys } from "./queryKeys"
@@ -18,7 +19,14 @@ const empty: AiKey[] = []
 export function useAiKeysQuery() {
   return useQuery({
     queryKey: queryKeys.aiKeys,
-    queryFn: listAiKeys,
+    queryFn: async () => {
+      const keys = await listAiKeys()
+      // The one moment the client knows which Keys still exist, so it is where
+      // a remembered id for a deleted one is dropped. See
+      // `reconcileAiKeySelection` for what goes wrong without it.
+      reconcileAiKeySelection(keys.map((k) => k.id))
+      return keys
+    },
     staleTime: 30_000,
   })
 }
