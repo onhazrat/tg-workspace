@@ -1,4 +1,4 @@
-import { expect, type Page, test } from "@playwright/test"
+import { expect, test } from "@playwright/test"
 import { firstSuperuser, firstSuperuserPassword } from "./config.ts"
 import { createUser } from "./utils/privateApi.ts"
 import { randomEmail, randomPassword } from "./utils/random"
@@ -225,47 +225,21 @@ test("Appearance button is visible in sidebar", async ({ page }) => {
   await expect(page.getByTestId("theme-button")).toBeVisible()
 })
 
-/**
- * Open the appearance menu, choose one mode, and leave the menu closed.
- *
- * The wait at the end is the whole point, and it is why this is a helper rather
- * than three lines repeated. The menu is a Radix dropdown, which keeps its
- * content mounted through the close animation that selecting an item starts —
- * and a click on the trigger during that window is swallowed. The menu then
- * never reopens, the next item never appears, and the `.click()` waiting for it
- * burns the full 30s test timeout.
- *
- * "User can switch between theme modes" did this wait once, after the first of
- * its three selections, and nowhere else. So it opened cleanly the second time
- * and raced the third, which is exactly where it failed: `system-mode`, at the
- * one reopen with no close behind it. Its neighbour did no waiting at all and
- * carries a comment about having flaked before for a related reason. CI runs
- * with `--fail-on-flaky-tests`, so passing on retry is still a red build.
- *
- * `force` on the item click for the mirror-image reason: the item can still be
- * inside Radix's *entry* animation when the click lands.
- */
-async function chooseTheme(
-  page: Page,
-  mode: "light-mode" | "dark-mode" | "system-mode",
-) {
-  await page.getByTestId("theme-button").click()
-  const item = page.getByTestId(mode)
-  await expect(item).toBeVisible()
-  await item.click({ force: true })
-  await expect(item).not.toBeVisible()
-}
-
 test("User can switch between theme modes", async ({ page }) => {
   await page.goto("/settings")
 
-  await chooseTheme(page, "dark-mode")
+  await page.getByTestId("theme-button").click()
+  await page.getByTestId("dark-mode").click({ force: true })
   await expect(page.locator("html")).toHaveClass(/dark/)
 
-  await chooseTheme(page, "light-mode")
+  await expect(page.getByTestId("dark-mode")).not.toBeVisible()
+
+  await page.getByTestId("theme-button").click()
+  await page.getByTestId("light-mode").click()
   await expect(page.locator("html")).toHaveClass(/light/)
 
-  await chooseTheme(page, "system-mode")
+  await page.getByTestId("theme-button").click()
+  await page.getByTestId("system-mode").click()
   await expect
     .poll(() => page.evaluate(() => localStorage.getItem("vite-ui-theme")))
     .toBe("system")
@@ -274,14 +248,17 @@ test("User can switch between theme modes", async ({ page }) => {
 test("Selected mode is preserved across sessions", async ({ page }) => {
   await page.goto("/settings")
 
-  // Pick light, then dark. This used to branch on the current theme and re-open
-  // the menu only inside that branch, which left it *already open* on the other
-  // path -- so the next `theme-button` click closed it and `dark-mode` was
-  // never there to click. `chooseTheme` is the general form of that fix.
-  await chooseTheme(page, "light-mode")
+  // Pick light, then dark, in the same open-menu-then-choose shape as the test
+  // above. This used to branch on the current theme and re-open the menu only
+  // inside that branch, which left it *already open* on the other path -- so
+  // the next `theme-button` click closed it and `dark-mode` was never there to
+  // click. It survived on timing and finally flaked the job.
+  await page.getByTestId("theme-button").click()
+  await page.getByTestId("light-mode").click()
   await expect(page.locator("html")).toHaveClass(/light/)
 
-  await chooseTheme(page, "dark-mode")
+  await page.getByTestId("theme-button").click()
+  await page.getByTestId("dark-mode").click({ force: true })
   await expect(page.locator("html")).toHaveClass(/dark/)
 
   await logOutUser(page)
