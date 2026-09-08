@@ -180,3 +180,38 @@ The workspace with its chrome collapsed — no title block, no stats strip, no
 width cap. Independent of native browser fullscreen, which is requested at the
 same time but cannot be restored on reload.
 _Avoid_: zen mode, fullscreen, distraction-free
+
+### AI access
+
+**Provider**:
+An external AI vendor and the API surface it speaks. There are exactly two
+kinds: Gemini, and anything OpenAI-compatible reachable at a base URL. The
+second kind is one thing, not a family — OpenRouter, Groq, Together, DeepSeek,
+Ollama and vLLM are all the same Provider pointed at different addresses.
+_Avoid_: vendor, model provider, backend, LLM
+
+**AI Key**:
+An Account's stored, encrypted access to one Provider. It carries a label, a
+Provider kind and a base URL; it does **not** carry a model, because one Key
+can reach hundreds. An AI Key is what pays for that Account's Artifacts, and
+nobody but the Account ever reads it back.
+_Avoid_: API key, token, credential, secret
+
+**Operator Key**:
+The deployment's own AI access, configured in the environment. It pays for
+every AI call that is not an Artifact, which is exactly the corpus-wide work:
+Embeddings and Translations. It never pays for an Artifact.
+_Avoid_: default key, fallback key, system key, shared key
+
+Note: the split between the two Keys is the Artifact definition above, used
+unchanged. An Artifact is a durable output somebody deliberately asked for, so
+it is charged to the Account that asked. Everything excluded from that
+definition is corpus-wide, shared between Accounts, and charged to the
+deployment. There is no third case and no fallback in either direction.
+
+**Spend session**:
+A View-as session in which an Owner may consume the target Account's paid
+resources: its AI Key, its bot credentials and its Telegram Budget. It is the
+third and narrowest tier, above read-only and elevated, and it grants *use*
+without ever granting *sight* — no tier reads key material back.
+_Avoid_: full access, impersonation, delegated session, admin mode
