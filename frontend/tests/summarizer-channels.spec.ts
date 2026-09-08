@@ -202,21 +202,19 @@ test.describe("TG Workspace channels and posts", () => {
           Authorization: `Bearer ${token}`,
         }
 
-        await Promise.all(
-          names.map((name) =>
-            fetch(`/api/v1/data/channels/${name}`, {
-              method: "PUT",
-              headers,
-              body: JSON.stringify({ id: name, name }),
-            }).then(async (response) => {
-              if (!response.ok) {
-                throw new Error(
-                  `trim test seed failed (${response.status}): ${await response.text()}`,
-                )
-              }
-            }),
-          ),
-        )
+        // Sequential — same touch_sync row-lock contention as seedBulkChannels.
+        for (const name of names) {
+          const response = await fetch(`/api/v1/data/channels/${name}`, {
+            method: "PUT",
+            headers,
+            body: JSON.stringify({ id: name, name }),
+          })
+          if (!response.ok) {
+            throw new Error(
+              `trim test seed failed (${response.status}): ${await response.text()}`,
+            )
+          }
+        }
       },
       { names: channelNames },
     )

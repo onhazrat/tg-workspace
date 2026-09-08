@@ -88,6 +88,11 @@ export async function seedBulkChannels(
   count: number,
   prefix: string,
 ): Promise<void> {
+  // Sequential, not Promise.all: each PUT ends in `touch_sync("channels")`,
+  // which takes a row lock on the single `tg_sync_meta` etag. Firing 25–70
+  // creates at once queues those commits on one another and intermittently
+  // answers 500 under CI load; Playwright then retries and `--fail-on-flaky-
+  // tests` fails the shard. One-at-a-time is a few seconds slower and stable.
   await page.evaluate(
     async ({ channelCount, channelPrefix }) => {
       const token = localStorage.getItem("access_token")
@@ -100,22 +105,27 @@ export async function seedBulkChannels(
         Authorization: `Bearer ${token}`,
       }
 
-      await Promise.all(
-        Array.from({ length: channelCount }, (_, index) => {
-          const name = `${channelPrefix}${index}`
-          return fetch(`/api/v1/data/channels/${name}`, {
+      const putWithRetry = async (name: string) => {
+        let lastError = ""
+        for (let attempt = 0; attempt < 3; attempt++) {
+          const response = await fetch(`/api/v1/data/channels/${name}`, {
             method: "PUT",
             headers,
             body: JSON.stringify({ id: name, name }),
-          }).then(async (response) => {
-            if (!response.ok) {
-              throw new Error(
-                `seedBulkChannels failed (${response.status}): ${await response.text()}`,
-              )
-            }
           })
-        }),
-      )
+          if (response.ok) return
+          lastError = `${response.status}: ${await response.text()}`
+          if (response.status < 500 || attempt === 2) {
+            throw new Error(`seedBulkChannels failed (${lastError})`)
+          }
+          await new Promise((resolve) => setTimeout(resolve, 200 * (attempt + 1)))
+        }
+        throw new Error(`seedBulkChannels failed (${lastError})`)
+      }
+
+      for (let index = 0; index < channelCount; index++) {
+        await putWithRetry(`${channelPrefix}${index}`)
+      }
     },
     { channelCount: count, channelPrefix: prefix },
   )

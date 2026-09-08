@@ -31,10 +31,14 @@ From failed Playwright runs on 2026-09-08 (pre- and mid-fix):
 |---|---|---|
 | User can switch between theme modes | `user-settings.spec.ts` | `locator.click` timeout; `--fail-on-flaky-tests` red on retry pass |
 | (same) Selected mode is preserved… | `user-settings.spec.ts` | Same duplicate `system-mode` test id on `/settings` |
+| channel grid loads more cards… | `summarizer-channels.spec.ts` | `seedBulkChannels` 500 under `Promise.all` of PUTs |
+| shard green, job red | `playwright.yml` upload | `FinalizeArtifact` 403 after 34 passed |
 
-Root cause: `/settings` rendered Appearance segmented control **and** sidebar theme dropdown both with `data-testid="system-mode"`.
+Theme root cause: `/settings` rendered Appearance segmented control **and** sidebar theme dropdown both with `data-testid="system-mode"`. Fix: rename section control to `appearance-section-system-mode`.
 
-Fix shipped in this PR: rename section control to `appearance-section-system-mode`; keep menu-scoped `chooseTheme` and wait for trigger visibility.
+`seedBulkChannels` root cause: each PUT commits then `touch_sync("channels")` locks one `tg_sync_meta` row; 25–70 parallel creates queue and intermittently 500. Fix: sequential puts + 5xx retry.
+
+Upload: `continue-on-error: true` on blob-report upload so an Actions storage 403 cannot fail a green shard.
 
 Cold docker builds (18–20 min) and cache races were the other outlier driver — addressed by workstream B, not a test flake.
 

@@ -219,7 +219,10 @@ jobs:
         run: docker compose run --rm playwright bunx playwright test --fail-on-flaky-tests --trace=retain-on-failure --shard=${{ matrix.shardIndex }}/${{ matrix.shardTotal }}
       - run: docker compose down -v --remove-orphans
       - name: Upload blob report
+        # GHA occasionally 403s on FinalizeArtifact after a green shard; do not
+        # fail the job for a report-merge nicety when tests already passed.
         if: ${{ !cancelled() }}
+        continue-on-error: true
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
         with:
           name: blob-report-${{ matrix.shardIndex }}
