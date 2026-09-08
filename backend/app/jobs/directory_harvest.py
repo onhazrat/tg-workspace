@@ -115,7 +115,29 @@ _sweep_lock = asyncio.Lock()
 
 
 def is_harvest_running() -> bool:
-    return _sweep_lock.locked()
+    """Whether a sweep is in flight, answerable **from the API process**.
+
+    Deliberately not `_sweep_lock.locked()`, which is the obvious implementation
+    and is always `False` where this is called from. The lock is an
+    `asyncio.Lock` in the process that runs the job, and the scheduler runs only
+    in the worker (`app/worker.py`); the API answering
+    `GET /data/discover/probe/queue` holds its own untouched copy of this module,
+    so it would report "idle" throughout every live harvest.
+
+    `lastStatus` crosses that boundary already: `_run_guarded` announces it over
+    `SCHEDULER_STATUS_CHANNEL` and the API folds every announcement into
+    `_job_status`, which is the same path `GET /jobs/status` reads. So the signal
+    was there and only the wrong source was being consulted.
+
+    The lock stays exactly where it is and keeps doing its own job, which is
+    mutual exclusion inside the worker — `_harvest` still takes it directly.
+    This function is the *report*, and a report has to answer in the process
+    somebody asks it.
+    """
+    from app.jobs.scheduler import get_job_status
+
+    status = get_job_status().get(DIRECTORY_HARVEST_JOB_ID) or {}
+    return bool(status.get("lastStatus") == "running")
 
 
 def _harvest(pending: int) -> dict[str, Any]:

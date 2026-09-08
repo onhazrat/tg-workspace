@@ -20,6 +20,7 @@ import {
 } from "@/hooks/useDiscover"
 import { useDiscoverProbeQueue } from "@/hooks/useDiscoverProbeQueue"
 import { useDiscoverReportParam } from "@/hooks/useDiscoverReportParam"
+import { useCanManageJobs } from "@/hooks/useJobsStatus"
 import {
   countUnfollowedCandidates,
   DISCOVERY_SIGNAL_KINDS,
@@ -168,7 +169,11 @@ export const DiscoverView: React.FC = () => {
    * and a scheduled job drains the queue whether or not this tab is open. This
    * view only reads progress and offers recheck and pause.
    */
-  const probe = useDiscoverProbeQueue({ enabled: !isOffline })
+  const canManageJobs = useCanManageJobs()
+  const probe = useDiscoverProbeQueue({
+    enabled: !isOffline,
+    canManageJobs,
+  })
 
   /**
    * Dismiss (or restore) every selected candidate in one call.
@@ -304,6 +309,7 @@ export const DiscoverView: React.FC = () => {
         {probe.queue ? (
           <DiscoverProbeBar
             queue={probe.queue}
+            canManageJobs={canManageJobs}
             onSetPaused={probe.setPaused}
             isPausePending={probe.isPausePending}
           />

@@ -880,3 +880,47 @@ def test_an_unchanged_re_upsert_does_not_send_the_post_back(
         fresh.commit()
 
     assert _unharvested() == 0
+
+
+def test_harvest_running_is_readable_from_the_api_process() -> None:
+    """ "Harvest running" must not be answered by a lock the API cannot see.
+
+    The obvious implementation is `_sweep_lock.locked()`, and it is wrong
+    everywhere it is read. The lock is an `asyncio.Lock` belonging to whichever
+    process runs the job, the scheduler runs only in `app/worker.py`, and the
+    read happens in the API process serving `GET /data/discover/probe/queue`.
+    That process holds its own untouched copy of the module, so the indicator
+    reported "idle" through every live harvest — a green light that could never
+    turn on, which is worse than no light at all.
+
+    `lastStatus` already crosses the boundary: `_run_guarded` announces it over
+    `SCHEDULER_STATUS_CHANNEL` and every process folds announcements into
+    `_job_status`. So this asserts the *source*, by moving the status the way a
+    worker's announcement does while leaving the lock alone, and separately that
+    a held lock does **not** answer it. Together those two say the reporting
+    function reads across processes rather than inside one.
+    """
+    from app.jobs import scheduler
+    from app.jobs.directory_harvest import (
+        DIRECTORY_HARVEST_JOB_ID,
+        _sweep_lock,
+        is_harvest_running,
+    )
+
+    before = dict(scheduler._job_status[DIRECTORY_HARVEST_JOB_ID])
+    try:
+        scheduler._job_status[DIRECTORY_HARVEST_JOB_ID]["lastStatus"] = "running"
+        assert is_harvest_running() is True
+
+        scheduler._job_status[DIRECTORY_HARVEST_JOB_ID]["lastStatus"] = "ok"
+        assert is_harvest_running() is False
+
+        # The lock is the worker's mutual exclusion and says nothing about what
+        # any other process should report. Holding it must not flip the report.
+        async def _held() -> bool:
+            async with _sweep_lock:
+                return is_harvest_running()
+
+        assert asyncio.run(_held()) is False
+    finally:
+        scheduler._job_status[DIRECTORY_HARVEST_JOB_ID].update(before)
