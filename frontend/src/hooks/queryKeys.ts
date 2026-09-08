@@ -37,6 +37,11 @@ export const queryKeys = {
   postsCounts: (scope: unknown) => ["postsCounts", scope] as const,
   /** The infinite Posts feed, keyed on scope + filters + cap + sort. */
   postsFeed: (scope: unknown) => ["postsFeed", scope] as const,
+  /**
+   * The scheduler's job table. Gated on `JOBS_MANAGE`, which is what lets it
+   * double as this client's reading of that permission (`useCanManageJobs`).
+   */
+  jobsStatus: ["jobsStatus"] as const,
   logs: {
     publish: ["logs", "publish"] as const,
     sync: ["logs", "sync"] as const,

@@ -14,6 +14,7 @@ import { DiscoverWeightsEditor } from "@/components/discover/DiscoverWeightsEdit
 import { useDiscoverFollowJob } from "@/components/discover/useDiscoverFollowJob"
 import { GoToActionEmptyState } from "@/components/history/GoToActionEmptyState"
 import { TgConfirmDialog } from "@/components/ui/tg-confirm-dialog"
+import { useCanManageJobs } from "@/hooks/useCanManageJobs"
 import {
   useDiscoverIgnoreMutation,
   useDiscoverReportQuery,
@@ -168,7 +169,11 @@ export const DiscoverView: React.FC = () => {
    * and a scheduled job drains the queue whether or not this tab is open. This
    * view only reads progress and offers recheck and pause.
    */
-  const probe = useDiscoverProbeQueue({ enabled: !isOffline })
+  const canManageJobs = useCanManageJobs()
+  const probe = useDiscoverProbeQueue({
+    enabled: !isOffline,
+    canManageJobs,
+  })
 
   /**
    * Dismiss (or restore) every selected candidate in one call.
@@ -304,6 +309,7 @@ export const DiscoverView: React.FC = () => {
         {probe.queue ? (
           <DiscoverProbeBar
             queue={probe.queue}
+            canManageJobs={canManageJobs}
             onSetPaused={probe.setPaused}
             isPausePending={probe.isPausePending}
           />

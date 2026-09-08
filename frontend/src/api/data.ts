@@ -197,6 +197,19 @@ export type DiscoverProbeQueue = {
   enabled: boolean
   /** Whether a batch is in flight right now. */
   running: boolean
+  /**
+   * Requests the probe lane has spent today, and over the last seven days.
+   *
+   * Deployment-wide totals with no owner behind them, so they render only for
+   * an account that may manage jobs — see `DiscoverProbeBar`. The route has
+   * returned them since the harvest shipped; this type omitted them, which is
+   * why nothing displayed the one number that says what the sweep costs.
+   */
+  requestsToday: number
+  requestsWeek: number
+  /** The harvest sweep's switch, and whether a tick is in flight right now. */
+  harvestEnabled: boolean
+  harvestRunning: boolean
 }
 
 export type BulkFollowChannelInput = {

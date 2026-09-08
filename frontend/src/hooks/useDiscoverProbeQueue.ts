@@ -11,7 +11,19 @@ import { queryKeys } from "@/hooks/queryKeys"
  * server probes at its own pace regardless, so this only sets how promptly
  * resolved rows appear.
  */
-const POLL_INTERVAL_MS = 4000
+export const DRAINING_POLL_INTERVAL_MS = 4000
+
+/**
+ * How often to re-read the queue while nothing is draining (ticket 04).
+ *
+ * Five minutes rather than four seconds because of what is on screen in this
+ * state: a day's and a week's Request spend, which moves a few times an hour at
+ * most, and which nobody is watching tick. The argument the drain predicate
+ * makes against polling for `retrying` — do not poll for the life of a tab to
+ * observe something that changes a few times a day — applies here in full, and
+ * is why this cadence is slow rather than why there is no cadence at all.
+ */
+export const IDLE_POLL_INTERVAL_MS = 5 * 60 * 1000
 
 /**
  * Whether the queue is worth polling.
@@ -24,6 +36,31 @@ const POLL_INTERVAL_MS = 4000
 export function shouldPollProbeQueue(queue?: DiscoverProbeQueue): boolean {
   if (!queue) return false
   return queue.enabled && (queue.queued > 0 || queue.running)
+}
+
+/**
+ * The cadence to re-read the queue on, or `false` to stop.
+ *
+ * Wraps `shouldPollProbeQueue` rather than replacing it, because that predicate
+ * still answers the question it was written for and that answer is still right:
+ * it says whether there is work in flight. What changed in ticket 04 is that
+ * "is there work in flight" stopped being the same question as "is anything on
+ * this bar still worth refreshing". For an account that may manage jobs the bar
+ * now carries a spend total and stays on screen through the idle stretch, so a
+ * queue that has stopped draining still has a figure going stale on it.
+ *
+ * `canManageJobs` is in here and not only in the component so the idle poll
+ * follows what is actually rendered. Everyone else sees nothing on an idle
+ * queue, and a request for a number nobody is shown is a request worth not
+ * making.
+ */
+export function probeQueueRefetchInterval(
+  queue: DiscoverProbeQueue | undefined,
+  canManageJobs: boolean,
+): number | false {
+  if (!queue) return false
+  if (shouldPollProbeQueue(queue)) return DRAINING_POLL_INTERVAL_MS
+  return canManageJobs ? IDLE_POLL_INTERVAL_MS : false
 }
 
 /**
@@ -41,7 +78,17 @@ export function shouldPollProbeQueue(queue?: DiscoverProbeQueue): boolean {
  *
  * What remains is a read, a refetch trigger, and two operator actions.
  */
-export function useDiscoverProbeQueue({ enabled }: { enabled: boolean }) {
+export function useDiscoverProbeQueue({
+  enabled,
+  canManageJobs,
+}: {
+  enabled: boolean
+  /**
+   * Whether the caller's bar keeps anything on screen once the queue is idle.
+   * Passed in rather than resolved here so this hook stays a read of the queue.
+   */
+  canManageJobs: boolean
+}) {
   const queryClient = useQueryClient()
 
   const query = useQuery({
@@ -49,7 +96,7 @@ export function useDiscoverProbeQueue({ enabled }: { enabled: boolean }) {
     queryFn: api.getDiscoverProbeQueue,
     enabled,
     refetchInterval: (q) =>
-      shouldPollProbeQueue(q.state.data) ? POLL_INTERVAL_MS : false,
+      probeQueueRefetchInterval(q.state.data, canManageJobs),
   })
 
   const queue = query.data
