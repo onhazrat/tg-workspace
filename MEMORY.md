@@ -10,7 +10,7 @@ Self-hosted Telegram channel summarizer. Migrated from browser-heavy `TG-Summari
 
 - **`backend/`** — FastAPI (`app/main.py`), SQLModel (`app/models_tg.py`), Alembic, services (`scraper.py`, `sync_orchestrator.py`, **`sync_schedule.py`**, `channels.py`, **`followed_channels.py`**, **`bulk_follow.py`**, **`channel_setting_groups.py`**, **`channel_tags.py`**, **`tag_runs.py`**, **`post_media_parser.py`**, **`post_thumbnails.py`**, **`telegram_html.py`**, …), APScheduler jobs, pluggable AI (`app/ai/`, Gemini first). Prompts in `backend/app/prompts/`.
 - **`frontend/`** — React 19 + Vite + TanStack Router/Query; dual-route UI:
-  - **`/_tg/summarizer`** — full-screen TG app (`App.tsx` + `TgProviders`); **command palette** on `main`. Main content uses **`app-shell`** width utility.
+  - **`/_tg/workspace`** — full-screen TG app (`App.tsx` + `TgProviders`); **command palette** on `main`. Main content uses **`app-shell`** width utility. Legacy `/_tg/summarizer` redirects here.
   - **`/_layout/*`** — template admin shell (`/`, `/admin`, `/settings`).
 - **Providers (TG shell):** `Settings → Data → UI → Scraper → Chat → AI → Tag` in [`TgProviders.tsx`](frontend/src/components/TgProviders.tsx).
 - **TG UI primitives:** `tg-*` under [`frontend/src/components/ui/`](frontend/src/components/ui/) — **not** shadcn admin controls. Policy: [`frontend/docs/tg-ui.md`](frontend/docs/tg-ui.md).

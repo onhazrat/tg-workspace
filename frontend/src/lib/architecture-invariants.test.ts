@@ -138,10 +138,10 @@ describe("One declaration of the workspace tabs", () => {
    * `WORKSPACE_TABS` is the only place a tab is declared.
    *
    * It was three places. `TabType` was a hand-written union in `types.ts`, and
-   * `VALID_TABS` was copied verbatim into `routes/_tg/summarizer.tsx` and
-   * `hooks/useSummarizerTab.ts` — the route validator and the hook that reads
+   * `VALID_TABS` was copied verbatim into `routes/_tg/workspace.tsx` and
+   * `hooks/useWorkspaceTab.ts` — the route validator and the hook that reads
    * it, which is exactly the pair that has to agree. Updating one and not the
-   * other leaves a tab reachable by URL but silently falling back to `summary`,
+   * other leaves a tab reachable by URL but silently falling back to `channels`,
    * and it fails in the browser rather than in CI.
    *
    * The drift was already visible when this guard was written: the hand-written
@@ -173,7 +173,7 @@ describe("One declaration of the workspace tabs", () => {
    * deep-links into hidden tabs, the command palette still offers them, and
    * `setActiveTab("summary")` is called from several places that know nothing
    * about the setting. If `VALID_TABS` were ever derived from the *filtered*
-   * list, every one of those would silently redirect to `summary`.
+   * list, every one of those would silently redirect to `channels`.
    */
   /**
    * `compactWorkspaceTabs` hides tabs from the *nav*, and only from the nav.
@@ -182,7 +182,7 @@ describe("One declaration of the workspace tabs", () => {
    * command palette's "Go to {label}" generator, and every `setActiveTab` call.
    * Filtering any of those turns a decluttering preference into a capability
    * removal, and the failure is silent — a deep link from History would land on
-   * `summary` instead of the artifact you clicked.
+   * `channels` instead of the artifact you clicked.
    */
   it("filters only the nav, never the palette or the validator", () => {
     const palette = readFileSync(join(SRC, "lib/commands/navigate.ts"), "utf8")
@@ -192,7 +192,7 @@ describe("One declaration of the workspace tabs", () => {
     // The nav is the one place the filter is applied.
     expect(app).toContain("visibleWorkspaceTabs(compactWorkspaceTabs")
 
-    const route = readFileSync(join(SRC, "routes/_tg/summarizer.tsx"), "utf8")
+    const route = readFileSync(join(SRC, "routes/_tg/workspace.tsx"), "utf8")
     expect(route).not.toContain("compactWorkspaceTabs")
   })
 
@@ -390,7 +390,7 @@ describe("Ticket 02 — browser storage has four owners, and they are named", ()
 describe("Ticket 26 — the View-as ribbon reaches every screen", () => {
   /**
    * It was mounted in `routes/_layout.tsx` first, and that missed the screen
-   * the whole feature exists for: `/summarizer` lives under `_tg`, a separate
+   * the whole feature exists for: `/workspace` lives under `_tg`, a separate
    * branch whose component is a bare `<Outlet />`, so the shell never wraps it.
    * An Owner reproducing a reported problem spends the entire session there and
    * would have seen no ribbon at all — spec 51, "an unmissable ribbon naming
@@ -418,7 +418,7 @@ describe("Ticket 26 — the View-as ribbon reaches every screen", () => {
   /**
    * The ribbon takes a row of its own at the top of the document, and two roots
    * underneath declare a full-viewport height. Without subtracting the offset,
-   * the summarizer's bottom 40px goes off the screen for the whole session —
+   * the workspace's bottom 40px goes off the screen for the whole session —
    * a layout regression visible only while somebody is viewing as another
    * account, which is the hardest kind to notice.
    */

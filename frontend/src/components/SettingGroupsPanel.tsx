@@ -13,7 +13,7 @@ import {
   useInvalidateSettingGroups,
   useSettingGroupsQuery,
 } from "@/hooks/useSettingGroups"
-import { useSummarizerGroupParams } from "@/hooks/useSummarizerGroupParams"
+import { useWorkspaceGroupParams } from "@/hooks/useWorkspaceGroupParams"
 import {
   isReservedSettingGroup,
   resolveInitialSelectedGroupId,
@@ -54,7 +54,7 @@ const draftFromGroup = (group: ChannelSettingGroup): SettingGroupWriteBody => ({
 
 export const SettingGroupsPanel: React.FC = () => {
   const { selectedSettingGroupId, setSelectedSettingGroup } =
-    useSummarizerGroupParams()
+    useWorkspaceGroupParams()
   const {
     data: groups = [],
     isLoading,

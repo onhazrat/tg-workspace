@@ -5,11 +5,11 @@ import {
   type SettingsSection,
 } from "@/lib/settingsSection"
 
-const summarizerRoute = getRouteApi("/_tg/summarizer")
+const workspaceRoute = getRouteApi("/_tg/workspace")
 
 export function useSettingsSection() {
-  const { section } = summarizerRoute.useSearch()
-  const navigate = summarizerRoute.useNavigate()
+  const { section } = workspaceRoute.useSearch()
+  const navigate = workspaceRoute.useNavigate()
 
   const activeSection = normalizeSettingsSection(section)
 

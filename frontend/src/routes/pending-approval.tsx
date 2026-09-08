@@ -10,7 +10,7 @@ import useAuth, { isLoggedIn } from "@/hooks/useAuth"
  *
  * A real route rather than a panel rendered in place of the app, so the URL says
  * what is on screen — a reload or a shared link lands here instead of on
- * `/summarizer` showing something else entirely.
+ * `/workspace` showing something else entirely.
  *
  * It sits outside `_layout` deliberately: that layout is the application shell,
  * and everything in it would fail against the API for someone in this state.
@@ -31,7 +31,7 @@ function PendingApproval() {
   // refetched. Send them into the app rather than leaving them on a page whose
   // whole premise has expired.
   if (user?.is_approved) {
-    throw redirect({ to: "/summarizer", search: { tab: "summary" } })
+    throw redirect({ to: "/workspace", search: { tab: "channels" } })
   }
 
   return (

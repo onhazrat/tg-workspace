@@ -3,7 +3,7 @@ import { expect, test } from "@playwright/test"
 
 async function gotoSettings(page: Page, search = "") {
   const qs = search.startsWith("?") ? search.slice(1) : search
-  const url = qs ? `/summarizer?tab=settings&${qs}` : "/summarizer?tab=settings"
+  const url = qs ? `/workspace?tab=settings&${qs}` : "/workspace?tab=settings"
   await page.goto(url)
   await expect(page.getByTestId("settings-search")).toBeVisible()
 }

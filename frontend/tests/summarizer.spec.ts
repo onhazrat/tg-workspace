@@ -94,8 +94,8 @@ async function channelHasTag(
   )
 }
 
-async function gotoSummarizer(page: Page, tab = "summary") {
-  await page.goto(`/summarizer?tab=${tab}`)
+async function gotoWorkspace(page: Page, tab = "summary") {
+  await page.goto(`/workspace?tab=${tab}`)
   await expect(page.getByTestId("command-palette-button")).toBeVisible()
 }
 
@@ -422,7 +422,7 @@ async function mockBulkFollowJob(page: Page, followJobId = "e2e-follow-job") {
  * Land on channels, let that settle, then pin selection to the carrier only.
  */
 async function pinSelectionToCarrier(page: Page, carrierName: string) {
-  await gotoSummarizer(page, "channels")
+  await gotoWorkspace(page, "channels")
   // Seeded channels auto-select once the channel list arrives, which under
   // load lands *after* the clear+select above and silently clobbers it. The
   // carrier then ends up unselected, posts are read from IDB filtered to other
@@ -455,14 +455,14 @@ async function openDiscoverWithForwards(
   await mockDiscoverForwardPosts(page, fixture)
   await pinSelectionToCarrier(page, fixture.carrierName)
 
-  await gotoSummarizer(page, "discover")
+  await gotoWorkspace(page, "discover")
   await expect(
     page.getByRole("heading", { name: "Channel Candidates" }),
   ).toBeVisible()
 
   // Generating moved to the Action tab — Discover renders results only, and no
   // longer auto-opens the most recent report. Click through rather than
-  // `gotoSummarizer`: a full page load would discard the pinned selection.
+  // `gotoWorkspace`: a full page load would discard the pinned selection.
   await page.locator("#tour-tab-action").click()
   await page.getByTestId("action-generate-report").click()
   await expect(page).toHaveURL(/tab=discover/, { timeout: 30_000 })
@@ -489,9 +489,14 @@ async function openDiscoverWithForwards(
   }
 }
 
-test.describe("TG Summarizer", () => {
-  test("summarizer shell renders workspace tabs", async ({ page }) => {
-    await page.goto("/summarizer")
+test.describe("TG Workspace", () => {
+  test("legacy /summarizer redirects to /workspace", async ({ page }) => {
+    await page.goto("/summarizer?tab=posts")
+    await expect(page).toHaveURL(/\/workspace\?.*tab=posts/)
+  })
+
+  test("workspace shell renders workspace tabs", async ({ page }) => {
+    await page.goto("/workspace")
 
     for (const tab of WORKSPACE_TABS) {
       await expect(page.locator(`#tour-tab-${tab.id}`)).toBeVisible()
@@ -508,7 +513,7 @@ test.describe("TG Summarizer", () => {
    * whatever conversation was last open.
    */
   test("the Action tab starts a chat from its own input", async ({ page }) => {
-    await page.goto("/summarizer?tab=action")
+    await page.goto("/workspace?tab=action")
 
     const input = page.getByTestId("action-chat-input")
     await expect(input).toBeVisible({ timeout: 15_000 })
@@ -524,7 +529,7 @@ test.describe("TG Summarizer", () => {
   test("the model and language selectors live above every action", async ({
     page,
   }) => {
-    await page.goto("/summarizer?tab=action")
+    await page.goto("/workspace?tab=action")
 
     const bar = page.getByTestId("action-run-settings")
     await expect(bar.getByLabel("Inference model")).toBeVisible({
@@ -539,7 +544,7 @@ test.describe("TG Summarizer", () => {
   })
 
   test("tag tab opens Tag view", async ({ page }) => {
-    await page.goto("/summarizer?tab=summary")
+    await page.goto("/workspace?tab=summary")
     await page.locator("#tour-tab-tag").click()
 
     await expect(page).toHaveURL(/tab=tag/)
@@ -548,7 +553,7 @@ test.describe("TG Summarizer", () => {
   })
 
   test("tag tab loads from ?tab=tag URL", async ({ page }) => {
-    await page.goto("/summarizer?tab=tag")
+    await page.goto("/workspace?tab=tag")
 
     await expect(page).toHaveURL(/tab=tag/)
     await expect(page.locator("#tour-tab-tag")).toHaveClass(/border-app-ink/)
@@ -556,7 +561,7 @@ test.describe("TG Summarizer", () => {
   })
 
   test("discover tab opens Discover view", async ({ page }) => {
-    await page.goto("/summarizer?tab=summary")
+    await page.goto("/workspace?tab=summary")
     await page.locator("#tour-tab-discover").click()
 
     await expect(page).toHaveURL(/tab=discover/)
@@ -569,7 +574,7 @@ test.describe("TG Summarizer", () => {
   })
 
   test("discover tab loads from ?tab=discover URL", async ({ page }) => {
-    await page.goto("/summarizer?tab=discover")
+    await page.goto("/workspace?tab=discover")
 
     await expect(page).toHaveURL(/tab=discover/)
     await expect(page.locator("#tour-tab-discover")).toHaveClass(
@@ -592,7 +597,7 @@ test.describe("TG Summarizer", () => {
     const stamp = Date.now()
     const carrierName = `dsorig${stamp}`
 
-    await gotoSummarizer(page, "channels")
+    await gotoWorkspace(page, "channels")
     await seedTestChannel(page, carrierName)
     await mockDiscoverForwardPosts(page, {
       carrierName,
@@ -601,7 +606,7 @@ test.describe("TG Summarizer", () => {
     })
     await pinSelectionToCarrier(page, carrierName)
 
-    await gotoSummarizer(page, "posts")
+    await gotoWorkspace(page, "posts")
     const originalOnly = page.getByRole("button", { name: "Original Only" })
     await originalOnly.click()
     await expect(originalOnly).toHaveClass(/bg-app-ink/)
@@ -619,7 +624,7 @@ test.describe("TG Summarizer", () => {
     })
 
     // Generating moved to the Action tab. Click through rather than
-    // `gotoSummarizer`, which is a full page load and would discard the signal
+    // `gotoWorkspace`, which is a full page load and would discard the signal
     // set and post filter this test just configured in memory. The Action card
     // navigates back to Discover once the report exists.
     await page.locator("#tour-tab-action").click()
@@ -645,7 +650,7 @@ test.describe("TG Summarizer", () => {
   test("discover signal toggles persist and filter candidates", async ({
     page,
   }) => {
-    await gotoSummarizer(page, "discover")
+    await gotoWorkspace(page, "discover")
 
     // Do not assume the starting state: the preference is schema-backed and
     // outlives whichever spec ran before this one.
@@ -675,7 +680,7 @@ test.describe("TG Summarizer", () => {
     const followedSource = `dsfoll${stamp}`
     const unfollowedSource = `dsunf${stamp}`
 
-    await gotoSummarizer(page, "channels")
+    await gotoWorkspace(page, "channels")
     await seedTestChannel(page, carrierName)
     await seedTestChannel(page, followedSource)
 
@@ -720,7 +725,7 @@ test.describe("TG Summarizer", () => {
     const followedSource = `dsfoll${stamp}`
     const unfollowedSource = `dsunf${stamp}`
 
-    await gotoSummarizer(page, "channels")
+    await gotoWorkspace(page, "channels")
     await seedTestChannel(page, carrierName)
     await seedTestChannel(page, followedSource)
 
@@ -751,7 +756,7 @@ test.describe("TG Summarizer", () => {
     const carrierName = `dscarr${stamp}`
     const sources = [`dsunfa${stamp}`, `dsunfb${stamp}`]
 
-    await gotoSummarizer(page, "channels")
+    await gotoWorkspace(page, "channels")
     await seedTestChannel(page, carrierName)
 
     const bulkFollow = await mockBulkFollowJob(page)
@@ -803,7 +808,7 @@ test.describe("TG Summarizer", () => {
       (_, index) => `dsunf${index}${stamp}`,
     )
 
-    await gotoSummarizer(page, "channels")
+    await gotoWorkspace(page, "channels")
     await seedTestChannel(page, carrierName)
 
     const bulkFollow = await mockBulkFollowJob(page)
@@ -842,7 +847,7 @@ test.describe("TG Summarizer", () => {
   }) => {
     test.setTimeout(90_000)
 
-    await gotoSummarizer(page, "channels")
+    await gotoWorkspace(page, "channels")
     const first = await seedTestChannel(page)
     const second = await seedTestChannel(page)
     const third = await seedTestChannel(page)
@@ -922,7 +927,7 @@ test.describe("TG Summarizer", () => {
   test("settings tab opens Settings hub with network section", async ({
     page,
   }) => {
-    await page.goto("/summarizer?tab=summary")
+    await page.goto("/workspace?tab=summary")
     // Prefer role locators: `#nav-tab-*` CSS ids are flaky under Playwright
     // Chrome (document ID map sometimes misses React-assigned ids).
     //
@@ -946,7 +951,7 @@ test.describe("TG Summarizer", () => {
   test("action tab shows the summary create controls", async ({ page }) => {
     // They were on the Summary tab until Action became the one place work
     // starts; the feature tabs render results only now.
-    await page.goto("/summarizer?tab=action")
+    await page.goto("/workspace?tab=action")
 
     await expect(
       page.locator("button").filter({ hasText: "Copy Summary Prompt" }).first(),
@@ -959,7 +964,7 @@ test.describe("TG Summarizer", () => {
   test("command palette opens via shortcut and header button", async ({
     page,
   }) => {
-    await page.goto("/summarizer")
+    await page.goto("/workspace")
 
     const palette = page.getByTestId("command-palette")
     await expect(palette).not.toBeVisible()
@@ -977,7 +982,7 @@ test.describe("TG Summarizer", () => {
   })
 
   test("command palette navigates to channels tab", async ({ page }) => {
-    await page.goto("/summarizer?tab=summary")
+    await page.goto("/workspace?tab=summary")
     await page.getByTestId("command-palette-button").click()
 
     await page.getByPlaceholder("Type a command...").fill("channels")
@@ -990,7 +995,7 @@ test.describe("TG Summarizer", () => {
   })
 
   test("command palette toggles theme", async ({ page }) => {
-    await page.goto("/summarizer")
+    await page.goto("/workspace")
     await page.evaluate(() => localStorage.setItem("vite-ui-theme", "light"))
     await page.reload()
 
@@ -1008,7 +1013,7 @@ test.describe("TG Summarizer", () => {
   })
 
   test("command palette copies all channel names", async ({ page }) => {
-    await gotoSummarizer(page, "channels")
+    await gotoWorkspace(page, "channels")
     await seedTestChannel(page)
 
     await page.getByTestId("command-palette-button").click()
@@ -1027,7 +1032,7 @@ test.describe("TG Summarizer", () => {
   test("command palette export selected channels uses jsonl", async ({
     page,
   }) => {
-    await gotoSummarizer(page, "channels")
+    await gotoWorkspace(page, "channels")
     const channelName = await seedTestChannel(page)
 
     await page.locator("button.uppercase", { hasText: "None" }).click()
@@ -1052,7 +1057,7 @@ test.describe("TG Summarizer", () => {
   test("import command shows confirmation before file picker", async ({
     page,
   }) => {
-    await page.goto("/summarizer")
+    await page.goto("/workspace")
 
     await page.getByTestId("command-palette-button").click()
     await page
@@ -1066,7 +1071,7 @@ test.describe("TG Summarizer", () => {
   })
 
   test("command palette sync channel opens entity picker", async ({ page }) => {
-    await gotoSummarizer(page, "channels")
+    await gotoWorkspace(page, "channels")
     await seedTestChannel(page)
 
     await page.getByTestId("command-palette-button").click()
@@ -1082,7 +1087,7 @@ test.describe("TG Summarizer", () => {
   test("command palette delete channel shows confirm after pick", async ({
     page,
   }) => {
-    await gotoSummarizer(page, "channels")
+    await gotoWorkspace(page, "channels")
     await page.getByTestId("command-palette-button").click()
     await page.getByPlaceholder("Type a command...").fill("delete channel")
     const deleteOption = page.getByRole("option", {
@@ -1106,7 +1111,7 @@ test.describe("TG Summarizer", () => {
   test("command palette search posts opens in-palette results", async ({
     page,
   }) => {
-    await page.goto("/summarizer?tab=posts")
+    await page.goto("/workspace?tab=posts")
     await page.getByTestId("command-palette-button").click()
     await page.getByPlaceholder("Type a command...").fill("search posts")
     await page
@@ -1121,7 +1126,7 @@ test.describe("TG Summarizer", () => {
   test("command palette search summaries opens in-palette results", async ({
     page,
   }) => {
-    await gotoSummarizer(page, "summary")
+    await gotoWorkspace(page, "summary")
     await page.getByTestId("command-palette-button").click()
     await page.getByPlaceholder("Type a command...").fill("search summaries")
     await page
@@ -1136,7 +1141,7 @@ test.describe("TG Summarizer", () => {
   test("command palette reload channels command is available", async ({
     page,
   }) => {
-    await page.goto("/summarizer?tab=channels")
+    await page.goto("/workspace?tab=channels")
     await page.getByTestId("command-palette-button").click()
     await page.getByPlaceholder("Type a command...").fill("reload channels")
     await expect(
@@ -1147,7 +1152,7 @@ test.describe("TG Summarizer", () => {
   test("command palette clear post filters command is available", async ({
     page,
   }) => {
-    await page.goto("/summarizer?tab=posts")
+    await page.goto("/workspace?tab=posts")
     await page.getByTestId("command-palette-button").click()
     await page.getByPlaceholder("Type a command...").fill("clear post filters")
     await expect(
@@ -1158,7 +1163,7 @@ test.describe("TG Summarizer", () => {
   test("command palette fix all partial history command is available", async ({
     page,
   }) => {
-    await gotoSummarizer(page, "channels")
+    await gotoWorkspace(page, "channels")
     await seedPartialHistoryChannel(page)
 
     await page.getByTestId("command-palette-button").click()
@@ -1176,7 +1181,7 @@ test.describe("TG Summarizer", () => {
   test("command palette fix partial history opens filtered entity picker", async ({
     page,
   }) => {
-    await gotoSummarizer(page, "channels")
+    await gotoWorkspace(page, "channels")
     const partialChannel = await seedPartialHistoryChannel(page)
     await seedTestChannel(page)
 
@@ -1203,7 +1208,7 @@ test.describe("TG Summarizer", () => {
   test("command palette show starred summaries toggles badge", async ({
     page,
   }) => {
-    await gotoSummarizer(page, "summary")
+    await gotoWorkspace(page, "summary")
     await page.getByTestId("command-palette-button").click()
     await page
       .getByPlaceholder("Type a command...")
@@ -1227,7 +1232,7 @@ test.describe("TG Summarizer", () => {
 
 test.describe("command palette keyboard", () => {
   test("K1: opens and closes via keyboard shortcut", async ({ page }) => {
-    await page.goto("/summarizer")
+    await page.goto("/workspace")
     const palette = page.getByTestId("command-palette")
     await expect(palette).not.toBeVisible()
 
@@ -1237,14 +1242,14 @@ test.describe("command palette keyboard", () => {
   })
 
   test("K2: navigates to channels tab via type and Enter", async ({ page }) => {
-    await page.goto("/summarizer?tab=summary")
+    await page.goto("/workspace?tab=summary")
     await openPaletteKeyboard(page)
     await runPaletteCommand(page, "channels")
     await expect(page).toHaveURL(/tab=channels/)
   })
 
   test("K3: toggles theme via type and Enter", async ({ page }) => {
-    await page.goto("/summarizer")
+    await page.goto("/workspace")
     await page.evaluate(() => localStorage.setItem("vite-ui-theme", "light"))
     await page.reload()
 
@@ -1258,7 +1263,7 @@ test.describe("command palette keyboard", () => {
   })
 
   test("K4: sync channel entity pick via keyboard", async ({ page }) => {
-    await gotoSummarizer(page, "channels")
+    await gotoWorkspace(page, "channels")
     const channelName = await seedTestChannel(page)
 
     await openPaletteKeyboard(page)
@@ -1274,7 +1279,7 @@ test.describe("command palette keyboard", () => {
   })
 
   test("K5: multi-pick select channel stays open", async ({ page }) => {
-    await gotoSummarizer(page, "channels")
+    await gotoWorkspace(page, "channels")
     const first = await seedTestChannel(page)
     const second = await seedTestChannel(page)
 
@@ -1322,7 +1327,7 @@ test.describe("command palette keyboard", () => {
   })
 
   test("K6: add channel editor apply via Enter", async ({ page }) => {
-    await gotoSummarizer(page, "channels")
+    await gotoWorkspace(page, "channels")
     const channelName = `kbd${Date.now()}`
 
     await page.route("**/api/v1/telegram/channel-info", async (route) => {
@@ -1354,7 +1359,7 @@ test.describe("command palette keyboard", () => {
   test("K7: search posts opens results and picks via keyboard", async ({
     page,
   }) => {
-    await page.goto("/summarizer?tab=posts")
+    await page.goto("/workspace?tab=posts")
     await openPaletteKeyboard(page)
     await runPaletteCommand(page, "search posts")
     await page.getByLabel(/Search posts/i).fill("test")
@@ -1373,7 +1378,7 @@ test.describe("command palette keyboard", () => {
   })
 
   test("K8: delete channel confirm dismisses via Escape", async ({ page }) => {
-    await gotoSummarizer(page, "channels")
+    await gotoWorkspace(page, "channels")
     const channelName = await seedTestChannel(page)
 
     await openPaletteKeyboard(page)
@@ -1397,7 +1402,7 @@ test.describe("command palette keyboard", () => {
   // dialog's keyboard path, not the command, so it now uses one that exists and
   // destroys nothing when it proceeds.
   test("K9: a confirm proceeds via Tab and Enter", async ({ page }) => {
-    await page.goto("/summarizer")
+    await page.goto("/workspace")
     await openPaletteKeyboard(page)
     await runPaletteCommand(page, "restart tor")
 
@@ -1412,7 +1417,7 @@ test.describe("command palette keyboard", () => {
   test("K10: entity view Backspace on empty filter returns to root", async ({
     page,
   }) => {
-    await gotoSummarizer(page, "channels")
+    await gotoWorkspace(page, "channels")
     await seedTestChannel(page)
 
     await openPaletteKeyboard(page)
@@ -1426,7 +1431,7 @@ test.describe("command palette keyboard", () => {
   })
 
   test("K12: add tag chain via keyboard", async ({ page }) => {
-    await gotoSummarizer(page, "channels")
+    await gotoWorkspace(page, "channels")
     const channelName = await seedTestChannel(page)
     const tagName = `tag${Date.now()}`
 
@@ -1451,7 +1456,7 @@ test.describe("command palette keyboard", () => {
   })
 
   test("K13: remove tag chain via keyboard", async ({ page }) => {
-    await gotoSummarizer(page, "channels")
+    await gotoWorkspace(page, "channels")
     const tagName = `rm${Date.now()}`
     const channelName = await seedTestChannel(page, undefined, [tagName])
 
@@ -1477,7 +1482,7 @@ test.describe("command palette keyboard", () => {
 
   test("K14: search-results back preserves editor query", async ({ page }) => {
     const searchQuery = `kbdquery${Date.now()}`
-    await page.goto("/summarizer?tab=posts")
+    await page.goto("/workspace?tab=posts")
     await openPaletteKeyboard(page)
     await runPaletteCommand(page, "search posts")
 
@@ -1501,7 +1506,7 @@ test.describe("command palette keyboard", () => {
     await page.route("**/api/v1/utils/health-check/**", (route) =>
       route.abort("failed"),
     )
-    await page.goto("/summarizer")
+    await page.goto("/workspace")
     await expect(page.getByText("Server offline.")).toBeVisible({
       timeout: 15_000,
     })
@@ -1527,7 +1532,7 @@ test.describe("command palette keyboard", () => {
   test("K15: clear database table confirm cancel via keyboard", async ({
     page,
   }) => {
-    await gotoSummarizer(page, "summary")
+    await gotoWorkspace(page, "summary")
 
     await openPaletteKeyboard(page)
     await runPaletteCommand(page, "clear database table")
@@ -1540,7 +1545,7 @@ test.describe("command palette keyboard", () => {
   })
 
   test("K16: deselect channel multi-pick via keyboard", async ({ page }) => {
-    await gotoSummarizer(page, "channels")
+    await gotoWorkspace(page, "channels")
     const first = await seedTestChannel(page)
     const second = await seedTestChannel(page)
 
@@ -1570,7 +1575,7 @@ test.describe("command palette keyboard", () => {
   })
 
   test("K17: freeze and unfreeze channel via keyboard", async ({ page }) => {
-    await gotoSummarizer(page, "channels")
+    await gotoWorkspace(page, "channels")
     const channelName = await seedTestChannel(page)
     const card = page.locator(`[data-channel-name="${channelName}"]`)
 
@@ -1594,7 +1599,7 @@ test.describe("command palette keyboard", () => {
   test("K18: fix partial history channel stays open after confirm", async ({
     page,
   }) => {
-    await gotoSummarizer(page, "channels")
+    await gotoWorkspace(page, "channels")
     const first = await seedPartialHistoryChannel(page)
     const second = await seedPartialHistoryChannel(page)
 
@@ -1618,10 +1623,10 @@ test.describe("command palette keyboard", () => {
     page,
   }) => {
     const prefix = `scroll${Date.now()}`
-    await gotoSummarizer(page, "summary")
+    await gotoWorkspace(page, "summary")
     await seedBulkChannels(page, 25, prefix)
 
-    await page.goto("/summarizer?tab=channels")
+    await page.goto("/workspace?tab=channels")
     await expect(page.getByTestId("command-palette-button")).toBeVisible()
     await page.getByPlaceholder("Search channels...").fill(prefix)
 
@@ -1659,10 +1664,10 @@ test.describe("command palette keyboard", () => {
   }) => {
     test.setTimeout(180_000)
     const prefix = `deep${Date.now()}`
-    await gotoSummarizer(page, "summary")
+    await gotoWorkspace(page, "summary")
     await seedBulkChannels(page, 70, prefix)
 
-    await page.goto("/summarizer?tab=channels")
+    await page.goto("/workspace?tab=channels")
     await expect(page.getByTestId("command-palette-button")).toBeVisible()
     await page.getByPlaceholder("Search channels...").fill(prefix)
 
@@ -1708,7 +1713,7 @@ test.describe("command palette keyboard", () => {
     const channelName = `media${Date.now()}`
     const now = Date.now()
 
-    await gotoSummarizer(page, "channels")
+    await gotoWorkspace(page, "channels")
     await seedTestChannel(page, channelName)
 
     await page.route("**/api/v1/data/sync-meta**", async (route) => {
@@ -1766,7 +1771,7 @@ test.describe("command palette keyboard", () => {
     await clearScopedStorage(page, ["sync_etag_posts"])
 
     await selectChannelsKeyboard(page, [channelName])
-    await gotoSummarizer(page, "posts")
+    await gotoWorkspace(page, "posts")
 
     await expect(page.getByTestId("post-media-filter-photo")).toBeVisible()
     await page.getByTestId("post-media-filter-photo").click()
@@ -1790,7 +1795,7 @@ test.describe("command palette keyboard", () => {
       (_, index) => `${prefix}${index}`,
     )
 
-    await gotoSummarizer(page, "channels")
+    await gotoWorkspace(page, "channels")
 
     await page.evaluate(
       async ({ names }) => {

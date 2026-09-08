@@ -12,11 +12,11 @@ import { Toaster } from "@/components/ui/sonner"
 import ViewAsRibbon from "@/components/ViewAsRibbon"
 
 function AppToaster() {
-  const isSummarizerRoute = useRouterState({
-    select: (state) => state.location.pathname.startsWith("/summarizer"),
+  const isWorkspaceRoute = useRouterState({
+    select: (state) => state.location.pathname.startsWith("/workspace"),
   })
 
-  if (isSummarizerRoute) {
+  if (isWorkspaceRoute) {
     return null
   }
 
@@ -28,7 +28,7 @@ export const Route = createRootRoute({
     <>
       <HeadContent />
       {/* Above every route, because a View-as session is a property of the
-          browser and not of one route subtree — `/summarizer` is under `_tg`,
+          browser and not of one route subtree — `/workspace` is under `_tg`,
           which the app shell does not wrap (ticket 26). */}
       <ViewAsRibbon />
       <Outlet />

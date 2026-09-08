@@ -28,7 +28,7 @@ const ELEVATION_MINUTES = [5, 10, 15] as const
  * The unmissable ribbon naming the account being viewed (ticket 26, 27).
  *
  * **Mounted at the router root, not in the shell.** It was in `_layout` first,
- * and that was wrong in the way that matters: `/summarizer` lives under `_tg`,
+ * and that was wrong in the way that matters: `/workspace` lives under `_tg`,
  * a separate branch that renders a bare `Outlet`, so the ribbon was absent from
  * the one screen a reported problem is usually about. A View-as session is a
  * property of the browser rather than of a route subtree, so it belongs where

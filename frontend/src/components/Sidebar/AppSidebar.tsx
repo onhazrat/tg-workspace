@@ -13,7 +13,7 @@ import { type Item, Main } from "./Main"
 import { User } from "./User"
 
 const baseItems: Item[] = [
-  { icon: Sparkles, title: "Summarizer", path: "/summarizer" },
+  { icon: Sparkles, title: "Workspace", path: "/workspace" },
   { icon: Home, title: "Dashboard", path: "/" },
 ]
 

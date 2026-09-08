@@ -34,9 +34,9 @@ export const WORKSPACE_TABS = [
  *
  * Derived rather than declared, because it used to be neither: `TabType` was a
  * hand-written union in `types.ts` and `VALID_TABS` was copied into both
- * `routes/_tg/summarizer.tsx` and `hooks/useSummarizerTab.ts`. Three lists to
+ * `routes/_tg/workspace.tsx` and `hooks/useWorkspaceTab.ts`. Three lists to
  * keep in step meant adding a tab to two of them left it reachable by URL but
- * silently falling back to `summary`, and the hand-written union had drifted to
+ * silently falling back to `channels`, and the hand-written union had drifted to
  * carry three ids (`db`, `bots`, `logs`) that no tab had rendered for months.
  *
  * `WORKSPACE_TABS` is now the only place a tab is declared.

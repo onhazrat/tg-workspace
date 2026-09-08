@@ -144,7 +144,7 @@ HTML report (local): `bunx playwright show-report`
 
 * Browser login: `/login` → JWT in `localStorage.access_token`
 * Scripts: optional `X-API-Key` header when `API_KEY` is set
-* Primary app: `/summarizer` (full-screen TG UI)
+* Primary app: `/workspace` (full-screen TG UI; `/summarizer` redirects here)
 * Admin dashboard: `/`, `/admin`, `/settings`
 
 ### Local registration and login
@@ -179,13 +179,13 @@ Frontend hardening from Sprint 3 (full workstream log: [REMEDIATION-PLAN.md Appe
 
 ### Summarizer tabs (URL)
 
-The active summarizer tab comes from the `tab` search param on `/summarizer`, not from `localStorage`. Valid values: `summary`, `posts`, `channels`, `history`, `chat`, `settings` (default when missing or invalid). Legacy `?tab=network` maps to `settings` with `section=network`. Tab changes update the URL via `useSummarizerTab` (replace navigation). Example: `http://localhost:5173/summarizer?tab=settings`.
+The active workspace tab comes from the `tab` search param on `/workspace`, not from `localStorage`. Valid values: `channels`, `posts`, `action`, `summary`, `tag`, `discover`, `chat`, `history`, `settings` (default `channels` when missing or invalid). Legacy `?tab=network` maps to `settings` with `section=network`. Tab changes update the URL via `useWorkspaceTab` (replace navigation). Example: `http://localhost:5173/workspace?tab=settings`. Legacy `/summarizer` URLs redirect to `/workspace` with the same query string.
 
 ### Settings sub-tabs (URL)
 
-When the settings workspace tab is active, the Engine Room sidebar section is driven by the `section` search param. Valid values: `appearance`, `sync`, `ai`, `network`, `db`, `publishing`, `diagnostics` (default `appearance` when missing or invalid). Example deep link: `http://localhost:5173/summarizer?tab=settings&section=network`. Section changes update the URL via `useSettingsSection` (replace navigation).
+When the settings workspace tab is active, the Engine Room sidebar section is driven by the `section` search param. Valid values: `appearance`, `sync`, `ai`, `network`, `db`, `publishing`, `diagnostics` (default `appearance` when missing or invalid). Example deep link: `http://localhost:5173/workspace?tab=settings&section=network`. Section changes update the URL via `useSettingsSection` (replace navigation).
 
-Successful login redirects to `/summarizer?tab=summary`.
+Successful login redirects to `/workspace?tab=channels`.
 
 ### Theme
 

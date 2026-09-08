@@ -11,7 +11,7 @@ import { ChannelTagChips } from "@/components/channel-grid/ChannelTagChips"
 import { useChannelGridActions } from "@/components/channel-grid/useChannelGridActions"
 import { useChannelGridSortState } from "@/components/channel-grid/useChannelGridSortState"
 import { useScopedPostCounts } from "@/hooks/usePostsView"
-import { useSummarizerGroupParams } from "@/hooks/useSummarizerGroupParams"
+import { useWorkspaceGroupParams } from "@/hooks/useWorkspaceGroupParams"
 import {
   areAllNamesSelected,
   collectGridTags,
@@ -83,7 +83,7 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
   const [selectedLanguageFilter, setSelectedLanguageFilter] =
     useState<string>("")
   const { channelGroupFilter, setChannelGroupFilter } =
-    useSummarizerGroupParams()
+    useWorkspaceGroupParams()
   const selectedGroupFilter = channelGroupFilter
 
   const actions = useChannelGridActions()

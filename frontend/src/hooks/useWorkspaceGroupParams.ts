@@ -1,10 +1,10 @@
 import { getRouteApi } from "@tanstack/react-router"
 
-const summarizerRoute = getRouteApi("/_tg/summarizer")
+const workspaceRoute = getRouteApi("/_tg/workspace")
 
-export function useSummarizerGroupParams() {
-  const { channelGroup, settingGroup } = summarizerRoute.useSearch()
-  const navigate = summarizerRoute.useNavigate()
+export function useWorkspaceGroupParams() {
+  const { channelGroup, settingGroup } = workspaceRoute.useSearch()
+  const navigate = workspaceRoute.useNavigate()
 
   const setChannelGroupFilter = (groupId: string) => {
     navigate({
