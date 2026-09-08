@@ -3,11 +3,12 @@
 #
 # Installs the toolchains the repo pins but the base image lacks (uv for the
 # Python 3.14 backend workspace, bun for the React frontend, PostgreSQL 18 for
-# the API/worker), then syncs dependencies and applies migrations to both the
-# dev (`app`) and test (`app_test`) databases. Runs from the repo root.
+# the API/worker), syncs dependencies, provisions the local database, and
+# applies migrations to both the dev (`app`) and test (`app_test`) databases.
+# Runs from the repo root.
 #
 # Everything here is durable, source-derived setup that a build snapshot can
-# capture once; per-boot service startup lives in `.cursor/start.sh`.
+# capture once; per-boot service startup and data init live in `.cursor/start.sh`.
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -55,33 +56,11 @@ if ! ls /usr/lib/postgresql/18/bin/pg_ctl >/dev/null 2>&1; then
   sudo apt-get install -y -qq postgresql-18 postgresql-contrib-18
 fi
 
-# The API talks to Postgres over TCP as the `postgres` role. Start the cluster
-# so we can seed roles/databases and migrate; `.cursor/start.sh` re-starts it
-# on every boot.
-sudo pg_ctlcluster 18 main start 2>/dev/null || true
-for _ in $(seq 1 30); do
-  sudo -u postgres pg_isready -q && break || sleep 1
-done
-
 # --- .env (authoritative for both halves; see CLAUDE.md) ------------------
 if [ ! -f "$REPO_ROOT/.env" ]; then
   log "Creating .env from .env.example"
   cp "$REPO_ROOT/.env.example" "$REPO_ROOT/.env"
 fi
-
-# Read the DB settings the app will actually use from .env.
-get_env() { grep -E "^$1=" "$REPO_ROOT/.env" | tail -1 | cut -d= -f2- | tr -d '"'; }
-PG_USER="$(get_env POSTGRES_USER)"; PG_USER="${PG_USER:-postgres}"
-PG_PASS="$(get_env POSTGRES_PASSWORD)"; PG_PASS="${PG_PASS:-changethis}"
-PG_DB="$(get_env POSTGRES_DB)"; PG_DB="${PG_DB:-app}"
-PG_DB_TEST="$(get_env POSTGRES_DB_TEST)"; PG_DB_TEST="${PG_DB_TEST:-app_test}"
-
-log "Seeding Postgres role and databases"
-sudo -u postgres psql -v ON_ERROR_STOP=1 <<SQL
-ALTER USER ${PG_USER} WITH PASSWORD '${PG_PASS}';
-SELECT 'CREATE DATABASE ${PG_DB}' WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname='${PG_DB}')\gexec
-SELECT 'CREATE DATABASE ${PG_DB_TEST}' WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname='${PG_DB_TEST}')\gexec
-SQL
 
 # --- Dependencies ---------------------------------------------------------
 log "uv sync (backend, Python 3.14 workspace)"
@@ -90,7 +69,61 @@ uv sync
 log "bun install (frontend)"
 bun install
 
+# --- Resolve the *effective* DB config the app will actually use ----------
+# Read it from the app's own pydantic Settings so provisioning matches runtime
+# exactly: environment variables (e.g. an injected POSTGRES_PASSWORD secret)
+# take precedence over .env, and seeding a role with the .env value while the
+# app connects with the secret would fail the build. POSTGRES_DB_TEST is not a
+# Settings field — pytest's conftest reads it straight from the environment —
+# so it is resolved the same way here (env only, default app_test).
+log "Resolving effective database configuration"
+mapfile -t PGV < <(cd "$REPO_ROOT/backend" && uv run python - <<'PY'
+import os
+from app.core.config import settings
+db_test = os.environ.get("TEST_POSTGRES_DB") or os.environ.get("POSTGRES_DB_TEST") or "app_test"
+for value in (
+    settings.POSTGRES_SERVER,
+    settings.POSTGRES_USER,
+    settings.POSTGRES_PASSWORD,
+    settings.POSTGRES_DB,
+    db_test,
+):
+    print(value)
+PY
+)
+PG_SERVER="${PGV[0]}"; PG_USER="${PGV[1]}"; PG_PASS="${PGV[2]}"
+PG_DB="${PGV[3]}"; PG_DB_TEST="${PGV[4]}"
+
+# --- Provision the local cluster, when the app targets one ----------------
+# If POSTGRES_SERVER points at an external database, that database is managed
+# elsewhere: do not start or seed a local cluster, just migrate against it.
+case "$PG_SERVER" in
+  localhost | 127.0.0.1 | ::1 | "")
+    log "Starting local PostgreSQL 18 cluster"
+    sudo pg_ctlcluster 18 main start 2>/dev/null || true
+    for _ in $(seq 1 30); do
+      sudo -u postgres pg_isready -q && break || sleep 1
+    done
+
+    log "Seeding Postgres role and databases (${PG_DB}, ${PG_DB_TEST})"
+    # -v quoting (:'var') escapes the password safely, whatever it contains.
+    sudo -u postgres psql -v ON_ERROR_STOP=1 \
+      -v role="$PG_USER" -v pass="$PG_PASS" -v db="$PG_DB" -v dbtest="$PG_DB_TEST" <<'SQL'
+ALTER USER :"role" WITH PASSWORD :'pass';
+SELECT format('CREATE DATABASE %I', :'db')
+  WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = :'db')\gexec
+SELECT format('CREATE DATABASE %I', :'dbtest')
+  WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = :'dbtest')\gexec
+SQL
+    ;;
+  *)
+    log "POSTGRES_SERVER=${PG_SERVER} is external; skipping local cluster provisioning"
+    ;;
+esac
+
 # --- Migrations (dev + test DBs) -----------------------------------------
+# No suppression: a migration that fails must fail the build, not boot the app
+# against a stale schema (mirrors backend/scripts/prestart.sh).
 log "Applying migrations to ${PG_DB}"
 ( cd "$REPO_ROOT/backend" && uv run alembic upgrade head )
 log "Applying migrations to ${PG_DB_TEST}"
