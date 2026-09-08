@@ -118,7 +118,9 @@ export async function seedBulkChannels(
           if (response.status < 500 || attempt === 2) {
             throw new Error(`seedBulkChannels failed (${lastError})`)
           }
-          await new Promise((resolve) => setTimeout(resolve, 200 * (attempt + 1)))
+          await new Promise((resolve) =>
+            setTimeout(resolve, 200 * (attempt + 1)),
+          )
         }
         throw new Error(`seedBulkChannels failed (${lastError})`)
       }
