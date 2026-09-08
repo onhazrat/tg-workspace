@@ -2014,6 +2014,35 @@ export type HandleProbeResponse = {
      * Checkedat
      */
     checkedAt?: number | null;
+    /**
+     * Lastpostat
+     */
+    lastPostAt?: number | null;
+    /**
+     * Samplecount
+     */
+    sampleCount?: number | null;
+    /**
+     * Postsperweek
+     */
+    postsPerWeek?: number | null;
+    /**
+     * Medianviews
+     */
+    medianViews?: number | null;
+    /**
+     * Forwardshare
+     */
+    forwardShare?: number | null;
+    /**
+     * Script
+     */
+    script?: string | null;
+    mediaMix?: MediaMixResponse | null;
+    /**
+     * Mediadensity
+     */
+    mediaDensity?: number | null;
 };
 
 /**
@@ -2279,6 +2308,41 @@ export type LogWriteResponse = {
      * Upserted
      */
     upserted?: number;
+};
+
+/**
+ * MediaMixResponse
+ * The four media counters as shares of each other, summing to 1.
+ *
+ * A share rather than a percentage of the Post count, because those counters
+ * come from Telegram's channel info bar and count **media items, not Posts**:
+ * an album of five photos adds five, and a Post carrying a photo and a link
+ * counts in both. The latest Post id is no better a denominator, since deleted
+ * and service messages consume ids. Inflated on both sides it is not a
+ * percentage, and presenting it as one would be lying with a number.
+ *
+ * `null` on a leg means Telegram showed no counter of that kind, which is not
+ * a share of zero — a photo-only Channel has three nulls and `photos: 1.0`.
+ * All four keys always travel, so the shape is closed and the bar can render a
+ * stable set of segments.
+ */
+export type MediaMixResponse = {
+    /**
+     * Photos
+     */
+    photos?: number | null;
+    /**
+     * Videos
+     */
+    videos?: number | null;
+    /**
+     * Files
+     */
+    files?: number | null;
+    /**
+     * Links
+     */
+    links?: number | null;
 };
 
 /**

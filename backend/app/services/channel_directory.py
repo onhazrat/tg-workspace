@@ -88,7 +88,7 @@ the last one.
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from sqlalchemy import and_, func, or_
@@ -96,7 +96,13 @@ from sqlmodel import Session, col, select
 
 from app.jobs.settings import load_directory_settings
 from app.models_tg import DirectoryEntry, utc_now
-from app.services.channel_directory_samples import replace_samples
+from app.services.channel_directory_samples import replace_samples, samples_for
+from app.services.directory_statistics import (
+    SampleStatistics,
+    compute_sample_statistics,
+    media_density,
+    media_mix,
+)
 from app.services.tenancy import unscoped_select
 
 #: Why the probe reads below do not go through `scoped_select` (ticket 16).
@@ -233,7 +239,28 @@ def is_refreshable(status: str, kind: str) -> bool:
     return status == "ok" and kind not in DEAD_KINDS
 
 
+def _epoch_ms(moment: datetime | None) -> int | None:
+    """A `tg_*` timestamp on the wire.
+
+    The tg tables store **naive** UTC (`models_tg.utc_now`), and
+    `datetime.timestamp()` reads a naive value as *local* time, so the obvious
+    `int(moment.timestamp() * 1000)` is off by the host's offset anywhere the
+    container is not UTC. Attaching the timezone the column already means is
+    what makes the two timestamps on this row agree with each other and with
+    the database.
+    """
+    if moment is None:
+        return None
+    return int(moment.replace(tzinfo=UTC).timestamp() * 1000)
+
+
 def probe_to_camel(row: DirectoryEntry) -> dict[str, Any]:
+    counters = {
+        "photos": row.photos,
+        "videos": row.videos,
+        "files": row.files,
+        "links": row.links,
+    }
     return {
         "handle": row.handle,
         "status": row.status,
@@ -249,9 +276,20 @@ def probe_to_camel(row: DirectoryEntry) -> dict[str, Any]:
         "photoUrl": row.photo_url,
         "attempts": row.attempts,
         "lastError": row.last_error,
-        "checkedAt": (
-            int(row.checked_at.timestamp() * 1000) if row.checked_at else None
-        ),
+        "checkedAt": _epoch_ms(row.checked_at),
+        # The six stored statistics, straight off the row (ticket 02).
+        # `None` is *not measured* everywhere, never zero.
+        "lastPostAt": _epoch_ms(row.last_post_at),
+        "sampleCount": row.sample_count,
+        "postsPerWeek": row.posts_per_week,
+        "medianViews": row.median_views,
+        "forwardShare": row.forward_share,
+        "script": row.script,
+        # The two derived at read, from four columns already selected above
+        # (ADR-015). Not stored, because a stored copy can disagree with its
+        # own inputs and the derivation costs no join.
+        "mediaMix": media_mix(counters),
+        "mediaDensity": media_density(counters, row.latest_id),
     }
 
 
@@ -530,6 +568,27 @@ def known_handles(session: Session, handles: set[str]) -> set[str]:
         reason=PROBE_SCOPE_REASON,
     )
     return {str(row) for row in session.exec(statement).all()}
+
+
+def _store_statistics(row: DirectoryEntry, stats: SampleStatistics) -> None:
+    """Copy the six sample-derived statistics onto the entry.
+
+    One function rather than the assignment written twice, for the reason
+    `_apply_page_metadata` is one: the two writers are a conclusive probe and a
+    recheck, and a second copy of this list is how one of them comes to miss a
+    column. A recheck passes an empty `SampleStatistics()`, which says what it
+    means — the row holds no answer, so it measures nothing — rather than six
+    `None`s that a reader has to recognise as a set.
+
+    Assignment by name rather than a loop over `fields()`: mypy checks these six
+    against the columns, and `setattr` would hand that up to save four lines.
+    """
+    row.last_post_at = stats.last_post_at
+    row.sample_count = stats.sample_count
+    row.posts_per_week = stats.posts_per_week
+    row.median_views = stats.median_views
+    row.forward_share = stats.forward_share
+    row.script = stats.script
 
 
 def _get_or_create(session: Session, handle: str) -> DirectoryEntry:
@@ -825,6 +884,28 @@ def record_probe_result(
     samples = payload.get("samples")
     if isinstance(samples, list):
         replace_samples(session, key, samples, captured_at=now)
+        # **An `unavailable` verdict keeps the statistics** (ticket 02,
+        # ADR-015). This is the one place the statistics and the samples part
+        # company, and it follows from why they are stored at all: an
+        # unavailable entry stops being refreshed, so it can never recompute
+        # them, and it is precisely the row where "posted four times a week
+        # until fourteen months ago" is worth more than the bare verdict. The
+        # samples above are cleared on that verdict — a page with no readable
+        # messages has no recent Posts — and the statistics are the record they
+        # leave behind.
+        #
+        # The row loses its subscriber count, its four counters and its latest
+        # Post id on the same path, and with them the media mix and density,
+        # because those are snapshots of a page and a stale snapshot is a lie.
+        # A sample-derived statistic is a claim about what the Channel *did*,
+        # which stays true after it goes away.
+        #
+        # Read back rather than computed from `samples`: the transform takes
+        # Posts, and the rows `replace_samples` just flushed are the Posts. That
+        # is what lets the Channels tab point the same function at the corpus
+        # later instead of reimplementing these formulas over a second shape.
+        if row.status == "ok":
+            _store_statistics(row, compute_sample_statistics(samples_for(session, key)))
     # A conclusive answer clears the failure history: the backoff exists to
     # throttle retries of an unresolved handle, and this one is now resolved.
     row.attempts = 0
@@ -875,6 +956,13 @@ def requeue_probes(
         row.telegram_chat_id = None
         row.photo_url = None
         row.latest_id = 0
+        # The statistics go with the verdict, and this is the one path where
+        # they do (ticket 02). A recheck resets the row to `unknown`, which
+        # means the deployment holds *no* answer rather than a negative one, so
+        # a row still showing "4.2 posts/week" beside "not checked" would be
+        # claiming a measurement it has disowned. An `unavailable` verdict is
+        # the opposite case and keeps them — see `record_probe_result`.
+        _store_statistics(row, SampleStatistics())
         row.attempts = 0
         row.last_error = None
         row.checked_at = None

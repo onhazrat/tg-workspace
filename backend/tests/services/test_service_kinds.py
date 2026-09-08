@@ -129,6 +129,11 @@ INVENTORY: dict[str, str] = {
     "scraper.py": INTEGRATION,
     # 4. Pure transform — no Session, no network, trivially testable.
     "channel_tags.py": PURE_TRANSFORM,
+    # The arithmetic behind a Candidate row (ticket 02, ADR-015). A transform
+    # rather than more of `channel_directory.py`, and it takes a list of Posts
+    # rather than a Directory entry, so the Channels tab can point it at the
+    # corpus later without a second copy of these formulas.
+    "directory_statistics.py": PURE_TRANSFORM,
     "language.py": PURE_TRANSFORM,
     "post_filters.py": PURE_TRANSFORM,
     "post_links_parser.py": PURE_TRANSFORM,

@@ -6771,6 +6771,40 @@
           "checkedAt": {
             "anyOf": [{ "type": "integer" }, { "type": "null" }],
             "title": "Checkedat"
+          },
+          "lastPostAt": {
+            "anyOf": [{ "type": "integer" }, { "type": "null" }],
+            "title": "Lastpostat"
+          },
+          "sampleCount": {
+            "anyOf": [{ "type": "integer" }, { "type": "null" }],
+            "title": "Samplecount"
+          },
+          "postsPerWeek": {
+            "anyOf": [{ "type": "number" }, { "type": "null" }],
+            "title": "Postsperweek"
+          },
+          "medianViews": {
+            "anyOf": [{ "type": "integer" }, { "type": "null" }],
+            "title": "Medianviews"
+          },
+          "forwardShare": {
+            "anyOf": [{ "type": "number" }, { "type": "null" }],
+            "title": "Forwardshare"
+          },
+          "script": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Script"
+          },
+          "mediaMix": {
+            "anyOf": [
+              { "$ref": "#/components/schemas/MediaMixResponse" },
+              { "type": "null" }
+            ]
+          },
+          "mediaDensity": {
+            "anyOf": [{ "type": "number" }, { "type": "null" }],
+            "title": "Mediadensity"
           }
         },
         "type": "object",
@@ -6998,6 +7032,29 @@
         "type": "object",
         "title": "LogWriteResponse",
         "description": "Result of a bulk log write: how many rows were accepted."
+      },
+      "MediaMixResponse": {
+        "properties": {
+          "photos": {
+            "anyOf": [{ "type": "number" }, { "type": "null" }],
+            "title": "Photos"
+          },
+          "videos": {
+            "anyOf": [{ "type": "number" }, { "type": "null" }],
+            "title": "Videos"
+          },
+          "files": {
+            "anyOf": [{ "type": "number" }, { "type": "null" }],
+            "title": "Files"
+          },
+          "links": {
+            "anyOf": [{ "type": "number" }, { "type": "null" }],
+            "title": "Links"
+          }
+        },
+        "type": "object",
+        "title": "MediaMixResponse",
+        "description": "The four media counters as shares of each other, summing to 1.\n\nA share rather than a percentage of the Post count, because those counters\ncome from Telegram's channel info bar and count **media items, not Posts**:\nan album of five photos adds five, and a Post carrying a photo and a link\ncounts in both. The latest Post id is no better a denominator, since deleted\nand service messages consume ids. Inflated on both sides it is not a\npercentage, and presenting it as one would be lying with a number.\n\n`null` on a leg means Telegram showed no counter of that kind, which is not\na share of zero \u2014 a photo-only Channel has three nulls and `photos: 1.0`.\nAll four keys always travel, so the shape is closed and the bar can render a\nstable set of segments."
       },
       "Message": {
         "properties": { "message": { "type": "string", "title": "Message" } },

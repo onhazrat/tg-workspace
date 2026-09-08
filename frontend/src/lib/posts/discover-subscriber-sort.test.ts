@@ -26,6 +26,14 @@ function probe(subscribers: string | null): DiscoveryProbe {
     attempts: 1,
     lastError: null,
     checkedAt: 1000,
+    lastPostAt: null,
+    sampleCount: null,
+    postsPerWeek: null,
+    medianViews: null,
+    forwardShare: null,
+    script: null,
+    mediaMix: null,
+    mediaDensity: null,
   }
 }
 
