@@ -1,3 +1,5 @@
+import { frontendBuildEnvironment } from "@/lib/env-catalog.generated"
+
 function parseIntEnv(value: string | undefined, fallback: number): number {
   if (value === undefined || value === "") return fallback
   const parsed = Number.parseInt(value, 10)
@@ -10,6 +12,21 @@ function parseStringEnv(value: string | undefined, fallback: string): string {
 }
 
 const viteEnv = typeof import.meta !== "undefined" ? import.meta.env : undefined
+
+/**
+ * Read one public build-time value for the admin configuration inventory.
+ * The generated map uses explicit property access so Vite can replace every
+ * value frozen into this particular bundle.
+ */
+export function frontendBuildValue(key: string, fallback: unknown): unknown {
+  const value = frontendBuildEnvironment[key]
+  return value === undefined || value === "" ? fallback : value
+}
+
+export function hasFrontendBuildValue(key: string): boolean {
+  const value = frontendBuildEnvironment[key]
+  return value !== undefined && value !== ""
+}
 
 /** Vite build-time tunables — loaded from repo root `.env` (see `.env.example`). */
 export const env = {

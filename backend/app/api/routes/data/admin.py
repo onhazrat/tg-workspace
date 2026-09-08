@@ -50,12 +50,14 @@ from app.jobs.settings import (
 )
 from app.models import User
 from app.schemas.common import AppSettingResponse, ImportDataResponse
+from app.schemas.configuration import ConfigurationCatalogResponse
 from app.schemas.stats import (
     ClearTableResponse,
     DbStatsResponse,
     TableSizeResponse,
 )
 from app.services import rbac
+from app.services.configuration_catalog import build_configuration_catalog
 from app.services.data_import_export import (
     EVERYONE,
     SUBJECT_NOT_FOUND,
@@ -168,6 +170,19 @@ def clear_table_route(
         for resource in CLEARED_SYNC_RESOURCES.get(name, (name,)):
             touch_sync(session, resource)
     return ClearTableResponse(deleted=deleted)
+
+
+@router.get(
+    "/configuration",
+    dependencies=ADMIN_ONLY,
+    response_model=ConfigurationCatalogResponse,
+)
+def get_configuration_catalog(
+    session: SessionDep,
+    current_user: CurrentUser,
+) -> ConfigurationCatalogResponse:
+    """All five configuration layers, with secret values redacted."""
+    return build_configuration_catalog(session, user_id=current_user.id)
 
 
 @router.get("/settings/network", dependencies=ADMIN_ONLY)

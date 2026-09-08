@@ -3,6 +3,7 @@ import { Search, X } from "lucide-react"
 import type React from "react"
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { BotManagement } from "@/components/BotManagement"
+import { ConfigurationCatalogView } from "@/components/ConfigurationCatalogView"
 import { DatabaseManagement } from "@/components/DatabaseManagement"
 import { DiagnosticsView } from "@/components/DiagnosticsView"
 import { NetworkTelemetry } from "@/components/NetworkTelemetry"
@@ -97,6 +98,13 @@ export const SettingsHub: React.FC = () => {
   // Deep-link: ?setting=<id> → navigate to group + scroll/highlight
   useEffect(() => {
     if (!deepLinkSetting) return
+    if (
+      /^(deployment|global|user|specialized|frontend):/.test(deepLinkSetting)
+    ) {
+      setHighlightId(deepLinkSetting)
+      setActiveSettingsTab("configuration")
+      return
+    }
     const entry = getCatalogEntry(deepLinkSetting)
     if (!entry) return
     setHighlightId(deepLinkSetting)
@@ -251,6 +259,8 @@ export const SettingsHub: React.FC = () => {
             <RuntimeConfigView />
           </SettingAnchor>
         )
+      case "configuration":
+        return <ConfigurationCatalogView focusId={deepLinkSetting} />
       default:
         return <CommonlyUsedSection highlightId={highlightId} />
     }
@@ -275,6 +285,7 @@ export const SettingsHub: React.FC = () => {
           activeSettingsTab === "diagnostics" ||
           activeSettingsTab === "network-telemetry" ||
           activeSettingsTab === "runtime-config" ||
+          activeSettingsTab === "configuration" ||
           activeSettingsTab === "tools"
             ? "terminal-theme text-app-ink"
             : ""

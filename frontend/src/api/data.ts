@@ -39,6 +39,41 @@ export type DiscoveredViaPayload = {
   timestamp: number
 }
 
+export type ConfigurationLayerId =
+  | "deployment"
+  | "global"
+  | "user"
+  | "specialized"
+  | "frontend"
+
+export interface ConfigurationEntry {
+  id: string
+  key: string
+  label: string
+  layer: ConfigurationLayerId
+  value: unknown
+  default_value: unknown
+  source: string
+  description: string
+  sensitive: boolean
+  configured: boolean
+  editable: boolean
+  restart_required: boolean
+  owner_id: string | null
+}
+
+export interface ConfigurationLayer {
+  id: ConfigurationLayerId
+  label: string
+  description: string
+  entries: ConfigurationEntry[]
+}
+
+export interface ConfigurationCatalog {
+  schema_version: number
+  layers: ConfigurationLayer[]
+}
+
 /**
  * The Posts-tab view state that maps onto server-side filtering, shared by the
  * Discover and counts endpoints. The cap *mode* is not here because not every
@@ -732,6 +767,9 @@ export const dataApi = {
     request<{ key: string; value: Record<string, unknown> }>(
       "/api/v1/data/settings/network",
     ),
+
+  getConfigurationCatalog: () =>
+    request<ConfigurationCatalog>("/api/v1/data/configuration"),
 
   putNetworkSettings: (value: Record<string, unknown>) =>
     request<{ key: string; value: Record<string, unknown> }>(

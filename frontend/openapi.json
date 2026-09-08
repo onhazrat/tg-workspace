@@ -4021,6 +4021,27 @@
         }
       }
     },
+    "/api/v1/data/configuration": {
+      "get": {
+        "tags": ["data"],
+        "summary": "Get Configuration Catalog",
+        "description": "All five configuration layers, with secret values redacted.",
+        "operationId": "data-get_configuration_catalog",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConfigurationCatalogResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [{ "OAuth2PasswordBearer": [] }]
+      }
+    },
     "/api/v1/data/settings/network": {
       "get": {
         "tags": ["data"],
@@ -6114,6 +6135,89 @@
         "type": "object",
         "required": ["text", "prompt", "model", "provider"],
         "title": "CompletionResult"
+      },
+      "ConfigurationCatalogResponse": {
+        "properties": {
+          "schema_version": {
+            "type": "integer",
+            "title": "Schema Version",
+            "default": 1
+          },
+          "layers": {
+            "items": { "$ref": "#/components/schemas/ConfigurationLayer" },
+            "type": "array",
+            "title": "Layers"
+          }
+        },
+        "type": "object",
+        "required": ["layers"],
+        "title": "ConfigurationCatalogResponse"
+      },
+      "ConfigurationEntry": {
+        "properties": {
+          "id": { "type": "string", "title": "Id" },
+          "key": { "type": "string", "title": "Key" },
+          "label": { "type": "string", "title": "Label" },
+          "layer": {
+            "type": "string",
+            "enum": ["deployment", "global", "user", "specialized", "frontend"],
+            "title": "Layer"
+          },
+          "value": { "title": "Value" },
+          "default_value": { "title": "Default Value" },
+          "source": { "type": "string", "title": "Source" },
+          "description": {
+            "type": "string",
+            "title": "Description",
+            "default": ""
+          },
+          "sensitive": {
+            "type": "boolean",
+            "title": "Sensitive",
+            "default": false
+          },
+          "configured": {
+            "type": "boolean",
+            "title": "Configured",
+            "default": false
+          },
+          "editable": {
+            "type": "boolean",
+            "title": "Editable",
+            "default": false
+          },
+          "restart_required": {
+            "type": "boolean",
+            "title": "Restart Required",
+            "default": false
+          },
+          "owner_id": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Owner Id"
+          }
+        },
+        "type": "object",
+        "required": ["id", "key", "label", "layer", "source"],
+        "title": "ConfigurationEntry"
+      },
+      "ConfigurationLayer": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "enum": ["deployment", "global", "user", "specialized", "frontend"],
+            "title": "Id"
+          },
+          "label": { "type": "string", "title": "Label" },
+          "description": { "type": "string", "title": "Description" },
+          "entries": {
+            "items": { "$ref": "#/components/schemas/ConfigurationEntry" },
+            "type": "array",
+            "title": "Entries"
+          }
+        },
+        "type": "object",
+        "required": ["id", "label", "description"],
+        "title": "ConfigurationLayer"
       },
       "DbStatsResponse": {
         "properties": {

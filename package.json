@@ -11,6 +11,8 @@
     "test:unit": "bun run --filter tg-summarizer-frontend test:unit",
     "test": "bun run --filter tg-summarizer-frontend test",
     "test:ui": "bun run --filter tg-summarizer-frontend test:ui",
+    "generate:env": "python3 scripts/generate_env_example.py",
+    "check:env": "python3 scripts/generate_env_example.py --check",
     "generate-client": "bash scripts/generate-client.sh"
   }
 }

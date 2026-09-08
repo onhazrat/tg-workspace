@@ -16,6 +16,7 @@ describe("settings TOC", () => {
     expect(VALID_SETTINGS_SECTIONS).toContain("retention")
     expect(VALID_SETTINGS_SECTIONS).toContain("diagnostics")
     expect(VALID_SETTINGS_SECTIONS).toContain("network-telemetry")
+    expect(VALID_SETTINGS_SECTIONS).toContain("configuration")
   })
 
   // The TOC used to advertise a "danger" section that had no panel behind it —
@@ -43,6 +44,7 @@ describe("settings TOC", () => {
     expect(parentTocId("retention")).toBe("data")
     expect(parentTocId("diagnostics")).toBe("tools")
     expect(parentTocId("network-telemetry")).toBe("tools")
+    expect(parentTocId("configuration")).toBe("tools")
     expect(parentTocId("network")).toBeNull()
     expect(parentTocId("commonly-used")).toBeNull()
   })
@@ -60,6 +62,7 @@ describe("settings TOC", () => {
       "diagnostics",
       "network-telemetry",
       "runtime-config",
+      "configuration",
     ])
   })
 

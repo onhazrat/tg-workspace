@@ -126,6 +126,7 @@ export interface JobToggleApi {
 export interface CommandContext {
   setActiveTab: (tab: TabType) => void
   setActiveSection: (section: SettingsSection) => void
+  openConfigurationEntry: (id: string) => void
   channels: Channel[]
   channelStats: Record<string, ChannelStats>
   selectedChannels: Set<string>

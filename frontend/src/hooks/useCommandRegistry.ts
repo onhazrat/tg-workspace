@@ -1,3 +1,4 @@
+import { getRouteApi } from "@tanstack/react-router"
 import { useCallback, useMemo } from "react"
 import { api } from "@/api"
 import { useCommandPaletteContext } from "@/components/CommandPaletteProvider"
@@ -8,6 +9,8 @@ import { useScraper } from "@/contexts/ScraperContext"
 import { useSettings } from "@/contexts/SettingsContext"
 import { useUI } from "@/contexts/UIContext"
 import { useApiStatus } from "@/hooks/useApiStatus"
+import useAuth from "@/hooks/useAuth"
+import { useConfigurationCatalog } from "@/hooks/useConfigurationCatalog"
 import { useGuidedTour } from "@/hooks/useGuidedTour"
 import { useJobToggles } from "@/hooks/useJobToggles"
 import {
@@ -22,6 +25,7 @@ import {
   buildChannelEntityCommands,
   buildChannelOpsCommands,
   buildChannelTelegramChatIdCommands,
+  buildConfigurationCommands,
   buildDataTransferCommands,
   buildExtendedCommands,
   buildGroupCommands,
@@ -33,11 +37,18 @@ import { SERVER_TABLE_NAMES } from "@/lib/data-transfer/tables"
 import { useLoadDBStats } from "./useDBStats"
 import { useInvalidateSummaries, useSummariesHistory } from "./useSummaries"
 
+const workspaceRoute = getRouteApi("/_tg/workspace")
+
 export function useCommandRegistry(): {
   commands: CommandDef[]
   context: CommandContext
 } {
   const settings = useSettings()
+  const { user } = useAuth()
+  const { data: configurationCatalog } = useConfigurationCatalog(
+    Boolean(user?.is_superuser),
+  )
+  const navigateWorkspace = workspaceRoute.useNavigate()
   const {
     channels,
     channelStats,
@@ -106,6 +117,19 @@ export function useCommandRegistry(): {
     useWorkspaceGroupParams()
   const { data: settingGroups = [] } = useSettingGroupsQuery()
   const invalidateSettingGroups = useInvalidateSettingGroups()
+  const openConfigurationEntry = useCallback(
+    (id: string) => {
+      navigateWorkspace({
+        search: (previous) => ({
+          ...previous,
+          tab: "settings" as const,
+          section: "configuration" as const,
+          setting: id,
+        }),
+      })
+    },
+    [navigateWorkspace],
+  )
 
   // Per-channel in-scope counts on demand. Mirrors ChannelGrid: server-side
   // when no semantic search is active and a selection exists, else derived
@@ -147,6 +171,7 @@ export function useCommandRegistry(): {
     () => ({
       setActiveTab,
       setActiveSection,
+      openConfigurationEntry,
       channels,
       channelStats,
       selectedChannels,
@@ -313,6 +338,7 @@ export function useCommandRegistry(): {
       postSearch,
       selectedChannels,
       setActiveSection,
+      openConfigurationEntry,
       setActiveTab,
       setAutoSyncPauseUntil,
       setChannels,
@@ -349,6 +375,7 @@ export function useCommandRegistry(): {
       ...buildNavigateCommands(),
       ...buildActionCommands(),
       ...buildSettingCommands(),
+      ...buildConfigurationCommands(configurationCatalog),
       ...buildGroupCommands(),
       ...buildChannelEntityCommands(),
       ...buildChannelOpsCommands(),
@@ -357,7 +384,7 @@ export function useCommandRegistry(): {
       ...buildExtendedCommands(),
     ]
     return all.filter((command) => !command.when || command.when(context))
-  }, [context])
+  }, [configurationCatalog, context])
 
   return { commands, context }
 }
