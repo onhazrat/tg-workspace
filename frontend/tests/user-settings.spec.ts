@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test"
+import { expect, type Page, test } from "@playwright/test"
 import { firstSuperuser, firstSuperuserPassword } from "./config.ts"
 import { createUser } from "./utils/privateApi.ts"
 import { randomEmail, randomPassword } from "./utils/random"
@@ -225,21 +225,50 @@ test("Appearance button is visible in sidebar", async ({ page }) => {
   await expect(page.getByTestId("theme-button")).toBeVisible()
 })
 
+/**
+ * Open the sidebar appearance menu, choose one mode, and wait for it to close.
+ *
+ * **Every locator is scoped to the open menu, and that is the fix.** `/settings`
+ * puts the mode names on screen twice: once as items in this Radix dropdown,
+ * and once as `AppearanceSection`'s segmented control — which is the default
+ * section, and whose System option carries `data-testid="system-mode"` too. So
+ * a bare `getByTestId("system-mode")` matches one element while the dropdown is
+ * shut and two the moment it opens.
+ *
+ * That ambiguity is what the flake was. The test clicked the trigger and then
+ * the bare test id, so it passed on the runs where the reopen was *swallowed*
+ * and a single match was left, and failed when the menu actually opened. Which
+ * is why it always failed on `system-mode` — the only one of the three with a
+ * twin — and never on light or dark.
+ *
+ * `role=menu` is Radix's own (`@radix-ui/react-menu` sets it); the segmented
+ * control is a `role=group` of `aria-pressed` buttons, so it cannot collide.
+ * The final wait is on the **menu**, not the item: the settings-page twin never
+ * disappears, and waiting for it to would burn the whole test timeout.
+ *
+ * CI runs with `--fail-on-flaky-tests`, so passing on retry is still red.
+ */
+async function chooseTheme(
+  page: Page,
+  mode: "light-mode" | "dark-mode" | "system-mode",
+) {
+  await page.getByTestId("theme-button").click()
+  const menu = page.getByRole("menu")
+  await expect(menu).toBeVisible()
+  await menu.getByTestId(mode).click()
+  await expect(menu).toBeHidden()
+}
+
 test("User can switch between theme modes", async ({ page }) => {
   await page.goto("/settings")
 
-  await page.getByTestId("theme-button").click()
-  await page.getByTestId("dark-mode").click({ force: true })
+  await chooseTheme(page, "dark-mode")
   await expect(page.locator("html")).toHaveClass(/dark/)
 
-  await expect(page.getByTestId("dark-mode")).not.toBeVisible()
-
-  await page.getByTestId("theme-button").click()
-  await page.getByTestId("light-mode").click()
+  await chooseTheme(page, "light-mode")
   await expect(page.locator("html")).toHaveClass(/light/)
 
-  await page.getByTestId("theme-button").click()
-  await page.getByTestId("system-mode").click()
+  await chooseTheme(page, "system-mode")
   await expect
     .poll(() => page.evaluate(() => localStorage.getItem("vite-ui-theme")))
     .toBe("system")
@@ -253,12 +282,10 @@ test("Selected mode is preserved across sessions", async ({ page }) => {
   // inside that branch, which left it *already open* on the other path -- so
   // the next `theme-button` click closed it and `dark-mode` was never there to
   // click. It survived on timing and finally flaked the job.
-  await page.getByTestId("theme-button").click()
-  await page.getByTestId("light-mode").click()
+  await chooseTheme(page, "light-mode")
   await expect(page.locator("html")).toHaveClass(/light/)
 
-  await page.getByTestId("theme-button").click()
-  await page.getByTestId("dark-mode").click({ force: true })
+  await chooseTheme(page, "dark-mode")
   await expect(page.locator("html")).toHaveClass(/dark/)
 
   await logOutUser(page)
