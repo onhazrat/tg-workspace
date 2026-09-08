@@ -2,7 +2,7 @@
 
 Fourth family converted under B4 of `docs/architecture-simplification-plan.md`,
 and the first one with real nesting: a candidate carries per-signal counts, a
-per-carrier breakdown, a sample-post pointer and an optional probe verdict. That
+per-carrier breakdown, a Reference pointer and an optional probe verdict. That
 nesting is exactly why it was worth typing — `dict[str, Any]` here erased four
 levels of structure at once, and the frontend hand-maintains all of it.
 
@@ -70,12 +70,17 @@ class ScopeCountsResponse(BaseModel):
     link_posts: int = Field(default=0, alias="linkPosts")
 
 
-class CandidateSamplePostResponse(BaseModel):
-    """Pointer to the most recent post that referenced a candidate.
+class CandidateReferenceResponse(BaseModel):
+    """The Reference: the most recent Post in a followed Channel that named a
+    candidate.
 
     A pointer rather than the post body on purpose: retention may prune the post
     later, and callers render a Telegram web-view link from these three fields so
     the evidence stays reachable outside our corpus.
+
+    It was a "sample post" until ticket 01 of discover-signals. The word now
+    means only the Directory's snapshot of a Channel's *own* Posts, which points
+    the opposite way: a Reference belongs to somebody else's Channel.
     """
 
     model_config = ConfigDict(populate_by_name=True)
@@ -144,7 +149,7 @@ class DiscoverCandidateResponse(BaseModel):
     last_seen: int = Field(default=0, alias="lastSeen")
     is_followed: bool = Field(default=False, alias="isFollowed")
     is_ignored: bool = Field(default=False, alias="isIgnored")
-    sample_post: CandidateSamplePostResponse = Field(alias="samplePost")
+    reference: CandidateReferenceResponse
 
 
 class ReportCandidateResponse(DiscoverCandidateResponse):

@@ -16,6 +16,7 @@ change a payload nobody asked to change.
 
 from __future__ import annotations
 
+import uuid
 from typing import Any
 
 from fastapi.testclient import TestClient
@@ -23,7 +24,7 @@ from sqlmodel import Session
 
 from app.core.config import settings
 from app.core.db import engine
-from app.models_tg import Post
+from app.models_tg import DiscoverReport, Post
 from app.services.channel_directory import record_probe_result
 from tests.utils.tenancy import follow_channels
 
@@ -50,7 +51,7 @@ CANDIDATE_KEYS = {
     "lastSeen",
     "isFollowed",
     "isIgnored",
-    "samplePost",
+    "reference",
 }
 REPORT_BASE_KEYS = {
     "id",
@@ -167,7 +168,7 @@ def test_candidate_nesting_survives_the_response_model(client: TestClient) -> No
             "total": 1,
         }
     ]
-    assert candidate["samplePost"] == {
+    assert candidate["reference"] == {
         "channelName": CARRIER,
         "postId": 1,
         "timestamp": 1000,
@@ -299,6 +300,63 @@ def test_re_dismissing_stays_idempotent_through_the_response_model(
     again = client.post(f"{DATA}/discover/ignored", json=body, headers=headers)
     assert again.status_code == 200
     assert again.json() == {"ignored": []}
+
+
+def test_a_report_saved_before_the_rename_still_opens(client: TestClient) -> None:
+    """A Reference stored under its pre-rename name still reads as a Reference.
+
+    Candidates are frozen into `tg_discover_reports.candidates` as JSON at
+    generate time and the response field is required with no default, so a
+    report written before the rename would fail validation on every read if the
+    stored key were trusted verbatim. Normalising at the read seam rather than
+    migrating the JSON is what also covers an old export imported *after* the
+    rename, which never passes through a migration at all.
+    """
+    headers = _auth(client)
+    _seed_forward()
+    report_id = _report(client, headers)["id"]
+
+    # Written out in full rather than derived from today's candidate, so the
+    # fixture keeps saying what the old shape was after this code moves on.
+    with Session(engine) as session:
+        report = session.get(DiscoverReport, uuid.UUID(report_id))
+        assert report is not None
+        report.candidates = [
+            {
+                "name": TARGET,
+                "displayName": "Target Two",
+                "counts": {"forward": 1, "mention": 0, "link": 0},
+                "total": 1,
+                "seenIn": [
+                    {
+                        "channelName": CARRIER,
+                        "counts": {"forward": 1, "mention": 0, "link": 0},
+                        "total": 1,
+                    }
+                ],
+                "seenInCount": 1,
+                "lastSeen": 1000,
+                "isFollowed": False,
+                "isIgnored": False,
+                "samplePost": {
+                    "channelName": CARRIER,
+                    "postId": 1,
+                    "timestamp": 1000,
+                },
+            }
+        ]
+        session.add(report)
+        session.commit()
+
+    r = client.get(f"{DATA}/discover/reports/{report_id}", headers=headers)
+    assert r.status_code == 200, r.text
+    candidate = r.json()["candidates"][0]
+    assert set(candidate) == CANDIDATE_KEYS | {"probe"}
+    assert candidate["reference"] == {
+        "channelName": CARRIER,
+        "postId": 1,
+        "timestamp": 1000,
+    }
 
 
 def test_the_probe_listing_keeps_its_key_set(client: TestClient) -> None:

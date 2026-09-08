@@ -53,7 +53,7 @@ describe("Discover candidate table — bidi", () => {
 describe("Discover candidate panel — bidi", () => {
   const source = code("discover", "DiscoverCandidatePanel.tsx")
 
-  it("resolves direction for the display name and the sample post", () => {
+  it("resolves direction for the display name and the reference", () => {
     expect(source).toContain('<SheetDescription dir="auto">')
     // Post bodies are the most reliably RTL text in the app; `PostCard` already
     // sets this and the panel quotes the same content.

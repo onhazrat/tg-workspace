@@ -25,7 +25,7 @@ describe("sortDiscoveryCandidates", () => {
       seenInCount: 1,
       lastSeen: 100,
       isFollowed: false,
-      samplePost: { channelName: "only", postId: 1, timestamp: 100 },
+      reference: { channelName: "only", postId: 1, timestamp: 100 },
     },
     {
       name: "wideSpread",
@@ -35,7 +35,7 @@ describe("sortDiscoveryCandidates", () => {
       seenInCount: 3,
       lastSeen: 900,
       isFollowed: true,
-      samplePost: { channelName: "a", postId: 10, timestamp: 900 },
+      reference: { channelName: "a", postId: 10, timestamp: 900 },
     },
     {
       name: "linkOnly",
@@ -45,7 +45,7 @@ describe("sortDiscoveryCandidates", () => {
       seenInCount: 1,
       lastSeen: 50,
       isFollowed: false,
-      samplePost: { channelName: "x", postId: 20, timestamp: 50 },
+      reference: { channelName: "x", postId: 20, timestamp: 50 },
     },
   ]
 
@@ -87,7 +87,7 @@ describe("filterDiscoveryCandidates", () => {
       seenInCount: 1,
       lastSeen: 100,
       isFollowed: false,
-      samplePost: { channelName: "a", postId: 1, timestamp: 100 },
+      reference: { channelName: "a", postId: 1, timestamp: 100 },
     },
     {
       name: "beta_wire",
@@ -97,7 +97,7 @@ describe("filterDiscoveryCandidates", () => {
       seenInCount: 1,
       lastSeen: 200,
       isFollowed: true,
-      samplePost: { channelName: "b", postId: 2, timestamp: 200 },
+      reference: { channelName: "b", postId: 2, timestamp: 200 },
     },
   ]
 

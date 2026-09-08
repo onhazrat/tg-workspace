@@ -135,7 +135,8 @@ class _Accumulator:
     counts: dict[str, int] = field(default_factory=_empty_counts)
     by_carrier: dict[str, dict[str, int]] = field(default_factory=dict)
     last_seen: int = 0
-    sample_post: Post | None = None
+    #: The Reference: the newest Post seen so far that named this handle.
+    reference: Post | None = None
 
 
 def compute_discover_candidates(
@@ -266,7 +267,7 @@ def compute_discover_candidates(
                         else handle
                     ),
                     last_seen=post.timestamp,
-                    sample_post=post,
+                    reference=post,
                 )
                 by_source[handle] = entry
 
@@ -278,7 +279,7 @@ def compute_discover_candidates(
             is_newest = post.timestamp >= entry.last_seen
             if is_newest:
                 entry.last_seen = post.timestamp
-                entry.sample_post = post
+                entry.reference = post
             # Forward metadata is the only source of a human-readable name.
             if "forward" in kinds and post.forwarded_from_name:
                 if is_newest or not entry.display_name:
@@ -291,7 +292,7 @@ def compute_discover_candidates(
     candidates = [
         _to_candidate(handle, entry, followed, ignored)
         for handle, entry in by_source.items()
-        if entry.sample_post is not None
+        if entry.reference is not None
     ]
     candidates.sort(
         key=lambda c: (
@@ -321,8 +322,8 @@ def _to_candidate(
         for channel_name, counts in entry.by_carrier.items()
     ]
     seen_in.sort(key=lambda s: (-sum(s["counts"].values()), s["channelName"]))
-    sample = entry.sample_post
-    assert sample is not None  # guarded by the caller
+    reference = entry.reference
+    assert reference is not None  # guarded by the caller
 
     return {
         "name": entry.canonical_name,
@@ -334,10 +335,10 @@ def _to_candidate(
         "lastSeen": entry.last_seen,
         "isFollowed": handle in followed,
         "isIgnored": handle in ignored,
-        "samplePost": {
-            "channelName": sample.channel_name,
-            "postId": sample.post_id,
-            "timestamp": sample.timestamp,
+        "reference": {
+            "channelName": reference.channel_name,
+            "postId": reference.post_id,
+            "timestamp": reference.timestamp,
         },
     }
 

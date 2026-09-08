@@ -10,8 +10,8 @@ Two things are deliberately *not* frozen into the stored row:
 * **`isFollowed`** is derived against the live `tg_channels` set on every read,
   so a report self-corrects as its candidates get followed. Counts are
   historical; follow state is live.
-* **Sample post bodies.** Only the pointer (channel, post id, timestamp) is
-  stored. Retention may prune the post later; callers render a Telegram
+* **Reference bodies.** Only the pointer (channel, post id, timestamp) is
+  stored. Retention may prune the Post later; callers render a Telegram
   web-view link so the evidence stays investigable outside our corpus.
 
 Mirrors `app/services/summaries.py`, including its light-vs-full projection
@@ -132,20 +132,30 @@ def _with_live_state(
     `probe` is `None` for a handle nothing has looked at yet, which the client
     renders as "not checked" rather than as a verdict — an unprobed handle and
     one confirmed unfollowable must not look the same.
+
+    This is also where the Reference is normalised. Ticket 01 of
+    discover-signals renamed `samplePost` to `reference`, and the response field
+    is required with no default, so a report generated before that rename would
+    fail validation on read if its stored key were passed through. A tolerant
+    read here rather than a migration over the JSON, because a migration repairs
+    this database and does nothing for an old export imported through
+    `POST /data/import` next month.
     """
     out: list[dict[str, Any]] = []
     for candidate in candidates:
         if not isinstance(candidate, dict):
             continue
         handle = _candidate_handle(candidate)
-        out.append(
-            {
-                **candidate,
-                "isFollowed": handle in followed,
-                "isIgnored": handle in ignored,
-                "probe": probes.get(handle),
-            }
-        )
+        row = {
+            **candidate,
+            "isFollowed": handle in followed,
+            "isIgnored": handle in ignored,
+            "probe": probes.get(handle),
+        }
+        stored_before_the_rename = row.pop("samplePost", None)
+        if "reference" not in row and stored_before_the_rename is not None:
+            row["reference"] = stored_before_the_rename
+        out.append(row)
     return out
 
 

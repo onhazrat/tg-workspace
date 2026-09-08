@@ -44,29 +44,29 @@ export const DiscoverCandidatePanel: React.FC<DiscoverCandidatePanelProps> = ({
   isFollowJobRunning,
   onFollow,
 }) => {
-  const sample = candidate?.samplePost ?? null
+  const reference = candidate?.reference ?? null
 
   // Fetched lazily rather than stored in the report: only the pointer is
   // persisted, so a report stays small and never carries a stale copy of a post
   // that has since been edited.
-  const sampleQuery = useQuery({
+  const referenceQuery = useQuery({
     queryKey: [
-      "discoverSamplePost",
-      sample?.channelName ?? "",
-      sample?.postId ?? 0,
+      "discoverReferencePost",
+      reference?.channelName ?? "",
+      reference?.postId ?? 0,
     ],
     queryFn: () =>
       api.lookupPosts([
-        { channelName: sample!.channelName, postId: sample!.postId },
+        { channelName: reference!.channelName, postId: reference!.postId },
       ]),
-    enabled: Boolean(sample),
+    enabled: Boolean(reference),
   })
 
-  const post = sampleQuery.data?.[0] ?? null
+  const post = referenceQuery.data?.[0] ?? null
   // Retention prunes posts; a saved report outlives them by design. Absence is
   // an expected state, not an error — the Telegram link below still works.
-  const samplePruned = Boolean(
-    sample && !sampleQuery.isLoading && !sampleQuery.isError && !post,
+  const referencePruned = Boolean(
+    reference && !referenceQuery.isLoading && !referenceQuery.isError && !post,
   )
 
   return (
@@ -172,41 +172,43 @@ export const DiscoverCandidatePanel: React.FC<DiscoverCandidatePanelProps> = ({
                 <h4 className="mb-2 text-[11px] font-bold uppercase tracking-widest text-app-ink/50">
                   Most recent reference
                 </h4>
-                {sample ? (
+                {reference ? (
                   <div className="space-y-2">
                     <p className="text-xs text-app-ink/60">
                       in{" "}
-                      <span className="font-mono">@{sample.channelName}</span> ·{" "}
-                      <RelativeTime timestamp={sample.timestamp} />
+                      <span className="font-mono">
+                        @{reference.channelName}
+                      </span>{" "}
+                      · <RelativeTime timestamp={reference.timestamp} />
                     </p>
-                    {sampleQuery.isLoading ? (
+                    {referenceQuery.isLoading ? (
                       <p className="text-sm text-app-ink/50">Loading post…</p>
                     ) : post?.text ? (
                       <blockquote
                         dir="auto"
                         className="max-h-64 overflow-y-auto whitespace-pre-wrap rounded-lg border border-app-ink/10 bg-app-muted/30 p-3 text-sm"
-                        data-testid="discover-panel-sample-text"
+                        data-testid="discover-panel-reference-text"
                       >
                         {post.text}
                       </blockquote>
                     ) : (
                       <p
                         className="text-sm text-app-ink/50"
-                        data-testid="discover-panel-sample-missing"
+                        data-testid="discover-panel-reference-missing"
                       >
-                        {samplePruned
+                        {referencePruned
                           ? "This post is no longer in your corpus. Open it on Telegram to read it."
                           : "Post text unavailable."}
                       </p>
                     )}
                     <a
                       href={telegramWebViewPostUrl(
-                        sample.channelName,
-                        sample.postId,
+                        reference.channelName,
+                        reference.postId,
                       )}
                       target="_blank"
                       rel="noopener noreferrer"
-                      data-testid="discover-panel-sample-link"
+                      data-testid="discover-panel-reference-link"
                       className="inline-flex items-center gap-1 text-xs text-blue-600 underline-offset-2 hover:underline dark:text-blue-400"
                     >
                       <ExternalLink size={12} />
@@ -215,7 +217,7 @@ export const DiscoverCandidatePanel: React.FC<DiscoverCandidatePanelProps> = ({
                   </div>
                 ) : (
                   <p className="text-sm text-app-ink/50">
-                    No sample post recorded.
+                    No reference recorded.
                   </p>
                 )}
               </section>

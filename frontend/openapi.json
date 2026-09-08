@@ -5501,7 +5501,7 @@
         "required": ["jobId", "status"],
         "title": "CancelSyncJobResponse"
       },
-      "CandidateSamplePostResponse": {
+      "CandidateReferenceResponse": {
         "properties": {
           "channelName": { "type": "string", "title": "Channelname" },
           "postId": { "type": "integer", "title": "Postid" },
@@ -5509,8 +5509,8 @@
         },
         "type": "object",
         "required": ["channelName", "postId", "timestamp"],
-        "title": "CandidateSamplePostResponse",
-        "description": "Pointer to the most recent post that referenced a candidate.\n\nA pointer rather than the post body on purpose: retention may prune the post\nlater, and callers render a Telegram web-view link from these three fields so\nthe evidence stays reachable outside our corpus."
+        "title": "CandidateReferenceResponse",
+        "description": "The Reference: the most recent Post in a followed Channel that named a\ncandidate.\n\nA pointer rather than the post body on purpose: retention may prune the post\nlater, and callers render a Telegram web-view link from these three fields so\nthe evidence stays reachable outside our corpus.\n\nIt was a \"sample post\" until ticket 01 of discover-signals. The word now\nmeans only the Directory's snapshot of a Channel's *own* Posts, which points\nthe opposite way: a Reference belongs to somebody else's Channel."
       },
       "CandidateSeenInResponse": {
         "properties": {
@@ -6162,12 +6162,12 @@
             "title": "Isignored",
             "default": false
           },
-          "samplePost": {
-            "$ref": "#/components/schemas/CandidateSamplePostResponse"
+          "reference": {
+            "$ref": "#/components/schemas/CandidateReferenceResponse"
           }
         },
         "type": "object",
-        "required": ["name", "counts", "samplePost"],
+        "required": ["name", "counts", "reference"],
         "title": "DiscoverCandidateResponse",
         "description": "One discovered handle, as `_to_candidate` builds it.\n\n`isFollowed` / `isIgnored` are resolved against live state, never frozen \u2014\ncounts are historical, follow state is not."
       },
@@ -7893,8 +7893,8 @@
             "title": "Isignored",
             "default": false
           },
-          "samplePost": {
-            "$ref": "#/components/schemas/CandidateSamplePostResponse"
+          "reference": {
+            "$ref": "#/components/schemas/CandidateReferenceResponse"
           },
           "probe": {
             "anyOf": [
@@ -7904,7 +7904,7 @@
           }
         },
         "type": "object",
-        "required": ["name", "counts", "samplePost"],
+        "required": ["name", "counts", "reference"],
         "title": "ReportCandidateResponse",
         "description": "A candidate read back from a saved report, with its probe verdict joined.\n\n`probe` is `null` for a handle nothing has looked at yet, which callers must\nrender as \"not checked\" rather than as a verdict: an unprobed handle and one\nconfirmed unfollowable must not look the same."
       },

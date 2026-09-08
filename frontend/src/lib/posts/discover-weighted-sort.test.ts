@@ -20,7 +20,7 @@ function candidate(
     seenInCount: 1,
     lastSeen: 100,
     isFollowed: false,
-    samplePost: { channelName: "carrier", postId: 1, timestamp: 100 },
+    reference: { channelName: "carrier", postId: 1, timestamp: 100 },
   }
 }
 

@@ -17,7 +17,7 @@ function candidate(
     lastSeen: 100,
     isFollowed: flags.isFollowed ?? false,
     isIgnored: flags.isIgnored,
-    samplePost: { channelName: "carrier", postId: 1, timestamp: 100 },
+    reference: { channelName: "carrier", postId: 1, timestamp: 100 },
   }
 }
 

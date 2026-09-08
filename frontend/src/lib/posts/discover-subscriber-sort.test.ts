@@ -45,7 +45,7 @@ function candidate(
     // `undefined` is the never-probed row; a probe carrying `null` is a handle
     // that was reached but showed no counter.
     probe: subscribers === undefined ? undefined : probe(subscribers),
-    samplePost: { channelName: "carrier", postId: 1, timestamp: 100 },
+    reference: { channelName: "carrier", postId: 1, timestamp: 100 },
   }
 }
 
