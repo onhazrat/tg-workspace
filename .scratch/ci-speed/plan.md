@@ -258,9 +258,11 @@ Skip unless Phases 1–4 leave wall-clock above ~5 min.
 
 ## Challenge / decisions needed from you
 
-1. **GHCR vs docker-save artifact** for Phase 1: I recommend **GHCR** (public packages, pull by digest). Artifacts for multi-GB images are clumsy and slow to upload twice. OK?
-2. **Fork PRs:** accept “build-in-job fallback for forks” vs “maintainer-only Playwright for forks”?
-3. **Backend matrix:** 2 jobs (`api` | `rest`) vs 3 (`api` | `services` | `rest`)? I recommend **3** given services ≈ half the suite.
-4. **Coverage HTML every PR:** drop to `main`-only, or keep artifact without `dynamic_context`?
+Tracked as **D1–D4** in [Tasks](#tasks). Recommendations unchanged:
 
-Once those four are decided, Phase 0+1 can land as the first implementation PR.
+1. **D1 — GHCR** (public packages, pull by digest) over docker-save artifacts.
+2. **D2 — build-in-job fallback for forks** over maintainer-only Playwright.
+3. **D3 — 3 backend matrix jobs** (`api` / `services` / `rest`).
+4. **D4 — coverage HTML `main`-only** (or every PR without `dynamic_context` if you still want the artifact).
+
+Once D1–D4 are checked off in Tasks, Phase 0+1 can land as the first implementation PR. Tick boxes in this file as work lands (`[ ]` → `[~]` → `[x]`).
