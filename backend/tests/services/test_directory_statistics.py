@@ -8,6 +8,17 @@ The transform is pure, so this needs no database and no fixtures. The Posts are
 real `DirectorySample` rows built in memory rather than stand-in objects,
 because the fields the transform reads are the fields the probe path writes, and
 a stub would let those two drift apart silently.
+
+## Watched to fail
+
+* `count / span` instead of `(count - 1) / span` -> the weekly case reads 1.25
+  and the year-old case 8.75
+* gate the median on `count` rather than on how many samples carry a view ->
+  twenty samples with one view between them report that one view as a median
+* read `post.text` instead of the parsed caption -> a set of `[photo]`
+  placeholders reports `latin`, and one real caption is outvoted by them
+* `floor(x + 0.5)` instead of `round` -> the tie test reads 11, and the
+  write-path file's agreement test fails against the migration's own SQL
 """
 
 from __future__ import annotations
@@ -150,6 +161,21 @@ class TestMedianViews:
         concern at this precision."""
         rows = [sample(i, views=v) for i, v in enumerate([10, 20, 30, 41, 50, 60])]
         assert compute_sample_statistics(rows).median_views == 36
+
+    def test_a_tie_goes_to_the_even_integer_because_the_migration_does(
+        self,
+    ) -> None:
+        """The one input where the two implementations of this could disagree.
+
+        `[10, 11]` has a median of 10.5, and which way that breaks is invisible
+        until you notice the backfill says this formula a second time in SQL.
+        Python's `round` and PostgreSQL's `round(double precision)` are both
+        `rint` and both answer 10, so they agree — but half-up here, or a
+        `::numeric` cast there, would part them. Pinned from this side; the
+        write-path file pins the same tie through the migration's own statement.
+        """
+        rows = [sample(i, views=v) for i, v in enumerate([8, 9, 10, 11, 12, 13])]
+        assert compute_sample_statistics(rows).median_views == 10
 
     def test_exactly_the_threshold_measures(self) -> None:
         rows = [sample(i, views=(i + 1) * 10) for i in range(MIN_SAMPLES)]

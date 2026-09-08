@@ -138,10 +138,16 @@ def expire_samples_before(session: Session, cutoff: datetime) -> int:
 def samples_for(session: Session, handle: str) -> list[DirectorySample]:
     """Every sample stored for one handle, newest Post first.
 
-    No production caller yet — the browsing surface that reads the Directory is
-    a separate feature. It exists so the write path has an observable answer to
-    assert against, which is the alternative to tests reaching into the table
-    and pinning its columns.
+    `record_probe_result` reads it back through here immediately after writing,
+    to compute the entry's statistics (ticket 02). That is a query rather than
+    reusing the parsed payload on purpose: `directory_statistics` takes **Posts**
+    so the Channels tab can point it at the corpus later, and the rows this
+    just flushed are the Posts. A probe is a handful per minute, so the extra
+    indexed read is not a cost worth designing around.
+
+    It began with no production caller at all, existing so the write path had an
+    observable answer to assert against rather than tests reaching into the
+    table and pinning its columns. It still serves that.
     """
     statement = (
         select(DirectorySample)

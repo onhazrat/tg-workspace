@@ -98,6 +98,7 @@ from app.jobs.settings import load_directory_settings
 from app.models_tg import DirectoryEntry, utc_now
 from app.services.channel_directory_samples import replace_samples, samples_for
 from app.services.directory_statistics import (
+    SampleStatistics,
     compute_sample_statistics,
     media_density,
     media_mix,
@@ -569,6 +570,27 @@ def known_handles(session: Session, handles: set[str]) -> set[str]:
     return {str(row) for row in session.exec(statement).all()}
 
 
+def _store_statistics(row: DirectoryEntry, stats: SampleStatistics) -> None:
+    """Copy the six sample-derived statistics onto the entry.
+
+    One function rather than the assignment written twice, for the reason
+    `_apply_page_metadata` is one: the two writers are a conclusive probe and a
+    recheck, and a second copy of this list is how one of them comes to miss a
+    column. A recheck passes an empty `SampleStatistics()`, which says what it
+    means — the row holds no answer, so it measures nothing — rather than six
+    `None`s that a reader has to recognise as a set.
+
+    Assignment by name rather than a loop over `fields()`: mypy checks these six
+    against the columns, and `setattr` would hand that up to save four lines.
+    """
+    row.last_post_at = stats.last_post_at
+    row.sample_count = stats.sample_count
+    row.posts_per_week = stats.posts_per_week
+    row.median_views = stats.median_views
+    row.forward_share = stats.forward_share
+    row.script = stats.script
+
+
 def _get_or_create(session: Session, handle: str) -> DirectoryEntry:
     row = session.get(DirectoryEntry, handle)
     if row is None:
@@ -883,13 +905,7 @@ def record_probe_result(
         # is what lets the Channels tab point the same function at the corpus
         # later instead of reimplementing these formulas over a second shape.
         if row.status == "ok":
-            stats = compute_sample_statistics(samples_for(session, key))
-            row.last_post_at = stats.last_post_at
-            row.sample_count = stats.sample_count
-            row.posts_per_week = stats.posts_per_week
-            row.median_views = stats.median_views
-            row.forward_share = stats.forward_share
-            row.script = stats.script
+            _store_statistics(row, compute_sample_statistics(samples_for(session, key)))
     # A conclusive answer clears the failure history: the backoff exists to
     # throttle retries of an unresolved handle, and this one is now resolved.
     row.attempts = 0
@@ -946,12 +962,7 @@ def requeue_probes(
         # a row still showing "4.2 posts/week" beside "not checked" would be
         # claiming a measurement it has disowned. An `unavailable` verdict is
         # the opposite case and keeps them — see `record_probe_result`.
-        row.last_post_at = None
-        row.sample_count = None
-        row.posts_per_week = None
-        row.median_views = None
-        row.forward_share = None
-        row.script = None
+        _store_statistics(row, SampleStatistics())
         row.attempts = 0
         row.last_error = None
         row.checked_at = None

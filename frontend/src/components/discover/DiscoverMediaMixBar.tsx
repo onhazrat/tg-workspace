@@ -33,16 +33,21 @@ const SEGMENTS: Record<
   links: { label: "Links", className: "bg-emerald-500" },
 }
 
+/**
+ * Deliberately no density.
+ *
+ * The spec puts forward share, script, density and the sample Post bodies in
+ * the **panel**, not on the row: ten numbers is not a scannable row. Density is
+ * ticket 03's to render, and it is already on the wire, derived at read — so
+ * that ticket is a consumer of this one rather than a schema change.
+ */
 interface DiscoverMediaMixBarProps {
   mix: DiscoveryMediaMix | null | undefined
-  /** Media items per published Post id. A rate; it may exceed 1. */
-  density: number | null | undefined
   handle: string
 }
 
 export const DiscoverMediaMixBar: React.FC<DiscoverMediaMixBarProps> = ({
   mix,
-  density,
   handle,
 }) => {
   if (!mix) return null
@@ -60,10 +65,7 @@ export const DiscoverMediaMixBar: React.FC<DiscoverMediaMixBarProps> = ({
     .join(" · ")
   const title =
     `${parts}. Shares of each other, not of the Post count — Telegram counts ` +
-    `media items, so an album adds one per photo.` +
-    (density === null || density === undefined
-      ? ""
-      : ` About ${density.toFixed(1)} media items per post id.`)
+    `media items, so an album adds one per photo.`
 
   return (
     <div

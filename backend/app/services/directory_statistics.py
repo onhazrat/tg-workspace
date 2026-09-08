@@ -50,9 +50,9 @@ album]` — which is ASCII, so a character-range heuristic run over it would lab
 a caption-less Persian or Russian photo Channel as Latin. The Channels most
 likely to be caption-less are exactly the image-heavy ones. Reading `caption`
 off the media block rather than `text` excludes every placeholder by
-construction: the parser records a caption only where the Post actually had one,
-so a Post with no media block at all is the one case where `text` *is* the
-caption.
+construction: the stored block carries that key only where the Post actually had
+a caption, so a Post with no media block at all is the one case where `text`
+*is* the caption. See `_caption`.
 
 **The mix is a share of the counters against each other, with no denominator.**
 The obvious construction — each counter over the Post count, as a percentage —
@@ -154,10 +154,16 @@ def _caption(post: SamplePost) -> str | None:
     """The Post's own words, or `None` when it had none.
 
     A Post with no media block never had a caption to synthesise over, so its
-    `text` is what was written. A Post *with* one carries its caption in the
-    media block if it had any at all — the parser writes the key only where a
-    caption was found — so an absent key is a placeholder and reads as no words
+    `text` is what was written. A Post *with* one carries its caption there if it
+    had one at all: `parse_widget_media` sets the field unconditionally, but
+    `PostMedia.to_storage_dict` dumps with `exclude_none=True`, so a Post with no
+    caption reaches storage with no `caption` key. An absent key therefore means
+    the stored `text` is a synthesised placeholder, and this reads it as no words
     rather than as ASCII ones.
+
+    The `isinstance` below is what makes that safe rather than merely likely — a
+    row written before that dump rule, or by a future caller that keeps nulls,
+    still answers "no caption" instead of returning `None` as a string.
     """
     if post.media is None:
         return post.text or None
@@ -211,6 +217,16 @@ def compute_sample_statistics(posts: Sequence[SamplePost]) -> SampleStatistics:
     # Rounded, not widened: the counts are themselves parsed from Telegram's
     # abbreviated display strings, where `9.74K` becomes 9,740, so the half view
     # an even set produces sits below the precision of the input.
+    #
+    # **`round`, and a tie goes to the even integer** — which matters only
+    # because this formula is written twice. The migration's backfill restates
+    # it in SQL, and PostgreSQL's `round(double precision)` is `rint`, so it
+    # breaks a tie the same way. The two agree, including on `504.5`.
+    #
+    # Worth naming because it is not obvious and is easy to break from either
+    # side: half-up here (`floor(x + 0.5)`) would diverge, and so would casting
+    # the SQL to `numeric`, whose `round` goes away from zero. Both directions
+    # are pinned by the tie cases in the two test files.
     median_views = (
         round(statistics.median(views)) if len(views) >= MIN_SAMPLES else None
     )
@@ -243,8 +259,12 @@ def media_mix(counters: dict[str, str | None]) -> dict[str, float] | None:
     a photo-only Channel is a mix of `{"photos": 1.0}` and a Channel we never
     read a page for has no mix.
 
-    A missing counter is left out rather than written as zero, so the keys are
-    the counters Telegram actually showed.
+    A missing counter is left out of **this dict** rather than written as zero,
+    so a caller reading it directly sees only the counters Telegram showed. It
+    does not reach the wire that way: `MediaMixResponse` declares all four legs,
+    so an absent one serialises as an explicit `null`. That is deliberate and
+    argued there — the bar renders a stable set of segments, and `null` still
+    reads as "no counter of this kind" rather than as a share of zero.
     """
     parsed = {
         name: value

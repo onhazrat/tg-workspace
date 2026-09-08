@@ -207,8 +207,17 @@ def test_the_migration_backfill_agrees_with_the_transform() -> None:
         "app.alembic.versions.d1e2f3a4b5c6_directory_statistics"
     )
     with Session(engine) as session:
-        record_probe_result(session, HANDLE, _page(samples=_weekly(9, views=500)))
+        # An **even** number of measured views whose median lands on a half,
+        # and one whose floor is even. That is the single input where the two
+        # roundings could differ: Python's `round` breaks a tie to the even
+        # integer and PostgreSQL's `round(double precision)` breaks it away from
+        # zero, so `10.5` would be 10 in the transform and 11 in the backfill.
+        # The transform floors `x + 0.5` for that reason, and a set with an odd
+        # count or identical views — which is what this test used to seed —
+        # steps around the disagreement instead of pinning it.
+        record_probe_result(session, HANDLE, _page(samples=_weekly(10, views=500)))
         expected = compute_sample_statistics(samples_for(session, HANDLE))
+        assert expected.median_views == 504, "the seed must land on a tie"
 
         session.execute(
             sa_text(

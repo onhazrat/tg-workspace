@@ -12,13 +12,8 @@ const mix = (over: Partial<DiscoveryMediaMix> = {}): DiscoveryMediaMix => ({
   ...over,
 })
 
-const render = (
-  value: DiscoveryMediaMix | null,
-  density: number | null = null,
-) =>
-  renderToStaticMarkup(
-    <DiscoverMediaMixBar mix={value} density={density} handle="chan" />,
-  )
+const render = (value: DiscoveryMediaMix | null) =>
+  renderToStaticMarkup(<DiscoverMediaMixBar mix={value} handle="chan" />)
 
 /**
  * The one column that is a shape rather than a number (ticket 02).
@@ -54,11 +49,14 @@ describe("DiscoverMediaMixBar", () => {
     expect(html).toContain("not of the Post count")
   })
 
-  test("density rides the tooltip and is labelled a rate", () => {
-    // Above 1 is ordinary and correct: an album adds one item per photo.
-    expect(render(mix({ photos: 1 }), 2.4)).toContain(
-      "2.4 media items per post",
-    )
+  test("density stays off the row", () => {
+    /**
+     * The spec puts density in the panel, which is ticket 03. It is on the
+     * wire already — derived at read, so ticket 03 is a consumer rather than a
+     * schema change — and this is what stops it drifting onto the row early,
+     * where it would be the tenth number on a line meant to be scanned.
+     */
+    expect(render(mix({ photos: 1 }))).not.toContain("per post")
   })
 
   test("an entry with no mix renders nothing at all", () => {

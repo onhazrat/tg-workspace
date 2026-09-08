@@ -429,7 +429,6 @@ export const DiscoverCandidateTable: React.FC<DiscoverCandidateTableProps> = ({
                 <td className="py-2">
                   <DiscoverMediaMixBar
                     mix={row.probe?.mediaMix}
-                    density={row.probe?.mediaDensity}
                     handle={row.name}
                   />
                 </td>
