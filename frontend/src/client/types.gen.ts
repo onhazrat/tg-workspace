@@ -1249,9 +1249,9 @@ export type CompletionResult = {
  */
 export type ConfigurationCatalogResponse = {
     /**
-     * Schema Version
+     * Schemaversion
      */
-    schema_version?: number;
+    schemaVersion?: number;
     /**
      * Layers
      */
@@ -1283,9 +1283,9 @@ export type ConfigurationEntry = {
      */
     value?: unknown;
     /**
-     * Default Value
+     * Defaultvalue
      */
-    default_value?: unknown;
+    defaultValue?: unknown;
     /**
      * Source
      */
@@ -1307,13 +1307,13 @@ export type ConfigurationEntry = {
      */
     editable?: boolean;
     /**
-     * Restart Required
+     * Restartrequired
      */
-    restart_required?: boolean;
+    restartRequired?: boolean;
     /**
-     * Owner Id
+     * Ownerid
      */
-    owner_id?: string | null;
+    ownerId?: string | null;
 };
 
 /**

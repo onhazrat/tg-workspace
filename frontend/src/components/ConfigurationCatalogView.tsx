@@ -41,7 +41,7 @@ function hydrateFrontend(
       return {
         ...layer,
         entries: (layer.entries ?? []).map((entry) => {
-          const value = frontendBuildValue(entry.key, entry.default_value)
+          const value = frontendBuildValue(entry.key, entry.defaultValue)
           const configured = hasFrontendBuildValue(entry.key)
           return {
             ...entry,
@@ -74,7 +74,7 @@ function ConfigRow({ entry }: { entry: ConfigurationEntry }) {
           <Badge variant={entry.configured ? "default" : "secondary"}>
             {entry.configured ? "configured" : "default"}
           </Badge>
-          {entry.restart_required ? (
+          {entry.restartRequired ? (
             <Badge variant="secondary">restart/rebuild</Badge>
           ) : null}
           {entry.sensitive ? <Badge variant="secondary">redacted</Badge> : null}
@@ -88,9 +88,9 @@ function ConfigRow({ entry }: { entry: ConfigurationEntry }) {
       </pre>
       <div className="flex flex-wrap gap-x-4 gap-y-1 font-mono text-[9px] uppercase tracking-wider opacity-50">
         <span>source: {entry.source}</span>
-        {entry.owner_id ? <span>owner: {entry.owner_id}</span> : null}
-        {entry.default_value !== null && entry.default_value !== undefined ? (
-          <span>default: {displayValue(entry.default_value)}</span>
+        {entry.ownerId ? <span>owner: {entry.ownerId}</span> : null}
+        {entry.defaultValue !== null && entry.defaultValue !== undefined ? (
+          <span>default: {displayValue(entry.defaultValue)}</span>
         ) : null}
       </div>
     </article>
@@ -151,7 +151,7 @@ export function ConfigurationCatalogView({
             entry.label,
             entry.description,
             entry.source,
-            entry.owner_id ?? "",
+            entry.ownerId ?? "",
             entry.sensitive ? "secret sensitive redacted" : "",
             displayValue(entry.value),
           ]

@@ -5,7 +5,7 @@ import type { CommandContext } from "@/lib/commands/types"
 import { buildConfigurationCommands } from "./configuration-commands"
 
 const catalog: ConfigurationCatalogResponse = {
-  schema_version: 1,
+  schemaVersion: 1,
   layers: [
     {
       id: "deployment",
@@ -18,14 +18,14 @@ const catalog: ConfigurationCatalogResponse = {
           label: "Postgres Server",
           layer: "deployment",
           value: "localhost",
-          default_value: null,
+          defaultValue: null,
           source: "environment",
           description: "Database host",
           sensitive: false,
           configured: true,
           editable: false,
-          restart_required: true,
-          owner_id: null,
+          restartRequired: true,
+          ownerId: null,
         },
       ],
     },

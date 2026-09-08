@@ -151,7 +151,7 @@ def _deployment_entries() -> list[ConfigurationEntry]:
                 label=_label(name),
                 layer="deployment",
                 value=_redact(value, sensitive=sensitive),
-                default_value=_redact(_field_default(name), sensitive=sensitive),
+                defaultValue=_redact(_field_default(name), sensitive=sensitive),
                 source=(
                     "environment"
                     if in_environment
@@ -164,7 +164,7 @@ def _deployment_entries() -> list[ConfigurationEntry]:
                 ),
                 sensitive=sensitive,
                 configured=configured,
-                restart_required=True,
+                restartRequired=True,
             )
         )
 
@@ -183,12 +183,12 @@ def _deployment_entries() -> list[ConfigurationEntry]:
                 label=_label(name),
                 layer="deployment",
                 value=_redact(raw, sensitive=sensitive),
-                default_value=_redact(spec.get("default"), sensitive=sensitive),
+                defaultValue=_redact(spec.get("default"), sensitive=sensitive),
                 source="environment" if configured else spec["scope"],
                 description=f"Discovered from {spec['scope']} source usage.",
                 sensitive=sensitive,
                 configured=configured,
-                restart_required=True,
+                restartRequired=True,
             )
         )
     return entries
@@ -267,7 +267,7 @@ def _user_entries(session: Session, user_id: uuid.UUID) -> list[ConfigurationEnt
                 description=description,
                 configured=bool(stored),
                 editable=True,
-                owner_id=str(user_id),
+                ownerId=str(user_id),
             )
         )
     return entries
@@ -299,7 +299,7 @@ def _specialized_entries(session: Session) -> list[ConfigurationEntry]:
             description="Per-account quota override; null values inherit global defaults.",
             configured=True,
             editable=True,
-            owner_id=str(row.user_id),
+            ownerId=str(row.user_id),
         )
         for row in rows
     ]
@@ -313,13 +313,13 @@ def _frontend_entries() -> list[ConfigurationEntry]:
             label=_label(spec["name"]),
             layer="frontend",
             value=None,
-            default_value=_redact(
+            defaultValue=_redact(
                 spec.get("default"), sensitive=bool(spec.get("sensitive"))
             ),
             source="frontend build (reported by browser)",
             description="Vite build-time value. Rebuild the frontend to change it.",
             sensitive=bool(spec.get("sensitive")),
-            restart_required=True,
+            restartRequired=True,
         )
         for spec in _manifest()
         if spec["scope"] == "frontend_build"

@@ -6137,9 +6137,9 @@
       },
       "ConfigurationCatalogResponse": {
         "properties": {
-          "schema_version": {
+          "schemaVersion": {
             "type": "integer",
-            "title": "Schema Version",
+            "title": "Schemaversion",
             "default": 1
           },
           "layers": {
@@ -6163,7 +6163,7 @@
             "title": "Layer"
           },
           "value": { "title": "Value" },
-          "default_value": { "title": "Default Value" },
+          "defaultValue": { "title": "Defaultvalue" },
           "source": { "type": "string", "title": "Source" },
           "description": {
             "type": "string",
@@ -6185,14 +6185,14 @@
             "title": "Editable",
             "default": false
           },
-          "restart_required": {
+          "restartRequired": {
             "type": "boolean",
-            "title": "Restart Required",
+            "title": "Restartrequired",
             "default": false
           },
-          "owner_id": {
+          "ownerId": {
             "anyOf": [{ "type": "string" }, { "type": "null" }],
-            "title": "Owner Id"
+            "title": "Ownerid"
           }
         },
         "type": "object",
