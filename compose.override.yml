@@ -124,6 +124,7 @@ services:
         - NODE_ENV=development
 
   playwright:
+    image: '${DOCKER_IMAGE_PLAYWRIGHT:-playwright}:${TAG:-latest}'
     build:
       context: .
       dockerfile: frontend/Dockerfile.playwright

@@ -100,7 +100,11 @@ test.describe("Admin user management", () => {
     await page.getByRole("menuitem", { name: "Edit User" }).click()
 
     const editDialog = page.getByRole("dialog", { name: "Edit User" })
-    await replaceFieldValue(editDialog.getByLabel("Full Name"), updatedName)
+    await expect(editDialog).toBeVisible()
+    const fullName = editDialog.getByLabel("Full Name")
+    await expect(fullName).toBeVisible()
+    await replaceFieldValue(fullName, updatedName)
+    await expect(editDialog.getByRole("button", { name: "Save" })).toBeEnabled()
     await editDialog.getByRole("button", { name: "Save" }).click()
 
     await expect(page.getByText("User updated successfully")).toBeVisible()

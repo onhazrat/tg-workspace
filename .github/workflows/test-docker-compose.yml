@@ -4,24 +4,61 @@ on:
   push:
     branches:
       - main
+    paths:
+      - "compose*.yml"
+      - "backend/Dockerfile*"
+      - "frontend/Dockerfile*"
+      - ".env.example"
+      # Build contexts bind-mount / COPY these; lockfile-only must still rebuild
+      - "pyproject.toml"
+      - "uv.lock"
+      - "package.json"
+      - "bun.lock"
+      - "frontend/nginx.conf"
+      - "frontend/nginx-backend-not-found.conf"
+      - ".github/workflows/test-docker-compose.yml"
   pull_request:
     types:
       - opened
       - synchronize
+    paths:
+      - "compose*.yml"
+      - "backend/Dockerfile*"
+      - "frontend/Dockerfile*"
+      - ".env.example"
+      - "pyproject.toml"
+      - "uv.lock"
+      - "package.json"
+      - "bun.lock"
+      - "frontend/nginx.conf"
+      - "frontend/nginx-backend-not-found.conf"
+      - ".github/workflows/test-docker-compose.yml"
   workflow_dispatch:
 
 permissions:
   contents: read
 
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 jobs:
   test-docker-compose:
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    permissions:
+      contents: read
+      actions: write
+    env:
+      COMPOSE_FILE: compose.yml:compose.override.yml:compose.cache.yml
+      COMPOSE_BAKE: "true"
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           persist-credentials: false
+      - uses: crazy-max/ghaction-github-runtime@04d248b84655b509d8c44dc1d6f990c879747487 # v4.0.0
+      - uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4.2.0
       - name: Prepare environment file
         run: test -f .env || cp .env.example .env
       - run: docker compose build
