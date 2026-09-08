@@ -30,6 +30,8 @@ export default defineConfig({
    * parallelism ever bought.
    */
   workers: 1,
+  /* Surface slow tests in CI logs for shard-balance work. */
+  reportSlowTests: { max: 10, threshold: 15_000 },
   /* Reporter to use. See https://playwright.dev/docs/test-reporters */
   reporter: process.env.CI ? 'blob' : 'html',
   /* Shared settings for all the projects below. See https://playwright.dev/docs/api/class-testoptions. */

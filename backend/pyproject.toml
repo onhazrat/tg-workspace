@@ -95,14 +95,16 @@ keep-runtime-typing = true
 
 [tool.coverage.run]
 source = ["app"]
-dynamic_context = "test_function"
+# Per-test dynamic_context was dropped: it inflated CI wall-clock for HTML
+# contexts we only upload on main. Re-enable locally if you need per-test
+# blame in htmlcov (`coverage run --context=...` / a private .coveragerc).
 
 [tool.coverage.report]
 show_missing = true
 sort = "-Cover"
 
 [tool.coverage.html]
-show_contexts = true
+# show_contexts requires dynamic_context; left off to match the CI diet.
 
 [tool.ty.terminal]
 error-on-warning = true
