@@ -151,7 +151,8 @@ jobs:
       - build-images
     if: ${{ needs.changes.outputs.changed == 'true' }}
     # Full suite (~130+ tests, CI workers=1). Shards pull/load prebuilt
-    # images — they must not docker compose build.
+    # images; `run` has no --no-build flag (Compose v2) — omit --build so
+    # pulled tags are used as-is.
     timeout-minutes: 30
     runs-on: ubuntu-latest
     permissions:
@@ -215,7 +216,7 @@ jobs:
         run: docker load -i /tmp/playwright-images.tar
       - run: docker compose down -v --remove-orphans
       - name: Run Playwright tests
-        run: docker compose run --rm --no-build playwright bunx playwright test --fail-on-flaky-tests --trace=retain-on-failure --shard=${{ matrix.shardIndex }}/${{ matrix.shardTotal }}
+        run: docker compose run --rm playwright bunx playwright test --fail-on-flaky-tests --trace=retain-on-failure --shard=${{ matrix.shardIndex }}/${{ matrix.shardTotal }}
       - run: docker compose down -v --remove-orphans
       - name: Upload blob report
         if: ${{ !cancelled() }}
