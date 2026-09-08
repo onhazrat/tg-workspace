@@ -104,7 +104,7 @@ jobs:
           fi
       - name: Log in to GHCR
         if: steps.meta.outputs.image_source == 'ghcr'
-        uses: docker/login-action@5e57cd118135c172c37395bdb10c0af8cee5f74a # v3.6.0
+        uses: docker/login-action@5e57cd118135c172c3672efd75eb46360885c0ef # v3.6.0
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -193,7 +193,7 @@ jobs:
           grep -q '^DOCKER_IMAGE_PLAYWRIGHT=' .env || echo "DOCKER_IMAGE_PLAYWRIGHT=${DOCKER_IMAGE_PLAYWRIGHT}" >> .env
       - name: Log in to GHCR
         if: needs.build-images.outputs.image_source == 'ghcr'
-        uses: docker/login-action@5e57cd118135c172c37395bdb10c0af8cee5f74a # v3.6.0
+        uses: docker/login-action@5e57cd118135c172c3672efd75eb46360885c0ef # v3.6.0
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
