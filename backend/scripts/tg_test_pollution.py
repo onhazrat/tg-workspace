@@ -90,6 +90,7 @@ TG_TABLES: tuple[str, ...] = (
     "tg_embedding_logs",
     "tg_network_logs",
     "tg_bot_credentials",
+    "tg_ai_credentials",
     "tg_chat_destinations",
     "tg_app_settings",
     # The per-User half of the ticket 06 settings split. Listed with its

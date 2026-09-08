@@ -13,10 +13,10 @@ from typing import Any
 from sqlmodel import Session, col, select
 
 from app.ai.registry import default_model, get_provider
-from app.core.config import settings
 from app.core.db import engine
 from app.models_tg import ChatDestination, Post, Summary, utc_now
 from app.prompts.summary import format_summary_prompt
+from app.services.ai_keys import Purpose, resolve_ai_key
 from app.services.channel_setting_groups import channel_is_frozen, load_groups_by_id
 from app.services.credentials import CHAT_DESTINATION_NOT_FOUND
 from app.services.follows import followed_channels_for
@@ -211,14 +211,25 @@ async def _regenerate_one(
             f"{datetime.utcfromtimestamp(new_end / 1000).isoformat()}."
         )
     else:
-        if not settings.GEMINI_API_KEY:
-            raise ValueError("GEMINI_API_KEY not configured")
         posts_text = "\n\n---\n\n".join(
             f"[{p.channel_name}] ID: {p.post_id}\nDate: {p.date}\nContent: {p.text}"
             for p in posts
         )
         model = summary.model or default_model()
-        provider = get_provider("gemini")
+        # An unattended regeneration is still the owner's Artifact, so it is
+        # charged to the owner's Key and never to the Operator's. BYOK-03 makes
+        # this read the `aiKeyId` the Summary stored in `extra`; until then it
+        # resolves the owner's Key the way an attended run does, which is the
+        # same answer for the Account holding one Key.
+        #
+        # `summary.user_id` may be NULL on a deployment old enough to predate
+        # the stamp. `resolve_ai_key` refuses that rather than falling back:
+        # nobody's Key can pay, and the fallback that would "fix" it is the
+        # Operator paying, which is what BYOK exists to stop.
+        key = resolve_ai_key(session, user_id=summary.user_id, purpose=Purpose.SUMMARY)
+        provider = get_provider(
+            provider=key.provider, api_key=key.api_key, base_url=key.base_url
+        )
         prompt = format_summary_prompt(
             channels=summary.channels or [],
             language=summary.language,

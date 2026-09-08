@@ -8,7 +8,6 @@ from google import genai
 from google.genai import types
 
 from app.ai.models import ChatMessage, CompletionResult, EmbeddingResult, ModelInfo
-from app.core.config import settings
 
 RTL_LANGUAGES = {"Persian", "Arabic", "فارسی", "العربية"}
 
@@ -25,14 +24,27 @@ def _rtl_instruction(language: str) -> str:
 class GeminiProvider:
     name = "gemini"
 
-    def __init__(self) -> None:
+    def __init__(self, *, api_key: str) -> None:
+        """The credential is an argument, never the environment.
+
+        It read `settings.GEMINI_API_KEY` until BYOK-01. A Provider that fetches
+        its own credential is a Provider that cannot be told whose money to
+        spend, and with per-Account Keys that is the whole feature. Who pays is
+        answered upstream by `services/ai_keys.resolve_ai_key`; this class does
+        not know and must not.
+
+        Required rather than defaulted for `scoped_select`'s reason: an optional
+        credential leaves every existing call site passing nothing and still
+        passing tests, on the Operator's key.
+        """
+        if not api_key:
+            raise ValueError("GeminiProvider needs an API key")
+        self._api_key = api_key
         self._client: genai.Client | None = None
 
     def _get_client(self) -> genai.Client:
-        if not settings.GEMINI_API_KEY:
-            raise ValueError("GEMINI_API_KEY not configured")
         if self._client is None:
-            self._client = genai.Client(api_key=settings.GEMINI_API_KEY)
+            self._client = genai.Client(api_key=self._api_key)
         return self._client
 
     @staticmethod

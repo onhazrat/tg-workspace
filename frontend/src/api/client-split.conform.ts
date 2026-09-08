@@ -43,6 +43,8 @@
  */
 
 import type {
+  AiKeyResponse,
+  AiKeySaveResponse,
   BadProxy,
   BotInfoResponse,
   ChannelInfoResponse,
@@ -105,6 +107,19 @@ export type RagStatusIsClosed = Assert<IsClosed<RagStatusResponse>>
 export type RagEmbedIsClosed = Assert<IsClosed<RagEmbedResponse>>
 export type ChannelInfoIsClosed = Assert<IsClosed<ChannelInfoResponse>>
 export type PublishIsClosed = Assert<IsClosed<PublishResponse>>
+
+/**
+ * BYOK-01's AI Keys, on the generated client from the first commit.
+ *
+ * This is the assertion that matters most on this family, because the model
+ * is what keeps the secret off the wire: `AIKeyResponse` declares `hasKey`
+ * and nothing else about the credential. Opening it with
+ * `ConfigDict(extra="allow")` would let a stray field carry the key and
+ * would type every declared field as `unknown` on the way — so it breaks the
+ * build here rather than shipping quietly.
+ */
+export type AiKeyIsClosed = Assert<IsClosed<AiKeyResponse>>
+export type AiKeySaveIsClosed = Assert<IsClosed<AiKeySaveResponse>>
 
 // ---------------------------------------------------------------------------
 // Kept hand-written because the model is open. If one of these starts failing,

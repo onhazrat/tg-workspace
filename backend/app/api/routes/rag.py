@@ -18,6 +18,7 @@ from app.schemas.rag import (
     RagSearchResponse,
     RagStatusResponse,
 )
+from app.services.ai_keys import Purpose, resolve_ai_key
 from app.services.channels import channel_names_for_user
 from app.services.embeddings import backfill_embeddings, get_embedding_status
 from app.services.serialization import post_to_camel
@@ -59,8 +60,12 @@ async def rag_embed(
     session: SessionDep,
     current_user: CurrentUser,
 ) -> RagEmbedResponse:
-    if not settings.GEMINI_API_KEY:
-        raise HTTPException(status_code=503, detail="GEMINI_API_KEY not configured")
+    # The corpus backfill spends the Operator Key, not the caller's: it writes
+    # `tg_post_embeddings`, one shared vector per Post, and two Accounts on
+    # different Providers would overwrite each other with vectors from
+    # incompatible spaces. Resolved here only to refuse early with the same
+    # message `backfill_embeddings` would hit inside the loop.
+    resolve_ai_key(session, user_id=None, purpose=Purpose.EMBED)
     try:
         return RagEmbedResponse.model_validate(
             await backfill_embeddings(
@@ -77,9 +82,15 @@ async def rag_search(
     session: SessionDep,
     current_user: CurrentUser,
 ) -> RagSearchResponse:
-    if not settings.GEMINI_API_KEY:
-        raise HTTPException(status_code=503, detail="GEMINI_API_KEY not configured")
-    provider = get_provider("gemini")
+    # `RAG_QUERY`, never the caller's Key: the question has to land in the same
+    # vector space the corpus was built in, so it is forced onto whichever Key
+    # built it. A Semantic chat therefore spends both keys, which is correct —
+    # the retrieval reads a shared corpus and the completion is the Account's
+    # own output (ADR-016).
+    key = resolve_ai_key(session, user_id=None, purpose=Purpose.RAG_QUERY)
+    provider = get_provider(
+        provider=key.provider, api_key=key.api_key, base_url=key.base_url
+    )
     try:
         query_vec = (
             await provider.embed([body.query], model=settings.EMBEDDING_MODEL)

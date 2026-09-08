@@ -1178,6 +1178,16 @@ def _chat_sessions_statement() -> Any:
 #: which is the only cheap moment to ask "does this belong in a backup?" — the
 #: same argument `IMPORT_WRITES` makes about the write door.
 EXPORT_OMISSIONS: dict[str, str] = {
+    "AICredential": (
+        "An Account's AI Keys (BYOK-01). An export is a file people email "
+        "themselves, and a Fernet ciphertext travels with it — readable by "
+        "anyone holding the deployment's `TOKEN_ENCRYPTION_KEY`, which on a "
+        "self-hosted install is the same person doing the exporting. The bot "
+        "credentials that *are* exported set no precedent worth following "
+        "here: this table exists so that spending is attributable, and a "
+        "credential that leaves through the backup door is spending nobody "
+        "can attribute. A Key comes back by pasting it again."
+    ),
     "DiscoverIgnoredChannel": (
         "A dismissal is a judgement about a candidate, not an artifact "
         "(ticket 30). Restoring one would re-hide handles on a deployment "

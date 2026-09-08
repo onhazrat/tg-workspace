@@ -6,6 +6,7 @@ from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 from sqlmodel import Session
 
+from app.ai.base import LLMProvider
 from app.ai.models import (
     ChatRequest,
     CompletionResult,
@@ -16,7 +17,12 @@ from app.ai.models import (
     TagRequest,
     TranslateRequest,
 )
-from app.ai.registry import default_model, get_provider, list_all_models
+from app.ai.registry import (
+    default_model,
+    get_provider,
+    is_credential_rejection,
+    list_all_models,
+)
 from app.api.deps import CurrentUser, SessionDep
 from app.core.config import settings
 from app.prompts.summary import format_summary_prompt, rtl_instruction
@@ -27,6 +33,13 @@ from app.schemas.ai import (
     PromptResponse,
     TranslateResponse,
 )
+from app.services.ai_keys import (
+    AI_KEY_REJECTED_DETAIL,
+    Purpose,
+    ResolvedKey,
+    record_validation,
+    resolve_ai_key,
+)
 from app.services.prompt_assembly import (
     PromptScope,
     assemble_posts_text,
@@ -34,6 +47,50 @@ from app.services.prompt_assembly import (
 )
 
 router = APIRouter(prefix="/ai", tags=["ai"])
+
+
+def _provider_for(
+    session: Session,
+    *,
+    user_id: uuid.UUID | None,
+    purpose: Purpose,
+    key_id: str | None = None,
+) -> tuple[LLMProvider, ResolvedKey]:
+    """Resolve who pays, then build the client that spends it.
+
+    Two steps rather than one function, because they answer different
+    questions and only the first is a rule: `resolve_ai_key` decides *whose*
+    credential this call uses, `get_provider` turns a credential into a client.
+    Collapsing them would put the payment rule behind a constructor.
+
+    The `ResolvedKey` comes back as well as the provider so a caller that gets a
+    rejection can clear that Key's validation stamp; the Operator Key has no row
+    to clear and says so with a `credential_id` of `None`.
+    """
+    key = resolve_ai_key(session, user_id=user_id, purpose=purpose, key_id=key_id)
+    return (
+        get_provider(provider=key.provider, api_key=key.api_key, base_url=key.base_url),
+        key,
+    )
+
+
+def _note_rejection(session: Session, key: ResolvedKey, exc: BaseException) -> bool:
+    """Clear the Key's validation stamp when its Provider refused it.
+
+    This is the only thing that ever flags a Key as broken after it was saved,
+    and it is deliberately driven by a call somebody was making anyway. Nothing
+    re-validates on a schedule: a job that spends people's money to find out
+    whether they can still spend money is the cost BYOK exists to remove.
+
+    Returns whether it did anything, so a caller can turn a raw Provider error
+    into the "your key was rejected" answer rather than a bare 500. The Operator
+    Key has no row and is skipped — an environment variable has no stamp to
+    clear, and the Account looking at the error cannot fix it either way.
+    """
+    if key.credential_id is None or not is_credential_rejection(exc):
+        return False
+    record_validation(session, key.credential_id, valid=False)
+    return True
 
 
 def _resolve_posts_text(
@@ -86,10 +143,13 @@ def api_list_models(_current_user: CurrentUser) -> ModelListResponse:
 async def api_summary(
     body: SummaryRequest, session: SessionDep, current_user: CurrentUser
 ) -> CompletionResult:
-    if not settings.GEMINI_API_KEY:
-        raise HTTPException(status_code=503, detail="GEMINI_API_KEY not configured")
     model = body.model or default_model()
-    provider = get_provider(body.provider)
+    provider, ai_key = _provider_for(
+        session,
+        user_id=current_user.id,
+        purpose=Purpose.SUMMARY,
+        key_id=body.ai_key_id,
+    )
     prompt = format_summary_prompt(
         channels=body.channels,
         channels_text=body.channels_text,
@@ -104,7 +164,14 @@ async def api_summary(
     )
     # Returned directly: `CompletionResult` is already a Pydantic model, and
     # the old `.model_dump()` existed only to satisfy a `dict` annotation.
-    return await provider.complete(prompt, model=model, temperature=body.temperature)
+    try:
+        return await provider.complete(
+            prompt, model=model, temperature=body.temperature
+        )
+    except Exception as exc:
+        if _note_rejection(session, ai_key, exc):
+            raise HTTPException(status_code=502, detail=AI_KEY_REJECTED_DETAIL) from exc
+        raise
 
 
 @router.post("/summary/prompt")
@@ -130,10 +197,13 @@ def api_summary_prompt(
 async def api_summary_stream(
     body: SummaryRequest, session: SessionDep, current_user: CurrentUser
 ) -> StreamingResponse:
-    if not settings.GEMINI_API_KEY:
-        raise HTTPException(status_code=503, detail="GEMINI_API_KEY not configured")
     model = body.model or default_model()
-    provider = get_provider(body.provider)
+    provider, ai_key = _provider_for(
+        session,
+        user_id=current_user.id,
+        purpose=Purpose.SUMMARY,
+        key_id=body.ai_key_id,
+    )
     prompt = format_summary_prompt(
         channels=body.channels,
         channels_text=body.channels_text,
@@ -148,10 +218,14 @@ async def api_summary_stream(
     )
 
     async def event_stream() -> AsyncIterator[str]:
-        async for chunk in provider.stream(
-            prompt, model=model, temperature=body.temperature
-        ):
-            yield f"data: {json.dumps({'text': chunk})}\n\n"
+        try:
+            async for chunk in provider.stream(
+                prompt, model=model, temperature=body.temperature
+            ):
+                yield f"data: {json.dumps({'text': chunk})}\n\n"
+        except Exception as exc:
+            if not _note_rejection(session, ai_key, exc):
+                raise
         yield "data: [DONE]\n\n"
 
     return StreamingResponse(event_stream(), media_type="text/event-stream")
@@ -161,10 +235,13 @@ async def api_summary_stream(
 async def api_chat_stream(
     body: ChatRequest, session: SessionDep, current_user: CurrentUser
 ) -> StreamingResponse:
-    if not settings.GEMINI_API_KEY:
-        raise HTTPException(status_code=503, detail="GEMINI_API_KEY not configured")
     model = body.model or default_model()
-    provider = get_provider(body.provider)
+    provider, ai_key = _provider_for(
+        session,
+        user_id=current_user.id,
+        purpose=Purpose.CHAT,
+        key_id=body.ai_key_id,
+    )
     template = RAG_CHAT_PROMPT if body.rag_mode else CHAT_PROMPT
     system = template.format(
         channels=(body.channels_text or "").strip() or ", ".join(body.channels),
@@ -180,14 +257,18 @@ async def api_chat_stream(
     )
 
     async def event_stream() -> AsyncIterator[str]:
-        async for chunk in provider.stream(
-            body.message,
-            model=model,
-            temperature=body.temperature,
-            system_instruction=system,
-            history=body.history,
-        ):
-            yield f"data: {json.dumps({'text': chunk})}\n\n"
+        try:
+            async for chunk in provider.stream(
+                body.message,
+                model=model,
+                temperature=body.temperature,
+                system_instruction=system,
+                history=body.history,
+            ):
+                yield f"data: {json.dumps({'text': chunk})}\n\n"
+        except Exception as exc:
+            if not _note_rejection(session, ai_key, exc):
+                raise
         yield "data: [DONE]\n\n"
 
     return StreamingResponse(event_stream(), media_type="text/event-stream")
@@ -220,10 +301,13 @@ def api_tag_prompt(
 async def api_tag_stream(
     body: TagRequest, session: SessionDep, current_user: CurrentUser
 ) -> StreamingResponse:
-    if not settings.GEMINI_API_KEY:
-        raise HTTPException(status_code=503, detail="GEMINI_API_KEY not configured")
     model = body.model or default_model()
-    provider = get_provider(body.provider)
+    provider, ai_key = _provider_for(
+        session,
+        user_id=current_user.id,
+        purpose=Purpose.TAG,
+        key_id=body.ai_key_id,
+    )
     prompt = format_tag_prompt(
         channels=body.channels,
         channels_text=body.channels_text,
@@ -242,10 +326,14 @@ async def api_tag_stream(
     )
 
     async def event_stream() -> AsyncIterator[str]:
-        async for chunk in provider.stream(
-            prompt, model=model, temperature=body.temperature
-        ):
-            yield f"data: {json.dumps({'text': chunk})}\n\n"
+        try:
+            async for chunk in provider.stream(
+                prompt, model=model, temperature=body.temperature
+            ):
+                yield f"data: {json.dumps({'text': chunk})}\n\n"
+        except Exception as exc:
+            if not _note_rejection(session, ai_key, exc):
+                raise
         yield "data: [DONE]\n\n"
 
     return StreamingResponse(event_stream(), media_type="text/event-stream")
@@ -253,24 +341,20 @@ async def api_tag_stream(
 
 @router.post("/embeddings")
 async def api_embeddings(
-    body: EmbedRequest, _current_user: CurrentUser
+    body: EmbedRequest, session: SessionDep, _current_user: CurrentUser
 ) -> EmbeddingResult:
-    if not settings.GEMINI_API_KEY:
-        raise HTTPException(status_code=503, detail="GEMINI_API_KEY not configured")
     model = body.model or settings.EMBEDDING_MODEL
-    provider = get_provider(body.provider)
+    provider, _ = _provider_for(session, user_id=None, purpose=Purpose.EMBED)
     # Same as `/summary`: `EmbeddingResult` is already a Pydantic model.
     return await provider.embed(body.texts, model=model)
 
 
 @router.post("/translate")
 async def api_translate(
-    body: TranslateRequest, _current_user: CurrentUser
+    body: TranslateRequest, session: SessionDep, _current_user: CurrentUser
 ) -> TranslateResponse:
-    if not settings.GEMINI_API_KEY:
-        raise HTTPException(status_code=503, detail="GEMINI_API_KEY not configured")
     model = body.model or default_model()
-    provider = get_provider(body.provider)
+    provider, _ = _provider_for(session, user_id=None, purpose=Purpose.TRANSLATE)
     translations = await provider.translate_batch(
         body.posts, target_language=body.target_language, model=model
     )

@@ -55,6 +55,13 @@ INVENTORY: dict[str, str] = {
     # `summaries.py`. The split is a storage detail the API never sees.
     "chat_sessions.py": AGGREGATE,
     "credentials.py": AGGREGATE,
+    # Owns `tg_ai_credentials` (BYOK-01) and is its only writer. A module
+    # of its own rather than more of `credentials.py`, for the reason
+    # `quota_limits.py` is separate from `quota.py`: an aggregate owns one
+    # table. It also holds `resolve_ai_key`, the one function that answers
+    # which Key pays for a call — the rule belongs beside the table it
+    # reads, the way `lane_for_job` sits beside the lanes.
+    "ai_keys.py": AGGREGATE,
     "data_vectors.py": AGGREGATE,
     "discover_ignored.py": AGGREGATE,
     "channel_directory.py": AGGREGATE,

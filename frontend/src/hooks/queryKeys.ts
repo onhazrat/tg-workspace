@@ -12,6 +12,12 @@ export const queryKeys = {
   channelBios: ["channelBios"] as const,
   settingGroups: ["settingGroups"] as const,
   bots: ["bots"] as const,
+  /**
+   * The account's AI Keys (BYOK-01). Separate from `bots` because an AI Key
+   * is not half of a publish pair, and the Action tab reads it without
+   * needing either bot credentials or chat destinations.
+   */
+  aiKeys: ["aiKeys"] as const,
   summaries: ["summaries"] as const,
   summary: (id: string) => ["summary", id] as const,
   dbStats: ["dbStats"] as const,

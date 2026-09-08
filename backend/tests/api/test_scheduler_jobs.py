@@ -11,13 +11,21 @@ from sqlmodel import Session, select
 
 from app.core.config import settings
 from app.core.db import engine
+from app.core.secrets import encrypt_token
 from app.jobs import scheduler as sched
 from app.jobs.auto_summary import run_auto_summary
 from app.jobs.auto_sync import run_auto_sync
 from app.jobs.retention import run_retention_cleanup
 from app.jobs.settings import default_job_enabled, save_settings_section
 from app.jobs.translation_batch import run_translation_batch
-from app.models_tg import Channel, Post, Summary, SyncLog, SyncLogPayload
+from app.models_tg import (
+    AICredential,
+    Channel,
+    Post,
+    Summary,
+    SyncLog,
+    SyncLogPayload,
+)
 from app.models_tg import SyncJob as SyncJobRow
 from app.services.follows import get_operator_user_id
 from app.services.network_settings import get_network_setting_row
@@ -732,8 +740,24 @@ def test_auto_summary_regenerates_due_summary(mock_get_provider) -> None:
             )
         session.commit()
 
-    with patch("app.jobs.auto_summary.settings.GEMINI_API_KEY", "test-key"):
-        result = asyncio.run(run_auto_summary())
+    # BYOK-01: an unattended regeneration is still the owner's Artifact, so it
+    # resolves the *owner's* Key rather than the environment's. The patch this
+    # replaces set `GEMINI_API_KEY` on a module that no longer reads it — under
+    # the new rule a deployment key would not have made this Summary run
+    # anyway, which is the whole point.
+    with Session(engine) as session:
+        session.add(
+            AICredential(
+                id="auto-sum-key",
+                user_id=operator_id,
+                label="operator key",
+                key_encrypted=encrypt_token("owner-secret"),
+                last_validated=now,
+            )
+        )
+        session.commit()
+
+    result = asyncio.run(run_auto_summary())
 
     assert len(result["regenerated"]) == 1
     with Session(engine) as session:

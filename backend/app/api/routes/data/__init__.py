@@ -17,6 +17,7 @@ from fastapi import APIRouter
 
 from app.api.routes.data import (
     admin,
+    ai_keys,
     artifacts,
     channels,
     chat_sessions,
@@ -39,6 +40,7 @@ router.include_router(summaries.router)
 router.include_router(chat_sessions.router)
 router.include_router(artifacts.router)
 router.include_router(credentials.router)
+router.include_router(ai_keys.router)
 router.include_router(vectors.router)
 router.include_router(logs.router)
 router.include_router(admin.router)
