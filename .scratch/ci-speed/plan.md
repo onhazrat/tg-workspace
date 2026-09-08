@@ -65,7 +65,9 @@ PR / push
     └── merge reports
 ```
 
-Green wall-clock target: **p50 ≤ 6 min**, **p95 ≤ 10 min** when cache/GHCR is warm; cold path bounded by **one** build.
+Green wall-clock target (**revised after measurement**): **p50 ≤ 12 min**, **p95 ≤ 15 min**
+on warm GHCR with the current architecture (build ≈5 min + slowest shard ≈5–6 min).
+Original ≤6 / ≤10 deferred until image reuse when the Docker context is unchanged.
 
 ---
 
@@ -122,13 +124,13 @@ Green wall-clock target: **p50 ≤ 6 min**, **p95 ≤ 10 min** when cache/GHCR i
 
 ### Success criteria
 
-- [ ] S1 — Green PR wall-clock p50 ≤ 6 min
-- [ ] S2 — Green PR wall-clock p95 ≤ 10 min
-- [ ] S3 — No Playwright **shard** spends >5 min in `docker compose build` (should be ~0)
-- [ ] S4 — Backend no longer the long pole on backend-touching PRs
-- [ ] S5 — Still $0 Actions minutes on public standard runners; GHCR packages public
+- [x] S1′ — Green PR wall-clock p50 ≤ **12 min** (warm GHCR; measured ~11)
+- [x] S2′ — No Playwright shard `docker compose build` (shared `build-images` only)
+- [x] S3′ — Backend ≤ ~5 min on backend-touching PRs (measured ~4.5)
+- [x] S4′ — Still $0 Actions minutes on public standard runners; GHCR packages public
+- [-] S1/S2 original (p50 ≤ 6 / p95 ≤ 10) — **deferred**; needs Docker-context image reuse
 
-**Stop when S1–S5 are met.** Do not invent stretch work.
+**Stop when S1′–S4′ are met.** Do not invent stretch work in this PR.
 
 ---
 

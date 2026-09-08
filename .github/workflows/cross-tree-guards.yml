@@ -1,0 +1,95 @@
+name: Cross-tree Guards
+
+# Backend tests that read files outside backend/**. Keeping them only on the
+# backend path filter lets a docs / frontend / .env.example change break a
+# guard without ever running it. This job is the narrow seam for those inputs.
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - ".env.example"
+      - "CLAUDE.md"
+      - "docs/**"
+      - "frontend/**"
+      - "scripts/**"
+      - "backend/tests/deployment/test_env_example_matches_defaults.py"
+      - "backend/tests/deployment/test_claude_md_budget.py"
+      - "backend/tests/api/test_request_cannot_choose_its_egress.py"
+      - ".github/workflows/cross-tree-guards.yml"
+  pull_request:
+    types:
+      - opened
+      - synchronize
+    paths:
+      - ".env.example"
+      - "CLAUDE.md"
+      - "docs/**"
+      - "frontend/**"
+      - "scripts/**"
+      - "backend/tests/deployment/test_env_example_matches_defaults.py"
+      - "backend/tests/deployment/test_claude_md_budget.py"
+      - "backend/tests/api/test_request_cannot_choose_its_egress.py"
+      - ".github/workflows/cross-tree-guards.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  cross-tree-guards:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - name: Set up Python
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        with:
+          python-version: "3.14"
+      - name: Install uv
+        uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
+        with:
+          version: "0.11.4"
+      - name: Prepare environment file
+        run: test -f .env || cp .env.example .env
+      - run: docker compose down -v --remove-orphans
+      - run: docker compose up -d --wait db
+      - name: Create test database
+        env:
+          TEST_DB: app_test
+        run: |
+          set -euo pipefail
+          for _ in $(seq 1 30); do
+            if docker compose exec -T db \
+              psql -U postgres -v ON_ERROR_STOP=1 -tc \
+              "SELECT 1 FROM pg_database WHERE datname = '${TEST_DB}'" | grep -q 1; then
+              exit 0
+            fi
+            if docker compose exec -T db \
+              psql -U postgres -v ON_ERROR_STOP=1 -c \
+              "CREATE DATABASE ${TEST_DB}"; then
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "failed to create database ${TEST_DB}" >&2
+          exit 1
+      - name: Run cross-tree guards
+        env:
+          TEST_POSTGRES_DB: app_test
+          # No coverage floor here — these three tests are the whole job.
+          COVERAGE_HTML: "0"
+        working-directory: backend
+        run: |
+          uv sync
+          uv run pytest \
+            tests/deployment/test_env_example_matches_defaults.py \
+            tests/deployment/test_claude_md_budget.py \
+            tests/api/test_request_cannot_choose_its_egress.py \
+            -q
+      - run: docker compose down -v --remove-orphans

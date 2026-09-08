@@ -9,6 +9,13 @@ on:
       - "backend/Dockerfile*"
       - "frontend/Dockerfile*"
       - ".env.example"
+      # Build contexts bind-mount / COPY these; lockfile-only must still rebuild
+      - "pyproject.toml"
+      - "uv.lock"
+      - "package.json"
+      - "bun.lock"
+      - "frontend/nginx.conf"
+      - "frontend/nginx-backend-not-found.conf"
       - ".github/workflows/test-docker-compose.yml"
   pull_request:
     types:
@@ -19,6 +26,12 @@ on:
       - "backend/Dockerfile*"
       - "frontend/Dockerfile*"
       - ".env.example"
+      - "pyproject.toml"
+      - "uv.lock"
+      - "package.json"
+      - "bun.lock"
+      - "frontend/nginx.conf"
+      - "frontend/nginx-backend-not-found.conf"
       - ".github/workflows/test-docker-compose.yml"
   workflow_dispatch:
 

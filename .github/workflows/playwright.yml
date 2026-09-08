@@ -35,11 +35,21 @@ jobs:
         with:
           filters: |
             changed:
+              # Runtime / test sources
               - backend/**
               - frontend/**
-              - .env
               - compose*.yml
               - .github/workflows/playwright.yml
+              # Copied to .env before compose runs
+              - .env
+              - .env.example
+              # Docker build contexts (backend + playwright images)
+              - backend/Dockerfile*
+              - frontend/Dockerfile*
+              - pyproject.toml
+              - uv.lock
+              - package.json
+              - bun.lock
       - name: Treat push as changed
         id: push-changed
         if: github.event_name == 'push'

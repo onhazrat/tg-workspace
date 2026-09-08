@@ -9,6 +9,11 @@ on:
       - "uv.lock"
       - "pyproject.toml"
       - "compose*.yml"
+      # Cross-tree inputs also covered by cross-tree-guards.yml; keep the
+      # cheap ones here so a backend PR that touches them still runs the
+      # full matrix rather than only the three-test seam.
+      - ".env.example"
+      - "CLAUDE.md"
       - ".github/workflows/test-backend.yml"
   pull_request:
     types:
@@ -19,6 +24,8 @@ on:
       - "uv.lock"
       - "pyproject.toml"
       - "compose*.yml"
+      - ".env.example"
+      - "CLAUDE.md"
       - ".github/workflows/test-backend.yml"
   workflow_dispatch:
 

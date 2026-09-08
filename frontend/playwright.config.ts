@@ -14,9 +14,15 @@ const devPort = playwrightApiUrl ? "5180" : "5173"
 const baseURL = `http://localhost:${devPort}`
 
 export default defineConfig({
-  testDir: './tests',
-  /* Run tests in files in parallel */
-  fullyParallel: true,
+  testDir: "./tests",
+  /*
+   * Local: fullyParallel lets a multi-worker run (if someone raises workers)
+   * interleave tests across files. CI: false so `--shard=N/M` assigns whole
+   * files — with fullyParallel:true Playwright shards individual tests, which
+   * made the summarizer.spec.ts split useless for balancing (same file on two
+   * shards) and left 2.2–4.2 min duration skew with equal test counts.
+   */
+  fullyParallel: !process.env.CI,
   /* Fail the build on CI if you accidentally left test.only in the source code. */
   forbidOnly: !!process.env.CI,
   /* Retry on CI only */
