@@ -4,19 +4,49 @@
 
 **Blocked by:** 04
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] `Post.harvested` is a `NOT NULL DEFAULT false` boolean, and a partial index on `(timestamp DESC) WHERE NOT harvested` serves the only query that reads it
-- [ ] The sweep selects `WHERE NOT harvested ORDER BY timestamp DESC`, extracts references, and stamps exactly the rows it examined in the same transaction that enqueues the handles
-- [ ] Both marks are gone: `harvestTail`, `harvestCursor`, `HARVEST_START`, `load_harvest_state`, `save_harvest_state`, `_harvest_mark`, the `directory_runtime` fields and the two `DiscoverRuntime` schema fields, with the client regenerated
-- [ ] `harvest_page` loses `after` and `until`, and `HarvestPage` loses `cursor`; it returns the handles, the rows to stamp, and how many it read
-- [ ] `DIRECTORY_HARVEST_BATCH_SIZE` and `DIRECTORY_HARVEST_BACKFILL_SCAN_LIMIT` are removed from `config.py` and `.env.example`; the batch is `BACKLOG_CEILING - pending`, computed from two numbers `run_directory_harvest_sweep` already reads
-- [ ] `DIRECTORY_HARVEST_PAGE_SIZE` becomes a module constant, leaving `DIRECTORY_HARVEST_SCAN_LIMIT` and `DIRECTORY_HARVEST_BACKLOG_CEILING` as the job's two settings
-- [ ] `deploy-staging.yml` keeps only the `DIRECTORY_HARVEST_SCAN_LIMIT=20000` override; the `BATCH_SIZE=1000` line goes, because it exceeded the ceiling it was written to respect
-- [ ] `ix_tg_posts_timestamp` is **kept** — `jobs/retention.py` reads it with no channel equality
-- [ ] A caught-up tick reads no Posts, and the partial index it reads is empty rather than corpus-sized
-- [ ] Every property ticket 04 asserted still holds: followed handles skipped, known handles skipped, one `HARVEST_PRIORITY`, the backlog ceiling, and the deployment tally
-- [ ] A new Post reaches the Directory on the next tick even with a 4.7M-row backlog unharvested
+- [x] `Post.harvested` is a `NOT NULL DEFAULT false` boolean, and a partial index on `(timestamp DESC) WHERE NOT harvested` serves the only query that reads it
+- [x] The sweep selects `WHERE NOT harvested ORDER BY timestamp DESC`, extracts references, and stamps exactly the rows it examined in the same transaction that enqueues the handles
+- [x] Both marks are gone: `harvestTail`, `harvestCursor`, `HARVEST_START`, `load_harvest_state`, `save_harvest_state`, `_harvest_mark`, the `directory_runtime` fields and the two `DiscoverRuntime` schema fields, with the client regenerated
+- [x] `harvest_page` loses `after` and `until`, and `HarvestPage` loses `cursor`; it returns the handles, the rows to stamp, and how many it read
+- [x] `DIRECTORY_HARVEST_BATCH_SIZE` and `DIRECTORY_HARVEST_BACKFILL_SCAN_LIMIT` are removed from `config.py` and `.env.example`; the batch is `BACKLOG_CEILING - pending`, computed from two numbers `run_directory_harvest_sweep` already reads
+- [x] `DIRECTORY_HARVEST_PAGE_SIZE` becomes a module constant, leaving `DIRECTORY_HARVEST_SCAN_LIMIT` and `DIRECTORY_HARVEST_BACKLOG_CEILING` as the job's two settings
+- [x] `deploy-staging.yml` keeps only the `DIRECTORY_HARVEST_SCAN_LIMIT=20000` override; the `BATCH_SIZE=1000` line goes, because it exceeded the ceiling it was written to respect
+- [x] `ix_tg_posts_timestamp` is **kept** — `jobs/retention.py` reads it with no channel equality
+- [x] A caught-up tick reads no Posts, and the partial index it reads is empty rather than corpus-sized
+- [x] Every property ticket 04 asserted still holds: followed handles skipped, known handles skipped, one `HARVEST_PRIORITY`, the backlog ceiling, and the deployment tally
+- [x] A new Post reaches the Directory on the next tick even with a 4.7M-row backlog unharvested
+
+## Verified on staging
+
+Shipped in `05e405b` and `276d971` (PRs #9, #10, 2026-09-07). The `Status:` line
+above sat at `ready-for-agent` until 2026-09-08 because nothing updates it on
+merge; the code had been live for a day. Re-audited item by item on 2026-09-08,
+against the deployment rather than against the diff:
+
+- `tg_posts.harvested` is `NOT NULL DEFAULT false`, and `ix_tg_posts_unharvested`
+  is `btree ("timestamp" DESC) WHERE (NOT harvested)`. `ix_tg_posts_timestamp`
+  is still there for `jobs/retention.py`.
+- The corpus is caught up: **27 unharvested Posts out of 4,679,346**, and the
+  Directory holds 27,151 rows. The first pass drained in about a day, ahead of
+  the ~4 days the ticket estimated, because the walk was never the bound.
+- A caught-up tick costs ~0.2s wall clock every five minutes, against the
+  20,000-Post walk the same tick used to do. That is the "reads no Posts"
+  property measured rather than asserted.
+- `directory_runtime` is gone from `tg_app_settings` (0 rows), so both marks are
+  off the deployment as well as out of the code.
+- `deploy-staging.yml` carries `DIRECTORY_HARVEST_SCAN_LIMIT=20000` and nothing
+  else; the `BATCH_SIZE=1000` line that overshot the ceiling by 2.6x is gone.
+
+One thing the ticket did not predict. `ix_tg_posts_unharvested` still occupies
+**88 MB** on disk while indexing 27 rows. The pages the drain emptied are on the
+index's free list, reusable but not returned to the filesystem, so the index is
+logically empty and physically not. It is harmless at 8.1 GB free and it will
+never grow back, since steady state is one `UPDATE` per new Post. A `REINDEX
+INDEX CONCURRENTLY ix_tg_posts_unharvested` would reclaim it if the disk ever
+gets tight; it is deliberately not run here, because staging is read-only for
+verification.
 
 ## Notes
 
