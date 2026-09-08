@@ -46,6 +46,7 @@ from typing import Any, cast
 from sqlmodel import Session, col, delete, select
 
 from app.models_tg import DirectorySample, utc_now
+from app.services.directory_statistics import views_of
 
 #: Why the reads and writes here do not go through `scoped_select`.
 #:
@@ -155,3 +156,24 @@ def samples_for(session: Session, handle: str) -> list[DirectorySample]:
         .order_by(col(DirectorySample.post_id).desc())
     )
     return list(session.exec(statement).all())
+
+
+def sample_to_camel(row: DirectorySample) -> dict[str, Any]:
+    """One sample on the wire, for the Candidate panel (ticket 03).
+
+    Here rather than in the route because an aggregate owns its table's wire
+    shape, which is the same rule that puts `probe_to_camel` in
+    `channel_directory.py` beside the entry it projects.
+
+    Four fields out of a dozen columns. The panel shows what the Post said, when
+    it said it and how many people read it, and builds its Telegram link from
+    the handle it already asked about — so the forward attribution, the media
+    block, the reply pointer and the capture time stay out of a payload that is
+    read once and thrown away.
+    """
+    return {
+        "postId": row.post_id,
+        "text": row.text,
+        "timestamp": row.timestamp,
+        "views": views_of(row),
+    }

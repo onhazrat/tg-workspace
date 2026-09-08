@@ -123,11 +123,14 @@ def test_the_split_did_not_change_the_route_count() -> None:
     with `POST /discover/probe/refresh`, the on-demand half of ticket 03's
     refresh window — a sibling of `probe/recheck` rather than a flag on it,
     because a recheck discards the verdict it replaces and a refresh keeps it
-    readable until the fresh one lands.
+    readable until the fresh one lands; and **75** with
+    `GET /directory/{handle}/posts`, the first route of the `directory` family —
+    the Candidate panel's sample Posts, which are kept off the report for the
+    reason the two list-versus-detail splits above were made.
     """
     data_routes = {
         (m, p) for m, p in _mounted_routes() if p.startswith("/api/v1/data/")
     }
-    assert len(data_routes) == 74, (
-        f"expected 74 /data endpoints, found {len(data_routes)}"
+    assert len(data_routes) == 75, (
+        f"expected 75 /data endpoints, found {len(data_routes)}"
     )

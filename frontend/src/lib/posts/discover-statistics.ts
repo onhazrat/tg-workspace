@@ -93,3 +93,67 @@ export function candidateStatistics(
         : NOT_MEASURED,
   }
 }
+
+/**
+ * The three statistics only the panel shows (ticket 03).
+ *
+ * Separate from `candidateStatistics` because they answer a different question
+ * and are read at a different moment. The row's four are a triage set scanned
+ * across forty Candidates; these three are read once, about one Channel, by
+ * somebody who has already decided it is worth opening. Merging them would put
+ * ten numbers in the shape a scan reads.
+ *
+ * Every field is `null` for *not measured*, and the panel says so in words
+ * rather than showing a zero. Two of the three go absent for a whole class of
+ * entry and it is not a fault: the mix and the density come from the preview
+ * page's counters, which an `unavailable` verdict clears along with the page,
+ * so a Channel Telegram has stopped serving keeps its cadence and loses these.
+ */
+export interface PanelStatistics {
+  /** Share of sample Posts carrying a forward attribution, as a percentage. */
+  forwardShare: string | null
+  /** The alphabet the captions are in, named for a reader. */
+  script: string | null
+  /** Media items per published Post id, as a rate that may exceed 1. */
+  mediaDensity: string | null
+}
+
+/**
+ * Alphabets, not languages, and the wording says so where it matters.
+ *
+ * `arabic` is one script covering Persian, Arabic and Urdu; telling them apart
+ * needs a language model where this is a character-range tally, and a Persian
+ * corpus labelled "Arabic" would read as a wrong answer rather than a coarse
+ * one. The other six name themselves.
+ */
+const SCRIPT_LABELS: Record<string, string> = {
+  arabic: "Arabic / Persian",
+  cyrillic: "Cyrillic",
+  hebrew: "Hebrew",
+  greek: "Greek",
+  devanagari: "Devanagari",
+  cjk: "CJK",
+  latin: "Latin",
+}
+
+export function panelStatistics(
+  probe: DiscoveryProbe | null | undefined,
+): PanelStatistics {
+  if (!probe) {
+    return { forwardShare: null, script: null, mediaDensity: null }
+  }
+
+  const { forwardShare, script, mediaDensity } = probe
+  return {
+    // Whole percent. The share is over at most a preview page of Posts, so a
+    // decimal place would be resolution the sample does not have — one Post in
+    // twenty is 5%, and there is no 5.3% to report.
+    forwardShare:
+      forwardShare === null ? null : `${Math.round(forwardShare * 100)}%`,
+    // An unrecognised value renders as itself rather than as nothing: the
+    // backend's range list can grow a script this map has not learned yet, and
+    // "tamil" is a better answer on screen than a blank.
+    script: script === null ? null : (SCRIPT_LABELS[script] ?? script),
+    mediaDensity: mediaDensity === null ? null : mediaDensity.toFixed(1),
+  }
+}
