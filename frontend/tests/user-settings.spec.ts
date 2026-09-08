@@ -228,23 +228,11 @@ test("Appearance button is visible in sidebar", async ({ page }) => {
 /**
  * Open the sidebar appearance menu, choose one mode, and wait for it to close.
  *
- * **Every locator is scoped to the open menu, and that is the fix.** `/settings`
- * puts the mode names on screen twice: once as items in this Radix dropdown,
- * and once as `AppearanceSection`'s segmented control — which is the default
- * section, and whose System option carries `data-testid="system-mode"` too. So
- * a bare `getByTestId("system-mode")` matches one element while the dropdown is
- * shut and two the moment it opens.
- *
- * That ambiguity is what the flake was. The test clicked the trigger and then
- * the bare test id, so it passed on the runs where the reopen was *swallowed*
- * and a single match was left, and failed when the menu actually opened. Which
- * is why it always failed on `system-mode` — the only one of the three with a
- * twin — and never on light or dark.
- *
- * `role=menu` is Radix's own (`@radix-ui/react-menu` sets it); the segmented
- * control is a `role=group` of `aria-pressed` buttons, so it cannot collide.
- * The final wait is on the **menu**, not the item: the settings-page twin never
- * disappears, and waiting for it to would burn the whole test timeout.
+ * Locators stay scoped to the open `role=menu` so they cannot collide with
+ * `AppearanceSection`'s segmented control on `/settings`. The section's System
+ * option uses `appearance-section-system-mode` (not `system-mode`) for the same
+ * reason. Wait on the menu hiding — not on the item — so a permanently visible
+ * twin cannot burn the timeout.
  *
  * CI runs with `--fail-on-flaky-tests`, so passing on retry is still red.
  */
@@ -252,7 +240,9 @@ async function chooseTheme(
   page: Page,
   mode: "light-mode" | "dark-mode" | "system-mode",
 ) {
-  await page.getByTestId("theme-button").click()
+  const trigger = page.getByTestId("theme-button")
+  await expect(trigger).toBeVisible()
+  await trigger.click()
   const menu = page.getByRole("menu")
   await expect(menu).toBeVisible()
   await menu.getByTestId(mode).click()
