@@ -332,7 +332,10 @@ def render_frontend_catalog(specs: list[EnvSpec]) -> str:
         "// Explicit property reads let Vite replace every public build value.",
         "export const frontendBuildEnvironment: Readonly<Record<string, unknown>> = {",
     ]
-    lines.extend(f'  "{name}": import.meta.env.{name},' for name in names)
+    # Playwright loads shared frontend modules directly in Node, where
+    # ``import.meta.env`` is absent. Optional access keeps that path safe while
+    # retaining the explicit property reads Vite needs for build replacement.
+    lines.extend(f'  "{name}": import.meta.env?.{name},' for name in names)
     lines.extend(["}", ""])
     return "\n".join(lines)
 
