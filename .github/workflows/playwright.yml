@@ -91,16 +91,20 @@ jobs:
           SHA: ${{ github.sha }}
         run: |
           set -euo pipefail
-          if [ "$EVENT_NAME" != "pull_request" ] || [ "$HEAD_REPO" = "$THIS_REPO" ]; then
+          # VERIFICATION ONLY: force the fork transport (docker save artifact)
+          # even on same-repo PRs. Real fork detection remains:
+          # EVENT_NAME=pull_request && HEAD_REPO != THIS_REPO → artifact.
+          echo "image_source=artifact" >> "$GITHUB_OUTPUT"
+          echo "image_tag=latest" >> "$GITHUB_OUTPUT"
+          echo "backend_image=backend" >> "$GITHUB_OUTPUT"
+          echo "playwright_image=playwright" >> "$GITHUB_OUTPUT"
+          echo "Forced image_source=artifact for fork-path verification" >&2
+          # Keep the real branch below for review; unreachable in this commit:
+          if false && { [ "$EVENT_NAME" != "pull_request" ] || [ "$HEAD_REPO" = "$THIS_REPO" ]; }; then
             echo "image_source=ghcr" >> "$GITHUB_OUTPUT"
             echo "image_tag=$SHA" >> "$GITHUB_OUTPUT"
             echo "backend_image=ghcr.io/${THIS_REPO}/backend" >> "$GITHUB_OUTPUT"
             echo "playwright_image=ghcr.io/${THIS_REPO}/playwright" >> "$GITHUB_OUTPUT"
-          else
-            echo "image_source=artifact" >> "$GITHUB_OUTPUT"
-            echo "image_tag=latest" >> "$GITHUB_OUTPUT"
-            echo "backend_image=backend" >> "$GITHUB_OUTPUT"
-            echo "playwright_image=playwright" >> "$GITHUB_OUTPUT"
           fi
       - name: Log in to GHCR
         if: steps.meta.outputs.image_source == 'ghcr'
