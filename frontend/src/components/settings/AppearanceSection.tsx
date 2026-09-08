@@ -76,7 +76,9 @@ export const AppearanceSection: React.FC<{
                       <Monitor size={12} /> System
                     </>
                   ),
-                  "data-testid": "system-mode",
+                  // Must not reuse sidebar dropdown ids (light/dark/system-mode):
+                  // /settings shows both and a bare getByTestId becomes ambiguous.
+                  "data-testid": "appearance-section-system-mode",
                 },
               ]}
             />

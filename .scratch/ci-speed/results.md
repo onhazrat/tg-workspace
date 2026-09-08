@@ -11,32 +11,31 @@ Record wall-clock after each workstream. Do not invent stretch work once S1–S5
 | Playwright warm | ~12 min (build ~3 min ×2 + tests 6–8 min) |
 | Playwright cold build | 18–20 min on one shard |
 
-## After A (quick wins)
+## After A–C (this PR)
 
-| Signal | Value | Notes |
+| Change | Status |
+|---|---|
+| Backend / smoke / zizmor path filters | shipped |
+| Coverage `dynamic_context` removed; htmlcov main-only | shipped |
+| Playwright build only `backend`+`playwright`; no host client regen | shipped |
+| Shared `build-images` → GHCR (forks: artifact); shards `--no-build` | shipped |
+| `summarizer.spec.ts` split into 5 files; 4 shards | shipped |
+| Backend 3-way matrix + per-leg DBs | shipped |
+| Measured green wall-clock | _pending first green CI on this branch_ |
+
+## Flake inventory (E)
+
+From failed Playwright runs on 2026-09-08 (pre- and mid-fix):
+
+| Title | File | Pattern |
 |---|---|---|
-| Backend path filters | shipped | skips docs/frontend-only PRs |
-| Coverage `dynamic_context` | removed | HTML artifact main-only |
-| Playwright build scope | `backend playwright` only | no host uv/bun/generate-client |
-| Measured green wall-clock | _pending CI_ | |
+| User can switch between theme modes | `user-settings.spec.ts` | `locator.click` timeout; `--fail-on-flaky-tests` red on retry pass |
+| (same) Selected mode is preserved… | `user-settings.spec.ts` | Same duplicate `system-mode` test id on `/settings` |
 
-## After B (shared build)
+Root cause: `/settings` rendered Appearance segmented control **and** sidebar theme dropdown both with `data-testid="system-mode"`.
 
-| Signal | Value | Notes |
-|---|---|---|
-| Measured green wall-clock | _pending_ | |
-| Shard build time | _pending_ | expect ~0 |
+Fix shipped in this PR: rename section control to `appearance-section-system-mode`; keep menu-scoped `chooseTheme` and wait for trigger visibility.
 
-## After C (4 shards)
+Cold docker builds (18–20 min) and cache races were the other outlier driver — addressed by workstream B, not a test flake.
 
-| Signal | Value | Notes |
-|---|---|---|
-| Slowest shard tests | _pending_ | |
-| Measured green wall-clock | _pending_ | |
-
-## After D / E
-
-| Signal | Value | Notes |
-|---|---|---|
-| Backend matrix | _pending / deferred_ | only if backend still > ~6 min |
-| Flake inventory | _pending_ | after B removes build noise |
+`retries: 2` left as-is until a green streak shows flake rate near zero.

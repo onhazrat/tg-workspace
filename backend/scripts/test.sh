@@ -3,7 +3,9 @@
 set -e
 set -x
 
-coverage run -m pytest tests/ --durations=30
+# Optional: restrict the suite (CI matrix). Default runs everything.
+# shellcheck disable=SC2086
+coverage run -m pytest ${PYTEST_PATHS:-tests/} --durations=30
 coverage report
 # HTML is optional locally and on main CI only (see test-backend.yml).
 # Skip the write when CI asks for report-only (PRs).
