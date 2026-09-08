@@ -4,6 +4,85 @@ Status: Proposed
 Constraint: stay on standard `ubuntu-latest` / existing self-hosted deploys — **no larger runners, no paid Actions features**. Repo stays public → Actions minutes stay free.  
 Goal: cut **wall-clock** to merge-green as far as possible; secondary goal is fewer flake-induced 30–40 min outliers.
 
+Progress legend: `[ ]` todo · `[~]` in progress · `[x]` done · `[-]` cancelled / deferred
+
+## Tasks
+
+### Decisions (block Phase 1+ coding)
+
+- [ ] D1 — Choose image distribution: GHCR (recommended) vs docker-save artifacts
+- [ ] D2 — Choose fork-PR policy: build-in-job fallback (recommended) vs maintainer-only Playwright
+- [ ] D3 — Choose backend matrix width: 3 jobs `api` / `services` / `rest` (recommended) vs 2
+- [ ] D4 — Choose coverage HTML: every PR without `dynamic_context` vs `main`-only artifact
+
+### Phase 0 — Instrument
+
+- [ ] 0.0 Phase 0 complete (exit: green PR with durations in logs; no behavior change)
+  - [ ] 0.1 Add `pytest --durations=30` to backend CI test invocation
+  - [ ] 0.2 Enable Playwright slow-test / per-file timing in CI shard logs
+  - [ ] 0.3 Add `.scratch/ci-speed/results.md` and record baseline wall-clock from a green run
+
+### Phase 1 — Shared Playwright build + shards
+
+- [ ] 1.0 Phase 1 complete (exit: shard jobs spend ~0 on build; wall-clock dominated by slowest shard tests)
+  - [ ] 1.1 Split `playwright.yml`: add single `build-images` job (buildx + `compose.cache.yml` as sole cache writer)
+  - [ ] 1.2 Tag and push `backend` / `frontend` / `playwright` images to GHCR as `:<git-sha>` (public packages)
+  - [ ] 1.3 Change `test-playwright` matrix to pull/retag images only — no `docker compose build` on shards
+  - [ ] 1.4 Implement fork fallback (per D2): same-repo pushes to GHCR; forks build in-job with GHA cache
+  - [ ] 1.5 Drop `ENVIRONMENT=local bash scripts/generate-client.sh` from Playwright CI
+  - [ ] 1.6 Split `frontend/tests/summarizer.spec.ts` into 3–4 files by feature area
+  - [ ] 1.7 Raise Playwright matrix from 2 → 4 shards after shared build is green
+  - [ ] 1.8 Confirm required status checks / `alls-green` still match new job names
+  - [ ] 1.9 Record Phase 1 wall-clock in `results.md` (warm + one cold if available)
+  - [ ] 1.10 Do **not** raise Playwright `workers` above 1
+
+### Phase 2 — Backend off the critical path
+
+- [ ] 2.0 Phase 2 complete (exit: backend wall-clock ≤ Playwright; target ~3–5 min)
+  - [ ] 2.1 Add path filters to `test-backend.yml` (`backend/**`, lockfiles, compose, workflow)
+  - [ ] 2.2 Remove `dynamic_context = "test_function"` from default CI coverage path
+  - [ ] 2.3 Keep `--fail-under=70`; gate HTML artifact per D4 (`main`-only or every PR without contexts)
+  - [ ] 2.4 Introduce matrix jobs with **separate DBs** per D3 (`app_test_api` / `app_test_services` / …)
+  - [ ] 2.5 Wire `coverage run --parallel-mode` per matrix leg + combine job + fail-under
+  - [ ] 2.6 Re-measure; only if still long-pole, spike per-worker DBs + xdist inside largest leg (else mark `[-]`)
+  - [ ] 2.7 Record Phase 2 wall-clock in `results.md`
+
+### Phase 3 — Redundant / always-on work
+
+- [ ] 3.0 Phase 3 complete (exit: unrelated PRs skip untouched workflows; smoke uses cache)
+  - [ ] 3.1 Path-filter `test-docker-compose.yml` to compose/Dockerfiles/workflow
+  - [ ] 3.2 Add `compose.cache.yml` + buildx (or reuse Phase 1 GHCR tags) to docker-smoke
+  - [ ] 3.3 Path-filter `zizmor.yml` to `.github/workflows/**`
+  - [ ] 3.4 Leave `pre-commit.yml` always-on for PRs (no aggressive path filter)
+  - [ ] 3.5 Decide later: fold smoke health-check into Playwright build vs keep separate (`[-]` until Phase 1 stable)
+
+### Phase 4 — Flake tax
+
+- [ ] 4.0 Phase 4 complete (exit: failed-run wall-clock ≈ green + one retry, not +20 min docker)
+  - [ ] 4.1 After Phase 1, inventory flaky titles from last ~20 failed Playwright runs
+  - [ ] 4.2 Fix root causes (shared account / channel-list / timing) — no retry inflation
+  - [ ] 4.3 Keep `--fail-on-flaky-tests`
+  - [ ] 4.4 Optionally drop `retries` 2 → 1 once flake rate is near zero (data-gated)
+  - [ ] 4.5 Record failure outlier times in `results.md`
+
+### Phase 5 — Stretch (only if wall-clock still > ~5 min)
+
+- [ ] 5.0 Phase 5 complete or marked deferred
+  - [ ] 5.1 Playwright 6 shards if 4 still unbalanced after summarizer split
+  - [ ] 5.2 Backend xdist + per-worker DBs inside largest matrix leg
+  - [ ] 5.3 Optional: merge frontend-unit into pre-commit bun install (tiny win)
+  - [ ] 5.4 Skip entire phase if Phases 1–4 already meet success metrics (`[-]`)
+
+### Success criteria
+
+- [ ] S1 — Green PR wall-clock p50 ≤ 6 min
+- [ ] S2 — Green PR wall-clock p95 ≤ 10 min
+- [ ] S3 — No Playwright **shard** job spends >5 min in `docker compose build` (should be ~0)
+- [ ] S4 — Backend no longer the long pole on backend-touching PRs
+- [ ] S5 — Still $0 Actions minutes on public standard runners; GHCR packages public
+
+---
+
 ## Current baseline (measured 2026-09-08)
 
 | Signal | Value |
