@@ -1,7 +1,7 @@
 # CI speed plan
 
-Status: Proposed (refined)  
-Constraint: standard `ubuntu-latest` / existing self-hosted deploys only — **no larger runners, no paid Actions compute**. Repo stays public → Actions minutes stay free.  
+Status: Proposed (refined)
+Constraint: standard `ubuntu-latest` / existing self-hosted deploys only — **no larger runners, no paid Actions compute**. Repo stays public → Actions minutes stay free.
 Goal: cut **wall-clock** to merge-green; secondary goal is fewer 30–40 min flake/cold-build outliers.
 
 Progress legend: `[ ]` todo · `[~]` in progress · `[x]` done · `[-]` cancelled / deferred

@@ -63,19 +63,30 @@ jobs:
       - name: Prepare environment file
         run: test -f .env || cp .env.example .env
       - run: docker compose down -v --remove-orphans
-      - run: docker compose up -d db mailcatcher
+      - run: docker compose up -d --wait db mailcatcher
       - name: Create matrix test database
         env:
           TEST_DB: ${{ matrix.db }}
         run: |
           set -euo pipefail
+          # Retry CREATE until postgres accepts it. A single || true hid a
+          # "system is shutting down" race and left the leg without a DB.
           for _ in $(seq 1 30); do
-            if docker compose exec -T db pg_isready -U postgres; then
-              break
+            if docker compose exec -T db \
+              psql -U postgres -v ON_ERROR_STOP=1 -tc \
+              "SELECT 1 FROM pg_database WHERE datname = '${TEST_DB}'" | grep -q 1; then
+              echo "database ${TEST_DB} already exists"
+              exit 0
+            fi
+            if docker compose exec -T db \
+              psql -U postgres -v ON_ERROR_STOP=1 -c \
+              "CREATE DATABASE ${TEST_DB}"; then
+              exit 0
             fi
             sleep 1
           done
-          docker compose exec -T db psql -U postgres -c "CREATE DATABASE ${TEST_DB}" || true
+          echo "failed to create database ${TEST_DB}" >&2
+          exit 1
       - name: Migrate DB
         run: uv run bash scripts/prestart.sh
         working-directory: backend
@@ -125,6 +136,10 @@ jobs:
           pattern: coverage-data-*
           merge-multiple: true
       - name: Combine and report
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          GIT_REF: ${{ github.ref }}
+          GIT_SHA: ${{ github.sha }}
         working-directory: backend
         run: |
           set -euo pipefail
@@ -138,8 +153,8 @@ jobs:
           fi
           uv run coverage combine "${parts[@]}"
           uv run coverage report --fail-under=70
-          if [ "${{ github.event_name }}" = "push" ] && [ "${{ github.ref }}" = "refs/heads/main" ]; then
-            uv run coverage html --title "Coverage for ${{ github.sha }}"
+          if [ "$EVENT_NAME" = "push" ] && [ "$GIT_REF" = "refs/heads/main" ]; then
+            uv run coverage html --title "Coverage for ${GIT_SHA}"
           fi
       - name: Store coverage files
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
