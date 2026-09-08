@@ -1,4 +1,4 @@
-# 02: Any OpenAI-compatible Provider, and a real model list
+# BYOK-02: Any OpenAI-compatible Provider, and a real model list
 
 **What to build:** An Account can point an AI Key at any OpenAI-compatible endpoint by giving it a
 base URL, and then pick from the models that endpoint actually offers rather than from three
@@ -8,7 +8,7 @@ This is what makes "any Provider they like" true. One Provider class reaches Ope
 Together, DeepSeek, Mistral, a local Ollama and vLLM, because they all speak the same API at
 different addresses. There is no class per vendor and there will not be one.
 
-**Blocked by:** 01.
+**Blocked by:** BYOK-01.
 
 **Status:** ready-for-agent
 

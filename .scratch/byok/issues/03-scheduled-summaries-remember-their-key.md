@@ -1,13 +1,13 @@
-# 03: Scheduled Summaries remember their Key, and the log says who paid
+# BYOK-03: Scheduled Summaries remember their Key, and the log says who paid
 
-**What to build:** A Summary set to auto-regenerate keeps working after ticket 01, because it
+**What to build:** A Summary set to auto-regenerate keeps working after BYOK-01, because it
 remembers which Key pays for it. Nobody is present at 4am to choose one.
 
 And when it stops working, the Account can find out why. A Key the Provider has started rejecting
 produces a failed run that leaves a log row and flags the Key, without switching off the
 schedule.
 
-**Blocked by:** 01. Independent of 02.
+**Blocked by:** BYOK-01. Independent of BYOK-02.
 
 **Status:** ready-for-agent
 
@@ -17,7 +17,7 @@ The Summary's open metadata bag already carries the publish bot and chat ids, an
 beside them. That bag is filled from unrecognised keys in the request body, so the Key id is
 **client-supplied and untrusted**.
 
-Ticket 33 found the same shape already exploited: resolving the publish bot id by primary key
+Multi-user-tenancy ticket 33 found the same shape already exploited: resolving the publish bot id by primary key
 alone let a Summary name another Account's credential, which the scheduler then decrypted and
 sent with. The AI Key must be re-checked against the Summary's own owner **before** the secret is
 decrypted, in the same place and for the same reason.
@@ -36,6 +36,6 @@ decrypted, in the same place and for the same reason.
 
 ## Notes
 
-The acting-Owner columns are ticket 04's accountability, which is why 04 is blocked by this
+The acting-Owner columns are BYOK-04's accountability, which is why BYOK-04 is blocked by this
 ticket rather than by 01. Shipping a tier that spends somebody's money before the attribution
 that records it is the wrong order.

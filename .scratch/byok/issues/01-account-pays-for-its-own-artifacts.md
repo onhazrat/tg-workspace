@@ -1,11 +1,11 @@
-# 01: An Account saves an AI Key and pays for its own Artifacts
+# BYOK-01: An Account saves an AI Key and pays for its own Artifacts
 
 **What to build:** An Account can save an AI Key in settings, and from then on its Summaries,
 Chats and Tag runs are paid for by that Key instead of by the Operator. Corpus Embeddings,
 Translations and the query-embedding inside a Semantic chat keep running on the Operator Key,
 because those produce shared rows and are not Artifacts.
 
-Gemini only in this ticket. The second Provider kind is ticket 02, which is why the Key still
+Gemini only in this ticket. The second Provider kind is BYOK-02, which is why the Key still
 needs a Provider field now rather than later.
 
 An Account with no Key is told to add one. An Account whose Key the Provider rejected is told

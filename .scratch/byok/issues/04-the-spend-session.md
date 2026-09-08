@@ -1,4 +1,4 @@
-# 04: The Spend session
+# BYOK-04: The Spend session
 
 **What to build:** An Owner helping somebody with a broken Summary can reproduce it, spending
 that Account's AI Key, without ever seeing the Key.
@@ -7,7 +7,7 @@ Today the two View-as tiers cannot serve this. A read-only session refuses every
 An elevated session authorises writes, and writes are reversible and attributed; spending is
 neither. So this is a third tier rather than a widening of the second.
 
-**Blocked by:** 03.
+**Blocked by:** BYOK-03.
 
 **Status:** ready-for-agent
 
@@ -29,9 +29,9 @@ the publish path, which refuses a foreign credential *before* it is decrypted.
 - [ ] It has its own ceiling, validated strictly shorter than the elevated ceiling, the way that one is validated strictly shorter than the read-only session.
 - [ ] It gets its own Permission constant. Authorisation here names a Permission and never a role, so a role that views and writes but never spends becomes expressible as data rather than a code change.
 - [ ] The Key routes are refused in all three tiers.
-- [ ] Every AI call made during the session is attributed to the acting Owner on the log row ticket 03 added, and an ordinary write by the Account clears that attribution.
+- [ ] Every AI call made during the session is attributed to the acting Owner on the log row BYOK-03 added, and an ordinary write by the Account clears that attribution.
 - [ ] The guard that walks every mounted mutating operation now walks it against three tiers, so a route added later cannot join the API without being classified against all of them.
-- [ ] The models endpoint from ticket 02, if that ticket has landed, is classified as spending rather than reading.
+- [ ] The models endpoint from BYOK-02, if that ticket has landed, is classified as spending rather than reading.
 
 ## Notes
 

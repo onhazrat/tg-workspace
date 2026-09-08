@@ -178,7 +178,7 @@ A Summary's open metadata bag gains the id of the Key its scheduled regeneration
 sitting beside the publish bot and chat ids already there.
 
 That bag is filled from unrecognised keys in the request body, so the Key id is **client-supplied
-and untrusted**. Ticket 33 found that resolving the publish bot id by primary key alone let a
+and untrusted**. Multi-user-tenancy ticket 33 found that resolving the publish bot id by primary key alone let a
 Summary name another Account's credential, which the scheduler then decrypted and sent with. The
 AI Key must be re-checked against the Summary's owner **before** the secret is decrypted, in the
 same place and for the same reason. A refusal files a failed log row rather than returning

@@ -42,7 +42,7 @@ gain the Key id. The 21 `settings.GEMINI_API_KEY` guards split into two distinct
 at all, and a Key the Provider rejected. Regenerate the client.
 
 **4. The unattended path.** `Summary.extra` gains `aiKeyId` beside `publishBotId`. Re-check it
-against the Summary's owner **before** `decrypt_token` — ticket 33 is the reason, and the check
+against the Summary's owner **before** `decrypt_token` — multi-user-tenancy ticket 33 is the reason, and the check
 belongs in the same place. A rejected Key files a failed `LLMLog` row and clears the Key's
 validation state; it does not disable the schedule.
 
