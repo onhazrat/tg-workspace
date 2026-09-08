@@ -83,7 +83,7 @@ describe("header accessibility", () => {
 
   it("navigates tabs with links, not click handlers", () => {
     expect(source).not.toContain("onClick={() => setActiveTab(tab.id")
-    expect(source).toContain('to="/summarizer"')
+    expect(source).toContain('to="/workspace"')
     expect(source).toContain('aria-current={isActive ? "page" : undefined}')
   })
 

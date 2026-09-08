@@ -12,7 +12,7 @@ import {
   useSummaryParam,
 } from "../hooks/useArtifactParams"
 import { useLazyTabData } from "../hooks/useLazyTabData"
-import { useSummarizerTab } from "../hooks/useSummarizerTab"
+import { useWorkspaceTab } from "../hooks/useWorkspaceTab"
 import type { TabType } from "../types"
 
 interface UIContextType {
@@ -51,7 +51,7 @@ interface UIContextType {
 const UIContext = createContext<UIContextType | undefined>(undefined)
 
 export const UIProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  const { activeTab, setActiveTab } = useSummarizerTab()
+  const { activeTab, setActiveTab } = useWorkspaceTab()
   useLazyTabData(activeTab)
 
   const [isRateLimited, setIsRateLimited] = useState<boolean>(false)
@@ -63,7 +63,7 @@ export const UIProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
    * deep links wrote a param nothing read: clicking a row switched tab and
    * scope and then showed an empty view, because the view still resolved its
    * selection from context. Backing them with the param — the same trick
-   * `useSummarizerTab` plays for `activeTab` — makes every existing consumer
+   * `useWorkspaceTab` plays for `activeTab` — makes every existing consumer
    * work unchanged *and* makes the artifact reopenable from a URL.
    */
   const { summaryId: currentSummaryId, openSummary: setCurrentSummaryId } =

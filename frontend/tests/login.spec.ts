@@ -44,7 +44,7 @@ test("Log in with valid email and password ", async ({ page }) => {
   await fillForm(page, firstSuperuser, firstSuperuserPassword)
   await page.getByRole("button", { name: "Log In" }).click()
 
-  await page.waitForURL(/\/summarizer/)
+  await page.waitForURL(/\/workspace\?.*tab=channels/)
   await seedScopedStorage(page, { hasSeenTour: "true" })
 })
 
@@ -73,7 +73,7 @@ test("Successful log out", async ({ page }) => {
   await fillForm(page, firstSuperuser, firstSuperuserPassword)
   await page.getByRole("button", { name: "Log In" }).click()
 
-  await page.waitForURL(/\/summarizer/)
+  await page.waitForURL(/\/workspace\?.*tab=channels/)
   await seedScopedStorage(page, { hasSeenTour: "true" })
   await page.goto("/settings")
 
@@ -88,7 +88,7 @@ test("Logged-out user cannot access protected routes", async ({ page }) => {
   await fillForm(page, firstSuperuser, firstSuperuserPassword)
   await page.getByRole("button", { name: "Log In" }).click()
 
-  await page.waitForURL(/\/summarizer/)
+  await page.waitForURL(/\/workspace\?.*tab=channels/)
   await seedScopedStorage(page, { hasSeenTour: "true" })
   await page.goto("/settings")
 

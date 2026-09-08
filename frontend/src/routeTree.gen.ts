@@ -20,6 +20,7 @@ import { Route as LayoutIndexRouteImport } from './routes/_layout/index'
 import { Route as LayoutAdminRouteImport } from './routes/_layout/admin'
 import { Route as LayoutSettingsRouteImport } from './routes/_layout/settings'
 import { Route as TgSummarizerRouteImport } from './routes/_tg/summarizer'
+import { Route as TgWorkspaceRouteImport } from './routes/_tg/workspace'
 
 const LayoutRoute = LayoutRouteImport.update({
   id: '/_layout',
@@ -74,6 +75,11 @@ const TgSummarizerRoute = TgSummarizerRouteImport.update({
   path: '/summarizer',
   getParentRoute: () => TgRoute,
 } as any)
+const TgWorkspaceRoute = TgWorkspaceRouteImport.update({
+  id: '/workspace',
+  path: '/workspace',
+  getParentRoute: () => TgRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof LayoutIndexRoute
@@ -85,6 +91,7 @@ export interface FileRoutesByFullPath {
   '/admin': typeof LayoutAdminRoute
   '/settings': typeof LayoutSettingsRoute
   '/summarizer': typeof TgSummarizerRoute
+  '/workspace': typeof TgWorkspaceRoute
 }
 export interface FileRoutesByTo {
   '/': typeof LayoutIndexRoute
@@ -96,6 +103,7 @@ export interface FileRoutesByTo {
   '/admin': typeof LayoutAdminRoute
   '/settings': typeof LayoutSettingsRoute
   '/summarizer': typeof TgSummarizerRoute
+  '/workspace': typeof TgWorkspaceRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -109,6 +117,7 @@ export interface FileRoutesById {
   '/_layout/admin': typeof LayoutAdminRoute
   '/_layout/settings': typeof LayoutSettingsRoute
   '/_tg/summarizer': typeof TgSummarizerRoute
+  '/_tg/workspace': typeof TgWorkspaceRoute
   '/_layout/': typeof LayoutIndexRoute
 }
 export interface FileRouteTypes {
@@ -123,6 +132,7 @@ export interface FileRouteTypes {
     | '/admin'
     | '/settings'
     | '/summarizer'
+    | '/workspace'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -134,6 +144,7 @@ export interface FileRouteTypes {
     | '/admin'
     | '/settings'
     | '/summarizer'
+    | '/workspace'
   id:
     | '__root__'
     | '/_layout'
@@ -146,6 +157,7 @@ export interface FileRouteTypes {
     | '/_layout/admin'
     | '/_layout/settings'
     | '/_tg/summarizer'
+    | '/_tg/workspace'
     | '/_layout/'
   fileRoutesById: FileRoutesById
 }
@@ -238,6 +250,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof TgSummarizerRouteImport
       parentRoute: typeof TgRoute
     }
+    '/_tg/workspace': {
+      id: '/_tg/workspace'
+      path: '/workspace'
+      fullPath: '/workspace'
+      preLoaderRoute: typeof TgWorkspaceRouteImport
+      parentRoute: typeof TgRoute
+    }
   }
 }
 
@@ -258,10 +277,12 @@ const LayoutRouteWithChildren =
 
 interface TgRouteChildren {
   TgSummarizerRoute: typeof TgSummarizerRoute
+  TgWorkspaceRoute: typeof TgWorkspaceRoute
 }
 
 const TgRouteChildren: TgRouteChildren = {
   TgSummarizerRoute: TgSummarizerRoute,
+  TgWorkspaceRoute: TgWorkspaceRoute,
 }
 
 const TgRouteWithChildren = TgRoute._addFileChildren(TgRouteChildren)

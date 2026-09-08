@@ -395,4 +395,4 @@ Replace `tg-summarizer.example.com` with your domain.
 | Adminer | `https://adminer.tg-summarizer.example.com` | `https://adminer.staging.tg-summarizer.example.com` |
 | Traefik UI | `https://traefik.tg-summarizer.example.com` | same host pattern |
 
-Primary app route after login: `/summarizer`.
+Primary app route after login: `/workspace?tab=channels` (`/summarizer` redirects).

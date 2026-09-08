@@ -123,7 +123,7 @@ reasoning for the parts that live nowhere else; `docs/*-plan.md` and
 - **PostgreSQL is the only client-side store.** *Enforced: `src/lib/architecture-invariants.test.ts`.* No `idb`/`localforage`/`dexie`, no `indexedDB`, no DB worker. The browser keeps settings and the current selection, nothing else.
 - **Nothing says `localStorage` except four modules.** *Enforced: `src/lib/architecture-invariants.test.ts`.* Use `scopedStorage` (`lib/storage/scoped.ts`), which namespaces every key under `u:<userId>:` from the unverified JWT `sub`. The rule is "do not name `localStorage`" rather than "namespace your keys" because only the first can be checked. The four exceptions are **device-scoped on purpose** and `DEVICE_SCOPED_KEYS` is asserted as an exact pair. Signing out clears the **query cache**, not just the token; stored preferences are deliberately kept. Every accessor swallows storage errors, because reads run inside `useState` initialisers. Playwright seeds through `tests/utils/scoped-storage.ts`, never bare keys.
 - **Settings are schema-driven.** Declare them in `src/lib/settings/schema.ts` (zod: key, default, legacy keys, backend section), not as new `useState` hooks. Theme is owned by `theme-provider` in `main.tsx`; do not add a second theme toggle (*that one is enforced*, the schema rule is **not**).
-- **Routing and tabs come from the URL.** TanStack Router; the summarizer tab is `?tab=` on `/summarizer`, settings sub-sections are `?section=`.
+- **Routing and tabs come from the URL.** TanStack Router; the workspace tab is `?tab=` on `/workspace`, settings sub-sections are `?section=`.
 
 ## Testing & migrations
 

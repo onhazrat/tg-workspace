@@ -166,7 +166,7 @@ export default function App() {
 
     const { tab, param } = artifactDestination(artifact)
     void navigate({
-      to: "/summarizer",
+      to: "/workspace",
       search: (prev) => ({ ...prev, tab, [param]: artifact.id }),
       replace: true,
     })
@@ -357,7 +357,7 @@ export default function App() {
           >
             <div>
               <h1 className="text-xl font-bold tracking-tighter uppercase leading-none">
-                Telegram Summarizer
+                Telegram Workspace
               </h1>
               <p className="text-[11px] text-app-ink/50 font-mono mt-1">
                 Technical Scraper & AI Analyst v{APP_VERSION}
@@ -576,7 +576,7 @@ export default function App() {
                         <Link
                           key={tab.id}
                           id={`tour-tab-${tab.id}`}
-                          to="/summarizer"
+                          to="/workspace"
                           search={(prev) => ({
                             ...prev,
                             tab: tab.id as TabType,

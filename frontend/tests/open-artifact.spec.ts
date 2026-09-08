@@ -20,7 +20,7 @@ test.beforeEach(async ({ page }) => {
 })
 
 test("opening a summary from History renders its body", async ({ page }) => {
-  await page.goto("/summarizer?tab=history")
+  await page.goto("/workspace?tab=history")
   const card = page.locator('[data-artifact-id="e2e-open-summary"]')
   await expect(card).toBeVisible({ timeout: 20_000 })
   await card.getByRole("button").first().click()
@@ -33,14 +33,14 @@ test("opening a summary from History renders its body", async ({ page }) => {
 })
 
 test("a summary opens from its URL alone", async ({ page }) => {
-  await page.goto("/summarizer?tab=summary&summary=e2e-open-summary")
+  await page.goto("/workspace?tab=summary&summary=e2e-open-summary")
   await expect(page.getByText("Three things happened this week")).toBeVisible({
     timeout: 20_000,
   })
 })
 
 test("opening a chat from History renders its transcript", async ({ page }) => {
-  await page.goto("/summarizer?tab=history")
+  await page.goto("/workspace?tab=history")
   const card = page.locator('[data-artifact-id="e2e-open-chat"]')
   await expect(card).toBeVisible({ timeout: 20_000 })
   await card.getByRole("button").first().click()
@@ -61,7 +61,7 @@ test("opening a chat from History renders its transcript", async ({ page }) => {
 test("a card with hundreds of channels does not widen the page", async ({
   page,
 }) => {
-  await page.goto("/summarizer?tab=history")
+  await page.goto("/workspace?tab=history")
   const card = page.locator(`[data-artifact-id="${WIDE_SUMMARY_ID}"]`)
   await expect(card).toBeVisible({ timeout: 20_000 })
 

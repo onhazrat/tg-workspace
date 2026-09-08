@@ -28,7 +28,7 @@ import { searchSettings, suggestSettingsOperators } from "@/lib/settings/search"
 import type { SettingsSection } from "@/lib/settings/toc"
 import { NetworkSection } from "./settings/NetworkSection"
 
-const summarizerRoute = getRouteApi("/_tg/summarizer")
+const workspaceRoute = getRouteApi("/_tg/workspace")
 
 function useDebouncedValue<T>(value: T, ms: number): T {
   const [debounced, setDebounced] = useState(value)
@@ -44,8 +44,8 @@ export const SettingsHub: React.FC = () => {
     activeSection: activeSettingsTab,
     setActiveSection: setActiveSettingsTab,
   } = useSettingsSection()
-  const { setting: deepLinkSetting } = summarizerRoute.useSearch()
-  const navigate = summarizerRoute.useNavigate()
+  const { setting: deepLinkSetting } = workspaceRoute.useSearch()
+  const navigate = workspaceRoute.useNavigate()
   const settings = useSettings()
   const loadDBStats = useLoadDBStats()
 

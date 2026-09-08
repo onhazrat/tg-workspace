@@ -15,8 +15,8 @@ const TAB_LABELS: Record<string, string> = {
   settings: "Settings",
 }
 
-async function gotoSummarizer(page: Page, tab = "channels") {
-  await page.goto(`/summarizer?tab=${tab}`)
+async function gotoWorkspace(page: Page, tab = "channels") {
+  await page.goto(`/workspace?tab=${tab}`)
   const label = TAB_LABELS[tab] ?? tab
   // Role locators are more reliable than `#nav-tab-*` under Playwright Chrome.
   // `link`, not `button`: the workspace tabs navigate to `?tab=`, so they are
@@ -27,7 +27,7 @@ async function gotoSummarizer(page: Page, tab = "channels") {
 }
 
 async function openSettingsSection(page: Page, sectionLabel: string) {
-  await gotoSummarizer(page, "settings")
+  await gotoWorkspace(page, "settings")
   await expect(page.getByTestId("settings-search")).toBeVisible()
   // Nested TOC leaves: expand parent via twistie when children are collapsed.
   const nestedParents: Record<string, string> = {
@@ -64,7 +64,7 @@ test.describe("TG UI primitives", () => {
   test("primary and ghost buttons expose hover/focus classes in light and dark", async ({
     page,
   }) => {
-    await gotoSummarizer(page, "channels")
+    await gotoWorkspace(page, "channels")
     await seedTestChannel(page)
 
     for (const theme of ["light", "dark"] as const) {
@@ -89,7 +89,7 @@ test.describe("TG UI primitives", () => {
   test("channel search muted input and settings field accept input", async ({
     page,
   }) => {
-    await gotoSummarizer(page, "channels")
+    await gotoWorkspace(page, "channels")
     const search = page.getByPlaceholder("Search channels...")
     await expect(search).toHaveAttribute("data-slot", "tg-input")
     await search.fill("alpha")
@@ -166,7 +166,7 @@ test.describe("TG UI primitives", () => {
   test("channel delete confirm opens TgConfirmDialog and cancel is a no-op", async ({
     page,
   }) => {
-    await gotoSummarizer(page, "channels")
+    await gotoWorkspace(page, "channels")
     const channelName = await seedTestChannel(page)
 
     let nativeConfirmOpened = false
@@ -223,7 +223,7 @@ test.describe("TG UI primitives", () => {
   test("channel card frosted icon buttons expose hover classes", async ({
     page,
   }) => {
-    await gotoSummarizer(page, "channels")
+    await gotoWorkspace(page, "channels")
     await seedTestChannel(page)
 
     for (const theme of ["light", "dark"] as const) {
@@ -262,7 +262,7 @@ test.describe("TG UI primitives", () => {
   test("channels toolbar controls are tab-focusable with focus-visible rings", async ({
     page,
   }) => {
-    await gotoSummarizer(page, "channels")
+    await gotoWorkspace(page, "channels")
     await seedTestChannel(page)
 
     const syncAll = page.getByRole("button", { name: /Sync All/i })
@@ -280,7 +280,7 @@ test.describe("TG UI primitives", () => {
   test("group filter chips and post filter chips use primitives", async ({
     page,
   }) => {
-    await gotoSummarizer(page, "channels")
+    await gotoWorkspace(page, "channels")
     await seedTestChannel(page)
     const selectionChip = page
       .locator('[data-slot="tg-selection-chip"]')
@@ -302,7 +302,7 @@ test.describe("TG UI primitives", () => {
   })
 
   test("history empty state uses TgHeroEmptyState", async ({ page }) => {
-    await gotoSummarizer(page, "history")
+    await gotoWorkspace(page, "history")
     // Search for something nothing can match, rather than assuming the
     // database is empty. It used to be a safe assumption because History
     // listed only summaries; now it lists every artifact kind, so any tag run
@@ -316,7 +316,7 @@ test.describe("TG UI primitives", () => {
   test("Sync All shows in-button loading while sync request is in flight", async ({
     page,
   }) => {
-    await gotoSummarizer(page, "channels")
+    await gotoWorkspace(page, "channels")
     await seedTestChannel(page)
 
     let release: (() => void) | undefined

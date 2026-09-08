@@ -260,7 +260,7 @@ describe("the one-time migration into a namespace", () => {
    * Safari with site data blocked: `typeof localStorage` is still `"object"`,
    * and every call throws. The `typeof` check alone does not see it, and these
    * accessors are called from `useState` initialisers — so an unguarded read
-   * white-screens `/summarizer` for that visitor.
+   * white-screens `/workspace` for that visitor.
    */
   it("survives a browser that refuses storage entirely", () => {
     const refuse = () => {

@@ -1,6 +1,6 @@
 import { getRouteApi } from "@tanstack/react-router"
 
-const summarizerRoute = getRouteApi("/_tg/summarizer")
+const workspaceRoute = getRouteApi("/_tg/workspace")
 
 /**
  * Which summary, chat session or tag run is open, held in the URL.
@@ -15,8 +15,8 @@ const summarizerRoute = getRouteApi("/_tg/summarizer")
  * tabs render results only and no longer auto-open the most recent artifact.
  */
 export function useSummaryParam() {
-  const { summary } = summarizerRoute.useSearch()
-  const navigate = summarizerRoute.useNavigate()
+  const { summary } = workspaceRoute.useSearch()
+  const navigate = workspaceRoute.useNavigate()
 
   const openSummary = (id: string | null) => {
     navigate({
@@ -29,8 +29,8 @@ export function useSummaryParam() {
 }
 
 export function useChatSessionParam() {
-  const { chatSession } = summarizerRoute.useSearch()
-  const navigate = summarizerRoute.useNavigate()
+  const { chatSession } = workspaceRoute.useSearch()
+  const navigate = workspaceRoute.useNavigate()
 
   const openChatSession = (id: string | null) => {
     navigate({
@@ -43,8 +43,8 @@ export function useChatSessionParam() {
 }
 
 export function useTagRunParam() {
-  const { tagRun } = summarizerRoute.useSearch()
-  const navigate = summarizerRoute.useNavigate()
+  const { tagRun } = workspaceRoute.useSearch()
+  const navigate = workspaceRoute.useNavigate()
 
   const openTagRun = (id: string | null) => {
     navigate({

@@ -37,8 +37,8 @@ export const Route = createFileRoute("/login")({
   beforeLoad: async () => {
     if (isLoggedIn()) {
       throw redirect({
-        to: "/summarizer",
-        search: { tab: "summary" },
+        to: "/workspace",
+        search: { tab: "channels" },
       })
     }
   },

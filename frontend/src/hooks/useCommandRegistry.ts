@@ -15,7 +15,7 @@ import {
   useSettingGroupsQuery,
 } from "@/hooks/useSettingGroups"
 import { useSettingsSection } from "@/hooks/useSettingsSection"
-import { useSummarizerGroupParams } from "@/hooks/useSummarizerGroupParams"
+import { useWorkspaceGroupParams } from "@/hooks/useWorkspaceGroupParams"
 import { buildPostsInScopeCounts } from "@/lib/channels/sort-channels-for-grid"
 import {
   buildActionCommands,
@@ -103,7 +103,7 @@ export function useCommandRegistry(): {
   const jobToggles = useJobToggles()
   const palette = useCommandPaletteContext()
   const { setChannelGroupFilter, setSelectedSettingGroup } =
-    useSummarizerGroupParams()
+    useWorkspaceGroupParams()
   const { data: settingGroups = [] } = useSettingGroupsQuery()
   const invalidateSettingGroups = useInvalidateSettingGroups()
 
