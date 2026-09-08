@@ -48,8 +48,8 @@ The original **p50 ≤ 6 / p95 ≤ 10** assumed a warm path where build was near
 | S2′ | Eliminate dual-shard builds; cold path = **one** shared build | met |
 | S3′ | Backend wall-clock ≤ ~5 min on backend-touching PRs | met (~4.5 min) |
 | S4′ | Docs-only skips backend / smoke / zizmor / frontend-unit | verified (PR #22) |
-| S5′ | Fork artifact transport works end-to-end | verified (PR #23, forced mode) |
-| S6′ | Cross-tree architecture guards still fire when their inputs change | addressed |
+| S5′ | Fork artifact transport works end-to-end | **partial** — save/load proven on same-repo forced mode (PR #23); real fork detection + fork token permissions not live-tested |
+| S6′ | Cross-tree architecture guards still fire when their inputs change | addressed (incl. `test_worker_count`) |
 
 ## Flake inventory (E)
 
@@ -64,5 +64,7 @@ Fixes: rename Appearance control; sequential seed + 5xx retry; `continue-on-erro
 ## Verification notes
 
 - Docs-only skip: PR #22 vs `cursor/ci-speed-plan-09f3`, tip `58caaa4` — backend/smoke/zizmor/frontend-unit did not run; Playwright `changed=false`.
-- Fork artifact path: PR #23 forced `image_source=artifact` — save → upload → download → load → all 4 shards green. Real `HEAD_REPO != THIS_REPO` detection not live-tested.
+- Fork artifact path: PR #23 forced `image_source=artifact` on a **same-repo** PR — validates save → upload → download → load → run only. Does **not** prove `HEAD_REPO != THIS_REPO` selection or fork-restricted `GITHUB_TOKEN` / `packages` behaviour. Keep S5′ partial until a real fork PR.
+- Admin Edit User flake: Dialog was nested under `DropdownMenuContent`, so focusing the dialog unmounted it (Save detached). Dialogs lifted outside the menu.
+- Duplicate workflow runs: per-workflow `concurrency` + `cancel-in-progress: true` on PR CI workflows.
 - Review follow-up: path-filter holes for cross-tree guards and Docker inputs; `fullyParallel` vs file sharding; target revision.
