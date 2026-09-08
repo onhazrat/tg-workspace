@@ -100,6 +100,28 @@ class CandidateSeenInResponse(BaseModel):
     total: int
 
 
+class MediaMixResponse(BaseModel):
+    """The four media counters as shares of each other, summing to 1.
+
+    A share rather than a percentage of the Post count, because those counters
+    come from Telegram's channel info bar and count **media items, not Posts**:
+    an album of five photos adds five, and a Post carrying a photo and a link
+    counts in both. The latest Post id is no better a denominator, since deleted
+    and service messages consume ids. Inflated on both sides it is not a
+    percentage, and presenting it as one would be lying with a number.
+
+    `null` on a leg means Telegram showed no counter of that kind, which is not
+    a share of zero — a photo-only Channel has three nulls and `photos: 1.0`.
+    All four keys always travel, so the shape is closed and the bar can render a
+    stable set of segments.
+    """
+
+    photos: float | None = None
+    videos: float | None = None
+    files: float | None = None
+    links: float | None = None
+
+
 class HandleProbeResponse(BaseModel):
     """A cached verdict about one handle, as `probe_to_camel` builds it.
 
@@ -129,6 +151,36 @@ class HandleProbeResponse(BaseModel):
     attempts: int = 0
     last_error: str | None = Field(default=None, alias="lastError")
     checked_at: int | None = Field(default=None, alias="checkedAt")
+
+    # What the Channel's sample Posts said about it (ticket 02, ADR-015).
+    # `null` is *not measured* on every one of these, never zero: a Channel
+    # that posts nothing and a Channel nobody has looked at are different
+    # claims and a sort must not rank them together.
+    #
+    # Below the five-sample threshold only `sampleCount` and `lastPostAt`
+    # survive, so a row showing no cadence can say why.
+    last_post_at: int | None = Field(default=None, alias="lastPostAt")
+    sample_count: int | None = Field(default=None, alias="sampleCount")
+    #: Intervals over the span the samples cover, weekly. **Not** the Post count
+    #: divided by the span — N Posts give N-1 intervals — and a recent rate
+    #: rather than a lifetime average, which is why the UI labels it as one.
+    posts_per_week: float | None = Field(default=None, alias="postsPerWeek")
+    median_views: int | None = Field(default=None, alias="medianViews")
+    forward_share: float | None = Field(default=None, alias="forwardShare")
+    #: Which alphabet the sample captions are predominantly written in — a
+    #: script, not a language. Panel-only: it appears on no row and in no sort.
+    script: str | None = None
+
+    # Derived at read from the four counters and the latest Post id, columns on
+    # the same row (ADR-015). They do not outlive the page: an `unavailable`
+    # verdict is synthesised with no page at all, so a Channel Telegram stops
+    # serving loses both while keeping every statistic above. That asymmetry is
+    # deliberate — the subscriber count is already cleared on that same path.
+    media_mix: MediaMixResponse | None = Field(default=None, alias="mediaMix")
+    #: Media items per published Post id. A rate, and it may exceed 1: an album
+    #: of five photos adds five items against one id. `null` where the entry has
+    #: no latest Post id, which is every entry the Directory seed created.
+    media_density: float | None = Field(default=None, alias="mediaDensity")
 
 
 class DiscoverCandidateResponse(BaseModel):

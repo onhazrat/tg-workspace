@@ -57,6 +57,7 @@
 
 import type {
   ChannelResponse,
+  HandleProbeResponse,
   LlmLogResponse,
   NetworkLogResponse,
   PostResponse,
@@ -297,5 +298,34 @@ export type DiscoveryCandidateHasServerFields = NoMismatches<
   MissingServerFields<
     ReportCandidateResponse,
     "name" | "total" | "counts" | "reference"
+  >
+>
+
+/**
+ * The probe blob's own rename check, which its refinement cannot be.
+ *
+ * `probe` is refined, and a refinement is asserted in the assignable direction
+ * only — our narrower type must extend the server's. That catches a field whose
+ * *type* stopped matching and is blind to a field whose *name* did, because an
+ * object with a property the target lacks still satisfies `extends`. So every
+ * statistic ticket 02 added could be renamed server-side with this file staying
+ * green, which is the exact failure ticket 01 added the candidate guard for.
+ *
+ * Listed here are the keys the row renders or sorts on. `bio`, `script` and
+ * `forwardShare` are deliberately absent: they are panel decoration, and a
+ * blank one is a cosmetic loss rather than a broken sort.
+ */
+export type DiscoveryProbeHasServerFields = NoMismatches<
+  MissingServerFields<
+    HandleProbeResponse,
+    | "handle"
+    | "status"
+    | "kind"
+    | "subscribers"
+    | "lastPostAt"
+    | "sampleCount"
+    | "postsPerWeek"
+    | "medianViews"
+    | "mediaMix"
   >
 >

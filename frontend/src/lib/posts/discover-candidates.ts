@@ -76,7 +76,62 @@ export interface DiscoveryProbe {
   attempts: number
   lastError: string | null
   checkedAt: number | null
+  /**
+   * What the Channel's sample Posts said about it (ticket 02, ADR-015).
+   *
+   * `null` is **not measured** on every one of these and never zero. A Channel
+   * that posts nothing and a Channel nobody has looked at are different claims,
+   * and `sortDiscoveryCandidates` sinks both to the end rather than ranking
+   * them against a real number.
+   *
+   * Below the five-sample threshold only `sampleCount` and `lastPostAt`
+   * survive, so a row showing no cadence can say what it is short of.
+   */
+  lastPostAt: number | null
+  sampleCount: number | null
+  /** Intervals over the span the samples cover, weekly. A **recent** rate, not
+   * a lifetime average — the row labels it as one, because on its own it would
+   * read as current activity for a Channel that stopped a year ago. */
+  postsPerWeek: number | null
+  medianViews: number | null
+  forwardShare: number | null
+  /** Which alphabet the captions are predominantly in. Panel-only. */
+  script: string | null
+  /**
+   * The four media counters as shares of each other. Derived server-side at
+   * read from columns on the entry, so unlike the statistics above it does not
+   * outlive the page: an entry Telegram has stopped serving keeps its cadence
+   * and loses this, exactly as it already loses its subscriber count.
+   */
+  mediaMix: DiscoveryMediaMix | null
+  /** Media items per published Post id. A rate, and it may exceed 1. */
+  mediaDensity: number | null
 }
+
+/**
+ * A share per counter, summing to 1 across the legs that are present.
+ *
+ * `null` on a leg means Telegram showed no counter of that kind, which is not a
+ * share of zero — a photo-only Channel is three nulls and `photos: 1`. Not a
+ * percentage of the Post count: those counters count media *items*, so an album
+ * of five photos adds five and a Post with a photo and a link counts in both.
+ */
+export interface DiscoveryMediaMix {
+  photos: number | null
+  videos: number | null
+  files: number | null
+  links: number | null
+}
+
+/** The mix legs in the order the bar stacks them. */
+export const DISCOVERY_MEDIA_MIX_KINDS = [
+  "photos",
+  "videos",
+  "files",
+  "links",
+] as const
+
+export type DiscoveryMediaMixKind = (typeof DISCOVERY_MEDIA_MIX_KINDS)[number]
 
 export interface DiscoveryCandidate {
   name: string
@@ -173,6 +228,9 @@ export type DiscoverSortKey =
   | "lastSeen"
   | "seenInCount"
   | "subscribers"
+  | "lastPostAt"
+  | "postsPerWeek"
+  | "medianViews"
 
 export const DISCOVER_SORT_OPTIONS: {
   label: string
@@ -186,6 +244,12 @@ export const DISCOVER_SORT_OPTIONS: {
   { label: "Last seen", value: "lastSeen" },
   { label: "Seen by", value: "seenInCount" },
   { label: "Subscribers", value: "subscribers" },
+  // The four triage keys a report is scanned on: alive, big, busy, read. Every
+  // one of them comes from the probe sweep, so on a fresh report most rows
+  // carry no value and migrate up the list as verdicts land.
+  { label: "Last post", value: "lastPostAt" },
+  { label: "Posts/week", value: "postsPerWeek" },
+  { label: "Median views", value: "medianViews" },
 ]
 
 /**
@@ -241,8 +305,15 @@ export function weightedScore(
 }
 
 /** `null` when the candidate has no value for this key — see the null handling
- * in `sortDiscoveryCandidates`. Only `subscribers` can be unknown; every other
- * key is derived from reference counts the report always carries. */
+ * in `sortDiscoveryCandidates`.
+ *
+ * The four probe-derived keys can all be unknown, and for three separate
+ * reasons that are indistinguishable here and rightly so: the handle has not
+ * been probed yet, the probe found no counter, or the sample set was below the
+ * threshold that makes a rate a measurement. Every one of them means "we have
+ * not measured this", which is one place in the ordering — the end. The keys
+ * derived from reference counts are always present, because a report carries
+ * them by construction. */
 function sortValue(
   candidate: DiscoveryCandidate,
   sortKey: DiscoverSortKey,
@@ -253,6 +324,9 @@ function sortValue(
   if (sortKey === "lastSeen") return candidate.lastSeen
   if (sortKey === "seenInCount") return candidate.seenInCount
   if (sortKey === "subscribers") return candidateSubscriberCount(candidate)
+  if (sortKey === "lastPostAt") return candidate.probe?.lastPostAt ?? null
+  if (sortKey === "postsPerWeek") return candidate.probe?.postsPerWeek ?? null
+  if (sortKey === "medianViews") return candidate.probe?.medianViews ?? null
   return candidate.counts[sortKey]
 }
 

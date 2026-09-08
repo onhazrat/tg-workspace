@@ -18,7 +18,42 @@ import {
   toggleSelectAllUnfollowed,
   toggleUnfollowedSelection,
 } from "@/lib/posts/discover-selection"
+import { candidateStatistics } from "@/lib/posts/discover-statistics"
 import { telegramWebViewChannelUrl } from "@/lib/telegram-web"
+import { DiscoverMediaMixBar } from "./DiscoverMediaMixBar"
+
+/**
+ * One statistic, or a dash that says why there is none (ticket 02).
+ *
+ * The dash carries a tooltip rather than being silent, because the three
+ * reasons a cell is blank are not the same fact: not probed yet, probed with
+ * too small a sample, or probed with nothing to measure. A row must never read
+ * as a bad score for the first — the sweep is asynchronous, so most of a fresh
+ * report is exactly that.
+ */
+const StatCell: React.FC<{
+  value: string | null
+  aside?: string | null
+  placeholderTitle: string
+  testId: string
+}> = ({ value, aside, placeholderTitle, testId }) => {
+  if (value !== null) {
+    return (
+      <td className="py-2 tabular-nums" data-testid={testId}>
+        {value}
+      </td>
+    )
+  }
+  return (
+    <td
+      className="py-2 tabular-nums text-app-ink/30"
+      data-testid={testId}
+      title={placeholderTitle}
+    >
+      {aside ?? "–"}
+    </td>
+  )
+}
 
 /** Count cells render a dash for zero so non-zero signals stand out when scanning. */
 const CountCell: React.FC<{ value: number; testId: string }> = ({
@@ -172,7 +207,7 @@ export const DiscoverCandidateTable: React.FC<DiscoverCandidateTableProps> = ({
 
   return (
     <div className="overflow-x-auto">
-      <table className="w-full min-w-[900px] text-left text-sm">
+      <table className="w-full min-w-[1180px] text-left text-sm">
         <thead className="text-[11px] uppercase tracking-wider text-app-ink/50">
           <tr>
             <th className="w-10 pb-2">
@@ -214,6 +249,33 @@ export const DiscoverCandidateTable: React.FC<DiscoverCandidateTableProps> = ({
             ) : null}
             <th className="pb-2">Seen by</th>
             <th className="pb-2">Last seen</th>
+            <th className="pb-2" title="When this channel last posted">
+              Last post
+            </th>
+            {/*
+             * Labelled a *recent* rate on purpose. It is measured over the
+             * span the sample Posts cover, so a channel that posted daily
+             * until it died still reads busy — which paired with "last post"
+             * is honest in both directions, and read alone is not.
+             */}
+            <th
+              className="pb-2"
+              title="Posts per week over the sampled span — a recent rate, not current activity"
+            >
+              Posts/wk
+            </th>
+            <th
+              className="pb-2"
+              title="Median views across the sample posts, so one viral post cannot relabel the channel"
+            >
+              Views
+            </th>
+            <th
+              className="pb-2"
+              title="What the channel publishes: photos, videos, files and links as shares of each other"
+            >
+              Mix
+            </th>
             <th className="pb-2">Actions</th>
           </tr>
         </thead>
@@ -222,6 +284,7 @@ export const DiscoverCandidateTable: React.FC<DiscoverCandidateTableProps> = ({
             const rowStatus = resultStatusByName.get(row.name)
             const metaName = row.displayName || row.probe?.displayName || ""
             const subscribers = row.probe?.subscribers || ""
+            const stats = candidateStatistics(row.probe)
             return (
               <tr key={row.name} className="border-t border-app-ink/10">
                 <td className="py-2 align-middle">
@@ -336,6 +399,39 @@ export const DiscoverCandidateTable: React.FC<DiscoverCandidateTableProps> = ({
                 </td>
                 <td className="py-2">
                   <RelativeTime timestamp={row.lastSeen} />
+                </td>
+                <td
+                  className="py-2"
+                  data-testid={`discover-last-post-${row.name}`}
+                >
+                  {stats.lastPostAt === null ? (
+                    <span
+                      className="text-app-ink/30"
+                      title={stats.placeholderTitle}
+                    >
+                      –
+                    </span>
+                  ) : (
+                    <RelativeTime timestamp={stats.lastPostAt} />
+                  )}
+                </td>
+                <StatCell
+                  value={stats.postsPerWeek}
+                  aside={stats.sampleNote}
+                  placeholderTitle={stats.placeholderTitle}
+                  testId={`discover-posts-per-week-${row.name}`}
+                />
+                <StatCell
+                  value={stats.medianViews}
+                  placeholderTitle={stats.placeholderTitle}
+                  testId={`discover-median-views-${row.name}`}
+                />
+                <td className="py-2">
+                  <DiscoverMediaMixBar
+                    mix={row.probe?.mediaMix}
+                    density={row.probe?.mediaDensity}
+                    handle={row.name}
+                  />
                 </td>
                 <td className="py-2">
                   <div className="flex flex-wrap items-center gap-2">

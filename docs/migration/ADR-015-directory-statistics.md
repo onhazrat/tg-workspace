@@ -56,7 +56,9 @@ codebase has already paid for twice, at 26 MB and at 56 MB.
 ## Decision
 
 The six sample-derived statistics are columns on the Directory entry, written at probe time by the
-aggregate that already writes the samples, in the same transaction: last post at (timestamptz),
+aggregate that already writes the samples, in the same transaction: last post at (a timestamp,
+naive UTC like every other `tg_*` one — see `models_tg.utc_now`, and `probe_to_camel` attaches the
+zone the column already means before serialising, so the wire value is right off UTC too),
 sample count (smallint), posts per week (float), median views (int), forward share (float) and
 script (text). All six are nullable, because absent and zero are different claims.
 
@@ -75,7 +77,20 @@ them, and it is the row where the last known picture is worth the most. Only the
 which resets an entry to "no answer" and clears every other metadata field, clears them too.
 
 A migration backfills every entry that already has samples, because that data is already in
-Postgres and the transform is pure.
+Postgres.
+
+It restates the arithmetic **in SQL** rather than importing the transform. An applied revision has
+to keep meaning what it meant, and a module it imported would be free to change underneath it —
+the same reason the owner backfill freezes its table list while its guard derives one. The cost of
+that duplication is a second place the formulas can drift, and
+`test_the_migration_backfill_agrees_with_the_transform` is what stops it: it seeds samples, blanks
+the columns, runs the migration's own statement and requires the transform's answer.
+
+`script` is the one column the backfill leaves null. A per-character tally over captions is a page
+of SQL to say badly, and it is the statistic that appears on no row and in no sort. Every entry
+holding samples is `ok` and therefore refreshable, so all of them re-probe inside
+`directoryRefreshDays` and fill it in properly. The backfill exists to bridge that week for the
+numbers an Operator scans; this column does not need bridging.
 
 An entry that stops being probed keeps the last statistics it was given. They are labelled by
 their own last-post timestamp, so a stale number is self-describing rather than misleading.

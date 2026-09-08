@@ -232,6 +232,15 @@ def test_a_resolved_probe_is_joined_into_the_report_read(client: TestClient) -> 
         "attempts",
         "lastError",
         "checkedAt",
+        # Ticket 02. The six stored statistics and the two derived at read.
+        "lastPostAt",
+        "sampleCount",
+        "postsPerWeek",
+        "medianViews",
+        "forwardShare",
+        "script",
+        "mediaMix",
+        "mediaDensity",
     }
     assert probe["status"] == "ok"
     assert probe["kind"] == "channel"
@@ -382,6 +391,15 @@ def test_the_probe_listing_keeps_its_key_set(client: TestClient) -> None:
         "attempts",
         "lastError",
         "checkedAt",
+        # Ticket 02. The six stored statistics and the two derived at read.
+        "lastPostAt",
+        "sampleCount",
+        "postsPerWeek",
+        "medianViews",
+        "forwardShare",
+        "script",
+        "mediaMix",
+        "mediaDensity",
     }
 
 

@@ -6,26 +6,34 @@ and what shape of media it publishes, and the report sorts by any of those.
 
 **Blocked by:** 01
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] A Candidate row shows last post age, subscribers, posts per week and median views
-- [ ] A Candidate row shows the Channel's media mix as a small stacked bar, readable in both
+- [x] A Candidate row shows last post age, subscribers, posts per week and median views
+- [x] A Candidate row shows the Channel's media mix as a small stacked bar, readable in both
       themes
-- [ ] Posts per week is labelled as a recent rate, so it is not read as current activity alone
-- [ ] The report sorts by each of those, and null sorts last on every key
-- [ ] A Channel with fewer than five sample Posts shows its Post count and no rates, rather than
+- [x] Posts per week is labelled as a recent rate, so it is not read as current activity alone
+- [x] The report sorts by each of those, and null sorts last on every key
+- [x] A Channel with fewer than five sample Posts shows its Post count and no rates, rather than
       a median computed from three numbers
-- [ ] A Candidate that has never been probed reads as "not probed yet", never as a bad score
-- [ ] A Channel that stopped being probed keeps the statistics from its last probe, so a long
+- [x] A Candidate that has never been probed reads as "not probed yet", never as a bad score
+- [x] A Channel that stopped being probed keeps the statistics from its last probe, so a long
       dead Channel still reads as long dead after its sample Posts are collected
-- [ ] **An `unavailable` verdict keeps the statistics**, because a Channel Telegram has stopped
+- [x] **An `unavailable` verdict keeps the statistics**, because a Channel Telegram has stopped
       serving is exactly the case ADR-015 exists to describe: "posted four times a week until
       fourteen months ago" is the useful epitaph, and clearing it would destroy the evidence on
       the only rows that cannot regenerate it
-- [ ] Entries probed before this ticket already carry statistics on the day it ships
-- [ ] Forward share and script are computed and stored, but appear on no row
-- [ ] Sample Post bodies do not travel with the report
-- [ ] A report loads no slower than it does today
+- [x] Entries probed before this ticket already carry statistics on the day it ships —
+      **five of the six**. The migration restates the arithmetic in SQL rather than importing
+      the transform, because an applied revision has to keep meaning what it meant, and
+      `script` is a per-character tally that SQL says badly. It is also the one statistic this
+      ticket puts on no row and in no sort. Every entry holding samples is `ok` and therefore
+      refreshable, so all of them re-probe inside `directoryRefreshDays` and fill it in
+      properly; the backfill is a bridge over that week and this column does not need one.
+      `test_the_migration_backfill_agrees_with_the_transform` pins the duplication the SQL
+      restatement introduced
+- [x] Forward share and script are computed and stored, but appear on no row
+- [x] Sample Post bodies do not travel with the report
+- [x] A report loads no slower than it does today
 
 ## The shape of the work
 
@@ -38,7 +46,7 @@ aggregate that already writes the samples, in the same transaction:
 
 | Column | Type | Null when |
 |---|---|---|
-| last post at | timestamptz | no samples |
+| last post at | timestamp (naive UTC, as every other `tg_*` one) | no samples |
 | sample count | smallint | no samples |
 | posts per week | float | below the threshold, or the span is zero |
 | median views | int | fewer than five samples **carry a view count** |

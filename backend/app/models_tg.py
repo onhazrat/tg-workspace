@@ -10,6 +10,7 @@ from sqlalchemy import (
     Boolean,
     Column,
     Index,
+    SmallInteger,
     Text,
     UniqueConstraint,
     false,
@@ -704,6 +705,37 @@ class DirectoryEntry(SQLModel, table=True):
     #: starvation the dequeue's docstring still documents — a probe waiting
     #: behind sync work looked exactly like a probe that had failed.
     refresh_due_at: datetime | None = None
+
+    #: What this Channel's sample Posts said about it, stored at probe time
+    #: rather than derived on read (ticket 02, **ADR-015**).
+    #:
+    #: The entries that lose their samples are exactly the ones that can never
+    #: recompute them: an `unavailable` verdict clears the snapshot outright,
+    #: and an entry that is not refreshable by verdict or by kind is never
+    #: probed again and has its samples collected by retention. Deriving on
+    #: read would therefore blank these on precisely the Channels whose
+    #: deadness is the most useful thing the row could say — a full row for
+    #: every live Channel and an empty one for every dead one, which inverts
+    #: the signal. They are also on the *list* read, so deriving would put an
+    #: aggregate over a child table inside the query that renders the table.
+    #:
+    #: `None` everywhere means **not measured**, never zero, and the two are
+    #: different claims. Below `directory_statistics.MIN_SAMPLES` only
+    #: `sample_count` and `last_post_at` survive, so a suppressed rate can
+    #: explain itself.
+    #:
+    #: Written by `record_probe_result` in the same transaction as the samples
+    #: they were computed from. The metadata refresh on a followed Channel's
+    #: sync leaves them alone, because that fetch carries no sample Posts.
+    last_post_at: datetime | None = None
+    sample_count: int | None = Field(default=None, sa_column=Column(SmallInteger))
+    posts_per_week: float | None = None
+    median_views: int | None = None
+    forward_share: float | None = None
+    #: Which alphabet the sample *captions* are predominantly written in. A
+    #: script, not a language, and no language library — see
+    #: `directory_statistics`.
+    script: str | None = None
 
     #: When a *conclusive* answer was last recorded. `None` while only failures
     #: have happened, which is what distinguishes "never resolved" from "known".
