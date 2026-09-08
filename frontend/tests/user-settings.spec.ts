@@ -226,34 +226,37 @@ test("Appearance button is visible in sidebar", async ({ page }) => {
 })
 
 /**
- * Open the appearance menu, choose one mode, and leave the menu closed.
+ * Open the sidebar appearance menu, choose one mode, and wait for it to close.
  *
- * The wait at the end is the whole point, and it is why this is a helper rather
- * than three lines repeated. The menu is a Radix dropdown, which keeps its
- * content mounted through the close animation that selecting an item starts —
- * and a click on the trigger during that window is swallowed. The menu then
- * never reopens, the next item never appears, and the `.click()` waiting for it
- * burns the full 30s test timeout.
+ * **Every locator is scoped to the open menu, and that is the fix.** `/settings`
+ * puts the mode names on screen twice: once as items in this Radix dropdown,
+ * and once as `AppearanceSection`'s segmented control — which is the default
+ * section, and whose System option carries `data-testid="system-mode"` too. So
+ * a bare `getByTestId("system-mode")` matches one element while the dropdown is
+ * shut and two the moment it opens.
  *
- * "User can switch between theme modes" did this wait once, after the first of
- * its three selections, and nowhere else. So it opened cleanly the second time
- * and raced the third, which is exactly where it failed: `system-mode`, at the
- * one reopen with no close behind it. Its neighbour did no waiting at all and
- * carries a comment about having flaked before for a related reason. CI runs
- * with `--fail-on-flaky-tests`, so passing on retry is still a red build.
+ * That ambiguity is what the flake was. The test clicked the trigger and then
+ * the bare test id, so it passed on the runs where the reopen was *swallowed*
+ * and a single match was left, and failed when the menu actually opened. Which
+ * is why it always failed on `system-mode` — the only one of the three with a
+ * twin — and never on light or dark.
  *
- * `force` on the item click for the mirror-image reason: the item can still be
- * inside Radix's *entry* animation when the click lands.
+ * `role=menu` is Radix's own (`@radix-ui/react-menu` sets it); the segmented
+ * control is a `role=group` of `aria-pressed` buttons, so it cannot collide.
+ * The final wait is on the **menu**, not the item: the settings-page twin never
+ * disappears, and waiting for it to would burn the whole test timeout.
+ *
+ * CI runs with `--fail-on-flaky-tests`, so passing on retry is still red.
  */
 async function chooseTheme(
   page: Page,
   mode: "light-mode" | "dark-mode" | "system-mode",
 ) {
   await page.getByTestId("theme-button").click()
-  const item = page.getByTestId(mode)
-  await expect(item).toBeVisible()
-  await item.click({ force: true })
-  await expect(item).not.toBeVisible()
+  const menu = page.getByRole("menu")
+  await expect(menu).toBeVisible()
+  await menu.getByTestId(mode).click()
+  await expect(menu).toBeHidden()
 }
 
 test("User can switch between theme modes", async ({ page }) => {
@@ -274,10 +277,11 @@ test("User can switch between theme modes", async ({ page }) => {
 test("Selected mode is preserved across sessions", async ({ page }) => {
   await page.goto("/settings")
 
-  // Pick light, then dark. This used to branch on the current theme and re-open
-  // the menu only inside that branch, which left it *already open* on the other
-  // path -- so the next `theme-button` click closed it and `dark-mode` was
-  // never there to click. `chooseTheme` is the general form of that fix.
+  // Pick light, then dark, in the same open-menu-then-choose shape as the test
+  // above. This used to branch on the current theme and re-open the menu only
+  // inside that branch, which left it *already open* on the other path -- so
+  // the next `theme-button` click closed it and `dark-mode` was never there to
+  // click. It survived on timing and finally flaked the job.
   await chooseTheme(page, "light-mode")
   await expect(page.locator("html")).toHaveClass(/light/)
 
