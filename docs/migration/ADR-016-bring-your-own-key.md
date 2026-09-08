@@ -93,7 +93,7 @@ alongside the `publishBotId` and `publishChatId` already there, and a scheduled 
 it back exactly as `_auto_publish` reads those.
 
 The security lesson from that neighbour transfers verbatim and is not optional. `extra` is filled
-from unknown keys in the request body, so `aiKeyId` is **client-supplied**. Ticket 33 found that
+from unknown keys in the request body, so `aiKeyId` is **client-supplied**. Multi-user-tenancy ticket 33 found that
 resolving `publishBotId` by primary key alone let a Summary name another Account's credential,
 which the scheduler would then decrypt and send with. The AI Key must be re-checked against the
 Summary's owner before `decrypt_token`, in the same place and for the same reason.
