@@ -574,10 +574,21 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({
         postCount,
         timestamp: Date.now(),
         autoRegenerate: true,
-        // The chain keeps the Key it was started with (BYOK-03); the live
-        // browser selection is only the fallback for a Summary scheduled
-        // before this existed.
-        aiKeyId: s.aiKeyId ?? selectedAiKeyId() ?? undefined,
+        // **The Key that actually paid, which is the live selection** — not
+        // the one the old Summary stored (BYOK-03).
+        //
+        // Written the other way round first, and it was wrong: this path
+        // regenerates through `generateSummary`, whose `withAiKey` sends
+        // `selectedAiKeyId()` and never consults `s.aiKeyId`. So a Summary
+        // stamped key A, re-run after switching the chooser to B, billed B,
+        // logged B's provider — and then wrote A onto the successor, so
+        // tonight the scheduler charges A again. One chain, two Keys,
+        // depending on which path regenerated it: exactly the ambiguity this
+        // ticket set out to close.
+        //
+        // `s.aiKeyId` remains the fallback for a Summary scheduled before this
+        // field existed, where nothing is selected and the server picked.
+        aiKeyId: selectedAiKeyId() ?? s.aiKeyId ?? undefined,
         autoPublish: s.autoPublish,
         publishBotId: s.publishBotId,
         publishChatId: s.publishChatId,

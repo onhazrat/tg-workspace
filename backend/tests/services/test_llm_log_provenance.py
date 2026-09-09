@@ -56,6 +56,22 @@ Watched to fail, one change at a time:
 * the resolved key spliced into the logged prompt — the secrecy test goes red,
   and it reads the whole row rather than `full_request` alone because an export
   streams every column.
+
+Added after `/code-review` on PR #28, which found three of these before they
+shipped:
+
+* narrowing `_run_summary_call`'s resolve guard back to `except HTTPException` —
+  `test_a_resolution_failure_that_is_not_an_http_error_still_files_a_row` goes
+  red. `decrypt_token` raises a bare `ValueError` outside `local`, so the
+  original catch quietly reopened the exact silent failure this module exists to
+  close;
+* dropping `_record_failure` from the error handler — the backoff test goes red
+  on the second tick. Removing the quota auto-disable was right; removing it
+  with no damper left a broken Key retrying 1,440 times a day;
+* narrowing `_NOT_INHERITED` back to `("autoRegenerate",)` — the clear-on-success
+  test goes red, because `extra`'s spread carries the stale ladder onto a
+  Summary that has just succeeded. That spread is also how `aiKeyId` travels,
+  which is why the same test asserts the Key survived the clearing.
 """
 
 from __future__ import annotations
@@ -337,6 +353,127 @@ def test_a_failed_run_does_not_disable_the_schedule(
         "a failed run turned auto-regeneration off; the Account loses every "
         "future run and nothing tells them"
     )
+
+
+def test_a_failed_run_backs_off_instead_of_retrying_every_minute(
+    session: Session, user: User
+) -> None:
+    """The other half of "a failed run does not disable the schedule".
+
+    Keeping the schedule is right and it is not free. `_is_due` stays true
+    forever once the window has passed and the tick is 60 seconds, so without a
+    damper the *most ordinary* case — an Account that had auto-regeneration on
+    before BYOK and has not saved a Key — calls a Provider and writes a failed
+    row 1,440 times a day, bumping the log etag every minute for every open
+    client.
+
+    Backoff rather than an attempt cap: a cap is the auto-disable wearing a
+    different hat, and would stop the Summary for good over an outage that
+    cleared itself.
+    """
+    key = _seed_key(session, user.id)
+    summary = _due_summary(session, user.id, extra={"aiKeyId": key.id})
+
+    provider = AsyncMock()
+    provider.complete.side_effect = RuntimeError("provider is having a day")
+
+    with patch.object(auto_summary, "get_provider", return_value=provider):
+        asyncio.run(auto_summary.run_auto_summary())
+        first = len(_llm_rows(user.id))
+        # A second tick immediately after. Without the backoff this is another
+        # outbound call and another row, once a minute, for ever.
+        asyncio.run(auto_summary.run_auto_summary())
+
+    assert first == 1
+    assert len(_llm_rows(user.id)) == 1, (
+        "the second tick retried inside the backoff window; a broken Key "
+        "produces ~1,440 failed rows and outbound calls a day"
+    )
+
+    with Session(engine) as check:
+        row = check.get(Summary, summary.id)
+    assert row is not None
+    assert (row.extra or {}).get("autoRegenerateFailures") == 1
+    assert (row.extra or {}).get("autoRegenerate") is True, (
+        "the backoff must pace the schedule, never switch it off"
+    )
+
+
+def test_the_wait_doubles_and_is_capped() -> None:
+    """A ladder, not a constant, and it stops climbing.
+
+    The cap is what keeps "keeps retrying" true: an unbounded doubling reaches
+    a wait longer than the deployment's life, which is an auto-disable arrived
+    at by arithmetic rather than by decision.
+    """
+    assert auto_summary._retry_after(1) == 60_000
+    assert auto_summary._retry_after(2) == 120_000
+    assert auto_summary._retry_after(3) == 240_000
+    assert auto_summary._retry_after(99) == auto_summary._RETRY_BACKOFF_CAP_MS
+
+
+def test_a_successful_run_clears_the_backoff(session: Session, user: User) -> None:
+    """The successor starts on attempt zero.
+
+    A run that produced a Summary is the proof the Key works. Inheriting the
+    ladder through `extra`'s spread would make last night's outage delay a
+    Summary that has just succeeded — and the spread is exactly how `aiKeyId`
+    travels, so this is the same mechanism carrying something it must not.
+    """
+    key = _seed_key(session, user.id)
+    _due_summary(
+        session,
+        user.id,
+        extra={
+            "aiKeyId": key.id,
+            "autoRegenerateFailures": 4,
+            "autoRegenerateRetryAfter": 1,  # long past, so it is due now
+        },
+    )
+
+    with patch.object(auto_summary, "get_provider", return_value=_stub_provider()):
+        result = asyncio.run(auto_summary.run_auto_summary())
+
+    assert len(result["regenerated"]) == 1
+    with Session(engine) as check:
+        fresh = check.get(Summary, result["regenerated"][0])
+    assert fresh is not None
+    extra = fresh.extra or {}
+    assert "autoRegenerateFailures" not in extra
+    assert "autoRegenerateRetryAfter" not in extra
+    assert extra.get("aiKeyId") == key.id, (
+        "clearing the ladder must not also drop the Key the chain runs on"
+    )
+
+
+def test_a_resolution_failure_that_is_not_an_http_error_still_files_a_row(
+    session: Session, user: User
+) -> None:
+    """ "Every failure files a row" has to mean every failure.
+
+    `resolve_ai_key` answers a missing or foreign Key with an `HTTPException`,
+    which is the case anybody catches. It also reaches `decrypt_token`, which
+    raises a bare `ValueError` outside `local` for a row that is not encrypted
+    — a `SECRET_KEY` rotation, or a restore carrying plaintext. Catching only
+    the tidy one puts that back in the silent column, which is the failure this
+    whole function exists to remove.
+    """
+    key = _seed_key(session, user.id)
+    _due_summary(session, user.id, extra={"aiKeyId": key.id})
+
+    with patch.object(
+        auto_summary,
+        "resolve_ai_key",
+        side_effect=ValueError("Stored key is not encrypted; re-save it"),
+    ):
+        result = asyncio.run(auto_summary.run_auto_summary())
+
+    assert result["regenerated"] == []
+    rows = _llm_rows(user.id)
+    assert [r.status for r in rows] == ["failed"], (
+        "a non-HTTP resolution failure produced no log row at all"
+    )
+    assert "not encrypted" in (rows[0].error or "")
 
 
 # --------------------------------------------------------------------------

@@ -88,11 +88,25 @@ export const saveSyncLog = (log: SyncLog, post?: LogPoster): Promise<void> =>
  * and the scheduler stamps its own from the Key it actually resolved.
  */
 function currentProvider(): Pick<LLMLog, "provider" | "baseUrl"> {
-  const keys = queryClient.getQueryData<AiKey[]>(queryKeys.aiKeys)
-  if (!keys?.length) return {}
   const selected = selectedAiKeyId()
-  const key = (selected && keys.find((k) => k.id === selected)) || keys[0]
-  return { provider: key?.provider, baseUrl: key?.baseUrl ?? undefined }
+  // **Only an explicit selection.** There was a `?? keys[0]` fallback here and
+  // it was worse than nothing: with no id in the body the server resolves
+  // `(validated or rows)[0]` — validated Keys first — while `keys[0]` is merely
+  // the most recently updated. Hold a validated Gemini Key updated yesterday
+  // and an OpenAI-compatible one whose stamp a rejection cleared today, select
+  // neither, and the server bills Gemini while the row claims the other. That
+  // is the "which Provider is failing me" question these columns exist for,
+  // answered wrong, which is worse than left blank.
+  //
+  // Mirroring the server's rule here instead would be the same rule in two
+  // places, drifting the moment either moves. `null` already means "nothing was
+  // recorded".
+  if (!selected) return {}
+  const key = queryClient
+    .getQueryData<AiKey[]>(queryKeys.aiKeys)
+    ?.find((k) => k.id === selected)
+  if (!key) return {}
+  return { provider: key.provider, baseUrl: key.baseUrl ?? undefined }
 }
 
 /**

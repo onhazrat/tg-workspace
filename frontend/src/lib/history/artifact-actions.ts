@@ -75,9 +75,17 @@ export async function setArtifactNote(
  * Turning `autoRegenerate` **on** also records which AI Key pays for it
  * (BYOK-03). This is the moment the choice exists to be made: the scheduler
  * fires with nobody present, and browser storage — where the live selection
- * lives — is a per-device convenience the server cannot read. Turning the flag
- * off leaves the stored id alone, so switching it back on next week keeps the
- * Key it had rather than silently adopting whichever one is newest.
+ * lives — is a per-device convenience the server cannot read.
+ *
+ * **Enabling always writes the current selection, overwriting any id already
+ * stored.** Switching a schedule back on is a fresh decision made with the
+ * chooser in front of you, so the Key selected now is the one meant. (An
+ * earlier draft of this comment claimed the opposite — that a stored id
+ * survived an off-then-on — which the code never did and `ArtifactListItem`
+ * could not support anyway, since it does not carry the field.)
+ *
+ * Turning the flag **off** sends only the flag, so the stored id is left
+ * exactly as it was rather than being cleared by a disable.
  *
  * An id naming a Key that has since been deleted is harmless: the server
  * answers it as an absent row and files a failed log row saying so, which is a

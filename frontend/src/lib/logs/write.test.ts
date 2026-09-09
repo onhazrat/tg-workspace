@@ -192,6 +192,7 @@ describe("an LLM log records which Provider answered (BYOK-03)", () => {
 
   it("records nothing rather than guessing when no Key is cached", async () => {
     queryClient.setQueryData(queryKeys.aiKeys, undefined)
+    scopedStorage.setItem("selected_ai_key", "k2")
 
     await saveLLMLog(llm("l2"), ok)
 
@@ -200,8 +201,27 @@ describe("an LLM log records which Provider answered (BYOK-03)", () => {
     expect(written.baseUrl).toBeUndefined()
   })
 
+  it("records nothing when no Key is selected, rather than the newest", async () => {
+    // The server resolves `(validated or rows)[0]` when the body names no
+    // Key — validated first. `keys[0]` is merely newest-updated, so a
+    // fallback here reports a Provider the server did not bill whenever the
+    // newest Key is the unvalidated one. Blank beats wrong: this column is
+    // read to answer "which Provider is failing me".
+    queryClient.setQueryData(queryKeys.aiKeys, [
+      key("newest", "openai_compatible", "https://newer.example/v1"),
+      key("validated", "gemini", null),
+    ])
+
+    await saveLLMLog(llm("l4"), ok)
+
+    const written = calls[0][1][0] as Record<string, unknown>
+    expect(written.provider).toBeUndefined()
+    expect(written.baseUrl).toBeUndefined()
+  })
+
   it("lets a caller that already knows override it", async () => {
     queryClient.setQueryData(queryKeys.aiKeys, [key("k1", "gemini", null)])
+    scopedStorage.setItem("selected_ai_key", "k1")
 
     await saveLLMLog(
       { ...(llm("l3") as object), provider: "openai_compatible" } as never,
