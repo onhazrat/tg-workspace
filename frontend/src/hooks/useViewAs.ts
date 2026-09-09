@@ -1,12 +1,18 @@
 import { useQueryClient } from "@tanstack/react-query"
 import { useCallback } from "react"
 
-import { viewAsElevateViewAs, viewAsStartViewAs } from "@/client"
+import {
+  viewAsElevateViewAs,
+  viewAsSpendViewAs,
+  viewAsStartViewAs,
+} from "@/client"
 import {
   enterViewAs,
   exitViewAs,
   ownerToken,
   VIEW_AS_ELEVATED,
+  VIEW_AS_SPEND,
+  VIEW_AS_WRITING_MODES,
   type ViewAsClaims,
   viewAsClaims,
 } from "@/lib/storage/scoped"
@@ -77,6 +83,32 @@ export function useViewAs() {
   }
 
   /**
+   * Trade the look for a short session that may spend the target's own money
+   * (BYOK-04).
+   *
+   * A third exchange rather than an argument to `elevate`, because the server
+   * makes it one: elevation authorises writes, which are reversible and
+   * attributed, and this authorises spending, which is neither. The ceiling is
+   * the shortest of the three and the server bounds `minutes` under it.
+   *
+   * Sent with the Owner's **own** token for `elevate`'s reason, and offered
+   * from either lower tier — a spend session is wider than an elevated one, so
+   * an Owner who elevated and then hit the AI wall reaches it without exiting
+   * first.
+   */
+  const spend = async (userId: string, minutes?: number): Promise<void> => {
+    const owner = ownerToken()
+    const session = await viewAsSpendViewAs({
+      path: { user_id: userId },
+      query: minutes === undefined ? undefined : { minutes },
+      headers: owner ? { Authorization: `Bearer ${owner}` } : undefined,
+    })
+    enterViewAs(session.accessToken)
+    queryClient.clear()
+    window.location.href = "/"
+  }
+
+  /**
    * Put the session down and go back to the Owner's own account.
    *
    * Memoised because `ViewAsRibbon` schedules it on a timer keyed by identity:
@@ -93,8 +125,12 @@ export function useViewAs() {
     claims,
     isViewingAs: claims !== null,
     isElevated: claims?.mode === VIEW_AS_ELEVATED,
+    isSpending: claims?.mode === VIEW_AS_SPEND,
+    /** Either tier where a click changes or costs something on their account. */
+    isWriting: claims !== null && VIEW_AS_WRITING_MODES.includes(claims.mode),
     start,
     elevate,
+    spend,
     stop,
   }
 }

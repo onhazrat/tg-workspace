@@ -9,7 +9,7 @@ neither. So this is a third tier rather than a widening of the second.
 
 **Blocked by:** BYOK-03.
 
-**Status:** ready-for-agent
+**Status:** done
 
 ## Use without sight
 
@@ -24,16 +24,21 @@ the publish path, which refuses a foreign credential *before* it is decrypted.
 
 ## Acceptance criteria
 
-- [ ] A third View-as mode joins read-only and elevated, and the one function that answers whether an operation is permitted answers for all three.
-- [ ] It is a third exchange authorised by the Owner's own token, so a session can never widen itself.
-- [ ] It has its own ceiling, validated strictly shorter than the elevated ceiling, the way that one is validated strictly shorter than the read-only session.
-- [ ] It gets its own Permission constant. Authorisation here names a Permission and never a role, so a role that views and writes but never spends becomes expressible as data rather than a code change.
-- [ ] The Key routes are refused in all three tiers.
-- [ ] Every AI call made during the session is attributed to the acting Owner on the log row BYOK-03 added, and an ordinary write by the Account clears that attribution.
-- [ ] The guard that walks every mounted mutating operation now walks it against three tiers, so a route added later cannot join the API without being classified against all of them.
-- [ ] The models endpoint from BYOK-02, if that ticket has landed, is classified as spending rather than reading.
+- [x] A third View-as mode joins read-only and elevated, and the one function that answers whether an operation is permitted answers for all three.
+- [x] It is a third exchange authorised by the Owner's own token, so a session can never widen itself.
+- [x] It has its own ceiling, validated strictly shorter than the elevated ceiling, the way that one is validated strictly shorter than the read-only session.
+- [x] It gets its own Permission constant. Authorisation here names a Permission and never a role, so a role that views and writes but never spends becomes expressible as data rather than a code change.
+- [x] The Key routes are refused in all three tiers.
+- [x] Every AI call made during the session is attributed to the acting Owner on the log row BYOK-03 added, and an ordinary write by the Account clears that attribution.
+- [x] The guard that walks every mounted mutating operation now walks it against three tiers, so a route added later cannot join the API without being classified against all of them.
+- [x] The models endpoint from BYOK-02, if that ticket has landed, is classified as spending rather than reading.
 
 ## Notes
+
+Built against BYOK-02 while BYOK-03 was still in flight, then rebased onto it. The
+`acted_by_user_id`/`acted_by_email` pair on `LLMLog` and the stamp in `upsert_llm_log` are
+BYOK-03's (`f3a4b5c6d7e8`); this ticket is the tier that makes them load-bearing, and
+`test_view_as_spend.py` asserts they hold under a spend token rather than re-adding them.
 
 Granted on Operator authority alone, with no target consent. This is deliberate and argued in
 ADR-017: an elevated Owner already spends a target's Telegram Budget with no consent step, so

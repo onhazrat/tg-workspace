@@ -786,6 +786,20 @@
       "sensitive": false
     },
     {
+      "default": 3,
+      "name": "VIEW_AS_SPEND_DEFAULT_MINUTES",
+      "required": false,
+      "scope": "backend_runtime",
+      "sensitive": false
+    },
+    {
+      "default": 10,
+      "name": "VIEW_AS_SPEND_MAX_MINUTES",
+      "required": false,
+      "scope": "backend_runtime",
+      "sensitive": false
+    },
+    {
       "default": 30,
       "name": "VIEW_AS_TOKEN_EXPIRE_MINUTES",
       "required": false,
