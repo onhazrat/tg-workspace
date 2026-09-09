@@ -2,7 +2,8 @@ import { Brain, ChevronDown, KeyRound, Languages } from "lucide-react"
 import type React from "react"
 import { useState } from "react"
 
-import { LANGUAGES, MODELS } from "@/constants"
+import { ModelCombo } from "@/components/ai/ModelCombo"
+import { LANGUAGES } from "@/constants"
 import { useSettings } from "@/contexts/SettingsContext"
 import { useAiKeys } from "@/hooks/useAiKeys"
 import { rememberAiKeyId, selectedAiKeyId } from "@/lib/aiKeys/selection"
@@ -17,10 +18,16 @@ import { rememberAiKeyId, selectedAiKeyId } from "@/lib/aiKeys/selection"
  * otherwise. Discover is the exception and does no inference at all: its report
  * is a server-side aggregation, so neither selector reaches it.
  *
- * The chevrons are not decoration. These are native `<select>`s styled as
- * chips, and `appearance: none` strips the platform's own dropdown arrow —
- * measured on staging, there was provably no affordance of any kind without
- * them. `pointer-events-none` keeps the click falling through to the select.
+ * The chevrons are not decoration. Language and Key are native `<select>`s
+ * styled as chips, and `appearance: none` strips the platform's own dropdown
+ * arrow — measured on staging, there was provably no affordance of any kind
+ * without them. `pointer-events-none` keeps the click falling through.
+ *
+ * Model is a `ModelCombo` since BYOK-02, an `<input list>` rather than a
+ * `<select>`, because the ids come from the account's own provider and an
+ * endpoint that serves no catalogue still has to be typeable. Its chevron earns
+ * its place for the same reason as the others: a datalist input looks exactly
+ * like a text field until something says otherwise.
  *
  * The AI Key chip (BYOK-01) is the one control here that can be absent. With
  * fewer than two Keys there is nothing to choose between, so the common case
@@ -58,19 +65,12 @@ export const RunSettingsBar: React.FC = () => {
 
       <div className="flex h-10 items-center gap-2 rounded-lg border border-app-ink/10 bg-app-muted/20 px-3 transition-colors hover:bg-app-muted/30">
         <Brain size={14} className="text-app-ink/50" />
-        <select
-          aria-label="Inference model"
+        <ModelCombo
+          ariaLabel="Inference model"
           value={selectedModel}
-          onChange={(e) => setSelectedModel(e.target.value)}
-          className="max-w-[160px] cursor-pointer appearance-none truncate bg-transparent font-mono text-xs focus:outline-none"
-          title="Inference Model"
-        >
-          {MODELS.map((m) => (
-            <option key={m.id} value={m.id}>
-              {m.label}
-            </option>
-          ))}
-        </select>
+          onChange={setSelectedModel}
+          className="max-w-[160px] truncate bg-transparent font-mono text-xs focus:outline-none"
+        />
         <ChevronDown
           size={12}
           aria-hidden="true"

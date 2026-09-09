@@ -26,21 +26,29 @@ import { deleteAiKey, saveAiKey } from "@/lib/aiKeys/store"
  * is deliberately no re-check button: a button that spends the user's money to
  * find out whether they can still spend money is the cost BYOK removes.
  *
- * No provider chooser. BYOK-01 ships Gemini alone, and a select with one option
- * is a control that teaches nothing; BYOK-02 adds the second kind and the field
- * with it.
+ * Two provider kinds and only two (BYOK-02). "OpenAI-compatible" is one kind
+ * rather than a family — OpenRouter, Groq, Together, DeepSeek, Mistral, a local
+ * Ollama and vLLM are the same API at different addresses — so what tells them
+ * apart is the base URL, and the field appears only for that kind. Gemini needs
+ * none and showing it an empty one would invite somebody to fill it in.
  */
 export const AIKeysPanel: React.FC = () => {
   const keys = useAiKeys()
   const refresh = useRefreshAiKeys()
   const [label, setLabel] = useState("")
   const [secret, setSecret] = useState("")
+  const [provider, setProvider] = useState("gemini")
+  const [baseUrl, setBaseUrl] = useState("")
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   const addKey = async () => {
     if (!secret.trim()) {
       setError("Paste a provider API key first.")
+      return
+    }
+    if (provider === "openai_compatible" && !baseUrl.trim()) {
+      setError("An OpenAI-compatible key needs a base URL.")
       return
     }
     setSaving(true)
@@ -50,6 +58,8 @@ export const AIKeysPanel: React.FC = () => {
         id: crypto.randomUUID(),
         label: label.trim() || "My key",
         key: secret.trim(),
+        provider,
+        baseUrl: baseUrl.trim() || null,
       })
       // The row is stored and used either way; only the message changes. A
       // failed check does not mean a bad key — the provider may simply have
@@ -63,6 +73,7 @@ export const AIKeysPanel: React.FC = () => {
       }
       setLabel("")
       setSecret("")
+      setBaseUrl("")
       await refresh()
     } catch {
       setError("Could not save that key.")
@@ -85,6 +96,23 @@ export const AIKeysPanel: React.FC = () => {
       </p>
 
       <div className="space-y-4 mb-8">
+        <select
+          aria-label="Provider"
+          value={provider}
+          onChange={(e) => setProvider(e.target.value)}
+          className="w-full bg-app-card border border-app-ink/10 px-4 py-3 text-[11px] font-mono uppercase tracking-widest focus:outline-none focus:border-app-ink/30"
+        >
+          <option value="gemini">GOOGLE GEMINI</option>
+          <option value="openai_compatible">OPENAI-COMPATIBLE</option>
+        </select>
+        {provider === "openai_compatible" && (
+          <TgInput
+            type="text"
+            placeholder="BASE URL (E.G. HTTPS://OPENROUTER.AI/API/V1)"
+            value={baseUrl}
+            onChange={(e) => setBaseUrl(e.target.value)}
+          />
+        )}
         <TgInput
           type="password"
           placeholder="PROVIDER API KEY"
@@ -127,8 +155,8 @@ export const AIKeysPanel: React.FC = () => {
                   {key.label}
                 </h3>
                 <div className="flex items-center gap-2 mt-1">
-                  <span className="text-[9px] font-mono opacity-40">
-                    {key.provider}
+                  <span className="text-[9px] font-mono opacity-40 truncate">
+                    {key.baseUrl ?? key.provider}
                   </span>
                   {key.lastValidated ? (
                     <span className="flex items-center gap-1 text-[9px] font-mono text-green-500">

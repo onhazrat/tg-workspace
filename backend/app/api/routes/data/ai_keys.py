@@ -13,7 +13,7 @@ from typing import Any
 
 from fastapi import APIRouter
 
-from app.ai.registry import validate_credential
+from app.ai.registry import forget_cached_models, validate_credential
 from app.api.deps import CurrentUser, SessionDep
 from app.core.secrets import decrypt_token
 from app.models_tg import AICredential
@@ -74,6 +74,10 @@ async def upsert_ai_credential(
         row.base_url,
     )
     session.close()
+
+    # A save can move the base URL, and a cached catalogue outliving that edit
+    # is a dropdown offering models the new endpoint has never heard of.
+    forget_cached_models(f"{stored_id}|")
 
     valid = await validate_credential(
         provider=provider, api_key=secret, base_url=base_url

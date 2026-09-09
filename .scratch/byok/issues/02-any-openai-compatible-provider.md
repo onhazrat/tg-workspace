@@ -10,7 +10,7 @@ different addresses. There is no class per vendor and there will not be one.
 
 **Blocked by:** BYOK-01.
 
-**Status:** ready-for-agent
+**Status:** done
 
 ## Why the model is not stored on the Key
 
@@ -24,15 +24,15 @@ already drifted in purpose. Both go.
 
 ## Acceptance criteria
 
-- [ ] A single `OpenAICompatibleProvider` implements the existing `LLMProvider` protocol and takes a base URL. No class per vendor.
-- [ ] An AI Key of that Provider kind carries a base URL; a Gemini Key does not need one.
-- [ ] Save-time validation works for the new Provider kind, so a wrong base URL or a rejected credential is caught at the form rather than at Artifact time.
-- [ ] The models endpoint proxies `{base_url}/models` for the named Key instead of returning a static list, and its response is cached per Key so a dropdown does not hit the Provider on every render.
-- [ ] A Provider that serves no model list falls back to a free-text model id rather than blocking the Account.
-- [ ] Both hardcoded model lists are deleted, the backend's and the frontend's.
-- [ ] The models endpoint is treated as a spending operation rather than a read, because it now makes an outbound call on an Account's behalf. It does not join the View-as read-only allowlist. The bar stated for that allowlist already refuses a route on exactly these grounds.
-- [ ] The new route joins the account-isolation probe.
-- [ ] Summary, Chat and Tag run all work against an OpenAI-compatible Key, not only Summary.
+- [x] A single `OpenAICompatibleProvider` implements the existing `LLMProvider` protocol and takes a base URL. No class per vendor.
+- [x] An AI Key of that Provider kind carries a base URL; a Gemini Key does not need one.
+- [x] Save-time validation works for the new Provider kind, so a wrong base URL or a rejected credential is caught at the form rather than at Artifact time.
+- [x] The models endpoint proxies `{base_url}/models` for the named Key instead of returning a static list, and its response is cached per Key so a dropdown does not hit the Provider on every render.
+- [x] A Provider that serves no model list falls back to a free-text model id rather than blocking the Account.
+- [x] Both hardcoded model lists are deleted, the backend's and the frontend's.
+- [x] The models endpoint is treated as a spending operation rather than a read, because it now makes an outbound call on an Account's behalf. It does not join the View-as read-only allowlist. The bar stated for that allowlist already refuses a route on exactly these grounds.
+- [x] The new route joins the account-isolation probe.
+- [x] Summary, Chat and Tag run all work against an OpenAI-compatible Key, not only Summary.
 
 ## Notes
 

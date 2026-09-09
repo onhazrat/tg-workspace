@@ -18,6 +18,12 @@ export const queryKeys = {
    * needing either bot credentials or chat destinations.
    */
   aiKeys: ["aiKeys"] as const,
+  /**
+   * The models one Key's provider offers (BYOK-02). Keyed by the Key, because
+   * two Keys reach two different catalogues — and `null` is a real key here,
+   * standing for "whichever Key the server picks for me".
+   */
+  aiModels: (aiKeyId: string | null) => ["aiModels", aiKeyId] as const,
   summaries: ["summaries"] as const,
   summary: (id: string) => ["summary", id] as const,
   dbStats: ["dbStats"] as const,

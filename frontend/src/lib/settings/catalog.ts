@@ -4,7 +4,6 @@ import {
   AUTO_SYNC_INTERVAL_MIN_MINUTES,
   DYNAMIC_SYNC_EXPECTED_POSTS_DEFAULT,
   LANGUAGES,
-  MODELS,
   RETENTION_LOG_DAYS_DEFAULT,
   RETENTION_POST_DAYS_DEFAULT,
   RETENTION_REPORT_DAYS_DEFAULT,
@@ -283,15 +282,21 @@ export const SETTINGS_CATALOG: SettingCatalogEntry[] = [
   {
     id: "selectedModel",
     label: "AI Model",
-    description: "Default Gemini model for summaries and chat.",
+    description: "Model id used for summaries, chats and tag runs.",
     keywords: ["ai", "model"],
     group: "ai",
     source: "app",
     defaultValue: appSettingsSpec.selectedModel.defaultValue,
+    // Free text since BYOK-02, where an `enum` over three hardcoded Gemini ids
+    // used to be. The palette builds one `set-{prefix}-{slug}` command per
+    // option, which cannot be done for a list fetched at runtime from an
+    // account's own provider — and an account on OpenRouter would get several
+    // hundred commands if it could. The Settings panel is where the fetched
+    // list is offered, as a combo that also accepts anything typed.
     control: {
-      kind: "enum",
-      commandPrefix: "selected-model",
-      options: MODELS.map((m) => ({ value: m.id, label: m.label })),
+      kind: "textarea",
+      commandId: "edit-selected-model",
+      fieldId: "selected-model",
     },
   },
   {
@@ -376,10 +381,11 @@ export const SETTINGS_CATALOG: SettingCatalogEntry[] = [
     group: "ai",
     source: "app",
     defaultValue: appSettingsSpec.translationModel.defaultValue,
+    // Free text, for the reason `selectedModel` above states at length.
     control: {
-      kind: "enum",
-      commandPrefix: "translation-model",
-      options: MODELS.map((m) => ({ value: m.id, label: m.label })),
+      kind: "textarea",
+      commandId: "edit-translation-model",
+      fieldId: "translation-model",
     },
   },
 

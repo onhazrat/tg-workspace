@@ -107,31 +107,32 @@ describe("invalid stored values", () => {
     ).toBeNull()
   })
 
-  // A stale model id — one persisted before the model list changed — used to pass
-  // validation (the spec was a bare non-empty string), restore as-is, match no
-  // option in the segmented control, and render as nothing selected.
-  it("falls back to the default for a model id no longer offered", () => {
+  // BYOK-02 inverted this pair. It used to assert that a model id outside the
+  // hardcoded list fell back to the default, because the control was a
+  // `<select>` and an unmatched value rendered as nothing selected. The list is
+  // gone — an account picks from whatever its own provider offers, which the
+  // client cannot enumerate at load time — and the control is a combo that
+  // accepts free text. Keeping the old rule would silently rewrite every
+  // OpenRouter, Groq or Ollama model id back to a Gemini default on reload.
+  it("keeps any model id its provider might accept", () => {
     expect(
       loadSetting(
         "selectedModel",
-        readerFromRecord({ selectedModel: "gemini-2.5-flash" }),
+        readerFromRecord({ selectedModel: "anthropic/claude-opus-5" }),
       ),
-    ).toBe(DEFAULT_MODEL)
+    ).toBe("anthropic/claude-opus-5")
     expect(
       loadSetting(
         "translationModel",
-        readerFromRecord({ translationModel: "gemini-1.5-pro" }),
+        readerFromRecord({ translationModel: "llama3.2:3b" }),
       ),
-    ).toBe(DEFAULT_MODEL)
+    ).toBe("llama3.2:3b")
   })
 
-  it("keeps a model id that is still offered", () => {
+  it("still falls back to the default for an empty model id", () => {
     expect(
-      loadSetting(
-        "selectedModel",
-        readerFromRecord({ selectedModel: "gemini-3.1-pro-preview" }),
-      ),
-    ).toBe("gemini-3.1-pro-preview")
+      loadSetting("selectedModel", readerFromRecord({ selectedModel: "" })),
+    ).toBe(DEFAULT_MODEL)
   })
 
   it("falls back to the default for a language outside the option list", () => {

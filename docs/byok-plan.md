@@ -30,11 +30,14 @@ and can be deferred without blocking it.
 `EXPORT_OMISSIONS` entry with its reason, and `services/ai_keys.py` as the sole writer declared as
 an aggregate in `test_service_kinds.py`. Encryption reuses `core/secrets.py`; no second scheme.
 
-**2. The second Provider.** `OpenAICompatibleProvider` against the existing `LLMProvider`
-protocol, taking a base URL. `get_provider` currently caches instances in a module-level dict keyed
-by name only (`app/ai/registry.py:5`), which would hand one Account another's client — key it by
-credential or drop the cache. Ship with the guard that no auth header or key-bearing query
-parameter can reach `full_request`.
+**2. The second Provider.** *Done (BYOK-02).* `OpenAICompatibleProvider` against the existing
+`LLMProvider` protocol, taking a base URL. The instance cache went in step 1 rather than being
+keyed by credential. `POST /ai/models` proxies the named Key's endpoint, cached per Key for ten
+minutes, `[]` where a provider serves no catalogue; both hardcoded model lists are deleted, and
+Gemini's own listing is fetched too. The route is a POST and stays off the View-as read-only
+allowlist. `validate_credential` moved from a cheap completion to a model listing, which costs no
+tokens and needs no model id — the completion needed one, and `DEFAULT_AI_MODEL` is a Gemini id.
+The credential-leak guard is `tests/api/test_openai_compatible_provider.py`.
 
 **3. Threading the Key through the Artifact calls.** Eleven `get_provider` call sites across six
 modules; the routes already have `current_user`. `SummaryRequest`, `ChatRequest` and `TagRequest`
@@ -54,11 +57,12 @@ families already carry, extending `test_view_as_elevation.py`'s existing guard t
 ceiling validated strictly shorter than `VIEW_AS_ELEVATED_MAX_MINUTES`, and a derived inventory of
 spendable operations. `/ai-keys` refused in all three tiers.
 
-**Frontend, alongside 3 and 4.** A Keys panel in settings mirroring bot credentials. A Key
-selector in the Action tab, with `scopedStorage` remembering the last used and no selector shown
-when an Account has one Key. `GET /ai/models` proxies `{base_url}/models` per Key, cached, with
-free text as the fallback. Deletes the hardcoded model list in `frontend/src/constants.ts:89` and
-its backend twin.
+**Frontend, alongside 3 and 4.** The Keys panel and the Action-tab Key selector landed with step
+1; step 2 added the provider chooser and base-URL field to the panel, and replaced every model
+`<select>` with `ModelCombo`, a native `<input list>` plus `<datalist>` that is a dropdown and a
+free-text field at once. `constants.MODELS` is gone, so `formatSummaryModelLabel` returns the id,
+the two model settings validate as any non-empty string, and the six per-model palette commands
+became two free-text editors.
 
 ## Guards this trips
 

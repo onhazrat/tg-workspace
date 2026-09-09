@@ -955,16 +955,33 @@
       }
     },
     "/api/v1/ai/models": {
-      "get": {
+      "post": {
         "tags": ["ai"],
         "summary": "Api List Models",
+        "description": "List the models the chosen AI key's provider offers.",
         "operationId": "ai-api_list_models",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/ModelListRequest" }
+            }
+          },
+          "required": true
+        },
         "responses": {
           "200": {
             "description": "Successful Response",
             "content": {
               "application/json": {
                 "schema": { "$ref": "#/components/schemas/ModelListResponse" }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
               }
             }
           }
@@ -7369,6 +7386,17 @@
         "type": "object",
         "required": ["id", "label", "provider"],
         "title": "ModelInfo"
+      },
+      "ModelListRequest": {
+        "properties": {
+          "aiKeyId": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Aikeyid"
+          }
+        },
+        "type": "object",
+        "title": "ModelListRequest",
+        "description": "Which AI key's provider to ask for a model list."
       },
       "ModelListResponse": {
         "properties": {

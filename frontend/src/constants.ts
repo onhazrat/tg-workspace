@@ -86,12 +86,6 @@ export const SETTINGS_TABS = [
 
 /** Flat list of top-level settings destinations (legacy navigate / labels). Prefer SETTINGS_TOC. */
 
-export const MODELS = [
-  { id: "gemini-3-flash-preview", label: "Gemini 3 Flash" },
-  { id: "gemini-3.1-pro-preview", label: "Gemini 3.1 Pro" },
-  { id: "gemini-3.1-flash-lite-preview", label: "Gemini 3.1 Flash Lite" },
-]
-
 /** Stored in Summary.model for externally pasted AI responses (not in-app generation). */
 export const PASTED_SUMMARY_MODEL = "external"
 
@@ -99,10 +93,19 @@ export function isPastedSummaryModel(model?: string | null): boolean {
   return model === PASTED_SUMMARY_MODEL
 }
 
+/**
+ * The model id, as stored on the Summary.
+ *
+ * It used to map three hardcoded Gemini ids to prettier labels. BYOK-02 deleted
+ * that list — an account on OpenRouter reaches several hundred models and the
+ * deployment knows the label for none of them — so the id is the label now. A
+ * History row from two providers ago still reads correctly, which the lookup
+ * could not manage even for Gemini once an id was retired.
+ */
 export function formatSummaryModelLabel(model?: string | null): string {
   if (!model) return "Unknown"
   if (isPastedSummaryModel(model)) return "External"
-  return MODELS.find((m) => m.id === model)?.label ?? model
+  return model
 }
 
 export function resolvePastedSummaryModel(optionalName?: string): string {
