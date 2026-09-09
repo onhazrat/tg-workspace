@@ -1115,6 +1115,21 @@ class LLMLog(SQLModel, table=True):
         ondelete="CASCADE",
     )
     model: str
+    #: Which Provider answered, and at what address (BYOK-03).
+    #:
+    #: **Denormalised, with no foreign key to `tg_ai_credentials`.** A log row
+    #: outlives the Key that made it: revoking a credential at the Provider and
+    #: deleting it here is one decision an Account is encouraged to make, and a
+    #: cascading delete would take the evidence of what went wrong with it. Two
+    #: short strings on a row already being written, so they are columns rather
+    #: than another key in `full_request` — a blob the list page does not ship
+    #: (`LOG_HEAVY_COLUMNS`), which is what makes "which provider is failing me"
+    #: answerable without opening every row.
+    #:
+    #: `NULL` on rows written before this migration, and on the Operator Key's
+    #: shared work where there is no row to name.
+    provider: str | None = None
+    base_url: str | None = None
     prompt: str = Field(sa_column=Column(Text))
     response: str = Field(sa_column=Column(Text))
     system_instruction: str | None = Field(default=None, sa_column=Column(Text))
@@ -1133,6 +1148,18 @@ class LLMLog(SQLModel, table=True):
     error: str | None = None
     timestamp: int = Field(default=0, sa_column=_ms_ts())
     log_type: str = "summary"
+    #: The Owner who made the last write, when it was not the account above —
+    #: the pair all four artifact families carry, arriving here in BYOK-03.
+    #:
+    #: **A log is not an Artifact, and that is exactly why it needs this.** The
+    #: four artifact tables record who wrote a row that exists; an AI call that
+    #: *fails* produces no Summary, no Chat and no Tag run, so without the pair
+    #: here a Spend session can burn a target's Key and leave nothing anywhere
+    #: saying who did it. `SET NULL` for the reason `Summary` gives.
+    acted_by_user_id: uuid.UUID | None = Field(
+        default=None, foreign_key="user.id", ondelete="SET NULL"
+    )
+    acted_by_email: str | None = Field(default=None, max_length=255)
     updated_at: datetime = Field(default_factory=utc_now)
 
 

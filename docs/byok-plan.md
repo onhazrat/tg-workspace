@@ -24,13 +24,13 @@ No fallback in either direction. An Account with no AI Key cannot create an Arti
 Each step lands on its own and leaves the suite green. Steps 1–4 are the feature; 5–6 are ADR-017
 and can be deferred without blocking it.
 
-**1. The table and its aggregate.** `tg_ai_credentials` modelled on `tg_bot_credentials`:
+**1. The table and its aggregate (done, BYOK-01).** `tg_ai_credentials` modelled on `tg_bot_credentials`:
 `user_id`, label, provider kind, base URL, `key_encrypted`, `last_validated`. Migration, an
 `alembic/env.py` import, a `SCOPES` entry as `USER_OWNED`, a `tg_cleanup` inventory entry, an
 `EXPORT_OMISSIONS` entry with its reason, and `services/ai_keys.py` as the sole writer declared as
 an aggregate in `test_service_kinds.py`. Encryption reuses `core/secrets.py`; no second scheme.
 
-**2. The second Provider.** *Done (BYOK-02).* `OpenAICompatibleProvider` against the existing
+**2. The second Provider (done, BYOK-02).** `OpenAICompatibleProvider` against the existing
 `LLMProvider` protocol, taking a base URL. The instance cache went in step 1 rather than being
 keyed by credential. `POST /ai/models` proxies the named Key's endpoint, cached per Key for ten
 minutes, `[]` where a provider serves no catalogue; both hardcoded model lists are deleted, and
@@ -39,17 +39,17 @@ allowlist. `validate_credential` moved from a cheap completion to a model listin
 tokens and needs no model id — the completion needed one, and `DEFAULT_AI_MODEL` is a Gemini id.
 The credential-leak guard is `tests/api/test_openai_compatible_provider.py`.
 
-**3. Threading the Key through the Artifact calls.** Eleven `get_provider` call sites across six
+**3. Threading the Key through the Artifact calls (done, BYOK-01).** Eleven `get_provider` call sites across six
 modules; the routes already have `current_user`. `SummaryRequest`, `ChatRequest` and `TagRequest`
 gain the Key id. The 21 `settings.GEMINI_API_KEY` guards split into two distinct failures: no Key
 at all, and a Key the Provider rejected. Regenerate the client.
 
-**4. The unattended path.** `Summary.extra` gains `aiKeyId` beside `publishBotId`. Re-check it
+**4. The unattended path (done, BYOK-03).** `Summary.extra` gains `aiKeyId` beside `publishBotId`. Re-check it
 against the Summary's owner **before** `decrypt_token` — multi-user-tenancy ticket 33 is the reason, and the check
 belongs in the same place. A rejected Key files a failed `LLMLog` row and clears the Key's
 validation state; it does not disable the schedule.
 
-**5. `LLMLog` grows three things.** `provider` and `base_url` as columns beside `model`,
+**5. `LLMLog` grows three things (done, BYOK-03, landed with step 4).** `provider` and `base_url` as columns beside `model`,
 denormalised, no foreign key. Plus `acted_by_user_id`/`acted_by_email`, the pair all four Artifact
 families already carry, extending `test_view_as_elevation.py`'s existing guard to cover it.
 

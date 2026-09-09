@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from "bun:test"
 import type { LogType } from "@/api/data"
 import { queryKeys, SUMMARIZER_STALE_TIME } from "@/hooks/queryKeys"
 import { queryClient } from "@/lib/queryClient"
+import { scopedStorage } from "@/lib/storage/scoped"
 import type { NetworkLog } from "@/types"
 import {
   type LogPoster,
@@ -145,5 +146,70 @@ describe("the staleness assumption this all rests on", () => {
     expect(SUMMARIZER_STALE_TIME).toBeGreaterThan(0)
     seedFresh(queryKeys.logs.llm)
     expect(isStale(queryKeys.logs.llm)).toBe(false)
+  })
+})
+
+describe("an LLM log records which Provider answered (BYOK-03)", () => {
+  /**
+   * Stamped inside `saveLLMLog` rather than at the three call sites, so the
+   * assertions here are about the *only* place that decides it.
+   *
+   * Mutation evidence: dropping the `...currentProvider()` spread turns both
+   * positive cases undefined; reversing the spread order (`{...log,
+   * ...currentProvider()}`) turns the caller-wins case red, which is the one
+   * that keeps the scheduler's own resolved values from being overwritten if
+   * this ever runs server-side.
+   */
+  const key = (id: string, provider: string, baseUrl: string | null) => ({
+    id,
+    label: id,
+    provider,
+    baseUrl,
+    hasKey: true,
+    lastValidated: null,
+  })
+
+  const llm = (id: string) =>
+    ({ id, timestamp: 1, status: "success", model: "m" }) as never
+
+  afterEach(() => {
+    localStorage.clear()
+  })
+
+  it("names the selected Key's provider and address", async () => {
+    queryClient.setQueryData(queryKeys.aiKeys, [
+      key("k1", "gemini", null),
+      key("k2", "openai_compatible", "https://openrouter.example/api/v1"),
+    ])
+    scopedStorage.setItem("selected_ai_key", "k2")
+
+    await saveLLMLog(llm("l1"), ok)
+
+    const written = calls[0][1][0] as Record<string, unknown>
+    expect(written.provider).toBe("openai_compatible")
+    expect(written.baseUrl).toBe("https://openrouter.example/api/v1")
+  })
+
+  it("records nothing rather than guessing when no Key is cached", async () => {
+    queryClient.setQueryData(queryKeys.aiKeys, undefined)
+
+    await saveLLMLog(llm("l2"), ok)
+
+    const written = calls[0][1][0] as Record<string, unknown>
+    expect(written.provider).toBeUndefined()
+    expect(written.baseUrl).toBeUndefined()
+  })
+
+  it("lets a caller that already knows override it", async () => {
+    queryClient.setQueryData(queryKeys.aiKeys, [key("k1", "gemini", null)])
+
+    await saveLLMLog(
+      { ...(llm("l3") as object), provider: "openai_compatible" } as never,
+      ok,
+    )
+
+    expect((calls[0][1][0] as Record<string, unknown>).provider).toBe(
+      "openai_compatible",
+    )
   })
 })

@@ -207,6 +207,7 @@ not the summary.** Open the file for the full list of what it checks and why.
 | `backend/tests/core/test_permissions.py` | no stranded permission, no permission on the default role, seeded rows match the constants | test |
 | `backend/tests/deployment/test_edge_rate_limit.py` | the auth paths are rate limited at Traefik, and that router keeps its service, priority, and compression | test |
 | `backend/tests/services/test_ai_key_payment_rule.py` | each Artifact purpose resolves the caller's Key and each shared purpose the Operator's; a foreign Key id is refused before decrypt and answers as an absent one; every `get_provider` call site is declared **and** resolves a Key | test |
+| `backend/tests/services/test_llm_log_provenance.py` | a scheduled Summary spends the Key it stored; every refusal files a failed log row and none disables the schedule; no credential reaches a logged body | test |
 | `backend/tests/api/test_openai_compatible_provider.py` | the credential never reaches a URL; the model list is the endpoint's own answer; a provider with no catalogue falls back to free text where a rejected Key says so and loses its stamp; a dropdown re-render costs no outbound call | test |
 | pre-commit `generate-frontend-sdk` | the committed client matches the backend | hook |
 

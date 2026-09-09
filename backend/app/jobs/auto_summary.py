@@ -10,13 +10,14 @@ from collections.abc import Sequence
 from datetime import datetime
 from typing import Any
 
+from fastapi import HTTPException
 from sqlmodel import Session, col, select
 
-from app.ai.registry import default_model, get_provider
+from app.ai.registry import default_model, get_provider, is_credential_rejection
 from app.core.db import engine
 from app.models_tg import ChatDestination, Post, Summary, utc_now
 from app.prompts.summary import format_summary_prompt
-from app.services.ai_keys import Purpose, resolve_ai_key
+from app.services.ai_keys import Purpose, record_validation, resolve_ai_key
 from app.services.channel_setting_groups import channel_is_frozen, load_groups_by_id
 from app.services.credentials import CHAT_DESTINATION_NOT_FOUND
 from app.services.follows import followed_channels_for
@@ -75,6 +76,123 @@ def _log_publish_failure(
     )
     session.commit()
     touch_sync(session, "publish_logs")
+
+
+async def _run_summary_call(
+    session: Session,
+    *,
+    owner_id: uuid.UUID,
+    user_id: uuid.UUID | None,
+    key_id: str | None,
+    model: str,
+    prompt: str,
+) -> str:
+    """Spend the Summary's own Key on one completion, and leave a row either way.
+
+    **Every failure files a failed `LLMLog` before it propagates.** The
+    scheduler is unattended, so a refusal that only raises makes "my Key stopped
+    working" and "auto-regeneration is off" the same observation — the argument
+    `_auto_publish` already makes for its side, and BYOK-03 applies it here. The
+    two failures it has to cover are a `key_id` naming somebody else's row,
+    which `resolve_ai_key` refuses **before** `decrypt_token` (multi-user-tenancy
+    ticket 33), and a Provider that has started rejecting a Key that used to
+    work.
+
+    A rejection also clears the Key's validation stamp, which is the signal the
+    settings panel reads — the same `_note_rejection` the interactive routes
+    call, for the same reason: nothing re-validates on a schedule, so the only
+    thing that ever finds out is a call somebody was making anyway.
+
+    **It does not touch `autoRegenerate`.** The schedule survives its own bad
+    night; one failed run turning the feature off is work lost quietly, which is
+    the failure mode this is a correction to.
+
+    `full_request` is composed here from the prompt rather than taken from the
+    outgoing HTTP request. That is what keeps a credential out of the log:
+    Gemini carries its key as a URL query parameter, so a request object dumped
+    verbatim would write it into a row the Account can read back and export.
+    `tests/services/test_llm_log_provenance.py` asserts it.
+    """
+    # Composed **before** the Key is resolved, because the refusal this has to
+    # record happens inside `resolve_ai_key` — a foreign `aiKeyId` never reaches
+    # a Provider, and a log built after the resolution would be exactly the
+    # silent return this function exists to remove. Such a row names no
+    # provider, which is the honest answer: no endpoint was reached.
+    log: dict[str, Any] = {
+        "id": str(uuid.uuid4()),
+        "model": model,
+        "prompt": prompt,
+        "model_config_json": {"temperature": 0.7},
+        "full_request": {"contents": [{"parts": [{"text": prompt}]}]},
+        "type": "summary",
+    }
+    start = time.perf_counter()
+    try:
+        key = resolve_ai_key(
+            session, user_id=user_id, purpose=Purpose.SUMMARY, key_id=key_id
+        )
+    except HTTPException as exc:
+        _log_ai_failure(
+            session, log, owner_id=owner_id, error=str(exc.detail), start=start
+        )
+        raise
+    log["provider"] = key.provider
+    log["base_url"] = key.base_url
+    provider = get_provider(
+        provider=key.provider, api_key=key.api_key, base_url=key.base_url
+    )
+    try:
+        result = await provider.complete(prompt, model=model, temperature=0.7)
+    except Exception as exc:
+        if key.credential_id and is_credential_rejection(exc):
+            record_validation(session, key.credential_id, valid=False)
+        _log_ai_failure(session, log, owner_id=owner_id, error=str(exc), start=start)
+        raise
+    duration = time.perf_counter() - start
+    upsert_llm_log(
+        session,
+        {
+            **log,
+            "response": result.text,
+            "full_response": result.model_dump(),
+            "status": "success",
+            "timestamp": int(time.time() * 1000),
+            "duration": duration,
+        },
+        owner_id,
+    )
+    return result.text
+
+
+def _log_ai_failure(
+    session: Session,
+    log: dict[str, Any],
+    *,
+    owner_id: uuid.UUID,
+    error: str,
+    start: float,
+) -> None:
+    """Record an AI call that produced no text.
+
+    Committed on its own, because the caller is about to raise and roll the rest
+    of the regeneration back. A log row that vanished with the failure it
+    documents would be worse than none: the History would show a gap and no
+    reason for it.
+    """
+    upsert_llm_log(
+        session,
+        {
+            **log,
+            "response": "",
+            "status": "failed",
+            "error": error,
+            "timestamp": int(time.time() * 1000),
+            "duration": time.perf_counter() - start,
+        },
+        owner_id,
+    )
+    session.commit()
+    touch_sync(session, "llm_logs")
 
 
 def _extract_cited_posts(text: str, posts: Sequence[Post]) -> dict[str, dict[str, Any]]:
@@ -216,50 +334,47 @@ async def _regenerate_one(
             for p in posts
         )
         model = summary.model or default_model()
-        # An unattended regeneration is still the owner's Artifact, so it is
-        # charged to the owner's Key and never to the Operator's. BYOK-03 makes
-        # this read the `aiKeyId` the Summary stored in `extra`; until then it
-        # resolves the owner's Key the way an attended run does, which is the
-        # same answer for the Account holding one Key.
-        #
-        # `summary.user_id` may be NULL on a deployment old enough to predate
-        # the stamp. `resolve_ai_key` refuses that rather than falling back:
-        # nobody's Key can pay, and the fallback that would "fix" it is the
-        # Operator paying, which is what BYOK exists to stop.
-        key = resolve_ai_key(session, user_id=summary.user_id, purpose=Purpose.SUMMARY)
-        provider = get_provider(
-            provider=key.provider, api_key=key.api_key, base_url=key.base_url
-        )
         prompt = format_summary_prompt(
             channels=summary.channels or [],
             language=summary.language,
             posts_text=posts_text,
         )
-        start = time.perf_counter()
-        result = await provider.complete(prompt, model=model, temperature=0.7)
-        duration = time.perf_counter() - start
-        full_text = result.text
-        upsert_llm_log(
+        # An unattended regeneration is still the owner's Artifact, so it is
+        # charged to the owner's Key and never to the Operator's, and it uses
+        # the Key the Account chose when it turned auto-regeneration on rather
+        # than whichever one happens to be newest at 4am (BYOK-03).
+        #
+        # `aiKeyId` rides `Summary.extra`, which `upsert_summary` fills from
+        # unrecognised keys in the request body — so it is **client-supplied and
+        # untrusted**, exactly like `publishBotId` two fields along.
+        # `resolve_ai_key` checks it against `summary.user_id` before
+        # `decrypt_token` for the reason multi-user-tenancy ticket 33 gives, and
+        # `_run_summary_call` turns its refusal into a failed log row.
+        #
+        # `summary.user_id` may be NULL on a deployment old enough to predate
+        # the stamp. `resolve_ai_key` refuses that rather than falling back:
+        # nobody's Key can pay, and the fallback that would "fix" it is the
+        # Operator paying, which is what BYOK exists to stop.
+        full_text = await _run_summary_call(
             session,
-            {
-                "id": str(uuid.uuid4()),
-                "model": model,
-                "prompt": prompt,
-                "response": full_text,
-                "model_config_json": {"temperature": 0.7},
-                "full_request": {"contents": [{"parts": [{"text": prompt}]}]},
-                "full_response": result.model_dump(),
-                "status": "success",
-                "timestamp": int(time.time() * 1000),
-                "duration": duration,
-                "type": "summary",
-            },
-            owner_id,
+            owner_id=owner_id,
+            user_id=summary.user_id,
+            key_id=extra.get("aiKeyId"),
+            model=model,
+            prompt=prompt,
         )
 
     cited = _extract_cited_posts(full_text, posts)
     new_id = str(int(time.time() * 1000))
     new_extra = {
+        # The spread is what carries `aiKeyId` (BYOK-03) onto the Summary that
+        # comes due next, and it is not incidental: the regenerated row is the
+        # one the scheduler picks up tomorrow, so a chain that dropped the
+        # choice would revert to "whichever Key is newest" after exactly one
+        # night, with nothing anywhere saying it changed. Re-listing the key
+        # below would be the redundant half of this, not the guard —
+        # `test_llm_log_provenance.py::test_the_regenerated_summary_carries_
+        # the_key_forward` is, and it fails if this spread ever narrows.
         **{k: v for k, v in extra.items() if k not in ("autoRegenerate",)},
         "autoRegenerate": True,
         "autoPublish": extra.get("autoPublish"),
@@ -469,17 +584,21 @@ async def run_auto_summary() -> dict[str, Any]:
                 if new_id:
                     regenerated.append(new_id)
         except Exception as exc:  # noqa: BLE001
+            # **A failed run leaves the schedule alone** (BYOK-03). This used to
+            # switch `autoRegenerate` off whenever the error text mentioned a
+            # quota, a 429 or a rate limit, which was defensible while every
+            # call spent the Operator's one key and one Account could burn the
+            # deployment's whole allowance. Under BYOK the Account is billed by
+            # its own Provider, so there is nothing left to protect and the
+            # behaviour is only a way to lose work quietly: a Provider that was
+            # busy for ninety seconds turned the feature off for good, in a
+            # `extra` flag nobody looks at, with no notification anywhere.
+            #
+            # The failure is recorded rather than acted on. `_run_summary_call`
+            # has already filed a failed `LLMLog` the Account can find in its
+            # History, and the Summary stays due, so the next tick retries.
             logger.exception("Auto-summary failed for %s", summary.id)
-            err = str(exc)
-            errors.append(f"{summary.id}: {err}")
-            if "quota" in err.lower() or "429" in err or "rate limit" in err.lower():
-                with Session(engine) as session:
-                    row = session.get(Summary, summary.id)
-                    if row:
-                        row.extra = {**_summary_extra(row), "autoRegenerate": False}
-                        session.add(row)
-                        session.commit()
-                        touch_sync(session, "summaries")
+            errors.append(f"{summary.id}: {exc}")
         finally:
             _regenerating.discard(summary.id)
 

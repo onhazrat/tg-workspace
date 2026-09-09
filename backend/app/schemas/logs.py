@@ -88,6 +88,17 @@ class LLMLogResponse(BaseModel):
 
     id: str
     model: str
+    #: Which Provider answered and at what address (BYOK-03). Denormalised off
+    #: the Key, so the row still says who failed after the Key is deleted.
+    #: `null` on rows from before the column existed and on the Operator's
+    #: shared work, which has no Key row to name.
+    provider: str | None = None
+    base_url: str | None = Field(default=None, alias="baseUrl")
+    #: The Owner who made this call on the account's behalf, `null` for almost
+    #: every row — `ArtifactBase.acted_by_email`'s field, arriving on the log
+    #: because a *failed* spend produces no Artifact to carry it. The id half
+    #: stays on the table: `services/logs.py::LOG_WIRE_SKIP` says why.
+    acted_by_email: str | None = Field(default=None, alias="actedByEmail")
     prompt: str
     response: str
     system_instruction: str | None = Field(default=None, alias="systemInstruction")
@@ -217,12 +228,21 @@ class LLMLogListItemResponse(BaseModel):
 
     `modelConfig` stays: it is `{"temperature": 0.7}`, and dropping it would be
     churn rather than a saving.
+
+    `provider`, `baseUrl` and `actedByEmail` are here for the same reason and
+    the opposite trade: three short strings on a row that is being sent anyway,
+    and the questions they answer — which Provider is failing me, who spent my
+    Key — are ones you ask *of a list*. Putting them in `fullRequest` instead
+    would have hidden them behind opening every row one at a time.
     """
 
     model_config = ConfigDict(populate_by_name=True, protected_namespaces=())
 
     id: str
     model: str
+    provider: str | None = None
+    base_url: str | None = Field(default=None, alias="baseUrl")
+    acted_by_email: str | None = Field(default=None, alias="actedByEmail")
     model_config_json: dict[str, Any] | None = Field(default=None, alias="modelConfig")
     tokens: int | None = None
     duration: float | None = None

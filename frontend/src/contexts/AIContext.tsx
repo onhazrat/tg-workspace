@@ -8,6 +8,7 @@ import {
   useInvalidateSummaries,
   useSummariesHistory,
 } from "@/hooks/useSummaries"
+import { selectedAiKeyId } from "@/lib/aiKeys/selection"
 import { saveLLMLog, savePublishLog } from "@/lib/logs/write"
 import { lookupPosts } from "@/lib/posts/store"
 import { saveSummary } from "@/lib/summaries/store"
@@ -573,6 +574,10 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({
         postCount,
         timestamp: Date.now(),
         autoRegenerate: true,
+        // The chain keeps the Key it was started with (BYOK-03); the live
+        // browser selection is only the fallback for a Summary scheduled
+        // before this existed.
+        aiKeyId: s.aiKeyId ?? selectedAiKeyId() ?? undefined,
         autoPublish: s.autoPublish,
         publishBotId: s.publishBotId,
         publishChatId: s.publishChatId,

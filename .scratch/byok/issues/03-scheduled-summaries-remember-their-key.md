@@ -9,7 +9,7 @@ schedule.
 
 **Blocked by:** BYOK-01. Independent of BYOK-02.
 
-**Status:** ready-for-agent
+**Status:** done
 
 ## The trap this ticket has to avoid
 
@@ -24,15 +24,15 @@ decrypted, in the same place and for the same reason.
 
 ## Acceptance criteria
 
-- [ ] A Summary carries the id of the Key its scheduled regeneration should use, beside the publish ids it already holds.
-- [ ] Scheduled regeneration resolves that Key through the same seam an interactive request uses, and charges the Summary's own owner.
-- [ ] A Key id naming another Account's row is refused before the secret is decrypted, and the refusal files a failed log row rather than returning quietly. The scheduler is unattended; a silent return is invisible.
-- [ ] A rejected Key during a scheduled run files a failed log row and clears the Key's validation state.
-- [ ] A failed run does **not** disable the schedule. Auto-disabling on one failure loses work quietly.
-- [ ] The LLM log gains the Provider kind and the base URL as columns beside the model it already carries, denormalised with no foreign key so a row stays readable after its Key is deleted.
-- [ ] The LLM log gains the acting-Owner pair that all four Artifact families already carry and it does not. A spend that fails produces no Artifact, so without this the money is gone and nothing is attributed.
-- [ ] Key material never reaches a logged request body. The recorded body is composed at the call site rather than dumped from the outgoing HTTP request, and a guard asserts it, because one supported Provider accepts its credential as a URL query parameter.
-- [ ] The log list stays cheap. These are short strings on a row already being written, so they are columns and not a blob; the list-versus-detail split exists because that mistake cost a 56 MB page once.
+- [x] A Summary carries the id of the Key its scheduled regeneration should use, beside the publish ids it already holds.
+- [x] Scheduled regeneration resolves that Key through the same seam an interactive request uses, and charges the Summary's own owner.
+- [x] A Key id naming another Account's row is refused before the secret is decrypted, and the refusal files a failed log row rather than returning quietly. The scheduler is unattended; a silent return is invisible.
+- [x] A rejected Key during a scheduled run files a failed log row and clears the Key's validation state.
+- [x] A failed run does **not** disable the schedule. Auto-disabling on one failure loses work quietly.
+- [x] The LLM log gains the Provider kind and the base URL as columns beside the model it already carries, denormalised with no foreign key so a row stays readable after its Key is deleted.
+- [x] The LLM log gains the acting-Owner pair that all four Artifact families already carry and it does not. A spend that fails produces no Artifact, so without this the money is gone and nothing is attributed.
+- [x] Key material never reaches a logged request body. The recorded body is composed at the call site rather than dumped from the outgoing HTTP request, and a guard asserts it, because one supported Provider accepts its credential as a URL query parameter.
+- [x] The log list stays cheap. These are short strings on a row already being written, so they are columns and not a blob; the list-versus-detail split exists because that mistake cost a 56 MB page once.
 
 ## Notes
 

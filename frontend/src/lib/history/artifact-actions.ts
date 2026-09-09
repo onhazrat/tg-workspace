@@ -1,4 +1,5 @@
 import { api } from "@/api"
+import { selectedAiKeyId } from "@/lib/aiKeys/selection"
 import type { ArtifactListItem } from "@/types"
 
 /**
@@ -70,6 +71,17 @@ export async function setArtifactNote(
  * `autoRegenerate` refuses a scope shorter than a minute, because the job would
  * re-run continuously over a window that barely moves — the same guard the old
  * History card carried.
+ *
+ * Turning `autoRegenerate` **on** also records which AI Key pays for it
+ * (BYOK-03). This is the moment the choice exists to be made: the scheduler
+ * fires with nobody present, and browser storage — where the live selection
+ * lives — is a per-device convenience the server cannot read. Turning the flag
+ * off leaves the stored id alone, so switching it back on next week keeps the
+ * Key it had rather than silently adopting whichever one is newest.
+ *
+ * An id naming a Key that has since been deleted is harmless: the server
+ * answers it as an absent row and files a failed log row saying so, which is a
+ * better outcome than a schedule that silently spends a different credential.
  */
 export async function setSummaryFlag(
   artifact: ArtifactListItem,
@@ -77,7 +89,11 @@ export async function setSummaryFlag(
   value: boolean,
 ): Promise<void> {
   if (artifact.kind !== "summary") return
-  await api.upsertSummary(artifact.id, { [flag]: value } as never)
+  const body: Record<string, unknown> = { [flag]: value }
+  if (flag === "autoRegenerate" && value) {
+    body.aiKeyId = selectedAiKeyId() ?? undefined
+  }
+  await api.upsertSummary(artifact.id, body as never)
 }
 
 export async function deleteArtifact(

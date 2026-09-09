@@ -270,8 +270,22 @@ def sync_log_to_camel(
     }
 
 
+#: BYOK-03's attribution, which an **export** leaves out for the reason
+#: `discover_reports._REPORT_EXPORT_SKIP` gives: it records who wrote the row on
+#: *this* deployment, and a document restored elsewhere would be asserting
+#: something about an account that install may not have. The import side already
+#: refuses both columns (`_NEVER_IMPORTED_COLUMNS`), so shipping them would be a
+#: claim nothing could ever read back.
+#:
+#: The four artifact families reach the same place by a different route — they
+#: build an explicit payload and simply never name these — which is why this is
+#: a skip set rather than a rewritten projection. The *route* serialisers keep
+#: `actedByEmail`, and `services/logs.py::LOG_WIRE_SKIP` is that half.
+_LLM_LOG_EXPORT_SKIP = frozenset({"acted_by_user_id", "acted_by_email"})
+
+
 def llm_log_to_camel(log: LLMLog) -> dict[str, Any]:
-    return {"id": log.id, **model_to_camel(log)}
+    return {"id": log.id, **model_to_camel(log, skip=_LLM_LOG_EXPORT_SKIP)}
 
 
 def embedding_log_to_camel(log: EmbeddingLog) -> dict[str, Any]:
