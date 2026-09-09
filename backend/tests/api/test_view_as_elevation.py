@@ -33,6 +33,12 @@ Watched to fail, one change at a time:
   clear) — `test_an_ordinary_write_clears_a_previous_stamp` goes red;
 * dropping the `acting_owner.stamp` call from `upsert_summary` — one family of
   the battery and the AST guard both go red, which is the point of having both;
+* dropping it from `upsert_llm_log` (BYOK-03) — only
+  `test_an_llm_log_written_during_an_elevation_is_attributed` goes red. The AST
+  guard above cannot reach it: `services/logs.py` is not one of the four
+  artifact aggregates and is not becoming one, because a log is not an artifact
+  — which is also why it needs the pair at all, a *failed* spend leaving no
+  artifact behind to carry it;
 * binding the acting owner for a read-only session as well as an elevated one —
   the read-only session cannot write, so no artifact test moves; only
   `test_only_an_elevated_token_attributes_a_write` catches it, which is why the
@@ -75,7 +81,7 @@ from app.core.db import engine
 from app.core.permissions import ROLE_ADMIN, ROLE_OWNER
 from app.models import TokenPayload, User
 from app.models_rbac import UserRole
-from app.models_tg import ChatSession, DiscoverReport, Summary, TagRun
+from app.models_tg import ChatSession, DiscoverReport, LLMLog, Summary, TagRun
 from app.models_view_as import ViewAsSession
 from app.services.artifacts import ARTIFACT_KINDS
 from tests.utils.user import user_authentication_headers
@@ -789,6 +795,55 @@ def test_a_report_created_during_an_elevation_is_attributed(
     assert len(rows) == 1
     assert rows[0].user_id == subject_row.id
     assert rows[0].acted_by_email == owner_row.email
+
+
+def test_an_llm_log_written_during_an_elevation_is_attributed(
+    client: TestClient,
+    owner: tuple[User, dict[str, str]],
+    subject: tuple[User, dict[str, str]],
+) -> None:
+    """The fifth table to carry the pair, and it is not an artifact (BYOK-03).
+
+    That is the whole reason it needs one. The four families above record who
+    wrote a row *that exists*; an AI call that fails produces no Summary, no
+    Chat and no Tag run, so a Spend session can burn a target's Key and leave
+    the battery above with nothing to assert against. The log row is the only
+    thing a failed spend writes, so the attribution has to be on it.
+
+    Written through `POST /data/logs/llm`, which is the door the interactive
+    Artifact paths use — they compose the row in the browser and post it, so
+    this is the real call site and not a stand-in for one.
+    """
+    owner_row, owner_headers = owner
+    subject_row, _ = subject
+    elevated = _headers(_elevate(client, owner_headers, subject_row))
+    log_id = f"llm-{uuid.uuid4()}"
+
+    response = client.post(
+        f"{V1}/data/logs/llm",
+        headers=elevated,
+        json=[
+            {
+                "id": log_id,
+                "model": "m",
+                "prompt": "p",
+                "response": "r",
+                "status": "success",
+                "type": "summary",
+            }
+        ],
+    )
+    assert response.status_code == 200, response.text
+
+    with Session(engine) as session:
+        row = session.get(LLMLog, log_id)
+    assert row is not None
+    assert row.user_id == subject_row.id, (
+        "the spend is charged to the account it was made for; the Owner is an "
+        "annotation on it, not its owner"
+    )
+    assert row.acted_by_user_id == owner_row.id
+    assert row.acted_by_email == owner_row.email
 
 
 def test_the_admin_write_doors_are_closed_to_an_elevated_session(

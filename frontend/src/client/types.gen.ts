@@ -2326,6 +2326,12 @@ export type JobsRuntimeSettings = {
  *
  * `modelConfig` stays: it is `{"temperature": 0.7}`, and dropping it would be
  * churn rather than a saving.
+ *
+ * `provider`, `baseUrl` and `actedByEmail` are here for the same reason and
+ * the opposite trade: three short strings on a row that is being sent anyway,
+ * and the questions they answer — which Provider is failing me, who spent my
+ * Key — are ones you ask *of a list*. Putting them in `fullRequest` instead
+ * would have hidden them behind opening every row one at a time.
  */
 export type LlmLogListItemResponse = {
     /**
@@ -2336,6 +2342,18 @@ export type LlmLogListItemResponse = {
      * Model
      */
     model: string;
+    /**
+     * Provider
+     */
+    provider?: string | null;
+    /**
+     * Baseurl
+     */
+    baseUrl?: string | null;
+    /**
+     * Actedbyemail
+     */
+    actedByEmail?: string | null;
     /**
      * Modelconfig
      */
@@ -2387,6 +2405,18 @@ export type LlmLogResponse = {
      * Model
      */
     model: string;
+    /**
+     * Provider
+     */
+    provider?: string | null;
+    /**
+     * Baseurl
+     */
+    baseUrl?: string | null;
+    /**
+     * Actedbyemail
+     */
+    actedByEmail?: string | null;
     /**
      * Prompt
      */

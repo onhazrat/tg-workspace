@@ -7213,6 +7213,18 @@
         "properties": {
           "id": { "type": "string", "title": "Id" },
           "model": { "type": "string", "title": "Model" },
+          "provider": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Provider"
+          },
+          "baseUrl": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Baseurl"
+          },
+          "actedByEmail": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Actedbyemail"
+          },
           "modelConfig": {
             "anyOf": [
               { "additionalProperties": true, "type": "object" },
@@ -7243,12 +7255,24 @@
         "type": "object",
         "required": ["id", "model", "status"],
         "title": "LLMLogListItemResponse",
-        "description": "An LLM log without the prompt, the response, or the raw bodies.\n\n`modelConfig` stays: it is `{\"temperature\": 0.7}`, and dropping it would be\nchurn rather than a saving."
+        "description": "An LLM log without the prompt, the response, or the raw bodies.\n\n`modelConfig` stays: it is `{\"temperature\": 0.7}`, and dropping it would be\nchurn rather than a saving.\n\n`provider`, `baseUrl` and `actedByEmail` are here for the same reason and\nthe opposite trade: three short strings on a row that is being sent anyway,\nand the questions they answer \u2014 which Provider is failing me, who spent my\nKey \u2014 are ones you ask *of a list*. Putting them in `fullRequest` instead\nwould have hidden them behind opening every row one at a time."
       },
       "LLMLogResponse": {
         "properties": {
           "id": { "type": "string", "title": "Id" },
           "model": { "type": "string", "title": "Model" },
+          "provider": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Provider"
+          },
+          "baseUrl": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Baseurl"
+          },
+          "actedByEmail": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Actedbyemail"
+          },
           "prompt": { "type": "string", "title": "Prompt" },
           "response": { "type": "string", "title": "Response" },
           "systemInstruction": {

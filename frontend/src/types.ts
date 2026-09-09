@@ -269,6 +269,16 @@ export interface Summary {
   chatMessages?: { role: "user" | "model"; text: string }[]
   autoRegenerate?: boolean
   autoPublish?: boolean
+  /**
+   * Which AI Key pays for a scheduled regeneration (BYOK-03).
+   *
+   * Persisted in the server `extra` bag beside `publishBotId`, because nobody
+   * is present at 4am to choose one. The live selection lives in browser
+   * storage (`lib/aiKeys/selection.ts`); this is the durable copy, and it is
+   * re-checked against the Summary's owner on the server before the secret is
+   * decrypted — a hand-edited value cannot make somebody else pay.
+   */
+  aiKeyId?: string
   publishBotId?: string
   publishChatId?: string
   note?: string
@@ -335,6 +345,18 @@ export type PublishLogListItem = Omit<
 export interface LLMLog {
   id: string
   model: string
+  /**
+   * Which Provider answered, and at what address (BYOK-03).
+   *
+   * Denormalised off the Key rather than joined to it, so a row still says who
+   * failed after the Key is deleted — revoking at the Provider and removing it
+   * here is one decision. Absent on rows written before BYOK and on the
+   * Operator's shared work, which has no Key row to name.
+   */
+  provider?: string
+  baseUrl?: string
+  /** The Owner who made this call on the account's behalf, if it was not them. */
+  actedByEmail?: string
   prompt: string
   response: string
   systemInstruction?: string

@@ -1,4 +1,4 @@
-import { Bot, Cpu, FileText, MessageSquare, Zap } from "lucide-react"
+import { Bot, Cpu, FileText, MessageSquare, UserCog, Zap } from "lucide-react"
 import type React from "react"
 import type { LLMLog, LLMLogListItem } from "@/types"
 import { LogCard, LogMetaItem } from "./LogCard"
@@ -68,6 +68,21 @@ export const LlmLogsTab: React.FC<LlmLogsTabProps> = ({
               {log.duration && (
                 <LogMetaItem icon={<Zap size={10} />}>
                   {log.duration}ms
+                </LogMetaItem>
+              )}
+              {/* BYOK-03. On the card rather than behind the expander: telling
+                  a broken Provider from a broken feature is the reason these
+                  columns exist, and it is a question you ask of the list. The
+                  base URL is the title because it is long and only interesting
+                  once you already suspect the endpoint. */}
+              {log.provider && (
+                <LogMetaItem icon={<Cpu size={10} />}>
+                  <span title={log.baseUrl ?? undefined}>{log.provider}</span>
+                </LogMetaItem>
+              )}
+              {log.actedByEmail && (
+                <LogMetaItem icon={<UserCog size={10} />}>
+                  Run by {log.actedByEmail}
                 </LogMetaItem>
               )}
             </>

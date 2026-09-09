@@ -65,6 +65,16 @@ HEAVY_SYNC_KEYS = {"fullRequest", "fullResponse"}
 LLM_KEYS = {
     "id",
     "model",
+    # BYOK-03. On the *list* shape too, deliberately: they are short strings
+    # and the questions they answer — which Provider is failing me, who spent
+    # my Key — are asked of a list rather than of one opened row.
+    #
+    # `actedByUserId` is **not** here and its absence is the assertion:
+    # `services/logs.py::LOG_WIRE_SKIP` drops the foreign-key half, the way
+    # `ArtifactBase` does for the four Artifact families.
+    "provider",
+    "baseUrl",
+    "actedByEmail",
     "prompt",
     "response",
     "systemInstruction",

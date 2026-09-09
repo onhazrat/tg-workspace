@@ -13,6 +13,7 @@ from sqlalchemy import delete as sa_delete
 from sqlalchemy import select as sa_select
 from sqlmodel import Session, SQLModel, col, or_, select
 
+from app.core import acting_owner
 from app.models_tg import (
     Channel,
     EmbeddingLog,
@@ -281,12 +282,29 @@ def _upsert_sync_log_payload(
 
 
 def upsert_llm_log(session: Session, item: dict[str, Any], user_id: uuid.UUID) -> None:
+    """Record one AI call, including who paid for it and who spent it.
+
+    **The only log family that carries the acting-Owner pair**, and the reason
+    is the one the four artifact aggregates cannot cover: a spend that fails
+    produces no Summary, Chat or Tag run, so the row that would have said an
+    Owner made it never exists. `acting_owner.stamp` therefore runs here, on
+    every write, exactly as it does in those aggregates — an ordinary write
+    clears a previous stamp back to `NULL`.
+
+    `provider` and `base_url` come from the caller's `ResolvedKey`, not from the
+    outgoing HTTP request. `full_request` is composed at the call site for the
+    same reason, and `test_llm_log_provenance.py` asserts it: the obvious
+    implementation records what it sent, and a Gemini credential travels as a
+    URL query parameter.
+    """
     normalized = normalize_body(item)
     log_id = normalized.get("id") or str(uuid.uuid4())
     existing = session.get(LLMLog, log_id)
     fields = {
         "user_id": user_id,
         "model": normalized.get("model", ""),
+        "provider": normalized.get("provider"),
+        "base_url": normalized.get("base_url"),
         "prompt": normalized.get("prompt", ""),
         "response": normalized.get("response", ""),
         "system_instruction": normalized.get("system_instruction"),
@@ -304,9 +322,11 @@ def upsert_llm_log(session: Session, item: dict[str, Any], user_id: uuid.UUID) -
         for k, v in fields.items():
             setattr(existing, k, v)
         existing.updated_at = utc_now()
-        session.add(existing)
+        row = existing
     else:
-        session.add(LLMLog(id=log_id, **cast(Any, fields)))
+        row = LLMLog(id=log_id, **cast(Any, fields))
+    acting_owner.stamp(session, row)
+    session.add(row)
 
 
 def upsert_embedding_log(
@@ -580,6 +600,17 @@ def expire_sync_payloads_stmt(cutoff: int) -> Any:
     return sa_delete(SyncLogPayload).where(col(SyncLogPayload.timestamp) < cutoff)
 
 
+#: Columns a log payload never carries, on top of the `id` / `user_id` /
+#: `updated_at` that `mapping_to_camel` drops for every table.
+#:
+#: `acted_by_user_id` is the foreign key half of BYOK-03's attribution and
+#: `acted_by_email` is the readable half; only the second travels, which is the
+#: choice `ArtifactBase` already made for the four artifact families. A raw
+#: account id tells a reader nothing they can use and names an account they may
+#: not be able to look up.
+LOG_WIRE_SKIP = frozenset({"acted_by_user_id"})
+
+
 #: Columns a *list* page does not select, per log type.
 #:
 #: `GET /data/logs/sync` returned **56.28 MB for one page of 500 rows, 99.7% of
@@ -728,7 +759,10 @@ def _list_logs_page(
         )
     statement = statement.order_by(table.c.timestamp.desc()).offset(offset).limit(limit)
     return [
-        {"id": row._mapping["id"], **mapping_to_camel(dict(row._mapping))}
+        {
+            "id": row._mapping["id"],
+            **mapping_to_camel(dict(row._mapping), skip=LOG_WIRE_SKIP),
+        }
         for row in session.execute(statement).all()
     ]
 
@@ -817,7 +851,7 @@ def get_log(
         return sync_log_to_camel(
             cast(SyncLog, row), session.get(SyncLogPayload, log_id)
         )
-    return {"id": log_id, **model_to_camel(row)}
+    return {"id": log_id, **model_to_camel(row, skip=LOG_WIRE_SKIP)}
 
 
 def _visible_channel_names_exact(session: Session, *, user_id: uuid.UUID) -> set[str]:
