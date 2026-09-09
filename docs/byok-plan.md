@@ -53,9 +53,23 @@ validation state; it does not disable the schedule.
 denormalised, no foreign key. Plus `acted_by_user_id`/`acted_by_email`, the pair all four Artifact
 families already carry, extending `test_view_as_elevation.py`'s existing guard to cover it.
 
-**6. The spend tier.** A third `VIEW_AS_MODES` constant, `Permission.VIEW_AS_SPEND`, its own
-ceiling validated strictly shorter than `VIEW_AS_ELEVATED_MAX_MINUTES`, and a derived inventory of
+**6. The spend tier (done, BYOK-04).** A third `VIEW_AS_MODES` constant, `Permission.VIEW_AS_SPEND`, its own
+ceiling validated strictly shorter than `VIEW_AS_ELEVATED_MAX_MINUTES`, and an inventory of
 spendable operations. `/ai-keys` refused in all three tiers.
+
+The inventory is enforced in **both** directions, and that was not the first cut. Forward only —
+every listed path is mounted — shipped two open doors: `POST /telegram/bot-info` proxies a
+free-form Bot API `method` on the target's decrypted token, which is `/telegram/publish` reached
+around the side, and `POST /data/channels/bulk-reset-sync` enqueues a job `run_sync_job` bills to
+the target. Both were reachable from an *elevated* session. The default for an unlisted mutating
+route is permitted-once-elevated, which is why this inventory needs the reverse direction more
+than `VIEW_AS_READ_ONLY_PATHS` does, where an unlisted route is merely refused.
+
+The reverse guard itself produced a false pass first: written over `app.routes`, it walked zero
+routes, because this FastAPI nests included routers as `_IncludedRouter`. It went green and stayed
+green when an inventory entry was deleted. `test_view_as.py` documents that trap and the shared
+`_walk` helper exists for it; the `walked > 10` sentinel is what makes a future collapse loud.
+This is the seventh false pass this repo has caught by mutation-testing a guard.
 
 **Frontend, alongside 3 and 4.** The Keys panel and the Action-tab Key selector landed with step
 1; step 2 added the provider chooser and base-URL field to the panel, and replaced every model
