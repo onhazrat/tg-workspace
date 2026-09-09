@@ -4371,7 +4371,8 @@
     "/api/v1/jobs/runtime-config": {
       "get": {
         "tags": ["jobs"],
-        "summary": "Get Runtime Config",
+        "summary": "Inspect resolved runtime diagnostics",
+        "description": "Return time-varying effective state that is not configuration inventory.\n\nThis API remains separate from ``/data/configuration`` for compatibility and\nbecause its clock, resolved cutoff/start time, proxy lanes, and active job\nare runtime diagnostics rather than values from one of the five config layers.",
         "operationId": "jobs-get_runtime_config",
         "responses": {
           "200": {

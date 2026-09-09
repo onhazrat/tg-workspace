@@ -7,11 +7,10 @@ from pathlib import Path
 
 from fastapi.testclient import TestClient
 
-from app.core.config import Settings, settings
+from app.core.config import SENSITIVE_CONFIG_SUFFIXES, Settings, settings
 from app.services.configuration_catalog import _redact
 
 PREFIX = f"{settings.API_V1_STR}/data/configuration"
-SENSITIVE_SUFFIXES = ("_KEY", "_TOKEN", "_SECRET", "_PASSWORD", "_DSN")
 
 
 def test_catalog_requires_admin(
@@ -57,7 +56,9 @@ def test_sensitive_settings_are_classified_by_suffix() -> None:
         item["name"]: item for item in json.loads(catalog_path.read_text())["variables"]
     }
     sensitive_fields = {
-        name for name in Settings.model_fields if name.endswith(SENSITIVE_SUFFIXES)
+        name
+        for name in Settings.model_fields
+        if name.endswith(SENSITIVE_CONFIG_SUFFIXES)
     }
     assert sensitive_fields
     assert not sorted(

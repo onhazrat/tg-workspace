@@ -38,7 +38,6 @@ SENSITIVE_NAMES = {
     "DEFAULT_PROXY_URLS",
     "TOR_SOCKS_PROXY",
 }
-SENSITIVE_SUFFIXES = ("_KEY", "_TOKEN", "_SECRET", "_PASSWORD", "_DSN")
 VITE_BUILT_INS = {"BASE_URL", "DEV", "MODE", "PROD", "SSR"}
 
 
@@ -69,6 +68,35 @@ def _safe_eval(node: ast.expr) -> Any:
         if isinstance(node.op, ast.Div):
             return left / right
     raise ValueError("not a static scalar default")
+
+
+def _config_string_tuple(name: str) -> tuple[str, ...]:
+    """Read a literal tuple from config.py without importing live settings."""
+    tree = ast.parse(CONFIG_SOURCE.read_text())
+    for node in tree.body:
+        if isinstance(node, ast.Assign):
+            targets = node.targets
+        elif isinstance(node, ast.AnnAssign):
+            targets = [node.target]
+        else:
+            continue
+        if not any(
+            isinstance(target, ast.Name) and target.id == name for target in targets
+        ):
+            continue
+        value = node.value
+        if value is None:
+            continue
+        parsed = ast.literal_eval(value)
+        if not isinstance(parsed, tuple) or not all(
+            isinstance(item, str) for item in parsed
+        ):
+            raise ValueError(f"{name} must be a literal tuple of strings")
+        return parsed
+    raise ValueError(f"{name} is missing from {CONFIG_SOURCE}")
+
+
+SENSITIVE_SUFFIXES = _config_string_tuple("SENSITIVE_CONFIG_SUFFIXES")
 
 
 def backend_specs() -> list[EnvSpec]:

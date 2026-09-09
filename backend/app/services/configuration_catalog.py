@@ -14,7 +14,7 @@ from typing import Any
 from pydantic_core import PydanticUndefined
 from sqlmodel import Session
 
-from app.core.config import Settings, settings
+from app.core.config import SENSITIVE_CONFIG_SUFFIXES, Settings, settings
 from app.jobs.settings import (
     load_directory_settings,
     load_jobs_settings,
@@ -47,7 +47,6 @@ from app.services.user_settings import get_user_setting
 
 _CATALOG_PATH = Path(__file__).resolve().parents[1] / "core/env_catalog.generated.json"
 _REDACTED = "••••••"
-_SENSITIVE_SUFFIXES = ("_KEY", "_TOKEN", "_SECRET", "_PASSWORD", "_DSN")
 _SENSITIVE_WORDS = {"KEY", "TOKEN", "SECRET", "PASSWORD", "DSN"}
 
 
@@ -83,7 +82,7 @@ def _redact(value: Any, *, sensitive: bool = False) -> Any:
                 item,
                 sensitive=(
                     normalized in _SENSITIVE_WORDS
-                    or normalized.endswith(_SENSITIVE_SUFFIXES)
+                    or normalized.endswith(SENSITIVE_CONFIG_SUFFIXES)
                 ),
             )
         return redacted

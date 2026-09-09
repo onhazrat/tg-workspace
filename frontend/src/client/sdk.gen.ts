@@ -2496,7 +2496,12 @@ export const jobsJobsStatus = <ThrowOnError extends boolean = true>(options?: Op
 };
 
 /**
- * Get Runtime Config
+ * Inspect resolved runtime diagnostics
+ * Return time-varying effective state that is not configuration inventory.
+ *
+ * This API remains separate from ``/data/configuration`` for compatibility and
+ * because its clock, resolved cutoff/start time, proxy lanes, and active job
+ * are runtime diagnostics rather than values from one of the five config layers.
  */
 export const jobsGetRuntimeConfig = <ThrowOnError extends boolean = true>(options?: Options<JobsGetRuntimeConfigData, ThrowOnError>) => {
     return (options?.client ?? _heyApiClient).get<JobsGetRuntimeConfigResponses, unknown, ThrowOnError, 'data'>({
