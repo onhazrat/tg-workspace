@@ -48,6 +48,7 @@ from app.api.deps import (
     VIEW_AS_ENDED_DETAILS,
     VIEW_AS_READ_ONLY_DETAIL,
     VIEW_AS_READ_ONLY_PATHS,
+    VIEW_AS_SPEND_PATHS,
     VIEW_AS_TARGET_INACTIVE_DETAIL,
     VIEW_AS_TARGET_MISSING_DETAIL,
 )
@@ -388,11 +389,21 @@ def test_every_mutating_operation_is_refused_or_allowlisted() -> None:
     Membership only — the behavioural half is the sweep below. This one exists
     so that a route added later cannot quietly become the first write a View-as
     session can make: it is in neither map, and this fails.
+
+    BYOK-04 made this three tiers rather than two, so the walk classifies
+    against all of them: a mutating route is a free read, an unauthenticated
+    one, a **spend**, or a write refused until an elevation. The three
+    classifications are asserted disjoint below, because an operation in two of
+    them is one the tiers disagree about — and the tier that answers first would
+    be whichever branch `view_as_allows` happens to test first.
     """
     allowlisted = {
         (method, path)
         for method, path in _mutating()
         if path in VIEW_AS_READ_ONLY_PATHS
+    }
+    spending = {
+        (method, path) for method, path in _mutating() if path in VIEW_AS_SPEND_PATHS
     }
     assert _unauthenticated_mutating() == set(UNAUTHENTICATED), (
         "a mutating route that authenticates nobody is outside the only gate "
@@ -400,9 +411,18 @@ def test_every_mutating_operation_is_refused_or_allowlisted() -> None:
         "an entry that has since gained an auth dependency"
     )
 
-    unplaced = _mutating() - allowlisted - set(UNAUTHENTICATED)
+    unplaced = _mutating() - allowlisted - spending - set(UNAUTHENTICATED)
     assert allowlisted, "the allowlist stopped matching any mounted route"
+    assert spending, "the spend inventory stopped matching any mounted route"
     assert unplaced, "every mutating route was excused; the gate does nothing"
+    assert not allowlisted & spending, (
+        "a free read that also spends the target's money is a contradiction, "
+        "and the read-only tier would win it"
+    )
+    assert not spending & set(UNAUTHENTICATED), (
+        "an operation that authenticates nobody cannot be spending a target's "
+        "resources; the gate never runs for it"
+    )
 
     for path, reason in VIEW_AS_READ_ONLY_PATHS.items():
         assert reason.strip(), f"{path} is allowlisted with no reason"

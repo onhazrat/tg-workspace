@@ -1,4 +1,4 @@
-import { Eye, Pencil } from "lucide-react"
+import { CreditCard, Eye, Pencil } from "lucide-react"
 import { useEffect, useState } from "react"
 
 import { Button } from "@/components/ui/button"
@@ -23,6 +23,15 @@ const RIBBON_HEIGHT = "2.5rem"
  * silently longer session.
  */
 const ELEVATION_MINUTES = [5, 10, 15] as const
+
+/**
+ * The lifetimes offered for a spend session (BYOK-04).
+ *
+ * Shorter than the elevation menu because the ceiling is shorter — the server
+ * validates `VIEW_AS_SPEND_MAX_MINUTES` (10) to be strictly under the elevated
+ * one, so anything above it is a 422 rather than a longer session.
+ */
+const SPEND_MINUTES = [3, 5, 10] as const
 
 /**
  * The unmissable ribbon naming the account being viewed (ticket 26, 27).
@@ -73,12 +82,13 @@ const ELEVATION_MINUTES = [5, 10, 15] as const
  * untouched: falling back silently costs nothing when nothing can be written.
  */
 export default function ViewAsRibbon() {
-  const { claims, isElevated, elevate, stop } = useViewAs()
+  const { claims, isElevated, isSpending, isWriting, elevate, spend, stop } =
+    useViewAs()
   const { showErrorToast } = useCustomToast()
-  const [elevating, setElevating] = useState(false)
+  const [widening, setWidening] = useState(false)
   const active = claims !== null
   /** Milliseconds, or null when this is not a session that can write. */
-  const elevatedUntil = isElevated && claims ? claims.expiresAt * 1000 : null
+  const elevatedUntil = isWriting && claims ? claims.expiresAt * 1000 : null
 
   // Before the early return, so the variable is cleared when the session ends.
   useEffect(() => {
@@ -114,13 +124,16 @@ export default function ViewAsRibbon() {
 
   if (claims === null) return null
 
-  const onElevate = (minutes: number) => {
-    setElevating(true)
-    elevate(claims.subjectUserId, minutes).catch((error: unknown) => {
+  const widen = (
+    exchange: (userId: string, minutes: number) => Promise<void>,
+    minutes: number,
+  ) => {
+    setWidening(true)
+    exchange(claims.subjectUserId, minutes).catch((error: unknown) => {
       // Only reached when the exchange is refused — a successful one navigates
       // away. The commonest refusal is a target who holds a permission, which
       // is a decision the Owner cannot argue with and has to be told about.
-      setElevating(false)
+      setWidening(false)
       handleError.call(showErrorToast, error)
     })
   }
@@ -130,16 +143,28 @@ export default function ViewAsRibbon() {
       data-testid="view-as-ribbon"
       data-view-as-mode={claims.mode}
       className={`sticky top-0 z-50 flex h-10 shrink-0 items-center justify-center gap-3 px-4 text-sm font-medium text-white shadow-md ${
-        isElevated ? "bg-amber-600" : "bg-destructive"
+        isSpending
+          ? "bg-rose-700"
+          : isElevated
+            ? "bg-amber-600"
+            : "bg-destructive"
       }`}
     >
-      {isElevated ? (
+      {isSpending ? (
+        <CreditCard className="size-4 shrink-0" />
+      ) : isElevated ? (
         <Pencil className="size-4 shrink-0" />
       ) : (
         <Eye className="size-4 shrink-0" />
       )}
       <span className="truncate">
-        {isElevated ? (
+        {isSpending ? (
+          <>
+            <strong>Spending as {claims.subjectEmail}</strong> — their AI key,
+            bots and Telegram budget pay for what you do, and every call is
+            recorded as yours. Signed in as {claims.actorEmail}.
+          </>
+        ) : isElevated ? (
           <>
             <strong>Acting as {claims.subjectEmail}</strong> — changes are saved
             to their account and recorded as yours. Signed in as{" "}
@@ -154,19 +179,49 @@ export default function ViewAsRibbon() {
       </span>
 
       {!isElevated &&
+        !isSpending &&
         ELEVATION_MINUTES.map((minutes) => (
           <Button
             key={minutes}
             size="sm"
             variant="secondary"
             className="h-7 shrink-0"
-            disabled={elevating}
-            onClick={() => onElevate(minutes)}
+            disabled={widening}
+            onClick={() => widen(elevate, minutes)}
             title={`Make changes on their behalf for ${minutes} minutes`}
           >
             {minutes === ELEVATION_MINUTES[0]
               ? `Make a change (${minutes}m)`
               : `${minutes}m`}
+          </Button>
+        ))}
+
+      {/*
+       * Offered from *either* lower tier, unlike elevation. A spend session is
+       * wider than an elevated one, so an Owner who elevated and then hit the
+       * AI refusal reaches it without exiting and starting over — which is the
+       * moment they would otherwise be told to elevate again by the only string
+       * the server had before BYOK-04.
+       *
+       * **Every label says "Spend", and the variant differs.** The first cut
+       * used the elevation menu's shape — a named first button and bare `5m` /
+       * `10m` after it — which put two buttons reading `5m` and two reading
+       * `10m` in one ribbon, identically styled, one minute apart in what they
+       * grant. An Owner reaching for a ten-minute elevation could start
+       * spending somebody's money, and nothing confirms the click.
+       */}
+      {!isSpending &&
+        SPEND_MINUTES.map((minutes) => (
+          <Button
+            key={`spend-${minutes}`}
+            size="sm"
+            variant="destructive"
+            className="h-7 shrink-0 border border-white/40"
+            disabled={widening}
+            onClick={() => widen(spend, minutes)}
+            title={`Spend their AI key, bots and Telegram budget for ${minutes} minutes`}
+          >
+            {`Spend ${minutes}m`}
           </Button>
         ))}
 

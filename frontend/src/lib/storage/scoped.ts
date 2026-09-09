@@ -56,17 +56,36 @@ export const THEME_STORAGE_KEY = "vite-ui-theme"
 export const VIEW_AS_TOKEN_STORAGE_KEY = "view_as_token"
 
 /**
- * The two modes a View-as session runs in, mirroring `app/core/security.py`.
+ * The three modes a View-as session runs in, mirroring `app/core/security.py`.
  *
  * `read_only` is the default the decoder falls back to, and that fallback is
  * the safe direction: a token with a mode nobody recognises must read as the
- * narrower session, never as the wider one. The server takes the same view —
- * `deps.view_as_allows` compares against `elevated` rather than against "not
+ * narrowest session, never as a wider one. The server takes the same view —
+ * `deps.view_as_allows` compares against named modes rather than against "not
  * read-only" — so an old or forged token cannot talk either side into
  * believing it may write.
+ *
+ * `spend` is BYOK-04's third tier: an Owner reproducing a broken Summary on the
+ * target's own AI Key. It is wider than `elevated` and deliberately shorter
+ * lived, because a write is reversible and attributed and money that has left
+ * is neither.
  */
 export const VIEW_AS_READ_ONLY = "read_only"
 export const VIEW_AS_ELEVATED = "elevated"
+export const VIEW_AS_SPEND = "spend"
+
+/**
+ * The modes in which a click changes or costs something on the target's
+ * account, so the ribbon warns and the session ends itself at `exp`.
+ *
+ * A set rather than `mode !== VIEW_AS_READ_ONLY`, matching the server's
+ * `VIEW_AS_WRITING_MODES`: an unrecognised mode must fall through to the
+ * narrower treatment, and "not read-only" points the other way.
+ */
+export const VIEW_AS_WRITING_MODES: readonly string[] = [
+  VIEW_AS_ELEVATED,
+  VIEW_AS_SPEND,
+]
 
 /**
  * Keys that intentionally belong to the browser rather than to an account.

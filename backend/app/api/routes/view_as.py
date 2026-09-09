@@ -218,6 +218,99 @@ def elevate_view_as(
     )
 
 
+#: What a spend exchange refuses a target for. A third string beside
+#: `_NOT_ELEVATABLE` for that one's reason: the three rules are deliberately
+#: different, and one shared message would hide which of them answered.
+_NOT_SPENDABLE = "No account to spend for"
+
+
+# **A third exchange, not a widening of the second**, and ADR-017 argues the
+# difference at length: elevation authorises writes, and every write it
+# authorises is reversible and attributed. Spending is neither — money leaves,
+# and no `acted_by_*` stamp brings it back. So the grant that reproduces
+# somebody's broken Summary on their own AI Key is its own tier, with its own
+# Permission and the shortest ceiling of the three.
+#
+# Authorised by the Owner's **own** token, exactly as the two exchanges above
+# are, which is what makes self-escalation impossible without a check written
+# here: `get_current_user` refuses every POST from an `act`-bearing token
+# whatever its mode, and `deps` refuses the whole `/view-as` family at both
+# writing tiers on top of that.
+#
+# Gated on `Permission.VIEW_AS_SPEND` rather than on `VIEW_AS`, so a role that
+# views and writes but never spends is a row in `rbac_roles` rather than an edit
+# here.
+#
+# Refused for a target holding any permission, for `elevate_view_as`'s reason
+# and derived the same way. **Granted with no consent from the target**, which
+# is deliberate and is the closest call in ADR-017: an elevated Owner already
+# spends a target's Telegram Budget with no consent step, so gating AI alone
+# would be a control in one place and not the other. If consent is revisited,
+# all three spendable resources move together.
+#
+# In a comment rather than a docstring, the convention `data/ai_keys.py` states:
+# a handler docstring becomes the `openapi.json` description and a JSDoc block
+# in `sdk.gen.ts`, so internal reasoning would ship to every SDK consumer.
+@router.post(
+    "/{user_id}/spend",
+    dependencies=[Depends(require_permission(Permission.VIEW_AS_SPEND))],
+    response_model=ViewAsSessionResponse,
+)
+def spend_view_as(
+    session: SessionDep,
+    current_user: CurrentUser,
+    user_id: uuid.UUID,
+    minutes: Annotated[
+        int | None,
+        Query(ge=1, le=settings.VIEW_AS_SPEND_MAX_MINUTES),
+    ] = None,
+) -> ViewAsSessionResponse:
+    """Start a session that may spend the viewed account's own resources."""
+
+    actor = current_user
+    target = session.get(User, user_id)
+    if target is None or not target.is_active or target.id == actor.id:
+        raise HTTPException(status_code=404, detail=_NOT_SPENDABLE)
+    if rbac.permissions_for(session, target.id):
+        raise HTTPException(status_code=404, detail=_NOT_SPENDABLE)
+
+    lifetime = timedelta(
+        minutes=minutes
+        if minutes is not None
+        else settings.VIEW_AS_SPEND_DEFAULT_MINUTES
+    )
+    expires_at = datetime.now(UTC) + lifetime
+    # Its own row, for the reason an elevation writes one rather than updating
+    # the read-only session it replaces: "spent on their behalf" is a third act
+    # with a `created_at` of its own, and it is the act an auditor is most
+    # likely to be looking for.
+    record = record_session(
+        session,
+        actor=actor,
+        subject=target,
+        expires_at=expires_at,
+        mode=security.VIEW_AS_SPEND,
+    )
+    token = security.create_view_as_token(
+        subject_id=target.id,
+        subject_email=target.email,
+        actor_id=actor.id,
+        actor_email=actor.email,
+        expires_delta=expires_at - datetime.now(UTC),
+        mode=security.VIEW_AS_SPEND,
+    )
+    return ViewAsSessionResponse(
+        accessToken=token,
+        sessionId=record.id,
+        subjectUserId=target.id,
+        subjectEmail=target.email,
+        actorUserId=actor.id,
+        actorEmail=actor.email,
+        mode=record.mode,
+        expiresAt=expires_at,
+    )
+
+
 @router.get(
     "/sessions",
     dependencies=[Depends(require_permission(Permission.VIEW_AS))],

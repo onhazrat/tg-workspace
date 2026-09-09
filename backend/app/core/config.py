@@ -55,6 +55,14 @@ class Settings(BaseSettings):
     #: than the read-only session, which is the ticket's "shorter-lived than"
     #: made true of every reachable value rather than of the default.
     VIEW_AS_ELEVATED_MAX_MINUTES: int = 15
+    # Spending (BYOK-04) is the narrowest activity of the three and gets the
+    # shortest lifetime: reproducing one broken Summary is a couple of calls,
+    # not a walk through somebody's settings. Validated below to be strictly
+    # shorter than the elevated ceiling, which is itself strictly shorter than
+    # the read-only session — the ladder holds for every reachable value rather
+    # than for the defaults alone.
+    VIEW_AS_SPEND_DEFAULT_MINUTES: int = 3
+    VIEW_AS_SPEND_MAX_MINUTES: int = 10
     FRONTEND_HOST: str = "http://localhost:5173"
     ENVIRONMENT: Literal["local", "staging", "production"] = "local"
 
@@ -499,6 +507,12 @@ class Settings(BaseSettings):
     def _enforce_elevation_is_shorter_than_looking(self) -> Self:
         """Ticket 27's "shorter-lived than the read-only session", as a rule.
 
+        BYOK-04 added the third rung, so this now enforces the whole ladder:
+        each tier that grants more than the one below it lasts strictly less
+        long. Kept as one validator rather than split per pair, because the
+        property is about the *ordering* and two validators could each pass
+        while the order they jointly describe did not exist.
+
         Asserted on the **ceiling** rather than on the default, because the
         default is not what a caller gets — `minutes` is chosen per exchange and
         bounded by the ceiling, so a deployment that raised the ceiling above
@@ -522,6 +536,20 @@ class Settings(BaseSettings):
                 "VIEW_AS_ELEVATED_MAX_MINUTES must be strictly shorter than "
                 "VIEW_AS_TOKEN_EXPIRE_MINUTES: an elevated session that outlives "
                 "the read-only one is not an elevation, it is a second login"
+            )
+        if not 0 < self.VIEW_AS_SPEND_DEFAULT_MINUTES:
+            raise ValueError("VIEW_AS_SPEND_DEFAULT_MINUTES must be positive")
+        if self.VIEW_AS_SPEND_DEFAULT_MINUTES > self.VIEW_AS_SPEND_MAX_MINUTES:
+            raise ValueError(
+                "VIEW_AS_SPEND_DEFAULT_MINUTES must not exceed "
+                "VIEW_AS_SPEND_MAX_MINUTES"
+            )
+        if self.VIEW_AS_SPEND_MAX_MINUTES >= self.VIEW_AS_ELEVATED_MAX_MINUTES:
+            raise ValueError(
+                "VIEW_AS_SPEND_MAX_MINUTES must be strictly shorter than "
+                "VIEW_AS_ELEVATED_MAX_MINUTES: BYOK-04's tier grants more than "
+                "the one below it and must not also last longer, or the ladder "
+                "is a ladder in name only"
             )
         return self
 

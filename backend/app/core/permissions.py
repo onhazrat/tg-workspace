@@ -92,6 +92,17 @@ class Permission(StrEnum):
     is an insert. Nothing checks it yet.
     """
 
+    VIEW_AS_SPEND = "view_as:spend"
+    """Spend a viewed Account's paid resources on their behalf (BYOK-04).
+
+    Separate from `VIEW_AS` for the reason `QUOTA_MANAGE` is separate from
+    `QUOTA_READ_ANY`: looking at an account and spending its money are different
+    acts, and ADR-017 makes the second the shortest-lived grant in the system.
+    A role that views and writes but never spends is then an `INSERT` rather
+    than a code change — which is the whole point of naming a Permission here
+    instead of testing for the Owner role at the route.
+    """
+
 
 # Role identifiers. Constants rather than bare strings so a typo is an
 # AttributeError here instead of a silently role-less user at runtime.
@@ -133,7 +144,10 @@ SEEDED_ROLES: tuple[RoleSeed, ...] = (
     ),
     RoleSeed(
         id=ROLE_OWNER,
-        description="Everything an Admin can do, plus looking as another User.",
+        description=(
+            "Everything an Admin can do, plus looking as another User "
+            "and spending on their behalf."
+        ),
         permissions=(
             Permission.USERS_READ,
             Permission.USERS_MANAGE,
@@ -144,6 +158,7 @@ SEEDED_ROLES: tuple[RoleSeed, ...] = (
             Permission.LOGS_READ_ANY,
             Permission.JOBS_MANAGE,
             Permission.VIEW_AS,
+            Permission.VIEW_AS_SPEND,
         ),
     ),
 )

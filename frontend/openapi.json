@@ -5132,6 +5132,55 @@
         }
       }
     },
+    "/api/v1/view-as/{user_id}/spend": {
+      "post": {
+        "tags": ["view-as"],
+        "summary": "Spend View As",
+        "description": "Start a session that may spend the viewed account's own resources.",
+        "operationId": "view-as-spend_view_as",
+        "security": [{ "OAuth2PasswordBearer": [] }],
+        "parameters": [
+          {
+            "name": "user_id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid", "title": "User Id" }
+          },
+          {
+            "name": "minutes",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                { "type": "integer", "maximum": 10, "minimum": 1 },
+                { "type": "null" }
+              ],
+              "title": "Minutes"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ViewAsSessionResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/view-as/sessions": {
       "get": {
         "tags": ["view-as"],

@@ -1,6 +1,6 @@
 import uuid
 from collections.abc import Generator
-from typing import Annotated
+from typing import Annotated, NamedTuple
 
 import jwt
 from fastapi import Depends, HTTPException, Request, status
@@ -80,6 +80,203 @@ VIEW_AS_READ_ONLY_PATHS: dict[str, str] = {
 #: explain rather than showing a bare permission error on a button click.
 VIEW_AS_READ_ONLY_DETAIL = "This View-as session is read-only"
 
+#: The paid resources a View-as session can be granted the *use* of (ADR-017).
+#:
+#: A closed set, and the classification below names one of these per operation,
+#: so a fourth spendable resource cannot be added without somebody answering
+#: which operations reach it: `test_view_as_spend.py` asserts this set and the
+#: resources actually named by `VIEW_AS_SPEND_PATHS` are the **same** set, in
+#: both directions. A resource nothing spends is a category nobody classified;
+#: an operation naming a resource that is not here is a spelling mistake that
+#: would otherwise widen the tier silently.
+#:
+#: "The deployment's money" is deliberately not one of them. An Operator Key
+#: call and a proxy fetch cost the *Operator*, who is the person holding this
+#: session, so gating an Owner from spending their own deployment's money would
+#: be a control aimed at nobody.
+SPENDABLE_RESOURCES = frozenset({"ai_key", "bot_credential", "telegram_budget"})
+
+
+class SpendableOperation(NamedTuple):
+    """Which of the target's resources an operation spends, and how it reaches it."""
+
+    resource: str
+    reason: str
+
+
+#: Operations that spend the **target account's** money, refused at both lower
+#: tiers (BYOK-04).
+#:
+#: This is the inventory `VIEW_AS_READ_ONLY_PATHS` is, pointed the other way.
+#: That one carves reads out of a default refusal; this one carves spends out of
+#: elevation's default permission — which is what makes it necessary rather than
+#: decorative, because before BYOK-04 an elevated session could already
+#: regenerate somebody's Summary on their Key and nothing anywhere said so.
+#:
+#: The bar: the request reaches an outside party who bills the **target** for
+#: it. `POST /rag/search` and `POST /ai/embeddings` are not here although they
+#: are outbound AI calls, because ADR-016 puts them on the Operator Key.
+#: `POST /ai/summary/prompt` is not here although it sits beside one that is: it
+#: assembles a prompt and calls nobody.
+#:
+#: `POST /ai/models` is here for the reason BYOK-02 made it a POST: it proxies
+#: the target's own Provider on their Key, so it is a spend that happens to look
+#: like a catalogue read. The classification is consulted **before** the
+#: safe-method shortcut in `view_as_allows`, so this stays true if it ever
+#: becomes a GET again.
+VIEW_AS_SPEND_PATHS: dict[str, SpendableOperation] = {
+    f"{settings.API_V1_STR}/ai/summary": SpendableOperation(
+        "ai_key", "generates a Summary on the target's AI Key (ADR-016)"
+    ),
+    f"{settings.API_V1_STR}/ai/summary/stream": SpendableOperation(
+        "ai_key", "the streaming half of the same call"
+    ),
+    f"{settings.API_V1_STR}/ai/chat/stream": SpendableOperation(
+        "ai_key", "a Chat is an Artifact, so it runs on the target's Key"
+    ),
+    f"{settings.API_V1_STR}/ai/tag/stream": SpendableOperation(
+        "ai_key", "a Tag run is an Artifact, so it runs on the target's Key"
+    ),
+    f"{settings.API_V1_STR}/ai/models": SpendableOperation(
+        "ai_key",
+        "asks the target's own Provider what it offers, authenticated with "
+        "their Key — `Purpose.MODELS` is on the Account's side of ADR-016",
+    ),
+    f"{settings.API_V1_STR}/telegram/publish": SpendableOperation(
+        "bot_credential",
+        "sends as the target's bot, from a token this request decrypts",
+    ),
+    f"{settings.API_V1_STR}/telegram/bot-info": SpendableOperation(
+        "bot_credential",
+        "the *second* door to the same credential, and the wider one: it "
+        "takes a free-form `method` and `params` and proxies them to "
+        "api.telegram.org on the target's decrypted token, so "
+        "`method=sendMessage` is `/telegram/publish` reached around the side. "
+        "Classifying only the route named after the act is the "
+        "`RUN_SYNC_JOB_CALLERS` failure, one resource down",
+    ),
+    f"{settings.API_V1_STR}/jobs/sync": SpendableOperation(
+        "telegram_budget",
+        "enqueues a sync job whose Requests `run_sync_job` charges to the "
+        "job's owner, which under View-as is the target",
+    ),
+    f"{settings.API_V1_STR}/data/channels/bulk-follow": SpendableOperation(
+        "telegram_budget",
+        "resolves every handle against Telegram inside a `metered()` block "
+        "charged to the caller, which under View-as is the target",
+    ),
+    f"{settings.API_V1_STR}/data/channels/bulk-reset-sync": SpendableOperation(
+        "telegram_budget",
+        "`bulk_reset_and_queue_sync` enqueues a job owned by the caller, so "
+        "`run_sync_job` charges the target exactly as `/jobs/sync` does — its "
+        "own `QuotaCeilingReached` handler logs that account as the one at its "
+        "ceiling. The reset half also deletes every Post, and it commits "
+        "before the enqueue",
+    ),
+}
+
+#: Mutating operations in a module that *does* reach a spend seam, and does not
+#: spend — each with the reason, so the guard below can assert the inventory in
+#: **both** directions.
+#:
+#: The forward direction (every listed path is mounted) catches a rename. It
+#: does not catch the failure that actually happened here: two routes reaching a
+#: target's bot token and Telegram Budget were simply never listed, and no test
+#: could fail. `VIEW_AS_READ_ONLY_PATHS` has had both directions since ticket
+#: 26 — the default there is refusal, so an unlisted route is merely unusable;
+#: here the default is *permitted at the elevated tier*, which is why the
+#: reverse direction matters more on this inventory, not less.
+VIEW_AS_NON_SPENDING_PATHS: dict[str, str] = {
+    f"{settings.API_V1_STR}/ai/summary/prompt": (
+        "assembles the prompt text and calls no Provider; the Account pastes "
+        "it into one themselves, which is the whole point of the route"
+    ),
+    f"{settings.API_V1_STR}/ai/tag/prompt": ("the same, for a Tag run"),
+    f"{settings.API_V1_STR}/ai/embeddings": (
+        "`Purpose.EMBED` is Operator-paid (ADR-016) — it writes one shared "
+        "vector per Post, so the deployment pays and the Owner holding this "
+        "session *is* the deployment"
+    ),
+    f"{settings.API_V1_STR}/ai/translate": ("`Purpose.TRANSLATE`, the same"),
+    f"{settings.API_V1_STR}/rag/embed": ("Operator-paid corpus embedding"),
+    f"{settings.API_V1_STR}/rag/search": (
+        "`Purpose.RAG_QUERY` is forced onto whichever Key built the corpus, "
+        "which is the Operator's; it is refused read-only for spending the "
+        "*deployment's* money, which is a different clause"
+    ),
+    f"{settings.API_V1_STR}/data/ai-keys/{{key_id}}": (
+        "saves and validates a Key rather than spending one, and is refused at "
+        "all three tiers anyway by `VIEW_AS_ELEVATED_REFUSED_PREFIXES`"
+    ),
+    f"{settings.API_V1_STR}/data/channels/bulk-reresolve-start-ids": (
+        "deprecated and a no-op since the start-id walk was replaced; it logs "
+        "and returns, reaching neither Telegram nor a credential"
+    ),
+    f"{settings.API_V1_STR}/data/channels/bulk-follow/{{follow_job_id}}/cancel": (
+        "stops work already paid for; cancelling spends nothing and refusing "
+        "it would strand a running job"
+    ),
+    f"{settings.API_V1_STR}/jobs/sync/{{job_id}}/cancel": ("the same, one lane up"),
+    f"{settings.API_V1_STR}/jobs/lanes/{{lane}}/drain": (
+        "deployment-wide queue administration behind `JOBS_MANAGE`, which a "
+        "target holding no permission cannot reach at all"
+    ),
+    f"{settings.API_V1_STR}/jobs/lanes/{{lane}}/pause": ("the same"),
+    f"{settings.API_V1_STR}/jobs/lanes/{{lane}}/resume": ("the same"),
+    f"{settings.API_V1_STR}/jobs/{{job_id}}/trigger": (
+        "runs a *scheduled* job, whose Requests `resolve_charge_owner` bills to "
+        "the operator rather than to any session; behind `JOBS_MANAGE` too"
+    ),
+    f"{settings.API_V1_STR}/jobs/{{job_id}}": (
+        "enables or disables a schedule; a write, and the tier below already "
+        "authorises writes"
+    ),
+    f"{settings.API_V1_STR}/data/channels/{{channel_id}}": (
+        "edits a Channel row; the sync it may schedule is charged when the "
+        "*scheduler* runs it, not by this request"
+    ),
+    # The three routes that reach Telegram without a ledger charge. They open no
+    # `metered()` block, and `network.record_telegram_request` charges "whatever
+    # meter is active" — which is nothing here, so no Request lands on the
+    # target's Budget. What they do consume is proxy capacity, and that is the
+    # deployment's, i.e. the Owner's own. Written out per route rather than as
+    # one note, because "reaches Telegram" and "spends the target's Budget" look
+    # identical from the outside and this is the distinction that decides it.
+    f"{settings.API_V1_STR}/telegram/scrape": (
+        "walks a channel's web view outside any `metered()` block, so the "
+        "Requests are charged to nobody; it spends the deployment's proxies"
+    ),
+    f"{settings.API_V1_STR}/telegram/channel-info": ("unmetered, the same"),
+    f"{settings.API_V1_STR}/telegram/resolve-start-time": ("unmetered, the same"),
+    # Setting groups live in `data/channels.py`, which reaches a seam elsewhere
+    # in the module. These handlers are plain row writes and reach none of it —
+    # the coarseness of a per-module scan, paid for with four explicit answers
+    # rather than a silent gap.
+    f"{settings.API_V1_STR}/data/setting-groups": ("writes a settings row"),
+    f"{settings.API_V1_STR}/data/setting-groups/{{group_id}}": (
+        "writes or deletes a settings row"
+    ),
+    f"{settings.API_V1_STR}/data/channels/bulk-setting-group": (
+        "reassigns follows to a group; no outbound call"
+    ),
+    f"{settings.API_V1_STR}/data/channels/bulk-sync-settings": (
+        "edits sync preferences; the sync they govern is charged when it runs"
+    ),
+    f"{settings.API_V1_STR}/data/channels/bulk-tags": ("edits tags"),
+}
+
+#: What a session below the spend tier is told when it reaches a spend path.
+#:
+#: A third string rather than a reuse of the elevated one, because it is the
+#: only refusal in this file naming an action the Owner *can* still take: the
+#: elevated refusals do not end at all, and this one ends by spending. A
+#: read-only session is told the read-only thing regardless — from there the
+#: next step is elevation whatever the path was, and two pieces of advice for
+#: one click is worse than one.
+VIEW_AS_SPEND_REQUIRED_DETAIL = (
+    "This spends the viewed account's own resources and needs a spend session"
+)
+
 #: Refused even while elevated, matched as a **prefix** because the routes
 #: underneath take path parameters and there is nothing literal to compare.
 #:
@@ -94,9 +291,9 @@ VIEW_AS_ELEVATED_REFUSED_PREFIXES: dict[str, str] = {
         "an AI Key is a credential the target pasted in, and an elevation is "
         "for reproducing their broken Summary rather than acquiring their "
         "provider account — the same argument the `/users/me` credential "
-        "routes make. BYOK-04's spend tier grants *use* without sight, so "
-        "these routes stay refused there too and this is the entry that will "
-        "already say so"
+        "routes make. BYOK-04's spend tier grants *use* without sight, and "
+        "reaches this entry through `VIEW_AS_WRITING_MODES`, so the Key routes "
+        "are refused in all three tiers"
     ),
     f"{settings.API_V1_STR}/view-as": (
         "an elevated session starting another one writes an audit row naming "
@@ -163,10 +360,20 @@ def view_as_allows(method: str, path: str, *, mode: str | None) -> bool:
     it rather than adding a sibling for the elevated case, which would have been
     that second place.
 
-    `mode` is compared against `security.VIEW_AS_ELEVATED` rather than against
-    "not read-only": an unrecognised mode — an old token after a rename, a
-    hand-rolled one — falls through to the narrowest behaviour instead of to the
-    widest.
+    `mode` is compared against named modes rather than against "not read-only":
+    an unrecognised mode — an old token after a rename, a hand-rolled one —
+    falls through to the narrowest behaviour instead of to the widest. BYOK-04
+    added the third tier here rather than beside it, for the reason ticket 27
+    widened this one instead of adding a sibling.
+
+    **The spend classification is consulted first, ahead of the safe-method
+    shortcut.** A spend is not a write, and the two lower tiers disagree about
+    writes while agreeing about this: neither may spend the target's money. It
+    goes first rather than last because a request that reaches a Provider on
+    somebody's Key is a spend whatever verb carries it — `POST /ai/models` was
+    a GET until BYOK-02 made it a POST specifically so this gate would see it,
+    and putting the check above `SAFE_METHODS` is what stops that from being a
+    fact about the verb.
 
     Matched on the **raw path**, not on a route template, because that is what
     exists here — and because every allowlisted path is literal, with no
@@ -175,11 +382,43 @@ def view_as_allows(method: str, path: str, *, mode: str | None) -> bool:
     and for the same reason: the router's redirect never runs if this has
     already refused.
     """
+    if view_as_spends(path):
+        return mode == security.VIEW_AS_SPEND
     if method.upper() in SAFE_METHODS:
         return True
-    if mode == security.VIEW_AS_ELEVATED:
+    if mode in security.VIEW_AS_WRITING_MODES:
         return not view_as_elevation_refuses(path)
     return path in VIEW_AS_READ_ONLY_PATHS or f"{path}/" in VIEW_AS_READ_ONLY_PATHS
+
+
+def view_as_refusal_detail(path: str, *, mode: str | None) -> str:
+    """What a refused View-as request is told, in the words its tier can act on.
+
+    Three strings for three different next steps, chosen here rather than at the
+    `raise` so the mapping is one testable answer — `view_as_allows`'s argument,
+    one rung down.
+
+    A **read-only** session hears the read-only string whatever the path was.
+    The next step from there is elevation in every case, and telling somebody
+    they need a spend session while they are still refused every write would
+    hand them the second instruction before the first.
+    """
+    if mode == security.VIEW_AS_READ_ONLY or mode not in security.VIEW_AS_MODES:
+        return VIEW_AS_READ_ONLY_DETAIL
+    if mode == security.VIEW_AS_ELEVATED and view_as_spends(path):
+        return VIEW_AS_SPEND_REQUIRED_DETAIL
+    return VIEW_AS_ELEVATED_DETAIL
+
+
+def view_as_spends(path: str) -> bool:
+    """Whether this path spends the **target's** money rather than the Owner's.
+
+    Matched exactly, with the trailing-slash tolerance `view_as_allows`
+    documents: every entry is literal, because a spend route that took a path
+    parameter would need a prefix and a prefix over `/ai` would swallow the
+    prompt-assembly routes that call nobody.
+    """
+    return path in VIEW_AS_SPEND_PATHS or f"{path}/" in VIEW_AS_SPEND_PATHS
 
 
 def view_as_elevation_refuses(path: str) -> bool:
@@ -227,16 +466,13 @@ def get_current_user(request: Request, session: SessionDep, token: TokenDep) -> 
     if is_view_as and not view_as_allows(
         request.method, request.url.path, mode=token_data.mode
     ):
-        # Two strings, because they are two different facts and the browser has
-        # different advice for each: a read-only refusal ends by elevating, and
-        # an elevated one does not end at all.
+        # Three strings, because they are three different facts and the browser
+        # has different advice for each: a read-only refusal ends by elevating,
+        # an elevated one over a spend path ends by spending, and every other
+        # elevated one does not end at all.
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail=(
-                VIEW_AS_ELEVATED_DETAIL
-                if token_data.mode == security.VIEW_AS_ELEVATED
-                else VIEW_AS_READ_ONLY_DETAIL
-            ),
+            detail=view_as_refusal_detail(request.url.path, mode=token_data.mode),
         )
 
     user = session.get(User, token_data.sub)
@@ -288,9 +524,13 @@ def acting_owner_for(token_data: TokenPayload) -> ActingOwner | None:
     day an allowlisted read-only POST grew a write, it was attributed to an
     Owner who had explicitly declined to elevate.
 
-    Compared against `VIEW_AS_ELEVATED` rather than "not read-only", for
+    Compared against `VIEW_AS_WRITING_MODES` rather than "not read-only", for
     `view_as_allows`'s reason: an unrecognised mode must fall through to the
-    narrower behaviour.
+    narrower behaviour. BYOK-04's spend tier is in that set, and it is the one
+    tier where the stamp is the *whole* compensating control — nobody consented
+    to the spend, so the row saying who caused it is what the target has instead
+    of a say. An LLM call that fails produces no Artifact at all, which is why
+    `LLMLog` had to grow the pair before this tier could ship.
 
     A token carrying `mode=elevated` with an unparsable `act`, or no
     `act_email`, names nobody rather than raising. The write then lands
@@ -300,7 +540,7 @@ def acting_owner_for(token_data: TokenPayload) -> ActingOwner | None:
     """
     if token_data.act is None or not token_data.act_email:
         return None
-    if token_data.mode != security.VIEW_AS_ELEVATED:
+    if token_data.mode not in security.VIEW_AS_WRITING_MODES:
         return None
     try:
         actor_id = uuid.UUID(token_data.act)

@@ -418,6 +418,13 @@ EXCUSED: dict[tuple[str, str], tuple[Reason, str]] = {
         "every row it then writes is stamped with the acting Owner; "
         "test_view_as_elevation.py (ticket 27)",
     ),
+    ("POST", f"{V1}/view-as/{{user_id}}/spend"): (
+        Reason.COVERED_ELSEWHERE,
+        "crosses accounts on purpose, one rung further again — gated on its "
+        "own VIEW_AS_SPEND permission, refused for any target holding a "
+        "permission, and every AI call it then makes is stamped with the "
+        "acting Owner on the log row; test_view_as_spend.py (BYOK-04)",
+    ),
     ("GET", f"{V1}/view-as/sessions"): (
         Reason.DEPLOYMENT_WIDE,
         "the audit trail across every Owner; an answer that covered only the "

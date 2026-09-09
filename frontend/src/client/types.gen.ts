@@ -9232,6 +9232,41 @@ export type ViewAsElevateViewAsResponses = {
 
 export type ViewAsElevateViewAsResponse = ViewAsElevateViewAsResponses[keyof ViewAsElevateViewAsResponses];
 
+export type ViewAsSpendViewAsData = {
+    body?: never;
+    path: {
+        /**
+         * User Id
+         */
+        user_id: string;
+    };
+    query?: {
+        /**
+         * Minutes
+         */
+        minutes?: number | null;
+    };
+    url: '/api/v1/view-as/{user_id}/spend';
+};
+
+export type ViewAsSpendViewAsErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type ViewAsSpendViewAsError = ViewAsSpendViewAsErrors[keyof ViewAsSpendViewAsErrors];
+
+export type ViewAsSpendViewAsResponses = {
+    /**
+     * Successful Response
+     */
+    200: ViewAsSessionResponse;
+};
+
+export type ViewAsSpendViewAsResponse = ViewAsSpendViewAsResponses[keyof ViewAsSpendViewAsResponses];
+
 export type ViewAsReadViewAsSessionsData = {
     body?: never;
     path?: never;

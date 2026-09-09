@@ -39,12 +39,29 @@ VIEW_AS_READ_ONLY = "read_only"
 #: session cannot reach either route.
 VIEW_AS_ELEVATED = "elevated"
 
+#: An Owner reproducing a broken Artifact by *spending* the target's paid
+#: resources — their AI Key, their bot credentials, their Telegram Budget
+#: (BYOK-04, ADR-017). A third exchange for the reason elevation is a second
+#: one, and a third tier rather than a widening of the second because the two
+#: grants are not degrees of the same thing: a write is reversible and
+#: attributed, and money that has left is neither.
+VIEW_AS_SPEND = "spend"
+
 #: Every mode this application mints, so a reader of the audit table has one
 #: place to look up what a value means. Unrecognised values are deliberately
 #: **not** rejected downstream: `act` alone decides whether a token is a View-as
 #: session, and a mode nobody recognises must fall through to the narrowest
 #: behaviour rather than to "not a View-as session at all".
-VIEW_AS_MODES = frozenset({VIEW_AS_READ_ONLY, VIEW_AS_ELEVATED})
+VIEW_AS_MODES = frozenset({VIEW_AS_READ_ONLY, VIEW_AS_ELEVATED, VIEW_AS_SPEND})
+
+#: The modes whose writes name the acting Owner on the row (ticket 27's stamp).
+#:
+#: Derived as a set rather than tested as `mode != VIEW_AS_READ_ONLY`, for the
+#: reason `view_as_allows` compares against a named mode: an unrecognised mode
+#: must fall through to the *narrower* behaviour, and "not read-only" points the
+#: other way — a renamed or hand-rolled mode would start attributing writes to
+#: an Owner whose session the gate had already refused.
+VIEW_AS_WRITING_MODES = frozenset({VIEW_AS_ELEVATED, VIEW_AS_SPEND})
 
 
 def create_view_as_token(
