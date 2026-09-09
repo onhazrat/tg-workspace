@@ -202,21 +202,26 @@ export default function ViewAsRibbon() {
        * AI refusal reaches it without exiting and starting over — which is the
        * moment they would otherwise be told to elevate again by the only string
        * the server had before BYOK-04.
+       *
+       * **Every label says "Spend", and the variant differs.** The first cut
+       * used the elevation menu's shape — a named first button and bare `5m` /
+       * `10m` after it — which put two buttons reading `5m` and two reading
+       * `10m` in one ribbon, identically styled, one minute apart in what they
+       * grant. An Owner reaching for a ten-minute elevation could start
+       * spending somebody's money, and nothing confirms the click.
        */}
       {!isSpending &&
         SPEND_MINUTES.map((minutes) => (
           <Button
             key={`spend-${minutes}`}
             size="sm"
-            variant="secondary"
-            className="h-7 shrink-0"
+            variant="destructive"
+            className="h-7 shrink-0 border border-white/40"
             disabled={widening}
             onClick={() => widen(spend, minutes)}
             title={`Spend their AI key, bots and Telegram budget for ${minutes} minutes`}
           >
-            {minutes === SPEND_MINUTES[0]
-              ? `Spend theirs (${minutes}m)`
-              : `${minutes}m`}
+            {`Spend ${minutes}m`}
           </Button>
         ))}
 

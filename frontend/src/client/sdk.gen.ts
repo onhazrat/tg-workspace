@@ -3017,31 +3017,7 @@ export const viewAsElevateViewAs = <ThrowOnError extends boolean = true>(options
 
 /**
  * Spend View As
- * Exchange the Owner's token for a session that may *spend* (BYOK-04).
- *
- * **A third exchange, not a widening of the second**, and ADR-017 argues the
- * difference at length: elevation authorises writes, and every write it
- * authorises is reversible and attributed. Spending is neither — money leaves,
- * and no `acted_by_*` stamp brings it back. So the grant that reproduces
- * somebody's broken Summary on their own AI Key is its own tier, with its own
- * Permission and the shortest ceiling of the three.
- *
- * Authorised by the Owner's **own** token, exactly as the two exchanges above
- * are, which is what makes self-escalation impossible without a check written
- * here: `get_current_user` refuses every POST from an `act`-bearing token
- * whatever its mode, and `deps` refuses the whole `/view-as` family at both
- * writing tiers on top of that.
- *
- * Gated on `Permission.VIEW_AS_SPEND` rather than on `VIEW_AS`, so a role that
- * views and writes but never spends is a row in `rbac_roles` rather than an
- * edit here.
- *
- * Refused for a target holding any permission, for `elevate_view_as`'s reason
- * and derived the same way. **Granted with no consent from the target**, which
- * is deliberate and is the closest call in ADR-017: an elevated Owner already
- * spends a target's Telegram Budget with no consent step, so gating AI alone
- * would be a control in one place and not the other. If consent is revisited,
- * all three spendable resources move together.
+ * Start a session that may spend the viewed account's own resources.
  */
 export const viewAsSpendViewAs = <ThrowOnError extends boolean = true>(options: Options<ViewAsSpendViewAsData, ThrowOnError>) => {
     return (options.client ?? _heyApiClient).post<ViewAsSpendViewAsResponses, ViewAsSpendViewAsErrors, ThrowOnError, 'data'>({

@@ -146,6 +146,15 @@ VIEW_AS_SPEND_PATHS: dict[str, SpendableOperation] = {
         "bot_credential",
         "sends as the target's bot, from a token this request decrypts",
     ),
+    f"{settings.API_V1_STR}/telegram/bot-info": SpendableOperation(
+        "bot_credential",
+        "the *second* door to the same credential, and the wider one: it "
+        "takes a free-form `method` and `params` and proxies them to "
+        "api.telegram.org on the target's decrypted token, so "
+        "`method=sendMessage` is `/telegram/publish` reached around the side. "
+        "Classifying only the route named after the act is the "
+        "`RUN_SYNC_JOB_CALLERS` failure, one resource down",
+    ),
     f"{settings.API_V1_STR}/jobs/sync": SpendableOperation(
         "telegram_budget",
         "enqueues a sync job whose Requests `run_sync_job` charges to the "
@@ -156,6 +165,104 @@ VIEW_AS_SPEND_PATHS: dict[str, SpendableOperation] = {
         "resolves every handle against Telegram inside a `metered()` block "
         "charged to the caller, which under View-as is the target",
     ),
+    f"{settings.API_V1_STR}/data/channels/bulk-reset-sync": SpendableOperation(
+        "telegram_budget",
+        "`bulk_reset_and_queue_sync` enqueues a job owned by the caller, so "
+        "`run_sync_job` charges the target exactly as `/jobs/sync` does — its "
+        "own `QuotaCeilingReached` handler logs that account as the one at its "
+        "ceiling. The reset half also deletes every Post, and it commits "
+        "before the enqueue",
+    ),
+}
+
+#: Mutating operations in a module that *does* reach a spend seam, and does not
+#: spend — each with the reason, so the guard below can assert the inventory in
+#: **both** directions.
+#:
+#: The forward direction (every listed path is mounted) catches a rename. It
+#: does not catch the failure that actually happened here: two routes reaching a
+#: target's bot token and Telegram Budget were simply never listed, and no test
+#: could fail. `VIEW_AS_READ_ONLY_PATHS` has had both directions since ticket
+#: 26 — the default there is refusal, so an unlisted route is merely unusable;
+#: here the default is *permitted at the elevated tier*, which is why the
+#: reverse direction matters more on this inventory, not less.
+VIEW_AS_NON_SPENDING_PATHS: dict[str, str] = {
+    f"{settings.API_V1_STR}/ai/summary/prompt": (
+        "assembles the prompt text and calls no Provider; the Account pastes "
+        "it into one themselves, which is the whole point of the route"
+    ),
+    f"{settings.API_V1_STR}/ai/tag/prompt": ("the same, for a Tag run"),
+    f"{settings.API_V1_STR}/ai/embeddings": (
+        "`Purpose.EMBED` is Operator-paid (ADR-016) — it writes one shared "
+        "vector per Post, so the deployment pays and the Owner holding this "
+        "session *is* the deployment"
+    ),
+    f"{settings.API_V1_STR}/ai/translate": ("`Purpose.TRANSLATE`, the same"),
+    f"{settings.API_V1_STR}/rag/embed": ("Operator-paid corpus embedding"),
+    f"{settings.API_V1_STR}/rag/search": (
+        "`Purpose.RAG_QUERY` is forced onto whichever Key built the corpus, "
+        "which is the Operator's; it is refused read-only for spending the "
+        "*deployment's* money, which is a different clause"
+    ),
+    f"{settings.API_V1_STR}/data/ai-keys/{{key_id}}": (
+        "saves and validates a Key rather than spending one, and is refused at "
+        "all three tiers anyway by `VIEW_AS_ELEVATED_REFUSED_PREFIXES`"
+    ),
+    f"{settings.API_V1_STR}/data/channels/bulk-reresolve-start-ids": (
+        "deprecated and a no-op since the start-id walk was replaced; it logs "
+        "and returns, reaching neither Telegram nor a credential"
+    ),
+    f"{settings.API_V1_STR}/data/channels/bulk-follow/{{follow_job_id}}/cancel": (
+        "stops work already paid for; cancelling spends nothing and refusing "
+        "it would strand a running job"
+    ),
+    f"{settings.API_V1_STR}/jobs/sync/{{job_id}}/cancel": ("the same, one lane up"),
+    f"{settings.API_V1_STR}/jobs/lanes/{{lane}}/drain": (
+        "deployment-wide queue administration behind `JOBS_MANAGE`, which a "
+        "target holding no permission cannot reach at all"
+    ),
+    f"{settings.API_V1_STR}/jobs/lanes/{{lane}}/pause": ("the same"),
+    f"{settings.API_V1_STR}/jobs/lanes/{{lane}}/resume": ("the same"),
+    f"{settings.API_V1_STR}/jobs/{{job_id}}/trigger": (
+        "runs a *scheduled* job, whose Requests `resolve_charge_owner` bills to "
+        "the operator rather than to any session; behind `JOBS_MANAGE` too"
+    ),
+    f"{settings.API_V1_STR}/jobs/{{job_id}}": (
+        "enables or disables a schedule; a write, and the tier below already "
+        "authorises writes"
+    ),
+    f"{settings.API_V1_STR}/data/channels/{{channel_id}}": (
+        "edits a Channel row; the sync it may schedule is charged when the "
+        "*scheduler* runs it, not by this request"
+    ),
+    # The three routes that reach Telegram without a ledger charge. They open no
+    # `metered()` block, and `network.record_telegram_request` charges "whatever
+    # meter is active" — which is nothing here, so no Request lands on the
+    # target's Budget. What they do consume is proxy capacity, and that is the
+    # deployment's, i.e. the Owner's own. Written out per route rather than as
+    # one note, because "reaches Telegram" and "spends the target's Budget" look
+    # identical from the outside and this is the distinction that decides it.
+    f"{settings.API_V1_STR}/telegram/scrape": (
+        "walks a channel's web view outside any `metered()` block, so the "
+        "Requests are charged to nobody; it spends the deployment's proxies"
+    ),
+    f"{settings.API_V1_STR}/telegram/channel-info": ("unmetered, the same"),
+    f"{settings.API_V1_STR}/telegram/resolve-start-time": ("unmetered, the same"),
+    # Setting groups live in `data/channels.py`, which reaches a seam elsewhere
+    # in the module. These handlers are plain row writes and reach none of it —
+    # the coarseness of a per-module scan, paid for with four explicit answers
+    # rather than a silent gap.
+    f"{settings.API_V1_STR}/data/setting-groups": ("writes a settings row"),
+    f"{settings.API_V1_STR}/data/setting-groups/{{group_id}}": (
+        "writes or deletes a settings row"
+    ),
+    f"{settings.API_V1_STR}/data/channels/bulk-setting-group": (
+        "reassigns follows to a group; no outbound call"
+    ),
+    f"{settings.API_V1_STR}/data/channels/bulk-sync-settings": (
+        "edits sync preferences; the sync they govern is charged when it runs"
+    ),
+    f"{settings.API_V1_STR}/data/channels/bulk-tags": ("edits tags"),
 }
 
 #: What a session below the spend tier is told when it reaches a spend path.

@@ -5136,7 +5136,7 @@
       "post": {
         "tags": ["view-as"],
         "summary": "Spend View As",
-        "description": "Exchange the Owner's token for a session that may *spend* (BYOK-04).\n\n**A third exchange, not a widening of the second**, and ADR-017 argues the\ndifference at length: elevation authorises writes, and every write it\nauthorises is reversible and attributed. Spending is neither \u2014 money leaves,\nand no `acted_by_*` stamp brings it back. So the grant that reproduces\nsomebody's broken Summary on their own AI Key is its own tier, with its own\nPermission and the shortest ceiling of the three.\n\nAuthorised by the Owner's **own** token, exactly as the two exchanges above\nare, which is what makes self-escalation impossible without a check written\nhere: `get_current_user` refuses every POST from an `act`-bearing token\nwhatever its mode, and `deps` refuses the whole `/view-as` family at both\nwriting tiers on top of that.\n\nGated on `Permission.VIEW_AS_SPEND` rather than on `VIEW_AS`, so a role that\nviews and writes but never spends is a row in `rbac_roles` rather than an\nedit here.\n\nRefused for a target holding any permission, for `elevate_view_as`'s reason\nand derived the same way. **Granted with no consent from the target**, which\nis deliberate and is the closest call in ADR-017: an elevated Owner already\nspends a target's Telegram Budget with no consent step, so gating AI alone\nwould be a control in one place and not the other. If consent is revisited,\nall three spendable resources move together.",
+        "description": "Start a session that may spend the viewed account's own resources.",
         "operationId": "view-as-spend_view_as",
         "security": [{ "OAuth2PasswordBearer": [] }],
         "parameters": [

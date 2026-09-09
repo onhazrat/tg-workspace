@@ -12,12 +12,18 @@ Three things are asserted here, and only the first is obvious:
   a spend session does not. The middle one is the whole ticket: before BYOK-04
   an elevated session could already regenerate somebody's Summary on their Key,
   and nothing said so anywhere;
-* the inventory — `SPENDABLE_RESOURCES` and the resources `VIEW_AS_SPEND_PATHS`
-  actually names are asserted as the **same** set, in both directions, so a
-  fourth spendable resource fails here until somebody classifies the operations
-  that reach it. `DEVICE_SCOPED_KEYS` in the frontend is the same shape and for
-  the same reason: a deliberate exception nothing checks becomes a leftover
-  nobody dares touch;
+* the inventory, in **both** directions. `SPENDABLE_RESOURCES` and the resources
+  `VIEW_AS_SPEND_PATHS` names are asserted as the same set, so a fourth
+  spendable resource fails here until somebody classifies the operations that
+  reach it. And `test_every_mutating_route_that_could_spend_is_classified` walks
+  the other way: every mutating route in a module that reaches a paid resource
+  must be classified as spending or excused. The forward direction alone shipped
+  two open doors — `POST /telegram/bot-info` proxying a free-form Bot API
+  `method` on the target's decrypted token, and `POST
+  /data/channels/bulk-reset-sync` enqueueing a job billed to the target. The
+  default for an unlisted mutating route is *permitted once elevated*, which is
+  why the reverse direction matters more on this inventory than on
+  `VIEW_AS_READ_ONLY_PATHS`, where an unlisted route is merely refused;
 * the attribution — an AI call made during the session names the acting Owner on
   the `tg_llm_logs` row, and an ordinary write by the Account clears it. That
   row is the *only* compensating control here, because nobody asked the target
@@ -25,7 +31,16 @@ Three things are asserted here, and only the first is obvious:
 
 ## Mutation evidence
 
-Five mutations were run and all five went red:
+**One false pass, recorded because it is the lesson.** The reverse-direction
+guard was first written as a one-level loop over `app.routes`, run green, and
+only caught when removing `/telegram/bot-info` from the inventory *did not* turn
+it red: this FastAPI keeps included routers nested as `_IncludedRouter` objects,
+so that loop reached zero routes and the guard could not fail at all.
+`test_view_as.py` says exactly this about `app.routes`, and the shared `_walk`
+helper exists for it. The `walked > 10` sentinel is what makes a future collapse
+loud rather than green.
+
+Eight mutations were run and all eight went red:
 
 * dropping the `view_as_spends` branch from `view_as_allows` — 3 failures;
 * moving that branch *below* the `SAFE_METHODS` shortcut — 1, and only
@@ -35,13 +50,20 @@ Five mutations were run and all five went red:
   that branch — 4;
 * dropping `acting_owner.stamp` from `upsert_llm_log` — 1;
 * raising `VIEW_AS_SPEND_MAX_MINUTES` to 15 (equal to the elevated ceiling) —
-  the whole file, at `Settings` construction, which is where it should be.
+  the whole file, at `Settings` construction, which is where it should be;
+* dropping `/telegram/bot-info` from `VIEW_AS_SPEND_PATHS` — 1;
+* dropping `/data/channels/bulk-reset-sync` from it — 1;
+* reverting the route walk to the one-level `app.routes` loop — 1, on the
+  `walked > 10` sentinel rather than on any classification, which is the point
+  of having it.
 """
 
 from __future__ import annotations
 
+import ast
 import uuid
 from collections.abc import Iterator
+from pathlib import Path
 from typing import Any
 
 import jwt
@@ -52,6 +74,7 @@ from sqlmodel import Session, col, delete, select
 from app.api.deps import (
     SPENDABLE_RESOURCES,
     VIEW_AS_ELEVATED_DETAIL,
+    VIEW_AS_NON_SPENDING_PATHS,
     VIEW_AS_READ_ONLY_DETAIL,
     VIEW_AS_READ_ONLY_PATHS,
     VIEW_AS_SPEND_PATHS,
@@ -505,6 +528,118 @@ def test_every_spend_entry_names_a_route_that_exists() -> None:
         assert path in mounted, (
             f"{path} is classified as spending but no route mounts it"
         )
+
+
+#: The functions that reach a paid resource. A route module naming one of these
+#: is a module where "does this spend?" has to be answered per route.
+#:
+#: Named rather than call-graphed: a transitive walk over every handler is a
+#: bigger machine than this needs, and the *module* is already the unit the
+#: payment rule uses (`ai_keys.AI_KEY_CALLERS`). It is also the unit that failed
+#: — `telegram.py` and `data/channels.py` each had one route classified and one
+#: not, and both misses were in a module the reviewer could see reached a seam.
+SPEND_SEAMS = frozenset(
+    {
+        "resolve_ai_key",
+        "_resolve_bot_token",
+        "enqueue_sync_job",
+        "create_follow_job",
+        "metered",
+    }
+)
+
+
+def _modules_reaching_a_seam() -> set[str]:
+    """Route modules whose source names a spend seam, off the AST."""
+    routes_dir = Path(__file__).resolve().parents[2] / "app" / "api" / "routes"
+    found: set[str] = set()
+    for path in routes_dir.rglob("*.py"):
+        tree = ast.parse(path.read_text("utf-8"))
+        names = {node.id for node in ast.walk(tree) if isinstance(node, ast.Name)} | {
+            node.attr for node in ast.walk(tree) if isinstance(node, ast.Attribute)
+        }
+        if names & SPEND_SEAMS:
+            found.add(str(path.relative_to(routes_dir.parents[2])).replace("\\", "/"))
+    return found
+
+
+def test_every_mutating_route_that_could_spend_is_classified() -> None:
+    """The **reverse** direction, and the one that was missing.
+
+    `test_every_spend_entry_names_a_route_that_exists` checks that everything
+    listed is mounted. That catches a rename and nothing else. It did not catch
+    what actually shipped: `POST /telegram/bot-info` proxies a free-form Bot API
+    `method` on the target's decrypted token, and `POST
+    /data/channels/bulk-reset-sync` enqueues a job the target is billed for —
+    neither was listed, and the default for an unlisted mutating route is
+    **permitted once elevated**.
+
+    That default is why this direction matters more here than on
+    `VIEW_AS_READ_ONLY_PATHS`, where an unlisted route is merely refused.
+
+    Scoped to modules that reach a seam rather than to the whole API, because
+    every other mutating route is a database write and the tier below already
+    authorises those. A route added to one of these modules has to be placed.
+    """
+    from app.main import app
+    from tests.api.test_public_route_exemptions import _walk
+    from tests.api.test_view_as import SAFE_METHODS
+
+    seam_modules = _modules_reaching_a_seam()
+    assert seam_modules, "the seam scan matched nothing; SPEND_SEAMS went stale"
+
+    # `_walk`, not `app.routes`: this FastAPI keeps included routers nested as
+    # `_IncludedRouter` objects, so a one-level loop over `app.routes` finds
+    # **nothing at all** and this guard passes unconditionally. It did exactly
+    # that on the first cut — written, run green, and mutation-tested straight
+    # into a false pass, which is why `test_view_as.py` says so in as many words
+    # and why that helper is shared rather than re-implemented here.
+    walked = 0
+    unclassified: list[str] = []
+    for path, route in _walk(app.routes):
+        endpoint = getattr(route, "endpoint", None)
+        if endpoint is None:
+            continue
+        module = endpoint.__module__.replace(".", "/") + ".py"
+        if module not in seam_modules:
+            continue
+        methods = {m.upper() for m in (getattr(route, "methods", set()) or set())}
+        if not methods - SAFE_METHODS:
+            continue
+        walked += 1
+        if path in VIEW_AS_SPEND_PATHS or path in VIEW_AS_NON_SPENDING_PATHS:
+            continue
+        unclassified.append(f"{sorted(methods - SAFE_METHODS)} {path} ({module})")
+
+    assert walked > 10, (
+        f"only {walked} mutating routes were reached in the seam modules; the "
+        "walk has collapsed and this guard is covering nothing"
+    )
+    assert not unclassified, (
+        "these mutating routes sit in a module that reaches a paid resource and "
+        "are classified neither as spending nor as not-spending, so an elevated "
+        "session may already be reaching the target's money through them:\n  "
+        + "\n  ".join(sorted(unclassified))
+    )
+
+
+def test_the_not_spending_inventory_is_not_a_dumping_ground() -> None:
+    """Every excuse names a mounted route and states a reason.
+
+    The mirror of the entry above. An excuse for a route that has since moved is
+    an excuse pointed at wherever the path went.
+    """
+    from tests.api.test_view_as import _mounted
+
+    mounted = {path for _, path in _mounted()}
+    for path, reason in VIEW_AS_NON_SPENDING_PATHS.items():
+        assert reason.strip(), f"{path} is excused with no reason"
+        assert path in mounted, (
+            f"{path} is excused from the spend inventory but nothing mounts it"
+        )
+    assert not set(VIEW_AS_NON_SPENDING_PATHS) & set(VIEW_AS_SPEND_PATHS), (
+        "a path cannot both spend and not spend"
+    )
 
 
 def test_the_spend_inventory_does_not_overlap_the_refusals() -> None:
