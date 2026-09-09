@@ -9,6 +9,7 @@ import { DiagnosticsView } from "@/components/DiagnosticsView"
 import { NetworkTelemetry } from "@/components/NetworkTelemetry"
 import { SettingGroupsPanel } from "@/components/SettingGroupsPanel"
 import { SettingsView } from "@/components/SettingsView"
+import { AIKeysPanel } from "@/components/settings/ai/AIKeysPanel"
 import { CommonlyUsedSection } from "@/components/settings/CommonlyUsedSection"
 import { SettingAnchor } from "@/components/settings/SettingAnchor"
 import { SettingsSearchResults } from "@/components/settings/SettingsSearchResults"
@@ -176,6 +177,16 @@ export const SettingsHub: React.FC = () => {
             activeSection={activeSettingsTab}
             highlightId={highlightId}
           />
+        )
+      case "ai-keys":
+        return (
+          <SettingAnchor
+            settingId="panel-ai-keys"
+            highlighted={highlightId === "panel-ai-keys"}
+            className="space-y-6"
+          >
+            <AIKeysPanel />
+          </SettingAnchor>
         )
       case "setting-groups":
         return (

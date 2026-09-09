@@ -14,7 +14,7 @@ would both be the single status the environment-key check answers.
 
 **Blocked by:** None (can start immediately).
 
-**Status:** ready-for-agent
+**Status:** done
 
 ## The rule this ticket makes true
 
@@ -40,22 +40,22 @@ inventory, which is the thing the declared caller list exists to prevent.
 
 ## Acceptance criteria
 
-- [ ] A new user-owned table holds many Keys per Account: owner, label, Provider kind, base URL, encrypted secret, last-validated timestamp. It reuses the deployment's existing Fernet encryption and its environment key rather than a second scheme.
-- [ ] A new aggregate service module is the table's sole writer and declares its kind.
-- [ ] The table is classified in the tenancy seam as user-owned, appears on the owner inventory, is truncated between tests, is pruned by no retention window, and is omitted from export with a stated reason.
-- [ ] The Key's plaintext is returned by no route. Editing a label or base URL does not require re-entering the secret.
-- [ ] Saving a Key validates it with one cheap completion and records the result. Nothing re-validates on a schedule.
-- [ ] `resolve_ai_key` exists with the six purposes above and a declared caller list walked from the AST. A call site not on the list fails a guard.
-- [ ] All eleven AI call sites resolve their Key through the seam. The Gemini Provider takes its credential as an argument instead of reading the environment.
-- [ ] The provider registry no longer caches instances keyed by Provider name alone. With per-Account Keys that cache hands one Account another Account's client.
-- [ ] Summary, Chat and Tag run accept the Key id on the wire; the generated client is regenerated.
-- [ ] An Account with no Key and an Account with a rejected Key get distinct statuses. A rejection clears the Key's validation state so the settings surface can flag it.
-- [ ] A Key id naming another Account's row is refused before the secret is decrypted, and answers as an absent row does.
-- [ ] Settings gains a Keys panel mirroring the bot credentials panel. The Action tab gains a Key selector, hidden when an Account holds exactly one Key, with the last used remembered in Account-namespaced browser storage.
-- [ ] A new services test module asserts the whole rule: each Artifact purpose resolves the caller's Key, each shared purpose resolves the Operator Key, a foreign Key is refused before decrypt, an undeclared caller fails.
-- [ ] The credential tenancy guard is **parametrised over both credential kinds** rather than copied. When you fix one of a pair, guard the pair.
-- [ ] The new routes join the account-isolation probe, either probed or excused with a typed reason.
-- [ ] Every new guard is mutation-tested. A green suite proves nothing until it has been watched going red.
+- [x] A new user-owned table holds many Keys per Account: owner, label, Provider kind, base URL, encrypted secret, last-validated timestamp. It reuses the deployment's existing Fernet encryption and its environment key rather than a second scheme.
+- [x] A new aggregate service module is the table's sole writer and declares its kind.
+- [x] The table is classified in the tenancy seam as user-owned, appears on the owner inventory, is truncated between tests, is pruned by no retention window, and is omitted from export with a stated reason.
+- [x] The Key's plaintext is returned by no route. Editing a label or base URL does not require re-entering the secret.
+- [x] Saving a Key validates it with one cheap completion and records the result. Nothing re-validates on a schedule.
+- [x] `resolve_ai_key` exists with the six purposes above and a declared caller list walked from the AST. A call site not on the list fails a guard.
+- [x] All eleven AI call sites resolve their Key through the seam. The Gemini Provider takes its credential as an argument instead of reading the environment.
+- [x] The provider registry no longer caches instances keyed by Provider name alone. With per-Account Keys that cache hands one Account another Account's client.
+- [x] Summary, Chat and Tag run accept the Key id on the wire; the generated client is regenerated.
+- [x] An Account with no Key and an Account with a rejected Key get distinct statuses. A rejection clears the Key's validation state so the settings surface can flag it.
+- [x] A Key id naming another Account's row is refused before the secret is decrypted, and answers as an absent row does.
+- [x] Settings gains a Keys panel mirroring the bot credentials panel. The Action tab gains a Key selector, hidden when an Account holds exactly one Key, with the last used remembered in Account-namespaced browser storage.
+- [x] A new services test module asserts the whole rule: each Artifact purpose resolves the caller's Key, each shared purpose resolves the Operator Key, a foreign Key is refused before decrypt, an undeclared caller fails.
+- [x] The credential tenancy guard is **parametrised over both credential kinds** rather than copied. When you fix one of a pair, guard the pair.
+- [x] The new routes join the account-isolation probe, either probed or excused with a typed reason.
+- [x] Every new guard is mutation-tested. A green suite proves nothing until it has been watched going red.
 
 ## Notes
 

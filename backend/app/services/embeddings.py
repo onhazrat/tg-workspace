@@ -14,6 +14,7 @@ from sqlmodel.sql.expression import SelectOfScalar
 from app.ai.registry import get_provider
 from app.core.config import settings
 from app.models_tg import EmbeddingLog, Post, PostEmbedding, SyncMeta, utc_now
+from app.services.ai_keys import Purpose, resolve_ai_key
 
 _last_backfill_run_ms: int | None = None
 
@@ -134,9 +135,6 @@ async def backfill_embeddings(
     if limit is None:
         limit = settings.EMBEDDINGS_BACKFILL_LIMIT_DEFAULT
 
-    if not settings.GEMINI_API_KEY:
-        raise ValueError("GEMINI_API_KEY not configured")
-
     from app.services.channels import channel_names_for_user
 
     operator_channels = channel_names_for_user(session, user_id)
@@ -153,7 +151,13 @@ async def backfill_embeddings(
             ),
         }
 
-    provider = get_provider("gemini")
+    # `EMBED` on the Operator Key. See `resolve_ai_key`: this writes
+    # `tg_post_embeddings`, which is FOLLOW_SCOPED and shared by every Account
+    # that follows the Channel, so it is not an Artifact and no Account pays.
+    key = resolve_ai_key(session, user_id=None, purpose=Purpose.EMBED)
+    provider = get_provider(
+        provider=key.provider, api_key=key.api_key, base_url=key.base_url
+    )
     model = settings.EMBEDDING_MODEL
     upserted = 0
     start = time.perf_counter()

@@ -126,12 +126,15 @@ def test_the_split_did_not_change_the_route_count() -> None:
     readable until the fresh one lands; and **75** with
     `GET /directory/{handle}/posts`, the first route of the `directory` family —
     the Candidate panel's sample Posts, which are kept off the report for the
-    reason the two list-versus-detail splits above were made; and **76** with
-    `GET /configuration`, the Admin-only five-layer configuration catalog.
+    reason the two list-versus-detail splits above were made; and **78** with
+    the three `/ai-keys` routes, BYOK-01's Keys panel — a family of its own
+    beside `/bot-credentials` rather than more of it, because an aggregate owns
+    one table; and **79** with `GET /configuration`, the Admin-only five-layer
+    configuration catalog.
     """
     data_routes = {
         (m, p) for m, p in _mounted_routes() if p.startswith("/api/v1/data/")
     }
-    assert len(data_routes) == 76, (
-        f"expected 76 /data endpoints, found {len(data_routes)}"
+    assert len(data_routes) == 79, (
+        f"expected 79 /data endpoints, found {len(data_routes)}"
     )
