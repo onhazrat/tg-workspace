@@ -115,13 +115,18 @@ def _seed_key(
 # --------------------------------------------------------------------------
 
 
-#: The classification, written out. **Deliberately literals and not derived
+#: The classification, written out. `MODELS` (BYOK-02) is on the Account's side
+#: without being an Artifact: asking an endpoint what it offers is an outbound
+#: call on somebody's credential, and the Operator Key would answer for a
+#: catalogue nothing they own can reach.
+#:
+#: **Deliberately literals and not derived
 #: from `ACCOUNT_PAID`**, which is the mutation that caught this file: a test
 #: parametrised over the set it is checking collects *zero cases* the moment
 #: somebody widens that set, and pytest reports zero cases as a pass. The
 #: derived half is `test_the_two_sides_are_the_classification_written_above`,
 #: which fails when these lists and the set stop agreeing.
-ARTIFACT_PURPOSES = (Purpose.SUMMARY, Purpose.CHAT, Purpose.TAG)
+ARTIFACT_PURPOSES = (Purpose.SUMMARY, Purpose.CHAT, Purpose.TAG, Purpose.MODELS)
 SHARED_PURPOSES = (Purpose.EMBED, Purpose.TRANSLATE, Purpose.RAG_QUERY)
 
 

@@ -1,11 +1,12 @@
 import { Cpu, Database, Languages, RefreshCw, Thermometer } from "lucide-react"
 import { AnimatePresence, motion } from "motion/react"
 import type React from "react"
+import { ModelCombo } from "@/components/ai/ModelCombo"
 import { SettingAnchor } from "@/components/settings/SettingAnchor"
 import { TgHelpText, TgInput, tgFieldClassName } from "@/components/ui/tg-input"
 import { TgSettingsSection } from "@/components/ui/tg-settings-section"
 import { TgToggle } from "@/components/ui/tg-toggle"
-import { LANGUAGES, MODELS } from "@/constants"
+import { LANGUAGES } from "@/constants"
 import { useSettings } from "@/contexts/SettingsContext"
 
 export const AiSection: React.FC<{
@@ -74,23 +75,15 @@ export const AiSection: React.FC<{
                 Default Model
               </span>
             </div>
-            <select
+            <ModelCombo
+              ariaLabel="Default model"
               value={selectedModel}
-              onChange={(e) => setSelectedModel(e.target.value)}
+              onChange={setSelectedModel}
               className={tgFieldClassName}
-            >
-              {MODELS.map((m) => (
-                <option
-                  key={m.id}
-                  value={m.id}
-                  className="bg-app-card text-app-ink"
-                >
-                  {m.label.toUpperCase()}
-                </option>
-              ))}
-            </select>
+            />
             <TgHelpText>
-              Flash models are faster, Pro models are more detailed.
+              Pick one your key's provider offers, or type any model id it
+              accepts.
             </TgHelpText>
           </SettingAnchor>
 
@@ -272,21 +265,12 @@ export const AiSection: React.FC<{
                       Translation Model
                     </span>
                   </div>
-                  <select
+                  <ModelCombo
+                    ariaLabel="Translation model"
                     value={translationModel}
-                    onChange={(e) => setTranslationModel(e.target.value)}
+                    onChange={setTranslationModel}
                     className={tgFieldClassName}
-                  >
-                    {MODELS.map((m) => (
-                      <option
-                        key={m.id}
-                        value={m.id}
-                        className="bg-app-card text-app-ink"
-                      >
-                        {m.label.toUpperCase()}
-                      </option>
-                    ))}
-                  </select>
+                  />
                 </SettingAnchor>
               </motion.div>
             )}

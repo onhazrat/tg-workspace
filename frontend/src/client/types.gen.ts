@@ -2461,6 +2461,17 @@ export type ModelInfo = {
 };
 
 /**
+ * ModelListRequest
+ * Which AI key's provider to ask for a model list.
+ */
+export type ModelListRequest = {
+    /**
+     * Aikeyid
+     */
+    aiKeyId?: string | null;
+};
+
+/**
  * ModelListResponse
  * Every model the configured providers expose, plus the current default.
  *
@@ -6006,11 +6017,20 @@ export type TelegramApiBotFileResponses = {
 };
 
 export type AiApiListModelsData = {
-    body?: never;
+    body: ModelListRequest;
     path?: never;
     query?: never;
     url: '/api/v1/ai/models';
 };
+
+export type AiApiListModelsErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type AiApiListModelsError = AiApiListModelsErrors[keyof AiApiListModelsErrors];
 
 export type AiApiListModelsResponses = {
     /**

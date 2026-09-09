@@ -58,12 +58,20 @@ AI_KEY_REJECTED_DETAIL = (
 #: cannot fix it.
 OPERATOR_KEY_MISSING_DETAIL = "The deployment has no AI key configured"
 
-#: The Provider kinds. Only `GEMINI` is implemented in BYOK-01; the second kind
-#: is BYOK-02, and the column exists now so that a row written today already
-#: says which one it is.
+#: The Provider kinds, and there are two. `OPENAI_COMPATIBLE` is one kind rather
+#: than a family: OpenRouter, Groq, Together, DeepSeek, Mistral, Ollama and vLLM
+#: are the same HTTP API at different addresses, so what distinguishes them is a
+#: base URL an Account pastes in. There is no class per vendor.
 GEMINI = "gemini"
 OPENAI_COMPATIBLE = "openai_compatible"
 PROVIDER_KINDS = frozenset({GEMINI, OPENAI_COMPATIBLE})
+
+#: An OpenAI-compatible Key with no address is a Key that cannot be used, and
+#: the failure without this check lands at Artifact time as a `ValueError` out
+#: of the registry rather than at the form as a sentence.
+BASE_URL_REQUIRED_DETAIL = (
+    "An OpenAI-compatible key needs a base URL, e.g. https://openrouter.ai/api/v1"
+)
 
 
 class Purpose(StrEnum):
@@ -80,6 +88,14 @@ class Purpose(StrEnum):
     SUMMARY = "summary"
     CHAT = "chat"
     TAG = "tag"
+    #: Not an Artifact, and on the Account's Key anyway (BYOK-02). Asking an
+    #: endpoint what models it offers is an authenticated outbound call made on
+    #: somebody's behalf, and the only Key that can answer for *their* Provider
+    #: is theirs — the Operator's would return a catalogue nothing they own can
+    #: reach. It is the one purpose where "who pays" and "whose question is it"
+    #: are the same answer for a different reason, which is why it is written
+    #: out here rather than folded in with the three above.
+    MODELS = "models"
     #: Not Artifacts. Charged to the Operator Key, because each writes or reads
     #: a row shared by every Account that follows the Channel: two Accounts on
     #: different Providers would overwrite each other with vectors from
@@ -95,7 +111,7 @@ class Purpose(StrEnum):
 #: derived, so that a purpose added without a decision falls to the Operator's
 #: side loudly (the enum member exists, nothing charges it) rather than quietly
 #: charging somebody's card.
-ACCOUNT_PAID = frozenset({Purpose.SUMMARY, Purpose.CHAT, Purpose.TAG})
+ACCOUNT_PAID = frozenset({Purpose.SUMMARY, Purpose.CHAT, Purpose.TAG, Purpose.MODELS})
 
 #: Modules that reach an AI Provider, and the purposes each resolves.
 #:
@@ -243,6 +259,11 @@ def key_to_camel(row: AICredential) -> dict[str, Any]:
     }
 
 
+def _require_base_url(provider: str, base_url: Any) -> None:
+    if provider == OPENAI_COMPATIBLE and not (base_url or "").strip():
+        raise HTTPException(status_code=400, detail=BASE_URL_REQUIRED_DETAIL)
+
+
 def _encrypt_key(raw: str) -> str:
     if not raw:
         return ""
@@ -277,6 +298,7 @@ def upsert_ai_key(
         row.provider = provider
         if "base_url" in normalized:
             row.base_url = normalized.get("base_url") or None
+        _require_base_url(provider, row.base_url)
         if encrypted:
             row.key_encrypted = encrypted
         row.updated_at = utc_now()
@@ -285,6 +307,7 @@ def upsert_ai_key(
             raise HTTPException(
                 status_code=400, detail="key is required for a new AI key"
             )
+        _require_base_url(provider, normalized.get("base_url"))
         row = AICredential(
             id=key_id,
             user_id=user_id,

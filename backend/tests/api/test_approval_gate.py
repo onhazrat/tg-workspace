@@ -107,19 +107,21 @@ def test_an_unapproved_account_can_read_its_own_record(
 
 @pytest.mark.security
 @pytest.mark.parametrize(
-    "path",
+    "method,path",
     [
-        f"{PREFIX}/data/channels",
-        f"{PREFIX}/jobs/status",
-        f"{PREFIX}/ai/models",
-        f"{PREFIX}/rag/status",
+        ("GET", f"{PREFIX}/data/channels"),
+        ("GET", f"{PREFIX}/jobs/status"),
+        # POST since BYOK-02: the model list stopped being a static read and
+        # became an outbound call on the caller's own Provider Key.
+        ("POST", f"{PREFIX}/ai/models"),
+        ("GET", f"{PREFIX}/rag/status"),
     ],
 )
 def test_an_unapproved_account_reaches_no_data(
-    client: TestClient, pending_user: str, path: str
+    client: TestClient, pending_user: str, method: str, path: str
 ) -> None:
     headers = {"Authorization": f"Bearer {_token(client, pending_user)}"}
-    response = client.get(path, headers=headers)
+    response = client.request(method, path, headers=headers, json={})
     assert response.status_code == 403, f"{path} -> {response.status_code}"
     assert response.json()["detail"] == PENDING_APPROVAL_DETAIL
 

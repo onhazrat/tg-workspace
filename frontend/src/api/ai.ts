@@ -23,11 +23,22 @@ const withAiKey = (body: Record<string, unknown>): Record<string, unknown> => {
 }
 
 export const aiApi = {
-  listModels: () =>
+  /**
+   * What the chosen Key's provider offers (BYOK-02).
+   *
+   * A POST, and it sends the Key like every other Artifact call: this stopped
+   * being a static list and became an outbound call on somebody's own
+   * credential, so it needs to know whose. The response is cached per Key
+   * server-side, which is what makes it safe to call from a dropdown.
+   */
+  listModels: (aiKeyId?: string | null) =>
     request<{
       models: { id: string; label: string; provider: string }[]
       default: string
-    }>("/api/v1/ai/models"),
+    }>("/api/v1/ai/models", {
+      method: "POST",
+      body: JSON.stringify(aiKeyId ? { aiKeyId } : {}),
+    }),
 
   summaryPrompt: (body: {
     channels: string[]

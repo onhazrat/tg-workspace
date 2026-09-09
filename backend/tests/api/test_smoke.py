@@ -5,6 +5,7 @@ from fastapi.testclient import TestClient
 
 from app.core.config import settings
 from app.main import app
+from app.services.ai_keys import AI_KEY_MISSING_DETAIL
 
 client = TestClient(app)
 
@@ -40,11 +41,16 @@ def test_tor_status() -> None:
 
 
 def test_ai_models_without_key() -> None:
-    r = client.get("/api/v1/ai/models", headers=_auth_headers())
-    assert r.status_code == 200
-    data = r.json()
-    assert len(data["models"]) >= 1
-    assert data["default"]
+    """No AI Key, no model list — and the message says which of the two it is.
+
+    This asserted a non-empty list until BYOK-02, when the endpoint stopped
+    serving three hardcoded Gemini ids and started asking an Account's own
+    Provider. There is no list to serve somebody holding no Key, and answering
+    an empty one would look like "your provider offers nothing".
+    """
+    r = client.post("/api/v1/ai/models", headers=_auth_headers(), json={})
+    assert r.status_code == 400
+    assert r.json()["detail"] == AI_KEY_MISSING_DETAIL
 
 
 def test_jobs_status() -> None:

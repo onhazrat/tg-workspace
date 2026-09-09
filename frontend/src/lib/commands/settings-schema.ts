@@ -425,8 +425,9 @@ export function buildSettingCommands(): CommandDef[] {
 }
 
 /**
- * Command ids that existed before the catalog migration, minus Advanced Mode
- * (intentionally removed). New sync-interval editors are additive.
+ * Command ids that existed before the catalog migration, minus Advanced Mode and
+ * the six per-model setters (both intentionally removed). New sync-interval
+ * editors are additive.
  */
 export const LEGACY_SETTING_COMMAND_IDS = [
   "disable-auto-translate",
@@ -451,6 +452,13 @@ export const LEGACY_SETTING_COMMAND_IDS = [
   "disable-tor-control",
   "disable-translation",
   "edit-ai-temperature",
+  // BYOK-02 replaced six `set-{selected,translation}-model-gemini-*` ids with
+  // these two editors. Those ids named three hardcoded Gemini models that no
+  // longer exist anywhere in the codebase, and a palette command per model
+  // cannot survive a list fetched from an account's own provider — an account
+  // on OpenRouter would generate several hundred of them.
+  "edit-selected-model",
+  "edit-translation-model",
   "edit-default-proxy-urls",
   "edit-global-start-time-value",
   "edit-log-retention-days",
@@ -495,9 +503,6 @@ export const LEGACY_SETTING_COMMAND_IDS = [
   "set-global-start-time-mode-absolute",
   "set-global-start-time-mode-relative",
   "set-global-start-time-mode-retention",
-  "set-selected-model-gemini-3-1-flash-lite-preview",
-  "set-selected-model-gemini-3-1-pro-preview",
-  "set-selected-model-gemini-3-flash-preview",
   "set-theme-dark",
   "set-theme-light",
   "set-theme-system",
@@ -505,9 +510,6 @@ export const LEGACY_SETTING_COMMAND_IDS = [
   "set-tor-mode-custom",
   "set-tor-rotation-strategy-random",
   "set-tor-rotation-strategy-sequential",
-  "set-translation-model-gemini-3-1-flash-lite-preview",
-  "set-translation-model-gemini-3-1-pro-preview",
-  "set-translation-model-gemini-3-flash-preview",
   "set-translation-target-language-arabic",
   "set-translation-target-language-chinese",
   "set-translation-target-language-english",
