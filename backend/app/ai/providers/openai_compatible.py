@@ -29,6 +29,7 @@ from typing import Any, cast
 import httpx
 
 from app.ai.models import ChatMessage, CompletionResult, EmbeddingResult, ModelInfo
+from app.ai.providers.gemini import rtl_instruction
 
 #: Generous overall, because a long summary against a slow local model is the
 #: normal case rather than the pathological one — but a short connect timeout,
@@ -178,10 +179,13 @@ class OpenAICompatibleProvider:
 
     async def embed(self, texts: list[str], *, model: str) -> EmbeddingResult:
         body = await self._post("embeddings", {"model": model, "input": texts})
-        vectors = [
-            [float(v) for v in entry.get("embedding", [])]
-            for entry in body.get("data", [])
-        ]
+        # Sorted by `index`, not taken in response order. The caller matches
+        # vectors to `texts` positionally, and the OpenAI schema carries an
+        # index per entry precisely because it does not promise order — a
+        # provider that batched and reassembled would attach vectors to the
+        # wrong Posts in a corpus every Follower shares.
+        entries = sorted(body.get("data", []), key=lambda e: e.get("index", 0))
+        vectors = [[float(v) for v in entry.get("embedding", [])] for entry in entries]
         return EmbeddingResult(
             vectors=vectors,
             model=model,
@@ -196,10 +200,16 @@ class OpenAICompatibleProvider:
         target_language: str,
         model: str,
     ) -> list[dict[str, str]]:
+        # `rtl_instruction` comes from the Gemini twin rather than being
+        # reworded here. CLAUDE.md's rule about twin modules is the reason: a
+        # fix applied to one of a pair is half a fix, and dropping the RTL
+        # directive would silently mangle Persian and Arabic on this Provider
+        # only.
         prompt = (
             f"Translate the following array of texts to {target_language}.\n"
             "Preserve markdown, links, and emojis. Return a JSON array of "
-            "{id, translation}.\n\nTEXTS:\n" + json.dumps(items)
+            f"{{id, translation}}.\n{rtl_instruction(target_language)}\n"
+            "\nTEXTS:\n" + json.dumps(items)
         )
         body = await self._post(
             "chat/completions",
@@ -210,7 +220,7 @@ class OpenAICompatibleProvider:
                 "messages": _messages(prompt, None, None),
             },
         )
-        parsed = json.loads(_first_message(body) or "[]")
+        parsed = json.loads(_unfenced(_first_message(body)) or "[]")
         if isinstance(parsed, dict):
             # `json_object` mode forces an object at the top level on several
             # endpoints, so the array arrives wrapped under whatever key the
@@ -238,6 +248,25 @@ def _messages(
         messages.append({"role": role, "content": message.text})
     messages.append({"role": "user", "content": prompt})
     return messages
+
+
+def _unfenced(text: str) -> str:
+    """A JSON reply with its markdown fence taken off, if it has one.
+
+    `response_format: {"type": "json_object"}` is ignored outright by Ollama and
+    by older vLLM builds, which answer a JSON request with a ```json block. The
+    Gemini twin needs none of this because `response_mime_type` is enforced
+    server-side; this Provider cannot rely on the same promise from an endpoint
+    it has never seen.
+
+    A malformed reply still raises. Swallowing it would turn a translation batch
+    that produced nothing into one that silently produced nothing.
+    """
+    stripped = text.strip()
+    if not stripped.startswith("```"):
+        return stripped
+    body = stripped[3:].removeprefix("json").removeprefix("JSON")
+    return body.removesuffix("```").strip()
 
 
 def _first_message(body: dict[str, Any]) -> str:

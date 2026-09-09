@@ -78,12 +78,17 @@ async def validate_credential(
     return True
 
 
-#: What a Provider says when it will not accept the credential, as opposed to
-#: when it is briefly unwell. Matched on the pair rather than on the status
-#: alone: Gemini answers a bad key with **400 INVALID_ARGUMENT**, the same code
-#: it uses for a malformed request, so clearing a Key's validation stamp on a
-#: bare 400 would flag a perfectly good Key the first time somebody sent a model
-#: id that does not exist.
+#: What a **400** means, when it means the credential rather than the request.
+#:
+#: Only 400 needs the phrases, and that is the whole point of them: Gemini
+#: answers a bad key with **400 INVALID_ARGUMENT**, the same code it uses for a
+#: malformed request, so clearing a Key's validation stamp on a bare 400 would
+#: flag a perfectly good Key the first time somebody sent a model id that does
+#: not exist. 401 and 403 carry no such ambiguity and are matched on the status
+#: alone — requiring a phrase there read OpenRouter's
+#: `{"error":{"message":"No auth credentials found"}}` as "not now", so a
+#: revoked key rendered as a provider offering no models and the settings panel
+#: went on calling it healthy.
 _REJECTION_STATUSES = frozenset({"UNAUTHENTICATED", "PERMISSION_DENIED"})
 _REJECTION_PHRASES = ("api key", "api_key", "unauthorized", "invalid authentication")
 
@@ -101,7 +106,9 @@ def is_credential_rejection(exc: BaseException) -> bool:
     the Key looking healthy until the next call.
     """
     code = getattr(exc, "code", None)
-    if code not in (400, 401, 403):
+    if code in (401, 403):
+        return True
+    if code != 400:
         return False
     if str(getattr(exc, "status", "") or "").upper() in _REJECTION_STATUSES:
         return True
@@ -147,7 +154,16 @@ async def list_models_cached(
 
 
 def forget_cached_models(cache_key_prefix: str) -> None:
-    """Drop what was cached for a Key, on a save that may have changed it."""
+    """Drop what was cached for a Key, on a save that may have changed it.
+
+    **Only in the process that served the save.** The API tier scales past one
+    replica (`docs/scaling-to-multiple-workers.md`), and this cache is a module
+    global, so another worker keeps the old endpoint's catalogue until its own
+    entry ages out. That is a bounded wrong answer — at most
+    `MODEL_CACHE_TTL_SECONDS`, in a dropdown, against a Key its owner has just
+    edited — and the alternative is a shared invalidation channel for a list of
+    model names. `NOTIFY` is there if this ever matters; it does not yet.
+    """
     for key in [k for k in _MODEL_CACHE if k.startswith(cache_key_prefix)]:
         _MODEL_CACHE.pop(key, None)
 

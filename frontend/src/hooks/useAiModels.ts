@@ -26,6 +26,8 @@ const empty: { id: string; label: string }[] = []
 
 export function useAiModels(): {
   models: { id: string; label: string }[]
+  /** A model id this provider will accept, for a stored value it will not. */
+  fallback: string
   isLoading: boolean
 } {
   const aiKeyId = selectedAiKeyId()
@@ -41,6 +43,7 @@ export function useAiModels(): {
   })
   return {
     models: query.data?.models ?? empty,
+    fallback: query.data?.default ?? "",
     isLoading: query.isLoading,
   }
 }

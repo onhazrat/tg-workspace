@@ -12,7 +12,16 @@ from app.ai.models import ChatMessage, CompletionResult, EmbeddingResult, ModelI
 RTL_LANGUAGES = {"Persian", "Arabic", "فارسی", "العربية"}
 
 
-def _rtl_instruction(language: str) -> str:
+def rtl_instruction(language: str) -> str:
+    """The RTL directive for a *translation*, shared by both Providers.
+
+    Public, and deliberately not `prompts/summary.rtl_instruction`, which says
+    "the entire summary" and is wrong for a batch of post translations. It
+    stays here rather than moving to a third module because this is where it
+    has always lived and one importer does not make a package — but it is no
+    longer private, because `openai_compatible.py` needs the same words and a
+    reworded copy there is the twin divergence CLAUDE.md warns about.
+    """
     if language in RTL_LANGUAGES:
         return (
             "IMPORTANT: Since this is a Right-to-Left (RTL) language, ensure formatting "
@@ -146,7 +155,7 @@ class GeminiProvider:
         target_language: str,
         model: str,
     ) -> list[dict[str, str]]:
-        rtl = _rtl_instruction(target_language)
+        rtl = rtl_instruction(target_language)
         prompt = f"""Translate the following array of texts to {target_language}.
 Preserve markdown, links, and emojis. Return JSON array of {{id, translation}}.
 {rtl}

@@ -14,7 +14,10 @@ its twin's docstring argued against exactly that.
 
 So this file is the other half: an inventory. Construction is the signal,
 walked from the AST — `httpx.AsyncClient(...)` anywhere in `app/` must belong
-to a callable named in `CLIENT_BUILDERS`, with a reason. A grep would not do,
+to a callable named in `CLIENT_BUILDERS` as `path::function`, with a reason.
+The path is half the key because the bare name is not unique: `_client` is a
+name any module might pick, and a name-keyed inventory would excuse the next
+one silently. A grep would not do,
 because `httpx` is named legitimately for its exception types in half a dozen
 modules and by every type annotation on a client that is passed around.
 
@@ -38,18 +41,22 @@ APP = pathlib.Path(__file__).resolve().parents[2] / "app"
 #: egress *to Telegram* that nothing meters, nothing paces and nothing routes
 #: through a proxy — add the Lane, do not add the entry. A different destination
 #: entirely is the only thing that earns an entry, and it has to say so.
+#: Keyed `path::function`, not by the bare function name. A bare name excuses
+#: *any* callable that happens to share it anywhere in `app/`, and `_client` is
+#: a name a future module will pick without ever hearing of this file — which
+#: turns the inventory into a hole exactly where it is least visible.
 CLIENT_BUILDERS: dict[str, str] = {
-    "build_lane_client": (
+    "app/services/proxy_pool.py::build_lane_client": (
         "the Lane's own client. This is the seam: one long-lived client per "
         "proxy, and the only object `_fetch_once` will accept."
     ),
-    "_build_diagnostic_client": (
+    "app/services/network.py::_build_diagnostic_client": (
         "`test_proxy` and `get_tor_ip` ask ipify which address one *named* "
         "proxy exits from. Neither reaches Telegram, and neither can use a "
         "Lane — the operator is testing a URL that may not be in the pool, and "
         "answering about a different proxy is worse than not answering."
     ),
-    "_client": (
+    "app/ai/providers/openai_compatible.py::_client": (
         "`OpenAICompatibleProvider` talks to an Account's own AI provider "
         "(BYOK-02), which is not Telegram. A Lane cannot answer: it would hold "
         "a proxy permit a sync is waiting on, charge the Telegram Request "
@@ -129,7 +136,7 @@ def test_only_the_declared_builders_open_a_client() -> None:
     undeclared = [
         (path, line, fn)
         for path, line, fn in _client_constructions()
-        if fn not in CLIENT_BUILDERS
+        if f"{path}::{fn}" not in CLIENT_BUILDERS
     ]
 
     assert not undeclared, (
@@ -145,7 +152,7 @@ def test_only_the_declared_builders_open_a_client() -> None:
 def test_every_declared_builder_still_exists() -> None:
     """The other direction. A reason attached to nothing is a leftover, and
     the next reader treats it as load-bearing rather than dead."""
-    live = {fn for _, _, fn in _client_constructions()}
+    live = {f"{path}::{fn}" for path, _, fn in _client_constructions()}
 
     stale = set(CLIENT_BUILDERS) - live
     assert not stale, (

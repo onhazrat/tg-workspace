@@ -12,6 +12,7 @@ from app.ai.models import (
     CompletionResult,
     EmbeddingResult,
     EmbedRequest,
+    ModelInfo,
     ModelListRequest,
     PromptScopeInput,
     SummaryRequest,
@@ -133,6 +134,27 @@ def _resolve_posts_text(
     return assemble_posts_text(session, prompt_scope, user_id=user_id)
 
 
+def _default_for(models: list[ModelInfo]) -> str:
+    """A model id this Provider will actually accept.
+
+    `DEFAULT_AI_MODEL` is one deployment-wide Gemini id, which was the only
+    possible answer while the Operator's key paid for everything and is the
+    wrong one the moment an Account's only Key is an OpenRouter or Ollama
+    credential: the settings default is a Gemini id, the client renders it
+    unchanged, and the first Summary posts `gemini-3-flash-preview` to an
+    endpoint that has never heard of it.
+
+    So the deployment default survives only if this Provider offers it.
+    Otherwise the Provider's own first model is the honest answer. An empty
+    list — a Provider serving no catalogue — keeps the deployment default,
+    because there is nothing better to say and the field is free text there.
+    """
+    if not models:
+        return default_model()
+    offered = {m.id for m in models}
+    return default_model() if default_model() in offered else models[0].id
+
+
 # POST, and deliberately not on `VIEW_AS_READ_ONLY_PATHS`. This used to serve a
 # static list and was a read; it now asks an Account's own Provider what it
 # offers, which is an authenticated outbound call made on their behalf. The bar
@@ -172,7 +194,7 @@ async def api_list_models(
         # free-text model id, which is the whole point of accepting Providers
         # nobody has heard of.
         models = []
-    return ModelListResponse(models=models, default=default_model())
+    return ModelListResponse(models=models, default=_default_for(models))
 
 
 @router.post("/summary")

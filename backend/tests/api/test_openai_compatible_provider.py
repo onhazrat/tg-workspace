@@ -182,6 +182,41 @@ def test_a_refusal_is_readable_by_the_one_rejection_rule(
     assert registry.is_credential_rejection(raised.value)
 
 
+def test_a_401_is_a_rejection_whatever_the_body_says() -> None:
+    """A 401 carries no ambiguity, so it needs no phrase match.
+
+    The phrase list exists for **400** alone, because Gemini answers a bad key
+    with `400 INVALID_ARGUMENT` and so does a bad model id. Requiring a phrase
+    at 401 read OpenRouter's real body — `{"error":{"message":"No auth
+    credentials found"}}` — as "briefly unwell", so a revoked Key answered 200
+    with an empty model list and kept its validation stamp: the settings panel
+    went on calling a dead key healthy.
+
+    **Mutation:** fold 401/403 back in with 400 and this goes red while the
+    Gemini cases below stay green.
+    """
+    assert registry.is_credential_rejection(
+        OpenAICompatibleError(401, '{"error":{"message":"No auth credentials found"}}')
+    )
+    assert registry.is_credential_rejection(OpenAICompatibleError(403, "Forbidden"))
+
+
+def test_a_400_still_needs_more_than_its_status() -> None:
+    """The discrimination the phrase list is *for*, kept.
+
+    A bad model id and a bad key are both 400 on Gemini, and clearing a stamp on
+    the first would flag a working Key the moment somebody typed a model name
+    wrong — which the free-text combo makes easy to do.
+    """
+    assert not registry.is_credential_rejection(
+        OpenAICompatibleError(400, "model not found: gemini-9-ultra")
+    )
+    assert registry.is_credential_rejection(
+        OpenAICompatibleError(400, "API key not valid")
+    )
+    assert not registry.is_credential_rejection(OpenAICompatibleError(500, "api key"))
+
+
 def test_a_stream_reassembles_the_deltas_and_stops_at_done(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -363,6 +398,67 @@ def test_the_listing_is_the_providers_answer_and_keeps_its_key_set(
     assert [m["id"] for m in body["models"]] == ["m-1"]
     for entry in body["models"]:
         assert set(entry) == {"id", "label", "provider"}
+
+
+def test_the_default_is_a_model_this_provider_actually_offers(
+    client: TestClient,
+    account: tuple[User, dict[str, str]],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """`DEFAULT_AI_MODEL` is one deployment-wide Gemini id, and it is not an
+    answer for an Account whose only Key is an OpenRouter or Ollama credential.
+
+    Without this the break is on the *first run*, not at some edge: the settings
+    default is a Gemini id, `ModelCombo` renders it unchanged, and the first
+    Summary posts `gemini-3-flash-preview` to an endpoint that has never heard
+    of it. Deleting `constants.MODELS` removed the client-side fallback that
+    used to cover this (`oneOfSetting` rejected an unlisted id), so the repair
+    moved here, where the offered list actually is.
+
+    **Mutation:** return `default_model()` unconditionally from `_default_for`
+    and this goes red.
+    """
+    user, headers = account
+    _seed_key(user.id, "models-default")
+
+    async def _list(**_kwargs: object) -> list[ModelInfo]:
+        return [
+            ModelInfo(id="qwen2.5:7b", label="qwen2.5:7b", provider=OPENAI_COMPATIBLE),
+            ModelInfo(id="zzz", label="zzz", provider=OPENAI_COMPATIBLE),
+        ]
+
+    monkeypatch.setattr("app.api.routes.ai_routes.list_models_cached", _list)
+
+    body = client.post(f"{V1}/ai/models", json={}, headers=headers).json()
+
+    assert body["default"] == "qwen2.5:7b", (
+        "the deployment's Gemini default was offered to a provider that does "
+        "not have it, which is the first Summary failing"
+    )
+
+
+def test_a_default_the_provider_does_offer_is_kept(
+    client: TestClient,
+    account: tuple[User, dict[str, str]],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The other half. A Gemini Key must keep the deployment's chosen model
+    rather than being moved to whatever sorts first."""
+    user, headers = account
+    _seed_key(user.id, "models-keep")
+    deployment_default = settings.DEFAULT_AI_MODEL
+
+    async def _list(**_kwargs: object) -> list[ModelInfo]:
+        return [
+            ModelInfo(id="aaa-sorts-first", label="a", provider="gemini"),
+            ModelInfo(id=deployment_default, label="d", provider="gemini"),
+        ]
+
+    monkeypatch.setattr("app.api.routes.ai_routes.list_models_cached", _list)
+
+    body = client.post(f"{V1}/ai/models", json={}, headers=headers).json()
+
+    assert body["default"] == deployment_default
 
 
 def test_an_endpoint_serving_no_catalogue_falls_back_to_free_text(
