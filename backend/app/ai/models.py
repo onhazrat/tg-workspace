@@ -30,6 +30,28 @@ class ModelInfo(BaseModel):
     provider: str
 
 
+# A body rather than a query parameter, and a POST rather than a GET, because
+# this endpoint stopped being a read: it makes an authenticated outbound call on
+# an Account's behalf. `api/deps.py` states the bar for the View-as read-only
+# allowlist as "reads a row, writes none, reaches no external service, spends no
+# Budget", and refuses `POST /rag/search` on precisely that third clause. This
+# route is refused for the same reason, by not appearing there.
+#
+# In a comment rather than a docstring: a model docstring becomes the schema
+# description in `openapi.json` and a JSDoc block in the generated client, so
+# internal paths and ticket numbers would ship to every consumer of the SDK.
+class ModelListRequest(BaseModel):
+    """Which AI key's provider to ask for a model list."""
+
+    #: Which of the caller's AI Keys to ask. `null` means "the one I have".
+    #:
+    #: **Client-supplied and untrusted.** It is checked against the caller
+    #: before the secret is decrypted; a foreign id answers as an absent one.
+    ai_key_id: str | None = Field(default=None, alias="aiKeyId")
+
+    model_config = {"populate_by_name": True}
+
+
 class CompletionResult(BaseModel):
     text: str
     prompt: str

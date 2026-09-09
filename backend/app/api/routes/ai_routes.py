@@ -12,6 +12,7 @@ from app.ai.models import (
     CompletionResult,
     EmbeddingResult,
     EmbedRequest,
+    ModelListRequest,
     PromptScopeInput,
     SummaryRequest,
     TagRequest,
@@ -21,7 +22,7 @@ from app.ai.registry import (
     default_model,
     get_provider,
     is_credential_rejection,
-    list_all_models,
+    list_models_cached,
 )
 from app.api.deps import CurrentUser, SessionDep
 from app.core.config import settings
@@ -132,11 +133,46 @@ def _resolve_posts_text(
     return assemble_posts_text(session, prompt_scope, user_id=user_id)
 
 
-@router.get("/models")
-def api_list_models(_current_user: CurrentUser) -> ModelListResponse:
-    return ModelListResponse.model_validate(
-        {"models": list_all_models(), "default": default_model()}
+# POST, and deliberately not on `VIEW_AS_READ_ONLY_PATHS`. This used to serve a
+# static list and was a read; it now asks an Account's own Provider what it
+# offers, which is an authenticated outbound call made on their behalf. The bar
+# `deps.py` states for that allowlist — reads a row, writes none, reaches no
+# external service, spends no Budget — already refuses `POST /rag/search` on the
+# third clause, and refuses this on the same one.
+#
+# In a comment rather than a docstring: a handler docstring becomes the
+# `openapi.json` description and a JSDoc block in the generated client.
+@router.post("/models")
+async def api_list_models(
+    body: ModelListRequest, session: SessionDep, current_user: CurrentUser
+) -> ModelListResponse:
+    """List the models the chosen AI key's provider offers."""
+    # `resolve_ai_key` rather than `_provider_for`: the cache below builds the
+    # client only on a miss, and building a second one here to throw away would
+    # be the more confusing line, not the shorter one.
+    ai_key = resolve_ai_key(
+        session,
+        user_id=current_user.id,
+        purpose=Purpose.MODELS,
+        key_id=body.ai_key_id,
     )
+    try:
+        models = await list_models_cached(
+            provider=ai_key.provider,
+            api_key=ai_key.api_key,
+            base_url=ai_key.base_url,
+            cache_key=f"{ai_key.credential_id}|{ai_key.base_url or ''}",
+        )
+    except Exception as exc:
+        if _note_rejection(session, ai_key, exc):
+            raise HTTPException(status_code=502, detail=AI_KEY_REJECTED_DETAIL) from exc
+        # Everything else is an endpoint that serves no catalogue, or one that
+        # is briefly unwell. Neither is a reason to block the Account from
+        # making an Artifact: the empty list is what the client turns into a
+        # free-text model id, which is the whole point of accepting Providers
+        # nobody has heard of.
+        models = []
+    return ModelListResponse(models=models, default=default_model())
 
 
 @router.post("/summary")

@@ -47,27 +47,30 @@ class GeminiProvider:
             self._client = genai.Client(api_key=self._api_key)
         return self._client
 
-    @staticmethod
-    def list_models_static() -> list[ModelInfo]:
-        return [
-            ModelInfo(
-                id="gemini-3-flash-preview", label="Gemini 3 Flash", provider="gemini"
-            ),
-            ModelInfo(
-                id="gemini-3.1-pro-preview", label="Gemini 3.1 Pro", provider="gemini"
-            ),
-            ModelInfo(
-                id="gemini-3.1-flash-lite-preview",
-                label="Gemini 3.1 Flash Lite",
-                provider="gemini",
-            ),
-        ]
-
-    def list_models_sync(self) -> list[ModelInfo]:
-        return self.list_models_static()
-
     async def list_models(self) -> list[ModelInfo]:
-        return self.list_models_static()
+        """What this credential can actually reach, asked of Google.
+
+        This was three ids hardcoded here and hardcoded again in
+        `frontend/src/constants.ts`; BYOK-02 deleted both. A static list ages
+        without anybody noticing, and it cannot be right for two Accounts on
+        different Google projects, which do not see the same set.
+
+        Filtered to the models that can answer a prompt: `models.list()` also
+        returns embedding-only and tuned entries, and offering one of those in a
+        summary dropdown produces a failure at Artifact time with nothing on
+        screen to explain it.
+        """
+        models: list[ModelInfo] = []
+        async for entry in await self._get_client().aio.models.list():
+            name = (entry.name or "").removeprefix("models/")
+            actions = entry.supported_actions
+            if not name or (actions is not None and "generateContent" not in actions):
+                continue
+            models.append(
+                ModelInfo(id=name, label=entry.display_name or name, provider=self.name)
+            )
+        models.sort(key=lambda m: m.id)
+        return models
 
     async def complete(
         self,

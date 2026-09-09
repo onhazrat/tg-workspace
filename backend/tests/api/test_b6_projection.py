@@ -1,6 +1,9 @@
 """Wire shapes for the jobs, rag, network and ai endpoints (B6).
 
-Scoped to what is reachable without mocking an outbound fetch. The scrape,
+Scoped to what is reachable without mocking an outbound fetch. `/ai/models` was
+here until BYOK-02 and left by that rule: it stopped serving a static list and
+became a call to an Account's own Provider, so its key set is asserted in
+`test_openai_compatible_provider.py` beside the stub that answers it. The scrape,
 channel-info, publish and bot-info shapes are covered by their existing tests
 (`test_telegram_channel_info.py`, `test_scrape*.py`), which already assert real
 keys against recorded fixtures — this file adds the cases those do not reach.
@@ -162,11 +165,3 @@ def test_proxy_health_serialises_a_proxy_in_cooldown(client: TestClient) -> None
         assert 0 < entry["cooldownRemaining"] <= 30
     finally:
         network._bad_proxies.pop("http://cooldown.example:8080", None)
-
-
-def test_model_listing_keeps_its_key_set(client: TestClient) -> None:
-    body = client.get(f"{V1}/ai/models", headers=_auth(client)).json()
-    assert set(body) == {"models", "default"}
-    assert body["models"], "expected at least one model"
-    for entry in body["models"]:
-        assert set(entry) == {"id", "label", "provider"}

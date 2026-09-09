@@ -26,7 +26,7 @@ def _auth(client: TestClient) -> dict[str, str]:
 @pytest.mark.parametrize(
     "method,path,json_body",
     [
-        ("GET", f"{PREFIX}/ai/models", None),
+        ("POST", f"{PREFIX}/ai/models", {}),
         (
             "POST",
             f"{PREFIX}/ai/summary",
@@ -57,9 +57,12 @@ def test_sensitive_routes_reject_unauthenticated(
 @pytest.mark.security
 def test_sensitive_routes_accept_jwt(client: TestClient) -> None:
     headers = _auth(client)
-    r = client.get(f"{PREFIX}/ai/models", headers=headers)
-    assert r.status_code == 200
-    assert "models" in r.json()
+    # BYOK-02 made this a POST that resolves the caller's AI Key, so a
+    # superuser with no Key saved answers 400 rather than 200. The property this
+    # test is about is unchanged: the request got past authentication and was
+    # answered by the handler rather than the middleware.
+    r = client.post(f"{PREFIX}/ai/models", headers=headers, json={})
+    assert r.status_code in (200, 400)
 
     r2 = client.get(f"{PREFIX}/jobs/status", headers=headers)
     assert r2.status_code == 200

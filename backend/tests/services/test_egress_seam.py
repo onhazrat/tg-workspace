@@ -33,10 +33,11 @@ APP = pathlib.Path(__file__).resolve().parents[2] / "app"
 
 #: Every callable in `app/` allowed to construct an HTTP client, and why.
 #:
-#: Two, and they are not interchangeable. One builds the Lanes; the other
-#: answers a question a Lane cannot. Anything else that appears here is a new
-#: egress that nothing meters, nothing paces and nothing routes through a
-#: proxy — add the Lane, do not add the entry.
+#: Three, and they are not interchangeable. One builds the Lanes; the other two
+#: answer questions a Lane cannot. Anything else that appears here is a new
+#: egress *to Telegram* that nothing meters, nothing paces and nothing routes
+#: through a proxy — add the Lane, do not add the entry. A different destination
+#: entirely is the only thing that earns an entry, and it has to say so.
 CLIENT_BUILDERS: dict[str, str] = {
     "build_lane_client": (
         "the Lane's own client. This is the seam: one long-lived client per "
@@ -47,6 +48,16 @@ CLIENT_BUILDERS: dict[str, str] = {
         "proxy exits from. Neither reaches Telegram, and neither can use a "
         "Lane — the operator is testing a URL that may not be in the pool, and "
         "answering about a different proxy is worse than not answering."
+    ),
+    "_client": (
+        "`OpenAICompatibleProvider` talks to an Account's own AI provider "
+        "(BYOK-02), which is not Telegram. A Lane cannot answer: it would hold "
+        "a proxy permit a sync is waiting on, charge the Telegram Request "
+        "ledger for a Summary, and route somebody's provider key through Tor "
+        "for the anonymity of an address their provider already has on file. "
+        "The Gemini provider makes the same egress through `google-genai` and "
+        "is invisible to this walk, which is an argument for keeping AI "
+        "traffic declared here rather than for letting it stay hidden."
     ),
 }
 

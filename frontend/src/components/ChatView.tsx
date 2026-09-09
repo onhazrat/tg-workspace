@@ -20,12 +20,13 @@ import { TgButton } from "@/components/ui/tg-button"
 import { TgIconButton } from "@/components/ui/tg-icon-button"
 import { TgFieldLabel } from "@/components/ui/tg-input"
 import { TgHeroEmptyState } from "@/components/ui/tg-segmented"
-import { LANGUAGES, MODELS } from "../constants"
+import { LANGUAGES } from "../constants"
 import { useChatContext } from "../contexts/ChatContext"
 import { useRAG } from "../contexts/RAGContext"
 import { useSettings } from "../contexts/SettingsContext"
 import { useUI } from "../contexts/UIContext"
 import { replaceCitations } from "../lib/citations/replace-citations"
+import { ModelCombo } from "./ai/ModelCombo"
 import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tg-tooltip"
 
 const SUGGESTED_PROMPTS_SUMMARY = [
@@ -147,21 +148,15 @@ export const ChatView: React.FC = () => {
               <span className="text-[9px] uppercase font-bold opacity-40">
                 Model:
               </span>
-              <select
+              <ModelCombo
+                // Not "Inference model": that label belongs to the Action tab's
+                // one bar, and `summarizer-shell.spec.ts` asserts exactly one
+                // control on the page carries it.
+                ariaLabel="Chat model"
                 value={selectedModel}
-                onChange={(e) => setSelectedModel(e.target.value)}
-                className="bg-transparent border-none py-0 focus:outline-none text-[10px] font-bold uppercase tracking-tight cursor-pointer hover:opacity-100 opacity-80 transition-opacity max-w-[120px] truncate"
-              >
-                {MODELS.map((m) => (
-                  <option
-                    key={m.id}
-                    value={m.id}
-                    className="bg-app-card text-app-ink"
-                  >
-                    {m.label}
-                  </option>
-                ))}
-              </select>
+                onChange={setSelectedModel}
+                className="bg-transparent border-none py-0 focus:outline-none text-[10px] font-bold uppercase tracking-tight hover:opacity-100 opacity-80 transition-opacity max-w-[120px] truncate"
+              />
             </div>
           </div>
         </div>

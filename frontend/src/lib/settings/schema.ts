@@ -5,7 +5,6 @@ import {
   DEFAULT_MODEL,
   DYNAMIC_SYNC_EXPECTED_POSTS_DEFAULT,
   LANGUAGES,
-  MODELS,
   RETENTION_LOG_DAYS_DEFAULT,
   RETENTION_PAYLOAD_DAYS_DEFAULT,
   RETENTION_POST_DAYS_DEFAULT,
@@ -127,7 +126,30 @@ const oneOfSetting = (
   ...options,
 })
 
-const MODEL_IDS = MODELS.map((model) => model.id)
+/**
+ * A model id, which is now any non-empty string (BYOK-02).
+ *
+ * This was `oneOfSetting` over three hardcoded Gemini ids. The membership check
+ * had to go with the list: an account on OpenRouter reaches several hundred
+ * models, and a refinement the client cannot evaluate would reject every one of
+ * them back to the deployment's default — silently, because falling back
+ * quietly is exactly what `oneOfSetting` is for.
+ *
+ * Emptiness is still rejected. An empty model id reaches the provider as a
+ * request naming no model and fails there instead of here.
+ */
+const modelSetting = (
+  storageKey: string,
+  defaultValue: string,
+  options: SpecOptions = {},
+): SettingSpec<string> => ({
+  storageKey,
+  schema: z.string().min(1),
+  defaultValue,
+  decode: (raw) => raw,
+  encode: (value) => value,
+  ...options,
+})
 
 /** JSON-encoded setting for non-scalar values (arrays, records). */
 const jsonSetting = <T>(
@@ -179,7 +201,7 @@ const globalStartTimeValueSetting: SettingSpec<GlobalStartTimeValue> = {
 // backend-synced keys still hydrate from the server, browser storage is a fallback).
 export const appSettingsSpec = {
   aiLanguage: oneOfSetting("aiLanguage", LANGUAGES, DEFAULT_AI_LANGUAGE),
-  selectedModel: oneOfSetting("selectedModel", MODEL_IDS, DEFAULT_MODEL),
+  selectedModel: modelSetting("selectedModel", DEFAULT_MODEL),
   aiTemperature: floatSetting("aiTemperature", 0.7),
   embeddingsEnabled: booleanSetting("embeddingsEnabled", false),
   embeddingsPaused: booleanSetting("embeddingsPaused", false),
@@ -271,7 +293,7 @@ export const appSettingsSpec = {
   autoTranslate: booleanSetting("autoTranslate", false, {
     section: "translation",
   }),
-  translationModel: oneOfSetting("translationModel", MODEL_IDS, DEFAULT_MODEL, {
+  translationModel: modelSetting("translationModel", DEFAULT_MODEL, {
     section: "translation",
   }),
   translationTargetLanguage: oneOfSetting(

@@ -131,6 +131,7 @@ PROBED: dict[tuple[str, str], str] = {
     ("PUT", f"{V1}/data/ai-keys/{{key_id}}"): "credential write by id",
     ("DELETE", f"{V1}/data/ai-keys/{{key_id}}"): "credential delete",
     ("GET", f"{V1}/data/ai-keys"): "credential list",
+    ("POST", f"{V1}/ai/models"): "a foreign key id must not list its provider",
     ("PUT", f"{V1}/data/chat-destinations/{{dest_id}}"): "destination write",
     ("DELETE", f"{V1}/data/chat-destinations/{{dest_id}}"): "destination delete",
     ("GET", f"{V1}/data/chat-destinations"): "destination list",
@@ -424,7 +425,6 @@ EXCUSED: dict[tuple[str, str], tuple[Reason, str]] = {
     # --- AI, RAG, network, telegram ------------------------------------------
     ("POST", f"{V1}/ai/chat/stream"): (Reason.EXTERNAL, "provider call"),
     ("POST", f"{V1}/ai/embeddings"): (Reason.EXTERNAL, "provider call"),
-    ("GET", f"{V1}/ai/models"): (Reason.NOT_ROW_ADDRESSED, "static registry"),
     ("POST", f"{V1}/ai/summary"): (Reason.EXTERNAL, "provider call"),
     ("POST", f"{V1}/ai/summary/prompt"): (
         Reason.COVERED_ELSEWHERE,
@@ -898,6 +898,17 @@ def test_ai_keys_are_isolated(
 
     removal = client.delete(f"{DATA}/ai-keys/iso-ai-key", headers=bob[1])
     assert removal.status_code == 404, removal.text[:200]
+
+    # BYOK-02: `POST /ai/models` reaches a Provider using the Key its body
+    # names, so naming somebody else's is the same defect as the overwrite
+    # above wearing a read's clothes — and it is the one that hands back the
+    # *catalogue* of an account somebody else pays for. The refusal comes from
+    # `resolve_ai_key` before `decrypt_token`, so nothing outbound happens and
+    # this needs no stub.
+    listing = client.post(
+        f"{V1}/ai/models", json={"aiKeyId": "iso-ai-key"}, headers=bob[1]
+    )
+    assert listing.status_code == 404, listing.text[:200]
 
     with Session(engine) as session:
         row = session.get(AICredential, "iso-ai-key")

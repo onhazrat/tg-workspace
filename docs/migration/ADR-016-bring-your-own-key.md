@@ -141,6 +141,12 @@ rather than returning silently, because the scheduler is unattended.
 `GET /api/v1/ai/models` now makes an outbound call on behalf of an Account, so it needs caching per
 Key and it is no longer a candidate for the View-as read-only allowlist.
 
+**Amendment, BYOK-02 (2026-09-09):** it shipped as `POST /api/v1/ai/models`, taking `aiKeyId` in
+the body. This ADR says "no longer a candidate for the allowlist" twice while naming a GET, and
+the two cannot both hold: the View-as guard refuses non-safe methods and lets every safe one
+through, so a GET is permitted in a View-as session whatever the allowlist says. The method is
+what carries the decision, and a body is where a client-supplied Key id belongs anyway.
+
 Two hardcoded model lists disappear, the backend's and `frontend/src/constants.ts:89`. They had
 already drifted from each other's purpose and would have drifted further.
 
