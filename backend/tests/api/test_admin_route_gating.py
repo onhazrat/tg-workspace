@@ -92,6 +92,7 @@ ADMIN_ROUTES: list[tuple[str, str, dict[str, Any] | None]] = [
     ("POST", f"{PREFIX}/data/import", {}),
     ("GET", f"{PREFIX}/data/export", None),
     ("GET", f"{PREFIX}/data/settings/network", None),
+    ("GET", f"{PREFIX}/data/configuration", None),
     ("PUT", f"{PREFIX}/data/settings/network", {}),
     ("DELETE", f"{PREFIX}/data/logs?type=publish&clearAll=true", None),
     ("GET", f"{PREFIX}/data/logs/network", None),
@@ -109,6 +110,7 @@ ADMIN_REACHABLE: list[tuple[str, str, dict[str, Any] | None]] = [
     ("GET", f"{PREFIX}/data/stats", None),
     ("GET", f"{PREFIX}/data/table-sizes", None),
     ("GET", f"{PREFIX}/data/settings/network", None),
+    ("GET", f"{PREFIX}/data/configuration", None),
     ("GET", f"{PREFIX}/data/logs/network", None),
     ("GET", f"{PREFIX}/jobs/status", None),
 ]

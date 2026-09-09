@@ -51,6 +51,9 @@ import type {
   ChannelSyncProgress,
   ChatArtifactResponse,
   ChatSessionListItemResponse,
+  ConfigurationCatalogResponse,
+  ConfigurationEntry,
+  ConfigurationLayer,
   DirectorySamplePostResponse,
   DiscoverReportResponse,
   DiscoveryArtifactResponse,
@@ -107,6 +110,11 @@ export type RagStatusIsClosed = Assert<IsClosed<RagStatusResponse>>
 export type RagEmbedIsClosed = Assert<IsClosed<RagEmbedResponse>>
 export type ChannelInfoIsClosed = Assert<IsClosed<ChannelInfoResponse>>
 export type PublishIsClosed = Assert<IsClosed<PublishResponse>>
+export type ConfigurationCatalogIsClosed = Assert<
+  IsClosed<ConfigurationCatalogResponse>
+>
+export type ConfigurationLayerIsClosed = Assert<IsClosed<ConfigurationLayer>>
+export type ConfigurationEntryIsClosed = Assert<IsClosed<ConfigurationEntry>>
 
 /**
  * BYOK-01's AI Keys, on the generated client from the first commit.

@@ -1292,6 +1292,100 @@ export type CompletionResult = {
 };
 
 /**
+ * ConfigurationCatalogResponse
+ */
+export type ConfigurationCatalogResponse = {
+    /**
+     * Schemaversion
+     */
+    schemaVersion?: number;
+    /**
+     * Layers
+     */
+    layers: Array<ConfigurationLayer>;
+};
+
+/**
+ * ConfigurationEntry
+ */
+export type ConfigurationEntry = {
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Key
+     */
+    key: string;
+    /**
+     * Label
+     */
+    label: string;
+    /**
+     * Layer
+     */
+    layer: 'deployment' | 'global' | 'user' | 'specialized' | 'frontend';
+    /**
+     * Value
+     */
+    value?: unknown;
+    /**
+     * Defaultvalue
+     */
+    defaultValue?: unknown;
+    /**
+     * Source
+     */
+    source: string;
+    /**
+     * Description
+     */
+    description?: string;
+    /**
+     * Sensitive
+     */
+    sensitive?: boolean;
+    /**
+     * Configured
+     */
+    configured?: boolean;
+    /**
+     * Editable
+     */
+    editable?: boolean;
+    /**
+     * Restartrequired
+     */
+    restartRequired?: boolean;
+    /**
+     * Ownerid
+     */
+    ownerId?: string | null;
+};
+
+/**
+ * ConfigurationLayer
+ */
+export type ConfigurationLayer = {
+    /**
+     * Id
+     */
+    id: 'deployment' | 'global' | 'user' | 'specialized' | 'frontend';
+    /**
+     * Label
+     */
+    label: string;
+    /**
+     * Description
+     */
+    description: string;
+    /**
+     * Entries
+     */
+    entries?: Array<ConfigurationEntry>;
+};
+
+/**
  * DbStatsResponse
  * Row counts across the corpus, scoped to the operator.
  *
@@ -8325,6 +8419,22 @@ export type DataClearTableRouteResponses = {
 };
 
 export type DataClearTableRouteResponse = DataClearTableRouteResponses[keyof DataClearTableRouteResponses];
+
+export type DataGetConfigurationCatalogData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/data/configuration';
+};
+
+export type DataGetConfigurationCatalogResponses = {
+    /**
+     * Successful Response
+     */
+    200: ConfigurationCatalogResponse;
+};
+
+export type DataGetConfigurationCatalogResponse = DataGetConfigurationCatalogResponses[keyof DataGetConfigurationCatalogResponses];
 
 export type DataGetNetworkSettingsData = {
     body?: never;

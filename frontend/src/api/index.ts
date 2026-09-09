@@ -40,7 +40,6 @@ export type {
 export { dataApi, streamFollowJobEvents } from "./data"
 export type {
   JobStatusEntry,
-  RuntimeConfig,
   SyncJobChannelStatus,
   SyncJobStatus,
 } from "./jobs"

@@ -197,6 +197,11 @@ export function useEntityFlow({
       return
     }
 
+    if (flow === "open-configuration") {
+      await finishCommand(entityCommand, undefined, value)
+      return
+    }
+
     if (isSettingGroupEntityFlow(flow)) {
       const group = context.settingGroups.find((entry) => entry.id === value)
       if (!group) return

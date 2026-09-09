@@ -1,0 +1,1069 @@
+{
+  "generatedBy": "scripts/generate_env_example.py",
+  "variables": [
+    {
+      "default": 11520,
+      "name": "ACCESS_TOKEN_EXPIRE_MINUTES",
+      "required": false,
+      "scope": "backend_runtime",
+      "sensitive": false
+    },
+    {
+      "default": "",
+      "name": "API_KEY",
+      "required": false,
+      "scope": "backend_runtime",
+      "sensitive": true
+    },
+    {
+      "default": "/api/v1",
+      "name": "API_V1_STR",
+      "required": false,
+      "scope": "backend_runtime",
+      "sensitive": false
+    },
+    {
+      "default": 60,
+      "name": "AUTO_SUMMARY_JOB_INTERVAL_SECONDS",
+      "required": false,
+      "scope": "backend_runtime",
+      "sensitive": false
+    },
+    {
+      "default": 60,
+      "name": "AUTO_SYNC_CHECK_INTERVAL_SECONDS",
+      "required": false,
+      "scope": "backend_runtime",
+      "sensitive": false
+    },
+    {
+      "default": 3,
+      "name": "AUTO_SYNC_FAILURE_THRESHOLD_MIN",
+      "required": false,
+      "scope": "backend_runtime",
+      "sensitive": false
+    },
+    {
+      "default": 60,
+      "name": "AUTO_SYNC_INTERVAL_MINUTES_DEFAULT",
+      "required": false,
+      "scope": "backend_runtime",
+      "sensitive": false
+    },
+    {
+      "default": 600000,
+      "name": "AUTO_SYNC_PAUSE_DURATION_MS",
+      "required": false,
+      "scope": "backend_runtime",
+      "sensitive": false
+    },
+    {
+      "default": null,
+      "name": "BACKEND_CORS_ORIGINS",
+      "required": false,
+      "scope": "backend_runtime",
+      "sensitive": false
+    },
+    {
+      "default": 3600,
+      "name": "CHANNEL_IMAGE_MAX_AGE_SECONDS",
+      "required": false,
+      "scope": "backend_runtime",
+      "sensitive": false
+    },
+    {
+      "default": "data/channel-photos",
+      "name": "CHANNEL_PHOTO_DIR",
+      "required": false,
+      "scope": "backend_runtime",
+      "sensitive": false
+    },
+    {
+      "default": 30,
+      "name": "CHANNEL_PHOTO_ORPHAN_MAX_AGE_DAYS",
+      "required": false,
+      "scope": "backend_runtime",
+      "sensitive": false
+    },
+    {
+      "default": 10,
+      "name": "DB_MAX_OVERFLOW",
+      "required": false,
+      "scope": "backend_runtime",
+      "sensitive": false
+    },
+    {
+      "default": 20,
+      "name": "DB_POOL_SIZE",
+      "required": false,
+      "scope": "backend_runtime",
+      "sensitive": false
+    },
+    {
+      "default": "gemini-3-flash-preview",
+      "name": "DEFAULT_AI_MODEL",
+      "required": false,
+      "scope": "backend_runtime",
+      "sensitive": false
+    },
+    {
+      "default": "",
+      "name": "DEFAULT_PROXY_URLS",
+      "required": false,
+      "scope": "backend_runtime",
+      "sensitive": true
+    },
+    {
+      "default": 600,
+      "name": "DIRECTORY_HARVEST_BACKLOG_CEILING",
+      "required": false,
+      "scope": "backend_runtime",
+      "sensitive": false
+    },
+    {
+      "default": 300,
+      "name": "DIRECTORY_HARVEST_INTERVAL_SECONDS",
+      "required": false,
+      "scope": "backend_runtime",
+      "sensitive": false
+    },
+    {
+      "default": 500,
+      "name": "DIRECTORY_HARVEST_SCAN_LIMIT",
+      "required": false,
+      "scope": "backend_runtime",
+      "sensitive": false
+    },
+    {
+      "default": 7,
+      "name": "DIRECTORY_REFRESH_DAYS_DEFAULT",
+      "required": false,
+      "scope": "backend_runtime",
+      "sensitive": false
+    },
+    {
+      "default": 6,
+      "name": "DIRECT_LANE_CONCURRENCY_DEFAULT",
+      "required": false,
+      "scope": "backend_runtime",
+      "sensitive": false
+    },
+    {
+      "default": 600,
+      "name": "DISCOVER_PROBE_BATCH_SIZE",
+      "required": false,
+      "scope": "backend_runtime",
+      "sensitive": false
+    },
+    {
+      "default": 30,
+      "name": "DISCOVER_PROBE_JOB_INTERVAL_SECONDS",
+      "required": false,
+      "scope": "backend_runtime",
+      "sensitive": false
+    },
+    {
+      "default": null,
+      "name": "EMAILS_FROM_EMAIL",
+      "required": false,
+      "scope": "backend_runtime",
+      "sensitive": false
+    },
+    {
+      "default": null,
+      "name": "EMAILS_FROM_NAME",
+      "required": false,
+      "scope": "backend_runtime",
+      "sensitive": false
+    },
+    {
+      "default": 48,
+      "name": "EMAIL_RESET_TOKEN_EXPIRE_HOURS",
+      "required": false,
+      "scope": "backend_runtime",
+      "sensitive": false
+    },
+    {
+      "default": "test@example.com",
+      "name": "EMAIL_TEST_USER",
+      "required": false,
+      "scope": "backend_runtime",
+      "sensitive": false
+    },
+    {
+      "default": 100,
+      "name": "EMBEDDINGS_BACKFILL_LIMIT_DEFAULT",
+      "required": false,
+      "scope": "backend_runtime",
+      "sensitive": false
+    },
+    {
+      "default": 20,
+      "name": "EMBEDDINGS_CHUNK_SIZE",
+      "required": false,
+      "scope": "backend_runtime",
+      "sensitive": false
+    },
+    {
+      "default": 60,
+      "name": "EMBEDDINGS_JOB_INTERVAL_SECONDS",
+      "required": false,
+      "scope": "backend_runtime",
+      "sensitive": false
+    },
+    {
+      "default": "gemini-embedding-2-preview",
+      "name": "EMBEDDING_MODEL",
+      "required": false,
+      "scope": "backend_runtime",
+      "sensitive": false
+    },
+    {
+      "default": "local",
+      "name": "ENVIRONMENT",
+      "required": false,
+      "scope": "backend_runtime",
+      "sensitive": false
+    },
+    {
+      "default": null,
+      "name": "FIRST_SUPERUSER",
+      "required": true,
+      "scope": "backend_runtime",
+      "sensitive": false
+    },
+    {
+      "default": null,
+      "name": "FIRST_SUPERUSER_PASSWORD",
+      "required": true,
+      "scope": "backend_runtime",
+      "sensitive": true
+    },
+    {
+      "default": "http://localhost:5173",
+      "name": "FRONTEND_HOST",
+      "required": false,
+      "scope": "backend_runtime",
+      "sensitive": false
+    },
+    {
+      "default": "",
+      "name": "GEMINI_API_KEY",
+      "required": false,
+      "scope": "backend_runtime",
+      "sensitive": true
+    },
+    {
+      "default": true,
+      "name": "JOBS_AUTO_SUMMARY_ENABLED_DEFAULT",
+      "required": false,
+      "scope": "backend_runtime",
+      "sensitive": false
+    },
+    {
+      "default": true,
+      "name": "JOBS_AUTO_SYNC_ENABLED_DEFAULT",
+      "required": false,
+      "scope": "backend_runtime",
+      "sensitive": false
+    },
+    {
+      "default": true,
+      "name": "JOBS_DIRECTORY_HARVEST_ENABLED_DEFAULT",
+      "required": false,
+      "scope": "backend_runtime",
+      "sensitive": false
+    },
+    {
+      "default": true,
+      "name": "JOBS_DISCOVER_PROBE_ENABLED_DEFAULT",
+      "required": false,
+      "scope": "backend_runtime",
+      "sensitive": false
+    },
+    {
+      "default": false,
+      "name": "JOBS_EMBEDDINGS_ENABLED_DEFAULT",
+      "required": false,
+      "scope": "backend_runtime",
+      "sensitive": false
+    },
+    {
+      "default": true,
+      "name": "JOBS_RETENTION_ENABLED_DEFAULT",
+      "required": false,
+      "scope": "backend_runtime",
+      "sensitive": false
+    },
+    {
+      "default": false,
+      "name": "JOBS_TRANSLATION_BATCH_ENABLED_DEFAULT",
+      "required": false,
+      "scope": "backend_runtime",
+      "sensitive": false
+    },
+    {
+      "default": 3000,
+      "name": "NETWORK_FETCH_INITIAL_DELAY_MS",
+      "required": false,
+      "scope": "backend_runtime",
+      "sensitive": false
+    },
+    {
+      "default": 8,
+      "name": "NETWORK_FETCH_RETRIES",
+      "required": false,
+      "scope": "backend_runtime",
+      "sensitive": false
+    },
+    {
+      "default": 60.0,
+      "name": "NETWORK_FETCH_TIMEOUT_SECONDS",
+      "required": false,
+      "scope": "backend_runtime",
+      "sensitive": false
+    },
+    {
+      "default": 600000,
+      "name": "NETWORK_PROXY_COOLDOWN_MS",
+      "required": false,
+      "scope": "backend_runtime",
+      "sensitive": false
+    },
+    {
+      "default": 10,
+      "name": "NETWORK_TOR_ROTATION_THRESHOLD",
+      "required": false,
+      "scope": "backend_runtime",
+      "sensitive": false
+    },
+    {
+      "default": "",
+      "name": "POSTGRES_DB",
+      "required": false,
+      "scope": "backend_runtime",
+      "sensitive": false
+    },
+    {
+      "default": "",
+      "name": "POSTGRES_PASSWORD",
+      "required": false,
+      "scope": "backend_runtime",
+      "sensitive": true
+    },
+    {
+      "default": 5432,
+      "name": "POSTGRES_PORT",
+      "required": false,
+      "scope": "backend_runtime",
+      "sensitive": false
+    },
+    {
+      "default": null,
+      "name": "POSTGRES_SERVER",
+      "required": true,
+      "scope": "backend_runtime",
+      "sensitive": false
+    },
+    {
+      "default": null,
+      "name": "POSTGRES_USER",
+      "required": true,
+      "scope": "backend_runtime",
+      "sensitive": false
+    },
+    {
+      "default": 2048,
+      "name": "POST_THUMB_CACHE_MAX_SIZE_MB_DEFAULT",
+      "required": false,
+      "scope": "backend_runtime",
+      "sensitive": false
+    },
+    {
+      "default": "data/post-thumbs",
+      "name": "POST_THUMB_DIR",
+      "required": false,
+      "scope": "backend_runtime",
+      "sensitive": false
+    },
+    {
+      "default": null,
+      "name": "PROJECT_NAME",
+      "required": true,
+      "scope": "backend_runtime",
+      "sensitive": false
+    },
+    {
+      "default": 1,
+      "name": "PROXY_DEFAULT_CONCURRENCY_DEFAULT",
+      "required": false,
+      "scope": "backend_runtime",
+      "sensitive": false
+    },
+    {
+      "default": 100000,
+      "name": "QUOTA_DEFAULT_AUTO_SYNC_CEILING_REQUESTS",
+      "required": false,
+      "scope": "backend_runtime",
+      "sensitive": false
+    },
+    {
+      "default": 10000,
+      "name": "QUOTA_DEFAULT_AUTO_SYNC_REQUESTS",
+      "required": false,
+      "scope": "backend_runtime",
+      "sensitive": false
+    },
+    {
+      "default": 30000,
+      "name": "QUOTA_DEFAULT_MANUAL_BULK_CEILING_REQUESTS",
+      "required": false,
+      "scope": "backend_runtime",
+      "sensitive": false
+    },
+    {
+      "default": 3000,
+      "name": "QUOTA_DEFAULT_MANUAL_BULK_REQUESTS",
+      "required": false,
+      "scope": "backend_runtime",
+      "sensitive": false
+    },
+    {
+      "default": 10000,
+      "name": "QUOTA_DEFAULT_MANUAL_SINGLE_CEILING_REQUESTS",
+      "required": false,
+      "scope": "backend_runtime",
+      "sensitive": false
+    },
+    {
+      "default": 1000,
+      "name": "QUOTA_DEFAULT_MANUAL_SINGLE_REQUESTS",
+      "required": false,
+      "scope": "backend_runtime",
+      "sensitive": false
+    },
+    {
+      "default": 100,
+      "name": "RAG_EMBED_LIMIT_DEFAULT",
+      "required": false,
+      "scope": "backend_runtime",
+      "sensitive": false
+    },
+    {
+      "default": 5000,
+      "name": "RAG_SCAN_LIMIT_MAX",
+      "required": false,
+      "scope": "backend_runtime",
+      "sensitive": false
+    },
+    {
+      "default": 20,
+      "name": "RAG_SEARCH_LIMIT_DEFAULT",
+      "required": false,
+      "scope": "backend_runtime",
+      "sensitive": false
+    },
+    {
+      "default": 30,
+      "name": "RETENTION_DIRECTORY_SAMPLE_DAYS_DEFAULT",
+      "required": false,
+      "scope": "backend_runtime",
+      "sensitive": false
+    },
+    {
+      "default": 1,
+      "name": "RETENTION_JOB_INTERVAL_HOURS",
+      "required": false,
+      "scope": "backend_runtime",
+      "sensitive": false
+    },
+    {
+      "default": 60,
+      "name": "RETENTION_JOB_STARTUP_DELAY_SECONDS",
+      "required": false,
+      "scope": "backend_runtime",
+      "sensitive": false
+    },
+    {
+      "default": 30,
+      "name": "RETENTION_LOG_DAYS_DEFAULT",
+      "required": false,
+      "scope": "backend_runtime",
+      "sensitive": false
+    },
+    {
+      "default": 7,
+      "name": "RETENTION_PAYLOAD_DAYS_DEFAULT",
+      "required": false,
+      "scope": "backend_runtime",
+      "sensitive": false
+    },
+    {
+      "default": 90,
+      "name": "RETENTION_POST_DAYS_DEFAULT",
+      "required": false,
+      "scope": "backend_runtime",
+      "sensitive": false
+    },
+    {
+      "default": 90,
+      "name": "RETENTION_REPORT_DAYS_DEFAULT",
+      "required": false,
+      "scope": "backend_runtime",
+      "sensitive": false
+    },
+    {
+      "default": 50,
+      "name": "RETENTION_REPORT_MAX_DEFAULT",
+      "required": false,
+      "scope": "backend_runtime",
+      "sensitive": false
+    },
+    {
+      "default": 30,
+      "name": "RETENTION_SHARED_LOG_DAYS_DEFAULT",
+      "required": false,
+      "scope": "backend_runtime",
+      "sensitive": false
+    },
+    {
+      "default": 50,
+      "name": "SCRAPER_ITERATION_LIMIT",
+      "required": false,
+      "scope": "backend_runtime",
+      "sensitive": false
+    },
+    {
+      "default": 300,
+      "name": "SCRAPER_MAX_POSTS_PER_CHANNEL",
+      "required": false,
+      "scope": "backend_runtime",
+      "sensitive": false
+    },
+    {
+      "default": null,
+      "name": "SECRET_KEY",
+      "required": false,
+      "scope": "backend_runtime",
+      "sensitive": true
+    },
+    {
+      "default": null,
+      "name": "SENTRY_DSN",
+      "required": false,
+      "scope": "backend_runtime",
+      "sensitive": true
+    },
+    {
+      "default": 1000,
+      "name": "SLOW_REQUEST_LOG_MS",
+      "required": false,
+      "scope": "backend_runtime",
+      "sensitive": false
+    },
+    {
+      "default": null,
+      "name": "SMTP_HOST",
+      "required": false,
+      "scope": "backend_runtime",
+      "sensitive": false
+    },
+    {
+      "default": null,
+      "name": "SMTP_PASSWORD",
+      "required": false,
+      "scope": "backend_runtime",
+      "sensitive": true
+    },
+    {
+      "default": 587,
+      "name": "SMTP_PORT",
+      "required": false,
+      "scope": "backend_runtime",
+      "sensitive": false
+    },
+    {
+      "default": false,
+      "name": "SMTP_SSL",
+      "required": false,
+      "scope": "backend_runtime",
+      "sensitive": false
+    },
+    {
+      "default": true,
+      "name": "SMTP_TLS",
+      "required": false,
+      "scope": "backend_runtime",
+      "sensitive": false
+    },
+    {
+      "default": null,
+      "name": "SMTP_USER",
+      "required": false,
+      "scope": "backend_runtime",
+      "sensitive": false
+    },
+    {
+      "default": 3,
+      "name": "SYNC_CONCURRENCY_DEFAULT",
+      "required": false,
+      "scope": "backend_runtime",
+      "sensitive": false
+    },
+    {
+      "default": 5000,
+      "name": "SYNC_JOB_PERSIST_INTERVAL_MS",
+      "required": false,
+      "scope": "backend_runtime",
+      "sensitive": false
+    },
+    {
+      "default": 14,
+      "name": "SYNC_JOB_RETENTION_DAYS",
+      "required": false,
+      "scope": "backend_runtime",
+      "sensitive": false
+    },
+    {
+      "default": 1000,
+      "name": "SYNC_JOB_SSE_THROTTLE_MS",
+      "required": false,
+      "scope": "backend_runtime",
+      "sensitive": false
+    },
+    {
+      "default": 3,
+      "name": "SYNC_MAX_RETRIES",
+      "required": false,
+      "scope": "backend_runtime",
+      "sensitive": false
+    },
+    {
+      "default": 10,
+      "name": "SYNC_QUEUE_BATCH_SIZE",
+      "required": false,
+      "scope": "backend_runtime",
+      "sensitive": false
+    },
+    {
+      "default": 3,
+      "name": "SYNC_QUEUE_MAX_READ_COUNT",
+      "required": false,
+      "scope": "backend_runtime",
+      "sensitive": false
+    },
+    {
+      "default": 30,
+      "name": "SYNC_QUEUE_POLL_INTERVAL_SECONDS",
+      "required": false,
+      "scope": "backend_runtime",
+      "sensitive": false
+    },
+    {
+      "default": 2000,
+      "name": "SYNC_RETRY_BACKOFF_BASE_MS",
+      "required": false,
+      "scope": "backend_runtime",
+      "sensitive": false
+    },
+    {
+      "default": 2000,
+      "name": "TELEGRAM_API_INITIAL_DELAY_MS",
+      "required": false,
+      "scope": "backend_runtime",
+      "sensitive": false
+    },
+    {
+      "default": 3,
+      "name": "TELEGRAM_API_RETRIES",
+      "required": false,
+      "scope": "backend_runtime",
+      "sensitive": false
+    },
+    {
+      "default": "t.me",
+      "name": "TELEGRAM_WEB_DOMAIN",
+      "required": false,
+      "scope": "backend_runtime",
+      "sensitive": false
+    },
+    {
+      "default": true,
+      "name": "TENANCY_ENFORCED",
+      "required": false,
+      "scope": "backend_runtime",
+      "sensitive": false
+    },
+    {
+      "default": "",
+      "name": "TOKEN_ENCRYPTION_KEY",
+      "required": false,
+      "scope": "backend_runtime",
+      "sensitive": true
+    },
+    {
+      "default": "",
+      "name": "TOR_CONTROL_PASSWORD",
+      "required": false,
+      "scope": "backend_runtime",
+      "sensitive": true
+    },
+    {
+      "default": 9051,
+      "name": "TOR_CONTROL_PORT",
+      "required": false,
+      "scope": "backend_runtime",
+      "sensitive": false
+    },
+    {
+      "default": false,
+      "name": "TOR_ENABLED",
+      "required": false,
+      "scope": "backend_runtime",
+      "sensitive": false
+    },
+    {
+      "default": "socks5h://127.0.0.1:9050",
+      "name": "TOR_SOCKS_PROXY",
+      "required": false,
+      "scope": "backend_runtime",
+      "sensitive": true
+    },
+    {
+      "default": 30,
+      "name": "TRANSLATION_BATCH_JOB_INTERVAL_SECONDS",
+      "required": false,
+      "scope": "backend_runtime",
+      "sensitive": false
+    },
+    {
+      "default": 20,
+      "name": "TRANSLATION_BATCH_LIMIT",
+      "required": false,
+      "scope": "backend_runtime",
+      "sensitive": false
+    },
+    {
+      "default": 4000,
+      "name": "TRANSLATION_BATCH_MAX_CHARS",
+      "required": false,
+      "scope": "backend_runtime",
+      "sensitive": false
+    },
+    {
+      "default": "English",
+      "name": "TRANSLATION_TARGET_LANGUAGE_DEFAULT",
+      "required": false,
+      "scope": "backend_runtime",
+      "sensitive": false
+    },
+    {
+      "default": true,
+      "name": "USERS_OPEN_REGISTRATION",
+      "required": false,
+      "scope": "backend_runtime",
+      "sensitive": false
+    },
+    {
+      "default": false,
+      "name": "USERS_REQUIRE_APPROVAL",
+      "required": false,
+      "scope": "backend_runtime",
+      "sensitive": false
+    },
+    {
+      "default": 5,
+      "name": "VIEW_AS_ELEVATED_DEFAULT_MINUTES",
+      "required": false,
+      "scope": "backend_runtime",
+      "sensitive": false
+    },
+    {
+      "default": 15,
+      "name": "VIEW_AS_ELEVATED_MAX_MINUTES",
+      "required": false,
+      "scope": "backend_runtime",
+      "sensitive": false
+    },
+    {
+      "default": 30,
+      "name": "VIEW_AS_TOKEN_EXPIRE_MINUTES",
+      "required": false,
+      "scope": "backend_runtime",
+      "sensitive": false
+    },
+    {
+      "default": null,
+      "name": "CF_DNS_API_TOKEN",
+      "required": false,
+      "scope": "compose",
+      "sensitive": true
+    },
+    {
+      "default": null,
+      "name": "DOCKER_IMAGE_BACKEND",
+      "required": false,
+      "scope": "compose",
+      "sensitive": false
+    },
+    {
+      "default": null,
+      "name": "DOCKER_IMAGE_FRONTEND",
+      "required": false,
+      "scope": "compose",
+      "sensitive": false
+    },
+    {
+      "default": "playwright",
+      "name": "DOCKER_IMAGE_PLAYWRIGHT",
+      "required": false,
+      "scope": "compose",
+      "sensitive": false
+    },
+    {
+      "default": null,
+      "name": "DOMAIN",
+      "required": false,
+      "scope": "compose",
+      "sensitive": false
+    },
+    {
+      "default": null,
+      "name": "EMAIL",
+      "required": false,
+      "scope": "compose",
+      "sensitive": false
+    },
+    {
+      "default": null,
+      "name": "HASHED_PASSWORD",
+      "required": false,
+      "scope": "compose",
+      "sensitive": true
+    },
+    {
+      "default": null,
+      "name": "STACK_NAME",
+      "required": false,
+      "scope": "compose",
+      "sensitive": false
+    },
+    {
+      "default": "latest",
+      "name": "TAG",
+      "required": false,
+      "scope": "compose",
+      "sensitive": false
+    },
+    {
+      "default": null,
+      "name": "USERNAME",
+      "required": false,
+      "scope": "compose",
+      "sensitive": false
+    },
+    {
+      "default": 30000,
+      "name": "VITE_API_HEALTH_POLL_MS",
+      "required": false,
+      "scope": "frontend_build",
+      "sensitive": false
+    },
+    {
+      "default": "",
+      "name": "VITE_API_KEY",
+      "required": false,
+      "scope": "frontend_build",
+      "sensitive": false
+    },
+    {
+      "default": "",
+      "name": "VITE_API_URL",
+      "required": false,
+      "scope": "frontend_build",
+      "sensitive": false
+    },
+    {
+      "default": 60,
+      "name": "VITE_AUTO_SYNC_INTERVAL_DEFAULT",
+      "required": false,
+      "scope": "frontend_build",
+      "sensitive": false
+    },
+    {
+      "default": 5,
+      "name": "VITE_COMMAND_PALETTE_RECENT_COUNT",
+      "required": false,
+      "scope": "frontend_build",
+      "sensitive": false
+    },
+    {
+      "default": "English",
+      "name": "VITE_DEFAULT_AI_LANGUAGE",
+      "required": false,
+      "scope": "frontend_build",
+      "sensitive": false
+    },
+    {
+      "default": "gemini-3-flash-preview",
+      "name": "VITE_DEFAULT_AI_MODEL",
+      "required": false,
+      "scope": "frontend_build",
+      "sensitive": false
+    },
+    {
+      "default": 15,
+      "name": "VITE_DYNAMIC_SYNC_EXPECTED_POSTS_DEFAULT",
+      "required": false,
+      "scope": "frontend_build",
+      "sensitive": false
+    },
+    {
+      "default": 30000,
+      "name": "VITE_QUERY_STALE_TIME_MS",
+      "required": false,
+      "scope": "frontend_build",
+      "sensitive": false
+    },
+    {
+      "default": 10000,
+      "name": "VITE_RAG_STATUS_POLL_MS",
+      "required": false,
+      "scope": "frontend_build",
+      "sensitive": false
+    },
+    {
+      "default": 30,
+      "name": "VITE_RETENTION_LOG_DAYS_DEFAULT",
+      "required": false,
+      "scope": "frontend_build",
+      "sensitive": false
+    },
+    {
+      "default": 7,
+      "name": "VITE_RETENTION_PAYLOAD_DAYS_DEFAULT",
+      "required": false,
+      "scope": "frontend_build",
+      "sensitive": false
+    },
+    {
+      "default": 90,
+      "name": "VITE_RETENTION_POST_DAYS_DEFAULT",
+      "required": false,
+      "scope": "frontend_build",
+      "sensitive": false
+    },
+    {
+      "default": 90,
+      "name": "VITE_RETENTION_REPORT_DAYS_DEFAULT",
+      "required": false,
+      "scope": "frontend_build",
+      "sensitive": false
+    },
+    {
+      "default": 50,
+      "name": "VITE_RETENTION_REPORT_MAX_DEFAULT",
+      "required": false,
+      "scope": "frontend_build",
+      "sensitive": false
+    },
+    {
+      "default": 30,
+      "name": "VITE_RETENTION_SHARED_LOG_DAYS_DEFAULT",
+      "required": false,
+      "scope": "frontend_build",
+      "sensitive": false
+    },
+    {
+      "default": 1000,
+      "name": "VITE_SYNC_JOB_FALLBACK_POLL_MS",
+      "required": false,
+      "scope": "frontend_build",
+      "sensitive": false
+    },
+    {
+      "default": 1800000,
+      "name": "VITE_SYNC_JOB_TIMEOUT_MS",
+      "required": false,
+      "scope": "frontend_build",
+      "sensitive": false
+    },
+    {
+      "default": 5000,
+      "name": "VITE_SYNC_META_MIN_INTERVAL_MS",
+      "required": false,
+      "scope": "frontend_build",
+      "sensitive": false
+    },
+    {
+      "default": "t.me",
+      "name": "VITE_TELEGRAM_WEB_DOMAIN",
+      "required": false,
+      "scope": "frontend_build",
+      "sensitive": false
+    },
+    {
+      "default": 1000,
+      "name": "VITE_TRANSLATION_DEBOUNCE_MS",
+      "required": false,
+      "scope": "frontend_build",
+      "sensitive": false
+    },
+    {
+      "default": 4000,
+      "name": "VITE_TRANSLATION_MAX_BATCH_CHARS",
+      "required": false,
+      "scope": "frontend_build",
+      "sensitive": false
+    },
+    {
+      "default": null,
+      "name": "CI",
+      "required": false,
+      "scope": "tooling",
+      "sensitive": false
+    },
+    {
+      "default": null,
+      "name": "DISABLE_HMR",
+      "required": false,
+      "scope": "tooling",
+      "sensitive": false
+    },
+    {
+      "default": null,
+      "name": "MAILCATCHER_HOST",
+      "required": false,
+      "scope": "tooling",
+      "sensitive": false
+    },
+    {
+      "default": null,
+      "name": "PLAYWRIGHT_API_URL",
+      "required": false,
+      "scope": "tooling",
+      "sensitive": false
+    },
+    {
+      "default": null,
+      "name": "PLAYWRIGHT_CHANNEL",
+      "required": false,
+      "scope": "tooling",
+      "sensitive": false
+    },
+    {
+      "default": null,
+      "name": "POSTGRES_DB_TEST",
+      "required": false,
+      "scope": "tooling",
+      "sensitive": false
+    },
+    {
+      "default": null,
+      "name": "TEST_POSTGRES_DB",
+      "required": false,
+      "scope": "tooling",
+      "sensitive": false
+    }
+  ]
+}

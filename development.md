@@ -73,6 +73,8 @@ Set `GEMINI_API_KEY` in the root `.env` for AI features.
 
 **Tunable defaults** — sync concurrency, scheduler intervals, RAG limits, network retries, job enabled defaults (`JOBS_*_ENABLED_DEFAULT`), and frontend poll intervals are documented in [`.env.example`](.env.example). Backend reads them via `app.core.config.Settings`; frontend reads `VITE_*` vars from the **same root `.env`** (`frontend/vite.config.ts` sets `envDir` to the repo root) through `frontend/src/lib/env.ts` (build-time for production Docker images). On a fresh database, scheduler job enabled flags come from those env vars until persisted in the `jobs` AppSetting row (embeddings and translation batch default to off).
 
+Run `bun run generate:env` after adding or removing an environment read. It discovers backend Settings fields, direct Python and frontend reads, and Compose interpolation; then synchronizes `.env.example` plus the backend and frontend configuration manifests. `bun run check:env` is the non-mutating drift check used by automation.
+
 For **bot token encryption** (Phase 2), set `TOKEN_ENCRYPTION_KEY` in `.env` to a Fernet key (generate command in `.env.example`). Required when `ENVIRONMENT` is not `local`; local dev may leave it empty and the backend uses a dev-only fallback. Staging/production without this key will fail when storing or migrating bot credentials.
 
 

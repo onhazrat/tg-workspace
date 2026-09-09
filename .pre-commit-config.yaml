@@ -71,6 +71,13 @@ repos:
         language: unsupported
         files: ^backend/.*$|^scripts/generate-client\.sh$
 
+      - id: generate-env-example
+        name: Generate environment catalog
+        entry: python3 scripts/generate_env_example.py
+        pass_filenames: false
+        language: system
+        files: ^backend/app/core/(config\.py|env_catalog\.generated\.json)$|^frontend/.*\.(ts|tsx)$|^compose.*\.yml$|^scripts/generate_env_example\.py$|^\.env\.example$
+
       - id: zizmor
         name: zizmor
         language: python

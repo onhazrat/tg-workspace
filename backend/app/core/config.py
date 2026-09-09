@@ -13,6 +13,12 @@ from pydantic import (
 )
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+# One vocabulary classifies credential-bearing configuration everywhere: the
+# generated environment manifest, runtime catalog redaction, and their guards.
+# Keep this as a literal tuple so the dependency-free generator can read it
+# statically without instantiating Settings or requiring a deployment .env.
+SENSITIVE_CONFIG_SUFFIXES = ("_KEY", "_TOKEN", "_SECRET", "_PASSWORD", "_DSN")
+
 
 def parse_cors(v: Any) -> list[str] | str:
     if isinstance(v, str) and not v.startswith("["):

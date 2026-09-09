@@ -204,11 +204,21 @@ def jobs_status(_current_user: CurrentUser) -> dict[str, JobStatusEntry]:
     }
 
 
-@router.get("/runtime-config", response_model=RuntimeConfigResponse)
+@router.get(
+    "/runtime-config",
+    response_model=RuntimeConfigResponse,
+    summary="Inspect resolved runtime diagnostics",
+)
 def get_runtime_config(
     session: SessionDep,
     current_user: CurrentUser,
 ) -> RuntimeConfigResponse:
+    """Return time-varying effective state that is not configuration inventory.
+
+    This API remains separate from ``/data/configuration`` for compatibility and
+    because its clock, resolved cutoff/start time, proxy lanes, and active job
+    are runtime diagnostics rather than values from one of the five config layers.
+    """
     payload = build_runtime_config(session, user_id=current_user.id)
     return RuntimeConfigResponse(**payload)
 

@@ -81,7 +81,7 @@ export const SETTINGS_TABS = [
   { id: "publishing", label: "Publishing", icon: "Send" },
   { id: "data", label: "Data", icon: "Database" },
   { id: "diagnostics", label: "Diagnostics", icon: "Activity" },
-  { id: "runtime-config", label: "Runtime Config", icon: "Braces" },
+  { id: "configuration", label: "Configuration Catalog", icon: "Braces" },
 ] as const
 
 /** Flat list of top-level settings destinations (legacy navigate / labels). Prefer SETTINGS_TOC. */

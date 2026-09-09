@@ -43,7 +43,10 @@ An unlisted disagreement fails.
 
 from __future__ import annotations
 
+import importlib.util
 import pathlib
+import subprocess
+import sys
 
 import pytest
 
@@ -129,6 +132,62 @@ def test_the_example_has_the_keys_this_guard_is_about() -> None:
         "the quota ladder's own allowance is not being compared, which is the "
         "setting the integer half of this guard was added for"
     )
+
+
+def test_every_backend_environment_setting_is_documented() -> None:
+    missing = set(Settings.model_fields) - set(_env_example())
+    assert not missing, (
+        "Settings fields missing from .env.example; run "
+        f"python3 scripts/generate_env_example.py: {sorted(missing)}"
+    )
+
+
+def test_commented_required_compose_inputs_remain_inactive() -> None:
+    """Discovery must not turn opt-in Traefik settings into active empties."""
+    example = _env_example()
+
+    assert {
+        "USERNAME",
+        "HASHED_PASSWORD",
+        "EMAIL",
+        "CF_DNS_API_TOKEN",
+    }.isdisjoint(example)
+
+
+def test_sync_preserves_curated_values_and_commented_assignments() -> None:
+    """The generator fills omissions; it does not rewrite operator choices."""
+    root = pathlib.Path(__file__).resolve().parents[3]
+    module_spec = importlib.util.spec_from_file_location(
+        "test_env_example_generator", root / "scripts/generate_env_example.py"
+    )
+    assert module_spec is not None and module_spec.loader is not None
+    module = importlib.util.module_from_spec(module_spec)
+    sys.modules[module_spec.name] = module
+    module_spec.loader.exec_module(module)
+
+    synchronized = module.synchronize_example(
+        "FEATURE_ENABLED=false\n# USERNAME=admin\n",
+        [
+            module.EnvSpec("FEATURE_ENABLED", "backend_runtime", True),
+            module.EnvSpec("USERNAME", "compose", None, required=True),
+        ],
+    )
+
+    assert "FEATURE_ENABLED=false" in synchronized
+    assert "# USERNAME=admin" in synchronized
+    assert "\nUSERNAME=" not in synchronized
+
+
+def test_generated_environment_artifacts_are_current() -> None:
+    root = pathlib.Path(__file__).resolve().parents[3]
+    result = subprocess.run(
+        [sys.executable, str(root / "scripts/generate_env_example.py"), "--check"],
+        cwd=root,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
 
 
 def test_every_boolean_in_the_example_matches_the_code_default() -> None:
