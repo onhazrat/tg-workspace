@@ -77,11 +77,43 @@ One message scraped from a Channel.
 _Avoid_: message, item, entry
 
 **Scope**:
-The slice of Posts an operation runs over: selected Channels × a date range ×
-the active post filters. Every Artifact freezes a snapshot of the Scope it was
-made from, so reopening one restores that selection rather than reinterpreting
-it against today's.
+The slice of Posts an operation runs over: selected Channels × an Analysis
+window × the active post filters. Every Artifact freezes a snapshot of the
+Scope it was made from, so it can be inspected or explicitly restored without
+reinterpreting it against today's.
 _Avoid_: selection, range, filter set, context
+
+**Analysis window**:
+The temporal part of the current Scope. It is explicitly either Live or Fixed,
+and the choice applies everywhere the Scope is used rather than only to the
+visible Posts feed.
+_Avoid_: date range, time range, range
+
+**Live window**:
+An Analysis window whose boundaries remain fixed offsets from the current time.
+It may end now or deliberately exclude the newest period; either way, both
+boundaries advance together without another choice from the Account. Its
+Duration and End gap remain fixed while its Start and End advance.
+_Avoid_: quick range, relative range, rolling range
+
+**Fixed window**:
+An Analysis window whose two boundaries are exact timestamp instants that do
+not advance with the current time. A displayed boundary of 02:00 means exactly
+02:00:00, not the whole 02:00 minute. Its Start, End and Duration remain fixed
+while its End gap grows. An Artifact always carries this form, resolved from
+the current Analysis window when the Artifact is created.
+_Avoid_: absolute range, custom range, snapshot range
+
+**Duration**:
+The positive exact elapsed time from an Analysis window's Start to its End. Its
+minimum value is one minute.
+_Avoid_: length, span
+
+**End gap**:
+The exact elapsed time from an Analysis window's End to the current time. Zero
+means the window ends now; a positive value deliberately excludes the newest
+period.
+_Avoid_: padding, lag, delay, end offset
 
 ### Scraping
 

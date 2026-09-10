@@ -47,6 +47,10 @@ Documentation for migrating the browser-first TG-Summarizer app to the FastAPI +
 | [ADR-012](./ADR-012-egress-seam.md) | The Lane is the egress seam — extends ADR-007 |
 | [ADR-013](./ADR-013-open-source-publication.md) | Publishing the repository as open source |
 | [ADR-014](./ADR-014-channel-directory.md) | The probe cache becomes the Channel Directory — extends ADR-009 |
+| [ADR-015](./ADR-015-directory-statistics.md) | Directory statistics are stored at probe time, not derived on read |
+| [ADR-016](./ADR-016-bring-your-own-key.md) | Each Account brings its own AI key |
+| [ADR-017](./ADR-017-spend-session.md) | A third View-as tier that spends without seeing |
+| [ADR-018](./ADR-018-analysis-window.md) | One global Analysis window with explicit Live and Fixed modes |
 
 ## Code references
 
