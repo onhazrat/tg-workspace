@@ -1,13 +1,41 @@
-# AW-01: The Analysis window
+# AW-00: The Analysis window (overview)
 
 **What to build:** Implement the accepted Analysis-window design in ADR-018 and
 the feature spec: one global four-field editor with explicit Live and Fixed
 modes, authoritative server-time resolution, half-open Post selection, and one
 complete immutable Scope snapshot shared by every Artifact kind.
 
-**Blocked by:** None (can start immediately)
+**Blocked by:** Not applicable — this is the effort overview, not a workable ticket.
 
-**Status:** ready-for-agent
+**Status:** superseded
+
+## Superseded by the slices
+
+This file is the effort-level summary. The workable tickets are `AW-01` through
+`AW-09` in this directory; each cuts a complete path through schema, API and UI
+and is sized for one agent session. The acceptance criteria below are the union
+of theirs and are kept here as the completion checklist for the whole effort.
+
+## The slices
+
+Work the frontier: any ticket whose blockers are all done.
+
+| Ticket | Blocked by |
+|---|---|
+| AW-01 One half-open window, everywhere | None |
+| AW-02 The server owns now | AW-01 |
+| AW-03 The Analysis-window controller | AW-02 |
+| AW-04 The Posts editor, and a window that moves | AW-03 |
+| AW-05 Frozen Scope, the contract and the Summary | AW-03 |
+| AW-06 Frozen Scope, the other three families | AW-05 |
+| AW-07 Drop the incomplete legacy Artifacts | AW-06 |
+| AW-08 Artifact display, and Use this Scope | AW-06 |
+| AW-09 Actions is where an Artifact begins | AW-04, AW-08 |
+
+AW-01 lands and is observed on its own before the rest starts: it changes which
+Posts every existing surface returns, and a boundary regression must not be able
+to hide inside the larger feature. AW-04 and AW-05 can run in parallel once the
+controller exists, as can AW-07 and AW-08 once all four families freeze Scope.
 
 ## The rule this ticket makes true
 
