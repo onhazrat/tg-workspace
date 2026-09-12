@@ -34,7 +34,7 @@ from sqlmodel import Session, col
 
 from app.core import acting_owner
 from app.models_tg import DiscoverReport, utc_now
-from app.schemas.scope import FrozenScope, ScopedPostRef
+from app.schemas.scope import FrozenScope
 from app.services.channel_directory import enqueue_handles, probe_map
 from app.services.discover import SignalKind, compute_discover_candidates
 from app.services.discover_ignored import ignored_handles
@@ -67,18 +67,18 @@ def _scope(row: Mapping[str, Any], *, with_posts: bool = False) -> dict[str, Any
     whole point of storing it: after the user changes tabs, live state no longer
     describes where these numbers came from.
 
-    **The shared `FrozenScope` shape, plus the keys this family has always
-    sent** (AW-06). `signals` is genuinely a report input rather than a post
-    filter — it picks which kinds of signal to report, not which Posts to read —
-    so it stays here and will outlive AW-07. `startDate`/`endDate` are the
-    superseded spelling of `start`/`end` and will not; they are kept only so the
-    scope card keeps rendering until AW-08 moves it.
+    **The shared `FrozenScope` shape, plus `signals`** (AW-06, narrowed by
+    AW-07). `signals` is genuinely a report input rather than a post filter —
+    it picks which kinds of signal to report, not which Posts to read — so it
+    stays here. The superseded `startDate`/`endDate` pair went with the columns
+    it spelled; the scope card reads `start`/`end` now.
 
-    A legacy row that predates the column is reconstructed from the columns
-    beside it. Discover is the one family that can be: it already stored the
-    whole filter set, so this is the same value written twice, not a guess —
-    which is exactly why the migration still refuses to backfill it. A guess is
-    what AW-07 deletes, and a rule with one silent exception is not a rule.
+    There is no legacy reconstruction left either. This family was the one that
+    *could* rebuild a Scope — it stored the whole filter set from the start —
+    and that branch went with the ten columns it read, because a rule with one
+    silent exception is not a rule and the columns it read are gone. A row with
+    no `scope` reports `None`; AW-07 deleted every row that predated the
+    contract rather than inventing one for it.
 
     Takes a **column mapping**, not an entity, because `list_reports` never
     materialises one — the light projection selects columns precisely so the
@@ -89,33 +89,17 @@ def _scope(row: Mapping[str, Any], *, with_posts: bool = False) -> dict[str, Any
     reached only one of them.
     """
     refs = row.get("scope_posts") if with_posts else None
-    frozen = FrozenScope.from_stored(
-        row.get("scope"), refs
-    ) or FrozenScope.model_validate(
-        {
-            "channels": row["channels"] or [],
-            "start": row["start_date"],
-            "end": row["end_date"],
-            "keyword": row["keyword"],
-            "forwarded": row["forwarded"],
-            "media": row["media"],
-            "maxPerChannel": row["max_per_channel"],
-            "maxPerChannelMode": row["max_per_channel_mode"],
-            "seed": row["seed"],
-            "scopedPostCount": row["scoped_post_count"],
-            "posts": (
-                None
-                if refs is None
-                else [ScopedPostRef.model_validate(ref) for ref in refs]
-            ),
-        }
-    )
+    frozen = FrozenScope.from_stored(row.get("scope"), refs)
+    if frozen is None:
+        # Unreachable: `tg_discover_reports.scope` is NOT NULL since AW-07, and
+        # the import door refuses a document that carries none. A raise rather
+        # than a reconstructed default, because a default here is the guessed
+        # filter set the whole ticket exists to refuse — and rather than an
+        # `assert`, which `python -O` deletes.
+        raise HTTPException(status_code=500, detail=REPORT_NOT_FOUND)
     return {
         **frozen.model_dump(by_alias=True),
         "signals": row["signals"] or [],
-        # Superseded by `start`/`end` above; removed in AW-07.
-        "startDate": row["start_date"],
-        "endDate": row["end_date"],
     }
 
 
@@ -322,11 +306,17 @@ def _search_clause(term: str) -> Any:
     Only scope fields are searchable: matching the candidate blob would make
     every report containing a popular handle a hit for that handle, which is
     not what someone searching their report history is asking for.
+
+    Read out of the frozen `scope` since AW-07 dropped the `channels` and
+    `keyword` columns this named — the same move `artifacts.py::_scope_text`
+    makes for the History union, and for the same reason: there is one copy of
+    the Scope now, so there is one thing to search.
     """
     like = f"%{term}%"
+    scope = col(DiscoverReport.scope)
     return or_(
-        sa_cast(col(DiscoverReport.channels), Text).ilike(like),
-        col(DiscoverReport.keyword).ilike(like),
+        sa_cast(scope.op("->>")("channels"), Text).ilike(like),
+        sa_cast(scope.op("->>")("keyword"), Text).ilike(like),
     )
 
 
@@ -469,21 +459,7 @@ def create_report(
     report = DiscoverReport(
         id=str(uuid.uuid4()),
         user_id=user_id,
-        # The superseded copy, kept in step at creation and never written
-        # again. AW-07 removes these; until then the History union and the
-        # scope card read them, so they agree with the frozen value by
-        # construction rather than by anyone remembering to keep them in step.
-        channels=list(scope.channels),
-        start_date=scope.start,
-        end_date=scope.end,
         signals=sorted(signals) if signals is not None else [],
-        keyword=filters.keyword,
-        forwarded=filters.forwarded,
-        media=filters.media,
-        max_per_channel=scope.max_per_channel,
-        max_per_channel_mode=scope.max_per_channel_mode,
-        seed=scope.seed,
-        scoped_post_count=scope.scoped_post_count,
         scope=scope.stored(),
         scope_posts=scope.stored_posts(),
         candidates=result["candidates"],

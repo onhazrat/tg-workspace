@@ -72,6 +72,7 @@ from app.core.db import engine
 from app.models import User
 from app.models_tg import Summary
 from app.services.tenancy import SCOPES, Scope
+from tests.utils.scope import stored_scope
 from tests.utils.user import create_random_user
 
 APP_ROOT = pathlib.Path(app.__file__).parent
@@ -362,9 +363,7 @@ def _due_summary(session: Session, owner: uuid.UUID | None) -> Summary:
         id=f"sum-{uuid.uuid4().hex[:8]}",
         user_id=owner,
         text="body",
-        channels=["ch"],
-        start_date=now - 7_200_000,
-        end_date=now - 3_600_000,
+        scope=stored_scope(channels=["ch"], start=now - 7_200_000, end=now - 3_600_000),
         language="English",
         post_count=0,
         timestamp=now,

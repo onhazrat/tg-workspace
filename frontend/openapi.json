@@ -6185,17 +6185,6 @@
         "properties": {
           "id": { "type": "string", "title": "Id" },
           "title": { "type": "string", "title": "Title", "default": "" },
-          "channels": {
-            "items": { "type": "string" },
-            "type": "array",
-            "title": "Channels"
-          },
-          "startDate": {
-            "type": "integer",
-            "title": "Startdate",
-            "default": 0
-          },
-          "endDate": { "type": "integer", "title": "Enddate", "default": 0 },
           "timestamp": {
             "type": "integer",
             "title": "Timestamp",
@@ -6333,17 +6322,6 @@
         "properties": {
           "id": { "type": "string", "title": "Id" },
           "title": { "type": "string", "title": "Title", "default": "" },
-          "channels": {
-            "items": { "type": "string" },
-            "type": "array",
-            "title": "Channels"
-          },
-          "startDate": {
-            "type": "integer",
-            "title": "Startdate",
-            "default": 0
-          },
-          "endDate": { "type": "integer", "title": "Enddate", "default": 0 },
           "language": {
             "type": "string",
             "title": "Language",
@@ -6390,17 +6368,6 @@
         "properties": {
           "id": { "type": "string", "title": "Id" },
           "title": { "type": "string", "title": "Title", "default": "" },
-          "channels": {
-            "items": { "type": "string" },
-            "type": "array",
-            "title": "Channels"
-          },
-          "startDate": {
-            "type": "integer",
-            "title": "Startdate",
-            "default": 0
-          },
-          "endDate": { "type": "integer", "title": "Enddate", "default": 0 },
           "language": {
             "type": "string",
             "title": "Language",
@@ -7162,18 +7129,12 @@
             "items": { "type": "string" },
             "type": "array",
             "title": "Signals"
-          },
-          "startDate": {
-            "type": "integer",
-            "title": "Startdate",
-            "default": 0
-          },
-          "endDate": { "type": "integer", "title": "Enddate", "default": 0 }
+          }
         },
         "type": "object",
         "required": ["start", "end"],
         "title": "DiscoverReportScopeResponse",
-        "description": "The frozen inputs a report was generated for.\n\nRendered by the scope card instead of live selection state \u2014 after the user\nchanges tabs, live state no longer describes where the numbers came from.\n\n**It is the shared `FrozenScope`** (AW-06), which is most of what it already\nwas: Discover is the one family that stored the whole filter set from the\nstart, so `keyword`, `forwarded`, `media`, `maxPerChannel`,\n`maxPerChannelMode`, `seed`, `channels` and `scopedPostCount` come straight\noff the base model under the names they already had.\n\nTwo things are added and one is kept.\n\n`signals` is added, and it stays after AW-07: it picks which kinds of signal\na report describes, not which Posts it reads, so it is a report input rather\nthan part of Scope.\n\n`startDate`/`endDate` are kept, and they do not stay. They are the\nsuperseded spelling of the inherited `start`/`end`, carried only so the\nexisting scope card renders unchanged until AW-08 moves it."
+        "description": "The frozen inputs a report was generated for.\n\nRendered by the scope card instead of live selection state \u2014 after the user\nchanges tabs, live state no longer describes where the numbers came from.\n\n**It is the shared `FrozenScope`** (AW-06), which is most of what it already\nwas: Discover is the one family that stored the whole filter set from the\nstart, so `keyword`, `forwarded`, `media`, `maxPerChannel`,\n`maxPerChannelMode`, `seed`, `channels` and `scopedPostCount` come straight\noff the base model under the names they already had.\n\nOne thing is added. `signals` picks which kinds of signal a report\ndescribes, not which Posts it reads, so it is a report input rather than\npart of Scope \u2014 which is why it survived AW-07 and the superseded\n`startDate`/`endDate` pair did not. Those were the old spelling of the\ninherited `start`/`end`, and the scope card reads the inherited pair now."
       },
       "DiscoveredViaPayload": {
         "properties": {
@@ -7189,17 +7150,6 @@
         "properties": {
           "id": { "type": "string", "title": "Id" },
           "title": { "type": "string", "title": "Title", "default": "" },
-          "channels": {
-            "items": { "type": "string" },
-            "type": "array",
-            "title": "Channels"
-          },
-          "startDate": {
-            "type": "integer",
-            "title": "Startdate",
-            "default": 0
-          },
-          "endDate": { "type": "integer", "title": "Enddate", "default": 0 },
           "timestamp": {
             "type": "integer",
             "title": "Timestamp",
@@ -9374,17 +9324,6 @@
         "properties": {
           "id": { "type": "string", "title": "Id" },
           "title": { "type": "string", "title": "Title", "default": "" },
-          "channels": {
-            "items": { "type": "string" },
-            "type": "array",
-            "title": "Channels"
-          },
-          "startDate": {
-            "type": "integer",
-            "title": "Startdate",
-            "default": 0
-          },
-          "endDate": { "type": "integer", "title": "Enddate", "default": 0 },
           "timestamp": {
             "type": "integer",
             "title": "Timestamp",
@@ -9463,17 +9402,6 @@
         "properties": {
           "id": { "type": "string", "title": "Id" },
           "text": { "type": "string", "title": "Text" },
-          "channels": {
-            "items": { "type": "string" },
-            "type": "array",
-            "title": "Channels"
-          },
-          "startDate": {
-            "type": "integer",
-            "title": "Startdate",
-            "default": 0
-          },
-          "endDate": { "type": "integer", "title": "Enddate", "default": 0 },
           "language": {
             "type": "string",
             "title": "Language",
@@ -9560,17 +9488,6 @@
         "properties": {
           "id": { "type": "string", "title": "Id" },
           "text": { "type": "string", "title": "Text" },
-          "channels": {
-            "items": { "type": "string" },
-            "type": "array",
-            "title": "Channels"
-          },
-          "startDate": {
-            "type": "integer",
-            "title": "Startdate",
-            "default": 0
-          },
-          "endDate": { "type": "integer", "title": "Enddate", "default": 0 },
           "language": {
             "type": "string",
             "title": "Language",
@@ -9857,17 +9774,6 @@
         "properties": {
           "id": { "type": "string", "title": "Id" },
           "title": { "type": "string", "title": "Title", "default": "" },
-          "channels": {
-            "items": { "type": "string" },
-            "type": "array",
-            "title": "Channels"
-          },
-          "startDate": {
-            "type": "integer",
-            "title": "Startdate",
-            "default": 0
-          },
-          "endDate": { "type": "integer", "title": "Enddate", "default": 0 },
           "timestamp": {
             "type": "integer",
             "title": "Timestamp",
@@ -9973,17 +9879,6 @@
           "status": { "type": "string", "title": "Status" },
           "source": { "type": "string", "title": "Source" },
           "mode": { "type": "string", "title": "Mode" },
-          "channels": {
-            "items": { "type": "string" },
-            "type": "array",
-            "title": "Channels"
-          },
-          "startDate": {
-            "type": "integer",
-            "title": "Startdate",
-            "default": 0
-          },
-          "endDate": { "type": "integer", "title": "Enddate", "default": 0 },
           "postCount": {
             "anyOf": [{ "type": "integer" }, { "type": "null" }],
             "title": "Postcount"
@@ -10033,17 +9928,6 @@
           "status": { "type": "string", "title": "Status" },
           "source": { "type": "string", "title": "Source" },
           "mode": { "type": "string", "title": "Mode" },
-          "channels": {
-            "items": { "type": "string" },
-            "type": "array",
-            "title": "Channels"
-          },
-          "startDate": {
-            "type": "integer",
-            "title": "Startdate",
-            "default": 0
-          },
-          "endDate": { "type": "integer", "title": "Enddate", "default": 0 },
           "postCount": {
             "anyOf": [{ "type": "integer" }, { "type": "null" }],
             "title": "Postcount"

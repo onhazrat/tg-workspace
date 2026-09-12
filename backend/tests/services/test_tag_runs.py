@@ -25,7 +25,10 @@ def test_upsert_tag_run_roundtrip() -> None:
         )
         assert created["id"] == "tag-run-service-1"
         assert created["status"] == "pending"
-        assert created["channels"] == ["chan_a"]
+        # `channels` is not a column any more (AW-07) and `upsert_tag_run`
+        # writes no Scope, so the key the body sent is dropped.
+        assert created["scope"] is None
+        assert "channels" not in created
 
         updated = upsert_tag_run(
             session,

@@ -11,9 +11,6 @@ import {
 const base = {
   id: "x",
   title: "t",
-  channels: ["a"],
-  startDate: 0,
-  endDate: 0,
   timestamp: 1,
   isStarred: false,
 }

@@ -12,9 +12,6 @@ function makeSummary(
   return {
     id,
     text,
-    channels: [],
-    startDate: 0,
-    endDate: 1,
     language: "en",
     timestamp,
     chatMessageCount: 0,

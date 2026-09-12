@@ -61,6 +61,7 @@ from app.models_tg import (
     Summary,
     TagRun,
 )
+from tests.utils.discover import stored_report_scope
 from tests.utils.setting_groups import add_test_channel
 from tests.utils.user import user_authentication_headers
 from tests.utils.utils import random_lower_string
@@ -714,7 +715,11 @@ FAMILIES: list[tuple[str, Any, str, str, str]] = [
         # SQLModel drops an unknown keyword silently and the column did not
         # exist until AW-06.
         lambda rid, owner: DiscoverReport(
-            id=rid, user_id=owner, timestamp=0, candidates=[]
+            id=rid,
+            user_id=owner,
+            timestamp=0,
+            candidates=[],
+            scope=stored_report_scope(),
         ),
         f"{DATA}/discover/reports/{{id}}",
         "report not found",

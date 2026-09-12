@@ -43,6 +43,7 @@ import type {
   EntityFlowType,
 } from "@/lib/commands/types"
 import { restartTorService, rotateTorIpNow } from "@/lib/network/tor-actions"
+import { scopeChannels } from "@/lib/scope/artifact-scope"
 import { scopedStorage } from "@/lib/storage/scoped"
 import { deleteSummary } from "@/lib/summaries/store"
 import type { Channel, Summary } from "@/types"
@@ -448,7 +449,7 @@ export function buildExtendedCommands(): CommandDef[] {
       getConfirmDescription: (_ctx, payload) => {
         const summary = payload as Summary | undefined
         if (!summary) return "Delete this summary from history?"
-        const channels = summary.channels.join(", ") || "summary"
+        const channels = scopeChannels(summary).join(", ") || "summary"
         return `Delete summary for ${channels}?`
       },
       disabled: (ctx) =>

@@ -73,9 +73,6 @@ def tag_run_to_camel(tag_run: TagRun) -> dict[str, Any]:
         "status": tag_run.status,
         "source": tag_run.source,
         "mode": tag_run.mode,
-        "channels": tag_run.channels,
-        "startDate": tag_run.start_date,
-        "endDate": tag_run.end_date,
         "postCount": tag_run.post_count,
         "model": tag_run.model,
         "promptText": tag_run.prompt_text,
@@ -116,9 +113,6 @@ def _light_from_mapping(row: dict[str, Any]) -> dict[str, Any]:
         "status": row["status"],
         "source": row["source"],
         "mode": row["mode"],
-        "channels": row["channels"],
-        "startDate": row["start_date"],
-        "endDate": row["end_date"],
         "postCount": row["post_count"],
         "model": row["model"],
         "error": row["error"],
@@ -172,13 +166,16 @@ def get_tag_run(
     return tag_run_to_camel(row)
 
 
-#: Columns written once, at submission, and never by a merge (AW-06).
+#: Names a merge recognises and never writes (AW-06).
 #:
-#: `channels`, `start_date` and `end_date` are AW-05's rule applied to this
-#: family: they are the Scope the run was produced from. A tag run is written at
-#: least twice — `copyTagPrompt` opens it pending and the pasted response
-#: completes it — so while these were settable a Live window that advanced in
-#: between rewrote the boundaries of a prompt that had already been built.
+#: `channels`, `start_date` and `end_date` were the Scope the run was produced
+#: from — a tag run is written at least twice, `copyTagPrompt` opening it
+#: pending and the pasted response completing it, so while they were settable a
+#: Live window that advanced in between rewrote the boundaries of a prompt that
+#: had already been built. AW-07 dropped the columns and they stay named here,
+#: because the merge loop would otherwise `setattr` a field the model no longer
+#: has, and `known` would otherwise let them fall into `extra` and be spread
+#: back onto the response as a Scope the row does not hold.
 #:
 #: Snake spellings only, because the merge loop tests `to_snake(key)` and both
 #: wire spellings of every key normalise to one of these.
@@ -294,9 +291,6 @@ def upsert_tag_run(
             status=body.get("status", "pending"),
             source=body.get("source", "generated"),
             mode=body.get("mode", "add"),
-            channels=body.get("channels", []),
-            start_date=body.get("startDate", body.get("start_date", 0)),
-            end_date=body.get("endDate", body.get("end_date", 0)),
             post_count=body.get("postCount", body.get("post_count")),
             model=body.get("model"),
             prompt_text=body.get("promptText", body.get("prompt_text")),
@@ -356,11 +350,6 @@ def submit_tag_run(
         status=status,
         source=source,
         mode=mode,
-        # The superseded copy, kept in step at creation and never written
-        # again. AW-07 removes these three.
-        channels=list(scope.channels),
-        start_date=scope.start,
-        end_date=scope.end,
         post_count=post_count if post_count is not None else scope.scoped_post_count,
         model=model,
         created_at=now,

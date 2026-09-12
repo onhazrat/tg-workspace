@@ -80,6 +80,7 @@ from app.services.data_import_export import (
 from app.services.follows import ensure_follow_for_channel
 from app.services.settings_registry import SYNC_PREFS_KEY
 from app.services.tenancy import SCOPES, Scope
+from tests.utils.discover import stored_report_scope
 from tests.utils.user import user_authentication_headers
 from tests.utils.utils import random_lower_string
 
@@ -220,10 +221,7 @@ def _seed_account(session: Session, owner: User, tag: str) -> None:
         DiscoverReport(
             id=f"report-{tag}",
             user_id=owner.id,
-            channels=[tag],
-            start_date=0,
-            end_date=0,
-            keyword=tag,
+            scope=stored_report_scope(channels=[tag], keyword=tag),
             timestamp=0,
             extra={},
         )

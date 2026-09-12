@@ -241,24 +241,16 @@ class DiscoverReportScopeResponse(FrozenScope):
     `maxPerChannelMode`, `seed`, `channels` and `scopedPostCount` come straight
     off the base model under the names they already had.
 
-    Two things are added and one is kept.
-
-    `signals` is added, and it stays after AW-07: it picks which kinds of signal
-    a report describes, not which Posts it reads, so it is a report input rather
-    than part of Scope.
-
-    `startDate`/`endDate` are kept, and they do not stay. They are the
-    superseded spelling of the inherited `start`/`end`, carried only so the
-    existing scope card renders unchanged until AW-08 moves it.
+    One thing is added. `signals` picks which kinds of signal a report
+    describes, not which Posts it reads, so it is a report input rather than
+    part of Scope — which is why it survived AW-07 and the superseded
+    `startDate`/`endDate` pair did not. Those were the old spelling of the
+    inherited `start`/`end`, and the scope card reads the inherited pair now.
     """
 
     #: Which kinds of signal this report describes. Not a Scope field — see the
     #: class docstring.
     signals: list[str] = Field(default_factory=list)
-    #: Superseded by `start`/`end`. Removed in AW-07.
-    start_date: int = Field(default=0, alias="startDate")
-    #: Superseded by `start`/`end`. Removed in AW-07.
-    end_date: int = Field(default=0, alias="endDate")
 
 
 class DiscoverReportListItemResponse(BaseModel):

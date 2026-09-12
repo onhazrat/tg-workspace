@@ -51,8 +51,8 @@ export const DiscoverScopeCard: React.FC<DiscoverScopeCardProps> = ({
           <p>
             <span className="text-app-ink/50">Date range:</span>{" "}
             {formatDateRange(
-              new Date(view.scope.startDate),
-              new Date(view.scope.endDate),
+              new Date(view.scope.start),
+              new Date(view.scope.end),
             )}
           </p>
           <p>

@@ -15,7 +15,7 @@ export function filterSummariesByTextQuery(
   if (!query.trim()) return summaries
   const normalized = query.toLowerCase()
   return summaries.filter((summary) => {
-    const matchesChannels = summary.channels.some((channel) =>
+    const matchesChannels = (summary.scope?.channels ?? []).some((channel) =>
       channel.toLowerCase().includes(normalized),
     )
     const matchesText = summary.text.toLowerCase().includes(normalized)

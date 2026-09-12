@@ -36,6 +36,7 @@ from app.services.artifacts import (
 from app.services.chat_sessions import upsert_chat_session
 from app.services.summaries import list_summaries, upsert_summary
 from app.services.tag_runs import upsert_tag_run
+from tests.utils.discover import stored_report_scope
 from tests.utils.tenancy import ANY_READER
 
 PAYLOAD_TABLES = ("tg_summary_payloads", "tg_chat_session_payloads")
@@ -102,7 +103,7 @@ def _seed(session: Session, *, corpus: int = 100) -> None:
         DiscoverReport(
             id="art-discovery",
             user_id=ANY_READER,
-            channels=["a"],
+            scope=stored_report_scope(channels=["a"]),
             candidates=[{"name": f"c{i}", "blurb": "q" * corpus} for i in range(20)],
             candidate_count=20,
             timestamp=100,

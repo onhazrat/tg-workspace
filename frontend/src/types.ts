@@ -260,9 +260,6 @@ export type ChatDestination = ChatDestinationResponse
 export interface Summary {
   id: string
   text: string
-  channels: string[]
-  startDate: number
-  endDate: number
   language: string
   model?: string
   postCount?: number
@@ -473,7 +470,7 @@ export type TagRunSummary = Omit<
  */
 export type TagRun = AlwaysSent<
   TagRunResponse,
-  "createdAt" | "updatedAt" | "channels" | "startDate" | "endDate" | "postCount"
+  "createdAt" | "updatedAt" | "postCount"
 > &
   Omit<
     TagRunResponse,
@@ -532,9 +529,6 @@ export type ChatMode = "full_scope" | "semantic"
 export interface ChatSession {
   id: string
   title: string
-  channels: string[]
-  startDate: number
-  endDate: number
   language: string
   model?: string | null
   mode: ChatMode

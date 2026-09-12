@@ -67,14 +67,14 @@ DERIVED_SUMMARY_FIELDS = frozenset({"chat_message_count", "prompt_excerpt"})
 
 #: Base columns a `PUT` may still change on a Summary that already exists.
 #:
-#: `channels`, `start_date` and `end_date` are **not** here, and that is AW-05:
-#: they are the Scope the text was made from, frozen at submission, so an edit
-#: to the body or a flag must not be able to move them. The client round-trips
-#: whole list items back through `PUT`, so leaving them settable meant a Live
-#: window that had advanced between generating and saving rewrote the
-#: boundaries of work already done. `scope` itself is unreachable from a
-#: request at all — it is not on `SummaryUpsertRequest` and `known` below drops
-#: it — which is the same rule stated where it cannot be forgotten.
+#: `channels`, `start_date` and `end_date` used to be the interesting omission
+#: here — the Scope the text was made from, settable by a client round-tripping
+#: a list item, so a Live window that had advanced between generating and saving
+#: rewrote the boundaries of work already done. AW-05 froze them and AW-07
+#: dropped the columns outright, so the rule is now structural. `scope` is
+#: unreachable from a request at all — it is not on `SummaryUpsertRequest` and
+#: `known` below drops it — which is the same rule stated where it cannot be
+#: forgotten.
 MUTABLE_SUMMARY_FIELDS = frozenset(
     {"text", "post_count", "language", "model", "timestamp"}
 )
@@ -87,9 +87,6 @@ def _summary_base(summary: Summary) -> dict[str, Any]:
     return {
         "id": summary.id,
         "text": summary.text,
-        "channels": summary.channels,
-        "startDate": summary.start_date,
-        "endDate": summary.end_date,
         "language": summary.language,
         "model": summary.model,
         "postCount": summary.post_count,
@@ -214,7 +211,10 @@ def _search_clause(term: str) -> Any:
     )
     return or_(
         col(Summary.text).ilike(like),
-        cast(col(Summary.channels), Text).ilike(like),
+        # The frozen Scope holds the channel list since AW-07 dropped the
+        # column; `->>` yields the JSON array's own text, which is what the
+        # cast over the old column produced and matches the same way.
+        cast(col(Summary.scope).op("->>")("channels"), Text).ilike(like),
         col(Summary.model).ilike(like),
         prompt_match,
         col(Summary.extra).op("->>")("note").ilike(like),
@@ -345,6 +345,11 @@ def upsert_summary(
     known = {
         "id",
         "text",
+        # Recognised only so they are *dropped*. AW-07 removed these columns;
+        # a client still round-tripping a list item from before, or an old
+        # export replayed through `PUT`, must not have them land in `extra`,
+        # which is spread onto the response and would put a superseded Scope
+        # back on the wire beside the frozen one.
         "channels",
         "start_date",
         "end_date",
@@ -411,9 +416,6 @@ def upsert_summary(
             id=summary_id,
             user_id=user_id,
             text=body.get("text", ""),
-            channels=body.get("channels", []),
-            start_date=body.get("startDate", body.get("start_date", 0)),
-            end_date=body.get("endDate", body.get("end_date", 0)),
             language=body.get("language", "English"),
             model=body.get("model"),
             post_count=body.get("postCount", body.get("post_count")),
@@ -475,15 +477,25 @@ def derived_scope(predecessor: Summary, mode: DerivationMode) -> FrozenScope:
     would record a Scope naming filters nobody used, which is worse than no
     Scope at all.
 
-    Independent of whether the predecessor had a Scope of its own, so a chain
-    older than AW-05 gains a complete record from its next run rather than
-    never.
+    **Read off the predecessor's frozen Scope**, which since AW-07 is the only
+    window it has. It used to read the `start_date` / `end_date` / `channels`
+    trio beside it, and that was what let a chain older than AW-05 derive at
+    all. There is no such chain left: the migration deleted every Summary that
+    could not supply a Scope, so a predecessor with none was opened by a legacy
+    write door after it — and refusing is the only honest answer, because the
+    alternative is inventing the boundaries a whole chain then inherits.
     """
-    duration = predecessor.end_date - predecessor.start_date
-    start = predecessor.end_date if mode == "successor" else predecessor.start_date
+    frozen = FrozenScope.from_stored(predecessor.scope)
+    if frozen is None:
+        raise HTTPException(
+            status_code=422,
+            detail="That Summary records no Scope, so nothing can be derived from it.",
+        )
+    duration = frozen.end - frozen.start
+    start = frozen.end if mode == "successor" else frozen.start
     return FrozenScope.model_validate(
         {
-            "channels": list(predecessor.channels or []),
+            "channels": list(frozen.channels),
             "start": start,
             "end": start + duration,
         }
@@ -555,12 +567,6 @@ def submit_summary(
         id=summary_id,
         user_id=user_id,
         text="",
-        # The superseded copy, kept in step at creation and never written
-        # again. AW-07 removes these three; until then the History union reads
-        # them, so they have to agree with the frozen value by construction.
-        channels=list(scope.channels),
-        start_date=scope.start,
-        end_date=scope.end,
         language=language,
         model=model,
         post_count=post_count if post_count is not None else scope.scoped_post_count,

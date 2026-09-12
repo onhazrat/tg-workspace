@@ -105,8 +105,10 @@ def test_report_freezes_its_scope() -> None:
 
         scope = created["scope"]
         assert scope["channels"] == ["carrier"]
-        assert scope["startDate"] == 500
-        assert scope["endDate"] == 1500
+        # `start` / `end`, not the `startDate` / `endDate` pair they superseded
+        # — AW-07 removed those from the wire along with their columns.
+        assert (scope["start"], scope["end"]) == (500, 1500)
+        assert not {"startDate", "endDate"} & set(scope)
         assert scope["signals"] == ["forward"]
         assert scope["keyword"] == "hello"
         assert scope["forwarded"] == "forwarded"

@@ -123,9 +123,12 @@ def _move_one(session: Session, summary: Summary, payload: SummaryPayload) -> st
         id=chat_id,
         user_id=summary.user_id,
         title=title,
-        channels=summary.channels,
-        start_date=summary.start_date,
-        end_date=summary.end_date,
+        # The frozen Scope, carried across whole (AW-07 dropped the
+        # `channels` / `start_date` / `end_date` trio this used to copy field
+        # by field). `None` travels as `None`: a chat extracted from a Summary
+        # that recorded no Scope records none either, rather than gaining one
+        # this script would have to invent.
+        scope=summary.scope,
         language=summary.language,
         model=summary.model,
         # Pre-split chats recorded no mode. `full_scope` is the honest default:

@@ -14,6 +14,7 @@ import {
 } from "@/lib/commands/palette-messages"
 import { truncatePreview } from "@/lib/commands/search-filters"
 import type { CommandDef, SearchResultsState } from "@/lib/commands/types"
+import { scopeChannels } from "@/lib/scope/artifact-scope"
 import type { Post, SummaryListItem } from "@/types"
 
 interface SearchResultsViewProps {
@@ -99,7 +100,7 @@ export function SearchResultsView({
                 >
                   <div className="flex min-w-0 flex-col gap-0.5">
                     <span className="truncate text-sm">
-                      {summary.channels.join(", ") || "Summary"}
+                      {scopeChannels(summary).join(", ") || "Summary"}
                     </span>
                     <span className="truncate text-xs text-app-ink/60">
                       {truncatePreview(summary.promptExcerpt || summary.text)}

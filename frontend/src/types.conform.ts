@@ -236,7 +236,10 @@ export type ChannelRefinementsHold = NoMismatches<
 // not do, because they only compare keys the two sides share.
 
 export type SummaryHasServerFields = NoMismatches<
-  MissingServerFields<SummaryResponse, "id" | "text" | "timestamp" | "channels">
+  // `channels` was here until AW-07 dropped the column; the Summary's channel
+  // list is inside `scope` now, and `scope` is what a view cannot render
+  // without.
+  MissingServerFields<SummaryResponse, "id" | "text" | "timestamp" | "scope">
 >
 export type SettingGroupHasServerFields = NoMismatches<
   MissingServerFields<SettingGroupResponse, "id" | "name">

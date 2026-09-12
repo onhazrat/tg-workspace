@@ -98,8 +98,8 @@ export const ArtifactCard: React.FC<ArtifactCardProps> = ({
           )}
         </div>
         <h4 className="truncate text-sm font-bold uppercase tracking-tight">
-          {artifact.channels?.length
-            ? artifact.channels.join(", ")
+          {artifact.scope?.channels?.length
+            ? artifact.scope.channels.join(", ")
             : "No channels"}
         </h4>
         <p className="line-clamp-2 text-[12px] leading-relaxed text-app-ink/80">

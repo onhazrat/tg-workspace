@@ -41,7 +41,8 @@ afterwards can move it.
 
 * resolve Live against `now` instead of the minute start -> the minute case
 * re-freeze the Scope on `PUT` -> the queue-delay and later-write cases
-* let `upsert_summary` set `channels` / `start_date` / `end_date` again -> the
+* let the three superseded keys reach `extra` (AW-07 dropped their columns,
+  so `known` is now the only thing keeping them off the wire) -> the
   round-tripped-list-item case
 * drop a filter from `FrozenScope` -> the completeness case
 * store `durationMinutes` instead of computing it -> the derived case
@@ -201,7 +202,6 @@ def test_a_simulated_queue_delay_does_not_move_the_stored_boundaries(
 
     stored, _ = _stored(submitted["id"])
     assert stored.scope is not None
-    assert (stored.start_date, stored.end_date) == (MINUTE - DAY_MS, MINUTE)
     assert stored.scope["start"] == MINUTE - DAY_MS
     assert stored.scope["end"] == MINUTE
 
@@ -466,6 +466,11 @@ def test_round_tripping_a_list_item_back_through_put_moves_nothing(
     History sends whole items back to toggle one flag. While `channels`,
     `startDate` and `endDate` were settable, a Live window that had advanced in
     the meantime rewrote the boundaries of work that was already finished.
+
+    AW-07 dropped the columns, so what is watched here now is the other half:
+    an unrecognised key falls into `extra`, and `extra` is spread onto the
+    response, so a key the server merely stopped having a column for would come
+    straight back out as a Scope the row does not hold.
     """
     headers = _auth(client)
     created = _submit(client, headers).json()
@@ -488,6 +493,11 @@ def test_round_tripping_a_list_item_back_through_put_moves_nothing(
     )
 
     stored, _ = _stored(created["id"])
-    assert (stored.start_date, stored.end_date) == (MINUTE - DAY_MS, MINUTE)
-    assert stored.channels == ["ch"]
+    # The frozen Scope is the only copy since AW-07 dropped the columns, so the
+    # three keys the body just sent have nowhere to land — including `extra`,
+    # which the open response model would have shipped them back out of.
+    assert stored.scope is not None
+    assert (stored.scope["start"], stored.scope["end"]) == (MINUTE - DAY_MS, MINUTE)
+    assert stored.scope["channels"] == ["ch"]
+    assert not {"startDate", "endDate", "channels"} & set(stored.extra)
     assert stored.extra.get("isStarred") is True

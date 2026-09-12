@@ -73,18 +73,17 @@ REPORT_BASE_KEYS = {
 #: this set is the place a filter added to `FrozenScope` and forgotten in a
 #: projection shows up.
 #:
-#: `signals` stays after AW-07 — it picks which kinds of signal a report
-#: describes, not which Posts it reads. `startDate` / `endDate` do not: they are
-#: the superseded spelling of `start` / `end`, kept only until AW-08 moves the
-#: scope card.
+#: `signals` survived AW-07 — it picks which kinds of signal a report describes,
+#: not which Posts it reads. `startDate` / `endDate` did not: they were the
+#: superseded spelling of `start` / `end`, and the scope card reads the
+#: inherited pair now. This assertion is what says they are gone from the wire
+#: and not merely gone from the database.
 SCOPE_KEYS = {
     "channels",
     "start",
     "end",
     "durationMinutes",
     "posts",
-    "startDate",
-    "endDate",
     "signals",
     "keyword",
     "forwarded",

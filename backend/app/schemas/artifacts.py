@@ -33,9 +33,6 @@ class ArtifactBase(BaseModel):
 
     id: str
     title: str = ""
-    channels: list[str] = Field(default_factory=list)
-    start_date: int = Field(default=0, alias="startDate")
-    end_date: int = Field(default=0, alias="endDate")
     timestamp: int = 0
     model: str | None = None
     post_count: int | None = Field(default=None, alias="postCount")
@@ -51,14 +48,15 @@ class ArtifactBase(BaseModel):
     #: about — which is the failure this module's discriminated union exists to
     #: avoid, pointed the other way.
     acted_by_email: str | None = Field(default=None, alias="actedByEmail")
-    #: The Scope this artifact was frozen at (AW-06), or `null` on a row that
-    #: predates the contract — which AW-07 deletes rather than backfills.
+    #: The Scope this artifact was frozen at (AW-06), or `null` on a row a
+    #: legacy write door opened without one — the rows that predated the
+    #: contract were deleted in AW-07 rather than backfilled.
     #:
     #: On the base, and that is the point of the ticket: History is the one
     #: screen that lists every kind, so it is the one place "Artifact kind does
     #: not change temporal meaning" is either true or visibly false. The
-    #: `channels` / `startDate` / `endDate` trio above is the per-kind subset
-    #: this supersedes, and AW-07 removes it.
+    #: `channels` / `startDate` / `endDate` trio it superseded went in AW-07,
+    #: so this is the only thing a History row says about which Posts it read.
     #:
     #: Without its Post refs — see `services/artifacts.py`, which never opens
     #: the column or table they live in. `scopedPostCount` is what says a

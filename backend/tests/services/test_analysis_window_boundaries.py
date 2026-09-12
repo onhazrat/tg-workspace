@@ -52,6 +52,7 @@ from app.services.discover import compute_discover_candidates
 from app.services.post_filters import PostFilters
 from app.services.posts import count_posts_in_scope, list_feed
 from app.services.prompt_assembly import PromptScope, assemble_posts_text
+from tests.utils.scope import stored_scope
 from tests.utils.user import create_random_user
 
 API = settings.API_V1_STR
@@ -431,11 +432,9 @@ def test_a_regenerated_summary_does_not_reclaim_its_predecessors_last_post(
             id=f"sum-{uuid.uuid4().hex[:8]}",
             user_id=regen_owner.id,
             text="the predecessor",
-            channels=[name],
             # Ends where the regenerated window starts, so the successor covers
             # exactly `[START, END)`.
-            start_date=START - duration,
-            end_date=START,
+            scope=stored_scope(channels=[name], start=START - duration, end=START),
             language="English",
             post_count=0,
             timestamp=int(time.time() * 1000),
@@ -451,7 +450,9 @@ def test_a_regenerated_summary_does_not_reclaim_its_predecessors_last_post(
         regenerated = check.exec(
             select(Summary).where(
                 col(Summary.user_id) == regen_owner.id,
-                col(Summary.start_date) == START,
+                # The frozen Scope is where the window lives since AW-07;
+                # `->>` on the JSON column is how a test reaches one key of it.
+                col(Summary.scope).op("->>")("start") == str(START),
             )
         ).one()
 
@@ -478,9 +479,7 @@ def test_the_regenerated_summary_carries_no_ignore_window_flag(
             id=f"sum-{uuid.uuid4().hex[:8]}",
             user_id=regen_owner.id,
             text="the predecessor",
-            channels=[name],
-            start_date=START - duration,
-            end_date=START,
+            scope=stored_scope(channels=[name], start=START - duration, end=START),
             language="English",
             post_count=0,
             timestamp=int(time.time() * 1000),
@@ -499,7 +498,9 @@ def test_the_regenerated_summary_carries_no_ignore_window_flag(
         regenerated = check.exec(
             select(Summary).where(
                 col(Summary.user_id) == regen_owner.id,
-                col(Summary.start_date) == START,
+                # The frozen Scope is where the window lives since AW-07;
+                # `->>` on the JSON column is how a test reaches one key of it.
+                col(Summary.scope).op("->>")("start") == str(START),
             )
         ).one()
 

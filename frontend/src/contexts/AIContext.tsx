@@ -12,6 +12,7 @@ import { selectedAiKeyId } from "@/lib/aiKeys/selection"
 import { floorToMinute, serverMinuteStart } from "@/lib/analysis-window"
 import { saveLLMLog, savePublishLog } from "@/lib/logs/write"
 import { lookupPosts } from "@/lib/posts/store"
+import { scopeChannels, scopeRange } from "@/lib/scope/artifact-scope"
 import {
   deleteSummary,
   saveSummary,
@@ -89,7 +90,15 @@ const parseCitationRefs = (
 }
 
 export const generateDefaultMetadataText = (s: Summary): string => {
-  return `📊 *Analysis Metadata*\n🕒 *Time Range:* ${new Date(s.startDate).toLocaleString()} - ${new Date(s.endDate).toLocaleString()}\n📡 *Channels Used:* ${s.channels?.length || 0}\n📋 *Channel List:* ${(s.channels || []).map((c) => `@${c}`).join(", ")}\n🤖 *AI Model:* ${formatSummaryModelLabel(s.model)}\n📝 *Posts Analyzed:* ${s.postCount || 0}`
+  // Off the frozen Scope, which since AW-07 is the only window and channel list
+  // a Summary has. A row a legacy `PUT` opened records none, and the published
+  // metadata says so rather than reporting the epoch as a time range.
+  const channels = scopeChannels(s)
+  const range = scopeRange(s)
+  const timeRange = range
+    ? `${new Date(range.start).toLocaleString()} - ${new Date(range.end).toLocaleString()}`
+    : "not recorded"
+  return `📊 *Analysis Metadata*\n🕒 *Time Range:* ${timeRange}\n📡 *Channels Used:* ${channels.length}\n📋 *Channel List:* ${channels.map((c) => `@${c}`).join(", ")}\n🤖 *AI Model:* ${formatSummaryModelLabel(s.model)}\n📝 *Posts Analyzed:* ${s.postCount || 0}`
 }
 
 interface AIContextType {
@@ -556,14 +565,23 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({
         },
       })
       openedId = newId
-      const newStartDate = opened.scope?.start ?? s.startDate
-      const newEndDate = opened.scope?.end ?? s.endDate
+      // The server's own answer. There is no local fallback any more: AW-07
+      // dropped the trio this used to fall back to, and `submitSummary` with a
+      // `derivedFrom` either returns a Scope or refuses, so a missing one here
+      // would be a bug to surface rather than a window to guess.
+      const openedScope = scopeRange(opened)
+      if (!openedScope) {
+        throw new Error("The regenerated summary came back with no scope.")
+      }
+      const newStartDate = openedScope.start
+      const newEndDate = openedScope.end
+      const summaryChannels = scopeChannels(opened)
 
       const newEndDateTimestamp = newEndDate
 
       // Sync channels first - only if they haven't been updated since the new summary's end date
       const channelsToSync = channels.filter((c) => {
-        if (!s.channels.includes(c.name)) return false
+        if (!summaryChannels.includes(c.name)) return false
         const lastUpdated = c.lastUpdated || 0
         return lastUpdated < newEndDateTimestamp
       })
@@ -597,7 +615,7 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({
       const counts = noTimeHasPassed
         ? {}
         : await api.getPostsCounts({
-            channelNames: s.channels,
+            channelNames: summaryChannels,
             ...scope,
           })
       const postCount = Object.values(counts).reduce((sum, n) => sum + n, 0)
@@ -608,8 +626,8 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({
       } else {
         const startTime = Date.now()
         const result = await generateSummary(
-          s.channels,
-          formatChannelsForPrompt(channels, s.channels, {
+          summaryChannels,
+          formatChannelsForPrompt(channels, summaryChannels, {
             includeBio: includeChannelBioInPrompt,
             includeTags: includeChannelTagsInPrompt,
           }),
@@ -649,17 +667,13 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({
         await lookupPosts(parseCitationRefs(fullSummaryText)),
       )
 
-      // What the run produced, and nothing the submission already settled:
-      // `channels`, `startDate` and `endDate` are the frozen Scope and the
-      // server drops them here (AW-05).
+      // What the run produced, and nothing the submission already settled.
+      // The frozen Scope is not here at all now (AW-07 dropped the `channels` /
+      // `startDate` / `endDate` trio that used to be sent back for `PUT` to
+      // discard): the submission wrote it and this write cannot touch it.
       const newSummary: Summary = {
         id: newId,
         text: fullSummaryText,
-        // The server's answer, not this browser's arithmetic. Sent back only
-        // because `Summary` declares them; `upsert_summary` drops all three.
-        channels: opened.channels,
-        startDate: newStartDate,
-        endDate: newEndDate,
         language: s.language,
         model: s.model,
         postCount,
