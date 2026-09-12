@@ -138,6 +138,13 @@ INVENTORY: dict[str, str] = {
     "publish.py": INTEGRATION,
     "scraper.py": INTEGRATION,
     # 4. Pure transform — no Session, no network, trivially testable.
+    # The one place a stated Analysis window becomes two exact instants
+    # (AW-02). A transform rather than a read model: no Session, no network,
+    # and every rule in it is arithmetic. `server_now_ms()` is the exception
+    # that proves it — the resolver takes `now_ms` and only falls back to the
+    # clock when a caller omits it, which is what lets the boundary cases be
+    # asserted at an exact instant instead of near one.
+    "analysis_window.py": PURE_TRANSFORM,
     "channel_tags.py": PURE_TRANSFORM,
     # The arithmetic behind a Candidate row (ticket 02, ADR-015). A transform
     # rather than more of `channel_directory.py`, and it takes a list of Posts

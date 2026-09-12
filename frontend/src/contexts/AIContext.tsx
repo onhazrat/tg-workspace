@@ -9,6 +9,7 @@ import {
   useSummariesHistory,
 } from "@/hooks/useSummaries"
 import { selectedAiKeyId } from "@/lib/aiKeys/selection"
+import { floorToMinute, serverMinuteStart } from "@/lib/analysis-window"
 import { saveLLMLog, savePublishLog } from "@/lib/logs/write"
 import { lookupPosts } from "@/lib/posts/store"
 import { saveSummary } from "@/lib/summaries/store"
@@ -504,10 +505,19 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({
         startDate: newStartDate,
         endDate: newEndDate,
       }
-      const counts = await api.getPostsCounts({
-        channelNames: s.channels,
-        ...scope,
-      })
+      // AW-02: the shifted window starts where the last Summary ended and runs
+      // into the future, and `fixedWindow` holds its end to the server's
+      // current minute. Inside the same minute that leaves start === end, which
+      // the server refuses — so a regeneration that simply came round too soon
+      // would fail instead of writing the "no new posts" note it always has.
+      // Asking is what is skipped here, not the answer: the answer is zero.
+      const noTimeHasPassed = floorToMinute(newStartDate) >= serverMinuteStart()
+      const counts = noTimeHasPassed
+        ? {}
+        : await api.getPostsCounts({
+            channelNames: s.channels,
+            ...scope,
+          })
       const postCount = Object.values(counts).reduce((sum, n) => sum + n, 0)
 
       let fullSummaryText = ""

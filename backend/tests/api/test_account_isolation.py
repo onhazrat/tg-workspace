@@ -185,6 +185,10 @@ EXCUSED: dict[tuple[str, str], tuple[Reason, str]] = {
         "mounted only when ENVIRONMENT == local",
     ),
     ("GET", f"{V1}/utils/health-check/"): (Reason.NOT_ROW_ADDRESSED, "liveness"),
+    ("GET", f"{V1}/utils/server-time"): (
+        Reason.NOT_ROW_ADDRESSED,
+        "the server's wall clock (AW-02); the same two integers for everybody",
+    ),
     ("POST", f"{V1}/utils/test-email/"): (Reason.DEPLOYMENT_WIDE, "superuser probe"),
     ("GET", f"{DATA}/configuration"): (
         Reason.DEPLOYMENT_WIDE,

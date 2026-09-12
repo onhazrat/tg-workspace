@@ -78,3 +78,23 @@ describe("restoredScopeNotice", () => {
     )
   })
 })
+
+describe("restoredScopeNotice with no window", () => {
+  /**
+   * An Artifact predating the frozen-Scope contract carries no window, and
+   * `(0, 0)` is not one — AW-02 refuses it, so `App.tsx` leaves the
+   * workspace's range alone. The banner has to say that rather than print
+   * "Jan 1, 1970 – Jan 1, 1970" beside a range nothing is querying.
+   */
+  it("says the range was left alone rather than naming the epoch", () => {
+    const notice = restoredScopeNotice({
+      channelCount: 3,
+      startDate: null,
+      endDate: null,
+    })
+
+    expect(notice).toContain("3 channels")
+    expect(notice).toContain("unchanged")
+    expect(notice).not.toContain("1970")
+  })
+})

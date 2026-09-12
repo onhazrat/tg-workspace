@@ -4,6 +4,7 @@ import { StrictMode } from "react"
 import { createRoot } from "react-dom/client"
 import { configureGeneratedClient } from "@/api/generated-client"
 import { ThemeProvider } from "@/components/theme-provider"
+import { syncServerClock } from "@/lib/analysis-window"
 import { queryClient } from "@/lib/queryClient"
 import { THEME_STORAGE_KEY } from "@/lib/storage/scoped"
 import { routeTree } from "@/routeTree.gen"
@@ -47,6 +48,16 @@ if (
 }
 
 configureGeneratedClient()
+
+// AW-02. The offset between two machines' clocks drifts by seconds a day, so
+// one read per session would nearly do — except that a tab suspended for hours
+// is the one case where the browser's own clock can move without ticking. This
+// catches that; the read that matters is awaited in `routes/_layout.tsx`
+// before the first scoped query, because `/utils/server-time` needs a token
+// and nothing here has one yet.
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible") void syncServerClock(true)
+})
 
 // The `QueryClient` lives in `lib/queryClient.ts` so non-React writers can
 // invalidate; see that file for why. It deliberately has no

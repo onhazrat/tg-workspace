@@ -19,6 +19,7 @@ from app.schemas.rag import (
     RagStatusResponse,
 )
 from app.services.ai_keys import Purpose, resolve_ai_key
+from app.services.analysis_window import resolve_analysis_window
 from app.services.channels import channel_names_for_user
 from app.services.embeddings import backfill_embeddings, get_embedding_status
 from app.services.post_filters import analysis_window_clauses
@@ -83,6 +84,11 @@ async def rag_search(
     session: SessionDep,
     current_user: CurrentUser,
 ) -> RagSearchResponse:
+    # Before the embedding call, not beside the query that uses it: resolving
+    # is also the validation, and an impossible window should answer 422 rather
+    # than first spending an outbound embedding request on the Operator's Key.
+    window = resolve_analysis_window(body.window)
+
     # `RAG_QUERY`, never the caller's Key: the question has to land in the same
     # vector space the corpus was built in, so it is forced onto whichever Key
     # built it. A Semantic chat therefore spends both keys, which is correct —
@@ -128,7 +134,7 @@ async def rag_search(
     # schema is the change that would walk into it.
     date_ok: list[Any] = [
         col(Post.post_id).is_(None),
-        and_(true(), *analysis_window_clauses(body.start_date, body.end_date)),
+        and_(true(), *analysis_window_clauses(window.start, window.end)),
     ]
 
     stmt = (

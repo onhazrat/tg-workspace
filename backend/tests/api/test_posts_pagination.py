@@ -36,6 +36,20 @@ def _auth(client: TestClient) -> dict[str, str]:
     return {"Authorization": f"Bearer {login.json()['access_token']}"}
 
 
+MINUTE_MS = 60_000
+
+
+def _base(count: int = 24) -> int:
+    """A minute-aligned instant far enough back that `count` posts fit before now.
+
+    In the past on purpose: AW-02 refuses a Fixed window that ends after the
+    server's current minute, and seeding from `time.time()` put both the posts
+    and the window inside the minute still in progress.
+    """
+    now = int(time.time() * 1000)
+    return now - now % MINUTE_MS - (count + 1) * MINUTE_MS
+
+
 def _feed(
     client: TestClient, headers: dict[str, str], **scope: object
 ) -> list[dict[str, object]]:
@@ -58,8 +72,11 @@ def _seed(
                 "id": i,
                 "channelName": channel,
                 "text": f"post {i}",
-                # ascending timestamps so the newest is the highest index
-                "timestamp": base_ts + i,
+                # Ascending timestamps so the newest is the highest index,
+                # a minute apart since AW-02: a Fixed window floors both bounds
+                # to the minute, so posts a millisecond apart leave no window
+                # that can separate them.
+                "timestamp": base_ts + i * MINUTE_MS,
             }
             for i in range(count)
         ],
@@ -74,7 +91,7 @@ def _seed(
 
 def test_returns_newest_first(client: TestClient) -> None:
     headers = _auth(client)
-    base = int(time.time() * 1000)
+    base = _base()
     _seed(client, headers, 5, base)
 
     body = _feed(client, headers, channelName=CHANNEL)
@@ -85,7 +102,7 @@ def test_returns_newest_first(client: TestClient) -> None:
 
 def test_limit_caps_returned_rows(client: TestClient) -> None:
     headers = _auth(client)
-    _seed(client, headers, 12, int(time.time() * 1000))
+    _seed(client, headers, 12, _base())
 
     body = _feed(client, headers, channelName=CHANNEL, limit=3)
     assert len(body) == 3
@@ -94,7 +111,7 @@ def test_limit_caps_returned_rows(client: TestClient) -> None:
 def test_offset_pages_through_without_repeats(client: TestClient) -> None:
     """Deterministic ordering is what makes offset paging safe."""
     headers = _auth(client)
-    _seed(client, headers, 6, int(time.time() * 1000))
+    _seed(client, headers, 6, _base())
 
     first = _feed(client, headers, channelName=CHANNEL, limit=2, offset=0)
     second = _feed(client, headers, channelName=CHANNEL, limit=2, offset=2)
@@ -106,7 +123,7 @@ def test_offset_pages_through_without_repeats(client: TestClient) -> None:
 
 def test_paging_covers_every_row_exactly_once(client: TestClient) -> None:
     headers = _auth(client)
-    _seed(client, headers, 7, int(time.time() * 1000))
+    _seed(client, headers, 7, _base())
 
     seen: list[int] = []
     for offset in range(0, 8, 2):
@@ -126,11 +143,18 @@ def test_date_bounds_still_apply(client: TestClient) -> None:
     own check that it did not keep a copy of the old one.
     """
     headers = _auth(client)
-    base = int(time.time() * 1000)
+    base = _base()
     _seed(client, headers, 10, base)
 
     body = _feed(
-        client, headers, channelName=CHANNEL, startDate=base + 3, endDate=base + 5
+        client,
+        headers,
+        channelName=CHANNEL,
+        window={
+            "mode": "fixed",
+            "start": base + 3 * MINUTE_MS,
+            "end": base + 5 * MINUTE_MS,
+        },
     )
 
     assert sorted(row["id"] for row in body) == [3, 4]

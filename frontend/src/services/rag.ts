@@ -1,4 +1,5 @@
 import { api } from "@/api"
+import { fixedWindow } from "@/lib/analysis-window"
 import { lookupPosts } from "@/lib/posts/store"
 import type { Post } from "../types"
 
@@ -24,11 +25,14 @@ export async function searchSimilarPostsFromQuery(
   startDate: number,
   endDate: number,
 ): Promise<Post[]> {
+  // AW-02: the window is stated, not computed here. `fixedWindow` also holds
+  // the end to the server's current minute, which matters most on this route —
+  // it is the one that refuses an absent window outright, so a browser running
+  // ahead would turn every semantic search into a 422.
   const result = (await api.ragSearch({
     query,
     channels,
-    startDate,
-    endDate,
+    window: fixedWindow(startDate, endDate),
     limit,
   })) as { results: RagSearchResult[] }
 

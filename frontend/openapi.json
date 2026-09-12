@@ -536,6 +536,25 @@
         }
       }
     },
+    "/api/v1/utils/server-time": {
+      "get": {
+        "tags": ["utils"],
+        "summary": "Server Time",
+        "description": "The server's current time, for a client estimating its clock offset.",
+        "operationId": "utils-server_time",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ServerTimeResponse" }
+              }
+            }
+          }
+        },
+        "security": [{ "OAuth2PasswordBearer": [] }]
+      }
+    },
     "/api/v1/network/test-proxy": {
       "post": {
         "tags": ["network"],
@@ -6534,13 +6553,24 @@
             "type": "array",
             "title": "Channelnames"
           },
-          "startDate": {
-            "anyOf": [{ "type": "integer" }, { "type": "null" }],
-            "title": "Startdate"
-          },
-          "endDate": {
-            "anyOf": [{ "type": "integer" }, { "type": "null" }],
-            "title": "Enddate"
+          "window": {
+            "anyOf": [
+              {
+                "oneOf": [
+                  { "$ref": "#/components/schemas/LiveAnalysisWindow" },
+                  { "$ref": "#/components/schemas/FixedAnalysisWindow" }
+                ],
+                "discriminator": {
+                  "propertyName": "mode",
+                  "mapping": {
+                    "fixed": "#/components/schemas/FixedAnalysisWindow",
+                    "live": "#/components/schemas/LiveAnalysisWindow"
+                  }
+                }
+              },
+              { "type": "null" }
+            ],
+            "title": "Window"
           },
           "keyword": {
             "anyOf": [{ "type": "string" }, { "type": "null" }],
@@ -6582,6 +6612,7 @@
             "title": "Postids"
           }
         },
+        "additionalProperties": false,
         "type": "object",
         "required": ["channelNames"],
         "title": "DiscoverCandidatesRequest",
@@ -7011,6 +7042,27 @@
         "required": ["vectors", "model", "provider", "dimensions"],
         "title": "EmbeddingResult"
       },
+      "FixedAnalysisWindow": {
+        "properties": {
+          "mode": { "type": "string", "const": "fixed", "title": "Mode" },
+          "start": {
+            "type": "integer",
+            "maximum": 253402300799999.0,
+            "minimum": 0.0,
+            "title": "Start"
+          },
+          "end": {
+            "type": "integer",
+            "maximum": 253402300799999.0,
+            "minimum": 0.0,
+            "title": "End"
+          }
+        },
+        "type": "object",
+        "required": ["mode", "start", "end"],
+        "title": "FixedAnalysisWindow",
+        "description": "Two exact UTC instants, in epoch milliseconds, that do not move."
+      },
       "FollowChannelResultResponse": {
         "properties": {
           "name": { "type": "string", "title": "Name" },
@@ -7375,6 +7427,27 @@
         "title": "LiftCeilingRequest",
         "description": "Lift (or restore) this account's ceilings for the current UTC day.\n\n`budgets` empty means all three, which is what an Admin unblocking somebody\nin a hurry means. The day is not a parameter: a lift is for today, because\nlifting a ceiling on a day that is already over changes nothing and lifting\none in advance is a limit change rather than a lift."
       },
+      "LiveAnalysisWindow": {
+        "properties": {
+          "mode": { "type": "string", "const": "live", "title": "Mode" },
+          "durationMinutes": {
+            "type": "integer",
+            "maximum": 52560000.0,
+            "minimum": 1.0,
+            "title": "Durationminutes"
+          },
+          "endGapMinutes": {
+            "type": "integer",
+            "maximum": 52560000.0,
+            "minimum": 0.0,
+            "title": "Endgapminutes"
+          }
+        },
+        "type": "object",
+        "required": ["mode", "durationMinutes", "endGapMinutes"],
+        "title": "LiveAnalysisWindow",
+        "description": "A window that advances with the server's clock."
+      },
       "LogDetailResponse": {
         "anyOf": [
           { "$ref": "#/components/schemas/PublishLogResponse" },
@@ -7710,13 +7783,24 @@
             ],
             "title": "Channelnames"
           },
-          "startDate": {
-            "anyOf": [{ "type": "integer" }, { "type": "null" }],
-            "title": "Startdate"
-          },
-          "endDate": {
-            "anyOf": [{ "type": "integer" }, { "type": "null" }],
-            "title": "Enddate"
+          "window": {
+            "anyOf": [
+              {
+                "oneOf": [
+                  { "$ref": "#/components/schemas/LiveAnalysisWindow" },
+                  { "$ref": "#/components/schemas/FixedAnalysisWindow" }
+                ],
+                "discriminator": {
+                  "propertyName": "mode",
+                  "mapping": {
+                    "fixed": "#/components/schemas/FixedAnalysisWindow",
+                    "live": "#/components/schemas/LiveAnalysisWindow"
+                  }
+                }
+              },
+              { "type": "null" }
+            ],
+            "title": "Window"
           },
           "keyword": {
             "anyOf": [{ "type": "string" }, { "type": "null" }],
@@ -7759,6 +7843,7 @@
           "sort": { "type": "string", "title": "Sort", "default": "time" },
           "seed": { "type": "integer", "title": "Seed", "default": 0 }
         },
+        "additionalProperties": false,
         "type": "object",
         "title": "PostFeedRequest",
         "description": "`PostScopeRequest` plus the feed's paging, cap mode and sort.\n\n`limit`/`offset` keep the same bounds the query params enforced, so an\nout-of-range page is still a 422 rather than an unbounded read."
@@ -7863,13 +7948,24 @@
             ],
             "title": "Channelnames"
           },
-          "startDate": {
-            "anyOf": [{ "type": "integer" }, { "type": "null" }],
-            "title": "Startdate"
-          },
-          "endDate": {
-            "anyOf": [{ "type": "integer" }, { "type": "null" }],
-            "title": "Enddate"
+          "window": {
+            "anyOf": [
+              {
+                "oneOf": [
+                  { "$ref": "#/components/schemas/LiveAnalysisWindow" },
+                  { "$ref": "#/components/schemas/FixedAnalysisWindow" }
+                ],
+                "discriminator": {
+                  "propertyName": "mode",
+                  "mapping": {
+                    "fixed": "#/components/schemas/FixedAnalysisWindow",
+                    "live": "#/components/schemas/LiveAnalysisWindow"
+                  }
+                }
+              },
+              { "type": "null" }
+            ],
+            "title": "Window"
           },
           "keyword": {
             "anyOf": [{ "type": "string" }, { "type": "null" }],
@@ -7888,6 +7984,7 @@
             "default": 0
           }
         },
+        "additionalProperties": false,
         "type": "object",
         "title": "PostScopeRequest",
         "description": "A post scope carried in a request body rather than a query string.\n\nThe channel selection can run to the full account \u2014 over a thousand handles \u2014\nwhich as `?channelNames=a,b,c,...` produced URLs long enough to hit proxy and\nserver header limits. A body has no such ceiling."
@@ -7920,13 +8017,24 @@
       },
       "PromptScopeInput": {
         "properties": {
-          "startDate": {
-            "anyOf": [{ "type": "integer" }, { "type": "null" }],
-            "title": "Startdate"
-          },
-          "endDate": {
-            "anyOf": [{ "type": "integer" }, { "type": "null" }],
-            "title": "Enddate"
+          "window": {
+            "anyOf": [
+              {
+                "oneOf": [
+                  { "$ref": "#/components/schemas/LiveAnalysisWindow" },
+                  { "$ref": "#/components/schemas/FixedAnalysisWindow" }
+                ],
+                "discriminator": {
+                  "propertyName": "mode",
+                  "mapping": {
+                    "fixed": "#/components/schemas/FixedAnalysisWindow",
+                    "live": "#/components/schemas/LiveAnalysisWindow"
+                  }
+                }
+              },
+              { "type": "null" }
+            ],
+            "title": "Window"
           },
           "keyword": {
             "anyOf": [{ "type": "string" }, { "type": "null" }],
@@ -7951,6 +8059,7 @@
           "sort": { "type": "string", "title": "Sort", "default": "time" },
           "seed": { "type": "integer", "title": "Seed", "default": 0 }
         },
+        "additionalProperties": false,
         "type": "object",
         "title": "PromptScopeInput",
         "description": "A Posts-feed scope the backend resolves into the prompt's posts block,\ninstead of the client shipping a pre-built ``postsText``. Mirrors the\nfrontend feed query params."
@@ -8255,8 +8364,20 @@
             ],
             "title": "Channels"
           },
-          "startDate": { "type": "integer", "title": "Startdate" },
-          "endDate": { "type": "integer", "title": "Enddate" },
+          "window": {
+            "oneOf": [
+              { "$ref": "#/components/schemas/LiveAnalysisWindow" },
+              { "$ref": "#/components/schemas/FixedAnalysisWindow" }
+            ],
+            "title": "Window",
+            "discriminator": {
+              "propertyName": "mode",
+              "mapping": {
+                "fixed": "#/components/schemas/FixedAnalysisWindow",
+                "live": "#/components/schemas/LiveAnalysisWindow"
+              }
+            }
+          },
           "limit": { "type": "integer", "title": "Limit", "default": 20 },
           "scanLimit": {
             "type": "integer",
@@ -8264,8 +8385,9 @@
             "default": 5000
           }
         },
+        "additionalProperties": false,
         "type": "object",
-        "required": ["query", "startDate", "endDate"],
+        "required": ["query", "window"],
         "title": "RagSearchRequest",
         "description": "A semantic search over the embedded corpus.\n\n`limit` caps the *results*; `scan_limit` caps how many embeddings are\ncompared before ranking. They are separate because a thin result set and a\ncapped scan are different failures \u2014 see `RagSearchResponse`.\n\nThe Analysis window is required; a search is always over a window."
       },
@@ -8601,6 +8723,16 @@
         "type": "object",
         "required": ["maxPostsPerChannel", "iterationLimit"],
         "title": "ScraperRuntimeSettings"
+      },
+      "ServerTimeResponse": {
+        "properties": {
+          "now": { "type": "integer", "title": "Now" },
+          "minuteStart": { "type": "integer", "title": "Minutestart" }
+        },
+        "type": "object",
+        "required": ["now", "minuteStart"],
+        "title": "ServerTimeResponse",
+        "description": "The server's clock: the current instant, and when its minute began."
       },
       "SetQuotaLimitsRequest": {
         "properties": {

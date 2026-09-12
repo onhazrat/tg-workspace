@@ -24,6 +24,7 @@ from __future__ import annotations
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.core.config import settings
+from app.schemas.analysis_window import AnalysisWindowInput
 from app.schemas.posts import PostResponse
 
 
@@ -37,7 +38,11 @@ class RagSearchRequest(BaseModel):
     The Analysis window is required; a search is always over a window.
     """
 
-    model_config = ConfigDict(populate_by_name=True)
+    # `extra="forbid"`: see `PostScopeRequest`. A stale client sending the
+    # pre-AW-02 pair must be refused, not quietly widened to the whole corpus —
+    # and on this route a silent widening also spends the Operator's Key
+    # embedding a query it then scans everything with.
+    model_config = ConfigDict(populate_by_name=True, extra="forbid")
 
     query: str
     channels: list[str] | None = None
@@ -46,9 +51,13 @@ class RagSearchRequest(BaseModel):
     # search" control asked for. A window the caller can decline is not a
     # window, so declining it is a 422 rather than a second meaning for the
     # same Scope. Channels stay optional; that scoping is a separate choice.
+    # AW-02 kept the requirement and changed what satisfies it: the window is
+    # stated, not computed by the browser, and `services/analysis_window.py`
+    # resolves it. Required here and optional on `PostScopeRequest` is not an
+    # inconsistency — the feed has reads that legitimately span the corpus and
+    # a semantic search has none.
     # Enforced: `tests/services/test_analysis_window_boundaries.py`.
-    start_date: int = Field(alias="startDate")
-    end_date: int = Field(alias="endDate")
+    window: AnalysisWindowInput
     limit: int = settings.RAG_SEARCH_LIMIT_DEFAULT
     scan_limit: int = Field(default=settings.RAG_SCAN_LIMIT_MAX, alias="scanLimit")
 

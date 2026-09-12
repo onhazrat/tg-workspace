@@ -118,8 +118,9 @@ def test_rag_search_empty_scope_matches_the_populated_shape(
         json={
             "query": "anything",
             "channels": ["no-such-channel"],
-            "startDate": 0,
-            "endDate": 1,
+            # A whole minute, not a millisecond: AW-02 floors both bounds to
+            # the minute and refuses what is left if they land on the same one.
+            "window": {"mode": "fixed", "start": 0, "end": 60_000},
         },
         headers=_auth(client),
     )

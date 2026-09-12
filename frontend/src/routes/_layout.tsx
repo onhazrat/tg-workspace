@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/sidebar"
 import { isLoggedIn } from "@/hooks/useAuth"
 import useViewAs from "@/hooks/useViewAs"
+import { syncServerClock } from "@/lib/analysis-window"
 import { queryClient } from "@/lib/queryClient"
 import { cn } from "@/lib/utils"
 
@@ -22,6 +23,19 @@ export const Route = createFileRoute("/_layout")({
         to: "/login",
       })
     }
+
+    // AW-02, and awaited on purpose. `fixedWindow` holds a window's end to the
+    // server's current minute, and until this resolves the offset is zero, so
+    // "the server's minute" is the browser's. On a clock running fast that
+    // sends an end the server has not reached and every scoped request 422s —
+    // a worse failure than the skew the ticket set out to remove.
+    //
+    // Here rather than at module load because `/utils/server-time` is
+    // authenticated: at boot there may be no token yet, and login is a
+    // client-side navigate with no reload, so a boot-only sync would 401 once
+    // and never be retried. This runs after the token exists and before the
+    // workspace's first feed or counts call.
+    await syncServerClock()
 
     // Someone waiting for approval holds a valid token, so the check above lets
     // them through — and then every query underneath 403s and they get a wall

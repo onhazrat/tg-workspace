@@ -786,7 +786,10 @@ def test_a_report_created_during_an_elevation_is_attributed(
     response = client.post(
         f"{V1}/data/discover/reports",
         headers=elevated,
-        json={"channelNames": [], "startDate": 0, "endDate": 0},
+        json={
+            "channelNames": [],
+            "window": {"mode": "fixed", "start": 0, "end": 60_000},
+        },
     )
     assert response.status_code == 200, response.text
 

@@ -250,29 +250,34 @@ def test_posts_date_range_query(client: TestClient) -> None:
             "channelName": "range-ch",
             "text": "old",
             "date": "2024-01-01",
-            "timestamp": 1000,
+            "timestamp": 60_000,
         },
         {
             "id": 2,
             "channelName": "range-ch",
             "text": "mid",
             "date": "2024-01-02",
-            "timestamp": 2000,
+            "timestamp": 120_000,
         },
         {
             "id": 3,
             "channelName": "range-ch",
             "text": "new",
             "date": "2024-01-03",
-            "timestamp": 3000,
+            "timestamp": 180_000,
         },
     ]
     r = client.post(f"{PREFIX}/posts/bulk", json=posts, headers=headers)
     assert r.status_code == 200
 
+    # One minute apart rather than one second: AW-02 floors a Fixed boundary to
+    # the minute, so a window narrower than one is refused rather than read.
     r2 = client.post(
         f"{PREFIX}/posts",
-        json={"channelNames": ["range-ch"], "startDate": 1500, "endDate": 2500},
+        json={
+            "channelNames": ["range-ch"],
+            "window": {"mode": "fixed", "start": 120_000, "end": 180_000},
+        },
         headers=headers,
     )
     assert r2.status_code == 200
