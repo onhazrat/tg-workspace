@@ -23,21 +23,39 @@ the three write-path rewrites in AW-06 so it gets reviewed on its own terms.
 
 - [ ] The migration deletes Artifact rows of every kind that cannot provide the complete frozen Scope.
 - [ ] No deleted row is backfilled with a default, and no missing filter is inferred.
-- [ ] Any superseded per-kind scope representation is removed, so two stored Scope values can never diverge.
+- [ ] Any superseded per-kind scope representation is removed, so two stored Scope values can never diverge — the inventory is AW-06's table.
+- [ ] `DiscoverReport._scope`'s legacy reconstruction branch goes with the columns it reads, so nothing is left able to invent a Scope for a row that has none.
 - [ ] The upgrade is tested from the previous schema and from an empty database.
 - [ ] Downgrade behaviour is explicit and does not claim to restore deleted user data.
 - [ ] The deployment's existing test-cleanup and table inventories still pass after the schema change.
 
-## Decide this before running the migration
+## The decision this was waiting on, and its answer
 
 AW-05 left one Summary creation path off the frozen-Scope contract:
-`AIContext.generateBackgroundSummary`, the browser-side twin of
-`auto_summary._regenerate_one`, still creates its successor through `PUT` and so
-writes `scope = NULL`. As it stands this migration would therefore delete the
-regenerations that happened to run with a tab open and keep the ones that ran in
-the worker — the same chain, pruned by which process was awake. That is not a
-legacy-data question and it is not what this ticket is for. AW-05'''s notes hold
-the three options and why none of them belonged in that ticket.
+`AIContext.generateBackgroundSummary` created its successor through `PUT` and so
+wrote `scope = NULL`. As it stood this migration would have deleted the
+regenerations that happened to run with a tab open and kept the ones that ran in
+the worker — the same chain, pruned by which process was awake.
+
+**AW-06 closed it.** A submission may now name the Artifact its Scope is derived
+from (`successorOf` on `SummarySubmitRequest`) instead of describing one, which
+is what let the browser join the contract: a successor's end is in the future and
+no caller is allowed to *state* such a window, so the server derives it through
+the one `services/summaries.py::successor_scope` that `jobs/auto_summary.py` also
+calls. The re-run path (`shiftTime: false`) states the predecessor's own window
+and goes through ordinary validation.
+
+So every Summary creation path now writes a complete Scope, and this migration's
+deletions are about age rather than about which process was awake. What it
+deletes is what genuinely predates the contract.
+
+## What to remove
+
+AW-06's "Identified for removal in AW-07" table is the inventory. It covers the
+`channels` / `start_date` / `end_date` trio on all four tables, the seven
+duplicated filter columns on `tg_discover_reports`, and the superseded
+`startDate` / `endDate` fields on the response models. `signals` is explicitly
+**not** on it.
 
 ## Notes
 

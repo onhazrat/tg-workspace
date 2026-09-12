@@ -73,6 +73,11 @@ ARTIFACT_FORBIDDEN_COLUMNS = frozenset(
         "cited_posts",
         "chat_messages",
         "messages",
+        # AW-06. The frozen Scope's explicit Post selection, which runs to
+        # thousands of refs. `scope` itself is read here and is not heavy — it
+        # is the filters and two integers — which is exactly why the frozen
+        # value was split across two columns in the first place.
+        "scope_posts",
     }
 )
 
@@ -153,6 +158,7 @@ def _summary_leg(user_id: uuid.UUID) -> Any:
             _starred(Summary).label("is_starred"),
             _text_flag(Summary, "note").label("note"),
             col(Summary.acted_by_email).label("acted_by_email"),
+            col(Summary.scope).label("scope"),
             _flag(Summary, "autoRegenerate").label("auto_regenerate"),
             _flag(Summary, "autoPublish").label("auto_publish"),
         ),
@@ -181,6 +187,7 @@ def _chat_leg(user_id: uuid.UUID) -> Any:
             _starred(ChatSession).label("is_starred"),
             _text_flag(ChatSession, "note").label("note"),
             col(ChatSession.acted_by_email).label("acted_by_email"),
+            col(ChatSession.scope).label("scope"),
             literal(False).label("auto_regenerate"),
             literal(False).label("auto_publish"),
         ),
@@ -213,6 +220,7 @@ def _tag_leg(user_id: uuid.UUID) -> Any:
             _starred(TagRun).label("is_starred"),
             _text_flag(TagRun, "note").label("note"),
             col(TagRun.acted_by_email).label("acted_by_email"),
+            col(TagRun.scope).label("scope"),
             literal(False).label("auto_regenerate"),
             literal(False).label("auto_publish"),
         ),
@@ -244,6 +252,7 @@ def _discovery_leg(user_id: uuid.UUID) -> Any:
             _starred(DiscoverReport).label("is_starred"),
             _text_flag(DiscoverReport, "note").label("note"),
             col(DiscoverReport.acted_by_email).label("acted_by_email"),
+            col(DiscoverReport.scope).label("scope"),
             literal(False).label("auto_regenerate"),
             literal(False).label("auto_publish"),
         ),
@@ -336,6 +345,18 @@ def _row_to_camel(row: Any) -> dict[str, Any]:
         # about a summary, and a field only some kinds carried would be one
         # narrowing by `kind` could not tell you about.
         "actedByEmail": row["acted_by_email"],
+        # AW-06, and on the base for the same reason `actedByEmail` is: "which
+        # Posts produced this" is a fact about an artifact, not about a summary.
+        # It is the *whole* reason History can stop reading four per-kind
+        # subsets — the four legs now select one column holding one shape, and
+        # AW-07 drops the `channels`/`startDate`/`endDate` trio above that this
+        # supersedes.
+        #
+        # Without its Post refs. Those live in a payload table or a heavy
+        # column depending on the family, and this module's one rule is that it
+        # opens neither; `scopedPostCount` inside the value is what a list shows
+        # instead.
+        "scope": row["scope"],
     }
     if kind == "summary":
         out["status"] = row["status"]

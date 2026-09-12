@@ -66,8 +66,23 @@ REPORT_BASE_KEYS = {
     "isStarred",
     "note",
 }
+#: A saved report's `scope`, which is the shared `FrozenScope` plus this
+#: family's own keys (AW-06).
+#:
+#: `start` / `end` / `durationMinutes` / `posts` come from the base model, so
+#: this set is the place a filter added to `FrozenScope` and forgotten in a
+#: projection shows up.
+#:
+#: `signals` stays after AW-07 — it picks which kinds of signal a report
+#: describes, not which Posts it reads. `startDate` / `endDate` do not: they are
+#: the superseded spelling of `start` / `end`, kept only until AW-08 moves the
+#: scope card.
 SCOPE_KEYS = {
     "channels",
+    "start",
+    "end",
+    "durationMinutes",
+    "posts",
     "startDate",
     "endDate",
     "signals",
@@ -78,6 +93,7 @@ SCOPE_KEYS = {
     "maxPerChannelMode",
     "seed",
     "scopedPostCount",
+    "sort",
 }
 
 
@@ -123,14 +139,44 @@ def _candidates(client: TestClient, headers: dict[str, str]) -> list[dict[str, A
     return list(r.json()["candidates"])
 
 
+#: A report is an Artifact, so it must name a window (AW-06). `/candidates`
+#: above deliberately does not: it computes and forgets, and "both sides open"
+#: is a corpus pass rather than a Scope anybody chose.
+#:
+#: A century wide, because the Posts seeded above sit at epoch-relative
+#: timestamps. These tests are about response *shape*, so the window has to be
+#: the one thing that cannot be why a candidate is missing.
+ANY_WINDOW = {
+    "mode": "live",
+    "durationMinutes": 100 * 365 * 24 * 60,
+    "endGapMinutes": 0,
+}
+
+
 def _report(client: TestClient, headers: dict[str, str]) -> dict[str, Any]:
     r = client.post(
         f"{DATA}/discover/reports",
-        json={"channelNames": [CARRIER]},
+        json={"channelNames": [CARRIER], "window": ANY_WINDOW},
         headers=headers,
     )
     assert r.status_code == 200, r.text
     return dict(r.json())
+
+
+def test_a_saved_report_must_name_a_window(client: TestClient) -> None:
+    """Where the stateless twin one function up is happy without one.
+
+    The difference is that this one *records* its answer, and a stored Scope
+    reading "everything, at some unrecorded moment" is not a description of
+    which Posts produced a result.
+    """
+    r = client.post(
+        f"{DATA}/discover/reports",
+        json={"channelNames": [CARRIER]},
+        headers=_auth(client),
+    )
+
+    assert r.status_code == 422
 
 
 def test_stateless_candidates_keep_their_exact_key_set(client: TestClient) -> None:

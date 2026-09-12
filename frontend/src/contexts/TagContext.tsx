@@ -10,6 +10,7 @@ import {
 } from "react"
 import { toast } from "sonner"
 import { api } from "@/api"
+import { frozenWindow } from "@/api/data"
 import { queryKeys, SUMMARIZER_STALE_TIME } from "@/hooks/queryKeys"
 import { useTagRunParam } from "@/hooks/useArtifactParams"
 import {
@@ -29,12 +30,12 @@ import {
   deleteTagRun,
   getTagRun,
   listTagRuns,
+  submitTagRun,
   upsertTagRun,
 } from "@/lib/summaries/store"
 import { generateTagStream, getTagPrompt } from "@/services/ai"
-import type { TagRun, TagRunSummary } from "@/types"
+import type { Post, TagRun, TagRunSummary } from "@/types"
 import { useData } from "./DataContext"
-import { useScope } from "./ScopeContext"
 import { useScraper } from "./ScraperContext"
 import { useSettings } from "./SettingsContext"
 import { useUI } from "./UIContext"
@@ -70,11 +71,10 @@ export const TagProvider: React.FC<{ children: React.ReactNode }> = ({
   children,
 }) => {
   const { channels, selectedChannels, setChannels } = useData()
-  const { getPromptPostsInput } = useScraper()
+  const { getPromptPostsInput, getScopeSubmission } = useScraper()
   const { aiLanguage, selectedModel, aiTemperature } = useSettings()
   const { activeTab, includeChannelBioInPrompt, includeChannelTagsInPrompt } =
     useUI()
-  const { startDate, endDate } = useScope()
   const queryClient = useQueryClient()
 
   const [mode, setMode] = useState<TagMode>("add")
@@ -165,6 +165,9 @@ export const TagProvider: React.FC<{ children: React.ReactNode }> = ({
         allTags,
         postCount,
         scope: input.scope,
+        // The submission carries no explicit selection: the filters were the
+        // whole story on this branch.
+        rankedPosts: undefined,
       }
     }
     const postsText = formatPostsForTagPrompt(input.posts, selectedChannels)
@@ -174,16 +177,44 @@ export const TagProvider: React.FC<{ children: React.ReactNode }> = ({
       allTags,
       postCount: input.posts.length,
       scope: undefined,
+      // Semantic/related ranking, which the server cannot rebuild from the
+      // filters — so the selection itself is what makes the run reproducible.
+      rankedPosts: input.posts,
     }
   }
+
+  /**
+   * Open the run at a frozen Scope, before the prompt is assembled (AW-06).
+   *
+   * Both entry points go through here, and both needed it. A tag run is
+   * written at least twice — `copyTagPrompt` opens it pending and the pasted
+   * response completes it, `generateTags` writes it after the stream — so with
+   * a Live window the prompt was built from one window and the row recorded
+   * another.
+   */
+  const openTagRun = async (
+    postCount: number,
+    rankedPosts: Post[] | undefined,
+    source: "generated" | "pasted",
+  ) =>
+    submitTagRun({
+      id: crypto.randomUUID(),
+      scope: getScopeSubmission(selectedChannelNames, rankedPosts),
+      mode,
+      source,
+      status: "pending",
+      model: selectedModel,
+      postCount,
+    })
 
   const copyTagPrompt = async () => {
     if (selectedChannelNames.length === 0) {
       toast.error("Select at least one channel first.")
       return
     }
-    const { channelsText, postsText, allTags, postCount, scope } =
+    const { channelsText, postsText, allTags, postCount, scope, rankedPosts } =
       await buildPromptParts()
+    const opened = await openTagRun(postCount, rankedPosts, "pasted")
     const prompt = await getTagPrompt({
       channels: selectedChannelNames,
       channelsText,
@@ -193,20 +224,15 @@ export const TagProvider: React.FC<{ children: React.ReactNode }> = ({
       language: aiLanguage,
       model: selectedModel,
       temperature: aiTemperature,
-      scope,
+      // Assemble by what was frozen, not by what the clock says now — the run
+      // and the prompt have to name the same two instants.
+      scope:
+        scope && opened.scope
+          ? { ...scope, window: frozenWindow(opened.scope) }
+          : scope,
     })
     const run: TagRun = {
-      id: crypto.randomUUID(),
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
-      status: "pending",
-      source: "pasted",
-      mode,
-      channels: selectedChannelNames,
-      startDate,
-      endDate,
-      postCount,
-      model: selectedModel,
+      ...opened,
       promptText: prompt,
       allTagsSnapshot: allTags === "(none yet)" ? [] : allTags.split(", "),
       channelContextOptions: {
@@ -226,10 +252,11 @@ export const TagProvider: React.FC<{ children: React.ReactNode }> = ({
       toast.error("Select at least one channel first.")
       return
     }
-    const { channelsText, postsText, allTags, postCount, scope } =
+    const { channelsText, postsText, allTags, postCount, scope, rankedPosts } =
       await buildPromptParts()
     setIsGenerating(true)
     try {
+      const opened = await openTagRun(postCount, rankedPosts, "generated")
       let responseText = ""
       const { stream, prompt } = await generateTagStream({
         channels: selectedChannelNames,
@@ -240,7 +267,10 @@ export const TagProvider: React.FC<{ children: React.ReactNode }> = ({
         language: aiLanguage,
         model: selectedModel,
         temperature: aiTemperature,
-        scope,
+        scope:
+          scope && opened.scope
+            ? { ...scope, window: frozenWindow(opened.scope) }
+            : scope,
       })
 
       for await (const chunk of stream) {
@@ -253,17 +283,8 @@ export const TagProvider: React.FC<{ children: React.ReactNode }> = ({
       setSuggestions(parsed)
 
       const run: TagRun = {
-        id: crypto.randomUUID(),
-        createdAt: Date.now(),
-        updatedAt: Date.now(),
+        ...opened,
         status: "completed",
-        source: "generated",
-        mode,
-        channels: selectedChannelNames,
-        startDate,
-        endDate,
-        postCount,
-        model: selectedModel,
         promptText: prompt,
         responseText,
         suggestions: parsed,

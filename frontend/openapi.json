@@ -2420,7 +2420,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/DiscoverCandidatesRequest"
+                "$ref": "#/components/schemas/DiscoverReportCreateRequest"
               }
             }
           }
@@ -2932,6 +2932,39 @@
             }
           }
         }
+      },
+      "post": {
+        "tags": ["data"],
+        "summary": "Submit Tag Run",
+        "description": "Open a tag run at a frozen Scope, before the prompt is assembled.",
+        "operationId": "data-submit_tag_run",
+        "security": [{ "OAuth2PasswordBearer": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/TagRunSubmitRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/TagRunResponse" }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
       }
     },
     "/api/v1/data/tag-runs/{tag_run_id}": {
@@ -3098,6 +3131,41 @@
                   },
                   "title": "Response Data-List Chat Sessions"
                 }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": ["data"],
+        "summary": "Submit Chat Session",
+        "description": "Open a chat at a frozen Scope, before any AI work begins.",
+        "operationId": "data-submit_chat_session",
+        "security": [{ "OAuth2PasswordBearer": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChatSessionSubmitRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ChatSessionResponse" }
               }
             }
           },
@@ -6154,6 +6222,12 @@
             "anyOf": [{ "type": "string" }, { "type": "null" }],
             "title": "Actedbyemail"
           },
+          "scope": {
+            "anyOf": [
+              { "$ref": "#/components/schemas/FrozenScope" },
+              { "type": "null" }
+            ]
+          },
           "kind": { "type": "string", "const": "chat", "title": "Kind" },
           "messageCount": {
             "type": "integer",
@@ -6298,6 +6372,12 @@
             "type": "integer",
             "title": "Messagecount",
             "default": 0
+          },
+          "scope": {
+            "anyOf": [
+              { "$ref": "#/components/schemas/FrozenScope" },
+              { "type": "null" }
+            ]
           }
         },
         "additionalProperties": true,
@@ -6350,6 +6430,12 @@
             "title": "Messagecount",
             "default": 0
           },
+          "scope": {
+            "anyOf": [
+              { "$ref": "#/components/schemas/FrozenScope" },
+              { "type": "null" }
+            ]
+          },
           "messages": { "items": {}, "type": "array", "title": "Messages" }
         },
         "additionalProperties": true,
@@ -6358,12 +6444,47 @@
         "title": "ChatSessionResponse",
         "description": "A chat session with the transcript the list omits.\n\n`messages` is always present \u2014 `[]` rather than absent when there is no\npayload row. See `chat_session_to_camel` for why this format differs from\nthe summary one on that point.\n\nThe turns stay loosely typed: `sources` carries whole posts whose shape is\nthe scraper's, and pinning it here would make a scraper change a schema\nmigration."
       },
+      "ChatSessionSubmitRequest": {
+        "properties": {
+          "id": { "type": "string", "title": "Id" },
+          "scope": { "$ref": "#/components/schemas/ScopeSubmission" },
+          "language": {
+            "type": "string",
+            "title": "Language",
+            "default": "English"
+          },
+          "model": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Model"
+          },
+          "mode": {
+            "type": "string",
+            "enum": ["full_scope", "semantic"],
+            "title": "Mode",
+            "default": "full_scope"
+          },
+          "postCount": {
+            "anyOf": [{ "type": "integer" }, { "type": "null" }],
+            "title": "Postcount"
+          },
+          "extra": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Extra"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["id", "scope"],
+        "title": "ChatSessionSubmitRequest",
+        "description": "Body for `POST /data/chat-sessions` \u2014 opens a chat at a frozen Scope."
+      },
       "ChatSessionUpsertRequest": {
         "properties": {},
         "additionalProperties": true,
         "type": "object",
         "title": "ChatSessionUpsertRequest",
-        "description": "Body for `PUT /data/chat-sessions/{id}`.\n\nPermissive like the summary one: unrecognised keys go to `extra`, an\nexplicit null removes an `extra` key, and `messages` routes to the payload\ntable. `title` and `messageCount` are derived on write and stripped, so a\nclient round-tripping a list item cannot shadow them."
+        "description": "Body for `PUT /data/chat-sessions/{id}`.\n\nPermissive like the summary one: unrecognised keys go to `extra`, an\nexplicit null removes an `extra` key, and `messages` routes to the payload\ntable. `title` and `messageCount` are derived on write and stripped, so a\nclient round-tripping a list item cannot shadow them.\n\nIt cannot move the Scope (AW-06). `channels`, `startDate`, `endDate` and\n`scope` are dropped by `upsert_chat_session`, which matters more here than\nit does for a Summary: a chat PUTs its whole session back on every turn, so\na settable window meant a conversation held across a Live boundary recorded\nwhichever slice its final message landed in."
       },
       "ClearTableResponse": {
         "properties": {
@@ -6804,6 +6925,73 @@
         "title": "DiscoverProbeRequest",
         "description": "Handles whose cached verdict should be discarded and re-queued."
       },
+      "DiscoverReportCreateRequest": {
+        "properties": {
+          "channelNames": {
+            "items": { "type": "string" },
+            "type": "array",
+            "title": "Channelnames"
+          },
+          "window": {
+            "oneOf": [
+              { "$ref": "#/components/schemas/LiveAnalysisWindow" },
+              { "$ref": "#/components/schemas/FixedAnalysisWindow" }
+            ],
+            "title": "Window",
+            "discriminator": {
+              "propertyName": "mode",
+              "mapping": {
+                "fixed": "#/components/schemas/FixedAnalysisWindow",
+                "live": "#/components/schemas/LiveAnalysisWindow"
+              }
+            }
+          },
+          "keyword": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Keyword"
+          },
+          "forwarded": {
+            "type": "string",
+            "title": "Forwarded",
+            "default": "all"
+          },
+          "media": { "type": "string", "title": "Media", "default": "all" },
+          "maxPerChannel": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Maxperchannel",
+            "default": 0
+          },
+          "signals": {
+            "anyOf": [
+              { "items": { "type": "string" }, "type": "array" },
+              { "type": "null" }
+            ],
+            "title": "Signals"
+          },
+          "maxPerChannelMode": {
+            "type": "string",
+            "title": "Maxperchannelmode",
+            "default": "latest"
+          },
+          "seed": { "type": "integer", "title": "Seed", "default": 0 },
+          "postIds": {
+            "anyOf": [
+              {
+                "items": { "$ref": "#/components/schemas/DiscoverPostRef" },
+                "type": "array"
+              },
+              { "type": "null" }
+            ],
+            "title": "Postids"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["channelNames", "window"],
+        "title": "DiscoverReportCreateRequest",
+        "description": "Body for `POST /data/discover/reports`.\n\nThe stateless request with **`window` re-declared as required** (AW-06), the\nsame move `DiscoverCandidatesRequest` makes on `channelNames` and for the\nsame kind of reason.\n\nOmitting a window means \"both sides open\", which is a newest-first pass over\nthe corpus. That is a perfectly good thing to *compute* \u2014 `/candidates` does\nit and forgets \u2014 and it is not a Scope anybody selected, so it is not\nsomething an Artifact can record. A saved report claims to describe which\nPosts produced it, and \"all of them, at some unrecorded moment\" is not that\nclaim.\n\nA subclass rather than a check in the handler so the refusal is a 422 naming\nthe field, produced before the handler runs, exactly as it is for every\nother submission."
+      },
       "DiscoverReportFlagsRequest": {
         "properties": {
           "isStarred": {
@@ -6905,46 +7093,86 @@
             "type": "array",
             "title": "Channels"
           },
-          "startDate": {
-            "type": "integer",
-            "title": "Startdate",
-            "default": 0
-          },
-          "endDate": { "type": "integer", "title": "Enddate", "default": 0 },
-          "signals": {
-            "items": { "type": "string" },
-            "type": "array",
-            "title": "Signals"
-          },
           "keyword": {
             "anyOf": [{ "type": "string" }, { "type": "null" }],
             "title": "Keyword"
           },
           "forwarded": {
             "type": "string",
+            "enum": ["all", "forwarded", "original", "unfollowed_forwarded"],
             "title": "Forwarded",
             "default": "all"
           },
-          "media": { "type": "string", "title": "Media", "default": "all" },
+          "media": {
+            "type": "string",
+            "enum": [
+              "all",
+              "text_only",
+              "media_only",
+              "photo",
+              "video",
+              "link_preview",
+              "grouped"
+            ],
+            "title": "Media",
+            "default": "all"
+          },
           "maxPerChannel": {
             "type": "integer",
+            "minimum": 0.0,
             "title": "Maxperchannel",
             "default": 0
           },
           "maxPerChannelMode": {
             "type": "string",
+            "enum": ["latest", "random"],
             "title": "Maxperchannelmode",
             "default": "latest"
           },
+          "sort": {
+            "type": "string",
+            "enum": ["time", "channel_time"],
+            "title": "Sort",
+            "default": "time"
+          },
           "seed": { "type": "integer", "title": "Seed", "default": 0 },
+          "start": { "type": "integer", "title": "Start" },
+          "end": { "type": "integer", "title": "End" },
           "scopedPostCount": {
             "anyOf": [{ "type": "integer" }, { "type": "null" }],
             "title": "Scopedpostcount"
-          }
+          },
+          "posts": {
+            "anyOf": [
+              {
+                "items": { "$ref": "#/components/schemas/ScopedPostRef" },
+                "type": "array"
+              },
+              { "type": "null" }
+            ],
+            "title": "Posts"
+          },
+          "durationMinutes": {
+            "type": "integer",
+            "title": "Durationminutes",
+            "default": 0
+          },
+          "signals": {
+            "items": { "type": "string" },
+            "type": "array",
+            "title": "Signals"
+          },
+          "startDate": {
+            "type": "integer",
+            "title": "Startdate",
+            "default": 0
+          },
+          "endDate": { "type": "integer", "title": "Enddate", "default": 0 }
         },
         "type": "object",
+        "required": ["start", "end"],
         "title": "DiscoverReportScopeResponse",
-        "description": "The frozen inputs a report was generated for.\n\nRendered by the scope card instead of live selection state \u2014 after the user\nchanges tabs, live state no longer describes where the numbers came from."
+        "description": "The frozen inputs a report was generated for.\n\nRendered by the scope card instead of live selection state \u2014 after the user\nchanges tabs, live state no longer describes where the numbers came from.\n\n**It is the shared `FrozenScope`** (AW-06), which is most of what it already\nwas: Discover is the one family that stored the whole filter set from the\nstart, so `keyword`, `forwarded`, `media`, `maxPerChannel`,\n`maxPerChannelMode`, `seed`, `channels` and `scopedPostCount` come straight\noff the base model under the names they already had.\n\nTwo things are added and one is kept.\n\n`signals` is added, and it stays after AW-07: it picks which kinds of signal\na report describes, not which Posts it reads, so it is a report input rather\nthan part of Scope.\n\n`startDate`/`endDate` are kept, and they do not stay. They are the\nsuperseded spelling of the inherited `start`/`end`, carried only so the\nexisting scope card renders unchanged until AW-08 moves it."
       },
       "DiscoveredViaPayload": {
         "properties": {
@@ -6996,6 +7224,12 @@
           "actedByEmail": {
             "anyOf": [{ "type": "string" }, { "type": "null" }],
             "title": "Actedbyemail"
+          },
+          "scope": {
+            "anyOf": [
+              { "$ref": "#/components/schemas/FrozenScope" },
+              { "type": "null" }
+            ]
           },
           "kind": { "type": "string", "const": "discovery", "title": "Kind" },
           "candidateCount": {
@@ -9176,6 +9410,12 @@
             "anyOf": [{ "type": "string" }, { "type": "null" }],
             "title": "Actedbyemail"
           },
+          "scope": {
+            "anyOf": [
+              { "$ref": "#/components/schemas/FrozenScope" },
+              { "type": "null" }
+            ]
+          },
           "kind": { "type": "string", "const": "summary", "title": "Kind" },
           "status": {
             "type": "string",
@@ -9349,7 +9589,16 @@
       "SummarySubmitRequest": {
         "properties": {
           "id": { "type": "string", "title": "Id" },
-          "scope": { "$ref": "#/components/schemas/ScopeSubmission" },
+          "scope": {
+            "anyOf": [
+              { "$ref": "#/components/schemas/ScopeSubmission" },
+              { "type": "null" }
+            ]
+          },
+          "successorOf": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Successorof"
+          },
           "language": {
             "type": "string",
             "title": "Language",
@@ -9371,7 +9620,7 @@
         },
         "additionalProperties": false,
         "type": "object",
-        "required": ["id", "scope"],
+        "required": ["id"],
         "title": "SummarySubmitRequest",
         "description": "Body for ``POST /data/summaries`` \u2014 opens a summary at a frozen Scope."
       },
@@ -9627,6 +9876,12 @@
             "anyOf": [{ "type": "string" }, { "type": "null" }],
             "title": "Actedbyemail"
           },
+          "scope": {
+            "anyOf": [
+              { "$ref": "#/components/schemas/FrozenScope" },
+              { "type": "null" }
+            ]
+          },
           "kind": { "type": "string", "const": "tag", "title": "Kind" },
           "status": {
             "type": "string",
@@ -9741,6 +9996,12 @@
           "note": {
             "anyOf": [{ "type": "string" }, { "type": "null" }],
             "title": "Note"
+          },
+          "scope": {
+            "anyOf": [
+              { "$ref": "#/components/schemas/FrozenScope" },
+              { "type": "null" }
+            ]
           }
         },
         "type": "object",
@@ -9796,6 +10057,12 @@
             "anyOf": [{ "type": "string" }, { "type": "null" }],
             "title": "Note"
           },
+          "scope": {
+            "anyOf": [
+              { "$ref": "#/components/schemas/FrozenScope" },
+              { "type": "null" }
+            ]
+          },
           "promptText": {
             "anyOf": [{ "type": "string" }, { "type": "null" }],
             "title": "Prompttext"
@@ -9813,6 +10080,41 @@
         "required": ["id", "status", "source", "mode"],
         "title": "TagRunResponse",
         "description": "A tag run with the corpus-sized fields the list omits.\n\nThe four JSON payloads stay loosely typed: `suggestions` and `applyResult`\nare shaped by the tagging prompt's output contract, which is versioned by the\nprompt rather than by this schema, and pinning them here would make a prompt\nchange a schema migration."
+      },
+      "TagRunSubmitRequest": {
+        "properties": {
+          "id": { "type": "string", "title": "Id" },
+          "scope": { "$ref": "#/components/schemas/ScopeSubmission" },
+          "mode": { "type": "string", "title": "Mode", "default": "add" },
+          "source": {
+            "type": "string",
+            "title": "Source",
+            "default": "generated"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status",
+            "default": "pending"
+          },
+          "model": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Model"
+          },
+          "postCount": {
+            "anyOf": [{ "type": "integer" }, { "type": "null" }],
+            "title": "Postcount"
+          },
+          "extra": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Extra"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["id", "scope"],
+        "title": "TagRunSubmitRequest",
+        "description": "Body for `POST /data/tag-runs` \u2014 opens a tag run at a frozen Scope."
       },
       "Telemetry": {},
       "TestProxyRequest": {

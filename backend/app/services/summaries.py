@@ -19,7 +19,7 @@ from sqlmodel import Session, col, select
 
 from app.core import acting_owner
 from app.models_tg import Summary, SummaryPayload, utc_now
-from app.schemas.scope import FrozenScope, ScopedPostRef, ScopeSubmission
+from app.schemas.scope import FrozenScope, ScopeSubmission
 from app.services.analysis_window import freeze_scope
 from app.services.serialization import to_snake
 from app.services.tenancy import (
@@ -129,18 +129,9 @@ def frozen_scope_of(
     there were any. Public because AW-08 renders this and AW-06 will need the
     same read for the other three families.
     """
-    if summary.scope is None:
-        return None
-    scope = FrozenScope.model_validate(summary.scope)
-    if payload is not None and payload.scope_posts is not None:
-        scope = scope.model_copy(
-            update={
-                "posts": [
-                    ScopedPostRef.model_validate(ref) for ref in payload.scope_posts
-                ]
-            }
-        )
-    return scope
+    return FrozenScope.from_stored(
+        summary.scope, payload.scope_posts if payload is not None else None
+    )
 
 
 def summary_to_camel(
@@ -449,12 +440,56 @@ def upsert_summary(
     return summary_to_camel(summary, session.get(SummaryPayload, summary_id))
 
 
+def successor_scope(predecessor: Summary) -> FrozenScope:
+    """The Scope of the Summary that continues `predecessor`'s chain (AW-06).
+
+    Three lines of arithmetic that used to exist twice — in
+    `jobs/auto_summary.py` and again in the browser's `AIContext` — and the two
+    copies had drifted into recording different things for the same chain. A
+    successor window opens exactly where its predecessor closed and runs the
+    same Duration forward, which means **its end is routinely in the future**:
+    a daily chain regenerating at 09:00 covers midnight to tomorrow's midnight,
+    most of which has not happened yet.
+
+    That is what kept this off `resolve_analysis_window`, and rightly:
+    `_resolve_fixed` refuses a future end because for a window somebody is
+    choosing *right now* a future end is a mistake, and clamping it silently
+    would be the editor making a time choice nobody asked for. Nobody is
+    choosing this one. It is derived from a window already frozen, so there is
+    no clock reading to protect and nothing to validate against one.
+
+    Clamping it anyway was considered and is worse than it looks: `end_date` is
+    what the *next* successor reads for both its start and its duration, so a
+    clamped link shortens every run after it and the chain decays.
+
+    **Every filter is at its default, and that is not an omission.**
+    Regeneration applies the channels and the window and nothing else — it has
+    never applied the predecessor's keyword or cap — so carrying those forward
+    would record a Scope naming filters nobody used, which is worse than no
+    Scope at all.
+
+    Independent of whether the predecessor had a Scope of its own, so a chain
+    older than AW-05 gains a complete record from its next run rather than
+    never.
+    """
+    duration = predecessor.end_date - predecessor.start_date
+    start = predecessor.end_date
+    return FrozenScope.model_validate(
+        {
+            "channels": list(predecessor.channels or []),
+            "start": start,
+            "end": start + duration,
+        }
+    )
+
+
 def submit_summary(
     session: Session,
     *,
     user_id: uuid.UUID,
     summary_id: str,
-    submission: ScopeSubmission,
+    submission: ScopeSubmission | None = None,
+    successor_of: str | None = None,
     language: str = "English",
     model: str | None = None,
     post_count: int | None = None,
@@ -475,11 +510,32 @@ def submit_summary(
 
     `now_ms` is the server clock, injectable so the minute boundary can be
     asserted at an exact instant rather than near one.
+
+    **`successor_of` states the Scope by naming another Artifact instead of
+    describing one** (AW-06). Auto-regeneration is the only caller: its window
+    is derived from the Summary before it and its end is deliberately in the
+    future, which is a window no caller can legally *state*. Deriving it here
+    rather than in the caller is what let the browser join the contract — it
+    had been falling back to `PUT`, which by AW-05's design writes no Scope at
+    all, so the same chain recorded a complete Scope on the ticks a worker
+    happened to run and nothing on the ticks a tab happened to be open.
     """
     if session.get(Summary, summary_id) is not None:
         raise HTTPException(status_code=409, detail="Summary already exists")
 
-    scope = freeze_scope(submission, now_ms=now_ms)
+    if successor_of is not None:
+        predecessor = session.get(Summary, successor_of)
+        if predecessor is None:
+            raise HTTPException(status_code=404, detail=SUMMARY_NOT_FOUND)
+        # The **ungated** guard, on a row this call only reads. The flag gates
+        # visibility; which Artifact a new Artifact continues is identity, and
+        # a foreign predecessor handing over its channels and boundaries is a
+        # cross-account read whichever way the flag is set.
+        assert_owner_on_write(predecessor.user_id, user_id, detail=SUMMARY_NOT_FOUND)
+        scope = successor_scope(predecessor)
+    else:
+        assert submission is not None  # the route model requires exactly one
+        scope = freeze_scope(submission, now_ms=now_ms)
     summary = Summary(
         id=summary_id,
         user_id=user_id,
@@ -501,19 +557,16 @@ def submit_summary(
         # `posts` is corpus-sized and goes to the payload table;
         # `durationMinutes` is derived on every read, so storing it would make a
         # third fact that nothing keeps in step with the two it came from.
-        scope=scope.model_dump(by_alias=True, exclude={"posts", "duration_minutes"}),
+        scope=scope.stored(),
     )
     session.add(summary)
 
+    refs = scope.stored_posts()
     payload = apply_summary_payload(
         session,
         summary_id,
         user_id=user_id,
-        updates=(
-            {"scope_posts": [ref.model_dump(by_alias=True) for ref in scope.posts]}
-            if scope.posts
-            else {}
-        ),
+        updates={} if refs is None else {"scope_posts": refs},
     )
     refresh_summary_derived_columns(summary, payload)
     acting_owner.stamp(session, summary)

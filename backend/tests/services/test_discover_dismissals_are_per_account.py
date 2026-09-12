@@ -58,7 +58,7 @@ from app.services.discover_ignored import (
 )
 from app.services.discover_reports import create_report, report_to_camel
 from app.services.follows import ensure_follow
-from app.services.post_filters import PostFilters
+from tests.utils.discover import report_scope
 from tests.utils.setting_groups import add_test_channel
 from tests.utils.user import create_random_user
 
@@ -374,12 +374,8 @@ def _make_report(session: Session, owner: uuid.UUID) -> Any:
 
     created = create_report(
         session,
-        channel_names=["carrier"],
-        start_date=None,
-        end_date=None,
+        scope=report_scope(channels=["carrier"]),
         signals=None,
-        filters=PostFilters(),
-        max_per_channel=0,
         user_id=owner,
     )
     return session.get(DiscoverReport, created["id"])

@@ -29,13 +29,15 @@ from app.schemas.discover import (
     DiscoverProbeRecheckResponse,
     DiscoverProbeRefreshResponse,
     DiscoverProbeRequest,
+    DiscoverReportCreateRequest,
     DiscoverReportFlagsRequest,
     DiscoverReportListItemResponse,
     DiscoverReportResponse,
     HandleProbeResponse,
     IgnoredChannelResponse,
 )
-from app.services.analysis_window import resolve_analysis_window
+from app.schemas.scope import FrozenScope
+from app.services.analysis_window import freeze_scope, resolve_analysis_window
 from app.services.channel_directory import (
     DEFAULT_PROBE_PAGE_SIZE,
     MAX_PROBE_PAGE_SIZE,
@@ -136,6 +138,25 @@ def _discover_kwargs(body: DiscoverCandidatesRequest) -> dict[str, Any]:
         "seed": body.seed,
         "post_ids": body.resolved_post_ids(),
     }
+
+
+def _report_submission(body: DiscoverReportCreateRequest) -> FrozenScope:
+    """Freeze the report's Scope **once**, here, before the aggregation runs.
+
+    The save route used to resolve the window through `_discover_kwargs` and
+    then write `window.start`/`window.end` onto the row — one resolution, so
+    that part was already right — but it shared that resolution with
+    `/discover/candidates`, which computes and forgets. AW-06 gives the saving
+    route its own submission seam so the value it persists is the same object
+    the aggregation ran on, produced by `freeze_scope` like every other
+    Artifact's.
+    """
+    if body.max_per_channel_mode not in FEED_CAP_MODES:
+        raise HTTPException(
+            status_code=422,
+            detail=f"unknown maxPerChannelMode: {body.max_per_channel_mode}",
+        )
+    return freeze_scope(body.to_scope_submission())
 
 
 @router.get("/discover/ignored")
@@ -285,7 +306,7 @@ def refresh_discover_probes(
 
 @router.post("/discover/reports")
 def create_discover_report(
-    body: DiscoverCandidatesRequest,
+    body: DiscoverReportCreateRequest,
     session: SessionDep,
     _current_user: CurrentUser,
 ) -> DiscoverReportResponse:
@@ -297,7 +318,14 @@ def create_discover_report(
     filters produce a *new* report rather than altering this one (IDEA-011 W1).
     """
     return DiscoverReportResponse.model_validate(
-        create_report(session, user_id=_current_user.id, **_discover_kwargs(body))
+        create_report(
+            session,
+            user_id=_current_user.id,
+            scope=_report_submission(body),
+            signals=cast(
+                "set[SignalKind] | None", _parse_discover_signals(body.signals)
+            ),
+        )
     )
 
 

@@ -12,6 +12,8 @@ from sqlmodel import Session, col
 
 from app.core import acting_owner
 from app.models_tg import TagRun, utc_now
+from app.schemas.scope import FrozenScope, ScopeSubmission
+from app.services.analysis_window import freeze_scope
 from app.services.serialization import to_snake
 from app.services.tenancy import (
     assert_owner,
@@ -36,6 +38,11 @@ HEAVY_TAG_RUN_COLUMNS = frozenset(
         "all_tags_snapshot",
         "channel_context_options",
         "apply_result",
+        # AW-06. The frozen Scope's explicit Post selection, which runs to
+        # thousands of refs on a semantic run. `scope` itself is *not* heavy —
+        # it is the filters and two integers, and the list renders it — which is
+        # exactly why the two are separate columns.
+        "scope_posts",
     }
 )
 
@@ -80,6 +87,7 @@ def tag_run_to_camel(tag_run: TagRun) -> dict[str, Any]:
         "createdAt": tag_run.created_at,
         "updatedAt": tag_run.updated_at_ms,
         **(tag_run.extra or {}),
+        **_scope_key(FrozenScope.from_stored(tag_run.scope, tag_run.scope_posts)),
     }
 
 
@@ -116,7 +124,20 @@ def _light_from_mapping(row: dict[str, Any]) -> dict[str, Any]:
         "createdAt": row["created_at"],
         "updatedAt": row["updated_at_ms"],
         **(row.get("extra") or {}),
+        # Without its refs: `scopedPostCount` is what a list shows instead, and
+        # `scope_posts` is not even in the select — see `HEAVY_TAG_RUN_COLUMNS`.
+        **_scope_key(FrozenScope.from_stored(row.get("scope"))),
     }
+
+
+def _scope_key(scope: FrozenScope | None) -> dict[str, Any]:
+    """The `scope` key, stamped **after** `extra` has been spread (AW-06).
+
+    Last, for the reason `summaries._with_scope` gives: `extra` is an open bag,
+    so a key named `scope` sitting in it would otherwise win over the column and
+    the endpoint would report a Scope the database does not hold.
+    """
+    return {"scope": None if scope is None else scope.model_dump(by_alias=True)}
 
 
 def list_tag_runs(
@@ -159,6 +180,20 @@ def get_tag_run(
     assert_owner(row.user_id, user_id, detail=TAG_RUN_NOT_FOUND)
     return tag_run_to_camel(row)
 
+
+#: Columns written once, at submission, and never by a merge (AW-06).
+#:
+#: `channels`, `start_date` and `end_date` are AW-05's rule applied to this
+#: family: they are the Scope the run was produced from. A tag run is written at
+#: least twice — `copyTagPrompt` opens it pending and the pasted response
+#: completes it — so while these were settable a Live window that advanced in
+#: between rewrote the boundaries of a prompt that had already been built.
+#:
+#: Snake spellings only, because the merge loop tests `to_snake(key)` and both
+#: wire spellings of every key normalise to one of these.
+_FROZEN_TAG_RUN_COLUMNS = frozenset(
+    {"channels", "start_date", "end_date", "scope", "scope_posts"}
+)
 
 #: Snake-cased spellings of wire keys whose column is named differently.
 #:
@@ -242,6 +277,13 @@ def upsert_tag_run(
         "createdAt",
         "updated_at_ms",
         "updatedAt",
+        # Recognised only so they are *dropped* (AW-06), for the reason
+        # `summaries.upsert_summary` gives: `_extra_from_body` takes everything
+        # the columns do not claim, so without these a client round-tripping a
+        # run would store a second copy of the Scope beside the frozen one.
+        "scope",
+        "scope_posts",
+        "scopePosts",
     }
     now_ms = int(utc_now().timestamp() * 1000)
     tag_run = session.get(TagRun, tag_run_id)
@@ -249,7 +291,7 @@ def upsert_tag_run(
         assert_owner_on_write(tag_run.user_id, user_id, detail=TAG_RUN_NOT_FOUND)
         for key, value in body.items():
             snake = to_snake(key)
-            if snake in known:
+            if snake in known and snake not in _FROZEN_TAG_RUN_COLUMNS:
                 setattr(tag_run, snake, value)
         tag_run.extra = _merge_extra(tag_run.extra, _extra_from_body(body, known))
         tag_run.updated_at_ms = now_ms
@@ -281,6 +323,61 @@ def upsert_tag_run(
             updated_at_ms=body.get("updatedAt", body.get("updated_at_ms", now_ms)),
             extra=_extra_from_body(body, known),
         )
+    acting_owner.stamp(session, tag_run)
+    session.add(tag_run)
+    session.commit()
+    session.refresh(tag_run)
+    return tag_run_to_camel(tag_run)
+
+
+def submit_tag_run(
+    session: Session,
+    *,
+    user_id: uuid.UUID,
+    tag_run_id: str,
+    submission: ScopeSubmission,
+    mode: str = "add",
+    source: str = "generated",
+    status: str = "pending",
+    model: str | None = None,
+    post_count: int | None = None,
+    extra: dict[str, Any] | None = None,
+    now_ms: int | None = None,
+) -> dict[str, Any]:
+    """Open a Tag run by freezing the Scope its prompt will be built from.
+
+    `submit_summary`'s twin (AW-06). A tag run has always been written twice —
+    `copyTagPrompt` opens it `pending` and the pasted response completes it —
+    and until this existed both writes carried their own idea of the window.
+    The prompt was assembled from the first and the row recorded the second.
+
+    The row starts with no prompt and no response; `upsert_tag_run` fills those
+    in afterwards and cannot touch any of this.
+    """
+    if session.get(TagRun, tag_run_id) is not None:
+        raise HTTPException(status_code=409, detail="Tag run already exists")
+
+    scope = freeze_scope(submission, now_ms=now_ms)
+    now = int(utc_now().timestamp() * 1000)
+    tag_run = TagRun(
+        id=tag_run_id,
+        user_id=user_id,
+        status=status,
+        source=source,
+        mode=mode,
+        # The superseded copy, kept in step at creation and never written
+        # again. AW-07 removes these three.
+        channels=list(scope.channels),
+        start_date=scope.start,
+        end_date=scope.end,
+        post_count=post_count if post_count is not None else scope.scoped_post_count,
+        model=model,
+        created_at=now,
+        updated_at_ms=now,
+        extra=dict(extra or {}),
+        scope=scope.stored(),
+        scope_posts=scope.stored_posts(),
+    )
     acting_owner.stamp(session, tag_run)
     session.add(tag_run)
     session.commit()

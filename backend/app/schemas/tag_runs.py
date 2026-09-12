@@ -14,6 +14,8 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.schemas.scope import FrozenScope, ScopeSubmission
+
 
 class TagRunListItemResponse(BaseModel):
     """A tag run's identity and metadata — the history-list projection.
@@ -49,6 +51,35 @@ class TagRunListItemResponse(BaseModel):
     updated_at: int = Field(default=0, alias="updatedAt")
     is_starred: bool = Field(default=False, alias="isStarred")
     note: str | None = None
+    #: The Scope this run was frozen at (AW-06), or `null` on a row that
+    #: predates the contract — which AW-07 deletes rather than backfills. On the
+    #: list model as well as the full one, without its Post refs:
+    #: `scopedPostCount` is what a list shows instead, and `scope_posts` is not
+    #: even in the light select.
+    scope: FrozenScope | None = None
+
+
+class TagRunSubmitRequest(BaseModel):
+    """Body for `POST /data/tag-runs` — opens a tag run at a frozen Scope."""
+
+    model_config = ConfigDict(populate_by_name=True, extra="forbid")
+
+    #: Client-chosen, for the reason `SummarySubmitRequest.id` gives.
+    id: str
+    scope: ScopeSubmission
+    #: What the run does to the tags it suggests.
+    mode: str = "add"
+    #: `generated` when the model is called here, `pasted` when the prompt is
+    #: copied out and the response comes back by hand.
+    source: str = "generated"
+    #: `pending` until a response exists, which is the state the copy-prompt
+    #: path opens in and the state the generate path leaves within seconds.
+    status: str = "pending"
+    model: str | None = None
+    post_count: int | None = Field(default=None, alias="postCount")
+    #: The small UI flags a new run starts with. Open for the reason
+    #: `SummarySubmitRequest.extra` is.
+    extra: dict[str, Any] = Field(default_factory=dict)
 
 
 class TagRunResponse(TagRunListItemResponse):

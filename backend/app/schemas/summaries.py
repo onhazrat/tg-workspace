@@ -32,7 +32,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from app.schemas.scope import FrozenScope, ScopeSubmission
 
@@ -85,7 +85,24 @@ class SummarySubmitRequest(BaseModel):
     #: is the whole primary key of ``tg_summaries``, so it is a UUID and a
     #: collision is a 409 rather than a silent merge into somebody else's row.
     id: str
-    scope: ScopeSubmission
+    #: The Scope this Summary is opened at, stated in full. Exactly one of this
+    #: and `successorOf`.
+    scope: ScopeSubmission | None = None
+    #: The Summary this one continues, when the Scope is *derived* rather than
+    #: stated (AW-06).
+    #:
+    #: A successor window opens where its predecessor closed and runs the same
+    #: Duration forward, so its end is routinely in the future — a window
+    #: `resolve_analysis_window` refuses, deliberately, for anything a caller
+    #: states. So a caller that needs one names the predecessor and the server
+    #: derives it; see `services/summaries.py::successor_scope`.
+    #:
+    #: A field on this request rather than a route of its own, because the
+    #: question it answers is "where did this submission's Scope come from",
+    #: and that belongs to the submission contract the other three families
+    #: joined in AW-06. A second route would have been a second way to open a
+    #: Summary, with its own id handling, its own 409 and its own drift.
+    successor_of: str | None = Field(default=None, alias="successorOf")
     language: str = "English"
     model: str | None = None
     post_count: int | None = Field(default=None, alias="postCount")
@@ -94,6 +111,22 @@ class SummarySubmitRequest(BaseModel):
     #: ``SummaryResponse`` is: they come and go, and an allowlist here would
     #: silently drop the next one.
     extra: dict[str, Any] = Field(default_factory=dict)
+
+    @model_validator(mode="after")
+    def _exactly_one_scope_source(self) -> SummarySubmitRequest:
+        """A Scope is stated or derived, never both and never neither.
+
+        Both would need a precedence rule, and a precedence rule over "which
+        Posts did this use" is the ambiguity the whole Analysis-window effort
+        was written against. Neither is a submission with no Scope, which is
+        the thing AW-05 made impossible.
+        """
+        if (self.scope is None) == (self.successor_of is None):
+            raise ValueError(
+                "Send exactly one of `scope` (the window stated in full) or "
+                "`successorOf` (the Summary whose window this one continues)."
+            )
+        return self
 
 
 class SummaryUpsertRequest(BaseModel):

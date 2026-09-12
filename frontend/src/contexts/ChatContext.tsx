@@ -9,7 +9,7 @@ import {
 } from "@/hooks/useChatSessions"
 import type { SendOptions } from "@/lib/chat-sessions/send-options"
 import { resolveSend } from "@/lib/chat-sessions/send-options"
-import { saveChatSession } from "@/lib/chat-sessions/store"
+import { saveChatSession, submitChatSession } from "@/lib/chat-sessions/store"
 import { saveLLMLog } from "@/lib/logs/write"
 import { formatChannelsForPrompt } from "../lib/channels/format-channels-for-prompt"
 import { formatPostsForPrompt } from "../lib/posts/post-view"
@@ -68,6 +68,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
     semanticSearchRespectsChannels,
     handleFilterPosts,
     getPromptPostsInput,
+    getScopeSubmission,
   } = useScraper()
   const { searchSimilarPosts } = useRAG()
 
@@ -139,7 +140,45 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
     setChatInput("")
     setIsChatting(true)
 
+    // A UUID, not a timestamp — see the note in `AIContext`. `id` is the whole
+    // primary key of `tg_chat_sessions`, and ticket 17 made a cross-account
+    // collision refuse the create instead of merging into it.
+    const sessionId = baseSessionId ?? crypto.randomUUID()
+    const selectedChannelNames = channels
+      .filter((channel) => selectedChannels.has(channel.name))
+      .map((channel) => channel.name)
+
     try {
+      // Submit before a single token is spent (AW-06). The server resolves the
+      // Analysis window against its own current minute and stores the result,
+      // so model latency, a retry and this browser's clock cannot move the
+      // boundaries the finished Chat claims it used.
+      //
+      // On the turn that *creates* the session and never again, which matters
+      // more here than it does for a Summary: a conversation writes back after
+      // every turn and can easily outlive the Live window it started in, so
+      // before this the recorded window was whichever one the last message
+      // happened to land in.
+      //
+      // No explicit Post selection, deliberately. A semantic chat ranks Posts
+      // per *turn*, against the question being asked; the session's Scope is
+      // the window and filters that ranking ran inside, and `scopedPostCount`
+      // being null says exactly that.
+      if (!baseSessionId) {
+        await submitChatSession({
+          id: sessionId,
+          scope: getScopeSubmission(selectedChannelNames),
+          language: aiLanguage,
+          model: selectedModel,
+          mode: chatMode,
+          extra: {
+            postSearch: postSearch || undefined,
+            semanticSearchQuery: semanticSearchQuery || undefined,
+            semanticSearchRespectsChannels,
+          },
+        })
+      }
+
       const startTime = Date.now()
       let fullModelText = ""
       let lastResponse: any = null
@@ -240,9 +279,6 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
 
         // Server-eligible → send the scope (backend assembles); semantic/related
         // → client-built postsText. Refreshed after any pre-chat sync above.
-        const selectedChannelNames = channels
-          .filter((channel) => selectedChannels.has(channel.name))
-          .map((channel) => channel.name)
         const input = await getPromptPostsInput()
         let postsText = ""
         let scope: PromptScope | undefined
@@ -349,27 +385,19 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
        * no summary, it assembles its prompt from the same channels and dates a
        * summary would. So there is no link to write.
        */
-      // A UUID, not a timestamp — see the note in `AIContext`. `id` is the
-      // whole primary key of `tg_chat_sessions`, and ticket 17 made a
-      // cross-account collision refuse the create instead of merging into it.
-      const sessionId = baseSessionId ?? crypto.randomUUID()
+      // What the turn produced, and nothing the submission already settled
+      // (AW-06). `channels`, `startDate` and `endDate` are gone from this body
+      // because they are the frozen Scope — the server drops them here anyway,
+      // and sending them would only make the client look like it still owned
+      // them.
       const session: Partial<ChatSession> = {
         id: sessionId,
-        channels: Array.from(selectedChannels),
-        startDate,
-        endDate,
-        language: aiLanguage,
-        model: selectedModel,
-        mode: chatMode,
         postCount:
           chatMode === "semantic"
             ? (similarPostsUsed?.length ?? 0)
             : summaryChatPostCount,
         timestamp: Date.now(),
         messages: finalMessages,
-        postSearch: postSearch || undefined,
-        semanticSearchQuery: semanticSearchQuery || undefined,
-        semanticSearchRespectsChannels,
       }
       await saveChatSession(session)
       // Claim the id before publishing it, so the loader effect above treats

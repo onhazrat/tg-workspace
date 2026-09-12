@@ -519,15 +519,50 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({
   ) => {
     if (isOffline) return
     setRegeneratingSummaries((prev) => new Set(prev).add(s.id))
+    // Submission creates the row, so a run that produces nothing has to take it
+    // back — otherwise every failed regeneration litters History with an empty
+    // Artifact that has a perfectly good Scope.
+    let openedId: string | null = null
     try {
-      let newStartDate = s.startDate
-      let newEndDate = s.endDate
-
-      if (shiftTime) {
-        const durationMs = s.endDate - s.startDate
-        newStartDate = s.endDate
-        newEndDate = s.endDate + durationMs
-      }
+      // **The server derives the successor window** (AW-06). This used to be
+      // three lines here and three identical lines in
+      // `jobs/auto_summary.py::_regenerate_one`, and the copies had drifted in
+      // a way nothing could catch: a successor runs a full Duration past where
+      // its predecessor closed, so its end is in the future, and
+      // `POST /data/summaries` refuses a stated window that ends in the future
+      // — rightly, for a window somebody is choosing right now. So this path
+      // fell back to `PUT`, which by AW-05's design writes no Scope at all, and
+      // the same chain recorded a complete Scope on the ticks the worker ran
+      // and nothing on the ticks a tab was open.
+      //
+      // Naming the predecessor instead sidesteps that entirely: no caller
+      // states the window, so the refusal never applies, and the arithmetic has
+      // one home.
+      //
+      // A UUID for the reason the interactive path uses one.
+      const newId = crypto.randomUUID()
+      //
+      // A re-run (`shiftTime: false`) is not a successor — it is the same
+      // window again — so it states that window rather than deriving one. It
+      // is stating two instants an Artifact already recorded, not a selection
+      // somebody is making now, and it goes through the ordinary validation
+      // for exactly that reason: re-running a window that has not finished
+      // elapsing is refused rather than quietly summarised in part. Before
+      // this it took the `PUT` path and recorded no Scope at all.
+      const opened = await submitSummary(
+        shiftTime
+          ? { id: newId, successorOf: s.id }
+          : {
+              id: newId,
+              scope: {
+                channels: s.channels,
+                window: frozenWindow({ start: s.startDate, end: s.endDate }),
+              },
+            },
+      )
+      openedId = newId
+      const newStartDate = opened.scope?.start ?? s.startDate
+      const newEndDate = opened.scope?.end ?? s.endDate
 
       const newEndDateTimestamp = newEndDate
 
@@ -612,9 +647,6 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({
         await saveLLMLog(llmLog)
       }
 
-      // A UUID for the reason the interactive path uses one.
-      const newId = crypto.randomUUID()
-
       // The scope path never holds the posts, so citations are resolved by
       // lookup — the same two-step the interactive path uses.
       const citedPosts = extractCitedPosts(
@@ -622,10 +654,15 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({
         await lookupPosts(parseCitationRefs(fullSummaryText)),
       )
 
+      // What the run produced, and nothing the submission already settled:
+      // `channels`, `startDate` and `endDate` are the frozen Scope and the
+      // server drops them here (AW-05).
       const newSummary: Summary = {
         id: newId,
         text: fullSummaryText,
-        channels: s.channels,
+        // The server's answer, not this browser's arithmetic. Sent back only
+        // because `Summary` declares them; `upsert_summary` drops all three.
+        channels: opened.channels,
         startDate: newStartDate,
         endDate: newEndDate,
         language: s.language,
@@ -658,6 +695,7 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({
         citedPosts,
       }
       await saveSummary(newSummary)
+      openedId = null
 
       // Auto-publish if enabled
       if (s.autoPublish && s.publishBotId && s.publishChatId && postCount > 0) {
@@ -748,6 +786,7 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({
         await loadHistory()
       }
     } finally {
+      if (openedId) await deleteSummary(openedId).catch(() => {})
       setRegeneratingSummaries((prev) => {
         const next = new Set(prev)
         next.delete(s.id)

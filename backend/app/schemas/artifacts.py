@@ -23,6 +23,8 @@ from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.schemas.scope import FrozenScope
+
 
 class ArtifactBase(BaseModel):
     """What every artifact has, whatever it is."""
@@ -49,6 +51,19 @@ class ArtifactBase(BaseModel):
     #: about — which is the failure this module's discriminated union exists to
     #: avoid, pointed the other way.
     acted_by_email: str | None = Field(default=None, alias="actedByEmail")
+    #: The Scope this artifact was frozen at (AW-06), or `null` on a row that
+    #: predates the contract — which AW-07 deletes rather than backfills.
+    #:
+    #: On the base, and that is the point of the ticket: History is the one
+    #: screen that lists every kind, so it is the one place "Artifact kind does
+    #: not change temporal meaning" is either true or visibly false. The
+    #: `channels` / `startDate` / `endDate` trio above is the per-kind subset
+    #: this supersedes, and AW-07 removes it.
+    #:
+    #: Without its Post refs — see `services/artifacts.py`, which never opens
+    #: the column or table they live in. `scopedPostCount` is what says a
+    #: selection existed.
+    scope: FrozenScope | None = None
 
 
 class SummaryArtifactResponse(ArtifactBase):

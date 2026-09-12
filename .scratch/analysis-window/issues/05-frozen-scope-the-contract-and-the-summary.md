@@ -82,7 +82,14 @@ every request and nothing persists their answer. AW-06 brings the other three
 Artifact families onto the submission path, and that is where the rest of the
 consumers move.
 
-**Left out, and it needs a decision:** `AIContext.generateBackgroundSummary`,
+**Left out, and it needed a decision — AW-06 made it.** The shape is
+`successorOf` on `SummarySubmitRequest`, standing in place of `scope`: the
+server derives the window from the named predecessor through the one
+`successor_scope` the scheduler also calls, so the browser and the worker record
+the same thing for one chain, and AW-07 is no longer pruning by which process
+was awake. The original statement of the problem follows.
+
+`AIContext.generateBackgroundSummary`,
 the browser-side twin of `auto_summary._regenerate_one`, still creates its
 successor through `PUT`, so a regeneration that happens with a tab open writes
 `scope = NULL` while the scheduler's writes a complete one. Every way of closing
@@ -97,10 +104,10 @@ it inside this ticket was worse than leaving it named:
   computing them — which is a new request shape on an unattended path, and
   AW-06 is about to settle what that shape is.
 
-**This matters to AW-07,** which deletes Artifacts that cannot supply the
-complete contract: as it stands that would delete regenerations that happened to
-run in a browser and keep the ones that ran in the worker. Decide this before
-AW-07 runs, not after. The scheduler half is no longer a blocker on its own —
+**This mattered to AW-07,** which deletes Artifacts that cannot supply the
+complete contract: as it stood that would have deleted regenerations that
+happened to run in a browser and kept the ones that ran in the worker. Settled
+in AW-06, before AW-07 runs. The scheduler half is no longer a blocker on its own —
 `_successor_scope` stopped depending on the predecessor having a Scope, so a
 chain that predates AW-05 gains a complete record from its next unattended run.
 

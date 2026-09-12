@@ -11,6 +11,7 @@ from app.api.deps import CurrentUser, SessionDep
 from app.schemas.chat_sessions import (
     ChatSessionListItemResponse,
     ChatSessionResponse,
+    ChatSessionSubmitRequest,
     ChatSessionUpsertRequest,
 )
 from app.schemas.common import StatusResponse
@@ -26,6 +27,9 @@ from app.services.chat_sessions import (
 )
 from app.services.chat_sessions import (
     list_chat_sessions as list_chat_sessions_impl,
+)
+from app.services.chat_sessions import (
+    submit_chat_session as submit_chat_session_impl,
 )
 from app.services.chat_sessions import (
     upsert_chat_session as upsert_chat_session_impl,
@@ -56,6 +60,35 @@ def list_chat_sessions(
             session, limit=limit, offset=offset, search=search, user_id=current_user.id
         )
     ]
+
+
+# AW-06. POST rather than another PUT, for the reason `submit_summary` gives:
+# it freezes the Analysis window against the server's current minute, so the
+# same body sent twice describes two different windows — and the second is a 409
+# for that reason rather than a merge.
+#
+# In a comment rather than a docstring: a handler docstring becomes the
+# `openapi.json` description and a JSDoc block in the generated client.
+@router.post("/chat-sessions")
+def submit_chat_session(
+    body: ChatSessionSubmitRequest,
+    session: SessionDep,
+    current_user: CurrentUser,
+) -> ChatSessionResponse:
+    """Open a chat at a frozen Scope, before any AI work begins."""
+    result = submit_chat_session_impl(
+        session,
+        user_id=current_user.id,
+        chat_session_id=body.id,
+        submission=body.scope,
+        language=body.language,
+        model=body.model,
+        mode=body.mode,
+        post_count=body.post_count,
+        extra=body.extra,
+    )
+    touch_sync(session, "chat_sessions")
+    return ChatSessionResponse.model_validate(result)
 
 
 @router.get("/chat-sessions/{chat_session_id}")

@@ -25,7 +25,7 @@ the schema description in `openapi.json` and a JSDoc block in
 
 from __future__ import annotations
 
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -121,4 +121,60 @@ class FrozenScope(_ScopeFilters):
     @model_validator(mode="after")
     def _derive_duration(self) -> FrozenScope:
         object.__setattr__(self, "duration_minutes", (self.end - self.start) // 60_000)
+        # And the size of the selection, whenever the selection is here. Not
+        # when it is absent: `posts` is `None` on a list projection, where
+        # `scopedPostCount` is the *only* thing that says a selection existed,
+        # and deriving it there would erase the fact it is carried to report.
+        # `0` is a real answer — a ranking that matched nothing — and is what
+        # tells that apart from "the filters were the whole story".
+        if self.posts is not None:
+            object.__setattr__(self, "scoped_post_count", len(self.posts))
         return self
+
+    # The pair below is what makes "one contract, four families" a fact rather
+    # than four copies of the same two lines (AW-06). Each aggregate owns its
+    # own tables and writes them itself, but *how a frozen Scope becomes two
+    # columns* is a property of the Scope, not of whichever table is holding it
+    # — and it was already subtle in one place: drop `duration_minutes` from
+    # the exclusion and a derived number becomes a third stored fact that
+    # nothing keeps in step.
+
+    def stored(self) -> dict[str, Any]:
+        """What the `scope` column holds.
+
+        Without `posts`, which is corpus-sized and goes to its own column, and
+        without `durationMinutes`, which is derived on every read.
+        """
+        return self.model_dump(by_alias=True, exclude={"posts", "duration_minutes"})
+
+    def stored_posts(self) -> list[dict[str, Any]] | None:
+        """What the `scope_posts` column holds, or `None` for no selection.
+
+        An empty selection stores `None` too: a ranking that matched nothing
+        restricted the Scope to no Posts, and `scopedPostCount` — which is `0`,
+        not `null` — is what tells that apart from "the filters were the whole
+        story".
+        """
+        if not self.posts:
+            return None
+        return [ref.model_dump(by_alias=True) for ref in self.posts]
+
+    @classmethod
+    def from_stored(
+        cls, scope: dict[str, Any] | None, scope_posts: list[Any] | None = None
+    ) -> FrozenScope | None:
+        """Rebuild from the two columns; `None` for a row that predates AW-05.
+
+        `scope_posts` left out reads back a `FrozenScope` with `posts` unset,
+        which is the list projection: `scopedPostCount` is what says whether
+        there was a selection, so a list can report one without opening the
+        column the refs live in.
+        """
+        if scope is None:
+            return None
+        frozen = cls.model_validate(scope)
+        if scope_posts is None:
+            return frozen
+        return frozen.model_copy(
+            update={"posts": [ScopedPostRef.model_validate(r) for r in scope_posts]}
+        )

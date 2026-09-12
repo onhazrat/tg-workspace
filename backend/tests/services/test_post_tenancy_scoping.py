@@ -477,6 +477,7 @@ def test_saving_a_report_keeps_the_scoped_is_followed(
     aggregate.
     """
     from app.services.discover_reports import create_report
+    from tests.utils.discover import report_scope
 
     add_test_channel(session, "t16-carrier", user_id=user.id)
     add_test_channel(session, "t16-target", user_id=other_user.id)
@@ -488,12 +489,8 @@ def test_saving_a_report_keeps_the_scoped_is_followed(
     )
     saved = create_report(
         session,
-        channel_names=["t16-carrier"],
-        start_date=None,
-        end_date=None,
+        scope=report_scope(channels=["t16-carrier"]),
         signals=None,
-        filters=PostFilters(),
-        max_per_channel=0,
         user_id=user.id,
     )
 

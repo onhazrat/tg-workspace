@@ -40,7 +40,9 @@ from typing import Any
 from pydantic import BaseModel, ConfigDict, Field
 from pydantic import Field as PydanticField
 
+from app.schemas.analysis_window import AnalysisWindowInput
 from app.schemas.posts import PostScopeRequest
+from app.schemas.scope import FrozenScope, ScopeSubmission
 
 
 class SignalCountsResponse(BaseModel):
@@ -227,28 +229,36 @@ class DiscoverCandidatesResponse(BaseModel):
     posts_in_scope: int = Field(default=0, alias="postsInScope")
 
 
-class DiscoverReportScopeResponse(BaseModel):
+class DiscoverReportScopeResponse(FrozenScope):
     """The frozen inputs a report was generated for.
 
     Rendered by the scope card instead of live selection state — after the user
     changes tabs, live state no longer describes where the numbers came from.
+
+    **It is the shared `FrozenScope`** (AW-06), which is most of what it already
+    was: Discover is the one family that stored the whole filter set from the
+    start, so `keyword`, `forwarded`, `media`, `maxPerChannel`,
+    `maxPerChannelMode`, `seed`, `channels` and `scopedPostCount` come straight
+    off the base model under the names they already had.
+
+    Two things are added and one is kept.
+
+    `signals` is added, and it stays after AW-07: it picks which kinds of signal
+    a report describes, not which Posts it reads, so it is a report input rather
+    than part of Scope.
+
+    `startDate`/`endDate` are kept, and they do not stay. They are the
+    superseded spelling of the inherited `start`/`end`, carried only so the
+    existing scope card renders unchanged until AW-08 moves it.
     """
 
-    model_config = ConfigDict(populate_by_name=True)
-
-    channels: list[str] = Field(default_factory=list)
-    start_date: int = Field(default=0, alias="startDate")
-    end_date: int = Field(default=0, alias="endDate")
+    #: Which kinds of signal this report describes. Not a Scope field — see the
+    #: class docstring.
     signals: list[str] = Field(default_factory=list)
-    keyword: str | None = None
-    forwarded: str = "all"
-    media: str = "all"
-    max_per_channel: int = Field(default=0, alias="maxPerChannel")
-    max_per_channel_mode: str = Field(default="latest", alias="maxPerChannelMode")
-    seed: int = 0
-    # How many posts the scope was explicitly restricted to; `null` means
-    # unrestricted. A semantic query passes its matches in.
-    scoped_post_count: int | None = Field(default=None, alias="scopedPostCount")
+    #: Superseded by `start`/`end`. Removed in AW-07.
+    start_date: int = Field(default=0, alias="startDate")
+    #: Superseded by `start`/`end`. Removed in AW-07.
+    end_date: int = Field(default=0, alias="endDate")
 
 
 class DiscoverReportListItemResponse(BaseModel):
@@ -433,3 +443,60 @@ class DiscoverCandidatesRequest(PostScopeRequest):
         if self.post_ids is None:
             return None
         return [(ref.channel_name, ref.post_id) for ref in self.post_ids]
+
+    def to_scope_submission(self) -> ScopeSubmission:
+        """The same request as the Scope every other Artifact family submits.
+
+        A conversion rather than a new request shape (AW-06). This body already
+        carries every field `ScopeSubmission` does, under the same names — it is
+        `PostScopeRequest` plus the cap mode, the seed and the explicit
+        selection, which is what a submission is — so asking callers to send a
+        second spelling of what they already send would have been churn with no
+        claim behind it.
+
+        `sort` is the one field with no counterpart, and it takes its default:
+        Discover aggregates rather than lists, so no order was chosen and none
+        is recorded.
+        """
+        return ScopeSubmission.model_validate(
+            {
+                "channels": [n.strip() for n in self.channel_names if n.strip()],
+                "window": self.window,
+                "keyword": self.keyword,
+                "forwarded": self.forwarded,
+                "media": self.media,
+                "maxPerChannel": self.max_per_channel,
+                "maxPerChannelMode": self.max_per_channel_mode,
+                "seed": self.seed,
+                "posts": (
+                    None
+                    if self.post_ids is None
+                    else [
+                        {"channelName": ref.channel_name, "postId": ref.post_id}
+                        for ref in self.post_ids
+                    ]
+                ),
+            }
+        )
+
+
+class DiscoverReportCreateRequest(DiscoverCandidatesRequest):
+    """Body for `POST /data/discover/reports`.
+
+    The stateless request with **`window` re-declared as required** (AW-06), the
+    same move `DiscoverCandidatesRequest` makes on `channelNames` and for the
+    same kind of reason.
+
+    Omitting a window means "both sides open", which is a newest-first pass over
+    the corpus. That is a perfectly good thing to *compute* — `/candidates` does
+    it and forgets — and it is not a Scope anybody selected, so it is not
+    something an Artifact can record. A saved report claims to describe which
+    Posts produced it, and "all of them, at some unrecorded moment" is not that
+    claim.
+
+    A subclass rather than a check in the handler so the refusal is a 422 naming
+    the field, produced before the handler runs, exactly as it is for every
+    other submission.
+    """
+
+    window: AnalysisWindowInput
