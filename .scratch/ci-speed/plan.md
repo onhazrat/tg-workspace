@@ -47,7 +47,9 @@ Critical path today: **Playwright ≈ Backend ≈ 10–12 min**.
 3. No larger / macOS / Windows hosted runners.
 4. Do not weaken architecture guards to go faster.
 5. Client drift stays on pre-commit `generate-frontend-sdk` + conform files — Playwright is not the SDK check.
-6. Playwright still runs on `main` pushes (honesty over skip).
+6. Playwright still reports on `main` pushes, but image builds and browser
+   shards follow the runtime-input classifier; a classifier failure fails the
+   required summary instead of silently skipping the suite.
 
 ## Target shape
 

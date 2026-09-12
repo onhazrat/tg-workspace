@@ -29,7 +29,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:
-      changed: ${{ steps.result.outputs.changed }}
+      changed: ${{ steps.filter.outputs.changed }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
@@ -55,21 +55,6 @@ jobs:
               - uv.lock
               - package.json
               - bun.lock
-      - name: Treat push as changed
-        id: push-changed
-        if: github.event_name == 'push'
-        run: echo "changed=true" >> "$GITHUB_OUTPUT"
-      - name: Publish change detection result
-        id: result
-        env:
-          PUSH_CHANGED: ${{ steps.push-changed.outputs.changed }}
-          FILTER_CHANGED: ${{ steps.filter.outputs.changed }}
-        run: |
-          if [ "$PUSH_CHANGED" = "true" ]; then
-            echo "changed=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "changed=$FILTER_CHANGED" >> "$GITHUB_OUTPUT"
-          fi
 
   build-images:
     needs:
@@ -290,6 +275,7 @@ jobs:
   alls-green-playwright:
     if: always()
     needs:
+      - changes
       - test-playwright
       - build-images
     runs-on: ubuntu-latest
