@@ -360,6 +360,13 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({
       return
     }
 
+    // Same rollback as `handleSummarize`, and this path needs it more: the
+    // prompt is assembled *after* the row exists, and `clipboard.writeText`
+    // rejects routinely — denied permission, a non-secure context. Without
+    // this, a person who never received a prompt is left with a `pending`
+    // Summary they can only clear by deleting.
+    let openedId: string | null = null
+
     try {
       const selectedChannelNames = channels
         .filter((channel) => selectedChannels.has(channel.name))
@@ -409,6 +416,7 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({
           status: "pending",
         },
       })
+      openedId = newId
       if (scope && opened.scope) {
         scope = { ...scope, window: frozenWindow(opened.scope) }
       }
@@ -427,6 +435,7 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({
       )
       await navigator.clipboard.writeText(prompt)
       await saveSummary({ id: newId, promptText: prompt } as Summary)
+      openedId = null
       setCurrentSummaryId(newId)
       setSummary(null)
       setChatMessages([])
@@ -442,6 +451,8 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({
       } else {
         toast.error("Failed to copy summary prompt")
       }
+    } finally {
+      if (openedId) await deleteSummary(openedId).catch(() => {})
     }
   }
 

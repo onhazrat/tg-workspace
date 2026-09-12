@@ -59,10 +59,21 @@ a validator rather than a `computed_field`, because a read-only property splits
 every model containing this one into a Readable and a Writable half in the
 generated client, for a number the client only ever reads.
 
-Auto-regeneration carries its predecessor's Scope forward with the window
-stepped on. It does **not** re-freeze: that window is derived from the one
-before it, and resolving against the clock would widen the chain every time a
-tick ran late.
+Auto-regeneration records the Scope it actually selects by: the channels and
+the stepped-on window, with every filter at its default. Carrying the
+predecessor's keyword and cap forward was the first version and it was wrong —
+`_regenerate_one` has never applied them, so the record would have named filters
+nobody used. It does not re-freeze through the resolver either: the window is
+derived from the one before it and its end is deliberately in the future, which
+`resolve_analysis_window` refuses, rightly, for a window somebody is choosing
+now.
+
+The export/import door learned about `scope` too. It writes `tg_summaries`
+without going through `upsert_summary`, so an unlisted field there does not
+merely fail to restore — it lands in the open `extra` bag and the projection
+reports it *as* the Scope, over a column that is still `NULL`. `_with_scope`
+stamps the column on last in both projections so a stray copy can never win
+again, whatever put it there.
 
 **Deliberately narrowed:** only the Summary submission sends the unflattened
 Live/Fixed window. The feed, counts and prompt reads still flatten through
@@ -70,6 +81,28 @@ Live/Fixed window. The feed, counts and prompt reads still flatten through
 every request and nothing persists their answer. AW-06 brings the other three
 Artifact families onto the submission path, and that is where the rest of the
 consumers move.
+
+**Left out, and it needs a decision:** `AIContext.generateBackgroundSummary`,
+the browser-side twin of `auto_summary._regenerate_one`, still creates its
+successor through `PUT`, so a regeneration that happens with a tab open writes
+`scope = NULL` while the scheduler's writes a complete one. Every way of closing
+it inside this ticket was worse than leaving it named:
+
+* Submitting the clamped window records a *different* window than the scheduler
+  does for the same chain — the divergence relocated, not removed.
+* Clamping the scheduler's end instead makes `duration = end - start` shrink
+  every run, so the chain decays.
+* The convergent fix is for the server to derive the successor — the browser
+  would submit "the successor of X" and take back the boundaries rather than
+  computing them — which is a new request shape on an unattended path, and
+  AW-06 is about to settle what that shape is.
+
+**This matters to AW-07,** which deletes Artifacts that cannot supply the
+complete contract: as it stands that would delete regenerations that happened to
+run in a browser and keep the ones that ran in the worker. Decide this before
+AW-07 runs, not after. The scheduler half is no longer a blocker on its own —
+`_successor_scope` stopped depending on the predecessor having a Scope, so a
+chain that predates AW-05 gains a complete record from its next unattended run.
 
 ## Notes
 

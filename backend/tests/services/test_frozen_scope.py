@@ -29,6 +29,10 @@ afterwards can move it.
   of the list projection.
 * **A later write cannot replace it.** Not the text, not a flag, not a
   round-tripped list item — which is the shape the client actually PUTs.
+* **An export and an import carry it.** That door writes `tg_summaries` without
+  going through `upsert_summary`, so it is the one place the rule above can be
+  bypassed rather than enforced, and it is where an unlisted field lands in
+  `extra` and is then reported *as* the Scope.
 * **Duration is derived.** It comes off the two boundaries every time rather
   than being stored beside them, so the number a reader looks at cannot
   disagree with the pair it came from.
@@ -42,6 +46,7 @@ afterwards can move it.
 * drop a filter from `FrozenScope` -> the completeness case
 * store `durationMinutes` instead of computing it -> the derived case
 * put `scope_posts` on `tg_summaries` -> the list-projection case
+* drop `scope` from `_SUMMARY_KNOWN_FIELDS` -> the round-trip case
 """
 
 from __future__ import annotations
@@ -417,6 +422,40 @@ def test_a_later_content_or_flag_write_cannot_replace_the_frozen_scope(
         "a rejected `scope` must not be routed into `extra`, where the "
         "projection would pick it up as the real one"
     )
+
+
+def test_an_export_and_import_round_trip_keeps_the_frozen_scope(
+    client: TestClient, at_now: None
+) -> None:
+    """The other write door, and the one that can bypass the rule above.
+
+    `POST /data/import` reaches `tg_summaries` without going through
+    `upsert_summary`, so a field it does not recognise does not merely fail to
+    restore — it lands in the open `extra` bag, and the projection then reports
+    it *as* the Scope. That is both halves of the same miss: the column stays
+    `NULL` while the API claims a Scope the database does not hold.
+    """
+    headers = _auth(client)
+    refs = [{"channelName": "ch", "postId": n} for n in (7, 8)]
+    created = _submit(
+        client, headers, scope=_scope(keyword="tehran", posts=refs)
+    ).json()
+    exported = client.get(f"{PREFIX}/summaries/{created['id']}", headers=headers).json()
+
+    client.delete(f"{PREFIX}/summaries/{created['id']}", headers=headers)
+    client.post(f"{PREFIX}/import", json={"summaries": [exported]}, headers=headers)
+
+    stored, payload = _stored(created["id"])
+    assert stored.scope is not None, "the import dropped the frozen Scope"
+    assert stored.scope["keyword"] == "tehran"
+    assert "scope" not in (stored.extra or {}), (
+        "the Scope landed in `extra`, where the projection reports it as the "
+        "real one over a column that is still NULL"
+    )
+    assert payload is not None and payload.scope_posts == refs
+
+    restored = client.get(f"{PREFIX}/summaries/{created['id']}", headers=headers).json()
+    assert restored["scope"] == exported["scope"]
 
 
 def test_round_tripping_a_list_item_back_through_put_moves_nothing(

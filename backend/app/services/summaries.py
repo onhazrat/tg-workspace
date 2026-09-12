@@ -83,7 +83,7 @@ SUMMARY_PROMPT_EXCERPT_CHARS = 80
 
 
 def _summary_base(summary: Summary) -> dict[str, Any]:
-    base = {
+    return {
         "id": summary.id,
         "text": summary.text,
         "channels": summary.channels,
@@ -94,16 +94,29 @@ def _summary_base(summary: Summary) -> dict[str, Any]:
         "postCount": summary.post_count,
         "timestamp": summary.timestamp,
     }
-    # Through the model rather than straight off the column, so the light and
-    # full projections emit one shape and `durationMinutes` is derived in both.
-    # Absent rather than `null` on a row that predates the contract, which is
-    # the wire rule the rest of this module already follows: a key that was
-    # never there stays away instead of becoming an explicit `null` that a
-    # client has to tell apart from "no Scope was frozen".
-    scope = frozen_scope_of(summary)
-    if scope is not None:
-        base["scope"] = scope.model_dump(by_alias=True)
-    return base
+
+
+def _with_scope(
+    out: dict[str, Any], summary: Summary, payload: SummaryPayload | None
+) -> dict[str, Any]:
+    """Stamp the frozen Scope on, **after** `extra` has been spread.
+
+    Last, not inside `_summary_base`, and that ordering is the point: `extra` is
+    an open bag, so a key named `scope` sitting in it would otherwise win over
+    the column and the endpoint would report a Scope the database does not hold.
+    Both writers now drop such a key, and this is the half that does not depend
+    on them remembering to.
+
+    Through the model rather than straight off the column, so the light and full
+    projections emit one shape and `durationMinutes` is derived in both. `None`
+    on a row that predates the contract — a declared optional field, so it
+    serialises as an explicit `null` rather than being absent; unlike the
+    conditional keys around it `scope` has no legacy wire shape to preserve, and
+    the client has to render it either way.
+    """
+    scope = frozen_scope_of(summary, payload)
+    out["scope"] = None if scope is None else scope.model_dump(by_alias=True)
+    return out
 
 
 def frozen_scope_of(
@@ -145,11 +158,9 @@ def summary_to_camel(
             value = getattr(payload, column)
             if value is not None:
                 heavy[key] = value
-    out = {**_summary_base(summary), **(summary.extra or {}), **heavy}
-    scope = frozen_scope_of(summary, payload)
-    if scope is not None:
-        out["scope"] = scope.model_dump(by_alias=True)
-    return out
+    return _with_scope(
+        {**_summary_base(summary), **(summary.extra or {}), **heavy}, summary, payload
+    )
 
 
 def _derive_chat_message_count(chat_messages: Any) -> int:
@@ -187,7 +198,10 @@ def summary_to_camel_light(summary: Summary) -> dict[str, Any]:
     light["chatMessageCount"] = summary.chat_message_count
     if summary.prompt_excerpt is not None:
         light["promptExcerpt"] = summary.prompt_excerpt
-    return {**_summary_base(summary), **light}
+    # `payload=None`: this projection must not open the payload table, so the
+    # Scope travels without its Post refs. `scopedPostCount` is what a list
+    # reads to know there were any.
+    return _with_scope({**_summary_base(summary), **light}, summary, None)
 
 
 def _search_clause(term: str) -> Any:
@@ -353,7 +367,8 @@ def upsert_summary(
         # Recognised only so it is *dropped*. `extra="allow"` routes anything
         # unrecognised into `extra`, so without this line a client PUTting a
         # list item straight back would store a second copy of the Scope beside
-        # the frozen one and the projection would emit the copy.
+        # the frozen one. `_with_scope` is the other half of that: it stamps the
+        # column on last, so a copy that got in some other way still loses.
         "scope",
         # Same, one table over: the explicit Post selection is written once by
         # `submit_summary` and is part of the frozen Scope, not an update.

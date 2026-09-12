@@ -442,10 +442,37 @@ _SUMMARY_KNOWN_FIELDS = {
     "model",
     "postCount",
     "timestamp",
+    # AW-05. It has a column, and leaving it out of this set was two bugs at
+    # once: the column stayed `NULL` while a copy of the Scope sat in `extra`,
+    # where `summary_to_camel_light` emitted it *as* `scope` — so the API
+    # reported a frozen Scope the database did not hold, and an imported
+    # document could rewrite one through a door `PUT` had just been closed on.
+    "scope",
     *HEAVY_SUMMARY_FIELDS,
     "chatMessageCount",
     "promptExcerpt",
 }
+
+
+def _frozen_scope_columns(item: Any) -> tuple[dict[str, Any] | None, list[Any] | None]:
+    """An exported `scope` split back into the two columns it lives in.
+
+    `summary_to_camel` merges the Post refs *into* the Scope on the way out,
+    because one value object is what a reader wants. Storage keeps them apart —
+    the refs are corpus-sized and belong in `tg_summary_payloads` — so an import
+    has to undo the merge rather than write the document shape back verbatim.
+
+    A document with no `scope` returns `(None, None)`, which both call sites
+    read as "leave what is there alone". Nothing is invented for a
+    pre-AW-05 export: AW-07 deletes those rows rather than guessing their
+    filters.
+    """
+    scope = item.get("scope")
+    if not isinstance(scope, dict):
+        return None, None
+    posts = scope.get("posts")
+    column = {k: v for k, v in scope.items() if k not in ("posts", "durationMinutes")}
+    return column, posts if isinstance(posts, list) else None
 
 
 def _import_summaries(session: Session, items: list[Any], *, user_id: uuid.UUID) -> int:
@@ -462,6 +489,7 @@ def _import_summaries(session: Session, items: list[Any], *, user_id: uuid.UUID)
     """
     for item in items:
         sid = item.get("id")
+        scope_column, scope_posts = _frozen_scope_columns(item)
         summary = session.get(Summary, sid)
         _assert_importable(
             summary, user_id, detail=SUMMARY_NOT_FOUND, section="summaries"
@@ -481,6 +509,13 @@ def _import_summaries(session: Session, items: list[Any], *, user_id: uuid.UUID)
                 "postCount", item.get("post_count", summary.post_count)
             )
             summary.timestamp = item.get("timestamp", summary.timestamp)
+            # An import is a restore, not a later edit, so it may write the
+            # frozen Scope where `PUT` may not — it is putting back a document
+            # this account exported, and the same argument already lets it write
+            # `start_date` and `channels` two lines up. An export that carries
+            # no Scope leaves the stored one alone rather than clearing it.
+            if scope_column is not None:
+                summary.scope = scope_column
             summary.extra = {
                 k: v
                 for k, v in item.items()
@@ -499,6 +534,7 @@ def _import_summaries(session: Session, items: list[Any], *, user_id: uuid.UUID)
                 model=item.get("model"),
                 post_count=item.get("postCount", item.get("post_count")),
                 timestamp=item.get("timestamp", 0),
+                scope=scope_column,
                 extra={k: v for k, v in item.items() if k not in _SUMMARY_KNOWN_FIELDS},
             )
         # Ticket 27: an import is a write door onto `tg_summaries` that is not
@@ -520,7 +556,12 @@ def _import_summaries(session: Session, items: list[Any], *, user_id: uuid.UUID)
                 column: item[key]
                 for key, column in PAYLOAD_COLUMNS.items()
                 if item.get(key) is not None
-            },
+            }
+            # Not in `PAYLOAD_COLUMNS`, deliberately: that map is the *wire*
+            # routing for the three heavy fields a client may PUT, and the Post
+            # refs are not one of those — they arrive inside `scope` and are
+            # unreachable from an ordinary write.
+            | ({"scope_posts": scope_posts} if scope_posts is not None else {}),
             removals={
                 column
                 for key, column in PAYLOAD_COLUMNS.items()

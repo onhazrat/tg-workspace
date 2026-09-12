@@ -299,11 +299,12 @@ export interface Summary {
   /**
    * The Scope this summary was produced from, frozen at submission (AW-05).
    *
-   * Absent on a row that predates the contract. Read-only everywhere: the
-   * server takes it once, on `POST /data/summaries`, and ignores it on every
-   * later write.
+   * `null` on a row that predates the contract — a declared field, so it is
+   * serialised rather than omitted; check the value, not the key. Read-only
+   * everywhere: the server takes it once, on `POST /data/summaries`, and
+   * ignores it on every later write.
    */
-  scope?: FrozenScope
+  scope?: FrozenScope | null
 }
 
 /**
