@@ -117,6 +117,23 @@ TG_TABLES: tuple[str, ...] = (
 )
 
 
+def _summary_channels(summary: Summary) -> list[str]:
+    """The channels a Summary was made from, off its frozen Scope.
+
+    AW-07 dropped the `channels` column, so the Scope is the only copy. A
+    Summary a legacy `PUT` door opened records none, which reads as "names no
+    test channel" — the right answer, since this script only ever deletes rows
+    it can positively identify as test pollution.
+    """
+    scope = summary.scope or {}
+    channels = scope.get("channels")
+    return (
+        [c for c in channels if isinstance(c, str)]
+        if isinstance(channels, list)
+        else []
+    )
+
+
 def _summary_references_test_channels(channels: list[str] | None) -> bool:
     if not channels:
         return False
@@ -167,7 +184,8 @@ def count_test_pollution(session: Session) -> dict[str, int]:
     counts["tg_summaries"] = sum(
         1
         for s in summary_rows
-        if s.id in TEST_SUMMARY_IDS or _summary_references_test_channels(s.channels)
+        if s.id in TEST_SUMMARY_IDS
+        or _summary_references_test_channels(_summary_channels(s))
     )
 
     counts["tg_network_logs"] = len(
@@ -209,7 +227,7 @@ def delete_test_pollution(session: Session, *, dry_run: bool = False) -> dict[st
 
     for summary in session.exec(select(Summary)).all():
         if summary.id in TEST_SUMMARY_IDS or _summary_references_test_channels(
-            summary.channels
+            _summary_channels(summary)
         ):
             session.delete(summary)
 
@@ -245,8 +263,8 @@ def cleanup_channel_keys(session: Session, channel_keys: Iterable[str]) -> None:
     session.exec(delete(SyncLog).where(col(SyncLog.channel_name).in_(keys)))
 
     for summary in session.exec(select(Summary)).all():
-        if _summary_references_test_channels(summary.channels) and any(
-            ch in keys for ch in (summary.channels or [])
+        if _summary_references_test_channels(_summary_channels(summary)) and any(
+            ch in keys for ch in _summary_channels(summary)
         ):
             session.delete(summary)
 

@@ -114,6 +114,24 @@ def _text_flag(model: Any, key: str) -> Any:
     return cast(col(model.extra).op("->>")(key), String)
 
 
+def _scope_text(model: Any, key: str) -> Any:
+    """One key of the frozen Scope as text, for a title or an `ILIKE`.
+
+    AW-07 dropped the `channels` / `start_date` / `end_date` trio and, on
+    reports, the seven duplicated filter columns, so the Scope is the only
+    place left holding them — which was the point of dropping them. `channels`
+    comes back as the JSON array's own text (`["a", "b"]`), which is what
+    `cast(col(Model.channels), Text)` produced here before and matches the same
+    way.
+
+    `NULL` on a row a legacy write door opened with no Scope, so such a row
+    matches nothing rather than matching everything: there is no window or
+    channel list to search, which is the honest answer and the same one the
+    projection gives.
+    """
+    return cast(col(model.scope).op("->>")(key), Text)
+
+
 def _scoped(leg: Any, model: type[SQLModel], user_id: uuid.UUID) -> Any:
     """One leg, narrowed to the rows this account may see.
 
@@ -141,9 +159,6 @@ def _summary_leg(user_id: uuid.UUID) -> Any:
             literal("summary").label("kind"),
             col(Summary.id).label("id"),
             func.left(col(Summary.text), ARTIFACT_TITLE_CHARS).label("title"),
-            col(Summary.channels).label("channels"),
-            col(Summary.start_date).label("start_date"),
-            col(Summary.end_date).label("end_date"),
             col(Summary.timestamp).label("timestamp"),
             col(Summary.model).label("model"),
             col(Summary.post_count).label("post_count"),
@@ -173,9 +188,6 @@ def _chat_leg(user_id: uuid.UUID) -> Any:
             literal("chat").label("kind"),
             col(ChatSession.id).label("id"),
             col(ChatSession.title).label("title"),
-            col(ChatSession.channels).label("channels"),
-            col(ChatSession.start_date).label("start_date"),
-            col(ChatSession.end_date).label("end_date"),
             col(ChatSession.timestamp).label("timestamp"),
             col(ChatSession.model).label("model"),
             col(ChatSession.post_count).label("post_count"),
@@ -202,9 +214,6 @@ def _tag_leg(user_id: uuid.UUID) -> Any:
             literal("tag").label("kind"),
             col(TagRun.id).label("id"),
             (literal("Tags · ") + col(TagRun.mode)).label("title"),
-            col(TagRun.channels).label("channels"),
-            col(TagRun.start_date).label("start_date"),
-            col(TagRun.end_date).label("end_date"),
             # The only rename: tag runs date from `created_at`, not `timestamp`.
             # Deliberately *not* `updated_at_ms`, and never the naive `updated_at`
             # datetime every one of these tables also carries — unifying TIMESTAMP
@@ -234,12 +243,9 @@ def _discovery_leg(user_id: uuid.UUID) -> Any:
         sa_select(
             literal("discovery").label("kind"),
             col(DiscoverReport.id).label("id"),
-            func.coalesce(col(DiscoverReport.keyword), literal("Discover")).label(
-                "title"
-            ),
-            col(DiscoverReport.channels).label("channels"),
-            col(DiscoverReport.start_date).label("start_date"),
-            col(DiscoverReport.end_date).label("end_date"),
+            func.coalesce(
+                _scope_text(DiscoverReport, "keyword"), literal("Discover")
+            ).label("title"),
             col(DiscoverReport.timestamp).label("timestamp"),
             # Discover runs no model.
             _null(String).label("model"),
@@ -296,27 +302,27 @@ def _search(kind: str, term: str) -> Any:
     if kind == "summary":
         return or_(
             col(Summary.text).ilike(like),
-            cast(col(Summary.channels), Text).ilike(like),
+            _scope_text(Summary, "channels").ilike(like),
             col(Summary.model).ilike(like),
             col(Summary.extra).op("->>")("note").ilike(like),
         )
     if kind == "chat":
         return or_(
             col(ChatSession.title).ilike(like),
-            cast(col(ChatSession.channels), Text).ilike(like),
+            _scope_text(ChatSession, "channels").ilike(like),
             col(ChatSession.model).ilike(like),
             col(ChatSession.extra).op("->>")("note").ilike(like),
         )
     if kind == "tag":
         return or_(
-            cast(col(TagRun.channels), Text).ilike(like),
+            _scope_text(TagRun, "channels").ilike(like),
             col(TagRun.model).ilike(like),
             col(TagRun.mode).ilike(like),
             col(TagRun.status).ilike(like),
         )
     return or_(
-        cast(col(DiscoverReport.channels), Text).ilike(like),
-        col(DiscoverReport.keyword).ilike(like),
+        _scope_text(DiscoverReport, "channels").ilike(like),
+        _scope_text(DiscoverReport, "keyword").ilike(like),
     )
 
 
@@ -332,9 +338,6 @@ def _row_to_camel(row: Any) -> dict[str, Any]:
         "kind": kind,
         "id": row["id"],
         "title": row["title"] or "",
-        "channels": row["channels"] or [],
-        "startDate": row["start_date"],
-        "endDate": row["end_date"],
         "timestamp": row["timestamp"],
         "model": row["model"],
         "postCount": row["post_count"],
@@ -347,10 +350,10 @@ def _row_to_camel(row: Any) -> dict[str, Any]:
         "actedByEmail": row["acted_by_email"],
         # AW-06, and on the base for the same reason `actedByEmail` is: "which
         # Posts produced this" is a fact about an artifact, not about a summary.
-        # It is the *whole* reason History can stop reading four per-kind
-        # subsets — the four legs now select one column holding one shape, and
-        # AW-07 drops the `channels`/`startDate`/`endDate` trio above that this
-        # supersedes.
+        # It is the *whole* reason History stopped reading four per-kind
+        # subsets — the four legs select one column holding one shape, and
+        # AW-07 dropped the `channels`/`startDate`/`endDate` trio it superseded,
+        # so a History row can no longer carry two Scopes that disagree.
         #
         # Without its Post refs. Those live in a payload table or a heavy
         # column depending on the family, and this module's one rule is that it
@@ -422,9 +425,9 @@ def list_artifacts(
         # scans feeding a MergeAppend.
         legs.append(leg.order_by(timestamp_col.desc(), id_col).limit(offset + limit))
 
-    # UNION ALL, never UNION: `channels` is a PostgreSQL `json` column and
-    # `json` has no equality operator, so a de-duplicating UNION fails outright.
-    # It is also semantically right — two artifacts never dedupe.
+    # UNION ALL, never UNION: `scope` is a PostgreSQL `json` column and `json`
+    # has no equality operator, so a de-duplicating UNION fails outright. It is
+    # also semantically right — two artifacts never dedupe.
     unioned = union_all(*legs).subquery("artifact")
     statement = (
         sa_select(unioned)

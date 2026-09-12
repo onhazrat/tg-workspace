@@ -152,6 +152,7 @@ from app.services.logs import LOG_MODELS, get_log
 from app.services.summaries import get_summary
 from app.services.tag_runs import get_tag_run
 from app.services.tenancy import Scope, scope_of
+from tests.utils.discover import stored_report_scope
 from tests.utils.user import create_random_user
 
 BOTH_FLAG_STATES = pytest.mark.parametrize("enforced", [False, True])
@@ -310,17 +311,21 @@ FAMILIES: tuple[Family, ...] = (
         seed=lambda row_id, owner: DiscoverReport(
             id=row_id,
             user_id=owner,
-            channels=["alpha"],
-            start_date=0,
-            end_date=0,
-            keyword="theirs",
+            scope=stored_report_scope(channels=["alpha"], keyword="theirs"),
             timestamp=0,
             extra={},
         ),
-        attack=lambda row_id: {"id": row_id, "keyword": "pwned"},
-        probe=lambda row: row.keyword,
-        original="theirs",
-        attacked="pwned",
+        # The document must carry a `scope`: AW-07 made the column NOT NULL and
+        # the import door refuses one without it — but the ownership refusal
+        # still has to win, which is what this family is here to prove.
+        attack=lambda row_id: {
+            "id": row_id,
+            "scope": stored_report_scope(channels=["alpha"], keyword="theirs"),
+            "postsInScope": 999,
+        },
+        probe=lambda row: row.posts_in_scope,
+        original=0,
+        attacked=999,
     ),
     Family(
         section="bot_credentials",

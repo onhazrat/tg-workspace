@@ -30,6 +30,7 @@ from app.models_tg import SyncJob as SyncJobRow
 from app.services.follows import get_operator_user_id
 from app.services.network_settings import get_network_setting_row
 from app.services.scraper_jobs import clear_jobs_for_tests
+from tests.utils.scope import stored_scope
 from tests.utils.setting_groups import freeze_channels_except, upsert_sync_test_channel
 from tests.utils.tenancy import ANY_READER
 
@@ -702,9 +703,9 @@ def test_auto_summary_regenerates_due_summary(mock_get_provider) -> None:
         existing_summary = session.get(Summary, summary_id)
         if existing_summary:
             existing_summary.text = "old"
-            existing_summary.channels = ["ch1"]
-            existing_summary.start_date = now - 2 * duration
-            existing_summary.end_date = now - duration
+            existing_summary.scope = stored_scope(
+                channels=["ch1"], start=now - 2 * duration, end=now - duration
+            )
             existing_summary.extra = {"autoRegenerate": True}
             existing_summary.user_id = operator_id
             session.add(existing_summary)
@@ -713,9 +714,11 @@ def test_auto_summary_regenerates_due_summary(mock_get_provider) -> None:
                 Summary(
                     id=summary_id,
                     text="old",
-                    channels=["ch1"],
-                    start_date=now - 2 * duration,
-                    end_date=now - duration,
+                    scope=stored_scope(
+                        channels=["ch1"],
+                        start=now - 2 * duration,
+                        end=now - duration,
+                    ),
                     language="English",
                     model="gemini-3-flash-preview",
                     extra={"autoRegenerate": True},

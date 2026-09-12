@@ -73,6 +73,7 @@ from app.services.logs import (
     SHARED_LOG_TYPES,
     delete_owned_logs_before,
 )
+from tests.utils.discover import stored_report_scope
 from tests.utils.user import create_random_user
 
 DAY_MS = 24 * 60 * 60 * 1000
@@ -543,7 +544,7 @@ def test_report_pruning_is_per_account_end_to_end() -> None:
                 DiscoverReport(
                     id=report_id,
                     user_id=owner,
-                    channels=["c"],
+                    scope=stored_report_scope(channels=["c"]),
                     candidates=[],
                     timestamp=now - 30 * DAY_MS,
                 )
@@ -578,7 +579,7 @@ def test_one_count_cap_does_not_prune_another_accounts_newest() -> None:
                 DiscoverReport(
                     id=f"busy-{i}",
                     user_id=busy,
-                    channels=["c"],
+                    scope=stored_report_scope(channels=["c"]),
                     candidates=[],
                     timestamp=now - i * 1000,
                 )
@@ -587,7 +588,7 @@ def test_one_count_cap_does_not_prune_another_accounts_newest() -> None:
             DiscoverReport(
                 id="quiet-only",
                 user_id=quiet,
-                channels=["c"],
+                scope=stored_report_scope(channels=["c"]),
                 candidates=[],
                 timestamp=now - 99 * DAY_MS,
             )

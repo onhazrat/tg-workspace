@@ -37,18 +37,16 @@ class ChatSessionListItemResponse(BaseModel):
 
     id: str
     title: str = ""
-    channels: list[str] = Field(default_factory=list)
-    start_date: int = Field(default=0, alias="startDate")
-    end_date: int = Field(default=0, alias="endDate")
     language: str = "English"
     model: str | None = None
     mode: Literal["full_scope", "semantic"] = "full_scope"
     post_count: int | None = Field(default=None, alias="postCount")
     timestamp: int = 0
     message_count: int = Field(default=0, alias="messageCount")
-    #: The Scope this chat was frozen at (AW-06), or `null` on a row that
-    #: predates the contract — which AW-07 deletes rather than backfills.
-    #: Declared, unlike the conditional keys this model leaves to `extra`,
+    #: The Scope this chat was frozen at (AW-06), or `null` on a row a legacy
+    #: write door opened without one — the pre-contract rows were deleted in
+    #: AW-07, along with the `channels`/`startDate`/`endDate` trio it
+    #: supersedes. Declared, unlike the conditional keys this model leaves to `extra`,
     #: because the client has to render it and `FrozenScope | undefined` is the
     #: type that says so.
     scope: FrozenScope | None = None

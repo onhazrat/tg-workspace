@@ -195,8 +195,10 @@ function discoverScopeBody(
  */
 export type DiscoverReportScope = {
   channels: string[]
-  startDate: number
-  endDate: number
+  /** The frozen boundaries. `startDate`/`endDate` spelled these until AW-07. */
+  start: number
+  end: number
+  durationMinutes: number
   signals: string[]
   keyword: string | null
   forwarded: ForwardedFilterValue

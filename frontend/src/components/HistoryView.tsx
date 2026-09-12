@@ -106,9 +106,10 @@ export const HistoryView: React.FC<HistoryViewProps> = ({ openArtifact }) => {
     const next = !artifact[flag]
     if (flag === "autoRegenerate" && next) {
       // A scope shorter than a minute would have the job re-running over a
-      // window that barely moves.
-      const span = (artifact.endDate ?? 0) - (artifact.startDate ?? 0)
-      if (span < 60_000) {
+      // window that barely moves. Read off the frozen Scope since AW-07: a
+      // Summary with none has no window to shift at all, which the server
+      // refuses too, so it fails the same check.
+      if ((artifact.scope?.durationMinutes ?? 0) < 1) {
         toast.error(
           "Cannot auto-regenerate a summary whose range is under a minute.",
         )
@@ -303,7 +304,7 @@ export const HistoryView: React.FC<HistoryViewProps> = ({ openArtifact }) => {
          */
         descriptionClassName="line-clamp-3 break-words text-sm text-app-ink/70"
         description={
-          pendingDelete?.channels?.join(", ") || "This cannot be undone."
+          pendingDelete?.scope?.channels?.join(", ") || "This cannot be undone."
         }
         confirmLabel="Delete"
         onConfirm={confirmDelete}

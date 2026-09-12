@@ -59,6 +59,7 @@ from app.services.tag_runs import (
     list_tag_runs,
     upsert_tag_run,
 )
+from tests.utils.discover import stored_report_scope
 from tests.utils.user import create_random_user
 
 
@@ -146,7 +147,11 @@ def _seed_tag_run(session: Session, row_id: str, owner: uuid.UUID) -> None:
 
 
 def _seed_report(session: Session, row_id: str, owner: uuid.UUID) -> None:
-    session.add(DiscoverReport(id=row_id, user_id=owner, timestamp=10))
+    session.add(
+        DiscoverReport(
+            id=row_id, user_id=owner, timestamp=10, scope=stored_report_scope()
+        )
+    )
     session.commit()
 
 

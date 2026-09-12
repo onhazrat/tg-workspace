@@ -6,6 +6,7 @@ import type {
   SearchResultsKind,
   SearchResultsState,
 } from "@/lib/commands/types"
+import { scopeChannels } from "@/lib/scope/artifact-scope"
 import type { Channel, Post, SummaryListItem } from "@/types"
 
 /** Non-channel entity candidate shape (summaries, posts, tags, tables, groups). */
@@ -151,7 +152,7 @@ export function filterSearchResultItems(
     // that produced `state.items` still matches whole prompts server-side, so
     // only further narrowing within an existing result set is affected.
     const haystack = [
-      summary.channels.join(" "),
+      scopeChannels(summary).join(" "),
       summary.text,
       summary.promptExcerpt ?? "",
       summary.model ?? "",

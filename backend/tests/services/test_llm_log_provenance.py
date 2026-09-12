@@ -96,6 +96,7 @@ from app.models import User
 from app.models_tg import AICredential, LLMLog, Post, Summary, utc_now
 from app.services.ai_keys import AI_CREDENTIAL_NOT_FOUND
 from app.services.logs import LOG_HEAVY_COLUMNS, list_logs
+from tests.utils.scope import stored_scope
 from tests.utils.user import create_random_user
 
 APP_ROOT = pathlib.Path(__file__).resolve().parents[2] / "app"
@@ -174,9 +175,9 @@ def _due_summary(
         id=f"sum-{uuid.uuid4().hex[:8]}",
         user_id=owner,
         text="body",
-        channels=[channel],
-        start_date=now - 7_200_000,
-        end_date=now - 3_600_000,
+        scope=stored_scope(
+            channels=[channel], start=now - 7_200_000, end=now - 3_600_000
+        ),
         language="English",
         post_count=0,
         timestamp=now,

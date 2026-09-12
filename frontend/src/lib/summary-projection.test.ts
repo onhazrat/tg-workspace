@@ -9,9 +9,6 @@ function summary(overrides: Partial<Summary> = {}): Summary {
   return {
     id: "s1",
     text: "body",
-    channels: ["ch"],
-    startDate: 0,
-    endDate: 1,
     language: "en",
     timestamp: 1,
     ...overrides,

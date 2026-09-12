@@ -17,6 +17,7 @@ from app.ai.registry import default_model, get_provider, is_credential_rejection
 from app.core.db import engine
 from app.models_tg import ChatDestination, Post, Summary, utc_now
 from app.prompts.summary import format_summary_prompt
+from app.schemas.scope import FrozenScope
 from app.services.ai_keys import Purpose, record_validation, resolve_ai_key
 from app.services.channel_setting_groups import channel_is_frozen, load_groups_by_id
 from app.services.credentials import CHAT_DESTINATION_NOT_FOUND
@@ -248,12 +249,38 @@ def _extract_cited_posts(text: str, posts: Sequence[Post]) -> dict[str, dict[str
     return cited
 
 
+def _scope_of(summary: Summary) -> FrozenScope | None:
+    """The window and channels this Summary was made from, or `None`.
+
+    AW-07 dropped the `start_date` / `end_date` / `channels` trio these callers
+    read, so the frozen Scope is the only copy. `None` on a row a legacy write
+    door opened without one; each caller says what it does about that, and none
+    of them invents boundaries.
+    """
+    return FrozenScope.from_stored(summary.scope)
+
+
 def _default_metadata(summary: Summary, extra: dict[str, Any]) -> str:
-    channels = summary.channels or []
+    """The metadata block published beside an auto-regenerated Summary.
+
+    A Summary with no frozen Scope says so rather than reporting the epoch
+    twice. `0`/`0` formats as `1970-01-01T00:00:00` in both halves of the range,
+    which is a *claim about which Posts this covered* and exactly the invented
+    window AW-07 exists to refuse — published, in this case, to a Telegram
+    channel. The browser's twin, `generateDefaultMetadataText`, answers "not
+    recorded" here, and the two halves of one message have to agree.
+    """
+    scope = _scope_of(summary)
+    channels = list(scope.channels) if scope else []
+    time_range = (
+        f"{datetime.utcfromtimestamp(scope.start / 1000).isoformat()} - "
+        f"{datetime.utcfromtimestamp(scope.end / 1000).isoformat()}"
+        if scope
+        else "not recorded"
+    )
     return (
         f"📊 *Analysis Metadata*\n"
-        f"🕒 *Time Range:* {datetime.utcfromtimestamp(summary.start_date / 1000).isoformat()} - "
-        f"{datetime.utcfromtimestamp(summary.end_date / 1000).isoformat()}\n"
+        f"🕒 *Time Range:* {time_range}\n"
         f"📡 *Channels Used:* {len(channels)}\n"
         f"📋 *Channel List:* {', '.join(f'@{c}' for c in channels)}\n"
         f"🤖 *AI Model:* {summary.model or default_model()}\n"
@@ -300,7 +327,14 @@ def _is_due(summary: Summary, now: int) -> bool:
     extra = _summary_extra(summary)
     if not extra.get("autoRegenerate"):
         return False
-    duration_ms = summary.end_date - summary.start_date
+    scope = _scope_of(summary)
+    # A Summary with no frozen Scope is never due. It has no window to shift,
+    # and the successor it would open has nothing to inherit — the same refusal
+    # `derived_scope` makes one layer down, made here so the scheduler skips it
+    # rather than failing it every tick.
+    if scope is None:
+        return False
+    duration_ms = scope.end - scope.start
     if duration_ms < 60_000:
         return False
     # Serving out a backoff. Read as a timestamp rather than recomputed from
@@ -309,7 +343,7 @@ def _is_due(summary: Summary, now: int) -> bool:
     retry_after = extra.get("autoRegenerateRetryAfter")
     if isinstance(retry_after, int | float) and now < retry_after:
         return False
-    target_time = summary.end_date + duration_ms
+    target_time = scope.end + duration_ms
     return now >= target_time
 
 
@@ -381,8 +415,12 @@ async def _regenerate_one(
     # and the browser recorded none, for the same chain.
     scope = derived_scope(summary, "successor")
     new_start, new_end = scope.start, scope.end
+    # The derived Scope's own channels, not a second read of the row. AW-07
+    # dropped `Summary.channels`, and `derived_scope` carries the predecessor's
+    # list forward, so there is one list here where there were two.
+    channel_names = list(scope.channels)
 
-    await _sync_channels_for_summary(session, summary.channels or [], new_end, owner_id)
+    await _sync_channels_for_summary(session, channel_names, new_end, owner_id)
 
     # The successor window opens exactly where its predecessor closed, so this
     # is the read the half-open rule exists for: an inclusive end summarised
@@ -390,7 +428,7 @@ async def _regenerate_one(
     posts = session.exec(
         apply_analysis_window(
             select(Post).where(
-                col(Post.channel_name).in_(summary.channels or []),
+                col(Post.channel_name).in_(channel_names),
                 col(Post.is_anchor) == False,  # noqa: E712
             ),
             new_start,
@@ -411,7 +449,7 @@ async def _regenerate_one(
         )
         model = summary.model or default_model()
         prompt = format_summary_prompt(
-            channels=summary.channels or [],
+            channels=channel_names,
             language=summary.language,
             posts_text=posts_text,
         )
@@ -468,9 +506,6 @@ async def _regenerate_one(
         id=new_id,
         user_id=owner_id,
         text=full_text,
-        channels=summary.channels,
-        start_date=new_start,
-        end_date=new_end,
         scope=scope.stored(),
         language=summary.language,
         model=summary.model,

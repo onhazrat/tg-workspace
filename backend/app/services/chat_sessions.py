@@ -62,9 +62,9 @@ CHAT_TITLE_CHARS = 80
 
 #: Base columns a `PUT` may still change on a Chat that already exists.
 #:
-#: `channels`, `start_date` and `end_date` are **not** here, and that is AW-06
-#: applying AW-05's rule to this family: they are the Scope the conversation was
-#: answered from, frozen at submission. It matters more here than it did for
+#: `channels`, `start_date` and `end_date` were the interesting omission here
+#: until AW-07 dropped the columns: they are the Scope the conversation was
+#: answered from, frozen at submission. It mattered more here than it did for
 #: Summaries — a chat PUTs its whole session back on *every turn*, so while
 #: these were settable a Live window that had advanced mid-conversation rewrote
 #: the boundaries the earlier answers were actually built from.
@@ -116,9 +116,6 @@ def _chat_session_base(row: ChatSession) -> dict[str, Any]:
     return {
         "id": row.id,
         "title": row.title,
-        "channels": row.channels,
-        "startDate": row.start_date,
-        "endDate": row.end_date,
         "language": row.language,
         "model": row.model,
         "mode": row.mode,
@@ -198,7 +195,10 @@ def _search_clause(term: str) -> Any:
     like = f"%{term}%"
     return or_(
         col(ChatSession.title).ilike(like),
-        cast(col(ChatSession.channels), Text).ilike(like),
+        # The frozen Scope holds the channel list since AW-07 dropped the
+        # column; `->>` yields the JSON array's own text, which is what the
+        # cast over the old column produced and matches the same way.
+        cast(col(ChatSession.scope).op("->>")("channels"), Text).ilike(like),
         col(ChatSession.model).ilike(like),
         col(ChatSession.extra).op("->>")("note").ilike(like),
     )
@@ -386,9 +386,6 @@ def upsert_chat_session(
             id=chat_session_id,
             user_id=user_id,
             title=body.get("title", ""),
-            channels=body.get("channels", []),
-            start_date=body.get("startDate", body.get("start_date", 0)),
-            end_date=body.get("endDate", body.get("end_date", 0)),
             language=body.get("language", "English"),
             model=body.get("model"),
             mode=body.get("mode", "full_scope"),
@@ -449,12 +446,6 @@ def submit_chat_session(
         id=chat_session_id,
         user_id=user_id,
         title="",
-        # The superseded copy, kept in step at creation and never written
-        # again. AW-07 removes these three; until then the History union reads
-        # them, so they have to agree with the frozen value by construction.
-        channels=list(scope.channels),
-        start_date=scope.start,
-        end_date=scope.end,
         language=language,
         model=model,
         mode=mode,

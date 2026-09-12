@@ -1006,18 +1006,6 @@ export type ChatArtifactResponse = {
      */
     title?: string;
     /**
-     * Channels
-     */
-    channels?: Array<string>;
-    /**
-     * Startdate
-     */
-    startDate?: number;
-    /**
-     * Enddate
-     */
-    endDate?: number;
-    /**
      * Timestamp
      */
     timestamp?: number;
@@ -1166,18 +1154,6 @@ export type ChatSessionListItemResponse = {
      */
     title?: string;
     /**
-     * Channels
-     */
-    channels?: Array<string>;
-    /**
-     * Startdate
-     */
-    startDate?: number;
-    /**
-     * Enddate
-     */
-    endDate?: number;
-    /**
      * Language
      */
     language?: string;
@@ -1227,18 +1203,6 @@ export type ChatSessionResponse = {
      * Title
      */
     title?: string;
-    /**
-     * Channels
-     */
-    channels?: Array<string>;
-    /**
-     * Startdate
-     */
-    startDate?: number;
-    /**
-     * Enddate
-     */
-    endDate?: number;
     /**
      * Language
      */
@@ -1998,15 +1962,11 @@ export type DiscoverReportResponse = {
  * `maxPerChannelMode`, `seed`, `channels` and `scopedPostCount` come straight
  * off the base model under the names they already had.
  *
- * Two things are added and one is kept.
- *
- * `signals` is added, and it stays after AW-07: it picks which kinds of signal
- * a report describes, not which Posts it reads, so it is a report input rather
- * than part of Scope.
- *
- * `startDate`/`endDate` are kept, and they do not stay. They are the
- * superseded spelling of the inherited `start`/`end`, carried only so the
- * existing scope card renders unchanged until AW-08 moves it.
+ * One thing is added. `signals` picks which kinds of signal a report
+ * describes, not which Posts it reads, so it is a report input rather than
+ * part of Scope — which is why it survived AW-07 and the superseded
+ * `startDate`/`endDate` pair did not. Those were the old spelling of the
+ * inherited `start`/`end`, and the scope card reads the inherited pair now.
  */
 export type DiscoverReportScopeResponse = {
     /**
@@ -2065,14 +2025,6 @@ export type DiscoverReportScopeResponse = {
      * Signals
      */
     signals?: Array<string>;
-    /**
-     * Startdate
-     */
-    startDate?: number;
-    /**
-     * Enddate
-     */
-    endDate?: number;
 };
 
 /**
@@ -2105,18 +2057,6 @@ export type DiscoveryArtifactResponse = {
      * Title
      */
     title?: string;
-    /**
-     * Channels
-     */
-    channels?: Array<string>;
-    /**
-     * Startdate
-     */
-    startDate?: number;
-    /**
-     * Enddate
-     */
-    endDate?: number;
     /**
      * Timestamp
      */
@@ -4600,18 +4540,6 @@ export type SummaryArtifactResponse = {
      */
     title?: string;
     /**
-     * Channels
-     */
-    channels?: Array<string>;
-    /**
-     * Startdate
-     */
-    startDate?: number;
-    /**
-     * Enddate
-     */
-    endDate?: number;
-    /**
      * Timestamp
      */
     timestamp?: number;
@@ -4696,18 +4624,6 @@ export type SummaryListItemResponse = {
      */
     text: string;
     /**
-     * Channels
-     */
-    channels?: Array<string>;
-    /**
-     * Startdate
-     */
-    startDate?: number;
-    /**
-     * Enddate
-     */
-    endDate?: number;
-    /**
      * Language
      */
     language?: string;
@@ -4783,18 +4699,6 @@ export type SummaryResponse = {
      * Text
      */
     text: string;
-    /**
-     * Channels
-     */
-    channels?: Array<string>;
-    /**
-     * Startdate
-     */
-    startDate?: number;
-    /**
-     * Enddate
-     */
-    endDate?: number;
     /**
      * Language
      */
@@ -5139,18 +5043,6 @@ export type TagArtifactResponse = {
      */
     title?: string;
     /**
-     * Channels
-     */
-    channels?: Array<string>;
-    /**
-     * Startdate
-     */
-    startDate?: number;
-    /**
-     * Enddate
-     */
-    endDate?: number;
-    /**
      * Timestamp
      */
     timestamp?: number;
@@ -5270,18 +5162,6 @@ export type TagRunListItemResponse = {
      */
     mode: string;
     /**
-     * Channels
-     */
-    channels?: Array<string>;
-    /**
-     * Startdate
-     */
-    startDate?: number;
-    /**
-     * Enddate
-     */
-    endDate?: number;
-    /**
      * Postcount
      */
     postCount?: number | null;
@@ -5339,18 +5219,6 @@ export type TagRunResponse = {
      * Mode
      */
     mode: string;
-    /**
-     * Channels
-     */
-    channels?: Array<string>;
-    /**
-     * Startdate
-     */
-    startDate?: number;
-    /**
-     * Enddate
-     */
-    endDate?: number;
     /**
      * Postcount
      */

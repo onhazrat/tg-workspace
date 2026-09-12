@@ -48,16 +48,34 @@ function makeSummary(
   id: string,
   overrides: Partial<SummaryListItem> = {},
 ): SummaryListItem {
+  const { channels, ...rest } = overrides as Partial<SummaryListItem> & {
+    channels?: string[]
+  }
   return {
     id,
     text: "",
-    channels: [],
-    startDate: 0,
-    endDate: 1,
     language: "en",
     timestamp: 1,
     chatMessageCount: 0,
-    ...overrides,
+    // The channel list is inside the frozen Scope since AW-07, which is what
+    // the search haystack reads. `channels` stays an override here so the
+    // cases below still read as "a summary over these channels".
+    scope: {
+      channels: channels ?? [],
+      start: 0,
+      end: 60_000,
+      durationMinutes: 1,
+      forwarded: "all",
+      media: "all",
+      maxPerChannel: 0,
+      maxPerChannelMode: "latest",
+      sort: "time",
+      seed: 0,
+      keyword: null,
+      scopedPostCount: null,
+      posts: null,
+    },
+    ...rest,
   }
 }
 

@@ -49,6 +49,7 @@ from app.services.tag_runs import (
     list_tag_runs,
     upsert_tag_run,
 )
+from tests.utils.discover import stored_report_scope
 from tests.utils.tenancy import ANY_READER
 
 
@@ -82,7 +83,7 @@ def _write_report(session: Session, report_id: str, candidates: list[Any]) -> No
     report = DiscoverReport(
         id=report_id,
         user_id=ANY_READER,
-        channels=["a"],
+        scope=stored_report_scope(channels=["a"]),
         candidates=candidates,
         candidate_count=len(candidates),
         timestamp=1,

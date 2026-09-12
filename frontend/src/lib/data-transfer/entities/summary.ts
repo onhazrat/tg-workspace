@@ -1,4 +1,5 @@
 import type { CommandContext } from "@/lib/commands/types"
+import { scopeChannels } from "@/lib/scope/artifact-scope"
 import { listSummaries, saveSummary } from "@/lib/summaries/store"
 import type { Summary } from "@/types"
 import type { DataEntityDef, ExportFilter, ImportResult } from "../types"
@@ -8,7 +9,7 @@ export function filterSummariesSelected(
   selectedChannels: Set<string>,
 ): Summary[] {
   return summaries.filter((summary) =>
-    summary.channels.some((name) => selectedChannels.has(name)),
+    scopeChannels(summary).some((name) => selectedChannels.has(name)),
   )
 }
 

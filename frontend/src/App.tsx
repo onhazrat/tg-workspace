@@ -157,33 +157,32 @@ export default function App() {
    * is deep-linked now; only Discover reports were before.
    */
   const openArtifact = (artifact: ArtifactListItem) => {
-    // An Artifact predating the frozen-Scope contract may carry no window, and
-    // `(0, 0)` is not one — it is the zero-width window AW-02 refuses, so
-    // restoring it would leave the workspace 422ing on the feed, the counts,
-    // Discover and every Action until somebody thought to look at the date
-    // range. The old server read it as an empty window and returned nothing,
-    // which made this useless rather than stuck.
+    // An Artifact opened by a legacy write door carries no frozen Scope, and
+    // there is nothing left to fall back to since AW-07 dropped the
+    // `startDate` / `endDate` / `channels` trio — which is the point: a window
+    // this screen invented would be a claim about which Posts produced the
+    // result. So an Artifact with no Scope restores nothing and says so.
     //
-    // `!= null` and a width check rather than truthiness: epoch 0 is a real
-    // instant, and a Fixed window starting there is exactly how "everything up
-    // to X" is expressed.
-    const { startDate, endDate } = artifact
-    const hasWindow =
-      startDate != null && endDate != null && endDate > startDate
+    // The width check stays. `(0, 0)` is the zero-width window AW-02 refuses,
+    // so restoring it would leave the workspace 422ing on the feed, the counts,
+    // Discover and every Action until somebody thought to look at the date
+    // range.
+    const scope = artifact.scope
+    const hasWindow = scope != null && scope.end > scope.start
 
     // The banner describes what was restored, so it says nothing about a
-    // window when none was. Showing the artifact's `0`/`0` beside a workspace
-    // still holding the previous range would describe a selection that is not
-    // the one being queried.
+    // window when none was. Showing `0`/`0` beside a workspace still holding
+    // the previous range would describe a selection that is not the one being
+    // queried.
     setRestoredScope({
-      channelCount: artifact.channels?.length ?? 0,
-      startDate: hasWindow ? startDate : null,
-      endDate: hasWindow ? endDate : null,
+      channelCount: scope?.channels?.length ?? 0,
+      startDate: hasWindow ? scope.start : null,
+      endDate: hasWindow ? scope.end : null,
     })
     if (hasWindow) {
-      setFixedRange(startDate, endDate)
+      setFixedRange(scope.start, scope.end)
     }
-    setSelectedChannels(new Set(artifact.channels ?? []))
+    setSelectedChannels(new Set(scope?.channels ?? []))
 
     const { tab, param } = artifactDestination(artifact)
     void navigate({

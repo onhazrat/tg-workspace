@@ -46,9 +46,6 @@ class TagRunListItemResponse(BaseModel):
     status: str
     source: str
     mode: str
-    channels: list[str] = Field(default_factory=list)
-    start_date: int = Field(default=0, alias="startDate")
-    end_date: int = Field(default=0, alias="endDate")
     #: Nullable, because `TagRun.post_count` is. Declared `int` with a default
     #: until now, which made `GET /data/tag-runs` a 500 for any run created
     #: without one — latent only because every current writer sets it.
@@ -59,8 +56,9 @@ class TagRunListItemResponse(BaseModel):
     updated_at: int = Field(default=0, alias="updatedAt")
     is_starred: bool = Field(default=False, alias="isStarred")
     note: str | None = None
-    #: The Scope this run was frozen at (AW-06), or `null` on a row that
-    #: predates the contract — which AW-07 deletes rather than backfills. On the
+    #: The Scope this run was frozen at (AW-06), or `null` on a row a legacy
+    #: write door opened without one; the pre-contract rows and the superseded
+    #: `channels`/`startDate`/`endDate` trio both went in AW-07. On the
     #: list model as well as the full one, without its Post refs:
     #: `scopedPostCount` is what a list shows instead, and `scope_posts` is not
     #: even in the light select.

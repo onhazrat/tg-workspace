@@ -267,8 +267,14 @@ export async function mockDiscoverForwardPosts(
     id: "e2e-report-1",
     scope: {
       channels: [fixture.carrierName],
-      startDate: 0,
-      endDate: now,
+      // The frozen boundaries. `startDate`/`endDate` spelled these until
+      // AW-07 dropped them from the wire; `durationMinutes` is derived
+      // server-side and travels with the value.
+      start: 0,
+      end: now,
+      durationMinutes: Math.floor(now / 60_000),
+      sort: "time",
+      posts: null,
       signals: ["forward", "mention", "link"],
       keyword: null,
       forwarded: "all",

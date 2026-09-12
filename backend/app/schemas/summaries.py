@@ -48,15 +48,14 @@ class SummaryResponse(BaseModel):
 
     id: str
     text: str
-    channels: list[str] = Field(default_factory=list)
-    start_date: int = Field(default=0, alias="startDate")
-    end_date: int = Field(default=0, alias="endDate")
     language: str = "English"
     model: str | None = None
     post_count: int | None = Field(default=None, alias="postCount")
     timestamp: int = 0
-    #: The Scope this summary was frozen at, or ``null`` on a row that predates
-    #: AW-05 (which AW-07 deletes rather than backfills). Declared — unlike the
+    #: The Scope this summary was frozen at, or ``null`` on a row a legacy
+    #: write door opened without one; the pre-AW-05 rows were deleted in AW-07
+    #: rather than backfilled, and the superseded ``channels`` /
+    #: ``startDate`` / ``endDate`` trio went with them. Declared — unlike the
     #: conditional keys this module leaves to ``extra`` — because the client has
     #: to render it, and a ``FrozenScope | undefined`` is the type that says so.
     scope: FrozenScope | None = None

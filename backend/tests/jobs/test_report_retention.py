@@ -15,6 +15,7 @@ from app.core.db import engine
 from app.jobs.retention import _prune_discover_reports
 from app.jobs.settings import load_retention_settings, save_settings_section
 from app.models_tg import DiscoverReport, utc_now
+from tests.utils.discover import stored_report_scope
 from tests.utils.user import create_random_user
 
 DAY_MS = 24 * 60 * 60 * 1000
@@ -39,7 +40,7 @@ def _report(
         DiscoverReport(
             id=report_id,
             user_id=user_id,
-            channels=["carrier"],
+            scope=stored_report_scope(channels=["carrier"]),
             candidates=[{"name": "alpha_news", "total": 1}],
             timestamp=_now_ms() - age_days * DAY_MS,
         )

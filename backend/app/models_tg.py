@@ -289,9 +289,6 @@ class Summary(SQLModel, table=True):
         ondelete="CASCADE",
     )
     text: str = Field(sa_column=Column(Text))
-    channels: list[str] = Field(default_factory=list, sa_column=Column(JSON))
-    start_date: int = Field(default=0, sa_column=_ms_ts())
-    end_date: int = Field(default=0, sa_column=_ms_ts())
     language: str = "English"
     model: str | None = None
     post_count: int | None = None
@@ -305,13 +302,14 @@ class Summary(SQLModel, table=True):
     #:
     #: Written once, at submission, and never again: `upsert_summary` does not
     #: accept it, so a later edit to the text or a flag cannot move the
-    #: boundaries the text was made from. `NULL` on a row that predates the
-    #: contract, which AW-07 deletes rather than backfills with invented
-    #: filters.
+    #: boundaries the text was made from.
     #:
-    #: It duplicates `channels`/`start_date`/`end_date` above, deliberately and
-    #: temporarily: those three are what the History union reads today, and
-    #: AW-07 removes the superseded copy so the two can never diverge.
+    #: **The only Scope this row holds** (AW-07). It duplicated
+    #: `channels`/`start_date`/`end_date` until that ticket dropped them and
+    #: deleted every row that had no `scope` to drop them in favour of, so two
+    #: stored Scope values can no longer diverge. It stays nullable because
+    #: `upsert_summary` and the import door still create rows without one; such
+    #: a row reports `scope: null` rather than a guess.
     scope: dict[str, Any] | None = Field(default=None, sa_column=Column(JSON))
     # Derived from SummaryPayload and maintained on write, so the list
     # projection never has to open the payload table. The list surfaces only
@@ -426,9 +424,6 @@ class ChatSession(SQLModel, table=True):
     #: table for it. This is what replaces the `"Chat: "` prefix — it stores the
     #: *label*, where the prefix stored the kind.
     title: str = Field(default="", sa_column=Column(Text))
-    channels: list[str] = Field(default_factory=list, sa_column=Column(JSON))
-    start_date: int = Field(default=0, sa_column=_ms_ts())
-    end_date: int = Field(default=0, sa_column=_ms_ts())
     language: str = "English"
     model: str | None = None
     #: `"full_scope"` (every post in scope) or `"semantic"` (only the posts a
@@ -443,8 +438,8 @@ class ChatSession(SQLModel, table=True):
     #: corpus-sized and lives in `ChatSessionPayload.scope_posts`.
     #:
     #: The same column, the same contract and the same rules as
-    #: `Summary.scope`: written once at submission, never accepted from a
-    #: `PUT`, `NULL` on a row that predates the contract. A chat appends turns
+    #: `Summary.scope`, AW-07's drop of the superseded trio included: written
+    #: once at submission, never accepted from a `PUT`. A chat appends turns
     #: for as long as the conversation runs, so "written once" is doing more
     #: work here than it does one table over — every later turn is a write that
     #: must not move the boundaries the first one was answered from.
@@ -535,34 +530,31 @@ class DiscoverReport(SQLModel, table=True):
     )
 
     # --- scope snapshot (inputs, frozen at generate time) ---
-    channels: list[str] = Field(default_factory=list, sa_column=Column(JSON))
-    start_date: int = Field(default=0, sa_column=_ms_ts())
-    end_date: int = Field(default=0, sa_column=_ms_ts())
     signals: list[str] = Field(default_factory=list, sa_column=Column(JSON))
-    keyword: str | None = None
-    forwarded: str = "all"
-    media: str = "all"
-    max_per_channel: int = 0
-    max_per_channel_mode: str = "latest"
-    # Seed for the `random` cap. Stored so the scope snapshot is complete: the
-    # same seed selects the same posts, which is what makes a `random`-capped
-    # report reproducible rather than a one-off.
-    seed: int = 0
-    # How many posts the scope was explicitly restricted to — a semantic query
-    # passes its matches in. `None` means unrestricted. The count rather than
-    # the ids: enough to explain the scope without another corpus-sized column.
-    scoped_post_count: int | None = None
     #: The frozen Scope this report was generated from (AW-06), as
     #: `app/schemas/scope.py::FrozenScope` dumps it — minus `posts`, which goes
     #: to `scope_posts` below.
     #:
-    #: It duplicates every scope column above, deliberately and temporarily.
-    #: Discover is the one family that already stored the whole filter set, so
-    #: unlike the other three there is nothing new *recorded* here — what is new
-    #: is that the recording now has the same shape, and the same single
-    #: producer, as the other three. AW-07 removes the columns it supersedes.
-    scope: dict[str, Any] | None = Field(default=None, sa_column=Column(JSON))
-    #: The refs behind `scoped_post_count`, which this table stored only the
+    #: **The only Scope this row holds** (AW-07). It duplicated ten columns —
+    #: the `channels`/`start_date`/`end_date` trio the other three families also
+    #: carried, plus `keyword`, `forwarded`, `media`, `max_per_channel`,
+    #: `max_per_channel_mode`, `seed` and `scoped_post_count`, which this table
+    #: alone did. Discover was the one family that already stored the whole
+    #: filter set, so nothing new is *recorded* here; what is new is that the
+    #: recording has one shape, one producer and now one copy.
+    #:
+    #: `signals` stays beside it rather than inside it: it picks which kinds of
+    #: signal the report describes, not which Posts it reads.
+    #:
+    #: **NOT NULL, unlike the other three families' `scope`.** They answer
+    #: `scope: null` honestly for a row a legacy `PUT` door opened without one;
+    #: `DiscoverReportScopeResponse` is required rather than nullable, because
+    #: the scope card renders it unconditionally, so here a missing Scope is a
+    #: 500 rather than a readable row. AW-07 deleted the rows that had none and
+    #: the import door refuses a document that carries none, which is what makes
+    #: the constraint satisfiable.
+    scope: dict[str, Any] = Field(sa_column=Column(JSON, nullable=False))
+    #: The refs behind `scopedPostCount`, which this table stored only the
     #: count of until AW-06. The count alone was "enough to explain the scope";
     #: the frozen contract asks for reproduction, and a semantic ranking is the
     #: one selection the server cannot rebuild from the filters beside it.
@@ -890,9 +882,6 @@ class TagRun(SQLModel, table=True):
     status: str = "pending"
     source: str = "generated"
     mode: str = "add"
-    channels: list[str] = Field(default_factory=list, sa_column=Column(JSON))
-    start_date: int = Field(default=0, sa_column=_ms_ts())
-    end_date: int = Field(default=0, sa_column=_ms_ts())
     post_count: int | None = None
     model: str | None = None
     prompt_text: str | None = Field(default=None, sa_column=Column(Text))
@@ -912,8 +901,8 @@ class TagRun(SQLModel, table=True):
     #: The frozen Scope this run was produced from (AW-06), as
     #: `app/schemas/scope.py::FrozenScope` dumps it — minus `posts`, which goes
     #: to `scope_posts` below. Written once at submission and never accepted
-    #: from a `PUT`; `NULL` on a row that predates the contract, which AW-07
-    #: deletes rather than backfills.
+    #: from a `PUT`; the superseded `channels`/`start_date`/`end_date` trio went
+    #: in AW-07, with the rows that had no `scope` to replace it.
     scope: dict[str, Any] | None = Field(default=None, sa_column=Column(JSON))
     #: The semantic path's explicit selection. On the row rather than in a
     #: companion table for the reason `DiscoverReport.scope_posts` gives: this

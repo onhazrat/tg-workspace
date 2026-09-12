@@ -23,6 +23,7 @@ import {
   useSummariesHistory,
 } from "@/hooks/useSummaries"
 import { savePublishLog } from "@/lib/logs/write"
+import { scopeChannels, scopeRange } from "@/lib/scope/artifact-scope"
 import { saveSummary } from "@/lib/summaries/store"
 import { buildActiveProxies } from "@/lib/syncSettings"
 import { formatSummaryModelLabel, isPendingSummary } from "../constants"
@@ -437,11 +438,20 @@ export const SummaryView: React.FC<SummaryViewProps> = () => {
                 {currentSummary.postCount ?? 0} Posts
               </span>
               <span className="bg-app-muted/30 px-2 py-1 rounded-md text-[11px] font-mono uppercase tracking-widest text-app-ink/70">
-                {currentSummary.channels.length} Channels
+                {scopeChannels(currentSummary).length} Channels
               </span>
+              {/*
+               * The frozen Scope, which since AW-07 is the only window a
+               * Summary has. A row opened by a legacy `PUT` records none, and
+               * this says so rather than rendering the epoch twice.
+               */}
               <span className="bg-app-muted/30 px-2 py-1 rounded-md text-[11px] font-mono uppercase tracking-widest text-app-ink/70">
-                Range: {new Date(currentSummary.startDate).toLocaleString()} -{" "}
-                {new Date(currentSummary.endDate).toLocaleString()}
+                {(() => {
+                  const range = scopeRange(currentSummary)
+                  return range
+                    ? `Range: ${new Date(range.start).toLocaleString()} - ${new Date(range.end).toLocaleString()}`
+                    : "Range: not recorded"
+                })()}
               </span>
             </div>
           </>
@@ -863,7 +873,7 @@ export const SummaryView: React.FC<SummaryViewProps> = () => {
                     {currentSummary.postCount} Posts Analyzed
                   </span>
                   <span className="bg-app-muted/30 px-2 py-1 rounded-md text-[11px] font-mono uppercase tracking-widest text-app-ink/70">
-                    {currentSummary.channels.length} Channels
+                    {scopeChannels(currentSummary).length} Channels
                   </span>
                 </div>
                 <div className="flex items-center gap-2">

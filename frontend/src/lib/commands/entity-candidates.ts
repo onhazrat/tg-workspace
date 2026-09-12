@@ -2,6 +2,7 @@ import { getTagNames } from "@/lib/channels/channel-tag-model"
 import { collectAllChannelTags } from "@/lib/channels/channel-tags"
 import { getSettingGroupEntityCandidates } from "@/lib/commands/group-commands"
 import type { CommandContext, EntityFlowType } from "@/lib/commands/types"
+import { scopeChannels } from "@/lib/scope/artifact-scope"
 import type { Channel, Post, SummaryListItem } from "@/types"
 
 export function getExtendedEntityCandidates(
@@ -87,7 +88,7 @@ export function getTagEntityCandidates(
 }
 
 function formatSummaryLabel(summary: SummaryListItem): string {
-  const channels = summary.channels.join(", ") || "Summary"
+  const channels = scopeChannels(summary).join(", ") || "Summary"
   const preview = (summary.promptExcerpt || summary.text || "").slice(0, 40)
   return `${channels} — ${preview}`
 }

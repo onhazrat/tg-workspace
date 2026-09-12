@@ -8,8 +8,9 @@ import { reportSignalKinds, savedReportToView } from "./discover-report-view"
 
 const scope: DiscoverReportScope = {
   channels: ["carrier"],
-  startDate: 1000,
-  endDate: 2000,
+  start: 1000,
+  end: 2000,
+  durationMinutes: 1,
   signals: ["forward"],
   keyword: null,
   forwarded: "all",

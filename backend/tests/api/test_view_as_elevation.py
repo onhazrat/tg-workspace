@@ -84,6 +84,7 @@ from app.models_rbac import UserRole
 from app.models_tg import ChatSession, DiscoverReport, LLMLog, Summary, TagRun
 from app.models_view_as import ViewAsSession
 from app.services.artifacts import ARTIFACT_KINDS
+from tests.utils.discover import stored_report_scope
 from tests.utils.user import user_authentication_headers
 from tests.utils.utils import random_lower_string
 
@@ -673,7 +674,13 @@ def test_a_write_during_an_elevation_names_the_acting_owner(
     # Every family tolerates this: the elevated write is the one being asserted.
     if family.kind == "discovery":
         with Session(engine) as session:
-            session.add(DiscoverReport(id=row_id, user_id=subject_row.id))
+            session.add(
+                DiscoverReport(
+                    id=row_id,
+                    user_id=subject_row.id,
+                    scope=stored_report_scope(),
+                )
+            )
             session.commit()
     else:
         seeded = _write(client, subject_headers, family, row_id)
@@ -714,7 +721,13 @@ def test_an_ordinary_write_clears_a_previous_stamp(
 
     if family.kind == "discovery":
         with Session(engine) as session:
-            session.add(DiscoverReport(id=row_id, user_id=subject_row.id))
+            session.add(
+                DiscoverReport(
+                    id=row_id,
+                    user_id=subject_row.id,
+                    scope=stored_report_scope(),
+                )
+            )
             session.commit()
     else:
         assert _write(client, subject_headers, family, row_id).status_code == 200

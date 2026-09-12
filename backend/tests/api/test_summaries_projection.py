@@ -35,6 +35,31 @@ def _auth(client: TestClient) -> dict[str, str]:
     return {"Authorization": f"Bearer {login.json()['access_token']}"}
 
 
+def _open_with_channels(
+    client: TestClient, headers: dict[str, str], summary_id: str, channels: list[str]
+) -> None:
+    """Open a Summary over `channels`, through the submission door.
+
+    A `PUT` cannot put channels anywhere since AW-07 dropped the column: the
+    frozen Scope is the only copy, and only a submission writes one. So a test
+    about searching by channel has to submit rather than upsert — which is the
+    contract working, not an inconvenience.
+    """
+    client.post(
+        f"{PREFIX}/summaries",
+        json={
+            "id": summary_id,
+            "scope": {
+                "channels": channels,
+                # A minute wide, which is the floor `resolve_analysis_window`
+                # enforces: a zero-width window cannot pass for work.
+                "window": {"mode": "fixed", "start": 0, "end": 60_000},
+            },
+        },
+        headers=headers,
+    )
+
+
 def _seed(client: TestClient, headers: dict[str, str], count: int = 3) -> None:
     for i in range(count):
         client.put(
@@ -213,11 +238,11 @@ def test_search_matches_prompt_body_without_shipping_it(client: TestClient) -> N
 
 def test_search_matches_text_channels_model_and_note(client: TestClient) -> None:
     headers = _auth(client)
+    _open_with_channels(client, headers, "s1", ["betachannel"])
     client.put(
         f"{PREFIX}/summaries/s1",
         json={
             "text": "alpha body",
-            "channels": ["betachannel"],
             "model": "gamma-model",
             "note": "delta note",
             "timestamp": 1,

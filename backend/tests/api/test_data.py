@@ -302,7 +302,11 @@ def test_summaries_crud(client: TestClient) -> None:
     r = client.put(f"{PREFIX}/summaries/sum-1", json=body, headers=headers)
     assert r.status_code == 200
     data = r.json()
-    assert data["startDate"] == 1000
+    # The three superseded keys the body still sends are dropped, not filed in
+    # `extra` and spread back out (AW-07). A `PUT`-created Summary records no
+    # Scope, and says so rather than reporting the ones it was handed.
+    assert data["scope"] is None
+    assert not {"startDate", "endDate", "channels"} & set(data)
     assert data["autoRegenerate"] is True
 
     r2 = client.get(f"{PREFIX}/summaries", headers=headers)
@@ -368,7 +372,10 @@ def test_tag_runs_crud(client: TestClient) -> None:
     created = r.json()
     assert created["id"] == "tag-run-1"
     assert created["source"] == "pasted"
-    assert created["channels"] == ["ch1", "ch2"]
+    # Same as summaries: `PUT` is the legacy create door, it writes no Scope,
+    # and the superseded keys it is still sent go nowhere (AW-07).
+    assert created["scope"] is None
+    assert not {"startDate", "endDate", "channels"} & set(created)
 
     r2 = client.get(f"{PREFIX}/tag-runs", headers=headers)
     assert r2.status_code == 200
