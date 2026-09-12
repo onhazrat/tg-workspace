@@ -321,8 +321,16 @@ def test_semantic_retrieval_uses_the_same_window(
     It joins `tg_post_embeddings` to `tg_posts` and applied the date predicate
     to the joined Post, so it was the copy furthest from the feed's and the
     likeliest to drift.
+
+    The Key is patched as well as the Provider. `resolve_ai_key` runs *before*
+    `get_provider` and answers 503 on a deployment with no Key, so stubbing
+    only the Provider passes on a developer machine whose `.env` carries a real
+    one and 503s in CI, where `.env.example` ships the field empty.
     """
-    with patch("app.api.routes.rag.get_provider") as get_provider:
+    with (
+        patch("app.api.routes.rag.settings.GEMINI_API_KEY", "test-key"),
+        patch("app.api.routes.rag.get_provider") as get_provider,
+    ):
         get_provider.return_value = _mock_provider()
         resp = client.post(
             f"{API}/rag/search",
