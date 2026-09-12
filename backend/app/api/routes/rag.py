@@ -4,7 +4,7 @@ from typing import Any
 
 import numpy as np
 from fastapi import APIRouter, HTTPException
-from sqlalchemy import and_, or_
+from sqlalchemy import and_, or_, true
 from sqlmodel import col, select
 
 from app.ai.registry import get_provider
@@ -120,9 +120,15 @@ async def rag_search(
     # The window itself is the shared half-open one (AW-01), and both bounds
     # are required on this route, so a Semantic search cannot be the one Posts
     # path that quietly means all time.
+    #
+    # `true()` rather than a bare `and_(*clauses)`: the helper permits an open
+    # side, and `and_()` with nothing in it is deprecated in SQLAlchemy and due
+    # to be disallowed. Unreachable while the schema requires both bounds —
+    # which is exactly why it is worth closing here, since loosening that
+    # schema is the change that would walk into it.
     date_ok: list[Any] = [
         col(Post.post_id).is_(None),
-        and_(*analysis_window_clauses(body.start_date, body.end_date)),
+        and_(true(), *analysis_window_clauses(body.start_date, body.end_date)),
     ]
 
     stmt = (

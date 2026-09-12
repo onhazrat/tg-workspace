@@ -54,18 +54,55 @@ NOT_THE_ANALYSIS_WINDOW: dict[str, str] = {
 _ORDER_OPS = (ast.Lt, ast.LtE, ast.Gt, ast.GtE)
 
 
-def _is_post_timestamp(node: ast.expr) -> bool:
-    """`Post.timestamp`, bare or wrapped in `col(...)`."""
+def _post_aliases(tree: ast.Module) -> set[str]:
+    """Names bound to `aliased(Post, ...)` anywhere in the module.
+
+    Without this the guard has a hole in the one module it most needs to
+    cover. `posts.py::list_feed` re-aliases `Post` onto its `row_number()`
+    subquery (`capped = aliased(Post, ranked)`), so a window predicate written
+    as `capped.timestamp <= end_date` — inside the capped branch, the subtler
+    of the feed's two query shapes — would be invisible here *and* pass the
+    boundary suite, which reaches the same rows through the shared predicate
+    applied earlier in the statement.
+
+    Module-scoped rather than flow-sensitive on purpose: a name that ever means
+    an aliased Post is treated as one everywhere. Over-matching costs a
+    declared exception; under-matching costs the thing this file exists for.
+    """
+    aliases: set[str] = set()
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Assign):
+            continue
+        value = node.value
+        if not isinstance(value, ast.Call):
+            continue
+        func = value.func
+        if not (isinstance(func, ast.Name) and func.id == "aliased"):
+            continue
+        if not (
+            value.args
+            and isinstance(value.args[0], ast.Name)
+            and value.args[0].id == "Post"
+        ):
+            continue
+        for target in node.targets:
+            if isinstance(target, ast.Name):
+                aliases.add(target.id)
+    return aliases
+
+
+def _is_post_timestamp(node: ast.expr, aliases: frozenset[str]) -> bool:
+    """`Post.timestamp` — bare, wrapped in `col(...)`, or through an alias."""
     if isinstance(node, ast.Call):
         func = node.func
         if isinstance(func, ast.Name) and func.id == "col" and node.args:
-            return _is_post_timestamp(node.args[0])
+            return _is_post_timestamp(node.args[0], aliases)
         return False
     return (
         isinstance(node, ast.Attribute)
         and node.attr == "timestamp"
         and isinstance(node.value, ast.Name)
-        and node.value.id == "Post"
+        and (node.value.id == "Post" or node.value.id in aliases)
     )
 
 
@@ -84,6 +121,7 @@ def _comparison_sites() -> dict[str, int]:
     found: dict[str, int] = {}
     for path in _modules():
         tree = ast.parse(path.read_text())
+        aliases = frozenset(_post_aliases(tree))
         count = 0
         for node in ast.walk(tree):
             if not isinstance(node, ast.Compare):
@@ -91,7 +129,7 @@ def _comparison_sites() -> dict[str, int]:
             if not any(isinstance(op, _ORDER_OPS) for op in node.ops):
                 continue
             operands = [node.left, *node.comparators]
-            if any(_is_post_timestamp(operand) for operand in operands):
+            if any(_is_post_timestamp(operand, aliases) for operand in operands):
                 count += 1
         if count:
             found[str(path.relative_to(APP_ROOT))] = count
