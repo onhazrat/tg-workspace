@@ -14,7 +14,7 @@
  * `usePostsFeed`.
  */
 
-import { useCallback } from "react"
+import { useCallback, useRef } from "react"
 
 import type { PromptScope } from "@/api/data"
 import type {
@@ -23,6 +23,7 @@ import type {
   PostViewOptions,
 } from "@/lib/posts/post-view"
 import { computeScopedPosts } from "@/lib/posts/scoped-posts"
+import type { WindowState } from "@/lib/scope/window"
 import type { Channel, Post } from "@/types"
 
 export interface PromptPostsDeps {
@@ -30,6 +31,17 @@ export interface PromptPostsDeps {
   selectedChannels: Set<string>
   startDate: number
   endDate: number
+  /**
+   * The canonical Analysis window, as the identity of `startDate`/`endDate`
+   * rather than their current value (AW-04).
+   *
+   * A Live window resolves to a new pair every minute, so memoising on the pair
+   * churns `getScopedPosts`'s identity once a minute — and two effects in
+   * `usePostsView` plus one in `useEntityFlow` depend on it. That re-ran the
+   * whole client vector path, in five mount points, every 60 seconds, and a
+   * transient failure there clears the Account's search.
+   */
+  windowKey: WindowState
   embeddingsEnabled: boolean
   debouncedPostSearch: string
   debouncedSemanticSearchQuery: string
@@ -64,6 +76,7 @@ export function usePromptPosts(deps: PromptPostsDeps): PromptPosts {
     selectedChannels,
     startDate,
     endDate,
+    windowKey,
     embeddingsEnabled,
     debouncedPostSearch,
     debouncedSemanticSearchQuery,
@@ -75,6 +88,11 @@ export function usePromptPosts(deps: PromptPostsDeps): PromptPosts {
     searchSimilarPosts,
     getPostsFeed,
   } = deps
+
+  // Read when the call happens, not when the memo was built, so a minute that
+  // has passed since is still reflected in what gets fetched.
+  const boundsRef = useRef({ startDate, endDate })
+  boundsRef.current = { startDate, endDate }
 
   const { maxPostsPerChannel, maxPostsPerChannelMode, postSortOrder } =
     postViewOptions
@@ -90,8 +108,8 @@ export function usePromptPosts(deps: PromptPostsDeps): PromptPosts {
         relatedPostSearch,
         embeddingsEnabled,
         selectedChannels: Array.from(selectedChannels),
-        startDate,
-        endDate,
+        startDate: boundsRef.current.startDate,
+        endDate: boundsRef.current.endDate,
         forwardedFilter,
         mediaFilter,
         channels,
@@ -101,8 +119,8 @@ export function usePromptPosts(deps: PromptPostsDeps): PromptPosts {
         getPostsFeed,
       }),
     [
-      startDate,
-      endDate,
+      // The window, not the minute it currently resolves to — see `windowKey`.
+      windowKey,
       selectedChannels,
       debouncedPostSearch,
       debouncedSemanticSearchQuery,

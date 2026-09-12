@@ -1,6 +1,5 @@
 import {
   Calendar,
-  Clock,
   Filter,
   ListOrdered,
   Search,
@@ -8,22 +7,12 @@ import {
   X,
 } from "lucide-react"
 import React from "react"
+import { AnalysisWindowControl } from "@/components/AnalysisWindowControl"
 import { TgButton } from "@/components/ui/tg-button"
 import { TgFilterChip } from "@/components/ui/tg-chips"
-import { useScope } from "../contexts/ScopeContext"
 import { useScraper } from "../contexts/ScraperContext"
 import { useSettings } from "../contexts/SettingsContext"
 import { MEDIA_FILTER_OPTIONS } from "../lib/posts/post-media"
-import { formatDateToLocalISO } from "../lib/utils"
-
-/** A refusal, beside the field that earned it rather than pooled per section. */
-const ScopeFieldError: React.FC<{ children: React.ReactNode }> = ({
-  children,
-}) => (
-  <p role="alert" className="text-[11px] text-red-600 dark:text-red-400">
-    {children}
-  </p>
-)
 
 interface PostFilterProps {
   postSearch: string
@@ -34,7 +23,6 @@ export const PostFilter: React.FC<PostFilterProps> = ({
   postSearch,
   setPostSearch,
 }) => {
-  const { startDate, endDate, applyValue, errors } = useScope()
   const {
     semanticSearchQuery,
     setSemanticSearchQuery,
@@ -62,18 +50,6 @@ export const PostFilter: React.FC<PostFilterProps> = ({
   React.useEffect(() => {
     setSemanticInput(semanticSearchQuery || "")
   }, [semanticSearchQuery])
-
-  // "The last N hours", which is what the buttons say, and it has to stay true
-  // in Fixed mode too — a migrated Account is Fixed, and holding its End would
-  // make "24h" mean a day three weeks ago. So: close the End gap first, then
-  // set the Duration against the End that move produced.
-  //
-  // AW-04 replaces this whole section with the four-field editor, where the gap
-  // is a field somebody can choose to keep.
-  const setQuickRange = (hours: number) => {
-    if (applyValue("endGap", 0)) return
-    applyValue("duration", hours * 60 * 60 * 1000)
-  }
 
   if (relatedPostSearch) {
     return (
@@ -155,96 +131,23 @@ export const PostFilter: React.FC<PostFilterProps> = ({
         </div>
 
         <div className="p-5 flex flex-col gap-6">
-          {/* Top Row: Time Filters */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-            {/* Column 1: Dates */}
-            <div className="flex flex-col gap-3">
-              <div className="flex items-center gap-2">
-                <Calendar size={12} className="text-app-ink/60" />
-                <label className="text-[11px] uppercase font-bold text-app-ink/70 tracking-widest">
-                  Time Range
-                </label>
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <label className="text-[11px] uppercase font-bold text-app-ink/60 tracking-widest">
-                    Start Timestamp
-                  </label>
-                  <input
-                    type="datetime-local"
-                    value={
-                      !Number.isNaN(startDate)
-                        ? formatDateToLocalISO(new Date(startDate))
-                        : ""
-                    }
-                    onChange={(e) => {
-                      if (e.target.value) {
-                        const time = new Date(e.target.value).getTime()
-                        if (!Number.isNaN(time)) applyValue("start", time)
-                      }
-                    }}
-                    className="w-full bg-app-muted text-app-ink border border-app-ink/10 rounded-xl py-2 px-3 focus:outline-none focus:border-app-ink/30 focus:ring-4 focus:ring-app-ink/5 transition-all text-[11px] font-mono"
-                  />
-                  {errors.start && (
-                    <ScopeFieldError>{errors.start}</ScopeFieldError>
-                  )}
-                </div>
-                <div className="space-y-2">
-                  <label className="text-[11px] uppercase font-bold text-app-ink/60 tracking-widest">
-                    End Timestamp
-                  </label>
-                  <input
-                    type="datetime-local"
-                    value={
-                      !Number.isNaN(endDate)
-                        ? formatDateToLocalISO(new Date(endDate))
-                        : ""
-                    }
-                    max={formatDateToLocalISO(new Date())}
-                    onChange={(e) => {
-                      if (e.target.value) {
-                        const time = new Date(e.target.value).getTime()
-                        if (!Number.isNaN(time)) applyValue("end", time)
-                      }
-                    }}
-                    className="w-full bg-app-muted text-app-ink border border-app-ink/10 rounded-xl py-2 px-3 focus:outline-none focus:border-app-ink/30 focus:ring-4 focus:ring-app-ink/5 transition-all text-[11px] font-mono"
-                  />
-                  {errors.end && (
-                    <ScopeFieldError>{errors.end}</ScopeFieldError>
-                  )}
-                </div>
-              </div>
+          {/*
+           * One control for the whole Analysis window (AW-04).
+           *
+           * This was two permanently expanded `datetime-local` fields and a row
+           * of nine quick ranges, occupying a block of page height whether or
+           * not anybody was changing the window — and saying nothing about
+           * whether that window moves with the clock. The summary says which it
+           * is; the editor behind it is the only one in the application.
+           */}
+          <div className="flex flex-col gap-3">
+            <div className="flex items-center gap-2">
+              <Calendar size={12} className="text-app-ink/60" />
+              <label className="text-[11px] uppercase font-bold text-app-ink/70 tracking-widest">
+                Analysis Window
+              </label>
             </div>
-
-            {/* Column 2: Quick Range */}
-            <div className="flex flex-col gap-3">
-              <div className="flex items-center gap-2">
-                <Clock size={12} className="text-app-ink/60" />
-                <label className="text-[11px] uppercase font-bold text-app-ink/70 tracking-widest">
-                  Quick Range
-                </label>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                {[
-                  { label: "30m", hours: 0.5 },
-                  { label: "1h", hours: 1 },
-                  { label: "3h", hours: 3 },
-                  { label: "6h", hours: 6 },
-                  { label: "12h", hours: 12 },
-                  { label: "24h", hours: 24 },
-                  { label: "3d", hours: 72 },
-                  { label: "7d", hours: 168 },
-                  { label: "14d", hours: 336 },
-                ].map((range) => (
-                  <TgFilterChip
-                    key={range.label}
-                    onClick={() => setQuickRange(range.hours)}
-                  >
-                    {range.label}
-                  </TgFilterChip>
-                ))}
-              </div>
-            </div>
+            <AnalysisWindowControl />
           </div>
 
           {/* Bottom Row: Search Filters */}
