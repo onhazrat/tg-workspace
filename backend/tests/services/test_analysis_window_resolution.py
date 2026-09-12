@@ -310,18 +310,11 @@ def _properties(schema: dict[str, object]) -> set[str]:
 #: them against the current minute would answer the wrong question, and
 #: refusing a past-dated one would refuse an import of last year's Summaries.
 #:
-#: AW-05 replaces them anyway, by freezing the Scope server-side at submission
-#: so an Artifact's window is never something a client states at all. Until
-#: then they stay, named here rather than tolerated silently.
-FROZEN_ARTIFACT_WRITES: dict[str, str] = {
-    "SummaryUpsertRequest": (
-        "A Summary the client already holds, re-posted or imported. Its "
-        "boundaries are the window that produced the text, so they are a "
-        "record rather than a request — resolving them against the current "
-        "minute would answer a question nobody asked, and refusing a "
-        "past-dated one would refuse an import of last year's Summaries."
-    ),
-}
+#: AW-05 emptied it. A Summary's boundaries are now frozen server-side at
+#: submission, so no Artifact write states a window at all. The dict stays
+#: because the guard below is what lets it stay empty: an entry added here has
+#: to argue for itself in the same sentence that adds it.
+FROZEN_ARTIFACT_WRITES: dict[str, str] = {}
 
 
 def test_no_request_schema_still_carries_the_browser_computed_pair() -> None:

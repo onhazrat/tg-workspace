@@ -1,4 +1,5 @@
 import { api } from "@/api"
+import type { SummarySubmitRequest } from "@/client"
 import { singleFlight } from "@/lib/singleFlight"
 import type { Summary, SummaryListItem, TagRun, TagRunSummary } from "@/types"
 
@@ -32,6 +33,7 @@ export type SummariesApi = Pick<
   | "listSummaries"
   | "getSummary"
   | "upsertSummary"
+  | "submitSummary"
   | "deleteSummary"
   | "listTagRuns"
   | "getTagRun"
@@ -63,6 +65,21 @@ export async function getSummary(
   client: SummariesApi = api,
 ): Promise<Summary | undefined> {
   return singleFlight(`summary:${id}`, () => client.getSummary(id))
+}
+
+/**
+ * Open a summary at a frozen Scope, before any AI work starts (AW-05).
+ *
+ * The two calls are ordered, not interchangeable: this one settles which Posts
+ * the Artifact is about, and {@link saveSummary} only ever fills in what the
+ * run produced. Nothing after this can move the boundaries — the server refuses
+ * them on the update path.
+ */
+export async function submitSummary(
+  body: SummarySubmitRequest,
+  client: SummariesApi = api,
+): Promise<Summary> {
+  return client.submitSummary(body)
 }
 
 export async function saveSummary(

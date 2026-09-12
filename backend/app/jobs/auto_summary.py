@@ -355,6 +355,22 @@ async def _sync_channels_for_summary(
     await run_sync_job(job, owner_id)
 
 
+def _successor_scope(
+    summary: Summary, new_start: int, new_end: int
+) -> dict[str, Any] | None:
+    """The predecessor's frozen Scope with the window advanced (AW-05).
+
+    Not re-frozen through `freeze_scope`: this window is *derived* from the one
+    before it, not resolved against the clock. Regeneration runs unattended
+    hours after the Account chose anything, so resolving here would answer a
+    question nobody asked — and would silently widen the chain every time a tick
+    ran late.
+    """
+    if summary.scope is None:
+        return None
+    return {**summary.scope, "start": new_start, "end": new_end}
+
+
 async def _regenerate_one(
     session: Session, summary: Summary, *, owner_id: uuid.UUID
 ) -> str | None:
@@ -468,6 +484,13 @@ async def _regenerate_one(
         channels=summary.channels,
         start_date=new_start,
         end_date=new_end,
+        # The successor's Scope is its predecessor's with the window stepped on
+        # — the filters, the cap and the seed are the choice the Account made
+        # when it turned auto-regeneration on, and dropping them here would
+        # produce a nightly chain of Artifacts that each claim a Scope none of
+        # them kept. `None` stays `None`: a predecessor that predates AW-05 has
+        # nothing to carry, and inventing filters for it is what AW-07 refuses.
+        scope=_successor_scope(summary, new_start, new_end),
         language=summary.language,
         model=summary.model,
         post_count=len(posts),

@@ -29,7 +29,11 @@
  * this browser's.
  */
 
-import { floorToMinute, MINUTE_MS } from "@/lib/analysis-window"
+import {
+  type AnalysisWindowInput,
+  floorToMinute,
+  MINUTE_MS,
+} from "@/lib/analysis-window"
 import { scopedStorage } from "@/lib/storage/scoped"
 
 export const HOUR_MS = 60 * MINUTE_MS
@@ -57,6 +61,25 @@ export const DEFAULT_WINDOW: WindowState = {
   mode: "live",
   durationMs: DAY_MS,
   endGapMs: 0,
+}
+
+/**
+ * The canonical state as the server's request contract states it (AW-05).
+ *
+ * A submission sends *this*, never the two instants `resolveWindow` derives. A
+ * Live window flattened in the browser stops being Live the moment it leaves:
+ * the server resolves it again against its own minute, so sending the pair
+ * would hand over a selection made by this laptop's clock and call it a choice.
+ */
+export function toWireWindow(state: WindowState): AnalysisWindowInput {
+  if (state.mode === "fixed") {
+    return { mode: "fixed", start: state.start, end: state.end }
+  }
+  return {
+    mode: "live",
+    durationMinutes: Math.round(state.durationMs / MINUTE_MS),
+    endGapMinutes: Math.round(state.endGapMs / MINUTE_MS),
+  }
 }
 
 /** All four displayed values at one instant. */

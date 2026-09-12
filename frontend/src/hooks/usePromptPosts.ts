@@ -17,13 +17,14 @@
 import { useCallback, useRef } from "react"
 
 import type { PromptScope } from "@/api/data"
+import type { ScopeSubmission } from "@/client"
 import type {
   ForwardedFilterValue,
   MediaFilterValue,
   PostViewOptions,
 } from "@/lib/posts/post-view"
 import { computeScopedPosts } from "@/lib/posts/scoped-posts"
-import type { WindowState } from "@/lib/scope/window"
+import { toWireWindow, type WindowState } from "@/lib/scope/window"
 import type { Channel, Post } from "@/types"
 
 export interface PromptPostsDeps {
@@ -68,6 +69,17 @@ export interface PromptPosts {
     semanticQuery?: string,
   ) => Promise<Post[]>
   getPromptPostsInput: () => Promise<PromptPostsInput>
+  /**
+   * The same Scope as a submission, for the server to freeze (AW-05).
+   *
+   * Here rather than at the call site because this hook already holds every
+   * filter that shapes the selection — a second assembly somewhere else is how
+   * an Artifact ends up recording a Scope that is not the one it was made
+   * from. It sends the canonical window, never the pair it currently resolves
+   * to: flattening a Live window in the browser is the clock skew AW-02
+   * removed, reintroduced one layer up.
+   */
+  getScopeSubmission: (channels: string[], posts?: Post[]) => ScopeSubmission
 }
 
 export function usePromptPosts(deps: PromptPostsDeps): PromptPosts {
@@ -177,5 +189,36 @@ export function usePromptPosts(deps: PromptPostsDeps): PromptPosts {
       postSortOrder,
     ])
 
-  return { getScopedPosts, getPromptPostsInput }
+  const getScopeSubmission = useCallback(
+    (channels: string[], posts?: Post[]): ScopeSubmission => ({
+      channels,
+      window: toWireWindow(windowKey),
+      keyword: debouncedPostSearch.trim() || null,
+      forwarded: forwardedFilter,
+      media: mediaFilter,
+      maxPerChannel: maxPostsPerChannel,
+      maxPerChannelMode: maxPostsPerChannelMode,
+      sort: postSortOrder,
+      seed: 0,
+      // The ranked selection, when there was one. `null` says the filters
+      // above were the whole story, which is a different fact from "the
+      // ranking returned nothing".
+      posts:
+        posts?.map((post) => ({
+          channelName: post.channelName,
+          postId: post.id,
+        })) ?? null,
+    }),
+    [
+      windowKey,
+      debouncedPostSearch,
+      forwardedFilter,
+      mediaFilter,
+      maxPostsPerChannel,
+      maxPostsPerChannelMode,
+      postSortOrder,
+    ],
+  )
+
+  return { getScopedPosts, getPromptPostsInput, getScopeSubmission }
 }

@@ -299,6 +299,20 @@ class Summary(SQLModel, table=True):
     #: Open bag of small UI flags (`isStarred`, `autoPublish`, `note`, …).
     #: The corpus-sized fields are **not** here — see `SummaryPayload`.
     extra: dict[str, Any] = Field(default_factory=dict, sa_column=Column(JSON))
+    #: The frozen Scope this Summary was produced from (AW-05), as
+    #: `app/schemas/scope.py::FrozenScope` dumps it — minus `posts`, which is
+    #: corpus-sized and lives in `SummaryPayload.scope_posts`.
+    #:
+    #: Written once, at submission, and never again: `upsert_summary` does not
+    #: accept it, so a later edit to the text or a flag cannot move the
+    #: boundaries the text was made from. `NULL` on a row that predates the
+    #: contract, which AW-07 deletes rather than backfills with invented
+    #: filters.
+    #:
+    #: It duplicates `channels`/`start_date`/`end_date` above, deliberately and
+    #: temporarily: those three are what the History union reads today, and
+    #: AW-07 removes the superseded copy so the two can never diverge.
+    scope: dict[str, Any] | None = Field(default=None, sa_column=Column(JSON))
     # Derived from SummaryPayload and maintained on write, so the list
     # projection never has to open the payload table. The list surfaces only
     # ever showed a count and a truncated preview.
@@ -362,6 +376,16 @@ class SummaryPayload(SQLModel, table=True):
     chat_messages: dict[str, Any] | list[Any] | None = Field(
         default=None, sa_column=Column(JSON)
     )
+    #: The explicit Post selection the frozen Scope named (AW-05), as a list of
+    #: `{"channelName": str, "postId": int}`. Only the semantic and
+    #: related-Post paths set it — they rank Posts with a query the server
+    #: cannot reproduce from filters, so the refs are the reproduction.
+    #:
+    #: Here rather than beside `Summary.scope` for the reason the three fields
+    #: above are here: a few thousand refs is a corpus, and the list projection
+    #: must not read it. `scopedPostCount` inside `Summary.scope` is what a
+    #: list shows instead.
+    scope_posts: list[Any] | None = Field(default=None, sa_column=Column(JSON))
     updated_at: datetime = Field(default_factory=utc_now)
 
 

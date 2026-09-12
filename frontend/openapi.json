@@ -2734,6 +2734,39 @@
             }
           }
         }
+      },
+      "post": {
+        "tags": ["data"],
+        "summary": "Submit Summary",
+        "description": "Open a summary at a frozen Scope, before any AI work begins.",
+        "operationId": "data-submit_summary",
+        "security": [{ "OAuth2PasswordBearer": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/SummarySubmitRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SummaryResponse" }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
       }
     },
     "/api/v1/data/summaries/{summary_id}": {
@@ -7092,6 +7125,83 @@
         "required": ["name", "status"],
         "title": "FollowChannelResultResponse"
       },
+      "FrozenScope": {
+        "properties": {
+          "channels": {
+            "items": { "type": "string" },
+            "type": "array",
+            "title": "Channels"
+          },
+          "keyword": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Keyword"
+          },
+          "forwarded": {
+            "type": "string",
+            "enum": ["all", "forwarded", "original", "unfollowed_forwarded"],
+            "title": "Forwarded",
+            "default": "all"
+          },
+          "media": {
+            "type": "string",
+            "enum": [
+              "all",
+              "text_only",
+              "media_only",
+              "photo",
+              "video",
+              "link_preview",
+              "grouped"
+            ],
+            "title": "Media",
+            "default": "all"
+          },
+          "maxPerChannel": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Maxperchannel",
+            "default": 0
+          },
+          "maxPerChannelMode": {
+            "type": "string",
+            "enum": ["latest", "random"],
+            "title": "Maxperchannelmode",
+            "default": "latest"
+          },
+          "sort": {
+            "type": "string",
+            "enum": ["time", "channel_time"],
+            "title": "Sort",
+            "default": "time"
+          },
+          "seed": { "type": "integer", "title": "Seed", "default": 0 },
+          "start": { "type": "integer", "title": "Start" },
+          "end": { "type": "integer", "title": "End" },
+          "scopedPostCount": {
+            "anyOf": [{ "type": "integer" }, { "type": "null" }],
+            "title": "Scopedpostcount"
+          },
+          "posts": {
+            "anyOf": [
+              {
+                "items": { "$ref": "#/components/schemas/ScopedPostRef" },
+                "type": "array"
+              },
+              { "type": "null" }
+            ],
+            "title": "Posts"
+          },
+          "durationMinutes": {
+            "type": "integer",
+            "title": "Durationminutes",
+            "default": 0
+          }
+        },
+        "type": "object",
+        "required": ["start", "end"],
+        "title": "FrozenScope",
+        "description": "The immutable Scope an Artifact was produced from."
+      },
       "GlobalStartTimeSnapshot": {
         "properties": {
           "mode": { "type": "string", "title": "Mode" },
@@ -8637,6 +8747,98 @@
         "title": "ScopeCountsResponse",
         "description": "How many posts in scope carried each signal kind.\n\nPost-level, not reference-level: a post forwarding two channels counts once\ntowards `forwardPosts`, which is what makes these comparable with\n`postsInScope`."
       },
+      "ScopeSubmission": {
+        "properties": {
+          "channels": {
+            "items": { "type": "string" },
+            "type": "array",
+            "title": "Channels"
+          },
+          "keyword": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Keyword"
+          },
+          "forwarded": {
+            "type": "string",
+            "enum": ["all", "forwarded", "original", "unfollowed_forwarded"],
+            "title": "Forwarded",
+            "default": "all"
+          },
+          "media": {
+            "type": "string",
+            "enum": [
+              "all",
+              "text_only",
+              "media_only",
+              "photo",
+              "video",
+              "link_preview",
+              "grouped"
+            ],
+            "title": "Media",
+            "default": "all"
+          },
+          "maxPerChannel": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Maxperchannel",
+            "default": 0
+          },
+          "maxPerChannelMode": {
+            "type": "string",
+            "enum": ["latest", "random"],
+            "title": "Maxperchannelmode",
+            "default": "latest"
+          },
+          "sort": {
+            "type": "string",
+            "enum": ["time", "channel_time"],
+            "title": "Sort",
+            "default": "time"
+          },
+          "seed": { "type": "integer", "title": "Seed", "default": 0 },
+          "window": {
+            "oneOf": [
+              { "$ref": "#/components/schemas/LiveAnalysisWindow" },
+              { "$ref": "#/components/schemas/FixedAnalysisWindow" }
+            ],
+            "title": "Window",
+            "discriminator": {
+              "propertyName": "mode",
+              "mapping": {
+                "fixed": "#/components/schemas/FixedAnalysisWindow",
+                "live": "#/components/schemas/LiveAnalysisWindow"
+              }
+            }
+          },
+          "posts": {
+            "anyOf": [
+              {
+                "items": { "$ref": "#/components/schemas/ScopedPostRef" },
+                "type": "array",
+                "maxItems": 5000
+              },
+              { "type": "null" }
+            ],
+            "title": "Posts"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["window"],
+        "title": "ScopeSubmission",
+        "description": "The complete Scope an Action is submitted with."
+      },
+      "ScopedPostRef": {
+        "properties": {
+          "channelName": { "type": "string", "title": "Channelname" },
+          "postId": { "type": "integer", "title": "Postid" }
+        },
+        "type": "object",
+        "required": ["channelName", "postId"],
+        "title": "ScopedPostRef",
+        "description": "One Post named by its natural key."
+      },
       "ScrapeChannelResponse": {
         "properties": {
           "channelName": { "type": "string", "title": "Channelname" },
@@ -9034,6 +9236,12 @@
             "title": "Timestamp",
             "default": 0
           },
+          "scope": {
+            "anyOf": [
+              { "$ref": "#/components/schemas/FrozenScope" },
+              { "type": "null" }
+            ]
+          },
           "chatMessageCount": {
             "type": "integer",
             "title": "Chatmessagecount",
@@ -9120,7 +9328,17 @@
             "anyOf": [{ "type": "integer" }, { "type": "null" }],
             "title": "Postcount"
           },
-          "timestamp": { "type": "integer", "title": "Timestamp", "default": 0 }
+          "timestamp": {
+            "type": "integer",
+            "title": "Timestamp",
+            "default": 0
+          },
+          "scope": {
+            "anyOf": [
+              { "$ref": "#/components/schemas/FrozenScope" },
+              { "type": "null" }
+            ]
+          }
         },
         "additionalProperties": true,
         "type": "object",
@@ -9128,26 +9346,40 @@
         "title": "SummaryResponse",
         "description": "One summary in the full projection, as `summary_to_camel` builds it.\n\nCarries every key of ``extra``, including the corpus-sized\n``citedPosts`` / ``promptText`` / ``chatMessages``."
       },
+      "SummarySubmitRequest": {
+        "properties": {
+          "id": { "type": "string", "title": "Id" },
+          "scope": { "$ref": "#/components/schemas/ScopeSubmission" },
+          "language": {
+            "type": "string",
+            "title": "Language",
+            "default": "English"
+          },
+          "model": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Model"
+          },
+          "postCount": {
+            "anyOf": [{ "type": "integer" }, { "type": "null" }],
+            "title": "Postcount"
+          },
+          "extra": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Extra"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["id", "scope"],
+        "title": "SummarySubmitRequest",
+        "description": "Body for ``POST /data/summaries`` \u2014 opens a summary at a frozen Scope."
+      },
       "SummaryUpsertRequest": {
         "properties": {
           "text": {
             "anyOf": [{ "type": "string" }, { "type": "null" }],
             "title": "Text"
-          },
-          "channels": {
-            "anyOf": [
-              { "items": { "type": "string" }, "type": "array" },
-              { "type": "null" }
-            ],
-            "title": "Channels"
-          },
-          "startDate": {
-            "anyOf": [{ "type": "integer" }, { "type": "null" }],
-            "title": "Startdate"
-          },
-          "endDate": {
-            "anyOf": [{ "type": "integer" }, { "type": "null" }],
-            "title": "Enddate"
           },
           "language": {
             "anyOf": [{ "type": "string" }, { "type": "null" }],
@@ -9169,7 +9401,7 @@
         "additionalProperties": true,
         "type": "object",
         "title": "SummaryUpsertRequest",
-        "description": "Body for ``PUT /data/summaries/{id}``.\n\nIntentionally permissive. The service accepts both camelCase and snake_case\nfor the base columns, routes anything unrecognised into ``extra``, and\ntreats an explicit ``null`` as \"remove this key from ``extra``\" \u2014 behaviour\na stricter model would break. Declaring the base fields still documents the\nshape and gives the generated client something better than ``unknown``."
+        "description": "Body for ``PUT /data/summaries/{id}``.\n\nIntentionally permissive. The service accepts both camelCase and snake_case\nfor the base columns, routes anything unrecognised into ``extra``, and\ntreats an explicit ``null`` as \"remove this key from ``extra``\" \u2014 behaviour\na stricter model would break. Declaring the base fields still documents the\nshape and gives the generated client something better than ``unknown``.\n\n**It no longer carries the window or the channels** (AW-05). Those are the\nScope the text was produced from, frozen at submission; a client that\nround-trips a list item back through here must not be able to move them,\nand a field that is not on the request is the version of that rule nobody\nhas to remember."
       },
       "SyncJobStatusResponse": {
         "properties": {

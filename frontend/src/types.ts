@@ -6,6 +6,7 @@ import type {
   DbStatsResponse,
   DiscoveryArtifactResponse,
   EmbeddingLogResponse,
+  FrozenScope,
   PostTranslationResponse,
   PublishLogResponse,
   SummaryArtifactResponse,
@@ -295,6 +296,14 @@ export interface Summary {
   status?: "pending"
   /** Full prompt text saved when user copies for external AI (persisted in server `extra`). */
   promptText?: string
+  /**
+   * The Scope this summary was produced from, frozen at submission (AW-05).
+   *
+   * Absent on a row that predates the contract. Read-only everywhere: the
+   * server takes it once, on `POST /data/summaries`, and ignores it on every
+   * later write.
+   */
+  scope?: FrozenScope
 }
 
 /**

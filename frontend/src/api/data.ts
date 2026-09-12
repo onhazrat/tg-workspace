@@ -1,4 +1,5 @@
-import { fixedWindow } from "../lib/analysis-window"
+import type { SummarySubmitRequest } from "../client"
+import { type AnalysisWindowInput, fixedWindow } from "../lib/analysis-window"
 import type {
   DiscoveryCandidate,
   DiscoveryScopeCounts,
@@ -82,7 +83,19 @@ export type PostFeedQuery = PostScopeQuery & {
 export type PromptScope = Omit<
   PostFeedQuery,
   "channelNames" | "limit" | "offset"
->
+> & {
+  /**
+   * A frozen window, sent verbatim instead of being derived from the pair
+   * (AW-05).
+   *
+   * An Artifact's producer runs *after* its Scope was frozen, and it has to
+   * select the Posts the record names. Re-deriving would put this browser's
+   * estimate of the server minute back in the path — `fixedWindow` clamps the
+   * end against it — so a late estimate would quietly narrow the window the
+   * Artifact claims it used.
+   */
+  window?: AnalysisWindowInput
+}
 
 /**
  * A post scope shaped for a JSON request body.
@@ -117,9 +130,23 @@ export function postScopeBody(params: PostScopeQuery): Record<string, unknown> {
  * scope in a nested `scope` object and carries its channels at the top level,
  * so the two bodies are not the same shape around the same window.
  */
+/**
+ * A frozen Scope's boundaries, as a window to select by — verbatim (AW-05).
+ *
+ * Deliberately not `fixedWindow`, which floors and clamps against this
+ * browser's estimate of the server minute. These two instants were already
+ * resolved server-side; touching them again is how the skew comes back.
+ */
+export function frozenWindow(scope: {
+  start: number
+  end: number
+}): AnalysisWindowInput {
+  return { mode: "fixed", start: scope.start, end: scope.end }
+}
+
 export function promptScopeBody(scope: PromptScope): Record<string, unknown> {
-  const { startDate, endDate, ...rest } = scope
-  const window = fixedWindow(startDate, endDate)
+  const { startDate, endDate, window: frozen, ...rest } = scope
+  const window = frozen ?? fixedWindow(startDate, endDate)
   return window ? { ...rest, window } : { ...rest }
 }
 
@@ -632,6 +659,20 @@ export const dataApi = {
   },
 
   getSummary: (id: string) => request<Summary>(`/api/v1/data/summaries/${id}`),
+
+  /**
+   * Open a summary at a frozen Scope, before any AI work starts (AW-05).
+   *
+   * The response carries the exact boundaries the server resolved, and those
+   * are what the prompt call must then select by — not a second reading of
+   * this browser's clock. Hand-written like the rest of this family because
+   * `SummaryResponse` is an open model (ADR-006).
+   */
+  submitSummary: (body: SummarySubmitRequest) =>
+    request<Summary>("/api/v1/data/summaries", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
 
   /**
    * The unified History list — every artifact kind, newest first.

@@ -33,6 +33,7 @@ import {
   type ScopeField,
   saveWindow,
   switchMode,
+  toWireWindow,
   WINDOW_STORAGE_KEY,
   type WindowState,
 } from "@/lib/scope/window"
@@ -438,6 +439,32 @@ describe("fixedRange — for values nobody typed", () => {
     const state = fixedRange(NOW, NOW - HOUR_MS, NOW)
 
     expect(four(state).durationMs).toBe(MINUTE_MS)
+  })
+})
+
+describe("toWireWindow — what a submission actually sends (AW-05)", () => {
+  test("a Live window leaves as Live, not as the pair it resolves to", () => {
+    // Flattening here would hand the server a selection made by this laptop's
+    // clock and call it a choice, which is exactly what AW-02 removed.
+    expect(toWireWindow(live(DAY_MS, 30 * MINUTE_MS))).toEqual({
+      mode: "live",
+      durationMinutes: 24 * 60,
+      endGapMinutes: 30,
+    })
+  })
+
+  test("a zero end gap survives, because it means the current minute", () => {
+    expect(toWireWindow(DEFAULT_WINDOW)).toEqual({
+      mode: "live",
+      durationMinutes: 24 * 60,
+      endGapMinutes: 0,
+    })
+  })
+
+  test("a Fixed window travels as its two exact instants", () => {
+    expect(
+      toWireWindow({ mode: "fixed", start: NOW - DAY_MS, end: NOW }),
+    ).toEqual({ mode: "fixed", start: NOW - DAY_MS, end: NOW })
   })
 })
 

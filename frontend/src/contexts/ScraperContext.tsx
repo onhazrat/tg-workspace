@@ -3,6 +3,7 @@ import React, { createContext, useCallback, useContext, useEffect } from "react"
 import { toast } from "sonner"
 import { api, type BulkFollowChannelInput, type FollowJobStatus } from "@/api"
 import type { PromptScope } from "@/api/data"
+import type { ScopeSubmission } from "@/client"
 import { parseApiError, unavailableChannelToastMessage } from "@/lib/api-errors"
 import { upsertChannel } from "@/lib/channels/store"
 import { logger } from "@/lib/logger"
@@ -78,6 +79,11 @@ interface ScraperContextType {
     | { posts: Post[]; scope?: undefined }
     | { posts?: undefined; scope: PromptScope }
   >
+  /**
+   * The current Scope as an Action submits it, for the server to freeze
+   * (AW-05). See `usePromptPosts`.
+   */
+  getScopeSubmission: (channels: string[], posts?: Post[]) => ScopeSubmission
   handleScrapeChannel: (
     channel: Channel,
     refresh?: boolean,
@@ -229,23 +235,24 @@ export const ScraperProvider: React.FC<{ children: React.ReactNode }> = ({
     setScrapingChannels,
   })
 
-  const { getScopedPosts, getPromptPostsInput } = usePromptPosts({
-    channels,
-    selectedChannels,
-    startDate,
-    endDate,
-    windowKey,
-    embeddingsEnabled,
-    debouncedPostSearch,
-    debouncedSemanticSearchQuery,
-    relatedPostSearch,
-    forwardedFilter,
-    mediaFilter,
-    postViewOptions,
-    semanticSearchRespectsChannels,
-    searchSimilarPosts,
-    getPostsFeed: api.getPostsFeed,
-  })
+  const { getScopedPosts, getPromptPostsInput, getScopeSubmission } =
+    usePromptPosts({
+      channels,
+      selectedChannels,
+      startDate,
+      endDate,
+      windowKey,
+      embeddingsEnabled,
+      debouncedPostSearch,
+      debouncedSemanticSearchQuery,
+      relatedPostSearch,
+      forwardedFilter,
+      mediaFilter,
+      postViewOptions,
+      semanticSearchRespectsChannels,
+      searchSimilarPosts,
+      getPostsFeed: api.getPostsFeed,
+    })
 
   const scrapingLocksRef = React.useRef<Set<string>>(new Set())
   const attemptedLanguageDetectionRef = React.useRef<Set<string>>(new Set())
@@ -578,6 +585,7 @@ export const ScraperProvider: React.FC<{ children: React.ReactNode }> = ({
         invalidatePostViews,
         getScopedPosts,
         getPromptPostsInput,
+        getScopeSubmission,
         handleScrapeChannel,
         handleScrapeAll,
         handleScrapeSelected,
