@@ -65,8 +65,10 @@ async def health_check() -> bool:
 # page wrong for no security gain — the value is the wall clock. Authenticated
 # all the same, because every caller that needs it already is.
 #
-# In a comment rather than a docstring: a handler docstring becomes the
-# `openapi.json` description and a JSDoc block in the generated client.
+# The reasoning above is in a comment because a handler docstring becomes the
+# `openapi.json` description and a JSDoc block in the generated client, and
+# none of it is a consumer's business. The one line that *is* a consumer's
+# business stays a docstring on purpose, and ships as that description.
 @router.get("/server-time")
 def server_time(_current_user: CurrentUser) -> ServerTimeResponse:
     """The server's current time, for a client estimating its clock offset."""

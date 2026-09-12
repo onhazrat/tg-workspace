@@ -6,6 +6,7 @@ import {
   useEffect,
   useState,
 } from "react"
+import { legalRange } from "@/lib/analysis-window"
 import { scopedStorage } from "@/lib/storage/scoped"
 import {
   useChatSessionParam,
@@ -111,48 +112,40 @@ export const UIProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
     return Date.now()
   })
 
+  // Every write to the pair goes through `legalRange` (AW-02). All three
+  // setters below repaired a crossed range by collapsing it onto one instant,
+  // which the server now refuses — and the pair is persisted, so the refusal
+  // survived a reload. See that function for the whole of it.
   const setStartDate = (value: React.SetStateAction<number>) => {
+    const apply = (next: number) => {
+      const [finalStart, finalEnd] = legalRange(next, endDate)
+      setEndDateInternal(finalEnd)
+      return finalStart
+    }
+
     if (typeof value === "function") {
-      setStartDateInternal((prev) => {
-        const next = value(prev)
-        if (next > endDate) {
-          setEndDateInternal(next)
-        }
-        return next
-      })
+      setStartDateInternal((prev) => apply(value(prev)))
     } else {
-      setStartDateInternal(value)
-      if (value > endDate) {
-        setEndDateInternal(value)
-      }
+      setStartDateInternal(apply(value))
     }
   }
 
   const setEndDate = (value: React.SetStateAction<number>) => {
-    const now = Date.now()
+    const apply = (next: number) => {
+      const [finalStart, finalEnd] = legalRange(startDate, next)
+      setStartDateInternal(finalStart)
+      return finalEnd
+    }
 
     if (typeof value === "function") {
-      setEndDateInternal((prev) => {
-        let next = value(prev)
-        if (next > now) next = now
-        if (next < startDate) {
-          setStartDateInternal(next)
-        }
-        return next
-      })
+      setEndDateInternal((prev) => apply(value(prev)))
     } else {
-      const next = value > now ? now : value
-      if (next < startDate) {
-        setStartDateInternal(next)
-      }
-      setEndDateInternal(next)
+      setEndDateInternal(apply(value))
     }
   }
 
   const setDateRange = (start: number, end: number) => {
-    const now = Date.now()
-    const finalEnd = end > now ? now : end
-    const finalStart = start > finalEnd ? finalEnd : start
+    const [finalStart, finalEnd] = legalRange(start, end)
 
     setStartDateInternal(finalStart)
     setEndDateInternal(finalEnd)

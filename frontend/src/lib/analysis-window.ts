@@ -43,14 +43,34 @@ export type AnalysisWindowInput = LiveAnalysisWindow | FixedAnalysisWindow
  */
 let offsetMs = 0
 
-/** Refresh the estimate. Failure leaves the last good offset in place. */
-export async function syncServerClock(): Promise<void> {
-  try {
-    const { now } = await utilsServerTime()
-    offsetMs = now - Date.now()
-  } catch {
-    // A clock estimate is a nicety; nothing here is worth an error surface.
-  }
+let pending: Promise<void> | null = null
+
+/**
+ * Refresh the estimate. Failure leaves the last good offset in place.
+ *
+ * At most one read per session, because `routes/_layout.tsx` awaits this in
+ * `beforeLoad` and that re-runs on **every** navigation into the layout. Two
+ * clocks drift by seconds a day, so a per-navigation round trip buys nothing
+ * and costs a stall on every route change — the whole render waits, and an
+ * offline browser waits out the full fetch timeout before the `catch` runs.
+ *
+ * `force` is how the `visibilitychange` listener gets a fresh read anyway: a
+ * tab suspended for hours is the one case where this browser's own clock can
+ * move without ticking, which is real drift rather than the imagined kind.
+ */
+export async function syncServerClock(force = false): Promise<void> {
+  if (force) pending = null
+  pending ??= (async () => {
+    try {
+      const { now } = await utilsServerTime()
+      offsetMs = now - Date.now()
+    } catch {
+      // A clock estimate is a nicety; nothing here is worth an error surface.
+      // Cleared so the next navigation retries rather than caching a failure.
+      pending = null
+    }
+  })()
+  return pending
 }
 
 /** The server's current instant, as well as this browser can tell. */
@@ -83,10 +103,38 @@ export function floorToMinute(ms: number): number {
  * conversion of a value the old UI produced from `Date.now()`, where there is
  * nothing to show anybody and no choice being made.
  */
+/**
+ * The shortest legal window containing `[start, end)`, given what the server
+ * will accept: an end no later than its current minute, and a width of at
+ * least one minute.
+ *
+ * Every workspace setter routes through this because all of them already
+ * repaired a crossed range, and all of them repaired it by *collapsing* —
+ * moving one boundary onto the other. That was an empty half-open window,
+ * which the old server answered with a 200 and no posts. It is now a 422 on
+ * every scoped request at once, and the pair is persisted, so one drag of the
+ * End picker past the Start left the workspace refusing everything until
+ * somebody thought to look at the date range.
+ *
+ * Holding the End and moving the Start is not a coin flip: it is the
+ * propagation rule ADR-018 specifies for editing Start, arrived at a ticket
+ * early.
+ */
+export function legalRange(start: number, end: number): [number, number] {
+  const finalEnd = Math.min(end, serverMinuteStart())
+  return [Math.min(start, finalEnd - MINUTE_MS), finalEnd]
+}
+
 export function fixedWindow(
   startDate?: number,
   endDate?: number,
 ): AnalysisWindowInput | undefined {
+  // No widening here if the pair is crossed or zero-width. The server refuses
+  // such a window by design (story 18), and a serialiser that quietly repaired
+  // one would be inventing a selection with nothing on screen to admit to it.
+  // Keeping the pair legal is `UIContext.legalRange`'s job, where there is a
+  // person and a picker; `App.tsx` and `AIContext` handle the two cases that
+  // do not come from the picker.
   if (startDate == null && endDate == null) return undefined
 
   const minute = serverMinuteStart()

@@ -156,19 +156,31 @@ export default function App() {
    * is deep-linked now; only Discover reports were before.
    */
   const openArtifact = (artifact: ArtifactListItem) => {
+    // An Artifact predating the frozen-Scope contract may carry no window, and
+    // `(0, 0)` is not one — it is the zero-width window AW-02 refuses, so
+    // restoring it would leave the workspace 422ing on the feed, the counts,
+    // Discover and every Action until somebody thought to look at the date
+    // range. The old server read it as an empty window and returned nothing,
+    // which made this useless rather than stuck.
+    //
+    // `!= null` and a width check rather than truthiness: epoch 0 is a real
+    // instant, and a Fixed window starting there is exactly how "everything up
+    // to X" is expressed.
+    const { startDate, endDate } = artifact
+    const hasWindow =
+      startDate != null && endDate != null && endDate > startDate
+
+    // The banner describes what was restored, so it says nothing about a
+    // window when none was. Showing the artifact's `0`/`0` beside a workspace
+    // still holding the previous range would describe a selection that is not
+    // the one being queried.
     setRestoredScope({
       channelCount: artifact.channels?.length ?? 0,
-      startDate: artifact.startDate ?? 0,
-      endDate: artifact.endDate ?? 0,
+      startDate: hasWindow ? startDate : null,
+      endDate: hasWindow ? endDate : null,
     })
-    // Only when the Artifact actually carries a window. The `?? 0` fallbacks
-    // above are for display; feeding them to `setDateRange` pins the workspace
-    // to `(0, 0)`, which AW-02 answers with a 422 on every scoped request —
-    // feed, counts, Discover, every Action — until somebody notices the date
-    // range is the thing to fix. The old server read it as an empty window and
-    // returned nothing, so this used to be merely useless rather than stuck.
-    if (artifact.startDate && artifact.endDate) {
-      setDateRange(artifact.startDate, artifact.endDate)
+    if (hasWindow) {
+      setDateRange(startDate, endDate)
     }
     setSelectedChannels(new Set(artifact.channels ?? []))
 

@@ -93,8 +93,10 @@ class PostScopeRequest(BaseModel):
     # shapes is the enforcement: while the pair existed, calling the resolver
     # was a convention a new route could forget, and a route that forgot it
     # would look correct and select by a clock the server cannot see. Omitted
-    # means both sides open — the export, lookup and language-detection reads,
-    # which are not a Scope anybody selected.
+    # means both sides open, which is the export and lookup reads — not a Scope
+    # anybody selected. Language detection is *not* one of them: it sends a
+    # window like any other caller (`ScraperContext.tsx` asks for a fixed
+    # lookback), and listing it here as an exception was simply wrong.
     window: AnalysisWindowInput | None = None
     keyword: str | None = None
     forwarded: str = "all"

@@ -73,9 +73,15 @@ describe("postScopeBody", () => {
     expect(body.endDate).toBeUndefined()
   })
 
-  it("preserves a zero date boundary rather than dropping it as falsy", () => {
-    expect(postScopeBody({ startDate: 0, endDate: 0 })).toEqual({
-      window: { mode: "fixed", start: 0, end: 0 },
+  /**
+   * Epoch 0 is a real instant, and "everything up to X" is how a Fixed window
+   * says so. This used to assert `{start: 0, end: 0}` — a zero-width window
+   * the server refuses (story 18), so the test pinned a body that cannot
+   * succeed and would have stayed green through exactly that bug.
+   */
+  it("preserves a zero start boundary rather than dropping it as falsy", () => {
+    expect(postScopeBody({ startDate: 0, endDate: MINUTE_AGO })).toEqual({
+      window: { mode: "fixed", start: 0, end: MINUTE_AGO },
     })
   })
 

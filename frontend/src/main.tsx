@@ -56,7 +56,7 @@ configureGeneratedClient()
 // before the first scoped query, because `/utils/server-time` needs a token
 // and nothing here has one yet.
 document.addEventListener("visibilitychange", () => {
-  if (document.visibilityState === "visible") void syncServerClock()
+  if (document.visibilityState === "visible") void syncServerClock(true)
 })
 
 // The `QueryClient` lives in `lib/queryClient.ts` so non-React writers can
