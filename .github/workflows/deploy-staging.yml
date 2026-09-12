@@ -32,6 +32,8 @@ permissions:
 
 jobs:
   deploy:
+    if: github.ref == 'refs/heads/main'
+    timeout-minutes: 30
     environment: staging
     runs-on:
       - self-hosted
