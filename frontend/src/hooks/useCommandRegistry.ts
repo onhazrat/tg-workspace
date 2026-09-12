@@ -5,6 +5,7 @@ import { useCommandPaletteContext } from "@/components/CommandPaletteProvider"
 import { useAI } from "@/contexts/AIContext"
 import { useChatContext } from "@/contexts/ChatContext"
 import { useData } from "@/contexts/DataContext"
+import { useScope } from "@/contexts/ScopeContext"
 import { useScraper } from "@/contexts/ScraperContext"
 import { useSettings } from "@/contexts/SettingsContext"
 import { useUI } from "@/contexts/UIContext"
@@ -61,11 +62,9 @@ export function useCommandRegistry(): {
   const summariesHistory = useSummariesHistory()
   const loadHistory = useInvalidateSummaries()
   const loadDBStats = useLoadDBStats()
+  const { startDate, endDate, setFixedRange: setDateRange } = useScope()
   const {
     setActiveTab,
-    startDate,
-    endDate,
-    setDateRange,
     setCurrentSummaryId,
     currentSummaryId,
     historySearchQuery,

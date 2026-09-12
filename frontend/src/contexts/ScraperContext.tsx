@@ -33,6 +33,7 @@ import { isNetworkRoutingActive } from "../lib/syncSettings"
 import type { Channel, Post } from "../types"
 import { useData } from "./DataContext"
 import { useRAG } from "./RAGContext"
+import { useScope } from "./ScopeContext"
 import { useSettings } from "./SettingsContext"
 import { useUI } from "./UIContext"
 
@@ -133,14 +134,8 @@ export const ScraperProvider: React.FC<{ children: React.ReactNode }> = ({
     setChannelStats,
     loadChannels,
   } = useData()
-  const {
-    startDate,
-    endDate,
-    setIsRateLimited,
-    activeTab,
-    setActiveTab,
-    summarizing,
-  } = useUI()
+  const { startDate, endDate } = useScope()
+  const { setIsRateLimited, activeTab, setActiveTab, summarizing } = useUI()
   const {
     proxyEnabled,
     defaultProxyUrls,

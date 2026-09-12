@@ -103,28 +103,6 @@ export function floorToMinute(ms: number): number {
  * conversion of a value the old UI produced from `Date.now()`, where there is
  * nothing to show anybody and no choice being made.
  */
-/**
- * The shortest legal window containing `[start, end)`, given what the server
- * will accept: an end no later than its current minute, and a width of at
- * least one minute.
- *
- * Every workspace setter routes through this because all of them already
- * repaired a crossed range, and all of them repaired it by *collapsing* —
- * moving one boundary onto the other. That was an empty half-open window,
- * which the old server answered with a 200 and no posts. It is now a 422 on
- * every scoped request at once, and the pair is persisted, so one drag of the
- * End picker past the Start left the workspace refusing everything until
- * somebody thought to look at the date range.
- *
- * Holding the End and moving the Start is not a coin flip: it is the
- * propagation rule ADR-018 specifies for editing Start, arrived at a ticket
- * early.
- */
-export function legalRange(start: number, end: number): [number, number] {
-  const finalEnd = Math.min(end, serverMinuteStart())
-  return [Math.min(start, finalEnd - MINUTE_MS), finalEnd]
-}
-
 export function fixedWindow(
   startDate?: number,
   endDate?: number,
@@ -132,9 +110,9 @@ export function fixedWindow(
   // No widening here if the pair is crossed or zero-width. The server refuses
   // such a window by design (story 18), and a serialiser that quietly repaired
   // one would be inventing a selection with nothing on screen to admit to it.
-  // Keeping the pair legal is `UIContext.legalRange`'s job, where there is a
-  // person and a picker; `App.tsx` and `AIContext` handle the two cases that
-  // do not come from the picker.
+  // Keeping the pair legal is the Analysis-window controller's job
+  // (`lib/scope/window.ts`), where a typed edit meets a person and a field to
+  // put the refusal in.
   if (startDate == null && endDate == null) return undefined
 
   const minute = serverMinuteStart()

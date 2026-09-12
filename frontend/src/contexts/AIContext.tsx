@@ -32,6 +32,7 @@ import { publishSummary } from "../services/telegram"
 import type { LLMLog, Post, PublishLog, Summary } from "../types"
 import { useChatContext } from "./ChatContext"
 import { useData } from "./DataContext"
+import { useScope } from "./ScopeContext"
 import { useScraper } from "./ScraperContext"
 import { useSettings } from "./SettingsContext"
 import { useUI } from "./UIContext"
@@ -113,9 +114,8 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({
   const loadHistory = useInvalidateSummaries()
   const botCredentials = useBotCredentials()
   const chatDestinations = useChatDestinations()
+  const { startDate, endDate } = useScope()
   const {
-    startDate,
-    endDate,
     setActiveTab,
     setSummarizing,
     setCurrentSummaryId,

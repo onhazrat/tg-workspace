@@ -7,6 +7,7 @@ import { AIProvider } from "@/contexts/AIContext"
 import { ChatProvider } from "@/contexts/ChatContext"
 import { DataProvider } from "@/contexts/DataContext"
 import { RAGProvider } from "@/contexts/RAGContext"
+import { ScopeProvider } from "@/contexts/ScopeContext"
 import { ScraperProvider } from "@/contexts/ScraperContext"
 import { SettingsProvider } from "@/contexts/SettingsContext"
 import { TagProvider } from "@/contexts/TagContext"
@@ -24,25 +25,27 @@ export function TgProviders({ children }: { children: ReactNode }) {
     <SettingsProvider>
       <DataProvider>
         <UIProvider>
-          <RAGProvider>
-            <ScraperProvider>
-              <TagProvider>
-                <ChatProvider>
-                  <AIProvider>
-                    <CommandPaletteProvider>
-                      <TranslationProvider>
-                        <TooltipProvider delay={500} closeDelay={300}>
-                          {children}
-                          <CommandPalette />
-                          <TgToaster richColors closeButton />
-                        </TooltipProvider>
-                      </TranslationProvider>
-                    </CommandPaletteProvider>
-                  </AIProvider>
-                </ChatProvider>
-              </TagProvider>
-            </ScraperProvider>
-          </RAGProvider>
+          <ScopeProvider>
+            <RAGProvider>
+              <ScraperProvider>
+                <TagProvider>
+                  <ChatProvider>
+                    <AIProvider>
+                      <CommandPaletteProvider>
+                        <TranslationProvider>
+                          <TooltipProvider delay={500} closeDelay={300}>
+                            {children}
+                            <CommandPalette />
+                            <TgToaster richColors closeButton />
+                          </TooltipProvider>
+                        </TranslationProvider>
+                      </CommandPaletteProvider>
+                    </AIProvider>
+                  </ChatProvider>
+                </TagProvider>
+              </ScraperProvider>
+            </RAGProvider>
+          </ScopeProvider>
         </UIProvider>
       </DataProvider>
     </SettingsProvider>

@@ -50,6 +50,7 @@ import {
   TooltipTrigger,
 } from "./components/ui/tg-tooltip"
 import { useData } from "./contexts/DataContext"
+import { useScope } from "./contexts/ScopeContext"
 import { useScraper } from "./contexts/ScraperContext"
 import { useSettings } from "./contexts/SettingsContext"
 import { useUI } from "./contexts/UIContext"
@@ -73,8 +74,8 @@ export default function App() {
 
   const { channels, selectedChannels, setSelectedChannels } = useData()
 
-  const { activeTab, setActiveTab, isRateLimited, setDateRange, summarizing } =
-    useUI()
+  const { activeTab, setActiveTab, isRateLimited, summarizing } = useUI()
+  const { setFixedRange } = useScope()
 
   const {
     postSearch,
@@ -180,7 +181,7 @@ export default function App() {
       endDate: hasWindow ? endDate : null,
     })
     if (hasWindow) {
-      setDateRange(startDate, endDate)
+      setFixedRange(startDate, endDate)
     }
     setSelectedChannels(new Set(artifact.channels ?? []))
 

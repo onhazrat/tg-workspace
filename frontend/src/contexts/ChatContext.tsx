@@ -21,6 +21,7 @@ import {
 import type { ChatMessage, ChatMode, ChatSession, LLMLog } from "../types"
 import { useData } from "./DataContext"
 import { useRAG } from "./RAGContext"
+import { useScope } from "./ScopeContext"
 import { useScraper } from "./ScraperContext"
 import { useSettings } from "./SettingsContext"
 import { useUI } from "./UIContext"
@@ -51,9 +52,8 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
 }) => {
   const { channels, selectedChannels } = useData()
   const loadHistory = useInvalidateChatSessions()
+  const { startDate, endDate } = useScope()
   const {
-    startDate,
-    endDate,
     activeTab,
     currentChatSessionId,
     setCurrentChatSessionId,

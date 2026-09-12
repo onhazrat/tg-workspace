@@ -5,9 +5,9 @@ import { toast } from "sonner"
 import { api } from "@/api"
 import type { PostFeedQuery } from "@/api/data"
 import { useData } from "@/contexts/DataContext"
+import { useScope } from "@/contexts/ScopeContext"
 import { useScraper } from "@/contexts/ScraperContext"
 import { useSettings } from "@/contexts/SettingsContext"
-import { useUI } from "@/contexts/UIContext"
 import { buildPostsInScopeCounts } from "@/lib/channels/sort-channels-for-grid"
 import type { Post } from "@/types"
 import { queryKeys, SUMMARIZER_STALE_TIME } from "./queryKeys"
@@ -36,7 +36,7 @@ function useSelectedChannelNames(): string[] {
  */
 export function useScopedPostCounts(): Record<string, number> {
   const { selectedChannels } = useData()
-  const { startDate, endDate } = useUI()
+  const { startDate, endDate } = useScope()
   const {
     postSearch,
     forwardedFilter,
@@ -101,7 +101,7 @@ export interface PostsFeed {
  * refetches the first page; a completed sync invalidates it (see ScraperContext).
  */
 export function usePostsFeed(): PostsFeed {
-  const { startDate, endDate } = useUI()
+  const { startDate, endDate } = useScope()
   const {
     postSearch,
     forwardedFilter,

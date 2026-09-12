@@ -34,6 +34,7 @@ import {
 import { generateTagStream, getTagPrompt } from "@/services/ai"
 import type { TagRun, TagRunSummary } from "@/types"
 import { useData } from "./DataContext"
+import { useScope } from "./ScopeContext"
 import { useScraper } from "./ScraperContext"
 import { useSettings } from "./SettingsContext"
 import { useUI } from "./UIContext"
@@ -71,13 +72,9 @@ export const TagProvider: React.FC<{ children: React.ReactNode }> = ({
   const { channels, selectedChannels, setChannels } = useData()
   const { getPromptPostsInput } = useScraper()
   const { aiLanguage, selectedModel, aiTemperature } = useSettings()
-  const {
-    activeTab,
-    startDate,
-    endDate,
-    includeChannelBioInPrompt,
-    includeChannelTagsInPrompt,
-  } = useUI()
+  const { activeTab, includeChannelBioInPrompt, includeChannelTagsInPrompt } =
+    useUI()
+  const { startDate, endDate } = useScope()
   const queryClient = useQueryClient()
 
   const [mode, setMode] = useState<TagMode>("add")
