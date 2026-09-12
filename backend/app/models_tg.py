@@ -438,6 +438,17 @@ class ChatSession(SQLModel, table=True):
     mode: str = "full_scope"
     post_count: int | None = None
     timestamp: int = Field(default=0, sa_column=_ms_ts())
+    #: The frozen Scope this Chat was produced from (AW-06), as
+    #: `app/schemas/scope.py::FrozenScope` dumps it — minus `posts`, which is
+    #: corpus-sized and lives in `ChatSessionPayload.scope_posts`.
+    #:
+    #: The same column, the same contract and the same rules as
+    #: `Summary.scope`: written once at submission, never accepted from a
+    #: `PUT`, `NULL` on a row that predates the contract. A chat appends turns
+    #: for as long as the conversation runs, so "written once" is doing more
+    #: work here than it does one table over — every later turn is a write that
+    #: must not move the boundaries the first one was answered from.
+    scope: dict[str, Any] | None = Field(default=None, sa_column=Column(JSON))
     #: Open bag of small UI flags (`isStarred`, `note`, `postSearch`,
     #: `semanticSearchQuery`, …), exactly as on `Summary`. Conditional keys flow
     #: through here and are deliberately **not** declared: a declared optional
@@ -490,6 +501,10 @@ class ChatSessionPayload(SQLModel, table=True):
     )
     #: `[{"role": "user" | "model", "text": str, "sources"?: [...]}]`
     messages: list[Any] | None = Field(default=None, sa_column=Column(JSON))
+    #: `{"channelName": str, "postId": int}` — the semantic chat's explicit
+    #: selection, here for the reason `SummaryPayload.scope_posts` is there: a
+    #: few thousand refs is a corpus and the list projection must not read one.
+    scope_posts: list[Any] | None = Field(default=None, sa_column=Column(JSON))
     updated_at: datetime = Field(default_factory=utc_now)
 
 
@@ -537,6 +552,25 @@ class DiscoverReport(SQLModel, table=True):
     # passes its matches in. `None` means unrestricted. The count rather than
     # the ids: enough to explain the scope without another corpus-sized column.
     scoped_post_count: int | None = None
+    #: The frozen Scope this report was generated from (AW-06), as
+    #: `app/schemas/scope.py::FrozenScope` dumps it — minus `posts`, which goes
+    #: to `scope_posts` below.
+    #:
+    #: It duplicates every scope column above, deliberately and temporarily.
+    #: Discover is the one family that already stored the whole filter set, so
+    #: unlike the other three there is nothing new *recorded* here — what is new
+    #: is that the recording now has the same shape, and the same single
+    #: producer, as the other three. AW-07 removes the columns it supersedes.
+    scope: dict[str, Any] | None = Field(default=None, sa_column=Column(JSON))
+    #: The refs behind `scoped_post_count`, which this table stored only the
+    #: count of until AW-06. The count alone was "enough to explain the scope";
+    #: the frozen contract asks for reproduction, and a semantic ranking is the
+    #: one selection the server cannot rebuild from the filters beside it.
+    #:
+    #: On the row rather than in a companion table because this table has no
+    #: companion — `candidates` is already the corpus-sized column here, and
+    #: `_light_columns` is what keeps both out of the list projection.
+    scope_posts: list[Any] | None = Field(default=None, sa_column=Column(JSON))
 
     # --- result ---
     candidates: list[Any] = Field(default_factory=list, sa_column=Column(JSON))
@@ -875,6 +909,17 @@ class TagRun(SQLModel, table=True):
     #: Open bag of small UI flags (`isStarred`, `note`) — see the note on
     #: `DiscoverReport.extra` for why all four artifact kinds have one.
     extra: dict[str, Any] = Field(default_factory=dict, sa_column=Column(JSON))
+    #: The frozen Scope this run was produced from (AW-06), as
+    #: `app/schemas/scope.py::FrozenScope` dumps it — minus `posts`, which goes
+    #: to `scope_posts` below. Written once at submission and never accepted
+    #: from a `PUT`; `NULL` on a row that predates the contract, which AW-07
+    #: deletes rather than backfills.
+    scope: dict[str, Any] | None = Field(default=None, sa_column=Column(JSON))
+    #: The semantic path's explicit selection. On the row rather than in a
+    #: companion table for the reason `DiscoverReport.scope_posts` gives: this
+    #: table already keeps its corpus in its own row, and `_light_columns` is
+    #: what keeps it out of the list projection.
+    scope_posts: list[Any] | None = Field(default=None, sa_column=Column(JSON))
     created_at: int = Field(default=0, sa_column=_ms_ts())
     updated_at_ms: int = Field(default=0, sa_column=_ms_ts())
     #: The Owner who made the last write, when it was not the account above

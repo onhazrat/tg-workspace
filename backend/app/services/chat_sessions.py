@@ -14,7 +14,7 @@ trick. Where this module differs from that one, there is a comment saying why.
 from __future__ import annotations
 
 import uuid
-from typing import Any
+from typing import Any, Literal
 
 from fastapi import HTTPException
 from sqlalchemy import Text, cast, or_
@@ -22,6 +22,8 @@ from sqlmodel import Session, col, select
 
 from app.core import acting_owner
 from app.models_tg import ChatSession, ChatSessionPayload, utc_now
+from app.schemas.scope import FrozenScope, ScopeSubmission, scope_key
+from app.services.analysis_window import freeze_scope
 from app.services.serialization import to_snake
 from app.services.tenancy import (
     assert_owner,
@@ -42,6 +44,14 @@ PAYLOAD_COLUMNS: dict[str, str] = {"messages": "messages"}
 HEAVY_CHAT_FIELDS = frozenset(PAYLOAD_COLUMNS)
 _PAYLOAD_COLUMN_NAMES = frozenset(PAYLOAD_COLUMNS.values())
 
+#: Every column of `tg_chat_session_payloads`, which is **not** the same set.
+#: `scope_posts` is written once by `submit_chat_session` and is unreachable
+#: from a request body, so it stays out of the wire mapping above — but it still
+#: has to count towards "is this payload row empty", or a Chat whose only heavy
+#: field is its frozen Post selection would have that row dropped on the next
+#: write. The same trap, and the same fix, as `summaries._ALL_PAYLOAD_COLUMNS`.
+_ALL_PAYLOAD_COLUMNS = _PAYLOAD_COLUMN_NAMES | {"scope_posts"}
+
 #: Maintained from the payload on write. Stripped from inbound bodies so a
 #: client round-tripping a list item cannot shadow them with a stale value.
 DERIVED_CHAT_FIELDS = frozenset({"message_count", "title"})
@@ -50,9 +60,30 @@ DERIVED_CHAT_FIELDS = frozenset({"message_count", "title"})
 #: distinguishes this chat from its siblings in a list, not a summary of it.
 CHAT_TITLE_CHARS = 80
 
+#: Base columns a `PUT` may still change on a Chat that already exists.
+#:
+#: `channels`, `start_date` and `end_date` are **not** here, and that is AW-06
+#: applying AW-05's rule to this family: they are the Scope the conversation was
+#: answered from, frozen at submission. It matters more here than it did for
+#: Summaries — a chat PUTs its whole session back on *every turn*, so while
+#: these were settable a Live window that had advanced mid-conversation rewrote
+#: the boundaries the earlier answers were actually built from.
+#:
+#: `title` stays mutable and is not a Scope field; `mode` stays mutable because
+#: `upsert_chat_session` is still the legacy create door for a chat that was
+#: never submitted.
+MUTABLE_CHAT_FIELDS = frozenset(
+    {"post_count", "title", "language", "model", "mode", "timestamp"}
+)
+
 #: The two ways a chat sources its posts. `full_scope` sends every post in the
 #: scope; `semantic` sends only what a vector search retrieved for the question.
 CHAT_MODES = ("full_scope", "semantic")
+
+#: The same pair as a type, so `submit_chat_session` is checked at its call
+#: sites rather than at runtime. The route model declares the same Literal, so a
+#: runtime check here was unreachable from the only caller that exists.
+ChatMode = Literal["full_scope", "semantic"]
 
 
 def derive_chat_title(messages: Any) -> str:
@@ -108,11 +139,15 @@ def chat_session_to_camel(
     put `?? []` in every consumer.
     """
     messages = payload.messages if payload is not None else None
-    return {
-        **_chat_session_base(row),
-        **(row.extra or {}),
-        "messages": messages if isinstance(messages, list) else [],
-    }
+    return _with_scope(
+        {
+            **_chat_session_base(row),
+            **(row.extra or {}),
+            "messages": messages if isinstance(messages, list) else [],
+        },
+        row,
+        payload,
+    )
 
 
 def chat_session_to_camel_light(row: ChatSession) -> dict[str, Any]:
@@ -124,7 +159,31 @@ def chat_session_to_camel_light(row: ChatSession) -> dict[str, Any]:
     """
     light = dict(row.extra or {})
     light["messageCount"] = row.message_count
-    return {**_chat_session_base(row), **light}
+    # The Scope travels without its Post refs — `scopedPostCount` is what a
+    # list shows instead, and reading the refs is what the payload table exists
+    # to avoid. Same split, same reason, as `summary_to_camel_light`.
+    return _with_scope({**_chat_session_base(row), **light}, row, None)
+
+
+def _with_scope(
+    out: dict[str, Any], row: ChatSession, payload: ChatSessionPayload | None
+) -> dict[str, Any]:
+    """Stamp the frozen Scope on, **after** `extra` has been spread (AW-06).
+
+    The ordering argument lives on `schemas/scope.py::scope_key`, which is the
+    one copy of it.
+    """
+    out.update(scope_key(frozen_scope_of(row, payload)))
+    return out
+
+
+def frozen_scope_of(
+    row: ChatSession, payload: ChatSessionPayload | None = None
+) -> FrozenScope | None:
+    """The Scope this Chat was produced from, refs included, or `None`."""
+    return FrozenScope.from_stored(
+        row.scope, payload.scope_posts if payload is not None else None
+    )
 
 
 def _search_clause(term: str) -> Any:
@@ -220,7 +279,7 @@ def apply_chat_session_payload(
     row.user_id = user_id
     row.updated_at = utc_now()
 
-    if all(getattr(row, column) is None for column in _PAYLOAD_COLUMN_NAMES):
+    if all(getattr(row, column) is None for column in _ALL_PAYLOAD_COLUMNS):
         if existing is not None:
             session.delete(existing)
         return None
@@ -276,6 +335,14 @@ def upsert_chat_session(
         "post_count",
         "postCount",
         "timestamp",
+        # Recognised only so they are *dropped* (AW-06). `extra` takes anything
+        # unrecognised, so without these a client PUTting a list item straight
+        # back would store a second copy of the Scope beside the frozen one —
+        # and a chat PUTs its whole session on every turn, so it would happen
+        # on the second message of every conversation.
+        "scope",
+        "scope_posts",
+        "scopePosts",
     }
     payload_updates: dict[str, Any] = {}
     payload_removals: set[str] = set()
@@ -302,17 +369,7 @@ def upsert_chat_session(
     if row:
         for key, value in body.items():
             snake = to_snake(key)
-            if snake in (
-                "start_date",
-                "end_date",
-                "post_count",
-                "title",
-                "channels",
-                "language",
-                "model",
-                "mode",
-                "timestamp",
-            ):
+            if snake in MUTABLE_CHAT_FIELDS:
                 setattr(row, snake, value)
         merged_extra = {
             **(row.extra or {}),
@@ -350,6 +407,73 @@ def upsert_chat_session(
     refresh_chat_session_derived_columns(row, payload)
     acting_owner.stamp(session, row)
     session.add(row)
+    session.commit()
+    session.refresh(row)
+    return chat_session_to_camel(row, session.get(ChatSessionPayload, chat_session_id))
+
+
+def submit_chat_session(
+    session: Session,
+    *,
+    user_id: uuid.UUID,
+    chat_session_id: str,
+    submission: ScopeSubmission,
+    language: str = "English",
+    model: str | None = None,
+    mode: ChatMode = "full_scope",
+    post_count: int | None = None,
+    extra: dict[str, Any] | None = None,
+    now_ms: int | None = None,
+) -> dict[str, Any]:
+    """Open a Chat by freezing the Scope it will be answered from (AW-06).
+
+    `submit_summary`'s twin, and the differences are the interesting part.
+
+    A Summary is submitted, produced once and then written back. A Chat is
+    submitted once and written back *per turn*, for as long as the conversation
+    runs — so the window between "the Scope was chosen" and "the last write
+    happened" is not a queue delay measured in minutes, it is however long
+    somebody keeps talking. That is the argument for freezing here rather than
+    letting the first `PUT` carry the boundaries: with a Live window, a
+    conversation held across midnight recorded whichever day its final turn
+    landed in.
+
+    The row starts with no transcript. `upsert_chat_session` appends the turns
+    afterwards and cannot touch any of this.
+    """
+    if session.get(ChatSession, chat_session_id) is not None:
+        raise HTTPException(status_code=409, detail="Chat session already exists")
+
+    scope = freeze_scope(submission, now_ms=now_ms)
+    row = ChatSession(
+        id=chat_session_id,
+        user_id=user_id,
+        title="",
+        # The superseded copy, kept in step at creation and never written
+        # again. AW-07 removes these three; until then the History union reads
+        # them, so they have to agree with the frozen value by construction.
+        channels=list(scope.channels),
+        start_date=scope.start,
+        end_date=scope.end,
+        language=language,
+        model=model,
+        mode=mode,
+        post_count=post_count if post_count is not None else scope.scoped_post_count,
+        timestamp=int(utc_now().timestamp() * 1000),
+        extra=dict(extra or {}),
+        scope=scope.stored(),
+    )
+    session.add(row)
+
+    refs = scope.stored_posts()
+    payload = apply_chat_session_payload(
+        session,
+        chat_session_id,
+        user_id=user_id,
+        updates={} if refs is None else {"scope_posts": refs},
+    )
+    refresh_chat_session_derived_columns(row, payload)
+    acting_owner.stamp(session, row)
     session.commit()
     session.refresh(row)
     return chat_session_to_camel(row, session.get(ChatSessionPayload, chat_session_id))

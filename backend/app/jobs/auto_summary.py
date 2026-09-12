@@ -17,7 +17,6 @@ from app.ai.registry import default_model, get_provider, is_credential_rejection
 from app.core.db import engine
 from app.models_tg import ChatDestination, Post, Summary, utc_now
 from app.prompts.summary import format_summary_prompt
-from app.schemas.scope import FrozenScope
 from app.services.ai_keys import Purpose, record_validation, resolve_ai_key
 from app.services.channel_setting_groups import channel_is_frozen, load_groups_by_id
 from app.services.credentials import CHAT_DESTINATION_NOT_FOUND
@@ -31,7 +30,7 @@ from app.services.network_settings import (
 from app.services.post_filters import apply_analysis_window
 from app.services.publish import publish_summary_text
 from app.services.scraper_jobs import create_job, has_active_sync_job
-from app.services.summaries import apply_summary_payload
+from app.services.summaries import apply_summary_payload, derived_scope
 from app.services.sync_meta import touch_sync
 from app.services.sync_orchestrator import run_sync_job
 from app.services.tenancy import may_act_on
@@ -356,30 +355,6 @@ async def _sync_channels_for_summary(
     await run_sync_job(job, owner_id)
 
 
-def _successor_scope(summary: Summary, new_start: int, new_end: int) -> dict[str, Any]:
-    """The Scope a regenerated Summary was actually produced from (AW-05).
-
-    **The channels and the window, with every filter at its default** — because
-    that is literally what the select below applies. Carrying the predecessor's
-    keyword, media filter or cap forward reads like the obvious thing and would
-    be a lie in the record: regeneration has never applied them, and a Scope
-    that names a filter nobody used is worse than no Scope at all. The same
-    asymmetry is already noted on the browser twin.
-
-    Not re-frozen through `freeze_scope` either. This window is *derived* from
-    the one before it rather than resolved against a clock, and its end is
-    deliberately in the future — `resolve_analysis_window` refuses that, rightly,
-    for a window somebody is choosing right now.
-
-    Independent of whether the predecessor had a Scope: this one is true about
-    the successor either way, so a chain that started before AW-05 gains a
-    complete record from its next run rather than never.
-    """
-    return FrozenScope.model_validate(
-        {"channels": list(summary.channels or []), "start": new_start, "end": new_end}
-    ).model_dump(by_alias=True, exclude={"posts", "duration_minutes"})
-
-
 async def _regenerate_one(
     session: Session, summary: Summary, *, owner_id: uuid.UUID
 ) -> str | None:
@@ -400,9 +375,12 @@ async def _regenerate_one(
     only Summaries that have an owner.
     """
     extra = _summary_extra(summary)
-    duration_ms = summary.end_date - summary.start_date
-    new_start = summary.end_date
-    new_end = summary.end_date + duration_ms
+    # The one place the successor window is computed, shared with the browser's
+    # submission path (AW-06). It used to be three lines here and three more in
+    # `AIContext`, and the two had drifted: the worker recorded a complete Scope
+    # and the browser recorded none, for the same chain.
+    scope = derived_scope(summary, "successor")
+    new_start, new_end = scope.start, scope.end
 
     await _sync_channels_for_summary(session, summary.channels or [], new_end, owner_id)
 
@@ -493,7 +471,7 @@ async def _regenerate_one(
         channels=summary.channels,
         start_date=new_start,
         end_date=new_end,
-        scope=_successor_scope(summary, new_start, new_end),
+        scope=scope.stored(),
         language=summary.language,
         model=summary.model,
         post_count=len(posts),

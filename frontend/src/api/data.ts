@@ -1,4 +1,8 @@
-import type { SummarySubmitRequest } from "../client"
+import type {
+  ChatSessionSubmitRequest,
+  SummarySubmitRequest,
+  TagRunSubmitRequest,
+} from "../client"
 import { type AnalysisWindowInput, fixedWindow } from "../lib/analysis-window"
 import type {
   DiscoveryCandidate,
@@ -726,6 +730,19 @@ export const dataApi = {
   getChatSession: (id: string) =>
     request<ChatSession>(`/api/v1/data/chat-sessions/${id}`),
 
+  /**
+   * Open a chat at a frozen Scope, before any AI work starts (AW-06).
+   *
+   * `submitSummary`'s twin, and needed more than that one was: a chat PUTs its
+   * whole session back on every turn, so without a submission the recorded
+   * window was whichever one the *last* message landed in.
+   */
+  submitChatSession: (body: ChatSessionSubmitRequest) =>
+    request<ChatSession>("/api/v1/data/chat-sessions", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
   upsertChatSession: (id: string, session: Partial<ChatSession>) =>
     request<ChatSession>(`/api/v1/data/chat-sessions/${id}`, {
       method: "PUT",
@@ -744,6 +761,19 @@ export const dataApi = {
   listTagRuns: () => request<TagRunSummary[]>("/api/v1/data/tag-runs"),
 
   getTagRun: (id: string) => request<TagRun>(`/api/v1/data/tag-runs/${id}`),
+
+  /**
+   * Open a tag run at a frozen Scope, before the prompt is assembled (AW-06).
+   *
+   * A tag run is written at least twice — the copy-prompt path opens it pending
+   * and the pasted response completes it — so the prompt used to be built from
+   * one window and the row to record another.
+   */
+  submitTagRun: (body: TagRunSubmitRequest) =>
+    request<TagRun>("/api/v1/data/tag-runs", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
 
   upsertTagRun: (id: string, run: Partial<TagRun>) =>
     request<TagRun>(`/api/v1/data/tag-runs/${id}`, {

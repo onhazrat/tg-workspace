@@ -22,6 +22,7 @@ endpoint must never ship it.
 from __future__ import annotations
 
 import uuid
+from collections.abc import Mapping
 from typing import Any
 from typing import cast as typing_cast
 
@@ -33,6 +34,7 @@ from sqlmodel import Session, col
 
 from app.core import acting_owner
 from app.models_tg import DiscoverReport, utc_now
+from app.schemas.scope import FrozenScope, ScopedPostRef
 from app.services.channel_directory import enqueue_handles, probe_map
 from app.services.discover import SignalKind, compute_discover_candidates
 from app.services.discover_ignored import ignored_handles
@@ -58,32 +60,77 @@ def _now_ms() -> int:
     return int(utc_now().timestamp() * 1000)
 
 
-def _scope(report: DiscoverReport) -> dict[str, Any]:
+def _scope(row: Mapping[str, Any], *, with_posts: bool = False) -> dict[str, Any]:
     """The frozen inputs — what this report was generated *for*.
 
     Rendered by the scope card instead of live selection state, which is the
     whole point of storing it: after the user changes tabs, live state no longer
     describes where these numbers came from.
+
+    **The shared `FrozenScope` shape, plus the keys this family has always
+    sent** (AW-06). `signals` is genuinely a report input rather than a post
+    filter — it picks which kinds of signal to report, not which Posts to read —
+    so it stays here and will outlive AW-07. `startDate`/`endDate` are the
+    superseded spelling of `start`/`end` and will not; they are kept only so the
+    scope card keeps rendering until AW-08 moves it.
+
+    A legacy row that predates the column is reconstructed from the columns
+    beside it. Discover is the one family that can be: it already stored the
+    whole filter set, so this is the same value written twice, not a guess —
+    which is exactly why the migration still refuses to backfill it. A guess is
+    what AW-07 deletes, and a rule with one silent exception is not a rule.
+
+    Takes a **column mapping**, not an entity, because `list_reports` never
+    materialises one — the light projection selects columns precisely so the
+    candidate array is not detoasted to build a page. One function over the
+    mapping is what keeps the list and the detail read emitting one shape; this
+    file held two hand-written copies of the scope dict before AW-06, and the
+    superseded-key comment above is exactly the kind of note that would have
+    reached only one of them.
     """
+    refs = row.get("scope_posts") if with_posts else None
+    frozen = FrozenScope.from_stored(
+        row.get("scope"), refs
+    ) or FrozenScope.model_validate(
+        {
+            "channels": row["channels"] or [],
+            "start": row["start_date"],
+            "end": row["end_date"],
+            "keyword": row["keyword"],
+            "forwarded": row["forwarded"],
+            "media": row["media"],
+            "maxPerChannel": row["max_per_channel"],
+            "maxPerChannelMode": row["max_per_channel_mode"],
+            "seed": row["seed"],
+            "scopedPostCount": row["scoped_post_count"],
+            "posts": (
+                None
+                if refs is None
+                else [ScopedPostRef.model_validate(ref) for ref in refs]
+            ),
+        }
+    )
     return {
-        "channels": report.channels or [],
-        "startDate": report.start_date,
-        "endDate": report.end_date,
-        "signals": report.signals or [],
-        "keyword": report.keyword,
-        "forwarded": report.forwarded,
-        "media": report.media,
-        "maxPerChannel": report.max_per_channel,
-        "maxPerChannelMode": report.max_per_channel_mode,
-        "seed": report.seed,
-        "scopedPostCount": report.scoped_post_count,
+        **frozen.model_dump(by_alias=True),
+        "signals": row["signals"] or [],
+        # Superseded by `start`/`end` above; removed in AW-07.
+        "startDate": row["start_date"],
+        "endDate": row["end_date"],
     }
 
 
-def _base(report: DiscoverReport) -> dict[str, Any]:
+def _columns(report: DiscoverReport) -> dict[str, Any]:
+    """One report as the mapping `_scope` and `_light_from_mapping` read."""
+    return {
+        c.key: getattr(report, c.key)
+        for c in typing_cast(Any, DiscoverReport).__table__.columns
+    }
+
+
+def _base(report: DiscoverReport, *, with_posts: bool = False) -> dict[str, Any]:
     return {
         "id": report.id,
-        "scope": _scope(report),
+        "scope": _scope(_columns(report), with_posts=with_posts),
         "scopeCounts": report.scope_counts or {},
         "postsInScope": report.posts_in_scope,
         "timestamp": report.timestamp,
@@ -187,7 +234,7 @@ def report_to_camel(
     handles = {_candidate_handle(c) for c in stored if isinstance(c, dict)} - {""}
     probes = probe_map(session, handles)
     return {
-        **_base(report),
+        **_base(report, with_posts=True),
         "candidates": _with_live_state(stored, followed, ignored, probes),
         "candidateCount": len(stored),
         **(report.extra or {}),
@@ -196,7 +243,7 @@ def report_to_camel(
 
 #: The one corpus-sized column: a wide-scope report holds the whole
 #: single-reference tail.
-HEAVY_REPORT_COLUMNS = frozenset({"candidates"})
+HEAVY_REPORT_COLUMNS = frozenset({"candidates", "scope_posts"})
 
 
 def _light_columns() -> list[Any]:
@@ -218,22 +265,14 @@ def _light_columns() -> list[Any]:
 
 
 def _light_from_mapping(row: dict[str, Any]) -> dict[str, Any]:
-    """The list projection, built from a column mapping rather than an entity."""
+    """The list projection, built from a column mapping rather than an entity.
+
+    `with_posts` stays false: the refs are not even in the select — see
+    `HEAVY_REPORT_COLUMNS` — and `scopedPostCount` is what a list shows instead.
+    """
     return {
         "id": row["id"],
-        "scope": {
-            "channels": row["channels"],
-            "startDate": row["start_date"],
-            "endDate": row["end_date"],
-            "signals": row["signals"],
-            "keyword": row["keyword"],
-            "forwarded": row["forwarded"],
-            "media": row["media"],
-            "maxPerChannel": row["max_per_channel"],
-            "maxPerChannelMode": row["max_per_channel_mode"],
-            "seed": row["seed"],
-            "scopedPostCount": row["scoped_post_count"],
-        },
+        "scope": _scope(row),
         "scopeCounts": row["scope_counts"] or {},
         "postsInScope": row["posts_in_scope"],
         "timestamp": row["timestamp"],
@@ -370,15 +409,8 @@ def get_report(
 def create_report(
     session: Session,
     *,
-    channel_names: list[str],
-    start_date: int | None,
-    end_date: int | None,
+    scope: FrozenScope,
     signals: set[SignalKind] | None,
-    filters: PostFilters,
-    max_per_channel: int,
-    max_per_channel_mode: str = "latest",
-    seed: int = 0,
-    post_ids: list[tuple[str, int]] | None = None,
     user_id: uuid.UUID,
 ) -> dict[str, Any]:
     """Run the aggregation and persist it as a new report.
@@ -393,35 +425,67 @@ def create_report(
     tempting one, resolving a missing owner through `get_operator_user_id`, is
     the NULL fallback the plan's decision 24 dissolves. The only caller is a
     route holding a `CurrentUser`.
+
+    **It takes the Scope already frozen, and every loose scope argument is gone**
+    (AW-06). The route resolved the Analysis window and this function would then
+    have written what the route resolved — two readings of one clock, a few
+    milliseconds apart, with a minute boundary able to fall between them. Now
+    the route freezes once and hands the value over, so the aggregation and the
+    record are the same two instants by construction, exactly as they are for a
+    Summary.
+
+    `filters` went the same way, and it had the same defect one field along: it
+    was passed beside the Scope, so the predicate the aggregation ran and the
+    keyword the row recorded were two values nothing held together. They are
+    derived from the Scope here instead. No validation is needed on the way —
+    `FrozenScope` types `forwarded` and `media` as the same literals
+    `PostFilters` does, so a value that got this far is already one of them.
+
+    `signals` stays an argument because it is not Scope: it picks which kinds of
+    signal the report describes, not which Posts it reads.
     """
+    filters = PostFilters(
+        keyword=scope.keyword, forwarded=scope.forwarded, media=scope.media
+    )
+    post_ids = (
+        None
+        if scope.posts is None
+        else [(ref.channel_name, ref.post_id) for ref in scope.posts]
+    )
     result = compute_discover_candidates(
         session,
         user_id=user_id,
-        channel_names=channel_names,
-        start_date=start_date,
-        end_date=end_date,
+        channel_names=list(scope.channels),
+        start_date=scope.start,
+        end_date=scope.end,
         signals=signals,
         filters=filters,
-        max_per_channel=max_per_channel,
-        max_per_channel_mode=max_per_channel_mode,
-        seed=seed,
+        max_per_channel=scope.max_per_channel,
+        max_per_channel_mode=scope.max_per_channel_mode,
+        seed=scope.seed,
         post_ids=post_ids,
     )
 
     report = DiscoverReport(
         id=str(uuid.uuid4()),
         user_id=user_id,
-        channels=channel_names,
-        start_date=start_date or 0,
-        end_date=end_date or 0,
+        # The superseded copy, kept in step at creation and never written
+        # again. AW-07 removes these; until then the History union and the
+        # scope card read them, so they agree with the frozen value by
+        # construction rather than by anyone remembering to keep them in step.
+        channels=list(scope.channels),
+        start_date=scope.start,
+        end_date=scope.end,
         signals=sorted(signals) if signals is not None else [],
         keyword=filters.keyword,
         forwarded=filters.forwarded,
         media=filters.media,
-        max_per_channel=max_per_channel,
-        max_per_channel_mode=max_per_channel_mode,
-        seed=seed,
-        scoped_post_count=None if post_ids is None else len(post_ids),
+        max_per_channel=scope.max_per_channel,
+        max_per_channel_mode=scope.max_per_channel_mode,
+        seed=scope.seed,
+        scoped_post_count=scope.scoped_post_count,
+        scope=scope.stored(),
+        scope_posts=scope.stored_posts(),
         candidates=result["candidates"],
         # Maintained on write so the list never opens `candidates` to count it.
         candidate_count=len(result["candidates"]),

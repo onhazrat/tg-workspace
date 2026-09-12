@@ -1,4 +1,5 @@
 import { api } from "@/api"
+import type { ChatSessionSubmitRequest } from "@/client"
 import type { ChatSession, ChatSessionListItem } from "@/types"
 
 /**
@@ -20,6 +21,18 @@ export const listChatSessions = (params?: {
 /** One session in full, transcript included. */
 export const getChatSession = (id: string): Promise<ChatSession> =>
   api.getChatSession(id)
+
+/**
+ * Open a chat at a frozen Scope, before any AI work starts (AW-06).
+ *
+ * Called once per conversation, on the turn that creates it.
+ * {@link saveChatSession} appends every turn after that and cannot move the
+ * boundaries the first answer was built from — which is the whole point, since
+ * a conversation can outlive the Live window it started in.
+ */
+export const submitChatSession = (
+  body: ChatSessionSubmitRequest,
+): Promise<ChatSession> => api.submitChatSession(body)
 
 export const saveChatSession = async (
   session: Partial<ChatSession>,

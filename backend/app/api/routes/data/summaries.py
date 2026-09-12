@@ -17,7 +17,11 @@ from app.schemas.summaries import (
     SummarySubmitRequest,
     SummaryUpsertRequest,
 )
-from app.schemas.tag_runs import TagRunListItemResponse, TagRunResponse
+from app.schemas.tag_runs import (
+    TagRunListItemResponse,
+    TagRunResponse,
+    TagRunSubmitRequest,
+)
 from app.services.summaries import (
     DEFAULT_SUMMARY_PAGE_SIZE,
     MAX_SUMMARY_PAGE_SIZE,
@@ -50,6 +54,9 @@ from app.services.tag_runs import (
 )
 from app.services.tag_runs import (
     list_tag_runs as list_tag_runs_impl,
+)
+from app.services.tag_runs import (
+    submit_tag_run as submit_tag_run_impl,
 )
 from app.services.tag_runs import (
     upsert_tag_run as upsert_tag_run_impl,
@@ -100,6 +107,7 @@ def submit_summary(
         user_id=current_user.id,
         summary_id=body.id,
         submission=body.scope,
+        derived_from=body.derived_from,
         language=body.language,
         model=body.model,
         post_count=body.post_count,
@@ -162,6 +170,30 @@ def list_tag_runs(
             session, limit=limit, offset=offset, user_id=current_user.id
         )
     ]
+
+
+# AW-06. POST for the reason `submit_summary` is a POST — see the note there.
+@router.post("/tag-runs")
+def submit_tag_run(
+    body: TagRunSubmitRequest,
+    session: SessionDep,
+    current_user: CurrentUser,
+) -> TagRunResponse:
+    """Open a tag run at a frozen Scope, before the prompt is assembled."""
+    result = submit_tag_run_impl(
+        session,
+        user_id=current_user.id,
+        tag_run_id=body.id,
+        submission=body.scope,
+        mode=body.mode,
+        source=body.source,
+        status=body.status,
+        model=body.model,
+        post_count=body.post_count,
+        extra=body.extra,
+    )
+    touch_sync(session, "tag_runs")
+    return TagRunResponse.model_validate(result)
 
 
 @router.get("/tag-runs/{tag_run_id}")

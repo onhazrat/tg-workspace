@@ -16,6 +16,8 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.schemas.scope import FrozenScope, ScopeSubmission
+
 
 class ChatSessionListItemResponse(BaseModel):
     """A chat session's identity and metadata — the history-list projection.
@@ -44,6 +46,12 @@ class ChatSessionListItemResponse(BaseModel):
     post_count: int | None = Field(default=None, alias="postCount")
     timestamp: int = 0
     message_count: int = Field(default=0, alias="messageCount")
+    #: The Scope this chat was frozen at (AW-06), or `null` on a row that
+    #: predates the contract — which AW-07 deletes rather than backfills.
+    #: Declared, unlike the conditional keys this model leaves to `extra`,
+    #: because the client has to render it and `FrozenScope | undefined` is the
+    #: type that says so.
+    scope: FrozenScope | None = None
 
 
 class ChatSessionResponse(ChatSessionListItemResponse):
@@ -61,6 +69,26 @@ class ChatSessionResponse(ChatSessionListItemResponse):
     messages: list[Any] = Field(default_factory=list)
 
 
+class ChatSessionSubmitRequest(BaseModel):
+    """Body for `POST /data/chat-sessions` — opens a chat at a frozen Scope."""
+
+    model_config = ConfigDict(populate_by_name=True, extra="forbid")
+
+    #: Client-chosen, for the reason `SummarySubmitRequest.id` gives: it is the
+    #: whole primary key of `tg_chat_sessions`, so it is a UUID and a collision
+    #: is a 409 rather than a silent merge into somebody else's row.
+    id: str
+    scope: ScopeSubmission
+    language: str = "English"
+    model: str | None = None
+    mode: Literal["full_scope", "semantic"] = "full_scope"
+    post_count: int | None = Field(default=None, alias="postCount")
+    #: The small UI flags a new chat starts with (`postSearch`,
+    #: `semanticSearchQuery`, …). Open for the same reason
+    #: `ChatSessionListItemResponse` is.
+    extra: dict[str, Any] = Field(default_factory=dict)
+
+
 class ChatSessionUpsertRequest(BaseModel):
     """Body for `PUT /data/chat-sessions/{id}`.
 
@@ -68,6 +96,12 @@ class ChatSessionUpsertRequest(BaseModel):
     explicit null removes an `extra` key, and `messages` routes to the payload
     table. `title` and `messageCount` are derived on write and stripped, so a
     client round-tripping a list item cannot shadow them.
+
+    It cannot move the Scope (AW-06). `channels`, `startDate`, `endDate` and
+    `scope` are dropped by `upsert_chat_session`, which matters more here than
+    it does for a Summary: a chat PUTs its whole session back on every turn, so
+    a settable window meant a conversation held across a Live boundary recorded
+    whichever slice its final message landed in.
     """
 
     model_config = ConfigDict(extra="allow", populate_by_name=True)

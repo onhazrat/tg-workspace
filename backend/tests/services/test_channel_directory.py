@@ -25,7 +25,7 @@ from app.services.channel_directory import (
     requeue_probes,
 )
 from app.services.discover_reports import create_report, get_report
-from app.services.post_filters import PostFilters
+from tests.utils.discover import report_scope
 from tests.utils.tenancy import ANY_READER, follow_channels
 
 OK_PAGE = {
@@ -397,12 +397,8 @@ def test_reports_carry_the_probe_for_each_candidate() -> None:
 
         report = create_report(
             session,
-            channel_names=["carrier"],
-            start_date=None,
-            end_date=None,
+            scope=report_scope(channels=["carrier"]),
             signals=None,
-            filters=PostFilters(),
-            max_per_channel=0,
             user_id=ANY_READER,
         )
         by_name = {c["name"]: c for c in report["candidates"]}
@@ -422,12 +418,8 @@ def test_a_queued_candidate_still_reads_as_not_checked() -> None:
         _seed(session, ["alpha_news"])
         report = create_report(
             session,
-            channel_names=["carrier"],
-            start_date=None,
-            end_date=None,
+            scope=report_scope(channels=["carrier"]),
             signals=None,
-            filters=PostFilters(),
-            max_per_channel=0,
             user_id=ANY_READER,
         )
         assert report["candidates"][0]["probe"] is None
@@ -440,12 +432,8 @@ def test_generating_a_report_queues_its_candidates() -> None:
         _seed(session, ["alpha_news", "helper_bot"])
         create_report(
             session,
-            channel_names=["carrier"],
-            start_date=None,
-            end_date=None,
+            scope=report_scope(channels=["carrier"]),
             signals=None,
-            filters=PostFilters(),
-            max_per_channel=0,
             user_id=ANY_READER,
         )
         assert set(dequeue_handles(session, limit=10)) == {"alpha_news", "helper_bot"}
@@ -457,12 +445,8 @@ def test_an_unprobed_candidate_has_no_probe_rather_than_a_verdict() -> None:
         _seed(session, ["alpha_news"])
         report = create_report(
             session,
-            channel_names=["carrier"],
-            start_date=None,
-            end_date=None,
+            scope=report_scope(channels=["carrier"]),
             signals=None,
-            filters=PostFilters(),
-            max_per_channel=0,
             user_id=ANY_READER,
         )
         assert report["candidates"][0]["probe"] is None
@@ -474,12 +458,8 @@ def test_probing_applies_to_reports_generated_before_it() -> None:
         _seed(session, ["helper_bot"])
         report = create_report(
             session,
-            channel_names=["carrier"],
-            start_date=None,
-            end_date=None,
+            scope=report_scope(channels=["carrier"]),
             signals=None,
-            filters=PostFilters(),
-            max_per_channel=0,
             user_id=ANY_READER,
         )
         assert report["candidates"][0]["probe"] is None
@@ -498,12 +478,8 @@ def test_probes_are_independent_of_dismissals() -> None:
 
         report = create_report(
             session,
-            channel_names=["carrier"],
-            start_date=None,
-            end_date=None,
+            scope=report_scope(channels=["carrier"]),
             signals=None,
-            filters=PostFilters(),
-            max_per_channel=0,
             user_id=ANY_READER,
         )
         candidate = report["candidates"][0]

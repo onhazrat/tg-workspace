@@ -1,5 +1,5 @@
 import { api } from "@/api"
-import type { SummarySubmitRequest } from "@/client"
+import type { SummarySubmitRequest, TagRunSubmitRequest } from "@/client"
 import { singleFlight } from "@/lib/singleFlight"
 import type { Summary, SummaryListItem, TagRun, TagRunSummary } from "@/types"
 
@@ -34,6 +34,7 @@ export type SummariesApi = Pick<
   | "getSummary"
   | "upsertSummary"
   | "submitSummary"
+  | "submitTagRun"
   | "deleteSummary"
   | "listTagRuns"
   | "getTagRun"
@@ -124,6 +125,20 @@ export async function getTagRun(
       return undefined
     }
   })
+}
+
+/**
+ * Open a tag run at a frozen Scope, before the prompt is assembled (AW-06).
+ *
+ * Ordered with {@link upsertTagRun} the way {@link submitSummary} is ordered
+ * with {@link saveSummary}: this settles which Posts the run is about, and the
+ * writes after it only fill in what the run produced.
+ */
+export async function submitTagRun(
+  body: TagRunSubmitRequest,
+  client: SummariesApi = api,
+): Promise<TagRun> {
+  return client.submitTagRun(body)
 }
 
 export async function upsertTagRun(

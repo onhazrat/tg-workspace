@@ -21,7 +21,7 @@ from app.services.discover_reports import (
     get_report,
     list_reports,
 )
-from app.services.post_filters import PostFilters
+from tests.utils.discover import report_scope
 from tests.utils.setting_groups import add_test_channel
 from tests.utils.tenancy import ANY_READER, follow_channels
 
@@ -55,17 +55,22 @@ def _seed(session: Session, posts: list[Post]) -> None:
     )
 
 
-def _create(session: Session, **overrides: Any) -> dict[str, Any]:
-    kwargs: dict[str, Any] = {
-        "channel_names": ["carrier"],
-        "start_date": None,
-        "end_date": None,
-        "signals": None,
-        "filters": PostFilters(),
-        "max_per_channel": 0,
-    }
-    kwargs.update(overrides)
-    return create_report(session, **kwargs, user_id=ANY_READER)
+def _create(
+    session: Session, *, signals: set[Any] | None = None, **scope: Any
+) -> dict[str, Any]:
+    """One report over every Post of `carrier`, unless the caller says otherwise.
+
+    AW-06 turned `create_report`'s seven loose scope arguments into one frozen
+    value, so the overrides here name `FrozenScope` fields — including the
+    filters, which the service derives from the Scope rather than taking beside
+    it. `signals` stays separate because it is not Scope.
+    """
+    return create_report(
+        session,
+        scope=report_scope(**{"channels": ["carrier"], **scope}),
+        signals=signals,
+        user_id=ANY_READER,
+    )
 
 
 def test_generating_saves_a_readable_report() -> None:
@@ -89,12 +94,13 @@ def test_report_freezes_its_scope() -> None:
 
         created = _create(
             session,
-            channel_names=["carrier"],
-            start_date=500,
-            end_date=1500,
+            channels=["carrier"],
+            start=500,
+            end=1500,
             signals={"forward"},
-            filters=PostFilters(keyword="hello", forwarded="forwarded"),
-            max_per_channel=25,
+            keyword="hello",
+            forwarded="forwarded",
+            maxPerChannel=25,
         )
 
         scope = created["scope"]
@@ -200,8 +206,8 @@ def test_list_is_newest_first() -> None:
 def test_search_matches_scope_channels() -> None:
     with Session(engine) as session:
         _seed(session, [_post(1, "carrier", 1000, forwarded_from="alpha_news")])
-        _create(session, channel_names=["carrier"])
-        _create(session, channel_names=["somewhere_else"])
+        _create(session, channels=["carrier"])
+        _create(session, channels=["somewhere_else"])
 
         rows = list_reports(session, search="carrier", user_id=ANY_READER)
         assert len(rows) == 1

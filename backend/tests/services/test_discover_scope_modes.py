@@ -15,7 +15,7 @@ from app.core.db import engine
 from app.models_tg import Post
 from app.services.discover import compute_discover_candidates
 from app.services.discover_reports import create_report
-from app.services.post_filters import PostFilters
+from tests.utils.discover import report_scope
 from tests.utils.tenancy import ANY_READER, follow_channels
 
 
@@ -160,15 +160,17 @@ def test_saved_report_records_the_cap_mode_seed_and_scope_size() -> None:
         _seed_posts(session, count=10)
         report = create_report(
             session,
-            channel_names=["carrier"],
-            start_date=None,
-            end_date=None,
+            scope=report_scope(
+                channels=["carrier"],
+                maxPerChannel=3,
+                maxPerChannelMode="random",
+                seed=42,
+                posts=[
+                    {"channelName": c, "postId": p}
+                    for c, p in [("carrier", 1), ("carrier", 2), ("carrier", 3)]
+                ],
+            ),
             signals=None,
-            filters=PostFilters(),
-            max_per_channel=3,
-            max_per_channel_mode="random",
-            seed=42,
-            post_ids=[("carrier", 1), ("carrier", 2), ("carrier", 3)],
             user_id=ANY_READER,
         )
         scope = report["scope"]
@@ -182,12 +184,8 @@ def test_unrestricted_report_records_no_scoped_post_count() -> None:
         _seed_posts(session, count=4)
         report = create_report(
             session,
-            channel_names=["carrier"],
-            start_date=None,
-            end_date=None,
+            scope=report_scope(channels=["carrier"]),
             signals=None,
-            filters=PostFilters(),
-            max_per_channel=0,
             user_id=ANY_READER,
         )
         assert report["scope"]["scopedPostCount"] is None

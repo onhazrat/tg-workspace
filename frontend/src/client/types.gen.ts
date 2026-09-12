@@ -1041,6 +1041,7 @@ export type ChatArtifactResponse = {
      * Actedbyemail
      */
     actedByEmail?: string | null;
+    scope?: FrozenScope | null;
     /**
      * Kind
      */
@@ -1200,6 +1201,7 @@ export type ChatSessionListItemResponse = {
      * Messagecount
      */
     messageCount?: number;
+    scope?: FrozenScope | null;
     [key: string]: unknown;
 };
 
@@ -1261,11 +1263,47 @@ export type ChatSessionResponse = {
      * Messagecount
      */
     messageCount?: number;
+    scope?: FrozenScope | null;
     /**
      * Messages
      */
     messages?: Array<unknown>;
     [key: string]: unknown;
+};
+
+/**
+ * ChatSessionSubmitRequest
+ *
+ * Body for `POST /data/chat-sessions` — opens a chat at a frozen Scope.
+ */
+export type ChatSessionSubmitRequest = {
+    /**
+     * Id
+     */
+    id: string;
+    scope: ScopeSubmission;
+    /**
+     * Language
+     */
+    language?: string;
+    /**
+     * Model
+     */
+    model?: string | null;
+    /**
+     * Mode
+     */
+    mode?: 'full_scope' | 'semantic';
+    /**
+     * Postcount
+     */
+    postCount?: number | null;
+    /**
+     * Extra
+     */
+    extra?: {
+        [key: string]: unknown;
+    };
 };
 
 /**
@@ -1277,6 +1315,12 @@ export type ChatSessionResponse = {
  * explicit null removes an `extra` key, and `messages` routes to the payload
  * table. `title` and `messageCount` are derived on write and stripped, so a
  * client round-tripping a list item cannot shadow them.
+ *
+ * It cannot move the Scope (AW-06). `channels`, `startDate`, `endDate` and
+ * `scope` are dropped by `upsert_chat_session`, which matters more here than
+ * it does for a Summary: a chat PUTs its whole session back on every turn, so
+ * a settable window meant a conversation held across a Live boundary recorded
+ * whichever slice its final message landed in.
  */
 export type ChatSessionUpsertRequest = {
     [key: string]: unknown;
@@ -1775,6 +1819,73 @@ export type DiscoverProbeRequest = {
 };
 
 /**
+ * DiscoverReportCreateRequest
+ *
+ * Body for `POST /data/discover/reports`.
+ *
+ * The stateless request with **`window` re-declared as required** (AW-06), the
+ * same move `DiscoverCandidatesRequest` makes on `channelNames` and for the
+ * same kind of reason.
+ *
+ * Omitting a window means "both sides open", which is a newest-first pass over
+ * the corpus. That is a perfectly good thing to *compute* — `/candidates` does
+ * it and forgets — and it is not a Scope anybody selected, so it is not
+ * something an Artifact can record. A saved report claims to describe which
+ * Posts produced it, and "all of them, at some unrecorded moment" is not that
+ * claim.
+ *
+ * A subclass rather than a check in the handler so the refusal is a 422 naming
+ * the field, produced before the handler runs, exactly as it is for every
+ * other submission.
+ */
+export type DiscoverReportCreateRequest = {
+    /**
+     * Channelnames
+     */
+    channelNames: Array<string>;
+    /**
+     * Window
+     */
+    window: ({
+        mode: 'live';
+    } & LiveAnalysisWindow) | ({
+        mode: 'fixed';
+    } & FixedAnalysisWindow);
+    /**
+     * Keyword
+     */
+    keyword?: string | null;
+    /**
+     * Forwarded
+     */
+    forwarded?: string;
+    /**
+     * Media
+     */
+    media?: string;
+    /**
+     * Maxperchannel
+     */
+    maxPerChannel?: number;
+    /**
+     * Signals
+     */
+    signals?: Array<string> | null;
+    /**
+     * Maxperchannelmode
+     */
+    maxPerChannelMode?: 'latest' | 'random';
+    /**
+     * Seed
+     */
+    seed?: number;
+    /**
+     * Postids
+     */
+    postIds?: Array<DiscoverPostRef> | null;
+};
+
+/**
  * DiscoverReportFlagsRequest
  *
  * Body for `PUT /data/discover/reports/{id}/flags`.
@@ -1880,12 +1991,80 @@ export type DiscoverReportResponse = {
  *
  * Rendered by the scope card instead of live selection state — after the user
  * changes tabs, live state no longer describes where the numbers came from.
+ *
+ * **It is the shared `FrozenScope`** (AW-06), which is most of what it already
+ * was: Discover is the one family that stored the whole filter set from the
+ * start, so `keyword`, `forwarded`, `media`, `maxPerChannel`,
+ * `maxPerChannelMode`, `seed`, `channels` and `scopedPostCount` come straight
+ * off the base model under the names they already had.
+ *
+ * Two things are added and one is kept.
+ *
+ * `signals` is added, and it stays after AW-07: it picks which kinds of signal
+ * a report describes, not which Posts it reads, so it is a report input rather
+ * than part of Scope.
+ *
+ * `startDate`/`endDate` are kept, and they do not stay. They are the
+ * superseded spelling of the inherited `start`/`end`, carried only so the
+ * existing scope card renders unchanged until AW-08 moves it.
  */
 export type DiscoverReportScopeResponse = {
     /**
      * Channels
      */
     channels?: Array<string>;
+    /**
+     * Keyword
+     */
+    keyword?: string | null;
+    /**
+     * Forwarded
+     */
+    forwarded?: 'all' | 'forwarded' | 'original' | 'unfollowed_forwarded';
+    /**
+     * Media
+     */
+    media?: 'all' | 'text_only' | 'media_only' | 'photo' | 'video' | 'link_preview' | 'grouped';
+    /**
+     * Maxperchannel
+     */
+    maxPerChannel?: number;
+    /**
+     * Maxperchannelmode
+     */
+    maxPerChannelMode?: 'latest' | 'random';
+    /**
+     * Sort
+     */
+    sort?: 'time' | 'channel_time';
+    /**
+     * Seed
+     */
+    seed?: number;
+    /**
+     * Start
+     */
+    start: number;
+    /**
+     * End
+     */
+    end: number;
+    /**
+     * Scopedpostcount
+     */
+    scopedPostCount?: number | null;
+    /**
+     * Posts
+     */
+    posts?: Array<ScopedPostRef> | null;
+    /**
+     * Durationminutes
+     */
+    durationMinutes?: number;
+    /**
+     * Signals
+     */
+    signals?: Array<string>;
     /**
      * Startdate
      */
@@ -1894,38 +2073,6 @@ export type DiscoverReportScopeResponse = {
      * Enddate
      */
     endDate?: number;
-    /**
-     * Signals
-     */
-    signals?: Array<string>;
-    /**
-     * Keyword
-     */
-    keyword?: string | null;
-    /**
-     * Forwarded
-     */
-    forwarded?: string;
-    /**
-     * Media
-     */
-    media?: string;
-    /**
-     * Maxperchannel
-     */
-    maxPerChannel?: number;
-    /**
-     * Maxperchannelmode
-     */
-    maxPerChannelMode?: string;
-    /**
-     * Seed
-     */
-    seed?: number;
-    /**
-     * Scopedpostcount
-     */
-    scopedPostCount?: number | null;
 };
 
 /**
@@ -1994,6 +2141,7 @@ export type DiscoveryArtifactResponse = {
      * Actedbyemail
      */
     actedByEmail?: string | null;
+    scope?: FrozenScope | null;
     /**
      * Kind
      */
@@ -4487,6 +4635,7 @@ export type SummaryArtifactResponse = {
      * Actedbyemail
      */
     actedByEmail?: string | null;
+    scope?: FrozenScope | null;
     /**
      * Kind
      */
@@ -4507,6 +4656,22 @@ export type SummaryArtifactResponse = {
      * Autopublish
      */
     autoPublish?: boolean;
+};
+
+/**
+ * SummaryDerivation
+ *
+ * The Artifact a submission reads its Scope off, and how.
+ */
+export type SummaryDerivation = {
+    /**
+     * Summaryid
+     */
+    summaryId: string;
+    /**
+     * Mode
+     */
+    mode: 'successor' | 'repeat';
 };
 
 /**
@@ -4660,7 +4825,8 @@ export type SummarySubmitRequest = {
      * Id
      */
     id: string;
-    scope: ScopeSubmission;
+    scope?: ScopeSubmission | null;
+    derivedFrom?: SummaryDerivation | null;
     /**
      * Language
      */
@@ -5008,6 +5174,7 @@ export type TagArtifactResponse = {
      * Actedbyemail
      */
     actedByEmail?: string | null;
+    scope?: FrozenScope | null;
     /**
      * Kind
      */
@@ -5142,6 +5309,7 @@ export type TagRunListItemResponse = {
      * Note
      */
     note?: string | null;
+    scope?: FrozenScope | null;
 };
 
 /**
@@ -5211,6 +5379,7 @@ export type TagRunResponse = {
      * Note
      */
     note?: string | null;
+    scope?: FrozenScope | null;
     /**
      * Prompttext
      */
@@ -5235,6 +5404,45 @@ export type TagRunResponse = {
      * Applyresult
      */
     applyResult?: unknown;
+};
+
+/**
+ * TagRunSubmitRequest
+ *
+ * Body for `POST /data/tag-runs` — opens a tag run at a frozen Scope.
+ */
+export type TagRunSubmitRequest = {
+    /**
+     * Id
+     */
+    id: string;
+    scope: ScopeSubmission;
+    /**
+     * Mode
+     */
+    mode?: 'add' | 'remove';
+    /**
+     * Source
+     */
+    source?: 'generated' | 'pasted';
+    /**
+     * Status
+     */
+    status?: 'pending' | 'completed';
+    /**
+     * Model
+     */
+    model?: string | null;
+    /**
+     * Postcount
+     */
+    postCount?: number | null;
+    /**
+     * Extra
+     */
+    extra?: {
+        [key: string]: unknown;
+    };
 };
 
 export type Telemetry = unknown;
@@ -7572,7 +7780,7 @@ export type DataListDiscoverReportsResponses = {
 export type DataListDiscoverReportsResponse = DataListDiscoverReportsResponses[keyof DataListDiscoverReportsResponses];
 
 export type DataCreateDiscoverReportData = {
-    body: DiscoverCandidatesRequest;
+    body: DiscoverReportCreateRequest;
     path?: never;
     query?: never;
     url: '/api/v1/data/discover/reports';
@@ -7909,6 +8117,31 @@ export type DataListTagRunsResponses = {
 
 export type DataListTagRunsResponse = DataListTagRunsResponses[keyof DataListTagRunsResponses];
 
+export type DataSubmitTagRunData = {
+    body: TagRunSubmitRequest;
+    path?: never;
+    query?: never;
+    url: '/api/v1/data/tag-runs';
+};
+
+export type DataSubmitTagRunErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type DataSubmitTagRunError = DataSubmitTagRunErrors[keyof DataSubmitTagRunErrors];
+
+export type DataSubmitTagRunResponses = {
+    /**
+     * Successful Response
+     */
+    200: TagRunResponse;
+};
+
+export type DataSubmitTagRunResponse = DataSubmitTagRunResponses[keyof DataSubmitTagRunResponses];
+
 export type DataDeleteTagRunData = {
     body?: never;
     path: {
@@ -8043,6 +8276,31 @@ export type DataListChatSessionsResponses = {
 };
 
 export type DataListChatSessionsResponse = DataListChatSessionsResponses[keyof DataListChatSessionsResponses];
+
+export type DataSubmitChatSessionData = {
+    body: ChatSessionSubmitRequest;
+    path?: never;
+    query?: never;
+    url: '/api/v1/data/chat-sessions';
+};
+
+export type DataSubmitChatSessionErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type DataSubmitChatSessionError = DataSubmitChatSessionErrors[keyof DataSubmitChatSessionErrors];
+
+export type DataSubmitChatSessionResponses = {
+    /**
+     * Successful Response
+     */
+    200: ChatSessionResponse;
+};
+
+export type DataSubmitChatSessionResponse = DataSubmitChatSessionResponses[keyof DataSubmitChatSessionResponses];
 
 export type DataDeleteChatSessionData = {
     body?: never;

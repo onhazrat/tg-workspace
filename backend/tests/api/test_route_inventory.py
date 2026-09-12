@@ -133,11 +133,16 @@ def test_the_split_did_not_change_the_route_count() -> None:
     configuration catalog; and **80** with `POST /summaries`, AW-05's submission
     door — a `POST` rather than another `PUT` because it resolves the Analysis
     window against the server's current minute, so the same body sent twice
-    describes two different windows and the second is a 409.
+    describes two different windows and the second is a 409; and **82** with
+    `POST /chat-sessions` and `POST /tag-runs`, AW-06 putting the other two
+    submittable families through the same door. Discover needed no third,
+    because `POST /discover/reports` was already the one place a report is
+    created — it now freezes its Scope there instead of resolving a window on
+    the way past.
     """
     data_routes = {
         (m, p) for m, p in _mounted_routes() if p.startswith("/api/v1/data/")
     }
-    assert len(data_routes) == 80, (
-        f"expected 80 /data endpoints, found {len(data_routes)}"
+    assert len(data_routes) == 82, (
+        f"expected 82 /data endpoints, found {len(data_routes)}"
     )

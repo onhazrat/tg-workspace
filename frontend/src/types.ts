@@ -546,6 +546,16 @@ export interface ChatSession {
   postSearch?: string
   semanticSearchQuery?: string
   semanticSearchRespectsChannels?: boolean
+  /**
+   * The Scope this chat was answered from, frozen at submission (AW-06).
+   *
+   * `null` on a row that predates the contract — a declared field, so it is
+   * serialised rather than omitted; check the value, not the key. Read-only
+   * everywhere: the server takes it once, on `POST /data/chat-sessions`, and
+   * ignores it on every later write, which here means every turn after the
+   * first.
+   */
+  scope?: FrozenScope | null
 }
 
 /** List projection: everything but the transcript. */

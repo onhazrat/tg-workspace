@@ -110,6 +110,8 @@ class Reason(enum.Enum):
 #: Routes this file probes live, below.
 PROBED: dict[tuple[str, str], str] = {
     ("POST", f"{V1}/data/summaries"): "artifact submission at a client-chosen id",
+    ("POST", f"{V1}/data/chat-sessions"): "artifact submission at a client-chosen id",
+    ("POST", f"{V1}/data/tag-runs"): "artifact submission at a client-chosen id",
     ("GET", f"{V1}/data/summaries/{{summary_id}}"): "artifact by id",
     ("PUT", f"{V1}/data/summaries/{{summary_id}}"): "artifact write by id",
     ("DELETE", f"{V1}/data/summaries/{{summary_id}}"): "artifact delete by id",
@@ -706,8 +708,13 @@ FAMILIES: list[tuple[str, Any, str, str, str]] = [
     ),
     (
         "discover-report",
+        # No `scope`: this is the legacy row AW-07 deletes, and the projection
+        # reconstructing one from the columns beside it is part of what these
+        # reads exercise. It used to pass `scope={}`, which did nothing —
+        # SQLModel drops an unknown keyword silently and the column did not
+        # exist until AW-06.
         lambda rid, owner: DiscoverReport(
-            id=rid, user_id=owner, timestamp=0, candidates=[], scope={}
+            id=rid, user_id=owner, timestamp=0, candidates=[]
         ),
         f"{DATA}/discover/reports/{{id}}",
         "report not found",
@@ -1210,27 +1217,44 @@ WRITES: list[tuple[str, str, dict[str, Any]]] = [
 ]
 
 
+#: The three submission doors, and the family each one opens a row in. Discover
+#: is absent because its report id is server-chosen, so there is no foreign id
+#: to submit at.
+SUBMISSIONS: list[tuple[str, str, type[Any]]] = [
+    ("summary", "/summaries", Summary),
+    ("chat-session", "/chat-sessions", ChatSession),
+    ("tag-run", "/tag-runs", TagRun),
+]
+
+
 @pytest.mark.security
+@pytest.mark.parametrize("submission", SUBMISSIONS, ids=lambda s: s[0])
 def test_submitting_at_a_foreign_id_takes_nothing_over(
     client: TestClient,
     alice: tuple[User, dict[str, str]],
     bob: tuple[User, dict[str, str]],
+    submission: tuple[str, str, type[Any]],
 ) -> None:
-    """AW-05's submission names its own id, so it is a takeover door too.
+    """A submission names its own id, so it is a takeover door too.
 
-    `POST /data/summaries` creates the row rather than merging into one, which
-    is the whole point — but the id comes from the client, so an id Alice
-    already holds has to be refused rather than silently reassigned. It answers
-    409 for a taken id whoever holds it, which is deliberately *less* than the
-    `PUT` door tells you: an id being taken is unavoidable for a client-chosen
-    primary key, an id being taken **by somebody else** is the enumeration
-    oracle the 404-not-403 rule exists to close.
+    These routes create the row rather than merging into one, which is the whole
+    point — but the id comes from the client, so an id Alice already holds has
+    to be refused rather than silently reassigned. They answer 409 for a taken
+    id whoever holds it, which is deliberately *less* than the `PUT` door tells
+    you: an id being taken is unavoidable for a client-chosen primary key, an id
+    being taken **by somebody else** is the enumeration oracle the 404-not-403
+    rule exists to close.
+
+    Parameterized over all three since AW-06, because "the Summary door is safe"
+    was never the claim — the claim is about the door, and there are three of
+    them now.
     """
+    name, path, model = submission
     row_id = f"iso-submit-{uuid.uuid4()}"
-    _seed(next(f for f in FAMILIES if f[0] == "summary")[1](row_id, alice[0].id))
+    _seed(next(f for f in FAMILIES if f[0] == name)[1](row_id, alice[0].id))
 
     response = client.post(
-        f"{DATA}/summaries",
+        f"{DATA}{path}",
         json={
             "id": row_id,
             "scope": {
@@ -1247,10 +1271,40 @@ def test_submitting_at_a_foreign_id_takes_nothing_over(
 
     assert response.status_code == 409, response.text[:200]
     with Session(engine) as session:
-        stored = session.get(Summary, row_id)
+        stored = session.get(model, row_id)
         assert stored is not None, "a refused submission deleted the row"
         assert stored.user_id == alice[0].id
         assert stored.scope is None, "a refused submission wrote a Scope"
+
+
+@pytest.mark.security
+def test_a_successor_of_a_foreign_summary_is_refused(
+    client: TestClient,
+    alice: tuple[User, dict[str, str]],
+    bob: tuple[User, dict[str, str]],
+) -> None:
+    """AW-06's other door into a submission: naming somebody else's Artifact.
+
+    `derivedFrom` hands over the predecessor's channels and boundaries, so it is
+    a cross-account **read** wearing a write's clothes. It goes through the
+    ungated guard, because a flag may gate visibility and never identity, and it
+    answers this family's own 404 so an absent id and a foreign one are
+    indistinguishable.
+    """
+    row_id = f"iso-successor-{uuid.uuid4()}"
+    _seed(next(f for f in FAMILIES if f[0] == "summary")[1](row_id, alice[0].id))
+
+    response = client.post(
+        f"{DATA}/summaries",
+        json={
+            "id": str(uuid.uuid4()),
+            "derivedFrom": {"summaryId": row_id, "mode": "successor"},
+        },
+        headers=bob[1],
+    )
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Summary not found"
 
 
 @pytest.mark.security
