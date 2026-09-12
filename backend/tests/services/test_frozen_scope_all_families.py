@@ -36,10 +36,12 @@ ticket exists to close.
 
 Two claims are Summary-only because only Summaries have successors:
 
-* **`successorOf` derives the window the browser could not state.** A successor
-  runs a full Duration past where its predecessor closed, so its end is in the
-  future and `resolve_analysis_window` refuses it — which is why the browser had
-  been falling back to `PUT` and writing no Scope at all.
+* **`derivedFrom` produces the window the browser could not state.** Both
+  derivations end in the future — a successor runs a full Duration past where
+  its predecessor closed, and a repeat inherits that end — which
+  `resolve_analysis_window` refuses, so the browser had been falling back to
+  `PUT` and writing no Scope at all. A stated window is checked against the
+  clock; a derived one never is.
 * **The worker and the browser compute it with the same function**, so the same
   chain records the same thing whichever process is awake.
 
@@ -50,8 +52,10 @@ Two claims are Summary-only because only Summaries have successors:
   later-write case, per family
 * resolve the window twice in the Discover route -> the queue-delay case
 * select `scope_posts` in a light projection -> the list-payload case
-* have `successor_scope` clamp its end to the current minute -> the successor
+* have `derived_scope` clamp its end to the current minute -> the successor
   case, which asserts the end is *past* that minute
+* send a repeat through the stated-window door -> the repeat case, which is a
+  re-run of a row whose own end has not elapsed
 * drop `scope` from a leg of the History union -> the unified-read case
 """
 
@@ -576,6 +580,10 @@ def _submit_summary(client: TestClient, headers: dict[str, str], **body: Any) ->
     )
 
 
+def _derived(summary_id: str, mode: str) -> dict[str, Any]:
+    return {"summaryId": summary_id, "mode": mode}
+
+
 def test_a_successor_is_derived_from_its_predecessor_and_runs_into_the_future(
     client: TestClient, at_now: None
 ) -> None:
@@ -593,7 +601,9 @@ def test_a_successor_is_derived_from_its_predecessor_and_runs_into_the_future(
         client, headers, scope={"channels": ["ch"], "window": _live()}
     ).json()
 
-    second = _submit_summary(client, headers, successorOf=first["id"]).json()
+    second = _submit_summary(
+        client, headers, derivedFrom=_derived(first["id"], "successor")
+    ).json()
 
     assert second["scope"]["start"] == first["scope"]["end"]
     assert second["scope"]["end"] == first["scope"]["end"] + DAY_MS
@@ -601,6 +611,38 @@ def test_a_successor_is_derived_from_its_predecessor_and_runs_into_the_future(
         "a successor's end is deliberately in the future; clamping it to the "
         "current minute shortens every run after it and the chain decays"
     )
+
+
+def test_a_repeat_of_a_summary_whose_window_has_not_elapsed_is_allowed(
+    client: TestClient, at_now: None
+) -> None:
+    """The Regenerate button, on the rows the chain actually produces.
+
+    Every successor has an end in the future by design, so the commonest thing
+    to re-run is a Summary the stated-window door would refuse. Making the
+    repeat *derive* rather than state is what keeps that button working: a
+    window read off an Artifact is derived whichever offset it takes, and only
+    a window somebody is choosing now is checked against the clock.
+
+    An earlier cut of this ticket stated the predecessor's boundaries here and
+    422'd on exactly these rows.
+    """
+    headers = _auth(client)
+    first = _submit_summary(
+        client, headers, scope={"channels": ["ch"], "window": _live()}
+    ).json()
+    successor = _submit_summary(
+        client, headers, derivedFrom=_derived(first["id"], "successor")
+    ).json()
+    assert successor["scope"]["end"] > MINUTE
+
+    repeat = _submit_summary(
+        client, headers, derivedFrom=_derived(successor["id"], "repeat")
+    )
+
+    assert repeat.status_code == 200, repeat.text[:200]
+    assert repeat.json()["scope"]["start"] == successor["scope"]["start"]
+    assert repeat.json()["scope"]["end"] == successor["scope"]["end"]
 
 
 def test_a_successor_carries_the_channels_and_no_filter_its_run_did_not_apply(
@@ -619,7 +661,9 @@ def test_a_successor_carries_the_channels_and_no_filter_its_run_did_not_apply(
         scope={"channels": ["ch", "other"], "window": _live(), **FILTERS},
     ).json()
 
-    second = _submit_summary(client, headers, successorOf=first["id"]).json()
+    second = _submit_summary(
+        client, headers, derivedFrom=_derived(first["id"], "successor")
+    ).json()
 
     assert second["scope"]["channels"] == ["ch", "other"]
     assert second["scope"]["keyword"] is None
@@ -636,18 +680,20 @@ def test_the_worker_and_the_browser_derive_the_same_successor(
     scheduler wrote a complete Scope and the browser wrote `NULL`, for the same
     chain, pruned afterwards by which process happened to be awake.
     """
-    from app.services.summaries import successor_scope
+    from app.services.summaries import derived_scope
 
     headers = _auth(client)
     first = _submit_summary(
         client, headers, scope={"channels": ["ch"], "window": _live()}
     ).json()
-    through_the_route = _submit_summary(client, headers, successorOf=first["id"]).json()
+    through_the_route = _submit_summary(
+        client, headers, derivedFrom=_derived(first["id"], "successor")
+    ).json()
 
     with Session(engine) as session:
         predecessor = session.get(Summary, first["id"])
         assert predecessor is not None
-        in_the_worker = successor_scope(predecessor)
+        in_the_worker = derived_scope(predecessor, "successor")
         session.expunge_all()
 
     # The stored column on both sides, which is the claim: `auto_summary`
@@ -680,7 +726,7 @@ def test_a_submission_states_its_scope_or_derives_it_and_never_both(
             client,
             headers,
             scope={"channels": ["ch"], "window": _live()},
-            successorOf=first["id"],
+            derivedFrom=_derived(first["id"], "successor"),
         ).status_code
         == 422
     )
@@ -696,7 +742,9 @@ def test_a_successor_of_somebody_elses_summary_is_refused_as_an_absent_one(
     set — and it answers this family's own 404, so an absent id and a foreign
     one are indistinguishable.
     """
-    response = _submit_summary(client, _auth(client), successorOf=str(uuid.uuid4()))
+    response = _submit_summary(
+        client, _auth(client), derivedFrom=_derived(str(uuid.uuid4()), "successor")
+    )
 
     assert response.status_code == 404
     assert response.json()["detail"] == "Summary not found"

@@ -19,7 +19,8 @@ from sqlmodel import Session, col, select
 
 from app.core import acting_owner
 from app.models_tg import Summary, SummaryPayload, utc_now
-from app.schemas.scope import FrozenScope, ScopeSubmission
+from app.schemas.scope import FrozenScope, ScopeSubmission, scope_key
+from app.schemas.summaries import DerivationMode, SummaryDerivation
 from app.services.analysis_window import freeze_scope
 from app.services.serialization import to_snake
 from app.services.tenancy import (
@@ -114,8 +115,7 @@ def _with_scope(
     conditional keys around it `scope` has no legacy wire shape to preserve, and
     the client has to render it either way.
     """
-    scope = frozen_scope_of(summary, payload)
-    out["scope"] = None if scope is None else scope.model_dump(by_alias=True)
+    out.update(scope_key(frozen_scope_of(summary, payload)))
     return out
 
 
@@ -440,27 +440,34 @@ def upsert_summary(
     return summary_to_camel(summary, session.get(SummaryPayload, summary_id))
 
 
-def successor_scope(predecessor: Summary) -> FrozenScope:
-    """The Scope of the Summary that continues `predecessor`'s chain (AW-06).
+def derived_scope(predecessor: Summary, mode: DerivationMode) -> FrozenScope:
+    """The Scope of a Summary derived from `predecessor` rather than stated.
 
-    Three lines of arithmetic that used to exist twice — in
-    `jobs/auto_summary.py` and again in the browser's `AIContext` — and the two
-    copies had drifted into recording different things for the same chain. A
-    successor window opens exactly where its predecessor closed and runs the
-    same Duration forward, which means **its end is routinely in the future**:
-    a daily chain regenerating at 09:00 covers midnight to tomorrow's midnight,
-    most of which has not happened yet.
+    Two derivations, one line apart. A **successor** opens where its
+    predecessor closed and runs the same Duration forward; a **repeat** is the
+    predecessor's own window again. Both exist because both produce a window no
+    caller is allowed to *state*.
 
-    That is what kept this off `resolve_analysis_window`, and rightly:
-    `_resolve_fixed` refuses a future end because for a window somebody is
-    choosing *right now* a future end is a mistake, and clamping it silently
-    would be the editor making a time choice nobody asked for. Nobody is
-    choosing this one. It is derived from a window already frozen, so there is
-    no clock reading to protect and nothing to validate against one.
+    **A derived end is routinely in the future, and that is the whole point.** A
+    daily chain regenerating at 09:00 covers midnight to tomorrow's midnight,
+    most of which has not happened yet — and a repeat of that Summary inherits
+    the same future end. `resolve_analysis_window` refuses such a window,
+    rightly, because for a window somebody is choosing *right now* a future end
+    is a mistake and clamping it silently would be the editor making a time
+    choice nobody asked for. Nobody is choosing these. They are read off a
+    window already frozen, so there is no clock reading to protect and nothing
+    to validate against one.
 
-    Clamping it anyway was considered and is worse than it looks: `end_date` is
-    what the *next* successor reads for both its start and its duration, so a
-    clamped link shortens every run after it and the chain decays.
+    That distinction is the rule: **a stated window is validated against the
+    clock, a derived one never is.** Getting it wrong in the other direction is
+    what an earlier cut of this did — the repeat path stated the predecessor's
+    boundaries through the ordinary door, and so refused a re-run of every
+    Summary the successor chain had just produced, which is the commonest case
+    there is.
+
+    Clamping instead is worse than it looks: `end_date` is what the *next*
+    successor reads for both its start and its duration, so a clamped link
+    shortens every run after it and the chain decays.
 
     **Every filter is at its default, and that is not an omission.**
     Regeneration applies the channels and the window and nothing else — it has
@@ -473,7 +480,7 @@ def successor_scope(predecessor: Summary) -> FrozenScope:
     never.
     """
     duration = predecessor.end_date - predecessor.start_date
-    start = predecessor.end_date
+    start = predecessor.end_date if mode == "successor" else predecessor.start_date
     return FrozenScope.model_validate(
         {
             "channels": list(predecessor.channels or []),
@@ -489,7 +496,7 @@ def submit_summary(
     user_id: uuid.UUID,
     summary_id: str,
     submission: ScopeSubmission | None = None,
-    successor_of: str | None = None,
+    derived_from: SummaryDerivation | None = None,
     language: str = "English",
     model: str | None = None,
     post_count: int | None = None,
@@ -511,31 +518,39 @@ def submit_summary(
     `now_ms` is the server clock, injectable so the minute boundary can be
     asserted at an exact instant rather than near one.
 
-    **`successor_of` states the Scope by naming another Artifact instead of
-    describing one** (AW-06). Auto-regeneration is the only caller: its window
-    is derived from the Summary before it and its end is deliberately in the
-    future, which is a window no caller can legally *state*. Deriving it here
-    rather than in the caller is what let the browser join the contract — it
-    had been falling back to `PUT`, which by AW-05's design writes no Scope at
-    all, so the same chain recorded a complete Scope on the ticks a worker
-    happened to run and nothing on the ticks a tab happened to be open.
+    **`derived_from` states the Scope by naming another Artifact instead of
+    describing one** (AW-06). Regeneration is the only caller, in both its
+    forms: the window is read off the Summary before it, and its end is
+    deliberately in the future, which is a window no caller can legally
+    *state*. Deriving it here rather than in the caller is what let the browser
+    join the contract — it had been falling back to `PUT`, which by AW-05's
+    design writes no Scope at all, so the same chain recorded a complete Scope
+    on the ticks a worker happened to run and nothing on the ticks a tab
+    happened to be open.
     """
     if session.get(Summary, summary_id) is not None:
         raise HTTPException(status_code=409, detail="Summary already exists")
 
-    if successor_of is not None:
-        predecessor = session.get(Summary, successor_of)
+    if derived_from is not None:
+        predecessor = session.get(Summary, derived_from.summary_id)
         if predecessor is None:
             raise HTTPException(status_code=404, detail=SUMMARY_NOT_FOUND)
         # The **ungated** guard, on a row this call only reads. The flag gates
-        # visibility; which Artifact a new Artifact continues is identity, and
-        # a foreign predecessor handing over its channels and boundaries is a
-        # cross-account read whichever way the flag is set.
+        # visibility; which Artifact a new Artifact is derived from is identity,
+        # and a foreign predecessor handing over its channels and boundaries is
+        # a cross-account read whichever way the flag is set.
         assert_owner_on_write(predecessor.user_id, user_id, detail=SUMMARY_NOT_FOUND)
-        scope = successor_scope(predecessor)
-    else:
-        assert submission is not None  # the route model requires exactly one
+        scope = derived_scope(predecessor, derived_from.mode)
+    elif submission is not None:
         scope = freeze_scope(submission, now_ms=now_ms)
+    else:
+        # `SummarySubmitRequest` requires exactly one, so a route cannot reach
+        # this. A raise rather than an `assert`, because a service function is
+        # callable from a script and `python -O` deletes the assert.
+        raise HTTPException(
+            status_code=422,
+            detail="A submission states a Scope or derives one; this did neither.",
+        )
     summary = Summary(
         id=summary_id,
         user_id=user_id,

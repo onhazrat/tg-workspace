@@ -14,7 +14,7 @@ trick. Where this module differs from that one, there is a comment saying why.
 from __future__ import annotations
 
 import uuid
-from typing import Any
+from typing import Any, Literal
 
 from fastapi import HTTPException
 from sqlalchemy import Text, cast, or_
@@ -22,7 +22,7 @@ from sqlmodel import Session, col, select
 
 from app.core import acting_owner
 from app.models_tg import ChatSession, ChatSessionPayload, utc_now
-from app.schemas.scope import FrozenScope, ScopeSubmission
+from app.schemas.scope import FrozenScope, ScopeSubmission, scope_key
 from app.services.analysis_window import freeze_scope
 from app.services.serialization import to_snake
 from app.services.tenancy import (
@@ -79,6 +79,11 @@ MUTABLE_CHAT_FIELDS = frozenset(
 #: The two ways a chat sources its posts. `full_scope` sends every post in the
 #: scope; `semantic` sends only what a vector search retrieved for the question.
 CHAT_MODES = ("full_scope", "semantic")
+
+#: The same pair as a type, so `submit_chat_session` is checked at its call
+#: sites rather than at runtime. The route model declares the same Literal, so a
+#: runtime check here was unreachable from the only caller that exists.
+ChatMode = Literal["full_scope", "semantic"]
 
 
 def derive_chat_title(messages: Any) -> str:
@@ -165,14 +170,10 @@ def _with_scope(
 ) -> dict[str, Any]:
     """Stamp the frozen Scope on, **after** `extra` has been spread (AW-06).
 
-    Last, for the reason `summaries._with_scope` gives: `extra` is an open bag,
-    so a key named `scope` sitting in it would otherwise win over the column and
-    the endpoint would report a Scope the database does not hold. The writer
-    drops such a key; this is the half that does not depend on it remembering
-    to.
+    The ordering argument lives on `schemas/scope.py::scope_key`, which is the
+    one copy of it.
     """
-    scope = frozen_scope_of(row, payload)
-    out["scope"] = None if scope is None else scope.model_dump(by_alias=True)
+    out.update(scope_key(frozen_scope_of(row, payload)))
     return out
 
 
@@ -419,7 +420,7 @@ def submit_chat_session(
     submission: ScopeSubmission,
     language: str = "English",
     model: str | None = None,
-    mode: str = "full_scope",
+    mode: ChatMode = "full_scope",
     post_count: int | None = None,
     extra: dict[str, Any] | None = None,
     now_ms: int | None = None,
@@ -442,8 +443,6 @@ def submit_chat_session(
     """
     if session.get(ChatSession, chat_session_id) is not None:
         raise HTTPException(status_code=409, detail="Chat session already exists")
-    if mode not in CHAT_MODES:
-        raise HTTPException(status_code=422, detail=f"unknown chat mode: {mode}")
 
     scope = freeze_scope(submission, now_ms=now_ms)
     row = ChatSession(

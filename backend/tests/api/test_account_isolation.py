@@ -1285,7 +1285,7 @@ def test_a_successor_of_a_foreign_summary_is_refused(
 ) -> None:
     """AW-06's other door into a submission: naming somebody else's Artifact.
 
-    `successorOf` hands over the predecessor's channels and boundaries, so it is
+    `derivedFrom` hands over the predecessor's channels and boundaries, so it is
     a cross-account **read** wearing a write's clothes. It goes through the
     ungated guard, because a flag may gate visibility and never identity, and it
     answers this family's own 404 so an absent id and a foreign one are
@@ -1296,7 +1296,10 @@ def test_a_successor_of_a_foreign_summary_is_refused(
 
     response = client.post(
         f"{DATA}/summaries",
-        json={"id": str(uuid.uuid4()), "successorOf": row_id},
+        json={
+            "id": str(uuid.uuid4()),
+            "derivedFrom": {"summaryId": row_id, "mode": "successor"},
+        },
         headers=bob[1],
     )
 

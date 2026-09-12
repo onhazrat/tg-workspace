@@ -542,24 +542,19 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({
       // A UUID for the reason the interactive path uses one.
       const newId = crypto.randomUUID()
       //
-      // A re-run (`shiftTime: false`) is not a successor — it is the same
-      // window again — so it states that window rather than deriving one. It
-      // is stating two instants an Artifact already recorded, not a selection
-      // somebody is making now, and it goes through the ordinary validation
-      // for exactly that reason: re-running a window that has not finished
-      // elapsing is refused rather than quietly summarised in part. Before
-      // this it took the `PUT` path and recorded no Scope at all.
-      const opened = await submitSummary(
-        shiftTime
-          ? { id: newId, successorOf: s.id }
-          : {
-              id: newId,
-              scope: {
-                channels: s.channels,
-                window: frozenWindow({ start: s.startDate, end: s.endDate }),
-              },
-            },
-      )
+      // A re-run (`shiftTime: false`) derives too, and that is not a detail.
+      // Stating its window instead was the first cut and it was wrong: every
+      // Summary the successor chain produces has an end in the future by
+      // design, so the ordinary door refused a re-run of exactly the rows the
+      // chain had just written. A window read off an Artifact is derived
+      // whichever offset it takes.
+      const opened = await submitSummary({
+        id: newId,
+        derivedFrom: {
+          summaryId: s.id,
+          mode: shiftTime ? "successor" : "repeat",
+        },
+      })
       openedId = newId
       const newStartDate = opened.scope?.start ?? s.startDate
       const newEndDate = opened.scope?.end ?? s.endDate

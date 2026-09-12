@@ -30,7 +30,7 @@ from app.services.network_settings import (
 from app.services.post_filters import apply_analysis_window
 from app.services.publish import publish_summary_text
 from app.services.scraper_jobs import create_job, has_active_sync_job
-from app.services.summaries import apply_summary_payload, successor_scope
+from app.services.summaries import apply_summary_payload, derived_scope
 from app.services.sync_meta import touch_sync
 from app.services.sync_orchestrator import run_sync_job
 from app.services.tenancy import may_act_on
@@ -379,7 +379,7 @@ async def _regenerate_one(
     # submission path (AW-06). It used to be three lines here and three more in
     # `AIContext`, and the two had drifted: the worker recorded a complete Scope
     # and the browser recorded none, for the same chain.
-    scope = successor_scope(summary)
+    scope = derived_scope(summary, "successor")
     new_start, new_end = scope.start, scope.end
 
     await _sync_channels_for_summary(session, summary.channels or [], new_end, owner_id)

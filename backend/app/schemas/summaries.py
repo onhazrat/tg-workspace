@@ -30,7 +30,7 @@ would change the payload.
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -76,6 +76,23 @@ class SummaryListItemResponse(SummaryResponse):
     chat_message_count: int = Field(default=0, alias="chatMessageCount")
 
 
+#: How a derived Scope relates to the Artifact it was read off.
+#:
+#: `successor` opens where the predecessor closed and runs the same Duration
+#: forward, which is auto-regeneration. `repeat` is the predecessor's own window
+#: again, which is the Regenerate button.
+DerivationMode = Literal["successor", "repeat"]
+
+
+class SummaryDerivation(BaseModel):
+    """The Artifact a submission reads its Scope off, and how."""
+
+    model_config = ConfigDict(populate_by_name=True, extra="forbid")
+
+    summary_id: str = Field(alias="summaryId")
+    mode: DerivationMode
+
+
 class SummarySubmitRequest(BaseModel):
     """Body for ``POST /data/summaries`` — opens a summary at a frozen Scope."""
 
@@ -88,21 +105,25 @@ class SummarySubmitRequest(BaseModel):
     #: The Scope this Summary is opened at, stated in full. Exactly one of this
     #: and `successorOf`.
     scope: ScopeSubmission | None = None
-    #: The Summary this one continues, when the Scope is *derived* rather than
-    #: stated (AW-06).
+    #: The Summary this one reads its Scope off, when the Scope is *derived*
+    #: rather than stated (AW-06).
     #:
-    #: A successor window opens where its predecessor closed and runs the same
-    #: Duration forward, so its end is routinely in the future — a window
-    #: `resolve_analysis_window` refuses, deliberately, for anything a caller
-    #: states. So a caller that needs one names the predecessor and the server
-    #: derives it; see `services/summaries.py::successor_scope`.
+    #: Both derivations produce a window whose end is routinely in the future,
+    #: which `resolve_analysis_window` refuses — deliberately — for anything a
+    #: caller states. So a caller that needs one names the Artifact and the
+    #: server derives it; see `services/summaries.py::derived_scope`.
     #:
     #: A field on this request rather than a route of its own, because the
     #: question it answers is "where did this submission's Scope come from",
     #: and that belongs to the submission contract the other three families
     #: joined in AW-06. A second route would have been a second way to open a
     #: Summary, with its own id handling, its own 409 and its own drift.
-    successor_of: str | None = Field(default=None, alias="successorOf")
+    #:
+    #: A small object rather than a bare id, because there are two derivations
+    #: and a caller has to say which. A bare `successorOf` was the first cut and
+    #: it forced the Regenerate button back onto the stated-window door, where
+    #: its own recorded end is in the future and is refused.
+    derived_from: SummaryDerivation | None = Field(default=None, alias="derivedFrom")
     language: str = "English"
     model: str | None = None
     post_count: int | None = Field(default=None, alias="postCount")
@@ -121,10 +142,10 @@ class SummarySubmitRequest(BaseModel):
         was written against. Neither is a submission with no Scope, which is
         the thing AW-05 made impossible.
         """
-        if (self.scope is None) == (self.successor_of is None):
+        if (self.scope is None) == (self.derived_from is None):
             raise ValueError(
                 "Send exactly one of `scope` (the window stated in full) or "
-                "`successorOf` (the Summary whose window this one continues)."
+                "`derivedFrom` (the Summary this one reads its window off)."
             )
         return self
 

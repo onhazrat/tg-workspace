@@ -38,12 +38,12 @@ regenerations that happened to run with a tab open and kept the ones that ran in
 the worker — the same chain, pruned by which process was awake.
 
 **AW-06 closed it.** A submission may now name the Artifact its Scope is derived
-from (`successorOf` on `SummarySubmitRequest`) instead of describing one, which
-is what let the browser join the contract: a successor's end is in the future and
-no caller is allowed to *state* such a window, so the server derives it through
-the one `services/summaries.py::successor_scope` that `jobs/auto_summary.py` also
-calls. The re-run path (`shiftTime: false`) states the predecessor's own window
-and goes through ordinary validation.
+from (`derivedFrom` on `SummarySubmitRequest`) instead of describing one, which
+is what let the browser join the contract: a derived end is in the future and no
+caller is allowed to *state* such a window, so the server derives it through the
+one `services/summaries.py::derived_scope` that `jobs/auto_summary.py` also
+calls. Both regeneration paths go through it, the shifting one as `successor`
+and the Regenerate button as `repeat`.
 
 So every Summary creation path now writes a complete Scope, and this migration's
 deletions are about age rather than about which process was awake. What it

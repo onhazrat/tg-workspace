@@ -2,14 +2,18 @@ import type React from "react"
 import { createContext, useContext, useEffect, useRef, useState } from "react"
 import { toast } from "sonner"
 import { api } from "@/api"
-import type { PromptScope } from "@/api/data"
+import { frozenWindow, type PromptScope } from "@/api/data"
 import {
   useChatSessionQuery,
   useInvalidateChatSessions,
 } from "@/hooks/useChatSessions"
 import type { SendOptions } from "@/lib/chat-sessions/send-options"
 import { resolveSend } from "@/lib/chat-sessions/send-options"
-import { saveChatSession, submitChatSession } from "@/lib/chat-sessions/store"
+import {
+  deleteChatSession,
+  saveChatSession,
+  submitChatSession,
+} from "@/lib/chat-sessions/store"
 import { saveLLMLog } from "@/lib/logs/write"
 import { formatChannelsForPrompt } from "../lib/channels/format-channels-for-prompt"
 import { formatPostsForPrompt } from "../lib/posts/post-view"
@@ -148,6 +152,16 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
       .filter((channel) => selectedChannels.has(channel.name))
       .map((channel) => channel.name)
 
+    // Submission creates the row, so a turn that produces nothing has to take
+    // it back — otherwise a chat whose very first message failed sits in
+    // History for ever as an empty session with a perfectly good Scope. Only
+    // ever the row *this* call created: a failure on turn nine does not throw
+    // away eight turns that worked.
+    let openedId: string | null = null
+    //: The row the submission opened, on the turn that opened it. Holds the
+    //: frozen Scope the rest of this turn assembles from.
+    let opened: ChatSession | undefined
+
     try {
       // Submit before a single token is spent (AW-06). The server resolves the
       // Analysis window against its own current minute and stores the result,
@@ -165,7 +179,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
       // the window and filters that ranking ran inside, and `scopedPostCount`
       // being null says exactly that.
       if (!baseSessionId) {
-        await submitChatSession({
+        opened = await submitChatSession({
           id: sessionId,
           scope: getScopeSubmission(selectedChannelNames),
           language: aiLanguage,
@@ -177,7 +191,16 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
             semanticSearchRespectsChannels,
           },
         })
+        openedId = sessionId
       }
+
+      // The window the *row* records, which on turn one is what the server
+      // just froze and afterwards is what it froze back then. Assembling the
+      // prompt from live scope instead was the defect: a conversation held
+      // across a Live boundary answered later turns from a window its own
+      // record did not claim. `undefined` only for a session opened before
+      // AW-06, which AW-07 deletes.
+      const frozen = opened?.scope ?? openedSession?.scope
 
       const startTime = Date.now()
       let fullModelText = ""
@@ -283,10 +306,16 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
         let postsText = ""
         let scope: PromptScope | undefined
         if (input.scope) {
-          scope = input.scope
+          // Select by what was frozen, not by what the clock says now — the
+          // Chat and its prompt have to name the same two instants. The counts
+          // go through the same value, or the number stored beside the answer
+          // describes a different window than the answer does.
+          scope = frozen
+            ? { ...input.scope, window: frozenWindow(frozen) }
+            : input.scope
           const counts = await api.getPostsCounts({
             channelNames: selectedChannelNames,
-            ...input.scope,
+            ...scope,
           })
           summaryChatPostCount = Object.values(counts).reduce(
             (sum, n) => sum + n,
@@ -400,6 +429,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
         messages: finalMessages,
       }
       await saveChatSession(session)
+      openedId = null
       // Claim the id before publishing it, so the loader effect above treats
       // this session as already-loaded and never refetches over the turns we
       // are appending live.
@@ -423,6 +453,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
         return updated
       })
     } finally {
+      if (openedId) await deleteChatSession(openedId).catch(() => {})
       setIsChatting(false)
     }
   }

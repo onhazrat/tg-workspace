@@ -6971,6 +6971,7 @@
           },
           "maxPerChannelMode": {
             "type": "string",
+            "enum": ["latest", "random"],
             "title": "Maxperchannelmode",
             "default": "latest"
           },
@@ -9443,6 +9444,21 @@
         "title": "SummaryArtifactResponse",
         "description": "`status` is `\"pending\"` until an externally-run prompt is pasted back.\n\n`autoRegenerate` and `autoPublish` are here rather than left to the Summary\ntab because History is where they are toggled, and reading them out of\n`extra` costs nothing once `isStarred` is already being read."
       },
+      "SummaryDerivation": {
+        "properties": {
+          "summaryId": { "type": "string", "title": "Summaryid" },
+          "mode": {
+            "type": "string",
+            "enum": ["successor", "repeat"],
+            "title": "Mode"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["summaryId", "mode"],
+        "title": "SummaryDerivation",
+        "description": "The Artifact a submission reads its Scope off, and how."
+      },
       "SummaryListItemResponse": {
         "properties": {
           "id": { "type": "string", "title": "Id" },
@@ -9595,9 +9611,11 @@
               { "type": "null" }
             ]
           },
-          "successorOf": {
-            "anyOf": [{ "type": "string" }, { "type": "null" }],
-            "title": "Successorof"
+          "derivedFrom": {
+            "anyOf": [
+              { "$ref": "#/components/schemas/SummaryDerivation" },
+              { "type": "null" }
+            ]
           },
           "language": {
             "type": "string",
@@ -10085,14 +10103,21 @@
         "properties": {
           "id": { "type": "string", "title": "Id" },
           "scope": { "$ref": "#/components/schemas/ScopeSubmission" },
-          "mode": { "type": "string", "title": "Mode", "default": "add" },
+          "mode": {
+            "type": "string",
+            "enum": ["add", "remove"],
+            "title": "Mode",
+            "default": "add"
+          },
           "source": {
             "type": "string",
+            "enum": ["generated", "pasted"],
             "title": "Source",
             "default": "generated"
           },
           "status": {
             "type": "string",
+            "enum": ["pending", "completed"],
             "title": "Status",
             "default": "pending"
           },

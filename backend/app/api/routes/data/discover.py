@@ -151,11 +151,6 @@ def _report_submission(body: DiscoverReportCreateRequest) -> FrozenScope:
     the aggregation ran on, produced by `freeze_scope` like every other
     Artifact's.
     """
-    if body.max_per_channel_mode not in FEED_CAP_MODES:
-        raise HTTPException(
-            status_code=422,
-            detail=f"unknown maxPerChannelMode: {body.max_per_channel_mode}",
-        )
     return freeze_scope(body.to_scope_submission())
 
 

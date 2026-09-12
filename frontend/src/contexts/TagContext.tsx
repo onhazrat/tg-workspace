@@ -10,7 +10,7 @@ import {
 } from "react"
 import { toast } from "sonner"
 import { api } from "@/api"
-import { frozenWindow } from "@/api/data"
+import { frozenWindow, type PromptScope } from "@/api/data"
 import { queryKeys, SUMMARIZER_STALE_TIME } from "@/hooks/queryKeys"
 import { useTagRunParam } from "@/hooks/useArtifactParams"
 import {
@@ -184,6 +184,21 @@ export const TagProvider: React.FC<{ children: React.ReactNode }> = ({
   }
 
   /**
+   * Assemble by what the server froze, not by what the clock says now.
+   *
+   * The run and its prompt have to name the same two instants. An `undefined`
+   * scope is the semantic path, which carries its Posts rather than a window;
+   * a run with no frozen Scope predates AW-06 and AW-07 deletes it.
+   */
+  const frozenScope = (
+    scope: PromptScope | undefined,
+    opened: TagRun,
+  ): PromptScope | undefined =>
+    scope && opened.scope
+      ? { ...scope, window: frozenWindow(opened.scope) }
+      : scope
+
+  /**
    * Open the run at a frozen Scope, before the prompt is assembled (AW-06).
    *
    * Both entry points go through here, and both needed it. A tag run is
@@ -214,37 +229,41 @@ export const TagProvider: React.FC<{ children: React.ReactNode }> = ({
     }
     const { channelsText, postsText, allTags, postCount, scope, rankedPosts } =
       await buildPromptParts()
+    // Submission opens the row, so a prompt that never gets built has to take
+    // it back — otherwise a failed copy litters History with a `pending` run
+    // nobody can complete. The same compensation `AIContext` makes, for the
+    // same reason.
     const opened = await openTagRun(postCount, rankedPosts, "pasted")
-    const prompt = await getTagPrompt({
-      channels: selectedChannelNames,
-      channelsText,
-      postsText,
-      allTags,
-      tagMode: mode,
-      language: aiLanguage,
-      model: selectedModel,
-      temperature: aiTemperature,
-      // Assemble by what was frozen, not by what the clock says now — the run
-      // and the prompt have to name the same two instants.
-      scope:
-        scope && opened.scope
-          ? { ...scope, window: frozenWindow(opened.scope) }
-          : scope,
-    })
-    const run: TagRun = {
-      ...opened,
-      promptText: prompt,
-      allTagsSnapshot: allTags === "(none yet)" ? [] : allTags.split(", "),
-      channelContextOptions: {
-        includeBio: includeChannelBioInPrompt,
-        includeTags: includeChannelTagsInPrompt,
-      },
+    try {
+      const prompt = await getTagPrompt({
+        channels: selectedChannelNames,
+        channelsText,
+        postsText,
+        allTags,
+        tagMode: mode,
+        language: aiLanguage,
+        model: selectedModel,
+        temperature: aiTemperature,
+        scope: frozenScope(scope, opened),
+      })
+      const run: TagRun = {
+        ...opened,
+        promptText: prompt,
+        allTagsSnapshot: allTags === "(none yet)" ? [] : allTags.split(", "),
+        channelContextOptions: {
+          includeBio: includeChannelBioInPrompt,
+          includeTags: includeChannelTagsInPrompt,
+        },
+      }
+      const saved = await upsertTagRun(run)
+      applySavedRun(saved)
+      setCurrentRunId(saved.id)
+      await tryWriteTextToClipboard(prompt)
+      toast.success("Tag prompt copied. Paste the AI response when ready.")
+    } catch (error) {
+      await deleteTagRun(opened.id).catch(() => {})
+      throw error
     }
-    const saved = await upsertTagRun(run)
-    applySavedRun(saved)
-    setCurrentRunId(saved.id)
-    await tryWriteTextToClipboard(prompt)
-    toast.success("Tag prompt copied. Paste the AI response when ready.")
   }
 
   const generateTags = async () => {
@@ -255,8 +274,12 @@ export const TagProvider: React.FC<{ children: React.ReactNode }> = ({
     const { channelsText, postsText, allTags, postCount, scope, rankedPosts } =
       await buildPromptParts()
     setIsGenerating(true)
+    // Opened before the first token is spent, and taken back if nothing comes
+    // of it — see the note in `copyTagPrompt`.
+    let openedId: string | null = null
     try {
       const opened = await openTagRun(postCount, rankedPosts, "generated")
+      openedId = opened.id
       let responseText = ""
       const { stream, prompt } = await generateTagStream({
         channels: selectedChannelNames,
@@ -267,10 +290,7 @@ export const TagProvider: React.FC<{ children: React.ReactNode }> = ({
         language: aiLanguage,
         model: selectedModel,
         temperature: aiTemperature,
-        scope:
-          scope && opened.scope
-            ? { ...scope, window: frozenWindow(opened.scope) }
-            : scope,
+        scope: frozenScope(scope, opened),
       })
 
       for await (const chunk of stream) {
@@ -295,6 +315,7 @@ export const TagProvider: React.FC<{ children: React.ReactNode }> = ({
         },
       }
       const saved = await upsertTagRun(run)
+      openedId = null
       applySavedRun(saved)
       setCurrentRunId(saved.id)
       toast.success("Tag suggestions generated.")
@@ -304,6 +325,7 @@ export const TagProvider: React.FC<{ children: React.ReactNode }> = ({
         error instanceof Error ? error.message : "Failed to generate tags",
       )
     } finally {
+      if (openedId) await deleteTagRun(openedId).catch(() => {})
       setIsGenerating(false)
     }
   }

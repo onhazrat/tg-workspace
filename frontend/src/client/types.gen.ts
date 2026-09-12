@@ -1874,7 +1874,7 @@ export type DiscoverReportCreateRequest = {
     /**
      * Maxperchannelmode
      */
-    maxPerChannelMode?: string;
+    maxPerChannelMode?: 'latest' | 'random';
     /**
      * Seed
      */
@@ -4659,6 +4659,22 @@ export type SummaryArtifactResponse = {
 };
 
 /**
+ * SummaryDerivation
+ *
+ * The Artifact a submission reads its Scope off, and how.
+ */
+export type SummaryDerivation = {
+    /**
+     * Summaryid
+     */
+    summaryId: string;
+    /**
+     * Mode
+     */
+    mode: 'successor' | 'repeat';
+};
+
+/**
  * SummaryListItemResponse
  *
  * List projection, as `summary_to_camel_light` builds it.
@@ -4810,10 +4826,7 @@ export type SummarySubmitRequest = {
      */
     id: string;
     scope?: ScopeSubmission | null;
-    /**
-     * Successorof
-     */
-    successorOf?: string | null;
+    derivedFrom?: SummaryDerivation | null;
     /**
      * Language
      */
@@ -5407,15 +5420,15 @@ export type TagRunSubmitRequest = {
     /**
      * Mode
      */
-    mode?: string;
+    mode?: 'add' | 'remove';
     /**
      * Source
      */
-    source?: string;
+    source?: 'generated' | 'pasted';
     /**
      * Status
      */
-    status?: string;
+    status?: 'pending' | 'completed';
     /**
      * Model
      */

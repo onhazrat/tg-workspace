@@ -45,6 +45,28 @@ CapMode = Literal["latest", "random"]
 MAX_SCOPED_POSTS = 5000
 
 
+def scope_key(scope: FrozenScope | None) -> dict[str, Any]:
+    """The `scope` key of an Artifact projection, stamped **last**.
+
+    Last, and that ordering is the point: three of the four Artifact rows carry
+    an open `extra` column that every projection spreads, so a key named
+    `scope` sitting in that bag would otherwise win over the column and the
+    endpoint would report a Scope the database does not hold. Each write door
+    drops such a key; this is the half that does not depend on them remembering
+    to.
+
+    `None` becomes an explicit `null` rather than an absent key. Unlike the
+    conditional keys it sits beside, `scope` has no legacy wire shape to
+    preserve and the client has to render it either way.
+
+    Here rather than copied into each aggregate for the reason `FrozenScope`
+    owns `stored` and `from_stored`: how a frozen Scope becomes a column is a
+    property of the Scope, and so is how it becomes a wire key. It was written
+    out three times first, with three copies of this paragraph.
+    """
+    return {"scope": None if scope is None else scope.model_dump(by_alias=True)}
+
+
 class ScopedPostRef(BaseModel):
     """One Post named by its natural key."""
 
@@ -175,6 +197,9 @@ class FrozenScope(_ScopeFilters):
         frozen = cls.model_validate(scope)
         if scope_posts is None:
             return frozen
-        return frozen.model_copy(
-            update={"posts": [ScopedPostRef.model_validate(r) for r in scope_posts]}
-        )
+        # Back through `model_validate`, not `model_copy`. A copy skips the
+        # validators, so adding `posts` to a value whose `scopedPostCount` came
+        # off the column would leave the count trusted on this path and derived
+        # on every other — the two disagreeing is the whole thing the validator
+        # was added to stop.
+        return cls.model_validate({**frozen.stored(), "posts": scope_posts})

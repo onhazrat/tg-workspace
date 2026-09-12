@@ -42,7 +42,7 @@ from pydantic import Field as PydanticField
 
 from app.schemas.analysis_window import AnalysisWindowInput
 from app.schemas.posts import PostScopeRequest
-from app.schemas.scope import FrozenScope, ScopeSubmission
+from app.schemas.scope import CapMode, FrozenScope, ScopeSubmission
 
 
 class SignalCountsResponse(BaseModel):
@@ -500,3 +500,8 @@ class DiscoverReportCreateRequest(DiscoverCandidatesRequest):
     """
 
     window: AnalysisWindowInput
+    #: Re-declared as the closed set `ScopeSubmission` uses. The stateless twin
+    #: leaves it a `str` and the route checks it by hand; doing that here as
+    #: well meant one validation written twice in one module, and the hand
+    #: check ran *after* the model had already accepted the value.
+    max_per_channel_mode: CapMode = PydanticField("latest", alias="maxPerChannelMode")

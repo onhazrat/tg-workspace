@@ -12,7 +12,8 @@ from sqlmodel import Session, col
 
 from app.core import acting_owner
 from app.models_tg import TagRun, utc_now
-from app.schemas.scope import FrozenScope, ScopeSubmission
+from app.schemas.scope import FrozenScope, ScopeSubmission, scope_key
+from app.schemas.tag_runs import TagMode, TagRunSource, TagRunStatus
 from app.services.analysis_window import freeze_scope
 from app.services.serialization import to_snake
 from app.services.tenancy import (
@@ -87,7 +88,7 @@ def tag_run_to_camel(tag_run: TagRun) -> dict[str, Any]:
         "createdAt": tag_run.created_at,
         "updatedAt": tag_run.updated_at_ms,
         **(tag_run.extra or {}),
-        **_scope_key(FrozenScope.from_stored(tag_run.scope, tag_run.scope_posts)),
+        **scope_key(FrozenScope.from_stored(tag_run.scope, tag_run.scope_posts)),
     }
 
 
@@ -126,18 +127,8 @@ def _light_from_mapping(row: dict[str, Any]) -> dict[str, Any]:
         **(row.get("extra") or {}),
         # Without its refs: `scopedPostCount` is what a list shows instead, and
         # `scope_posts` is not even in the select — see `HEAVY_TAG_RUN_COLUMNS`.
-        **_scope_key(FrozenScope.from_stored(row.get("scope"))),
+        **scope_key(FrozenScope.from_stored(row.get("scope"))),
     }
-
-
-def _scope_key(scope: FrozenScope | None) -> dict[str, Any]:
-    """The `scope` key, stamped **after** `extra` has been spread (AW-06).
-
-    Last, for the reason `summaries._with_scope` gives: `extra` is an open bag,
-    so a key named `scope` sitting in it would otherwise win over the column and
-    the endpoint would report a Scope the database does not hold.
-    """
-    return {"scope": None if scope is None else scope.model_dump(by_alias=True)}
 
 
 def list_tag_runs(
@@ -336,9 +327,9 @@ def submit_tag_run(
     user_id: uuid.UUID,
     tag_run_id: str,
     submission: ScopeSubmission,
-    mode: str = "add",
-    source: str = "generated",
-    status: str = "pending",
+    mode: TagMode = "add",
+    source: TagRunSource = "generated",
+    status: TagRunStatus = "pending",
     model: str | None = None,
     post_count: int | None = None,
     extra: dict[str, Any] | None = None,

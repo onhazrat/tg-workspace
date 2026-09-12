@@ -10,11 +10,19 @@ the list response cannot accidentally acquire the heavy fields as `null`s.
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.schemas.scope import FrozenScope, ScopeSubmission
+
+#: What a run does to the tags it suggests.
+TagMode = Literal["add", "remove"]
+#: Whether the model was called here, or the prompt copied out and the response
+#: pasted back.
+TagRunSource = Literal["generated", "pasted"]
+#: The states a run can be *opened* in. The update door reaches the rest.
+TagRunStatus = Literal["pending", "completed"]
 
 
 class TagRunListItemResponse(BaseModel):
@@ -68,13 +76,19 @@ class TagRunSubmitRequest(BaseModel):
     id: str
     scope: ScopeSubmission
     #: What the run does to the tags it suggests.
-    mode: str = "add"
+    #:
+    #: Declared as a closed set, like `ChatSessionSubmitRequest.mode` and unlike
+    #: the `str` columns these three write to. A submission is a trust boundary
+    #: and these three are persisted verbatim, so a bare `str` here meant
+    #: `{"status": "banana"}` became a tag run's status with nothing to stop it.
+    mode: TagMode = "add"
     #: `generated` when the model is called here, `pasted` when the prompt is
     #: copied out and the response comes back by hand.
-    source: str = "generated"
+    source: TagRunSource = "generated"
     #: `pending` until a response exists, which is the state the copy-prompt
     #: path opens in and the state the generate path leaves within seconds.
-    status: str = "pending"
+    #: `completed` and `failed` are reachable only through the update door.
+    status: TagRunStatus = "pending"
     model: str | None = None
     post_count: int | None = Field(default=None, alias="postCount")
     #: The small UI flags a new run starts with. Open for the reason

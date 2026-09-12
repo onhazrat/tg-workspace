@@ -107,7 +107,7 @@ def submit_summary(
         user_id=current_user.id,
         summary_id=body.id,
         submission=body.scope,
-        successor_of=body.successor_of,
+        derived_from=body.derived_from,
         language=body.language,
         model=body.model,
         post_count=body.post_count,
