@@ -6,9 +6,20 @@ Revises: b8d2f3a51c04
 Create Date: 2026-09-13
 
 An Artifact is paid for in Posts and has to record exactly which Posts. AW-05
-and AW-06 made every creation path freeze that record; this deletes the rows
-written before they did, and then removes the per-kind columns the frozen
-`scope` supersedes so two stored Scope values can never disagree.
+and AW-06 made every *interactive* creation path freeze that record; this
+deletes the rows that carry none, and then removes the per-kind columns the
+frozen `scope` supersedes so two stored Scope values can never disagree.
+
+**The predicate is `scope IS NULL`, which is "cannot supply the contract" and
+not "is old".** Those are the same set only because every UI path freezes a
+Scope now. They are not the same set for the two doors AW-06 deliberately left
+open — `upsert_*` via `PUT`, which the browser's own data-transfer import still
+uses — so a row written through one of those *today* is deleted by this
+revision too. That is the acceptance criterion as written ("rows of every kind
+that cannot provide the complete frozen Scope"), and it is survivable only
+because the deployment has not launched and the Accounts belong to the product
+team (ADR-018). On a launched deployment this predicate would have to be bounded
+by age, or those doors closed first.
 
 **Nothing is backfilled.** Discover is the one family that *could* be — it
 stored the whole filter set from the start — and it is deleted on the same terms
@@ -164,5 +175,22 @@ def downgrade() -> None:
         sa.Column("seed", sa.Integer(), nullable=False, server_default="0"),
     )
     op.add_column(
-        "tg_discover_reports", sa.Column("scoped_post_count", sa.Integer(), nullable=True)
+        "tg_discover_reports",
+        sa.Column("scoped_post_count", sa.Integer(), nullable=True),
     )
+
+    # The defaults above exist only so a NOT NULL column can be added to a
+    # populated table; the revisions that created these columns gave them none.
+    # Left in place they are schema this database never had, and autogenerate
+    # would propose dropping them on the next revision.
+    for table in _TRIO_TABLES:
+        for column in ("start_date", "end_date"):
+            op.alter_column(table, column, server_default=None)
+    for column in (
+        "forwarded",
+        "media",
+        "max_per_channel",
+        "max_per_channel_mode",
+        "seed",
+    ):
+        op.alter_column("tg_discover_reports", column, server_default=None)

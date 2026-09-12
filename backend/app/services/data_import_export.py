@@ -56,6 +56,7 @@ from typing import cast as typing_cast
 
 from fastapi import HTTPException
 from fastapi.encoders import jsonable_encoder
+from pydantic import ValidationError
 from sqlalchemy import func
 from sqlmodel import Session, col, select
 
@@ -83,6 +84,7 @@ from app.models_tg import (
     UserSetting,
     utc_now,
 )
+from app.schemas.scope import FrozenScope
 from app.services.channel_setting_groups import (
     ensure_default_group,
     get_or_create_restricted_group,
@@ -461,25 +463,53 @@ _SUMMARY_KNOWN_FIELDS = {
 }
 
 
-def _frozen_scope_columns(item: Any) -> tuple[dict[str, Any] | None, list[Any] | None]:
+def _frozen_scope_columns(
+    item: Any, *, section: str, required: bool = False
+) -> tuple[dict[str, Any] | None, list[Any] | None]:
     """An exported `scope` split back into the two columns it lives in.
 
-    `summary_to_camel` merges the Post refs *into* the Scope on the way out,
-    because one value object is what a reader wants. Storage keeps them apart —
-    the refs are corpus-sized and belong in `tg_summary_payloads` — so an import
-    has to undo the merge rather than write the document shape back verbatim.
+    Every artifact projection merges the Post refs *into* the Scope on the way
+    out, because one value object is what a reader wants. Storage keeps them
+    apart — the refs are corpus-sized and live in a payload table or their own
+    column — so an import has to undo the merge rather than write the document
+    shape back verbatim. Writing it verbatim is not merely untidy: `scope` is
+    in the light select of every family, so the refs would ride the *list*
+    projection, which is the 26 MB page this codebase has fixed twice.
 
-    A document with no `scope` returns `(None, None)`, which both call sites
-    read as "leave what is there alone". Nothing is invented for a
-    pre-AW-05 export: AW-07 deletes those rows rather than guessing their
-    filters.
+    **It goes through `FrozenScope` rather than stripping two keys by name**,
+    so what lands in the column is exactly what a submission writes, and a
+    document whose Scope is not a Scope is refused here instead of 500ing every
+    later read. That was a real hole: a `scope` of `{}` satisfied a
+    presence-only check and the NOT NULL on `tg_discover_reports`, then made
+    `GET /data/discover/reports` raise a `ValidationError` for that account
+    **forever** — one poisoned row taking down the whole page, which is the
+    failure the check was added to prevent.
+
+    A document with no `scope` returns `(None, None)`, which the call sites read
+    as "leave what is there alone" — except where `required`, which is
+    `discover_reports`, whose response declares its Scope non-optional. Nothing
+    is invented either way: AW-07 deletes what cannot supply the contract rather
+    than guessing its filters.
     """
     scope = item.get("scope")
     if not isinstance(scope, dict):
+        if required:
+            raise HTTPException(
+                status_code=422,
+                detail=(
+                    f"{section}: a row carries no frozen scope; it predates the "
+                    "Analysis window contract and cannot be imported."
+                ),
+            )
         return None, None
-    posts = scope.get("posts")
-    column = {k: v for k, v in scope.items() if k not in ("posts", "durationMinutes")}
-    return column, posts if isinstance(posts, list) else None
+    try:
+        frozen = FrozenScope.model_validate(scope)
+    except ValidationError as exc:
+        raise HTTPException(
+            status_code=422,
+            detail=f"{section}: the frozen scope is not a valid Scope.",
+        ) from exc
+    return frozen.stored(), frozen.stored_posts()
 
 
 def _import_summaries(session: Session, items: list[Any], *, user_id: uuid.UUID) -> int:
@@ -498,7 +528,7 @@ def _import_summaries(session: Session, items: list[Any], *, user_id: uuid.UUID)
     """
     for item in items:
         sid = item.get("id")
-        scope_column, scope_posts = _frozen_scope_columns(item)
+        scope_column, scope_posts = _frozen_scope_columns(item, section="summaries")
         summary = session.get(Summary, sid)
         _assert_importable(
             summary, user_id, detail=SUMMARY_NOT_FOUND, section="summaries"
@@ -803,6 +833,14 @@ def _importable_columns(model: type[Any]) -> frozenset[str]:
     )
 
 
+#: Where `_import_artifact_rows` hands the split-out Post refs back to the
+#: caller, which is the half that knows where its family keeps them: a chat's go
+#: to its payload table, a tag run's and a report's to their own row. A private
+#: key rather than a second return value because the callers already iterate
+#: `(row, item)` pairs, and a document cannot contain it.
+_SCOPE_POSTS = "__scope_posts__"
+
+
 def _import_artifact_rows(
     session: Session,
     items: list[Any],
@@ -813,7 +851,7 @@ def _import_artifact_rows(
     user_id: uuid.UUID,
     aliases: dict[str, str] | None = None,
     heavy: frozenset[str] = frozenset(),
-    require: tuple[str, ...] = (),
+    scope_required: bool = False,
 ) -> list[tuple[Any, dict[str, Any]]]:
     """Upsert one open artifact family, keeping unknown keys in `extra`.
 
@@ -843,10 +881,14 @@ def _import_artifact_rows(
     recognised so they do not fall into `extra`, and left for the caller to
     route.
 
-    `require` names wire keys a document of this family must carry, and it is
-    checked **after** `_assert_importable` on purpose: a foreign row answers
-    that family's 404 whatever shape its document is in, so a caller cannot use
-    a malformed body to tell an existing row from an absent one.
+    **`scope` is never taken from the document as a column.** It goes through
+    `_frozen_scope_columns`, which validates it and splits the refs back out;
+    the caller is handed those refs to route, because where they live differs
+    per family. `scope_required` is the `discover_reports` case.
+
+    That validation runs **after** `_assert_importable` on purpose: a foreign
+    row answers that family's 404 whatever shape its document is in, so a caller
+    cannot use a malformed body to tell an existing row from an absent one.
 
     Returns each row with the item it came from, because the payload write
     needs both and the caller owns the transaction.
@@ -860,15 +902,9 @@ def _import_artifact_rows(
         row_id = item.get("id") or normalize_body(item).get("id")
         existing = session.get(model, row_id)
         _assert_importable(existing, user_id, detail=detail, section=section)
-        for key in require:
-            if item.get(key) is None:
-                raise HTTPException(
-                    status_code=422,
-                    detail=(
-                        f"{section}: a row carries no {key}; it predates the "
-                        "Analysis window contract and cannot be imported."
-                    ),
-                )
+        scope_column, scope_posts = _frozen_scope_columns(
+            item, section=section, required=scope_required
+        )
 
         row = existing if existing is not None else model(id=row_id, user_id=user_id)
         extra: dict[str, Any] = {}
@@ -876,6 +912,11 @@ def _import_artifact_rows(
             if key == "id":
                 continue
             name = aliases.get(key, to_snake(key))
+            # `scope` and `scope_posts` are the helper's business, not the
+            # loop's: the document merges them into one value and the columns
+            # keep them apart.
+            if name in ("scope", "scope_posts"):
+                continue
             if name in columns:
                 setattr(row, name, value)
             elif (
@@ -898,9 +939,11 @@ def _import_artifact_rows(
         # Admin importing *for* somebody binds themselves as the acting Owner,
         # so a restore says who uploaded it rather than claiming the account
         # wrote every row in the file.
+        if scope_column is not None:
+            row.scope = scope_column
         acting_owner.stamp(session, row)
         session.add(row)
-        written.append((row, item))
+        written.append((row, {**item, _SCOPE_POSTS: scope_posts}))
 
     return written
 
@@ -932,6 +975,12 @@ def _import_chat_sessions(
             updates = {"messages": messages}
         elif "messages" in item:
             removals = {"messages"}
+        # A chat keeps its corpus in the payload table, so its Scope's refs go
+        # there too — the same split `submit_chat_session` writes, and the
+        # reason the list projection can read `scope` without opening it.
+        scope_posts = item.get(_SCOPE_POSTS)
+        if scope_posts is not None:
+            updates["scope_posts"] = scope_posts
         payload = apply_chat_session_payload(
             session,
             row.id,
@@ -947,7 +996,13 @@ def _import_chat_sessions(
 
 
 def _import_tag_runs(session: Session, items: list[Any], *, user_id: uuid.UUID) -> int:
-    _import_artifact_rows(
+    """Upsert exported tag runs, keeping the Scope's refs off the list page.
+
+    A tag run keeps its corpus on its own row, so `scope_posts` goes there —
+    and it has to go *somewhere*, because `scope` is in the light select and a
+    ref list left inside it ships on every list read.
+    """
+    for row, item in _import_artifact_rows(
         session,
         items,
         model=TagRun,
@@ -955,7 +1010,8 @@ def _import_tag_runs(session: Session, items: list[Any], *, user_id: uuid.UUID) 
         section="tag_runs",
         user_id=user_id,
         aliases={"updatedAt": "updated_at_ms"},
-    )
+    ):
+        row.scope_posts = item.get(_SCOPE_POSTS)
     return len(items)
 
 
@@ -973,16 +1029,19 @@ def _import_discover_reports(
 
     A refusal rather than a skip: a restore that silently dropped saved reports
     would be discovered by whoever went looking for one that is not there.
+
+    Its refs go on its own row, for the reason `_import_tag_runs` gives.
     """
-    _import_artifact_rows(
+    for row, item in _import_artifact_rows(
         session,
         items,
         model=DiscoverReport,
         detail=REPORT_NOT_FOUND,
         section="discover_reports",
         user_id=user_id,
-        require=("scope",),
-    )
+        scope_required=True,
+    ):
+        row.scope_posts = item.get(_SCOPE_POSTS)
     return len(items)
 
 

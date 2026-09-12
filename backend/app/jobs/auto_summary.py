@@ -261,14 +261,26 @@ def _scope_of(summary: Summary) -> FrozenScope | None:
 
 
 def _default_metadata(summary: Summary, extra: dict[str, Any]) -> str:
+    """The metadata block published beside an auto-regenerated Summary.
+
+    A Summary with no frozen Scope says so rather than reporting the epoch
+    twice. `0`/`0` formats as `1970-01-01T00:00:00` in both halves of the range,
+    which is a *claim about which Posts this covered* and exactly the invented
+    window AW-07 exists to refuse — published, in this case, to a Telegram
+    channel. The browser's twin, `generateDefaultMetadataText`, answers "not
+    recorded" here, and the two halves of one message have to agree.
+    """
     scope = _scope_of(summary)
     channels = list(scope.channels) if scope else []
-    start = scope.start if scope else 0
-    end = scope.end if scope else 0
+    time_range = (
+        f"{datetime.utcfromtimestamp(scope.start / 1000).isoformat()} - "
+        f"{datetime.utcfromtimestamp(scope.end / 1000).isoformat()}"
+        if scope
+        else "not recorded"
+    )
     return (
         f"📊 *Analysis Metadata*\n"
-        f"🕒 *Time Range:* {datetime.utcfromtimestamp(start / 1000).isoformat()} - "
-        f"{datetime.utcfromtimestamp(end / 1000).isoformat()}\n"
+        f"🕒 *Time Range:* {time_range}\n"
         f"📡 *Channels Used:* {len(channels)}\n"
         f"📋 *Channel List:* {', '.join(f'@{c}' for c in channels)}\n"
         f"🤖 *AI Model:* {summary.model or default_model()}\n"

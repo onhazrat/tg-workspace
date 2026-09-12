@@ -71,14 +71,17 @@ from app.alembic.versions import (
     c9e4a8b71d25_aw07_drop_incomplete_legacy_artifacts as mig,
 )
 from app.core.db import engine
+from app.jobs import auto_summary
 from app.models_tg import (
     ChatSession,
+    ChatSessionPayload,
     DiscoverReport,
     Summary,
     TagRun,
 )
 from app.services import discover_reports
 from app.services.data_import_export import import_data
+from app.services.discover_reports import list_reports
 from tests.utils.scope import stored_scope
 from tests.utils.tenancy import ANY_READER
 
@@ -543,6 +546,113 @@ def test_nothing_reconstructs_a_scope_for_a_row_that_has_none() -> None:
     with pytest.raises(HTTPException) as raised:
         discover_reports._scope({"scope": None, "signals": []})
     assert raised.value.status_code == 500
+
+
+def test_an_imported_scope_that_is_not_a_scope_is_refused() -> None:
+    """Presence is not validity, and the difference is a permanent 500.
+
+    A `scope` of `{}` satisfies a presence check and the NOT NULL alike, and
+    then makes `FrozenScope.model_validate` raise on **every** later read — so
+    one poisoned row takes down `GET /data/discover/reports` for that account
+    for good, because `_scope` runs per row in the light projection. Refusing it
+    at the door is what the 422 was for; a null check only looked like it.
+    """
+    for section, extra in (
+        ("discover_reports", {"candidates": []}),
+        ("summaries", {"text": "t"}),
+    ):
+        document = {
+            section: [{"id": f"aw07-{uuid.uuid4().hex[:8]}", "scope": {}, **extra}]
+        }
+        with Session(engine) as session, pytest.raises(HTTPException) as raised:
+            import_data(session, document, user_id=ANY_READER)
+        assert raised.value.status_code == 422, section
+
+    # And the list still reads, which is the failure being prevented.
+    with Session(engine) as session:
+        assert list_reports(session, user_id=ANY_READER) is not None
+
+
+@pytest.mark.parametrize("section", ["chat_sessions", "tag_runs", "discover_reports"])
+def test_an_imported_scope_keeps_its_refs_out_of_the_light_column(
+    section: str,
+) -> None:
+    """An export merges the Post refs into the Scope; storage keeps them apart.
+
+    Every family's `scope` is in its *light* select, so a document written back
+    verbatim puts the whole ref list on the list page — the 26 MB regression
+    this codebase has already fixed twice. AW-07 makes it lossy as well as
+    wasteful: with the superseded columns gone there is no second copy to fall
+    back on, and `scope_posts` would simply never be written.
+    """
+    row_id = f"aw07-{uuid.uuid4().hex[:8]}"
+    refs = [{"channelName": "a", "postId": 1}, {"channelName": "a", "postId": 2}]
+    scope = {
+        "channels": ["a"],
+        "start": 1_000,
+        "end": 61_000,
+        "durationMinutes": 1,
+        "scopedPostCount": 2,
+        "posts": refs,
+    }
+    base: dict[str, Any] = {"id": row_id, "scope": scope}
+    if section == "tag_runs":
+        base |= {"status": "pending", "source": "generated", "mode": "add"}
+    elif section == "discover_reports":
+        base |= {"candidates": []}
+
+    with Session(engine) as session:
+        import_data(session, {section: [base]}, user_id=ANY_READER)
+
+    model = {
+        "chat_sessions": ChatSession,
+        "tag_runs": TagRun,
+        "discover_reports": DiscoverReport,
+    }[section]
+    # A context manager, not a bare `Session`: an assertion below that fails
+    # would otherwise leave the connection `idle in transaction`, and the
+    # autouse `TRUNCATE` in teardown then blocks forever — the suite hangs with
+    # no traceback instead of reporting the failure.
+    with Session(engine) as session:
+        row = session.get(model, row_id)
+        assert row is not None
+        assert "posts" not in (row.scope or {}), (
+            f"{section} stored the Post refs inside `scope`, which is in its "
+            f"light select — so the list page now ships the whole ref array."
+        )
+        assert "durationMinutes" not in (row.scope or {}), (
+            f"{section} stored a derived number as a third stored fact."
+        )
+
+        if section == "chat_sessions":
+            payload = session.get(ChatSessionPayload, row_id)
+            # `None` means no payload row was written at all, which is the
+            # refs being dropped — said as an assertion rather than left to
+            # raise `AttributeError` off the fallback.
+            assert payload is not None, (
+                "the chat's Scope refs were dropped: no payload row was written"
+            )
+            stored_refs = payload.scope_posts
+        else:
+            stored_refs = row.scope_posts
+        assert stored_refs == refs, (
+            f"{section} dropped the Post refs on the way in. They are the one "
+            f"part of a Scope the server cannot rebuild from the filters "
+            f"beside it."
+        )
+
+
+def test_published_metadata_never_invents_a_window() -> None:
+    """A Summary with no Scope publishes "not recorded", not the epoch twice.
+
+    `0`/`0` renders as `1970-01-01T00:00:00` on both sides of the range, which
+    is a claim about which Posts a Summary covered — sent to a Telegram channel,
+    where nobody is present to disbelieve it. The browser's twin already answers
+    this way; the two halves of one message have to agree.
+    """
+    scopeless = Summary(id="x", user_id=uuid.uuid4(), text="t")
+    assert "1970" not in auto_summary._default_metadata(scopeless, {})
+    assert "not recorded" in auto_summary._default_metadata(scopeless, {})
 
 
 def test_the_import_door_refuses_a_report_that_predates_the_contract() -> None:

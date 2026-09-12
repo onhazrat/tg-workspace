@@ -53,22 +53,63 @@ export async function seedArtifacts(page: Page): Promise<void> {
     ).toBe(true)
   }
 
+  /**
+   * Open an artifact at a frozen Scope, which is the only way it gets one.
+   *
+   * AW-07 dropped the `channels` / `startDate` / `endDate` trio, so a `PUT`
+   * has nowhere to put a channel list: it is inside `scope` now, and only a
+   * submission writes that. Seeding through `PUT` alone still *succeeds* here
+   * — which is the trap, because the card then renders "No channels" and the
+   * wide-card regression test below passes without exercising anything.
+   */
+  const submit = async (
+    path: string,
+    id: string,
+    channels: string[],
+    extra: Record<string, unknown> = {},
+  ): Promise<void> => {
+    const response = await page.request.post(path, {
+      headers,
+      data: {
+        id,
+        scope: {
+          channels,
+          window: { mode: "fixed", start: now - 86_400_000, end: now },
+        },
+        ...extra,
+      },
+    })
+    expect(
+      response.ok(),
+      `submitting ${path}/${id} failed: ${response.status()} ${await response.text()}`,
+    ).toBe(true)
+  }
+
+  await submit(
+    "/api/v1/data/summaries",
+    WIDE_SUMMARY_ID,
+    WIDE_SUMMARY_CHANNELS,
+    {
+      model: "gemini-3-flash-preview",
+      postCount: 7,
+    },
+  )
   await put(`/api/v1/data/summaries/${WIDE_SUMMARY_ID}`, {
     text: "Wide.",
-    channels: WIDE_SUMMARY_CHANNELS,
     timestamp: now + 1000,
-    model: "gemini-3-flash-preview",
-    postCount: 7,
   })
-  await put(`/api/v1/data/summaries/${OPEN_SUMMARY_ID}`, {
-    text: `# Weekly report\n\n${OPEN_SUMMARY_BODY}`,
-    channels: ["alpha"],
-    timestamp: now,
+
+  await submit("/api/v1/data/summaries", OPEN_SUMMARY_ID, ["alpha"], {
     model: "gemini-3-flash-preview",
     postCount: 42,
   })
+  await put(`/api/v1/data/summaries/${OPEN_SUMMARY_ID}`, {
+    text: `# Weekly report\n\n${OPEN_SUMMARY_BODY}`,
+    timestamp: now,
+  })
+
+  await submit("/api/v1/data/chat-sessions", OPEN_CHAT_ID, ["alpha"])
   await put(`/api/v1/data/chat-sessions/${OPEN_CHAT_ID}`, {
-    channels: ["alpha"],
     timestamp: now - 1000,
     messages: [
       { role: "user", text: "what changed?" },
