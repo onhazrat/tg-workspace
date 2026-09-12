@@ -21,13 +21,20 @@ export const FEED_PAGE_SIZE = 20
  *
  * `ScopeContext` owns the timer — one for the whole application, so the "ago"
  * labels everywhere move together. This is the other half: it turns a tick into
- * an *invalidation* of the feed and counts. Invalidation rather than a new key
- * is the whole point, because the pages already loaded stay loaded and the
- * Account keeps their scroll.
+ * an *invalidation* of the post views. Invalidation rather than a new key is
+ * the whole point, because the pages already loaded stay loaded and the Account
+ * keeps their scroll.
  *
- * Call it from the surface that shows Posts, handing it that surface's refresh.
- * The refresh arrives as an argument rather than being read from `ScraperContext`
- * here so this can be tested against a spy and one provider.
+ * Call it from the surface that shows Posts, handing it that surface's refresh —
+ * `ScraperContext.invalidatePostViews`, which covers the feed, the counts and
+ * the Discover candidates, all three of which a moved window changes. The
+ * refresh arrives as an argument rather than being read from the context here
+ * so this can be tested against a spy and one provider.
+ *
+ * ponytail: an invalidation refetches every loaded page of the infinite feed,
+ * so a deeply scrolled tab costs one round trip per page per minute. Bound it
+ * with `maxPages` if that shows up in the edge log — it is a paging-semantics
+ * change, not a local one, so it is not made on spec.
  */
 export function useLiveWindowRefresh(refresh: () => void): void {
   const { liveTick } = useScope()

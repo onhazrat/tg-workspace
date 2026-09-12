@@ -288,12 +288,33 @@ describe("a Live window keeps up with the clock on its own", () => {
     })
   })
 
-  test("a Fixed window arms no timer at all", async () => {
+  test("a Fixed window keeps still, but its End gap keeps up", async () => {
     const clock = clockNearBoundary(150)
     const { result } = mount(clock.read)
 
     act(() => result.current.setMode("fixed"))
     act(() => clock.advance(150))
+    await act(() => settle(TICK_SETTLE))
+
+    // The boundaries are stored, so nothing moves them and nothing needs
+    // refetching — a Fixed window selects the same Posts however long you look.
+    expect(result.current.endDate).toBe(NOW)
+    expect(result.current.startDate).toBe(NOW - DAY_MS)
+    expect(result.current.liveTick).toBe(0)
+
+    // End gap is *derived* from the current minute, though. Freezing it would
+    // show `0m` on a page left open for three hours past a window that ended.
+    expect(result.current.endGapMs).toBe(MINUTE_MS)
+    expect(result.current.draftText("endGap")).toBe("1m")
+  })
+
+  test("a tick that finds the minute unmoved refreshes nothing", async () => {
+    const clock = clockNearBoundary(150)
+    const { result } = mount(clock.read)
+
+    // The clock never reaches the next minute. The timer still fires — it is
+    // counting this browser's milliseconds against a delay computed from the
+    // server's estimate — and re-arms for the remainder each time.
     await act(() => settle(TICK_SETTLE))
 
     expect(result.current.endDate).toBe(NOW)

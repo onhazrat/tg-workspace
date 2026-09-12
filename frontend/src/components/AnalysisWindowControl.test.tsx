@@ -134,6 +134,24 @@ describe("the shortcut row", () => {
     expect(screen.queryByRole("button", { name: "30d" })).toBeNull()
   })
 
+  test("it goes away when the field it belonged to loses focus", () => {
+    renderControl()
+    open()
+
+    act(() => {
+      fireEvent.focus(field("Duration"))
+    })
+    expect(screen.getByRole("button", { name: "30d" })).toBeTruthy()
+
+    // Clicking the mode switch blurs the input without focusing another one. A
+    // row left behind would apply to a field nothing on screen still points at.
+    act(() => {
+      fireEvent.blur(field("Duration"))
+    })
+
+    expect(screen.queryByRole("button", { name: "30d" })).toBeNull()
+  })
+
   test("zero is typeable but is not one of the shortcuts", () => {
     renderControl()
     open()

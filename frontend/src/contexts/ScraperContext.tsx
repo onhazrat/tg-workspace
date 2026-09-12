@@ -143,7 +143,7 @@ export const ScraperProvider: React.FC<{ children: React.ReactNode }> = ({
     setChannelStats,
     loadChannels,
   } = useData()
-  const { startDate, endDate } = useScope()
+  const { startDate, endDate, windowKey } = useScope()
   const { setIsRateLimited, activeTab, setActiveTab, summarizing } = useUI()
   const {
     proxyEnabled,
@@ -234,6 +234,7 @@ export const ScraperProvider: React.FC<{ children: React.ReactNode }> = ({
     selectedChannels,
     startDate,
     endDate,
+    windowKey,
     embeddingsEnabled,
     debouncedPostSearch,
     debouncedSemanticSearchQuery,

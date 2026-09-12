@@ -16,7 +16,15 @@ import { describe, expect, test } from "bun:test"
 import { renderHook } from "@testing-library/react"
 
 import { type PromptPostsDeps, usePromptPosts } from "@/hooks/usePromptPosts"
+import type { WindowState } from "@/lib/scope/window"
 import type { Post } from "@/types"
+
+/** One window identity, reused so a rerender is not a new window by accident. */
+const LIVE_WINDOW: WindowState = {
+  mode: "live",
+  durationMs: 8000,
+  endGapMs: 0,
+}
 
 function post(id: number): Post {
   return {
@@ -28,30 +36,46 @@ function post(id: number): Post {
   } as Post
 }
 
+/*
+ * Every default is a module constant rather than a fresh literal per call.
+ *
+ * `deps()` runs on every render, so a `new Set(...)` or an inline arrow here
+ * would be a new identity each time and would defeat the memo the AW-04 block
+ * below exists to check — the guard would fail against correct code and tell
+ * you nothing about the dependency it is guarding. The real providers hand
+ * these down from `useState`/`useCallback`, which is what this mirrors.
+ */
+const CHANNELS: PromptPostsDeps["channels"] = []
+const SELECTED = new Set(["alpha"])
+const VIEW_OPTIONS: PromptPostsDeps["postViewOptions"] = {
+  maxPostsPerChannel: 0,
+  maxPostsPerChannelMode: "latest",
+  postSortOrder: "time",
+}
+const NO_SEARCH: PromptPostsDeps["searchSimilarPosts"] = async () => {
+  throw new Error("searchSimilarPosts should not be called")
+}
+const NO_FEED: PromptPostsDeps["getPostsFeed"] = async () => {
+  throw new Error("getPostsFeed should not be called")
+}
+
 function deps(over: Partial<PromptPostsDeps> = {}): PromptPostsDeps {
   return {
-    channels: [],
-    selectedChannels: new Set(["alpha"]),
+    channels: CHANNELS,
+    selectedChannels: SELECTED,
     startDate: 1000,
     endDate: 9000,
+    windowKey: LIVE_WINDOW,
     embeddingsEnabled: false,
     debouncedPostSearch: "",
     debouncedSemanticSearchQuery: "",
     relatedPostSearch: null,
     forwardedFilter: "all",
     mediaFilter: "all",
-    postViewOptions: {
-      maxPostsPerChannel: 0,
-      maxPostsPerChannelMode: "latest",
-      postSortOrder: "time",
-    },
+    postViewOptions: VIEW_OPTIONS,
     semanticSearchRespectsChannels: false,
-    searchSimilarPosts: async () => {
-      throw new Error("searchSimilarPosts should not be called")
-    },
-    getPostsFeed: async () => {
-      throw new Error("getPostsFeed should not be called")
-    },
+    searchSimilarPosts: NO_SEARCH,
+    getPostsFeed: NO_FEED,
     ...over,
   }
 }
@@ -148,5 +172,64 @@ describe("getPromptPostsInput", () => {
 
     expect(input.scope?.keyword).toBe("crypto")
     expect(input.posts).toBeUndefined()
+  })
+})
+
+describe("getScopedPosts keeps its identity while the minute moves (AW-04)", () => {
+  /**
+   * A Live window resolves to a new `[start, end)` pair every minute. This
+   * callback used to be memoised on that pair, so its identity churned once a
+   * minute — and `usePostsView` and `useEntityFlow` hold it in effect
+   * dependencies. That re-ran the whole client vector path, in five mount
+   * points, every 60 seconds; and a transient failure on that path clears the
+   * Account's search rather than retrying it.
+   *
+   * So the memo is keyed on the *window*, and the boundaries are read when the
+   * call happens. Both halves matter: a stable identity that also captured
+   * stale boundaries would quietly keep fetching an older minute forever.
+   */
+  function renderWithDeps(initial: Partial<PromptPostsDeps>) {
+    return renderHook(
+      (over: Partial<PromptPostsDeps>) => usePromptPosts(deps(over)),
+      { initialProps: initial },
+    )
+  }
+
+  test("a new minute does not mint a new callback", () => {
+    const { result, rerender } = renderWithDeps({})
+    const first = result.current.getScopedPosts
+
+    // What a tick looks like from here: the same window, boundaries a minute on.
+    rerender({ startDate: 61_000, endDate: 69_000 })
+
+    expect(result.current.getScopedPosts).toBe(first)
+  })
+
+  test("a new window does", () => {
+    const { result, rerender } = renderWithDeps({})
+    const first = result.current.getScopedPosts
+
+    rerender({
+      windowKey: { mode: "live", durationMs: 3000, endGapMs: 0 },
+      startDate: 6000,
+      endDate: 9000,
+    })
+
+    expect(result.current.getScopedPosts).not.toBe(first)
+  })
+
+  test("the call still fetches the minute it happens in", async () => {
+    const asked: { startDate?: number; endDate?: number }[] = []
+    const feed = (async (params: { startDate?: number; endDate?: number }) => {
+      asked.push(params)
+      return []
+    }) as unknown as PromptPostsDeps["getPostsFeed"]
+
+    const { result, rerender } = renderWithDeps({ getPostsFeed: feed })
+    rerender({ getPostsFeed: feed, startDate: 61_000, endDate: 69_000 })
+    await result.current.getScopedPosts()
+
+    expect(asked.at(-1)?.startDate).toBe(61_000)
+    expect(asked.at(-1)?.endDate).toBe(69_000)
   })
 })

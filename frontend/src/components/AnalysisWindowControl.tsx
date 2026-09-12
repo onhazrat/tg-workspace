@@ -88,7 +88,16 @@ const WindowField: React.FC<WindowFieldProps> = ({
         placeholder={asInstant ? undefined : "1d 6h"}
         onChange={(event) => setDraft(field, event.target.value)}
         onFocus={() => onElapsedFocus(isElapsed ? field : null)}
-        onBlur={() => commitDraft(field)}
+        onBlur={() => {
+          commitDraft(field)
+          // And the row goes with the focus. Clicking the mode switch blurs
+          // this input without focusing another, and a row left armed behind it
+          // would apply to a field nothing on screen still points at — the
+          // exact ambiguity the row is rendered conditionally to avoid. A move
+          // to another field fires this before that field's `onFocus`, so the
+          // row simply changes hands.
+          onElapsedFocus(null)
+        }}
         onKeyDown={(event) => {
           if (event.key === "Enter") {
             event.preventDefault()

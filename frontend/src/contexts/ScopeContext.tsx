@@ -146,29 +146,52 @@ export const ScopeProvider: React.FC<{
   )
 
   /*
-   * The one timer that makes a Live window live (AW-04).
+   * The one timer that keeps the four fields honest, and the only thing that
+   * makes a Live window live (AW-04).
    *
    * It is here, and only here. Every surface that draws an "ago" reads
    * `minuteNow` from this context, so the labels across the application move
-   * together on one timer rather than each arming its own. What it must *not*
-   * do is move the query key: `windowKey` is what a Posts query is keyed on and
-   * a Live window's identity does not change on a tick, so the feed keeps the
-   * pages it has already loaded and `liveTick` refreshes them in place.
+   * together on one timer rather than each arming its own.
+   *
+   * It runs in **both** modes, because `minuteNow` is what a Fixed window's End
+   * gap is derived from: a page left open for three hours would otherwise show
+   * a Fixed gap of `0m` for a window that ended three hours ago. What is
+   * Live-only is `liveTick` — a Fixed window selects the same Posts however
+   * long you look at it, so there is nothing to refetch.
+   *
+   * What the timer must *not* do is move the query key. `windowKey` is what a
+   * Posts query is keyed on, a Live window's identity does not change on a
+   * tick, so the feed keeps the pages it has already loaded and `liveTick`
+   * refreshes them in place.
    *
    * The delay is measured against the server's instant rather than this
    * browser's, so a tick lands on the minute the server will resolve against.
-   * Fixed mode arms nothing: a window that does not move has nothing to
-   * refresh.
    */
-  useEffect(() => {
-    if (state.mode !== "live") return
+  const lastMinute = useRef(minuteNow)
 
+  useEffect(() => {
+    const live = state.mode === "live"
     let timer: ReturnType<typeof setTimeout> | undefined
     let stopped = false
 
-    const bump = () => {
-      setMinuteNow(readMinute())
-      setLiveTick((tick) => tick + 1)
+    /**
+     * `force` is a return to the tab, which refreshes whether or not the clock
+     * has moved — the Posts on the server have, and that is what the Account
+     * came back to see.
+     *
+     * A plain tick does not. `setTimeout` counts this browser's milliseconds
+     * while the delay was computed from the server's estimate, so a tick can
+     * land a few milliseconds inside the old minute; re-arming then fires it
+     * again immediately. Refetching on a minute that has not changed is a round
+     * trip for the same rows, multiplied by however many pages are loaded.
+     */
+    const bump = (force: boolean) => {
+      const minute = readMinute()
+      setMinuteNow(minute)
+      if (live && (force || minute !== lastMinute.current)) {
+        setLiveTick((tick) => tick + 1)
+      }
+      lastMinute.current = minute
     }
 
     const arm = () => {
@@ -181,7 +204,7 @@ export const ScopeProvider: React.FC<{
       const remaining =
         MINUTE_MS - (((now % MINUTE_MS) + MINUTE_MS) % MINUTE_MS)
       timer = setTimeout(() => {
-        bump()
+        bump(false)
         arm()
       }, remaining)
     }
@@ -197,7 +220,7 @@ export const ScopeProvider: React.FC<{
         timer = undefined
         return
       }
-      bump()
+      bump(true)
       arm()
     }
 
@@ -216,6 +239,10 @@ export const ScopeProvider: React.FC<{
     // fields are drawn against, so an edit never renders itself relative to a
     // minute that has already passed.
     setMinuteNow(minute)
+    // And the minute the next tick compares itself against, or a commit that
+    // moved the clock forward would leave the following tick looking like a
+    // change and firing a refetch the commit had already caused.
+    lastMinute.current = minute
     saveWindow(next)
   }, [])
 

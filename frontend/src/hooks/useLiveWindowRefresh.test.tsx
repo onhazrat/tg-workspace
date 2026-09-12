@@ -53,22 +53,27 @@ describe("a Live tick refreshes the Posts views", () => {
     expect(refresh).not.toHaveBeenCalled()
   })
 
-  test("a tick refreshes, and so does the one after it", async () => {
+  test("each minute refreshes once, and only once", async () => {
     const refresh = mock(() => {})
     const clock = nearBoundaryClock()
     mount(clock.read, refresh)
 
-    // A whole minute on, so the clock is 120 ms short of a boundary again and
-    // the tick after this one also lands inside the test.
+    // A whole minute on, so the clock lands 120 ms short of the *next* boundary
+    // and the tick after this one is also inside the test.
     act(() => clock.advance(MINUTE_MS))
+    await act(() => settle(400))
 
-    // Two separate waits, because `act` holds every update inside it until it
-    // resolves: a single long one would collapse ten ticks into one render and
-    // the assertion below would pass on an effect that only ever fires once.
-    await act(() => settle(250))
+    // One, not several. The timer re-arms for the few milliseconds it may have
+    // fired early, and those repeats find the minute unmoved — each of them
+    // would otherwise be a round trip for rows nothing has changed.
     expect(refresh).toHaveBeenCalledTimes(1)
 
-    await act(() => settle(250))
-    expect(refresh.mock.calls.length).toBeGreaterThanOrEqual(2)
+    // Separate waits, because `act` holds every update inside it until it
+    // resolves: one long wait would collapse both minutes into a single render
+    // and the assertion below would pass on an effect that only ever fires once.
+    act(() => clock.advance(MINUTE_MS))
+    await act(() => settle(400))
+
+    expect(refresh).toHaveBeenCalledTimes(2)
   })
 })
