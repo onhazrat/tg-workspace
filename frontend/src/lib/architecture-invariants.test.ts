@@ -491,3 +491,39 @@ describe("Ticket 17 — an artifact id is a UUID, never a timestamp", () => {
     expect(found.length).toBeGreaterThanOrEqual(4)
   })
 })
+
+describe("AW-04 — a Live tick invalidates the Posts key, never replaces it", () => {
+  /**
+   * A Live Analysis window resolves to a new `[start, end)` pair every minute.
+   * While those two numbers were part of `queryKeys.postsFeed`, making the
+   * window actually live meant a *new key* every minute: the infinite feed
+   * would remount at page one, whatever the Account had scrolled past would be
+   * gone, and a fresh cache entry would be minted per minute per filter
+   * combination. AW-03 refused to ship the timer for exactly this reason and
+   * left the note behind in `ScopeContext`.
+   *
+   * What makes the timer safe is that the key carries the window's *identity* —
+   * `windowKey`, the canonical Live or Fixed state — while the request still
+   * carries freshly resolved boundaries. That is the whole of what lets
+   * `liveTick` be an invalidation of the key the feed already has.
+   *
+   * No type can say this, and it is one careless autocomplete from coming back:
+   * `feedParams` is right there, spelled almost the same.
+   */
+  const POSTS_VIEW = "src/hooks/usePostsView.ts"
+  const KEY_CALL = /queryKeys\.posts(?:Feed|Counts)\([^\n]*/g
+
+  it("keys both Posts queries on the window, not on the minute it resolves to", () => {
+    const source = readFileSync(join(FRONTEND, POSTS_VIEW), "utf8")
+    const calls = [...source.matchAll(KEY_CALL)].map(([call]) => call)
+
+    // Both of them — the feed and the counts — or a tick refreshes half the
+    // screen and remints the other half.
+    expect(calls.length).toBe(2)
+    for (const call of calls) {
+      expect(call).toContain("window: windowKey")
+      expect(call).not.toContain("startDate")
+      expect(call).not.toContain("feedParams")
+    }
+  })
+})

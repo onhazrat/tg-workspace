@@ -1,5 +1,5 @@
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query"
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { toast } from "sonner"
 
 import { api } from "@/api"
@@ -15,6 +15,33 @@ import { useDebouncedValue } from "./useDebouncedValue"
 
 /** One page of the infinite Posts feed. */
 export const FEED_PAGE_SIZE = 20
+
+/**
+ * Refresh the Posts views when a Live window has moved (AW-04).
+ *
+ * `ScopeContext` owns the timer — one for the whole application, so the "ago"
+ * labels everywhere move together. This is the other half: it turns a tick into
+ * an *invalidation* of the feed and counts. Invalidation rather than a new key
+ * is the whole point, because the pages already loaded stay loaded and the
+ * Account keeps their scroll.
+ *
+ * Call it from the surface that shows Posts, handing it that surface's refresh.
+ * The refresh arrives as an argument rather than being read from `ScraperContext`
+ * here so this can be tested against a spy and one provider.
+ */
+export function useLiveWindowRefresh(refresh: () => void): void {
+  const { liveTick } = useScope()
+  // A tick is a *change*, so the value this mounted at is not one. Without
+  // this the first render would refetch a feed that has just been fetched, on
+  // every visit to the tab.
+  const seen = useRef(liveTick)
+
+  useEffect(() => {
+    if (seen.current === liveTick) return
+    seen.current = liveTick
+    refresh()
+  }, [liveTick, refresh])
+}
 
 function useSelectedChannelNames(): string[] {
   const { channels, selectedChannels } = useData()
@@ -36,7 +63,7 @@ function useSelectedChannelNames(): string[] {
  */
 export function useScopedPostCounts(): Record<string, number> {
   const { selectedChannels } = useData()
-  const { startDate, endDate } = useScope()
+  const { startDate, endDate, windowKey } = useScope()
   const {
     postSearch,
     forwardedFilter,
@@ -51,17 +78,18 @@ export function useScopedPostCounts(): Record<string, number> {
   const serverEligible =
     !semanticSearchQuery.trim() && selectedChannels.size > 0
 
-  const params = {
+  const filters = {
     channelNames: selectedChannelNames,
-    startDate,
-    endDate,
     keyword: debouncedPostSearch,
     forwarded: forwardedFilter,
     media: mediaFilter,
     maxPerChannel: maxPostsPerChannel,
   }
+  const params = { ...filters, startDate, endDate }
   const query = useQuery({
-    queryKey: queryKeys.postsCounts(params),
+    // Keyed on the window rather than the minute it currently resolves to —
+    // see `usePostsFeed`, which pays for this and says why.
+    queryKey: queryKeys.postsCounts({ ...filters, window: windowKey }),
     queryFn: () => api.getPostsCounts(params),
     enabled: serverEligible,
     staleTime: SUMMARIZER_STALE_TIME,
@@ -101,7 +129,7 @@ export interface PostsFeed {
  * refetches the first page; a completed sync invalidates it (see ScraperContext).
  */
 export function usePostsFeed(): PostsFeed {
-  const { startDate, endDate } = useScope()
+  const { startDate, endDate, windowKey } = useScope()
   const {
     postSearch,
     forwardedFilter,
@@ -123,10 +151,8 @@ export function usePostsFeed(): PostsFeed {
   const semanticActive =
     embeddingsEnabled && (!!relatedPostSearch || !!debouncedSemantic.trim())
 
-  const feedParams: PostFeedQuery = {
+  const filters = {
     channelNames: selectedChannelNames,
-    startDate,
-    endDate,
     keyword: debouncedPostSearch,
     forwarded: forwardedFilter,
     media: mediaFilter,
@@ -135,9 +161,24 @@ export function usePostsFeed(): PostsFeed {
     sort: postSortOrder,
     seed: 0,
   }
+  const feedParams: PostFeedQuery = { ...filters, startDate, endDate }
 
   const infinite = useInfiniteQuery({
-    queryKey: queryKeys.postsFeed(feedParams),
+    /*
+     * Keyed on the *window*, not the boundaries it currently resolves to.
+     *
+     * A Live window resolves to a new pair every minute (AW-04). A key built
+     * from that pair would be a different key every minute: the infinite query
+     * would remount at page one, whatever the Account had scrolled past would
+     * be gone, and a fresh cache entry would be minted per minute per filter
+     * combination. The window's *identity* — 24 hours ending at the current
+     * minute — does not change on a tick, so the key does not either, and
+     * `liveTick` refreshes the pages that are already loaded.
+     *
+     * `feedParams` still carries fresh boundaries: the query function is read
+     * from the latest render, so a refetch asks for the minute it happens in.
+     */
+    queryKey: queryKeys.postsFeed({ ...filters, window: windowKey }),
     queryFn: ({ pageParam }) =>
       api.getPostsFeed({
         ...feedParams,

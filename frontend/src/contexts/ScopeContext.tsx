@@ -25,7 +25,7 @@ import {
   useRef,
   useState,
 } from "react"
-import { serverMinuteStart } from "@/lib/analysis-window"
+import { floorToMinute, MINUTE_MS, serverNow } from "@/lib/analysis-window"
 import {
   applyField,
   fieldText,
@@ -55,6 +55,23 @@ export interface ScopeContextType {
   endGapMs: number
   /** The minute every derived value is resolved against. */
   minuteNow: number
+  /**
+   * The canonical window — what Live and Fixed each *are*, not what they
+   * currently resolve to.
+   *
+   * This is what a server-backed Posts query is keyed on. A Live window's
+   * boundaries move every minute; its identity does not, so keying on this
+   * keeps the infinite feed's loaded pages across a tick and lets
+   * {@link ScopeContextType.liveTick} refresh them in place.
+   */
+  windowKey: WindowState
+  /**
+   * Bumped whenever a Live window has moved and what it selects may have
+   * changed: each synchronised minute boundary, and on regaining focus.
+   *
+   * Never bumped in Fixed mode, because a Fixed window does not move.
+   */
+  liveTick: number
   /** `Live · 1d 10h ago → 30m ago (1d 9h 30m)`. */
   summary: string
 
@@ -89,36 +106,31 @@ type Drafts = Partial<Record<ScopeField, string>>
 export const ScopeProvider: React.FC<{
   children: ReactNode
   /**
-   * The current minute, injected. Defaults to the server's, estimated — never
-   * this browser's own, so a skewed laptop cannot change what a window means.
-   * Tests pass a fake one and drive time by hand.
+   * The current *instant*, injected. Defaults to the server's, estimated —
+   * never this browser's own, so a skewed laptop cannot change what a window
+   * means. Tests pass a fake one and drive time by hand.
+   *
+   * An instant rather than the minute it falls in, because the live timer has
+   * to land on the boundary: how long the current minute has left is
+   * `MINUTE_MS - (now % MINUTE_MS)`, and a clock that has already floored
+   * cannot answer it. Everything else here floors on the way in.
    */
   clock?: () => number
-}> = ({ children, clock = serverMinuteStart }) => {
+}> = ({ children, clock = serverNow }) => {
   const clockRef = useRef(clock)
   clockRef.current = clock
 
-  const [minuteNow, setMinuteNow] = useState(() => clock())
-  const [state, setState] = useState<WindowState>(() => loadWindow(clock()))
+  const readMinute = useCallback(() => floorToMinute(clockRef.current()), [])
+
+  const [minuteNow, setMinuteNow] = useState(() => floorToMinute(clock()))
+  const [liveTick, setLiveTick] = useState(0)
+  const [state, setState] = useState<WindowState>(() =>
+    loadWindow(floorToMinute(clock())),
+  )
   const [drafts, setDrafts] = useState<Drafts>({})
   const [errors, setErrors] = useState<Drafts>({})
   const timers = useRef(new Map<ScopeField, ReturnType<typeof setTimeout>>())
   const draftsRef = useRef<Drafts>({})
-
-  /*
-   * There is deliberately no timer here.
-   *
-   * A Live window's boundaries are what `queryKeys.postsFeed` and
-   * `postsCounts` are built from, so re-resolving the minute on a tick does not
-   * refresh the feed — it *remints the key*. The infinite query remounts at
-   * page one, whatever the Account had scrolled past is gone, and a fresh cache
-   * entry is minted every minute for every filter combination.
-   *
-   * Making a Live window move is AW-04's ticket, and the mechanism it needs is
-   * invalidation of the key the feed already has, not a new one. The minute is
-   * therefore re-read at mount and at each commit, which keeps the four fields
-   * truthful the moment anybody acts on them, and left alone in between.
-   */
 
   useEffect(() => {
     const pending = timers.current
@@ -132,6 +144,71 @@ export const ScopeProvider: React.FC<{
     () => resolveWindow(state, minuteNow),
     [state, minuteNow],
   )
+
+  /*
+   * The one timer that makes a Live window live (AW-04).
+   *
+   * It is here, and only here. Every surface that draws an "ago" reads
+   * `minuteNow` from this context, so the labels across the application move
+   * together on one timer rather than each arming its own. What it must *not*
+   * do is move the query key: `windowKey` is what a Posts query is keyed on and
+   * a Live window's identity does not change on a tick, so the feed keeps the
+   * pages it has already loaded and `liveTick` refreshes them in place.
+   *
+   * The delay is measured against the server's instant rather than this
+   * browser's, so a tick lands on the minute the server will resolve against.
+   * Fixed mode arms nothing: a window that does not move has nothing to
+   * refresh.
+   */
+  useEffect(() => {
+    if (state.mode !== "live") return
+
+    let timer: ReturnType<typeof setTimeout> | undefined
+    let stopped = false
+
+    const bump = () => {
+      setMinuteNow(readMinute())
+      setLiveTick((tick) => tick + 1)
+    }
+
+    const arm = () => {
+      clearTimeout(timer)
+      timer = undefined
+      // Suspended while the tab is hidden: nobody is reading the labels and
+      // nothing is on screen to refresh. Coming back is what catches it up.
+      if (stopped || document.hidden) return
+      const now = clockRef.current()
+      const remaining =
+        MINUTE_MS - (((now % MINUTE_MS) + MINUTE_MS) % MINUTE_MS)
+      timer = setTimeout(() => {
+        bump()
+        arm()
+      }, remaining)
+    }
+
+    // `main.tsx` re-reads the server clock on this same event, so by the time a
+    // later tick is armed the offset is the fresh one. This half does not wait
+    // for that round trip: a tab that has been away for an hour is stale the
+    // moment it comes back, and a refresh that waits on a fetch is a refresh
+    // somebody watches happen.
+    const onVisibility = () => {
+      if (document.hidden) {
+        clearTimeout(timer)
+        timer = undefined
+        return
+      }
+      bump()
+      arm()
+    }
+
+    arm()
+    document.addEventListener("visibilitychange", onVisibility)
+    return () => {
+      stopped = true
+      clearTimeout(timer)
+      document.removeEventListener("visibilitychange", onVisibility)
+    }
+  }, [state.mode, readMinute])
 
   const commit = useCallback((next: WindowState, minute: number) => {
     setState(next)
@@ -175,7 +252,7 @@ export const ScopeProvider: React.FC<{
 
   const attempt = useCallback(
     (field: ScopeField, text: string) => {
-      const minute = clockRef.current()
+      const minute = readMinute()
       const current = stateRef.current
       const parsed = parseField(current.mode, minute, field, text)
       if (!parsed.ok) {
@@ -190,12 +267,12 @@ export const ScopeProvider: React.FC<{
       commit(applied.state, minute)
       clearDraft(field)
     },
-    [commit, clearDraft],
+    [commit, clearDraft, readMinute],
   )
 
   const applyValue = useCallback(
     (field: ScopeField, value: number) => {
-      const minute = clockRef.current()
+      const minute = readMinute()
       const applied = applyField(stateRef.current, minute, field, value)
       if (!applied.ok) {
         // Into the field's own error, not only the return value: a refusal has
@@ -208,7 +285,7 @@ export const ScopeProvider: React.FC<{
       clearDraft(field)
       return null
     },
-    [commit, clearDraft],
+    [commit, clearDraft, readMinute],
   )
 
   const setDraft = useCallback(
@@ -266,14 +343,16 @@ export const ScopeProvider: React.FC<{
       durationMs: resolved.durationMs,
       endGapMs: resolved.endGapMs,
       minuteNow,
+      windowKey: state,
+      liveTick,
       summary: formatWindowSummary(resolved, minuteNow),
       // A mode change commits immediately and moves none of the four values.
       setMode: (next) => {
-        const minute = clockRef.current()
+        const minute = readMinute()
         commit(switchMode(stateRef.current, minute, next), minute)
       },
       setFixedRange: (start, end) => {
-        const minute = clockRef.current()
+        const minute = readMinute()
         commit(fixedRange(start, end, minute), minute)
       },
       applyValue,
@@ -286,7 +365,10 @@ export const ScopeProvider: React.FC<{
     [
       resolved,
       minuteNow,
+      state,
+      liveTick,
       errors,
+      readMinute,
       commit,
       applyValue,
       draftText,

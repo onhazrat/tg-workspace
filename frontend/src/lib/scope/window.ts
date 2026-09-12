@@ -492,3 +492,31 @@ export function retireLegacyWindow(state: WindowState): void {
 export function saveWindow(state: WindowState): void {
   scopedStorage.setItem(WINDOW_STORAGE_KEY, JSON.stringify(state))
 }
+
+/* ------------------------------------------------------------------ */
+/* The shortcut row                                                    */
+/* ------------------------------------------------------------------ */
+
+/**
+ * One vocabulary for both elapsed fields (AW-04).
+ *
+ * Duration and End gap share it because they are the same kind of number, and
+ * a person who has learned the row on one field has learned it on the other.
+ * The tokens are exactly what {@link parseElapsed} accepts, so a shortcut and a
+ * typed value are the same act.
+ *
+ * Zero is absent deliberately. A zero End gap is valid and typeable — it is how
+ * a Live window ends at the current minute — but promoting it to a shortcut
+ * would advertise an edge value beside seven ordinary ones, and it is not a
+ * Duration at all.
+ */
+export const ELAPSED_PRESETS = [
+  "1m",
+  "30m",
+  "1h",
+  "3h",
+  "8h",
+  "24h",
+  "7d",
+  "30d",
+] as const

@@ -3,7 +3,11 @@ import { motion } from "motion/react"
 import type React from "react"
 import { useEffect } from "react"
 import { TgHeroEmptyState } from "@/components/ui/tg-segmented"
-import { usePostsFeed, useScopedPostCounts } from "@/hooks/usePostsView"
+import {
+  useLiveWindowRefresh,
+  usePostsFeed,
+  useScopedPostCounts,
+} from "@/hooks/usePostsView"
 import { useScraper } from "../contexts/ScraperContext"
 import { PostCard } from "./PostCard"
 import { PostFilter } from "./PostFilter"
@@ -21,12 +25,21 @@ export const PostFeed: React.FC<PostFeedProps> = ({
   setPostSearch,
   loadMoreRef,
 }) => {
-  const { maxPostsPerChannel, maxPostsPerChannelMode, postSortOrder } =
-    useScraper()
+  const {
+    maxPostsPerChannel,
+    maxPostsPerChannelMode,
+    postSortOrder,
+    invalidatePostViews,
+  } = useScraper()
   const { posts, isInitialLoading, hasMore, loadMore, isLoadingMore } =
     usePostsFeed()
   const counts = useScopedPostCounts()
   const totalInScope = Object.values(counts).reduce((sum, n) => sum + n, 0)
+
+  // Posts is the surface a Live window is watched on, so it is the surface that
+  // refreshes on the minute. Mounted here rather than in the feed hook so the
+  // count above refreshes with it (AW-04).
+  useLiveWindowRefresh(invalidatePostViews)
 
   const subtitleParts = [`${totalInScope} posts in range`]
   if (maxPostsPerChannel > 0) {

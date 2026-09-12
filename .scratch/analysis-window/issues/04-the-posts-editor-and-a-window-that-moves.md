@@ -7,7 +7,7 @@ editor, and a visible Live view keeps up with the clock on its own.
 
 **Blocked by:** AW-03
 
-**Status:** ready-for-agent
+**Status:** done
 
 ## The rule this ticket makes true
 
@@ -16,18 +16,18 @@ compactly and none of them implements a competing editor or a second feed timer.
 
 ## Acceptance criteria
 
-- [ ] Posts shows a persistent summary trigger carrying mode, boundaries and Duration, relative in Live and exact local in Fixed.
-- [ ] The trigger opens one four-field editor: an anchored popover on desktop, a bottom sheet on mobile.
-- [ ] Start and End use relative input and output in Live and exact local date-time input and output in Fixed; Duration and End gap always use elapsed time; Duration is always visible.
-- [ ] Focusing Duration or End gap shows the same shortcut row — `1m`, `30m`, `1h`, `3h`, `8h`, `24h`, `7d`, `30d` — applying to the focused field. Zero is typeable but is not a shortcut.
-- [ ] Presets and mode changes commit immediately; a Duration preset preserves the current End gap.
-- [ ] The editor stays open after a valid change so nearby windows can be compared.
-- [ ] The trigger, an outside click and Escape all close it; keyboard closure returns focus to the trigger.
-- [ ] Focus is contained while the mobile sheet is open, every field has a programmatic label, and inline errors are associated with their field and announced.
-- [ ] While Posts is visible in Live mode, one foreground timer invalidates the feed and counts at the next synchronized minute boundary and every minute after.
-- [ ] The timer is suspended while the document is hidden; regaining focus resynchronizes the clock and invalidates immediately.
-- [ ] Completion of a Sync invalidates the current Live feed and counts.
-- [ ] Other surfaces update their relative labels from the same derived minute without creating duplicate feed timers.
+- [x] Posts shows a persistent summary trigger carrying mode, boundaries and Duration, relative in Live and exact local in Fixed.
+- [x] The trigger opens one four-field editor: an anchored popover on desktop, a bottom sheet on mobile.
+- [x] Start and End use relative input and output in Live and exact local date-time input and output in Fixed; Duration and End gap always use elapsed time; Duration is always visible.
+- [x] Focusing Duration or End gap shows the same shortcut row — `1m`, `30m`, `1h`, `3h`, `8h`, `24h`, `7d`, `30d` — applying to the focused field. Zero is typeable but is not a shortcut.
+- [x] Presets and mode changes commit immediately; a Duration preset preserves the current End gap.
+- [x] The editor stays open after a valid change so nearby windows can be compared.
+- [x] The trigger, an outside click and Escape all close it; keyboard closure returns focus to the trigger.
+- [x] Focus is contained while the mobile sheet is open, every field has a programmatic label, and inline errors are associated with their field and announced.
+- [x] While Posts is visible in Live mode, one foreground timer invalidates the feed and counts at the next synchronized minute boundary and every minute after.
+- [x] The timer is suspended while the document is hidden; regaining focus resynchronizes the clock and invalidates immediately.
+- [x] Completion of a Sync invalidates the current Live feed and counts.
+- [x] Other surfaces update their relative labels from the same derived minute without creating duplicate feed timers.
 
 ## Notes
 

@@ -53,6 +53,15 @@ interface ScraperContextType {
   /** Refresh the server-backed post views (feed / counts / Discover). */
   handleFilterPosts: () => Promise<void>
   /**
+   * The same refresh, without the command-palette shape.
+   *
+   * `handleFilterPosts` is what a command or an "apply" button calls and is
+   * async because those callers await it. The Live-window timer (AW-04) is
+   * neither: it refreshes on a clock, has nothing to await, and reads better
+   * saying what it does.
+   */
+  invalidatePostViews: () => void
+  /**
    * Fetch the current scope's filtered posts on demand — the set the Posts
    * view holds for the same inputs — without writing state. Consumers that
    * only need posts at action time (summary/chat/tag/pickers) call this.
@@ -565,6 +574,7 @@ export const ScraperProvider: React.FC<{ children: React.ReactNode }> = ({
         scrapingChannels,
         setScrapingChannels,
         handleFilterPosts,
+        invalidatePostViews,
         getScopedPosts,
         getPromptPostsInput,
         handleScrapeChannel,
