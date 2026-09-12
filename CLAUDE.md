@@ -6,11 +6,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Self-hosted Telegram channel summarizer, migrated from a standalone app (`TG-Summarizer/`, a parity reference, may be absent from some clones) into a FastAPI + React monorepo. See `README.md` and `development.md` for the full operator/setup guide; `docs/migration/` holds the ADRs and locked decisions (`DECISIONS.md`).
 
-This file is an **index of invariants**, not an explanation of them. Every rule
-below is a claim plus the test that enforces it; the argument for a rule lives in
-that test's docstring and in the module it guards.
-`docs/agents/architecture-rationale.md` archives the long-form reasoning, and it
-is kept short here on purpose, because every byte is loaded into every session.
+This is an **index of invariants**: every rule names its guard. Reasoning lives
+there; history is in `docs/agents/architecture-rationale.md`. Every session
+loads this file.
 
 ## Layout
 
@@ -184,6 +182,7 @@ not the summary.** Open the file for the full list of what it checks and why.
 | `backend/tests/services/test_tenancy_seam.py` | every table is classified or excused with a reason; scoping is byte-identical while the flag is off; the flag has exactly one reader | test |
 | `backend/tests/api/test_account_isolation.py` | **all 138 mounted operations are probed with two live accounts or excused with a typed reason, and a `PROBED` entry no request exercises fails**; a foreign row is 404 with that family's own detail on read, write and delete; turning the flag off reopens cross-account reads | test |
 | `backend/tests/deployment/test_env_example_matches_defaults.py` | `.env.example` ships `config.py`'s value for every boolean **and every integer**, or names the divergence | test |
+| `backend/tests/deployment/test_ci_path_filters.py` | docs-only main pushes skip Playwright shards and staging deploys; a broken Playwright classifier cannot report green | test |
 | `backend/tests/services/test_artifact_tenancy_scoping.py` | all four artifact families and the History scope by owner, per leg, with that family's own 404 detail; writes and deletes refuse a foreign row **even while the flag is off** | test |
 | `backend/tests/services/test_post_tenancy_scoping.py` | the feed, lookup, counts and Discover scope in **both** query shapes; the followed-channel set is scoped too; probes stay corpus and say why | test |
 | `backend/tests/services/test_sync_log_channel_telemetry.py` | a second Follower sees telemetry the first produced; search and `searchInDetails` stay inside the Follow; the row stores no owner even when handed one | test |

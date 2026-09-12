@@ -4,6 +4,20 @@ on:
   push:
     branches:
       - main
+    # Only these files can change what `docker compose -f compose.yml` builds
+    # or starts. Planning and other documentation commits do not redeploy the
+    # same application revision to the self-hosted staging runner.
+    paths:
+      - ".dockerignore"
+      - ".github/workflows/deploy-staging.yml"
+      - "backend/**"
+      - "bun.lock"
+      - "compose.yml"
+      - "frontend/**"
+      - "package.json"
+      - "pyproject.toml"
+      - "scripts/postgres-init/**"
+      - "uv.lock"
   # Deploying the current `main` on demand, without inventing a commit to push.
   # Added 2026-08-26, when a critical Actions incident (throttled inbound work,
   # 15:11Z onward) stopped creating runs for pushes to `main` while leaving
