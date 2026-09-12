@@ -47,6 +47,15 @@ export function configureGeneratedClient(): void {
   })
 
   client.interceptors.error.use((error: unknown, response: Response) => {
+    // Already ours, so leave it alone. `@hey-api/client-fetch` runs every
+    // registered error interceptor in turn and feeds each one the previous
+    // one's return value, so a second registration would otherwise wrap an
+    // `ApiError` in another `ApiError` — and `message` would become the JSON of
+    // the first instead of the server's `detail`. `configureGeneratedClient()`
+    // runs once in `main.tsx`, so this is not reachable in the app; it is
+    // reachable from any test that configures per case, which is exactly where
+    // the nesting was found.
+    if (error instanceof ApiError) return error
     const detail = errorDetail(error, response)
     handleAuthError(response.status, detail)
     return new ApiError(response.status, detail, error)
