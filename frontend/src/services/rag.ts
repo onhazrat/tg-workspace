@@ -20,9 +20,9 @@ export { getPostEmbeddingText } from "@/lib/posts/post-media"
 export async function searchSimilarPostsFromQuery(
   query: string,
   limit: number = 10,
-  channels?: string[],
-  startDate?: number,
-  endDate?: number,
+  channels: string[] | undefined,
+  startDate: number,
+  endDate: number,
 ): Promise<Post[]> {
   const result = (await api.ragSearch({
     query,

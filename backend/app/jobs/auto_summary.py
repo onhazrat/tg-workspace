@@ -27,6 +27,7 @@ from app.services.network_settings import (
     resolve_proxies,
     resolve_proxy_concurrency,
 )
+from app.services.post_filters import apply_analysis_window
 from app.services.publish import publish_summary_text
 from app.services.scraper_jobs import create_job, has_active_sync_job
 from app.services.summaries import apply_summary_payload
@@ -380,15 +381,18 @@ async def _regenerate_one(
 
     await _sync_channels_for_summary(session, summary.channels or [], new_end, owner_id)
 
+    # The successor window opens exactly where its predecessor closed, so this
+    # is the read the half-open rule exists for: an inclusive end summarised
+    # the Post on the shared millisecond twice, once in each Summary (AW-01).
     posts = session.exec(
-        select(Post)
-        .where(
-            col(Post.channel_name).in_(summary.channels or []),
-            col(Post.timestamp) >= new_start,
-            col(Post.timestamp) <= new_end,
-            col(Post.is_anchor) == False,  # noqa: E712
-        )
-        .order_by(col(Post.timestamp).desc())
+        apply_analysis_window(
+            select(Post).where(
+                col(Post.channel_name).in_(summary.channels or []),
+                col(Post.is_anchor) == False,  # noqa: E712
+            ),
+            new_start,
+            new_end,
+        ).order_by(col(Post.timestamp).desc())
     ).all()
 
     if not posts:
@@ -453,7 +457,6 @@ async def _regenerate_one(
         "metadataText": extra.get("metadataText"),
         "postSearch": extra.get("postSearch"),
         "semanticSearchQuery": extra.get("semanticSearchQuery"),
-        "semanticSearchRespectsTimeRange": extra.get("semanticSearchRespectsTimeRange"),
         "semanticSearchRespectsChannels": extra.get("semanticSearchRespectsChannels"),
         "postCount": len(posts),
     }
@@ -623,10 +626,17 @@ async def _auto_publish(
 #: Clearing by *not inheriting* rather than by assigning `None`: `extra` is an
 #: open bag whose keys are absent or present, and an explicit null would travel
 #: to the client as a field the schema never declared.
+#:
+#: `semanticSearchRespectsTimeRange` is a retired key (AW-01), and it is here
+#: rather than simply deleted from the list below because the spread is what
+#: carries it: an unattended chain copies its predecessor's bag forward every
+#: night, so a flag nothing sets any more would keep minting rows on Summaries
+#: created long after the control that wrote it was removed.
 _NOT_INHERITED = (
     "autoRegenerate",
     "autoRegenerateFailures",
     "autoRegenerateRetryAfter",
+    "semanticSearchRespectsTimeRange",
 )
 
 

@@ -45,7 +45,6 @@ function deps(over: Partial<PromptPostsDeps> = {}): PromptPostsDeps {
       maxPostsPerChannelMode: "latest",
       postSortOrder: "time",
     },
-    semanticSearchRespectsTimeRange: false,
     semanticSearchRespectsChannels: false,
     searchSimilarPosts: async () => {
       throw new Error("searchSimilarPosts should not be called")

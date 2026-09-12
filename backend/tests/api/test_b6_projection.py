@@ -113,7 +113,14 @@ def test_rag_search_empty_scope_matches_the_populated_shape(
         pytest.skip("live Gemini call; sync TestClient hits event-loop issues")
     r = client.post(
         f"{V1}/rag/search",
-        json={"query": "anything", "channels": ["no-such-channel"]},
+        # The window is required since AW-01; without one pydantic answers 422
+        # and this never reaches the empty-scope branch it exists to pin.
+        json={
+            "query": "anything",
+            "channels": ["no-such-channel"],
+            "startDate": 0,
+            "endDate": 1,
+        },
         headers=_auth(client),
     )
     assert r.status_code == 503

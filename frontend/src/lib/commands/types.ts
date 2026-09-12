@@ -163,7 +163,6 @@ export interface CommandContext {
   postSearch: string
   setPostSearch: (query: string) => void
   setSemanticSearchQuery: (query: string) => void
-  setSemanticSearchRespectsTimeRange: (value: boolean) => void
   setSemanticSearchRespectsChannels: (value: boolean) => void
   setRelatedPostSearch: (post: Post | null) => void
   handleFilterPosts: (searchText?: string) => Promise<void>

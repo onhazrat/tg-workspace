@@ -137,7 +137,6 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({
     scrapeChannelsInParallel,
     postSearch,
     semanticSearchQuery,
-    semanticSearchRespectsTimeRange,
     semanticSearchRespectsChannels,
     handleFilterPosts,
     getPromptPostsInput,
@@ -298,7 +297,6 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({
           sendMetadata: true,
           postSearch: postSearch || undefined,
           semanticSearchQuery: semanticSearchQuery || undefined,
-          semanticSearchRespectsTimeRange,
           semanticSearchRespectsChannels,
           citedPosts,
         }
@@ -381,7 +379,6 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({
         sendMetadata: true,
         postSearch: postSearch || undefined,
         semanticSearchQuery: semanticSearchQuery || undefined,
-        semanticSearchRespectsTimeRange,
         semanticSearchRespectsChannels,
         status: "pending",
         promptText: prompt,
@@ -595,7 +592,6 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({
         sendMetadata: s.sendMetadata !== undefined ? s.sendMetadata : true,
         postSearch: s.postSearch,
         semanticSearchQuery: s.semanticSearchQuery,
-        semanticSearchRespectsTimeRange: s.semanticSearchRespectsTimeRange,
         semanticSearchRespectsChannels: s.semanticSearchRespectsChannels,
         citedPosts,
       }

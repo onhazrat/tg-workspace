@@ -184,3 +184,46 @@ def apply_post_filters(
     for clause in post_filter_clauses(filters, followed_names=followed_names):
         stmt = stmt.where(clause)
     return stmt
+
+
+def analysis_window_clauses(
+    start_date: int | None, end_date: int | None
+) -> list[ColumnElement[bool]]:
+    """The Analysis window as SQL: `start_date <= timestamp < end_date` (AW-01).
+
+    **Half-open, and the exclusive end is the whole point.** Two adjacent
+    windows must meet without sharing a Post, or dividing a period
+    double-counts its boundary. `jobs/auto_summary.py` is where that was not
+    academic: a regenerated Summary starts at exactly the previous one's
+    `end_date`, so an inclusive end put any Post landing on that millisecond
+    into both Summaries.
+
+    It is also what lets a displayed minute mean something exact. A Fixed End
+    shown as 02:00 is the instant 02:00:00.000 and is excluded, rather than
+    silently meaning "02:00 and the rest of that minute" (ADR-018).
+
+    This is the only place in `app/` where the comparison is written. It used
+    to exist as five independent copies — the feed, the counts, Discover,
+    semantic search and auto-regeneration — every one of them inclusive, and
+    fixing any one of them alone would have left the same Scope meaning
+    different things on different paths. The boundary suite runs one fixture
+    through all five, and its companion guard fails any new comparison written
+    elsewhere; both live in `tests/services/`.
+
+    Either bound may be `None`, which is that side left open.
+    """
+    clauses: list[ColumnElement[bool]] = []
+    if start_date is not None:
+        clauses.append(col(Post.timestamp) >= start_date)
+    if end_date is not None:
+        clauses.append(col(Post.timestamp) < end_date)
+    return clauses
+
+
+def apply_analysis_window(
+    stmt: Any, start_date: int | None, end_date: int | None
+) -> Any:
+    """Return `stmt` narrowed to the Analysis window."""
+    for clause in analysis_window_clauses(start_date, end_date):
+        stmt = stmt.where(clause)
+    return stmt

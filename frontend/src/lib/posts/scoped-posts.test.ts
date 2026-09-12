@@ -68,7 +68,6 @@ function baseDeps(overrides: Partial<ScopedPostsDeps> = {}): ScopedPostsDeps {
     mediaFilter: "all",
     channels,
     postViewOptions: view,
-    semanticSearchRespectsTimeRange: false,
     semanticSearchRespectsChannels: false,
     searchSimilarPosts: async () => {
       throw new Error("searchSimilarPosts should not be called")
@@ -159,7 +158,6 @@ describe("computeScopedPosts", () => {
       embeddingsEnabled: true,
       semanticQuery: "  crypto  ",
       forwardedFilter: "original",
-      semanticSearchRespectsTimeRange: true,
       semanticSearchRespectsChannels: true,
       searchSimilarPosts: async (_q, limit, options) => {
         capturedLimit = limit
@@ -186,7 +184,13 @@ describe("computeScopedPosts", () => {
     )
   })
 
-  test("semantic path: respects-flags off omit RAG scoping options", async () => {
+  test("semantic path: the window is sent even when channels are not", async () => {
+    /**
+     * The channel scoping is still optional; the Analysis window is not
+     * (AW-01). This test used to assert the opposite — that both bounds were
+     * omitted — which was the control that let one Posts path mean all time
+     * while the rest of Scope meant a window.
+     */
     let capturedOptions: unknown
     const deps = baseDeps({
       embeddingsEnabled: true,
@@ -200,8 +204,8 @@ describe("computeScopedPosts", () => {
     await computeScopedPosts(deps)
 
     expect(capturedOptions).toEqual({
-      startDate: undefined,
-      endDate: undefined,
+      startDate: 1000,
+      endDate: 9000,
       channels: undefined,
     })
   })
@@ -214,11 +218,13 @@ describe("computeScopedPosts", () => {
       makePost("beta", 2, 300),
     ]
     let capturedLimit: number | undefined
+    let capturedOptions: unknown
     const deps = baseDeps({
       embeddingsEnabled: true,
       relatedPostSearch: seed,
-      searchSimilarPosts: async (_q, limit) => {
+      searchSimilarPosts: async (_q, limit, options) => {
         capturedLimit = limit
+        capturedOptions = options
         return ragResults
       },
     })
@@ -226,6 +232,10 @@ describe("computeScopedPosts", () => {
     const result = await computeScopedPosts(deps)
 
     expect(capturedLimit).toBe(50)
+    // "More like this" passed no options at all before AW-01, so it searched
+    // every Post ever — the same defect as the removed ignore-window control,
+    // with nothing on screen admitting to it.
+    expect(capturedOptions).toEqual({ startDate: 1000, endDate: 9000 })
     const expected = ragResults.filter(
       (p) => p.id !== seed.id || p.channelName !== seed.channelName,
     )

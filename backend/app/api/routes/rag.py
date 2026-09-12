@@ -4,7 +4,7 @@ from typing import Any
 
 import numpy as np
 from fastapi import APIRouter, HTTPException
-from sqlalchemy import and_, or_
+from sqlalchemy import and_, or_, true
 from sqlmodel import col, select
 
 from app.ai.registry import get_provider
@@ -21,6 +21,7 @@ from app.schemas.rag import (
 from app.services.ai_keys import Purpose, resolve_ai_key
 from app.services.channels import channel_names_for_user
 from app.services.embeddings import backfill_embeddings, get_embedding_status
+from app.services.post_filters import analysis_window_clauses
 from app.services.serialization import post_to_camel
 
 router = APIRouter(prefix="/rag", tags=["rag"])
@@ -115,13 +116,20 @@ async def rag_search(
     # The join is an outer join and the date predicate tolerates a missing
     # post, preserving the previous behaviour where an embedding whose post
     # row is absent is still scored and returned.
-    date_ok: list[Any] = [col(Post.post_id).is_(None)]
-    in_range: list[Any] = []
-    if body.start_date is not None:
-        in_range.append(col(Post.timestamp) >= body.start_date)
-    if body.end_date is not None:
-        in_range.append(col(Post.timestamp) <= body.end_date)
-    date_ok.append(and_(*in_range) if in_range else col(Post.post_id).isnot(None))
+    #
+    # The window itself is the shared half-open one (AW-01), and both bounds
+    # are required on this route, so a Semantic search cannot be the one Posts
+    # path that quietly means all time.
+    #
+    # `true()` rather than a bare `and_(*clauses)`: the helper permits an open
+    # side, and `and_()` with nothing in it is deprecated in SQLAlchemy and due
+    # to be disallowed. Unreachable while the schema requires both bounds —
+    # which is exactly why it is worth closing here, since loosening that
+    # schema is the change that would walk into it.
+    date_ok: list[Any] = [
+        col(Post.post_id).is_(None),
+        and_(true(), *analysis_window_clauses(body.start_date, body.end_date)),
+    ]
 
     stmt = (
         select(PostEmbedding, Post)

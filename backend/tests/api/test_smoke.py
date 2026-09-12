@@ -115,8 +115,13 @@ def test_rag_search() -> None:
         pytest.skip(
             "Live Gemini RAG is verified against a running server; sync TestClient hits event-loop issues"
         )
+    # The window is required since AW-01, and pydantic rejects a body without
+    # one *before* the handler can answer 503. The bounds are arbitrary: what
+    # this test is about is the missing credential, so they only have to exist.
     r = client.post(
-        "/api/v1/rag/search", json={"query": "test"}, headers=_auth_headers()
+        "/api/v1/rag/search",
+        json={"query": "test", "startDate": 0, "endDate": 1},
+        headers=_auth_headers(),
     )
     assert r.status_code == 503
 

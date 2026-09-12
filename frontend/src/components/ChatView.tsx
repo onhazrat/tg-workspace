@@ -238,7 +238,7 @@ export const ChatView: React.FC = () => {
             description={
               chatMode === "full_scope"
                 ? "Ask about every post in the current scope — the selected channels, date range and filters."
-                : "Ask across everything saved. A vector search picks the posts most relevant to each question."
+                : "Ask about the current date range. A vector search picks the posts most relevant to each question."
             }
           >
             <div className="w-full space-y-2">

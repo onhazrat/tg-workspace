@@ -100,6 +100,12 @@ def seeded(client: TestClient) -> TestClient:
     return client
 
 
+#: The window is required on this route since AW-01, so every call here has to
+#: carry one. This pair spans the whole seeded corpus; tests that care about
+#: the window override it.
+WHOLE_CORPUS = {"startDate": 1000, "endDate": 1000 + POST_COUNT}
+
+
 def _search(client: TestClient, **body: object) -> dict:
     headers = _auth(client)
     with (
@@ -109,7 +115,7 @@ def _search(client: TestClient, **body: object) -> dict:
         get_provider.return_value = _mock_provider([[1.0, 0.0]])
         resp = client.post(
             f"{PREFIX}/search",
-            json={"query": "q", "channels": [CHANNEL], **body},
+            json={"query": "q", "channels": [CHANNEL], **WHOLE_CORPUS, **body},
             headers=headers,
         )
     assert resp.status_code == 200, resp.text
@@ -124,7 +130,9 @@ def test_date_filter_finds_matches_beyond_the_scan_cap(seeded: TestClient) -> No
         seeded,
         scanLimit=5,
         startDate=1000 + TARGET_ID,
-        endDate=1000 + TARGET_ID,
+        # Half-open (AW-01), so the end is the millisecond after the target
+        # rather than the target itself.
+        endDate=1000 + TARGET_ID + 1,
     )
     ids = [r["postId"] for r in body["results"]]
     assert ids == [TARGET_ID]
@@ -134,7 +142,7 @@ def test_date_filter_excludes_out_of_range_posts(seeded: TestClient) -> None:
     body = _search(seeded, startDate=1030, endDate=1035)
     ids = {r["postId"] for r in body["results"]}
     assert ids
-    assert all(30 <= i <= 35 for i in ids)
+    assert all(30 <= i < 35 for i in ids)
 
 
 def test_results_are_stable_across_identical_calls(seeded: TestClient) -> None:

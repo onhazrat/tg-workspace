@@ -33,14 +33,22 @@ class RagSearchRequest(BaseModel):
     `limit` caps the *results*; `scan_limit` caps how many embeddings are
     compared before ranking. They are separate because a thin result set and a
     capped scan are different failures — see `RagSearchResponse`.
+
+    The Analysis window is required; a search is always over a window.
     """
 
     model_config = ConfigDict(populate_by_name=True)
 
     query: str
     channels: list[str] | None = None
-    start_date: int | None = Field(default=None, alias="startDate")
-    end_date: int | None = Field(default=None, alias="endDate")
+    # AW-01. Both bounds were optional, and omitting them meant every Post
+    # ever — which is exactly what the removed "ignore time range for semantic
+    # search" control asked for. A window the caller can decline is not a
+    # window, so declining it is a 422 rather than a second meaning for the
+    # same Scope. Channels stay optional; that scoping is a separate choice.
+    # Enforced: `tests/services/test_analysis_window_boundaries.py`.
+    start_date: int = Field(alias="startDate")
+    end_date: int = Field(alias="endDate")
     limit: int = settings.RAG_SEARCH_LIMIT_DEFAULT
     scan_limit: int = Field(default=settings.RAG_SCAN_LIMIT_MAX, alias="scanLimit")
 
