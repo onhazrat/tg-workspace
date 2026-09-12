@@ -42,6 +42,7 @@ from app.services.ai_keys import (
     record_validation,
     resolve_ai_key,
 )
+from app.services.analysis_window import resolve_analysis_window
 from app.services.prompt_assembly import (
     PromptScope,
     assemble_posts_text,
@@ -117,10 +118,11 @@ def _resolve_posts_text(
         return posts_text
     if scope is None:
         return ""
+    window = resolve_analysis_window(scope.window)
     prompt_scope = PromptScope(
         channels=channels,
-        start_date=scope.start_date,
-        end_date=scope.end_date,
+        start_date=window.start,
+        end_date=window.end,
         keyword=scope.keyword,
         forwarded=scope.forwarded,
         media=scope.media,

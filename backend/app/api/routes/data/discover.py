@@ -35,6 +35,7 @@ from app.schemas.discover import (
     HandleProbeResponse,
     IgnoredChannelResponse,
 )
+from app.services.analysis_window import resolve_analysis_window
 from app.services.channel_directory import (
     DEFAULT_PROBE_PAGE_SIZE,
     MAX_PROBE_PAGE_SIZE,
@@ -121,10 +122,11 @@ def _discover_kwargs(body: DiscoverCandidatesRequest) -> dict[str, Any]:
             status_code=422,
             detail=f"unknown maxPerChannelMode: {body.max_per_channel_mode}",
         )
+    window = resolve_analysis_window(body.window)
     return {
         "channel_names": [n.strip() for n in body.channel_names if n.strip()],
-        "start_date": body.start_date,
-        "end_date": body.end_date,
+        "start_date": window.start,
+        "end_date": window.end,
         "signals": cast(
             "set[SignalKind] | None", _parse_discover_signals(body.signals)
         ),

@@ -18,6 +18,7 @@ from app.schemas.posts import (
     PostResponse,
     PostScopeRequest,
 )
+from app.services.analysis_window import resolve_analysis_window
 from app.services.posts import (
     FEED_CAP_MODES,
     FEED_SORTS,
@@ -55,14 +56,15 @@ def list_posts(
             status_code=422,
             detail=f"unknown maxPerChannelMode: {body.max_per_channel_mode}",
         )
+    window = resolve_analysis_window(body.window)
     return [
         PostResponse.model_validate(row)
         for row in list_feed_impl(
             session,
             user_id=current_user.id,
             channel_names=body.resolved_channel_names(),
-            start_date=body.start_date,
-            end_date=body.end_date,
+            start_date=window.start,
+            end_date=window.end,
             filters=parse_post_filters(body.keyword, body.forwarded, body.media),
             max_per_channel=body.max_per_channel,
             max_per_channel_mode=body.max_per_channel_mode,
@@ -88,12 +90,13 @@ def posts_counts(
     POST rather than GET because the scope carries the channel selection: this is
     a read expressed as a POST purely so the selection travels in the body.
     """
+    window = resolve_analysis_window(body.window)
     return count_posts_in_scope_impl(
         session,
         user_id=current_user.id,
         channel_names=body.cleaned_channel_names(),
-        start_date=body.start_date,
-        end_date=body.end_date,
+        start_date=window.start,
+        end_date=window.end,
         filters=parse_post_filters(body.keyword, body.forwarded, body.media),
         max_per_channel=body.max_per_channel,
     )

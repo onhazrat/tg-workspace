@@ -28,6 +28,7 @@ CHANNEL = "scan-ch"
 # Posts are timestamped oldest..newest; the target sits at the OLD end so a
 # newest-first scan reaches it only if the date filter runs in SQL.
 POST_COUNT = 40
+MINUTE_MS = 60_000
 TARGET_ID = 0
 
 
@@ -69,7 +70,10 @@ def _seed(client: TestClient) -> None:
                 "channelName": CHANNEL,
                 "text": f"post {i}",
                 "date": "2024-01-01",
-                "timestamp": 1000 + i,
+                # A minute apart since AW-02: a Fixed window floors both
+                # bounds to the minute, so posts a millisecond apart leave no
+                # window that can separate them.
+                "timestamp": (i + 1) * MINUTE_MS,
             }
             for i in range(POST_COUNT)
         ],
@@ -101,9 +105,16 @@ def seeded(client: TestClient) -> TestClient:
 
 
 #: The window is required on this route since AW-01, so every call here has to
-#: carry one. This pair spans the whole seeded corpus; tests that care about
-#: the window override it.
-WHOLE_CORPUS = {"startDate": 1000, "endDate": 1000 + POST_COUNT}
+#: carry one, and AW-02 made it a stated Live or Fixed value. This one spans
+#: the whole seeded corpus, which sits in the first `POST_COUNT` minutes after
+#: the epoch; tests that care about the window override it.
+WHOLE_CORPUS = {
+    "window": {
+        "mode": "fixed",
+        "start": 0,
+        "end": (POST_COUNT + 2) * MINUTE_MS,
+    }
+}
 
 
 def _search(client: TestClient, **body: object) -> dict:
@@ -129,17 +140,27 @@ def test_date_filter_finds_matches_beyond_the_scan_cap(seeded: TestClient) -> No
     body = _search(
         seeded,
         scanLimit=5,
-        startDate=1000 + TARGET_ID,
-        # Half-open (AW-01), so the end is the millisecond after the target
-        # rather than the target itself.
-        endDate=1000 + TARGET_ID + 1,
+        # Half-open (AW-01), so the end is the minute after the target rather
+        # than the target's own.
+        window={
+            "mode": "fixed",
+            "start": (TARGET_ID + 1) * MINUTE_MS,
+            "end": (TARGET_ID + 2) * MINUTE_MS,
+        },
     )
     ids = [r["postId"] for r in body["results"]]
     assert ids == [TARGET_ID]
 
 
 def test_date_filter_excludes_out_of_range_posts(seeded: TestClient) -> None:
-    body = _search(seeded, startDate=1030, endDate=1035)
+    body = _search(
+        seeded,
+        window={
+            "mode": "fixed",
+            "start": 31 * MINUTE_MS,
+            "end": 36 * MINUTE_MS,
+        },
+    )
     ids = {r["postId"] for r in body["results"]}
     assert ids
     assert all(30 <= i < 35 for i in ids)

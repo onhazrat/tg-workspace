@@ -120,7 +120,10 @@ def test_rag_search() -> None:
     # this test is about is the missing credential, so they only have to exist.
     r = client.post(
         "/api/v1/rag/search",
-        json={"query": "test", "startDate": 0, "endDate": 1},
+        json={
+            "query": "test",
+            "window": {"mode": "fixed", "start": 0, "end": 60_000},
+        },
         headers=_auth_headers(),
     )
     assert r.status_code == 503

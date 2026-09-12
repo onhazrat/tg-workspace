@@ -29,6 +29,7 @@ from typing import Any
 from pydantic import BaseModel, ConfigDict, Field
 from pydantic import Field as PydanticField
 
+from app.schemas.analysis_window import AnalysisWindowInput
 from app.services.posts import (
     DEFAULT_POST_PAGE_SIZE,
     MAX_POST_LOOKUP_BATCH,
@@ -78,8 +79,14 @@ class PostScopeRequest(BaseModel):
     """
 
     channel_names: list[str] | None = PydanticField(None, alias="channelNames")
-    start_date: int | None = PydanticField(None, alias="startDate")
-    end_date: int | None = PydanticField(None, alias="endDate")
+    # AW-02. This was `startDate`/`endDate`, two epoch milliseconds the browser
+    # computed from its own clock. Removing them rather than accepting both
+    # shapes is the enforcement: while the pair existed, calling the resolver
+    # was a convention a new route could forget, and a route that forgot it
+    # would look correct and select by a clock the server cannot see. Omitted
+    # means both sides open — the export, lookup and language-detection reads,
+    # which are not a Scope anybody selected.
+    window: AnalysisWindowInput | None = None
     keyword: str | None = None
     forwarded: str = "all"
     media: str = "all"

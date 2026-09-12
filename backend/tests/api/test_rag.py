@@ -56,21 +56,24 @@ def _seed_posts_and_embeddings(client: TestClient) -> None:
             "channelName": "rag-ch",
             "text": "alpha topic",
             "date": "2024-01-01",
-            "timestamp": 1000,
+            # A minute apart, not a second: AW-02 floors a Fixed window bound
+            # to the minute, so a second-scale fixture leaves no window that
+            # can tell these three apart.
+            "timestamp": 60_000,
         },
         {
             "id": 2,
             "channelName": "rag-ch",
             "text": "beta topic",
             "date": "2024-01-02",
-            "timestamp": 2000,
+            "timestamp": 120_000,
         },
         {
             "id": 3,
             "channelName": "rag-ch",
             "text": "gamma topic",
             "date": "2024-01-03",
-            "timestamp": 3000,
+            "timestamp": 180_000,
         },
     ]
     client.post(f"{DATA}/posts/bulk", json=posts, headers=headers)
@@ -147,7 +150,11 @@ def test_rag_search_cosine_order_and_post_shape(
         f"{PREFIX}/search",
         # A window is required since AW-01; this one spans the seeded corpus,
         # because what this test is about is the ranking, not the window.
-        json={"query": "alpha", "limit": 2, "startDate": 0, "endDate": 9999},
+        json={
+            "query": "alpha",
+            "limit": 2,
+            "window": {"mode": "fixed", "start": 0, "end": 600_000},
+        },
         headers=headers,
     )
     assert r.status_code == 200, r.text
@@ -159,7 +166,7 @@ def test_rag_search_cosine_order_and_post_shape(
     assert post["id"] == 1
     assert post["channelName"] == "rag-ch"
     assert post["text"] == "alpha topic"
-    assert post["timestamp"] == 1000
+    assert post["timestamp"] == 60_000
     assert "forwardedFrom" in post
 
 
@@ -178,8 +185,7 @@ def test_rag_search_date_and_channel_filters(
         json={
             "query": "topic",
             "channels": ["rag-ch"],
-            "startDate": 1500,
-            "endDate": 2500,
+            "window": {"mode": "fixed", "start": 120_000, "end": 180_000},
             "limit": 10,
         },
         headers=headers,
@@ -200,7 +206,7 @@ def test_rag_status_pending_and_total(client: TestClient) -> None:
                 "channelName": "rag-ch",
                 "text": "delta without embedding",
                 "date": "2024-01-04",
-                "timestamp": 4000,
+                "timestamp": 240_000,
             }
         ],
         headers=headers,
@@ -354,7 +360,11 @@ def test_rag_search_scoped_to_operator_channels(
     ):
         r = client.post(
             f"{PREFIX}/search",
-            json={"query": "post", "limit": 10, "startDate": 0, "endDate": 9999},
+            json={
+                "query": "post",
+                "limit": 10,
+                "window": {"mode": "fixed", "start": 0, "end": 600_000},
+            },
             headers=headers,
         )
     assert r.status_code == 200, r.text

@@ -79,14 +79,24 @@ def test_counts_accept_a_selection_far_larger_than_a_url_could_carry(
 def test_counts_respect_the_date_window(
     client: TestClient, superuser_token_headers: dict[str, str], db: Session
 ) -> None:
-    _seed(db, "alpha", 1, 1_000)
-    _seed(db, "alpha", 2, 5_000)
+    # Minute-scaled since AW-02, which floors a Fixed boundary to the minute:
+    # at millisecond scale both bounds land on the same minute and the server
+    # refuses the window rather than counting inside it.
+    _seed(db, "alpha", 1, 1_000 * 60_000)
+    _seed(db, "alpha", 2, 5_000 * 60_000)
     db.commit()
 
     response = client.post(
         COUNTS_URL,
         headers=superuser_token_headers,
-        json={"channelNames": ["alpha"], "startDate": 4_000, "endDate": 6_000},
+        json={
+            "channelNames": ["alpha"],
+            "window": {
+                "mode": "fixed",
+                "start": 4_000 * 60_000,
+                "end": 6_000 * 60_000,
+            },
+        },
     )
 
     assert response.status_code == 200

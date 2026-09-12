@@ -2,8 +2,8 @@
 
 Auto-regenerate used to call `getPostsByDateRange(s.channels, start, end)` in the
 browser, concatenate the result with `formatPostsForPrompt`, and post the whole
-string back. It now sends `scope: {startDate, endDate}` and lets the backend
-assemble the block.
+string back. It now sends `scope: {window}` — a stated Analysis window the
+server resolves (AW-02) — and lets the backend assemble the block.
 
 That substitution is only sound if a scope carrying *nothing but* the channels
 and the window selects the same posts, in the same order, as the plain
@@ -35,6 +35,14 @@ from tests.utils.utils import get_superuser_token_headers
 PREFIX = settings.API_V1_STR
 
 
+#: AW-02 floors a Fixed Analysis-window boundary to the minute, so the whole
+#: fixture is scaled by one. Every timestamp and window bound below is written
+#: in the same small integers it always was and read as *minutes*, which keeps
+#: the orderings and the boundary cases identical while making each window a
+#: real one rather than four milliseconds the server now refuses.
+MINUTE_MS = 60_000
+
+
 def _seed(rows: list[tuple[str, int, str, int]], **extra: Any) -> None:
     with Session(engine) as session:
         for channel_name, post_id, text, ts in rows:
@@ -43,7 +51,7 @@ def _seed(rows: list[tuple[str, int, str, int]], **extra: Any) -> None:
                     channel_name=channel_name,
                     post_id=post_id,
                     text=text,
-                    timestamp=ts,
+                    timestamp=ts * MINUTE_MS,
                     **extra,
                 )
             )
@@ -52,6 +60,15 @@ def _seed(rows: list[tuple[str, int, str, int]], **extra: Any) -> None:
         # and no Follow is invisible under enforcement. These read back through
         # the client as `FIRST_SUPERUSER`, the operator this defaults to.
         follow_channels(session, *{row[0] for row in rows})
+
+
+def _window(start: int, end: int) -> dict[str, Any]:
+    """The window as AW-02 states it, in the fixture's minute units."""
+    return {
+        "mode": "fixed",
+        "start": start * MINUTE_MS,
+        "end": end * MINUTE_MS,
+    }
 
 
 def _date_range_read(
@@ -65,7 +82,7 @@ def _date_range_read(
     r = client.post(
         f"{PREFIX}/data/posts",
         headers=headers,
-        json={"channelNames": channels, "startDate": start, "endDate": end},
+        json={"channelNames": channels, "window": _window(start, end)},
     )
     assert r.status_code == 200, r.text
     return list(r.json())
@@ -86,7 +103,7 @@ def _prompt_from_scope(
             "channels": channels,
             "language": "English",
             "postsText": "",
-            "scope": {"startDate": start, "endDate": end},
+            "scope": {"window": _window(start, end)},
         },
     )
     assert r.status_code == 200, r.text
@@ -195,7 +212,7 @@ def test_counts_and_the_assembled_block_agree_on_the_post_set(
     counts = client.post(
         f"{PREFIX}/data/posts/counts",
         headers=headers,
-        json={"channelNames": ["alpha"], "startDate": 0, "endDate": 5_000},
+        json={"channelNames": ["alpha"], "window": _window(0, 5_000)},
     )
     assert counts.status_code == 200, counts.text
     assert sum(counts.json().values()) == 2

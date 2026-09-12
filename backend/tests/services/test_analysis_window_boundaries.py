@@ -58,7 +58,12 @@ API = settings.API_V1_STR
 
 #: A round, realistic pair. The absolute values do not matter; that the posts
 #: sit exactly on, either side of, and one millisecond inside them does.
-START = 1_700_000_000_000
+#:
+#: Minute-aligned since AW-02, which floors a Fixed boundary to the minute. An
+#: unaligned start floors *backwards*, which would quietly pull post 1 — seeded
+#: at `START - 1` precisely to be excluded — into the window on the one path
+#: here that goes through the API rather than calling the service directly.
+START = 1_699_999_980_000
 END = START + 3_600_000
 MID = START + 1_800_000
 
@@ -337,8 +342,7 @@ def test_semantic_retrieval_uses_the_same_window(
             json={
                 "query": "q",
                 "channels": [channel],
-                "startDate": START,
-                "endDate": END,
+                "window": {"mode": "fixed", "start": START, "end": END},
                 "limit": 50,
             },
             headers=_auth(client),

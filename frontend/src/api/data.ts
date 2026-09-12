@@ -1,3 +1,4 @@
+import { fixedWindow } from "../lib/analysis-window"
 import type {
   DiscoveryCandidate,
   DiscoveryScopeCounts,
@@ -47,6 +48,12 @@ export type DiscoveredViaPayload = {
  */
 export type PostScopeQuery = {
   channelNames?: string[]
+  /**
+   * The window as the workspace still holds it. **Not the wire shape** since
+   * AW-02: `postScopeBody` converts the pair into the Analysis window the
+   * server resolves, so nothing below this function sends a raw timestamp.
+   * AW-03 replaces the pair here too, with the controller's own state.
+   */
   startDate?: number
   endDate?: number
   keyword?: string
@@ -91,8 +98,8 @@ export type PromptScope = Omit<
 export function postScopeBody(params: PostScopeQuery): Record<string, unknown> {
   const body: Record<string, unknown> = {}
   if (params.channelNames?.length) body.channelNames = params.channelNames
-  if (params.startDate != null) body.startDate = params.startDate
-  if (params.endDate != null) body.endDate = params.endDate
+  const window = fixedWindow(params.startDate, params.endDate)
+  if (window) body.window = window
   if (params.keyword?.trim()) body.keyword = params.keyword.trim()
   if (params.forwarded && params.forwarded !== "all")
     body.forwarded = params.forwarded
@@ -100,6 +107,20 @@ export function postScopeBody(params: PostScopeQuery): Record<string, unknown> {
   if (params.maxPerChannel != null && params.maxPerChannel > 0)
     body.maxPerChannel = params.maxPerChannel
   return body
+}
+
+/**
+ * A prompt scope shaped for a JSON request body (AW-02).
+ *
+ * The same conversion `postScopeBody` makes, for the scope the AI endpoints
+ * resolve into their own posts block. Separate because the AI request puts the
+ * scope in a nested `scope` object and carries its channels at the top level,
+ * so the two bodies are not the same shape around the same window.
+ */
+export function promptScopeBody(scope: PromptScope): Record<string, unknown> {
+  const { startDate, endDate, ...rest } = scope
+  const window = fixedWindow(startDate, endDate)
+  return window ? { ...rest, window } : { ...rest }
 }
 
 /**
@@ -400,8 +421,8 @@ export const dataApi = {
   }) => {
     const body: Record<string, unknown> = {}
     if (params?.channelNames?.length) body.channelNames = params.channelNames
-    if (params?.startDate != null) body.startDate = params.startDate
-    if (params?.endDate != null) body.endDate = params.endDate
+    const window = fixedWindow(params?.startDate, params?.endDate)
+    if (window) body.window = window
     if (params?.limit != null) body.limit = params.limit
     if (params?.offset != null) body.offset = params.offset
     return request<Post[]>("/api/v1/data/posts", {

@@ -1529,13 +1529,13 @@ export type DiscoverCandidatesRequest = {
      */
     channelNames: Array<string>;
     /**
-     * Startdate
+     * Window
      */
-    startDate?: number | null;
-    /**
-     * Enddate
-     */
-    endDate?: number | null;
+    window?: (({
+        mode: 'live';
+    } & LiveAnalysisWindow) | ({
+        mode: 'fixed';
+    } & FixedAnalysisWindow)) | null;
     /**
      * Keyword
      */
@@ -2058,6 +2058,25 @@ export type EmbeddingResult = {
 };
 
 /**
+ * FixedAnalysisWindow
+ * Two exact UTC instants, in epoch milliseconds, that do not move.
+ */
+export type FixedAnalysisWindow = {
+    /**
+     * Mode
+     */
+    mode: 'fixed';
+    /**
+     * Start
+     */
+    start: number;
+    /**
+     * End
+     */
+    end: number;
+};
+
+/**
  * FollowChannelResultResponse
  */
 export type FollowChannelResultResponse = {
@@ -2483,6 +2502,25 @@ export type LiftCeilingRequest = {
     lifted?: boolean;
 };
 
+/**
+ * LiveAnalysisWindow
+ * A window that advances with the server's clock.
+ */
+export type LiveAnalysisWindow = {
+    /**
+     * Mode
+     */
+    mode: 'live';
+    /**
+     * Durationminutes
+     */
+    durationMinutes: number;
+    /**
+     * Endgapminutes
+     */
+    endGapMinutes: number;
+};
+
 export type LogDetailResponse = PublishLogResponse | SyncLogResponse | LlmLogResponse | EmbeddingLogResponse | NetworkLogResponse;
 
 export type LogEntryResponse = PublishLogListItemResponse | SyncLogListItemResponse | LlmLogListItemResponse | EmbeddingLogResponse | NetworkLogResponse;
@@ -2870,13 +2908,13 @@ export type PostFeedRequest = {
      */
     channelNames?: Array<string> | null;
     /**
-     * Startdate
+     * Window
      */
-    startDate?: number | null;
-    /**
-     * Enddate
-     */
-    endDate?: number | null;
+    window?: (({
+        mode: 'live';
+    } & LiveAnalysisWindow) | ({
+        mode: 'fixed';
+    } & FixedAnalysisWindow)) | null;
     /**
      * Keyword
      */
@@ -3035,13 +3073,13 @@ export type PostScopeRequest = {
      */
     channelNames?: Array<string> | null;
     /**
-     * Startdate
+     * Window
      */
-    startDate?: number | null;
-    /**
-     * Enddate
-     */
-    endDate?: number | null;
+    window?: (({
+        mode: 'live';
+    } & LiveAnalysisWindow) | ({
+        mode: 'fixed';
+    } & FixedAnalysisWindow)) | null;
     /**
      * Keyword
      */
@@ -3113,13 +3151,13 @@ export type PromptResponse = {
  */
 export type PromptScopeInput = {
     /**
-     * Startdate
+     * Window
      */
-    startDate?: number | null;
-    /**
-     * Enddate
-     */
-    endDate?: number | null;
+    window?: (({
+        mode: 'live';
+    } & LiveAnalysisWindow) | ({
+        mode: 'fixed';
+    } & FixedAnalysisWindow)) | null;
     /**
      * Keyword
      */
@@ -3567,13 +3605,13 @@ export type RagSearchRequest = {
      */
     channels?: Array<string> | null;
     /**
-     * Startdate
+     * Window
      */
-    startDate: number;
-    /**
-     * Enddate
-     */
-    endDate: number;
+    window: ({
+        mode: 'live';
+    } & LiveAnalysisWindow) | ({
+        mode: 'fixed';
+    } & FixedAnalysisWindow);
     /**
      * Limit
      */
@@ -3942,6 +3980,21 @@ export type ScraperRuntimeSettings = {
      * Iterationlimit
      */
     iterationLimit: number;
+};
+
+/**
+ * ServerTimeResponse
+ * The server's clock: the current instant, and when its minute began.
+ */
+export type ServerTimeResponse = {
+    /**
+     * Now
+     */
+    now: number;
+    /**
+     * Minutestart
+     */
+    minuteStart: number;
 };
 
 /**
@@ -5809,6 +5862,22 @@ export type UtilsHealthCheckResponses = {
 };
 
 export type UtilsHealthCheckResponse = UtilsHealthCheckResponses[keyof UtilsHealthCheckResponses];
+
+export type UtilsServerTimeData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/utils/server-time';
+};
+
+export type UtilsServerTimeResponses = {
+    /**
+     * Successful Response
+     */
+    200: ServerTimeResponse;
+};
+
+export type UtilsServerTimeResponse = UtilsServerTimeResponses[keyof UtilsServerTimeResponses];
 
 export type NetworkApiTestProxyData = {
     body: TestProxyRequest;

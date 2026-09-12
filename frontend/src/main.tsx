@@ -4,6 +4,7 @@ import { StrictMode } from "react"
 import { createRoot } from "react-dom/client"
 import { configureGeneratedClient } from "@/api/generated-client"
 import { ThemeProvider } from "@/components/theme-provider"
+import { syncServerClock } from "@/lib/analysis-window"
 import { queryClient } from "@/lib/queryClient"
 import { THEME_STORAGE_KEY } from "@/lib/storage/scoped"
 import { routeTree } from "@/routeTree.gen"
@@ -47,6 +48,17 @@ if (
 }
 
 configureGeneratedClient()
+
+// AW-02. One read at startup and one whenever the tab comes back, which is
+// what a clock estimate needs and all it needs: the offset between two
+// machines' clocks drifts by seconds a day, not by minutes, and a tab that was
+// suspended for hours is the one case where the browser's own clock may have
+// moved without ticking. Nothing waits on either call — an unsynced offset is
+// zero, which is the browser clock, which is what this drew with before.
+syncServerClock()
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible") syncServerClock()
+})
 
 // The `QueryClient` lives in `lib/queryClient.ts` so non-React writers can
 // invalidate; see that file for why. It deliberately has no

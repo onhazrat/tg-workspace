@@ -8,7 +8,7 @@ that minute for its own previews.
 
 **Blocked by:** AW-01
 
-**Status:** ready-for-agent
+**Status:** done
 
 ## The rule this ticket makes true
 
@@ -18,16 +18,16 @@ selects anything, and network latency can only move when a label repaints.
 
 ## Acceptance criteria
 
-- [ ] The shared Scope request carries an Analysis-window input that is a discriminated Live or Fixed value.
-- [ ] Live carries Duration and End gap in whole minutes; Fixed carries two exact UTC instants.
-- [ ] One resolver turns either form into exact Start and End, and every Scope-accepting operation calls it before selecting Posts.
-- [ ] Live resolves against the start of the server's current minute: at 14:32:47 a zero-gap end is 14:32:00.
-- [ ] Duration is at least one minute; End gap may be zero; Duration units are exact elapsed UTC time, so a day is 24 hours and a week is 168 hours across a daylight-saving change.
-- [ ] A crossed pair and a Fixed End later than the server's current minute are both rejected, not swapped, clamped or repaired.
-- [ ] Fixed boundaries are normalized to zero seconds and zero milliseconds.
-- [ ] A lightweight endpoint reports the server's current time so a client can estimate its offset.
-- [ ] Existing callers keep working by sending the Fixed form; no second legacy interpretation of End survives.
-- [ ] The generated API client is regenerated.
+- [x] The shared Scope request carries an Analysis-window input that is a discriminated Live or Fixed value.
+- [x] Live carries Duration and End gap in whole minutes; Fixed carries two exact UTC instants.
+- [x] One resolver turns either form into exact Start and End, and every Scope-accepting operation calls it before selecting Posts.
+- [x] Live resolves against the start of the server's current minute: at 14:32:47 a zero-gap end is 14:32:00.
+- [x] Duration is at least one minute; End gap may be zero; Duration units are exact elapsed UTC time, so a day is 24 hours and a week is 168 hours across a daylight-saving change.
+- [x] A crossed pair and a Fixed End later than the server's current minute are both rejected, not swapped, clamped or repaired.
+- [x] Fixed boundaries are normalized to zero seconds and zero milliseconds.
+- [x] A lightweight endpoint reports the server's current time so a client can estimate its offset.
+- [x] Existing callers keep working by sending the Fixed form; no second legacy interpretation of End survives.
+- [x] The generated API client is regenerated.
 
 ## Notes
 

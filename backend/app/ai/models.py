@@ -1,5 +1,7 @@
 from pydantic import BaseModel, Field
 
+from app.schemas.analysis_window import AnalysisWindowInput
+
 
 class ChatMessage(BaseModel):
     role: str
@@ -11,8 +13,8 @@ class PromptScopeInput(BaseModel):
     instead of the client shipping a pre-built ``postsText``. Mirrors the
     frontend feed query params."""
 
-    start_date: int | None = Field(None, alias="startDate")
-    end_date: int | None = Field(None, alias="endDate")
+    # AW-02: stated, not computed by the browser. See `PostScopeRequest`.
+    window: AnalysisWindowInput | None = None
     keyword: str | None = None
     forwarded: str = "all"
     media: str = "all"
