@@ -17,6 +17,7 @@ from app.ai.registry import default_model, get_provider, is_credential_rejection
 from app.core.db import engine
 from app.models_tg import ChatDestination, Post, Summary, utc_now
 from app.prompts.summary import format_summary_prompt
+from app.schemas.scope import FrozenScope
 from app.services.ai_keys import Purpose, record_validation, resolve_ai_key
 from app.services.channel_setting_groups import channel_is_frozen, load_groups_by_id
 from app.services.credentials import CHAT_DESTINATION_NOT_FOUND
@@ -355,6 +356,30 @@ async def _sync_channels_for_summary(
     await run_sync_job(job, owner_id)
 
 
+def _successor_scope(summary: Summary, new_start: int, new_end: int) -> dict[str, Any]:
+    """The Scope a regenerated Summary was actually produced from (AW-05).
+
+    **The channels and the window, with every filter at its default** — because
+    that is literally what the select below applies. Carrying the predecessor's
+    keyword, media filter or cap forward reads like the obvious thing and would
+    be a lie in the record: regeneration has never applied them, and a Scope
+    that names a filter nobody used is worse than no Scope at all. The same
+    asymmetry is already noted on the browser twin.
+
+    Not re-frozen through `freeze_scope` either. This window is *derived* from
+    the one before it rather than resolved against a clock, and its end is
+    deliberately in the future — `resolve_analysis_window` refuses that, rightly,
+    for a window somebody is choosing right now.
+
+    Independent of whether the predecessor had a Scope: this one is true about
+    the successor either way, so a chain that started before AW-05 gains a
+    complete record from its next run rather than never.
+    """
+    return FrozenScope.model_validate(
+        {"channels": list(summary.channels or []), "start": new_start, "end": new_end}
+    ).model_dump(by_alias=True, exclude={"posts", "duration_minutes"})
+
+
 async def _regenerate_one(
     session: Session, summary: Summary, *, owner_id: uuid.UUID
 ) -> str | None:
@@ -468,6 +493,7 @@ async def _regenerate_one(
         channels=summary.channels,
         start_date=new_start,
         end_date=new_end,
+        scope=_successor_scope(summary, new_start, new_end),
         language=summary.language,
         model=summary.model,
         post_count=len(posts),

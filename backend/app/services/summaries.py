@@ -19,6 +19,8 @@ from sqlmodel import Session, col, select
 
 from app.core import acting_owner
 from app.models_tg import Summary, SummaryPayload, utc_now
+from app.schemas.scope import FrozenScope, ScopedPostRef, ScopeSubmission
+from app.services.analysis_window import freeze_scope
 from app.services.serialization import to_snake
 from app.services.tenancy import (
     assert_owner,
@@ -50,10 +52,31 @@ PAYLOAD_COLUMNS: dict[str, str] = {
 HEAVY_SUMMARY_FIELDS = frozenset(PAYLOAD_COLUMNS)
 _PAYLOAD_COLUMN_NAMES = frozenset(PAYLOAD_COLUMNS.values())
 
+#: Every column of `tg_summary_payloads`, which is **not** the same set.
+#: `scope_posts` is written once by `submit_summary` and is unreachable from a
+#: request body, so it stays out of the wire mapping above — but it still has to
+#: count towards "is this payload row empty", or a Summary whose only heavy
+#: field is its frozen Post selection would have that row dropped on write.
+_ALL_PAYLOAD_COLUMNS = _PAYLOAD_COLUMN_NAMES | {"scope_posts"}
+
 #: Computed from the payload on every write, never accepted from a request.
 #: Clients round-trip list items back through `PUT`, so without this the
 #: derived values would be stored into `extra` and then shadow the real ones.
 DERIVED_SUMMARY_FIELDS = frozenset({"chat_message_count", "prompt_excerpt"})
+
+#: Base columns a `PUT` may still change on a Summary that already exists.
+#:
+#: `channels`, `start_date` and `end_date` are **not** here, and that is AW-05:
+#: they are the Scope the text was made from, frozen at submission, so an edit
+#: to the body or a flag must not be able to move them. The client round-trips
+#: whole list items back through `PUT`, so leaving them settable meant a Live
+#: window that had advanced between generating and saving rewrote the
+#: boundaries of work already done. `scope` itself is unreachable from a
+#: request at all — it is not on `SummaryUpsertRequest` and `known` below drops
+#: it — which is the same rule stated where it cannot be forgotten.
+MUTABLE_SUMMARY_FIELDS = frozenset(
+    {"text", "post_count", "language", "model", "timestamp"}
+)
 
 # Matches truncatePreview's default in frontend/src/lib/commands/search-filters.ts.
 SUMMARY_PROMPT_EXCERPT_CHARS = 80
@@ -73,6 +96,53 @@ def _summary_base(summary: Summary) -> dict[str, Any]:
     }
 
 
+def _with_scope(
+    out: dict[str, Any], summary: Summary, payload: SummaryPayload | None
+) -> dict[str, Any]:
+    """Stamp the frozen Scope on, **after** `extra` has been spread.
+
+    Last, not inside `_summary_base`, and that ordering is the point: `extra` is
+    an open bag, so a key named `scope` sitting in it would otherwise win over
+    the column and the endpoint would report a Scope the database does not hold.
+    Both writers now drop such a key, and this is the half that does not depend
+    on them remembering to.
+
+    Through the model rather than straight off the column, so the light and full
+    projections emit one shape and `durationMinutes` is derived in both. `None`
+    on a row that predates the contract — a declared optional field, so it
+    serialises as an explicit `null` rather than being absent; unlike the
+    conditional keys around it `scope` has no legacy wire shape to preserve, and
+    the client has to render it either way.
+    """
+    scope = frozen_scope_of(summary, payload)
+    out["scope"] = None if scope is None else scope.model_dump(by_alias=True)
+    return out
+
+
+def frozen_scope_of(
+    summary: Summary, payload: SummaryPayload | None = None
+) -> FrozenScope | None:
+    """The Scope this Summary was made from, refs included, or `None`.
+
+    The refs come from the payload table, so a caller that did not open it gets
+    a `FrozenScope` with `posts` unset — `scopedPostCount` is what says whether
+    there were any. Public because AW-08 renders this and AW-06 will need the
+    same read for the other three families.
+    """
+    if summary.scope is None:
+        return None
+    scope = FrozenScope.model_validate(summary.scope)
+    if payload is not None and payload.scope_posts is not None:
+        scope = scope.model_copy(
+            update={
+                "posts": [
+                    ScopedPostRef.model_validate(ref) for ref in payload.scope_posts
+                ]
+            }
+        )
+    return scope
+
+
 def summary_to_camel(
     summary: Summary, payload: SummaryPayload | None = None
 ) -> dict[str, Any]:
@@ -88,7 +158,9 @@ def summary_to_camel(
             value = getattr(payload, column)
             if value is not None:
                 heavy[key] = value
-    return {**_summary_base(summary), **(summary.extra or {}), **heavy}
+    return _with_scope(
+        {**_summary_base(summary), **(summary.extra or {}), **heavy}, summary, payload
+    )
 
 
 def _derive_chat_message_count(chat_messages: Any) -> int:
@@ -126,7 +198,10 @@ def summary_to_camel_light(summary: Summary) -> dict[str, Any]:
     light["chatMessageCount"] = summary.chat_message_count
     if summary.prompt_excerpt is not None:
         light["promptExcerpt"] = summary.prompt_excerpt
-    return {**_summary_base(summary), **light}
+    # `payload=None`: this projection must not open the payload table, so the
+    # Scope travels without its Post refs. `scopedPostCount` is what a list
+    # reads to know there were any.
+    return _with_scope({**_summary_base(summary), **light}, summary, None)
 
 
 def _search_clause(term: str) -> Any:
@@ -230,7 +305,7 @@ def apply_summary_payload(
     row.user_id = user_id
     row.updated_at = utc_now()
 
-    if all(getattr(row, column) is None for column in _PAYLOAD_COLUMN_NAMES):
+    if all(getattr(row, column) is None for column in _ALL_PAYLOAD_COLUMNS):
         if existing is not None:
             session.delete(existing)
         return None
@@ -289,6 +364,16 @@ def upsert_summary(
         "post_count",
         "postCount",
         "timestamp",
+        # Recognised only so it is *dropped*. `extra="allow"` routes anything
+        # unrecognised into `extra`, so without this line a client PUTting a
+        # list item straight back would store a second copy of the Scope beside
+        # the frozen one. `_with_scope` is the other half of that: it stamps the
+        # column on last, so a copy that got in some other way still loses.
+        "scope",
+        # Same, one table over: the explicit Post selection is written once by
+        # `submit_summary` and is part of the frozen Scope, not an update.
+        "scope_posts",
+        "scopePosts",
     }
     payload_updates: dict[str, Any] = {}
     payload_removals: set[str] = set()
@@ -318,16 +403,7 @@ def upsert_summary(
     if summary:
         for key, value in body.items():
             snake = to_snake(key)
-            if snake in (
-                "start_date",
-                "end_date",
-                "post_count",
-                "text",
-                "channels",
-                "language",
-                "model",
-                "timestamp",
-            ):
+            if snake in MUTABLE_SUMMARY_FIELDS:
                 setattr(summary, snake, value)
         merged_extra = {
             **(summary.extra or {}),
@@ -368,6 +444,79 @@ def upsert_summary(
     # afterwards has to clear an Owner's name off it.
     acting_owner.stamp(session, summary)
     session.add(summary)
+    session.commit()
+    session.refresh(summary)
+    return summary_to_camel(summary, session.get(SummaryPayload, summary_id))
+
+
+def submit_summary(
+    session: Session,
+    *,
+    user_id: uuid.UUID,
+    summary_id: str,
+    submission: ScopeSubmission,
+    language: str = "English",
+    model: str | None = None,
+    post_count: int | None = None,
+    extra: dict[str, Any] | None = None,
+    now_ms: int | None = None,
+) -> dict[str, Any]:
+    """Open a Summary by freezing the Scope it will be produced from.
+
+    This is the submission seam: it runs *before* the prompt is assembled and
+    before a single token is spent, so the boundaries the finished Artifact
+    reports are the ones that were current when somebody asked for it. The
+    producer then re-states the frozen pair as a Fixed window — which resolves
+    to itself — and `upsert_summary` fills in the text afterwards without being
+    able to touch any of this.
+
+    The row starts with no text; the producer fills it in through
+    `upsert_summary`, which cannot touch any of the Scope.
+
+    `now_ms` is the server clock, injectable so the minute boundary can be
+    asserted at an exact instant rather than near one.
+    """
+    if session.get(Summary, summary_id) is not None:
+        raise HTTPException(status_code=409, detail="Summary already exists")
+
+    scope = freeze_scope(submission, now_ms=now_ms)
+    summary = Summary(
+        id=summary_id,
+        user_id=user_id,
+        text="",
+        # The superseded copy, kept in step at creation and never written
+        # again. AW-07 removes these three; until then the History union reads
+        # them, so they have to agree with the frozen value by construction.
+        channels=list(scope.channels),
+        start_date=scope.start,
+        end_date=scope.end,
+        language=language,
+        model=model,
+        post_count=post_count if post_count is not None else scope.scoped_post_count,
+        timestamp=int(utc_now().timestamp() * 1000),
+        # Flags, verbatim. `status: pending` is **not** forced here: it means
+        # "awaiting a response pasted from somewhere else", which is one
+        # caller's situation and not a property of submitting.
+        extra=dict(extra or {}),
+        # `posts` is corpus-sized and goes to the payload table;
+        # `durationMinutes` is derived on every read, so storing it would make a
+        # third fact that nothing keeps in step with the two it came from.
+        scope=scope.model_dump(by_alias=True, exclude={"posts", "duration_minutes"}),
+    )
+    session.add(summary)
+
+    payload = apply_summary_payload(
+        session,
+        summary_id,
+        user_id=user_id,
+        updates=(
+            {"scope_posts": [ref.model_dump(by_alias=True) for ref in scope.posts]}
+            if scope.posts
+            else {}
+        ),
+    )
+    refresh_summary_derived_columns(summary, payload)
+    acting_owner.stamp(session, summary)
     session.commit()
     session.refresh(summary)
     return summary_to_camel(summary, session.get(SummaryPayload, summary_id))

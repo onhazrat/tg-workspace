@@ -130,11 +130,14 @@ def test_the_split_did_not_change_the_route_count() -> None:
     the three `/ai-keys` routes, BYOK-01's Keys panel — a family of its own
     beside `/bot-credentials` rather than more of it, because an aggregate owns
     one table; and **79** with `GET /configuration`, the Admin-only five-layer
-    configuration catalog.
+    configuration catalog; and **80** with `POST /summaries`, AW-05's submission
+    door — a `POST` rather than another `PUT` because it resolves the Analysis
+    window against the server's current minute, so the same body sent twice
+    describes two different windows and the second is a 409.
     """
     data_routes = {
         (m, p) for m, p in _mounted_routes() if p.startswith("/api/v1/data/")
     }
-    assert len(data_routes) == 79, (
-        f"expected 79 /data endpoints, found {len(data_routes)}"
+    assert len(data_routes) == 80, (
+        f"expected 80 /data endpoints, found {len(data_routes)}"
     )

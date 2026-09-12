@@ -34,6 +34,8 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.schemas.scope import FrozenScope, ScopeSubmission
+
 
 class SummaryResponse(BaseModel):
     """One summary in the full projection, as `summary_to_camel` builds it.
@@ -53,6 +55,11 @@ class SummaryResponse(BaseModel):
     model: str | None = None
     post_count: int | None = Field(default=None, alias="postCount")
     timestamp: int = 0
+    #: The Scope this summary was frozen at, or ``null`` on a row that predates
+    #: AW-05 (which AW-07 deletes rather than backfills). Declared — unlike the
+    #: conditional keys this module leaves to ``extra`` — because the client has
+    #: to render it, and a ``FrozenScope | undefined`` is the type that says so.
+    scope: FrozenScope | None = None
 
 
 class SummaryListItemResponse(SummaryResponse):
@@ -69,6 +76,26 @@ class SummaryListItemResponse(SummaryResponse):
     chat_message_count: int = Field(default=0, alias="chatMessageCount")
 
 
+class SummarySubmitRequest(BaseModel):
+    """Body for ``POST /data/summaries`` — opens a summary at a frozen Scope."""
+
+    model_config = ConfigDict(populate_by_name=True, extra="forbid")
+
+    #: Client-chosen, for the reason the interactive path already chose one: it
+    #: is the whole primary key of ``tg_summaries``, so it is a UUID and a
+    #: collision is a 409 rather than a silent merge into somebody else's row.
+    id: str
+    scope: ScopeSubmission
+    language: str = "English"
+    model: str | None = None
+    post_count: int | None = Field(default=None, alias="postCount")
+    #: The small UI flags a new summary starts with (``sendMetadata``,
+    #: ``aiKeyId``, ``postSearch``, …). Open for the same reason
+    #: ``SummaryResponse`` is: they come and go, and an allowlist here would
+    #: silently drop the next one.
+    extra: dict[str, Any] = Field(default_factory=dict)
+
+
 class SummaryUpsertRequest(BaseModel):
     """Body for ``PUT /data/summaries/{id}``.
 
@@ -77,14 +104,17 @@ class SummaryUpsertRequest(BaseModel):
     treats an explicit ``null`` as "remove this key from ``extra``" — behaviour
     a stricter model would break. Declaring the base fields still documents the
     shape and gives the generated client something better than ``unknown``.
+
+    **It no longer carries the window or the channels** (AW-05). Those are the
+    Scope the text was produced from, frozen at submission; a client that
+    round-trips a list item back through here must not be able to move them,
+    and a field that is not on the request is the version of that rule nobody
+    has to remember.
     """
 
     model_config = ConfigDict(extra="allow", populate_by_name=True)
 
     text: str | None = None
-    channels: list[str] | None = None
-    start_date: int | None = Field(default=None, alias="startDate")
-    end_date: int | None = Field(default=None, alias="endDate")
     language: str | None = None
     model: str | None = None
     post_count: int | None = Field(default=None, alias="postCount")

@@ -2099,6 +2099,65 @@ export type FollowChannelResultResponse = {
 };
 
 /**
+ * FrozenScope
+ * The immutable Scope an Artifact was produced from.
+ */
+export type FrozenScope = {
+    /**
+     * Channels
+     */
+    channels?: Array<string>;
+    /**
+     * Keyword
+     */
+    keyword?: string | null;
+    /**
+     * Forwarded
+     */
+    forwarded?: 'all' | 'forwarded' | 'original' | 'unfollowed_forwarded';
+    /**
+     * Media
+     */
+    media?: 'all' | 'text_only' | 'media_only' | 'photo' | 'video' | 'link_preview' | 'grouped';
+    /**
+     * Maxperchannel
+     */
+    maxPerChannel?: number;
+    /**
+     * Maxperchannelmode
+     */
+    maxPerChannelMode?: 'latest' | 'random';
+    /**
+     * Sort
+     */
+    sort?: 'time' | 'channel_time';
+    /**
+     * Seed
+     */
+    seed?: number;
+    /**
+     * Start
+     */
+    start: number;
+    /**
+     * End
+     */
+    end: number;
+    /**
+     * Scopedpostcount
+     */
+    scopedPostCount?: number | null;
+    /**
+     * Posts
+     */
+    posts?: Array<ScopedPostRef> | null;
+    /**
+     * Durationminutes
+     */
+    durationMinutes?: number;
+};
+
+/**
  * GlobalStartTimeSnapshot
  */
 export type GlobalStartTimeSnapshot = {
@@ -3869,6 +3928,72 @@ export type ScopeCountsResponse = {
 };
 
 /**
+ * ScopeSubmission
+ * The complete Scope an Action is submitted with.
+ */
+export type ScopeSubmission = {
+    /**
+     * Channels
+     */
+    channels?: Array<string>;
+    /**
+     * Keyword
+     */
+    keyword?: string | null;
+    /**
+     * Forwarded
+     */
+    forwarded?: 'all' | 'forwarded' | 'original' | 'unfollowed_forwarded';
+    /**
+     * Media
+     */
+    media?: 'all' | 'text_only' | 'media_only' | 'photo' | 'video' | 'link_preview' | 'grouped';
+    /**
+     * Maxperchannel
+     */
+    maxPerChannel?: number;
+    /**
+     * Maxperchannelmode
+     */
+    maxPerChannelMode?: 'latest' | 'random';
+    /**
+     * Sort
+     */
+    sort?: 'time' | 'channel_time';
+    /**
+     * Seed
+     */
+    seed?: number;
+    /**
+     * Window
+     */
+    window: ({
+        mode: 'live';
+    } & LiveAnalysisWindow) | ({
+        mode: 'fixed';
+    } & FixedAnalysisWindow);
+    /**
+     * Posts
+     */
+    posts?: Array<ScopedPostRef> | null;
+};
+
+/**
+ * ScopedPostRef
+ * One Post named by its natural key.
+ */
+export type ScopedPostRef = {
+    /**
+     * Channelname
+     */
+    channelName: string;
+    /**
+     * Postid
+     */
+    postId: number;
+};
+
+/**
  * ScrapeChannelResponse
  * A scraped page range plus the channel meta that came with it.
  *
@@ -4339,11 +4464,12 @@ export type SummaryListItemResponse = {
      * Timestamp
      */
     timestamp?: number;
+    scope?: FrozenScope | null;
     /**
      * Chatmessagecount
      */
     chatMessageCount?: number;
-    [key: string]: unknown | string | Array<string> | number | (string | null) | (number | null) | undefined;
+    [key: string]: unknown | string | Array<string> | number | (string | null) | (number | null) | (FrozenScope | null) | undefined;
 };
 
 /**
@@ -4425,7 +4551,38 @@ export type SummaryResponse = {
      * Timestamp
      */
     timestamp?: number;
-    [key: string]: unknown | string | Array<string> | number | (string | null) | (number | null) | undefined;
+    scope?: FrozenScope | null;
+    [key: string]: unknown | string | Array<string> | number | (string | null) | (number | null) | (FrozenScope | null) | undefined;
+};
+
+/**
+ * SummarySubmitRequest
+ * Body for ``POST /data/summaries`` — opens a summary at a frozen Scope.
+ */
+export type SummarySubmitRequest = {
+    /**
+     * Id
+     */
+    id: string;
+    scope: ScopeSubmission;
+    /**
+     * Language
+     */
+    language?: string;
+    /**
+     * Model
+     */
+    model?: string | null;
+    /**
+     * Postcount
+     */
+    postCount?: number | null;
+    /**
+     * Extra
+     */
+    extra?: {
+        [key: string]: unknown;
+    };
 };
 
 /**
@@ -4437,24 +4594,18 @@ export type SummaryResponse = {
  * treats an explicit ``null`` as "remove this key from ``extra``" — behaviour
  * a stricter model would break. Declaring the base fields still documents the
  * shape and gives the generated client something better than ``unknown``.
+ *
+ * **It no longer carries the window or the channels** (AW-05). Those are the
+ * Scope the text was produced from, frozen at submission; a client that
+ * round-trips a list item back through here must not be able to move them,
+ * and a field that is not on the request is the version of that rule nobody
+ * has to remember.
  */
 export type SummaryUpsertRequest = {
     /**
      * Text
      */
     text?: string | null;
-    /**
-     * Channels
-     */
-    channels?: Array<string> | null;
-    /**
-     * Startdate
-     */
-    startDate?: number | null;
-    /**
-     * Enddate
-     */
-    endDate?: number | null;
     /**
      * Language
      */
@@ -4471,7 +4622,7 @@ export type SummaryUpsertRequest = {
      * Timestamp
      */
     timestamp?: number | null;
-    [key: string]: unknown | (string | null) | (Array<string> | null) | (number | null) | (number | null) | (string | null) | (string | null) | (number | null) | (number | null) | undefined;
+    [key: string]: unknown | (string | null) | (string | null) | (string | null) | (number | null) | (number | null) | undefined;
 };
 
 /**
@@ -7478,6 +7629,31 @@ export type DataListSummariesResponses = {
 };
 
 export type DataListSummariesResponse = DataListSummariesResponses[keyof DataListSummariesResponses];
+
+export type DataSubmitSummaryData = {
+    body: SummarySubmitRequest;
+    path?: never;
+    query?: never;
+    url: '/api/v1/data/summaries';
+};
+
+export type DataSubmitSummaryErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type DataSubmitSummaryError = DataSubmitSummaryErrors[keyof DataSubmitSummaryErrors];
+
+export type DataSubmitSummaryResponses = {
+    /**
+     * Successful Response
+     */
+    200: SummaryResponse;
+};
+
+export type DataSubmitSummaryResponse = DataSubmitSummaryResponses[keyof DataSubmitSummaryResponses];
 
 export type DataDeleteSummaryData = {
     body?: never;

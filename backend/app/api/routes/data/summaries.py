@@ -14,6 +14,7 @@ from app.schemas.common import StatusResponse
 from app.schemas.summaries import (
     SummaryListItemResponse,
     SummaryResponse,
+    SummarySubmitRequest,
     SummaryUpsertRequest,
 )
 from app.schemas.tag_runs import TagRunListItemResponse, TagRunResponse
@@ -29,6 +30,9 @@ from app.services.summaries import (
 )
 from app.services.summaries import (
     list_summaries as list_summaries_impl,
+)
+from app.services.summaries import (
+    submit_summary as submit_summary_impl,
 )
 from app.services.summaries import (
     upsert_summary as upsert_summary_impl,
@@ -75,6 +79,34 @@ def list_summaries(
             session, limit=limit, offset=offset, search=search, user_id=current_user.id
         )
     ]
+
+
+# AW-05. POST rather than another PUT because it is not idempotent: it freezes
+# the Analysis window against the server's current minute, so the same body sent
+# twice describes two different windows — and the second is a 409 for that
+# reason rather than a merge.
+#
+# In a comment rather than a docstring: a handler docstring becomes the
+# `openapi.json` description and a JSDoc block in the generated client.
+@router.post("/summaries")
+def submit_summary(
+    body: SummarySubmitRequest,
+    session: SessionDep,
+    current_user: CurrentUser,
+) -> SummaryResponse:
+    """Open a summary at a frozen Scope, before any AI work begins."""
+    result = submit_summary_impl(
+        session,
+        user_id=current_user.id,
+        summary_id=body.id,
+        submission=body.scope,
+        language=body.language,
+        model=body.model,
+        post_count=body.post_count,
+        extra=body.extra,
+    )
+    touch_sync(session, "summaries")
+    return SummaryResponse.model_validate(result)
 
 
 @router.get("/summaries/{summary_id}")

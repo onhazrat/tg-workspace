@@ -109,6 +109,7 @@ class Reason(enum.Enum):
 
 #: Routes this file probes live, below.
 PROBED: dict[tuple[str, str], str] = {
+    ("POST", f"{V1}/data/summaries"): "artifact submission at a client-chosen id",
     ("GET", f"{V1}/data/summaries/{{summary_id}}"): "artifact by id",
     ("PUT", f"{V1}/data/summaries/{{summary_id}}"): "artifact write by id",
     ("DELETE", f"{V1}/data/summaries/{{summary_id}}"): "artifact delete by id",
@@ -1207,6 +1208,49 @@ WRITES: list[tuple[str, str, dict[str, Any]]] = [
         {"handle": "x", "isFollowed": True},
     ),
 ]
+
+
+@pytest.mark.security
+def test_submitting_at_a_foreign_id_takes_nothing_over(
+    client: TestClient,
+    alice: tuple[User, dict[str, str]],
+    bob: tuple[User, dict[str, str]],
+) -> None:
+    """AW-05's submission names its own id, so it is a takeover door too.
+
+    `POST /data/summaries` creates the row rather than merging into one, which
+    is the whole point — but the id comes from the client, so an id Alice
+    already holds has to be refused rather than silently reassigned. It answers
+    409 for a taken id whoever holds it, which is deliberately *less* than the
+    `PUT` door tells you: an id being taken is unavoidable for a client-chosen
+    primary key, an id being taken **by somebody else** is the enumeration
+    oracle the 404-not-403 rule exists to close.
+    """
+    row_id = f"iso-submit-{uuid.uuid4()}"
+    _seed(next(f for f in FAMILIES if f[0] == "summary")[1](row_id, alice[0].id))
+
+    response = client.post(
+        f"{DATA}/summaries",
+        json={
+            "id": row_id,
+            "scope": {
+                "channels": ["ch"],
+                "window": {
+                    "mode": "live",
+                    "durationMinutes": 60,
+                    "endGapMinutes": 0,
+                },
+            },
+        },
+        headers=bob[1],
+    )
+
+    assert response.status_code == 409, response.text[:200]
+    with Session(engine) as session:
+        stored = session.get(Summary, row_id)
+        assert stored is not None, "a refused submission deleted the row"
+        assert stored.user_id == alice[0].id
+        assert stored.scope is None, "a refused submission wrote a Scope"
 
 
 @pytest.mark.security

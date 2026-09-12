@@ -2,7 +2,7 @@ import type React from "react"
 import { createContext, useContext, useState } from "react"
 import { toast } from "sonner"
 import { api } from "@/api"
-import type { PromptScope } from "@/api/data"
+import { frozenWindow, type PromptScope } from "@/api/data"
 import { useBotCredentials, useChatDestinations } from "@/hooks/useBots"
 import {
   useInvalidateSummaries,
@@ -12,7 +12,11 @@ import { selectedAiKeyId } from "@/lib/aiKeys/selection"
 import { floorToMinute, serverMinuteStart } from "@/lib/analysis-window"
 import { saveLLMLog, savePublishLog } from "@/lib/logs/write"
 import { lookupPosts } from "@/lib/posts/store"
-import { saveSummary } from "@/lib/summaries/store"
+import {
+  deleteSummary,
+  saveSummary,
+  submitSummary,
+} from "@/lib/summaries/store"
 import {
   formatSummaryModelLabel,
   isPendingSummary,
@@ -114,7 +118,10 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({
   const loadHistory = useInvalidateSummaries()
   const botCredentials = useBotCredentials()
   const chatDestinations = useChatDestinations()
-  const { startDate, endDate } = useScope()
+  // Only `endDate`: what a Summary is *about* is frozen server-side now
+  // (AW-05), and the one thing left that needs a boundary here is deciding
+  // which channels to sync before generating.
+  const { endDate } = useScope()
   const {
     setActiveTab,
     setSummarizing,
@@ -141,6 +148,7 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({
     semanticSearchRespectsChannels,
     handleFilterPosts,
     getPromptPostsInput,
+    getScopeSubmission,
   } = useScraper()
   const { setChatMessages } = useChatContext()
   const { isOffline } = useApiStatus()
@@ -221,11 +229,47 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({
     setSummary(null)
     setActiveTab("summary")
 
+    // Submission creates the row, so a run that produces nothing has to take
+    // it back — otherwise every failed generation litters History with an
+    // empty Artifact that has a perfectly good Scope.
+    let openedId: string | null = null
+
     try {
       const channelsText = formatChannelsForPrompt(channels, selectedChannels, {
         includeBio: includeChannelBioInPrompt,
         includeTags: includeChannelTagsInPrompt,
       })
+
+      // Submit before a single token is spent (AW-05). The server resolves the
+      // Analysis window against its own current minute and stores the result,
+      // so model latency, a retry and this browser's clock cannot move the
+      // boundaries the finished Summary claims it used.
+      //
+      // A UUID, not a timestamp: `id` is the whole primary key of
+      // `tg_summaries`, so two accounts submitting in the same millisecond
+      // would collide.
+      const newId = crypto.randomUUID()
+      const opened = await submitSummary({
+        id: newId,
+        scope: getScopeSubmission(selectedChannelNames, input.posts),
+        language: aiLanguage,
+        model: selectedModel,
+        postCount,
+        extra: {
+          sendMetadata: true,
+          postSearch: postSearch || undefined,
+          semanticSearchQuery: semanticSearchQuery || undefined,
+          semanticSearchRespectsChannels,
+        },
+      })
+
+      openedId = newId
+
+      // Select by what was frozen, not by what the clock says now — the
+      // Artifact and the prompt have to name the same two instants.
+      if (scope && opened.scope) {
+        scope = { ...scope, window: frozenWindow(opened.scope) }
+      }
 
       const startTime = Date.now()
       const { stream, prompt, config } = await generateSummaryStream(
@@ -271,12 +315,6 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({
       await saveLLMLog(llmLog)
 
       if (fullSummaryText) {
-        // A UUID, not a timestamp: `id` is the whole primary key of
-        // `tg_summaries`, so two accounts saving in the same millisecond would
-        // collide, and since ticket 17 the loser's create is refused as a 404
-        // rather than silently merging into the winner's row.
-        const newId = crypto.randomUUID()
-
         // Scope path never held the posts, so resolve the cited ones by lookup.
         const citedPosts = scope
           ? extractCitedPosts(
@@ -285,23 +323,19 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({
             )
           : extractCitedPosts(fullSummaryText, citationPool)
 
-        const newSummary: Summary = {
+        // Only what the run produced. The Scope is already on the row and the
+        // server refuses to take it again, so sending it back would be a
+        // second copy of a fact that is settled.
+        await saveSummary({
           id: newId,
           text: fullSummaryText,
-          channels: Array.from(selectedChannels),
-          startDate,
-          endDate,
-          language: aiLanguage,
           model: selectedModel,
           postCount,
           timestamp: Date.now(),
-          sendMetadata: true,
-          postSearch: postSearch || undefined,
-          semanticSearchQuery: semanticSearchQuery || undefined,
-          semanticSearchRespectsChannels,
+          status: null,
           citedPosts,
-        }
-        await saveSummary(newSummary)
+        } as unknown as Summary)
+        openedId = null
         setCurrentSummaryId(newId)
         await loadHistory()
       }
@@ -315,6 +349,7 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({
         toast.error("An unexpected error occurred during summarization")
       }
     } finally {
+      if (openedId) await deleteSummary(openedId).catch(() => {})
       setSummarizing(false)
     }
   }
@@ -324,6 +359,13 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({
       toast.warning("Server offline — cannot build summary prompt.")
       return
     }
+
+    // Same rollback as `handleSummarize`, and this path needs it more: the
+    // prompt is assembled *after* the row exists, and `clipboard.writeText`
+    // rejects routinely — denied permission, a non-secure context. Without
+    // this, a person who never received a prompt is left with a `pending`
+    // Summary they can only clear by deleting.
+    let openedId: string | null = null
 
     try {
       const selectedChannelNames = channels
@@ -351,6 +393,34 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({
         return
       }
 
+      // Submit *before* the prompt is assembled, for the same reason the
+      // interactive path submits before streaming: the prompt has to be built
+      // from the window the Artifact records, and a response pasted back hours
+      // later must not be able to reinterpret it.
+      //
+      // A UUID for the reason the interactive path uses one.
+      const newId = crypto.randomUUID()
+      const opened = await submitSummary({
+        id: newId,
+        scope: getScopeSubmission(selectedChannelNames, input.posts),
+        language: aiLanguage,
+        model: selectedModel,
+        postCount,
+        extra: {
+          sendMetadata: true,
+          postSearch: postSearch || undefined,
+          semanticSearchQuery: semanticSearchQuery || undefined,
+          semanticSearchRespectsChannels,
+          // This path genuinely is awaiting a response from somewhere else,
+          // which is what `pending` has always meant.
+          status: "pending",
+        },
+      })
+      openedId = newId
+      if (scope && opened.scope) {
+        scope = { ...scope, window: frozenWindow(opened.scope) }
+      }
+
       const prompt = await getSummaryPrompt(
         selectedChannelNames,
         formatChannelsForPrompt(channels, selectedChannels, {
@@ -364,28 +434,8 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({
         scope,
       )
       await navigator.clipboard.writeText(prompt)
-
-      // A UUID for the reason the interactive path uses one.
-      const newId = crypto.randomUUID()
-      const pendingSummary: Summary = {
-        id: newId,
-        text: "",
-        channels: Array.from(selectedChannels),
-        startDate,
-        endDate,
-        language: aiLanguage,
-        model: selectedModel,
-        postCount,
-        timestamp: Date.now(),
-        sendMetadata: true,
-        postSearch: postSearch || undefined,
-        semanticSearchQuery: semanticSearchQuery || undefined,
-        semanticSearchRespectsChannels,
-        status: "pending",
-        promptText: prompt,
-      }
-
-      await saveSummary(pendingSummary)
+      await saveSummary({ id: newId, promptText: prompt } as Summary)
+      openedId = null
       setCurrentSummaryId(newId)
       setSummary(null)
       setChatMessages([])
@@ -401,6 +451,8 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({
       } else {
         toast.error("Failed to copy summary prompt")
       }
+    } finally {
+      if (openedId) await deleteSummary(openedId).catch(() => {})
     }
   }
 

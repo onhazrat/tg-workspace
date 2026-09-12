@@ -42,6 +42,7 @@ from app.schemas.analysis_window import (
     FixedAnalysisWindow,
     LiveAnalysisWindow,
 )
+from app.schemas.scope import FrozenScope, ScopeSubmission
 
 MINUTE_MS = 60_000
 
@@ -117,3 +118,43 @@ def _resolve_fixed(window: FixedAnalysisWindow, minute: int) -> ResolvedWindow:
             ),
         )
     return ResolvedWindow(start=start, end=end)
+
+
+def freeze_scope(
+    submission: ScopeSubmission, *, now_ms: int | None = None
+) -> FrozenScope:
+    """Resolve a submitted Scope once, into the value an Artifact records.
+
+    The point of doing it here rather than at the point of use is *when*: this
+    runs at submission, before anything is queued and before a single token is
+    spent, so the boundaries an Artifact reports are the ones that were current
+    when somebody asked for it. Resolving at the point of use would put a queue
+    wait, a retry and a worker's start time between the request and the window,
+    and a Live Scope would then mean whatever the clock said by the time a
+    worker got to it.
+
+    Everything downstream re-states the frozen pair as a Fixed window, which
+    resolves to itself: the producer and the record cannot disagree, because
+    they are the same two numbers.
+    """
+    window = resolve_analysis_window(submission.window, now_ms=now_ms)
+    # `resolve_analysis_window` returns `None` on both sides only for the
+    # no-window case, which `ScopeSubmission.window` makes unreachable. The
+    # assertion is here rather than a `cast` so a future optional window fails
+    # loudly instead of freezing a corpus-wide Scope as `0 -> 0`.
+    assert window.start is not None and window.end is not None
+
+    # Through `model_validate` rather than the constructor: the filter half is
+    # copied wholesale, by alias, so a filter added to `ScopeSubmission` reaches
+    # the record without anyone naming it here.
+    return FrozenScope.model_validate(
+        {
+            **submission.model_dump(by_alias=True, exclude={"window", "posts"}),
+            "start": window.start,
+            "end": window.end,
+            "scopedPostCount": (
+                None if submission.posts is None else len(submission.posts)
+            ),
+            "posts": submission.posts,
+        }
+    )
