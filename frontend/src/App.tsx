@@ -161,7 +161,15 @@ export default function App() {
       startDate: artifact.startDate ?? 0,
       endDate: artifact.endDate ?? 0,
     })
-    setDateRange(artifact.startDate ?? 0, artifact.endDate ?? 0)
+    // Only when the Artifact actually carries a window. The `?? 0` fallbacks
+    // above are for display; feeding them to `setDateRange` pins the workspace
+    // to `(0, 0)`, which AW-02 answers with a 422 on every scoped request —
+    // feed, counts, Discover, every Action — until somebody notices the date
+    // range is the thing to fix. The old server read it as an empty window and
+    // returned nothing, so this used to be merely useless rather than stuck.
+    if (artifact.startDate && artifact.endDate) {
+      setDateRange(artifact.startDate, artifact.endDate)
+    }
     setSelectedChannels(new Set(artifact.channels ?? []))
 
     const { tab, param } = artifactDestination(artifact)

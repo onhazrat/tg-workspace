@@ -49,15 +49,14 @@ if (
 
 configureGeneratedClient()
 
-// AW-02. One read at startup and one whenever the tab comes back, which is
-// what a clock estimate needs and all it needs: the offset between two
-// machines' clocks drifts by seconds a day, not by minutes, and a tab that was
-// suspended for hours is the one case where the browser's own clock may have
-// moved without ticking. Nothing waits on either call — an unsynced offset is
-// zero, which is the browser clock, which is what this drew with before.
-syncServerClock()
+// AW-02. The offset between two machines' clocks drifts by seconds a day, so
+// one read per session would nearly do — except that a tab suspended for hours
+// is the one case where the browser's own clock can move without ticking. This
+// catches that; the read that matters is awaited in `routes/_layout.tsx`
+// before the first scoped query, because `/utils/server-time` needs a token
+// and nothing here has one yet.
 document.addEventListener("visibilitychange", () => {
-  if (document.visibilityState === "visible") syncServerClock()
+  if (document.visibilityState === "visible") void syncServerClock()
 })
 
 // The `QueryClient` lives in `lib/queryClient.ts` so non-React writers can

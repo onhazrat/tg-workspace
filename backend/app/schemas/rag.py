@@ -38,7 +38,11 @@ class RagSearchRequest(BaseModel):
     The Analysis window is required; a search is always over a window.
     """
 
-    model_config = ConfigDict(populate_by_name=True)
+    # `extra="forbid"`: see `PostScopeRequest`. A stale client sending the
+    # pre-AW-02 pair must be refused, not quietly widened to the whole corpus —
+    # and on this route a silent widening also spends the Operator's Key
+    # embedding a query it then scans everything with.
+    model_config = ConfigDict(populate_by_name=True, extra="forbid")
 
     query: str
     channels: list[str] | None = None

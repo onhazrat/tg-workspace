@@ -40,6 +40,8 @@ computes reaches a selection.
 * swap a crossed pair instead of refusing -> the crossed case
 * stop flooring Fixed bounds -> the normalisation case
 * re-add `start_date` to `PostScopeRequest` -> the legacy-pair guard
+* drop `extra="forbid"` from any of the three -> the stale-client case
+* drop the `le=` ceilings -> the absurd-window case (a 500, not a 422)
 """
 
 from __future__ import annotations
@@ -48,7 +50,9 @@ import datetime as dt
 
 import pytest
 from fastapi import HTTPException
+from fastapi.testclient import TestClient
 
+from app.core.config import settings
 from app.main import app
 from app.schemas.analysis_window import (
     FixedAnalysisWindow,
@@ -400,3 +404,90 @@ def test_the_window_reaches_the_client_as_a_discriminated_union() -> None:
 
     for name in ("LiveAnalysisWindow", "FixedAnalysisWindow"):
         assert "mode" in _properties(schemas[name])
+
+
+# --- The legacy pair has to be refused, not ignored -------------------------
+#
+# Removing a field does not refuse it. Pydantic ignores unknown keys unless
+# told otherwise, so before `extra="forbid"` every model below accepted the
+# pre-AW-02 body, resolved `window=None` to "both sides open", and answered a
+# whole-corpus read with a 200. That is the same defect the ticket set out to
+# remove — a Scope meaning something the caller did not ask for — only louder,
+# because it is every Post rather than four minutes of them.
+#
+# Through the client rather than against the models: `extra` is inherited by
+# subclasses and configured three different ways across these three modules, so
+# what matters is the answer at the door.
+
+LEGACY_PAIR = {"startDate": 1_000, "endDate": 2_000}
+
+
+def _superuser(client: TestClient) -> dict[str, str]:
+    login = client.post(
+        f"{settings.API_V1_STR}/login/access-token",
+        data={
+            "username": settings.FIRST_SUPERUSER,
+            "password": settings.FIRST_SUPERUSER_PASSWORD,
+        },
+    )
+    return {"Authorization": f"Bearer {login.json()['access_token']}"}
+
+
+@pytest.mark.parametrize(
+    ("path", "body"),
+    [
+        ("/data/posts", {"channelNames": ["alpha"], **LEGACY_PAIR}),
+        ("/data/posts/counts", {"channelNames": ["alpha"], **LEGACY_PAIR}),
+        ("/data/discover/candidates", {"channelNames": ["alpha"], **LEGACY_PAIR}),
+        ("/rag/search", {"query": "q", **LEGACY_PAIR}),
+        (
+            "/ai/summary/prompt",
+            {
+                "channels": ["alpha"],
+                "postsText": "",
+                "language": "English",
+                "scope": LEGACY_PAIR,
+            },
+        ),
+    ],
+)
+def test_a_stale_client_sending_the_legacy_pair_is_refused(
+    client: TestClient, path: str, body: dict[str, object]
+) -> None:
+    """A tab open across the deploy must not read the whole corpus.
+
+    422 and not 200: silently widening is the failure mode worth a test, and on
+    `/ai/summary/prompt` it would also assemble a prompt from every Post the
+    account can see and bill it to the caller's own Key.
+    """
+    response = client.post(
+        f"{settings.API_V1_STR}{path}", json=body, headers=_superuser(client)
+    )
+
+    assert response.status_code == 422, response.text
+    assert "startDate" in response.text
+
+
+@pytest.mark.parametrize(
+    "window",
+    [
+        {"mode": "live", "durationMinutes": 10**25, "endGapMinutes": 0},
+        {"mode": "fixed", "start": 0, "end": 10**25},
+    ],
+)
+def test_an_absurd_window_is_refused_rather_than_crashing_the_query(
+    client: TestClient, window: dict[str, object]
+) -> None:
+    """A number no `bigint` can hold answers 422, not 500.
+
+    Unbounded, the arithmetic reaches a value psycopg refuses to bind and the
+    caller gets a 500 with nothing to act on. The ceilings sit far past any
+    real corpus, so the only requests they refuse could never have worked.
+    """
+    response = client.post(
+        f"{settings.API_V1_STR}/data/posts/counts",
+        json={"channelNames": ["alpha"], "window": window},
+        headers=_superuser(client),
+    )
+
+    assert response.status_code == 422, response.text

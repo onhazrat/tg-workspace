@@ -78,6 +78,15 @@ class PostScopeRequest(BaseModel):
     server header limits. A body has no such ceiling.
     """
 
+    # `extra="forbid"` is the other half of dropping `startDate`/`endDate`, and
+    # without it the removal enforces nothing. Pydantic ignores unknown keys by
+    # default, so a tab left open across a deploy would post the legacy pair,
+    # get `window=None`, and be answered with **every Post in the corpus**
+    # instead of the day it asked for — silently, with a 200. An unknown key on
+    # a Scope is a client that means something this server does not do, and the
+    # only safe answer is 422.
+    model_config = ConfigDict(extra="forbid")
+
     channel_names: list[str] | None = PydanticField(None, alias="channelNames")
     # AW-02. This was `startDate`/`endDate`, two epoch milliseconds the browser
     # computed from its own clock. Removing them rather than accepting both

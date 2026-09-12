@@ -23,7 +23,12 @@ class PromptScopeInput(BaseModel):
     sort: str = "time"
     seed: int = 0
 
-    model_config = {"populate_by_name": True}
+    # `extra="forbid"`: see `PostScopeRequest`. The blast radius is largest
+    # here. A stale client posting the pre-AW-02 pair would resolve to an
+    # unbounded window, and this path has no `limit` to bound it — it would
+    # assemble a prompt from every Post the account can see and bill it to the
+    # caller's own AI Key.
+    model_config = {"populate_by_name": True, "extra": "forbid"}
 
 
 class ModelInfo(BaseModel):

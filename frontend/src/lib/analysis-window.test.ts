@@ -15,12 +15,22 @@ import { fixedWindow, floorToMinute, MINUTE_MS } from "./analysis-window"
  * which is what every assertion below assumes.
  */
 
-const MINUTE = Math.floor(Date.now() / MINUTE_MS) * MINUTE_MS
+/**
+ * Read per assertion, never captured once at module load.
+ *
+ * `fixedWindow` calls `serverMinuteStart()` when the assertion runs, so a
+ * fixture frozen at import time is a different minute from the one under test
+ * whenever a run crosses a boundary — which is a flake that shows up as an
+ * off-by-60000 diff on an unrelated afternoon.
+ */
+const minute = () => Math.floor(Date.now() / MINUTE_MS) * MINUTE_MS
 
 describe("floorToMinute", () => {
   it("drops seconds and milliseconds", () => {
-    expect(floorToMinute(MINUTE + 59_999)).toBe(MINUTE)
-    expect(floorToMinute(MINUTE)).toBe(MINUTE)
+    const m = minute()
+
+    expect(floorToMinute(m + 59_999)).toBe(m)
+    expect(floorToMinute(m)).toBe(m)
   })
 
   it("floors backwards before the epoch rather than truncating toward it", () => {
@@ -34,13 +44,14 @@ describe("fixedWindow", () => {
   })
 
   it("floors both boundaries to the minute, as the server will", () => {
-    const start = MINUTE - 60 * MINUTE_MS + 31_500
-    const end = MINUTE - MINUTE_MS + 999
+    const m = minute()
 
-    expect(fixedWindow(start, end)).toEqual({
+    expect(
+      fixedWindow(m - 60 * MINUTE_MS + 31_500, m - MINUTE_MS + 999),
+    ).toEqual({
       mode: "fixed",
-      start: MINUTE - 60 * MINUTE_MS,
-      end: MINUTE - MINUTE_MS,
+      start: m - 60 * MINUTE_MS,
+      end: m - MINUTE_MS,
     })
   })
 
@@ -48,12 +59,13 @@ describe("fixedWindow", () => {
     // What a clock running four minutes fast produces for "up to now". Sent
     // as-is this is a 422 — the server refuses a Fixed end it has not reached
     // — so every such browser would lose the feed entirely.
-    const window = fixedWindow(MINUTE - MINUTE_MS, MINUTE + 4 * MINUTE_MS)
+    const m = minute()
+    const window = fixedWindow(m - MINUTE_MS, m + 4 * MINUTE_MS)
 
     expect(window).toEqual({
       mode: "fixed",
-      start: MINUTE - MINUTE_MS,
-      end: MINUTE,
+      start: m - MINUTE_MS,
+      end: m,
     })
   })
 
@@ -61,15 +73,17 @@ describe("fixedWindow", () => {
     // The old pair let either side be absent. Both cases select the same rows
     // as leaving the side open did: nothing is stored before the epoch, and
     // nothing is stored in the future.
-    expect(fixedWindow(MINUTE - MINUTE_MS, undefined)).toEqual({
+    const m = minute()
+
+    expect(fixedWindow(m - MINUTE_MS, undefined)).toEqual({
       mode: "fixed",
-      start: MINUTE - MINUTE_MS,
-      end: MINUTE,
+      start: m - MINUTE_MS,
+      end: m,
     })
-    expect(fixedWindow(undefined, MINUTE - MINUTE_MS)).toEqual({
+    expect(fixedWindow(undefined, m - MINUTE_MS)).toEqual({
       mode: "fixed",
       start: 0,
-      end: MINUTE - MINUTE_MS,
+      end: m - MINUTE_MS,
     })
   })
 })

@@ -23,6 +23,17 @@ from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
+#: 9999-12-31T23:59:59.999Z. An upper bound on every instant and every span,
+#: because without one the arithmetic leaves the range PostgreSQL can compare a
+#: `bigint` against: a Duration of 10**25 minutes resolves to a start that makes
+#: psycopg raise `NumericValueOutOfRange`, and a 500 is the wrong answer to a
+#: number a client simply made up. Far past any real corpus, so the only
+#: requests it refuses are ones that were never going to work.
+MAX_INSTANT_MS = 253_402_300_799_999
+
+#: A century. The same argument as `MAX_INSTANT_MS`, for the elapsed values.
+MAX_SPAN_MINUTES = 100 * 365 * 24 * 60
+
 
 class LiveAnalysisWindow(BaseModel):
     """A window that advances with the server's clock."""
@@ -39,8 +50,8 @@ class LiveAnalysisWindow(BaseModel):
     # Duration is at least one minute: a zero-width window cannot masquerade as
     # useful work (story 18). The end gap may be zero — that is "ending at the
     # current minute", which needs no dedicated shortcut (story 19).
-    duration_minutes: int = Field(alias="durationMinutes", ge=1)
-    end_gap_minutes: int = Field(alias="endGapMinutes", ge=0)
+    duration_minutes: int = Field(alias="durationMinutes", ge=1, le=MAX_SPAN_MINUTES)
+    end_gap_minutes: int = Field(alias="endGapMinutes", ge=0, le=MAX_SPAN_MINUTES)
 
 
 class FixedAnalysisWindow(BaseModel):
@@ -49,8 +60,8 @@ class FixedAnalysisWindow(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
     mode: Literal["fixed"]
-    start: int
-    end: int
+    start: int = Field(ge=0, le=MAX_INSTANT_MS)
+    end: int = Field(ge=0, le=MAX_INSTANT_MS)
 
 
 #: Either form, told apart by `mode` rather than by which fields are present.

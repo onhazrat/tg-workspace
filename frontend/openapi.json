@@ -6612,6 +6612,7 @@
             "title": "Postids"
           }
         },
+        "additionalProperties": false,
         "type": "object",
         "required": ["channelNames"],
         "title": "DiscoverCandidatesRequest",
@@ -7044,8 +7045,18 @@
       "FixedAnalysisWindow": {
         "properties": {
           "mode": { "type": "string", "const": "fixed", "title": "Mode" },
-          "start": { "type": "integer", "title": "Start" },
-          "end": { "type": "integer", "title": "End" }
+          "start": {
+            "type": "integer",
+            "maximum": 253402300799999.0,
+            "minimum": 0.0,
+            "title": "Start"
+          },
+          "end": {
+            "type": "integer",
+            "maximum": 253402300799999.0,
+            "minimum": 0.0,
+            "title": "End"
+          }
         },
         "type": "object",
         "required": ["mode", "start", "end"],
@@ -7421,11 +7432,13 @@
           "mode": { "type": "string", "const": "live", "title": "Mode" },
           "durationMinutes": {
             "type": "integer",
+            "maximum": 52560000.0,
             "minimum": 1.0,
             "title": "Durationminutes"
           },
           "endGapMinutes": {
             "type": "integer",
+            "maximum": 52560000.0,
             "minimum": 0.0,
             "title": "Endgapminutes"
           }
@@ -7830,6 +7843,7 @@
           "sort": { "type": "string", "title": "Sort", "default": "time" },
           "seed": { "type": "integer", "title": "Seed", "default": 0 }
         },
+        "additionalProperties": false,
         "type": "object",
         "title": "PostFeedRequest",
         "description": "`PostScopeRequest` plus the feed's paging, cap mode and sort.\n\n`limit`/`offset` keep the same bounds the query params enforced, so an\nout-of-range page is still a 422 rather than an unbounded read."
@@ -7970,6 +7984,7 @@
             "default": 0
           }
         },
+        "additionalProperties": false,
         "type": "object",
         "title": "PostScopeRequest",
         "description": "A post scope carried in a request body rather than a query string.\n\nThe channel selection can run to the full account \u2014 over a thousand handles \u2014\nwhich as `?channelNames=a,b,c,...` produced URLs long enough to hit proxy and\nserver header limits. A body has no such ceiling."
@@ -8044,6 +8059,7 @@
           "sort": { "type": "string", "title": "Sort", "default": "time" },
           "seed": { "type": "integer", "title": "Seed", "default": 0 }
         },
+        "additionalProperties": false,
         "type": "object",
         "title": "PromptScopeInput",
         "description": "A Posts-feed scope the backend resolves into the prompt's posts block,\ninstead of the client shipping a pre-built ``postsText``. Mirrors the\nfrontend feed query params."
@@ -8369,6 +8385,7 @@
             "default": 5000
           }
         },
+        "additionalProperties": false,
         "type": "object",
         "required": ["query", "window"],
         "title": "RagSearchRequest",
