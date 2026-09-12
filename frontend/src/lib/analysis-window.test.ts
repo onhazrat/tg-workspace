@@ -1,10 +1,5 @@
 import { describe, expect, it } from "bun:test"
-import {
-  fixedWindow,
-  floorToMinute,
-  legalRange,
-  MINUTE_MS,
-} from "./analysis-window"
+import { fixedWindow, floorToMinute, MINUTE_MS } from "./analysis-window"
 
 /**
  * AW-02, the browser half.
@@ -90,53 +85,5 @@ describe("fixedWindow", () => {
       start: 0,
       end: m - MINUTE_MS,
     })
-  })
-})
-
-describe("legalRange", () => {
-  /**
-   * The regression this exists for: every workspace setter used to repair a
-   * crossed range by collapsing it onto one instant, and AW-02 turned that
-   * empty window into a 422 on the feed, the counts, Discover and every
-   * Action at once. The pair is persisted, so a reload did not clear it.
-   */
-  it("never returns a zero-width range, however the two were crossed", () => {
-    const m = minute()
-
-    for (const [start, end] of [
-      [m - MINUTE_MS, m - MINUTE_MS], // already collapsed
-      [m, m - 5 * MINUTE_MS], // End dragged before Start
-      [m - 10, m - 5], // both inside the current minute
-      [m + 9 * MINUTE_MS, m + 9 * MINUTE_MS], // both in the future
-    ]) {
-      const [s, e] = legalRange(start, end)
-      expect(e - s).toBeGreaterThanOrEqual(MINUTE_MS)
-    }
-  })
-
-  it("leaves a range that is already legal alone", () => {
-    const m = minute()
-
-    expect(legalRange(m - 60 * MINUTE_MS, m - MINUTE_MS)).toEqual([
-      m - 60 * MINUTE_MS,
-      m - MINUTE_MS,
-    ])
-  })
-
-  it("holds the End and moves the Start, per the propagation rule", () => {
-    const m = minute()
-
-    // Start dragged past End: the End is what stays put (ADR-018).
-    expect(legalRange(m - MINUTE_MS, m - 5 * MINUTE_MS)).toEqual([
-      m - 6 * MINUTE_MS,
-      m - 5 * MINUTE_MS,
-    ])
-  })
-
-  it("never lets the End reach past the server's current minute", () => {
-    const m = minute()
-    const [, end] = legalRange(m - MINUTE_MS, m + 4 * MINUTE_MS)
-
-    expect(end).toBe(m)
   })
 })

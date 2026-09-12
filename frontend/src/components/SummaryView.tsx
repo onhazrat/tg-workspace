@@ -27,6 +27,7 @@ import { saveSummary } from "@/lib/summaries/store"
 import { buildActiveProxies } from "@/lib/syncSettings"
 import { formatSummaryModelLabel, isPendingSummary } from "../constants"
 import { generateDefaultMetadataText, useAI } from "../contexts/AIContext"
+import { useScope } from "../contexts/ScopeContext"
 import { useScraper } from "../contexts/ScraperContext"
 import { useSettings } from "../contexts/SettingsContext"
 import { useUI } from "../contexts/UIContext"
@@ -161,7 +162,8 @@ export const SummaryView: React.FC<SummaryViewProps> = () => {
   const chatDestinations = useChatDestinations()
   const summariesHistory = useSummariesHistory()
   const loadHistory = useInvalidateSummaries()
-  const { startDate, endDate, currentSummaryId, summarizing } = useUI()
+  const { currentSummaryId, summarizing } = useUI()
+  const { startDate, endDate } = useScope()
 
   // The prompt panel below needs the full promptText, which the list
   // projection omits (it was ~94% of that payload).

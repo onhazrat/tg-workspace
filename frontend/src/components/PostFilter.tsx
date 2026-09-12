@@ -10,11 +10,20 @@ import {
 import React from "react"
 import { TgButton } from "@/components/ui/tg-button"
 import { TgFilterChip } from "@/components/ui/tg-chips"
+import { useScope } from "../contexts/ScopeContext"
 import { useScraper } from "../contexts/ScraperContext"
 import { useSettings } from "../contexts/SettingsContext"
-import { useUI } from "../contexts/UIContext"
 import { MEDIA_FILTER_OPTIONS } from "../lib/posts/post-media"
 import { formatDateToLocalISO } from "../lib/utils"
+
+/** A refusal, beside the field that earned it rather than pooled per section. */
+const ScopeFieldError: React.FC<{ children: React.ReactNode }> = ({
+  children,
+}) => (
+  <p role="alert" className="text-[11px] text-red-600 dark:text-red-400">
+    {children}
+  </p>
+)
 
 interface PostFilterProps {
   postSearch: string
@@ -25,7 +34,7 @@ export const PostFilter: React.FC<PostFilterProps> = ({
   postSearch,
   setPostSearch,
 }) => {
-  const { startDate, endDate, setDateRange, setStartDate, setEndDate } = useUI()
+  const { startDate, endDate, applyValue, errors } = useScope()
   const {
     semanticSearchQuery,
     setSemanticSearchQuery,
@@ -54,10 +63,16 @@ export const PostFilter: React.FC<PostFilterProps> = ({
     setSemanticInput(semanticSearchQuery || "")
   }, [semanticSearchQuery])
 
+  // "The last N hours", which is what the buttons say, and it has to stay true
+  // in Fixed mode too — a migrated Account is Fixed, and holding its End would
+  // make "24h" mean a day three weeks ago. So: close the End gap first, then
+  // set the Duration against the End that move produced.
+  //
+  // AW-04 replaces this whole section with the four-field editor, where the gap
+  // is a field somebody can choose to keep.
   const setQuickRange = (hours: number) => {
-    const end = Date.now()
-    const start = end - hours * 60 * 60 * 1000
-    setDateRange(start, end)
+    if (applyValue("endGap", 0)) return
+    applyValue("duration", hours * 60 * 60 * 1000)
   }
 
   if (relatedPostSearch) {
@@ -165,11 +180,14 @@ export const PostFilter: React.FC<PostFilterProps> = ({
                     onChange={(e) => {
                       if (e.target.value) {
                         const time = new Date(e.target.value).getTime()
-                        if (!Number.isNaN(time)) setStartDate(time)
+                        if (!Number.isNaN(time)) applyValue("start", time)
                       }
                     }}
                     className="w-full bg-app-muted text-app-ink border border-app-ink/10 rounded-xl py-2 px-3 focus:outline-none focus:border-app-ink/30 focus:ring-4 focus:ring-app-ink/5 transition-all text-[11px] font-mono"
                   />
+                  {errors.start && (
+                    <ScopeFieldError>{errors.start}</ScopeFieldError>
+                  )}
                 </div>
                 <div className="space-y-2">
                   <label className="text-[11px] uppercase font-bold text-app-ink/60 tracking-widest">
@@ -186,11 +204,14 @@ export const PostFilter: React.FC<PostFilterProps> = ({
                     onChange={(e) => {
                       if (e.target.value) {
                         const time = new Date(e.target.value).getTime()
-                        if (!Number.isNaN(time)) setEndDate(time)
+                        if (!Number.isNaN(time)) applyValue("end", time)
                       }
                     }}
                     className="w-full bg-app-muted text-app-ink border border-app-ink/10 rounded-xl py-2 px-3 focus:outline-none focus:border-app-ink/30 focus:ring-4 focus:ring-app-ink/5 transition-all text-[11px] font-mono"
                   />
+                  {errors.end && (
+                    <ScopeFieldError>{errors.end}</ScopeFieldError>
+                  )}
                 </div>
               </div>
             </div>

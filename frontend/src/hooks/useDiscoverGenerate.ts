@@ -1,9 +1,9 @@
 import { useMemo } from "react"
 
 import { useData } from "@/contexts/DataContext"
+import { useScope } from "@/contexts/ScopeContext"
 import { useScraper } from "@/contexts/ScraperContext"
 import { useSettings } from "@/contexts/SettingsContext"
-import { useUI } from "@/contexts/UIContext"
 import { useDebouncedValue } from "@/hooks/useDebouncedValue"
 import type { DiscoverCandidatesParams } from "@/hooks/useDiscover"
 import { useCreateDiscoverReportMutation } from "@/hooks/useDiscover"
@@ -29,7 +29,7 @@ export function useDiscoverGenerate() {
     maxPostsPerChannelMode,
     mediaFilter,
   } = useScraper()
-  const { startDate, endDate } = useUI()
+  const { startDate, endDate } = useScope()
   const { discoverSignals } = useSettings()
   const { openReport } = useDiscoverReportParam()
   const createReport = useCreateDiscoverReportMutation()

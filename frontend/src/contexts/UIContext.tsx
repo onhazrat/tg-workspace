@@ -6,7 +6,6 @@ import {
   useEffect,
   useState,
 } from "react"
-import { legalRange } from "@/lib/analysis-window"
 import { scopedStorage } from "@/lib/storage/scoped"
 import {
   useChatSessionParam,
@@ -21,11 +20,6 @@ interface UIContextType {
   setActiveTab: React.Dispatch<React.SetStateAction<TabType>>
   isRateLimited: boolean
   setIsRateLimited: React.Dispatch<React.SetStateAction<boolean>>
-  startDate: number
-  setStartDate: React.Dispatch<React.SetStateAction<number>>
-  endDate: number
-  setEndDate: React.Dispatch<React.SetStateAction<number>>
-  setDateRange: (start: number, end: number) => void
   summarizing: boolean
   setSummarizing: React.Dispatch<React.SetStateAction<boolean>>
   currentSummaryId: string | null
@@ -86,76 +80,6 @@ export const UIProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
       return scopedStorage.getItem("prompt_includeChannelTags") === "true"
     })
 
-  const [startDate, setStartDateInternal] = useState<number>(() => {
-    if (typeof window !== "undefined") {
-      const saved = scopedStorage.getItem("startDateTs")
-      if (saved && !Number.isNaN(Number(saved))) return Number(saved)
-      const oldSaved = scopedStorage.getItem("startDate")
-      if (oldSaved) {
-        const ts = new Date(oldSaved).getTime()
-        if (!Number.isNaN(ts)) return ts
-      }
-    }
-    return Date.now() - 7 * 24 * 60 * 60 * 1000
-  })
-
-  const [endDate, setEndDateInternal] = useState<number>(() => {
-    if (typeof window !== "undefined") {
-      const saved = scopedStorage.getItem("endDateTs")
-      if (saved && !Number.isNaN(Number(saved))) return Number(saved)
-      const oldSaved = scopedStorage.getItem("endDate")
-      if (oldSaved) {
-        const ts = new Date(oldSaved).getTime()
-        if (!Number.isNaN(ts)) return ts
-      }
-    }
-    return Date.now()
-  })
-
-  // Every write to the pair goes through `legalRange` (AW-02). All three
-  // setters below repaired a crossed range by collapsing it onto one instant,
-  // which the server now refuses — and the pair is persisted, so the refusal
-  // survived a reload. See that function for the whole of it.
-  const setStartDate = (value: React.SetStateAction<number>) => {
-    const apply = (next: number) => {
-      const [finalStart, finalEnd] = legalRange(next, endDate)
-      setEndDateInternal(finalEnd)
-      return finalStart
-    }
-
-    if (typeof value === "function") {
-      setStartDateInternal((prev) => apply(value(prev)))
-    } else {
-      setStartDateInternal(apply(value))
-    }
-  }
-
-  const setEndDate = (value: React.SetStateAction<number>) => {
-    const apply = (next: number) => {
-      const [finalStart, finalEnd] = legalRange(startDate, next)
-      setStartDateInternal(finalStart)
-      return finalEnd
-    }
-
-    if (typeof value === "function") {
-      setEndDateInternal((prev) => apply(value(prev)))
-    } else {
-      setEndDateInternal(apply(value))
-    }
-  }
-
-  const setDateRange = (start: number, end: number) => {
-    const [finalStart, finalEnd] = legalRange(start, end)
-
-    setStartDateInternal(finalStart)
-    setEndDateInternal(finalEnd)
-  }
-
-  useEffect(() => {
-    scopedStorage.setItem("startDateTs", startDate.toString())
-    scopedStorage.setItem("endDateTs", endDate.toString())
-  }, [startDate, endDate])
-
   useEffect(() => {
     scopedStorage.setItem(
       "prompt_includeChannelBio",
@@ -177,11 +101,6 @@ export const UIProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
         setActiveTab,
         isRateLimited,
         setIsRateLimited,
-        startDate,
-        setStartDate,
-        endDate,
-        setEndDate,
-        setDateRange,
         summarizing,
         setSummarizing,
         currentSummaryId,

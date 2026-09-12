@@ -4,7 +4,7 @@ import { countOf } from "@/lib/plural"
 /**
  * Says out loud what opening a saved report just changed.
  *
- * `applyHistorySummarySelection` calls `setSelectedChannels` and `setDateRange`
+ * `applyHistorySummarySelection` calls `setSelectedChannels` and `setFixedRange`
  * — deliberately, because a report only makes sense beside the posts it was
  * generated from. But it happened with nothing on screen to say so, and the
  * figures it drives (the "Posts in Scope" counter, the Posts feed, Discover)
