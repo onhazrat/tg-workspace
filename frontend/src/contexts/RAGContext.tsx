@@ -14,10 +14,19 @@ import { searchSimilarPostsFromQuery } from "../services/rag"
 import type { Post } from "../types"
 import { useSettings } from "./SettingsContext"
 
+/**
+ * Channels are optional; the Analysis window is not (AW-01).
+ *
+ * Both bounds used to be optional and two of the three call sites omitted
+ * them, which is how semantic retrieval and "more like this" searched all
+ * time while the rest of Scope meant a window. Required here so a caller that
+ * forgets does not compile, and required on the server so one that is not
+ * this client gets a 422 rather than a different answer.
+ */
 interface RAGSearchOptions {
   channels?: string[]
-  startDate?: number
-  endDate?: number
+  startDate: number
+  endDate: number
 }
 
 interface RAGContextType {
@@ -25,8 +34,8 @@ interface RAGContextType {
   progress: { current: number; total: number }
   searchSimilarPosts: (
     query: string,
-    limit?: number,
-    options?: RAGSearchOptions,
+    limit: number,
+    options: RAGSearchOptions,
   ) => Promise<Post[]>
   forceSync: () => Promise<void>
 }
@@ -71,7 +80,7 @@ export const RAGProvider: React.FC<{ children: ReactNode }> = ({
     async (
       query: string,
       limit: number = 10,
-      options?: RAGSearchOptions,
+      options: RAGSearchOptions,
     ): Promise<Post[]> => {
       if (!embeddingsEnabled) return []
 
@@ -79,9 +88,9 @@ export const RAGProvider: React.FC<{ children: ReactNode }> = ({
         return await searchSimilarPostsFromQuery(
           query,
           limit,
-          options?.channels,
-          options?.startDate,
-          options?.endDate,
+          options.channels,
+          options.startDate,
+          options.endDate,
         )
       } catch (error) {
         console.error("[RAGProvider] Search failed:", error)

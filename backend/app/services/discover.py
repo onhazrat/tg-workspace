@@ -28,7 +28,11 @@ from sqlmodel import Session, col, select
 from app.models_tg import Post
 from app.services.discover_ignored import ignored_handles
 from app.services.follows import visible_channel_names
-from app.services.post_filters import PostFilters, apply_post_filters
+from app.services.post_filters import (
+    PostFilters,
+    apply_analysis_window,
+    apply_post_filters,
+)
 from app.services.post_links_parser import channel_from_telegram_url
 from app.services.posts import random_cap_order
 from app.services.telegram_web import _all_web_domains, is_channel_handle
@@ -196,10 +200,7 @@ def compute_discover_candidates(
     stmt = scoped_select(select(Post), Post, user_id).where(
         col(Post.channel_name).in_(channel_names)
     )
-    if start_date is not None:
-        stmt = stmt.where(Post.timestamp >= start_date)
-    if end_date is not None:
-        stmt = stmt.where(Post.timestamp <= end_date)
+    stmt = apply_analysis_window(stmt, start_date, end_date)
     if post_ids:
         unique_pairs = {(name, post_id) for name, post_id in post_ids}
         stmt = stmt.where(

@@ -37,12 +37,11 @@ export interface PromptPostsDeps {
   forwardedFilter: ForwardedFilterValue
   mediaFilter: MediaFilterValue
   postViewOptions: PostViewOptions
-  semanticSearchRespectsTimeRange: boolean
   semanticSearchRespectsChannels: boolean
   searchSimilarPosts: (
     query: string,
-    limit?: number,
-    options?: { channels?: string[]; startDate?: number; endDate?: number },
+    limit: number,
+    options: { channels?: string[]; startDate: number; endDate: number },
   ) => Promise<Post[]>
   getPostsFeed: typeof import("@/api").api.getPostsFeed
 }
@@ -72,7 +71,6 @@ export function usePromptPosts(deps: PromptPostsDeps): PromptPosts {
     forwardedFilter,
     mediaFilter,
     postViewOptions,
-    semanticSearchRespectsTimeRange,
     semanticSearchRespectsChannels,
     searchSimilarPosts,
     getPostsFeed,
@@ -98,7 +96,6 @@ export function usePromptPosts(deps: PromptPostsDeps): PromptPosts {
         mediaFilter,
         channels,
         postViewOptions,
-        semanticSearchRespectsTimeRange,
         semanticSearchRespectsChannels,
         searchSimilarPosts,
         getPostsFeed,
@@ -111,7 +108,6 @@ export function usePromptPosts(deps: PromptPostsDeps): PromptPosts {
       debouncedSemanticSearchQuery,
       relatedPostSearch,
       embeddingsEnabled,
-      semanticSearchRespectsTimeRange,
       semanticSearchRespectsChannels,
       searchSimilarPosts,
       getPostsFeed,

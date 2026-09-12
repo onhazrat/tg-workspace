@@ -65,7 +65,6 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
     scrapeChannelsInParallel,
     postSearch,
     semanticSearchQuery,
-    semanticSearchRespectsTimeRange,
     semanticSearchRespectsChannels,
     handleFilterPosts,
     getPromptPostsInput,
@@ -166,7 +165,10 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
 
         let similarPosts
         try {
-          similarPosts = await searchSimilarPosts(userMessage, 20)
+          similarPosts = await searchSimilarPosts(userMessage, 20, {
+            startDate,
+            endDate,
+          })
         } catch (error) {
           const message =
             error instanceof Error ? error.message : "Semantic search failed"
@@ -367,7 +369,6 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
         messages: finalMessages,
         postSearch: postSearch || undefined,
         semanticSearchQuery: semanticSearchQuery || undefined,
-        semanticSearchRespectsTimeRange,
         semanticSearchRespectsChannels,
       }
       await saveChatSession(session)

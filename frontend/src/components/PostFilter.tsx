@@ -29,8 +29,6 @@ export const PostFilter: React.FC<PostFilterProps> = ({
   const {
     semanticSearchQuery,
     setSemanticSearchQuery,
-    semanticSearchRespectsTimeRange,
-    setSemanticSearchRespectsTimeRange,
     semanticSearchRespectsChannels,
     setSemanticSearchRespectsChannels,
     relatedPostSearch,
@@ -406,19 +404,6 @@ export const PostFilter: React.FC<PostFilterProps> = ({
                 </div>
 
                 <div className="flex flex-col gap-1.5 mt-1">
-                  <label className="flex items-center gap-2 cursor-pointer group">
-                    <input
-                      type="checkbox"
-                      checked={!semanticSearchRespectsTimeRange}
-                      onChange={(e) =>
-                        setSemanticSearchRespectsTimeRange(!e.target.checked)
-                      }
-                      className="w-3 h-3 accent-blue-500 rounded-sm"
-                    />
-                    <span className="text-[11px] uppercase font-bold tracking-wider text-app-ink/70 group-hover:text-app-ink transition-colors">
-                      Ignore time range for semantic search
-                    </span>
-                  </label>
                   <label className="flex items-center gap-2 cursor-pointer group">
                     <input
                       type="checkbox"

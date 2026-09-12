@@ -3554,6 +3554,8 @@ export type RagSearchHit = {
  * `limit` caps the *results*; `scan_limit` caps how many embeddings are
  * compared before ranking. They are separate because a thin result set and a
  * capped scan are different failures — see `RagSearchResponse`.
+ *
+ * The Analysis window is required; a search is always over a window.
  */
 export type RagSearchRequest = {
     /**
@@ -3567,11 +3569,11 @@ export type RagSearchRequest = {
     /**
      * Startdate
      */
-    startDate?: number | null;
+    startDate: number;
     /**
      * Enddate
      */
-    endDate?: number | null;
+    endDate: number;
     /**
      * Limit
      */

@@ -8255,14 +8255,8 @@
             ],
             "title": "Channels"
           },
-          "startDate": {
-            "anyOf": [{ "type": "integer" }, { "type": "null" }],
-            "title": "Startdate"
-          },
-          "endDate": {
-            "anyOf": [{ "type": "integer" }, { "type": "null" }],
-            "title": "Enddate"
-          },
+          "startDate": { "type": "integer", "title": "Startdate" },
+          "endDate": { "type": "integer", "title": "Enddate" },
           "limit": { "type": "integer", "title": "Limit", "default": 20 },
           "scanLimit": {
             "type": "integer",
@@ -8271,9 +8265,9 @@
           }
         },
         "type": "object",
-        "required": ["query"],
+        "required": ["query", "startDate", "endDate"],
         "title": "RagSearchRequest",
-        "description": "A semantic search over the embedded corpus.\n\n`limit` caps the *results*; `scan_limit` caps how many embeddings are\ncompared before ranking. They are separate because a thin result set and a\ncapped scan are different failures \u2014 see `RagSearchResponse`."
+        "description": "A semantic search over the embedded corpus.\n\n`limit` caps the *results*; `scan_limit` caps how many embeddings are\ncompared before ranking. They are separate because a thin result set and a\ncapped scan are different failures \u2014 see `RagSearchResponse`.\n\nThe Analysis window is required; a search is always over a window."
       },
       "RagSearchResponse": {
         "properties": {

@@ -12,7 +12,11 @@ from sqlmodel import Session, col, select
 
 from app.models_tg import Post, utc_now
 from app.services.follows import visible_channel_names
-from app.services.post_filters import PostFilters, apply_post_filters
+from app.services.post_filters import (
+    PostFilters,
+    apply_analysis_window,
+    apply_post_filters,
+)
 from app.services.serialization import post_to_camel
 from app.services.sync_meta import touch_sync
 from app.services.tenancy import scoped_select
@@ -249,10 +253,7 @@ def list_feed(
     base = scoped_select(select(Post), Post, user_id)
     if channel_names:
         base = base.where(col(Post.channel_name).in_(channel_names))
-    if start_date is not None:
-        base = base.where(Post.timestamp >= start_date)
-    if end_date is not None:
-        base = base.where(Post.timestamp <= end_date)
+    base = apply_analysis_window(base, start_date, end_date)
     if filters is not None:
         followed: frozenset[str] | None = None
         if filters.forwarded == "unfollowed_forwarded":
@@ -349,10 +350,7 @@ def count_posts_in_scope(
     stmt = scoped_select(select(col(Post.channel_name), count_expr), Post, user_id)
     if channel_names:
         stmt = stmt.where(col(Post.channel_name).in_(channel_names))
-    if start_date is not None:
-        stmt = stmt.where(Post.timestamp >= start_date)
-    if end_date is not None:
-        stmt = stmt.where(Post.timestamp <= end_date)
+    stmt = apply_analysis_window(stmt, start_date, end_date)
     if filters is not None:
         followed: frozenset[str] | None = None
         if filters.forwarded == "unfollowed_forwarded":

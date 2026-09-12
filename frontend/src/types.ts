@@ -287,7 +287,6 @@ export interface Summary {
   isStarred?: boolean
   postSearch?: string
   semanticSearchQuery?: string
-  semanticSearchRespectsTimeRange?: boolean
   semanticSearchRespectsChannels?: boolean
   citedPosts?: Record<string, Post>
   /** Provenance when summary was not generated in-app (persisted in server `extra`). */
@@ -536,7 +535,6 @@ export interface ChatSession {
   note?: string
   postSearch?: string
   semanticSearchQuery?: string
-  semanticSearchRespectsTimeRange?: boolean
   semanticSearchRespectsChannels?: boolean
 }
 

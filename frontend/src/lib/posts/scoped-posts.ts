@@ -47,12 +47,11 @@ export interface ScopedPostsDeps {
   mediaFilter: MediaFilterValue
   channels: Channel[]
   postViewOptions: PostViewOptions
-  semanticSearchRespectsTimeRange: boolean
   semanticSearchRespectsChannels: boolean
   searchSimilarPosts: (
     query: string,
-    limit?: number,
-    options?: { channels?: string[]; startDate?: number; endDate?: number },
+    limit: number,
+    options: { channels?: string[]; startDate: number; endDate: number },
   ) => Promise<Post[]>
   /**
    * The server feed. Injected rather than imported so the branch stays
@@ -83,15 +82,23 @@ export async function computeScopedPosts(
     mediaFilter,
     channels,
     postViewOptions,
-    semanticSearchRespectsTimeRange,
     semanticSearchRespectsChannels,
     searchSimilarPosts,
     getPostsFeed,
   } = deps
 
   // Related-post ("more like this") search — bounded at 50 by the RAG call.
+  //
+  // It passes the window like every other path now (AW-01). It used to pass
+  // nothing at all, which meant every Post ever: the second way a Posts path
+  // silently meant all time, and the one with no control on screen admitting
+  // to it. Both bounds are required by `searchSimilarPosts`, so a branch that
+  // forgets them no longer compiles.
   if (embeddingsEnabled && relatedPostSearch) {
-    const results = await searchSimilarPosts(relatedPostSearch.text, 50)
+    const results = await searchSimilarPosts(relatedPostSearch.text, 50, {
+      startDate,
+      endDate,
+    })
     const otherPosts = results.filter(
       (p) =>
         p.id !== relatedPostSearch.id ||
@@ -107,8 +114,8 @@ export async function computeScopedPosts(
   // Semantic search — bounded at 50 by the RAG call.
   if (embeddingsEnabled && semanticQuery.trim()) {
     const results = await searchSimilarPosts(semanticQuery, 50, {
-      startDate: semanticSearchRespectsTimeRange ? startDate : undefined,
-      endDate: semanticSearchRespectsTimeRange ? endDate : undefined,
+      startDate,
+      endDate,
       channels:
         semanticSearchRespectsChannels && selectedChannels.length > 0
           ? selectedChannels

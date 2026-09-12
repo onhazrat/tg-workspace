@@ -117,6 +117,14 @@ def test_paging_covers_every_row_exactly_once(client: TestClient) -> None:
 
 
 def test_date_bounds_still_apply(client: TestClient) -> None:
+    """Half-open since AW-01: the start is in, the end is not.
+
+    This used to expect `[3, 4, 5]`. Post 5 sits exactly on the requested end,
+    and it leaves the window now so that two adjacent windows can meet without
+    sharing it. `tests/services/test_analysis_window_boundaries.py` is where
+    that rule is argued and proved on every path; this is the paging route's
+    own check that it did not keep a copy of the old one.
+    """
     headers = _auth(client)
     base = int(time.time() * 1000)
     _seed(client, headers, 10, base)
@@ -125,7 +133,7 @@ def test_date_bounds_still_apply(client: TestClient) -> None:
         client, headers, channelName=CHANNEL, startDate=base + 3, endDate=base + 5
     )
 
-    assert sorted(row["id"] for row in body) == [3, 4, 5]
+    assert sorted(row["id"] for row in body) == [3, 4]
 
 
 def test_response_is_a_bare_list(client: TestClient) -> None:

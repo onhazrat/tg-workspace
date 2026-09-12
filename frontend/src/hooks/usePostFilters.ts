@@ -44,10 +44,6 @@ export interface PostFilters {
   setPostSearch: React.Dispatch<React.SetStateAction<string>>
   semanticSearchQuery: string
   setSemanticSearchQuery: React.Dispatch<React.SetStateAction<string>>
-  semanticSearchRespectsTimeRange: boolean
-  setSemanticSearchRespectsTimeRange: React.Dispatch<
-    React.SetStateAction<boolean>
-  >
   semanticSearchRespectsChannels: boolean
   setSemanticSearchRespectsChannels: React.Dispatch<
     React.SetStateAction<boolean>
@@ -99,8 +95,6 @@ export function readStoredMediaFilter(): MediaFilterValue {
 export function usePostFilters(): PostFilters {
   const [postSearch, setPostSearch] = useState("")
   const [semanticSearchQuery, setSemanticSearchQuery] = useState("")
-  const [semanticSearchRespectsTimeRange, setSemanticSearchRespectsTimeRange] =
-    useState(false)
   const [semanticSearchRespectsChannels, setSemanticSearchRespectsChannels] =
     useState(false)
   const [relatedPostSearch, setRelatedPostSearch] = useState<Post | null>(null)
@@ -164,8 +158,6 @@ export function usePostFilters(): PostFilters {
     setPostSearch,
     semanticSearchQuery,
     setSemanticSearchQuery,
-    semanticSearchRespectsTimeRange,
-    setSemanticSearchRespectsTimeRange,
     semanticSearchRespectsChannels,
     setSemanticSearchRespectsChannels,
     relatedPostSearch,

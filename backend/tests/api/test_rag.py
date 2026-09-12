@@ -144,7 +144,11 @@ def test_rag_search_cosine_order_and_post_shape(
 
     headers = _auth(client)
     r = client.post(
-        f"{PREFIX}/search", json={"query": "alpha", "limit": 2}, headers=headers
+        f"{PREFIX}/search",
+        # A window is required since AW-01; this one spans the seeded corpus,
+        # because what this test is about is the ranking, not the window.
+        json={"query": "alpha", "limit": 2, "startDate": 0, "endDate": 9999},
+        headers=headers,
     )
     assert r.status_code == 200, r.text
     data = r.json()
@@ -350,7 +354,7 @@ def test_rag_search_scoped_to_operator_channels(
     ):
         r = client.post(
             f"{PREFIX}/search",
-            json={"query": "post", "limit": 10},
+            json={"query": "post", "limit": 10, "startDate": 0, "endDate": 9999},
             headers=headers,
         )
     assert r.status_code == 200, r.text

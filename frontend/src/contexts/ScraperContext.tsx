@@ -41,10 +41,6 @@ interface ScraperContextType {
   setPostSearch: React.Dispatch<React.SetStateAction<string>>
   semanticSearchQuery: string
   setSemanticSearchQuery: React.Dispatch<React.SetStateAction<string>>
-  semanticSearchRespectsTimeRange: boolean
-  setSemanticSearchRespectsTimeRange: React.Dispatch<
-    React.SetStateAction<boolean>
-  >
   semanticSearchRespectsChannels: boolean
   setSemanticSearchRespectsChannels: React.Dispatch<
     React.SetStateAction<boolean>
@@ -175,8 +171,6 @@ export const ScraperProvider: React.FC<{ children: React.ReactNode }> = ({
     setPostSearch,
     semanticSearchQuery,
     setSemanticSearchQuery,
-    semanticSearchRespectsTimeRange,
-    setSemanticSearchRespectsTimeRange,
     semanticSearchRespectsChannels,
     setSemanticSearchRespectsChannels,
     relatedPostSearch,
@@ -243,7 +237,6 @@ export const ScraperProvider: React.FC<{ children: React.ReactNode }> = ({
     forwardedFilter,
     mediaFilter,
     postViewOptions,
-    semanticSearchRespectsTimeRange,
     semanticSearchRespectsChannels,
     searchSimilarPosts,
     getPostsFeed: api.getPostsFeed,
@@ -570,8 +563,6 @@ export const ScraperProvider: React.FC<{ children: React.ReactNode }> = ({
         setPostSearch,
         semanticSearchQuery,
         setSemanticSearchQuery,
-        semanticSearchRespectsTimeRange,
-        setSemanticSearchRespectsTimeRange,
         semanticSearchRespectsChannels,
         setSemanticSearchRespectsChannels,
         relatedPostSearch,
