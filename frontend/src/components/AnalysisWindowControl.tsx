@@ -62,16 +62,17 @@ const WindowField: React.FC<WindowFieldProps> = ({
   label,
   onElapsedFocus,
 }) => {
-  const { mode, draftText, setDraft, commitDraft, errors } = useScope()
+  const { draftText, setDraft, commitDraft, errors } = useScope()
   const id = useId()
   const errorId = `${id}-error`
   const error = errors[field]
   const isElapsed = ELAPSED_FIELDS.includes(field)
 
-  // A Fixed boundary is an instant, so it gets the platform's own date-time
-  // control rather than a parser and a format to learn. Everything else is
-  // elapsed time, where `datetime-local` would be the wrong question entirely.
-  const asInstant = !isElapsed && mode === "fixed"
+  // A boundary is an instant in either mode, so it gets the platform's own
+  // date-time control rather than a parser and a format to learn. Everything
+  // else is elapsed time, where `datetime-local` would be the wrong question
+  // entirely.
+  const asInstant = !isElapsed
 
   return (
     <div className="space-y-1.5">
