@@ -351,20 +351,30 @@ describe("fields and the summary line", () => {
     end: new Date("2026-09-11T14:30").getTime(),
   }
 
-  test("Live fields are relative in both directions", () => {
+  test("Live boundaries are exact local date-times, and the spans elapsed", () => {
     const r = resolveWindow(liveState, NOW)
 
-    expect(fieldText(r, NOW, "start")).toBe("1d 10h")
-    expect(fieldText(r, NOW, "end")).toBe("30m")
-    expect(fieldText(r, NOW, "duration")).toBe("1d 9h 30m")
-    expect(fieldText(r, NOW, "endGap")).toBe("30m")
+    // The whole point of the change: a Live Start says *when*, not how long
+    // ago. It still moves — `r` is re-resolved against every new minute.
+    expect(fieldText(r, "start")).toBe(formatLocalMinute(r.start))
+    expect(fieldText(r, "end")).toBe(formatLocalMinute(r.end))
+    expect(fieldText(r, "duration")).toBe("1d 9h 30m")
+    expect(fieldText(r, "endGap")).toBe("30m")
+  })
+
+  test("a Live boundary reads the same as the Fixed one it froze to", () => {
+    const moving = resolveWindow(liveState, NOW)
+    const frozen = resolveWindow(switchMode(liveState, NOW, "fixed"), NOW)
+
+    expect(fieldText(moving, "start")).toBe(fieldText(frozen, "start"))
+    expect(fieldText(moving, "end")).toBe(fieldText(frozen, "end"))
   })
 
   test("Fixed boundaries are exact local date-times", () => {
     const r = resolveWindow(fixedState, NOW)
 
-    expect(fieldText(r, NOW, "start")).toBe(formatLocalMinute(fixedState.start))
-    expect(fieldText(r, NOW, "duration")).toBe("1d 5h")
+    expect(fieldText(r, "start")).toBe(formatLocalMinute(fixedState.start))
+    expect(fieldText(r, "duration")).toBe("1d 5h")
   })
 
   test("the Live summary reads as the spec writes it", () => {
@@ -388,35 +398,24 @@ describe("fields and the summary line", () => {
 })
 
 describe("a typed field reaches the right kind of value", () => {
-  test("Live boundaries are typed as elapsed, and become instants", () => {
-    expect(parseField("live", NOW, "start", "2h")).toEqual({
-      ok: true,
-      value: NOW - 2 * HOUR_MS,
-    })
-    expect(parseField("live", NOW, "start", "2026-09-10T09:30")).toEqual({
-      ok: false,
-      error: ERRORS.grammar,
-    })
-  })
-
-  test("Fixed boundaries are typed as date-times", () => {
-    expect(parseField("fixed", NOW, "end", "2026-09-10T09:30")).toEqual({
+  test("a boundary is typed as a date-time, whatever the mode", () => {
+    expect(parseField("end", "2026-09-10T09:30")).toEqual({
       ok: true,
       value: new Date("2026-09-10T09:30").getTime(),
     })
-    expect(parseField("fixed", NOW, "end", "2h")).toEqual({
+    // And elapsed text is refused there in *both* modes now, where Live used
+    // to be the one place it was the only accepted form.
+    expect(parseField("end", "2h")).toEqual({
       ok: false,
       error: ERRORS.timestamp,
     })
   })
 
-  test("Duration and End gap are elapsed in either mode", () => {
-    for (const mode of ["live", "fixed"] as const) {
-      expect(parseField(mode, NOW, "duration", "1d 6h")).toEqual({
-        ok: true,
-        value: DAY_MS + 6 * HOUR_MS,
-      })
-    }
+  test("Duration and End gap are elapsed", () => {
+    expect(parseField("duration", "1d 6h")).toEqual({
+      ok: true,
+      value: DAY_MS + 6 * HOUR_MS,
+    })
   })
 })
 

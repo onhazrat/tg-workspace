@@ -80,16 +80,23 @@ test.describe("the Analysis window journey", () => {
     await endGap.press("Enter")
 
     await page.getByRole("button", { name: "Fixed" }).click()
-    // A Fixed boundary is an instant, so the platform's own control answers it.
+    // A boundary is an instant in either mode, so the platform's own control
+    // answers it in both.
     await expect(page.getByLabel("Start", { exact: true })).toHaveAttribute(
       "type",
       "datetime-local",
     )
     await expect(page.getByLabel("Duration", { exact: true })).toHaveValue("2h")
     await page.getByRole("button", { name: "Live" }).click()
-    await expect(page.getByLabel("Start", { exact: true })).toHaveValue(
-      "2h 30m",
-    )
+    const liveStart = page.getByLabel("Start", { exact: true })
+    await expect(liveStart).toHaveAttribute("type", "datetime-local")
+    // A Live Start says *when* the window opens, not the `2h 30m` offset the
+    // state happens to store. The stamp is matched by shape rather than by
+    // value because a Live boundary advances on every tick, and asserting the
+    // instant across a mode switch would fail on whichever run crossed a
+    // minute. That the switch moves nothing is what Duration answers.
+    await expect(liveStart).toHaveValue(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/)
+    await expect(page.getByLabel("Duration", { exact: true })).toHaveValue("2h")
 
     // ---- Back to the Action, which is still there ----
     await page.getByTestId("window-editor-return").click()

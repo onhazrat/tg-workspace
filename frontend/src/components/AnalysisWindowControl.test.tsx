@@ -84,17 +84,22 @@ describe("the four fields", () => {
     }
   })
 
-  test("Live boundaries are relative; Fixed boundaries are exact local instants", () => {
+  test("both boundaries are exact local instants in either mode", () => {
     renderControl()
     open()
 
-    expect(value("Start")).toBe("1d")
-    expect(field("Start").getAttribute("type")).toBe("text")
+    // Live used to show `1d` here — the offset it stores rather than the
+    // boundary it means — and got a bare text box to type an offset back into.
+    const asTyped = value("Start")
+    expect(asTyped).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/)
+    expect(field("Start").getAttribute("type")).toBe("datetime-local")
 
     act(() => {
       fireEvent.click(screen.getByRole("button", { name: "Fixed" }))
     })
 
+    // Freezing changes none of the four values, so the boundary reads the same.
+    expect(value("Start")).toBe(asTyped)
     expect(field("Start").getAttribute("type")).toBe("datetime-local")
     // Duration is elapsed in both modes, and always on screen.
     expect(value("Duration")).toBe("1d")

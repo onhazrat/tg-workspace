@@ -294,7 +294,7 @@ export const ScopeProvider: React.FC<{
     (field: ScopeField, text: string) => {
       const minute = readMinute()
       const current = stateRef.current
-      const parsed = parseField(current.mode, minute, field, text)
+      const parsed = parseField(field, text)
       if (!parsed.ok) {
         setErrors((open) => ({ ...open, [field]: parsed.error }))
         return
@@ -370,9 +370,8 @@ export const ScopeProvider: React.FC<{
   }, [])
 
   const draftText = useCallback(
-    (field: ScopeField) =>
-      drafts[field] ?? fieldText(resolved, minuteNow, field),
-    [drafts, resolved, minuteNow],
+    (field: ScopeField) => drafts[field] ?? fieldText(resolved, field),
+    [drafts, resolved],
   )
 
   const [editorRequested, setEditorRequested] = useState(false)

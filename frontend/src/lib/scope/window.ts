@@ -340,23 +340,23 @@ export function formatLocalStamp(ms: number): string {
 /* ------------------------------------------------------------------ */
 
 /**
- * What a field shows. Live boundaries are relative, Fixed boundaries are exact
- * local date-times, and the two elapsed fields are elapsed in both modes.
+ * What a field shows.
+ *
+ * A boundary is an instant in **both** modes, so it is always an exact local
+ * date-time. Live used to render its boundaries as `1d 10h` / `30m` — the
+ * elapsed offsets it actually stores — which asked somebody reading the window
+ * to do the subtraction the control already knows how to do. The two elapsed
+ * fields remain elapsed in both modes; those really are spans.
+ *
+ * A Live boundary still moves: it is re-derived from `minuteNow` every tick,
+ * so the stamp advances rather than standing still.
  */
-export function fieldText(
-  resolved: ResolvedWindow,
-  minuteNow: number,
-  field: ScopeField,
-): string {
+export function fieldText(resolved: ResolvedWindow, field: ScopeField): string {
   switch (field) {
     case "start":
-      return resolved.mode === "live"
-        ? formatElapsed(minuteNow - resolved.start)
-        : formatLocalMinute(resolved.start)
+      return formatLocalMinute(resolved.start)
     case "end":
-      return resolved.mode === "live"
-        ? formatElapsed(resolved.endGapMs)
-        : formatLocalMinute(resolved.end)
+      return formatLocalMinute(resolved.end)
     case "duration":
       return formatElapsed(resolved.durationMs)
     case "endGap":
@@ -364,23 +364,20 @@ export function fieldText(
   }
 }
 
-/** Turn a typed field into the number `applyField` takes, or say why not. */
-export function parseField(
-  mode: WindowMode,
-  minuteNow: number,
-  field: ScopeField,
-  text: string,
-): FieldResult {
+/**
+ * Turn a typed field into the number `applyField` takes, or say why not.
+ *
+ * Mode-blind, because what a field *is* does not depend on the mode: the two
+ * boundaries are instants and the two spans are elapsed time. `applyField`
+ * reduces either to a `[start, end)` pair and `canonicalise` then stores
+ * whichever two numbers the current mode is made of, so typing an exact Start
+ * into a Live window is simply a new Duration.
+ */
+export function parseField(field: ScopeField, text: string): FieldResult {
   if (field === "duration" || field === "endGap") {
     const elapsed = parseElapsed(text)
     if (elapsed === null) return { ok: false, error: ERRORS.grammar }
     return { ok: true, value: elapsed }
-  }
-
-  if (mode === "live") {
-    const elapsed = parseElapsed(text)
-    if (elapsed === null) return { ok: false, error: ERRORS.grammar }
-    return { ok: true, value: minuteNow - elapsed }
   }
 
   const instant = parseLocalMinute(text)
