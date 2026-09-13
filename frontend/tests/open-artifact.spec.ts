@@ -78,3 +78,54 @@ test("a card with hundreds of channels does not widen the page", async ({
   expect(scrollerBox).not.toBeNull()
   expect(cardBox!.width).toBeLessThanOrEqual(scrollerBox!.width)
 })
+
+/**
+ * Inspecting history is not editing it (AW-08).
+ *
+ * Opening an artifact used to replace the channel selection and the Analysis
+ * window and then announce that in a banner. Both are gone, so this asserts the
+ * two halves that replaced them: opening changes nothing, and **Use this Scope**
+ * changes everything — to Fixed, at the artifact's own frozen boundaries.
+ *
+ * The window is read off the Posts summary trigger rather than off storage,
+ * because the trigger is what a person actually sees, and it is the one place
+ * that says whether the window still moves.
+ */
+test("opening an artifact leaves the workspace window alone", async ({
+  page,
+}) => {
+  await page.goto("/workspace?tab=posts")
+  const windowTrigger = page.getByRole("button", { name: "Analysis window" })
+  await expect(windowTrigger).toBeVisible({ timeout: 20_000 })
+  const before = await windowTrigger.textContent()
+
+  await page.goto("/workspace?tab=history")
+  const card = page.locator('[data-artifact-id="e2e-open-summary"]')
+  await expect(card).toBeVisible({ timeout: 20_000 })
+  await card.getByRole("button").first().click()
+  await expect(page).toHaveURL(/tab=summary/)
+
+  await page.goto("/workspace?tab=posts")
+  await expect(windowTrigger).toHaveText(before ?? "")
+})
+
+test("Use this Scope restores the artifact's window as Fixed", async ({
+  page,
+}) => {
+  await page.goto("/workspace?tab=history")
+  const card = page.locator('[data-artifact-id="e2e-open-summary"]')
+  await expect(card).toBeVisible({ timeout: 20_000 })
+
+  // The card states exact boundaries and a derived duration, never "ago".
+  const scopeLine = card.getByTestId("artifact-scope-line")
+  await expect(scopeLine).toBeVisible()
+  await expect(scopeLine).not.toContainText("ago")
+  await expect(scopeLine).toContainText("· 1d")
+
+  await card.getByTestId("use-this-scope").click()
+
+  await page.goto("/workspace?tab=posts")
+  const windowTrigger = page.getByRole("button", { name: "Analysis window" })
+  await expect(windowTrigger).toContainText("Fixed ·", { timeout: 20_000 })
+  await expect(windowTrigger).toContainText("(1d)")
+})

@@ -50,7 +50,6 @@ import {
   TooltipTrigger,
 } from "./components/ui/tg-tooltip"
 import { useData } from "./contexts/DataContext"
-import { useScope } from "./contexts/ScopeContext"
 import { useScraper } from "./contexts/ScraperContext"
 import { useSettings } from "./contexts/SettingsContext"
 import { useUI } from "./contexts/UIContext"
@@ -61,21 +60,15 @@ import { useScopedPostCounts } from "./hooks/usePostsView"
 import { useWorkspaceFullscreen } from "./hooks/useWorkspaceFullscreen"
 import { APP_VERSION } from "./lib/app-version"
 import { artifactDestination } from "./lib/history/open-artifact"
-import {
-  isEmptyScope,
-  type RestoredScope,
-  restoredScopeNotice,
-} from "./lib/history/restored-scope-notice"
 import { visibleWorkspaceTabs } from "./lib/workspace-tabs"
 import type { ArtifactListItem, TabType } from "./types"
 
 export default function App() {
   const { isOffline } = useApiStatus()
 
-  const { channels, selectedChannels, setSelectedChannels } = useData()
+  const { channels, selectedChannels } = useData()
 
   const { activeTab, setActiveTab, isRateLimited, summarizing } = useUI()
-  const { setFixedRange } = useScope()
 
   const {
     postSearch,
@@ -139,51 +132,18 @@ export default function App() {
         : "Switch to System Mode"
 
   /**
-   * Set when a saved report replaces the working scope, so the change can be
-   * stated instead of just happening. Cleared on dismiss, and replaced whenever
-   * another report is opened.
-   */
-  const [restoredScope, setRestoredScope] = useState<RestoredScope | null>(null)
-
-  /**
-   * Open an artifact from History: restore its scope, then go where it renders.
+   * Open an artifact from History: go where it renders, and change nothing else.
    *
-   * Every artifact freezes the scope it was made from, so opening one replaces
-   * the channel selection and the date range — correctly, since the artifact
-   * only means anything beside the posts it came from. The banner below states
-   * that rather than letting it happen silently.
+   * Opening one used to replace the channel selection and the date range, and
+   * announce that in a banner. Inspecting history is not editing it (AW-08), so
+   * both are gone — the selection, the Analysis window and every filter survive
+   * a look at an old result. `ArtifactScopeLine` offers **Use this Scope** on
+   * the artifact itself for the times restoring it is what somebody wants.
    *
    * Which tab, and which URL param, is `artifactDestination`'s call. Every kind
    * is deep-linked now; only Discover reports were before.
    */
   const openArtifact = (artifact: ArtifactListItem) => {
-    // An Artifact opened by a legacy write door carries no frozen Scope, and
-    // there is nothing left to fall back to since AW-07 dropped the
-    // `startDate` / `endDate` / `channels` trio — which is the point: a window
-    // this screen invented would be a claim about which Posts produced the
-    // result. So an Artifact with no Scope restores nothing and says so.
-    //
-    // The width check stays. `(0, 0)` is the zero-width window AW-02 refuses,
-    // so restoring it would leave the workspace 422ing on the feed, the counts,
-    // Discover and every Action until somebody thought to look at the date
-    // range.
-    const scope = artifact.scope
-    const hasWindow = scope != null && scope.end > scope.start
-
-    // The banner describes what was restored, so it says nothing about a
-    // window when none was. Showing `0`/`0` beside a workspace still holding
-    // the previous range would describe a selection that is not the one being
-    // queried.
-    setRestoredScope({
-      channelCount: scope?.channels?.length ?? 0,
-      startDate: hasWindow ? scope.start : null,
-      endDate: hasWindow ? scope.end : null,
-    })
-    if (hasWindow) {
-      setFixedRange(scope.start, scope.end)
-    }
-    setSelectedChannels(new Set(scope?.channels ?? []))
-
     const { tab, param } = artifactDestination(artifact)
     void navigate({
       to: "/workspace",
@@ -283,47 +243,6 @@ export default function App() {
                 Showing cached data. Sync, summary, and publish actions are
                 disabled.
               </span>
-            </motion.div>
-          )}
-        </AnimatePresence>
-
-        {/*
-         * Restored-scope banner (C8).
-         *
-         * Opening a saved report replaces the channel selection and the date
-         * range — correctly, since a report only means anything beside the
-         * posts it came from. But it used to happen in silence, so the "Posts
-         * in Scope" counter and every scoped view changed underneath the user
-         * with no explanation. This states the change; it does not undo it.
-         */}
-        <AnimatePresence>
-          {restoredScope && (
-            <motion.div
-              initial={{ height: 0, opacity: 0, marginBottom: 0 }}
-              animate={{ height: "auto", opacity: 1, marginBottom: 16 }}
-              exit={{ height: 0, opacity: 0, marginBottom: 0 }}
-              data-testid="restored-scope-banner"
-              className="bg-blue-500/10 border border-blue-500/20 text-blue-700 dark:text-blue-400 px-4 py-3 flex items-center justify-between gap-3 text-xs rounded-md overflow-hidden"
-            >
-              <div className="flex items-center gap-3">
-                <History className="w-4 h-4 shrink-0" />
-                <span>
-                  <strong className="uppercase tracking-wider">
-                    Loaded from history.
-                  </strong>{" "}
-                  {isEmptyScope(restoredScope)
-                    ? "This report was saved without any channels, so the selection is now empty."
-                    : restoredScopeNotice(restoredScope)}
-                </span>
-              </div>
-              <button
-                type="button"
-                onClick={() => setRestoredScope(null)}
-                aria-label="Dismiss scope notice"
-                className="shrink-0 uppercase tracking-widest font-bold opacity-60 hover:opacity-100 focus-visible:opacity-100 transition-opacity"
-              >
-                Dismiss
-              </button>
             </motion.div>
           )}
         </AnimatePresence>
