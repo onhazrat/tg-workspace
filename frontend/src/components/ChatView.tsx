@@ -10,17 +10,15 @@ import {
   Send,
   Sparkles,
   User,
-  Zap,
 } from "lucide-react"
 import { AnimatePresence, motion } from "motion/react"
 import type React from "react"
 import { useState } from "react"
 import ReactMarkdown from "react-markdown"
 import { ArtifactScopeLine } from "@/components/ArtifactScopeLine"
+import { GoToActionEmptyState } from "@/components/history/GoToActionEmptyState"
 import { TgButton } from "@/components/ui/tg-button"
 import { TgIconButton } from "@/components/ui/tg-icon-button"
-import { TgFieldLabel } from "@/components/ui/tg-input"
-import { TgHeroEmptyState } from "@/components/ui/tg-segmented"
 import { LANGUAGES } from "../constants"
 import { useChatContext } from "../contexts/ChatContext"
 import { useRAG } from "../contexts/RAGContext"
@@ -30,18 +28,6 @@ import { useChatSessionQuery } from "../hooks/useChatSessions"
 import { replaceCitations } from "../lib/citations/replace-citations"
 import { ModelCombo } from "./ai/ModelCombo"
 import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tg-tooltip"
-
-const SUGGESTED_PROMPTS_SUMMARY = [
-  "Summarize the latest trends in these channels",
-  "What are the most active discussions about?",
-  "Identify any key announcements or news",
-]
-
-const SUGGESTED_PROMPTS_HISTORY = [
-  "What did we discuss about AI models previously?",
-  "Find mentions of specific project deadlines",
-  "Summarize past conversations about API limits",
-]
 
 export const ChatView: React.FC = () => {
   const [copied, setCopied] = useState(false)
@@ -77,15 +63,6 @@ export const ChatView: React.FC = () => {
 
   const toggleSources = (index: number) => {
     setExpandedSources((prev) => ({ ...prev, [index]: !prev[index] }))
-  }
-
-  const handleSuggestedPrompt = (prompt: string) => {
-    setChatInput(prompt)
-    setTimeout(() => {
-      if (chatInputRef.current) {
-        chatInputRef.current.focus()
-      }
-    }, 50)
   }
 
   return (
@@ -238,52 +215,20 @@ export const ChatView: React.FC = () => {
 
       {/* Chat Feed */}
       <div className="flex-1 overflow-y-auto space-y-6 mb-4 pr-2 custom-scrollbar">
-        {chatMessages.length === 0 && (
-          <TgHeroEmptyState
-            className="h-full max-w-md mx-auto py-10"
-            icon={
-              chatMode === "full_scope" ? (
-                <FileText size={28} className="opacity-40" />
-              ) : (
-                <Database size={28} className="opacity-40" />
-              )
-            }
-            title={
-              chatMode === "full_scope"
-                ? "Chat over the full scope"
-                : "Chat over semantic matches"
-            }
-            description={
-              chatMode === "full_scope"
-                ? "Ask about every post in the current scope — the selected channels, date range and filters."
-                : "Ask about the current date range. A vector search picks the posts most relevant to each question."
-            }
-          >
-            <div className="w-full space-y-2">
-              <TgFieldLabel className="mb-3 text-[9px] font-sans font-bold tracking-widest opacity-40 text-left pl-1">
-                Suggested Prompts
-              </TgFieldLabel>
-              {(chatMode === "full_scope"
-                ? SUGGESTED_PROMPTS_SUMMARY
-                : SUGGESTED_PROMPTS_HISTORY
-              ).map((prompt, idx) => (
-                <button
-                  type="button"
-                  key={idx}
-                  onClick={() => handleSuggestedPrompt(prompt)}
-                  className="w-full text-left p-3 text-[11px] bg-app-card hover:bg-app-muted border border-app-ink/10 rounded-xl transition-all flex items-center gap-3 group shadow-sm hover:shadow-md"
-                >
-                  <Zap
-                    size={14}
-                    className="opacity-40 group-hover:opacity-100 group-hover:text-blue-500 transition-colors shrink-0"
-                  />
-                  <span className="opacity-80 group-hover:opacity-100 font-medium">
-                    {prompt}
-                  </span>
-                </button>
-              ))}
-            </div>
-          </TgHeroEmptyState>
+        {chatMessages.length === 0 && !isChatting && (
+          /*
+           * A result tab with no result (AW-09).
+           *
+           * This used to be three suggested prompts, each of which started a
+           * conversation — so Chat was a fifth place an Artifact could begin,
+           * with its own idea of what the Scope was. Every Artifact begins in
+           * Actions now, and the composer below goes with the prompts: it
+           * carries an existing conversation on, and there is none.
+           */
+          <GoToActionEmptyState
+            what="conversation"
+            description="A chat starts with a question, and questions are asked on the Action tab. Open a past conversation from History, or ask a new one there."
+          />
         )}
 
         {chatMessages.map((m, i) => (
@@ -439,52 +384,59 @@ export const ChatView: React.FC = () => {
         <div ref={chatEndRef} />
       </div>
 
-      {/* Input Composer */}
-      <div className="pt-2 shrink-0">
-        <div className="bg-app-card border border-app-ink/10 rounded-2xl shadow-sm p-1.5 flex items-end gap-2 focus-within:border-app-ink/30 focus-within:ring-4 focus-within:ring-app-ink/5 transition-all">
-          <textarea
-            ref={chatInputRef}
-            rows={1}
-            value={chatInput}
-            onChange={(e) => setChatInput(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey) {
-                e.preventDefault()
-                void handleSendMessage()
-              }
-            }}
-            placeholder="Ask about trends, specific topics, or summarize selected channels..."
-            className="flex-1 bg-transparent border-none p-3 text-[13px] focus:outline-none resize-none min-h-[44px] max-h-[200px] custom-scrollbar"
-          />
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <TgButton
-                type="button"
-                variant="primary"
-                size="md"
-                onClick={() => void handleSendMessage()}
-                disabled={!chatInput.trim()}
-                loading={isChatting}
-                aria-label="Send Message"
-                className="size-11 shrink-0 rounded-xl p-0 mb-0.5 mr-0.5"
-              >
-                {isChatting ? null : <Send size={18} />}
-              </TgButton>
-            </TooltipTrigger>
-            <TooltipContent>
-              <p>Send Message</p>
-            </TooltipContent>
-          </Tooltip>
+      {/*
+       * The composer, only where there is a conversation to carry on — and
+       * while one is being started, so a first turn that fails has somewhere
+       * to be retried rather than a "go to Action" that has already eaten the
+       * question.
+       */}
+      {(chatMessages.length > 0 || isChatting) && (
+        <div className="pt-2 shrink-0">
+          <div className="bg-app-card border border-app-ink/10 rounded-2xl shadow-sm p-1.5 flex items-end gap-2 focus-within:border-app-ink/30 focus-within:ring-4 focus-within:ring-app-ink/5 transition-all">
+            <textarea
+              ref={chatInputRef}
+              rows={1}
+              value={chatInput}
+              onChange={(e) => setChatInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault()
+                  void handleSendMessage()
+                }
+              }}
+              placeholder="Ask about trends, specific topics, or summarize selected channels..."
+              className="flex-1 bg-transparent border-none p-3 text-[13px] focus:outline-none resize-none min-h-[44px] max-h-[200px] custom-scrollbar"
+            />
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <TgButton
+                  type="button"
+                  variant="primary"
+                  size="md"
+                  onClick={() => void handleSendMessage()}
+                  disabled={!chatInput.trim()}
+                  loading={isChatting}
+                  aria-label="Send Message"
+                  className="size-11 shrink-0 rounded-xl p-0 mb-0.5 mr-0.5"
+                >
+                  {isChatting ? null : <Send size={18} />}
+                </TgButton>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Send Message</p>
+              </TooltipContent>
+            </Tooltip>
+          </div>
+          <div className="flex justify-between items-center mt-2 px-2">
+            <span className="text-[9px] opacity-40 font-mono uppercase tracking-widest">
+              Enter to send, Shift+Enter for new line
+            </span>
+            <span className="text-[9px] opacity-40 font-mono uppercase tracking-widest">
+              AI can make mistakes. Verify info.
+            </span>
+          </div>
         </div>
-        <div className="flex justify-between items-center mt-2 px-2">
-          <span className="text-[9px] opacity-40 font-mono uppercase tracking-widest">
-            Enter to send, Shift+Enter for new line
-          </span>
-          <span className="text-[9px] opacity-40 font-mono uppercase tracking-widest">
-            AI can make mistakes. Verify info.
-          </span>
-        </div>
-      </div>
+      )}
     </motion.div>
   )
 }

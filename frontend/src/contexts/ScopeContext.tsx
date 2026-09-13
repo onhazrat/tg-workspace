@@ -97,6 +97,19 @@ export interface ScopeContextType {
   /** Throw every open draft away; the committed window is untouched. */
   discardDrafts: () => void
   errors: Partial<Record<ScopeField, string>>
+
+  /**
+   * A pending request from another surface for the one editor to open (AW-09).
+   *
+   * Action shows the window as a read-only summary and hands the editing off
+   * rather than growing a second copy of it — so it needs a way to say "open
+   * yours" to a component that is not mounted yet. A flag rather than a
+   * counter, because the editor consumes it: a counter left non-zero would
+   * re-open the popover every later time somebody walked onto Posts.
+   */
+  editorRequested: boolean
+  requestEditor: () => void
+  clearEditorRequest: () => void
 }
 
 const ScopeContext = createContext<ScopeContextType | undefined>(undefined)
@@ -362,6 +375,10 @@ export const ScopeProvider: React.FC<{
     [drafts, resolved, minuteNow],
   )
 
+  const [editorRequested, setEditorRequested] = useState(false)
+  const requestEditor = useCallback(() => setEditorRequested(true), [])
+  const clearEditorRequest = useCallback(() => setEditorRequested(false), [])
+
   const value = useMemo<ScopeContextType>(
     () => ({
       mode: resolved.mode,
@@ -388,6 +405,9 @@ export const ScopeProvider: React.FC<{
       commitDraft,
       discardDrafts,
       errors,
+      editorRequested,
+      requestEditor,
+      clearEditorRequest,
     }),
     [
       resolved,
@@ -402,6 +422,9 @@ export const ScopeProvider: React.FC<{
       setDraft,
       commitDraft,
       discardDrafts,
+      editorRequested,
+      requestEditor,
+      clearEditorRequest,
     ],
   )
 

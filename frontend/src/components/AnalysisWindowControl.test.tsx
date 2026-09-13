@@ -14,9 +14,10 @@
 
 import { afterEach, beforeEach, describe, expect, test } from "bun:test"
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react"
+import { useState } from "react"
 
 import { AnalysisWindowControl } from "@/components/AnalysisWindowControl"
-import { ScopeProvider } from "@/contexts/ScopeContext"
+import { ScopeProvider, useScope } from "@/contexts/ScopeContext"
 
 const NOW = Date.UTC(2026, 8, 11, 14, 30)
 
@@ -268,5 +269,114 @@ describe("the mobile presentation", () => {
     for (const label of ["Start", "End", "Duration", "End gap"]) {
       expect(field(label)).toBeTruthy()
     }
+  })
+})
+
+/**
+ * The editor opening because another surface asked it to (AW-09).
+ *
+ * Action draws the window read-only and hands the editing here, so the request
+ * has to survive a navigation and arrive at a component that was not mounted
+ * when it was made. Both halves of that are load-bearing: it must open on
+ * arrival, and it must be *spent* — a request left standing would reopen the
+ * popover every later time somebody walked onto Posts.
+ *
+ * `AnalysisWindowLink` itself is not rendered here. It needs `UIProvider` for
+ * the tab hop, and what that hop is worth is a browser question; what is
+ * testable at this seam is the half the editor owns.
+ */
+describe("a request from another surface", () => {
+  /** Stands in for Action: asks, then goes away, exactly as the tab does. */
+  const Requester: React.FC = () => {
+    const { requestEditor } = useScope()
+    return (
+      <button type="button" onClick={requestEditor}>
+        ask
+      </button>
+    )
+  }
+
+  /** The control unmounts and remounts, because leaving Posts is what that is. */
+  const Remountable: React.FC = () => {
+    const [mounted, setMounted] = useState(true)
+    return (
+      <>
+        <button type="button" onClick={() => setMounted((on) => !on)}>
+          toggle posts
+        </button>
+        {mounted && (
+          <AnalysisWindowControl onReturnToAction={() => setMounted(false)} />
+        )}
+      </>
+    )
+  }
+
+  const renderPair = () =>
+    render(
+      <ScopeProvider clock={() => NOW}>
+        <Requester />
+        <Remountable />
+      </ScopeProvider>,
+    )
+
+  const ask = () =>
+    act(() => {
+      fireEvent.click(screen.getByRole("button", { name: "ask" }))
+    })
+
+  const toggle = () =>
+    act(() => {
+      fireEvent.click(screen.getByRole("button", { name: "toggle posts" }))
+    })
+
+  test("opens the one editor, with the way back", () => {
+    renderPair()
+    expect(screen.queryByLabelText("Duration")).toBeNull()
+
+    ask()
+
+    expect(screen.getByLabelText("Duration")).toBeTruthy()
+    expect(screen.getByRole("button", { name: "Back to Action" })).toBeTruthy()
+  })
+
+  test("the request is spent, so a later arrival finds it closed", () => {
+    renderPair()
+    ask()
+    expect(screen.getByLabelText("Duration")).toBeTruthy()
+
+    // Leave Posts, come back.
+    toggle()
+    toggle()
+
+    expect(screen.queryByLabelText("Duration")).toBeNull()
+  })
+
+  test("leaving by the button still throws an invalid draft away", () => {
+    renderPair()
+    ask()
+
+    // `abc` is refused, so it lives on as a draft with an error beside it.
+    typeAndCommit("Duration", "abc")
+    expect(screen.getByRole("alert")).toBeTruthy()
+
+    // The tab change unmounts this without Radix ever seeing a close, so the
+    // return has to go out through the same door every other close does.
+    act(() => {
+      fireEvent.click(screen.getByRole("button", { name: "Back to Action" }))
+    })
+
+    toggle()
+    open()
+    expect(value("Duration")).toBe("1d")
+    expect(screen.queryByRole("alert")).toBeNull()
+  })
+
+  test("opening it by hand offers no way back to a tab nobody came from", () => {
+    renderPair()
+
+    open()
+
+    expect(screen.getByLabelText("Duration")).toBeTruthy()
+    expect(screen.queryByRole("button", { name: "Back to Action" })).toBeNull()
   })
 })

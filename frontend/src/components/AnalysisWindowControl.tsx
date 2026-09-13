@@ -14,10 +14,10 @@
  * and a rendered summary is what they get instead.
  */
 
-import { Clock } from "lucide-react"
+import { ArrowLeft, Clock } from "lucide-react"
 import { Popover } from "radix-ui"
 import type React from "react"
-import { useId, useState } from "react"
+import { useEffect, useId, useState } from "react"
 
 import {
   Sheet,
@@ -25,10 +25,12 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet"
+import { TgButton } from "@/components/ui/tg-button"
 import { TgFilterChip } from "@/components/ui/tg-chips"
 import { TgInput } from "@/components/ui/tg-input"
 import { TgSegmentedControl } from "@/components/ui/tg-segmented"
 import { useScope } from "@/contexts/ScopeContext"
+import { useUI } from "@/contexts/UIContext"
 import { useIsMobile } from "@/hooks/useMobile"
 import {
   ELAPSED_PRESETS,
@@ -126,12 +128,34 @@ const WindowField: React.FC<WindowFieldProps> = ({
  * four-field form is two places for the propagation rules to be wired up
  * differently.
  */
-const WindowEditor: React.FC = () => {
+const WindowEditor: React.FC<{ onReturn?: () => void }> = ({ onReturn }) => {
   const { mode, setMode, applyValue } = useScope()
   const [elapsedFocus, setElapsedFocus] = useState<ScopeField | null>(null)
 
   return (
     <div className="flex flex-col gap-4">
+      {/*
+       * The way back, shown only to somebody who was sent here (AW-09).
+       *
+       * Action hands editing off to this editor rather than growing its own, so
+       * the window is checked one tab away from the half-written Action it
+       * belongs to. The nav still has an Action tab, but it is behind whichever
+       * overlay this is — a sheet covers it outright on a phone. One button
+       * where the eye already is costs less than the trip.
+       */}
+      {onReturn && (
+        <TgButton
+          size="sm"
+          variant="secondary"
+          data-testid="window-editor-return"
+          className="self-start"
+          onClick={onReturn}
+        >
+          <ArrowLeft size={13} />
+          Back to Action
+        </TgButton>
+      )}
+
       <TgSegmentedControl
         size="sm"
         aria-label="Analysis window mode"
@@ -185,11 +209,73 @@ const WindowEditor: React.FC = () => {
   )
 }
 
+/** The collapsed line both surfaces draw: a clock, then the whole window. */
+const TRIGGER_CLASS =
+  "flex w-full items-center gap-2.5 rounded-xl border border-app-ink/10 bg-app-muted/50 px-3.5 py-2.5 text-left transition-colors hover:border-app-ink/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-app-ink/30"
+
+const TriggerFace: React.FC<{ summary: string }> = ({ summary }) => (
+  <>
+    <Clock size={13} className="shrink-0 text-app-ink/60" />
+    <span className="text-[11px] font-mono text-app-ink/90">{summary}</span>
+  </>
+)
+
+/**
+ * The window on a surface that does not edit it (AW-09).
+ *
+ * Actions is where every Artifact begins, so it has to say what window the
+ * thing it is about to make will use. It says it with the *same* line Posts
+ * draws and then sends you to the one editor, because a second editor is how
+ * two surfaces start disagreeing about what Live means.
+ */
+export const AnalysisWindowLink: React.FC = () => {
+  const { summary, requestEditor } = useScope()
+  const { setActiveTab } = useUI()
+
+  return (
+    <button
+      type="button"
+      aria-label="Analysis window"
+      data-testid="action-analysis-window"
+      className={TRIGGER_CLASS}
+      onClick={() => {
+        setActiveTab("posts")
+        requestEditor()
+      }}
+    >
+      <TriggerFace summary={summary} />
+    </button>
+  )
+}
+
 /** The persistent trigger: mode, both boundaries and Duration, in one line. */
-export const AnalysisWindowControl: React.FC = () => {
-  const { summary, commitDraft, discardDrafts } = useScope()
+export const AnalysisWindowControl: React.FC<{
+  /** Where "Back to Action" goes. Omitted, the button is not rendered. */
+  onReturnToAction?: () => void
+}> = ({ onReturnToAction }) => {
+  const {
+    summary,
+    commitDraft,
+    discardDrafts,
+    editorRequested,
+    clearEditorRequest,
+  } = useScope()
   const isMobile = useIsMobile()
   const [open, setOpen] = useState(false)
+  /** Whether this opening came from Action, which is what earns the way back. */
+  const [sentHere, setSentHere] = useState(false)
+
+  /*
+   * Somebody on another tab asked for this editor, and the request outlived the
+   * navigation that carried it. Consume it, or every later arrival on Posts
+   * would find the popover opening by itself.
+   */
+  useEffect(() => {
+    if (!editorRequested) return
+    clearEditorRequest()
+    setSentHere(true)
+    setOpen(true)
+  }, [editorRequested, clearEditorRequest])
 
   const onOpenChange = (next: boolean) => {
     if (!next) {
@@ -205,6 +291,7 @@ export const AnalysisWindowControl: React.FC = () => {
        */
       for (const field of SCOPE_FIELDS) commitDraft(field)
       discardDrafts()
+      setSentHere(false)
     }
     setOpen(next)
   }
@@ -216,12 +303,26 @@ export const AnalysisWindowControl: React.FC = () => {
     <button
       type="button"
       aria-label="Analysis window"
-      className="flex w-full items-center gap-2.5 rounded-xl border border-app-ink/10 bg-app-muted/50 px-3.5 py-2.5 text-left transition-colors hover:border-app-ink/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-app-ink/30"
+      className={TRIGGER_CLASS}
     >
-      <Clock size={13} className="shrink-0 text-app-ink/60" />
-      <span className="text-[11px] font-mono text-app-ink/90">{summary}</span>
+      <TriggerFace summary={summary} />
     </button>
   )
+
+  /*
+   * Leaving by the button is still leaving, so it goes out through the same
+   * door. `AnimatePresence` unmounts this on the tab change without Radix ever
+   * seeing a close, so a draft left invalid — `abc` in Duration, with its
+   * error — would be sitting there on the next visit, which no other way of
+   * closing the editor leaves behind.
+   */
+  const editorReturn =
+    sentHere && onReturnToAction
+      ? () => {
+          onOpenChange(false)
+          onReturnToAction()
+        }
+      : undefined
 
   if (isMobile) {
     return (
@@ -235,7 +336,7 @@ export const AnalysisWindowControl: React.FC = () => {
             Analysis window
           </SheetTitle>
           <div className="px-4 pb-6">
-            <WindowEditor />
+            <WindowEditor onReturn={editorReturn} />
           </div>
         </SheetContent>
       </Sheet>
@@ -252,7 +353,7 @@ export const AnalysisWindowControl: React.FC = () => {
           aria-label="Analysis window"
           className="z-50 w-[26rem] max-w-[calc(100vw-2rem)] rounded-xl border border-app-ink/10 bg-app-card p-4 shadow-xl"
         >
-          <WindowEditor />
+          <WindowEditor onReturn={editorReturn} />
         </Popover.Content>
       </Popover.Portal>
     </Popover.Root>

@@ -35,6 +35,17 @@ interface ChatContextType {
   setChatMessages: React.Dispatch<React.SetStateAction<ChatMessage[]>>
   chatInput: string
   setChatInput: React.Dispatch<React.SetStateAction<string>>
+  /**
+   * The question typed on the Action tab but not asked yet (AW-09).
+   *
+   * It lives here rather than in `ActionView` because Action is unmounted the
+   * moment you go to Posts to check the Analysis window — and checking the
+   * window the Action is about to use must not be the thing that throws the
+   * Action away. Separate from `chatInput`, which is the Chat tab's composer
+   * and carries an existing conversation on.
+   */
+  actionDraft: string
+  setActionDraft: React.Dispatch<React.SetStateAction<string>>
   isChatting: boolean
   chatMode: ChatMode
   setChatMode: React.Dispatch<React.SetStateAction<ChatMode>>
@@ -78,6 +89,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
 
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([])
   const [chatInput, setChatInput] = useState("")
+  const [actionDraft, setActionDraft] = useState("")
   const [isChatting, setIsChatting] = useState(false)
   const [chatMode, setChatMode] = useState<ChatMode>("full_scope")
 
@@ -445,11 +457,20 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
             ? err.message
             : "Failed to generate response"
       setChatMessages((prev) => {
-        const updated = [...prev]
-        updated[updated.length - 1] = {
-          role: "model",
+        const failure = {
+          role: "model" as const,
           text: `Error: ${errorMessage}`,
         }
+        /*
+         * The turns are written *after* the session is opened, so a submission
+         * that fails — offline, a 4xx, a refused Scope — lands here with none
+         * on screen at all. Overwriting `length - 1` then wrote index `-1`: a
+         * property, not an element, so the failure was invisible and the Chat
+         * tab sat empty with the question already cleared from Action.
+         */
+        if (prev.length === 0) return [failure]
+        const updated = [...prev]
+        updated[updated.length - 1] = failure
         return updated
       })
     } finally {
@@ -465,6 +486,8 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
         setChatMessages,
         chatInput,
         setChatInput,
+        actionDraft,
+        setActionDraft,
         isChatting,
         chatMode,
         setChatMode,

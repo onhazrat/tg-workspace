@@ -10,8 +10,10 @@ import React from "react"
 import { AnalysisWindowControl } from "@/components/AnalysisWindowControl"
 import { TgButton } from "@/components/ui/tg-button"
 import { TgFilterChip } from "@/components/ui/tg-chips"
+import { useScope } from "../contexts/ScopeContext"
 import { useScraper } from "../contexts/ScraperContext"
 import { useSettings } from "../contexts/SettingsContext"
+import { useUI } from "../contexts/UIContext"
 import { MEDIA_FILTER_OPTIONS } from "../lib/posts/post-media"
 
 interface PostFilterProps {
@@ -42,6 +44,8 @@ export const PostFilter: React.FC<PostFilterProps> = ({
     setPostSortOrder,
   } = useScraper()
   const { embeddingsEnabled } = useSettings()
+  const { setActiveTab } = useUI()
+  const { clearEditorRequest } = useScope()
 
   const [semanticInput, setSemanticInput] = React.useState(
     semanticSearchQuery || "",
@@ -50,6 +54,17 @@ export const PostFilter: React.FC<PostFilterProps> = ({
   React.useEffect(() => {
     setSemanticInput(semanticSearchQuery || "")
   }, [semanticSearchQuery])
+
+  /*
+   * A related-post search replaces every filter, the Analysis window included,
+   * so this is the one place on Posts where the editor is not on screen to
+   * answer a request from Action (AW-09). Void the request rather than leave it
+   * standing: nothing would consume it until the search was cleared, and the
+   * popover would then open by itself on a visit nobody asked it to.
+   */
+  React.useEffect(() => {
+    if (relatedPostSearch) clearEditorRequest()
+  }, [relatedPostSearch, clearEditorRequest])
 
   if (relatedPostSearch) {
     return (
@@ -147,7 +162,9 @@ export const PostFilter: React.FC<PostFilterProps> = ({
                 Analysis Window
               </label>
             </div>
-            <AnalysisWindowControl />
+            <AnalysisWindowControl
+              onReturnToAction={() => setActiveTab("action")}
+            />
           </div>
 
           {/* Bottom Row: Search Filters */}
