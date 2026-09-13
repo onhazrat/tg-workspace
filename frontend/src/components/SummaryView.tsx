@@ -5,7 +5,6 @@ import {
   Copy,
   Database,
   Download,
-  FileText,
   Loader2,
   RefreshCw,
   Send,
@@ -17,6 +16,7 @@ import React, { useState } from "react"
 import ReactMarkdown from "react-markdown"
 import { toast } from "sonner"
 import { ArtifactScopeLine } from "@/components/ArtifactScopeLine"
+import { GoToActionEmptyState } from "@/components/history/GoToActionEmptyState"
 import { TgButton } from "@/components/ui/tg-button"
 import { useBotCredentials, useChatDestinations } from "@/hooks/useBots"
 import {
@@ -907,18 +907,17 @@ export const SummaryView: React.FC<SummaryViewProps> = () => {
             </div>
           </div>
         ) : (
-          <div className="h-full flex flex-col items-center justify-center text-center py-32">
-            <div className="w-20 h-20 rounded-3xl bg-app-muted/20 flex items-center justify-center mb-6">
-              <FileText size={40} className="opacity-20" strokeWidth={1.5} />
-            </div>
-            <h3 className="text-lg font-bold tracking-tight mb-2">
-              Ready to Summarize
-            </h3>
-            <p className="text-xs text-app-ink/70 max-w-[280px] mx-auto leading-relaxed">
-              Generate in-app, or use Copy Prompt to run an external AI and
-              paste the response from History.
-            </p>
-          </div>
+          /*
+           * A result tab with no result (AW-09).
+           *
+           * It said "Ready to Summarize" and then described a create path that
+           * has not been on this tab since Action took the four forms. Naming
+           * where work starts is the same answer Tag, Discover and Chat give.
+           */
+          <GoToActionEmptyState
+            what="summary"
+            description="Summaries are made on the Action tab, from the channels and Analysis window in scope there. Open a past one from History, or generate a new one."
+          />
         )}
       </div>
 

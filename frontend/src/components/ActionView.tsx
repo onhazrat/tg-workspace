@@ -2,7 +2,7 @@ import { Compass, FileText, MessageSquare, Send, Tag } from "lucide-react"
 import { motion } from "motion/react"
 import type React from "react"
 import { useState } from "react"
-
+import { AnalysisWindowLink } from "@/components/AnalysisWindowControl"
 import { RunSettingsBar } from "@/components/action/RunSettingsBar"
 import { PasteTagsModal } from "@/components/PasteTagsModal"
 import { SummaryConfig } from "@/components/SummaryConfig"
@@ -72,6 +72,8 @@ export const ActionView: React.FC = () => {
     setChatMessages,
     handleSendMessage,
     isChatting,
+    actionDraft: chatDraft,
+    setActionDraft: setChatDraft,
   } = useChatContext()
   const { embeddingsEnabled } = useSettings()
   const { completePendingTagRun } = useTagContext()
@@ -79,7 +81,6 @@ export const ActionView: React.FC = () => {
   const { generate, isGenerating, channelCount } = useDiscoverGenerate()
 
   const [pasteOpen, setPasteOpen] = useState(false)
-  const [chatDraft, setChatDraft] = useState("")
 
   /**
    * Generate a report, then go and look at it.
@@ -142,6 +143,28 @@ export const ActionView: React.FC = () => {
       exit={{ opacity: 0, y: -20 }}
       className="space-y-4"
     >
+      {/*
+       * What the four actions below will run over (AW-09).
+       *
+       * Read-only on purpose: this is the same line the Posts editor's trigger
+       * draws, and activating it goes there rather than opening a second copy
+       * of the editor here. Every draft on this tab survives the trip.
+       */}
+      <section
+        data-testid="action-scope"
+        className="flex flex-wrap items-center gap-3 rounded-xl border border-app-ink/10 bg-app-card p-4 shadow-sm"
+      >
+        <div className="mr-auto">
+          <h3 className="text-sm font-bold uppercase tracking-tight">Scope</h3>
+          <p className="mt-0.5 text-[11px] text-app-ink/60">
+            The Analysis window every action below uses. Change it on Posts.
+          </p>
+        </div>
+        <div className="w-full sm:w-auto sm:min-w-[22rem]">
+          <AnalysisWindowLink />
+        </div>
+      </section>
+
       <RunSettingsBar />
 
       <ActionCard
