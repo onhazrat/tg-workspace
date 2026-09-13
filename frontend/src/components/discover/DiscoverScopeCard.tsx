@@ -1,6 +1,7 @@
 import { Compass } from "lucide-react"
 import type React from "react"
-import { formatDateRange } from "@/lib/format-date-range"
+
+import { ArtifactScopeLine } from "@/components/ArtifactScopeLine"
 import { countOf } from "@/lib/plural"
 import { FORWARDED_FILTER_LABELS } from "@/lib/posts/discover-empty-state"
 import type { DiscoverReportView } from "@/lib/posts/discover-report-view"
@@ -49,13 +50,6 @@ export const DiscoverScopeCard: React.FC<DiscoverScopeCardProps> = ({
             {view.scope.channels.length} selected
           </p>
           <p>
-            <span className="text-app-ink/50">Date range:</span>{" "}
-            {formatDateRange(
-              new Date(view.scope.start),
-              new Date(view.scope.end),
-            )}
-          </p>
-          <p>
             <span className="text-app-ink/50">Post filter:</span>{" "}
             {FORWARDED_FILTER_LABELS[view.scope.forwarded] ??
               view.scope.forwarded}
@@ -78,6 +72,13 @@ export const DiscoverScopeCard: React.FC<DiscoverScopeCardProps> = ({
             {candidateCount > 0 ? ` (${unfollowedCount} unfollowed)` : null}
           </p>
         </div>
+
+        {/*
+         * The Analysis window the report was generated over (AW-08). It used to
+         * be one more cell in the grid above, reading exact boundaries with no
+         * Duration beside them and offering no way back to the Scope it names.
+         */}
+        <ArtifactScopeLine artifact={view} className="mt-3" />
 
         {view.scope.maxPerChannel > 0 ? (
           <p

@@ -11,6 +11,7 @@ import {
   Trash2,
 } from "lucide-react"
 import type React from "react"
+import { ArtifactScopeLine } from "@/components/ArtifactScopeLine"
 import { TgMetaChip } from "@/components/ui/tg-chips"
 import { TgIconButton } from "@/components/ui/tg-icon-button"
 import type { ArtifactListItem } from "@/types"
@@ -111,6 +112,15 @@ export const ArtifactCard: React.FC<ArtifactCardProps> = ({
         <span className="truncate">{artifactDetail(artifact)}</span>
         <RelativeTime timestamp={artifact.timestamp} />
       </div>
+
+      {/*
+       * The frozen Analysis window, on the card rather than only on the detail
+       * view: "which hours was this made from" is asked while scanning the
+       * list, and it is the whole of what distinguishes two runs over the same
+       * channels. The relative stamp above it is the *creation* time, which is
+       * a fact about the row and not about its window.
+       */}
+      <ArtifactScopeLine artifact={artifact} />
 
       {/*
        * Ticket 27. Present on the card rather than only on the detail view,

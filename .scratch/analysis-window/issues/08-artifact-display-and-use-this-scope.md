@@ -7,7 +7,7 @@ the Account wants.
 
 **Blocked by:** AW-06
 
-**Status:** ready-for-agent
+**Status:** done
 
 ## The rule this ticket makes true
 
@@ -23,10 +23,10 @@ go away.
 
 ## Acceptance criteria
 
-- [ ] Every Artifact surface shows exact local Start, exact local End and derived Duration.
-- [ ] No Artifact view shows End gap, a former workspace mode or relative "ago" text.
-- [ ] Opening an Artifact changes only navigation and the Artifact being viewed; selected Channels, the Analysis window and the filters are untouched.
-- [ ] The implicit scope-restoration behaviour and its notice are deleted.
-- [ ] A Use this Scope action replaces the entire workspace Scope with the Artifact snapshot.
-- [ ] Restoration sets the Analysis window to Fixed at the Artifact's exact boundaries, derives Duration, and calculates End gap against the synchronized current minute.
-- [ ] The Artifact itself is unchanged by restoring it.
+- [x] Every Artifact surface shows exact local Start, exact local End and derived Duration.
+- [x] No Artifact view shows End gap, a former workspace mode or relative "ago" text.
+- [x] Opening an Artifact changes only navigation and the Artifact being viewed; selected Channels, the Analysis window and the filters are untouched.
+- [x] The implicit scope-restoration behaviour and its notice are deleted.
+- [x] A Use this Scope action replaces the entire workspace Scope with the Artifact snapshot.
+- [x] Restoration sets the Analysis window to Fixed at the Artifact's exact boundaries, derives Duration, and calculates End gap against the synchronized current minute.
+- [x] The Artifact itself is unchanged by restoring it.

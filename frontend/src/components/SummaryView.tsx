@@ -16,6 +16,7 @@ import { motion } from "motion/react"
 import React, { useState } from "react"
 import ReactMarkdown from "react-markdown"
 import { toast } from "sonner"
+import { ArtifactScopeLine } from "@/components/ArtifactScopeLine"
 import { TgButton } from "@/components/ui/tg-button"
 import { useBotCredentials, useChatDestinations } from "@/hooks/useBots"
 import {
@@ -23,12 +24,11 @@ import {
   useSummariesHistory,
 } from "@/hooks/useSummaries"
 import { savePublishLog } from "@/lib/logs/write"
-import { scopeChannels, scopeRange } from "@/lib/scope/artifact-scope"
+import { scopeChannels } from "@/lib/scope/artifact-scope"
 import { saveSummary } from "@/lib/summaries/store"
 import { buildActiveProxies } from "@/lib/syncSettings"
 import { formatSummaryModelLabel, isPendingSummary } from "../constants"
 import { generateDefaultMetadataText, useAI } from "../contexts/AIContext"
-import { useScope } from "../contexts/ScopeContext"
 import { useScraper } from "../contexts/ScraperContext"
 import { useSettings } from "../contexts/SettingsContext"
 import { useUI } from "../contexts/UIContext"
@@ -164,7 +164,6 @@ export const SummaryView: React.FC<SummaryViewProps> = () => {
   const summariesHistory = useSummariesHistory()
   const loadHistory = useInvalidateSummaries()
   const { currentSummaryId, summarizing } = useUI()
-  const { startDate, endDate } = useScope()
 
   // The prompt panel below needs the full promptText, which the list
   // projection omits (it was ~94% of that payload).
@@ -440,20 +439,14 @@ export const SummaryView: React.FC<SummaryViewProps> = () => {
               <span className="bg-app-muted/30 px-2 py-1 rounded-md text-[11px] font-mono uppercase tracking-widest text-app-ink/70">
                 {scopeChannels(currentSummary).length} Channels
               </span>
-              {/*
-               * The frozen Scope, which since AW-07 is the only window a
-               * Summary has. A row opened by a legacy `PUT` records none, and
-               * this says so rather than rendering the epoch twice.
-               */}
-              <span className="bg-app-muted/30 px-2 py-1 rounded-md text-[11px] font-mono uppercase tracking-widest text-app-ink/70">
-                {(() => {
-                  const range = scopeRange(currentSummary)
-                  return range
-                    ? `Range: ${new Date(range.start).toLocaleString()} - ${new Date(range.end).toLocaleString()}`
-                    : "Range: not recorded"
-                })()}
-              </span>
             </div>
+
+            {/*
+             * The frozen Analysis window, exact on both ends and never the
+             * workspace's own (AW-08). The workspace one moves; this Summary
+             * was made from these two instants and no others.
+             */}
+            <ArtifactScopeLine artifact={currentSummary} className="mt-3" />
           </>
         ) : summaryBody ? (
           <>
@@ -876,12 +869,13 @@ export const SummaryView: React.FC<SummaryViewProps> = () => {
                     {scopeChannels(currentSummary).length} Channels
                   </span>
                 </div>
-                <div className="flex items-center gap-2">
-                  <span className="bg-app-muted/30 px-2 py-1 rounded-md text-[11px] font-mono uppercase tracking-widest text-app-ink/70">
-                    Range: {new Date(startDate).toLocaleString()} -{" "}
-                    {new Date(endDate).toLocaleString()}
-                  </span>
-                </div>
+                {/*
+                 * The Summary's own window, not the workspace's. This read
+                 * `startDate`/`endDate` off live Scope until AW-08, so a
+                 * Summary generated last week described whatever window Posts
+                 * happened to be showing while you read it.
+                 */}
+                <ArtifactScopeLine artifact={currentSummary} />
               </div>
             )}
           </>

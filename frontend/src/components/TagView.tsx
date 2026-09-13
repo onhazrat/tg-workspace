@@ -1,6 +1,7 @@
 import { motion } from "motion/react"
 import type React from "react"
 import { useMemo, useState } from "react"
+import { ArtifactScopeLine } from "@/components/ArtifactScopeLine"
 import { GoToActionEmptyState } from "@/components/history/GoToActionEmptyState"
 import { ApplyTagsBar } from "@/components/tag/ApplyTagsBar"
 import { normalizeParsedTagSuggestions } from "@/lib/channels/apply-tag-suggestions"
@@ -78,6 +79,12 @@ export const TagView: React.FC = () => {
       className="space-y-6"
     >
       <ApplyTagsBar />
+
+      {/*
+       * The Scope the selected run was made from (AW-08), and only once one is
+       * selected — the preview below a fresh run has no frozen window yet.
+       */}
+      {selectedRun && <ArtifactScopeLine artifact={selectedRun} />}
 
       <div className="rounded-xl border border-app-ink/10 bg-app-card p-4 shadow-sm">
         <div className="mb-3">

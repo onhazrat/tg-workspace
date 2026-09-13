@@ -16,6 +16,7 @@ import { AnimatePresence, motion } from "motion/react"
 import type React from "react"
 import { useState } from "react"
 import ReactMarkdown from "react-markdown"
+import { ArtifactScopeLine } from "@/components/ArtifactScopeLine"
 import { TgButton } from "@/components/ui/tg-button"
 import { TgIconButton } from "@/components/ui/tg-icon-button"
 import { TgFieldLabel } from "@/components/ui/tg-input"
@@ -25,6 +26,7 @@ import { useChatContext } from "../contexts/ChatContext"
 import { useRAG } from "../contexts/RAGContext"
 import { useSettings } from "../contexts/SettingsContext"
 import { useUI } from "../contexts/UIContext"
+import { useChatSessionQuery } from "../hooks/useChatSessions"
 import { replaceCitations } from "../lib/citations/replace-citations"
 import { ModelCombo } from "./ai/ModelCombo"
 import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tg-tooltip"
@@ -56,7 +58,9 @@ export const ChatView: React.FC = () => {
     resolvedTheme: theme,
     embeddingsEnabled,
   } = useSettings()
-  const { setCurrentSummaryId, setCurrentChatSessionId } = useUI()
+  const { currentChatSessionId, setCurrentSummaryId, setCurrentChatSessionId } =
+    useUI()
+  const { data: chatSession } = useChatSessionQuery(currentChatSessionId)
   const { isSyncing, progress } = useRAG()
   const {
     chatMessages,
@@ -217,6 +221,20 @@ export const ChatView: React.FC = () => {
           )}
         </div>
       </div>
+
+      {/*
+       * The Scope this conversation was answered from (AW-08).
+       *
+       * Only once a session exists: before the first turn there is no frozen
+       * window to show, and the workspace's own is one tab away in the Posts
+       * editor. Rendering the live one here would say a chat had been answered
+       * from a window it has never seen.
+       */}
+      {chatSession && (
+        <div className="mb-4 shrink-0">
+          <ArtifactScopeLine artifact={chatSession} />
+        </div>
+      )}
 
       {/* Chat Feed */}
       <div className="flex-1 overflow-y-auto space-y-6 mb-4 pr-2 custom-scrollbar">
