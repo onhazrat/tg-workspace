@@ -75,6 +75,7 @@ def _row(
         timestamp=int(post.get("timestamp") or 0),
         forwarded_from=post.get("forwardedFrom") or None,
         forwarded_from_name=post.get("forwardedFromName") or None,
+        forwarded_from_post_id=post.get("forwardedFromPostId"),
         media=post.get("media") or None,
         links=post.get("links") or None,
         reply_to_post_id=post.get("replyToPostId"),

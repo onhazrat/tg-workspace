@@ -22,6 +22,7 @@ Per `CLAUDE.md`, each assertion was mutation-tested:
 * store samples on the inconclusive branch → the inconclusive test fails
 * let `replace_samples` commit → nothing fails, which is why the
   transaction rule is asserted directly rather than through the write path
+* drop `forwarded_from_post_id` from `_row` (CRG-03) → the forward test fails
 """
 
 from __future__ import annotations
@@ -116,6 +117,33 @@ def test_a_sample_carries_the_view_and_reaction_counts_it_was_parsed_with() -> N
     assert stored[0].media is not None
     assert stored[0].media["viewsCount"] == 9700
     assert stored[0].media["reactionsCount"] == 12
+
+
+def test_a_sampled_forward_stores_the_post_it_came_from() -> None:
+    """CRG-03's column, parallel on `Post` and here the way `links` already is.
+
+    CRG-02 mines References out of samples through CRG-01's extractor, which
+    reads this attribute off whichever of the two models it was handed. A
+    sample that dropped it would make every forward off an unfollowed Channel a
+    second-class edge naming a Channel and no Post.
+    """
+    with Session(engine) as session:
+        record_probe_result(
+            session,
+            HANDLE,
+            _page(
+                samples=[
+                    _post(11, forwardedFrom="alphachan", forwardedFromPostId=4271),
+                    _post(12, forwardedFrom="betachan"),
+                ]
+            ),
+        )
+        stored = {row.post_id: row for row in samples_for(session, HANDLE)}
+
+    assert stored[11].forwarded_from == "alphachan"
+    assert stored[11].forwarded_from_post_id == 4271
+    assert stored[12].forwarded_from == "betachan"
+    assert stored[12].forwarded_from_post_id is None
 
 
 def test_a_sample_never_points_at_a_thumbnail_we_did_not_download() -> None:

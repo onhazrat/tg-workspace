@@ -23,8 +23,7 @@ from app.services.post_reply_parser import extract_reply
 from app.services.telegram_html import attr_str, extract_telegram_html_text
 from app.services.telegram_web import (
     TelegramWebViewUnavailable,
-    extract_channel_name_from_href,
-    is_channel_handle,
+    extract_channel_post_from_href,
     parse_telegram_web_view_url,
     resolve_telegram_href,
     telegram_web_view_channel_url,
@@ -86,17 +85,22 @@ def _parse_posts_from_html(
 
         forwarded_from: str | None = None
         forwarded_from_name: str | None = None
+        forwarded_from_post_id: int | None = None
         fwd_el = el.select_one(".tgme_widget_message_forwarded_from_name")
         if fwd_el:
             forwarded_from_name = fwd_el.get_text(strip=True)
             href = attr_str(fwd_el.get("href"))
             if href:
-                candidate = extract_channel_name_from_href(href)
-                # A forward from a private channel or invite link yields a
-                # reserved path ("c", "joinchat"), never a followable handle.
-                # Storing it would seed phantom auto-follow candidates.
-                if candidate and is_channel_handle(candidate):
-                    forwarded_from = candidate
+                # CRG-03: the href names the source Post as well as the source
+                # Channel, and this used to keep only the handle. The pair
+                # helper refuses both together for a private channel or an
+                # invite link, whose first segment is a reserved path ("c",
+                # "joinchat") and never a followable handle — storing that
+                # would seed phantom auto-follow candidates, and the Post id
+                # under it is worth nothing without somewhere to resolve it.
+                parsed = extract_channel_post_from_href(href)
+                if parsed is not None:
+                    forwarded_from, forwarded_from_post_id = parsed
 
         reply_to_post_id, reply_to = extract_reply(el)
 
@@ -116,6 +120,8 @@ def _parse_posts_from_html(
             post["forwardedFrom"] = forwarded_from
         if forwarded_from_name:
             post["forwardedFromName"] = forwarded_from_name
+        if forwarded_from_post_id is not None:
+            post["forwardedFromPostId"] = forwarded_from_post_id
         if reply_to_post_id is not None:
             post["replyToPostId"] = reply_to_post_id
         if reply_to:

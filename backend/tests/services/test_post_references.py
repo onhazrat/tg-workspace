@@ -30,6 +30,9 @@ Per `CLAUDE.md`, each assertion was mutation-tested:
 * let `extract_channel_post_from_href` skip the host check → the spoofed-host
   test fails
 * clear `telegram_chat_id` in `requeue_probes` again → the recheck test fails
+* drop `forwarded_from_post_id` from the forward `add` (CRG-03) → the exact-Post
+  test fails and the pre-CRG-03 test stays green, which is the pair asserting
+  that the missing id is a null rather than a withheld row
 """
 
 from __future__ import annotations
@@ -63,6 +66,7 @@ def _post(
     channel_name: str = SOURCE,
     text: str = "",
     forwarded_from: str | None = None,
+    forwarded_from_post_id: int | None = None,
     links: list[dict[str, Any]] | None = None,
     reply_to: dict[str, Any] | None = None,
     reply_to_post_id: int | None = None,
@@ -76,6 +80,7 @@ def _post(
         timestamp=timestamp if timestamp is not None else _ms(days_ago=1),
         retrieved_at=retrieved_at,
         forwarded_from=forwarded_from,
+        forwarded_from_post_id=forwarded_from_post_id,
         links=links,
         reply_to=reply_to,
         reply_to_post_id=reply_to_post_id,
@@ -199,6 +204,32 @@ def test_the_discover_signal_vocabulary_is_unchanged() -> None:
     from app.services.discover import SIGNAL_KINDS
 
     assert SIGNAL_KINDS == ("forward", "mention", "link")
+
+
+def test_a_forward_carries_the_exact_post_it_came_from() -> None:
+    """CRG-03's column, parsed at scrape time out of the attribution href."""
+    post = _post(1, forwarded_from="alphachan", forwarded_from_post_id=4271)
+
+    refs = references_for(post, source_handle=SOURCE)
+
+    assert [(r.kind, r.target_handle, r.target_post_id) for r in refs] == [
+        ("forward", "alphachan", 4271)
+    ]
+
+
+def test_a_forward_scraped_before_crg_03_names_the_channel_and_no_post() -> None:
+    """There is no backfill and there cannot be one — the href was never stored.
+
+    The Reference is still written. A forward whose source Post is unknown is a
+    real edge with a missing detail, not a row to withhold.
+    """
+    post = _post(1, forwarded_from="alphachan")
+
+    refs = references_for(post, source_handle=SOURCE)
+
+    assert [(r.kind, r.target_handle, r.target_post_id) for r in refs] == [
+        ("forward", "alphachan", None)
+    ]
 
 
 def test_a_link_carries_the_exact_post_it_names() -> None:

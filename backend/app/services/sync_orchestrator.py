@@ -206,6 +206,7 @@ def _posts_to_save(
                 "timestamp": ts or int(time.time() * 1000),
                 "forwardedFrom": p.get("forwardedFrom"),
                 "forwardedFromName": p.get("forwardedFromName"),
+                "forwardedFromPostId": p.get("forwardedFromPostId"),
                 "media": p.get("media"),
                 "links": p.get("links"),
                 "replyToPostId": p.get("replyToPostId"),

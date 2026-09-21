@@ -253,6 +253,12 @@ class Post(SQLModel, table=True):
     timestamp: int = Field(default=0, sa_column=_ms_ts())
     forwarded_from: str | None = None
     forwarded_from_name: str | None = None
+    #: The Post in `forwarded_from` this one was forwarded from (CRG-03).
+    #: Parsed out of the forward attribution's href, which the scraper used to
+    #: read for the handle alone and then discard. Null for every Post scraped
+    #: before CRG-03 and permanently so: the href was never stored anywhere, so
+    #: there is nothing for a backfill to read.
+    forwarded_from_post_id: int | None = None
     is_anchor: bool = Field(default=False, index=True)
     retrieved_at: int | None = Field(default=None, sa_column=_ms_ts(nullable=True))
     retrieval_job_id: str | None = None
@@ -869,6 +875,11 @@ class DirectorySample(SQLModel, table=True):
     timestamp: int = Field(default=0, sa_column=_ms_ts())
     forwarded_from: str | None = None
     forwarded_from_name: str | None = None
+    #: The twin of `Post.forwarded_from_post_id` (CRG-03), parallel here the way
+    #: `links` and the two reply fields already are: CRG-02 mines References out
+    #: of samples through the same extractor, so a field only one of the two
+    #: models carries makes a sample-sourced forward a second-class edge.
+    forwarded_from_post_id: int | None = None
     #: The parsed media block, view and reaction counts included. No file is
     #: ever downloaded for a sample and `thumbApiPath` is never rewritten to
     #: the local cache, because a probe does not fill that cache and the

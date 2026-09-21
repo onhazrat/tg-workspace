@@ -4,7 +4,7 @@ Spec: `.scratch/channel-reference-graph/spec.md`. Decisions:
 [ADR-019](./migration/ADR-019-channel-reference-graph.md). Tickets:
 `.scratch/channel-reference-graph/issues/`.
 
-Status as of 2026-09-21: designed, nothing implemented.
+Status as of 2026-09-21: CRG-01 and CRG-03 landed; CRG-02 and CRG-04 open.
 
 ## What this builds
 
@@ -60,6 +60,22 @@ and adding one would have forced a retention change.
 
 - Forwards already in the corpus can never gain a target post id. The href was
   never stored. No backfill can invent it.
+- An export does not carry `forwarded_from_post_id`. `post_to_camel` emits a
+  fixed seventeen keys that the closed `PostResponse` declares, so an
+  eighteenth is a wire change and a client regeneration, which this effort puts
+  out of scope. An import into a *fresh* deployment therefore restores forwards
+  with no target Post. An import into a deployment that already has them leaves
+  them alone rather than nulling them: `bulk_upsert_posts_impl` writes this one
+  column only when the payload names it, unlike the four fields around it,
+  which are exported and so restore themselves. The export side is one line
+  whenever a read surface makes the regeneration worth it.
+- A pre-CRG-03 forward that gains the column on re-scrape does not gain the
+  Reference. Nothing resets `Post.references_extracted`, so an edge already
+  written with a null target Post keeps it, the same way an edited Post's
+  References go stale today. `bulk_upsert_posts_impl` has the pattern for it —
+  it clears `harvested` when a field the Discover extractor reads changed — and
+  wiring the reference flag to the same comparison belongs with whoever next
+  touches the walk, not with the parse change.
 - A Post whose channel has no chat id produces no Reference. It is retried for a
   grace period, then skipped for good, and the sweep counts both so the gap is
   visible rather than silent.

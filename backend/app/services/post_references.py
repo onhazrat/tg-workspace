@@ -170,14 +170,11 @@ def references_for(
         found.setdefault((normalized, kind, target_post_id), ref)
 
     if source.forwarded_from:
-        # CRG-03 adds the column this reads for a forward's exact Post; until
-        # then a forward carries only its Channel. Nothing here changes when it
-        # lands beyond the `getattr` becoming an attribute.
-        add(
-            source.forwarded_from,
-            "forward",
-            getattr(source, "forwarded_from_post_id", None),
-        )
+        # CRG-03's column, parsed at scrape time out of the forward
+        # attribution's href. Null for every Post scraped before it, and
+        # permanently so — the href was never stored, so the Reference simply
+        # names the Channel, as it did before.
+        add(source.forwarded_from, "forward", source.forwarded_from_post_id)
 
     for handle in extract_mentions(_post_text(source)):
         add(handle, "mention")
