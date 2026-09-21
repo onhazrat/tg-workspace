@@ -58,6 +58,17 @@ from app.services.tenancy import unscoped_select
 #: is `reply` here and `link` there; see the model docstring.
 KINDS: tuple[str, ...] = ("forward", "mention", "link", "reply")
 
+#: The columns `write_references` binds per row. Named here rather than
+#: counted from the model, because the statement binds exactly the keys that
+#: function builds and a model column it does not set would not be one of
+#: them -- the number has to move when *that dict* does.
+_BOUND_COLUMNS_PER_ROW = 9
+
+#: References per `INSERT`. The wire protocol refuses a statement with more
+#: than 65535 bind parameters, so this is the ceiling with a little room left
+#: rather than a tuning knob.
+_INSERT_CHUNK_ROWS = 65535 // _BOUND_COLUMNS_PER_ROW - 1
+
 #: What the extractor reads (CRG-02). A `DirectorySample` is `Post` minus the
 #: owner and the sync bookkeeping, and every field read below — the text, the
 #: links blob, the forward attribution and the reply pointer — is spelled the
@@ -255,10 +266,19 @@ def write_references(
 ) -> int:
     """Insert what is not already there, and report how many were new.
 
-    **One statement for the whole page**, not one per Post. Every source column
-    is already per-row, so there is nothing a per-Post call buys -- and at a
-    scan limit of 500 it would be 500 round trips a tick, which is the defect
+    **One statement per chunk, not one per Post.** Every source column is
+    already per-row, so there is nothing a per-Post call buys -- and at a scan
+    limit of 500 it would be 500 round trips a tick, which is the defect
     `_target_chat_ids` and the harvest sweep both go out of their way to avoid.
+
+    The chunk exists because the wire protocol has a hard ceiling of 65535
+    bind parameters per statement and a row here spends nine of them, so a
+    single `VALUES` list dies above 7281 References. The page size does not
+    bound that: `references_for` is unbounded per Post, since a post listing
+    twenty channels yields twenty References on its own. At the sweep's scan
+    limit of 500 Posts it never came close; CRG-04's backfill reads thousands
+    of Posts a batch, and the failure would be an `INSERT` rejected outright
+    hours into an unattended run.
 
     `ON CONFLICT DO NOTHING` against the occurrence constraint, which is
     `NULLS NOT DISTINCT` — so a mention, whose `target_post_id` is null,
@@ -285,18 +305,19 @@ def write_references(
         for one in sourced
         for ref in one.references
     ]
-    if not rows:
-        return 0
-    # `RETURNING` rather than `rowcount`: a multi-row INSERT reports -1 on this
-    # driver, and `ON CONFLICT DO NOTHING` returns only the rows it actually
-    # inserted, which is exactly the number the caller wants.
-    inserted = session.execute(
-        pg_insert(PostReference)
-        .values(rows)
-        .on_conflict_do_nothing(constraint="uq_tg_post_references_occurrence")
-        .returning(col(PostReference.id))
-    ).all()
-    return len(inserted)
+    written = 0
+    for start in range(0, len(rows), _INSERT_CHUNK_ROWS):
+        # `RETURNING` rather than `rowcount`: a multi-row INSERT reports -1 on
+        # this driver, and `ON CONFLICT DO NOTHING` returns only the rows it
+        # actually inserted, which is exactly the number the caller wants.
+        inserted = session.execute(
+            pg_insert(PostReference)
+            .values(rows[start : start + _INSERT_CHUNK_ROWS])
+            .on_conflict_do_nothing(constraint="uq_tg_post_references_occurrence")
+            .returning(col(PostReference.id))
+        ).all()
+        written += len(inserted)
+    return written
 
 
 def extract_sample_references(
@@ -570,4 +591,68 @@ def mark_references_extracted(session: Session, post_ids: list[uuid.UUID]) -> No
         .where(col(Post.id).in_(post_ids))
         .values(references_extracted=True)
         .execution_options(synchronize_session=False)
+    )
+
+
+@dataclass(frozen=True)
+class PendingCounts:
+    """What a walk still has in front of it, without walking it (CRG-04).
+
+    `pending` is every Post whose flag is unset; `eligible` is the subset a
+    walk would read right now, so `deferred` is the Posts waiting on a chat id
+    or on their grace to expire.
+
+    **This is the aggregate over the pending partial index that
+    `ExtractionCounts` deliberately refuses to do.** That refusal is about
+    cost per *tick*: the sweep runs every few minutes forever, and during the
+    first backfill the index covers the whole corpus. A dry run is one
+    operator, once, before a multi-hour job — it is the number that decides
+    whether to run at all, and it is worth the scan there.
+    """
+
+    pending: int = 0
+    eligible: int = 0
+    deferring_channels: int = 0
+
+    @property
+    def deferred(self) -> int:
+        return self.pending - self.eligible
+
+
+def pending_counts(session: Session, *, now: datetime | None = None) -> PendingCounts:
+    """Count what `extract_batch` would do, writing nothing.
+
+    Shares `_eligible` with the walk rather than restating it, so the dry run
+    cannot report a population the real run then disagrees with — which is the
+    whole reason CRG-04's script has no predicate of its own.
+
+    **One statement, with the eligible leg as a `FILTER` rather than a second
+    query.** Two counts would take two snapshots under READ COMMITTED, and the
+    scraper inserts Posts the whole time this runs — every one of them pending,
+    most of them eligible. So `eligible` would pick up rows `pending` never
+    saw, and `deferred`, being the subtraction, would print *negative* on the
+    line an operator reads to decide whether to run. One statement also walks
+    the pending set once instead of twice, which matters here more than it
+    looks: `_eligible` correlates a scalar subquery against `tg_channels`, so
+    the walk is per row and the second pass is not free.
+    """
+    epoch_ms = graph_epoch_ms(session)
+    cutoff_ms = grace_cutoff_ms(now=now)
+
+    pending, eligible = session.exec(
+        unscoped_select(
+            select(
+                func.count(),
+                func.count().filter(_eligible(epoch_ms, cutoff_ms)),
+            )
+            .select_from(Post)
+            .where(col(Post.references_extracted) == False),  # noqa: E712
+            reason=_SCOPE_REASON,
+        )
+    ).one()
+
+    return PendingCounts(
+        pending=int(pending),
+        eligible=int(eligible),
+        deferring_channels=_deferring_channels(session),
     )

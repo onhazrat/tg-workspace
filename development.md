@@ -219,9 +219,39 @@ curl -X POST http://localhost:8000/api/v1/data/channels/bulk-reset-sync \
 
 `POST /api/v1/data/channels/bulk-reset-sync` with `{"confirm": true}` clears posts, nulls `startId`, and queues one sync job per channel. UI button in Settings → Scraping & Sync.
 
-**Deprecated:** `bulk_reresolve_start_ids.py` and `POST /api/v1/data/channels/bulk-reresolve-start-ids` are backward-compat no-ops — use bulk reset-sync instead. See [MEMORY.md](MEMORY.md) maintenance scripts table.
+**Deprecated:** `bulk_reresolve_start_ids.py` and `POST /api/v1/data/channels/bulk-reresolve-start-ids` are backward-compat no-ops — use bulk reset-sync instead. See [Maintenance scripts](#maintenance-scripts) below.
 
 **Auto-follow forwarded:** enable per channel on each **ChannelCard** (`autoFollowForwarded` toggle). There is no global Settings toggle. To clean up channels discovered via forwards: `uv run python backend/scripts/cleanup_auto_follow_channels.py --dry-run` then `--freeze` or `--delete` (add `--auto-follow-only` to limit scope).
+
+## Maintenance scripts
+
+Everything in `backend/scripts/` is run by hand from the repo root, and loads the
+root `.env` itself:
+
+```bash
+uv run python backend/scripts/<name>.py --dry-run
+```
+
+**Run `--dry-run` first on anything that offers it**, and read the counts before
+committing to the real pass. These are type-checked and linted alongside `app/`
+(`backend/scripts/lint.sh`), because a script nothing checks breaks silently and
+is discovered by an operator part-way through a run.
+
+| Script | What it does |
+|---|---|
+| `backfill_post_references.py` | Fills the channel reference graph from the corpus already stored (CRG-04). `--dry-run` reports pending, eligible and deferred Post counts; a large deferred count is a population of channels with no chat id, which needs looking at before the grace expires. |
+| `backfill_channel_follows.py` | Gives every existing Channel a Follow. Also runs unattended from `prestart.sh` as `--if-needed`. |
+| `backfill_chat_sessions.py` | Moves chats out of `tg_summaries` into `tg_chat_sessions`. |
+| `backfill_post_media.py` | Re-fetches Telegram web-view HTML to fill `tg_posts.media` and cache thumbnails. Hits the network, so it is paced and scoped to named channels. |
+| `backfill_user_id.py` | Superseded by ticket 34's migration; kept for backups predating it. |
+| `audit_tenancy_drift.py` | Read-only. Reports Channels with no Follow and other ownership drift. |
+| `audit_post_media.py` | Read-only. Reports media-only placeholders, empty text and forwards in `tg_posts`. |
+| `slow_endpoints.py` | Read-only. Ranks endpoints by total time from Traefik's access log — see **Finding slow endpoints** in [deployment.md](deployment.md). |
+| `prune_channel_photos.py` | Deletes cached avatars no Channel row references. The retention sweep does this too; the script is for clearing a backlog now. |
+| `cleanup_auto_follow_channels.py` | Freezes or deletes Channels added by auto-follow (`--freeze` / `--delete`, `--auto-follow-only` to narrow). |
+| `cleanup_test_channels.py` | Removes TG rows pytest left in the dev database. |
+| `capture_scrape_html.py` | Dev only. Captures web-view HTML as test fixtures. |
+| `bulk_reresolve_start_ids.py` | **Deprecated**, a no-op. Use bulk reset-sync. |
 
 ## API surface (`/api/v1/*`)
 

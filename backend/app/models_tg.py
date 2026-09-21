@@ -82,7 +82,14 @@ class Channel(SQLModel, table=True):
     #: the shared backward walk over one handle's history, which is the same
     #: walk however many people follow it.
     id: str = Field(primary_key=True)
-    name: str
+    #: Indexed, and **not** unique — `channels.py` carries a detector for two
+    #: rows sharing a name precisely because it happens. The index is here for
+    #: the reference graph: `post_references._eligible` and
+    #: `_deferring_channels` both correlate a subquery on `name = channel_name`
+    #: per Post, so without it every pending Post drives a sequential scan of
+    #: this table. That is bounded by the sweep's scan limit and unbounded in
+    #: CRG-04's dry run, which counts the whole pending corpus.
+    name: str = Field(index=True)
     display_name: str | None = None
     photo_url: str | None = None
     bio: str | None = None
