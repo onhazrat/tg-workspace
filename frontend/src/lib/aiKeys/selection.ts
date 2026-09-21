@@ -1,5 +1,6 @@
 import { useSyncExternalStore } from "react"
 
+import { forgetModelsForMissingKeys } from "@/lib/aiKeys/modelMemory"
 import type { AiKey } from "@/lib/aiKeys/store"
 import { scopedStorage } from "@/lib/storage/scoped"
 
@@ -116,6 +117,9 @@ function serverPreferred(keys: readonly AiKey[]): string | null {
  * there is nothing to write and the choice stands.
  */
 export function reconcileAiKeySelection(keys: readonly AiKey[]): void {
+  // Here because this is already the one place that knows the live id set, and
+  // it runs on every fetch of the list.
+  forgetModelsForMissingKeys(keys.map((k) => k.id))
   const remembered = selectedAiKeyId()
   if (remembered && keys.some((k) => k.id === remembered)) return
   // Deliberately not an early return on the forget: deleting the selected Key

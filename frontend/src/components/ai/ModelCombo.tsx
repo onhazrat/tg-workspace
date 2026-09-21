@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/command"
 import { useSelectedAiKeyId } from "@/hooks/useAiKeys"
 import { useAiModels } from "@/hooks/useAiModels"
+import { rememberModelForKey } from "@/lib/aiKeys/modelMemory"
 import { cn } from "@/lib/utils"
 
 /**
@@ -82,7 +83,15 @@ export const ModelCombo: React.FC<{
     // An empty field never commits: the last good value stands. Nothing repairs
     // a blank model id any more, so this is the only thing between a cleared
     // field and a request naming no model at all.
-    if (next.trim()) onChange(next.trim())
+    const chosen = next.trim()
+    if (chosen) {
+      onChange(chosen)
+      // Recorded here rather than at the three call sites, because this is the
+      // one funnel every deliberate model choice passes through. The Operator
+      // Key's picker is excluded for the same reason it shows no catalogue: the
+      // model it names is not the Account Key's business.
+      if (!operatorKey) rememberModelForKey(selectedKeyId, chosen)
+    }
     setSearch("")
     setOpen(false)
   }

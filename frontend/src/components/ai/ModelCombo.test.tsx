@@ -28,6 +28,10 @@ import type { ReactNode } from "react"
 
 import { ModelCombo } from "@/components/ai/ModelCombo"
 import { queryKeys } from "@/hooks/queryKeys"
+import {
+  forgetModelsForMissingKeys,
+  modelForKey,
+} from "@/lib/aiKeys/modelMemory"
 import { rememberAiKeyId } from "@/lib/aiKeys/selection"
 
 const KEY_ID = "k1"
@@ -35,6 +39,7 @@ const KEY_ID = "k1"
 afterEach(() => {
   cleanup()
   rememberAiKeyId(null)
+  forgetModelsForMissingKeys([])
 })
 
 /** A client whose model list is already fresh, so no `queryFn` ever runs. */
@@ -181,6 +186,54 @@ describe("ModelCombo", () => {
     )
     fireEvent.click(screen.getByLabelText("Translation model"))
     expect(screen.queryByText("gpt-5")).toBeNull()
+  })
+
+  it("records the chosen model against the key that pays for it", async () => {
+    mount("gemini-3-flash", catalogue)
+    fireEvent.click(screen.getByLabelText("Model"))
+    fireEvent.click(await screen.findByText("gpt-5"))
+    expect(modelForKey(KEY_ID)).toBe("gpt-5")
+  })
+
+  it("records a typed id too, not only a listed one", async () => {
+    mount("gemini-3-flash", catalogue)
+    fireEvent.click(screen.getByLabelText("Model"))
+    fireEvent.change(
+      await screen.findByPlaceholderText(/Filter or type a model id/i),
+      { target: { value: "my-private-model" } },
+    )
+    fireEvent.click(await screen.findByText(/Use "my-private-model"/))
+    expect(modelForKey(KEY_ID)).toBe("my-private-model")
+  })
+
+  it("records nothing for a model the Operator Key runs", async () => {
+    // Same reason it shows no catalogue: the model it names is not the Account
+    // Key's business, so stamping it onto that Key would make switching Keys
+    // drag the deployment's translation model into an Artifact run.
+    rememberAiKeyId(KEY_ID)
+    const qc = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    })
+    render(
+      <ModelCombo
+        ariaLabel="Translation model"
+        value="deployment-model"
+        onChange={() => {}}
+        operatorKey
+      />,
+      {
+        wrapper: ({ children }: { children: ReactNode }) => (
+          <QueryClientProvider client={qc}>{children}</QueryClientProvider>
+        ),
+      },
+    )
+    fireEvent.click(screen.getByLabelText("Translation model"))
+    fireEvent.change(
+      await screen.findByPlaceholderText(/Filter or type a model id/i),
+      { target: { value: "some-operator-model" } },
+    )
+    fireEvent.click(await screen.findByText(/Use "some-operator-model"/))
+    expect(modelForKey(KEY_ID)).toBeNull()
   })
 
   it("is disabled with no key selected", () => {
