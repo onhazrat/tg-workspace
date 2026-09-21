@@ -1,55 +1,80 @@
-import { Brain, ChevronDown, KeyRound, Languages } from "lucide-react"
+import { Brain, ChevronDown, KeyRound, Languages, Plus } from "lucide-react"
 import type React from "react"
 import { useState } from "react"
 
+import { AiKeyAddForm } from "@/components/ai/AiKeyAddForm"
 import { ModelCombo } from "@/components/ai/ModelCombo"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 import { LANGUAGES } from "@/constants"
 import { useSettings } from "@/contexts/SettingsContext"
-import { useAiKeys } from "@/hooks/useAiKeys"
-import { rememberAiKeyId, selectedAiKeyId } from "@/lib/aiKeys/selection"
+import { useAiKeys, useSelectedAiKeyId } from "@/hooks/useAiKeys"
+import { rememberAiKeyId } from "@/lib/aiKeys/selection"
 
 /**
- * Model and language, once, for the whole Action tab.
+ * Model, key and language, once, for the whole Action tab.
  *
- * These two selectors sat inside the Summary card while `AIContext`,
- * `TagContext` and `ChatContext` all read the same two `useSettings` values —
- * so changing the model for a tag run meant opening the summary form and
- * setting it there. The state was always shared; only the placement said
- * otherwise. Discover is the exception and does no inference at all: its report
- * is a server-side aggregation, so neither selector reaches it.
+ * These selectors sat inside the Summary card while `AIContext`, `TagContext`
+ * and `ChatContext` all read the same `useSettings` values — so changing the
+ * model for a tag run meant opening the summary form and setting it there. The
+ * state was always shared; only the placement said otherwise. Discover is the
+ * exception and does no inference at all: its report is a server-side
+ * aggregation, so none of these reach it.
  *
- * The chevrons are not decoration. Language and Key are native `<select>`s
- * styled as chips, and `appearance: none` strips the platform's own dropdown
- * arrow — measured on staging, there was provably no affordance of any kind
- * without them. `pointer-events-none` keeps the click falling through.
+ * The chevrons are not decoration. Language is a native `<select>` styled as a
+ * chip, and `appearance: none` strips the platform's own dropdown arrow —
+ * measured on staging, there was provably no affordance of any kind without
+ * them. `pointer-events-none` keeps the click falling through.
  *
- * Model is a `ModelCombo` since BYOK-02, an `<input list>` rather than a
- * `<select>`, because the ids come from the account's own provider and an
- * endpoint that serves no catalogue still has to be typeable. Its chevron earns
- * its place for the same reason as the others: a datalist input looks exactly
- * like a text field until something says otherwise.
+ * **The AI Key chip is always here now, including at zero Keys.** It used to
+ * appear only above two Keys, on the argument that with fewer there was nothing
+ * to choose between — true about *choosing*, and wrong about everything else.
+ * An account with no Key gets `AI_KEY_MISSING_DETAIL` from the run button
+ * directly below this bar, and the only cure lived in Settings → AI Keys, two
+ * tabs away and unmentioned by the error. So the chip becomes an add button
+ * when there is nothing to select, and keeps a small one beside it when there
+ * is. The form is `AiKeyAddForm`, the same component the settings panel
+ * renders — one copy of the provider rules, in a dialog here.
  *
- * The AI Key chip (BYOK-01) is the one control here that can be absent. With
- * fewer than two Keys there is nothing to choose between, so the common case
- * gets no extra step; the moment somebody holds a cheap Key and an expensive
- * one it appears, and the last used is pre-selected.
+ * The add button is a chip of its own rather than a control inside the key
+ * chip, because the key chip's whole surface is the `<select>`'s hit area: a
+ * button sharing it would open a dropdown or a dialog depending on a few
+ * pixels.
  */
 export const RunSettingsBar: React.FC = () => {
   const { selectedModel, setSelectedModel, aiLanguage, setAiLanguage } =
     useSettings()
   const aiKeys = useAiKeys()
-  const [aiKeyId, setAiKeyId] = useState<string | null>(selectedAiKeyId)
-  const chooseAiKey = (id: string) => {
-    setAiKeyId(id)
-    rememberAiKeyId(id)
-  }
-  // A remembered id whose Key was deleted falls back to the first, rather than
-  // leaving the chip showing a blank selection over a request that would 404.
-  // `useAiKeysQuery` has already cleared the stored id by the time this runs,
-  // so the fallback is what the request sends too — the chip and the wire
-  // cannot disagree.
+  const selectedKeyId = useSelectedAiKeyId()
+  const [addOpen, setAddOpen] = useState(false)
+
+  // Checked against the list rather than taken on trust. `selectedKeyId` can
+  // name a Key this list no longer has for the render between the fetch landing
+  // and the reconcile's write being observed, and a `<select>` whose `value`
+  // matches no `<option>` shows the wrong label *and* warns about an
+  // uncontrolled change.
   const activeAiKeyId =
-    aiKeys.find((k) => k.id === aiKeyId)?.id ?? aiKeys[0]?.id ?? ""
+    (aiKeys.some((k) => k.id === selectedKeyId) ? selectedKeyId : null) ??
+    aiKeys[0]?.id ??
+    ""
+
+  const addButton = (
+    <button
+      type="button"
+      onClick={() => setAddOpen(true)}
+      aria-label="Add AI key"
+      title="Add an AI key"
+      className="flex h-10 items-center gap-2 rounded-lg border border-app-ink/10 bg-app-muted/20 px-3 text-xs font-bold uppercase tracking-tight transition-colors hover:bg-app-muted/30"
+    >
+      <Plus size={14} className="text-app-ink/50" />
+      {aiKeys.length === 0 && <span>Add AI key</span>}
+    </button>
+  )
 
   return (
     <section
@@ -59,7 +84,9 @@ export const RunSettingsBar: React.FC = () => {
       <div className="mr-auto">
         <h3 className="text-sm font-bold uppercase tracking-tight">Run with</h3>
         <p className="mt-0.5 text-[11px] text-app-ink/60">
-          Applies to summaries, tag runs and chats.
+          {aiKeys.length === 0
+            ? "No AI keys saved yet. Add one to create summaries."
+            : "Applies to summaries, tag runs and chats."}
         </p>
       </div>
 
@@ -69,22 +96,17 @@ export const RunSettingsBar: React.FC = () => {
           ariaLabel="Inference model"
           value={selectedModel}
           onChange={setSelectedModel}
-          className="max-w-[160px] truncate bg-transparent font-mono text-xs focus:outline-none"
-        />
-        <ChevronDown
-          size={12}
-          aria-hidden="true"
-          className="pointer-events-none shrink-0 text-app-ink/40"
+          className="max-w-[180px] bg-transparent font-mono text-xs focus:outline-none"
         />
       </div>
 
-      {aiKeys.length > 1 && (
+      {aiKeys.length > 0 && (
         <div className="flex h-10 items-center gap-2 rounded-lg border border-app-ink/10 bg-app-muted/20 px-3 transition-colors hover:bg-app-muted/30">
           <KeyRound size={14} className="text-app-ink/50" />
           <select
             aria-label="AI key"
             value={activeAiKeyId}
-            onChange={(e) => chooseAiKey(e.target.value)}
+            onChange={(e) => rememberAiKeyId(e.target.value)}
             className="max-w-[160px] cursor-pointer appearance-none truncate bg-transparent font-mono text-xs focus:outline-none"
             title="Which key pays for this run"
           >
@@ -101,6 +123,8 @@ export const RunSettingsBar: React.FC = () => {
           />
         </div>
       )}
+
+      {addButton}
 
       <div className="flex h-10 items-center gap-2 rounded-lg border border-app-ink/10 bg-app-muted/20 px-3 transition-colors hover:bg-app-muted/30">
         <Languages size={14} className="text-app-ink/50" />
@@ -123,6 +147,22 @@ export const RunSettingsBar: React.FC = () => {
           className="pointer-events-none shrink-0 text-app-ink/40"
         />
       </div>
+
+      <Dialog open={addOpen} onOpenChange={setAddOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Add an AI key</DialogTitle>
+            <DialogDescription>
+              Summaries, chats and tag runs are billed to your own provider key.
+            </DialogDescription>
+          </DialogHeader>
+          {/* Closes on a verified save only. A key that saved without
+              verifying is used all the same, but the sentence saying so is
+              inside the form — closing over it would throw away the one state
+              that has something to read. */}
+          <AiKeyAddForm onSaved={() => setAddOpen(false)} />
+        </DialogContent>
+      </Dialog>
     </section>
   )
 }

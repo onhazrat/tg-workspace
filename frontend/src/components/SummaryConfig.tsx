@@ -6,6 +6,7 @@ import { useAI } from "../contexts/AIContext"
 import { useData } from "../contexts/DataContext"
 import { useScraper } from "../contexts/ScraperContext"
 import { useUI } from "../contexts/UIContext"
+import { useSelectedAiKeyId } from "../hooks/useAiKeys"
 import { useScopedPostCounts } from "../hooks/usePostsView"
 import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tg-tooltip"
 
@@ -26,6 +27,11 @@ export const SummaryConfig: React.FC = () => {
 
   const postsInScopeCounts = useScopedPostCounts()
   const hasPostsInScope = Object.values(postsInScopeCounts).some((n) => n > 0)
+
+  // Only the run spends a Key. `/ai/summary/prompt` never calls
+  // `resolve_ai_key`, so copying the prompt is the path that still works with
+  // no Key at all — gating it too would leave a keyless account with nothing.
+  const noKey = useSelectedAiKeyId() === null
 
   const actionsDisabled =
     scrapingChannels.size > 0 ||
@@ -76,7 +82,7 @@ export const SummaryConfig: React.FC = () => {
             variant="primary"
             size="md"
             onClick={handleSummarize}
-            disabled={actionsDisabled}
+            disabled={actionsDisabled || noKey}
             loading={summarizing}
             loadingLabel="Generate Summary"
             className="group h-10 px-6"
@@ -89,7 +95,11 @@ export const SummaryConfig: React.FC = () => {
           </TgButton>
         </TooltipTrigger>
         <TooltipContent>
-          <p>Analyzes the selected posts and creates a new summary using AI.</p>
+          <p>
+            {noKey
+              ? "Add an AI key above to run this."
+              : "Analyzes the selected posts and creates a new summary using AI."}
+          </p>
         </TooltipContent>
       </Tooltip>
     </div>

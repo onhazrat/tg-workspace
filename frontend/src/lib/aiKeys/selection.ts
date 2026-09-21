@@ -1,3 +1,6 @@
+import { useSyncExternalStore } from "react"
+
+import type { AiKey } from "@/lib/aiKeys/store"
 import { scopedStorage } from "@/lib/storage/scoped"
 
 /**
@@ -19,6 +22,24 @@ import { scopedStorage } from "@/lib/storage/scoped"
  */
 const SELECTED_AI_KEY = "selected_ai_key"
 
+/**
+ * Subscribers to the selection, so a change re-renders everything that reads it.
+ *
+ * The selection used to be read three ways — a plain `selectedAiKeyId()` call
+ * in `withAiKey`, another in `useAiModels`, and a `useState` shadow copy inside
+ * `RunSettingsBar` — and only the third re-rendered anything. That held while
+ * the only reader on screen was the chooser itself and its own child. It stops
+ * holding now that three run buttons in three separate subtrees gate on whether
+ * a Key is selected: `TagConfig` is not below the bar, so a bar-local `useState`
+ * could never have reached it.
+ */
+const listeners = new Set<() => void>()
+
+function subscribe(onChange: () => void): () => void {
+  listeners.add(onChange)
+  return () => listeners.delete(onChange)
+}
+
 export function selectedAiKeyId(): string | null {
   return scopedStorage.getItem(SELECTED_AI_KEY)
 }
@@ -29,24 +50,77 @@ export function rememberAiKeyId(id: string | null): void {
   } else {
     scopedStorage.removeItem(SELECTED_AI_KEY)
   }
+  for (const notify of listeners) notify()
 }
 
 /**
- * Forget a remembered id that no longer names one of the account's Keys.
+ * The stored selection, or `null`, re-rendering on every change.
  *
- * Without this the fallback above is a comment rather than behaviour, and the
- * failure is total: delete the Key you had selected and every summary, chat and
- * tag request sends its id for ever, because `withAiKey` reads storage and
- * cannot see the list. Worse, dropping to one Key hides the chooser, so there
- * is no control left to select something else with — the account simply cannot
- * make an Artifact again.
+ * **Not the hook components use** — that is `useSelectedAiKeyId` in
+ * `hooks/useAiKeys.ts`, which mounts the query that fills this in. Reading the
+ * store alone answers `null` on any screen that never fetched the Key list, and
+ * three of the four `ModelCombo` call sites are on such screens.
  *
- * Called from the query that fetches the list, so it runs wherever the Keys are
- * loaded rather than only where a chooser happens to be mounted.
+ * `useSyncExternalStore` rather than a context: the writer is a plain function
+ * (`rememberAiKeyId`) called from `api/ai.ts`'s neighbourhood and from the
+ * reconcile below, neither of which sits under a provider — and wrapping the
+ * app in one more provider to publish a single string is the heavier answer to
+ * a problem React ships a hook for.
+ *
+ * **`null` means "no Key at all" in practice**, not "holds Keys, picked none":
+ * `reconcileAiKeySelection` selects the first whenever the list is non-empty
+ * and nothing is remembered. Callers gating on a Key being selected therefore
+ * gate on the account having one, which is the same condition said honestly —
+ * a bar whose select shows a Key beside a disabled run button would read as a
+ * bug, not as a prompt.
  */
-export function reconcileAiKeySelection(ids: readonly string[]): void {
+export function useStoredAiKeyId(): string | null {
+  return useSyncExternalStore(subscribe, selectedAiKeyId, () => null)
+}
+
+/**
+ * Which Key the server would choose when the client names none.
+ *
+ * `resolve_ai_key` takes `(validated or rows)[0]` from rows already sorted
+ * newest write first, so this is that rule restated — and it has to be, because
+ * writing the selection through means the client now *names* a Key on every
+ * request where it used to stay silent. Picking `ids[0]` instead would quietly
+ * override the server on the one case the server's rule exists for: a Key saved
+ * today whose provider check failed sorts ahead of a working Key saved last
+ * week, and every run would go to the broken one.
+ */
+function serverPreferred(keys: readonly AiKey[]): string | null {
+  const validated = keys.find((k) => k.lastValidated)
+  return (validated ?? keys[0])?.id ?? null
+}
+
+/**
+ * Reconcile the remembered id against the Keys that actually exist.
+ *
+ * Two halves, and both run wherever the list loads rather than wherever a
+ * chooser happens to be mounted.
+ *
+ * **Forget an id that names nothing.** Without it the fallback above is a
+ * comment rather than behaviour, and the failure is total: delete the Key you
+ * had selected and every summary, chat and tag request sends its id for ever,
+ * because `withAiKey` reads storage and cannot see the list.
+ *
+ * **Select the Key the server would have picked when nothing is remembered.**
+ * The bar used to show
+ * `aiKeys[0]` as a *display* fallback while `withAiKey` sent nothing, so an
+ * account holding two Keys saw the chip name one and had the server pick the
+ * other — `resolve_ai_key`'s "most recent working Key" is not "the first in
+ * this list". Writing the selection through is what makes the chip and the wire
+ * one answer. It also gives adding a Key its rule for free: with none, the new
+ * Key is the only Key and becomes the selection; with one already chosen,
+ * there is nothing to write and the choice stands.
+ */
+export function reconcileAiKeySelection(keys: readonly AiKey[]): void {
   const remembered = selectedAiKeyId()
-  if (remembered && !ids.includes(remembered)) {
-    rememberAiKeyId(null)
-  }
+  if (remembered && keys.some((k) => k.id === remembered)) return
+  // Deliberately not an early return on the forget: deleting the selected Key
+  // while another remains has to land on that other Key, or the account holds
+  // a Key, shows it in the chip, and finds every run button disabled until it
+  // reloads.
+  rememberAiKeyId(serverPreferred(keys))
 }

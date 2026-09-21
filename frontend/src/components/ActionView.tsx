@@ -12,6 +12,7 @@ import { useChatContext } from "@/contexts/ChatContext"
 import { useSettings } from "@/contexts/SettingsContext"
 import { useTagContext } from "@/contexts/TagContext"
 import { useUI } from "@/contexts/UIContext"
+import { useSelectedAiKeyId } from "@/hooks/useAiKeys"
 import { useApiStatus } from "@/hooks/useApiStatus"
 import { useDiscoverGenerate } from "@/hooks/useDiscoverGenerate"
 import type { ChatMode } from "@/types"
@@ -79,6 +80,9 @@ export const ActionView: React.FC = () => {
   const { completePendingTagRun } = useTagContext()
   const { isOffline } = useApiStatus()
   const { generate, isGenerating, channelCount } = useDiscoverGenerate()
+  // Chat spends the caller's Key; Discover is a server-side aggregation with no
+  // inference in it, so it stays runnable with none.
+  const noKey = useSelectedAiKeyId() === null
 
   const [pasteOpen, setPasteOpen] = useState(false)
 
@@ -246,7 +250,8 @@ export const ActionView: React.FC = () => {
             <TgButton
               data-testid="action-start-chat"
               onClick={startChat}
-              disabled={!chatDraft.trim() || isChatting || isOffline}
+              disabled={!chatDraft.trim() || isChatting || isOffline || noKey}
+              title={noKey ? "Add an AI key above to run this." : undefined}
               loading={isChatting}
               loadingLabel="Starting…"
             >
