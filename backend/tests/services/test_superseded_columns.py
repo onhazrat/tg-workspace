@@ -251,11 +251,15 @@ def test_the_migrations_frozen_list_is_the_derived_one() -> None:
     # and it is the one worth reading twice: it looks exactly like
     # `tg_quota_usage`, which *is* owned. It has no owner because the probe lane
     # spends on nobody's behalf, so there is no stamp for a revision to drop.
+    # `tg_post_references` (CRG-01) is the same case again, further out still:
+    # the reference graph is corpus by ADR-019 and was created without an owner
+    # column, long after this revision ran.
     never_had_one = derived - frozen
     assert never_had_one <= {
         "tg_channel_directory",
         "tg_channel_directory_samples",
         "tg_directory_probe_usage",
+        "tg_post_references",
         "tg_sync_meta",
     }, (
         f"{sorted(never_had_one)} are owner-free in `SCOPES` but the ticket 22 "

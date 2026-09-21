@@ -60,11 +60,15 @@ becomes a Candidate by turning up in the Posts somebody actually reads.
 _Avoid_: suggestion, recommendation, discovered channel
 
 **Reference**:
-The Post in a followed Channel that surfaced a Candidate, by forwarding it,
-linking to it or mentioning it. The arrow points the opposite way to a Directory
-entry's sample, which is a Post by the Channel itself, so the two never share a
-word.
-_Avoid_: sample post, source post, evidence
+One Post naming one Channel, once, in one way: a forward, a mention, a link or a
+reply that crosses channels. A Post naming two Channels makes two References, and
+a Post that both forwards from and mentions the same Channel makes two more. The
+naming Post need not be in a followed Channel, because a Directory entry's
+samples are read for References too. The arrow points the opposite way to a
+Directory entry's sample, which is a Post by the Channel itself, so the two never
+share a word. A Discovery report surfaces the newest Reference to each Candidate;
+the deployment keeps every one of them, for good.
+_Avoid_: edge, link, connection, sample post, source post, evidence
 
 **Follow**:
 The relation between an Account and a Channel, carrying everything private

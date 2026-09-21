@@ -77,6 +77,11 @@ INVENTORY: dict[str, str] = {
     "logs.py": AGGREGATE,
     "post_sync_state.py": AGGREGATE,
     "posts.py": AGGREGATE,
+    # Owns `tg_post_references` (CRG-01) and is its only writer. Holds the
+    # extractor as well as the writes: the pure half is a few functions over
+    # one Post and splitting it out would be a module whose only caller is the
+    # one next to it.
+    "post_references.py": AGGREGATE,
     # Owns `tg_quota_usage` (ticket 08) and is its only writer. The counting
     # itself is not here — `core/request_meter.py` does that, because a
     # ContextVar tally has no table and no domain in it.

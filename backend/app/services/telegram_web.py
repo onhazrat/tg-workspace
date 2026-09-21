@@ -148,6 +148,48 @@ def extract_channel_name_from_href(href: str) -> str | None:
     return channel
 
 
+def extract_channel_post_from_href(href: str) -> tuple[str, int | None] | None:
+    """The Channel a Telegram href names, and the Post id when it names one.
+
+    The sibling of `extract_channel_name_from_href`, which returns the first
+    path segment alone because most of its callers want a channel and nothing
+    else. That function is left as it is rather than widened: changing its
+    return shape would churn call sites that have no use for the id.
+
+    Three differences from it, each deliberate:
+
+    * The `/s/<name>` web-view form resolves to `<name>` rather than to `None`,
+      matching `post_links_parser.channel_from_telegram_url`. The graph's
+      extractor has to agree with the Discover one about which handles a Post
+      names, and Discover reaches handles through that function.
+    * `is_channel_handle` is applied here rather than left to the caller. A
+      Post id is worth nothing without a usable handle, so a reserved path
+      ("c", "joinchat") refuses the pair together rather than handing back an
+      id attached to something nobody can follow.
+    * The trailing segment is parsed as the Post id when it is all digits, and
+      ignored otherwise. `t.me/foo/bar` is a channel with no Post.
+
+    The host is validated exactly as the sibling validates it, so
+    `https://evil.example.com/t.me/foo/123` is not a Telegram link here either.
+    """
+    url = href if href.startswith("http") else f"https://{href.lstrip('/')}"
+    if not _url_host_is_telegram_web(url):
+        return None
+    segments = [seg for seg in (urlparse(url).path or "").split("/") if seg]
+    if not segments:
+        return None
+    if segments[0].lower() == "s":
+        segments = segments[1:]
+        if not segments:
+            return None
+    channel = segments[0]
+    if not is_channel_handle(channel):
+        return None
+    rest = segments[1:]
+    post_id = int(rest[0]) if rest and rest[0].isdigit() else None
+    return channel, post_id
+
+
 @dataclass(frozen=True)
 class ParsedTelegramWebViewUrl:
     channel_name: str

@@ -232,6 +232,17 @@ class Post(SQLModel, table=True):
             text("timestamp DESC"),
             postgresql_where=text("NOT harvested"),
         ),
+        # CRG-01's twin of the line above, and separate from it on purpose:
+        # `harvested` is one-way and its first pass is already finished, so
+        # sharing it would have meant resetting the whole corpus, and the
+        # deferral in `post_references` works by leaving a flag unset, which on
+        # a newest-first walk would stall the Directory enqueue behind one
+        # chat-id-less channel for the whole grace window.
+        Index(
+            "ix_tg_posts_references_pending",
+            text("timestamp DESC"),
+            postgresql_where=text("NOT references_extracted"),
+        ),
     )
 
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
@@ -260,6 +271,14 @@ class Post(SQLModel, table=True):
     # Directory (ticket 05). The server default is declared so autogenerate does
     # not read the migration's as drift and emit an `alter_column` dropping it.
     harvested: bool = Field(
+        default=False,
+        sa_column=Column(Boolean, nullable=False, server_default=false()),
+    )
+    # Whether this Post's References have been extracted into
+    # `tg_post_references` (CRG-01). Deliberately not `harvested`: see the
+    # index comment above. The server default is declared for the reason
+    # `harvested`'s is — autogenerate reads the migration's as drift otherwise.
+    references_extracted: bool = Field(
         default=False,
         sa_column=Column(Boolean, nullable=False, server_default=false()),
     )
@@ -868,6 +887,114 @@ class DirectorySample(SQLModel, table=True):
     #: from here, not from the Post's own date: a Channel that stopped posting
     #: two years ago should keep the sample we captured last week.
     captured_at: datetime = Field(default_factory=utc_now, index=True)
+
+
+class PostReference(SQLModel, table=True):
+    """One Post naming one Channel, once, in one way (CRG-01, ADR-019).
+
+    A Post linking to two Channels makes two rows. A Post that forwards from
+    @foo and separately mentions @foo makes two more, because the kinds differ.
+    The weight of an edge is a `GROUP BY` at read time; nothing is aggregated
+    here, because occurrences cannot be reconstructed from a weight.
+
+    ## Identity is the chat id, not the handle
+
+    Handles are reusable. A Channel that renames frees its old handle for
+    somebody else, so a graph keyed by handle silently merges two unrelated
+    Channels into one node the moment that happens. `DirectoryEntry` already
+    states the rule this follows: the chat id is the only identity that
+    survives a rename.
+
+    The price is that `source_chat_id` is NOT NULL and the value is not always
+    known -- a sync whose scrape yielded no chat id proceeds anyway, and a
+    Channel frozen by a chat-id collision keeps its Posts with the column
+    unset. `post_references.extract_batch` answers that by *deferring* such a
+    Post rather than dropping it. Incomplete is recoverable; a merged node is
+    not.
+
+    `source_channel` rides along denormalised so a `t.me` link needs no join,
+    and is deliberately **not** part of the key: a renamed Channel then leaves
+    a stale handle beside a correct id rather than an unresolvable row.
+
+    The target end is keyed by handle and carries a nullable chat id filled
+    only when the Directory already knows it, because a target is usually a
+    Channel nobody has probed and its chat id is unknowable until somebody
+    fetches its page. A read resolves the null case by joining the Directory,
+    whose rows are never deleted.
+
+    ## Never pruned
+
+    On neither retention inventory, asserted in `test_post_references.py` the
+    way `tg_quota_usage`'s is. An embedding dies with its Post because it is a
+    representation of a body we no longer hold; a Reference is a fact about a
+    relationship, and the `t.me` permalink it carries still resolves against
+    Telegram long after our copy is gone. `timestamp` is denormalised for that
+    reason -- a Reference whose Post has been deleted must still be placeable
+    in time without joining a row that is not there.
+
+    There is no foreign key to `tg_posts`, which costs nothing: retention
+    deletes Posts in bulk by `(channel_name, post_id)` rather than through the
+    surrogate id, so a key would have forced a retention change to buy
+    integrity that permanence rejects anyway.
+
+    ## Four kinds where `SignalKind` has three
+
+    A cross-channel reply is `reply` here and `link` in `discover.py`, which
+    folds it in on the grounds that it is a `t.me` link like any other. The
+    graph keeps it apart because a reply is the one kind with an exact target
+    Post available today. `SignalKind` and every Discovery counter are
+    untouched, so the graph's extractor is a *sibling* of `post_references`
+    rather than a caller, and a test asserts the two find the same handles.
+    """
+
+    __tablename__ = "tg_post_references"
+    __table_args__ = (
+        # `NULLS NOT DISTINCT` is load-bearing, not tidiness. `target_post_id`
+        # is NULL for every mention and for every forward scraped before
+        # CRG-03, and under Postgres's default null semantics those rows never
+        # collide -- so a plain UNIQUE would dedup the minority of the table
+        # and silently duplicate the majority on every re-run of the backfill.
+        # Hand-written in the migration as well, because autogenerate reads
+        # metadata rather than intent and emits a drop for what it cannot see.
+        UniqueConstraint(
+            "source_chat_id",
+            "source_post_id",
+            "target_handle",
+            "kind",
+            "target_post_id",
+            name="uq_tg_post_references_occurrence",
+            postgresql_nulls_not_distinct=True,
+        ),
+        # The reverse question -- who references @foo -- is the reason this
+        # table exists, and it ships before any reader does because adding an
+        # index to a table that only grows costs more the longer it waits.
+        Index("ix_tg_post_references_target", "target_handle"),
+    )
+
+    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+
+    #: The referencing Channel's Telegram chat id. Identity; see the class
+    #: docstring for why this is not the handle.
+    source_chat_id: int = Field(sa_column=Column(BigInteger, nullable=False))
+    #: The referencing Channel's handle, normalised. Denormalised for link
+    #: building, and not part of the key.
+    source_channel: str = Field(index=True)
+    source_post_id: int
+    #: The referencing Post's own timestamp, copied. See "Never pruned".
+    timestamp: int = Field(default=0, sa_column=_ms_ts())
+
+    #: The referenced Channel's handle, normalised.
+    target_handle: str
+    #: Filled when the Directory already knows it, never backfilled later.
+    target_chat_id: int | None = Field(
+        default=None, sa_column=Column(BigInteger, nullable=True)
+    )
+    #: The exact Post referenced, where the kind can yield one.
+    target_post_id: int | None = None
+
+    #: `forward` | `mention` | `link` | `reply`. Plain text, as
+    #: `DirectoryEntry.kind` and `.status` are, rather than a database enum.
+    kind: str
 
 
 class TagRun(SQLModel, table=True):

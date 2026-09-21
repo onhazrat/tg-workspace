@@ -46,6 +46,12 @@ SYNC_PREFS_KEY = "sync_prefs"
 #: the guard all have to agree on it.
 SYNC_LANES_KEY = "sync_lanes"
 
+#: CRG-01's grace epoch. A key of its own rather than a field on `retention`,
+#: because it is not a window over rows: it is the instant the reference graph
+#: started existing, and the deferral clock measures from the later of it and
+#: the Post's own. See `post_references.grace_cutoff_ms`.
+REFERENCE_GRAPH_KEY = "reference_graph"
+
 #: Deployment scheduler policy: how often the tick runs, how many channels it
 #: syncs at once, how long it waits after a failure. One answer per deployment
 #: — the scheduler is a single process (see `test_worker_count.py`), so a
@@ -204,6 +210,16 @@ GLOBAL_KEYS: dict[str, str] = {
         "the one worker drains, so pausing one is a fact about the deployment "
         "in exactly the way `jobs` is; a per-account copy would mean the "
         "worker honouring one account's pause on everybody's work."
+    ),
+    REFERENCE_GRAPH_KEY: (
+        "When the reference graph was created, which is the floor the "
+        "chat-id grace period counts from (CRG-01, ADR-019). Deployment-wide "
+        "because the graph is: `tg_post_references` is corpus, owned by "
+        "nobody, and a per-account epoch would mean one account's clock "
+        "deciding when another account's Posts are given up on. Written once "
+        "by the migration and not expected to change; it lives here rather "
+        "than in `config.py` so an Operator looking at a skipped Post can see "
+        "which instant the seven days ran from."
     ),
 }
 

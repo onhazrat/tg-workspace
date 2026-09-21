@@ -97,6 +97,7 @@ from app.models_tg import (
     NetworkLog,
     Post,
     PostEmbedding,
+    PostReference,
     PostSyncState,
     PostTranslation,
     PublishLog,
@@ -214,6 +215,16 @@ SCOPES: dict[type[SQLModel], Scope] = {
     # table records what one account spent and this one records what the
     # deployment spent on nobody's behalf.
     DirectoryProbeUsage: Scope.CORPUS,
+    # Which Channel named which Channel, one row per occurrence (CRG-01,
+    # ADR-019). Corpus for `DirectorySample`'s reason, one step further out:
+    # the graph exists precisely to record Channels nobody follows -- half its
+    # rows are mined from Directory samples, whose handles have no
+    # `tg_channels` row to correlate against at all -- so a `FOLLOW_SCOPED`
+    # classification would hide exactly the rows with the strongest reason to
+    # be there. The row carries no owner column to scope by, and what it
+    # discloses (somebody on this deployment scrapes @foo) is the fact a
+    # Directory entry already discloses.
+    PostReference: Scope.CORPUS,
     SyncMeta: Scope.CORPUS,
 }
 

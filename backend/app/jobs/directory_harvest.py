@@ -90,6 +90,7 @@ from app.services.channel_directory import (
 )
 from app.services.discover import harvest_page
 from app.services.follows import followed_channel_names
+from app.services.post_references import extract_batch
 from app.services.posts import mark_harvested
 
 logger = logging.getLogger(__name__)
@@ -233,6 +234,28 @@ def _pending() -> int:
         return counts["queued"] + counts["retrying"]
 
 
+def _extract_references() -> dict[str, int]:
+    """One reference-extraction walk (CRG-01).
+
+    A second walk in this tick rather than a job of its own, because it reads
+    the same table for the same reason and a second scheduler entry would be a
+    second interval to keep in step with this one.
+
+    It is deliberately **not** gated on the probe backlog the way the harvest
+    below is. That ceiling exists because the sweep's handles go into a queue
+    something else has to drain; References go into a table nothing drains, so
+    a deep probe backlog is no reason to stop filling the graph.
+    """
+    with Session(engine) as session:
+        counts = extract_batch(session, limit=settings.POST_REFERENCE_SCAN_LIMIT)
+    return {
+        "referencesScanned": counts.scanned,
+        "referencesWritten": counts.written,
+        "referencesSkipped": counts.skipped,
+        "referenceDeferringChannels": counts.deferring_channels,
+    }
+
+
 async def run_directory_harvest_sweep() -> dict[str, Any]:
     """Walk one batch of stored Posts and queue the handles they reference.
 
@@ -240,11 +263,27 @@ async def run_directory_harvest_sweep() -> dict[str, Any]:
     It reports what was **queued**, not what was found: the probe lane decides
     when a queued handle is actually fetched, and this function is finished long
     before any verdict is.
+
+    Two walks share the tick. The reference-extraction walk (CRG-01) runs first
+    and unconditionally, because the early return below is about the probe queue
+    being full and that says nothing about the graph.
     """
     if _sweep_lock.locked():
         return {"skipped": True, "reason": "harvest already running"}
 
     async with _sweep_lock:
+        try:
+            references = await run_db(_extract_references)
+        except Exception:
+            # The two walks are independent, and this is what makes that true
+            # rather than merely stated. Without it any fault in the newer of
+            # the two — a lock timeout on its bulk UPDATE, a constraint
+            # surprise, a settings row somebody hand-edited — would abort the
+            # tick before the Directory harvest below ever ran, and the symptom
+            # would be handles quietly not being queued any more.
+            logger.exception("Reference extraction failed; harvest continues")
+            references = {"referencesFailed": 1}
+
         # **Nothing is harvested while the queue is already deeper than the lane
         # can chew.** The two ends of this pipe are paced by different things:
         # the sweep adds on a timer, and the probe lane drains only when no sync
@@ -263,10 +302,11 @@ async def run_directory_harvest_sweep() -> dict[str, Any]:
         pending = await run_db(_pending)
         if pending >= settings.DIRECTORY_HARVEST_BACKLOG_CEILING:
             return {
+                **references,
                 "skipped": True,
                 "reason": "probe backlog at the ceiling",
                 "pending": pending,
             }
 
         found = await run_db(_harvest, pending)
-        return {**found, "pending": pending}
+        return {**references, **found, "pending": pending}

@@ -953,7 +953,14 @@ def requeue_probes(
         row.videos = None
         row.files = None
         row.links = None
-        row.telegram_chat_id = None
+        # **The chat id is deliberately kept** (CRG-01). Every other field here
+        # is a snapshot of a page, and a stale snapshot is a lie; the chat id is
+        # immutable, so a remembered one stays true however the page changed —
+        # which is the argument `_apply_page_metadata` already makes above, and
+        # this line used to contradict it. It became load-bearing when
+        # `tg_post_references` started keying on the value: clearing it here
+        # meant a recheck blinded the graph for this entry until the next probe
+        # returned, so asking for a refresh quietly cost References.
         row.photo_url = None
         row.latest_id = 0
         # The statistics go with the verdict, and this is the one path where

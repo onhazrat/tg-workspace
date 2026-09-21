@@ -198,6 +198,10 @@ def test_corpus_models_are_the_ones_the_plan_names() -> None:
         "DirectoryEntry",
         "DirectorySample",
         "DirectoryProbeUsage",
+        # CRG-01's reference graph, corpus for `DirectorySample`'s reason: it
+        # exists to record Channels nobody follows, and half its rows come
+        # from samples whose handles have no `tg_channels` row at all.
+        "PostReference",
         "SyncMeta",
     }
 
