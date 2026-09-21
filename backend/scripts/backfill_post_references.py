@@ -20,6 +20,16 @@ month: at the shipped scan limit and tick interval it moves on the order of a
 hundred thousand Posts a day. The sweep is the right steady-state mechanism
 and the wrong catch-up mechanism.
 
+## Stop the worker first, or expect the two walks to fight
+
+`jobs/directory_harvest._extract_references` calls the same `extract_batch`,
+over the same pending set, in the same newest-first order, every harvest tick.
+Nothing here is incorrect if both run — the uniqueness constraint absorbs the
+overlap and each walk marks what it read — but the two re-extract each other's
+Posts for nothing and then contend on the `UPDATE`, and whichever commits
+second waits out the other's whole batch. At this batch size that stalls the
+Directory harvest tick, not just its extraction half.
+
 ## It carries no logic of its own
 
 The walk, the extraction, the grace rule and the conflict handling all live in
@@ -66,6 +76,11 @@ logger = logging.getLogger("backfill_post_references")
 #: Larger than the sweep's `POST_REFERENCE_SCAN_LIMIT`, which is sized for a
 #: tick that shares its interval with the Directory harvest. Nothing shares
 #: this run, so the batch is sized by the memory one page of Posts costs.
+#:
+#: It is **not** bounded by how many References the page yields:
+#: `write_references` chunks its own `INSERT` under the wire protocol's bind
+#: parameter ceiling, so a batch of unusually link-heavy Posts costs another
+#: statement rather than an aborted run.
 DEFAULT_BATCH_SIZE = 5_000
 
 
@@ -100,15 +115,15 @@ def backfill(*, dry_run: bool, batch_size: int) -> Totals:
             counts.deferred,
             counts.deferring_channels,
         )
-        # `scanned` is what the run *would* read and `skipped` what it would
-        # leave behind; `written` stays zero because a dry run cannot know it
-        # without extracting, and guessing one Reference per Post would be a
-        # number an operator then holds the real run to.
-        return Totals(
-            scanned=counts.eligible,
-            skipped=counts.deferred,
-            deferring_channels=counts.deferring_channels,
-        )
+        # Only the gauge crosses over. `scanned`, `written` and `skipped` stay
+        # zero because a dry run has no honest value for them: its `deferred`
+        # is Posts the walk would **not read at all**, while the run's
+        # `skipped` is Posts it read and gave up on — disjoint populations
+        # under one name. An operator who saw `skipped=40000` here and
+        # `skipped=120` after the real run would reasonably conclude the run
+        # had lost forty thousand Posts. The dry run's numbers are on the line
+        # above, which labels each of them.
+        return Totals(deferring_channels=counts.deferring_channels)
 
     totals = Totals()
     while True:

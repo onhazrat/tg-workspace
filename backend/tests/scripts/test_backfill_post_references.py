@@ -32,6 +32,13 @@ counts reach both the per-batch line and the total.
   Post is readable and disagrees with the run that follows it
 * drop the per-batch `logger.info`, or demote the final one to `debug` → the
   progress-output test fails on each half separately
+* put the dry run's `eligible`/`deferred` into `Totals.scanned`/`skipped` →
+  the dry-run test fails. They are different populations under the run's
+  names, and the suite used to pass either way because both fixtures happened
+  to answer 1
+* split `pending_counts` back into two `count()` calls → the one-statement
+  test fails. Its own docstring says why that is asserted structurally rather
+  than by staging the race
 """
 
 from __future__ import annotations
@@ -42,10 +49,12 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
+from sqlalchemy import event
 from sqlmodel import Session, select
 
 from app.core.db import engine
 from app.models_tg import Channel, Post, PostReference
+from app.services import post_references
 from app.services.post_references import extract_batch, pending_counts
 from app.services.settings_registry import REFERENCE_GRAPH_KEY
 from app.services.settings_store import put_global_setting
@@ -132,7 +141,55 @@ def test_a_dry_run_reports_the_population_and_writes_nothing() -> None:
     assert counts.eligible == 4
     assert counts.deferred == 1
     assert counts.deferring_channels == 2
-    assert totals.skipped == counts.deferred
+    # Only the gauge crosses into `Totals`. A dry run's `deferred` is Posts the
+    # walk would not read; a run's `skipped` is Posts it read and gave up on.
+    # Putting the first in the second's field makes the real run look like it
+    # lost the difference.
+    assert (totals.scanned, totals.written, totals.skipped) == (0, 0, 0)
+    assert totals.deferring_channels == 2
+
+
+def test_the_two_pending_counts_are_one_statement(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Asserted structurally, because the failure needs a second writer.
+
+    Two counts would take two snapshots under READ COMMITTED, and the scraper
+    inserts pending Posts the whole time a dry run is reading. `eligible`
+    would pick up rows `pending` never saw and `deferred`, the subtraction,
+    would print **negative** on the line an operator uses to decide whether to
+    run at all. Reproducing that needs a concurrent inserter landing between
+    the two statements, which is a race a single-threaded test cannot stage —
+    so what is asserted is that there is no "between".
+
+    Mutation: split `pending_counts` back into two `count()` calls and this
+    fails with 2.
+    """
+    _seed()
+    executed: list[str] = []
+
+    @event.listens_for(engine, "before_cursor_execute")
+    def record(conn, cursor, statement, *args) -> None:  # noqa: ANN001, ARG001
+        executed.append(statement)
+
+    # Stubbed, because its `EXISTS` names `references_extracted` too and it is
+    # a different question — how many Channels are holding a Post back, not
+    # how many Posts there are. Leaving it in would make the probe below count
+    # two statements whatever `pending_counts` does.
+    with monkeypatch.context() as patched:
+        patched.setattr(post_references, "_deferring_channels", lambda session: 0)
+        try:
+            with Session(engine) as session:
+                counts = pending_counts(session)
+        finally:
+            event.remove(engine, "before_cursor_execute", record)
+
+    over_pending_posts = [
+        statement for statement in executed if "references_extracted" in statement
+    ]
+    assert len(over_pending_posts) == 1
+    # Still the right answers, so the collapse is not a shortcut past the work.
+    assert (counts.pending, counts.eligible, counts.deferred) == (5, 4, 1)
 
 
 def test_the_loop_drains_the_corpus_across_batches() -> None:

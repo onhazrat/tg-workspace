@@ -129,7 +129,7 @@ reasoning for the parts that live nowhere else; `docs/*-plan.md` and
 
 - **pytest uses a separate database (`app_test`) always** — `tests/conftest.py` overrides `POSTGRES_DB` to it and each test truncates `tg_*` tables afterward. Never point the dev server at `app_test`, and keep `POSTGRES_DB=app` for dev. One-time: `createdb app_test && cd backend && POSTGRES_DB=app_test uv run alembic upgrade head`.
 - After changing any model, generate an Alembic revision and commit it; migrations live in `backend/app/alembic/versions/`.
-- Maintenance/backfill scripts live in `backend/scripts/` (run with `uv run python backend/scripts/<name>.py`, usually `--dry-run` first) — see `MEMORY.md`.
+- Maintenance/backfill scripts live in `backend/scripts/` (run with `uv run python backend/scripts/<name>.py`, usually `--dry-run` first) — indexed in `development.md`.
 
 ## Architecture guards — read this before "simplifying" something
 

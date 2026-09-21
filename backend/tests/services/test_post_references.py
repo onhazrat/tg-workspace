@@ -36,6 +36,8 @@ Per `CLAUDE.md`, each assertion was mutation-tested:
 * drop `forwarded_from_post_id` from the forward `add` (CRG-03) → the exact-Post
   test fails and the pre-CRG-03 test stays green, which is the pair asserting
   that the missing id is a null rather than a withheld row
+* un-chunk `write_references` back to one `INSERT` for the whole page (CRG-04)
+  → the bind-parameter test fails inside psycopg rather than on an assertion
 """
 
 from __future__ import annotations
@@ -51,6 +53,7 @@ from app.models_tg import Channel, DirectorySample, Post, PostReference
 from app.services.channel_directory import record_probe_result, requeue_probes
 from app.services.discover import post_references
 from app.services.post_references import (
+    _INSERT_CHUNK_ROWS,
     ExtractionCounts,
     extract_batch,
     references_for,
@@ -415,6 +418,29 @@ def test_the_walk_writes_references_and_marks_the_posts() -> None:
     ]
     with Session(engine) as session:
         assert session.exec(select(Post.references_extracted)).all() == [True]
+
+
+def test_a_page_yielding_more_references_than_one_insert_can_bind() -> None:
+    """The wire protocol refuses a statement with over 65535 bind parameters.
+
+    A row here binds nine of them, so a single `VALUES` list dies above 7281
+    References — and nothing about the **page** size bounds that, because
+    `references_for` is unbounded per Post: one post listing channels yields
+    one Reference per distinct handle it names. At the sweep's scan limit of
+    500 Posts this was unreachable; CRG-04's backfill reads thousands a batch
+    and would have hit it hours into an unattended run, as an `INSERT`
+    rejected outright rather than anything the loop could resume from.
+
+    Mutation: drop the chunking in `write_references` and this fails inside
+    psycopg with a bind-parameter count, not an assertion.
+    """
+    handles = [f"floodchan{n}" for n in range(_INSERT_CHUNK_ROWS + 200)]
+    _seed([_post(1, text=" ".join(f"@{handle}" for handle in handles))])
+
+    counts = _run()
+
+    assert counts.written == len(handles)
+    assert len(_stored()) == len(handles)
 
 
 def test_a_second_run_writes_nothing_even_for_a_mention() -> None:
