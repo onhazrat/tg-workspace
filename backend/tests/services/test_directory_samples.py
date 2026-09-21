@@ -22,6 +22,18 @@ Per `CLAUDE.md`, each assertion was mutation-tested:
 * store samples on the inconclusive branch → the inconclusive test fails
 * let `replace_samples` commit → nothing fails, which is why the
   transaction rule is asserted directly rather than through the write path
+* skip sample mining entirely → all five CRG-02 tests below fail
+* mine from `payload["telegramChatId"]` instead of `row.telegram_chat_id` →
+  the downgrade test fails and only that one, which is the case the payload
+  has no id for
+* mine a chat-id-less entry under `source_chat_id or 0` → the missing-id test
+  fails. That is the mutation for "skipped", and "not deferred" is the same
+  test's second half: nothing was written *and* nothing was kept, so the next
+  probe is the whole retry
+* drop `on_conflict_do_nothing` → the re-probe test fails on a
+  `UniqueViolation`, and only that one
+* delete the References under a handle in `replace_samples` → the
+  survives-replacement test fails
 * drop `forwarded_from_post_id` from `_row` (CRG-03) → the forward test fails
 """
 
@@ -32,10 +44,10 @@ import pathlib
 from datetime import timedelta
 from typing import Any
 
-from sqlmodel import Session
+from sqlmodel import Session, select
 
 from app.core.db import engine
-from app.models_tg import utc_now
+from app.models_tg import PostReference, utc_now
 from app.services.channel_directory import (
     record_probe_result,
     requeue_probes,
@@ -47,6 +59,9 @@ from app.services.channel_directory_samples import (
 )
 
 HANDLE = "sample_news"
+#: The sampled Channel's Telegram chat id, which a Reference is keyed by.
+CHAT_ID = 2_001
+TARGET = "othernews"
 
 
 def _post(post_id: int, **extra: Any) -> dict[str, Any]:
@@ -80,6 +95,13 @@ def _page(
 
 def _ids(session: Session, handle: str = HANDLE) -> list[int]:
     return [row.post_id for row in samples_for(session, handle)]
+
+
+def _references(session: Session) -> list[PostReference]:
+    """Every Reference in the graph, oldest source Post first."""
+    return list(
+        session.exec(select(PostReference).order_by(PostReference.source_post_id)).all()
+    )
 
 
 # --------------------------------------------------------------------------
@@ -263,6 +285,120 @@ def test_a_recheck_resets_the_verdict_and_keeps_the_samples() -> None:
 
 
 # --------------------------------------------------------------------------
+# The samples contribute to the reference graph (CRG-02)
+# --------------------------------------------------------------------------
+
+
+def test_a_conclusive_probe_mines_references_from_the_samples_it_stored() -> None:
+    """The tier that was free all along: a Channel nobody follows joins the graph.
+
+    The Posts were fetched and parsed by a probe that was happening anyway, so
+    this costs no Telegram request at all — which is the whole argument for
+    mining here rather than deep-scraping unfollowed Channels.
+    """
+    with Session(engine) as session:
+        record_probe_result(
+            session,
+            HANDLE,
+            _page(telegramChatId=CHAT_ID, samples=[_post(11, text=f"via @{TARGET}")]),
+        )
+        stored = _references(session)
+
+    assert [
+        (row.source_chat_id, row.source_channel, row.source_post_id, row.target_handle)
+        for row in stored
+    ] == [(CHAT_ID, HANDLE, 11, TARGET)]
+    assert stored[0].kind == "mention"
+    assert stored[0].timestamp == _post(11)["timestamp"], (
+        "the source Post's clock is denormalised, because the sample it came "
+        "from is replaced on the next probe"
+    )
+
+
+def test_re_probing_the_same_channel_writes_no_second_row() -> None:
+    """A Channel refreshed weekly must not multiply its rows fifty-two times a year.
+
+    The snapshot is replaced wholesale on every probe, so the same Posts are
+    re-mined every time. `ON CONFLICT DO NOTHING` against the `NULLS NOT
+    DISTINCT` constraint is what absorbs that — a mention's `target_post_id` is
+    null, and under default null semantics it would collide with nothing.
+    """
+    page = _page(telegramChatId=CHAT_ID, samples=[_post(11, text=f"via @{TARGET}")])
+    with Session(engine) as session:
+        record_probe_result(session, HANDLE, page)
+        record_probe_result(session, HANDLE, page)
+        assert len(_references(session)) == 1
+
+
+def test_a_reference_survives_the_snapshot_that_produced_it() -> None:
+    """The graph is the durable artifact; the sample is the ephemeral one.
+
+    Post 11 falls off the preview window, so it stops being a recent Post and
+    its sample row is deleted. The connection it recorded still happened, and
+    its `t.me` permalink still resolves against Telegram.
+    """
+    with Session(engine) as session:
+        record_probe_result(
+            session,
+            HANDLE,
+            _page(telegramChatId=CHAT_ID, samples=[_post(11, text=f"via @{TARGET}")]),
+        )
+        record_probe_result(
+            session, HANDLE, _page(telegramChatId=CHAT_ID, samples=[_post(12)])
+        )
+
+        assert _ids(session) == [12], "the snapshot moved on"
+        assert [row.source_post_id for row in _references(session)] == [11]
+
+
+def test_an_entry_with_no_chat_id_is_skipped_and_the_next_probe_writes_them() -> None:
+    """A sample has nothing to defer *with*, which is why the rule differs.
+
+    A Post defers by leaving its extraction flag unset, so a later tick retries
+    it. A sample carries no such flag and the whole snapshot is replaced on the
+    next probe, so a chat-id-less entry is skipped outright — and the retry is
+    the refresh window, not a queue. The second probe re-mines the same Posts
+    and writes them once.
+    """
+    samples = [_post(11, text=f"via @{TARGET}")]
+    with Session(engine) as session:
+        record_probe_result(session, HANDLE, _page(samples=samples))
+        assert _references(session) == [], (
+            "a Reference keyed by an unknown chat id would key by nothing"
+        )
+
+        record_probe_result(
+            session, HANDLE, _page(telegramChatId=CHAT_ID, samples=samples)
+        )
+        assert [row.source_chat_id for row in _references(session)] == [CHAT_ID]
+
+
+def test_a_live_to_unavailable_downgrade_mines_on_the_remembered_chat_id() -> None:
+    """The one branch that deliberately ignores the page it was handed.
+
+    A provisional downgrade skips `_apply_page_metadata` entirely, so the
+    payload's chat id — and a synthesized `unavailable` answer carries none at
+    all — is not what the entry holds. The remembered id is, and it is still
+    correct: the chat id is immutable, which is why the recheck path stopped
+    clearing it in CRG-01.
+    """
+    with Session(engine) as session:
+        record_probe_result(session, HANDLE, _page(telegramChatId=CHAT_ID, samples=[]))
+        after = record_probe_result(
+            session,
+            HANDLE,
+            {
+                "isTelegramPage": True,
+                "isUnavailableOnWebView": True,
+                "samples": [_post(11, text=f"via @{TARGET}")],
+            },
+        )
+
+        assert after["status"] == "unavailable"
+        assert [row.source_chat_id for row in _references(session)] == [CHAT_ID]
+
+
+# --------------------------------------------------------------------------
 # The aggregate's own contract
 # --------------------------------------------------------------------------
 
@@ -331,15 +467,44 @@ def test_an_old_post_captured_recently_is_not_expired() -> None:
 
 _APP = pathlib.Path(__file__).resolve().parents[2] / "app"
 
-#: The module that owns the table, plus the two that are allowed to name the
-#: model without writing it: `models_tg` defines it and `tenancy` classifies it.
-_SAMPLE_TABLE_WRITERS = frozenset(
+#: The module that owns the table. Everything else goes through `replace_samples`.
+_SAMPLE_TABLE_WRITER = "services/channel_directory_samples.py"
+
+#: The three modules allowed to *name* `DirectorySample` without writing it:
+#: `models_tg` defines it, `tenancy` classifies it, and `post_references` reads
+#: one to extract its References (CRG-02).
+#:
+#: Exempting them by file would have let any of them grow a
+#: `session.add(DirectorySample(...))` and stay green, which is the leftover
+#: `CLAUDE.md` warns about: assert the reason, not the state. So the exemption
+#: is narrower than the file — these may mention the name and nothing more, and
+#: `_writes_samples` below still fails them for a construction or a delete.
+#: `post_references` is the first entry where that matters, because it already
+#: holds a `Session` and already has the rows in hand.
+_SAMPLE_NAME_READERS = frozenset(
     {
-        "services/channel_directory_samples.py",
         "models_tg.py",
         "services/tenancy.py",
+        "services/post_references.py",
     }
 )
+
+
+def _writes_samples(tree: ast.AST) -> bool:
+    """Whether this module constructs or deletes a `DirectorySample`.
+
+    `DirectorySample(...)` is the constructor; `delete(DirectorySample)` and
+    `update(DirectorySample)` are the two statement builders that reach the
+    table without one. An `insert(DirectorySample)` is the same shape again.
+    """
+    return any(
+        isinstance(node, ast.Call)
+        and any(
+            isinstance(arg, ast.Name) and arg.id == "DirectorySample"
+            for arg in [node.func, *node.args]
+        )
+        for node in ast.walk(tree)
+    )
 
 
 def test_the_sample_table_has_one_writer() -> None:
@@ -355,22 +520,36 @@ def test_the_sample_table_has_one_writer() -> None:
     Matches the identifier rather than a constructor call, for the reason
     `test_the_follow_table_has_one_writer` gives: a second writer is at least as
     likely to reach for `delete(DirectorySample)` as for the constructor.
+
+    The three readers in `_SAMPLE_NAME_READERS` are exempt from *that* rule and
+    not from the writing one, which `_writes_samples` still applies to them.
     """
     offenders = []
+    readers_that_write = []
     for path in sorted(_APP.rglob("*.py")):
         rel = str(path.relative_to(_APP))
-        if rel in _SAMPLE_TABLE_WRITERS or rel.startswith("alembic/"):
+        if rel == _SAMPLE_TABLE_WRITER or rel.startswith("alembic/"):
             continue
         tree = ast.parse(path.read_text())
-        if any(
+        names_it = any(
             isinstance(node, ast.Name) and node.id == "DirectorySample"
             for node in ast.walk(tree)
-        ):
+        )
+        if not names_it:
+            continue
+        if rel not in _SAMPLE_NAME_READERS:
             offenders.append(rel)
+        elif _writes_samples(tree):
+            readers_that_write.append(rel)
 
     assert not offenders, (
         f"{sorted(offenders)} name DirectorySample directly. "
         f"`app/services/channel_directory_samples.py` is the aggregate and the "
         f"only writer; go through `replace_samples` so replace-wholesale is "
         f"decided in one place."
+    )
+    assert not readers_that_write, (
+        f"{sorted(readers_that_write)} are exempt to *read* a DirectorySample "
+        f"and have started writing one. The exemption is the narrower claim; "
+        f"go through `replace_samples`."
     )

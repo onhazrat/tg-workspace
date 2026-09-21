@@ -4,7 +4,7 @@ Spec: `.scratch/channel-reference-graph/spec.md`. Decisions:
 [ADR-019](./migration/ADR-019-channel-reference-graph.md). Tickets:
 `.scratch/channel-reference-graph/issues/`.
 
-Status as of 2026-09-21: CRG-01 and CRG-03 landed; CRG-02 and CRG-04 open.
+Status as of 2026-09-21: CRG-01, CRG-02 and CRG-03 landed. CRG-04 remains.
 
 ## What this builds
 
@@ -16,9 +16,9 @@ and Directory samples mined at probe time. Nothing reads it in this effort.
 
 | Ticket | What lands | Blocked by |
 |---|---|---|
-| CRG-01 | The tracer bullet: the table, its sole-writer service, the tenancy and retention classification, the extraction flag, the harvest tick's second walk, the defer-then-skip rule and its grace settings. Folds in two prefactors: the url helper that returns a post id, and a recheck that keeps the remembered chat id | none |
-| CRG-02 | Sample mining at probe time, skip-not-defer | CRG-01 |
-| CRG-03 | The forwarded-from post id columns and their scrape-time parsing | CRG-01 |
+| CRG-01 | **Landed.** The tracer bullet: the table, its sole-writer service, the tenancy and retention classification, the extraction flag, the harvest tick's second walk, the defer-then-skip rule and its grace settings. Folds in two prefactors: the url helper that returns a post id, and a recheck that keeps the remembered chat id | none |
+| CRG-02 | **Landed.** Sample mining at probe time, skip-not-defer | CRG-01 |
+| CRG-03 | **Landed.** The forwarded-from post id columns and their scrape-time parsing | CRG-01 |
 | CRG-04 | The backfill script and its first run | CRG-01 |
 
 CRG-02, CRG-03 and CRG-04 are independent of each other and can be worked in

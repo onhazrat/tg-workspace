@@ -103,6 +103,7 @@ from app.services.directory_statistics import (
     media_density,
     media_mix,
 )
+from app.services.post_references import extract_sample_references
 from app.services.tenancy import unscoped_select
 
 #: Why the probe reads below do not go through `scoped_select` (ticket 16).
@@ -904,8 +905,22 @@ def record_probe_result(
         # Posts, and the rows `replace_samples` just flushed are the Posts. That
         # is what lets the Channels tab point the same function at the corpus
         # later instead of reimplementing these formulas over a second shape.
+        stored_samples = samples_for(session, key)
+        # **The samples contribute References** (CRG-02). The Posts are already
+        # fetched and already parsed, and nothing ever read them for the graph.
+        # This is the tier that covers Channels nobody follows.
+        #
+        # `row.telegram_chat_id`, never `payload["telegramChatId"]`: the
+        # provisional downgrade above skips `_apply_page_metadata` entirely, so
+        # the payload's id — synthesized answers carry none at all — would blind
+        # the mining for exactly the entry whose remembered id is still correct.
+        # A sample gets no deferral if that id is missing; `post_references`
+        # says why the rule differs from a Post's.
+        extract_sample_references(
+            session, key, stored_samples, source_chat_id=row.telegram_chat_id
+        )
         if row.status == "ok":
-            _store_statistics(row, compute_sample_statistics(samples_for(session, key)))
+            _store_statistics(row, compute_sample_statistics(stored_samples))
     # A conclusive answer clears the failure history: the backoff exists to
     # throttle retries of an unresolved handle, and this one is now resolved.
     row.attempts = 0
