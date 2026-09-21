@@ -274,12 +274,20 @@ def test_recheck_clears_the_stale_metadata_too() -> None:
         assert row.display_name is None
         assert row.subscribers is None
         assert row.checked_at is None
-        # Ticket 01: the counters and the chat id go with the rest of it.
+        # Ticket 01: the counters go with the rest of it.
         assert row.photos is None
         assert row.videos is None
         assert row.files is None
         assert row.links is None
-        assert row.telegram_chat_id is None
+        # **The chat id stays** (CRG-01). Ticket 01 cleared it here, which
+        # contradicted `record_probe_result`'s own rule that an id is immutable
+        # and a remembered one stays true however the page changed. Everything
+        # else above is a snapshot of a page and a stale snapshot is a lie; the
+        # chat id is not a snapshot. It became load-bearing when
+        # `tg_post_references` started keying on it, because clearing it meant
+        # a recheck quietly cost the graph every Reference from this Channel
+        # until the next probe returned.
+        assert row.telegram_chat_id == RICH_PAGE["telegramChatId"]
         # And the read-time join drops it, so the row goes back to reading as
         # "not checked yet" rather than as a fresh inconclusive verdict.
         assert probe_map(session, {"alpha_news"}) == {}

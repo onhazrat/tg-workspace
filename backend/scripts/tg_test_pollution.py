@@ -77,6 +77,11 @@ TG_TABLES: tuple[str, ...] = (
     # cascades anyway.
     "tg_channel_directory_samples",
     "tg_channel_directory",
+    # CRG-01's reference graph. Truncated between tests for the reason
+    # `tg_directory_probe_usage` is, despite production never pruning it: rows
+    # left by one test are rows the next test's walk finds already present, so
+    # a dedup assertion passes for the wrong reason.
+    "tg_post_references",
     # Ticket 04's probe-lane tally. Truncated between tests for the reason
     # `tg_quota_usage` is, despite production never pruning either: the row is
     # keyed by day alone, so a count left behind by one test is the *same* row

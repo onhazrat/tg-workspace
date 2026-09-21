@@ -373,6 +373,20 @@
       "sensitive": false
     },
     {
+      "default": 7,
+      "name": "POST_REFERENCE_CHAT_ID_GRACE_DAYS",
+      "required": false,
+      "scope": "backend_runtime",
+      "sensitive": false
+    },
+    {
+      "default": 500,
+      "name": "POST_REFERENCE_SCAN_LIMIT",
+      "required": false,
+      "scope": "backend_runtime",
+      "sensitive": false
+    },
+    {
       "default": 2048,
       "name": "POST_THUMB_CACHE_MAX_SIZE_MB_DEFAULT",
       "required": false,

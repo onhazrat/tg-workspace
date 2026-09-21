@@ -395,6 +395,26 @@ class Settings(BaseSettings):
     # lane always has work, shallow enough that a refresh waits minutes.
     DIRECTORY_HARVEST_BACKLOG_CEILING: int = 600
 
+    # Reference graph (CRG-01)
+    #
+    # How long a Post whose Channel has no `telegram_chat_id` is retried before
+    # its References are given up on. A Reference is keyed by the chat id, so
+    # there is nothing to write until the id lands; the Post is deferred rather
+    # than marked, and skipped only once this many days have passed.
+    #
+    # Counted from the later of the Post's own clock (retrieval, falling back
+    # to its Telegram timestamp) and the `reference_graph` epoch the migration
+    # stored. Without that floor every Post already in the corpus would be past
+    # the window the instant the feature deployed, which is the population the
+    # grace exists for.
+    POST_REFERENCE_CHAT_ID_GRACE_DAYS: int = 7
+
+    # How many Posts one reference-extraction walk reads. Separate from
+    # `DIRECTORY_HARVEST_SCAN_LIMIT` because the two walks answer to different
+    # things: that one is bounded by how deep the probe queue may get, and this
+    # one writes rows nothing drains.
+    POST_REFERENCE_SCAN_LIMIT: int = 500
+
     # Translation batch job
     TRANSLATION_BATCH_LIMIT: int = 20
     TRANSLATION_BATCH_MAX_CHARS: int = 4000
