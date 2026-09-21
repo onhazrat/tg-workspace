@@ -84,7 +84,7 @@ test.describe("TG Workspace palette", () => {
     await gotoWorkspace(page, "channels")
     const channelName = await seedTestChannel(page)
 
-    await page.locator("button.uppercase", { hasText: "None" }).click()
+    await page.getByRole("button", { name: "None", exact: true }).click()
     await page
       .getByRole("button", { name: `Select ${channelName}`, exact: true })
       .click()
