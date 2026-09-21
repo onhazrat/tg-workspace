@@ -44,10 +44,10 @@ def _post_reply_from_item(item: dict[str, Any]) -> dict[str, Any] | None:
     return reply if isinstance(reply, dict) else None
 
 
-def _post_reply_id_from_item(item: dict[str, Any]) -> int | None:
+def _post_int_from_item(item: dict[str, Any], camel: str, snake: str) -> int | None:
     # `isinstance` rather than a truth test: the JSON import path can deliver a
     # string here, and bool is an int subclass.
-    value = item.get("replyToPostId", item.get("reply_to_post_id"))
+    value = item.get(camel, item.get(snake))
     return value if isinstance(value, int) and not isinstance(value, bool) else None
 
 
@@ -89,7 +89,22 @@ def bulk_upsert_posts_impl(
             existing.forwarded_from_name = item.get("forwardedFromName") or item.get(
                 "forwarded_from_name"
             )
-            existing.reply_to_post_id = _post_reply_id_from_item(item)
+            existing.reply_to_post_id = _post_int_from_item(
+                item, "replyToPostId", "reply_to_post_id"
+            )
+            # Guarded on the key where the four fields around it are not, and
+            # the difference is which payloads carry the key. `post_to_camel`
+            # emits a fixed seventeen and CRG-03's column is not among them, so
+            # this function — which `POST /data/import` and `/data/posts/bulk`
+            # share with the scraper — would take an absent key as "no id" and
+            # null the column on every Post an export round trip restored. The
+            # href is gone, so nothing could put it back. `forwarded_from` and
+            # `reply_to_post_id` are exported, so their unconditional writes
+            # restore themselves; this one does not.
+            if "forwardedFromPostId" in item or "forwarded_from_post_id" in item:
+                existing.forwarded_from_post_id = _post_int_from_item(
+                    item, "forwardedFromPostId", "forwarded_from_post_id"
+                )
             if "media" in item:
                 existing.media = _post_media_from_item(item)
             if "links" in item:
@@ -136,9 +151,14 @@ def bulk_upsert_posts_impl(
                     or item.get("forwarded_from"),
                     forwarded_from_name=item.get("forwardedFromName")
                     or item.get("forwarded_from_name"),
+                    forwarded_from_post_id=_post_int_from_item(
+                        item, "forwardedFromPostId", "forwarded_from_post_id"
+                    ),
                     media=_post_media_from_item(item),
                     links=_post_links_from_item(item),
-                    reply_to_post_id=_post_reply_id_from_item(item),
+                    reply_to_post_id=_post_int_from_item(
+                        item, "replyToPostId", "reply_to_post_id"
+                    ),
                     reply_to=_post_reply_from_item(item),
                     retrieved_at=now_ms,
                     retrieval_job_id=job_id,

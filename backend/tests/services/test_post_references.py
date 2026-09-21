@@ -33,6 +33,9 @@ Per `CLAUDE.md`, each assertion was mutation-tested:
 * rename `DirectorySample.links` → the sample extractor test fails and every
   `Post` test above stays green, which is why the sample source is asserted on
   its own type rather than assumed from the union
+* drop `forwarded_from_post_id` from the forward `add` (CRG-03) → the exact-Post
+  test fails and the pre-CRG-03 test stays green, which is the pair asserting
+  that the missing id is a null rather than a withheld row
 """
 
 from __future__ import annotations
@@ -66,6 +69,7 @@ def _post(
     channel_name: str = SOURCE,
     text: str = "",
     forwarded_from: str | None = None,
+    forwarded_from_post_id: int | None = None,
     links: list[dict[str, Any]] | None = None,
     reply_to: dict[str, Any] | None = None,
     reply_to_post_id: int | None = None,
@@ -79,6 +83,7 @@ def _post(
         timestamp=timestamp if timestamp is not None else _ms(days_ago=1),
         retrieved_at=retrieved_at,
         forwarded_from=forwarded_from,
+        forwarded_from_post_id=forwarded_from_post_id,
         links=links,
         reply_to=reply_to,
         reply_to_post_id=reply_to_post_id,
@@ -201,14 +206,19 @@ def test_a_directory_sample_yields_the_same_four_kinds_a_post_does() -> None:
     it says nothing about `links` holding the same shape or `reply_to` the same
     keys. Running one sample carrying every kind at once is what checks it.
 
-    Mutation: rename any of `text`, `links`, `reply_to` or `forwarded_from` on
-    `DirectorySample` and this fails where the `Post` tests above stay green.
+    Mutation: rename any of `text`, `links`, `reply_to`, `forwarded_from` or
+    `forwarded_from_post_id` on `DirectorySample` and this fails where the
+    `Post` tests above stay green. The fifth is CRG-03's, and it is carried here
+    rather than only on the storage side: the union's claim is that the sample
+    spells every field the extractor reads the same way the Post does, so a
+    field added to one model and not the other has to fail *here*.
     """
     sample = DirectorySample(
         handle=SOURCE,
         post_id=1,
         text="more from @alphachan, see https://t.me/betachan/12",
         forwarded_from="gammachan",
+        forwarded_from_post_id=91,
         links=[{"url": "https://t.me/deltachan/44"}],
         reply_to={"channel": "epsilonchan", "url": "https://t.me/epsilonchan/7"},
         reply_to_post_id=7,
@@ -217,7 +227,7 @@ def test_a_directory_sample_yields_the_same_four_kinds_a_post_does() -> None:
     refs = references_for(sample, source_handle=SOURCE)
 
     assert {(r.target_handle, r.kind, r.target_post_id) for r in refs} == {
-        ("gammachan", "forward", None),
+        ("gammachan", "forward", 91),
         ("alphachan", "mention", None),
         ("betachan", "link", 12),
         ("deltachan", "link", 44),
@@ -252,6 +262,32 @@ def test_the_discover_signal_vocabulary_is_unchanged() -> None:
     from app.services.discover import SIGNAL_KINDS
 
     assert SIGNAL_KINDS == ("forward", "mention", "link")
+
+
+def test_a_forward_carries_the_exact_post_it_came_from() -> None:
+    """CRG-03's column, parsed at scrape time out of the attribution href."""
+    post = _post(1, forwarded_from="alphachan", forwarded_from_post_id=4271)
+
+    refs = references_for(post, source_handle=SOURCE)
+
+    assert [(r.kind, r.target_handle, r.target_post_id) for r in refs] == [
+        ("forward", "alphachan", 4271)
+    ]
+
+
+def test_a_forward_scraped_before_crg_03_names_the_channel_and_no_post() -> None:
+    """There is no backfill and there cannot be one — the href was never stored.
+
+    The Reference is still written. A forward whose source Post is unknown is a
+    real edge with a missing detail, not a row to withhold.
+    """
+    post = _post(1, forwarded_from="alphachan")
+
+    refs = references_for(post, source_handle=SOURCE)
+
+    assert [(r.kind, r.target_handle, r.target_post_id) for r in refs] == [
+        ("forward", "alphachan", None)
+    ]
 
 
 def test_a_link_carries_the_exact_post_it_names() -> None:

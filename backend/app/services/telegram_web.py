@@ -169,6 +169,13 @@ def extract_channel_post_from_href(href: str) -> tuple[str, int | None] | None:
     * The trailing segment is parsed as the Post id when it is all digits, and
       ignored otherwise. `t.me/foo/bar` is a channel with no Post.
 
+    `isdecimal` rather than `isdigit`, and the difference is a crash: `isdigit`
+    is true for superscripts, which `int` then refuses, so `t.me/foo/²` raised
+    `ValueError` out of whatever was parsing. `isdecimal` is exactly the set
+    `int` accepts, so Arabic-Indic digits still parse and the rest read as
+    "no Post id". The href comes off scraped HTML a channel controls, so an
+    exception here fails a whole page for one crafted link.
+
     The host is validated exactly as the sibling validates it, so
     `https://evil.example.com/t.me/foo/123` is not a Telegram link here either.
     """
@@ -186,7 +193,7 @@ def extract_channel_post_from_href(href: str) -> tuple[str, int | None] | None:
     if not is_channel_handle(channel):
         return None
     rest = segments[1:]
-    post_id = int(rest[0]) if rest and rest[0].isdigit() else None
+    post_id = int(rest[0]) if rest and rest[0].isdecimal() else None
     return channel, post_id
 
 
