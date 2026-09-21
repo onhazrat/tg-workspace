@@ -571,3 +571,57 @@ def mark_references_extracted(session: Session, post_ids: list[uuid.UUID]) -> No
         .values(references_extracted=True)
         .execution_options(synchronize_session=False)
     )
+
+
+@dataclass(frozen=True)
+class PendingCounts:
+    """What a walk still has in front of it, without walking it (CRG-04).
+
+    `pending` is every Post whose flag is unset; `eligible` is the subset a
+    walk would read right now, so `deferred` is the Posts waiting on a chat id
+    or on their grace to expire.
+
+    **This is the aggregate over the pending partial index that
+    `ExtractionCounts` deliberately refuses to do.** That refusal is about
+    cost per *tick*: the sweep runs every few minutes forever, and during the
+    first backfill the index covers the whole corpus. A dry run is one
+    operator, once, before a multi-hour job — the number is worth a couple of
+    index scans there, and it is the number that decides whether to run at all.
+    """
+
+    pending: int = 0
+    eligible: int = 0
+    deferring_channels: int = 0
+
+    @property
+    def deferred(self) -> int:
+        return self.pending - self.eligible
+
+
+def pending_counts(session: Session, *, now: datetime | None = None) -> PendingCounts:
+    """Count what `extract_batch` would do, writing nothing.
+
+    Shares `_eligible` with the walk rather than restating it, so the dry run
+    cannot report a population the real run then disagrees with — which is the
+    whole reason CRG-04's script has no predicate of its own.
+    """
+    epoch_ms = graph_epoch_ms(session)
+    cutoff_ms = grace_cutoff_ms(now=now)
+
+    def count(*where: Any) -> int:
+        return int(
+            session.exec(
+                unscoped_select(
+                    select(func.count())
+                    .select_from(Post)
+                    .where(col(Post.references_extracted) == False, *where),  # noqa: E712
+                    reason=_SCOPE_REASON,
+                )
+            ).one()
+        )
+
+    return PendingCounts(
+        pending=count(),
+        eligible=count(_eligible(epoch_ms, cutoff_ms)),
+        deferring_channels=_deferring_channels(session),
+    )
