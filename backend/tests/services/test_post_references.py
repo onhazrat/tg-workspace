@@ -30,6 +30,9 @@ Per `CLAUDE.md`, each assertion was mutation-tested:
 * let `extract_channel_post_from_href` skip the host check → the spoofed-host
   test fails
 * clear `telegram_chat_id` in `requeue_probes` again → the recheck test fails
+* rename `DirectorySample.links` → the sample extractor test fails and every
+  `Post` test above stays green, which is why the sample source is asserted on
+  its own type rather than assumed from the union
 """
 
 from __future__ import annotations
@@ -41,7 +44,7 @@ from typing import Any
 from sqlmodel import Session, select
 
 from app.core.db import engine
-from app.models_tg import Channel, Post, PostReference
+from app.models_tg import Channel, DirectorySample, Post, PostReference
 from app.services.channel_directory import record_probe_result, requeue_probes
 from app.services.discover import post_references
 from app.services.post_references import (
@@ -187,6 +190,56 @@ def test_a_cross_channel_reply_is_its_own_kind() -> None:
     refs = references_for(post, source_handle=SOURCE)
 
     assert [(r.kind, r.target_post_id) for r in refs] == [("reply", 7)]
+
+
+def test_a_directory_sample_yields_the_same_four_kinds_a_post_does() -> None:
+    """The extractor's other source (CRG-02), asserted on the type itself.
+
+    `references_for` takes `Post | DirectorySample` because the sample was
+    modelled on the Post and spells all four fields the same way. That is a
+    claim about two tables, and the union alone only checks the names exist —
+    it says nothing about `links` holding the same shape or `reply_to` the same
+    keys. Running one sample carrying every kind at once is what checks it.
+
+    Mutation: rename any of `text`, `links`, `reply_to` or `forwarded_from` on
+    `DirectorySample` and this fails where the `Post` tests above stay green.
+    """
+    sample = DirectorySample(
+        handle=SOURCE,
+        post_id=1,
+        text="more from @alphachan, see https://t.me/betachan/12",
+        forwarded_from="gammachan",
+        links=[{"url": "https://t.me/deltachan/44"}],
+        reply_to={"channel": "epsilonchan", "url": "https://t.me/epsilonchan/7"},
+        reply_to_post_id=7,
+    )
+
+    refs = references_for(sample, source_handle=SOURCE)
+
+    assert {(r.target_handle, r.kind, r.target_post_id) for r in refs} == {
+        ("gammachan", "forward", None),
+        ("alphachan", "mention", None),
+        ("betachan", "link", 12),
+        ("deltachan", "link", 44),
+        ("epsilonchan", "reply", 7),
+    }
+
+
+def test_a_same_channel_reply_in_a_sample_makes_no_reference() -> None:
+    """The self-loop rule holds on the sample side too.
+
+    A Channel replying to itself is the common case on a preview page, so
+    getting this wrong on the sample source would fill the graph with loops
+    from every probe rather than from the corpus walk.
+    """
+    sample = DirectorySample(
+        handle=SOURCE,
+        post_id=1,
+        reply_to={"channel": SOURCE, "url": f"https://t.me/{SOURCE}/7"},
+        reply_to_post_id=7,
+    )
+
+    assert references_for(sample, source_handle=SOURCE) == []
 
 
 def test_the_discover_signal_vocabulary_is_unchanged() -> None:

@@ -43,7 +43,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlmodel import Session, col, select
 
 from app.core.config import settings
-from app.models_tg import Channel, DirectoryEntry, Post, PostReference
+from app.models_tg import Channel, DirectoryEntry, DirectorySample, Post, PostReference
 from app.services.discover import (
     _text_link_re,
     extract_mentions,
@@ -57,6 +57,14 @@ from app.services.tenancy import unscoped_select
 #: The four kinds, one wider than `discover.SignalKind`. A cross-channel reply
 #: is `reply` here and `link` there; see the model docstring.
 KINDS: tuple[str, ...] = ("forward", "mention", "link", "reply")
+
+#: What the extractor reads (CRG-02). A `DirectorySample` is `Post` minus the
+#: owner and the sync bookkeeping, and every field read below — the text, the
+#: links blob, the forward attribution and the reply pointer — is spelled the
+#: same on both, because the sample was modelled on the Post deliberately. A
+#: union rather than a `Protocol`: two concrete classes are the whole set, and
+#: mypy checks the attribute names against the columns this way.
+ReferenceSource = Post | DirectorySample
 
 _SCOPE_REASON = (
     "The reference graph is corpus-wide: it records what exists on Telegram "
@@ -93,11 +101,11 @@ class ExtractionCounts:
     deferring_channels: int = 0
 
 
-def _post_text(source: Post) -> str:
+def _source_text(source: ReferenceSource) -> str:
     return source.text or ""
 
 
-def _link_references(source: Post) -> list[Reference]:
+def _link_references(source: ReferenceSource) -> list[Reference]:
     """Telegram links in the body, from the stored hrefs and the plain text.
 
     Mirrors `discover.extract_post_link_channels`, which unions the masked
@@ -119,7 +127,7 @@ def _link_references(source: Post) -> list[Reference]:
         handle, post_id = parsed
         found.setdefault((normalize_handle(handle), post_id), None)
 
-    for match in _text_link_re().finditer(_post_text(source)):
+    for match in _text_link_re().finditer(_source_text(source)):
         add(extract_channel_post_from_href(f"https://t.me/{match.group(1)}"))
 
     for link in source.links or []:
@@ -142,7 +150,7 @@ def _link_references(source: Post) -> list[Reference]:
 
 
 def references_for(
-    source: Post,
+    source: ReferenceSource,
     *,
     source_handle: str,
 ) -> list[Reference]:
@@ -179,7 +187,7 @@ def references_for(
             getattr(source, "forwarded_from_post_id", None),
         )
 
-    for handle in extract_mentions(_post_text(source)):
+    for handle in extract_mentions(_source_text(source)):
         add(handle, "mention")
 
     for ref in _link_references(source):
@@ -292,6 +300,60 @@ def write_references(
         .returning(col(PostReference.id))
     ).all()
     return len(inserted)
+
+
+def extract_sample_references(
+    session: Session,
+    handle: str,
+    samples: list[DirectorySample],
+    *,
+    source_chat_id: int | None,
+) -> None:
+    """Mine a Directory entry's samples for References.
+
+    The tier that was free all along and never collected (CRG-02). A probe
+    already fetched and parsed these Posts, so the graph grows to cover
+    Channels nobody follows at no additional Telegram cost.
+
+    **A sample gets no deferral, and that asymmetry with `extract_batch` is
+    deliberate.** A Post defers by leaving its flag unset, so a later tick can
+    retry it once the chat id lands. A sample carries no such flag and the whole
+    snapshot is replaced on the next probe, so there is nothing to defer *with*.
+    An entry with no chat id is therefore skipped outright — and the next probe
+    re-mines exactly these Posts anyway, with the uniqueness constraint
+    absorbing whatever overlap the previous one already wrote. The retry is
+    built into the refresh window.
+
+    **Does not commit.** `record_probe_result` writes the verdict, the snapshot
+    and these in one transaction: a probe half stored is worse than one not
+    stored at all.
+
+    Returns nothing, unlike `extract_batch`. A probe reports a verdict, not a
+    walk, and no caller has anywhere to put a count — `ExtractionCounts` exists
+    because the sweep's deferrals are a gap somebody has to go and look at, and
+    a sample has no deferral to report.
+    """
+    if source_chat_id is None or not samples:
+        return
+
+    extracted: list[SourcedReferences] = []
+    targets: set[str] = set()
+    for sample in samples:
+        references = references_for(sample, source_handle=handle)
+        extracted.append(
+            SourcedReferences(
+                source_chat_id=source_chat_id,
+                source_channel=handle,
+                source_post_id=sample.post_id,
+                timestamp=sample.timestamp,
+                references=references,
+            )
+        )
+        targets.update(ref.target_handle for ref in references)
+
+    write_references(
+        session, extracted, target_chat_ids=_target_chat_ids(session, targets)
+    )
 
 
 def graph_epoch_ms(session: Session) -> int:
