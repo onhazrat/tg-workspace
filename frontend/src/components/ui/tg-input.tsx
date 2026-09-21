@@ -9,7 +9,7 @@ const tgInputVariants = cva(
     variants: {
       variant: {
         settings:
-          "bg-app-ink/5 border border-app-ink/10 p-3 text-[10px] font-mono uppercase tracking-widest focus:border-app-ink/30 focus-visible:ring-2 focus-visible:ring-app-ink/30",
+          "bg-app-ink/5 border border-app-ink/10 p-3 text-[11px] font-mono tracking-wide focus:border-app-ink/30 focus-visible:ring-2 focus-visible:ring-app-ink/30",
         muted:
           "bg-app-muted/50 border border-app-ink/10 rounded-lg py-2 px-3 text-sm focus:ring-2 focus:ring-app-ink/20 focus-visible:ring-2 focus-visible:ring-app-ink/30",
       },

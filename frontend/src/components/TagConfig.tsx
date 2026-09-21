@@ -2,6 +2,7 @@ import { ClipboardPaste, Copy, Sparkles } from "lucide-react"
 import type React from "react"
 import { TgButton } from "@/components/ui/tg-button"
 import { useTagContext } from "@/contexts/TagContext"
+import { useSelectedAiKeyId } from "@/hooks/useAiKeys"
 
 interface TagConfigProps {
   onPasteClick: () => void
@@ -17,6 +18,8 @@ interface TagConfigProps {
 export const TagConfig: React.FC<TagConfigProps> = ({ onPasteClick }) => {
   const { mode, setMode, copyTagPrompt, generateTags, isGenerating } =
     useTagContext()
+  // `/ai/tag/prompt` resolves no Key, so Copy and Paste stay live with none.
+  const noKey = useSelectedAiKeyId() === null
 
   return (
     <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
@@ -64,6 +67,8 @@ export const TagConfig: React.FC<TagConfigProps> = ({ onPasteClick }) => {
           variant="primary"
           size="md"
           onClick={() => void generateTags()}
+          disabled={noKey}
+          title={noKey ? "Add an AI key above to run this." : undefined}
           loading={isGenerating}
           loadingLabel="Generating..."
         >

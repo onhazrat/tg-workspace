@@ -1,6 +1,7 @@
 import { expect, test } from "@playwright/test"
 
 import { WORKSPACE_TABS } from "../src/constants"
+import { seedAiKey } from "./utils/seed-ai-key"
 import { seedTestChannel } from "./utils/seed-channel"
 import {
   channelHasTag,
@@ -35,6 +36,10 @@ test.describe("TG Workspace shell", () => {
    * whatever conversation was last open.
    */
   test("the Action tab starts a chat from its own input", async ({ page }) => {
+    await page.goto("/workspace?tab=action")
+    // Starting a chat spends the account's own Key, so the button is disabled
+    // without one. That gate is the feature, not an obstacle to route around.
+    await seedAiKey(page)
     await page.goto("/workspace?tab=action")
 
     const input = page.getByTestId("action-chat-input")

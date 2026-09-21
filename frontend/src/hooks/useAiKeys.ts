@@ -1,6 +1,9 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query"
 
-import { reconcileAiKeySelection } from "@/lib/aiKeys/selection"
+import {
+  reconcileAiKeySelection,
+  useStoredAiKeyId,
+} from "@/lib/aiKeys/selection"
 import { type AiKey, listAiKeys } from "@/lib/aiKeys/store"
 
 import { queryKeys } from "./queryKeys"
@@ -24,11 +27,29 @@ export function useAiKeysQuery() {
       // The one moment the client knows which Keys still exist, so it is where
       // a remembered id for a deleted one is dropped. See
       // `reconcileAiKeySelection` for what goes wrong without it.
-      reconcileAiKeySelection(keys.map((k) => k.id))
+      reconcileAiKeySelection(keys)
       return keys
     },
     staleTime: 30_000,
   })
+}
+
+/**
+ * Which Key pays for the next Artifact, or `null` when the Account has none.
+ *
+ * **Here rather than in `lib/aiKeys/selection.ts`, and it mounts the query.**
+ * The selection is written by `reconcileAiKeySelection` inside that query's
+ * `queryFn`, so on a screen that never fetches the Key list the stored value is
+ * whatever a previous screen left — `null` in a fresh browser. Three of the
+ * four `ModelCombo` call sites are such screens (Chat, and both Settings → AI
+ * pickers, which are a different sub-tab from AI Keys), and reading the store
+ * alone left them permanently disabled saying "Add a key first" for an Account
+ * that holds several. Asking for the selection is therefore also asking for the
+ * list; the query is shared and cached, so the second caller costs nothing.
+ */
+export function useSelectedAiKeyId(): string | null {
+  useAiKeysQuery()
+  return useStoredAiKeyId()
 }
 
 /** The keys, with a stable empty default. */

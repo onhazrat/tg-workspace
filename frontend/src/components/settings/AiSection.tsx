@@ -270,6 +270,10 @@ export const AiSection: React.FC<{
                     value={translationModel}
                     onChange={setTranslationModel}
                     className={tgFieldClassName}
+                    // Translations are corpus-wide rows shared by every
+                    // Follower, so the Operator Key pays for them. An Admin
+                    // with no personal Key still names this model.
+                    operatorKey
                   />
                 </SettingAnchor>
               </motion.div>

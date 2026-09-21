@@ -229,6 +229,14 @@ can reach hundreds. An AI Key is what pays for that Account's Artifacts, and
 nobody but the Account ever reads it back.
 _Avoid_: API key, token, credential, secret
 
+**Selected AI Key**:
+The one of an Account's AI Keys that pays for its next Artifact, remembered per
+device under the acting Account. Distinct from *holding* a Key: the run controls
+that spend one are unavailable until a Key is selected. A Key is selected
+automatically whenever the Account has one and has not chosen otherwise, so in
+practice "no Key selected" means "no Key at all".
+_Avoid_: active key, current key, default key, chosen provider
+
 **Operator Key**:
 The deployment's own AI access, configured in the environment. It pays for
 every AI call that is not an Artifact, which is exactly the corpus-wide work:

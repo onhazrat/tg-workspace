@@ -65,7 +65,7 @@ export const DestinationsPanel: React.FC<DestinationsPanelProps> = ({
         <div className="relative">
           <TgInput
             type="text"
-            placeholder="CHAT ID (E.G., @MYCHANNEL OR -100...)"
+            placeholder="Chat id (e.g. @mychannel or -100…)"
             value={newDestChatId}
             onChange={(e) => onDestChatIdChange(e.target.value)}
           />
@@ -77,7 +77,7 @@ export const DestinationsPanel: React.FC<DestinationsPanelProps> = ({
         </div>
         <TgInput
           type="text"
-          placeholder="DESTINATION NAME (AUTO-FILLED OR CUSTOM)"
+          placeholder="Destination name (auto-filled or custom)"
           value={newDestName}
           onChange={(e) => onDestNameChange(e.target.value)}
         />
