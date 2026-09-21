@@ -1,6 +1,6 @@
 import { Brain, ChevronDown, KeyRound, Languages, Plus } from "lucide-react"
 import type React from "react"
-import { useState } from "react"
+import { useEffect, useState } from "react"
 
 import { AiKeyAddForm } from "@/components/ai/AiKeyAddForm"
 import { ModelCombo } from "@/components/ai/ModelCombo"
@@ -14,6 +14,7 @@ import {
 import { LANGUAGES } from "@/constants"
 import { useSettings } from "@/contexts/SettingsContext"
 import { useAiKeys, useSelectedAiKeyId } from "@/hooks/useAiKeys"
+import { modelForKey } from "@/lib/aiKeys/modelMemory"
 import { rememberAiKeyId } from "@/lib/aiKeys/selection"
 
 /**
@@ -63,6 +64,31 @@ export const RunSettingsBar: React.FC = () => {
     aiKeys[0]?.id ??
     ""
 
+  /**
+   * Switching Key switches back to the model you last ran on it.
+   *
+   * **Here rather than in `ModelCombo`, which is where the other half lives.**
+   * The recording belongs on the picker because all three model pickers write
+   * the same setting and any of them can be the one you chose in; applying
+   * belongs here because this bar holds the only control that changes the Key.
+   * Putting the effect on the picker instead would mount it three times to
+   * serve an event only one of them can raise.
+   *
+   * A Key with nothing recorded leaves the model alone, which is what makes
+   * this safe to add to an account that has never used it: the map is empty,
+   * the effect is a no-op, and nothing moves until a first deliberate choice
+   * puts something in it.
+   *
+   * It is not the repair effect under a new name. That one overwrote a value
+   * somebody typed with a default the *server* suggested, on the catalogue
+   * arriving; this restores a value the account itself chose, and only when the
+   * Key changes.
+   */
+  useEffect(() => {
+    const remembered = modelForKey(selectedKeyId)
+    if (remembered && remembered !== selectedModel) setSelectedModel(remembered)
+  }, [selectedKeyId, selectedModel, setSelectedModel])
+
   const addButton = (
     <button
       type="button"
@@ -90,16 +116,12 @@ export const RunSettingsBar: React.FC = () => {
         </p>
       </div>
 
-      <div className="flex h-10 items-center gap-2 rounded-lg border border-app-ink/10 bg-app-muted/20 px-3 transition-colors hover:bg-app-muted/30">
-        <Brain size={14} className="text-app-ink/50" />
-        <ModelCombo
-          ariaLabel="Inference model"
-          value={selectedModel}
-          onChange={setSelectedModel}
-          className="max-w-[180px] bg-transparent font-mono text-xs focus:outline-none"
-        />
-      </div>
-
+      {/*
+       * Key first, then model, then language — the order the choices depend on
+       * each other in. The Key decides which catalogue the model picker can
+       * offer and which model the bar restores, so putting it second asked you
+       * to choose from a list before choosing what produced the list.
+       */}
       {aiKeys.length > 0 && (
         <div className="flex h-10 items-center gap-2 rounded-lg border border-app-ink/10 bg-app-muted/20 px-3 transition-colors hover:bg-app-muted/30">
           <KeyRound size={14} className="text-app-ink/50" />
@@ -125,6 +147,16 @@ export const RunSettingsBar: React.FC = () => {
       )}
 
       {addButton}
+
+      <div className="flex h-10 items-center gap-2 rounded-lg border border-app-ink/10 bg-app-muted/20 px-3 transition-colors hover:bg-app-muted/30">
+        <Brain size={14} className="text-app-ink/50" />
+        <ModelCombo
+          ariaLabel="Inference model"
+          value={selectedModel}
+          onChange={setSelectedModel}
+          className="max-w-[180px] bg-transparent font-mono text-xs focus:outline-none"
+        />
+      </div>
 
       <div className="flex h-10 items-center gap-2 rounded-lg border border-app-ink/10 bg-app-muted/20 px-3 transition-colors hover:bg-app-muted/30">
         <Languages size={14} className="text-app-ink/50" />
