@@ -267,8 +267,8 @@ test.describe("TG Workspace channels and posts", () => {
       })
     }
 
-    await page.locator("button.uppercase", { hasText: "None" }).click()
-    await page.locator("button.uppercase", { hasText: "All" }).first().click()
+    await page.getByRole("button", { name: "None", exact: true }).click()
+    await page.getByRole("button", { name: "All", exact: true }).click()
     await expect(page.getByText("5 Selected")).toBeVisible()
 
     await page.getByTestId("channel-trim-count").fill("2")
