@@ -47,7 +47,7 @@ export const QuickMessagePanel: React.FC<QuickMessagePanelProps> = ({
           onChange={(e) => onSelectBot(e.target.value)}
           className={tgFieldClassName}
         >
-          <option value="">SELECT BOT</option>
+          <option value="">Select bot</option>
           {botCredentials.map((b) => (
             <option
               key={b.id}
@@ -63,7 +63,7 @@ export const QuickMessagePanel: React.FC<QuickMessagePanelProps> = ({
           onChange={(e) => onSelectDest(e.target.value)}
           className={tgFieldClassName}
         >
-          <option value="">SELECT DESTINATION</option>
+          <option value="">Select destination</option>
           {chatDestinations.map((d) => (
             <option
               key={d.id}
@@ -76,7 +76,7 @@ export const QuickMessagePanel: React.FC<QuickMessagePanelProps> = ({
         </select>
       </div>
       <TgTextarea
-        placeholder="TYPE YOUR MESSAGE HERE..."
+        placeholder="Type your message here…"
         value={quickMessage}
         onChange={(e) => onMessageChange(e.target.value)}
         rows={4}

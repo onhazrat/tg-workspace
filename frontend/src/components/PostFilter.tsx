@@ -185,7 +185,7 @@ export const PostFilter: React.FC<PostFilterProps> = ({
                   />
                   <input
                     type="text"
-                    placeholder="SEARCH POSTS..."
+                    placeholder="Search posts…"
                     value={postSearch}
                     onChange={(e) => setPostSearch(e.target.value)}
                     className="w-full bg-app-muted border border-app-ink/10 rounded-xl pl-9 pr-4 py-2 text-[11px] font-mono focus:outline-none focus:border-app-ink/30 focus:ring-4 focus:ring-app-ink/5 transition-all placeholder:uppercase placeholder:tracking-widest shadow-sm"
@@ -332,7 +332,7 @@ export const PostFilter: React.FC<PostFilterProps> = ({
                   />
                   <input
                     type="text"
-                    placeholder="FIND BY MEANING (PRESS ENTER)..."
+                    placeholder="Find by meaning (press Enter)…"
                     value={semanticInput}
                     onChange={(e) => setSemanticInput(e.target.value)}
                     onKeyDown={(e) => {

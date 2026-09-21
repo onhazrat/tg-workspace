@@ -3,7 +3,7 @@ import type React from "react"
 import { useState } from "react"
 
 import { TgButton } from "@/components/ui/tg-button"
-import { TgInput } from "@/components/ui/tg-input"
+import { TgInput, tgFieldClassName } from "@/components/ui/tg-input"
 import { useRefreshAiKeys } from "@/hooks/useAiKeys"
 import { saveAiKey } from "@/lib/aiKeys/store"
 
@@ -94,28 +94,28 @@ export const AiKeyAddForm: React.FC<{ onSaved?: () => void }> = ({
         aria-label="Provider"
         value={provider}
         onChange={(e) => setProvider(e.target.value)}
-        className="w-full bg-app-card border border-app-ink/10 px-4 py-3 text-[11px] font-mono uppercase tracking-widest focus:outline-none focus:border-app-ink/30"
+        className={tgFieldClassName}
       >
-        <option value="gemini">GOOGLE GEMINI</option>
-        <option value="openai_compatible">OPENAI-COMPATIBLE</option>
+        <option value="gemini">Google Gemini</option>
+        <option value="openai_compatible">OpenAI-compatible</option>
       </select>
       {provider === "openai_compatible" && (
         <TgInput
           type="text"
-          placeholder="BASE URL (E.G. HTTPS://OPENROUTER.AI/API/V1)"
+          placeholder="Base URL (e.g. https://openrouter.ai/api/v1)"
           value={baseUrl}
           onChange={(e) => setBaseUrl(e.target.value)}
         />
       )}
       <TgInput
         type="password"
-        placeholder="PROVIDER API KEY"
+        placeholder="Provider API key"
         value={secret}
         onChange={(e) => setSecret(e.target.value)}
       />
       <TgInput
         type="text"
-        placeholder="LABEL (E.G. WORK KEY)"
+        placeholder="Label (e.g. Work key)"
         value={label}
         onChange={(e) => setLabel(e.target.value)}
       />

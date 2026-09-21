@@ -60,7 +60,7 @@ export const BotCredentialsPanel: React.FC<BotCredentialsPanelProps> = ({
         <div className="relative">
           <TgInput
             type="password"
-            placeholder="BOT TOKEN (FROM @BOTFATHER)"
+            placeholder="Bot token (from @BotFather)"
             value={newBotToken}
             onChange={(e) => onBotTokenChange(e.target.value)}
           />
@@ -72,7 +72,7 @@ export const BotCredentialsPanel: React.FC<BotCredentialsPanelProps> = ({
         </div>
         <TgInput
           type="text"
-          placeholder="BOT NAME (AUTO-FILLED OR CUSTOM)"
+          placeholder="Bot name (auto-filled or custom)"
           value={newBotName}
           onChange={(e) => onBotNameChange(e.target.value)}
         />

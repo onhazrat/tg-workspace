@@ -10,15 +10,21 @@ import {
 } from "./tg-input"
 
 describe("TgInput", () => {
-  test("settings variant uses mono uppercase field recipe", () => {
+  test("settings variant uses the mono field recipe, and never shouts", () => {
     const html = renderToStaticMarkup(
       <TgInput variant="settings" defaultValue="x" />,
     )
     expect(html).toContain('data-variant="settings"')
     expect(tgInputVariants({ variant: "settings" })).toContain(
-      "font-mono uppercase tracking-widest",
+      "font-mono tracking-wide",
     )
-    expect(tgFieldClassName).toContain("p-3 text-[10px]")
+    expect(tgFieldClassName).toContain("p-3 text-[11px]")
+    // The `uppercase` this variant used to carry is gone, and the assertion is
+    // here rather than in a comment because the placeholders it shouted are now
+    // written in sentence case: putting the class back would not restore the
+    // old look, it would double-capitalise "Provider API key" into something
+    // nobody wrote. Both halves have to stay removed together.
+    expect(tgInputVariants({ variant: "settings" })).not.toContain("uppercase")
   })
 
   test("muted variant uses toolbar recipe", () => {
