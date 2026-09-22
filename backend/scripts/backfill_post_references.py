@@ -75,13 +75,19 @@ logger = logging.getLogger("backfill_post_references")
 
 #: Larger than the sweep's `POST_REFERENCE_SCAN_LIMIT`, which is sized for a
 #: tick that shares its interval with the Directory harvest. Nothing shares
-#: this run, so the batch is sized by the memory one page of Posts costs.
+#: this run, so the batch is sized by the memory one page of Posts costs —
+#: about 8 MB of Post text here, at the 422-character average measured on the
+#: corpus this was written against.
+#:
+#: Kept above that setting deliberately, so this stays the faster of the two
+#: ways to drain the same backlog. It tracked a limit of 500 when it was 5000;
+#: the limit is 10000 now.
 #:
 #: It is **not** bounded by how many References the page yields:
 #: `write_references` chunks its own `INSERT` under the wire protocol's bind
 #: parameter ceiling, so a batch of unusually link-heavy Posts costs another
 #: statement rather than an aborted run.
-DEFAULT_BATCH_SIZE = 5_000
+DEFAULT_BATCH_SIZE = 20_000
 
 
 @dataclass

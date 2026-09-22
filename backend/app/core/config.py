@@ -383,7 +383,15 @@ class Settings(BaseSettings):
     # numbers cannot be set into disagreement. As separate settings they were:
     # staging ran a batch of 1000 against a ceiling of 600 that is checked
     # before the walk, so a tick starting at 599 pending ended at 1599.
-    DIRECTORY_HARVEST_SCAN_LIMIT: int = 500
+    #
+    # Raised 500 -> 20000. This is the value staging has actually run since the
+    # first-pass drain (`DIRECTORY_HARVEST_SCAN_LIMIT=20000` in
+    # `deploy-staging.yml`), so the default now matches the only deployment
+    # that has exercised it at size. It costs nothing on a caught-up corpus —
+    # the walk stops at the ceiling below whatever this says — and on a fresh
+    # one it is the difference between the first pass taking a day and taking
+    # a month.
+    DIRECTORY_HARVEST_SCAN_LIMIT: int = 20000
 
     # Pending handles at which the harvest stops adding more.
     #
@@ -391,9 +399,22 @@ class Settings(BaseSettings):
     # wants a Slot, so nothing makes the two rates agree. Without a ceiling the
     # backlog grows monotonically on a busy deployment — and since a harvested
     # row sorts ahead of every refresh, ticket 03's staleness refresh then stops
-    # being dequeued at all. Roughly ten probe batches: deep enough that the
-    # lane always has work, shallow enough that a refresh waits minutes.
-    DIRECTORY_HARVEST_BACKLOG_CEILING: int = 600
+    # being dequeued at all.
+    #
+    # Raised 600 -> 3000, and this is the one dial here with a real cost.
+    # `DISCOVER_PROBE_BATCH_SIZE` is 600 and the lane measured ~2,340
+    # verdicts/hour, so a refresh row queued behind a *full* backlog now waits
+    # roughly 75 minutes rather than roughly 15. That is the trade: a deeper
+    # queue discovers new handles faster on a fresh deployment and makes
+    # staleness refresh correspondingly less prompt. It is still bounded, which
+    # is the property that matters — the pre-ticket-03 failure was an unbounded
+    # backlog that starved refresh *permanently*, not one that delays it.
+    #
+    # Lower it back toward 600 if refresh latency matters more than discovery
+    # rate on a given deployment. The old comment claimed 600 was "roughly ten
+    # probe batches"; with `DISCOVER_PROBE_BATCH_SIZE` at 600 it was exactly
+    # one, so that reasoning had already gone stale.
+    DIRECTORY_HARVEST_BACKLOG_CEILING: int = 3000
 
     # Reference graph (CRG-01)
     #
@@ -413,7 +434,19 @@ class Settings(BaseSettings):
     # `DIRECTORY_HARVEST_SCAN_LIMIT` because the two walks answer to different
     # things: that one is bounded by how deep the probe queue may get, and this
     # one writes rows nothing drains.
-    POST_REFERENCE_SCAN_LIMIT: int = 500
+    #
+    # Raised 500 -> 10000, and that asymmetry is exactly why it is the safe one
+    # to raise: there is no queue downstream to overfill, so a bigger page is
+    # purely less overhead per Post. A page costs ~4 MB of Post text at 10000
+    # (measured: 422 chars average), the walk runs in a thread via `run_db` so
+    # it never blocks the worker's lanes, and `ix_tg_posts_references_pending`
+    # is `(timestamp DESC) WHERE NOT references_extracted`, so the LIMIT is an
+    # ordered index walk rather than a sort.
+    #
+    # Safe only since CRG-04 chunked `write_references`: one INSERT binds nine
+    # parameters per Reference against a 65535 ceiling, so a 10000-Post page of
+    # link-heavy Posts would previously have aborted the tick outright.
+    POST_REFERENCE_SCAN_LIMIT: int = 10000
 
     # Translation batch job
     TRANSLATION_BATCH_LIMIT: int = 20
