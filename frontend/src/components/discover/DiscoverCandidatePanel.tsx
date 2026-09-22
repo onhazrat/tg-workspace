@@ -39,7 +39,7 @@ interface DiscoverCandidatePanelProps {
   candidate: DiscoveryCandidate | null
   onClose: () => void
   isOffline: boolean
-  isFollowJobRunning: boolean
+  activeFollowNames: string[]
   onFollow: (name: string) => void
   /**
    * Discard this handle's cached verdict and put it back at the front of the
@@ -96,7 +96,7 @@ export const DiscoverCandidatePanel: React.FC<DiscoverCandidatePanelProps> = ({
   candidate,
   onClose,
   isOffline,
-  isFollowJobRunning,
+  activeFollowNames,
   onFollow,
   onRecheck,
   isRecheckPending,
@@ -205,7 +205,9 @@ export const DiscoverCandidatePanel: React.FC<DiscoverCandidatePanelProps> = ({
                     type="button"
                     variant="primary"
                     size="sm"
-                    disabled={isOffline || isFollowJobRunning}
+                    disabled={isOffline}
+                    loading={activeFollowNames.includes(candidate.name)}
+                    loadingLabel="Follow"
                     onClick={() => onFollow(candidate.name)}
                     data-testid={`discover-panel-follow-${candidate.name}`}
                     className="rounded-full"

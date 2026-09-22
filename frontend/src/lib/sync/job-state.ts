@@ -59,6 +59,26 @@ export function deriveScrapingChannels(status: SyncJobStatus): Set<string> {
 }
 
 /**
+ * Fold one job's progress into the app-wide syncing set.
+ *
+ * Several jobs can run at once (a manual sync beside a Follow's First sync), so
+ * a job adds its active channels and removes only its own finished ones. It
+ * never replaces the set, which would unmark every other job's channels.
+ */
+export function mergeScrapingChannels(
+  prev: ReadonlySet<string>,
+  status: SyncJobStatus,
+): Set<string> {
+  const active = deriveScrapingChannels(status)
+  const next = new Set(prev)
+  for (const ch of status.channels) {
+    if (active.has(ch.channelName)) next.add(ch.channelName)
+    else next.delete(ch.channelName)
+  }
+  return next
+}
+
+/**
  * Whether any channel failed with something that reads as a rate limit.
  *
  * **Wart, preserved deliberately:** this is a regex over the error *string*

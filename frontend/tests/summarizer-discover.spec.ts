@@ -251,6 +251,41 @@ test.describe("TG Workspace discover", () => {
     })
   })
 
+  test("a second Candidate can be followed while the first one's First sync runs", async ({
+    page,
+  }) => {
+    test.setTimeout(90_000)
+    const stamp = Date.now()
+    const carrierName = `dscarr${stamp}`
+    const [first, second] = [`dsfsa${stamp}`, `dsfsb${stamp}`]
+
+    await gotoWorkspace(page, "channels")
+    await seedTestChannel(page, carrierName)
+
+    const bulkFollow = await mockBulkFollowJob(page, "e2e-follow-job", {
+      firstSyncJobId: "e2e-first-sync",
+    })
+    await openDiscoverWithForwards(page, {
+      carrierName,
+      unfollowedSources: [first, second],
+    })
+
+    await page.getByTestId(`discover-follow-${first}`).click()
+    await expect.poll(() => bulkFollow.getPostCount()).toBe(1)
+    await expect(page.getByText(/Follow finished/i).first()).toBeVisible({
+      timeout: 15_000,
+    })
+
+    // The first sync never finishes; the other row must not wait for it.
+    await expect(page.getByTestId(`discover-follow-${second}`)).toBeEnabled()
+    await page.getByTestId(`discover-follow-${second}`).click()
+    await expect.poll(() => bulkFollow.getPostCount()).toBe(2)
+    const body = bulkFollow.getPostBodies()[1] as {
+      channels: Array<{ name: string }>
+    }
+    expect(body.channels.map((c) => c.name)).toEqual([second])
+  })
+
   test("discover follow selected confirms when selection is at least 5", async ({
     page,
   }) => {

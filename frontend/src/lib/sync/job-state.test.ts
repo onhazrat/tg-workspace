@@ -18,6 +18,7 @@ import {
   deriveScrapingChannels,
   hasRateLimitError,
   isTerminalSyncStatus,
+  mergeScrapingChannels,
   shouldFallBackToPolling,
   TERMINAL_SYNC_STATUSES,
 } from "./job-state"
@@ -177,5 +178,23 @@ describe("shouldFallBackToPolling", () => {
     // The job outlived `syncJobTimeoutMs`; the caller cancels it instead of
     // polling a job it has already given up on.
     expect(shouldFallBackToPolling(true)).toBe(false)
+  })
+})
+
+describe("mergeScrapingChannels", () => {
+  test("keeps channels another job is syncing", () => {
+    const result = mergeScrapingChannels(
+      new Set(["other"]),
+      status({ channels: [channel({ channelName: "a", status: "running" })] }),
+    )
+    expect([...result].sort()).toEqual(["a", "other"])
+  })
+
+  test("removes only this job's finished channels", () => {
+    const result = mergeScrapingChannels(
+      new Set(["a", "other"]),
+      status({ channels: [channel({ channelName: "a", status: "success" })] }),
+    )
+    expect([...result]).toEqual(["other"])
   })
 })

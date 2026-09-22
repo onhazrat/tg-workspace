@@ -24,9 +24,9 @@ import { getChannelStats } from "@/lib/channels/store"
 import { env } from "@/lib/env"
 import { logger } from "@/lib/logger"
 import {
-  deriveScrapingChannels,
   hasRateLimitError,
   isTerminalSyncStatus,
+  mergeScrapingChannels,
   shouldFallBackToPolling,
 } from "@/lib/sync/job-state"
 import type { ChannelStats } from "@/types"
@@ -90,7 +90,7 @@ export function useSyncJob(deps: SyncJobDeps): SyncJob {
 
   const applySyncJobStatus = useCallback(
     (status: SyncJobStatus) => {
-      setScrapingChannels(deriveScrapingChannels(status))
+      setScrapingChannels((prev) => mergeScrapingChannels(prev, status))
       setIsRateLimited(hasRateLimitError(status))
     },
     [setIsRateLimited],

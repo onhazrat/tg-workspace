@@ -1,7 +1,12 @@
 import { useQueryClient } from "@tanstack/react-query"
 import React, { createContext, useCallback, useContext, useEffect } from "react"
 import { toast } from "sonner"
-import { api, type BulkFollowChannelInput, type FollowJobStatus } from "@/api"
+import {
+  api,
+  type BulkFollowChannelInput,
+  type FollowJobStatus,
+  streamFollowJobEvents,
+} from "@/api"
 import type { PromptScope } from "@/api/data"
 import type { ScopeSubmission } from "@/client"
 import { parseApiError, unavailableChannelToastMessage } from "@/lib/api-errors"
@@ -137,6 +142,13 @@ interface ScraperContextType {
   postViewOptions: PostViewOptions
 }
 
+/** Module-level so `useFollowJob`'s callbacks keep one identity across renders. */
+const FOLLOW_API = {
+  bulkFollowChannels: api.bulkFollowChannels,
+  getFollowJobStatus: api.getFollowJobStatus,
+  streamFollowJobEvents,
+}
+
 const ScraperContext = createContext<ScraperContextType | undefined>(undefined)
 
 export const ScraperProvider: React.FC<{ children: React.ReactNode }> = ({
@@ -233,6 +245,7 @@ export const ScraperProvider: React.FC<{ children: React.ReactNode }> = ({
     invalidatePostViews,
     waitSyncJob,
     setScrapingChannels,
+    followApi: FOLLOW_API,
   })
 
   const { getScopedPosts, getPromptPostsInput, getScopeSubmission } =

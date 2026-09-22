@@ -76,6 +76,13 @@ about watching it. Following is what makes a Channel's Posts visible to an
 Account; unfollowing removes the relation and nothing else.
 _Avoid_: subscription, watch, membership
 
+**First sync**:
+The sync queued for a Channel when an Account creates a Follow on it, whether
+or not another Account already follows it.
+It comes after the Follow and is not part of it: the Follow is complete when
+the relation exists, whether or not the first sync has finished.
+_Avoid_: initial sync, backfill
+
 **Post**:
 One message scraped from a Channel.
 _Avoid_: message, item, entry
