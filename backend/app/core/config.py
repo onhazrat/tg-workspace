@@ -372,26 +372,18 @@ class Settings(BaseSettings):
     # when Telegram pushes back.
     DISCOVER_PROBE_BATCH_SIZE: int = 600
 
-    # The harvest sweep (ticket 04, simplified by ticket 05)
+    # The harvest sweep (ticket 04; reads References since DDS-02)
     #
-    # How many Posts one tick may read. The cost bound: once the corpus is
-    # harvested almost every Post references only known handles, so a tick
-    # chasing new ones would otherwise walk the whole table before giving up.
-    #
-    # It is the sweep's only rate dial. How many *new* handles a tick may add is
-    # not a setting — it is whatever is left under the ceiling below, so the two
-    # numbers cannot be set into disagreement. As separate settings they were:
-    # staging ran a batch of 1000 against a ceiling of 600 that is checked
-    # before the walk, so a tick starting at 599 pending ended at 1599.
-    #
-    # Raised 500 -> 20000. This is the value staging has actually run since the
-    # first-pass drain (`DIRECTORY_HARVEST_SCAN_LIMIT=20000` in
-    # `deploy-staging.yml`), so the default now matches the only deployment
-    # that has exercised it at size. It costs nothing on a caught-up corpus —
-    # the walk stops at the ceiling below whatever this says — and on a fresh
-    # one it is the difference between the first pass taking a day and taking
-    # a month.
-    DIRECTORY_HARVEST_SCAN_LIMIT: int = 20000
+    # Whether a handle only a Directory sample names is queued. Samples come
+    # from Channels nobody follows, so this is the crawl past one hop from the
+    # follows: a queued handle is probed, its samples name more handles, the
+    # next tick queues those. Off queues exactly what followed Posts name,
+    # which is what the harvest did before DDS-02, so it is the rollback if
+    # probe traffic starts costing sync (watch `tg_directory_probe_usage` and
+    # the soft-block rate). The rate stays bounded either way by the backlog
+    # ceiling below, the probe lane running only on spare capacity, and the
+    # adaptive per-proxy wait.
+    DIRECTORY_FOLLOW_SAMPLE_REFERENCES: bool = True
 
     # Pending handles at which the harvest stops adding more.
     #
@@ -430,10 +422,9 @@ class Settings(BaseSettings):
     # grace exists for.
     POST_REFERENCE_CHAT_ID_GRACE_DAYS: int = 7
 
-    # How many Posts one reference-extraction walk reads. Separate from
-    # `DIRECTORY_HARVEST_SCAN_LIMIT` because the two walks answer to different
-    # things: that one is bounded by how deep the probe queue may get, and this
-    # one writes rows nothing drains.
+    # How many Posts one reference-extraction walk reads. Not bounded by the
+    # probe backlog the way the harvest's enqueue is: this walk writes rows
+    # nothing drains, so there is no queue downstream of it to overfill.
     #
     # Raised 500 -> 10000, and that asymmetry is exactly why it is the safe one
     # to raise: there is no queue downstream to overfill, so a bigger page is

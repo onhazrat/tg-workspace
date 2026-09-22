@@ -36,7 +36,7 @@ from app.services.post_filters import (
 from app.services.post_links_parser import channel_from_telegram_url
 from app.services.posts import random_cap_order
 from app.services.telegram_web import _all_web_domains, is_channel_handle
-from app.services.tenancy import scoped_select, unscoped_select
+from app.services.tenancy import scoped_select
 
 SignalKind = Literal["forward", "mention", "link"]
 SIGNAL_KINDS: tuple[SignalKind, ...] = ("forward", "mention", "link")
@@ -342,92 +342,3 @@ def _to_candidate(
             "timestamp": reference.timestamp,
         },
     }
-
-
-@dataclass(frozen=True)
-class HarvestPage:
-    """One page of the harvest walk (ticket 05).
-
-    `post_ids` is what the page examined, and the caller marks exactly those
-    rows harvested. Empty means there is nothing left to do.
-    """
-
-    handles: list[str]
-    post_ids: list[uuid.UUID]
-
-
-#: Why the harvest walk does not go through `scoped_select`.
-#:
-#: The sweep is deployment-level work, like the corpus half of retention: the
-#: Directory it feeds is `Scope.CORPUS`, so there is no account asking the
-#: question and no response for a scope to narrow. Scoping it per account would
-#: also be the *unfair* implementation, since the walk would then have to pick
-#: whose corpus to read first — the ordering the sweep deliberately does not
-#: make. Fairness lives on the queue instead: every harvested handle carries one
-#: priority, so the drain order falls through to the handle itself.
-HARVEST_SCOPE_REASON = (
-    "The harvest sweep reads the whole corpus because the Directory it feeds "
-    "is corpus-wide: nobody is asking, so there is no account to scope to. "
-    "Reading it per account would make the walk order a choice about whose "
-    "handles get probed first, which is the starvation the one-priority "
-    "enqueue exists to avoid. See `jobs/directory_harvest.py`."
-)
-
-
-def harvest_page(session: Session, *, limit: int) -> HarvestPage:
-    """Handles referenced by the next `limit` Posts the harvest has not seen.
-
-    The read half of the harvest sweep. It reuses `post_references`, so a
-    forward, a mention, a masked href and a cross-channel reply are found here
-    exactly as a Discovery report finds them — the sweep changes who asks, not
-    what counts as a reference.
-
-    **`WHERE NOT harvested`, and that is the whole walk (ticket 05).** Ticket 04
-    kept two `Post.timestamp` marks: a tail for new Posts and a wrapping
-    backfill for the history below it, because a *backward* sync stores Posts
-    with old timestamps that land beneath a mark which has already passed them.
-    A flag on the row answers that by construction — an unprocessed Post is
-    unprocessed whenever it arrived — so the second mark, the wrap, the `until`
-    bound and the re-lap they cost all go away.
-
-    It also removes a hazard rather than shrinking one. Any cursor over a
-    Python-assigned stamp can be outrun by commit order: a writer takes a lower
-    position and commits after the walk has passed it, and the row is skipped
-    with nothing to notice. A row that commits late is simply still
-    `harvested = false`.
-
-    `translation_batch` and `embeddings` pick their next batch the same way,
-    anti-joining the companion table that holds their output. The harvest
-    produces no per-post output, so the same idea is a column.
-
-    **Newest first**, served by the partial index `(timestamp DESC) WHERE NOT
-    harvested`. That index covers exactly the rows still to do, so it shrinks
-    toward empty as the corpus is processed instead of growing with it. The
-    ordering is what makes a new Post reach the Directory on the next tick even
-    with a large backlog outstanding — the property ticket 04 needed a whole
-    second leg, a second budget and a wrap to arrange.
-
-    Handles are returned in the order the Posts referenced them, deduplicated.
-    The order is *not* a ranking and the caller must not treat it as one: it is
-    the order the walk happened to reach them, which is a fact about which
-    Channels were being synced, not about which handles are worth probing. See
-    `channel_directory.HARVEST_PRIORITY`.
-    """
-    if limit <= 0:
-        return HarvestPage(handles=[], post_ids=[])
-
-    statement = unscoped_select(
-        select(Post)
-        .where(col(Post.harvested) == False)  # noqa: E712
-        .order_by(col(Post.timestamp).desc())
-        .limit(limit),
-        reason=HARVEST_SCOPE_REASON,
-    )
-    posts = list(session.exec(statement).all())
-
-    found: dict[str, None] = {}
-    for post in posts:
-        for handle in post_references(post):
-            found.setdefault(handle, None)
-
-    return HarvestPage(handles=list(found), post_ids=[post.id for post in posts])

@@ -41,6 +41,7 @@ from typing import Any, cast
 from sqlalchemy import func, or_, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlmodel import Session, col, select
+from sqlmodel.sql.expression import SelectOfScalar
 
 from app.core.config import settings
 from app.models_tg import Channel, DirectoryEntry, DirectorySample, Post, PostReference
@@ -49,6 +50,7 @@ from app.services.discover import (
     extract_mentions,
     normalize_handle,
 )
+from app.services.follows import followed_channel_names
 from app.services.settings_registry import REFERENCE_GRAPH_KEY
 from app.services.settings_store import get_global_setting
 from app.services.telegram_web import extract_channel_post_from_href, is_channel_handle
@@ -374,6 +376,69 @@ def extract_sample_references(
     )
 
 
+def unknown_targets_statement(
+    *, limit: int, followed: set[str], followed_sources_only: bool
+) -> SelectOfScalar[str]:
+    """Reference targets with no Directory entry that nobody follows (DDS-02).
+
+    What the harvest sweep queues. The graph already holds every handle a
+    stored Post names, and a Directory sample names more, so reading it here
+    replaced a second walk over the Posts that re-extracted the same handles.
+
+    `followed_sources_only` narrows the sources to followed Channels, which is
+    exactly the set the old Post walk could see: the rollback for the crawl
+    past one hop. Followed names arrive normalised, the form both handle
+    columns are stored in.
+
+    **Newest Reference first**, the order the Post walk before it had. It is
+    what lets a handle a Post named a moment ago reach the queue on the next
+    tick while a backlog larger than the budget is still outstanding; ordered
+    by handle, a target late in the alphabet would lose every tick to the
+    samples arriving ahead of it. The handle breaks ties so the order is total.
+
+    **An anti-join computed every tick, with no cursor.** `PostReference.id` is
+    a random UUID, so there is no position to resume from, and a caught-up
+    tick reads the whole table to find nothing. Measured on staging on
+    2026-09-23: 19 ms over 79k References (21 MB), every 300 s.
+    ponytail: the scan grows linearly with the graph; add a cursor column
+    once `pg_stat_statements` shows the tick is costly.
+    """
+    on_map = (
+        select(DirectoryEntry.handle)
+        .where(col(DirectoryEntry.handle) == col(PostReference.target_handle))
+        .exists()
+    )
+    statement = (
+        select(col(PostReference.target_handle))
+        .where(~on_map, col(PostReference.target_handle).not_in(followed))
+        .group_by(col(PostReference.target_handle))
+        .order_by(
+            func.max(PostReference.timestamp).desc(),
+            col(PostReference.target_handle),
+        )
+        .limit(limit)
+    )
+    if followed_sources_only:
+        statement = statement.where(col(PostReference.source_channel).in_(followed))
+    return unscoped_select(statement, reason=_SCOPE_REASON)
+
+
+def unknown_targets(
+    session: Session, *, limit: int, followed_sources_only: bool
+) -> list[str]:
+    """Run `unknown_targets_statement` against the Channels followed right now."""
+    followed = {normalize_handle(name) for name in followed_channel_names(session)}
+    return list(
+        session.exec(
+            unknown_targets_statement(
+                limit=limit,
+                followed=followed,
+                followed_sources_only=followed_sources_only,
+            )
+        ).all()
+    )
+
+
 def graph_epoch_ms(session: Session) -> int:
     """When the reference graph started existing.
 
@@ -578,9 +643,9 @@ def _deferring_channels(session: Session) -> int:
 def mark_references_extracted(session: Session, post_ids: list[uuid.UUID]) -> None:
     """Record that these Posts' References have been extracted.
 
-    A bulk `UPDATE`, and `synchronize_session=False`, for `posts.mark_harvested`'s
-    reason: `auto` resolves to `evaluate`, which walks the whole identity map
-    per call, so a catch-up pass would be quadratic in the scan limit.
+    A bulk `UPDATE`, and `synchronize_session=False`, because `auto` resolves
+    to `evaluate`, which walks the whole identity map per call, so a catch-up
+    pass would be quadratic in the scan limit.
 
     **Not committed here.** See `write_references`.
     """
