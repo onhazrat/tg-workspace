@@ -1,52 +1,56 @@
-"""Handles enter the Directory on their own (ticket 04, IDEA-011 D16).
+"""Handles enter the Directory on their own (ticket 04, IDEA-011 D16; DDS-02).
 
-Before this, the deployment only ever probed handles somebody's Discovery report
-had named. The harvest sweep walks stored Posts instead, so a forward, a mention
-or a `t.me` link reaches the map without anybody generating a report to drive
-it — and the Operator can see what that costs.
+Before ticket 04 the deployment only ever probed handles somebody's Discovery
+report had named. The harvest sweep fills the map without anybody generating a
+report to drive it, and the Operator can see what that costs.
 
-Driven through the seams the spec already established: `discover.harvest_page`
-for what a walk over Posts finds, `channel_directory.enqueue_handles` for what
-lands in the queue, and `run_directory_harvest_sweep` for the tick that joins
-them. Everything is observed by what the queue hands out next and what the
-tally holds, never by a column layout.
+Since DDS-02 the sweep reads **References** rather than walking Posts. The
+graph already holds every handle a stored Post names, and a Directory sample
+names more, so a handle an unfollowed Channel cites reaches the queue too and
+the crawl is recursive.
+
+Driven through one seam, the tick (`run_directory_harvest_sweep`). Inputs go in
+through the real write paths only: Posts as rows the extraction walk reads,
+samples through `record_probe_result`. No test writes a Reference by hand, so
+extraction and enqueue are exercised together, the way production runs them.
+Everything is observed by what the queue hands out next and what the tally
+holds, never by a column layout.
 
 ## The properties that are the ticket
 
-* A handle referenced by a Post is queued, and nobody had to ask for it.
-* A handle somebody follows is **not** — sync already keeps that entry current
-  for free (ticket 03's `record_sync_metadata`), so probing it here is the same
-  page fetched twice by two routes.
-* One Account's corpus does not starve another's out of the queue. The
-  mechanism is `HARVEST_PRIORITY`: one number for every harvested handle, so
-  the drain order falls through to the handle itself and cannot prefer whoever
-  the cursor happened to be walking.
-* The batch counts **new** handles, because a batch spent on handles already on
-  the map throttles nothing.
-* Probe-lane Requests are counted at deployment level and no account's ledger
-  is touched.
+* A handle a stored Post references is queued, and nobody had to ask for it.
+* So is a handle a Directory sample references, unless the switch is off, and
+  then the queue is exactly what the followed Posts alone produce.
+* A handle somebody follows is **not**: sync already keeps that entry current
+  for free (ticket 03's `record_sync_metadata`).
+* One Account's corpus does not starve another's out of the queue, because
+  every queued handle carries `HARVEST_PRIORITY` and the drain order falls
+  through to the handle itself.
+* The batch counts **new** handles, and a handle the ceiling turned away is
+  queued by a later tick rather than lost.
 
 ## Watched to fail
 
 Per `CLAUDE.md`, each assertion was mutation-tested:
 
-* drop the `followed` filter → the followed-handle test fails
-* rank harvested handles by discovery order instead of `HARVEST_PRIORITY` →
+* drop the `followed` filter → the followed-handle tests fail
+* ignore the switch → the switch-off test fails
+* drop the Directory anti-join → the budget test fails (`enqueue_handles`
+  already skips known rows, so only the `LIMIT` notices)
+* rank queued handles by discovery order instead of `HARVEST_PRIORITY` →
   the fairness test fails, and so does the one asserting a report's candidates
   still drain first
-* count scanned Posts instead of new handles against the batch → the
-  known-handles test fails
-* let the sweep skip its own commit when nothing was queued → the
-  no-progress test fails
-* charge the probe meter to `quota.charge_requests` → the ledger test fails
-* walk ascending instead of newest-first → the prompt-Post test fails
-* mark the Posts in a transaction of their own → the atomicity test fails
+* stop the upsert clearing `references_extracted` on an edit → the edit test
+  fails
+* order by handle instead of newest Reference → the prompt-Post test fails
 """
 
 from __future__ import annotations
 
 import asyncio
+import itertools
 from datetime import timedelta
+from typing import Any
 from unittest.mock import patch
 
 import pytest
@@ -62,7 +66,7 @@ from app.services.channel_directory import (
     HARVEST_PRIORITY,
     dequeue_handles,
     enqueue_handles,
-    known_handles,
+    record_probe_result,
 )
 from app.services.directory_probe_usage import (
     record_probe_requests,
@@ -70,10 +74,14 @@ from app.services.directory_probe_usage import (
     requests_since,
     today_utc,
 )
-from app.services.discover import harvest_page
-from app.services.posts import bulk_upsert_posts_impl, mark_harvested
+from app.services.posts import bulk_upsert_posts_impl
 from tests.utils.setting_groups import add_test_channel
 from tests.utils.user import create_random_user
+
+#: A Reference is keyed by its source's chat id (ADR-019 Decision 2), so every
+#: followed Channel a test seeds needs one of its own, or its Posts are deferred
+#: rather than extracted and nothing reaches the queue.
+_chat_ids = itertools.count(9_100_000)
 
 
 @pytest.fixture
@@ -98,6 +106,10 @@ def other_user(session: Session) -> User:
     session.commit()
 
 
+def _follow(session: Session, name: str, user: User) -> None:
+    add_test_channel(session, name, user_id=user.id, telegram_chat_id=next(_chat_ids))
+
+
 def _post(
     session: Session,
     channel_name: str,
@@ -119,6 +131,26 @@ def _post(
     session.commit()
 
 
+def _probe(handle: str, *samples: dict[str, Any]) -> None:
+    """A probe of an unfollowed Channel whose preview page carried `samples`."""
+    with Session(engine) as fresh:
+        record_probe_result(
+            fresh,
+            handle,
+            {
+                "isTelegramPage": True,
+                "kind": "channel",
+                "telegramChatId": next(_chat_ids),
+                "latestId": len(samples),
+                "samples": list(samples),
+            },
+        )
+
+
+def _sample(post_id: int, text: str) -> dict[str, Any]:
+    return {"id": post_id, "text": text, "timestamp": post_id * 10}
+
+
 def _sweep() -> dict:
     return asyncio.run(run_directory_harvest_sweep())
 
@@ -128,30 +160,43 @@ def _entries() -> dict[str, DirectoryEntry]:
         return {row.handle: row for row in session.exec(select(DirectoryEntry)).all()}
 
 
-def _unharvested() -> int:
-    """Posts the sweep has not looked at — the whole of its progress state."""
+def _pending_handles() -> set[str]:
+    return {h for h, row in _entries().items() if row.status == "unknown"}
+
+
+def _clear_queue() -> None:
+    with Session(engine) as fresh:
+        for row in fresh.exec(
+            select(DirectoryEntry).where(col(DirectoryEntry.status) == "unknown")
+        ).all():
+            fresh.delete(row)
+        fresh.commit()
+
+
+def _unextracted() -> int:
     with Session(engine) as session:
         return len(
             session.exec(
-                select(Post).where(col(Post.harvested) == False)  # noqa: E712
+                select(Post).where(col(Post.references_extracted) == False)  # noqa: E712
             ).all()
         )
 
 
 # --------------------------------------------------------------------------
-# The walk
+# What reaches the queue
 # --------------------------------------------------------------------------
 
 
 def test_a_forward_a_mention_and_a_link_all_reach_the_directory(
     session: Session, user: User
 ) -> None:
-    """The three signal kinds a report counts are the three the sweep harvests.
+    """The three signal kinds a report counts are the three the sweep queues.
 
-    `post_references` is reused rather than reimplemented precisely so that this
-    cannot drift: a forward is a forward on both sides.
+    The graph's extractor is a sibling of `discover.post_references`, and
+    `test_post_references.py` asserts the two agree, so a forward is a forward
+    on both sides.
     """
-    add_test_channel(session, "t04-src", user_id=user.id)
+    _follow(session, "t04-src", user)
     _post(session, "t04-src", 1, timestamp=10, forwarded_from="forwardedone")
     _post(session, "t04-src", 2, timestamp=20, text="see @mentionedone for more")
     _post(session, "t04-src", 3, timestamp=30, text="https://t.me/linkedonehere")
@@ -163,12 +208,8 @@ def test_a_forward_a_mention_and_a_link_all_reach_the_directory(
 
 
 def test_nobody_had_to_ask(session: Session, user: User) -> None:
-    """No report, no candidate list, no request — the tick is the whole trigger.
-
-    This is the user story the ticket exists for: the map fills in without an
-    Account generating scans to drive it.
-    """
-    add_test_channel(session, "t04-quiet", user_id=user.id)
+    """No report, no candidate list, no request: the tick is the whole trigger."""
+    _follow(session, "t04-quiet", user)
     _post(session, "t04-quiet", 1, timestamp=10, forwarded_from="unaskedfor")
 
     _sweep()
@@ -177,14 +218,86 @@ def test_nobody_had_to_ask(session: Session, user: User) -> None:
         assert dequeue_handles(fresh, limit=10) == ["unaskedfor"]
 
 
-def test_a_channel_never_harvests_itself(session: Session, user: User) -> None:
-    """`post_references` drops self-references, and the sweep inherits that."""
-    add_test_channel(session, "t04-selfref", user_id=user.id)
+def test_a_channel_never_queues_itself(session: Session, user: User) -> None:
+    """The extractor drops self-references, and the sweep inherits that."""
+    _follow(session, "t04-selfref", user)
     _post(session, "t04-selfref", 1, timestamp=10, text="we are @t04-selfref")
 
     _sweep()
 
     assert "t04-selfref" not in _entries()
+
+
+def test_a_post_a_backward_sync_stored_is_reached(session: Session, user: User) -> None:
+    """An old Post stored after newer ones still reaches the queue.
+
+    A backward sync stores Posts with old timestamps below everything already
+    extracted. The References table has no order to fall behind: whatever the
+    extraction walk writes, the next tick reads.
+    """
+    _follow(session, "t05-backward", user)
+    _post(session, "t05-backward", 2, timestamp=200, forwarded_from="recentref")
+    _sweep()
+    assert "recentref" in _entries()
+
+    _post(session, "t05-backward", 1, timestamp=100, forwarded_from="historicref")
+    _sweep()
+    assert "historicref" in _entries()
+
+
+# --------------------------------------------------------------------------
+# Samples: the crawl past one hop (DDS-02)
+# --------------------------------------------------------------------------
+
+
+def test_a_handle_a_sample_names_is_queued() -> None:
+    """The source nobody follows. The probe already fetched this page.
+
+    Before DDS-02 a sample's References were written to the graph and its
+    handles went nowhere, so the Directory stopped one hop from the follows.
+    """
+    _probe("t02-unfollowed", _sample(1, "more at @deepfind"))
+
+    _sweep()
+
+    assert "deepfind" in _pending_handles()
+
+
+def test_the_crawl_is_recursive() -> None:
+    """A queued handle's own probe feeds the next tick, with nobody asking."""
+    _probe("t02-first", _sample(1, "try @hopone"))
+    _sweep()
+    assert "hopone" in _pending_handles()
+
+    _probe("hopone", _sample(1, "and @hoptwo"))
+    _sweep()
+    assert "hoptwo" in _pending_handles()
+
+
+def test_a_refresh_brings_in_what_the_channel_cited_since() -> None:
+    """Refresh re-probes a live entry, and its new samples feed the queue."""
+    _probe("t02-refreshed", _sample(1, "old news from @citedbefore"))
+    _sweep()
+
+    _probe("t02-refreshed", _sample(2, "new from @citedsince"))
+    _sweep()
+
+    assert {"citedbefore", "citedsince"} <= set(_entries())
+
+
+def test_with_the_switch_off_only_followed_posts_feed_the_queue(
+    session: Session, user: User, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Off is a true rollback: exactly what the Post walk used to queue."""
+    monkeypatch.setattr(settings, "DIRECTORY_FOLLOW_SAMPLE_REFERENCES", False)
+
+    _follow(session, "t02-read", user)
+    _post(session, "t02-read", 1, timestamp=10, forwarded_from="fromthefeed")
+    _probe("t02-stranger", _sample(1, "see @fromasample"))
+
+    _sweep()
+
+    assert _pending_handles() == {"fromthefeed"}
 
 
 # --------------------------------------------------------------------------
@@ -196,12 +309,11 @@ def test_a_followed_handle_is_skipped(session: Session, user: User) -> None:
     """Sync already keeps a followed Channel's entry current for nothing.
 
     `record_sync_metadata` (ticket 03) writes the Directory from the metadata
-    every sync page already carries, so harvesting a followed handle here is the
-    same page fetched twice by two routes — and the sync route is both cheaper
-    and more frequent.
+    every sync page already carries, so queueing a followed handle here is the
+    same page fetched twice by two routes.
     """
-    add_test_channel(session, "t04-watcher", user_id=user.id)
-    add_test_channel(session, "t04-followed", user_id=user.id)
+    _follow(session, "t04-watcher", user)
+    _follow(session, "t04-followed", user)
     _post(session, "t04-watcher", 1, timestamp=10, forwarded_from="t04-followed")
     _post(session, "t04-watcher", 2, timestamp=20, forwarded_from="t04-stranger")
 
@@ -212,17 +324,24 @@ def test_a_followed_handle_is_skipped(session: Session, user: User) -> None:
     assert "t04-followed" not in entries
 
 
+def test_a_followed_handle_a_sample_names_is_skipped(
+    session: Session, user: User
+) -> None:
+    """The follow filter applies to the sample source too."""
+    _follow(session, "t02-mine", user)
+    _probe("t02-elsewhere", _sample(1, "subscribe to @t02-mine"))
+
+    _sweep()
+
+    assert "t02-mine" not in _entries()
+
+
 def test_a_second_account_following_it_is_enough(
     session: Session, user: User, other_user: User
 ) -> None:
-    """ "Somebody follows it" is deployment-wide, not "the walker follows it".
-
-    The Directory is corpus-wide and so is the sync that keeps it current: it
-    does not matter *whose* follow causes the Channel to be synced, only that
-    one exists.
-    """
-    add_test_channel(session, "t04-mine", user_id=user.id)
-    add_test_channel(session, "t04-theirs", user_id=other_user.id)
+    """ "Somebody follows it" is deployment-wide, not "the source's follower"."""
+    _follow(session, "t04-mine", user)
+    _follow(session, "t04-theirs", other_user)
     _post(session, "t04-mine", 1, timestamp=10, forwarded_from="t04-theirs")
 
     _sweep()
@@ -230,19 +349,19 @@ def test_a_second_account_following_it_is_enough(
     assert "t04-theirs" not in _entries()
 
 
-def test_a_handle_already_on_the_map_is_not_harvested_again(
+def test_a_handle_already_on_the_map_is_not_queued_again(
     session: Session, user: User
 ) -> None:
-    """Any row, whatever the verdict — pending is queued and conclusive is answered.
+    """Any row, whatever the verdict: pending is queued and conclusive is answered.
 
-    And the batch is spent on *new* handles for this reason: a stretch of Posts
-    referencing only known handles is not work, so letting it exhaust the batch
+    And the batch is spent on *new* handles for this reason: a graph full of
+    References to known handles is not work, so letting them exhaust the batch
     would throttle nothing while looking like it throttled everything.
     """
     with Session(engine) as fresh:
         enqueue_handles(fresh, ["alreadyknown"])
 
-    add_test_channel(session, "t04-repeat", user_id=user.id)
+    _follow(session, "t04-repeat", user)
     _post(session, "t04-repeat", 1, timestamp=10, forwarded_from="alreadyknown")
     _post(session, "t04-repeat", 2, timestamp=20, forwarded_from="brandnewone")
 
@@ -252,63 +371,23 @@ def test_a_handle_already_on_the_map_is_not_harvested_again(
     assert _entries()["alreadyknown"].priority != HARVEST_PRIORITY
 
 
-def test_the_posts_beyond_the_budget_are_reached_by_the_next_tick(
-    session: Session, user: User, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """Room under the ceiling stops the walk; it does not end it.
-
-    The Posts a tick did not reach are still unharvested, so they are simply
-    what the next tick with room reads first — no mark to leave behind and
-    nothing to re-lap.
-    """
-    monkeypatch.setattr(settings, "DIRECTORY_HARVEST_BACKLOG_CEILING", 50)
-
-    add_test_channel(session, "t04-many", user_id=user.id)
-    for index in range(150):
-        _post(
-            session,
-            "t04-many",
-            index + 1,
-            timestamp=(index + 1) * 10,
-            forwarded_from=f"harvested{index:03d}",
-        )
-
-    first = _sweep()
-    # One page, because 100 new handles is already past a budget of 50.
-    assert first["scanned"] == 100
-    assert _unharvested() == 50
-
-    # Clear the queue so the next tick has room again.
-    with Session(engine) as fresh:
-        for row in fresh.exec(select(DirectoryEntry)).all():
-            fresh.delete(row)
-        fresh.commit()
-
-    second = _sweep()
-    assert second["scanned"] == 50
-    assert _unharvested() == 0
-
-
 # --------------------------------------------------------------------------
-# Fairness
+# Fairness and order
 # --------------------------------------------------------------------------
 
 
 def test_one_accounts_corpus_does_not_starve_another_account(
-    session: Session, user: User, other_user: User, monkeypatch: pytest.MonkeyPatch
+    session: Session, user: User, other_user: User
 ) -> None:
-    """Every harvested handle carries one priority, so the queue orders by handle.
+    """Every queued handle carries one priority, so the queue orders by handle.
 
-    The walk is a single cursor over the corpus and knows nothing about who
-    follows what, so the order it *finds* handles in is a fact about which
-    Channels were being synced. Ranking by that order would hand the front of
-    the queue to whichever account's Posts the cursor happened to be walking.
-    At one priority `dequeue_handles` falls through to its `handle` tiebreak,
-    which cannot prefer an account.
+    Ranking by the order the sweep found handles in would hand the front of the
+    queue to whichever account's Posts were extracted first. At one priority
+    `dequeue_handles` falls through to its `handle` tiebreak, which cannot
+    prefer an account.
     """
-    add_test_channel(session, "t04-loud", user_id=user.id)
-    add_test_channel(session, "t04-modest", user_id=other_user.id)
-    # The loud account's Posts are walked first and there are more of them.
+    _follow(session, "t04-loud", user)
+    _follow(session, "t04-modest", other_user)
     for index in range(4):
         _post(
             session,
@@ -324,20 +403,14 @@ def test_one_accounts_corpus_does_not_starve_another_account(
     entries = _entries()
     assert {row.priority for row in entries.values()} == {HARVEST_PRIORITY}
     with Session(engine) as fresh:
-        # Alphabetical, so the account that was walked last is served first.
         assert dequeue_handles(fresh, limit=1) == ["amodest"]
 
 
 def test_a_reports_candidates_still_drain_before_harvested_handles(
     session: Session, user: User
 ) -> None:
-    """`HARVEST_PRIORITY` sits behind a rank and ahead of a refresh.
-
-    A handle somebody's report named is worth more than one nobody asked about;
-    one nobody asked about is still an answer we have never had, which beats
-    re-fetching an answer we hold.
-    """
-    add_test_channel(session, "t04-order", user_id=user.id)
+    """`HARVEST_PRIORITY` sits behind a rank and ahead of a refresh."""
+    _follow(session, "t04-order", user)
     _post(session, "t04-order", 1, timestamp=10, forwarded_from="aharvested")
     _sweep()
 
@@ -347,181 +420,22 @@ def test_a_reports_candidates_still_drain_before_harvested_handles(
 
 
 # --------------------------------------------------------------------------
-# The flag
+# The ceiling
 # --------------------------------------------------------------------------
 
 
-def test_a_walked_post_is_marked_and_not_walked_again(
-    session: Session, user: User, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """The mark is the whole progress mechanism (ticket 05).
-
-    Ticket 04 kept two `Post.timestamp` cursors in a settings row. A flag on the
-    row it describes cannot disagree with the corpus, cannot be outrun by a
-    commit landing behind it, and cannot skip a group of Posts sharing a value.
-    """
-    monkeypatch.setattr(settings, "DIRECTORY_HARVEST_SCAN_LIMIT", 1)
-
-    add_test_channel(session, "t05-mark", user_id=user.id)
-    _post(session, "t05-mark", 1, timestamp=20, forwarded_from="newerref")
-    _post(session, "t05-mark", 2, timestamp=10, forwarded_from="olderref")
-
-    first = _sweep()
-    assert first["scanned"] == 1
-    assert set(_entries()) == {"newerref"}
-    assert _unharvested() == 1
-
-    second = _sweep()
-    assert second["scanned"] == 1
-    assert set(_entries()) == {"newerref", "olderref"}
-    assert _unharvested() == 0
-
-
-def test_a_post_a_backward_sync_stored_is_reached(session: Session, user: User) -> None:
-    """The property that cost ticket 04 a second mark, a wrap and a budget.
-
-    A backward sync stores Posts with *old* timestamps, which land below a
-    cursor that has already passed them — so the tail leg by construction never
-    saw them and a wrapping backfill leg had to exist. Unharvested is
-    unharvested whenever it arrived, so one query reaches it.
-    """
-    add_test_channel(session, "t05-backward", user_id=user.id)
-    _post(session, "t05-backward", 2, timestamp=200, forwarded_from="recentref")
-
-    _sweep()
-    assert "recentref" in _entries()
-
-    # A backward sync now stores an older Post, below everything already walked.
-    _post(session, "t05-backward", 1, timestamp=100, forwarded_from="historicref")
-
-    _sweep()
-    assert "historicref" in _entries()
-
-
-def test_a_new_post_is_harvested_before_an_old_backlog(
-    session: Session, user: User, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """Newest first, which is what makes a new reference prompt.
-
-    This is the tail leg's property without the tail leg. With a backlog still
-    outstanding and a budget that cannot clear it, a Post stored a moment ago
-    must still be the one the next tick reads.
-    """
-    monkeypatch.setattr(settings, "DIRECTORY_HARVEST_SCAN_LIMIT", 1)
-
-    add_test_channel(session, "t05-prompt", user_id=user.id)
-    for index in range(4):
-        _post(
-            session,
-            "t05-prompt",
-            index + 1,
-            timestamp=(index + 1) * 10,
-            forwarded_from=f"backlogref{index}",
-        )
-
-    _sweep()
-    assert _unharvested() == 3
-
-    _post(session, "t05-prompt", 99, timestamp=9999, forwarded_from="justarrived")
-
-    result = _sweep()
-    assert result["queued"] == 1
-    assert "justarrived" in _entries()
-
-
-def test_a_caught_up_tick_reads_no_posts(session: Session, user: User) -> None:
-    """Steady state has to be free, or the job is the "pays its cost every tick,
-    forever" shape `CLAUDE.md` names.
-
-    Ticket 04's backfill leg re-lapped history at 100 Posts a tick for the life
-    of the install. Here the index the tick scans is empty, not merely small.
-    """
-    add_test_channel(session, "t05-settled", user_id=user.id)
-    for index in range(5):
-        _post(session, "t05-settled", index + 1, timestamp=(index + 1) * 10)
-
-    _sweep()
-    assert _sweep()["scanned"] == 0
-    assert _unharvested() == 0
-
-
-def test_a_tick_that_finds_nothing_still_records_its_progress(
-    session: Session, user: User
-) -> None:
-    """Otherwise the sweep re-reads the same stretch on every tick for ever.
-
-    `enqueue_handles` commits, but returns early without doing so when handed
-    nothing — so a tick whose Posts referenced nothing new depends on the
-    sweep's own commit to keep its marks.
-    """
-    add_test_channel(session, "t05-silent", user_id=user.id)
-    _post(session, "t05-silent", 1, timestamp=42)
-
-    result = _sweep()
-
-    assert result["queued"] == 0
-    assert _unharvested() == 0
-
-
-def test_a_post_with_no_timestamp_is_still_walked(session: Session, user: User) -> None:
-    """`Post.timestamp` defaults to 0 for a row stored with no usable date.
-
-    Ticket 04's exclusive cursor needed a sentinel of -1 so those rows were not
-    invisible for ever. A flag has no sentinel to get wrong, but the row still
-    has to come back — sorted last by `timestamp DESC`, not dropped.
-    """
-    add_test_channel(session, "t05-zero", user_id=user.id)
-    _post(session, "t05-zero", 1, timestamp=0, forwarded_from="datelessref")
-
-    _sweep()
-    assert "datelessref" in _entries()
-
-
-def test_the_scan_limit_bounds_a_tick_that_finds_nothing(
-    session: Session, user: User, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """The cost bound, which has to exist separately from the ceiling.
-
-    Once the corpus is harvested almost every Post references only known
-    handles, so a tick chasing new ones would walk the whole table before
-    giving up. This is the "a scheduled job pays its cost every tick, forever"
-    rule made into a number.
-    """
-    monkeypatch.setattr(settings, "DIRECTORY_HARVEST_SCAN_LIMIT", 3)
-
-    add_test_channel(session, "t05-boring", user_id=user.id)
-    for index in range(10):
-        _post(session, "t05-boring", index + 1, timestamp=(index + 1) * 10)
-
-    result = _sweep()
-
-    assert result["queued"] == 0
-    assert result["scanned"] <= 3
-
-
 @pytest.mark.parametrize(
-    ("already_pending", "expected_scanned"),
-    [(0, 200), (100, 100)],
+    ("already_pending", "expected_queued"),
+    [(0, 150), (100, 50)],
 )
 def test_the_new_handle_budget_is_what_is_left_under_the_ceiling(
     session: Session,
     user: User,
     monkeypatch: pytest.MonkeyPatch,
     already_pending: int,
-    expected_scanned: int,
+    expected_queued: int,
 ) -> None:
-    """Derived from the ceiling, not a second setting that can disagree with it.
-
-    As `DIRECTORY_HARVEST_BATCH_SIZE` it did disagree: staging ran 1000 against
-    a ceiling of 600 that is checked *before* the walk, so a tick starting at
-    599 pending ended at 1599 — overshooting by 2.6x the bound that exists to
-    stop ticket 03's refresh starving.
-
-    Observed by how far the walk gets. At a ceiling of 150 with nothing pending
-    the budget is 150, so the walk needs a second page; with 100 already pending
-    it is 50 and the first page is already past it. A budget that ignored
-    `pending` would read the same distance both times.
-    """
+    """Derived from the ceiling, not a second setting that can disagree with it."""
     monkeypatch.setattr(settings, "DIRECTORY_HARVEST_BACKLOG_CEILING", 150)
 
     if already_pending:
@@ -530,7 +444,7 @@ def test_the_new_handle_budget_is_what_is_left_under_the_ceiling(
                 fresh, [f"prefilled{i:03d}" for i in range(already_pending)]
             )
 
-    add_test_channel(session, "t05-derived", user_id=user.id)
+    _follow(session, "t05-derived", user)
     for index in range(250):
         _post(
             session,
@@ -540,19 +454,125 @@ def test_the_new_handle_budget_is_what_is_left_under_the_ceiling(
             forwarded_from=f"budgeted{index:03d}",
         )
 
-    assert _sweep()["scanned"] == expected_scanned
+    assert _sweep()["queued"] == expected_queued
 
 
-def test_a_tick_that_dies_mid_walk_loses_no_handles(
+def test_known_targets_do_not_spend_the_budget(
+    session: Session, user: User, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The anti-join is what makes the budget count new handles.
+
+    `enqueue_handles` already ignores a known handle, so dropping the Directory
+    anti-join changes nothing about *what* is queued. It changes what the
+    `LIMIT` is spent on: known targets sorting first would fill every slot and
+    the new one behind them would never be reached.
+    """
+    monkeypatch.setattr(settings, "DIRECTORY_HARVEST_BACKLOG_CEILING", 3)
+    for handle in ("aaknown1", "aaknown2", "aaknown3"):
+        _probe(handle)
+
+    _follow(session, "t02-budget", user)
+    for index, handle in enumerate(("aaknown1", "aaknown2", "aaknown3", "zznew")):
+        _post(session, "t02-budget", index + 1, timestamp=10, forwarded_from=handle)
+
+    assert _sweep()["queued"] == 1
+    assert "zznew" in _pending_handles()
+
+
+def test_the_sweep_stops_adding_at_the_backlog_ceiling(
+    session: Session, user: User, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The sweep adds on a timer; the lane drains behind every sync and a
+    widening proxy wait. Nothing makes those rates agree.
+
+    Without a ceiling the backlog grows monotonically, and because a queued
+    row sorts ahead of every `REFRESH_PRIORITY` row, ticket 03's staleness
+    refresh then stops being dequeued at all, silently.
+    """
+    monkeypatch.setattr(settings, "DIRECTORY_HARVEST_BACKLOG_CEILING", 2)
+
+    with Session(engine) as fresh:
+        enqueue_handles(fresh, ["backlogone", "backlogtwo"])
+
+    _follow(session, "t05-full", user)
+    _post(session, "t05-full", 1, timestamp=10, forwarded_from="wouldbequeued")
+
+    result = _sweep()
+
+    assert result["skipped"] is True
+    assert result["reason"] == "probe backlog at the ceiling"
+    assert "wouldbequeued" not in _entries()
+
+
+def test_a_handle_the_ceiling_turned_away_is_queued_later(
+    session: Session, user: User, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A full queue delays a handle; it never loses one.
+
+    The Reference outlives the tick that could not queue it, so the next tick
+    with room finds the same target still unknown.
+    """
+    monkeypatch.setattr(settings, "DIRECTORY_HARVEST_BACKLOG_CEILING", 1)
+
+    with Session(engine) as fresh:
+        enqueue_handles(fresh, ["blocking"])
+
+    _follow(session, "t02-later", user)
+    _post(session, "t02-later", 1, timestamp=10, forwarded_from="patientone")
+    assert _sweep()["skipped"] is True
+
+    _clear_queue()
+
+    _sweep()
+    assert "patientone" in _entries()
+
+
+def test_a_new_post_is_queued_before_an_old_backlog(
+    session: Session, user: User, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Newest Reference first, which is what makes a new reference prompt.
+
+    With more unknown targets than the budget can take, the one a Post named a
+    moment ago must still be the one queued. Ordered by handle, `zz...` would
+    lose to every older target sorting ahead of it, for as long as the crawl
+    keeps finding more.
+    """
+    monkeypatch.setattr(settings, "DIRECTORY_HARVEST_BACKLOG_CEILING", 1)
+
+    _follow(session, "t05-prompt", user)
+    for index in range(4):
+        _post(
+            session,
+            "t05-prompt",
+            index + 1,
+            timestamp=(index + 1) * 10,
+            forwarded_from=f"backlogref{index}",
+        )
+    _post(session, "t05-prompt", 99, timestamp=9999, forwarded_from="zzjustarrived")
+
+    assert _sweep()["queued"] == 1
+    assert _pending_handles() == {"zzjustarrived"}
+
+
+def test_a_caught_up_tick_queues_nothing(session: Session, user: User) -> None:
+    """Steady state: every target already has an entry, so the tick adds none."""
+    _follow(session, "t05-settled", user)
+    _post(session, "t05-settled", 1, timestamp=10, forwarded_from="settledref")
+
+    _sweep()
+    assert _sweep()["queued"] == 0
+
+
+# --------------------------------------------------------------------------
+# Faults
+# --------------------------------------------------------------------------
+
+
+def test_a_tick_that_dies_before_enqueueing_loses_no_handles(
     session: Session, user: User
 ) -> None:
-    """The marks and the enqueue are one transaction.
-
-    Marking first and enqueueing after would make a crash between them drop
-    those handles permanently: the Posts would be harvested and nothing would
-    hold what they referenced.
-    """
-    add_test_channel(session, "t05-atomic", user_id=user.id)
+    """The Reference is the record, so a failed enqueue is retried by the next tick."""
+    _follow(session, "t05-atomic", user)
     _post(session, "t05-atomic", 1, timestamp=10, forwarded_from="mustsurvive")
 
     with (
@@ -564,67 +584,32 @@ def test_a_tick_that_dies_mid_walk_loses_no_handles(
     ):
         _sweep()
 
-    assert _unharvested() == 1
     assert _entries() == {}
 
     _sweep()
     assert "mustsurvive" in _entries()
 
 
-def test_the_sweep_stops_adding_at_the_backlog_ceiling(
-    session: Session, user: User, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """The sweep adds on a timer; the lane drains behind every sync and a
-    widening proxy wait. Nothing makes those rates agree.
+def test_a_failed_extraction_does_not_stop_the_enqueue() -> None:
+    """The graph already holds References the enqueue can use.
 
-    Without a ceiling the backlog grows monotonically, and because a harvested
-    row sorts ahead of every `REFRESH_PRIORITY` row, ticket 03's staleness
-    refresh then stops being dequeued at all — silently.
+    A sample's References are written at probe time, so a tick whose
+    extraction walk fails still has them to queue.
     """
-    monkeypatch.setattr(settings, "DIRECTORY_HARVEST_BACKLOG_CEILING", 2)
+    _probe("t02-written", _sample(1, "see @alreadyinthegraph"))
 
-    with Session(engine) as fresh:
-        enqueue_handles(fresh, ["backlogone", "backlogtwo"])
+    with patch(
+        "app.jobs.directory_harvest.extract_batch",
+        side_effect=RuntimeError("lock timeout"),
+    ):
+        result = _sweep()
 
-    add_test_channel(session, "t05-full", user_id=user.id)
-    _post(session, "t05-full", 1, timestamp=10, forwarded_from="wouldbeharvested")
-
-    result = _sweep()
-
-    assert result["skipped"] is True
-    assert result["reason"] == "probe backlog at the ceiling"
-    assert "wouldbeharvested" not in _entries()
-    assert _unharvested() == 1
-
-
-def test_a_refresh_is_dequeued_once_the_harvest_backlog_clears(
-    session: Session, user: User, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """The property the ceiling exists to protect, asserted end to end.
-
-    A harvested handle outranks a refresh deliberately — an answer we have never
-    had beats one we hold. The ceiling is what turns that into a bounded delay
-    rather than starvation.
-    """
-    monkeypatch.setattr(settings, "DIRECTORY_HARVEST_BACKLOG_CEILING", 1)
-
-    add_test_channel(session, "t05-starve", user_id=user.id)
-    _post(session, "t05-starve", 1, timestamp=10, forwarded_from="harvestedref")
-    _sweep()
-    assert "harvestedref" in _entries()
-
-    # With one handle pending the sweep is already at the ceiling and adds none.
-    _post(session, "t05-starve", 2, timestamp=20, forwarded_from="wouldpileon")
-    assert _sweep()["skipped"] is True
-    assert "wouldpileon" not in _entries()
+    assert result["referencesFailed"] == 1
+    assert "alreadyinthegraph" in _pending_handles()
 
 
 def test_two_ticks_do_not_overlap() -> None:
-    """The lock covers the manual trigger as well as the scheduled tick.
-
-    Two overlapping ticks would read the same unharvested Posts and harvest them
-    twice — the marks are only visible to each other once committed.
-    """
+    """The lock covers the manual trigger as well as the scheduled tick."""
 
     async def _both() -> tuple[dict, dict]:
         return await asyncio.gather(  # type: ignore[return-value]
@@ -636,55 +621,76 @@ def test_two_ticks_do_not_overlap() -> None:
 
 
 # --------------------------------------------------------------------------
-# The walk itself, at its own seam
+# An edited Post
 # --------------------------------------------------------------------------
 
 
-def test_harvest_page_returns_the_rows_it_examined(
+def test_an_edit_that_adds_a_reference_reaches_the_directory(
     session: Session, user: User
 ) -> None:
-    """`post_ids` is what the caller marks, so it has to be exactly the page.
+    """An edit sends the Post back to reference extraction.
 
-    An empty one means there is nothing left to do — the condition that used to
-    be a `None` cursor and decided whether the backfill leg wrapped.
+    With the Post walk gone, extraction is the only reader. Without the reset
+    a channel editing an already-extracted Post to add a `t.me` link would hide
+    that handle for ever. The References table's uniqueness absorbs whatever
+    the first extraction already wrote.
     """
-    add_test_channel(session, "t04-page", user_id=user.id)
-    _post(session, "t04-page", 1, timestamp=10)
+    _follow(session, "t05-edit", user)
+    _post(session, "t05-edit", 1, timestamp=10, text="nothing here yet")
+
+    _sweep()
+    assert _unextracted() == 0
+    assert _entries() == {}
 
     with Session(engine) as fresh:
-        page = harvest_page(fresh, limit=10)
-        assert len(page.post_ids) == 1
-        mark_harvested(fresh, page.post_ids)
+        bulk_upsert_posts_impl(
+            [
+                {
+                    "channelName": "t05-edit",
+                    "id": 1,
+                    "text": "now see https://t.me/editedinlater",
+                    "timestamp": 10,
+                }
+            ],
+            fresh,
+        )
         fresh.commit()
-        assert harvest_page(fresh, limit=10).post_ids == []
+
+    assert _unextracted() == 1
+    _sweep()
+    assert "editedinlater" in _entries()
 
 
-def test_harvest_page_takes_the_newest_unharvested_post_first(
+def test_an_unchanged_re_upsert_does_not_send_the_post_back(
     session: Session, user: User
 ) -> None:
-    """Newest first is what makes a new reference prompt with a backlog behind it."""
-    add_test_channel(session, "t04-order", user_id=user.id)
-    _post(session, "t04-order", 1, timestamp=10, forwarded_from="olderref")
-    _post(session, "t04-order", 2, timestamp=20, forwarded_from="newerref")
+    """The condition is the whole point.
+
+    Sync re-scrapes the newest page of every followed Channel on every run, so
+    clearing the flag unconditionally would hand extraction thousands of
+    unchanged rows per sync round for ever.
+    """
+    _follow(session, "t05-noedit", user)
+    _post(session, "t05-noedit", 1, timestamp=10, text="stable body")
+
+    _sweep()
+    assert _unextracted() == 0
 
     with Session(engine) as fresh:
-        assert harvest_page(fresh, limit=1).handles == ["newerref"]
+        bulk_upsert_posts_impl(
+            [
+                {
+                    "channelName": "t05-noedit",
+                    "id": 1,
+                    "text": "stable body",
+                    "timestamp": 10,
+                }
+            ],
+            fresh,
+        )
+        fresh.commit()
 
-
-def test_harvest_page_dedupes_within_a_page(session: Session, user: User) -> None:
-    add_test_channel(session, "t04-dupe", user_id=user.id)
-    _post(session, "t04-dupe", 1, timestamp=10, forwarded_from="repeatedref")
-    _post(session, "t04-dupe", 2, timestamp=20, forwarded_from="repeatedref")
-
-    with Session(engine) as fresh:
-        assert harvest_page(fresh, limit=10).handles == ["repeatedref"]
-
-
-def test_known_handles_answers_for_every_verdict(session: Session) -> None:
-    """Pending or conclusive, the handle is already on the map."""
-    with Session(engine) as fresh:
-        enqueue_handles(fresh, ["pendingone"])
-        assert known_handles(fresh, {"pendingone", "neverseen"}) == {"pendingone"}
+    assert _unextracted() == 0
 
 
 # --------------------------------------------------------------------------
@@ -812,74 +818,6 @@ def test_a_probe_that_raises_still_pays_for_what_it_fetched() -> None:
 
     with Session(engine) as fresh:
         assert requests_on(fresh) == 1
-
-
-def test_an_edit_that_adds_a_reference_sends_the_post_back(
-    session: Session, user: User
-) -> None:
-    """Ticket 04's wrapping backfill leg would have caught this on the next lap.
-
-    Ticket 05 deleted that leg, so a channel editing an already-harvested Post
-    to add a `t.me` link would hide that handle for ever. `bulk_upsert_posts_impl`
-    clears the flag when a field `post_references` reads actually changed.
-    """
-    add_test_channel(session, "t05-edit", user_id=user.id)
-    _post(session, "t05-edit", 1, timestamp=10, text="nothing here yet")
-
-    _sweep()
-    assert _unharvested() == 0
-    assert _entries() == {}
-
-    with Session(engine) as fresh:
-        bulk_upsert_posts_impl(
-            [
-                {
-                    "channelName": "t05-edit",
-                    "id": 1,
-                    "text": "now see https://t.me/editedinlater",
-                    "timestamp": 10,
-                }
-            ],
-            fresh,
-        )
-        fresh.commit()
-
-    assert _unharvested() == 1
-    _sweep()
-    assert "editedinlater" in _entries()
-
-
-def test_an_unchanged_re_upsert_does_not_send_the_post_back(
-    session: Session, user: User
-) -> None:
-    """The condition is the whole point.
-
-    Sync re-scrapes the newest page of every followed Channel on every run, so
-    clearing the flag unconditionally would hand the harvest thousands of
-    unchanged rows per sync round for ever — the "pays its cost every tick,
-    forever" shape, reintroduced by the fix for the test above.
-    """
-    add_test_channel(session, "t05-noedit", user_id=user.id)
-    _post(session, "t05-noedit", 1, timestamp=10, text="stable body")
-
-    _sweep()
-    assert _unharvested() == 0
-
-    with Session(engine) as fresh:
-        bulk_upsert_posts_impl(
-            [
-                {
-                    "channelName": "t05-noedit",
-                    "id": 1,
-                    "text": "stable body",
-                    "timestamp": 10,
-                }
-            ],
-            fresh,
-        )
-        fresh.commit()
-
-    assert _unharvested() == 0
 
 
 def test_harvest_running_is_readable_from_the_api_process() -> None:

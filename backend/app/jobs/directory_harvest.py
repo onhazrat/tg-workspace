@@ -6,45 +6,43 @@ mention, every `t.me` link — stayed invisible until an Account happened to run
 scan over the right Scope, so "what Channels do we know exist" had no answer
 that did not depend on who had been clicking.
 
-This walks the stored Posts instead and puts what they reference into the
-Directory queue. The extraction is `discover.post_references`, the same function
-a report uses, so a forward is a forward here and there; the sweep changes who
-asks, not what counts.
+This reads the reference graph instead and puts what it names into the
+Directory queue. Every Reference target with no Directory entry is new work.
+
+## It reads References, not Posts (DDS-02)
+
+Until DDS-02 the sweep walked the stored Posts itself, with its own progress
+flag (`Post.harvested`), and pulled handles out of them with
+`discover.post_references`. The reference-extraction walk (CRG-01) reads the
+same Posts with a sibling extractor that `test_post_references.py` holds to the
+same handles, and writes them to `tg_post_references`. So the graph already
+held every handle the harvest walk found, and the harvest was a second
+extraction feeding one queue.
+
+It also held more. A Directory probe mines its preview page's samples for
+References (CRG-02), and those samples come from Channels nobody follows. The
+Post walk could never see them, so the Directory stopped one hop from the
+follows while the graph recorded the next hop and nothing queued it. Reading
+the graph makes the crawl recursive: a queued handle is probed, its samples
+name more handles, the next tick queues those. The existing refresh re-probes
+every live entry, so each refresh brings in what that Channel cited since.
+`DIRECTORY_FOLLOW_SAMPLE_REFERENCES` switches the sample source off, which
+queues exactly what the Post walk used to. `docs/migration/ADR-020-*.md`
+records the trade: a Post whose Channel has no chat id is deferred by
+extraction, and so are its handles now.
+
+There are no marks and no cursor. The query is an anti-join against the
+Directory, so a target the ceiling turned away is simply still unknown on the
+next tick, and a caught-up tick finds nothing.
 
 ## A sweep, not a write on the sync path
 
 Extracting at ingest was the obvious alternative and is the wrong shape twice
-over. It would put handle extraction and a Directory write inside the walk an
-Account is waiting on, and it would leave the deployment with no throttle at
-all — the rate of new handles would be the rate of new Posts, which is not a
-number anybody chose. As a sweep there is one place to turn down
-(`DIRECTORY_HARVEST_SCAN_LIMIT`) and nothing an Account waits on.
-
-It also reaches Posts that were already stored, which an ingest hook by
-construction never would.
-
-## The Post carries whether it has been looked at
-
-`Post.harvested`, and the walk is `WHERE NOT harvested ORDER BY timestamp DESC`
-(ticket 05). There is no mark, no cursor and no state in the settings row.
-
-Ticket 04 kept two `Post.timestamp` marks: a tail for new Posts and a wrapping
-backfill for the history below it, because a *backward* sync stores Posts with
-old timestamps that land beneath a mark which has already passed them. A flag
-answers that by construction — an unprocessed Post is unprocessed whenever it
-arrived — so the second mark, the wrap, the `until` bound, the separate budget
-and the permanent re-lap all went away together.
-
-Newest first, so a Post stored a moment ago is at the front of the unprocessed
-set and reaches the Directory on the next tick even while a large backlog is
-still draining behind it. That is the property the tail leg existed to buy, and
-here one query has it. The partial index `(timestamp DESC) WHERE NOT harvested`
-serves it and shrinks toward empty as the corpus is processed, so a caught-up
-tick reads nothing and scans an index that holds nothing.
-
-The rows are marked in the same transaction that enqueues their handles. A tick
-that dies between the two re-reads those Posts next time rather than losing
-their handles for ever.
+over. It would put a Directory write inside the walk an Account is waiting on,
+and it would leave the deployment with no throttle at all: the rate of new
+handles would be the rate of new Posts, which is not a number anybody chose.
+As a sweep there is one place to turn down (the backlog ceiling) and nothing an
+Account waits on.
 
 ## What it refuses to enqueue
 
@@ -55,9 +53,8 @@ and the sync route is both cheaper and more frequent.
 
 Handles the Directory already holds a row for, whatever the verdict. A pending
 row is already queued and a conclusive one is already answered, so re-finding
-either is not new work — and the budget has to count *new* handles or a stretch
-of Posts referencing only known handles would exhaust it while throttling
-nothing.
+either is not new work, and the budget has to count *new* handles or a graph
+full of References to known handles would exhaust it while throttling nothing.
 
 Anything at all, once the pending backlog is at the ceiling. See
 `run_directory_harvest_sweep`.
@@ -85,22 +82,11 @@ from app.services.async_db import run_db
 from app.services.channel_directory import (
     HARVEST_PRIORITY,
     enqueue_handles,
-    known_handles,
     queue_counts,
 )
-from app.services.discover import harvest_page
-from app.services.follows import followed_channel_names
-from app.services.post_references import extract_batch
-from app.services.posts import mark_harvested
+from app.services.post_references import extract_batch, unknown_targets
 
 logger = logging.getLogger(__name__)
-
-#: Posts held in memory at once, which with the per-page expunge in `_harvest`
-#: is the memory bound on the whole tick rather than on one query. A constant
-#: rather than a setting: it is an implementation fact about how large a page
-#: of TOAST-heavy rows may get, and nobody has ever needed to tune it apart
-#: from the scan limit.
-_PAGE_SIZE = 100
 
 #: Scheduler job id. Registered under the ordinary job machinery so that
 #: enable/disable, manual trigger and last-run status all come for free — and so
@@ -110,8 +96,8 @@ DIRECTORY_HARVEST_JOB_ID = "directory_harvest"
 #: One sweep at a time, for the reason `discover_probe._sweep_lock` is held:
 #: APScheduler's `max_instances=1` covers the scheduled trigger but not
 #: `POST /jobs/directory_harvest/trigger`, which calls the runner directly. Two
-#: overlapping ticks would read the same unharvested Posts and harvest them
-#: twice — the marks are only visible to each other once committed.
+#: overlapping ticks would run two extraction walks over the same Posts and
+#: both read the same unknown targets before either had queued them.
 _sweep_lock = asyncio.Lock()
 
 
@@ -142,89 +128,28 @@ def is_harvest_running() -> bool:
 
 
 def _harvest(pending: int) -> dict[str, Any]:
-    """Walk the unharvested Posts, mark them, and queue what they reference.
+    """Queue the Reference targets the Directory does not hold yet (DDS-02).
 
     **The budget is what is left under the ceiling**, not a setting of its own.
     `DIRECTORY_HARVEST_BACKLOG_CEILING` already names how deep the queue the
-    probe lane drains may get; a separate `BATCH_SIZE` was a second number that
-    could disagree with it, and on staging it did — 1000 against a ceiling of
-    600 checked *before* the walk, so a tick starting at 599 pending ended at
-    1599 and overshot by 2.6x the bound that exists to stop ticket 03's refresh
-    starving. Derived, the two cannot be set into that disagreement.
+    probe lane drains may get; a separate batch size was a second number that
+    could disagree with it, and on staging it did (1000 against a ceiling of
+    600), so a tick starting at 599 pending ended at 1599. Derived, the two
+    cannot be set into that disagreement.
 
-    It still overshoots by up to one page's references, because the budget is
-    checked **between** pages — ticket 04's behaviour, unchanged. Truncating a
-    page to the budget would be worse now than it was then: the Posts in it are
-    marked in this same transaction, so a dropped handle is not deferred to the
-    next lap, it is gone. A bounded overshoot of `_PAGE_SIZE` Posts' worth of
-    handles is the price of that, against a ceiling two orders larger.
-
-    `DIRECTORY_HARVEST_SCAN_LIMIT` is the other half and has to exist
-    separately: once the corpus is harvested almost every Post references only
-    known handles, so a tick chasing new ones would walk the whole table before
-    giving up.
-
-    **One session and one transaction for the walk, the marks and the
-    enqueue.** Marking inside the transaction is also what lets the loop make
-    progress — the walk has no cursor, so the next page is only a different page
-    because the previous one is no longer unharvested. Committing them together
-    is what makes a tick that dies mid-walk re-read those Posts rather than lose
-    their handles. Every read here is a plain indexed page and the session never
-    spans awaited work, which is the rule an `idle in transaction` transaction
-    pinning the xmin horizon is the cost of breaking.
+    There are no marks and so nothing to lose. A target the budget did not
+    reach is still unknown on the next tick, because the Reference that names
+    it outlives this one.
     """
     batch = settings.DIRECTORY_HARVEST_BACKLOG_CEILING - pending
-    budget = settings.DIRECTORY_HARVEST_SCAN_LIMIT
-
-    fresh: dict[str, None] = {}
-    scanned = 0
-
     with Session(engine) as session:
-        # Read once for the whole walk, not once per page. It is a set of a few
-        # thousand names at most, against pages of a hundred Posts — and the
-        # alternative reads `tg_channels` several times a tick to answer the
-        # same question with the same answer.
-        followed = {name.lower() for name in followed_channel_names(session)}
-
-        while budget > 0 and len(fresh) < batch:
-            page = harvest_page(session, limit=min(_PAGE_SIZE, budget))
-            if not page.post_ids:
-                break
-            mark_harvested(session, page.post_ids)
-            # The page is finished with: `harvest_page` already extracted
-            # its references and the mark went by primary key. Without this
-            # every Post the tick reads stays in the identity map until the
-            # commit, so `_PAGE_SIZE` would bound one query and nothing
-            # would bound the tick — at a scan limit of 20,000 that is
-            # 20,000 fully loaded Posts, `text` included, held at once.
-            session.expunge_all()
-            scanned += len(page.post_ids)
-            budget -= len(page.post_ids)
-
-            candidates = [
-                handle
-                for handle in page.handles
-                if handle not in followed and handle not in fresh
-            ]
-            if not candidates:
-                continue
-            # One membership query per page, never one per handle. A page can
-            # reference a couple of hundred handles, and asking about them one
-            # at a time is the "compute it for everything, read one field"
-            # shape from the other direction — a round trip per answer.
-            known = known_handles(session, set(candidates))
-            for handle in candidates:
-                if handle not in known:
-                    fresh.setdefault(handle, None)
-
-        queued = enqueue_handles(session, list(fresh), priority=HARVEST_PRIORITY)
-        # `enqueue_handles` commits, but returns early without doing so when it
-        # was handed nothing. A tick that read five hundred Posts referencing
-        # nothing new still did the work, and leaving those marks uncommitted
-        # would make the sweep re-read that stretch on every tick for ever.
-        session.commit()
-
-    return {"queued": queued, "scanned": scanned}
+        fresh = unknown_targets(
+            session,
+            limit=batch,
+            followed_sources_only=not settings.DIRECTORY_FOLLOW_SAMPLE_REFERENCES,
+        )
+        queued = enqueue_handles(session, fresh, priority=HARVEST_PRIORITY)
+    return {"queued": queued}
 
 
 def _pending() -> int:
@@ -237,9 +162,10 @@ def _pending() -> int:
 def _extract_references() -> dict[str, int]:
     """One reference-extraction walk (CRG-01).
 
-    A second walk in this tick rather than a job of its own, because it reads
-    the same table for the same reason and a second scheduler entry would be a
-    second interval to keep in step with this one.
+    Part of this tick rather than a job of its own, because the enqueue reads
+    what it writes: running it first is what puts a new Post's handles in the
+    queue on the same tick, where a second scheduler entry would be a second
+    interval to keep in step with this one.
 
     It is deliberately **not** gated on the probe backlog the way the harvest
     below is. That ceiling exists because the sweep's handles go into a queue
@@ -257,16 +183,18 @@ def _extract_references() -> dict[str, int]:
 
 
 async def run_directory_harvest_sweep() -> dict[str, Any]:
-    """Walk one batch of stored Posts and queue the handles they reference.
+    """Extract one batch of References and queue the targets nobody has seen.
 
     Returns a summary dict, which the scheduler surfaces as the job's `detail`.
     It reports what was **queued**, not what was found: the probe lane decides
     when a queued handle is actually fetched, and this function is finished long
     before any verdict is.
 
-    Two walks share the tick. The reference-extraction walk (CRG-01) runs first
+    Two steps share the tick. The reference-extraction walk (CRG-01) runs first
     and unconditionally, because the early return below is about the probe queue
-    being full and that says nothing about the graph.
+    being full and that says nothing about the graph. The enqueue runs whether
+    or not extraction succeeded, because the graph already holds References it
+    can use: a sample's are written at probe time.
     """
     if _sweep_lock.locked():
         return {"skipped": True, "reason": "harvest already running"}

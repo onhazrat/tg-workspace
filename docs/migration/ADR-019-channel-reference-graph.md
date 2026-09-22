@@ -12,7 +12,8 @@ since the Discovery feature shipped, and two callers consume it.
 
 A Discovery report aggregates them into per-candidate counters and keeps, per candidate, the
 single newest Post that named it. The harvest sweep reads the handles, enqueues the ones the
-Directory does not already hold, and discards the rest.
+Directory does not already hold, and discards the rest. *(Superseded by [ADR-020](./ADR-020-references-feed-the-directory.md):
+the harvest now queues from this graph.)*
 
 Both throw away the same thing: which Post named which handle. So the deployment can answer "how
 many Posts in this Scope named @foo" and cannot answer "which Posts", "in which direction",
@@ -116,7 +117,8 @@ from empty, and waiting about a month at the current scan limit. Worse, deferral
 a flag unset, and the harvest walk is newest-first, so one chat-id-less channel with a large recent
 backlog would have stalled the Directory enqueue for the entire grace period.
 
-Nothing reads the table in the effort that creates it. No routes, no client, no UI. A surface
+Nothing reads the table in the effort that creates it *(until ADR-020, whose harvest queues its
+unknown targets)*. No routes, no client, no UI. A surface
 designed against an empty table is a guess, and the shape of the real data is the input that
 decision needs.
 

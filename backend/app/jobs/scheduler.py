@@ -505,10 +505,10 @@ def start_scheduler() -> None:
         id=DIRECTORY_HARVEST_JOB_ID,
         replace_existing=True,
         # Same reasoning as the probe sweep above, from the database side rather
-        # than the network one: a tick reads up to
-        # `DIRECTORY_HARVEST_SCAN_LIMIT` Posts, which can outlast a 1s grace on
-        # a loaded deployment. Running late is fine; a dropped tick leaves the
-        # cursor where it was and the map that much staler.
+        # than the network one: a tick's extraction walk reads up to
+        # `POST_REFERENCE_SCAN_LIMIT` Posts, which can outlast a 1s grace on a
+        # loaded deployment. Running late is fine; a dropped tick leaves the
+        # map that much staler.
         misfire_grace_time=None,
         coalesce=True,
     )

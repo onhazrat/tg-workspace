@@ -114,6 +114,13 @@
       "sensitive": true
     },
     {
+      "default": true,
+      "name": "DIRECTORY_FOLLOW_SAMPLE_REFERENCES",
+      "required": false,
+      "scope": "backend_runtime",
+      "sensitive": false
+    },
+    {
       "default": 3000,
       "name": "DIRECTORY_HARVEST_BACKLOG_CEILING",
       "required": false,
@@ -123,13 +130,6 @@
     {
       "default": 300,
       "name": "DIRECTORY_HARVEST_INTERVAL_SECONDS",
-      "required": false,
-      "scope": "backend_runtime",
-      "sensitive": false
-    },
-    {
-      "default": 20000,
-      "name": "DIRECTORY_HARVEST_SCAN_LIMIT",
       "required": false,
       "scope": "backend_runtime",
       "sensitive": false

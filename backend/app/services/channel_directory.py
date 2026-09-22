@@ -548,29 +548,6 @@ def handles_needing_probe(
     return out
 
 
-def known_handles(session: Session, handles: set[str]) -> set[str]:
-    """Which of `handles` the Directory already holds a row for (ticket 04).
-
-    Any row, whatever its verdict — the harvest sweep wants "is this handle
-    already on the map", not "does it have an answer". A pending row is already
-    queued and a conclusive one is already answered, so in both cases harvesting
-    it again would spend the sweep's batch on work that is not new.
-
-    Deliberately not `probe_map`, which builds a camelCase projection of every
-    row it touches. The caller wants a set membership test over a few hundred
-    handles per tick and would throw the projection away.
-    """
-    if not handles:
-        return set()
-    statement = unscoped_select(
-        select(col(DirectoryEntry.handle)).where(
-            col(DirectoryEntry.handle).in_(handles)
-        ),
-        reason=PROBE_SCOPE_REASON,
-    )
-    return {str(row) for row in session.exec(statement).all()}
-
-
 def _store_statistics(row: DirectoryEntry, stats: SampleStatistics) -> None:
     """Copy the six sample-derived statistics onto the entry.
 
