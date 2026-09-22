@@ -352,6 +352,7 @@ export async function mockDiscoverForwardPosts(
 export function completedFollowJobStatus(
   followJobId: string,
   channelNames: string[],
+  syncJobId: string | null = null,
 ) {
   return {
     followJobId,
@@ -364,29 +365,54 @@ export function completedFollowJobStatus(
     unavailable: 0,
     failed: 0,
     results: channelNames.map((name) => ({ name, status: "added" })),
-    syncJobId: null,
+    syncJobId,
     createdAt: Date.now(),
     finishedAt: Date.now(),
   }
 }
 
-/** Mock bulk-follow create + SSE completion; returns POST call recorder. */
+/**
+ * Mock bulk-follow create + SSE completion; returns POST call recorder.
+ *
+ * Each POST gets its own job id (`<followJobId>`, then `-1`, `-2`, …), so a
+ * job's status names the channels its own POST sent. With `firstSyncJobId`,
+ * every job reports that First sync, and its endpoints never answer: the sync
+ * stays running for the whole test.
+ */
 export async function mockBulkFollowJob(
   page: Page,
   followJobId = "e2e-follow-job",
+  { firstSyncJobId = null }: { firstSyncJobId?: string | null } = {},
 ) {
   const postBodies: unknown[] = []
+  const jobIdFor = (index: number) =>
+    index === 0 ? followJobId : `${followJobId}-${index}`
+  const namesFor = (jobId: string) => {
+    const index = postBodies.findIndex((_, i) => jobIdFor(i) === jobId)
+    return (
+      (
+        postBodies[Math.max(index, 0)] as
+          | { channels?: Array<{ name: string }> }
+          | undefined
+      )?.channels?.map((c) => c.name) ?? []
+    )
+  }
+
+  if (firstSyncJobId) {
+    // Never fulfilled: the First sync is still running when the test ends.
+    await page.route(`**/api/v1/jobs/sync/${firstSyncJobId}**`, () => {})
+  }
 
   await page.route("**/api/v1/data/channels/bulk-follow/**", async (route) => {
     const url = route.request().url()
     if (url.includes("/events")) {
       const jobId =
         url.match(/bulk-follow\/([^/]+)\/events/)?.[1] ?? followJobId
-      const names =
-        (
-          postBodies[0] as { channels?: Array<{ name: string }> } | undefined
-        )?.channels?.map((c) => c.name) ?? []
-      const status = completedFollowJobStatus(jobId, names)
+      const status = completedFollowJobStatus(
+        jobId,
+        namesFor(jobId),
+        firstSyncJobId,
+      )
       await route.fulfill({
         status: 200,
         contentType: "text/event-stream",
@@ -397,12 +423,8 @@ export async function mockBulkFollowJob(
 
     if (route.request().method() === "GET") {
       const jobId = url.match(/bulk-follow\/([^/?]+)/)?.[1] ?? followJobId
-      const names =
-        (
-          postBodies[0] as { channels?: Array<{ name: string }> } | undefined
-        )?.channels?.map((c) => c.name) ?? []
       await route.fulfill({
-        json: completedFollowJobStatus(jobId, names),
+        json: completedFollowJobStatus(jobId, namesFor(jobId), firstSyncJobId),
       })
       return
     }
@@ -415,11 +437,12 @@ export async function mockBulkFollowJob(
       await route.continue()
       return
     }
+    const jobId = jobIdFor(postBodies.length)
     postBodies.push(route.request().postDataJSON())
     await route.fulfill({
       status: 200,
       contentType: "application/json",
-      body: JSON.stringify({ followJobId }),
+      body: JSON.stringify({ followJobId: jobId }),
     })
   })
 
