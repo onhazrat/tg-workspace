@@ -61,6 +61,8 @@ export const DiscoverBulkBar: React.FC<DiscoverBulkBarProps> = ({
         size="sm"
         data-testid="discover-follow-selected"
         disabled={isOffline}
+        loading={isFollowJobRunning}
+        loadingLabel="Follow selected"
         onClick={onFollowSelected}
         className="rounded-full border-blue-500/30 text-blue-600 hover:bg-blue-500/10 dark:text-blue-400"
       >

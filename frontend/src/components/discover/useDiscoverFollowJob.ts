@@ -1,5 +1,5 @@
 import { useQueryClient } from "@tanstack/react-query"
-import { useMemo, useState } from "react"
+import { useMemo, useRef, useState } from "react"
 import type { FollowJobStatus } from "@/api"
 import type { DiscoveryCandidate } from "@/lib/posts/discover-candidates"
 import {
@@ -37,6 +37,15 @@ export function useDiscoverFollowJob({
   // one Candidate never blocks following another.
   const [activeFollowNames, setActiveFollowNames] = useState<string[]>([])
   const isFollowJobRunning = activeFollowNames.length > 0
+  // The same names, read synchronously: two clicks in one render would both
+  // pass a filter over the state and start two jobs for one Channel.
+  const inFlightRef = useRef(new Set<string>())
+  // Only the newest job reports progress, so overlapping jobs never
+  // interleave their counters.
+  const latestJobRef = useRef(0)
+  const [resultStatusByName, setResultStatusByName] = useState<
+    Map<string, string>
+  >(() => new Map())
 
   const candidatesByName = useMemo(
     () =>
@@ -46,34 +55,39 @@ export function useDiscoverFollowJob({
     [candidates],
   )
 
-  const resultStatusByName = useMemo(() => {
-    const map = new Map<string, string>()
-    for (const result of followProgress?.results ?? []) {
-      map.set(result.name, result.status)
-    }
-    return map
-  }, [followProgress])
-
   const executeFollow = async (requested: string[]) => {
-    const names = requested.filter((name) => !activeFollowNames.includes(name))
+    const names = requested.filter((name) => !inFlightRef.current.has(name))
     if (names.length === 0 || isOffline) return
 
     const payload = buildBulkFollowChannels(names, candidatesByName)
+    for (const name of names) inFlightRef.current.add(name)
     setActiveFollowNames((prev) => [...prev, ...names])
+    const job = ++latestJobRef.current
     setFollowProgress(null)
-    try {
-      const status = await followDiscoverChannels(payload, {
-        onProgress: setFollowProgress,
+    const onProgress = (status: FollowJobStatus) => {
+      // Statuses from every job, so a newer job does not erase an older one's.
+      setResultStatusByName((prev) => {
+        const next = new Map(prev)
+        for (const result of status.results)
+          next.set(result.name, result.status)
+        return next
       })
+      if (job === latestJobRef.current) setFollowProgress(status)
+    }
+    try {
+      const status = await followDiscoverChannels(payload, { onProgress })
       if (status) {
         setSelectedForFollow((prev) =>
           pruneSelectionAfterFollow(prev, status.results),
         )
-        setFollowProgress(status)
+        onProgress(status)
         // `isFollowed` is resolved server-side per read, as `isIgnored` is.
-        void queryClient.invalidateQueries({ queryKey: ["discoverReport"] })
+        // Awaited so the row never shows an enabled Follow button between the
+        // unlock below and the refetch.
+        await queryClient.invalidateQueries({ queryKey: ["discoverReport"] })
       }
     } finally {
+      for (const name of names) inFlightRef.current.delete(name)
       setActiveFollowNames((prev) =>
         prev.filter((name) => !names.includes(name)),
       )
@@ -81,7 +95,7 @@ export function useDiscoverFollowJob({
   }
 
   const startFollow = async (requested: string[]) => {
-    const names = requested.filter((name) => !activeFollowNames.includes(name))
+    const names = requested.filter((name) => !inFlightRef.current.has(name))
     if (names.length === 0 || isOffline) return
     if (needsBulkFollowConfirm(names.length)) {
       setPendingFollowNames(names)

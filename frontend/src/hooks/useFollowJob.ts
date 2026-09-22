@@ -156,6 +156,14 @@ export function useFollowJob(deps: FollowJobDeps): FollowJob {
       setScrapingChannels((prev) => new Set([...prev, ...channelNames]))
       try {
         const syncResult = await waitSyncJob(syncJobId)
+        const failed = syncResult.channels.filter(
+          (ch) => ch.status === "failed",
+        )
+        if (failed.length > 0) {
+          toast.error(
+            `Followed ${failed.map((ch) => ch.channelName).join(", ")}, but the first sync failed`,
+          )
+        }
         const successes = syncResult.channels.filter(
           (ch) => ch.status === "success",
         )

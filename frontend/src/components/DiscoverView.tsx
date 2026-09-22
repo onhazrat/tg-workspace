@@ -337,7 +337,9 @@ export const DiscoverView: React.FC = () => {
           <DiscoverBulkBar
             selectedCount={follow.selectedForFollow.size}
             isOffline={isOffline}
-            isFollowJobRunning={follow.isFollowJobRunning}
+            isFollowJobRunning={[...follow.selectedForFollow].some((name) =>
+              follow.activeFollowNames.includes(name),
+            )}
             followProgress={follow.followProgress}
             onFollowSelected={() => void follow.followSelected()}
             onClearSelection={() => follow.setSelectedForFollow(new Set())}
