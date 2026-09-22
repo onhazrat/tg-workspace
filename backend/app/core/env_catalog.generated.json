@@ -114,7 +114,7 @@
       "sensitive": true
     },
     {
-      "default": 600,
+      "default": 3000,
       "name": "DIRECTORY_HARVEST_BACKLOG_CEILING",
       "required": false,
       "scope": "backend_runtime",
@@ -128,7 +128,7 @@
       "sensitive": false
     },
     {
-      "default": 500,
+      "default": 20000,
       "name": "DIRECTORY_HARVEST_SCAN_LIMIT",
       "required": false,
       "scope": "backend_runtime",
@@ -380,7 +380,7 @@
       "sensitive": false
     },
     {
-      "default": 500,
+      "default": 10000,
       "name": "POST_REFERENCE_SCAN_LIMIT",
       "required": false,
       "scope": "backend_runtime",
