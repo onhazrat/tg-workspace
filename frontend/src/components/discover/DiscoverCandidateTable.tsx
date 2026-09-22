@@ -109,6 +109,8 @@ interface DiscoverCandidateTableProps {
   isOffline: boolean
   isFollowJobRunning: boolean
   activeFollowNames: string[]
+  /** Channels whose sync is running, including a just-followed one's First sync. */
+  syncingNames: Set<string>
   resultStatusByName: Map<string, string>
   onFollow: (name: string) => void
   /**
@@ -148,6 +150,7 @@ export const DiscoverCandidateTable: React.FC<DiscoverCandidateTableProps> = ({
   isOffline,
   isFollowJobRunning,
   activeFollowNames,
+  syncingNames,
   resultStatusByName,
   onFollow,
   onInspect,
@@ -216,9 +219,7 @@ export const DiscoverCandidateTable: React.FC<DiscoverCandidateTableProps> = ({
                 type="checkbox"
                 data-testid="discover-select-all"
                 checked={headerState === "checked"}
-                disabled={
-                  isOffline || isFollowJobRunning || unfollowedCount === 0
-                }
+                disabled={isOffline || unfollowedCount === 0}
                 onChange={() =>
                   setSelectedForFollow((prev) =>
                     toggleSelectAllUnfollowed(candidates, prev),
@@ -298,7 +299,10 @@ export const DiscoverCandidateTable: React.FC<DiscoverCandidateTableProps> = ({
                     )}
                     disabled={
                       isOffline ||
-                      isRowCheckboxDisabled(row.isFollowed, isFollowJobRunning)
+                      isRowCheckboxDisabled(
+                        row.isFollowed,
+                        activeFollowNames.includes(row.name),
+                      )
                     }
                     onClick={(event) => {
                       shiftHeldRef.current = event.shiftKey
@@ -436,7 +440,7 @@ export const DiscoverCandidateTable: React.FC<DiscoverCandidateTableProps> = ({
                   <div className="flex flex-wrap items-center gap-2">
                     {row.isFollowed ? (
                       <span className="rounded-full bg-app-muted/40 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-app-ink/60">
-                        Following
+                        {syncingNames.has(row.name) ? "Syncing…" : "Following"}
                       </span>
                     ) : (
                       <TgButton
@@ -444,7 +448,7 @@ export const DiscoverCandidateTable: React.FC<DiscoverCandidateTableProps> = ({
                         variant="secondary"
                         size="sm"
                         data-testid={`discover-follow-${row.name}`}
-                        disabled={isOffline || isFollowJobRunning}
+                        disabled={isOffline}
                         loading={activeFollowNames.includes(row.name)}
                         loadingLabel="Follow"
                         onClick={() => onFollow(row.name)}

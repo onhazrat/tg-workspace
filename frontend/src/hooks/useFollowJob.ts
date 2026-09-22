@@ -15,11 +15,11 @@
 import { useCallback } from "react"
 import { toast } from "sonner"
 
-import {
+import type {
   api,
-  type BulkFollowChannelInput,
-  type FollowJobStatus,
-  type SyncJobStatus,
+  BulkFollowChannelInput,
+  FollowJobStatus,
+  SyncJobStatus,
   streamFollowJobEvents,
 } from "@/api"
 import { getChannelStats } from "@/lib/channels/store"
@@ -47,6 +47,15 @@ export interface FollowJobDeps extends ProxySettings {
   /** From `useSyncJob` — the follow job chains into a sync job. */
   waitSyncJob: (jobId: string) => Promise<SyncJobStatus>
   setScrapingChannels: React.Dispatch<React.SetStateAction<Set<string>>>
+  /**
+   * The follow endpoints, injected so a test can drive a job without
+   * `mock.module`, which is process-wide in Bun.
+   */
+  followApi: {
+    bulkFollowChannels: typeof api.bulkFollowChannels
+    getFollowJobStatus: typeof api.getFollowJobStatus
+    streamFollowJobEvents: typeof streamFollowJobEvents
+  }
 }
 
 export interface FollowJob {
@@ -72,6 +81,7 @@ export function useFollowJob(deps: FollowJobDeps): FollowJob {
     invalidatePostViews,
     waitSyncJob,
     setScrapingChannels,
+    followApi,
   } = deps
 
   /**
@@ -94,7 +104,7 @@ export function useFollowJob(deps: FollowJobDeps): FollowJob {
       )
 
       try {
-        for await (const status of streamFollowJobEvents(
+        for await (const status of followApi.streamFollowJobEvents(
           followJobId,
           abortController.signal,
         )) {
@@ -103,7 +113,7 @@ export function useFollowJob(deps: FollowJobDeps): FollowJob {
             return status
           }
         }
-        const finalStatus = await api.getFollowJobStatus(followJobId)
+        const finalStatus = await followApi.getFollowJobStatus(followJobId)
         onProgress?.(finalStatus)
         return finalStatus
       } catch (err) {
@@ -116,7 +126,7 @@ export function useFollowJob(deps: FollowJobDeps): FollowJob {
         )
         const deadline = Date.now() + env.syncJobTimeoutMs
         while (Date.now() < deadline) {
-          const status = await api.getFollowJobStatus(followJobId)
+          const status = await followApi.getFollowJobStatus(followJobId)
           onProgress?.(status)
           if (isTerminalSyncStatus(status.status)) {
             return status
@@ -130,7 +140,60 @@ export function useFollowJob(deps: FollowJobDeps): FollowJob {
         window.clearTimeout(timeoutId)
       }
     },
-    [],
+    [followApi],
+  )
+
+  /**
+   * Watch the First sync of the Channels a follow job just added.
+   *
+   * Runs detached from the follow, so it reports its own failure and keeps
+   * its Channels marked as syncing by adding and removing names: another
+   * follow's First sync may be running beside it.
+   */
+  const runFirstSync = useCallback(
+    async (syncJobId: string, channelNames: string[]) => {
+      if (channelNames.length === 0) return
+      setScrapingChannels((prev) => new Set([...prev, ...channelNames]))
+      try {
+        const syncResult = await waitSyncJob(syncJobId)
+        const successes = syncResult.channels.filter(
+          (ch) => ch.status === "success",
+        )
+        for (const ch of successes) {
+          const s = await getChannelStats(ch.channelId)
+          if (s) {
+            setChannelStats((prev) => ({
+              ...prev,
+              // Nullable on the wire — see the same write in `useSyncJob`.
+              [ch.channelName]: {
+                ...s,
+                latestId: ch.newLatestId ?? undefined,
+              },
+            }))
+          }
+        }
+        await loadChannels()
+        invalidatePostViews()
+      } catch (err) {
+        console.error("[Scraper] First sync after follow failed:", err)
+        toast.error(
+          `Followed ${channelNames.join(", ")}, but the first sync failed`,
+        )
+      } finally {
+        setScrapingChannels((prev) => {
+          const next = new Set(prev)
+          for (const name of channelNames) next.delete(name)
+          return next
+        })
+      }
+    },
+    [
+      waitSyncJob,
+      setChannelStats,
+      loadChannels,
+      invalidatePostViews,
+      setScrapingChannels,
+    ],
   )
 
   const followDiscoverChannels = useCallback(
@@ -147,6 +210,8 @@ export function useFollowJob(deps: FollowJobDeps): FollowJob {
       if (channelsToFollow.length === 0) return null
 
       const followingNames = channelsToFollow.map((c) => c.name)
+      // Names handed to a First sync stay marked; it unmarks them itself.
+      let syncingNames: string[] = []
       setScrapingChannels((prev) => {
         const next = new Set(prev)
         followingNames.forEach((n) => next.add(n))
@@ -154,7 +219,7 @@ export function useFollowJob(deps: FollowJobDeps): FollowJob {
       })
 
       try {
-        const { followJobId } = await api.bulkFollowChannels({
+        const { followJobId } = await followApi.bulkFollowChannels({
           channels: channelsToFollow,
           proxyEnabled: isNetworkRoutingActive({
             proxyEnabled,
@@ -206,29 +271,13 @@ export function useFollowJob(deps: FollowJobDeps): FollowJob {
         }
 
         if (followStatus.syncJobId) {
-          const channelNames = followStatus.results
+          // Not awaited: the Follow is complete now, and Discover holds its
+          // Follow buttons for as long as this call is pending.
+          // The backend syncs only "added" rows; an unavailable one has no feed.
+          syncingNames = followStatus.results
             .filter((r) => r.status === "added")
             .map((r) => r.name)
-          setScrapingChannels(new Set(channelNames))
-          const syncResult = await waitSyncJob(followStatus.syncJobId)
-          const successes = syncResult.channels.filter(
-            (ch) => ch.status === "success",
-          )
-          for (const ch of successes) {
-            const s = await getChannelStats(ch.channelId)
-            if (s) {
-              setChannelStats((prev) => ({
-                ...prev,
-                // Nullable on the wire — see the same write in `useSyncJob`.
-                [ch.channelName]: {
-                  ...s,
-                  latestId: ch.newLatestId ?? undefined,
-                },
-              }))
-            }
-          }
-          await loadChannels()
-          invalidatePostViews()
+          void runFirstSync(followStatus.syncJobId, syncingNames)
         }
 
         return followStatus
@@ -239,7 +288,9 @@ export function useFollowJob(deps: FollowJobDeps): FollowJob {
       } finally {
         setScrapingChannels((prev) => {
           const next = new Set(prev)
-          followingNames.forEach((n) => next.delete(n))
+          for (const name of followingNames) {
+            if (!syncingNames.includes(name)) next.delete(name)
+          }
           return next
         })
       }
@@ -254,11 +305,9 @@ export function useFollowJob(deps: FollowJobDeps): FollowJob {
       torAutoRotate,
       torRotationThreshold,
       waitFollowJob,
-      waitSyncJob,
+      runFirstSync,
       setSelectedChannels,
       loadChannels,
-      invalidatePostViews,
-      setChannelStats,
     ],
   )
 

@@ -57,7 +57,8 @@ import { useApiStatus } from "../hooks/useApiStatus"
  */
 export const DiscoverView: React.FC = () => {
   const { selectedChannels } = useData()
-  const { setForwardedFilter, followDiscoverChannels } = useScraper()
+  const { setForwardedFilter, followDiscoverChannels, scrapingChannels } =
+    useScraper()
   const { setActiveTab } = useUI()
   const { isOffline } = useApiStatus()
   const {
@@ -386,6 +387,7 @@ export const DiscoverView: React.FC = () => {
             isOffline={isOffline}
             isFollowJobRunning={follow.isFollowJobRunning}
             activeFollowNames={follow.activeFollowNames}
+            syncingNames={scrapingChannels}
             resultStatusByName={follow.resultStatusByName}
             onFollow={(name) => void follow.followOne(name)}
             onInspect={(candidate) => setInspectingName(candidate.name)}
@@ -404,7 +406,7 @@ export const DiscoverView: React.FC = () => {
         candidate={inspecting}
         onClose={() => setInspectingName(null)}
         isOffline={isOffline}
-        isFollowJobRunning={follow.isFollowJobRunning}
+        activeFollowNames={follow.activeFollowNames}
         onFollow={(name) => void follow.followOne(name)}
         onRecheck={(name) => probe.recheck([name])}
         isRecheckPending={probe.isRecheckPending}

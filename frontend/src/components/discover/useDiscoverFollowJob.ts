@@ -1,3 +1,4 @@
+import { useQueryClient } from "@tanstack/react-query"
 import { useMemo, useState } from "react"
 import type { FollowJobStatus } from "@/api"
 import type { DiscoveryCandidate } from "@/lib/posts/discover-candidates"
@@ -22,17 +23,20 @@ export function useDiscoverFollowJob({
   isOffline,
   followDiscoverChannels,
 }: UseDiscoverFollowJobOptions) {
+  const queryClient = useQueryClient()
   const [selectedForFollow, setSelectedForFollow] = useState<Set<string>>(
     () => new Set(),
   )
-  const [isFollowJobRunning, setIsFollowJobRunning] = useState(false)
   const [followProgress, setFollowProgress] = useState<FollowJobStatus | null>(
     null,
   )
   const [pendingFollowNames, setPendingFollowNames] = useState<string[] | null>(
     null,
   )
+  // Every name in any running follow job. Rows lock one by one, so following
+  // one Candidate never blocks following another.
   const [activeFollowNames, setActiveFollowNames] = useState<string[]>([])
+  const isFollowJobRunning = activeFollowNames.length > 0
 
   const candidatesByName = useMemo(
     () =>
@@ -50,12 +54,12 @@ export function useDiscoverFollowJob({
     return map
   }, [followProgress])
 
-  const executeFollow = async (names: string[]) => {
-    if (names.length === 0 || isOffline || isFollowJobRunning) return
+  const executeFollow = async (requested: string[]) => {
+    const names = requested.filter((name) => !activeFollowNames.includes(name))
+    if (names.length === 0 || isOffline) return
 
     const payload = buildBulkFollowChannels(names, candidatesByName)
-    setIsFollowJobRunning(true)
-    setActiveFollowNames(names)
+    setActiveFollowNames((prev) => [...prev, ...names])
     setFollowProgress(null)
     try {
       const status = await followDiscoverChannels(payload, {
@@ -66,15 +70,19 @@ export function useDiscoverFollowJob({
           pruneSelectionAfterFollow(prev, status.results),
         )
         setFollowProgress(status)
+        // `isFollowed` is resolved server-side per read, as `isIgnored` is.
+        void queryClient.invalidateQueries({ queryKey: ["discoverReport"] })
       }
     } finally {
-      setIsFollowJobRunning(false)
-      setActiveFollowNames([])
+      setActiveFollowNames((prev) =>
+        prev.filter((name) => !names.includes(name)),
+      )
     }
   }
 
-  const startFollow = async (names: string[]) => {
-    if (names.length === 0 || isOffline || isFollowJobRunning) return
+  const startFollow = async (requested: string[]) => {
+    const names = requested.filter((name) => !activeFollowNames.includes(name))
+    if (names.length === 0 || isOffline) return
     if (needsBulkFollowConfirm(names.length)) {
       setPendingFollowNames(names)
       return
