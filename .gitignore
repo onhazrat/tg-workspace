@@ -31,3 +31,6 @@ graphify-out/
 # whole directory as one untracked entry. Cited by docs/architecture-entropy-audit.md
 # (E8); re-create with: git clone --depth 1 <template-url> _template_tmp
 _template_tmp/
+
+# CRAP score report (scripts/crap/run.sh)
+crap-report/

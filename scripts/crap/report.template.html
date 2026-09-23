@@ -1,0 +1,616 @@
+<title>tg-workspace CRAP scores</title>
+<style>
+:root {
+  --page: #f9f9f7;
+  --surface: #fcfcfb;
+  --ink: #0b0b0b;
+  --ink-2: #52514e;
+  --muted: #7a7873;
+  --grid: #e8e7e1;
+  --axis: #c3c2b7;
+  --border: rgba(11, 11, 11, 0.1);
+  --hover: rgba(11, 11, 11, 0.05);
+  --s1: #2a78d6;
+  --s2: #eb6834;
+  --risk: rgba(208, 59, 59, 0.08);
+  --risk-line: #d03b3b;
+  --focus: #2a78d6;
+  --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --sans: system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --page: #0d0d0d;
+    --surface: #1a1a19;
+    --ink: #ffffff;
+    --ink-2: #c3c2b7;
+    --muted: #9a9890;
+    --grid: #2c2c2a;
+    --axis: #45453f;
+    --border: rgba(255, 255, 255, 0.1);
+    --hover: rgba(255, 255, 255, 0.06);
+    --s1: #3987e5;
+    --s2: #d95926;
+    --risk: rgba(230, 103, 103, 0.1);
+    --risk-line: #e66767;
+    --focus: #3987e5;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --page: #0d0d0d;
+  --surface: #1a1a19;
+  --ink: #ffffff;
+  --ink-2: #c3c2b7;
+  --muted: #9a9890;
+  --grid: #2c2c2a;
+  --axis: #45453f;
+  --border: rgba(255, 255, 255, 0.1);
+  --hover: rgba(255, 255, 255, 0.06);
+  --s1: #3987e5;
+  --s2: #d95926;
+  --risk: rgba(230, 103, 103, 0.1);
+  --risk-line: #e66767;
+  --focus: #3987e5;
+}
+body {
+  background: var(--page);
+  color: var(--ink);
+  font: 14px/1.5 var(--sans);
+}
+.wrap {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding-block: 32px 64px;
+  padding-inline: 20px;
+  display: grid;
+  gap: 24px;
+}
+header { display: grid; gap: 8px; }
+h1 { font-size: 26px; line-height: 1.2; margin: 0; font-weight: 650; text-wrap: balance; }
+h2 { font-size: 16px; margin: 0; font-weight: 600; text-wrap: balance; }
+.lede { color: var(--ink-2); margin: 0; max-width: 68ch; }
+.formula {
+  font-family: var(--mono);
+  font-size: 13px;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 10px;
+  justify-self: start;
+  max-width: 100%;
+  overflow-x: auto;
+}
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; }
+.tile {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 16px;
+  display: grid;
+  gap: 12px;
+}
+.tile-head { display: flex; align-items: center; gap: 8px; font-weight: 600; }
+.swatch { width: 10px; height: 10px; border-radius: 3px; flex: none; }
+.stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px 16px; margin: 0; }
+.stats div { display: grid; gap: 2px; }
+.stats dt { color: var(--muted); font-size: 12px; }
+.stats dd { margin: 0; font-size: 20px; font-weight: 600; }
+.stats dd small { font-size: 12px; font-weight: 400; color: var(--ink-2); }
+.panel {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 16px;
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+.panel-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 8px 16px; }
+.sub { color: var(--ink-2); margin: 0; font-size: 13px; max-width: 72ch; }
+.legend { display: flex; gap: 16px; flex-wrap: wrap; font-size: 13px; color: var(--ink-2); }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.chart { width: 100%; min-width: 0; }
+.chart svg { display: block; width: 100%; height: auto; overflow: visible; }
+.chart text { fill: var(--muted); font: 11px var(--sans); font-variant-numeric: tabular-nums; }
+.chart .lbl { fill: var(--ink-2); }
+.facets { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px; }
+.facet { display: grid; gap: 4px; min-width: 0; }
+.facet-title { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; }
+.facet-title em { font-style: normal; font-weight: 400; color: var(--ink-2); }
+#tip {
+  position: fixed;
+  z-index: 10;
+  pointer-events: none;
+  background: var(--surface);
+  color: var(--ink);
+  border: 1px solid var(--border);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+  border-radius: 6px;
+  padding: 8px 10px;
+  font-size: 12px;
+  line-height: 1.45;
+  max-width: 320px;
+  font-variant-numeric: tabular-nums;
+}
+#tip .row { display: flex; align-items: center; gap: 6px; }
+#tip .path { font-family: var(--mono); font-size: 11px; color: var(--ink-2); word-break: break-all; }
+.controls { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; }
+.controls label { font-size: 13px; color: var(--ink-2); display: inline-flex; gap: 6px; align-items: center; }
+input, select, button {
+  font: inherit;
+  font-size: 13px;
+  color: var(--ink);
+  background: var(--page);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 5px 8px;
+}
+input[type="search"] { width: min(280px, 100%); }
+input[type="number"] { width: 72px; }
+button { cursor: pointer; }
+button:hover { background: var(--hover); }
+:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.table-wrap { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+th, td { text-align: left; padding: 6px 10px; border-bottom: 1px solid var(--grid); white-space: nowrap; }
+th { font-weight: 600; color: var(--ink-2); font-size: 12px; position: sticky; top: 0; background: var(--surface); }
+th button { border: 0; background: none; padding: 0; font-weight: 600; color: inherit; font-size: 12px; }
+th[aria-sort] button::after { content: " ↓"; }
+th[aria-sort="ascending"] button::after { content: " ↑"; }
+td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+td.fn { font-family: var(--mono); font-size: 12px; white-space: normal; word-break: break-all; min-width: 220px; }
+td.fn .loc { font-size: 11px; color: var(--ink-2); }
+.pill { display: inline-flex; align-items: center; gap: 6px; }
+.over { font-weight: 600; }
+.over::after { content: "▲"; font-size: 9px; margin-left: 4px; color: var(--risk-line); }
+tbody tr:hover { background: var(--hover); }
+.table-foot { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; color: var(--ink-2); font-size: 13px; }
+.notes { color: var(--ink-2); font-size: 13px; display: grid; gap: 6px; max-width: 76ch; }
+.notes p { margin: 0; }
+code { font-family: var(--mono); font-size: 12px; }
+@media (max-width: 520px) {
+  h1 { font-size: 22px; }
+  .stats dd { font-size: 17px; }
+}
+</style>
+
+<div class="wrap">
+  <header>
+    <h1>tg-workspace CRAP scores</h1>
+    <p class="lede">Every function in <code>backend/app</code> and <code>frontend/src</code>, scored at commit <code>__COMMIT__</code> on __DATE__. A score above 30 is the usual line for code that is risky to change.</p>
+    <div class="formula">CRAP = complexity² × (1 − coverage)³ + complexity</div>
+  </header>
+
+  <section class="tiles" id="tiles" aria-label="Summary per codebase"></section>
+
+  <section class="panel" aria-labelledby="h-hist">
+    <div class="panel-head">
+      <h2 id="h-hist">How scores are distributed</h2>
+      <div class="legend" id="legend-hist"></div>
+    </div>
+    <p class="sub">Share of each codebase's functions per score band. Bands widen as scores grow, because the tail runs from 30 to over 5,000.</p>
+    <div class="chart" id="hist"></div>
+  </section>
+
+  <section class="panel" aria-labelledby="h-cdf">
+    <div class="panel-head">
+      <h2 id="h-cdf">Share of functions at or below a score</h2>
+      <div class="legend" id="legend-cdf"></div>
+    </div>
+    <p class="sub">Read across from any score to see what fraction of functions stay under it. The gap between the curves past 30 is the frontend's untested component tail.</p>
+    <div class="chart" id="cdf"></div>
+  </section>
+
+  <section class="panel" aria-labelledby="h-scatter">
+    <div class="panel-head">
+      <h2 id="h-scatter">Complexity against coverage</h2>
+    </div>
+    <p class="sub">Each dot is one function. The shaded region scores above 30. Left of complexity 5 no function can cross 30; right of 30 no amount of coverage brings one back under.</p>
+    <div class="facets" id="scatter"></div>
+  </section>
+
+  <section class="panel" aria-labelledby="h-table">
+    <div class="panel-head">
+      <h2 id="h-table">Every function</h2>
+    </div>
+    <div class="controls">
+      <input type="search" id="q" placeholder="Filter by function or file" aria-label="Filter by function or file">
+      <label for="side">Codebase
+        <select id="side">
+          <option value="all">Both</option>
+          <option value="0">Backend</option>
+          <option value="1">Frontend</option>
+        </select>
+      </label>
+      <label for="min">Min CRAP <input type="number" id="min" min="0" step="1" value="0"></label>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th data-k="side">Codebase</th>
+            <th data-k="name"><button type="button">Function</button> · <button type="button" data-k2="loc">Location</button></th>
+            <th data-k="cc" class="num"><button type="button">Complexity</button></th>
+            <th data-k="cov" class="num"><button type="button">Coverage</button></th>
+            <th data-k="crap" class="num" aria-sort="descending"><button type="button">CRAP</button></th>
+          </tr>
+        </thead>
+        <tbody id="tbody"></tbody>
+      </table>
+    </div>
+    <div class="table-foot">
+      <span id="count"></span>
+      <button type="button" id="more">Show 100 more</button>
+    </div>
+  </section>
+
+  <section class="notes" aria-label="How this was measured">
+    <h2>How this was measured</h2>
+    <p>Backend complexity is radon's cyclomatic complexity. Coverage is coverage.py line coverage from the full pytest suite (__BACKEND_TESTS__, __BACKEND_LINE_COV__ of lines).</p>
+    <p>Frontend complexity follows ESLint's <code>complexity</code> rule, counted on the TypeScript AST. Coverage is bun's line coverage from <code>bun test src</code> (__FRONTEND_TESTS__). Playwright runs are not counted, so components that only e2e exercises show as 0% covered and their scores overstate the risk.</p>
+    <p>Nested functions and closures are scored on their own on both sides, and their lines don't count toward the enclosing function. The generated client, tests and <code>.conform.ts</code> files are excluded.</p>
+  </section>
+</div>
+<div id="tip" hidden></div>
+
+<script>
+const DATA = __DATA__
+const SIDES = ["Backend", "Frontend"]
+const SERIES = ["var(--s1)", "var(--s2)"]
+const NS = "http://www.w3.org/2000/svg"
+
+const rows = DATA.rows.map(([side, fi, line, name, cc, cov], i) => ({
+  i, side, name, cc, cov,
+  file: DATA.files[fi],
+  line,
+  crap: cc * cc * (1 - cov) ** 3 + cc,
+}))
+const bySide = [0, 1].map((s) => rows.filter((r) => r.side === s))
+const sorted = bySide.map((rs) => rs.map((r) => r.crap).sort((a, b) => a - b))
+
+const fmt = (n, d = 0) => n.toLocaleString("en-US", { maximumFractionDigits: d, minimumFractionDigits: d })
+const pct = (n, d = 1) => `${fmt(n * 100, d)}%`
+const q = (arr, p) => arr[Math.min(arr.length - 1, Math.floor(p * (arr.length - 1)))]
+
+function el(tag, attrs = {}, parent) {
+  const e = document.createElementNS(NS, tag)
+  for (const [k, v] of Object.entries(attrs)) e.setAttribute(k, v)
+  if (parent) parent.appendChild(e)
+  return e
+}
+function text(parent, x, y, s, attrs = {}) {
+  const t = el("text", { x, y, ...attrs }, parent)
+  t.textContent = s
+  return t
+}
+function svgFor(host, w, h, label) {
+  host.textContent = ""
+  const s = el("svg", { viewBox: `0 0 ${w} ${h}`, role: "img", "aria-label": label })
+  host.appendChild(s)
+  return s
+}
+function swatch(i) {
+  return `<span class="swatch" style="background:${SERIES[i]}"></span>`
+}
+
+// Tooltip
+const tip = document.getElementById("tip")
+function showTip(html, ev) {
+  tip.innerHTML = html
+  tip.hidden = false
+  const pad = 14
+  const r = tip.getBoundingClientRect()
+  let x = ev.clientX + pad
+  let y = ev.clientY + pad
+  if (x + r.width > innerWidth - 8) x = ev.clientX - r.width - pad
+  if (y + r.height > innerHeight - 8) y = ev.clientY - r.height - pad
+  tip.style.left = `${Math.max(8, x)}px`
+  tip.style.top = `${Math.max(8, y)}px`
+}
+function hideTip() { tip.hidden = true }
+
+// Tiles
+document.getElementById("tiles").innerHTML = [0, 1].map((s) => {
+  const a = sorted[s]
+  const over = a.filter((v) => v > 30).length
+  return `<div class="tile">
+    <div class="tile-head">${swatch(s)}${SIDES[s]}</div>
+    <dl class="stats">
+      <div><dt>Functions</dt><dd>${fmt(a.length)}</dd></div>
+      <div><dt>Median</dt><dd>${fmt(q(a, 0.5), 1)}</dd></div>
+      <div><dt>90th percentile</dt><dd>${fmt(q(a, 0.9), 1)}</dd></div>
+      <div><dt>99th percentile</dt><dd>${fmt(q(a, 0.99), 0)}</dd></div>
+      <div><dt>Worst</dt><dd>${fmt(a[a.length - 1], 0)}</dd></div>
+      <div><dt>Above 30</dt><dd>${fmt(over)} <small>${pct(over / a.length)}</small></dd></div>
+    </dl>
+  </div>`
+}).join("")
+
+const legendHtml = [0, 1].map((s) => `<span>${swatch(s)}${SIDES[s]}</span>`).join("")
+document.getElementById("legend-hist").innerHTML = legendHtml
+document.getElementById("legend-cdf").innerHTML = legendHtml
+
+// Histogram
+const EDGES = [1, 2, 3, 5, 10, 20, 30, 50, 100, 300, 1000, Infinity]
+const BIN_LABELS = ["1–2", "2–3", "3–5", "5–10", "10–20", "20–30", "30–50", "50–100", "100–300", "300–1k", "1k+"]
+const bins = [0, 1].map((s) => {
+  const c = new Array(BIN_LABELS.length).fill(0)
+  for (const v of sorted[s]) {
+    let b = 0
+    while (v > EDGES[b + 1]) b++
+    c[b]++
+  }
+  return c
+})
+
+function niceMax(v) {
+  const steps = [0.05, 0.1, 0.2, 0.25, 0.4, 0.5, 0.6, 0.8, 1]
+  return steps.find((s) => s >= v) ?? 1
+}
+
+function drawHist() {
+  const host = document.getElementById("hist")
+  const W = Math.max(320, host.clientWidth)
+  const H = W < 560 ? 280 : 320
+  const m = { t: 20, r: 8, b: 44, l: 44 }
+  const s = svgFor(host, W, H, "Histogram of CRAP scores per codebase, share of functions per band")
+  const iw = W - m.l - m.r
+  const ih = H - m.t - m.b
+  const shares = bins.map((c, si) => c.map((n) => n / sorted[si].length))
+  const ymax = niceMax(Math.max(...shares.flat()) * 1.05)
+  const y = (v) => m.t + ih - (v / ymax) * ih
+  const ticks = 5
+  for (let k = 0; k <= ticks; k++) {
+    const v = (ymax / ticks) * k
+    el("line", { x1: m.l, x2: W - m.r, y1: y(v), y2: y(v), stroke: k === 0 ? "var(--axis)" : "var(--grid)", "stroke-width": 1 }, s)
+    text(s, m.l - 6, y(v) + 4, pct(v, 0), { "text-anchor": "end" })
+  }
+  const band = iw / BIN_LABELS.length
+  const bw = Math.min(24, (band - 10) / 2)
+  // Threshold rule between "20–30" and "30–50"
+  const tx = m.l + band * 6
+  el("rect", { x: tx, y: m.t, width: W - m.r - tx, height: ih, fill: "var(--risk)" }, s)
+  el("line", { x1: tx, x2: tx, y1: m.t - 6, y2: m.t + ih, stroke: "var(--risk-line)", "stroke-width": 1 }, s)
+  text(s, tx + 6, m.t + 4, "above 30", { class: "lbl" })
+  BIN_LABELS.forEach((lab, b) => {
+    const cx = m.l + band * b + band / 2
+    text(s, cx, H - m.b + 16, lab, { "text-anchor": "middle" })
+    ;[0, 1].forEach((si) => {
+      const v = shares[si][b]
+      const x = cx - bw - 1 + si * (bw + 2)
+      const top = y(v)
+      const h = m.t + ih - top
+      if (h > 0) {
+        const r = Math.min(4, h, bw / 2)
+        el("path", {
+          d: `M${x},${m.t + ih}V${top + r}Q${x},${top} ${x + r},${top}H${x + bw - r}Q${x + bw},${top} ${x + bw},${top + r}V${m.t + ih}Z`,
+          fill: SERIES[si],
+        }, s)
+      }
+    })
+    const hit = el("rect", { x: m.l + band * b, y: m.t, width: band, height: ih, fill: "transparent" }, s)
+    const html = () => `<strong>CRAP ${lab}</strong>${[0, 1].map((si) =>
+      `<div class="row">${swatch(si)}${SIDES[si]}: ${fmt(bins[si][b])} functions · ${pct(shares[si][b])}</div>`).join("")}`
+    hit.addEventListener("pointermove", (ev) => { hit.setAttribute("fill", "var(--hover)"); showTip(html(), ev) })
+    hit.addEventListener("pointerleave", () => { hit.setAttribute("fill", "transparent"); hideTip() })
+  })
+  text(s, m.l + iw / 2, H - 6, "CRAP score band", { "text-anchor": "middle", class: "lbl" })
+}
+
+// CDF
+function drawCdf() {
+  const host = document.getElementById("cdf")
+  const W = Math.max(320, host.clientWidth)
+  const H = W < 560 ? 260 : 300
+  const m = { t: 16, r: 16, b: 40, l: 44 }
+  const s = svgFor(host, W, H, "Cumulative share of functions at or below each CRAP score, log scale")
+  const iw = W - m.l - m.r
+  const ih = H - m.t - m.b
+  const lx0 = 0
+  const lx1 = Math.log10(10000)
+  const x = (v) => m.l + ((Math.log10(Math.max(1, v)) - lx0) / (lx1 - lx0)) * iw
+  const y = (p) => m.t + ih - p * ih
+  for (let k = 0; k <= 4; k++) {
+    const p = k / 4
+    el("line", { x1: m.l, x2: W - m.r, y1: y(p), y2: y(p), stroke: k === 0 ? "var(--axis)" : "var(--grid)", "stroke-width": 1 }, s)
+    text(s, m.l - 6, y(p) + 4, pct(p, 0), { "text-anchor": "end" })
+  }
+  for (const v of [1, 3, 10, 30, 100, 300, 1000, 3000, 10000]) {
+    el("line", { x1: x(v), x2: x(v), y1: m.t, y2: m.t + ih, stroke: "var(--grid)", "stroke-width": 1 }, s)
+    text(s, x(v), H - m.b + 16, v >= 1000 ? `${v / 1000}k` : String(v), { "text-anchor": "middle" })
+  }
+  el("rect", { x: x(30), y: m.t, width: W - m.r - x(30), height: ih, fill: "var(--risk)" }, s)
+  el("line", { x1: x(30), x2: x(30), y1: m.t, y2: m.t + ih, stroke: "var(--risk-line)", "stroke-width": 1 }, s)
+  text(s, x(30) + 6, y(0.08), "above 30", { class: "lbl" })
+  const cum = (si, v) => {
+    const a = sorted[si]
+    let lo = 0
+    let hi = a.length
+    while (lo < hi) { const mid = (lo + hi) >> 1; if (a[mid] <= v) lo = mid + 1; else hi = mid }
+    return lo / a.length
+  }
+  ;[0, 1].forEach((si) => {
+    const a = sorted[si]
+    let d = `M${x(1)},${y(0)}`
+    let prev = 0
+    for (let k = 0; k < a.length; k++) {
+      if (k < a.length - 1 && a[k + 1] === a[k]) continue
+      const p = (k + 1) / a.length
+      d += `H${x(a[k])}V${y(p)}`
+      prev = p
+    }
+    d += `H${x(10000)}`
+    el("path", { d, fill: "none", stroke: SERIES[si], "stroke-width": 2, "stroke-linejoin": "round", "stroke-linecap": "round" }, s)
+    const p30 = cum(si, 30)
+    el("circle", { cx: x(30), cy: y(p30), r: 4, fill: SERIES[si], stroke: "var(--surface)", "stroke-width": 2 }, s)
+    text(s, x(30) - 8, y(p30) + (si === 0 ? -8 : 16), `${SIDES[si]} ${pct(p30)}`, { "text-anchor": "end", class: "lbl" })
+    void prev
+  })
+  const cross = el("line", { y1: m.t, y2: m.t + ih, stroke: "var(--axis)", "stroke-width": 1, visibility: "hidden" }, s)
+  const hit = el("rect", { x: m.l, y: m.t, width: iw, height: ih, fill: "transparent" }, s)
+  hit.addEventListener("pointermove", (ev) => {
+    const pt = s.createSVGPoint()
+    pt.x = ev.clientX
+    pt.y = ev.clientY
+    const loc = pt.matrixTransform(s.getScreenCTM().inverse())
+    const v = 10 ** (((loc.x - m.l) / iw) * (lx1 - lx0) + lx0)
+    cross.setAttribute("x1", loc.x)
+    cross.setAttribute("x2", loc.x)
+    cross.setAttribute("visibility", "visible")
+    showTip(`<strong>CRAP ≤ ${fmt(v, v < 10 ? 1 : 0)}</strong>${[0, 1].map((si) =>
+      `<div class="row">${swatch(si)}${SIDES[si]}: ${pct(cum(si, v))}</div>`).join("")}`, ev)
+  })
+  hit.addEventListener("pointerleave", () => { cross.setAttribute("visibility", "hidden"); hideTip() })
+  text(s, m.l + iw / 2, H - 4, "CRAP score (log scale)", { "text-anchor": "middle", class: "lbl" })
+}
+
+// Scatter
+function jitter(i, k) {
+  const v = Math.sin((i + 1) * 12.9898 + k * 78.233) * 43758.5453
+  return v - Math.floor(v) - 0.5
+}
+function drawScatter() {
+  const host = document.getElementById("scatter")
+  host.textContent = ""
+  const maxcc = Math.max(...rows.map((r) => r.cc))
+  const boxes = [0, 1].map((si) => {
+    const rs = bySide[si]
+    const over = rs.filter((r) => r.crap > 30).length
+    const wrap = document.createElement("div")
+    wrap.className = "facet"
+    wrap.innerHTML = `<div class="facet-title">${swatch(si)}${SIDES[si]} <em>${fmt(over)} of ${fmt(rs.length)} in the shaded region</em></div>`
+    const box = document.createElement("div")
+    box.className = "chart"
+    wrap.appendChild(box)
+    host.appendChild(wrap)
+    return box
+  })
+  ;[0, 1].forEach((si) => {
+    const rs = bySide[si]
+    const box = boxes[si]
+    const W = Math.max(300, box.clientWidth)
+    const H = Math.round(W * 0.72)
+    const m = { t: 10, r: 10, b: 38, l: 44 }
+    const s = svgFor(box, W, H, `${SIDES[si]}: cyclomatic complexity against line coverage per function`)
+    const iw = W - m.l - m.r
+    const ih = H - m.t - m.b
+    const lmax = Math.log10(maxcc * 1.15)
+    const x = (cc) => m.l + (Math.log10(cc) / lmax) * iw
+    const y = (c) => m.t + ih - c * ih
+    for (const c of [0, 0.25, 0.5, 0.75, 1]) {
+      el("line", { x1: m.l, x2: W - m.r, y1: y(c), y2: y(c), stroke: c === 0 ? "var(--axis)" : "var(--grid)", "stroke-width": 1 }, s)
+      text(s, m.l - 6, y(c) + 4, pct(c, 0), { "text-anchor": "end" })
+    }
+    for (const cc of [1, 2, 5, 10, 20, 30, 50]) {
+      if (cc > maxcc * 1.15) continue
+      el("line", { x1: x(cc), x2: x(cc), y1: m.t, y2: m.t + ih, stroke: "var(--grid)", "stroke-width": 1 }, s)
+      text(s, x(cc), H - m.b + 16, String(cc), { "text-anchor": "middle" })
+    }
+    // CRAP = 30 boundary: coverage needed = 1 - cbrt((30 - cc) / cc²), for 5 <= cc <= 30
+    let d = `M${x(5)},${y(0)}`
+    let edge = `M${x(5)},${y(0)}`
+    for (let cc = 5; cc <= 30; cc += 0.25) {
+      const need = 1 - Math.cbrt((30 - cc) / (cc * cc))
+      d += `L${x(cc)},${y(need)}`
+      edge += `L${x(cc)},${y(need)}`
+    }
+    d += `L${x(30)},${y(1)}L${W - m.r},${y(1)}L${W - m.r},${y(0)}Z`
+    el("path", { d, fill: "var(--risk)" }, s)
+    el("path", { d: `${edge}V${m.t}`, fill: "none", stroke: "var(--risk-line)", "stroke-width": 1 }, s)
+    text(s, W - m.r - 6, y(0.5), "CRAP > 30", { "text-anchor": "end", class: "lbl" })
+    const pts = rs.map((r) => {
+      const px = x(r.cc * 10 ** (jitter(r.i, 1) * 0.06))
+      const py = y(Math.min(1, Math.max(0, r.cov + jitter(r.i, 2) * 0.03)))
+      return { r, px, py }
+    })
+    const g = el("g", { fill: SERIES[si], "fill-opacity": 0.45 }, s)
+    for (const p of pts) el("circle", { cx: p.px.toFixed(1), cy: p.py.toFixed(1), r: 2.5 }, g)
+    const ring = el("circle", { r: 5, fill: SERIES[si], stroke: "var(--surface)", "stroke-width": 2, visibility: "hidden" }, s)
+    text(s, m.l + iw / 2, H - 4, "Cyclomatic complexity (log scale)", { "text-anchor": "middle", class: "lbl" })
+    const yl = text(s, 0, 0, "Line coverage", { "text-anchor": "middle", class: "lbl", transform: `translate(11 ${m.t + ih / 2}) rotate(-90)` })
+    void yl
+    const hit = el("rect", { x: m.l, y: m.t, width: iw, height: ih, fill: "transparent" }, s)
+    hit.addEventListener("pointermove", (ev) => {
+      const pt = s.createSVGPoint()
+      pt.x = ev.clientX
+      pt.y = ev.clientY
+      const loc = pt.matrixTransform(s.getScreenCTM().inverse())
+      let best = null
+      let bd = 144
+      for (const p of pts) {
+        const dd = (p.px - loc.x) ** 2 + (p.py - loc.y) ** 2
+        if (dd < bd) { bd = dd; best = p }
+      }
+      if (!best) { ring.setAttribute("visibility", "hidden"); hideTip(); return }
+      ring.setAttribute("cx", best.px)
+      ring.setAttribute("cy", best.py)
+      ring.setAttribute("visibility", "visible")
+      const r = best.r
+      showTip(`<strong>${esc(r.name)}</strong><div class="path">${esc(r.file)}:${r.line}</div>
+        <div>Complexity ${r.cc} · coverage ${pct(r.cov, 0)} · CRAP ${fmt(r.crap, 1)}</div>`, ev)
+    })
+    hit.addEventListener("pointerleave", () => { ring.setAttribute("visibility", "hidden"); hideTip() })
+  })
+}
+
+function esc(s) {
+  return s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c])
+}
+
+// Table
+const state = { q: "", side: "all", min: 0, key: "crap", dir: -1, limit: 100 }
+const tbody = document.getElementById("tbody")
+function renderTable() {
+  const needle = state.q.toLowerCase()
+  let list = rows.filter((r) =>
+    (state.side === "all" || r.side === Number(state.side)) &&
+    r.crap >= state.min &&
+    (!needle || r.name.toLowerCase().includes(needle) || r.file.toLowerCase().includes(needle)))
+  const k = state.key
+  const val = (r) => (k === "loc" ? `${r.file}:${String(r.line).padStart(6, "0")}` : r[k])
+  list.sort((a, b) => {
+    const va = val(a)
+    const vb = val(b)
+    return (va < vb ? -1 : va > vb ? 1 : 0) * state.dir
+  })
+  const shown = list.slice(0, state.limit)
+  tbody.innerHTML = shown.map((r) => `<tr>
+    <td><span class="pill">${swatch(r.side)}${SIDES[r.side]}</span></td>
+    <td class="fn">${esc(r.name)}<div class="loc">${esc(r.file)}:${r.line}</div></td>
+    <td class="num">${r.cc}</td>
+    <td class="num">${pct(r.cov, 0)}</td>
+    <td class="num${r.crap > 30 ? " over" : ""}">${fmt(r.crap, 1)}</td>
+  </tr>`).join("")
+  document.getElementById("count").textContent = `Showing ${fmt(shown.length)} of ${fmt(list.length)} functions`
+  document.getElementById("more").hidden = shown.length >= list.length
+  document.querySelectorAll("th[data-k]").forEach((th) => {
+    if (th.dataset.k === state.key || (th.dataset.k === "name" && state.key === "loc")) th.setAttribute("aria-sort", state.dir < 0 ? "descending" : "ascending")
+    else th.removeAttribute("aria-sort")
+  })
+}
+document.getElementById("q").addEventListener("input", (e) => { state.q = e.target.value; state.limit = 100; renderTable() })
+document.getElementById("side").addEventListener("change", (e) => { state.side = e.target.value; state.limit = 100; renderTable() })
+document.getElementById("min").addEventListener("input", (e) => { state.min = Number(e.target.value) || 0; state.limit = 100; renderTable() })
+document.getElementById("more").addEventListener("click", () => { state.limit += 100; renderTable() })
+document.querySelectorAll("th[data-k] button").forEach((b) => b.addEventListener("click", () => {
+  const k = b.dataset.k2 ?? b.parentElement.dataset.k
+  if (state.key === k) state.dir = -state.dir
+  else { state.key = k; state.dir = k === "name" || k === "loc" ? 1 : -1 }
+  renderTable()
+}))
+
+function drawAll() { drawHist(); drawCdf(); drawScatter() }
+drawAll()
+renderTable()
+let rt
+let lastW = innerWidth
+addEventListener("resize", () => {
+  if (innerWidth === lastW) return
+  lastW = innerWidth
+  clearTimeout(rt)
+  rt = setTimeout(drawAll, 150)
+})
+</script>
