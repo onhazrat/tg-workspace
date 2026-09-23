@@ -53,6 +53,18 @@ into the corpus; the statistics are kept once computed, so an entry that stops
 being probed still describes the Channel after its sample is collected.
 _Avoid_: probe, probe row, map row
 
+**Channel counters**:
+The five counts Telegram shows on a Channel's page: subscribers, photos,
+videos, files and links. Each is a number, exact below 1,000 and rounded to
+three significant digits above it, because that is all the page reveals. A
+counter the page does not show is absent, which is not the same as zero.
+_Avoid_: stats, metadata, subscriber string
+
+**View count**:
+How many times a Post was seen, as a number rounded the way Channel counters
+are. Reactions are counted per chip, never as one flattened line.
+_Avoid_: views string, impressions
+
 **Candidate**:
 A Directory entry that a Discovery report's scan surfaced. The distinction is
 the Scope: every Candidate is a Directory entry, but a Directory entry only
