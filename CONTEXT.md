@@ -87,6 +87,20 @@ _Avoid_: initial sync, backfill
 One message scraped from a Channel.
 _Avoid_: message, item, entry
 
+**Language**:
+The human language a Post is written in, read from the Post's own words by the
+deployment rather than chosen by anybody. A Post with no words has no Language;
+a Post whose words cannot be placed has an undetermined one, which is a
+different claim. A Channel's Language is the most common among its own recent
+Posts, counting forwards only when it has nothing of its own, and a Directory
+entry's is derived the same way from its sample. Neither is ever set directly.
+_Avoid_: locale, lang, script, channel language (as something set)
+
+**Translation language**:
+The one Language the deployment translates Posts into. Deployment policy, not an
+Account's preference.
+_Avoid_: target language, translation target
+
 **Scope**:
 The slice of Posts an operation runs over: selected Channels × an Analysis
 window × the active post filters. Every Artifact freezes a snapshot of the
@@ -191,6 +205,12 @@ _Avoid_: discover report, discovery run, candidates list
 The state of an Artifact whose prompt was copied for an external AI but whose
 response has not been pasted back. Applies to Summary and Tag run only.
 _Avoid_: draft, incomplete, awaiting
+
+**Output language**:
+The Language an Artifact is written in, chosen by the Account that asks for it.
+Unrelated to the Languages of the Posts in its Scope: a Summary of Persian Posts
+may be written in English.
+_Avoid_: AI language, summary language, target language
 
 ### Chat modes
 

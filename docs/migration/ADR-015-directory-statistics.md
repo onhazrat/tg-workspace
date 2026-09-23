@@ -1,7 +1,8 @@
 # ADR-015: Directory statistics are stored at probe time, not derived on read
 
 **Status:** Accepted (2026-09-08). Extends ADR-014, which created the Directory and its sample
-Posts.
+Posts. The `script` statistic is superseded by an entry Language
+([ADR-021](./ADR-021-post-language.md)).
 
 ## Context
 
