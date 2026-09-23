@@ -1,5 +1,6 @@
 import { ExternalLink, Loader2 } from "lucide-react"
 import { useEffect, useState } from "react"
+import { renderPostText } from "@/lib/posts/render-post-text"
 import { getPost } from "@/lib/posts/store"
 import { telegramWebViewPostUrl } from "../lib/telegram-web"
 import type { Post } from "../types"
@@ -95,7 +96,9 @@ export function CitationHover({
               className={`text-sm leading-relaxed max-h-64 overflow-y-auto pr-1 whitespace-pre-wrap break-words ${textIsRTL ? "text-right" : "text-left"}`}
               dir={textIsRTL ? "rtl" : "ltr"}
             >
-              {post.text || "No text content available."}
+              {post.text
+                ? renderPostText(post.text, "", post.linkSpans)
+                : "No text content available."}
             </div>
           ) : (
             <div className="text-sm italic opacity-60 py-2 text-center">

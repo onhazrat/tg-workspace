@@ -38,13 +38,14 @@ export function isValidChannelHandle(name: string): boolean {
   return !RESERVED_TELEGRAM_PATHS.has(clean.toLowerCase())
 }
 
-function legacyDomains(): string[] {
+/** The hosts a Telegram link may use: the configured domain, `t.me`, `telegram.me`. */
+export function telegramHosts(): string[] {
   return [
     ...new Set([telegramWebDomain().toLowerCase(), "t.me", "telegram.me"]),
   ]
 }
 
-function escapeRegExp(value: string): string {
+export function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
 }
 
@@ -87,7 +88,7 @@ export function channelFromTelegramPath(path: string): string | null {
 /** Channel handles from plain-text `t.me/...` URLs in post text. */
 export function extractTextLinks(text: string): string[] {
   if (!text) return []
-  const domains = legacyDomains().map(escapeRegExp).join("|")
+  const domains = telegramHosts().map(escapeRegExp).join("|")
   const re = new RegExp(
     `(?:https?://)?(?:www\\.)?(?:${domains})/([^\\s<>"')\\]]+)`,
     "gi",

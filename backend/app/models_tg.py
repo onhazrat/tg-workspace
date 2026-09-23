@@ -283,6 +283,11 @@ class Post(SQLModel, table=True):
     # Telegram channel links found in the post body (masked hrefs the plain-text
     # extraction discards). Shape: [{"url": str, "channel": str}]
     links: list[Any] | None = Field(default=None, sa_column=Column(JSON))
+    # Every Link in the body, positioned over `text` in UTF-16 code units, href
+    # verbatim (LINK-01, ADR-022). Null means the Post was stored before Links
+    # were read; an empty list means Telegram marked nothing.
+    # Shape: [{"offset": int, "length": int, "url": str}]
+    link_spans: list[Any] | None = Field(default=None, sa_column=Column(JSON))
     # The post this one replies to. `reply_to["text"]` is Telegram's truncated
     # excerpt of the parent, not its full body.
     # Shape: {"channel": str, "authorName": str, "text": str, "url": str}

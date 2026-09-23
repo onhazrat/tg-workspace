@@ -7,6 +7,7 @@ import type {
   DiscoveryArtifactResponse,
   EmbeddingLogResponse,
   FrozenScope,
+  PostLinkSpan,
   PostTranslationResponse,
   PublishLogResponse,
   SummaryArtifactResponse,
@@ -135,6 +136,9 @@ export interface PostReplyRef {
   url?: string | null
 }
 
+/** One Link in a post body, positioned over `text` in UTF-16 units (ADR-022). */
+export type { PostLinkSpan }
+
 export interface Post {
   id: number
   channelName: string
@@ -143,6 +147,8 @@ export interface Post {
   timestamp: number
   media?: PostMedia | null
   links?: PostBodyLink[] | null
+  /** `null` for a Post stored before LINK-01; empty when nothing was marked. */
+  linkSpans?: PostLinkSpan[] | null
   replyToPostId?: number | null
   replyTo?: PostReplyRef | null
   forwardedFrom?: string

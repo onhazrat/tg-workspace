@@ -61,7 +61,8 @@ This spec makes a Post keep its Links and render them. The decision is recorded 
   otherwise leave the app on a `mailto:`. Telegram's own attributes (`onclick`, `rel`) are never
   copied; only the href is stored.
 - **A masked Link shows its destination on hover**: a Link whose words differ from its URL gets
-  `title` set to the full URL.
+  `title` set to the address a click opens, which for a Telegram Link is the web view it is
+  rewritten to.
 
 ## Facts the implementer needs
 

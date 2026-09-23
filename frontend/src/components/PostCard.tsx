@@ -451,7 +451,12 @@ export const PostCard: React.FC<PostCardProps> = ({ post, postSearch }) => {
               isLongPost && !isExpanded ? "max-h-64 overflow-hidden" : ""
             }`}
           >
-            {renderPostText(activeText, postSearch)}
+            {renderPostText(
+              activeText,
+              postSearch,
+              // A translation has no positions of its own (ADR-022).
+              activeText === post.text ? post.linkSpans : null,
+            )}
           </p>
           {isLongPost && !isExpanded ? (
             <div className="pointer-events-none absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-app-card to-transparent" />

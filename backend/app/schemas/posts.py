@@ -3,7 +3,7 @@
 Third family converted under B3 of `docs/architecture-simplification-plan.md`.
 
 Unlike `ChannelResponse` and `SummaryResponse`, `PostResponse` is **closed**:
-`post_to_camel` emits exactly seventeen keys and merges nothing conditional, so
+`post_to_camel` emits a fixed set of keys and merges nothing conditional, so
 there is no open `extra` blob to carry and no reason to allow one. The open
 models in this codebase are the exception, not the pattern.
 
@@ -37,6 +37,18 @@ from app.services.posts import (
 )
 
 
+class PostLinkSpan(BaseModel):
+    """One Link: a stretch of `text` in UTF-16 code units, href verbatim (ADR-022).
+
+    Declared where `links` is not, because every stored entry carries all three
+    keys, so the model can never invent a `null` on the way out.
+    """
+
+    offset: int
+    length: int
+    url: str
+
+
 class PostResponse(BaseModel):
     """One post, as `post_to_camel` builds it."""
 
@@ -59,6 +71,8 @@ class PostResponse(BaseModel):
     media: dict[str, Any] | None = None
     # Shape: [{"url": str, "channel": str}]
     links: list[Any] | None = None
+    # Null for a Post stored before LINK-01; empty when Telegram marked nothing.
+    link_spans: list[PostLinkSpan] | None = Field(default=None, alias="linkSpans")
     reply_to_post_id: int | None = Field(default=None, alias="replyToPostId")
     # Shape: {"channel": str, "authorName": str, "text": str, "url": str}
     reply_to: dict[str, Any] | None = Field(default=None, alias="replyTo")

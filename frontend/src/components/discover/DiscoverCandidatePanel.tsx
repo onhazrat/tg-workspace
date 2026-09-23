@@ -23,6 +23,7 @@ import {
   candidateStatistics,
   panelStatistics,
 } from "@/lib/posts/discover-statistics"
+import { renderPostText } from "@/lib/posts/render-post-text"
 import {
   telegramWebViewChannelUrl,
   telegramWebViewPostUrl,
@@ -398,7 +399,7 @@ export const DiscoverCandidatePanel: React.FC<DiscoverCandidatePanelProps> = ({
                         className="max-h-64 overflow-y-auto whitespace-pre-wrap rounded-lg border border-app-ink/10 bg-app-muted/30 p-3 text-sm"
                         data-testid="discover-panel-reference-text"
                       >
-                        {post.text}
+                        {renderPostText(post.text, "", post.linkSpans)}
                       </blockquote>
                     ) : (
                       <p
