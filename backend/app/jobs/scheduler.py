@@ -30,6 +30,11 @@ from app.jobs.discover_probe import (
     DISCOVER_PROBE_JOB_ID,
     run_discover_probe_sweep,
 )
+from app.jobs.post_language import (
+    POST_LANGUAGE_INTERVAL_SECONDS,
+    POST_LANGUAGE_JOB_ID,
+    run_post_language_walk,
+)
 from app.jobs.retention import run_retention_cleanup
 from app.jobs.settings import (
     JOB_IDS,
@@ -231,6 +236,10 @@ async def job_directory_harvest() -> None:
     await _run_guarded(DIRECTORY_HARVEST_JOB_ID, run_directory_harvest_sweep)
 
 
+async def job_post_language() -> None:
+    await _run_guarded(POST_LANGUAGE_JOB_ID, run_post_language_walk)
+
+
 _JOB_RUNNERS: dict[str, Callable[[], Awaitable[None]]] = {
     "auto_sync": job_auto_sync,
     "embeddings": job_embeddings,
@@ -239,6 +248,7 @@ _JOB_RUNNERS: dict[str, Callable[[], Awaitable[None]]] = {
     "translation_batch": job_translation_batch,
     DISCOVER_PROBE_JOB_ID: job_discover_probe,
     DIRECTORY_HARVEST_JOB_ID: job_directory_harvest,
+    POST_LANGUAGE_JOB_ID: job_post_language,
 }
 
 
@@ -509,6 +519,18 @@ def start_scheduler() -> None:
         # `POST_REFERENCE_SCAN_LIMIT` Posts, which can outlast a 1s grace on a
         # loaded deployment. Running late is fine; a dropped tick leaves the
         # map that much staler.
+        misfire_grace_time=None,
+        coalesce=True,
+    )
+    scheduler.add_job(
+        job_post_language,
+        "interval",
+        seconds=POST_LANGUAGE_INTERVAL_SECONDS,
+        id=POST_LANGUAGE_JOB_ID,
+        replace_existing=True,
+        # Same reasoning as the harvest above. A backfill tick reads a page of
+        # Posts, which can outlast a 1s grace, and a dropped tick only delays
+        # the walk.
         misfire_grace_time=None,
         coalesce=True,
     )
