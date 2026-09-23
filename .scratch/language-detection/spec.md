@@ -170,7 +170,7 @@ borderline two-word cases, so a model update cannot flake them. Every new guard 
 before it is trusted.
 
 - **The Post write path**, asserted on database rows. Covered: a new Post gets its code, a
-  captionless photo gets `zxx`, an emoji-only or two-letter Post gets `und`, an unchanged
+  captionless photo and an emoji-only Post get `zxx`, a one-word Post gets `und`, an unchanged
   re-scrape leaves the Language untouched, an edited Post is read again, and an import's Language
   is ignored. Channel derivation is asserted through the same seam: majority of own Posts, forwards
   ignored when own Posts exist and used when none do, null when nothing is readable, and a Channel

@@ -37,6 +37,7 @@ from sqlalchemy.dialects.postgresql import JSONB
 from sqlmodel import col
 
 from app.models_tg import Post
+from app.services.post_media_parser import LEGACY_MEDIA_PLACEHOLDER
 
 ForwardedFilter = Literal["all", "forwarded", "original", "unfollowed_forwarded"]
 MediaFilter = Literal[
@@ -62,9 +63,6 @@ MEDIA_FILTERS: frozenset[str] = frozenset(
 _MEDIA_ONLY_TEXT_RE = (
     r"^\[(photo|video|voice|audio|document|poll|sticker|photo album)\]"
 )
-
-# Frontend sentinel: text set to this exact string means "media, no caption".
-_MEDIA_PLACEHOLDER_TEXT = "[Media/No Text Content]"
 
 
 @dataclass(frozen=True)
@@ -113,7 +111,7 @@ def _kinds_contains(kind: str) -> ColumnElement[bool]:
 
 def _is_media_only() -> ColumnElement[bool]:
     flag = _media_jsonb().op("->>")("isMediaOnly") == "true"
-    placeholder = and_(_has_media(), col(Post.text) == _MEDIA_PLACEHOLDER_TEXT)
+    placeholder = and_(_has_media(), col(Post.text) == LEGACY_MEDIA_PLACEHOLDER)
     text_re = func.trim(col(Post.text)).op("~*")(_MEDIA_ONLY_TEXT_RE)
     return or_(flag, placeholder, text_re)
 

@@ -52,7 +52,9 @@ likely to be caption-less are exactly the image-heavy ones. Reading `caption`
 off the media block rather than `text` excludes every placeholder by
 construction: the stored block carries that key only where the Post actually had
 a caption, so a Post with no media block at all is the one case where `text`
-*is* the caption. See `_caption`.
+*is* the caption, unless it is the parser's legacy `[Media/No Text Content]`,
+which reads as no words since LANG-01. See `language.own_words`, which the
+Post write path shares.
 
 **The mix is a share of the counters against each other, with no denominator.**
 The obvious construction — each counter over the Post count, as a percentage —
@@ -74,8 +76,9 @@ import statistics
 from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import Any, Protocol
+from typing import Protocol
 
+from app.services.language import HasWords, own_words
 from app.services.post_media_parser import parse_abbreviated_count
 
 #: How many samples a rate needs before it is reported at all.
@@ -89,18 +92,17 @@ MIN_SAMPLES = 5
 _WEEK_MS = 7 * 24 * 60 * 60 * 1000
 
 
-class SamplePost(Protocol):
+class SamplePost(HasWords, Protocol):
     """The four attributes both `DirectorySample` and `Post` carry.
 
     Structural rather than a base class, because the two models are deliberately
     separate tables (see `channel_directory_samples`) and neither should grow a
-    dependency on the other to satisfy this transform.
+    dependency on the other to satisfy this transform. `text` and `media` come
+    from `HasWords`, the shape `own_words` reads.
     """
 
-    text: str
     timestamp: int
     forwarded_from: str | None
-    media: dict[str, Any] | None
 
 
 @dataclass(frozen=True)
@@ -150,31 +152,10 @@ def _script_of(char: str) -> str | None:
     return None
 
 
-def _caption(post: SamplePost) -> str | None:
-    """The Post's own words, or `None` when it had none.
-
-    A Post with no media block never had a caption to synthesise over, so its
-    `text` is what was written. A Post *with* one carries its caption there if it
-    had one at all: `parse_widget_media` sets the field unconditionally, but
-    `PostMedia.to_storage_dict` dumps with `exclude_none=True`, so a Post with no
-    caption reaches storage with no `caption` key. An absent key therefore means
-    the stored `text` is a synthesised placeholder, and this reads it as no words
-    rather than as ASCII ones.
-
-    The `isinstance` below is what makes that safe rather than merely likely — a
-    row written before that dump rule, or by a future caller that keeps nulls,
-    still answers "no caption" instead of returning `None` as a string.
-    """
-    if post.media is None:
-        return post.text or None
-    caption = post.media.get("caption")
-    return caption if isinstance(caption, str) and caption else None
-
-
 def _dominant_script(posts: Sequence[SamplePost]) -> str | None:
     tally: dict[str, int] = {}
     for post in posts:
-        caption = _caption(post)
+        caption = own_words(post)
         if not caption:
             continue
         for char in caption:

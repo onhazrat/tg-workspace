@@ -12,6 +12,7 @@ from sqlmodel import Session, col, select
 
 from app.models_tg import Post, utc_now
 from app.services.follows import visible_channel_names
+from app.services.language import own_words, read_language
 from app.services.post_filters import (
     PostFilters,
     apply_analysis_window,
@@ -79,6 +80,7 @@ def bulk_upsert_posts_impl(
                 existing.links,
                 existing.reply_to,
             )
+            was_words = own_words(existing)
             existing.text = item.get("text", existing.text)
             existing.date = item.get("date", existing.date)
             existing.timestamp = item.get("timestamp", existing.timestamp)
@@ -126,6 +128,12 @@ def bulk_upsert_posts_impl(
                 existing.reply_to,
             ):
                 existing.references_extracted = False
+            # Conditional for the same reason: an unchanged re-scrape is the
+            # common case and reading it again would only repeat the answer.
+            # An unread Post is read here rather than waiting for the walk.
+            words = own_words(existing)
+            if existing.language is None or words != was_words:
+                existing.language = read_language(words)
             existing.updated_at = utc_now()
             session.add(existing)
         else:
@@ -144,32 +152,34 @@ def bulk_upsert_posts_impl(
                 or item.get("retrieval_source")
                 or retrieval_source
             )
-            session.add(
-                Post(
-                    channel_name=channel,
-                    post_id=post_id,
-                    text=item.get("text", ""),
-                    date=item.get("date", ""),
-                    timestamp=item.get("timestamp", 0),
-                    forwarded_from=item.get("forwardedFrom")
-                    or item.get("forwarded_from"),
-                    forwarded_from_name=item.get("forwardedFromName")
-                    or item.get("forwarded_from_name"),
-                    forwarded_from_post_id=_post_int_from_item(
-                        item, "forwardedFromPostId", "forwarded_from_post_id"
-                    ),
-                    media=_post_media_from_item(item),
-                    links=_post_links_from_item(item),
-                    reply_to_post_id=_post_int_from_item(
-                        item, "replyToPostId", "reply_to_post_id"
-                    ),
-                    reply_to=_post_reply_from_item(item),
-                    retrieved_at=now_ms,
-                    retrieval_job_id=job_id,
-                    retrieval_pass=pass_val,
-                    retrieval_source=source,
-                )
+            post = Post(
+                channel_name=channel,
+                post_id=post_id,
+                text=item.get("text", ""),
+                date=item.get("date", ""),
+                timestamp=item.get("timestamp", 0),
+                forwarded_from=item.get("forwardedFrom") or item.get("forwarded_from"),
+                forwarded_from_name=item.get("forwardedFromName")
+                or item.get("forwarded_from_name"),
+                forwarded_from_post_id=_post_int_from_item(
+                    item, "forwardedFromPostId", "forwarded_from_post_id"
+                ),
+                media=_post_media_from_item(item),
+                links=_post_links_from_item(item),
+                reply_to_post_id=_post_int_from_item(
+                    item, "replyToPostId", "reply_to_post_id"
+                ),
+                reply_to=_post_reply_from_item(item),
+                retrieved_at=now_ms,
+                retrieval_job_id=job_id,
+                retrieval_pass=pass_val,
+                retrieval_source=source,
             )
+            # Read on write, and never from the payload: an import's document
+            # may carry a Language, but every Language in the deployment comes
+            # from the one detector (LANG-01).
+            post.language = read_language(own_words(post))
+            session.add(post)
         count += 1
     return count
 

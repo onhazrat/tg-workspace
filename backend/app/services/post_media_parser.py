@@ -17,7 +17,7 @@ from app.services.telegram_html import (
 )
 
 _BACKGROUND_IMAGE_RE = re.compile(r"background-image:\s*url\(['\"]?([^'\"()]+)['\"]?\)")
-_LEGACY_MEDIA_PLACEHOLDER = "[Media/No Text Content]"
+LEGACY_MEDIA_PLACEHOLDER = "[Media/No Text Content]"
 
 
 def _extract_background_url(style: str | None) -> str | None:
@@ -300,7 +300,7 @@ def parse_widget_media(
     thumb_source_url = _extract_thumb_source_url(el) if kinds else None
 
     if not kinds:
-        text = caption or _LEGACY_MEDIA_PLACEHOLDER
+        text = caption or LEGACY_MEDIA_PLACEHOLDER
         if not (views or reactions):
             return text, None, None
         # Engagement counters exist on plain-text posts too, and were previously

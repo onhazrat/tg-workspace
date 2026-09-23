@@ -3268,6 +3268,10 @@ export type PostResponse = {
     replyTo?: {
         [key: string]: unknown;
     } | null;
+    /**
+     * Language
+     */
+    language?: string | null;
 };
 
 /**
