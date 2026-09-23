@@ -44,7 +44,7 @@ function candidate(
             postsPerWeek: null,
             medianViews: null,
             forwardShare: null,
-            script: null,
+            language: null,
             mediaMix: null,
             mediaDensity: null,
           },

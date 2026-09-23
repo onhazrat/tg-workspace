@@ -28,7 +28,7 @@ function probe(measured: Partial<DiscoveryProbe> = {}): DiscoveryProbe {
     postsPerWeek: null,
     medianViews: null,
     forwardShare: null,
-    script: null,
+    language: null,
     mediaMix: null,
     mediaDensity: null,
     ...measured,
@@ -119,15 +119,15 @@ describe("candidateStatistics", () => {
  *
  * * `?? 0` on any of the three → the not-probed test fails
  * * round the share to a decimal → the whole-percent test fails
- * * return `script` raw → the Arabic label test fails
- * * `SCRIPT_LABELS[script]` with no fallback → the unknown-script test fails
+ * * return `language` raw → the Persian-and-Arabic test fails
+ * * ignore the locale → the locale test fails
  * * clamp density at 1 → the album test fails
  */
 describe("panelStatistics", () => {
   test("a candidate nobody has probed reads as not measured, not as zeroes", () => {
     const stats = panelStatistics(undefined)
     expect(stats.forwardShare).toBeNull()
-    expect(stats.script).toBeNull()
+    expect(stats.language).toBeNull()
     expect(stats.mediaDensity).toBeNull()
   })
 
@@ -146,22 +146,21 @@ describe("panelStatistics", () => {
     )
   })
 
-  test("the script is named for a reader, and Persian is not called Arabic", () => {
-    // One script covers Persian, Arabic and Urdu, and separating them needs a
-    // language model where the backend runs a character-range tally. Labelling
-    // a Persian corpus "Arabic" reads as a wrong answer rather than a coarse
-    // one, so the label carries both.
-    expect(panelStatistics(probe({ script: "arabic" })).script).toBe(
-      "Arabic / Persian",
+  test("the language is named for a reader, and Persian is not called Arabic", () => {
+    // The distinction the alphabet tally could not make: both are one script,
+    // and deciding whether to follow a Candidate turns on exactly this.
+    expect(panelStatistics(probe({ language: "fa" }), "en").language).toBe(
+      "Persian",
     )
-    expect(panelStatistics(probe({ script: "cjk" })).script).toBe("CJK")
+    expect(panelStatistics(probe({ language: "ar" }), "en").language).toBe(
+      "Arabic",
+    )
   })
 
-  test("a script this map has not learned renders as itself", () => {
-    // The backend's range list can grow one. "tamil" on screen is a worse
-    // label than "Tamil" and a much better one than a blank cell that reads as
-    // "no captions in any alphabet".
-    expect(panelStatistics(probe({ script: "tamil" })).script).toBe("tamil")
+  test("the language is named in the reader's locale", () => {
+    expect(panelStatistics(probe({ language: "fa" }), "de").language).toBe(
+      "Persisch",
+    )
   })
 
   test("density may exceed one, because an album is five items on one id", () => {

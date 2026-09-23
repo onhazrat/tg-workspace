@@ -7490,9 +7490,9 @@
             "anyOf": [{ "type": "number" }, { "type": "null" }],
             "title": "Forwardshare"
           },
-          "script": {
+          "language": {
             "anyOf": [{ "type": "string" }, { "type": "null" }],
-            "title": "Script"
+            "title": "Language"
           },
           "mediaMix": {
             "anyOf": [

@@ -2409,9 +2409,9 @@ export type HandleProbeResponse = {
      */
     forwardShare?: number | null;
     /**
-     * Script
+     * Language
      */
-    script?: string | null;
+    language?: string | null;
     mediaMix?: MediaMixResponse | null;
     /**
      * Mediadensity

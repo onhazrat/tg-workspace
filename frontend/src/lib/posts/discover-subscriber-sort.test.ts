@@ -31,7 +31,7 @@ function probe(subscribers: string | null): DiscoveryProbe {
     postsPerWeek: null,
     medianViews: null,
     forwardShare: null,
-    script: null,
+    language: null,
     mediaMix: null,
     mediaDensity: null,
   }

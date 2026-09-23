@@ -95,8 +95,8 @@ export interface DiscoveryProbe {
   postsPerWeek: number | null
   medianViews: number | null
   forwardShare: number | null
-  /** Which alphabet the captions are predominantly in. Panel-only. */
-  script: string | null
+  /** The sample's Language as a code (`fa`, `ar`). Panel-only. */
+  language: string | null
   /**
    * The four media counters as shares of each other. Derived server-side at
    * read from columns on the entry, so unlike the statistics above it does not

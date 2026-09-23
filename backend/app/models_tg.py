@@ -826,10 +826,10 @@ class DirectoryEntry(SQLModel, table=True):
     posts_per_week: float | None = None
     median_views: int | None = None
     forward_share: float | None = None
-    #: Which alphabet the sample *captions* are predominantly written in. A
-    #: script, not a language, and no language library — see
-    #: `directory_statistics`.
-    script: str | None = None
+    #: The sample's Language by the Channel rule (LANG-05, ADR-021): a code, or
+    #: `None` where no sample carried readable words. Entries older than it
+    #: gain one on their next conclusive probe.
+    language: str | None = None
 
     #: When a *conclusive* answer was last recorded. `None` while only failures
     #: have happened, which is what distinguishes "never resolved" from "known".

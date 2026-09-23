@@ -283,7 +283,7 @@ def test_a_resolved_probe_is_joined_into_the_report_read(client: TestClient) -> 
         "postsPerWeek",
         "medianViews",
         "forwardShare",
-        "script",
+        "language",
         "mediaMix",
         "mediaDensity",
     }
@@ -442,7 +442,7 @@ def test_the_probe_listing_keeps_its_key_set(client: TestClient) -> None:
         "postsPerWeek",
         "medianViews",
         "forwardShare",
-        "script",
+        "language",
         "mediaMix",
         "mediaDensity",
     }

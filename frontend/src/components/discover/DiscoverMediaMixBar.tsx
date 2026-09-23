@@ -36,7 +36,7 @@ const SEGMENTS: Record<
 /**
  * Deliberately no density.
  *
- * The spec puts forward share, script, density and the sample Post bodies in
+ * The spec puts forward share, language, density and the sample Post bodies in
  * the **panel**, not on the row: ten numbers is not a scannable row. Density is
  * ticket 03's to render, and it is already on the wire, derived at read — so
  * that ticket is a consumer of this one rather than a schema change.
