@@ -21,6 +21,7 @@ import type React from "react"
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { toast } from "sonner"
 import { api } from "@/api"
+import { needsTranslation } from "@/constants"
 import { getTranslation, saveTranslation } from "@/lib/translations/store"
 import { useData } from "../contexts/DataContext"
 import { useScraper } from "../contexts/ScraperContext"
@@ -130,6 +131,10 @@ export const PostCard: React.FC<PostCardProps> = ({ post, postSearch }) => {
   const [showTranslation, setShowTranslation] = useState(false)
   const [isExpanded, setIsExpanded] = useState(false)
 
+  const translatable =
+    translationEnabled &&
+    needsTranslation(post.language, translationTargetLanguage)
+
   const activeText =
     showTranslation && translatedText ? translatedText : post.text
   const channel = useMemo(
@@ -204,7 +209,7 @@ export const PostCard: React.FC<PostCardProps> = ({ post, postSearch }) => {
 
   useEffect(() => {
     const loadTranslation = async () => {
-      if (!translationEnabled) return
+      if (!translatable) return
 
       const existingTranslation = await getTranslation(
         post.channelName,
@@ -225,7 +230,7 @@ export const PostCard: React.FC<PostCardProps> = ({ post, postSearch }) => {
   }, [
     post.channelName,
     post.id,
-    translationEnabled,
+    translatable,
     autoTranslate,
     translationTargetLanguage,
     handleTranslate,
@@ -337,7 +342,7 @@ export const PostCard: React.FC<PostCardProps> = ({ post, postSearch }) => {
 
           {/* Action Bar — anchored left of the time badge so hover never covers it */}
           <div className="absolute right-full mr-2 top-1/2 -translate-y-1/2 flex items-center gap-1 opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto group-focus-within:opacity-100 group-focus-within:pointer-events-auto transition-all duration-200 translate-x-2 group-hover:translate-x-0 group-focus-within:translate-x-0 bg-app-card/90 backdrop-blur-md p-1 rounded-full border border-app-ink/10 shadow-sm">
-            {translationEnabled && (
+            {translatable && (
               <>
                 <TgIconButton
                   aria-label={showTranslation ? "Show Original" : "Translate"}
