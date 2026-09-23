@@ -125,19 +125,36 @@ describe("filterChannelsForGrid", () => {
 })
 
 describe("collectChannelLanguages", () => {
-  it("returns sorted unique languages, skipping channels without one", () => {
-    const channels: Channel[] = [
-      ...sampleChannels,
-      {
-        id: "dup",
-        name: "dup",
-        tags: [],
-        language: "en",
-        lastUpdated: 0,
-        followedAt: 0,
-      },
-    ]
-    expect(collectChannelLanguages(channels)).toEqual(["en", "fa"])
+  const withLanguage = (name: string, language: string): Channel => ({
+    id: name,
+    name,
+    tags: [],
+    language,
+    lastUpdated: 0,
+    followedAt: 0,
+  })
+
+  it("lists each code once, named, sorted by name, skipping channels without one", () => {
+    const channels = [...sampleChannels, withLanguage("dup", "en")]
+    expect(collectChannelLanguages(channels, "en")).toEqual([
+      { code: "en", name: "English" },
+      { code: "fa", name: "Persian" },
+    ])
+  })
+
+  it("sorts by the displayed name, not the code", () => {
+    // `en` sorts before `hy` as a code; "Armenian" before "English" as a name.
+    const channels = [withLanguage("a", "en"), withLanguage("b", "hy")]
+    expect(collectChannelLanguages(channels, "en").map((l) => l.code)).toEqual([
+      "hy",
+      "en",
+    ])
+  })
+
+  it("names languages in the locale it is given", () => {
+    expect(collectChannelLanguages([withLanguage("a", "fa")], "de")).toEqual([
+      { code: "fa", name: "Persisch" },
+    ])
   })
 
   it("returns empty for channels without languages", () => {

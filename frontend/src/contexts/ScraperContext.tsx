@@ -1,5 +1,5 @@
 import { useQueryClient } from "@tanstack/react-query"
-import React, { createContext, useCallback, useContext, useEffect } from "react"
+import React, { createContext, useCallback, useContext } from "react"
 import { toast } from "sonner"
 import {
   api,
@@ -23,12 +23,6 @@ import {
   disabledReason,
   filterChannelsForOperation,
 } from "../lib/channels/sync-permissions"
-import {
-  detectLanguageFromPosts,
-  LANGUAGE_DETECTION_LOOKBACK_MS,
-  LANGUAGE_DETECTION_SAMPLE_SIZE,
-  selectChannelsForLanguageDetection,
-} from "../lib/language"
 import type {
   MaxPostsPerChannelMode,
   MediaFilterValue,
@@ -268,71 +262,6 @@ export const ScraperProvider: React.FC<{ children: React.ReactNode }> = ({
     })
 
   const scrapingLocksRef = React.useRef<Set<string>>(new Set())
-  const attemptedLanguageDetectionRef = React.useRef<Set<string>>(new Set())
-
-  // Background language detection for existing channels.
-  //
-  // This effect re-arms whenever `channels` changes identity — including from
-  // the `loadChannels()` it ends with. `attemptedLanguageDetectionRef` is what
-  // makes it terminate: every channel is marked before its detection runs, so
-  // channels that yield no language (short sample, or `franc` returns "und")
-  // are not rescanned for the rest of the session. Without it they stay in the
-  // "no language" set and are refetched every few seconds, forever.
-  useEffect(() => {
-    const detectMissingLanguages = async () => {
-      const attempted = attemptedLanguageDetectionRef.current
-      const channelsWithoutLanguage = selectChannelsForLanguageDetection(
-        channels,
-        attempted,
-      )
-      if (channelsWithoutLanguage.length === 0) return
-
-      let detectedAny = false
-      for (const channel of channelsWithoutLanguage) {
-        attempted.add(channel.name)
-        try {
-          // Bounded read: detection samples at most
-          // LANGUAGE_DETECTION_SAMPLE_SIZE posts, and the feed returns them
-          // newest-first, so there is nothing to gain by fetching more.
-          //
-          // Straight to the feed rather than through `repository` (A1c): the
-          // repository wrapper's only extra behaviour here was falling back to
-          // the IndexedDB mirror, and ADR-009 makes the server authoritative.
-          // A failed sample is already caught below and simply retried later.
-          const recentPosts = await api.getPostsFeed({
-            channelNames: [channel.name],
-            startDate: Date.now() - LANGUAGE_DETECTION_LOOKBACK_MS,
-            endDate: Date.now(),
-            sort: "time",
-            limit: LANGUAGE_DETECTION_SAMPLE_SIZE,
-          })
-          if (recentPosts && recentPosts.length > 0) {
-            recentPosts.sort((a, b) => b.id - a.id)
-            const lang = detectLanguageFromPosts(recentPosts)
-            if (lang) {
-              const updatedChannel = { ...channel, language: lang }
-              await upsertChannel(updatedChannel)
-              detectedAny = true
-              logger.debug(
-                `[Background] Detected language for @${channel.name}: ${lang}`,
-              )
-            }
-          }
-        } catch (e) {
-          console.error(
-            `[Background] Failed to detect language for @${channel.name}`,
-            e,
-          )
-        }
-      }
-      // Only refresh when something actually changed — an unconditional
-      // reload re-arms this effect for no reason.
-      if (detectedAny) await loadChannels()
-    }
-
-    const timer = setTimeout(detectMissingLanguages, 5000)
-    return () => clearTimeout(timer)
-  }, [loadChannels, channels])
 
   // Refresh the post views. The feed / counts / Discover are react-query
   // backed and refetch on their own when the scope or filter state changes;

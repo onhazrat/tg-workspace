@@ -405,7 +405,6 @@ def _import_channels(session: Session, items: list[Any], *, user_id: uuid.UUID) 
                 files=normalized.get("files"),
                 links=normalized.get("links"),
                 last_updated=normalized.get("last_updated"),
-                language=normalized.get("language"),
             )
             # A brand-new Channel has no existing Follow to leave alone, so its
             # first Follow takes every follow-owned field the document carries,
@@ -1182,8 +1181,14 @@ def import_data(
         )
 
     if payload.get("posts"):
-        counts["posts"] = bulk_upsert_posts_impl(payload["posts"], session)
+        # Follow first: the write path labels the Channels its Posts touch, and
+        # a Channel this creates must exist by then or it stays unlabelled.
         _follow_handles_from_posts(session, payload["posts"], user_id=user_id)
+        # Relabelled Channels are announced after the commit below, with every
+        # other section, rather than holding the etag's row lock until then.
+        counts["posts"] = bulk_upsert_posts_impl(
+            payload["posts"], session, announce_relabels=False
+        )
 
     if payload.get("summaries"):
         counts["summaries"] = _import_summaries(
@@ -1231,6 +1236,8 @@ def import_data(
     session.commit()
     for key in counts:
         touch_sync(session, key)
+    if "posts" in counts and "channels" not in counts:
+        touch_sync(session, "channels")
     return {"imported": counts}
 
 

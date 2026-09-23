@@ -324,7 +324,9 @@ const CHANNEL_INHERITED_WRITE_FIELDS = [
   "resetSyncEnabled",
   "settingGroupId",
   "settingGroupName",
+  // Server-managed: the update route refuses them (400).
   "telegramChatId",
+  "language",
 ] as const satisfies readonly (keyof Channel)[]
 
 export function channelWritePayload(

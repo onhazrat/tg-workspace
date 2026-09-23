@@ -22,6 +22,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tg-tooltip"
+import type { ChannelLanguageOption } from "@/lib/channels/filter-channels-for-grid"
 import type { ChannelGridSortOption } from "@/lib/channels/sort-channels-for-grid"
 
 type ChannelGridFilterBarProps = {
@@ -32,7 +33,7 @@ type ChannelGridFilterBarProps = {
   isFilteringActive: boolean
   filteredCount: number
   totalCount: number
-  allLanguages: string[]
+  allLanguages: ChannelLanguageOption[]
   selectedLanguageFilter: string
   onLanguageFilterChange: (value: string) => void
   sortBy: ChannelGridSortOption
@@ -128,9 +129,9 @@ export const ChannelGridFilterBar: React.FC<ChannelGridFilterBarProps> = ({
                 </SelectTrigger>
                 <SelectContent className="border-app-ink/15 bg-app-card text-app-ink">
                   <SelectItem value="__all_languages__">All</SelectItem>
-                  {allLanguages.map((lang) => (
-                    <SelectItem key={lang} value={lang}>
-                      {lang}
+                  {allLanguages.map(({ code, name }) => (
+                    <SelectItem key={code} value={code}>
+                      {name}
                     </SelectItem>
                   ))}
                 </SelectContent>

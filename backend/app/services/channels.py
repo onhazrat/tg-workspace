@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import uuid
+from collections.abc import Iterable
 from typing import Any, cast
 
 from fastapi import HTTPException
@@ -41,6 +42,7 @@ from app.services.follows import (
     remove_follow,
     sync_follow_settings,
 )
+from app.services.language import LANGUAGE_WINDOW, derive_language
 from app.services.logs import collect_channel_sync_logs
 from app.services.post_sync_state import clear_channel_sync_state
 from app.services.serialization import channel_to_camel, normalize_body
@@ -63,9 +65,60 @@ from app.services.tenancy import scoped_select
 #: owns parks that Channel until the lease lapses, every few minutes, for ever,
 #: with no log line saying why. A claim is only an invariant if the only thing
 #: that can write it is the code that reasons about it.
+#:
+#: `language` for the same reason (LANG-02): `relabel_channels` derives it from
+#: the Channel's Posts, and a browser writing it was how one Account's detector
+#: came to overwrite the label every other Account sees.
 SERVER_MANAGED_CHANNEL_FIELDS = frozenset(
-    {"telegram_chat_id", "sync_claimed_at", "sync_claimed_by"}
+    {"telegram_chat_id", "sync_claimed_at", "sync_claimed_by", "language"}
 )
+
+
+#: How deep into a Channel's newest Posts the relabel reads for its sample.
+#: Filtering for coded own Posts in SQL instead would walk a Channel's whole
+#: history whenever it has fewer than `LANGUAGE_WINDOW` of them: a re-poster, a
+#: photo Channel, or any Channel before LANG-03 has read its stored Posts.
+# ponytail: a Channel under 10% readable own Posts is judged on fewer than
+# the window's 100; deepen this if such a Channel is ever mislabelled.
+_LANGUAGE_SCAN_DEPTH = 10 * LANGUAGE_WINDOW
+
+
+def _language_sample(session: Session, name: str) -> list[tuple[str | None, bool]]:
+    """One Channel's newest Posts as `derive_language` reads them, bounded."""
+    rows = session.exec(
+        select(Post.language, Post.forwarded_from)
+        .where(Post.channel_name == name)
+        .order_by(col(Post.post_id).desc())
+        .limit(_LANGUAGE_SCAN_DEPTH)
+    )
+    return [(language, bool(forwarded_from)) for language, forwarded_from in rows]
+
+
+def relabel_channels(
+    session: Session, names: Iterable[str], *, announce: bool = True
+) -> None:
+    """Re-derive the Language of each named Channel; its only writer (LANG-02).
+
+    The Post write path calls this after every batch, so a Channel's label
+    follows what it publishes now. A Channel is written, and the `channels`
+    etag moved, only when the answer changes: sync writes a page per run and
+    the Channels tab should not refetch for each one. Does not commit, and
+    moves the etag last so the caller's commit comes straight after it.
+
+    `announce=False` is for a caller whose commit does *not* come straight
+    after: `POST /data/import` writes more sections first, and would hold the
+    etag's row lock through all of them. It moves the etag after its commit.
+    """
+    changed = False
+    for channel in session.exec(select(Channel).where(col(Channel.name).in_(names))):
+        language = derive_language(_language_sample(session, channel.name))
+        if language != channel.language:
+            channel.language = language
+            channel.updated_at = utc_now()
+            session.add(channel)
+            changed = True
+    if changed and announce:
+        touch_sync(session, "channels", commit=False)
 
 
 def update_channel_coverage(

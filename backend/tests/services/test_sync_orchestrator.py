@@ -29,7 +29,6 @@ def _ctx(channel_id: str, channel_name: str) -> _ChannelSyncCtx:
         channel_name=channel_name,
         display_name=channel_name,
         photo_url=None,
-        language="en",
         auto_follow=False,
         proxies=[],
         proxy_concurrency=(1, {}),

@@ -11,6 +11,7 @@ from sqlalchemy.orm import aliased
 from sqlmodel import Session, col, select
 
 from app.models_tg import Post, utc_now
+from app.services.channels import relabel_channels
 from app.services.follows import visible_channel_names
 from app.services.language import own_words, read_language
 from app.services.post_filters import (
@@ -59,11 +60,14 @@ def bulk_upsert_posts_impl(
     retrieval_job_id: str | None = None,
     retrieval_pass: str | None = None,
     retrieval_source: str | None = None,
+    announce_relabels: bool = True,
 ) -> int:
     count = 0
     now_ms = int(time.time() * 1000)
+    touched: set[str] = set()
     for item in body:
         channel = item.get("channelName") or item.get("channel_name", "")
+        touched.add(channel)
         post_id = int(item.get("id") or item.get("post_id", 0))
         existing = session.exec(
             select(Post).where(Post.channel_name == channel, Post.post_id == post_id)
@@ -181,6 +185,7 @@ def bulk_upsert_posts_impl(
             post.language = read_language(own_words(post))
             session.add(post)
         count += 1
+    relabel_channels(session, touched, announce=announce_relabels)
     return count
 
 
