@@ -121,3 +121,9 @@ catch up.
 ## Credit
 
 Built on [fastapi/full-stack-fastapi-template](https://github.com/fastapi/full-stack-fastapi-template).
+
+Post languages are detected with fastText's `lid.176` language identification model by Facebook
+AI Research, installed through [`fast-langdetect`](https://github.com/LlmKira/fast-langdetect). The
+model is distributed under [CC BY-SA 3.0](https://creativecommons.org/licenses/by-sa/3.0/); see
+[fastText's language identification page](https://fasttext.cc/docs/en/language-identification.html).
+It ships inside the installed package, not this repository.

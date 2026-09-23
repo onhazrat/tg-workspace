@@ -28,6 +28,7 @@ dependencies = [
     "stem>=1.8.0",
     "socksio>=1.0.0",
     "langdetect>=1.0.9",
+    "fast-langdetect>=1.0.1",
 ]
 
 [dependency-groups]
@@ -58,6 +59,8 @@ module = [
     "stem.*",
     "langdetect",
     "langdetect.*",
+    "fast_langdetect",
+    "fast_langdetect.*",
 ]
 ignore_missing_imports = true
 disable_error_code = ["import-untyped"]

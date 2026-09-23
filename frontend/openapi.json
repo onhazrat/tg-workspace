@@ -8227,6 +8227,10 @@
               { "type": "null" }
             ],
             "title": "Replyto"
+          },
+          "language": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Language"
           }
         },
         "type": "object",

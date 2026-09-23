@@ -25,6 +25,7 @@ from app.jobs.settings import load_media_settings
 from app.models_tg import Channel, Post
 from app.services.channel_setting_groups import find_group_for_channel
 from app.services.follows import get_operator_user_id
+from app.services.language import own_words, read_language
 from app.services.network import fetch_with_retry
 from app.services.post_media_parser import finalize_post_media_paths, parse_widget_media
 from app.services.post_thumbnails import (
@@ -202,6 +203,10 @@ async def _process_post(
             return result
         row.text = text
         row.media = media
+        # The Post's words just changed, so its Language must too (LANG-01):
+        # left alone, a row read as `zxx` from its old placeholder would keep
+        # that answer for good, since only unread rows are walked.
+        row.language = read_language(own_words(row))
         session.add(row)
         session.commit()
         result["updated"] = True

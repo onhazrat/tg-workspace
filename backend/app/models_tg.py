@@ -250,6 +250,14 @@ class Post(SQLModel, table=True):
             text("timestamp DESC"),
             postgresql_where=text("NOT references_extracted"),
         ),
+        # LANG-01's queue: the Posts the Language walk (LANG-03) has still to
+        # read, newest first. Empty once the backfill is done, because every
+        # Post written since is read on write.
+        Index(
+            "ix_tg_posts_language_unread",
+            text("timestamp DESC"),
+            postgresql_where=text("language IS NULL"),
+        ),
     )
 
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
@@ -295,6 +303,10 @@ class Post(SQLModel, table=True):
         default=False,
         sa_column=Column(Boolean, nullable=False, server_default=false()),
     )
+    #: The Post's Language (LANG-01, ADR-021): an ISO 639 code, `zxx` when the
+    #: Post has no words, `und` when its words cannot be placed, and null only
+    #: while it is unread. Written by the Post write path and nothing else.
+    language: str | None = None
     updated_at: datetime = Field(default_factory=utc_now)
 
 

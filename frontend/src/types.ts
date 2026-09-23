@@ -152,6 +152,8 @@ export interface Post {
   retrievalJobId?: string
   retrievalPass?: "initial" | "incremental"
   retrievalSource?: string
+  /** ISO 639 code, "zxx" (no words) or "und" (undetermined); null while unread. */
+  language?: string | null
 }
 
 export interface PostEmbedding {

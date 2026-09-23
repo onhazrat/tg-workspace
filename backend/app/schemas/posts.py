@@ -62,6 +62,9 @@ class PostResponse(BaseModel):
     reply_to_post_id: int | None = Field(default=None, alias="replyToPostId")
     # Shape: {"channel": str, "authorName": str, "text": str, "url": str}
     reply_to: dict[str, Any] | None = Field(default=None, alias="replyTo")
+    # An ISO 639 code, "zxx" (no words) or "und" (undetermined); null while
+    # the Post is unread (LANG-01).
+    language: str | None = None
 
 
 class BulkUpsertPostsResponse(BaseModel):

@@ -208,6 +208,7 @@ def post_to_camel(p: Post) -> dict[str, Any]:
         "links": p.links,
         "replyToPostId": p.reply_to_post_id,
         "replyTo": p.reply_to,
+        "language": p.language,
     }
 
 
