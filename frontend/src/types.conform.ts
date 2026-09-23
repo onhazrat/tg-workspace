@@ -314,7 +314,7 @@ export type DiscoveryCandidateHasServerFields = NoMismatches<
  * statistic ticket 02 added could be renamed server-side with this file staying
  * green, which is the exact failure ticket 01 added the candidate guard for.
  *
- * Listed here are the keys the row renders or sorts on. `bio`, `script` and
+ * Listed here are the keys the row renders or sorts on. `bio`, `language` and
  * `forwardShare` are deliberately absent: they are panel decoration, and a
  * blank one is a cosmetic loss rather than a broken sort.
  */

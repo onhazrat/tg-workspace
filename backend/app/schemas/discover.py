@@ -169,9 +169,9 @@ class HandleProbeResponse(BaseModel):
     posts_per_week: float | None = Field(default=None, alias="postsPerWeek")
     median_views: int | None = Field(default=None, alias="medianViews")
     forward_share: float | None = Field(default=None, alias="forwardShare")
-    #: Which alphabet the sample captions are predominantly written in — a
-    #: script, not a language. Panel-only: it appears on no row and in no sort.
-    script: str | None = None
+    #: The sample's Language as a code (`fa`, `ar`), by the Channel rule.
+    #: Panel-only: it appears on no row and in no sort.
+    language: str | None = None
 
     # Derived at read from the four counters and the latest Post id, columns on
     # the same row (ADR-015). They do not outlive the page: an `unavailable`

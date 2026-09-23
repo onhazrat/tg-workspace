@@ -271,8 +271,8 @@ export const DiscoverCandidatePanel: React.FC<DiscoverCandidatePanelProps> = ({
                     </div>
                     {/*
                      * The three that would not fit on a row. Forward share
-                     * and script have been stored since ticket 02 and shown
-                     * nowhere; density is derived at read from the counters.
+                     * and Language are stored at probe time; density is
+                     * derived at read from the counters.
                      */}
                     <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
                       <Stat
@@ -281,9 +281,9 @@ export const DiscoverCandidatePanel: React.FC<DiscoverCandidatePanelProps> = ({
                         title="Share of the sample Posts carrying a forward attribution — an aggregator reposts, an original source does not"
                       />
                       <Stat
-                        label="Script"
-                        value={panel.script}
-                        title="The alphabet the sample captions are written in — a script, not a language"
+                        label="Language"
+                        value={panel.language}
+                        title="The language the Channel's sample Posts are written in, read from its own words; forwards count only when it has none"
                       />
                       <Stat
                         label="Media / post"

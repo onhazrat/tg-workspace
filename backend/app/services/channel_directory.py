@@ -285,7 +285,7 @@ def probe_to_camel(row: DirectoryEntry) -> dict[str, Any]:
         "postsPerWeek": row.posts_per_week,
         "medianViews": row.median_views,
         "forwardShare": row.forward_share,
-        "script": row.script,
+        "language": row.language,
         # The two derived at read, from four columns already selected above
         # (ADR-015). Not stored, because a stored copy can disagree with its
         # own inputs and the derivation costs no join.
@@ -566,7 +566,7 @@ def _store_statistics(row: DirectoryEntry, stats: SampleStatistics) -> None:
     row.posts_per_week = stats.posts_per_week
     row.median_views = stats.median_views
     row.forward_share = stats.forward_share
-    row.script = stats.script
+    row.language = stats.language
 
 
 def _get_or_create(session: Session, handle: str) -> DirectoryEntry:

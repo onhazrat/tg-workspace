@@ -44,10 +44,10 @@ repeats what last post age already says; a lifetime average hides every change
 in behaviour the Channel had. Span-based means "when this Channel is active, it
 posts this often", which paired with last post age is honest in both directions.
 
-**Script reads captions, never the stored text.** A media Post with no caption
-is stored with synthesised stand-in text — `[photo]`, `[video]`, `[photo
-album]` — which is ASCII, so a character-range heuristic run over it would label
-a caption-less Persian or Russian photo Channel as Latin. The Channels most
+**Language reads captions, never the stored text.** A media Post with no
+caption is stored with synthesised stand-in text — `[photo]`, `[video]`,
+`[photo album]` — so reading it would label a caption-less Persian or Russian
+photo Channel by its placeholders. The Channels most
 likely to be caption-less are exactly the image-heavy ones. Reading `caption`
 off the media block rather than `text` excludes every placeholder by
 construction: the stored block carries that key only where the Post actually had
@@ -78,7 +78,12 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Protocol
 
-from app.services.language import HasWords, own_words
+from app.services.language import (
+    HasWords,
+    derive_language,
+    own_words,
+    read_language,
+)
 from app.services.post_media_parser import parse_abbreviated_count
 
 #: How many samples a rate needs before it is reported at all.
@@ -120,51 +125,18 @@ class SampleStatistics:
     posts_per_week: float | None = None
     median_views: int | None = None
     forward_share: float | None = None
-    script: str | None = None
+    language: str | None = None
 
 
-#: Character ranges per script, in the order they are tested.
-#:
-#: Alphabets rather than languages, and only the ones a Telegram corpus actually
-#: separates into: Persian and Arabic share a script and are reported as one,
-#: because distinguishing them needs a language model and this is a `str.
-#: __contains__` over ranges. Latin is last because it is the fallback every
-#: other script's punctuation and digits fall into.
-_SCRIPT_RANGES: tuple[tuple[str, tuple[tuple[int, int], ...]], ...] = (
-    (
-        "arabic",
-        ((0x0600, 0x06FF), (0x0750, 0x077F), (0xFB50, 0xFDFF), (0xFE70, 0xFEFF)),
-    ),
-    ("cyrillic", ((0x0400, 0x04FF), (0x0500, 0x052F))),
-    ("hebrew", ((0x0590, 0x05FF),)),
-    ("greek", ((0x0370, 0x03FF),)),
-    ("devanagari", ((0x0900, 0x097F),)),
-    ("cjk", ((0x3040, 0x30FF), (0x4E00, 0x9FFF), (0xAC00, 0xD7AF))),
-    ("latin", ((0x0041, 0x005A), (0x0061, 0x007A), (0x00C0, 0x024F))),
-)
-
-
-def _script_of(char: str) -> str | None:
-    code = ord(char)
-    for name, ranges in _SCRIPT_RANGES:
-        if any(low <= code <= high for low, high in ranges):
-            return name
-    return None
-
-
-def _dominant_script(posts: Sequence[SamplePost]) -> str | None:
-    tally: dict[str, int] = {}
-    for post in posts:
-        caption = own_words(post)
-        if not caption:
-            continue
-        for char in caption:
-            script = _script_of(char)
-            if script is not None:
-                tally[script] = tally.get(script, 0) + 1
-    if not tally:
-        return None
-    return max(tally, key=lambda name: tally[name])
+def _sample_language(posts: Sequence[SamplePost]) -> str | None:
+    """The Channel rule over the sample, so a Candidate and the Channel it
+    becomes once followed agree (LANG-05). Samples are not stored newest first,
+    and the rule's tie-break needs them that way."""
+    newest_first = sorted(posts, key=lambda post: post.timestamp, reverse=True)
+    return derive_language(
+        (read_language(own_words(post)), bool(post.forwarded_from))
+        for post in newest_first
+    )
 
 
 def views_of(post: SamplePost) -> int | None:
@@ -232,7 +204,7 @@ def compute_sample_statistics(posts: Sequence[SamplePost]) -> SampleStatistics:
         posts_per_week=posts_per_week,
         median_views=median_views,
         forward_share=forward_share,
-        script=_dominant_script(posts),
+        language=_sample_language(posts),
     )
 
 

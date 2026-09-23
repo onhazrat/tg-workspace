@@ -16,7 +16,9 @@ a stub would let those two drift apart silently.
 * gate the median on `count` rather than on how many samples carry a view ->
   twenty samples with one view between them report that one view as a median
 * read `post.text` instead of the parsed caption -> a set of `[photo]`
-  placeholders reports `latin`, and one real caption is outvoted by them
+  placeholders reports a Language where it has none
+* derive over the samples as stored rather than newest first -> the tie test
+  reads `en` in one of its two orders
 * `floor(x + 0.5)` instead of `round` -> the tie test reads 11, and the
   write-path file's agreement test fails against the migration's own SQL
 """
@@ -89,7 +91,7 @@ class TestEmpty:
         assert stats.posts_per_week is None
         assert stats.median_views is None
         assert stats.forward_share is None
-        assert stats.script is None
+        assert stats.language is None
 
 
 class TestPostsPerWeek:
@@ -201,60 +203,79 @@ class TestForwardShare:
         assert compute_sample_statistics(weekly(5)).forward_share == 0.0
 
 
-class TestScript:
-    def test_placeholders_yield_no_script_rather_than_latin(self) -> None:
-        """The case that motivates reading captions instead of the stored text.
+PERSIAN = "امروز جلسه شورای شهر برگزار شد و درباره بودجه سال آینده گفتگو کردند"
+ARABIC = "عقد مجلس المدينة اليوم اجتماعا لمناقشة ميزانية العام المقبل والمشاريع الجديدة"
+ENGLISH = "The city council met today to discuss next year's budget and new projects"
 
-        A caption-less media Post is stored as `[photo]`, which is ASCII, so a
-        heuristic over the text would label a Persian photo Channel Latin — and
-        caption-less Channels are exactly the image-heavy ones this would
-        otherwise describe well.
-        """
-        rows = [
-            sample(i, text="[photo]", media={"kinds": ["photo"], "isMediaOnly": True})
-            for i in range(5)
-        ]
-        assert compute_sample_statistics(rows).script is None
 
-    def test_it_separates_the_alphabets_the_corpus_contains(self) -> None:
-        cases = {
-            "arabic": "سلام دنیا این یک کانال است",
-            "cyrillic": "Привет мир это канал",
-            "latin": "Hello world this is a channel",
-            "hebrew": "שלום עולם זה ערוץ",
-            "greek": "Γεια σου κόσμε αυτό είναι κανάλι",
-            "cjk": "你好世界这是一个频道",
-        }
-        for expected, caption in cases.items():
-            rows = [sample(i, caption=caption) for i in range(5)]
-            assert compute_sample_statistics(rows).script == expected
+def photo(post_id: int, **kwargs: Any) -> DirectorySample:
+    """A caption-less photo, stored as its placeholder."""
+    return sample(
+        post_id,
+        text="[photo]",
+        media={"kinds": ["photo"], "isMediaOnly": True},
+        **kwargs,
+    )
 
-    def test_latin_punctuation_does_not_outvote_the_caption(self) -> None:
-        """A Persian caption carrying a URL and an @handle is still Persian.
-        Digits and punctuation belong to no script and are not counted at all,
-        which is what keeps the majority honest on short captions."""
-        rows = [sample(i, caption="کانال ما — t.me/x (۱۴۰۳) @ch") for i in range(5)]
-        assert compute_sample_statistics(rows).script == "arabic"
+
+class TestLanguage:
+    """The Channel rule over a sample, through the one reading module (LANG-05)."""
+
+    def test_a_persian_sample_is_persian_and_an_arabic_one_arabic(self) -> None:
+        """The distinction the alphabet tally could not make: both are one
+        script, and it read "Arabic / Persian" for either."""
+        persian = [sample(i, caption=PERSIAN) for i in range(5)]
+        arabic = [sample(i, caption=ARABIC) for i in range(5)]
+        assert compute_sample_statistics(persian).language == "fa"
+        assert compute_sample_statistics(arabic).language == "ar"
+
+    def test_placeholders_yield_no_language_rather_than_english(self) -> None:
+        """A caption-less photo is stored as `[photo]`; reading the stored text
+        would label a Persian photo Channel by its placeholders."""
+        rows = [photo(i) for i in range(5)]
+        assert compute_sample_statistics(rows).language is None
 
     def test_a_post_with_no_media_block_is_read_as_its_own_words(self) -> None:
-        """The one case where the stored text *is* the caption: a plain-text
-        Post with no counters has no media block for a caption to live in."""
-        rows = [sample(i, media=None, text="Привет") for i in range(5)]
-        assert compute_sample_statistics(rows).script == "cyrillic"
+        rows = [sample(i, media=None, text=PERSIAN) for i in range(5)]
+        assert compute_sample_statistics(rows).language == "fa"
 
-    def test_one_caption_is_enough(self) -> None:
-        """No threshold on the script. Unlike the rates it is a label rather
-        than a measurement, and one real caption beats guessing."""
+    def test_forwards_are_outvoted_by_the_channels_own_words(self) -> None:
+        """A Persian Channel forwarding English news is still Persian."""
         rows = [
-            sample(0, caption="Привет мир"),
+            sample(0, caption=PERSIAN, timestamp=ORIGIN),
             *[
                 sample(
-                    i, text="[photo]", media={"kinds": ["photo"], "isMediaOnly": True}
+                    i, caption=ENGLISH, forwarded_from="reuters", timestamp=ORIGIN + i
                 )
                 for i in range(1, 5)
             ],
         ]
-        assert compute_sample_statistics(rows).script == "cyrillic"
+        assert compute_sample_statistics(rows).language == "fa"
+
+    def test_a_sample_of_forwards_alone_still_has_a_language(self) -> None:
+        rows = [sample(i, caption=ENGLISH, forwarded_from="reuters") for i in range(5)]
+        assert compute_sample_statistics(rows).language == "en"
+
+    def test_a_sample_below_the_minimum_still_has_a_language(self) -> None:
+        """No threshold. The rates are suppressed below `MIN_SAMPLES`; a
+        Language is a label, and a preview page of three Persian Posts still
+        says Persian."""
+        rows = [sample(i, caption=PERSIAN) for i in range(MIN_SAMPLES - 2)]
+        stats = compute_sample_statistics(rows)
+        assert stats.posts_per_week is None
+        assert stats.language == "fa"
+
+    def test_a_tie_goes_to_the_newest_post_whatever_order_they_arrive_in(
+        self,
+    ) -> None:
+        """The Channel rule reads newest first, and samples are not stored in
+        that order, so the transform has to sort them itself."""
+        rows = [
+            sample(2, caption=PERSIAN, timestamp=ORIGIN + 2 * DAY_MS),
+            sample(1, caption=ENGLISH, timestamp=ORIGIN + DAY_MS),
+        ]
+        assert compute_sample_statistics(rows).language == "fa"
+        assert compute_sample_statistics(list(reversed(rows))).language == "fa"
 
 
 class TestLastPostAt:

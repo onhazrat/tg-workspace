@@ -23,6 +23,7 @@
  * differently.
  */
 
+import { languageName } from "@/lib/language-name"
 import type { DiscoveryProbe } from "./discover-candidates"
 
 /** Compact, because a Candidate row is scanned rather than read. */
@@ -112,48 +113,28 @@ export function candidateStatistics(
 export interface PanelStatistics {
   /** Share of sample Posts carrying a forward attribution, as a percentage. */
   forwardShare: string | null
-  /** The alphabet the captions are in, named for a reader. */
-  script: string | null
+  /** The sample's Language, named in the reader's locale. */
+  language: string | null
   /** Media items per published Post id, as a rate that may exceed 1. */
   mediaDensity: string | null
 }
 
-/**
- * Alphabets, not languages, and the wording says so where it matters.
- *
- * `arabic` is one script covering Persian, Arabic and Urdu; telling them apart
- * needs a language model where this is a character-range tally, and a Persian
- * corpus labelled "Arabic" would read as a wrong answer rather than a coarse
- * one. The other six name themselves.
- */
-const SCRIPT_LABELS: Record<string, string> = {
-  arabic: "Arabic / Persian",
-  cyrillic: "Cyrillic",
-  hebrew: "Hebrew",
-  greek: "Greek",
-  devanagari: "Devanagari",
-  cjk: "CJK",
-  latin: "Latin",
-}
-
 export function panelStatistics(
   probe: DiscoveryProbe | null | undefined,
+  locale?: string,
 ): PanelStatistics {
   if (!probe) {
-    return { forwardShare: null, script: null, mediaDensity: null }
+    return { forwardShare: null, language: null, mediaDensity: null }
   }
 
-  const { forwardShare, script, mediaDensity } = probe
+  const { forwardShare, language, mediaDensity } = probe
   return {
     // Whole percent. The share is over at most a preview page of Posts, so a
     // decimal place would be resolution the sample does not have — one Post in
     // twenty is 5%, and there is no 5.3% to report.
     forwardShare:
       forwardShare === null ? null : `${Math.round(forwardShare * 100)}%`,
-    // An unrecognised value renders as itself rather than as nothing: the
-    // backend's range list can grow a script this map has not learned yet, and
-    // "tamil" is a better answer on screen than a blank.
-    script: script === null ? null : (SCRIPT_LABELS[script] ?? script),
+    language: language === null ? null : languageName(language, locale),
     mediaDensity: mediaDensity === null ? null : mediaDensity.toFixed(1),
   }
 }

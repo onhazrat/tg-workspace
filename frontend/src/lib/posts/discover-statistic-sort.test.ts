@@ -42,7 +42,7 @@ function probe(measured: Measured): DiscoveryProbe {
     postsPerWeek: null,
     medianViews: null,
     forwardShare: null,
-    script: null,
+    language: null,
     mediaMix: null,
     mediaDensity: null,
     ...measured,

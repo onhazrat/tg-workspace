@@ -53,19 +53,23 @@ GONE: dict[str, Any] = {
 }
 
 
+#: Enough words for the detector to place, so a stored Language is an answer.
+_WORDS = "The city council met today to discuss next year's budget and new projects"
+
+
 def _weekly(count: int, *, views: int | None = None) -> list[dict[str, Any]]:
     """`count` sample Posts one week apart, as `_parse_posts_from_html` builds them."""
     out: list[dict[str, Any]] = []
     for i in range(count):
         post: dict[str, Any] = {
             "id": 100 + i,
-            "text": f"post {i}",
+            "text": _WORDS,
             "date": "2026-09-01T10:00:00+00:00",
             "timestamp": _ORIGIN + i * _WEEK_MS,
             "channelName": HANDLE,
         }
         if views is not None:
-            post["media"] = {"kinds": [], "viewsCount": views + i}
+            post["media"] = {"kinds": [], "viewsCount": views + i, "caption": _WORDS}
         out.append(post)
     return out
 
@@ -94,6 +98,7 @@ def test_a_conclusive_probe_stores_the_statistics_of_the_samples_it_stored() -> 
         assert after["medianViews"] == 1002
         assert after["forwardShare"] == 0.0
         assert after["lastPostAt"] is not None
+        assert after["language"] == "en"
 
 
 def test_the_next_conclusive_probe_replaces_them() -> None:
@@ -176,7 +181,10 @@ def test_a_recheck_discards_them_with_the_verdict() -> None:
     samples, which a recheck deliberately keeps.
     """
     with Session(engine) as session:
-        record_probe_result(session, HANDLE, _page(samples=_weekly(5, views=1000)))
+        probed = record_probe_result(
+            session, HANDLE, _page(samples=_weekly(5, views=1000))
+        )
+        assert probed["language"] == "en"
         requeue_probes(session, [HANDLE])
 
         row = session.get(DirectoryEntry, HANDLE)
@@ -186,7 +194,7 @@ def test_a_recheck_discards_them_with_the_verdict() -> None:
         assert row.median_views is None
         assert row.forward_share is None
         assert row.last_post_at is None
-        assert row.script is None
+        assert row.language is None
 
 
 def test_the_migration_backfill_agrees_with_the_transform() -> None:
@@ -199,9 +207,8 @@ def test_the_migration_backfill_agrees_with_the_transform() -> None:
     columns, run the migration's own statement, and require the answer the pure
     transform gives.
 
-    `script` is out of the comparison because the backfill does not compute it.
-    See the migration's docstring for why a per-character tally is left to a
-    refresh window that is a week away.
+    The Language is out of the comparison because the backfill does not compute
+    it: the detector lives in Python, and the next probe fills it in.
     """
     module = importlib.import_module(
         "app.alembic.versions.d1e2f3a4b5c6_directory_statistics"
