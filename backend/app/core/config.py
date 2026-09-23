@@ -439,6 +439,16 @@ class Settings(BaseSettings):
     # link-heavy Posts would previously have aborted the tick outright.
     POST_REFERENCE_SCAN_LIMIT: int = 10000
 
+    # The Language walk (LANG-03)
+    #
+    # How many stored Posts one tick of the walk reads, newest first, for the
+    # Posts written before Posts carried a Language. Sized like
+    # `POST_REFERENCE_SCAN_LIMIT`, whose walk reads the same Posts through the
+    # same shape of partial index: a page is ~4 MB of Post text and a few
+    # hundred milliseconds of fastText. Raise it to finish the backfill sooner,
+    # lower it if the dead tuples it leaves outrun autovacuum on `tg_posts`.
+    POST_LANGUAGE_WALK_BATCH_SIZE: int = 10000
+
     # Translation batch job
     TRANSLATION_BATCH_LIMIT: int = 20
     TRANSLATION_BATCH_MAX_CHARS: int = 4000

@@ -68,6 +68,7 @@ JOB_IDS = (
     "translation_batch",
     "discover_probe",
     "directory_harvest",
+    "post_language",
 )
 
 

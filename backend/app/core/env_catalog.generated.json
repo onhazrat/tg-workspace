@@ -373,6 +373,13 @@
       "sensitive": false
     },
     {
+      "default": 10000,
+      "name": "POST_LANGUAGE_WALK_BATCH_SIZE",
+      "required": false,
+      "scope": "backend_runtime",
+      "sensitive": false
+    },
+    {
       "default": 7,
       "name": "POST_REFERENCE_CHAT_ID_GRACE_DAYS",
       "required": false,

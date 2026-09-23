@@ -4,9 +4,10 @@ from __future__ import annotations
 
 import time
 import uuid
+from collections import defaultdict
 from typing import Any
 
-from sqlalchemy import func, literal, or_
+from sqlalchemy import func, literal, or_, update
 from sqlalchemy.orm import aliased
 from sqlmodel import Session, col, select
 
@@ -21,7 +22,7 @@ from app.services.post_filters import (
 )
 from app.services.serialization import post_to_camel
 from app.services.sync_meta import touch_sync
-from app.services.tenancy import scoped_select
+from app.services.tenancy import scoped_select, unscoped_select
 
 DEFAULT_POST_PAGE_SIZE = 500
 MAX_POST_PAGE_SIZE = 5000
@@ -187,6 +188,52 @@ def bulk_upsert_posts_impl(
         count += 1
     relabel_channels(session, touched, announce=announce_relabels)
     return count
+
+
+def _unread_page(session: Session, limit: int) -> list[Post]:
+    """The newest `limit` Posts nobody has read, through the unread index."""
+    return list(
+        session.exec(
+            unscoped_select(
+                select(Post)
+                .where(col(Post.language).is_(None))
+                .order_by(col(Post.timestamp).desc())
+                .limit(limit),
+                reason=(
+                    "A Post's Language is corpus: read once from its words and "
+                    "served to every Follower, so the walk reads every Post."
+                ),
+            )
+        ).all()
+    )
+
+
+def read_unread_languages(session: Session, *, limit: int) -> int:
+    """Read one page of Posts stored before LANG-01, newest first (LANG-03).
+
+    One `UPDATE` per Language rather than one per Post. Each keeps
+    `language IS NULL` in its predicate, because sync may have edited and read
+    one of these Posts since the page was loaded, and its answer is about the
+    newer words. Then relabels the Channels the page touched, so the Channels
+    tab fills in as the walk proceeds. Commits; returns how many Posts it read,
+    so a caught-up tick is one probe of an empty index and no write.
+    """
+    page = _unread_page(session, limit)
+    if not page:
+        return 0
+    by_language: defaultdict[str, list[uuid.UUID]] = defaultdict(list)
+    for post in page:
+        by_language[read_language(own_words(post))].append(post.id)
+    for language, ids in by_language.items():
+        session.execute(
+            update(Post)
+            .where(col(Post.id).in_(ids), col(Post.language).is_(None))
+            .values(language=language)
+            .execution_options(synchronize_session=False)
+        )
+    relabel_channels(session, {post.channel_name for post in page})
+    session.commit()
+    return len(page)
 
 
 def random_cap_order(seed: int) -> Any:
