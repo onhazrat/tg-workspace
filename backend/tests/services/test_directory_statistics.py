@@ -268,10 +268,12 @@ class TestLanguage:
     def test_a_tie_goes_to_the_newest_post_whatever_order_they_arrive_in(
         self,
     ) -> None:
-        """The Channel rule reads newest first, and samples are not stored in
-        that order, so the transform has to sort them itself."""
+        """The Channel rule reads newest first by Post id, and samples are not
+        stored in that order, so the transform has to sort them itself. The
+        timestamps disagree with the ids on purpose: the Channel rule orders by
+        id, so a sort by time would split a Candidate from its Channel."""
         rows = [
-            sample(2, caption=PERSIAN, timestamp=ORIGIN + 2 * DAY_MS),
+            sample(2, caption=PERSIAN, timestamp=ORIGIN),
             sample(1, caption=ENGLISH, timestamp=ORIGIN + DAY_MS),
         ]
         assert compute_sample_statistics(rows).language == "fa"

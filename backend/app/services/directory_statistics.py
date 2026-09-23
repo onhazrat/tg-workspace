@@ -45,8 +45,8 @@ in behaviour the Channel had. Span-based means "when this Channel is active, it
 posts this often", which paired with last post age is honest in both directions.
 
 **Language reads captions, never the stored text.** A media Post with no
-caption is stored with synthesised stand-in text — `[photo]`, `[video]`,
-`[photo album]` — so reading it would label a caption-less Persian or Russian
+caption is stored with synthesised stand-in text (`[photo]`, `[video]`,
+`[photo album]`), so reading it would label a caption-less Persian or Russian
 photo Channel by its placeholders. The Channels most
 likely to be caption-less are exactly the image-heavy ones. Reading `caption`
 off the media block rather than `text` excludes every placeholder by
@@ -98,7 +98,7 @@ _WEEK_MS = 7 * 24 * 60 * 60 * 1000
 
 
 class SamplePost(HasWords, Protocol):
-    """The four attributes both `DirectorySample` and `Post` carry.
+    """The five attributes both `DirectorySample` and `Post` carry.
 
     Structural rather than a base class, because the two models are deliberately
     separate tables (see `channel_directory_samples`) and neither should grow a
@@ -106,6 +106,7 @@ class SamplePost(HasWords, Protocol):
     from `HasWords`, the shape `own_words` reads.
     """
 
+    post_id: int
     timestamp: int
     forwarded_from: str | None
 
@@ -131,8 +132,9 @@ class SampleStatistics:
 def _sample_language(posts: Sequence[SamplePost]) -> str | None:
     """The Channel rule over the sample, so a Candidate and the Channel it
     becomes once followed agree (LANG-05). Samples are not stored newest first,
-    and the rule's tie-break needs them that way."""
-    newest_first = sorted(posts, key=lambda post: post.timestamp, reverse=True)
+    and the rule's tie-break needs them that way: by Post id, as
+    `channels.relabel_channels` orders them, so the two cannot disagree."""
+    newest_first = sorted(posts, key=lambda post: post.post_id, reverse=True)
     return derive_language(
         (read_language(own_words(post)), bool(post.forwarded_from))
         for post in newest_first
