@@ -11,11 +11,11 @@ are read on write and are unaffected.
 
 **Blocked by:** LANG-01.
 
-**Status:** ready-for-agent
+**Status:** resolved
 
-- [ ] The translation job considers only Posts that have been read, skips `zxx` and Posts whose Language equals the Translation language's code, and keeps `und`
-- [ ] The Translation language setting stays a name; a backend map from the offered names to codes serves the comparison, and a name missing from the map disables the skip rather than skipping everything
-- [ ] A backend guard holds the backend map equal to the frontend's list of offered Translation languages, in both directions, and is mutation-tested
-- [ ] The Translate button is hidden when a Post's Language is `zxx` or equals the Translation language's code, and shown otherwise, including for `und` and unread Posts
-- [ ] Tests with a fake Provider cover: same-language and no-words Posts never reach it; undetermined Posts do; unread Posts wait; an unmapped Translation language translates as before
-- [ ] Frontend unit tests cover the button's visibility rule for `zxx`, the same Language, `und` and unread
+- [x] The translation job considers only Posts that have been read, skips `zxx` and Posts whose Language equals the Translation language's code, and keeps `und`
+- [x] The Translation language setting stays a name; a backend map from the offered names to codes serves the comparison, and a name missing from the map disables the skip rather than skipping everything
+- [x] A backend guard holds the backend map equal to the frontend's list of offered Translation languages, in both directions, and is mutation-tested
+- [x] The Translate button is hidden when a Post's Language is `zxx` or equals the Translation language's code, and shown otherwise, including for `und` and unread Posts
+- [x] Tests with a fake Provider cover: same-language and no-words Posts never reach it; undetermined Posts do; unread Posts wait; an unmapped Translation language translates as before
+- [x] Frontend unit tests cover the button's visibility rule for `zxx`, the same Language, `und` and unread
