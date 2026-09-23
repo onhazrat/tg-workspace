@@ -31,9 +31,7 @@ from app.jobs.discover_probe import (
     run_discover_probe_sweep,
 )
 from app.jobs.post_language import (
-    INTERVAL_SECONDS as POST_LANGUAGE_INTERVAL_SECONDS,
-)
-from app.jobs.post_language import (
+    POST_LANGUAGE_INTERVAL_SECONDS,
     POST_LANGUAGE_JOB_ID,
     run_post_language_walk,
 )
@@ -530,8 +528,9 @@ def start_scheduler() -> None:
         seconds=POST_LANGUAGE_INTERVAL_SECONDS,
         id=POST_LANGUAGE_JOB_ID,
         replace_existing=True,
-        # As the harvest above: a backfill tick reads a page of Posts, which
-        # can outlast a 1s grace, and a dropped tick only delays the walk.
+        # Same reasoning as the harvest above. A backfill tick reads a page of
+        # Posts, which can outlast a 1s grace, and a dropped tick only delays
+        # the walk.
         misfire_grace_time=None,
         coalesce=True,
     )

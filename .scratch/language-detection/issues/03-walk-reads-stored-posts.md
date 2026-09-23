@@ -22,8 +22,10 @@ proceeds. Once it catches up it keeps running at next to no cost. See
 Delivered on branch `worktree-lang-03-walk`. Where it differs from the text above:
 
 - The walk is its own scheduler job, `post_language`, rather than a step in the harvest tick the
-  way reference extraction is: nothing downstream reads what it writes on the same tick, and a job
+  way reference extraction is. Nothing downstream reads what it writes on the same tick, and a job
   of its own can be paused from `PUT /jobs/post_language` without touching the Directory crawl.
+  `POST /jobs/post_language/trigger` asks the worker over `NOTIFY` like every job, so the walk
+  never runs in the API process.
 - Its interval is a module constant (300 s, the harvest's cadence), not a setting.
   `POST_LANGUAGE_WALK_BATCH_SIZE` (10,000, like `POST_REFERENCE_SCAN_LIMIT`) is the one dial.
 - Each `UPDATE` keeps `language IS NULL` in its predicate, so a Post that sync edited and read

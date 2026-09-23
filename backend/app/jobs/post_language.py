@@ -7,9 +7,9 @@ Nobody runs a script on a deployment; once the walk catches up, a tick is one
 probe of the empty `ix_tg_posts_language_unread` and writes nothing.
 
 It runs on the Sync worker only, like every scheduled job (`app/worker.py`).
-The pace is `POST_LANGUAGE_WALK_BATCH_SIZE` per `INTERVAL_SECONDS`, which keeps
-the dead tuples it leaves on `tg_posts` at a rate autovacuum reclaims, so no
-manual `VACUUM` step either.
+The pace is `POST_LANGUAGE_WALK_BATCH_SIZE` per
+`POST_LANGUAGE_INTERVAL_SECONDS`, which keeps the dead tuples it leaves on
+`tg_posts` at a rate autovacuum reclaims, so no manual `VACUUM` step either.
 """
 
 from __future__ import annotations
@@ -24,9 +24,9 @@ from app.services.posts import read_unread_languages
 POST_LANGUAGE_JOB_ID = "post_language"
 
 #: The reference-extraction walk's cadence (the harvest tick), at the same page
-#: size: a pace that ran on staging's ~4.7M-Post corpus without competing with
-#: sync. The batch size is the dial; this is not a second one.
-INTERVAL_SECONDS = 300
+#: size. That pace ran on staging's ~4.7M-Post corpus without competing with
+#: sync. The batch size is the dial, and this is not a second one.
+POST_LANGUAGE_INTERVAL_SECONDS = 300
 
 
 def _walk() -> dict[str, int]:

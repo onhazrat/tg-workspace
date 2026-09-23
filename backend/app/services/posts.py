@@ -218,6 +218,8 @@ def read_unread_languages(session: Session, *, limit: int) -> int:
     tab fills in as the walk proceeds. Commits; returns how many Posts it read,
     so a caught-up tick is one probe of an empty index and no write.
     """
+    if limit <= 0:
+        return 0
     page = _unread_page(session, limit)
     if not page:
         return 0
