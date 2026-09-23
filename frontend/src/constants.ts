@@ -120,16 +120,31 @@ export function isPendingSummary(summary: {
   return summary.status === "pending"
 }
 
-export const LANGUAGES = [
-  "English",
-  "Persian",
-  "Spanish",
-  "French",
-  "German",
-  "Chinese",
-  "Japanese",
-  "Russian",
-  "Portuguese",
-  "Italian",
-  "Arabic",
-]
+// The languages a setting may name, and the code a Post's Language carries for
+// each. The backend's `TRANSLATION_LANGUAGE_CODES` must equal this map, and
+// `backend/tests/jobs/test_translation_skips.py` parses this block to hold it so.
+export const LANGUAGE_CODES: Record<string, string> = {
+  English: "en",
+  Persian: "fa",
+  Spanish: "es",
+  French: "fr",
+  German: "de",
+  Chinese: "zh",
+  Japanese: "ja",
+  Russian: "ru",
+  Portuguese: "pt",
+  Italian: "it",
+  Arabic: "ar",
+}
+
+export const LANGUAGES = Object.keys(LANGUAGE_CODES)
+
+/** False for a Post with no words or one already in the Translation language.
+ *  `und` and unread Posts stay translatable (LANG-04). */
+export function needsTranslation(
+  language: string | null | undefined,
+  translationLanguage: string,
+): boolean {
+  if (language == null) return true
+  return language !== "zxx" && language !== LANGUAGE_CODES[translationLanguage]
+}

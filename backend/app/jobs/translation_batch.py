@@ -15,9 +15,27 @@ from app.jobs.settings import load_translation_settings
 from app.models_tg import Post, PostTranslation, utc_now
 from app.services.ai_keys import Purpose, resolve_ai_key
 from app.services.follows import followed_channel_names
+from app.services.language import NO_WORDS
 from app.services.sync_meta import touch_sync
 
 logger = logging.getLogger(__name__)
+
+#: The Translation language setting is a name; a Post's Language is a code. This
+#: is the frontend's `LANGUAGE_CODES`, held equal to it by
+#: `tests/jobs/test_translation_skips.py`.
+TRANSLATION_LANGUAGE_CODES = {
+    "English": "en",
+    "Persian": "fa",
+    "Spanish": "es",
+    "French": "fr",
+    "German": "de",
+    "Chinese": "zh",
+    "Japanese": "ja",
+    "Russian": "ru",
+    "Portuguese": "pt",
+    "Italian": "it",
+    "Arabic": "ar",
+}
 
 
 def _posts_needing_translation(
@@ -39,6 +57,12 @@ def _posts_needing_translation(
     Channel nobody follows is excluded because it is retention's queue (ticket
     05) — spending provider quota translating posts that are about to be
     collected is the one case worth filtering out.
+
+    Only Posts that have been read, and none that need no translation (LANG-04):
+    no words, or already in the Translation language. `und` stays, because that
+    is where Finglish and short Posts land. A name missing from
+    `TRANSLATION_LANGUAGE_CODES` keeps the same-language Posts rather than
+    skipping everything. Filtered in SQL so skipped Posts never fill the batch.
     """
     channel_names = followed_channel_names(session)
     if not channel_names:
@@ -54,9 +78,14 @@ def _posts_needing_translation(
         .where(col(PostTranslation.id).is_(None))
         .where(col(Post.channel_name).in_(channel_names))
         .where(col(Post.is_anchor) == False)  # noqa: E712
+        # `<>` is NULL for an unread Post, so this also makes unread Posts wait.
+        .where(col(Post.language) != NO_WORDS)
         .order_by(col(Post.timestamp).desc())
         .limit(limit)
     )
+    code = TRANSLATION_LANGUAGE_CODES.get(language)
+    if code:
+        stmt = stmt.where(col(Post.language) != code)
     return list(session.exec(stmt).all())
 
 
