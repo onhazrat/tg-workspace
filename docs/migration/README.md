@@ -53,6 +53,7 @@ Documentation for migrating the browser-first TG-Summarizer app to the FastAPI +
 | [ADR-018](./ADR-018-analysis-window.md) | One global Analysis window with explicit Live and Fixed modes |
 | [ADR-019](./ADR-019-channel-reference-graph.md) | The channel reference graph is per-occurrence and permanent |
 | [ADR-020](./ADR-020-references-feed-the-directory.md) | References feed the Directory, superseding part of ADR-019 |
+| [ADR-021](./ADR-021-post-language.md) | A Post has a Language, read on the server by fastText, superseding ADR-015's `script` |
 
 ## Code references
 
