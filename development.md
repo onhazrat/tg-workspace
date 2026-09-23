@@ -253,6 +253,25 @@ is discovered by an operator part-way through a run.
 | `capture_scrape_html.py` | Dev only. Captures web-view HTML as test fixtures. |
 | `bulk_reresolve_start_ids.py` | **Deprecated**, a no-op. Use bulk reset-sync. |
 
+## CRAP score report
+
+`scripts/crap/run.sh` scores every function in `backend/app` and `frontend/src`
+with CRAP (`complexity² × (1 − coverage)³ + complexity`, above 30 is the usual
+risk line) and writes a self-contained HTML page with the distribution, a
+complexity-against-coverage scatter and a searchable table of every function:
+
+```bash
+docker compose up -d db              # the dev Postgres from .env
+bash scripts/crap/run.sh             # writes crap-report/crap-scores.html (gitignored)
+bash scripts/crap/run.sh /tmp/x.html # or anywhere else
+```
+
+It runs the whole pytest suite under coverage (~7 minutes) in its own throwaway
+database, dropped on exit, so it is safe beside another suite on `app_test`. It
+also prints a per-side summary and the five worst functions. Frontend coverage
+comes from `bun test src` alone; Playwright isn't counted, so components that
+only e2e reaches score as untested.
+
 ## API surface (`/api/v1/*`)
 
 **Supported surface:** `/api/v1/*` only. Use hand-written `frontend/src/api/` for the summarizer and generated `frontend/src/client/` for the admin shell ([ADR-006](docs/migration/ADR-006-api-client.md)).
