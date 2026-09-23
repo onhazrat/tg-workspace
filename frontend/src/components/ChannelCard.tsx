@@ -42,6 +42,7 @@ import {
   isVirtualGroupTag,
   toVirtualGroupTagName,
 } from "@/lib/channels/virtual-group-tags"
+import { languageName } from "@/lib/language-name"
 import { telegramWebViewChannelUrl } from "@/lib/telegram-web"
 import { useData } from "../contexts/DataContext"
 import { useScraper } from "../contexts/ScraperContext"
@@ -357,7 +358,7 @@ export const ChannelCard: React.FC<ChannelCardProps> = ({
 
         {channel.language && (
           <div className="bg-app-ink/5 text-app-ink/70 border border-app-ink/10 text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1 shadow-sm">
-            <span>{channel.language}</span>
+            <span>{languageName(channel.language)}</span>
           </div>
         )}
 

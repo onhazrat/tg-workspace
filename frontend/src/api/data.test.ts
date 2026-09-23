@@ -13,6 +13,7 @@ describe("channelWritePayload", () => {
       settingGroupId: "group-1",
       settingGroupName: "default",
       telegramChatId: -1001234567890,
+      language: "fa",
       displayName: "Channel A",
     })
 

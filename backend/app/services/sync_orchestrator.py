@@ -54,7 +54,6 @@ from app.services.followed_channels import (
     normalize_channel_name,
 )
 from app.services.follows import follows_for_channels, resolve_follow_owner
-from app.services.language import detect_language_from_posts
 from app.services.logs import upsert_network_log, upsert_sync_log
 from app.services.network import rotate_tor_identity
 from app.services.network_settings import (
@@ -418,7 +417,6 @@ class _ChannelSyncCtx:
     channel_name: str
     display_name: str | None
     photo_url: str | None
-    language: str | None
     auto_follow: bool
     proxies: list[str]
     proxy_concurrency: tuple[int, dict[str, int]]
@@ -563,7 +561,6 @@ def _prepare_channel_sync(
                 channel_name=channel.name,
                 display_name=channel.display_name,
                 photo_url=channel.photo_url,
-                language=channel.language,
                 auto_follow=bool(group.auto_follow_forwarded),
                 proxies=resolve_proxies(network),
                 proxy_concurrency=(proxy_default, proxy_overrides),
@@ -1089,32 +1086,8 @@ def _finalize_channel_success(
             reached_channel_start=reached_channel_start,
         )
 
-        detected_language = channel.language or ctx.language
-        if not detected_language:
-            recent = session.exec(
-                select(Post)
-                .where(Post.channel_name == channel.name)
-                .order_by(col(Post.post_id).desc())
-                .limit(20)
-            ).all()
-            if recent:
-                lang = detect_language_from_posts(
-                    [
-                        {
-                            "text": p.text,
-                            "id": p.post_id,
-                            "channelName": p.channel_name,
-                            "timestamp": p.timestamp,
-                        }
-                        for p in recent
-                    ]
-                )
-                if lang:
-                    detected_language = lang
-
         now = int(time.time() * 1000)
         channel.last_updated = now
-        channel.language = detected_language
         if group.regular_sync_enabled:
             channel.next_regular_sync_at = (
                 compute_next_regular_sync_at_from_last_updated(

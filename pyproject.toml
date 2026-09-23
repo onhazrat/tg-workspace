@@ -57,8 +57,6 @@ module = [
     "apscheduler.*",
     "stem",
     "stem.*",
-    "langdetect",
-    "langdetect.*",
 ]
 ignore_missing_imports = true
 disable_error_code = ["import-untyped"]

@@ -1,4 +1,5 @@
 import { getTagNames } from "@/lib/channels/channel-tag-model"
+import { languageName } from "@/lib/language-name"
 import type { Channel } from "@/types"
 
 export type ChannelGridFilters = {
@@ -38,11 +39,23 @@ export function filterChannelsForGrid(
   return result
 }
 
-/** Unique languages across all channels, sorted for the Lang filter select. */
-export function collectChannelLanguages(channels: Channel[]): string[] {
-  const langs = new Set<string>()
-  channels.forEach((c) => {
-    if (c.language) langs.add(c.language)
-  })
-  return Array.from(langs).sort()
+export type ChannelLanguageOption = { code: string; name: string }
+
+/**
+ * Each Language code across all channels once, for the Lang filter select.
+ * The option's value is the code, which is what `filterChannelsForGrid`
+ * matches; the options are sorted by the name the reader sees.
+ */
+export function collectChannelLanguages(
+  channels: Channel[],
+  locale?: string,
+): ChannelLanguageOption[] {
+  const codes = new Set<string>()
+  for (const c of channels) {
+    if (c.language) codes.add(c.language)
+  }
+  return Array.from(codes, (code) => ({
+    code,
+    name: languageName(code, locale),
+  })).sort((a, b) => a.name.localeCompare(b.name, locale))
 }

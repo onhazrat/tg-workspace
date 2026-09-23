@@ -6,8 +6,8 @@ to read, or `UNDETERMINED` when there are words it cannot place. `own_words`
 is the one answer to "what did this Post actually say", shared with the
 Directory statistics so a captionless photo means the same thing in both.
 
-`detect_language_from_posts` below is the retired channel-level detector, still
-called by sync finalisation until LANG-02 deletes both.
+`derive_language` is the one answer to "what Language is this Channel in",
+over its Posts' answers (LANG-02); `channels.relabel_channels` feeds it rows.
 """
 
 from __future__ import annotations
@@ -15,6 +15,8 @@ from __future__ import annotations
 import functools
 import re
 import unicodedata
+from collections import Counter
+from collections.abc import Iterable
 from typing import Any, Protocol
 
 from fast_langdetect import LangDetectConfig, LangDetector
@@ -37,6 +39,10 @@ MIN_LETTERS = 20
 #: The model's top score must reach this, or the Post is `UNDETERMINED`. On the
 #: ADR-021 benchmark it kept fastText's mistakes on two-word Posts to 41 of 1,143.
 MIN_SCORE = 0.5
+#: How many of a Channel's newest Posts carrying a code decide its Language:
+#: enough to outvote a run of forwards-with-comment, few enough that a Channel
+#: which switched language is judged on what it publishes now.
+LANGUAGE_WINDOW = 100
 
 _URL = re.compile(r"https?://\S+|www\.\S+|\bt\.me/\S+", re.IGNORECASE)
 _MENTION = re.compile(r"@\w+")
@@ -120,76 +126,25 @@ def read_language(words: str | None) -> str:
     return str(best["lang"])
 
 
-_ISO639_3_TO_NAME: dict[str, str] = {
-    "eng": "English",
-    "fas": "Persian",
-    "ara": "Arabic",
-    "rus": "Russian",
-    "ukr": "Ukrainian",
-    "deu": "German",
-    "fra": "French",
-    "spa": "Spanish",
-    "ita": "Italian",
-    "tur": "Turkish",
-    "heb": "Hebrew",
-    "urd": "Urdu",
-    "zho": "Chinese",
-    "jpn": "Japanese",
-    "kor": "Korean",
-    "por": "Portuguese",
-    "nld": "Dutch",
-    "pol": "Polish",
-}
+def is_code(language: str | None) -> bool:
+    """A Language that names one: not unread, `NO_WORDS` or `UNDETERMINED`."""
+    return language is not None and language not in (NO_WORDS, UNDETERMINED)
 
 
-def _sample_text(posts: list[dict[str, Any]], limit: int = 20) -> str:
-    parts: list[str] = []
-    for post in posts[:limit]:
-        text = (post.get("text") or "").strip()
-        if text:
-            parts.append(text)
-    return " ".join(parts)
+def derive_language(posts: Iterable[tuple[str | None, bool]]) -> str | None:
+    """The Language of a Channel, from `(language, forwarded)` pairs newest first.
 
-
-def detect_language_from_posts(posts: list[dict[str, Any]]) -> str | None:
-    """Detect language from recent posts; mirrors frontend franc-min behavior."""
-    sample = _sample_text(posts)
-    if len(sample) < 20:
-        return None
-
-    try:
-        from langdetect import DetectorFactory, detect
-
-        DetectorFactory.seed = 0
-        code = detect(sample)
-    except Exception:
-        return None
-
-    if not code or code == "und":
-        return None
-
-    # langdetect returns ISO 639-1; map common codes to display names
-    iso3_map = {
-        "en": "eng",
-        "fa": "fas",
-        "ar": "ara",
-        "ru": "rus",
-        "uk": "ukr",
-        "de": "deu",
-        "fr": "fra",
-        "es": "spa",
-        "it": "ita",
-        "tr": "tur",
-        "he": "heb",
-        "ur": "urd",
-        "zh-cn": "zho",
-        "zh-tw": "zho",
-        "ja": "jpn",
-        "ko": "kor",
-        "pt": "por",
-        "nl": "nld",
-        "pl": "pol",
-    }
-    iso3 = iso3_map.get(code, code)
-    name = _ISO639_3_TO_NAME.get(iso3, code)
-    return str(name)
+    Among the newest `LANGUAGE_WINDOW` own Posts carrying a code, the most
+    common code wins, and a tie goes to the code of the newest Post among the
+    tied. Forwards count only when there is no own Post to go on, so a Persian
+    Channel forwarding English news stays Persian and a pure re-poster still
+    gets a Language. `None` when nothing qualifies.
+    """
+    coded = [
+        (language, forwarded) for language, forwarded in posts if is_code(language)
+    ]
+    own = [language for language, forwarded in coded if not forwarded]
+    window = (own or [language for language, _ in coded])[:LANGUAGE_WINDOW]
+    # `most_common` orders equal counts by first insertion, which in a
+    # newest-first list is the tied code whose newest Post is newest.
+    return Counter(window).most_common(1)[0][0] if window else None
