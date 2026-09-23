@@ -99,9 +99,11 @@ def test_an_unmapped_translation_language_skips_only_what_has_no_words(
 
 def _frontend_codes() -> dict[str, str]:
     source = CONSTANTS.read_text()
-    block = re.search(r"LANGUAGE_CODES[^{]*\{(.*?)\}", source, re.DOTALL)
+    block = re.search(r"export const LANGUAGE_CODES[^{]*\{(.*?)\}", source, re.DOTALL)
     assert block, f"LANGUAGE_CODES not found in {CONSTANTS}"
-    return dict(re.findall(r"(\w+):\s*\"([\w-]+)\"", block.group(1)))
+    return dict(
+        re.findall(r"(?m)^\s*\"?([^\":\n]+?)\"?:\s*\"([\w-]+)\"", block.group(1))
+    )
 
 
 def test_the_backend_map_is_the_frontends_list_of_translation_languages() -> None:
