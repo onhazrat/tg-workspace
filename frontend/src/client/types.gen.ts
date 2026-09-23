@@ -3167,6 +3167,29 @@ export type PostFeedRequest = {
 };
 
 /**
+ * PostLinkSpan
+ *
+ * One Link: a stretch of `text` in UTF-16 code units, href verbatim (ADR-022).
+ *
+ * Declared where `links` is not, because every stored entry carries all three
+ * keys, so the model can never invent a `null` on the way out.
+ */
+export type PostLinkSpan = {
+    /**
+     * Offset
+     */
+    offset: number;
+    /**
+     * Length
+     */
+    length: number;
+    /**
+     * Url
+     */
+    url: string;
+};
+
+/**
  * PostLookupRef
  */
 export type PostLookupRef = {
@@ -3258,6 +3281,10 @@ export type PostResponse = {
      * Links
      */
     links?: Array<unknown> | null;
+    /**
+     * Linkspans
+     */
+    linkSpans?: Array<PostLinkSpan> | null;
     /**
      * Replytopostid
      */

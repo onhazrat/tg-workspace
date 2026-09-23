@@ -206,6 +206,7 @@ def post_to_camel(p: Post) -> dict[str, Any]:
         "retrievalSource": p.retrieval_source,
         "media": p.media,
         "links": p.links,
+        "linkSpans": p.link_spans,
         "replyToPostId": p.reply_to_post_id,
         "replyTo": p.reply_to,
         "language": p.language,

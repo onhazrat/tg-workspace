@@ -20,7 +20,12 @@ from app.services.network import fetch_with_retry
 from app.services.post_links_parser import extract_body_links
 from app.services.post_media_parser import finalize_post_media_paths, parse_widget_media
 from app.services.post_reply_parser import extract_reply
-from app.services.telegram_html import attr_str, extract_telegram_html_text
+from app.services.telegram_html import (
+    attr_str,
+    extract_link_spans,
+    extract_telegram_html_text,
+    message_body_element,
+)
 from app.services.telegram_web import (
     TelegramWebViewUnavailable,
     extract_channel_post_from_href,
@@ -114,6 +119,9 @@ def _parse_posts_from_html(
         links = extract_body_links(el)
         if links:
             post["links"] = links
+        # Always present, because an empty list is an answer ("Telegram marked
+        # nothing") where an absent key reads as "never looked" (ADR-022).
+        post["linkSpans"] = extract_link_spans(message_body_element(el))
         if thumb_source_url:
             post["_thumbSourceUrl"] = thumb_source_url
         if forwarded_from:

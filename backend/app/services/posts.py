@@ -42,6 +42,31 @@ def _post_links_from_item(item: dict[str, Any]) -> list[Any] | None:
     return links if isinstance(links, list) else None
 
 
+def _is_link_span(entry: object) -> bool:
+    if not isinstance(entry, dict):
+        return False
+    offset, length = entry.get("offset"), entry.get("length")
+    return (
+        type(offset) is int
+        and type(length) is int
+        and isinstance(entry.get("url"), str)
+    )
+
+
+def _post_link_spans_from_item(item: dict[str, Any]) -> list[Any] | None:
+    # Import and `/data/posts/bulk` take any JSON, and `PostResponse` declares
+    # the entry shape, so one bad entry kept here would 500 every read of a
+    # Post every Follower shares. `type(...) is int` because bool is an int.
+    spans = item.get("linkSpans", item.get("link_spans"))
+    if not isinstance(spans, list):
+        return None
+    return [
+        {"offset": s["offset"], "length": s["length"], "url": s["url"]}
+        for s in spans
+        if _is_link_span(s)
+    ]
+
+
 def _post_reply_from_item(item: dict[str, Any]) -> dict[str, Any] | None:
     reply = item.get("replyTo", item.get("reply_to"))
     return reply if isinstance(reply, dict) else None
@@ -86,6 +111,7 @@ def bulk_upsert_posts_impl(
                 existing.reply_to,
             )
             was_words = own_words(existing)
+            was_text = existing.text
             existing.text = item.get("text", existing.text)
             existing.date = item.get("date", existing.date)
             existing.timestamp = item.get("timestamp", existing.timestamp)
@@ -100,7 +126,7 @@ def bulk_upsert_posts_impl(
             )
             # Guarded on the key where the four fields around it are not, and
             # the difference is which payloads carry the key. `post_to_camel`
-            # emits a fixed seventeen and CRG-03's column is not among them, so
+            # emits a fixed set of keys and CRG-03's column is not among them, so
             # this function — which `POST /data/import` and `/data/posts/bulk`
             # share with the scraper — would take an absent key as "no id" and
             # null the column on every Post an export round trip restored. The
@@ -115,12 +141,22 @@ def bulk_upsert_posts_impl(
                 existing.media = _post_media_from_item(item)
             if "links" in item:
                 existing.links = _post_links_from_item(item)
+            # Key-guarded like `forwardedFromPostId`, so an export from before
+            # LINK-01 leaves the column alone, but only while the words are the
+            # same. Positions measured against other words link the wrong ones,
+            # and null sends the renderer back to its regex (ADR-022).
+            if "linkSpans" in item or "link_spans" in item:
+                existing.link_spans = _post_link_spans_from_item(item)
+            elif existing.text != was_text:
+                existing.link_spans = None
             if "replyTo" in item:
                 existing.reply_to = _post_reply_from_item(item)
-            # Conditional, and that is the whole point: sync re-scrapes the
-            # newest page of every followed Channel on every run, so clearing
-            # the flag unconditionally would hand reference extraction
-            # thousands of unchanged rows per sync round for ever.
+            # Conditional, and that is the whole point: an import restores a
+            # whole export and a first sync re-upserts its page, so clearing the
+            # flag unconditionally would hand reference extraction every
+            # unchanged row they touch. Sync's incremental and backfill passes
+            # never get here, because `_persist_page_posts` drops a Post already
+            # stored before the upsert.
             #
             # `references_extracted` since DDS-02: the harvest queues what the
             # graph holds, so an edit that adds a link reaches the Directory
@@ -171,6 +207,7 @@ def bulk_upsert_posts_impl(
                 ),
                 media=_post_media_from_item(item),
                 links=_post_links_from_item(item),
+                link_spans=_post_link_spans_from_item(item),
                 reply_to_post_id=_post_int_from_item(
                     item, "replyToPostId", "reply_to_post_id"
                 ),

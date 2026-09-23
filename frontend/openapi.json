@@ -8143,6 +8143,17 @@
         "title": "PostFeedRequest",
         "description": "`PostScopeRequest` plus the feed's paging, cap mode and sort.\n\n`limit`/`offset` keep the same bounds the query params enforced, so an\nout-of-range page is still a 422 rather than an unbounded read."
       },
+      "PostLinkSpan": {
+        "properties": {
+          "offset": { "type": "integer", "title": "Offset" },
+          "length": { "type": "integer", "title": "Length" },
+          "url": { "type": "string", "title": "Url" }
+        },
+        "type": "object",
+        "required": ["offset", "length", "url"],
+        "title": "PostLinkSpan",
+        "description": "One Link: a stretch of `text` in UTF-16 code units, href verbatim (ADR-022).\n\nDeclared where `links` is not, because every stored entry carries all three\nkeys, so the model can never invent a `null` on the way out."
+      },
       "PostLookupRef": {
         "properties": {
           "channelName": { "type": "string", "title": "Channelname" },
@@ -8216,6 +8227,16 @@
           "links": {
             "anyOf": [{ "items": {}, "type": "array" }, { "type": "null" }],
             "title": "Links"
+          },
+          "linkSpans": {
+            "anyOf": [
+              {
+                "items": { "$ref": "#/components/schemas/PostLinkSpan" },
+                "type": "array"
+              },
+              { "type": "null" }
+            ],
+            "title": "Linkspans"
           },
           "replyToPostId": {
             "anyOf": [{ "type": "integer" }, { "type": "null" }],

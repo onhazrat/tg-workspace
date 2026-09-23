@@ -26,6 +26,7 @@ import { useSettings } from "../contexts/SettingsContext"
 import { useUI } from "../contexts/UIContext"
 import { useChatSessionQuery } from "../hooks/useChatSessions"
 import { replaceCitations } from "../lib/citations/replace-citations"
+import { renderPostText } from "../lib/posts/render-post-text"
 import { ModelCombo } from "./ai/ModelCombo"
 import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tg-tooltip"
 
@@ -354,7 +355,11 @@ export const ChatView: React.FC = () => {
                                 </span>
                               </div>
                               <p className="text-[11px] line-clamp-3 opacity-80 leading-relaxed">
-                                {source.text}
+                                {renderPostText(
+                                  source.text,
+                                  "",
+                                  source.linkSpans,
+                                )}
                               </p>
                             </div>
                           ))}

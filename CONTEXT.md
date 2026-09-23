@@ -87,6 +87,15 @@ _Avoid_: initial sync, backfill
 One message scraped from a Channel.
 _Avoid_: message, item, entry
 
+**Link**:
+A stretch of a Post's own words that points somewhere, exactly as Telegram
+marked it: a phrase masking an address, a bare address, a mention or a hashtag.
+A mention is the Link whose words are a Channel's handle. A Link to a Channel
+makes a Reference, most Links point elsewhere and make none, and a forward or a
+reply is a Reference with no Link at all. The quoted excerpt of a replied-to
+Post is not the Post's own words, so it carries no Links.
+_Avoid_: hyperlink, URL, entity, anchor, text link
+
 **Language**:
 The human language a Post is written in, read from the Post's own words by the
 deployment rather than chosen by anybody. A Post with no words has no Language;

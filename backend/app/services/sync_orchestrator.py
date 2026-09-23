@@ -208,6 +208,7 @@ def _posts_to_save(
                 "forwardedFromPostId": p.get("forwardedFromPostId"),
                 "media": p.get("media"),
                 "links": p.get("links"),
+                "linkSpans": p.get("linkSpans"),
                 "replyToPostId": p.get("replyToPostId"),
                 "replyTo": p.get("replyTo"),
             }

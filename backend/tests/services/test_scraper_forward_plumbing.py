@@ -208,7 +208,7 @@ def test_a_scrape_that_lost_the_link_clears_the_id() -> None:
 def test_a_payload_that_never_mentions_the_id_leaves_it_alone() -> None:
     """An export round trip must not null the one column it cannot carry.
 
-    `post_to_camel` emits a fixed seventeen keys and this is not among them, so
+    `post_to_camel` emits a fixed set of keys and this is not among them, so
     `POST /data/import` hands `bulk_upsert_posts_impl` a Post with no
     `forwardedFromPostId` at all. Overwriting on an absent key would destroy
     every id CRG-03 has collected, with no href left anywhere to recover it.
