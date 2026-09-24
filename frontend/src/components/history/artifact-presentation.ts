@@ -48,6 +48,12 @@ export function artifactDetail(artifact: ArtifactListItem): string {
   }
 }
 
+/** The channels an artifact was made from, as the card's heading. */
+export function artifactChannelsLine(artifact: ArtifactListItem): string {
+  const channels = artifact.scope?.channels
+  return channels?.length ? channels.join(", ") : "No channels"
+}
+
 /** A pending artifact is one whose externally-run prompt has not come back. */
 export function isPendingArtifact(artifact: ArtifactListItem): boolean {
   return (
