@@ -52,23 +52,28 @@ MEDIA_TABLES: dict[str, tuple[str, ...]] = {
     "tg_channel_directory_samples": ("handle", "post_id"),
 }
 
-#: A Summary keeps copies of the Posts it cited, media included. 16 rows on
-#: staging, so one statement.
-_CITED_HAS_STRINGS = """
-json_typeof(cited_posts) = 'array'
-AND jsonb_path_exists(
-    cited_posts::jsonb, '$[*].media ? (exists(@.views) || exists(@.reactions))'
-)
+#: A Summary keeps copies of the Posts it cited, media included: a map of
+#: "handle-id" to Post on every staging row, though the model also allows a
+#: list. 16 rows on staging, so one statement.
+_HAS_STRINGS_PATH = ".media ? (exists(@.views) || exists(@.reactions))"
+_CITED_HAS_STRINGS = f"""
+(json_typeof(cited_posts) = 'object'
+ AND jsonb_path_exists(cited_posts::jsonb, 'lax $.*{_HAS_STRINGS_PATH}'))
+OR (json_typeof(cited_posts) = 'array'
+ AND jsonb_path_exists(cited_posts::jsonb, 'lax $[*]{_HAS_STRINGS_PATH}'))
 """
+_STRIP_POST = """CASE WHEN jsonb_typeof(p -> 'media') = 'object'
+    THEN jsonb_set(p, '{media}', (p -> 'media') - 'views' - 'reactions')
+    ELSE p END"""
 _CITED_POSTS = f"""
-UPDATE tg_summary_payloads SET cited_posts = (
-    SELECT json_agg(
-        CASE WHEN jsonb_typeof(e -> 'media') = 'object'
-            THEN jsonb_set(e, '{{media}}', (e -> 'media') - 'views' - 'reactions')
-            ELSE e END
-        ORDER BY ord)
-    FROM jsonb_array_elements(cited_posts::jsonb) WITH ORDINALITY AS x(e, ord)
-)
+UPDATE tg_summary_payloads SET cited_posts = CASE json_typeof(cited_posts)
+    WHEN 'object' THEN (
+        SELECT json_object_agg(key, {_STRIP_POST})
+        FROM jsonb_each(cited_posts::jsonb) AS x(key, p))
+    ELSE (
+        SELECT json_agg({_STRIP_POST} ORDER BY ord)
+        FROM jsonb_array_elements(cited_posts::jsonb) WITH ORDINALITY AS x(p, ord))
+    END
 WHERE {_CITED_HAS_STRINGS}"""
 
 

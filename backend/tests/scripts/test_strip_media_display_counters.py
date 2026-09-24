@@ -13,7 +13,9 @@ from pathlib import Path
 from sqlmodel import Session, col, delete, select
 
 from app.core.db import engine
-from app.models_tg import DirectoryEntry, DirectorySample, Post
+from app.models import User
+from app.models_tg import DirectoryEntry, DirectorySample, Post, SummaryPayload
+from tests.utils.user import create_random_user
 
 _SCRIPTS_DIR = Path(__file__).resolve().parents[2] / "scripts"
 if str(_SCRIPTS_DIR) not in sys.path:
@@ -78,4 +80,46 @@ def test_display_strings_go_and_the_numbers_stay() -> None:
             session.exec(delete(Post).where(col(Post.channel_name) == "strip-me"))
             session.exec(delete(DirectorySample))
             session.exec(delete(DirectoryEntry))
+            session.commit()
+
+
+def test_cited_posts_are_stripped_in_both_shapes_they_are_stored_in() -> None:
+    """`cited_posts` is a map of "handle-id" to Post on every staging row, and
+    the model still allows a list. The first version handled only the list
+    and matched nothing on staging."""
+    with Session(engine) as session:
+        user_id = create_random_user(session).id
+    cited = {"strip-me-1": {"id": 1, "media": dict(_LEGACY_MEDIA)}}
+    with Session(engine) as session:
+        session.add(
+            SummaryPayload(summary_id="s-map", user_id=user_id, cited_posts=cited)
+        )
+        session.add(
+            SummaryPayload(
+                summary_id="s-list",
+                user_id=user_id,
+                cited_posts=list(cited.values()),
+            )
+        )
+        session.commit()
+    try:
+        assert strip(dry_run=True, batch_size=2)["tg_summary_payloads"] == 2
+        assert strip(dry_run=False, batch_size=2)["tg_summary_payloads"] == 2
+
+        with Session(engine) as session:
+            by_id = {
+                row.summary_id: row.cited_posts
+                for row in session.exec(select(SummaryPayload))
+            }
+        kept = {
+            "kinds": ["photo"],
+            "viewsCount": 3860,
+            "reactionCounts": [{"emoji": "🔥", "count": 25}],
+        }
+        assert by_id["s-map"] == {"strip-me-1": {"id": 1, "media": kept}}
+        assert by_id["s-list"] == [{"id": 1, "media": kept}]
+    finally:
+        with Session(engine) as session:
+            session.exec(delete(SummaryPayload))
+            session.exec(delete(User).where(col(User.id) == user_id))
             session.commit()
