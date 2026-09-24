@@ -9,6 +9,7 @@ import {
 } from "react"
 import { toast } from "sonner"
 import { env } from "@/lib/env"
+import { isTranslationQuotaError } from "@/lib/translations/translation-errors"
 import { translateTextBatch } from "../services/ai"
 import { useSettings } from "./SettingsContext"
 
@@ -78,11 +79,7 @@ export const TranslationProvider: React.FC<{ children: ReactNode }> = ({
     } catch (error: any) {
       console.error("[TranslationProvider] Batch translation failed:", error)
 
-      const errorMsg = error instanceof Error ? error.message : String(error)
-      if (
-        errorMsg.toLowerCase().includes("quota") ||
-        errorMsg.toLowerCase().includes("429")
-      ) {
+      if (isTranslationQuotaError(error)) {
         setAutoTranslate(false)
         toast.error(
           "Translation failed: API Quota Exceeded. Auto-translate disabled.",
@@ -93,7 +90,7 @@ export const TranslationProvider: React.FC<{ children: ReactNode }> = ({
 
       // Reject all pending promises in this batch
       batch.forEach((req) =>
-        req.reject(error instanceof Error ? error : new Error(errorMsg)),
+        req.reject(error instanceof Error ? error : new Error(String(error))),
       )
     }
   }, [
