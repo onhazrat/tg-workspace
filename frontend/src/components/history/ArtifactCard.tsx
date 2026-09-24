@@ -1,34 +1,14 @@
-import {
-  Compass,
-  FileText,
-  MessageSquare,
-  RefreshCw,
-  Send,
-  ShieldCheck,
-  Star,
-  StickyNote,
-  Tag,
-  Trash2,
-} from "lucide-react"
 import type React from "react"
 import { ArtifactScopeLine } from "@/components/ArtifactScopeLine"
-import { TgMetaChip } from "@/components/ui/tg-chips"
-import { TgIconButton } from "@/components/ui/tg-icon-button"
 import type { ArtifactListItem } from "@/types"
 
 import { RelativeTime } from "../RelativeTime"
 import {
-  ARTIFACT_KIND_LABELS,
-  artifactDetail,
-  isPendingArtifact,
-} from "./artifact-presentation"
-
-const ICONS = {
-  summary: FileText,
-  chat: MessageSquare,
-  tag: Tag,
-  discovery: Compass,
-} as const
+  ArtifactCardActions,
+  ArtifactCardHeading,
+  ArtifactCardNotes,
+} from "./ArtifactCardParts"
+import { artifactDetail, isPendingArtifact } from "./artifact-presentation"
 
 interface ArtifactCardProps {
   artifact: ArtifactListItem
@@ -52,20 +32,9 @@ interface ArtifactCardProps {
 export const ArtifactCard: React.FC<ArtifactCardProps> = ({
   artifact,
   onOpen,
-  onToggleStar,
-  onEditNote,
-  onDelete,
-  onToggleAutoRegenerate,
-  onToggleAutoPublish,
+  ...actions
 }) => {
-  const Icon = ICONS[artifact.kind]
   const pending = isPendingArtifact(artifact)
-  /*
-   * Auto-regenerate and auto-publish are summary-only, and History is the only
-   * place they can be toggled — the first rewrite of this card dropped them,
-   * which made scheduled regeneration unreachable from the UI entirely.
-   */
-  const summary = artifact.kind === "summary" ? artifact : null
 
   /*
    * The `min-w-0`s below make the card safe to drop into any flex or grid
@@ -84,29 +53,11 @@ export const ArtifactCard: React.FC<ArtifactCardProps> = ({
           : "border-app-ink/10 hover:border-app-ink/20"
       }`}
     >
-      <button
-        type="button"
-        onClick={() => onOpen(artifact)}
-        className="flex min-w-0 flex-col gap-1.5 text-left"
-      >
-        <div className="flex items-center gap-2">
-          <Icon size={13} className="shrink-0 opacity-50" />
-          <TgMetaChip>{ARTIFACT_KIND_LABELS[artifact.kind]}</TgMetaChip>
-          {pending && (
-            <span className="rounded-md bg-amber-500/15 px-2 py-0.5 text-[11px] font-bold uppercase tracking-wider text-amber-800 dark:text-amber-200">
-              Awaiting response
-            </span>
-          )}
-        </div>
-        <h4 className="truncate text-sm font-bold uppercase tracking-tight">
-          {artifact.scope?.channels?.length
-            ? artifact.scope.channels.join(", ")
-            : "No channels"}
-        </h4>
-        <p className="line-clamp-2 text-[12px] leading-relaxed text-app-ink/80">
-          {artifact.title || artifactDetail(artifact)}
-        </p>
-      </button>
+      <ArtifactCardHeading
+        artifact={artifact}
+        pending={pending}
+        onOpen={onOpen}
+      />
 
       <div className="flex min-w-0 items-center justify-between gap-3 text-[11px] font-mono text-app-ink/60">
         <span className="truncate">{artifactDetail(artifact)}</span>
@@ -122,110 +73,9 @@ export const ArtifactCard: React.FC<ArtifactCardProps> = ({
        */}
       <ArtifactScopeLine artifact={artifact} />
 
-      {/*
-       * Ticket 27. Present on the card rather than only on the detail view,
-       * because the question this answers — "did I make this?" — is asked while
-       * scanning the list, and an artifact somebody else wrote on your behalf
-       * is exactly the one you would not remember making.
-       *
-       * Null for almost every row, so it costs nothing to render conditionally
-       * and would cost a line of dead chrome on every card if it did not.
-       */}
-      {artifact.actedByEmail && (
-        <p
-          data-testid="artifact-acted-by"
-          className="flex min-w-0 items-center gap-1.5 text-[11px] text-app-ink/60"
-        >
-          <ShieldCheck size={12} className="shrink-0 opacity-60" />
-          <span className="truncate">
-            Last changed by {artifact.actedByEmail} on your behalf
-          </span>
-        </p>
-      )}
+      <ArtifactCardNotes artifact={artifact} />
 
-      {artifact.note && (
-        <p className="break-words rounded-md border border-app-ink/10 bg-app-muted/30 px-3 py-2 text-[11px] italic text-app-ink/70">
-          {artifact.note}
-        </p>
-      )}
-
-      <div className="absolute right-3 top-3 flex items-center gap-1 rounded-lg border border-app-ink/5 bg-app-card/80 p-1 opacity-0 shadow-sm backdrop-blur-sm transition-opacity group-focus-within:opacity-100 group-hover:opacity-100">
-        <TgIconButton
-          aria-label={artifact.isStarred ? "Unstar item" : "Star item"}
-          tooltip={artifact.isStarred ? "Unstar item" : "Star item"}
-          data-active={artifact.isStarred || undefined}
-          onClick={() => onToggleStar(artifact)}
-          className={
-            artifact.isStarred ? "bg-amber-500/10 text-amber-500" : undefined
-          }
-        >
-          <Star
-            size={14}
-            className={artifact.isStarred ? "fill-amber-500" : ""}
-          />
-        </TgIconButton>
-        <TgIconButton
-          aria-label={artifact.note ? "Edit note" : "Add note"}
-          tooltip={artifact.note ? "Edit note" : "Add note"}
-          data-active={artifact.note ? true : undefined}
-          onClick={() => onEditNote(artifact)}
-        >
-          <StickyNote size={14} />
-        </TgIconButton>
-        {summary && (
-          <>
-            <TgIconButton
-              aria-label={
-                summary.autoRegenerate
-                  ? "Disable auto-regenerate"
-                  : "Enable auto-regenerate"
-              }
-              tooltip={
-                summary.autoRegenerate
-                  ? "Disable auto-regenerate"
-                  : "Enable auto-regenerate"
-              }
-              data-active={summary.autoRegenerate || undefined}
-              disabled={pending}
-              onClick={() => onToggleAutoRegenerate(artifact)}
-              className={
-                summary.autoRegenerate
-                  ? "bg-green-500/10 text-green-600"
-                  : undefined
-              }
-            >
-              <RefreshCw size={14} />
-            </TgIconButton>
-            <TgIconButton
-              aria-label={
-                summary.autoPublish
-                  ? "Disable auto-publish"
-                  : "Enable auto-publish"
-              }
-              tooltip={
-                summary.autoPublish
-                  ? "Disable auto-publish"
-                  : "Enable auto-publish"
-              }
-              data-active={summary.autoPublish || undefined}
-              disabled={pending}
-              onClick={() => onToggleAutoPublish(artifact)}
-              className={
-                summary.autoPublish ? "bg-blue-500/10 text-blue-600" : undefined
-              }
-            >
-              <Send size={14} />
-            </TgIconButton>
-          </>
-        )}
-        <TgIconButton
-          aria-label="Delete item"
-          tooltip="Delete item"
-          onClick={() => onDelete(artifact)}
-        >
-          <Trash2 size={14} />
-        </TgIconButton>
-      </div>
+      <ArtifactCardActions artifact={artifact} pending={pending} {...actions} />
     </div>
   )
 }

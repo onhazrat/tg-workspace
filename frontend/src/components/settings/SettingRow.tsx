@@ -84,65 +84,11 @@ export const SettingRow: React.FC<SettingRowProps> = ({
         </div>
 
         <div className="flex items-center gap-2 shrink-0">
-          {entry.control.kind === "boolean" && (
-            <TgToggle
-              checked={Boolean(value)}
-              onClick={() => onChange(!value)}
-              aria-label={entry.label}
-            />
-          )}
-          {entry.control.kind === "number" && (
-            <TgInput
-              type="number"
-              min={entry.control.min}
-              max={entry.control.max}
-              step={entry.control.step === "any" ? "any" : entry.control.step}
-              value={typeof value === "number" ? value : Number(value) || 0}
-              onChange={(e) => {
-                const raw = e.target.value
-                const parsed =
-                  entry.control.kind === "number" &&
-                  entry.control.step === "any"
-                    ? Number.parseFloat(raw)
-                    : Number.parseInt(raw, 10)
-                if (!Number.isNaN(parsed)) onChange(parsed)
-              }}
-              className="w-24 p-2 normal-case tracking-normal rounded"
-              aria-label={entry.label}
-            />
-          )}
-          {entry.control.kind === "enum" &&
-          entry.control.options.length <= 4 ? (
-            <TgSegmentedControl
-              size="dense"
-              className="w-fit"
-              aria-label={entry.label}
-              value={String(value)}
-              onChange={(v) => onChange(v)}
-              options={entry.control.options.map((o) => ({
-                value: o.value,
-                label: o.label,
-              }))}
-            />
-          ) : null}
-          {entry.control.kind === "enum" && entry.control.options.length > 4 ? (
-            <select
-              value={String(value)}
-              onChange={(e) => onChange(e.target.value)}
-              className={tgFieldClassName}
-              aria-label={entry.label}
-            >
-              {entry.control.options.map((o) => (
-                <option
-                  key={o.value}
-                  value={o.value}
-                  className="bg-app-card text-app-ink"
-                >
-                  {o.label}
-                </option>
-              ))}
-            </select>
-          ) : null}
+          <SettingControlInput
+            entry={entry}
+            value={value}
+            onChange={onChange}
+          />
 
           <div className="relative">
             <TgIconButton
@@ -178,6 +124,86 @@ export const SettingRow: React.FC<SettingRowProps> = ({
       </div>
     </div>
   )
+}
+
+/**
+ * A number field's text as the value to store: whole numbers unless the control
+ * takes any step, and `null` while the text is not a number yet.
+ */
+export function parseSettingNumber(
+  raw: string,
+  step: number | "any" | undefined,
+): number | null {
+  const parsed =
+    step === "any" ? Number.parseFloat(raw) : Number.parseInt(raw, 10)
+  return Number.isNaN(parsed) ? null : parsed
+}
+
+/** The control a catalog entry's kind calls for; a panel has none inline. */
+const SettingControlInput: React.FC<
+  Pick<SettingRowProps, "entry" | "value" | "onChange">
+> = ({ entry, value, onChange }) => {
+  const { control, label } = entry
+  switch (control.kind) {
+    case "boolean":
+      return (
+        <TgToggle
+          checked={Boolean(value)}
+          onClick={() => onChange(!value)}
+          aria-label={label}
+        />
+      )
+    case "number":
+      return (
+        <TgInput
+          type="number"
+          min={control.min}
+          max={control.max}
+          step={control.step}
+          value={typeof value === "number" ? value : Number(value) || 0}
+          onChange={(e) => {
+            const parsed = parseSettingNumber(e.target.value, control.step)
+            if (parsed !== null) onChange(parsed)
+          }}
+          className="w-24 p-2 normal-case tracking-normal rounded"
+          aria-label={label}
+        />
+      )
+    case "enum":
+      // A short list reads best as segments; a long one would overflow them.
+      return control.options.length <= 4 ? (
+        <TgSegmentedControl
+          size="dense"
+          className="w-fit"
+          aria-label={label}
+          value={String(value)}
+          onChange={(v) => onChange(v)}
+          options={control.options.map((o) => ({
+            value: o.value,
+            label: o.label,
+          }))}
+        />
+      ) : (
+        <select
+          value={String(value)}
+          onChange={(e) => onChange(e.target.value)}
+          className={tgFieldClassName}
+          aria-label={label}
+        >
+          {control.options.map((o) => (
+            <option
+              key={o.value}
+              value={o.value}
+              className="bg-app-card text-app-ink"
+            >
+              {o.label}
+            </option>
+          ))}
+        </select>
+      )
+    default:
+      return null
+  }
 }
 
 export function settingValueChanged(
