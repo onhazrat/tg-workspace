@@ -13,6 +13,7 @@ import { TgIconButton } from "@/components/ui/tg-icon-button"
 import { TgInput } from "@/components/ui/tg-input"
 import { TgSettingsSection } from "@/components/ui/tg-settings-section"
 import type { BotCredential, ChatDestination } from "@/types"
+import { destinationStatus } from "./publishing-model"
 
 export type DestValidationState = Record<
   string,
@@ -102,102 +103,140 @@ export const DestinationsPanel: React.FC<DestinationsPanelProps> = ({
         </div>
       ) : (
         chatDestinations.map((dest) => (
-          <div
+          <DestinationRow
             key={dest.id}
-            className="group flex flex-col p-4 border border-app-ink/10 bg-app-card hover:border-app-ink/30 transition-all gap-4"
-          >
-            <div className="flex justify-between items-start">
-              <div className="flex items-start gap-4 min-w-0 flex-1">
-                <div className="relative shrink-0 mt-0.5">
-                  <div className="w-10 h-10 rounded-full bg-app-ink/5 border border-app-ink/10 flex items-center justify-center">
-                    <Send size={16} className="opacity-40" />
-                  </div>
-                  {destValidation[dest.id]?.isValid && (
-                    <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-green-500 rounded-full border-2 border-app-card flex items-center justify-center">
-                      <CheckCircle2 size={10} className="text-white" />
-                    </div>
-                  )}
-                </div>
-                <div className="min-w-0 pt-0.5">
-                  <h3 className="text-[11px] font-bold uppercase tracking-widest truncate">
-                    {dest.name}
-                  </h3>
-                  <div className="flex items-center gap-2 mt-1">
-                    <span className="text-[9px] font-mono opacity-40 truncate">
-                      {dest.chatId}
-                    </span>
-                  </div>
-                </div>
-              </div>
-              <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity">
-                <TgIconButton
-                  aria-label="Verify Destination"
-                  tooltip="Verify Destination"
-                  onClick={() => onCheckDestination(dest.id, dest.chatId)}
-                  loading={destValidation[dest.id]?.loading}
-                  className="rounded-full opacity-60 hover:opacity-100"
-                >
-                  <Activity size={14} />
-                </TgIconButton>
-                {botCredentials.length > 0 && (
-                  <TgIconButton
-                    aria-label="Test Connection"
-                    tooltip="Test Connection"
-                    onClick={() => {
-                      const bot = botCredentials[0]
-                      onTestConnection(bot.id, dest.chatId, bot.name, dest.name)
-                    }}
-                    className="rounded-full opacity-60 hover:opacity-100"
-                  >
-                    <RotateCcw size={14} />
-                  </TgIconButton>
-                )}
-                <TgIconButton
-                  aria-label="Delete Destination"
-                  tooltip="Delete Destination"
-                  onClick={() => onDeleteDestination(dest.id)}
-                  className="rounded-full text-red-500 opacity-60 hover:opacity-100 hover:bg-red-500/10"
-                >
-                  <Trash2 size={14} />
-                </TgIconButton>
-              </div>
-            </div>
-            {destValidation[dest.id] && (
-              <div className="flex items-center justify-between pt-3 border-t border-app-ink/5">
-                <div className="flex items-center gap-6">
-                  <div className="flex flex-col">
-                    <span className="text-[8px] font-mono uppercase tracking-widest opacity-40 mb-0.5">
-                      Status
-                    </span>
-                    <span
-                      className={`text-[10px] font-mono uppercase tracking-widest ${destValidation[dest.id]?.isValid ? "text-green-500" : destValidation[dest.id]?.isValid === false ? "text-red-500" : "opacity-40"}`}
-                    >
-                      {destValidation[dest.id]?.loading
-                        ? "Checking..."
-                        : destValidation[dest.id]?.isValid
-                          ? "Valid"
-                          : destValidation[dest.id]?.isValid === false
-                            ? "Invalid"
-                            : "Unknown"}
-                    </span>
-                  </div>
-                  <div className="flex flex-col">
-                    <span className="text-[8px] font-mono uppercase tracking-widest opacity-40 mb-0.5">
-                      Details
-                    </span>
-                    <span className="text-[10px] font-mono uppercase tracking-widest max-w-[150px] truncate">
-                      {destValidation[dest.id].info ||
-                        (destValidation[dest.id].loading
-                          ? "Verifying..."
-                          : "Invalid")}
-                    </span>
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
+            dest={dest}
+            validation={destValidation[dest.id]}
+            onCheck={() => onCheckDestination(dest.id, dest.chatId)}
+            onTest={
+              botCredentials.length > 0
+                ? () => {
+                    const bot = botCredentials[0]
+                    onTestConnection(bot.id, dest.chatId, bot.name, dest.name)
+                  }
+                : undefined
+            }
+            onDelete={() => onDeleteDestination(dest.id)}
+          />
         ))
       )}
     </div>
   </TgSettingsSection>
 )
+
+/**
+ * One saved destination: its name and chat id, the hover actions, and the
+ * status row once it has been checked. Test Connection appears only when the
+ * caller passes `onTest`, which it does only while a bot exists to test with.
+ */
+export function DestinationRow({
+  dest,
+  validation,
+  onCheck,
+  onTest,
+  onDelete,
+}: {
+  dest: ChatDestination
+  validation?: DestValidationState[string]
+  onCheck: () => void
+  onTest?: () => void
+  onDelete: () => void
+}) {
+  return (
+    <div className="group flex flex-col p-4 border border-app-ink/10 bg-app-card hover:border-app-ink/30 transition-all gap-4">
+      <div className="flex justify-between items-start">
+        <div className="flex items-start gap-4 min-w-0 flex-1">
+          <div className="relative shrink-0 mt-0.5">
+            <div className="w-10 h-10 rounded-full bg-app-ink/5 border border-app-ink/10 flex items-center justify-center">
+              <Send size={16} className="opacity-40" />
+            </div>
+            {validation?.isValid && (
+              <div
+                className="absolute -bottom-1 -right-1 w-4 h-4 bg-green-500 rounded-full border-2 border-app-card flex items-center justify-center"
+                data-testid="destination-valid-badge"
+              >
+                <CheckCircle2 size={10} className="text-white" />
+              </div>
+            )}
+          </div>
+          <div className="min-w-0 pt-0.5">
+            <h3 className="text-[11px] font-bold uppercase tracking-widest truncate">
+              {dest.name}
+            </h3>
+            <div className="flex items-center gap-2 mt-1">
+              <span className="text-[9px] font-mono opacity-40 truncate">
+                {dest.chatId}
+              </span>
+            </div>
+          </div>
+        </div>
+        <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity">
+          <TgIconButton
+            aria-label="Verify Destination"
+            tooltip="Verify Destination"
+            onClick={onCheck}
+            loading={validation?.loading}
+            className="rounded-full opacity-60 hover:opacity-100"
+          >
+            <Activity size={14} />
+          </TgIconButton>
+          {onTest && (
+            <TgIconButton
+              aria-label="Test Connection"
+              tooltip="Test Connection"
+              onClick={onTest}
+              className="rounded-full opacity-60 hover:opacity-100"
+            >
+              <RotateCcw size={14} />
+            </TgIconButton>
+          )}
+          <TgIconButton
+            aria-label="Delete Destination"
+            tooltip="Delete Destination"
+            onClick={onDelete}
+            className="rounded-full text-red-500 opacity-60 hover:opacity-100 hover:bg-red-500/10"
+          >
+            <Trash2 size={14} />
+          </TgIconButton>
+        </div>
+      </div>
+      {validation && <DestinationStatus validation={validation} />}
+    </div>
+  )
+}
+
+function DestinationStatus({
+  validation,
+}: {
+  validation: DestValidationState[string]
+}) {
+  const status = destinationStatus(validation)
+  return (
+    <div className="flex items-center justify-between pt-3 border-t border-app-ink/5">
+      <div className="flex items-center gap-6">
+        <div className="flex flex-col">
+          <span className="text-[8px] font-mono uppercase tracking-widest opacity-40 mb-0.5">
+            Status
+          </span>
+          <span
+            className={`text-[10px] font-mono uppercase tracking-widest ${status.toneClass}`}
+            data-testid="destination-status"
+          >
+            {status.label}
+          </span>
+        </div>
+        <div className="flex flex-col">
+          <span className="text-[8px] font-mono uppercase tracking-widest opacity-40 mb-0.5">
+            Details
+          </span>
+          <span
+            className="text-[10px] font-mono uppercase tracking-widest max-w-[150px] truncate"
+            data-testid="destination-details"
+          >
+            {status.details}
+          </span>
+        </div>
+      </div>
+    </div>
+  )
+}

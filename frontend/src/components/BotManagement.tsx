@@ -22,12 +22,7 @@ import {
   fetchBotInfo as fetchBotInfoApi,
   publishSummary,
 } from "../services/telegram"
-import type {
-  BotCredential,
-  ChatDestination,
-  NetworkLog,
-  PublishLog,
-} from "../types"
+import type { BotCredential, ChatDestination, PublishLog } from "../types"
 import {
   BotCredentialsPanel,
   type BotValidationState,
@@ -36,6 +31,22 @@ import {
   DestinationsPanel,
   type DestValidationState,
 } from "./settings/publishing/DestinationsPanel"
+import {
+  autofillName,
+  BOT_NETWORK_ERROR,
+  type BotApiCall,
+  botDisplayName,
+  botNetworkLog,
+  canLookUpChat,
+  chatDisplayName,
+  checkBotToken,
+  DEST_NETWORK_ERROR,
+  destinationValidation,
+  errorText,
+  looksLikeBotToken,
+  publishLogFor,
+  visiblePanels,
+} from "./settings/publishing/publishing-model"
 import { QuickMessagePanel } from "./settings/publishing/QuickMessagePanel"
 import { SettingAnchor } from "./settings/SettingAnchor"
 
@@ -46,6 +57,11 @@ type BotManagementProps = {
 
 const EMPTY_PUBLISH_LOGS: PublishLog[] = []
 
+// Owned here rather than passed through `DataContext`: `savePublishLog`
+// invalidates this key, and an enabled query refetches on its own.
+const usePublishLogs = () =>
+  usePublishLogsQuery(true).data ?? EMPTY_PUBLISH_LOGS
+
 export const BotManagement: React.FC<BotManagementProps> = ({
   focus = "publishing",
   highlightId = null,
@@ -54,9 +70,7 @@ export const BotManagement: React.FC<BotManagementProps> = ({
   const setBotCredentials = useSetBotCredentials()
   const chatDestinations = useChatDestinations()
   const setChatDestinations = useSetChatDestinations()
-  // Owned here rather than passed through `DataContext`: `savePublishLog`
-  // invalidates this key, and an enabled query refetches on its own.
-  const publishLogs = usePublishLogsQuery(true).data ?? EMPTY_PUBLISH_LOGS
+  const publishLogs = usePublishLogs()
   const {
     proxyEnabled,
     defaultProxyUrls,
@@ -91,103 +105,74 @@ export const BotManagement: React.FC<BotManagementProps> = ({
       torProxyUrls,
     })
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const fetchBotInfo = async (
-    credentialId: string | undefined,
-    token: string | undefined,
-    method: string,
-    params?: Record<string, string | number>,
-  ): Promise<any> => {
-    const activeProxies = getActiveProxies()
+  const fetchBotInfo: BotApiCall = async (
+    credentialId,
+    token,
+    method,
+    params,
+  ) => {
     const startTime = Date.now()
-    let status = 0
-    let errorMsg: string | undefined
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    let telemetryData: any
-
+    let statusCode = 0
+    let error: string | undefined
+    let telemetry: any
     try {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const data: any = await fetchBotInfoApi(
+      const data = await fetchBotInfoApi(
         credentialId,
         token,
         method,
         params,
-        activeProxies.length > 0,
+        getActiveProxies().length > 0,
         torAutoRotate,
         torRotationThreshold,
       )
-      status = 200
-      telemetryData = data.telemetry
+      statusCode = 200
+      telemetry = data.telemetry
       return data
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } catch (error: any) {
-      errorMsg = error.message
-      throw error
+    } catch (err: any) {
+      error = err.message
+      throw err
     } finally {
       const duration = Date.now() - startTime
-      const proxyUsed =
-        telemetryData?.attempts?.[telemetryData.attempts.length - 1]?.proxyUrl
-      const attempts = telemetryData?.attempts?.length || 1
-
-      const logEntry: NetworkLog = {
-        id: crypto.randomUUID(),
-        url: `https://api.telegram.org/bot.../${method}`,
-        method: "POST",
-        status: status === 200 ? "success" : "failed",
-        statusCode: status,
-        duration: telemetryData?.totalDuration || duration,
-        source: "BotManagement",
-        timestamp: Date.now(),
-        error: errorMsg,
-        proxyUsed,
-        attempts,
-        telemetry: telemetryData,
-      }
-      saveNetworkLog(logEntry).catch((e) =>
-        console.error("Failed to save network log:", e),
-      )
+      saveNetworkLog(
+        botNetworkLog({ method, statusCode, error, telemetry, duration }),
+      ).catch((e) => console.error("Failed to save network log:", e))
     }
   }
 
   const handleBotTokenChange = async (token: string) => {
     setNewBotToken(token)
-    if (token.includes(":") && token.length > 20) {
-      setIsAutoFetchingBot(true)
-      try {
-        const data = await fetchBotInfo(undefined, token, "getMe")
-        if (data.ok && !newBotName) {
-          setNewBotName(data.result.first_name || data.result.username || "")
-        }
-      } catch (e) {
-        console.error("Auto-fetch bot failed", e)
-      } finally {
-        setIsAutoFetchingBot(false)
-      }
+    if (!looksLikeBotToken(token)) return
+    setIsAutoFetchingBot(true)
+    try {
+      const data = await fetchBotInfo(undefined, token, "getMe")
+      const name = autofillName(data, newBotName, botDisplayName)
+      if (name !== null) setNewBotName(name)
+    } catch (e) {
+      console.error("Auto-fetch bot failed", e)
+    } finally {
+      setIsAutoFetchingBot(false)
     }
   }
 
   const handleDestChatIdChange = async (chatId: string) => {
     setNewDestChatId(chatId)
-    if (chatId.length >= 4 && botCredentials.length > 0) {
-      const bot = botCredentials[0]
-      setIsAutoFetchingDest(true)
-      try {
-        const data = await fetchBotInfo(bot.id, undefined, "getChat", {
+    if (!canLookUpChat(chatId, botCredentials.length)) return
+    setIsAutoFetchingDest(true)
+    try {
+      const data = await fetchBotInfo(
+        botCredentials[0].id,
+        undefined,
+        "getChat",
+        {
           chat_id: chatId,
-        })
-        if (data.ok && !newDestName) {
-          setNewDestName(
-            data.result.title ||
-              data.result.username ||
-              data.result.first_name ||
-              "",
-          )
-        }
-      } catch (e) {
-        console.error("Auto-fetch dest failed", e)
-      } finally {
-        setIsAutoFetchingDest(false)
-      }
+        },
+      )
+      const name = autofillName(data, newDestName, chatDisplayName)
+      if (name !== null) setNewDestName(name)
+    } catch (e) {
+      console.error("Auto-fetch dest failed", e)
+    } finally {
+      setIsAutoFetchingDest(false)
     }
   }
 
@@ -217,75 +202,38 @@ export const BotManagement: React.FC<BotManagementProps> = ({
     }
   }
 
+  /** Store what `getMe` said about a saved bot on its credential row. */
+  const recordBotProfile = async (
+    id: string,
+    profile: { username: string; photoPath: string },
+  ) => {
+    const bot = botCredentials.find((b) => b.id === id)
+    if (!bot) return
+    const updated = {
+      ...bot,
+      username: profile.username,
+      photoUrl: profile.photoPath || bot.photoUrl,
+      lastValidated: Date.now(),
+      hasToken: true,
+    }
+    await saveBotCredential(updated)
+    setBotCredentials((prev) => prev.map((b) => (b.id === id ? updated : b)))
+  }
+
   const handleCheckBotToken = async (id: string) => {
     setBotValidation((prev) => ({
       ...prev,
       [id]: { isValid: false, loading: true },
     }))
+    let validation: BotValidationState[string]
     try {
-      const data = await fetchBotInfo(id, undefined, "getMe")
-      if (data.ok) {
-        let photoPath = ""
-        if (
-          data.result.can_join_groups &&
-          data.result.can_read_all_group_messages !== undefined
-        ) {
-          try {
-            const photosData = await fetchBotInfo(
-              id,
-              undefined,
-              "getUserProfilePhotos",
-              { user_id: data.result.id, limit: 1 },
-            )
-            if (photosData.ok && photosData.result.total_count > 0) {
-              const fileId = photosData.result.photos[0][0].file_id
-              const fileData = await fetchBotInfo(id, undefined, "getFile", {
-                file_id: fileId,
-              })
-              if (fileData.ok) {
-                photoPath = fileData.result.file_path
-              }
-            }
-          } catch (e) {
-            console.error("Error fetching bot photo:", e)
-          }
-        }
-
-        const updatedBot = botCredentials.find((b) => b.id === id)
-        if (updatedBot) {
-          const newBot = {
-            ...updatedBot,
-            username: data.result.username,
-            photoUrl: photoPath || updatedBot.photoUrl,
-            lastValidated: Date.now(),
-            hasToken: true,
-          }
-          await saveBotCredential(newBot)
-          setBotCredentials((prev) =>
-            prev.map((b) => (b.id === id ? newBot : b)),
-          )
-        }
-
-        setBotValidation((prev) => ({
-          ...prev,
-          [id]: {
-            isValid: true,
-            botInfo: `@${data.result.username} (${data.result.first_name})`,
-            loading: false,
-          },
-        }))
-      } else {
-        setBotValidation((prev) => ({
-          ...prev,
-          [id]: { isValid: false, botInfo: "Invalid Token", loading: false },
-        }))
-      }
+      const checked = await checkBotToken(fetchBotInfo, id)
+      if (checked.profile) await recordBotProfile(id, checked.profile)
+      validation = checked.validation
     } catch (_err) {
-      setBotValidation((prev) => ({
-        ...prev,
-        [id]: { isValid: false, botInfo: "Network Error", loading: false },
-      }))
+      validation = BOT_NETWORK_ERROR
     }
+    setBotValidation((prev) => ({ ...prev, [id]: validation }))
   }
 
   const handleCheckDestination = async (destId: string, chatId: string) => {
@@ -293,46 +241,25 @@ export const BotManagement: React.FC<BotManagementProps> = ({
       toast.error("Please add a bot first to validate destinations.")
       return
     }
-
-    const bot = botCredentials[0]
     setDestValidation((prev) => ({
       ...prev,
       [destId]: { isValid: false, loading: true },
     }))
-
+    let validation: DestValidationState[string]
     try {
-      const data = await fetchBotInfo(bot.id, undefined, "getChat", {
-        chat_id: chatId,
-      })
-
-      if (data.ok) {
-        let info =
-          data.result.title ||
-          data.result.username ||
-          data.result.first_name ||
-          "Valid Chat"
-        if (data.result.type) info += ` (${data.result.type.toUpperCase()})`
-
-        setDestValidation((prev) => ({
-          ...prev,
-          [destId]: { isValid: true, info, loading: false },
-        }))
-      } else {
-        setDestValidation((prev) => ({
-          ...prev,
-          [destId]: {
-            isValid: false,
-            info: data.description || "Invalid Chat ID",
-            loading: false,
-          },
-        }))
-      }
+      const data = await fetchBotInfo(
+        botCredentials[0].id,
+        undefined,
+        "getChat",
+        {
+          chat_id: chatId,
+        },
+      )
+      validation = destinationValidation(data)
     } catch (_err) {
-      setDestValidation((prev) => ({
-        ...prev,
-        [destId]: { isValid: false, info: "Network Error", loading: false },
-      }))
+      validation = DEST_NETWORK_ERROR
     }
+    setDestValidation((prev) => ({ ...prev, [destId]: validation }))
   }
 
   const handleDeleteBotCredential = async (id: string) => {
@@ -370,6 +297,30 @@ export const BotManagement: React.FC<BotManagementProps> = ({
     if (selectedQuickDestId === id) setSelectedQuickDestId("")
   }
 
+  /** Send through the backend and file the publish log, whatever happened. */
+  const sendAndLog = async (
+    kind: "test" | "quick",
+    botId: string,
+    chatId: string,
+    botName: string,
+    destName: string,
+    text: string,
+  ) => {
+    const result = await publishSummary(
+      botId,
+      chatId,
+      text,
+      undefined,
+      getActiveProxies().length > 0,
+      torAutoRotate,
+      torRotationThreshold,
+    )
+    await savePublishLog(
+      publishLogFor({ kind, botId, botName, chatId, destName, text, result }),
+    )
+    return result
+  }
+
   const handleTestBot = async (
     botId: string,
     chatId: string,
@@ -378,40 +329,21 @@ export const BotManagement: React.FC<BotManagementProps> = ({
   ) => {
     const testMessage = `🔔 Test Connection: Bot "${botName}" is working correctly!`
     try {
-      const activeProxies = getActiveProxies()
-      const result = await publishSummary(
+      const result = await sendAndLog(
+        "test",
         botId,
         chatId,
+        botName,
+        destName,
         testMessage,
-        undefined,
-        activeProxies.length > 0,
-        torAutoRotate,
-        torRotationThreshold,
       )
-
-      const log: PublishLog = {
-        id: Date.now().toString() + Math.random().toString(36).substring(2, 7),
-        summaryId: `test-${Date.now()}`,
-        botId: botId,
-        botName: botName,
-        chatId: chatId,
-        chatName: destName,
-        status: result.success ? "success" : "failed",
-        error: result.error,
-        timestamp: Date.now(),
-        fullRequest: result.requests,
-        fullResponse: result.responses,
-        textSent: testMessage,
-      }
-      await savePublishLog(log)
-
       if (result.success) {
         toast.success(`Test message sent successfully using ${botName}!`)
       } else {
         toast.error(`Test failed: ${result.error}`)
       }
     } catch (e: unknown) {
-      toast.error(`Test failed: ${e instanceof Error ? e.message : String(e)}`)
+      toast.error(`Test failed: ${errorText(e)}`)
     }
   }
 
@@ -423,51 +355,29 @@ export const BotManagement: React.FC<BotManagementProps> = ({
     destName: string,
   ) => {
     try {
-      const activeProxies = getActiveProxies()
-      const result = await publishSummary(
+      const result = await sendAndLog(
+        "quick",
         botId,
         chatId,
+        botName,
+        destName,
         text,
-        undefined,
-        activeProxies.length > 0,
-        torAutoRotate,
-        torRotationThreshold,
       )
-
-      const log: PublishLog = {
-        id: Date.now().toString() + Math.random().toString(36).substring(2, 7),
-        summaryId: `quick-${Date.now()}`,
-        botId: botId,
-        botName: botName,
-        chatId: chatId,
-        chatName: destName,
-        status: result.success ? "success" : "failed",
-        error: result.error,
-        timestamp: Date.now(),
-        fullRequest: result.requests,
-        fullResponse: result.responses,
-        textSent: text,
-      }
-      await savePublishLog(log)
-
       if (result.success) {
         toast.success(`Successfully published using ${botName}!`)
       } else {
         toast.error(`Error publishing: ${result.error}`)
       }
     } catch (e: unknown) {
-      toast.error(
-        `Error publishing: ${e instanceof Error ? e.message : String(e)}`,
-      )
+      toast.error(`Error publishing: ${errorText(e)}`)
     }
   }
 
-  const showCredentials = focus === "publishing" || focus === "bot-credentials"
-  const showDestinations = focus === "publishing" || focus === "destinations"
-  const showQuickMessage =
-    (focus === "publishing" || focus === "quick-message") &&
-    botCredentials.length > 0 &&
-    chatDestinations.length > 0
+  const show = visiblePanels(
+    focus,
+    botCredentials.length,
+    chatDestinations.length,
+  )
 
   return (
     <motion.div
@@ -497,7 +407,7 @@ export const BotManagement: React.FC<BotManagementProps> = ({
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         <div className="space-y-8">
-          {showCredentials && (
+          {show.credentials && (
             <SettingAnchor
               settingId="panel-bot-credentials"
               highlighted={highlightId === "panel-bot-credentials"}
@@ -519,7 +429,7 @@ export const BotManagement: React.FC<BotManagementProps> = ({
             </SettingAnchor>
           )}
 
-          {showQuickMessage && (
+          {show.quickMessage && (
             <SettingAnchor
               settingId="panel-quick-message"
               highlighted={highlightId === "panel-quick-message"}
@@ -540,7 +450,7 @@ export const BotManagement: React.FC<BotManagementProps> = ({
         </div>
 
         <div className="space-y-8">
-          {showDestinations && (
+          {show.destinations && (
             <SettingAnchor
               settingId="panel-destinations"
               highlighted={highlightId === "panel-destinations"}
