@@ -18,6 +18,11 @@ function shouldUseBlobDownloadFallback(): boolean {
   return false
 }
 
+/** The user closed the save or open dialog without choosing a file. */
+export function isAbortError(err: unknown): boolean {
+  return err instanceof DOMException && err.name === "AbortError"
+}
+
 export async function pickSaveFile(
   suggestedName: string,
 ): Promise<SaveFileResult> {
@@ -39,14 +44,11 @@ export async function pickSaveFile(
         },
       ],
     })
-    if (fileHandle) {
-      return { fileHandle, useBlobFallback: false }
-    }
-    return { useBlobFallback: true }
+    return fileHandle
+      ? { fileHandle, useBlobFallback: false }
+      : { useBlobFallback: true }
   } catch (err: unknown) {
-    if (err instanceof DOMException && err.name === "AbortError") {
-      throw err
-    }
+    if (isAbortError(err)) throw err
     return { useBlobFallback: true }
   }
 }

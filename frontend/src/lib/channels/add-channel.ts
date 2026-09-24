@@ -1,13 +1,17 @@
 import { toast } from "sonner"
-
-import { api } from "@/api"
+import type { ChannelInfoResponse } from "@/client"
 import { parseApiError, unavailableChannelToastMessage } from "@/lib/api-errors"
 import type { CommandContext } from "@/lib/commands/types"
-import { saveNetworkLog } from "@/lib/logs/write"
-import { isNetworkRoutingActive } from "@/lib/syncSettings"
-import { telegramWebViewChannelUrl } from "@/lib/telegram-web"
-import type { Channel, NetworkLog } from "@/types"
-import { upsertChannel } from "./store"
+import type { Channel } from "@/types"
+import {
+  type ChannelInfoDeps,
+  type ChannelInfoNetworkSettings,
+  type ChannelInfoResult,
+  channelInfoDeps,
+  channelInfoRequest,
+  fetchChannelInfo,
+  mergeChannelInfo,
+} from "./channel-info"
 
 export function normalizeChannelHandle(input: string): string {
   return input.trim().replace(/^@/, "").split("/").pop() || ""
@@ -20,23 +24,13 @@ export function findChannelByTelegramChatId(
   return channels.find((channel) => channel.telegramChatId === telegramChatId)
 }
 
-export interface AddChannelNetworkSettings {
-  proxyEnabled: boolean
-  defaultProxyUrls: string
-  torEnabled: boolean
-  torMode: "auto" | "custom"
-  torProxyUrls: string
-  torAutoRotate: boolean
-  torRotationThreshold: number
-}
-
 export interface AddChannelContext {
   channels: Channel[]
   setSelectedChannels: CommandContext["setSelectedChannels"]
   loadChannels: () => Promise<void>
   addToSyncQueue: CommandContext["addToSyncQueue"]
   getEffectiveGlobalStartTime: () => number
-  settings: AddChannelNetworkSettings
+  settings: ChannelInfoNetworkSettings
 }
 
 export function toAddChannelContext(ctx: CommandContext): AddChannelContext {
@@ -58,156 +52,116 @@ export function toAddChannelContext(ctx: CommandContext): AddChannelContext {
   }
 }
 
-export async function addChannelByName(
-  rawInput: string,
-  ctx: AddChannelContext,
-): Promise<{ ok: boolean; channelName?: string }> {
-  const channelName = normalizeChannelHandle(rawInput)
-  if (!channelName) {
-    toast.error("Enter a channel handle")
-    return { ok: false }
+function hasChannelNamed(channels: Channel[], channelName: string): boolean {
+  const wanted = channelName.toLowerCase()
+  return channels.some((channel) => channel.name.toLowerCase() === wanted)
+}
+
+/** Why `channelName` cannot be added, or undefined when it can. */
+function addChannelRefusal(
+  channelName: string,
+  channels: Channel[],
+): string | undefined {
+  if (!channelName) return "Enter a channel handle"
+  return hasChannelNamed(channels, channelName)
+    ? `@${channelName} is already in your channel list`
+    : undefined
+}
+
+/**
+ * The channel already followed under another handle, going by the chat id the
+ * page showed. Telegram's web view only exposes one when at least one message
+ * widget exists.
+ */
+function alreadyFollowedAs(
+  info: ChannelInfoResult,
+  channels: Channel[],
+): Channel | undefined {
+  if (!("data" in info) || typeof info.data.telegramChatId !== "number") {
+    return undefined
   }
+  return findChannelByTelegramChatId(channels, info.data.telegramChatId)
+}
 
-  const duplicate = ctx.channels.some(
-    (channel) => channel.name.toLowerCase() === channelName.toLowerCase(),
-  )
-  if (duplicate) {
-    toast.error(`@${channelName} is already in your channel list`)
-    return { ok: false }
-  }
-
-  let displayName = channelName
-  let photoUrl: string | undefined
-  const effectiveStartTime = ctx.getEffectiveGlobalStartTime()
-
-  const proxySettings = {
-    proxyEnabled: ctx.settings.proxyEnabled,
-    defaultProxyUrls: ctx.settings.defaultProxyUrls,
-    torEnabled: ctx.settings.torEnabled,
-    torMode: ctx.settings.torMode,
-    torProxyUrls: ctx.settings.torProxyUrls,
-  }
-
-  const startTime = Date.now()
-  let status = 0
-  let errorMsg: string | undefined
-  let telemetryData: Record<string, unknown> | undefined
-
-  let bio: string | undefined
-  let subscribers: number | null | undefined
-  let photos: number | null | undefined
-  let videos: number | null | undefined
-  let files: number | null | undefined
-  let links: number | null | undefined
-  let isUnavailableOnWebView = false
-  let telegramChatId: number | undefined
-
-  try {
-    const data = await api.channelInfo({
-      channelName,
-      proxyEnabled: isNetworkRoutingActive(proxySettings),
-      torAutoRotate: ctx.settings.torAutoRotate,
-      torRotationThreshold: ctx.settings.torRotationThreshold,
-    })
-
-    status = 200
-    // `Telemetry` is `Any` on the backend by design, so it generates as
-    // `unknown` and this one cast survives. Every other field below used to
-    // need one too, until F2 moved this call onto the generated client.
-    telemetryData = data.telemetry as Record<string, unknown> | undefined
-
-    if (data.displayName) displayName = data.displayName
-    if (data.photoUrl) photoUrl = data.photoUrl
-    if (data.bio) bio = data.bio
-    if (data.subscribers != null) subscribers = data.subscribers
-    if (data.photos != null) photos = data.photos
-    if (data.videos != null) videos = data.videos
-    if (data.files != null) files = data.files
-    if (data.links != null) links = data.links
-    if (data.isUnavailableOnWebView) {
-      isUnavailableOnWebView = true
-    }
-    if (typeof data.telegramChatId === "number") {
-      telegramChatId = data.telegramChatId
-      // Telegram web view only exposes chat IDs when at least one message widget exists.
-      const existingChannel = findChannelByTelegramChatId(
-        ctx.channels,
-        telegramChatId,
-      )
-      if (existingChannel) {
-        toast.info(`Already following this channel as @${existingChannel.name}`)
-        ctx.setSelectedChannels((prev) =>
-          new Set(prev).add(existingChannel.name),
-        )
-        setTimeout(() => {
-          const element = document.querySelector(
-            `[data-channel-name="${existingChannel.name}"]`,
-          )
-          element?.scrollIntoView({ behavior: "smooth", block: "center" })
-        }, 0)
-        return { ok: true, channelName: existingChannel.name }
-      }
-    }
-  } catch (err: unknown) {
-    console.error("Failed to fetch initial channel info:", err)
-    const parsed = parseApiError(err)
-    errorMsg = parsed.message
-    if (parsed.isUnavailableOnWebView) {
-      isUnavailableOnWebView = true
-    }
-  } finally {
-    const duration = Date.now() - startTime
-    const attempts = telemetryData?.attempts as
-      | Array<{ proxyUrl?: string }>
-      | undefined
-    const proxyUsed = attempts?.[attempts.length - 1]?.proxyUrl
-
-    const logEntry: NetworkLog = {
-      id: crypto.randomUUID(),
-      url: telegramWebViewChannelUrl(channelName),
-      method: "GET",
-      status: status === 200 ? "success" : "failed",
-      statusCode: status,
-      duration:
-        (telemetryData?.totalDuration as number | undefined) || duration,
-      source: "AddChannel",
-      timestamp: Date.now(),
-      error: errorMsg,
-      proxyUsed,
-      attempts: attempts?.length || 1,
-      telemetry: telemetryData,
-    }
-    saveNetworkLog(logEntry).catch((e) =>
-      console.error("Failed to save network log:", e),
-    )
-  }
-
-  const newChannel: Channel = {
+/** The row a new follow writes, from whatever the page fetch returned. */
+export function newChannelRecord(
+  channelName: string,
+  info: ChannelInfoResult,
+  startTime: number,
+  now: number,
+): Channel {
+  const data = "data" in info ? info.data : undefined
+  const metadata = data
+    ? mergeChannelInfo({ displayName: channelName }, data)
+    : { displayName: channelName }
+  return {
     id: channelName,
     name: channelName,
-    displayName,
-    photoUrl,
-    bio,
-    subscribers,
-    photos,
-    videos,
-    files,
-    links,
-    startTime: effectiveStartTime,
-    lastUpdated: Date.now(),
-    followedAt: Date.now(),
+    ...metadata,
+    startTime,
+    lastUpdated: now,
+    followedAt: now,
     tags: [],
     nextRegularSyncAt: null,
     nextDynamicSyncAt: null,
-    isUnavailableOnWebView,
-    telegramChatId,
+    isUnavailableOnWebView:
+      "error" in info
+        ? parseApiError(info.error).isUnavailableOnWebView
+        : info.data.isUnavailableOnWebView === true,
+    telegramChatId:
+      typeof data?.telegramChatId === "number"
+        ? data.telegramChatId
+        : undefined,
+  }
+}
+
+function showExistingChannel(existing: Channel, ctx: AddChannelContext): void {
+  toast.info(`Already following this channel as @${existing.name}`)
+  ctx.setSelectedChannels((prev) => new Set(prev).add(existing.name))
+  setTimeout(() => {
+    const element = document.querySelector(
+      `[data-channel-name="${existing.name}"]`,
+    )
+    element?.scrollIntoView({ behavior: "smooth", block: "center" })
+  }, 0)
+}
+
+export async function addChannelByName(
+  rawInput: string,
+  ctx: AddChannelContext,
+  deps: ChannelInfoDeps = channelInfoDeps,
+): Promise<{ ok: boolean; channelName?: string }> {
+  const channelName = normalizeChannelHandle(rawInput)
+  const refusal = addChannelRefusal(channelName, ctx.channels)
+  if (refusal) {
+    toast.error(refusal)
+    return { ok: false }
   }
 
-  await upsertChannel(newChannel)
+  const startTime = ctx.getEffectiveGlobalStartTime()
+  const info = await fetchChannelInfo(
+    channelName,
+    ctx.settings,
+    "AddChannel",
+    (err) => parseApiError(err).message,
+    deps,
+  )
+  if ("error" in info) {
+    console.error("Failed to fetch initial channel info:", info.error)
+  }
+
+  const existing = alreadyFollowedAs(info, ctx.channels)
+  if (existing) {
+    showExistingChannel(existing, ctx)
+    return { ok: true, channelName: existing.name }
+  }
+
+  const newChannel = newChannelRecord(channelName, info, startTime, Date.now())
+  await deps.upsertChannel(newChannel)
   await ctx.loadChannels()
   ctx.setSelectedChannels((prev) => new Set(prev).add(channelName))
 
-  if (isUnavailableOnWebView) {
+  if (newChannel.isUnavailableOnWebView) {
     toast.warning(unavailableChannelToastMessage(channelName), {
       duration: 8000,
     })
@@ -216,4 +170,108 @@ export async function addChannelByName(
     toast.success(`Added @${channelName}`)
   }
   return { ok: true, channelName }
+}
+
+export type ForwardedChannelContext = Omit<
+  AddChannelContext,
+  "setSelectedChannels"
+> & { isOffline: boolean }
+
+interface ForwardedChannelInfo {
+  data?: ChannelInfoResponse
+  isUnavailableOnWebView: boolean
+}
+
+/** A failed fetch still adds the channel; only a non-Unavailable failure is shown. */
+async function fetchForwardedChannelInfo(
+  channelName: string,
+  settings: ChannelInfoNetworkSettings,
+  deps: ChannelInfoDeps,
+): Promise<ForwardedChannelInfo> {
+  try {
+    const data = await deps.channelInfo(
+      channelInfoRequest(channelName, settings),
+    )
+    return {
+      data,
+      isUnavailableOnWebView: data.isUnavailableOnWebView === true,
+    }
+  } catch (err: unknown) {
+    console.error("Failed to fetch initial channel info:", err)
+    const parsed = parseApiError(err)
+    if (!parsed.isUnavailableOnWebView && parsed.message) {
+      toast.error(parsed.message)
+    }
+    return { isUnavailableOnWebView: parsed.isUnavailableOnWebView }
+  }
+}
+
+/** The row following a channel from a forwarded post writes; an Unavailable one starts frozen. */
+export function forwardedChannelRecord(
+  channelName: string,
+  info: ForwardedChannelInfo,
+  startTime: number,
+  discoveredVia: Channel["discoveredVia"],
+  now: number,
+): Channel {
+  const unavailable = info.isUnavailableOnWebView
+  return {
+    id: channelName,
+    name: channelName,
+    displayName: info.data?.displayName || channelName,
+    photoUrl: info.data?.photoUrl || undefined,
+    startTime,
+    lastUpdated: now,
+    followedAt: now,
+    tags: [],
+    isFrozen: unavailable,
+    isUnavailableOnWebView: unavailable,
+    autoFollowForwarded: false,
+    regularSyncEnabled: !unavailable,
+    dynamicSyncEnabled: false,
+    discoveredVia,
+  }
+}
+
+/**
+ * Follow a channel named by a forwarded post. Unlike `addChannelByName` it
+ * files no Network log and leaves the selection alone.
+ */
+export async function addForwardedChannel(
+  rawName: string,
+  discoveredVia: Channel["discoveredVia"],
+  ctx: ForwardedChannelContext,
+  deps: ChannelInfoDeps = channelInfoDeps,
+): Promise<void> {
+  if (ctx.isOffline) {
+    toast.warning("Server offline — cannot add channels while offline.")
+    return
+  }
+  const channelName = normalizeChannelHandle(rawName)
+  if (!channelName) return
+  if (hasChannelNamed(ctx.channels, channelName)) {
+    toast.info(`Channel @${channelName} is already in your workspace`)
+    return
+  }
+
+  const startTime = ctx.getEffectiveGlobalStartTime()
+  const info = await fetchForwardedChannelInfo(channelName, ctx.settings, deps)
+  const newChannel = forwardedChannelRecord(
+    channelName,
+    info,
+    startTime,
+    discoveredVia,
+    Date.now(),
+  )
+  await deps.upsertChannel(newChannel)
+  await ctx.loadChannels()
+
+  if (info.isUnavailableOnWebView) {
+    toast.warning(unavailableChannelToastMessage(channelName), {
+      duration: 8000,
+    })
+  } else {
+    toast.success(`Added @${channelName} to workspace`)
+    ctx.addToSyncQueue(newChannel, "Manual (Added from Forward)", () => {})
+  }
 }
