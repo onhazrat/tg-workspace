@@ -12,9 +12,13 @@ import {
 } from "@/hooks/useSummaries"
 import { savePublishLog } from "@/lib/logs/write"
 import { saveSummary } from "@/lib/summaries/store"
+import {
+  publishedText,
+  summaryMetadataText,
+} from "@/lib/summaries/summary-model"
 import { buildActiveProxies } from "@/lib/syncSettings"
 import { isPendingSummary } from "../constants"
-import { generateDefaultMetadataText, useAI } from "../contexts/AIContext"
+import { useAI } from "../contexts/AIContext"
 import { useSettings } from "../contexts/SettingsContext"
 import { useUI } from "../contexts/UIContext"
 import { useApiStatus } from "../hooks/useApiStatus"
@@ -40,9 +44,6 @@ import {
   TelegramLengthHint,
 } from "./summary-view/SummaryToolbar"
 import { telegramMessageLength } from "./summary-view/summary-text"
-
-const savedMetadataText = (s: Summary) =>
-  s.metadataText || generateDefaultMetadataText(s)
 
 export const SummaryView: React.FC = () => {
   const {
@@ -100,7 +101,7 @@ export const SummaryView: React.FC = () => {
   useEffect(() => {
     if (!currentSummary) return
     setSendMetadata(currentSummary.sendMetadata !== false)
-    setMetadataText(savedMetadataText(currentSummary))
+    setMetadataText(summaryMetadataText(currentSummary))
   }, [currentSummary])
 
   // Read from the loaded record, so a saved report renders in its own language
@@ -164,8 +165,7 @@ export const SummaryView: React.FC = () => {
         timestamp: Date.now(),
         fullRequest: result.requests,
         fullResponse: result.responses,
-        textSent:
-          metadataToSend === null ? text : `${metadataToSend}\n\n${text}`,
+        textSent: publishedText(metadataToSend, text),
       })
       if (result.success)
         toast.success(`Successfully published using ${bot.name}!`)
@@ -260,7 +260,7 @@ export const SummaryView: React.FC = () => {
               <PublishMetadataPanel
                 send={sendMetadata}
                 text={metadataText}
-                savedText={savedMetadataText(currentSummary)}
+                savedText={summaryMetadataText(currentSummary)}
                 onSendChange={(send) => {
                   setSendMetadata(send)
                   void saveCurrent({ sendMetadata: send })
