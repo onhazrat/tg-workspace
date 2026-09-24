@@ -961,6 +961,22 @@ export type ChannelUpsertRequest = {
      */
     subscribers?: number | null;
     /**
+     * Photos
+     */
+    photos?: number | null;
+    /**
+     * Videos
+     */
+    videos?: number | null;
+    /**
+     * Files
+     */
+    files?: number | null;
+    /**
+     * Links
+     */
+    links?: number | null;
+    /**
      * Startid
      */
     startId?: number | null;

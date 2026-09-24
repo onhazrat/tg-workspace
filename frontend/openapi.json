@@ -6144,6 +6144,22 @@
             "anyOf": [{ "type": "integer" }, { "type": "null" }],
             "title": "Subscribers"
           },
+          "photos": {
+            "anyOf": [{ "type": "integer" }, { "type": "null" }],
+            "title": "Photos"
+          },
+          "videos": {
+            "anyOf": [{ "type": "integer" }, { "type": "null" }],
+            "title": "Videos"
+          },
+          "files": {
+            "anyOf": [{ "type": "integer" }, { "type": "null" }],
+            "title": "Files"
+          },
+          "links": {
+            "anyOf": [{ "type": "integer" }, { "type": "null" }],
+            "title": "Links"
+          },
           "startId": {
             "anyOf": [{ "type": "integer" }, { "type": "null" }],
             "title": "Startid"
