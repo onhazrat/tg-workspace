@@ -25,7 +25,6 @@ export const RANDOM_CAP_SEED = 0
  */
 
 import type { ForwardedFilterValue } from "@/lib/posts/post-view"
-import { parseSubscriberCount } from "@/lib/subscriber-count"
 
 export type DiscoverySignalKind = "forward" | "mention" | "link"
 
@@ -71,7 +70,7 @@ export interface DiscoveryProbe {
   kind: DiscoverProbeKind
   displayName: string | null
   bio: string | null
-  subscribers: string | null
+  subscribers: number | null
   photoUrl: string | null
   attempts: number
   lastError: string | null
@@ -268,7 +267,7 @@ export const DISCOVER_SORT_OPTIONS: {
 export function candidateSubscriberCount(
   candidate: DiscoveryCandidate,
 ): number | null {
-  return parseSubscriberCount(candidate.probe?.subscribers)
+  return candidate.probe?.subscribers ?? null
 }
 
 /**

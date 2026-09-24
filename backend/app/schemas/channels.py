@@ -59,11 +59,11 @@ class ChannelResponse(BaseModel):
     name: str
     display_name: str | None = Field(default=None, alias="displayName")
     photo_url: str | None = Field(default=None, alias="photoUrl")
-    subscribers: str | None = None
-    photos: str | None = None
-    videos: str | None = None
-    files: str | None = None
-    links: str | None = None
+    subscribers: int | None = None
+    photos: int | None = None
+    videos: int | None = None
+    files: int | None = None
+    links: int | None = None
     start_id: int | None = Field(default=None, alias="startId")
     start_time: int | None = Field(default=None, alias="startTime")
     tags: list[Any] = Field(default_factory=list)
@@ -103,7 +103,7 @@ class ChannelUpsertRequest(BaseModel):
     display_name: str | None = Field(default=None, alias="displayName")
     photo_url: str | None = Field(default=None, alias="photoUrl")
     bio: str | None = None
-    subscribers: str | None = None
+    subscribers: int | None = None
     start_id: int | None = Field(default=None, alias="startId")
     start_time: int | None = Field(default=None, alias="startTime")
     tags: list[Any] | None = None

@@ -18,7 +18,11 @@ from app.core.config import settings
 from app.services.channel_photos import resolve_cached_photo_url
 from app.services.network import fetch_with_retry
 from app.services.post_links_parser import extract_body_links
-from app.services.post_media_parser import finalize_post_media_paths, parse_widget_media
+from app.services.post_media_parser import (
+    finalize_post_media_paths,
+    parse_abbreviated_count,
+    parse_widget_media,
+)
 from app.services.post_reply_parser import extract_reply
 from app.services.telegram_html import (
     attr_str,
@@ -233,6 +237,28 @@ def _classify_handle_kind(
     return "unknown"
 
 
+#: The five Channel counters (ADR-023), keyed as the page labels them.
+CHANNEL_COUNTERS = ("subscribers", "photos", "videos", "files", "links")
+
+
+def _channel_counter(
+    counters: dict[str, str], name: str, channel_name: str
+) -> int | None:
+    """One counter as the number it stands for, `None` when the page showed none.
+
+    Telegram labels a count of one in the singular ("1 photo"). Text the parser
+    does not recognise is dropped with a warning rather than failing the page:
+    one counter is not worth losing the Posts that came with it.
+    """
+    raw = counters.get(name) or counters.get(name[:-1])
+    if not raw:
+        return None
+    value = parse_abbreviated_count(raw)
+    if value is None:
+        logger.warning("Unrecognised %s counter %r on %s", name, raw, channel_name)
+    return value
+
+
 def _parse_channel_meta(soup: BeautifulSoup, channel_name: str) -> dict[str, Any]:
     display = soup.select_one(".tgme_channel_info_header_title span")
     if not display:
@@ -281,11 +307,10 @@ def _parse_channel_meta(soup: BeautifulSoup, channel_name: str) -> dict[str, Any
         "displayName": display_name,
         "photoUrl": photo_url,
         "bio": bio,
-        "subscribers": counters.get("subscribers") or counters.get("subscriber"),
-        "photos": counters.get("photos") or counters.get("photo"),
-        "videos": counters.get("videos") or counters.get("video"),
-        "files": counters.get("files") or counters.get("file"),
-        "links": counters.get("links") or counters.get("link"),
+        **{
+            name: _channel_counter(counters, name, channel_name)
+            for name in CHANNEL_COUNTERS
+        },
         "latestId": latest_id,
         "telegramChatId": telegram_chat_id,
         "isUnavailableOnWebView": is_unavailable,
@@ -386,11 +411,11 @@ def _parse_scrape_channel_page(
         "displayName": known_display_name or meta.get("displayName") or channel_name,
         "photoUrl": known_photo_url or meta.get("photoUrl") or "",
         "bio": meta.get("bio") or "",
-        "subscribers": meta.get("subscribers") or "",
-        "photos": meta.get("photos") or "",
-        "videos": meta.get("videos") or "",
-        "files": meta.get("files") or "",
-        "links": meta.get("links") or "",
+        "subscribers": meta.get("subscribers"),
+        "photos": meta.get("photos"),
+        "videos": meta.get("videos"),
+        "files": meta.get("files"),
+        "links": meta.get("links"),
         "telegramChatId": meta.get("telegramChatId"),
         "posts": posts,
         "latestId": latest_id,
@@ -503,7 +528,8 @@ async def scrape_channel(
     latest_id = known_latest_id or 0
     display_name = known_display_name or ""
     photo_url = known_photo_url or ""
-    bio = subscribers = photos = videos = files = links = ""
+    bio = ""
+    subscribers = photos = videos = files = links = None
     # Stays empty when the caller supplied a known latest id: the channel meta
     # page is never fetched on that path, so there is no chat id to report.
     meta: dict[str, Any] = {}
@@ -521,11 +547,11 @@ async def scrape_channel(
         display_name = meta["displayName"]
         photo_url = meta.get("photoUrl") or ""
         bio = meta.get("bio") or ""
-        subscribers = meta.get("subscribers") or ""
-        photos = meta.get("photos") or ""
-        videos = meta.get("videos") or ""
-        files = meta.get("files") or ""
-        links = meta.get("links") or ""
+        subscribers = meta.get("subscribers")
+        photos = meta.get("photos")
+        videos = meta.get("videos")
+        files = meta.get("files")
+        links = meta.get("links")
         latest_id = meta.get("latestId") or 0
 
     initial_posts, current_next = await fetch_posts(url)

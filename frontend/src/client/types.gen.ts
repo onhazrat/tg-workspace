@@ -702,7 +702,7 @@ export type ChannelInfoRequest = {
  *
  * What one fetch of a channel's meta page reports.
  *
- * Unlike `ScrapeChannelResponse`, the counters here are `str | None`:
+ * Unlike `ScrapeChannelResponse`, `photoUrl` and `bio` here are nullable:
  * `_parse_channel_meta` returns them straight from the parsed page without the
  * `or ""` coercion that the scrape path applies. Same fields, different
  * nullability — that difference is real and is why these are two models.
@@ -727,23 +727,23 @@ export type ChannelInfoResponse = {
     /**
      * Subscribers
      */
-    subscribers?: string | null;
+    subscribers?: number | null;
     /**
      * Photos
      */
-    photos?: string | null;
+    photos?: number | null;
     /**
      * Videos
      */
-    videos?: string | null;
+    videos?: number | null;
     /**
      * Files
      */
-    files?: string | null;
+    files?: number | null;
     /**
      * Links
      */
-    links?: string | null;
+    links?: number | null;
     /**
      * Latestid
      */
@@ -795,23 +795,23 @@ export type ChannelResponse = {
     /**
      * Subscribers
      */
-    subscribers?: string | null;
+    subscribers?: number | null;
     /**
      * Photos
      */
-    photos?: string | null;
+    photos?: number | null;
     /**
      * Videos
      */
-    videos?: string | null;
+    videos?: number | null;
     /**
      * Files
      */
-    files?: string | null;
+    files?: number | null;
     /**
      * Links
      */
-    links?: string | null;
+    links?: number | null;
     /**
      * Startid
      */
@@ -959,7 +959,7 @@ export type ChannelUpsertRequest = {
     /**
      * Subscribers
      */
-    subscribers?: string | null;
+    subscribers?: number | null;
     /**
      * Startid
      */
@@ -2351,23 +2351,23 @@ export type HandleProbeResponse = {
     /**
      * Subscribers
      */
-    subscribers?: string | null;
+    subscribers?: number | null;
     /**
      * Photos
      */
-    photos?: string | null;
+    photos?: number | null;
     /**
      * Videos
      */
-    videos?: string | null;
+    videos?: number | null;
     /**
      * Files
      */
-    files?: string | null;
+    files?: number | null;
     /**
      * Links
      */
-    links?: string | null;
+    links?: number | null;
     /**
      * Telegramchatid
      */
@@ -4203,10 +4203,10 @@ export type ScopedPostRef = {
  *
  * A scraped page range plus the channel meta that came with it.
  *
- * The counter fields (`subscribers`, `photos`, …) are the strings Telegram
- * renders ("12.3K"), not parsed numbers, and default to `""` here rather than
- * `null`: `scrape_channel` coerces every one with `or ""`, so the empty string
- * is what the wire has always carried when a counter is missing.
+ * The counter fields (`subscribers`, `photos`, …) are the numbers Telegram's
+ * text stands for ("12.3K" is 12300, ADR-023), `null` when the page showed
+ * none. The text fields default to `""` because `scrape_channel` coerces
+ * each with `or ""`.
  */
 export type ScrapeChannelResponse = {
     /**
@@ -4228,23 +4228,23 @@ export type ScrapeChannelResponse = {
     /**
      * Subscribers
      */
-    subscribers?: string;
+    subscribers?: number | null;
     /**
      * Photos
      */
-    photos?: string;
+    photos?: number | null;
     /**
      * Videos
      */
-    videos?: string;
+    videos?: number | null;
     /**
      * Files
      */
-    files?: string;
+    files?: number | null;
     /**
      * Links
      */
-    links?: string;
+    links?: number | null;
     /**
      * Telegramchatid
      */

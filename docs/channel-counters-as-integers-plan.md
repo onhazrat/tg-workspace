@@ -32,6 +32,9 @@ Decision: [ADR-023](migration/ADR-023-counters-are-numbers.md). Settled in a gri
 
 ## Steps
 
+All five implemented on branch `worktree-channel-counters-as-integers` (2026-09-24).
+The operator still has to run step 4's script against staging after the deploy.
+
 1. Backend models, schemas and the scraper write integers via `parse_abbreviated_count`; the
    Alembic migration converts both tables' five columns with a SQL parse that raises on failure.
 2. `post_media_parser` stops writing `views`/`reactions`; `PostMedia` drops both fields.

@@ -180,6 +180,24 @@ def parse_abbreviated_count(text: str | None) -> int | None:
     return round(value * _COUNT_MULTIPLIERS.get((suffix or "").lower(), 1))
 
 
+def format_abbreviated_count(count: int) -> str:
+    """The inverse of `parse_abbreviated_count`: 28300 -> "28.3K" (ADR-023).
+
+    Three significant digits above 1,000, which is how Telegram renders its
+    counters and what `Intl.NumberFormat` compact notation gives the frontend.
+    """
+    if count < 1_000:
+        return str(count)
+    value = float(count)
+    unit = ""
+    for unit in ("K", "M", "B"):
+        value /= 1_000
+        # Rounding to three digits can carry into the next unit: 999999 -> 1M.
+        if float(f"{value:.3g}") < 1_000 or unit == "B":
+            break
+    return f"{float(f'{value:.3g}'):g}{unit}"
+
+
 def _extract_views(el: Tag) -> str | None:
     views_el = el.select_one(".tgme_widget_message_views")
     if not views_el:
@@ -188,19 +206,11 @@ def _extract_views(el: Tag) -> str | None:
     return views if views else None
 
 
-def _extract_reactions(el: Tag) -> str | None:
-    reactions_el = el.select_one(".tgme_widget_message_reactions")
-    if not reactions_el:
-        return None
-    reactions = reactions_el.get_text(" ", strip=True)
-    return reactions if reactions else None
-
-
 def _extract_reaction_counts(el: Tag) -> list[dict[str, Any]] | None:
     """Per-chip reaction counts.
 
-    The flattened `reactions` string is ambiguous: the leading number belongs to
-    an emoji-less paid-stars chip, so which count goes with which emoji cannot be
+    The chips' flattened text is ambiguous: the leading number belongs to an
+    emoji-less paid-stars chip, so which count goes with which emoji cannot be
     recovered from it. Read the chips directly instead.
     """
     reactions_el = el.select_one(".tgme_widget_message_reactions")
@@ -291,8 +301,7 @@ def parse_widget_media(
     # A poll question is real text content, so it stands in for a missing
     # caption rather than being replaced by a "[poll]" placeholder.
     caption = _extract_caption(el) or _extract_poll_question(el)
-    views = _extract_views(el)
-    reactions = _extract_reactions(el)
+    views_count = parse_abbreviated_count(_extract_views(el))
     reaction_counts = _extract_reaction_counts(el)
     reactions_count = (
         sum(item["count"] for item in reaction_counts) if reaction_counts else None
@@ -301,7 +310,7 @@ def parse_widget_media(
 
     if not kinds:
         text = caption or LEGACY_MEDIA_PLACEHOLDER
-        if not (views or reactions):
+        if views_count is None and not reaction_counts:
             return text, None, None
         # Engagement counters exist on plain-text posts too, and were previously
         # dropped by this early return. `kinds: []` keeps such a post `text_only`
@@ -310,9 +319,7 @@ def parse_widget_media(
             {
                 "kinds": [],
                 "caption": caption,
-                "views": views,
-                "viewsCount": parse_abbreviated_count(views),
-                "reactions": reactions,
+                "viewsCount": views_count,
                 "reactionCounts": reaction_counts,
                 "reactionsCount": reactions_count,
                 "isMediaOnly": False,
@@ -332,9 +339,7 @@ def parse_widget_media(
             "kinds": kinds,
             "caption": caption,
             "durationSec": duration_sec,
-            "views": views,
-            "viewsCount": parse_abbreviated_count(views),
-            "reactions": reactions,
+            "viewsCount": views_count,
             "reactionCounts": reaction_counts,
             "reactionsCount": reactions_count,
             "linkPreview": link_preview,

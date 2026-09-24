@@ -3,6 +3,7 @@ import type React from "react"
 import { useEffect, useRef, useState } from "react"
 import { RelativeTime } from "@/components/RelativeTime"
 import { TgButton } from "@/components/ui/tg-button"
+import { formatCount } from "@/lib/format-count"
 import {
   DISCOVER_PROBE_KIND_LABELS,
   type DiscoverSignalWeights,
@@ -284,7 +285,10 @@ export const DiscoverCandidateTable: React.FC<DiscoverCandidateTableProps> = ({
           {candidates.map((row, index) => {
             const rowStatus = resultStatusByName.get(row.name)
             const metaName = row.displayName || row.probe?.displayName || ""
-            const subscribers = row.probe?.subscribers || ""
+            const subscribers =
+              row.probe?.subscribers != null
+                ? formatCount(row.probe.subscribers)
+                : ""
             const stats = candidateStatistics(row.probe)
             return (
               <tr key={row.name} className="border-t border-app-ink/10">

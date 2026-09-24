@@ -54,7 +54,7 @@ def _channel_page(handle: str) -> dict[str, Any]:
         "isUnavailableOnWebView": False,
         "kind": "channel",
         "displayName": handle.title(),
-        "subscribers": "1.2K",
+        "subscribers": 1_200,
         "latestId": 7,
     }
 

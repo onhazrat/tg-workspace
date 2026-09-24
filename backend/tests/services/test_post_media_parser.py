@@ -10,6 +10,7 @@ from bs4 import BeautifulSoup
 
 from app.services.post_media_parser import (
     finalize_post_media_paths,
+    format_abbreviated_count,
     parse_abbreviated_count,
     parse_widget_media,
 )
@@ -72,8 +73,8 @@ def test_reuters_photo_caption_and_views() -> None:
     )
     assert "photo" in media["kinds"]
     assert text and text != "[photo]"
-    assert media.get("views")
-    assert media.get("reactions") is None
+    assert media.get("viewsCount")
+    assert media.get("reactionCounts") is None
 
 
 def test_durov_reactions_present() -> None:
@@ -81,7 +82,7 @@ def test_durov_reactions_present() -> None:
     el = _widget_by_post_id(html, 512)
     _text, media, _thumb = parse_widget_media(el, channel_name="durov", post_id=512)
     assert media is not None
-    assert media.get("reactions")
+    assert media.get("reactionCounts")
 
 
 def test_video_duration_when_present() -> None:
@@ -242,7 +243,7 @@ def test_views_survive_on_a_post_with_no_media_kinds() -> None:
     assert text == "plain text post"
     assert media is not None
     assert media["kinds"] == []
-    assert media["views"] == "1.2K"
+    assert media["viewsCount"] == 1_200
     # `kinds: []` keeps the post `text_only` for both filter implementations.
     assert media["isMediaOnly"] is False
 
@@ -290,7 +291,7 @@ def test_corpus_invariants(fixture: Path) -> None:
 
 
 # --- Numeric engagement counters ------------------------------------------
-# `views` / `reactions` remain display strings; these are the sortable forms.
+# Stored as numbers only (ADR-023); the display strings are not kept.
 
 
 @pytest.mark.parametrize(
@@ -312,12 +313,13 @@ def test_parse_abbreviated_count(text: str | None, expected: int | None) -> None
     assert parse_abbreviated_count(text) == expected
 
 
-def test_views_are_also_stored_numerically() -> None:
+def test_views_are_stored_as_a_number_only() -> None:
     el = _widget_by_post_id(_load_fixture("Premium_root.html"), 153)
     _text, media, _thumb = parse_widget_media(el)
     assert media is not None
-    assert media["views"] == "16.4M"
     assert media["viewsCount"] == 16_400_000
+    assert "views" not in media
+    assert "reactions" not in media
 
 
 def test_reaction_chips_are_split_per_emoji() -> None:
@@ -411,3 +413,26 @@ def test_poll_question_becomes_the_text() -> None:
     assert media is not None
     assert media["kinds"] == ["poll"]
     assert text == "Which one?"
+
+
+@pytest.mark.parametrize(
+    ("count", "text"),
+    [
+        (0, "0"),
+        (877, "877"),
+        (1_000, "1K"),
+        (9_240, "9.24K"),
+        (28_300, "28.3K"),
+        (166_000, "166K"),
+        (999_999, "1M"),
+        (1_200_000, "1.2M"),
+        (16_400_000, "16.4M"),
+    ],
+)
+def test_a_count_formats_back_to_the_text_telegram_showed(
+    count: int, text: str
+) -> None:
+    """ADR-023: storing the number loses nothing, formatting it restores the text."""
+    assert format_abbreviated_count(count) == text
+    if count != 999_999:
+        assert parse_abbreviated_count(text) == count

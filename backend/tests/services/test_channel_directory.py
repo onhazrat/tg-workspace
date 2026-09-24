@@ -33,16 +33,16 @@ OK_PAGE = {
     "isUnavailableOnWebView": False,
     "kind": "channel",
     "displayName": "Alpha News",
-    "subscribers": "12.3K",
+    "subscribers": 12_300,
     "latestId": 42,
 }
 
 RICH_PAGE = {
     **OK_PAGE,
-    "photos": "1.2K",
-    "videos": "340",
-    "files": "12",
-    "links": "5.6K",
+    "photos": 1_200,
+    "videos": 340,
+    "files": 12,
+    "links": 5600,
     "telegramChatId": 1234567890123,
 }
 
@@ -82,7 +82,7 @@ def test_a_parsed_page_becomes_a_verdict() -> None:
         result = record_probe_result(session, "alpha_news", OK_PAGE)
         assert result["status"] == "ok"
         assert result["kind"] == "channel"
-        assert result["subscribers"] == "12.3K"
+        assert result["subscribers"] == 12_300
         assert result["checkedAt"] is not None
 
 
@@ -547,20 +547,20 @@ def test_a_conclusive_probe_keeps_the_counters_and_chat_id() -> None:
         record_probe_result(session, "alpha_news", RICH_PAGE)
         row = session.get(DirectoryEntry, "alpha_news")
         assert row is not None
-        assert row.photos == "1.2K"
-        assert row.videos == "340"
-        assert row.files == "12"
-        assert row.links == "5.6K"
+        assert row.photos == 1200
+        assert row.videos == 340
+        assert row.files == 12
+        assert row.links == 5600
         assert row.telegram_chat_id == 1234567890123
 
 
 def test_the_projection_carries_the_new_fields() -> None:
     with Session(engine) as session:
         camel = record_probe_result(session, "alpha_news", RICH_PAGE)
-    assert camel["photos"] == "1.2K"
-    assert camel["videos"] == "340"
-    assert camel["files"] == "12"
-    assert camel["links"] == "5.6K"
+    assert camel["photos"] == 1200
+    assert camel["videos"] == 340
+    assert camel["files"] == 12
+    assert camel["links"] == 5600
     assert camel["telegramChatId"] == 1234567890123
 
 
@@ -585,7 +585,7 @@ def test_an_inconclusive_fetch_stores_no_metadata() -> None:
         row = session.get(DirectoryEntry, "alpha_news")
         assert row is not None
         # The earlier conclusive answer is left alone, not overwritten with None.
-        assert row.photos == "1.2K"
+        assert row.photos == 1200
         assert row.telegram_chat_id == 1234567890123
 
 
@@ -612,7 +612,7 @@ def test_an_unavailable_verdict_keeps_a_known_chat_id() -> None:
         assert row is not None
         assert row.status == "unavailable"
         # Provisional: the answer is not confirmed, so nothing is thrown away.
-        assert row.photos == "1.2K"
+        assert row.photos == 1200
 
         record_probe_result(session, "alpha_news", BOT_PAGE)
         session.refresh(row)

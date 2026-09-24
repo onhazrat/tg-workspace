@@ -93,11 +93,12 @@ class Channel(SQLModel, table=True):
     display_name: str | None = None
     photo_url: str | None = None
     bio: str | None = None
-    subscribers: str | None = None
-    photos: str | None = None
-    videos: str | None = None
-    files: str | None = None
-    links: str | None = None
+    #: The five Channel counters as numbers (ADR-023); `None` = not shown.
+    subscribers: int | None = None
+    photos: int | None = None
+    videos: int | None = None
+    files: int | None = None
+    links: int | None = None
     last_updated: int | None = Field(default=None, sa_column=_ms_ts(nullable=True))
     next_regular_sync_at: int | None = Field(
         default=None, sa_column=_ms_ts(nullable=True)
@@ -747,17 +748,16 @@ class DirectoryEntry(SQLModel, table=True):
 
     display_name: str | None = None
     bio: str | None = None
-    #: Raw text as Telegram renders it ("12.3K"), not parsed into an int: the
-    #: exact number is not worth a fragile locale-aware parse.
-    subscribers: str | None = None
-    #: The other four counters the preview page carries, raw text for the same
-    #: reason `subscribers` is. Named and typed to match `Channel` so promoting
-    #: an entry into a followed Channel needs no translation. `None` means the
-    #: page did not show one, which is not the same as a count of zero.
-    photos: str | None = None
-    videos: str | None = None
-    files: str | None = None
-    links: str | None = None
+    #: The five Channel counters as the numbers Telegram's text stands for
+    #: ("12.3K" is 12300), approximate above 1,000 (ADR-023). Named and typed to
+    #: match `Channel` so promoting an entry into a followed Channel needs no
+    #: translation. `None` means the page did not show one, which is not the
+    #: same as a count of zero.
+    subscribers: int | None = None
+    photos: int | None = None
+    videos: int | None = None
+    files: int | None = None
+    links: int | None = None
     photo_url: str | None = None
     latest_id: int = 0
 
@@ -911,7 +911,7 @@ class DirectorySample(SQLModel, table=True):
     media: dict[str, Any] | None = Field(default=None, sa_column=Column(JSON))
     #: Telegram links found in the Post body, as `Post.links` holds them.
     #: **Not `DirectoryEntry.links`**, which is the preview page's link *counter*
-    #: as raw text. The collision is inherited — `Channel.links` and `Post.links`
+    #: as a number. The collision is inherited — `Channel.links` and `Post.links`
     #: already mean these two different things — and it is worth knowing about
     #: here, where both tables are "the Directory".
     links: list[Any] | None = Field(default=None, sa_column=Column(JSON))

@@ -106,11 +106,8 @@ export type PostMedia = {
   caption?: string | null
   durationSec?: number | null
   thumbApiPath?: string | null
-  /** Telegram's display string, e.g. "16.4M". Use viewsCount to compare. */
-  views?: string | null
+  /** A number (ADR-023); render it with `formatCount`. */
   viewsCount?: number | null
-  /** Flattened display string; per-chip counts live in reactionCounts. */
-  reactions?: string | null
   reactionCounts?: PostReactionCount[] | null
   reactionsCount?: number | null
   linkPreview?: PostLinkPreview | null
@@ -179,11 +176,12 @@ export interface Channel {
   displayName?: string
   photoUrl?: string
   bio?: string
-  subscribers?: string
-  photos?: string
-  videos?: string
-  files?: string
-  links?: string
+  /** Channel counters as numbers (ADR-023); `null` = the page showed none. */
+  subscribers?: number | null
+  photos?: number | null
+  videos?: number | null
+  files?: number | null
+  links?: number | null
   startId?: number
   startTime?: number
   tags?: ChannelTag[] | string[]

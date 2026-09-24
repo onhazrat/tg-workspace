@@ -32,10 +32,10 @@ type Telemetry = Any
 class ScrapeChannelResponse(BaseModel):
     """A scraped page range plus the channel meta that came with it.
 
-    The counter fields (`subscribers`, `photos`, …) are the strings Telegram
-    renders ("12.3K"), not parsed numbers, and default to `""` here rather than
-    `null`: `scrape_channel` coerces every one with `or ""`, so the empty string
-    is what the wire has always carried when a counter is missing.
+    The counter fields (`subscribers`, `photos`, …) are the numbers Telegram's
+    text stands for ("12.3K" is 12300, ADR-023), `null` when the page showed
+    none. The text fields default to `""` because `scrape_channel` coerces
+    each with `or ""`.
     """
 
     model_config = ConfigDict(populate_by_name=True)
@@ -44,11 +44,11 @@ class ScrapeChannelResponse(BaseModel):
     display_name: str = Field(default="", alias="displayName")
     photo_url: str = Field(default="", alias="photoUrl")
     bio: str = ""
-    subscribers: str = ""
-    photos: str = ""
-    videos: str = ""
-    files: str = ""
-    links: str = ""
+    subscribers: int | None = None
+    photos: int | None = None
+    videos: int | None = None
+    files: int | None = None
+    links: int | None = None
     #: An `int`, not a string — `_extract_telegram_chat_id` parses it out of
     #: the page and the `Channel.telegram_chat_id` column is `int | None` too.
     telegram_chat_id: int | None = Field(default=None, alias="telegramChatId")
@@ -63,7 +63,7 @@ class ScrapeChannelResponse(BaseModel):
 class ChannelInfoResponse(BaseModel):
     """What one fetch of a channel's meta page reports.
 
-    Unlike `ScrapeChannelResponse`, the counters here are `str | None`:
+    Unlike `ScrapeChannelResponse`, `photoUrl` and `bio` here are nullable:
     `_parse_channel_meta` returns them straight from the parsed page without the
     `or ""` coercion that the scrape path applies. Same fields, different
     nullability — that difference is real and is why these are two models.
@@ -75,11 +75,11 @@ class ChannelInfoResponse(BaseModel):
     display_name: str = Field(default="", alias="displayName")
     photo_url: str | None = Field(default=None, alias="photoUrl")
     bio: str | None = None
-    subscribers: str | None = None
-    photos: str | None = None
-    videos: str | None = None
-    files: str | None = None
-    links: str | None = None
+    subscribers: int | None = None
+    photos: int | None = None
+    videos: int | None = None
+    files: int | None = None
+    links: int | None = None
     latest_id: int = Field(default=0, alias="latestId")
     telegram_chat_id: int | None = Field(default=None, alias="telegramChatId")
     #: Structural fact: the page exists but cannot be followed.

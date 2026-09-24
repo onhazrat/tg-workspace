@@ -790,12 +790,12 @@ def _refresh_channel_meta(
 ) -> None:
     """Copy the page's channel metadata onto the row.
 
-    Only truthy values overwrite: a page that omits a counter must not blank a
-    value we already have.
+    Only present values overwrite: a page that omits a counter must not blank a
+    value we already have. A counter of 0 is present (ADR-023).
     """
     for field_name, attr in _CHANNEL_META_FIELDS:
         val = response.get(field_name)
-        if val and getattr(channel, attr) != val:
+        if val not in (None, "") and getattr(channel, attr) != val:
             setattr(channel, attr, val)
         if field_name == "displayName" and val:
             result.display_name = val

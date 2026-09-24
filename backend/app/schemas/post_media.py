@@ -44,12 +44,8 @@ class PostMedia(BaseModel):
     caption: str | None = None
     duration_sec: int | None = Field(None, alias="durationSec")
     thumb_api_path: str | None = Field(None, alias="thumbApiPath")
-    # `views`/`reactions` stay as Telegram's display strings ("16.4M", and one
-    # flattened reaction line). The parsed forms alongside them are what any
-    # ranking or comparison should use — "9.74K" does not sort.
-    views: str | None = None
+    # Counts are numbers (ADR-023); the UI formats them back to "16.4M".
     views_count: int | None = Field(None, alias="viewsCount")
-    reactions: str | None = None
     reaction_counts: list[ReactionCount] | None = Field(None, alias="reactionCounts")
     reactions_count: int | None = Field(None, alias="reactionsCount")
     link_preview: LinkPreview | dict[str, str] | None = Field(None, alias="linkPreview")

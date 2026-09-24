@@ -52,11 +52,11 @@ export async function refreshChannelMetadata(
     if (data.displayName) displayName = data.displayName
     if (data.photoUrl) photoUrl = data.photoUrl
     if (data.bio) bio = data.bio
-    if (data.subscribers) subscribers = data.subscribers
-    if (data.photos) photos = data.photos
-    if (data.videos) videos = data.videos
-    if (data.files) files = data.files
-    if (data.links) links = data.links
+    if (data.subscribers != null) subscribers = data.subscribers
+    if (data.photos != null) photos = data.photos
+    if (data.videos != null) videos = data.videos
+    if (data.files != null) files = data.files
+    if (data.links != null) links = data.links
     if (data.isUnavailableOnWebView) {
       isUnavailableOnWebView = true
     } else if (wasUnavailable) {

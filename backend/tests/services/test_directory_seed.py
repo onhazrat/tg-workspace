@@ -76,11 +76,11 @@ def test_a_followed_channel_becomes_a_directory_entry(session: Session) -> None:
         _channel(
             "alpha_news",
             display_name="Alpha News",
-            subscribers="12.3K",
-            photos="1.2K",
-            videos="340",
-            files="12",
-            links="5.6K",
+            subscribers=12_300,
+            photos=1_200,
+            videos=340,
+            files=12,
+            links=5_600,
             telegram_chat_id=1234567890123,
         )
     )
@@ -91,11 +91,11 @@ def test_a_followed_channel_becomes_a_directory_entry(session: Session) -> None:
     row = session.get(DirectoryEntry, "alpha_news")
     assert row is not None
     assert row.display_name == "Alpha News"
-    assert row.subscribers == "12.3K"
-    assert row.photos == "1.2K"
-    assert row.videos == "340"
-    assert row.files == "12"
-    assert row.links == "5.6K"
+    assert row.subscribers == 12_300
+    assert row.photos == 1200
+    assert row.videos == 340
+    assert row.files == 12
+    assert row.links == 5600
     assert row.telegram_chat_id == 1234567890123
 
 

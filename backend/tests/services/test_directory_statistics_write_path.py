@@ -80,7 +80,7 @@ def _page(*, samples: list[dict[str, Any]], **extra: Any) -> dict[str, Any]:
         "isUnavailableOnWebView": False,
         "kind": "channel",
         "displayName": "Stats News",
-        "subscribers": "12.3K",
+        "subscribers": 12_300,
         "samples": samples,
         **extra,
     }
@@ -149,7 +149,7 @@ def test_an_unavailable_entry_keeps_its_statistics_and_loses_its_mix() -> None:
         alive = record_probe_result(
             session,
             HANDLE,
-            _page(samples=_weekly(5, views=1000), photos="300", latestId="900"),
+            _page(samples=_weekly(5, views=1000), photos=300, latestId="900"),
         )
         assert alive["mediaMix"] == {"photos": 1.0}
         assert alive["mediaDensity"] == 300 / 900

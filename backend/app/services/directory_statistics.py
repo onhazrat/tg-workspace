@@ -84,7 +84,6 @@ from app.services.language import (
     own_words,
     read_language,
 )
-from app.services.post_media_parser import parse_abbreviated_count
 
 #: How many samples a rate needs before it is reported at all.
 #:
@@ -214,7 +213,7 @@ def compute_sample_statistics(posts: Sequence[SamplePost]) -> SampleStatistics:
 MEDIA_COUNTERS = ("photos", "videos", "files", "links")
 
 
-def media_mix(counters: dict[str, str | None]) -> dict[str, float] | None:
+def media_mix(counters: dict[str, int | None]) -> dict[str, float] | None:
     """The four counters as shares of each other, summing to 1.
 
     `None` when the page showed no counters at all, which is not the same as a
@@ -232,7 +231,7 @@ def media_mix(counters: dict[str, str | None]) -> dict[str, float] | None:
     parsed = {
         name: value
         for name in MEDIA_COUNTERS
-        if (value := parse_abbreviated_count(counters.get(name))) is not None
+        if (value := counters.get(name)) is not None
     }
     total = sum(parsed.values())
     if not total:
@@ -240,7 +239,7 @@ def media_mix(counters: dict[str, str | None]) -> dict[str, float] | None:
     return {name: value / total for name, value in parsed.items()}
 
 
-def media_density(counters: dict[str, str | None], latest_id: int) -> float | None:
+def media_density(counters: dict[str, int | None], latest_id: int) -> float | None:
     """Media items per published Post id — a rate, deliberately not a percentage.
 
     Allowed to exceed 1, and it routinely does: an album of five photos adds
@@ -254,9 +253,7 @@ def media_density(counters: dict[str, str | None], latest_id: int) -> float | No
     if latest_id <= 0:
         return None
     total = sum(
-        value
-        for name in MEDIA_COUNTERS
-        if (value := parse_abbreviated_count(counters.get(name))) is not None
+        value for name in MEDIA_COUNTERS if (value := counters.get(name)) is not None
     )
     if not total:
         return None

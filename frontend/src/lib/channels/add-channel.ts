@@ -94,11 +94,11 @@ export async function addChannelByName(
   let telemetryData: Record<string, unknown> | undefined
 
   let bio: string | undefined
-  let subscribers: string | undefined
-  let photos: string | undefined
-  let videos: string | undefined
-  let files: string | undefined
-  let links: string | undefined
+  let subscribers: number | null | undefined
+  let photos: number | null | undefined
+  let videos: number | null | undefined
+  let files: number | null | undefined
+  let links: number | null | undefined
   let isUnavailableOnWebView = false
   let telegramChatId: number | undefined
 
@@ -119,11 +119,11 @@ export async function addChannelByName(
     if (data.displayName) displayName = data.displayName
     if (data.photoUrl) photoUrl = data.photoUrl
     if (data.bio) bio = data.bio
-    if (data.subscribers) subscribers = data.subscribers
-    if (data.photos) photos = data.photos
-    if (data.videos) videos = data.videos
-    if (data.files) files = data.files
-    if (data.links) links = data.links
+    if (data.subscribers != null) subscribers = data.subscribers
+    if (data.photos != null) photos = data.photos
+    if (data.videos != null) videos = data.videos
+    if (data.files != null) files = data.files
+    if (data.links != null) links = data.links
     if (data.isUnavailableOnWebView) {
       isUnavailableOnWebView = true
     }

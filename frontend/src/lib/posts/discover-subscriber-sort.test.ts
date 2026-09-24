@@ -14,7 +14,7 @@ import {
  * question rather than an edge case.
  */
 
-function probe(subscribers: string | null): DiscoveryProbe {
+function probe(subscribers: number | null): DiscoveryProbe {
   return {
     handle: "h",
     status: "ok",
@@ -39,7 +39,7 @@ function probe(subscribers: string | null): DiscoveryProbe {
 
 function candidate(
   name: string,
-  subscribers: string | null | undefined,
+  subscribers: number | null | undefined,
   total = 1,
 ): DiscoveryCandidate {
   return {
@@ -59,7 +59,7 @@ function candidate(
 
 describe("candidateSubscriberCount", () => {
   test("reads the probe's count", () => {
-    expect(candidateSubscriberCount(candidate("a", "12.5K"))).toBe(12_500)
+    expect(candidateSubscriberCount(candidate("a", 12_500))).toBe(12_500)
   })
 
   test("null for a candidate that was never probed", () => {
@@ -74,9 +74,9 @@ describe("candidateSubscriberCount", () => {
 describe("sortDiscoveryCandidates — subscribers", () => {
   test("largest first", () => {
     const rows = [
-      candidate("small", "573"),
-      candidate("huge", "1.2M"),
-      candidate("medium", "12.5K"),
+      candidate("small", 573),
+      candidate("huge", 1_200_000),
+      candidate("medium", 12_500),
     ]
     expect(
       sortDiscoveryCandidates(rows, "subscribers").map((c) => c.name),
@@ -88,9 +88,9 @@ describe("sortDiscoveryCandidates — subscribers", () => {
   test("handles with no count sort after every known count", () => {
     const rows = [
       candidate("unprobed", undefined),
-      candidate("small", "42"),
+      candidate("small", 42),
       candidate("noCounter", null),
-      candidate("big", "9K"),
+      candidate("big", 9_000),
     ]
     // Both unknown rows tie on every signal, so they land in name order — the
     // last tie-break. What matters is that both follow every known count.
@@ -102,7 +102,7 @@ describe("sortDiscoveryCandidates — subscribers", () => {
   // The trap `?? 0` would fall into: an unprobed handle outranking a channel we
   // actually measured and found tiny.
   test("a genuine zero still outranks an unknown", () => {
-    const rows = [candidate("unprobed", undefined), candidate("empty", "0")]
+    const rows = [candidate("unprobed", undefined), candidate("empty", 0)]
     expect(
       sortDiscoveryCandidates(rows, "subscribers").map((c) => c.name),
     ).toEqual(["empty", "unprobed"])
@@ -111,7 +111,7 @@ describe("sortDiscoveryCandidates — subscribers", () => {
   test("unknowns keep the reference-strength tie-breaks among themselves", () => {
     const rows = [
       candidate("weak", undefined, 1),
-      candidate("known", "500", 1),
+      candidate("known", 500, 1),
       candidate("strong", undefined, 9),
     ]
     expect(

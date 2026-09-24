@@ -295,14 +295,14 @@ class TestLastPostAt:
 
 class TestMediaMix:
     def test_the_four_counters_are_shares_of_each_other(self) -> None:
-        mix = media_mix({"photos": "50", "videos": "25", "files": "15", "links": "10"})
+        mix = media_mix({"photos": 50, "videos": 25, "files": 15, "links": 10})
         assert mix == {"photos": 0.5, "videos": 0.25, "files": 0.15, "links": 0.1}
         assert mix is not None and sum(mix.values()) == 1.0
 
     def test_a_missing_counter_is_left_out_rather_than_zeroed(self) -> None:
         """Telegram omits a counter it has none of, so the keys are what the
         page actually showed. A zero would claim we read a counter of zero."""
-        mix = media_mix({"photos": "3", "videos": None, "files": None, "links": "1"})
+        mix = media_mix({"photos": 3, "videos": None, "files": None, "links": 1})
         assert mix == {"photos": 0.75, "links": 0.25}
 
     def test_no_counters_at_all_is_no_mix(self) -> None:
@@ -314,14 +314,10 @@ class TestMediaMix:
         one. The Directory seed stamped every already-synced Channel with a
         latest Post id of zero, which leaves density undefined and the mix
         perfectly readable."""
-        assert media_mix({"photos": "2", "videos": "2"}) == {
+        assert media_mix({"photos": 2, "videos": 2}) == {
             "photos": 0.5,
             "videos": 0.5,
         }
-
-    def test_abbreviated_counters_are_parsed(self) -> None:
-        mix = media_mix({"photos": "1.5K", "videos": "500"})
-        assert mix == {"photos": 0.75, "videos": 0.25}
 
 
 class TestMediaDensity:
@@ -329,10 +325,10 @@ class TestMediaDensity:
         """An album of five photos adds five items against one Post id, so a
         media-heavy Channel reads above 1. Presenting this as a percentage is
         the error the mix/density split exists to avoid."""
-        assert media_density({"photos": "300", "videos": "100"}, 200) == 2.0
+        assert media_density({"photos": 300, "videos": 100}, 200) == 2.0
 
     def test_no_latest_id_is_no_density(self) -> None:
-        assert media_density({"photos": "300"}, 0) is None
+        assert media_density({"photos": 300}, 0) is None
 
     def test_no_counters_is_no_density(self) -> None:
         assert media_density({"photos": None}, 500) is None

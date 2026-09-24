@@ -45,6 +45,36 @@ def test_parse_channel_meta_includes_photo_url() -> None:
     assert meta["photoUrl"] == "https://cdn.example/avatar.jpg"
 
 
+def _counter(value: str, kind: str) -> str:
+    return (
+        '<div class="tgme_channel_info_counter">'
+        f'<span class="counter_value">{value}</span>'
+        f'<span class="counter_type">{kind}</span></div>'
+    )
+
+
+def test_channel_counters_are_stored_as_numbers() -> None:
+    """ADR-023: Telegram's display text becomes the integer it stands for.
+
+    A counter the page does not show stays absent rather than zero, and one the
+    parser cannot read is absent too: a new Telegram format must never fail a
+    sync, and guessing a number would be a lie.
+    """
+    html = (
+        _counter("28.3K", "subscribers")
+        + _counter("877", "photos")
+        + _counter("1.2M", "videos")
+        + _counter("about a dozen", "links")
+    )
+    meta = _parse_channel_meta(BeautifulSoup(html, "html.parser"), "counted")
+
+    assert meta["subscribers"] == 28_300
+    assert meta["photos"] == 877
+    assert meta["videos"] == 1_200_000
+    assert meta["files"] is None
+    assert meta["links"] is None
+
+
 # --------------------------------------------------------------------------
 # The samples flag (ticket 02)
 # --------------------------------------------------------------------------
@@ -144,7 +174,7 @@ def test_sample_media_is_parsed_but_never_pointed_at_our_own_cache() -> None:
 
     assert set(by_id) == {41, 42}
     media = by_id[42]["media"]
-    assert media["views"] == "9.7K"
+    assert media["viewsCount"] == 9_700
     assert "thumbApiPath" not in media, (
         "a probe fills no thumb cache, so the rewritten path would render broken"
     )
