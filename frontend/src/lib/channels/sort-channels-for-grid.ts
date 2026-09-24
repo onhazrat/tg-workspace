@@ -90,61 +90,51 @@ export function buildPostsInScopeCounts(
   return counts
 }
 
+type SortInputs = {
+  channelStats: Record<string, ChannelStats>
+  postsInScopeCounts: Record<string, number>
+}
+
+type ChannelComparator = (a: Channel, b: Channel, inputs: SortInputs) => number
+
+const SORT_COMPARATORS: Record<ChannelGridSortOption, ChannelComparator> = {
+  activity_rate: (a, b, { channelStats }) =>
+    (channelStats[a.name]?.velocity || 0) -
+    (channelStats[b.name]?.velocity || 0),
+  total_posts: (a, b, { channelStats }) =>
+    (channelStats[a.name]?.count || 0) - (channelStats[b.name]?.count || 0),
+  posts_in_scope: (a, b, { postsInScopeCounts }) =>
+    (postsInScopeCounts[a.name] ?? 0) - (postsInScopeCounts[b.name] ?? 0),
+  last_updated: (a, b) => (a.lastUpdated || 0) - (b.lastUpdated || 0),
+  followed_at: (a, b) => (a.followedAt || 0) - (b.followedAt || 0),
+  channel_id: (a, b) => (a.startId || 0) - (b.startId || 0),
+  channel_name: (a, b) =>
+    (a.displayName || a.name).localeCompare(b.displayName || b.name),
+  // An unknown count sorts as 0 here, which is this grid's long-standing
+  // behaviour and reasonable given its asc/desc toggle. The Discover ranking
+  // deliberately differs — it pushes unknowns to the end in either direction
+  // (see `sortDiscoveryCandidates`) — because a freshly generated report is
+  // normally half unprobed, so zeros would dominate the top or the bottom.
+  subscribers: (a, b) => (a.subscribers ?? 0) - (b.subscribers ?? 0),
+  next_regular_sync: (a, b) =>
+    compareNullableSyncAt(a.nextRegularSyncAt, b.nextRegularSyncAt),
+  next_dynamic_sync: (a, b) =>
+    compareNullableSyncAt(a.nextDynamicSyncAt, b.nextDynamicSyncAt),
+  next_auto_sync: (a, b) =>
+    compareNullableSyncAt(getNextAutoSyncAt(a), getNextAutoSyncAt(b)),
+}
+
 const compareBySortOption = (
   a: Channel,
   b: Channel,
-  channelStats: Record<string, ChannelStats>,
-  postsInScopeCounts: Record<string, number>,
+  inputs: SortInputs,
   sortBy: ChannelGridSortOption,
-): number => {
-  if (sortBy === "activity_rate") {
-    const aVel = channelStats[a.name]?.velocity || 0
-    const bVel = channelStats[b.name]?.velocity || 0
-    return aVel - bVel
-  }
-  if (sortBy === "total_posts") {
-    const aCount = channelStats[a.name]?.count || 0
-    const bCount = channelStats[b.name]?.count || 0
-    return aCount - bCount
-  }
-  if (sortBy === "posts_in_scope") {
-    const aCount = postsInScopeCounts[a.name] ?? 0
-    const bCount = postsInScopeCounts[b.name] ?? 0
-    return aCount - bCount
-  }
-  if (sortBy === "last_updated") {
-    return (a.lastUpdated || 0) - (b.lastUpdated || 0)
-  }
-  if (sortBy === "followed_at") {
-    return (a.followedAt || 0) - (b.followedAt || 0)
-  }
-  if (sortBy === "channel_id") {
-    return (a.startId || 0) - (b.startId || 0)
-  }
-  if (sortBy === "channel_name") {
-    const aName = a.displayName || a.name
-    const bName = b.displayName || b.name
-    return aName.localeCompare(bName)
-  }
-  if (sortBy === "subscribers") {
-    // An unknown count sorts as 0 here, which is this grid's long-standing
-    // behaviour and reasonable given its asc/desc toggle. The Discover ranking
-    // deliberately differs — it pushes unknowns to the end in either direction
-    // (see `sortDiscoveryCandidates`) — because a freshly generated report is
-    // normally half unprobed, so zeros would dominate the top or the bottom.
-    return (a.subscribers ?? 0) - (b.subscribers ?? 0)
-  }
-  if (sortBy === "next_regular_sync") {
-    return compareNullableSyncAt(a.nextRegularSyncAt, b.nextRegularSyncAt)
-  }
-  if (sortBy === "next_dynamic_sync") {
-    return compareNullableSyncAt(a.nextDynamicSyncAt, b.nextDynamicSyncAt)
-  }
-  if (sortBy === "next_auto_sync") {
-    return compareNullableSyncAt(getNextAutoSyncAt(a), getNextAutoSyncAt(b))
-  }
-  return 0
-}
+): number =>
+  // `sortBy` can come from storage unchecked, so an unknown value (or an
+  // inherited key like "constructor") compares equal rather than calling it.
+  Object.hasOwn(SORT_COMPARATORS, sortBy)
+    ? SORT_COMPARATORS[sortBy](a, b, inputs)
+    : 0
 
 export type SortChannelsForGridParams = {
   channels: Channel[]
@@ -174,8 +164,7 @@ export function sortChannelsForGrid({
     let comparison = compareBySortOption(
       a,
       b,
-      channelStats,
-      postsInScopeCounts,
+      { channelStats, postsInScopeCounts },
       sortBy,
     )
     if (comparison === 0) {
