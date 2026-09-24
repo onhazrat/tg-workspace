@@ -1,4 +1,9 @@
-import { listChannels, upsertChannel } from "@/lib/channels/store"
+import { api } from "@/api"
+import {
+  type ChannelsApi,
+  listChannels,
+  upsertChannel,
+} from "@/lib/channels/store"
 import type { CommandContext } from "@/lib/commands/types"
 import type { Channel } from "@/types"
 import type { DataEntityDef, ExportFilter, ImportResult } from "../types"
@@ -116,33 +121,48 @@ export function filterChannelImportRecords(
   }
 }
 
+/**
+ * What an import writes for `record`. A record that leaves `isFrozen` out keeps
+ * the stored value; a Frozen import merges onto the stored row and can only
+ * freeze, never thaw.
+ */
+export function channelImportPayload(
+  record: Channel,
+  existing: Channel | undefined,
+  filter: ExportFilter,
+): Channel {
+  if (!existing) return { ...record }
+  if (filter === "frozen") {
+    return {
+      ...existing,
+      ...record,
+      isFrozen: record.isFrozen === true ? true : existing.isFrozen,
+    }
+  }
+  if (record.isFrozen === undefined) {
+    return { ...record, isFrozen: existing.isFrozen }
+  }
+  return { ...record }
+}
+
 export async function upsertChannelRecords(
   records: Channel[],
   filter: ExportFilter,
   ctx: CommandContext,
+  client: ChannelsApi = api,
 ): Promise<ImportResult> {
   let imported = 0
   let failed = 0
 
   for (const record of records) {
+    const existing = ctx.channels.find(
+      (channel) => channel.id === record.id || channel.name === record.name,
+    )
     try {
-      let payload: Channel = { ...record }
-      const existing = ctx.channels.find(
-        (channel) => channel.id === record.id || channel.name === record.name,
+      await upsertChannel(
+        channelImportPayload(record, existing, filter),
+        client,
       )
-
-      if (record.isFrozen === undefined && existing) {
-        payload = { ...payload, isFrozen: existing.isFrozen }
-      }
-
-      if (filter === "frozen" && existing) {
-        payload = { ...existing, ...record }
-        if (record.isFrozen !== true) {
-          payload.isFrozen = existing.isFrozen
-        }
-      }
-
-      await upsertChannel(payload)
       imported++
     } catch {
       failed++
@@ -155,7 +175,7 @@ export async function upsertChannelRecords(
     // `ctx.setChannels` is the query-cache write-through. The
     // `refreshSyncMeta(true)` that used to follow this only bumped an etag that
     // no longer exists — this read already got the authoritative list.
-    const channels = await listChannels()
+    const channels = await listChannels(client)
     ctx.setChannels(channels)
   } catch {
     /* keep existing in-memory state */

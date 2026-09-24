@@ -1,14 +1,17 @@
 import { toast } from "sonner"
 
-import type { CommandDef } from "@/lib/commands/types"
+import type { CommandContext, CommandDef } from "@/lib/commands/types"
 import { copyTextToClipboard, joinCopyLines } from "./clipboard"
-import { buildTimestampedFilename, writeJsonlToFile } from "./download"
+import {
+  buildTimestampedFilename,
+  isAbortError,
+  writeJsonlToFile,
+} from "./download"
 import { channelEntityDef } from "./entities/channel"
 import { postEntityDef } from "./entities/post"
 import { summaryEntityDef } from "./entities/summary"
 import {
   buildJsonlContent,
-  JsonlParseError,
   parseJsonlFile,
   summarizeImportResult,
 } from "./jsonl"
@@ -151,14 +154,14 @@ export function buildDataCommandsForEntity<T extends DataEntityKind>(
         )
         try {
           await writeJsonlToFile(content, filename)
-          const offlineHint = ctx.isOffline ? " (from local cache)" : ""
-          toast.success(
-            `Exported ${items.length} ${def.pluralLabel.toLowerCase()}${offlineHint}`,
-          )
         } catch (err: unknown) {
-          if (err instanceof DOMException && err.name === "AbortError") return
+          if (isAbortError(err)) return
           throw err
         }
+        const offlineHint = ctx.isOffline ? " (from local cache)" : ""
+        toast.success(
+          `Exported ${items.length} ${def.pluralLabel.toLowerCase()}${offlineHint}`,
+        )
       },
     })
 
@@ -181,42 +184,46 @@ export function buildDataCommandsForEntity<T extends DataEntityKind>(
       },
       run: async (ctx) => {
         const file = await triggerJsonlFilePicker()
-        if (!file) return
-
-        let rawRecords: Awaited<ReturnType<typeof parseJsonlFile<T>>>["records"]
-        try {
-          ;({ records: rawRecords } = await parseJsonlFile(file, def.entity))
-        } catch (error) {
-          const message =
-            error instanceof JsonlParseError
-              ? error.message
-              : error instanceof Error
-                ? error.message
-                : "Invalid JSONL file"
-          toast.error(message)
-          return
-        }
-
-        const filtered = def.filterImportRecords(rawRecords, filter, ctx)
-        const skipped = rawRecords.length - filtered.length
-
-        if (filtered.length === 0) {
-          toast.info(
-            skipped > 0
-              ? `No matching ${def.pluralLabel.toLowerCase()} in file (${skipped} skipped)`
-              : `No ${def.pluralLabel.toLowerCase()} found in file`,
-          )
-          return
-        }
-
-        const result = await def.upsertRecords(filtered, filter, ctx)
-        result.skipped = skipped
-        toast.success(summarizeImportResult(result))
+        if (file) await importJsonlFile(def, filter, ctx, file)
       },
     })
   }
 
   return commands
+}
+
+/** Import `file` as `def`'s records, keeping those `filter` admits, and toast the outcome. */
+export async function importJsonlFile<T extends DataEntityKind>(
+  def: DataEntityDef<T>,
+  filter: ExportFilter,
+  ctx: CommandContext,
+  file: File,
+): Promise<void> {
+  let rawRecords: Awaited<ReturnType<typeof parseJsonlFile<T>>>["records"]
+  try {
+    ;({ records: rawRecords } = await parseJsonlFile(file, def.entity))
+  } catch (error) {
+    // `JsonlParseError` is an `Error`, so its message is shown as is.
+    toast.error(error instanceof Error ? error.message : "Invalid JSONL file")
+    return
+  }
+
+  const filtered = def.filterImportRecords(rawRecords, filter, ctx)
+  const skipped = rawRecords.length - filtered.length
+  const label = def.pluralLabel.toLowerCase()
+
+  if (filtered.length === 0) {
+    toast.info(
+      skipped > 0
+        ? `No matching ${label} in file (${skipped} skipped)`
+        : `No ${label} found in file`,
+    )
+    return
+  }
+
+  const result = await def.upsertRecords(filtered, filter, ctx)
+  result.skipped = skipped
+  toast.success(summarizeImportResult(result))
 }
 
 export function buildDataCommands(): CommandDef[] {

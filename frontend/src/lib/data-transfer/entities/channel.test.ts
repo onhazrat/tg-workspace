@@ -1,5 +1,8 @@
 import { describe, expect, test } from "bun:test"
+import type { ChannelsApi } from "@/lib/channels/store"
+import type { CommandContext } from "@/lib/commands/types"
 import type { Channel } from "@/types"
+import type { ExportFilter } from "../types"
 import {
   applyChannelFilter,
   channelsToCopyText,
@@ -13,6 +16,7 @@ import {
   filterChannelsFrozen,
   filterChannelsSelected,
   filterChannelsWithTelegramChatId,
+  upsertChannelRecords,
 } from "./channel"
 
 const channels: Channel[] = [
@@ -109,6 +113,83 @@ describe("filterChannelImportRecords", () => {
     ] as Channel[]
     const filtered = filterChannelImportRecords(records, "selected", ctx)
     expect(filtered.map((r) => r.name)).toEqual(["alpha", "gamma"])
+  })
+})
+
+describe("upsertChannelRecords", () => {
+  const stored: Channel[] = [
+    { id: "1", name: "alpha", isFrozen: true, bio: "kept" },
+    { id: "2", name: "beta", isFrozen: false, bio: "kept" },
+  ]
+
+  function importInto(failOn = "") {
+    const written: Channel[] = []
+    let list: Channel[] = []
+    const client = {
+      upsertChannel: async (id: string, body: Channel) => {
+        if (id === failOn) throw new Error("rejected")
+        written.push(body)
+        return body
+      },
+      listChannels: async () => [{ id: "fresh", name: "fresh" }],
+    } as unknown as ChannelsApi
+    const importCtx = {
+      channels: stored,
+      setChannels: (next: Channel[]) => {
+        list = next
+      },
+    } as unknown as CommandContext
+    return {
+      written,
+      list: () => list,
+      run: (records: Channel[], filter: ExportFilter) =>
+        upsertChannelRecords(records, filter, importCtx, client),
+    }
+  }
+
+  test("a record without isFrozen keeps the stored value; one with it wins", async () => {
+    const { written, run } = importInto()
+    await run(
+      [
+        { id: "1", name: "alpha" },
+        { id: "x", name: "beta", isFrozen: true },
+        { id: "9", name: "new" },
+      ],
+      "all",
+    )
+    expect(written).toEqual([
+      { id: "1", name: "alpha", isFrozen: true },
+      { id: "x", name: "beta", isFrozen: true },
+      { id: "9", name: "new" },
+    ])
+  })
+
+  test("a Frozen import merges onto the stored row and never thaws", async () => {
+    const { written, run } = importInto()
+    await run(
+      [
+        { id: "1", name: "alpha", isFrozen: false },
+        { id: "2", name: "beta", isFrozen: true },
+      ],
+      "frozen",
+    )
+    expect(written).toEqual([
+      { id: "1", name: "alpha", isFrozen: true, bio: "kept" },
+      { id: "2", name: "beta", isFrozen: true, bio: "kept" },
+    ])
+  })
+
+  test("counts failures and replaces the list with the server's", async () => {
+    const { list, run } = importInto("9")
+    const result = await run(
+      [
+        { id: "1", name: "alpha" },
+        { id: "9", name: "new" },
+      ],
+      "all",
+    )
+    expect(result).toEqual({ imported: 1, failed: 1, skipped: 0 })
+    expect(list()).toEqual([{ id: "fresh", name: "fresh" }])
   })
 })
 

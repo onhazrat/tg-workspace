@@ -9,8 +9,12 @@ import {
 } from "@/api"
 import type { PromptScope } from "@/api/data"
 import type { ScopeSubmission } from "@/client"
-import { parseApiError, unavailableChannelToastMessage } from "@/lib/api-errors"
-import { upsertChannel } from "@/lib/channels/store"
+import { addForwardedChannel } from "@/lib/channels/add-channel"
+import {
+  type ManualSyncMode,
+  manualSyncErrorText,
+  planManualSync,
+} from "@/lib/channels/manual-sync"
 import { logger } from "@/lib/logger"
 import { useApiStatus } from "../hooks/useApiStatus"
 import { useFollowJob } from "../hooks/useFollowJob"
@@ -18,18 +22,13 @@ import { usePostFilters } from "../hooks/usePostFilters"
 import { usePromptPosts } from "../hooks/usePromptPosts"
 import { useSyncJob } from "../hooks/useSyncJob"
 import { useSyncQueue } from "../hooks/useSyncQueue"
-import {
-  channelAllows,
-  disabledReason,
-  filterChannelsForOperation,
-} from "../lib/channels/sync-permissions"
+import { channelAllows, disabledReason } from "../lib/channels/sync-permissions"
 import type {
   MaxPostsPerChannelMode,
   MediaFilterValue,
   PostSortOrder,
   PostViewOptions,
 } from "../lib/posts/post-view"
-import { isNetworkRoutingActive } from "../lib/syncSettings"
 import type { Channel, Post } from "../types"
 import { useData } from "./DataContext"
 import { useRAG } from "./RAGContext"
@@ -341,174 +340,45 @@ export const ScraperProvider: React.FC<{ children: React.ReactNode }> = ({
     )
   }
 
-  const handleScrapeAll = async () => {
-    if (channels.length === 0) {
-      toast.error("Please add at least one channel first")
+  const runManualSync = async (mode: ManualSyncMode) => {
+    const plan = planManualSync(mode, channels, selectedChannels)
+    if ("refusal" in plan) {
+      toast[plan.refusal.level](plan.refusal.message)
       return
     }
-
-    const channelsToScrape = filterChannelsForOperation(channels, "sync_all")
-    if (channelsToScrape.length === 0) {
-      toast.info("No channels eligible for Sync All")
-      return
-    }
-
     try {
-      await scrapeChannelsInParallel(
-        channelsToScrape,
-        "Manual (Sync All)",
-        "sync_all",
-      )
+      await scrapeChannelsInParallel(plan.channels, plan.source, plan.syncMode)
       if (activeTab !== "channels") setActiveTab("posts")
     } catch (err: unknown) {
       console.error(err)
-      toast.error(
-        err instanceof Error
-          ? err.message
-          : "An unexpected error occurred during scraping",
-      )
+      toast.error(manualSyncErrorText(err, mode))
     }
   }
 
-  const handleScrapeSelected = async () => {
-    if (selectedChannels.size === 0) {
-      toast.error("Please select at least one channel first")
-      return
-    }
+  const handleScrapeAll = () => runManualSync("sync_all")
+  const handleScrapeSelected = () => runManualSync("bulk")
+  const handleRecheckRestricted = () => runManualSync("recheck_restricted")
 
-    const selected = channels.filter((c) => selectedChannels.has(c.name))
-    const channelsToScrape = filterChannelsForOperation(selected, "bulk")
-    if (channelsToScrape.length === 0) {
-      toast.info("No selected channels eligible for bulk sync")
-      return
-    }
-
-    try {
-      await scrapeChannelsInParallel(
-        channelsToScrape,
-        "Manual (Sync Selected)",
-        "bulk",
-      )
-      if (activeTab !== "channels") setActiveTab("posts")
-    } catch (err: unknown) {
-      console.error(err)
-      toast.error(
-        err instanceof Error
-          ? err.message
-          : "An unexpected error occurred during scraping",
-      )
-    }
-  }
-
-  const handleRecheckRestricted = async () => {
-    const restricted = channels.filter((c) => c.isUnavailableOnWebView)
-    if (restricted.length === 0) {
-      toast.info("No restricted channels to recheck")
-      return
-    }
-
-    try {
-      await scrapeChannelsInParallel(
-        restricted,
-        "Manual (Recheck Restricted)",
-        "recheck_restricted",
-      )
-      if (activeTab !== "channels") setActiveTab("posts")
-    } catch (err: unknown) {
-      console.error(err)
-      toast.error(
-        err instanceof Error
-          ? err.message
-          : "An unexpected error occurred during recheck",
-      )
-    }
-  }
-
-  const addNewChannel = async (
+  const addNewChannel = (
     channelName: string,
     discoveredVia?: { channelName: string; postId: number; timestamp: number },
-  ) => {
-    if (isOffline) {
-      toast.warning("Server offline — cannot add channels while offline.")
-      return
-    }
-    const cleanName =
-      channelName.trim().replace(/^@/, "").split("/").pop() || ""
-    if (!cleanName) return
-
-    if (
-      channels.some((c) => c.name.toLowerCase() === cleanName.toLowerCase())
-    ) {
-      toast.info(`Channel @${cleanName} is already in your workspace`)
-      return
-    }
-
-    let displayName = cleanName
-    let photoUrl
-    let isUnavailableOnWebView = false
-    const effectiveStartTime = getEffectiveGlobalStartTime()
-
-    try {
-      const data = await api.channelInfo({
-        channelName: cleanName,
-        proxyEnabled: isNetworkRoutingActive({
-          proxyEnabled,
-          defaultProxyUrls,
-          torEnabled,
-          torMode,
-          torProxyUrls,
-        }),
+  ) =>
+    addForwardedChannel(channelName, discoveredVia, {
+      isOffline,
+      channels,
+      loadChannels,
+      addToSyncQueue,
+      getEffectiveGlobalStartTime,
+      settings: {
+        proxyEnabled,
+        defaultProxyUrls,
+        torEnabled,
+        torMode,
+        torProxyUrls,
         torAutoRotate,
         torRotationThreshold,
-      })
-
-      if (data.displayName) displayName = data.displayName
-      if (data.photoUrl) photoUrl = data.photoUrl
-      if (data.isUnavailableOnWebView) isUnavailableOnWebView = true
-      // There used to be an `if (data.error)` branch here. `ChannelInfoResponse`
-      // is closed and has no `error`: the key only ever arrives inside an
-      // `HTTPException(400, detail={"error", "isUnavailableOnWebView"})`, which
-      // the `catch` below already handles via `parseApiError`. The branch was
-      // unreachable, and the generated type is what proved it.
-    } catch (err: unknown) {
-      console.error("Failed to fetch initial channel info:", err)
-      const parsed = parseApiError(err)
-      if (parsed.isUnavailableOnWebView) {
-        isUnavailableOnWebView = true
-      } else if (parsed.message) {
-        toast.error(parsed.message)
-      }
-    }
-
-    const newChannel: Channel = {
-      id: cleanName,
-      name: cleanName,
-      displayName,
-      photoUrl,
-      startTime: effectiveStartTime,
-      lastUpdated: Date.now(),
-      followedAt: Date.now(),
-      tags: [],
-      isFrozen: isUnavailableOnWebView,
-      isUnavailableOnWebView,
-      autoFollowForwarded: false,
-      regularSyncEnabled: !isUnavailableOnWebView,
-      dynamicSyncEnabled: false,
-      discoveredVia,
-    }
-
-    await upsertChannel(newChannel)
-    await loadChannels()
-
-    if (isUnavailableOnWebView) {
-      toast.warning(unavailableChannelToastMessage(cleanName), {
-        duration: 8000,
-      })
-    } else {
-      toast.success(`Added @${cleanName} to workspace`)
-      addToSyncQueue(newChannel, "Manual (Added from Forward)", () => {})
-    }
-  }
+      },
+    })
 
   return (
     <ScraperContext.Provider
