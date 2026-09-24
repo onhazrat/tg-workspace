@@ -1,5 +1,5 @@
 import { getTagNames } from "@/lib/channels/channel-tag-model"
-import { upsertChannel } from "@/lib/channels/store"
+import { type ChannelsApi, upsertChannel } from "@/lib/channels/store"
 import { filterPartialHistoryChannels } from "@/lib/commands/filter-channels"
 import type { CommandContext, EntityFlowType } from "@/lib/commands/types"
 import { filterChannelsWithTelegramChatId } from "@/lib/data-transfer/entities/channel"
@@ -56,6 +56,8 @@ export async function runEntityChannelAction(
   flow: EntityFlowType,
   channel: Channel,
   ctx: CommandContext,
+  // Test seam, as in `lib/channels/store.ts`; production callers never pass it.
+  channelsApi?: ChannelsApi,
 ): Promise<void> {
   switch (flow) {
     case "search-channel":
@@ -79,7 +81,7 @@ export async function runEntityChannelAction(
       return
     case "freeze-channel": {
       const updated = { ...channel, isFrozen: true }
-      await upsertChannel(updated)
+      await upsertChannel(updated, channelsApi)
       ctx.setChannels((prev) =>
         prev.map((entry) => (entry.id === channel.id ? updated : entry)),
       )
@@ -92,7 +94,7 @@ export async function runEntityChannelAction(
     }
     case "unfreeze-channel": {
       const updated = { ...channel, isFrozen: false }
-      await upsertChannel(updated)
+      await upsertChannel(updated, channelsApi)
       ctx.setChannels((prev) =>
         prev.map((entry) => (entry.id === channel.id ? updated : entry)),
       )
@@ -103,7 +105,7 @@ export async function runEntityChannelAction(
         ...channel,
         autoFollowForwarded: !channel.autoFollowForwarded,
       }
-      await upsertChannel(updated)
+      await upsertChannel(updated, channelsApi)
       ctx.setChannels((prev) =>
         prev.map((entry) => (entry.id === channel.id ? updated : entry)),
       )
