@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/sheet"
 import { TgButton } from "@/components/ui/tg-button"
 import { queryKeys } from "@/hooks/queryKeys"
+import { formatCount } from "@/lib/format-count"
 import {
   DISCOVERY_SIGNAL_KINDS,
   DISCOVERY_SIGNAL_LABELS,
@@ -31,11 +32,6 @@ import {
 import { DiscoverMediaMixBar } from "./DiscoverMediaMixBar"
 
 /** Compact, the way the row's median views are formatted. */
-const VIEWS = new Intl.NumberFormat(undefined, {
-  notation: "compact",
-  maximumFractionDigits: 1,
-})
-
 interface DiscoverCandidatePanelProps {
   candidate: DiscoveryCandidate | null
   onClose: () => void
@@ -256,7 +252,11 @@ export const DiscoverCandidatePanel: React.FC<DiscoverCandidatePanelProps> = ({
                        * sample-derived blanks and would be the wrong sentence. */}
                       <Stat
                         label="Subscribers"
-                        value={probe.subscribers}
+                        value={
+                          probe.subscribers != null
+                            ? formatCount(probe.subscribers)
+                            : null
+                        }
                         title="As Telegram renders it. Cleared for a Channel it has stopped serving, alongside the media mix and density."
                       />
                       <Stat
@@ -488,7 +488,7 @@ export const DiscoverCandidatePanel: React.FC<DiscoverCandidatePanelProps> = ({
                            * for. A zero here would be a claim. */}
                           {post.views != null ? (
                             <span className="tabular-nums">
-                              {VIEWS.format(post.views)} views
+                              {formatCount(post.views)} views
                             </span>
                           ) : null}
                           <a

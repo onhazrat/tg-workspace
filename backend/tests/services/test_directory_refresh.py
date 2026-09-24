@@ -72,7 +72,7 @@ def _page(**extra: Any) -> dict[str, Any]:
         "isUnavailableOnWebView": False,
         "kind": "channel",
         "displayName": "Stale News",
-        "subscribers": "12.3K",
+        "subscribers": 12_300,
         "latestId": 42,
         **extra,
     }
@@ -90,11 +90,11 @@ def _meta(**extra: Any) -> dict[str, Any]:
         "displayName": "Stale News",
         "photoUrl": "https://cdn.example/avatar.jpg",
         "bio": "",
-        "subscribers": "13.0K",
-        "photos": "1.2K",
-        "videos": "340",
-        "files": "12",
-        "links": "5.6K",
+        "subscribers": 13_000,
+        "photos": 1_200,
+        "videos": 340,
+        "files": 12,
+        "links": 5600,
         "latestId": 4242,
         "telegramChatId": 1234567890123,
         "isUnavailableOnWebView": False,
@@ -334,7 +334,7 @@ def test_an_on_demand_refresh_keeps_the_answer_it_is_refreshing() -> None:
 
         assert row.status == "ok"
         assert row.display_name == "Stale News"
-        assert row.subscribers == "12.3K"
+        assert row.subscribers == 12_300
         assert row.telegram_chat_id == 999
         assert [s.post_id for s in samples_for(session, HANDLE)] == [1]
 
@@ -409,8 +409,8 @@ def test_sync_metadata_updates_the_entry() -> None:
 
         row = _entry(session)
         assert row.status == "ok"
-        assert row.subscribers == "13.0K"
-        assert row.photos == "1.2K"
+        assert row.subscribers == 13_000
+        assert row.photos == 1200
         assert row.telegram_chat_id == 1234567890123
         assert row.latest_id == 4242
         assert row.checked_at == later
@@ -437,7 +437,7 @@ def test_sync_creates_an_entry_for_a_channel_the_directory_has_never_seen() -> N
         row = session.get(DirectoryEntry, "brand_new")
         assert row is not None
         assert row.status == "ok"
-        assert row.subscribers == "13.0K"
+        assert row.subscribers == 13_000
 
 
 def test_the_metadata_only_update_does_not_clear_the_samples() -> None:
@@ -522,7 +522,7 @@ def test_a_failed_refresh_keeps_the_answer_it_could_not_replace() -> None:
 
         assert row.status == "ok"
         assert row.display_name == "Stale News"
-        assert row.subscribers == "12.3K"
+        assert row.subscribers == 12_300
         assert row.attempts == 1
         assert row.last_error == "proxy timeout"
 
@@ -584,7 +584,7 @@ def test_one_unavailable_answer_does_not_seal_a_live_entry() -> None:
         assert row.status == "unavailable"
         assert row.refresh_due_at is not None, "a live entry gets a second look"
         assert row.display_name == "Stale News", "and keeps what it knew"
-        assert row.subscribers == "12.3K"
+        assert row.subscribers == 12_300
 
 
 def test_a_live_entry_that_came_back_recovers_on_its_own() -> None:
@@ -664,7 +664,7 @@ def test_a_sync_does_not_cancel_an_operator_s_refresh() -> None:
         session.commit()
 
         row = _entry(session)
-        assert row.subscribers == "13.0K", "the metadata still lands"
+        assert row.subscribers == 13_000, "the metadata still lands"
         assert dequeue_handles(session, limit=10) == [HANDLE], "and so does the refresh"
 
 

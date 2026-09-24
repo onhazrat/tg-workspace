@@ -131,7 +131,7 @@ def test_a_post_reports_the_view_count_the_median_was_computed_from(
     """
     _probe(
         HANDLE,
-        [_post(11, media={"type": "photo", "views": "9.7K", "viewsCount": 9700})],
+        [_post(11, media={"type": "photo", "viewsCount": 9700})],
     )
 
     body = _get(client, superuser_token_headers).json()

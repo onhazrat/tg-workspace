@@ -73,7 +73,9 @@ def test_media_text_only_vs_media_only_kinds() -> None:
         _add(session, 4, text="a video caption", media={"kinds": ["video"]})
         # A text post whose only media payload is engagement stats: the parser
         # emits `kinds: []` so that it stays text_only.
-        _add(session, 5, text="text with views", media={"kinds": [], "views": "1.2K"})
+        _add(
+            session, 5, text="text with views", media={"kinds": [], "viewsCount": 1_200}
+        )
         # Stickers are real media and must leave text_only.
         _add(session, 6, text="[sticker]", media={"kinds": ["sticker"]})
         session.commit()

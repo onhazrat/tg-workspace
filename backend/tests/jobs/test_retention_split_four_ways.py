@@ -632,7 +632,7 @@ def test_directory_samples_run_on_their_own_deployment_window() -> None:
                 "isTelegramPage": True,
                 "isUnavailableOnWebView": False,
                 "kind": "channel",
-                "subscribers": "1.2K",
+                "subscribers": 1_200,
                 "samples": [{"id": 1, "text": "stale"}, {"id": 2, "text": "fresh"}],
             },
         )
@@ -652,7 +652,7 @@ def test_directory_samples_run_on_their_own_deployment_window() -> None:
         # would throw the map away, which is the point of the Directory.
         assert (
             probe_map(session, {"windowed_handle"})["windowed_handle"]["subscribers"]
-            == "1.2K"
+            == 1200
         )
 
 

@@ -240,6 +240,7 @@ is discovered by an operator part-way through a run.
 | Script | What it does |
 |---|---|
 | `backfill_post_references.py` | Fills the channel reference graph from the corpus already stored (CRG-04). `--dry-run` reports pending, eligible and deferred Post counts; a large deferred count is a population of channels with no chat id, which needs looking at before the grace expires. |
+| `strip_media_display_counters.py` | Drops the `views` and `reactions` display strings from stored Post, Directory sample and cited-Post media, keeping `viewsCount` and `reactionCounts` (ADR-023). Batched and resumable; run once after the deploy that carries ADR-023. |
 | `backfill_channel_follows.py` | Gives every existing Channel a Follow. Also runs unattended from `prestart.sh` as `--if-needed`. |
 | `backfill_chat_sessions.py` | Moves chats out of `tg_summaries` into `tg_chat_sessions`. |
 | `backfill_post_media.py` | Re-fetches Telegram web-view HTML to fill `tg_posts.media` and cache thumbnails. Hits the network, so it is paced and scoped to named channels. |

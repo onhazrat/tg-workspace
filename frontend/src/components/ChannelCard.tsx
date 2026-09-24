@@ -42,6 +42,7 @@ import {
   isVirtualGroupTag,
   toVirtualGroupTagName,
 } from "@/lib/channels/virtual-group-tags"
+import { formatCount } from "@/lib/format-count"
 import { languageName } from "@/lib/language-name"
 import { telegramWebViewChannelUrl } from "@/lib/telegram-web"
 import { useData } from "../contexts/DataContext"
@@ -477,7 +478,7 @@ export const ChannelCard: React.FC<ChannelCardProps> = ({
           )}
 
           {/* New Metadata Badges */}
-          {showChannelSubscribers && channel.subscribers && (
+          {showChannelSubscribers && channel.subscribers != null && (
             <Tooltip>
               <TooltipTrigger asChild>
                 <TgMetaChip
@@ -485,7 +486,7 @@ export const ChannelCard: React.FC<ChannelCardProps> = ({
                   className="uppercase tracking-wider cursor-help"
                 >
                   <Users size={10} className="opacity-50" />
-                  <span>{channel.subscribers}</span>
+                  <span>{formatCount(channel.subscribers)}</span>
                 </TgMetaChip>
               </TooltipTrigger>
               <TooltipContent>
@@ -508,7 +509,7 @@ export const ChannelCard: React.FC<ChannelCardProps> = ({
               </TooltipContent>
             </Tooltip>
           )}
-          {showChannelPhotos && channel.photos && (
+          {showChannelPhotos && channel.photos != null && (
             <Tooltip>
               <TooltipTrigger asChild>
                 <TgMetaChip
@@ -516,7 +517,7 @@ export const ChannelCard: React.FC<ChannelCardProps> = ({
                   className="uppercase tracking-wider cursor-help"
                 >
                   <ImageIcon size={10} className="opacity-50" />
-                  <span>{channel.photos}</span>
+                  <span>{formatCount(channel.photos)}</span>
                 </TgMetaChip>
               </TooltipTrigger>
               <TooltipContent>
@@ -524,7 +525,7 @@ export const ChannelCard: React.FC<ChannelCardProps> = ({
               </TooltipContent>
             </Tooltip>
           )}
-          {showChannelVideos && channel.videos && (
+          {showChannelVideos && channel.videos != null && (
             <Tooltip>
               <TooltipTrigger asChild>
                 <TgMetaChip
@@ -532,7 +533,7 @@ export const ChannelCard: React.FC<ChannelCardProps> = ({
                   className="uppercase tracking-wider cursor-help"
                 >
                   <Video size={10} className="opacity-50" />
-                  <span>{channel.videos}</span>
+                  <span>{formatCount(channel.videos)}</span>
                 </TgMetaChip>
               </TooltipTrigger>
               <TooltipContent>
@@ -540,7 +541,7 @@ export const ChannelCard: React.FC<ChannelCardProps> = ({
               </TooltipContent>
             </Tooltip>
           )}
-          {showChannelFiles && channel.files && (
+          {showChannelFiles && channel.files != null && (
             <Tooltip>
               <TooltipTrigger asChild>
                 <TgMetaChip
@@ -548,7 +549,7 @@ export const ChannelCard: React.FC<ChannelCardProps> = ({
                   className="uppercase tracking-wider cursor-help"
                 >
                   <File size={10} className="opacity-50" />
-                  <span>{channel.files}</span>
+                  <span>{formatCount(channel.files)}</span>
                 </TgMetaChip>
               </TooltipTrigger>
               <TooltipContent>
@@ -556,7 +557,7 @@ export const ChannelCard: React.FC<ChannelCardProps> = ({
               </TooltipContent>
             </Tooltip>
           )}
-          {showChannelLinks && channel.links && (
+          {showChannelLinks && channel.links != null && (
             <Tooltip>
               <TooltipTrigger asChild>
                 <TgMetaChip
@@ -564,7 +565,7 @@ export const ChannelCard: React.FC<ChannelCardProps> = ({
                   className="uppercase tracking-wider cursor-help"
                 >
                   <LinkIcon size={10} className="opacity-50" />
-                  <span>{channel.links}</span>
+                  <span>{formatCount(channel.links)}</span>
                 </TgMetaChip>
               </TooltipTrigger>
               <TooltipContent>

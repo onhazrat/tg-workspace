@@ -1,3 +1,4 @@
+import { formatCount } from "@/lib/format-count"
 import type { Post, PostMediaKind } from "@/types"
 
 export type MediaFilterValue =
@@ -90,7 +91,9 @@ export function formatPostMediaHints(post: Post): string {
   if (media.durationSec != null && media.durationSec > 0) {
     parts.push(`Duration: ${formatDurationLabel(media.durationSec)}`)
   }
-  if (media.views) parts.push(`Views: ${media.views}`)
+  if (media.viewsCount != null) {
+    parts.push(`Views: ${formatCount(media.viewsCount)}`)
+  }
   if (media.groupedCount != null && media.groupedCount > 1) {
     parts.push(`Album: ${media.groupedCount} items`)
   }

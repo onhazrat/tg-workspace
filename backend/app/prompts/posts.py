@@ -12,6 +12,8 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import Any
 
+from app.services.post_media_parser import format_abbreviated_count
+
 # A single prompt is capped so an oversized selection is refused with a clear
 # error rather than silently truncated (the user's explicit choice) or sent on
 # to blow past a model's context window. ~200k tokens is the context limit of
@@ -46,9 +48,9 @@ def _format_media_hints(post: dict[str, Any]) -> str:
     duration = media.get("durationSec")
     if duration is not None and duration > 0:
         parts.append(f"Duration: {_format_duration_label(duration)}")
-    views = media.get("views")
-    if views:
-        parts.append(f"Views: {views}")
+    views = media.get("viewsCount")
+    if isinstance(views, int):
+        parts.append(f"Views: {format_abbreviated_count(views)}")
     grouped = media.get("groupedCount")
     if grouped is not None and grouped > 1:
         parts.append(f"Album: {grouped} items")

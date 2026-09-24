@@ -22,6 +22,7 @@ import { useCallback, useEffect, useMemo, useState } from "react"
 import { toast } from "sonner"
 import { api } from "@/api"
 import { needsTranslation } from "@/constants"
+import { formatCount } from "@/lib/format-count"
 import { getTranslation, saveTranslation } from "@/lib/translations/store"
 import { useData } from "../contexts/DataContext"
 import { useScraper } from "../contexts/ScraperContext"
@@ -146,7 +147,8 @@ export const PostCard: React.FC<PostCardProps> = ({ post, postSearch }) => {
   )
   const mediaKinds = useMemo(() => getPostMediaKinds(post), [post])
   const thumbApiPath = post.media?.thumbApiPath
-  const viewsLabel = post.media?.views
+  const viewsLabel =
+    post.media?.viewsCount != null ? formatCount(post.media.viewsCount) : null
   const isLongPost = useMemo(() => {
     const lineCount = activeText.split("\n").length
     return activeText.length > 900 || lineCount > 14

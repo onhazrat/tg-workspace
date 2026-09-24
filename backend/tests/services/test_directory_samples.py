@@ -85,7 +85,7 @@ def _page(
         "isUnavailableOnWebView": False,
         "kind": "channel",
         "displayName": "Sample News",
-        "subscribers": "12.3K",
+        "subscribers": 12_300,
         **extra,
     }
     if samples is not None:
@@ -127,9 +127,8 @@ def test_a_sample_carries_the_view_and_reaction_counts_it_was_parsed_with() -> N
     media = {
         "type": "photo",
         "url": "https://cdn.telegram.example/x.jpg",
-        "views": "9.7K",
         "viewsCount": 9700,
-        "reactions": "12 👍",
+        "reactionCounts": [{"emoji": "👍", "count": 12}],
         "reactionsCount": 12,
     }
     with Session(engine) as session:
@@ -243,7 +242,7 @@ def test_an_inconclusive_fetch_touches_neither_the_columns_nor_the_samples() -> 
 
         assert after["status"] == "ok", "a failed fetch is not evidence of anything"
         assert after["lastError"] == "timeout", "and the failure is still recorded"
-        assert after["subscribers"] == "12.3K", "the metadata survives a failed fetch"
+        assert after["subscribers"] == 12_300, "the metadata survives a failed fetch"
         assert _ids(session) == [11]
 
 
@@ -440,9 +439,7 @@ def test_samples_expire_on_their_own_window_and_the_entry_does_not() -> None:
 
         assert deleted == 2
         assert _ids(session) == []
-        assert (
-            record_probe_result(session, HANDLE, _page())["subscribers"] == "12.3K"
-        ), (
+        assert record_probe_result(session, HANDLE, _page())["subscribers"] == 12_300, (
             "the entry itself is never collected by age — that would throw the "
             "map away, which is the point of the Directory"
         )

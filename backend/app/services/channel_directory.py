@@ -586,9 +586,8 @@ def _apply_page_metadata(row: DirectoryEntry, payload: dict[str, Any]) -> None:
     is not here: each caller decides what its own fetch is evidence of, and
     those two answers are deliberately different.
 
-    `or None` on the counters collapses a missing counter and an empty string
-    together, which is right: Telegram omits a counter it has none of, and `""`
-    would make "no photos" and "we did not look" the same value.
+    The counters arrive as numbers or `None` (ADR-023), so they are copied as
+    they are: `or None` would turn a real count of zero into "not shown".
 
     **The chat id is only ever written, never cleared**, which is the one place
     this does not simply overwrite what it knows. It is decoded from a message
@@ -607,11 +606,11 @@ def _apply_page_metadata(row: DirectoryEntry, payload: dict[str, Any]) -> None:
     row.kind = kind if kind in PROBE_KINDS else "unknown"
     row.display_name = payload.get("displayName") or None
     row.bio = payload.get("bio") or None
-    row.subscribers = payload.get("subscribers") or None
-    row.photos = payload.get("photos") or None
-    row.videos = payload.get("videos") or None
-    row.files = payload.get("files") or None
-    row.links = payload.get("links") or None
+    row.subscribers = payload.get("subscribers")
+    row.photos = payload.get("photos")
+    row.videos = payload.get("videos")
+    row.files = payload.get("files")
+    row.links = payload.get("links")
     chat_id = payload.get("telegramChatId")
     if isinstance(chat_id, int):
         row.telegram_chat_id = chat_id

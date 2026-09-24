@@ -38,7 +38,7 @@ OK_PAGE = {
     "isUnavailableOnWebView": False,
     "kind": "channel",
     "displayName": "Target Two",
-    "subscribers": "12.3K",
+    "subscribers": 12_300,
 }
 
 CANDIDATE_KEYS = {
@@ -289,7 +289,7 @@ def test_a_resolved_probe_is_joined_into_the_report_read(client: TestClient) -> 
     }
     assert probe["status"] == "ok"
     assert probe["kind"] == "channel"
-    assert probe["subscribers"] == "12.3K"
+    assert probe["subscribers"] == 12_300
 
 
 def test_the_full_report_keeps_its_scope_snapshot(client: TestClient) -> None:

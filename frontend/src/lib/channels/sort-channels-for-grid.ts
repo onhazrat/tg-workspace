@@ -1,5 +1,4 @@
 import { scopedStorage } from "@/lib/storage/scoped"
-import { parseSubscriberCount } from "@/lib/subscriber-count"
 import type { Channel, ChannelStats, Post } from "@/types"
 
 export type ChannelGridSortOption =
@@ -133,10 +132,7 @@ const compareBySortOption = (
     // deliberately differs — it pushes unknowns to the end in either direction
     // (see `sortDiscoveryCandidates`) — because a freshly generated report is
     // normally half unprobed, so zeros would dominate the top or the bottom.
-    return (
-      (parseSubscriberCount(a.subscribers) ?? 0) -
-      (parseSubscriberCount(b.subscribers) ?? 0)
-    )
+    return (a.subscribers ?? 0) - (b.subscribers ?? 0)
   }
   if (sortBy === "next_regular_sync") {
     return compareNullableSyncAt(a.nextRegularSyncAt, b.nextRegularSyncAt)

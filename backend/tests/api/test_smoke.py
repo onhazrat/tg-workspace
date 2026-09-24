@@ -90,6 +90,24 @@ def test_data_channels_crud() -> None:
         client.delete("/api/v1/data/channels/smoke-test", headers=headers)
 
 
+@pytest.mark.parametrize(
+    "counter", ["subscribers", "photos", "videos", "files", "links"]
+)
+def test_a_channel_counter_must_be_a_number(counter: str) -> None:
+    """ADR-023: a display string ("12K", from a tab still running the old
+    bundle) is a 422, not a 500 from Postgres refusing it at commit."""
+    headers = _auth_headers()
+    try:
+        r = client.put(
+            "/api/v1/data/channels/counter-shape",
+            json={"name": "counter-shape", counter: "12K"},
+            headers=headers,
+        )
+        assert r.status_code == 422, r.text
+    finally:
+        client.delete("/api/v1/data/channels/counter-shape", headers=headers)
+
+
 def test_scrape_invalid_url() -> None:
     r = client.post(
         "/api/v1/telegram/scrape", json={"url": "not-a-url"}, headers=_auth_headers()

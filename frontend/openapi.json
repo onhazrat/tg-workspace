@@ -5942,23 +5942,23 @@
             "title": "Bio"
           },
           "subscribers": {
-            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "anyOf": [{ "type": "integer" }, { "type": "null" }],
             "title": "Subscribers"
           },
           "photos": {
-            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "anyOf": [{ "type": "integer" }, { "type": "null" }],
             "title": "Photos"
           },
           "videos": {
-            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "anyOf": [{ "type": "integer" }, { "type": "null" }],
             "title": "Videos"
           },
           "files": {
-            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "anyOf": [{ "type": "integer" }, { "type": "null" }],
             "title": "Files"
           },
           "links": {
-            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "anyOf": [{ "type": "integer" }, { "type": "null" }],
             "title": "Links"
           },
           "latestId": { "type": "integer", "title": "Latestid", "default": 0 },
@@ -5982,7 +5982,7 @@
         "type": "object",
         "required": ["channelName"],
         "title": "ChannelInfoResponse",
-        "description": "What one fetch of a channel's meta page reports.\n\nUnlike `ScrapeChannelResponse`, the counters here are `str | None`:\n`_parse_channel_meta` returns them straight from the parsed page without the\n`or \"\"` coercion that the scrape path applies. Same fields, different\nnullability \u2014 that difference is real and is why these are two models."
+        "description": "What one fetch of a channel's meta page reports.\n\nUnlike `ScrapeChannelResponse`, `photoUrl` and `bio` here are nullable:\n`_parse_channel_meta` returns them straight from the parsed page without the\n`or \"\"` coercion that the scrape path applies. Same fields, different\nnullability \u2014 that difference is real and is why these are two models."
       },
       "ChannelResponse": {
         "properties": {
@@ -5997,23 +5997,23 @@
             "title": "Photourl"
           },
           "subscribers": {
-            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "anyOf": [{ "type": "integer" }, { "type": "null" }],
             "title": "Subscribers"
           },
           "photos": {
-            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "anyOf": [{ "type": "integer" }, { "type": "null" }],
             "title": "Photos"
           },
           "videos": {
-            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "anyOf": [{ "type": "integer" }, { "type": "null" }],
             "title": "Videos"
           },
           "files": {
-            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "anyOf": [{ "type": "integer" }, { "type": "null" }],
             "title": "Files"
           },
           "links": {
-            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "anyOf": [{ "type": "integer" }, { "type": "null" }],
             "title": "Links"
           },
           "startId": {
@@ -6141,8 +6141,24 @@
             "title": "Bio"
           },
           "subscribers": {
-            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "anyOf": [{ "type": "integer" }, { "type": "null" }],
             "title": "Subscribers"
+          },
+          "photos": {
+            "anyOf": [{ "type": "integer" }, { "type": "null" }],
+            "title": "Photos"
+          },
+          "videos": {
+            "anyOf": [{ "type": "integer" }, { "type": "null" }],
+            "title": "Videos"
+          },
+          "files": {
+            "anyOf": [{ "type": "integer" }, { "type": "null" }],
+            "title": "Files"
+          },
+          "links": {
+            "anyOf": [{ "type": "integer" }, { "type": "null" }],
+            "title": "Links"
           },
           "startId": {
             "anyOf": [{ "type": "integer" }, { "type": "null" }],
@@ -7434,23 +7450,23 @@
             "title": "Bio"
           },
           "subscribers": {
-            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "anyOf": [{ "type": "integer" }, { "type": "null" }],
             "title": "Subscribers"
           },
           "photos": {
-            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "anyOf": [{ "type": "integer" }, { "type": "null" }],
             "title": "Photos"
           },
           "videos": {
-            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "anyOf": [{ "type": "integer" }, { "type": "null" }],
             "title": "Videos"
           },
           "files": {
-            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "anyOf": [{ "type": "integer" }, { "type": "null" }],
             "title": "Files"
           },
           "links": {
-            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "anyOf": [{ "type": "integer" }, { "type": "null" }],
             "title": "Links"
           },
           "telegramChatId": {
@@ -9060,14 +9076,25 @@
           "photoUrl": { "type": "string", "title": "Photourl", "default": "" },
           "bio": { "type": "string", "title": "Bio", "default": "" },
           "subscribers": {
-            "type": "string",
-            "title": "Subscribers",
-            "default": ""
+            "anyOf": [{ "type": "integer" }, { "type": "null" }],
+            "title": "Subscribers"
           },
-          "photos": { "type": "string", "title": "Photos", "default": "" },
-          "videos": { "type": "string", "title": "Videos", "default": "" },
-          "files": { "type": "string", "title": "Files", "default": "" },
-          "links": { "type": "string", "title": "Links", "default": "" },
+          "photos": {
+            "anyOf": [{ "type": "integer" }, { "type": "null" }],
+            "title": "Photos"
+          },
+          "videos": {
+            "anyOf": [{ "type": "integer" }, { "type": "null" }],
+            "title": "Videos"
+          },
+          "files": {
+            "anyOf": [{ "type": "integer" }, { "type": "null" }],
+            "title": "Files"
+          },
+          "links": {
+            "anyOf": [{ "type": "integer" }, { "type": "null" }],
+            "title": "Links"
+          },
           "telegramChatId": {
             "anyOf": [{ "type": "integer" }, { "type": "null" }],
             "title": "Telegramchatid"
@@ -9087,7 +9114,7 @@
         "type": "object",
         "required": ["channelName"],
         "title": "ScrapeChannelResponse",
-        "description": "A scraped page range plus the channel meta that came with it.\n\nThe counter fields (`subscribers`, `photos`, \u2026) are the strings Telegram\nrenders (\"12.3K\"), not parsed numbers, and default to `\"\"` here rather than\n`null`: `scrape_channel` coerces every one with `or \"\"`, so the empty string\nis what the wire has always carried when a counter is missing."
+        "description": "A scraped page range plus the channel meta that came with it.\n\nThe counter fields (`subscribers`, `photos`, \u2026) are the numbers Telegram's\ntext stands for (\"12.3K\" is 12300, ADR-023), `null` when the page showed\nnone. The text fields default to `\"\"` because `scrape_channel` coerces\neach with `or \"\"`."
       },
       "ScrapeRequest": {
         "properties": {

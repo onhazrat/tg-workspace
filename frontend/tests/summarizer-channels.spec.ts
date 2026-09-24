@@ -141,7 +141,7 @@ test.describe("TG Workspace channels and posts", () => {
         media: {
           kinds: ["photo"],
           isMediaOnly: true,
-          views: "1.2K",
+          viewsCount: 1_200,
           thumbApiPath: "/api/v1/telegram/post-thumb/demo/2",
         },
       },

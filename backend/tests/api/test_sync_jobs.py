@@ -50,7 +50,7 @@ def _mock_page_response(
         "displayName": "Sync Test",
         "photoUrl": "https://example.com/photo.jpg",
         "bio": "bio",
-        "subscribers": "1K",
+        "subscribers": 1_000,
         "posts": posts,
         "latestId": latest,
         "nextBeforeId": next_before_id,

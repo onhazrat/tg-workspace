@@ -29,7 +29,7 @@ def test_matches_frontend_golden_reference() -> None:
             "text": "[photo]",
             "media": {
                 "kinds": ["photo"],
-                "views": "2.23M",
+                "viewsCount": 2_230_000,
                 "isMediaOnly": True,
                 "thumbApiPath": "/api/v1/telegram/post-thumb/durov/522",
             },
