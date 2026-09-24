@@ -2,11 +2,10 @@ import { useEffect, useMemo, useRef, useState } from "react"
 import { usePaletteListSelection } from "@/hooks/usePaletteListSelection"
 import { removeTagFromChannel } from "@/lib/channels/channel-tags"
 import {
-  findPostByEntityId,
   getExtendedEntityCandidates,
   isNonChannelEntityFlow,
-  isSettingGroupEntityFlow,
 } from "@/lib/commands/entity-candidates"
+import { type PickResolution, resolvePick } from "@/lib/commands/entity-pick"
 import {
   getChainedEditorField,
   runChainedChannelEntityPick,
@@ -16,7 +15,11 @@ import {
   filterExtendedEntityCandidates,
   getFirstEntityCandidateId,
 } from "@/lib/commands/palette-view-model"
-import type { CommandContext, CommandDef } from "@/lib/commands/types"
+import type {
+  CommandContext,
+  CommandDef,
+  EntityFlowType,
+} from "@/lib/commands/types"
 import {
   filterChannelsByQuery,
   getEntityCandidates,
@@ -143,136 +146,92 @@ export function useEntityFlow({
     })
   }
 
-  const handlePick = async (value: string) => {
-    if (!entityCommand?.entityFlow) return
-    const flow = entityCommand.entityFlow
+  /** Record the pick against the query that led here, then close the palette. */
+  const recordAndClose = (command: CommandDef) => {
+    const rootQuery = palette.getRootQuery()
+    if (rootQuery.trim()) recordPick(rootQuery, command.id)
+    recordRecent(command.id)
+    palette.close()
+  }
 
-    if (flow === "remove-tag-pick") {
-      const channel = palette.entityPayload as Channel | undefined
-      if (!channel) return
-      await removeTagFromChannel(channel, value, context)
-      const rootQuery = palette.getRootQuery()
-      if (rootQuery.trim()) {
-        recordPick(rootQuery, entityCommand.id)
-      }
-      recordRecent(entityCommand.id)
-      palette.close()
-      return
-    }
-
-    if (flow === "delete-summary") {
-      const summary = context.summariesHistory.find(
-        (entry) => entry.id === value,
-      )
-      if (!summary) return
-      if (entityCommand.requiresConfirmation) {
-        palette.openConfirm(entityCommand, summary)
-        return
-      }
-      await entityCommand.run(context, summary)
-      await finishCommand(entityCommand)
-      return
-    }
-
-    if (flow === "pick-post") {
-      const post = findPostByEntityId(pickPostPool, value)
-      if (!post) return
-      await entityCommand.run(context, post)
-      const rootQuery = palette.getRootQuery()
-      if (rootQuery.trim()) {
-        recordPick(rootQuery, entityCommand.id)
-      }
-      recordRecent(entityCommand.id)
-      palette.close()
-      return
-    }
-
-    if (flow === "clear-db-table") {
-      if (entityCommand.requiresConfirmation) {
-        palette.openConfirm(entityCommand, value)
-        return
-      }
-      await entityCommand.run(context, value)
-      await finishCommand(entityCommand)
-      return
-    }
-
-    if (flow === "open-configuration") {
-      await finishCommand(entityCommand, undefined, value)
-      return
-    }
-
-    if (isSettingGroupEntityFlow(flow)) {
-      const group = context.settingGroups.find((entry) => entry.id === value)
-      if (!group) return
-      await entityCommand.run(context, value)
-      await finishCommand(entityCommand)
-      return
-    }
-
-    const channel = context.channels.find((entry) => entry.name === value)
-    if (!channel) return
-
-    if (flow === "delete-channel" && entityCommand.requiresConfirmation) {
-      palette.openConfirm(entityCommand, channel)
-      return
-    }
-
-    if (
-      (flow === "reset-sync-channel" ||
-        flow === "fix-partial-history-channel") &&
-      entityCommand.requiresConfirmation
-    ) {
-      palette.openConfirm(entityCommand, channel)
-      return
-    }
-
-    const chained = await runChainedChannelEntityPick(flow, channel, context)
-    if (chained === "editor") {
-      const field = getChainedEditorField(entityCommand.id, channel)
-      setEditorValue(field?.getValue() ?? "")
-      palette.openEditor(entityCommand)
-      return
-    }
-    if (chained === "tag-pick") {
-      palette.setEntityCommand({
-        ...entityCommand,
-        entityFlow: "remove-tag-pick",
-      })
-      setEntityQuery("")
-      requestAnimationFrame(() => {
-        inputRef.current?.focus()
-      })
-      return
-    }
-    if (chained === "done") {
-      const rootQuery = palette.getRootQuery()
-      if (rootQuery.trim()) {
-        recordPick(rootQuery, entityCommand.id)
-      }
-      recordRecent(entityCommand.id)
-      palette.close()
-      return
-    }
-
-    await runEntityChannelAction(flow, channel, context)
-
-    const shouldClose = entityCommand.closeOnPick !== false
-    if (shouldClose) {
-      const rootQuery = palette.getRootQuery()
-      if (rootQuery.trim()) {
-        recordPick(rootQuery, entityCommand.id)
-      }
-      recordRecent(entityCommand.id)
-      palette.close()
-      return
-    }
-
+  /** Clear the filter and put the cursor back, for a flow that stays open. */
+  const refocus = () => {
     setEntityQuery("")
-    setLiveAnnouncement(getStayOpenAnnouncement(flow))
     requestAnimationFrame(() => {
       inputRef.current?.focus()
     })
+  }
+
+  /** A channel was picked: chained steps first, then the channel action. */
+  const pickChannel = async (
+    command: CommandDef,
+    flow: EntityFlowType,
+    channel: Channel,
+  ) => {
+    const chained = await runChainedChannelEntityPick(flow, channel, context)
+    // A chained step that took over ends the pick here; "confirm" and null
+    // fall through to the channel action, as they always have.
+    const takeover = {
+      editor: () => {
+        const field = getChainedEditorField(command.id, channel)
+        setEditorValue(field?.getValue() ?? "")
+        palette.openEditor(command)
+      },
+      "tag-pick": () => {
+        palette.setEntityCommand({ ...command, entityFlow: "remove-tag-pick" })
+        refocus()
+      },
+      done: () => recordAndClose(command),
+    }[chained ?? ""]
+    if (takeover) return takeover()
+
+    await runEntityChannelAction(flow, channel, context)
+    if (command.closeOnPick !== false) return recordAndClose(command)
+    refocus()
+    setLiveAnnouncement(getStayOpenAnnouncement(flow))
+  }
+
+  const handlePick = async (value: string) => {
+    const command = entityCommand
+    const flow = command?.entityFlow
+    if (!command || !flow) return
+    const pick = resolvePick(
+      flow,
+      value,
+      Boolean(command.requiresConfirmation),
+      {
+        channels: context.channels,
+        summaries: context.summariesHistory,
+        settingGroups: context.settingGroups,
+        posts: pickPostPool,
+        payload: palette.entityPayload,
+      },
+    )
+    // One entry per kind, and the mapped type makes a missing one a compile
+    // error — which the `switch` this replaced did not.
+    const perform: {
+      [K in PickResolution["kind"]]: (
+        p: Extract<PickResolution, { kind: K }>,
+      ) => unknown
+    } = {
+      ignore: () => undefined,
+      confirm: (p) => palette.openConfirm(command, p.payload),
+      "run-then-finish": async (p) => {
+        await command.run(context, p.payload)
+        await finishCommand(command)
+      },
+      "run-then-close": async (p) => {
+        await command.run(context, p.payload)
+        recordAndClose(command)
+      },
+      "remove-tag": async (p) => {
+        await removeTagFromChannel(p.channel, p.tag, context)
+        recordAndClose(command)
+      },
+      "finish-with": (p) => finishCommand(command, undefined, p.value),
+      channel: (p) => pickChannel(command, flow, p.channel),
+    }
+    await (perform[pick.kind] as (p: PickResolution) => unknown)(pick)
   }
 
   return {
