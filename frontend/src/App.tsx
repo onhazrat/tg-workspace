@@ -1,8 +1,6 @@
 import { Link, useNavigate } from "@tanstack/react-router"
 import {
   Activity,
-  AlertCircle,
-  AlertTriangle,
   Command as CommandIcon,
   Compass,
   Database,
@@ -33,22 +31,28 @@ import { useCommandPaletteContext } from "./components/CommandPaletteProvider"
 import { DiscoverView } from "./components/DiscoverView"
 import { HistoryView } from "./components/HistoryView"
 import { PostFeed } from "./components/PostFeed"
-import { RelativeTime } from "./components/RelativeTime"
 import { SettingsHub } from "./components/SettingsHub"
 import { SummaryView } from "./components/SummaryView"
 import { TagView } from "./components/TagView"
 import { getNextTheme } from "./components/theme-provider"
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "./components/ui/dialog"
-import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
 } from "./components/ui/tg-tooltip"
+import {
+  RateLimitBanner,
+  ShortcutsDialog,
+  StatusBanners,
+  WorkspaceStats,
+} from "./components/workspace-shell/WorkspaceShellParts"
+import {
+  commandKeyFor,
+  oldestSync,
+  opensShortcuts,
+  routingMode,
+  THEME_TOOLTIPS,
+} from "./components/workspace-shell/workspace-shell-model"
 import { useData } from "./contexts/DataContext"
 import { useScraper } from "./contexts/ScraperContext"
 import { useSettings } from "./contexts/SettingsContext"
@@ -62,6 +66,23 @@ import { APP_VERSION } from "./lib/app-version"
 import { artifactDestination } from "./lib/history/open-artifact"
 import { visibleWorkspaceTabs } from "./lib/workspace-tabs"
 import type { ArtifactListItem, TabType } from "./types"
+
+const THEME_ICONS = { system: Monitor, light: Moon, dark: Sun }
+
+const TAB_ICONS = {
+  Database,
+  List,
+  MessageSquare,
+  History,
+  Send,
+  Settings,
+  Sparkles,
+  FileText,
+  Activity,
+  Tag,
+  Compass,
+  Zap,
+}
 
 export default function App() {
   const { isOffline } = useApiStatus()
@@ -115,21 +136,10 @@ export default function App() {
     setTheme(getNextTheme(theme))
   }
 
-  const themeIcon =
-    theme === "system" ? (
-      <Monitor size={14} />
-    ) : theme === "light" ? (
-      <Moon size={14} />
-    ) : (
-      <Sun size={14} />
-    )
-
-  const themeTooltip =
-    theme === "system"
-      ? "System theme (follows OS) — click for Light"
-      : theme === "light"
-        ? "Switch to Dark Mode"
-        : "Switch to System Mode"
+  const ThemeIcon = THEME_ICONS[theme]
+  const themeIcon = <ThemeIcon size={14} />
+  const themeTooltip = THEME_TOOLTIPS[theme]
+  const routing = routingMode({ torEnabled, proxyEnabled })
 
   /**
    * Open an artifact from History: go where it renders, and change nothing else.
@@ -153,23 +163,8 @@ export default function App() {
   }
 
   useEffect(() => {
-    const isEditableTarget = (target: EventTarget | null) => {
-      if (!(target instanceof HTMLElement)) return false
-      if (target.isContentEditable) return true
-      const tag = target.tagName
-      return tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT"
-    }
-
     const onKeyDown = (event: KeyboardEvent) => {
-      if (
-        event.defaultPrevented ||
-        event.metaKey ||
-        event.ctrlKey ||
-        event.altKey
-      )
-        return
-      if (isEditableTarget(event.target)) return
-      if (event.key !== "?") return
+      if (!opensShortcuts(event)) return
       event.preventDefault()
       setShortcutsOpen(true)
     }
@@ -204,11 +199,46 @@ export default function App() {
     if (container && container.scrollTop !== 0) container.scrollTop = 0
   }, [activeTab])
 
-  const commandKey =
-    typeof navigator !== "undefined" &&
-    /(Mac|iPhone|iPad|iPod)/i.test(navigator.platform)
-      ? "Cmd"
-      : "Ctrl"
+  const commandKey = commandKeyFor(globalThis.navigator?.platform)
+
+  const resumeAutoSync = async () => {
+    try {
+      await api.putSetting("sync", {
+        autoSyncPauseUntil: null,
+        consecutiveFailures: 0,
+      })
+      setAutoSyncPauseUntil(null)
+    } catch (err) {
+      console.error("[App] Failed to resume auto-sync:", err)
+    }
+  }
+
+  /** The view for `?tab=`; anything unrecognised falls through to Posts. */
+  const tabView = () => {
+    const views: Partial<Record<TabType, () => React.ReactNode>> = {
+      history: () => (
+        <HistoryView openArtifact={openArtifact} setActiveTab={setActiveTab} />
+      ),
+      chat: () => <ChatView />,
+      channels: () => <ChannelGrid scrollContainerRef={scrollContainerRef} />,
+      tag: () => <TagView />,
+      discover: () => <DiscoverView />,
+      summary: () => <SummaryView />,
+      action: () => <ActionView />,
+      settings: () => <SettingsHub />,
+    }
+    const view = views[activeTab]
+    return view ? (
+      view()
+    ) : (
+      <PostFeed
+        postSearch={postSearch}
+        setPostSearch={setPostSearch}
+        loadMoreRef={loadMoreRef}
+        scrollContainerRef={scrollContainerRef}
+      />
+    )
+  }
 
   return (
     <div
@@ -226,66 +256,11 @@ export default function App() {
           isFullscreen ? "w-full p-0" : "app-shell p-4 md:p-8"
         }`}
       >
-        {/* Offline Banner */}
-        <AnimatePresence>
-          {isOffline && (
-            <motion.div
-              initial={{ height: 0, opacity: 0, marginBottom: 0 }}
-              animate={{ height: "auto", opacity: 1, marginBottom: 16 }}
-              exit={{ height: 0, opacity: 0, marginBottom: 0 }}
-              className="bg-amber-500/10 border border-amber-500/20 text-amber-700 dark:text-amber-400 px-4 py-3 flex items-center gap-3 text-xs rounded-md overflow-hidden"
-            >
-              <AlertTriangle className="w-4 h-4 shrink-0" />
-              <span>
-                <strong className="uppercase tracking-wider">
-                  Server offline.
-                </strong>{" "}
-                Showing cached data. Sync, summary, and publish actions are
-                disabled.
-              </span>
-            </motion.div>
-          )}
-        </AnimatePresence>
-
-        {/* Auto-Sync Paused Banner */}
-        <AnimatePresence>
-          {autoSyncPauseUntil && Date.now() < autoSyncPauseUntil && (
-            <motion.div
-              initial={{ height: 0, opacity: 0, marginBottom: 0 }}
-              animate={{ height: "auto", opacity: 1, marginBottom: 16 }}
-              exit={{ height: 0, opacity: 0, marginBottom: 0 }}
-              className="bg-red-500/10 border border-red-500/20 text-red-500 px-4 py-3 flex items-center justify-between text-xs rounded-md overflow-hidden"
-            >
-              <div className="flex items-center gap-3">
-                <AlertCircle className="w-4 h-4 shrink-0" />
-                <span>
-                  <strong className="uppercase tracking-wider">
-                    Auto-sync paused.
-                  </strong>{" "}
-                  Multiple channels failed to update. Auto-sync will resume in{" "}
-                  <RelativeTime timestamp={autoSyncPauseUntil} />.
-                </span>
-              </div>
-              <button
-                type="button"
-                onClick={async () => {
-                  try {
-                    await api.putSetting("sync", {
-                      autoSyncPauseUntil: null,
-                      consecutiveFailures: 0,
-                    })
-                    setAutoSyncPauseUntil(null)
-                  } catch (err) {
-                    console.error("[App] Failed to resume auto-sync:", err)
-                  }
-                }}
-                className="px-3 py-1.5 hover:bg-red-500/10 rounded transition-colors font-medium font-mono uppercase tracking-widest text-[10px] whitespace-nowrap"
-              >
-                Resume Now
-              </button>
-            </motion.div>
-          )}
-        </AnimatePresence>
+        <StatusBanners
+          offline={isOffline}
+          autoSyncPausedUntil={autoSyncPauseUntil}
+          onResumeAutoSync={resumeAutoSync}
+        />
 
         {/* Main Content Area */}
         <div className="w-full flex min-h-0 flex-1 flex-col">
@@ -304,12 +279,9 @@ export default function App() {
             </div>
             <div className="flex items-center gap-4">
               <div className="hidden sm:flex items-center gap-3 text-[11px] font-mono uppercase tracking-widest text-app-ink/50">
-                <span>
-                  Routing:{" "}
-                  {torEnabled ? "Tor" : proxyEnabled ? "Proxy" : "Direct"}
-                </span>
+                <span>Routing: {routing.label}</span>
                 <span
-                  className={`w-1 h-1 rounded-full animate-pulse ${torEnabled ? "bg-green-500" : proxyEnabled ? "bg-purple-500" : "bg-blue-500"}`}
+                  className={`w-1 h-1 rounded-full animate-pulse ${routing.dotClass}`}
                 />
               </div>
               <Tooltip>
@@ -394,79 +366,13 @@ export default function App() {
             </div>
           </div>
 
-          {isRateLimited && (
-            <motion.div
-              initial={{ opacity: 0, scale: 0.9 }}
-              animate={{ opacity: 1, scale: 1 }}
-              className="mb-6 bg-red-500 text-white p-3 flex items-center justify-center gap-3 font-bold uppercase tracking-tighter text-xs animate-pulse"
-            >
-              <AlertTriangle size={16} />
-              Telegram Rate Limit Active - Retrying with exponential backoff...
-            </motion.div>
-          )}
+          {isRateLimited && <RateLimitBanner />}
 
-          <Dialog open={shortcutsOpen} onOpenChange={setShortcutsOpen}>
-            <DialogContent className="border-app-ink/20 bg-app-card p-0 text-app-ink sm:max-w-xl">
-              <DialogHeader className="border-b border-app-ink/10 p-4">
-                <DialogTitle className="text-lg font-bold tracking-tight uppercase">
-                  Keyboard Shortcuts
-                </DialogTitle>
-              </DialogHeader>
-              {/*
-               * Grouped because four of these are not global.
-               *
-               * `Enter`, `{cmd}+Enter`, `Esc` and `Backspace` are handled by the
-               * command palette and do nothing anywhere else, but the flat list
-               * presented all six alike — so "Run Highlighted Command / Enter"
-               * read as an app-wide binding that silently did nothing.
-               *
-               * Only two shortcuts are genuinely global: the palette
-               * (`useCommandPalette`) and this dialog (`App`). The list is
-               * short because the app is, not because the list is incomplete.
-               */}
-              <div className="space-y-4 p-4 text-xs font-mono uppercase tracking-widest">
-                {[
-                  {
-                    heading: "Anywhere",
-                    bindings: [
-                      {
-                        label: "Command Palette",
-                        keys: `${commandKey}+Shift+P`,
-                      },
-                      { label: "Keyboard Shortcuts", keys: "?" },
-                    ],
-                  },
-                  {
-                    heading: "In the command palette",
-                    bindings: [
-                      { label: "Run Highlighted Command", keys: "Enter" },
-                      {
-                        label: "Alternate Run Command",
-                        keys: `${commandKey}+Enter`,
-                      },
-                      { label: "Back / Close Sub-View", keys: "Esc" },
-                      { label: "Parent Sub-View", keys: "Backspace (empty)" },
-                    ],
-                  },
-                ].map((group) => (
-                  <section key={group.heading} className="space-y-2">
-                    <h3 className="text-[10px] text-app-ink/50">
-                      {group.heading}
-                    </h3>
-                    {group.bindings.map((binding) => (
-                      <div
-                        key={binding.label}
-                        className="flex items-center justify-between rounded-md border border-app-ink/10 bg-app-muted/30 px-3 py-2"
-                      >
-                        <span>{binding.label}</span>
-                        <code>{binding.keys}</code>
-                      </div>
-                    ))}
-                  </section>
-                ))}
-              </div>
-            </DialogContent>
-          </Dialog>
+          <ShortcutsDialog
+            open={shortcutsOpen}
+            onOpenChange={setShortcutsOpen}
+            commandKey={commandKey}
+          />
 
           <div className="border border-app-ink border-opacity-20 flex min-h-0 flex-1 flex-col bg-app-card overflow-hidden">
             <div className="border-b border-app-ink border-opacity-10 p-4 flex flex-col gap-4 bg-app-muted shrink-0">
@@ -494,20 +400,8 @@ export default function App() {
                   {visibleWorkspaceTabs(compactWorkspaceTabs, activeTab).map(
                     (tab) => {
                       const Icon =
-                        {
-                          Database,
-                          List,
-                          MessageSquare,
-                          History,
-                          Send,
-                          Settings,
-                          Sparkles,
-                          FileText,
-                          Activity,
-                          Tag,
-                          Compass,
-                          Zap,
-                        }[tab.icon] || Database
+                        TAB_ICONS[tab.icon as keyof typeof TAB_ICONS] ??
+                        Database
 
                       const isActive = activeTab === tab.id
 
@@ -566,42 +460,11 @@ export default function App() {
                       isFullscreen ? "hidden" : "flex"
                     }`}
                   >
-                    <div className="flex flex-col items-end">
-                      <span className="text-[10px] font-mono uppercase tracking-widest text-app-ink/50 mb-0.5">
-                        Last Sync
-                      </span>
-                      <span className="text-xs font-medium tracking-tighter leading-none font-mono">
-                        {(() => {
-                          const selected = channels.filter(
-                            (c) => selectedChannels.has(c.name) && !c.isFrozen,
-                          )
-                          if (selected.length === 0) return "—"
-                          const minTime = Math.min(
-                            ...selected.map((c) => c.lastUpdated || 0),
-                          )
-                          return <RelativeTime timestamp={minTime} />
-                        })()}
-                      </span>
-                    </div>
-                    <div className="flex flex-col items-end">
-                      <span className="text-[10px] font-mono uppercase tracking-widest text-app-ink/50 mb-0.5">
-                        Active Channels
-                      </span>
-                      <span
-                        data-testid="header-active-channels"
-                        className="text-xs font-medium tracking-tighter leading-none font-mono"
-                      >
-                        {selectedChannels.size}
-                      </span>
-                    </div>
-                    <div className="flex flex-col items-end">
-                      <span className="text-[10px] font-mono uppercase tracking-widest text-app-ink/50 mb-0.5">
-                        Posts in Scope
-                      </span>
-                      <span className="text-xs font-medium tracking-tighter text-app-ink leading-none font-mono">
-                        {postsInScopeTotal.toLocaleString()}
-                      </span>
-                    </div>
+                    <WorkspaceStats
+                      lastSync={oldestSync(channels, selectedChannels)}
+                      activeChannels={selectedChannels.size}
+                      postsInScope={postsInScopeTotal}
+                    />
                   </div>
                 </div>
               </div>
@@ -617,56 +480,34 @@ export default function App() {
               className="min-h-0 flex-1 overflow-y-auto p-8"
             >
               <AnimatePresence mode="wait">
-                {summarizing ? (
-                  <motion.div
-                    key="loading"
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    exit={{ opacity: 0 }}
-                    className="h-full flex flex-col items-center justify-center text-center space-y-4"
-                  >
-                    <div className="w-12 h-12 border-2 border-app-ink border-t-transparent rounded-full animate-spin" />
-                    <div className="space-y-1">
-                      <p className="text-xs font-mono uppercase tracking-widest animate-pulse">
-                        Generating Summary
-                      </p>
-                      <p className="text-[10px] opacity-40 italic serif">
-                        AI is analyzing content...
-                      </p>
-                    </div>
-                  </motion.div>
-                ) : activeTab === "history" ? (
-                  <HistoryView
-                    openArtifact={openArtifact}
-                    setActiveTab={setActiveTab}
-                  />
-                ) : activeTab === "chat" ? (
-                  <ChatView />
-                ) : activeTab === "channels" ? (
-                  <ChannelGrid scrollContainerRef={scrollContainerRef} />
-                ) : activeTab === "tag" ? (
-                  <TagView />
-                ) : activeTab === "discover" ? (
-                  <DiscoverView />
-                ) : activeTab === "summary" ? (
-                  <SummaryView />
-                ) : activeTab === "action" ? (
-                  <ActionView />
-                ) : activeTab === "settings" ? (
-                  <SettingsHub />
-                ) : (
-                  <PostFeed
-                    postSearch={postSearch}
-                    setPostSearch={setPostSearch}
-                    loadMoreRef={loadMoreRef}
-                    scrollContainerRef={scrollContainerRef}
-                  />
-                )}
+                {summarizing ? <GeneratingSummary key="loading" /> : tabView()}
               </AnimatePresence>
             </div>
           </div>
         </div>
       </main>
     </div>
+  )
+}
+
+function GeneratingSummary() {
+  return (
+    <motion.div
+      key="loading"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="h-full flex flex-col items-center justify-center text-center space-y-4"
+    >
+      <div className="w-12 h-12 border-2 border-app-ink border-t-transparent rounded-full animate-spin" />
+      <div className="space-y-1">
+        <p className="text-xs font-mono uppercase tracking-widest animate-pulse">
+          Generating Summary
+        </p>
+        <p className="text-[10px] opacity-40 italic serif">
+          AI is analyzing content...
+        </p>
+      </div>
+    </motion.div>
   )
 }
