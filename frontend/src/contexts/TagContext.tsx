@@ -10,9 +10,15 @@ import {
 } from "react"
 import { toast } from "sonner"
 import { api } from "@/api"
-import { frozenWindow, type PromptScope } from "@/api/data"
 import { queryKeys, SUMMARIZER_STALE_TIME } from "@/hooks/queryKeys"
 import { useTagRunParam } from "@/hooks/useArtifactParams"
+import {
+  errorText,
+  frozenScope,
+  type ProvisionalRow,
+  readStream,
+  withProvisionalRow,
+} from "@/lib/artifacts/artifact-run"
 import {
   applyTagSuggestions,
   buildBulkChannelTagUpdates,
@@ -25,6 +31,14 @@ import {
   formatAllTagsForPrompt,
   formatPostsForTagPrompt,
 } from "@/lib/channels/tag-prompt"
+import {
+  applicableSuggestions,
+  appliedTagsMessage,
+  completedTagRun,
+  parsePastedTagSuggestions,
+  pendingTagRun,
+  tagRunSnapshot,
+} from "@/lib/channels/tag-run"
 import { tryWriteTextToClipboard } from "@/lib/data-transfer/clipboard"
 import {
   deleteTagRun,
@@ -184,21 +198,6 @@ export const TagProvider: React.FC<{ children: React.ReactNode }> = ({
   }
 
   /**
-   * Assemble by what the server froze, not by what the clock says now.
-   *
-   * The run and its prompt have to name the same two instants. An `undefined`
-   * scope is the semantic path, which carries its Posts rather than a window;
-   * a run with no frozen Scope predates AW-06 and AW-07 deletes it.
-   */
-  const frozenScope = (
-    scope: PromptScope | undefined,
-    opened: TagRun,
-  ): PromptScope | undefined =>
-    scope && opened.scope
-      ? { ...scope, window: frozenWindow(opened.scope) }
-      : scope
-
-  /**
    * Open the run at a frozen Scope, before the prompt is assembled (AW-06).
    *
    * Both entry points go through here, and both needed it. A tag run is
@@ -222,6 +221,11 @@ export const TagProvider: React.FC<{ children: React.ReactNode }> = ({
       postCount,
     })
 
+  const channelContextOptions = () => ({
+    includeBio: includeChannelBioInPrompt,
+    includeTags: includeChannelTagsInPrompt,
+  })
+
   const copyTagPrompt = async () => {
     if (selectedChannelNames.length === 0) {
       toast.error("Select at least one channel first.")
@@ -244,18 +248,14 @@ export const TagProvider: React.FC<{ children: React.ReactNode }> = ({
         language: aiLanguage,
         model: selectedModel,
         temperature: aiTemperature,
-        scope: frozenScope(scope, opened),
+        // Assemble by what the server froze, not by what the clock says now.
+        scope: frozenScope(scope, opened.scope),
       })
-      const run: TagRun = {
+      const saved = await upsertTagRun({
         ...opened,
         promptText: prompt,
-        allTagsSnapshot: allTags === "(none yet)" ? [] : allTags.split(", "),
-        channelContextOptions: {
-          includeBio: includeChannelBioInPrompt,
-          includeTags: includeChannelTagsInPrompt,
-        },
-      }
-      const saved = await upsertTagRun(run)
+        ...tagRunSnapshot(allTags, channelContextOptions()),
+      })
       applySavedRun(saved)
       setCurrentRunId(saved.id)
       await tryWriteTextToClipboard(prompt)
@@ -271,96 +271,78 @@ export const TagProvider: React.FC<{ children: React.ReactNode }> = ({
       toast.error("Select at least one channel first.")
       return
     }
-    const { channelsText, postsText, allTags, postCount, scope, rankedPosts } =
-      await buildPromptParts()
+    const parts = await buildPromptParts()
     setIsGenerating(true)
     // Opened before the first token is spent, and taken back if nothing comes
     // of it — see the note in `copyTagPrompt`.
-    let openedId: string | null = null
     try {
-      const opened = await openTagRun(postCount, rankedPosts, "generated")
-      openedId = opened.id
-      let responseText = ""
-      const { stream, prompt } = await generateTagStream({
-        channels: selectedChannelNames,
-        channelsText,
-        postsText,
-        allTags,
-        tagMode: mode,
-        language: aiLanguage,
-        model: selectedModel,
-        temperature: aiTemperature,
-        scope: frozenScope(scope, opened),
-      })
-
-      for await (const chunk of stream) {
-        responseText += chunk.text
-      }
-      const parsed = normalizeParsedTagSuggestions(
-        parseTagResponse(responseText),
-        channels,
-      )
-      setSuggestions(parsed)
-
-      const run: TagRun = {
-        ...opened,
-        status: "completed",
-        promptText: prompt,
-        responseText,
-        suggestions: parsed,
-        allTagsSnapshot: allTags === "(none yet)" ? [] : allTags.split(", "),
-        channelContextOptions: {
-          includeBio: includeChannelBioInPrompt,
-          includeTags: includeChannelTagsInPrompt,
-        },
-      }
-      const saved = await upsertTagRun(run)
-      openedId = null
-      applySavedRun(saved)
-      setCurrentRunId(saved.id)
-      toast.success("Tag suggestions generated.")
+      await withProvisionalRow(deleteTagRun, (row) => runTagging(parts, row))
     } catch (error) {
       console.error(error)
-      toast.error(
-        error instanceof Error ? error.message : "Failed to generate tags",
-      )
+      toast.error(errorText(error, "Failed to generate tags"))
     } finally {
-      if (openedId) await deleteTagRun(openedId).catch(() => {})
       setIsGenerating(false)
     }
+  }
+
+  const runTagging = async (
+    parts: Awaited<ReturnType<typeof buildPromptParts>>,
+    row: ProvisionalRow,
+  ) => {
+    const opened = await openTagRun(
+      parts.postCount,
+      parts.rankedPosts,
+      "generated",
+    )
+    row.opened(opened.id)
+    const { stream, prompt } = await generateTagStream({
+      channels: selectedChannelNames,
+      channelsText: parts.channelsText,
+      postsText: parts.postsText,
+      allTags: parts.allTags,
+      tagMode: mode,
+      language: aiLanguage,
+      model: selectedModel,
+      temperature: aiTemperature,
+      scope: frozenScope(parts.scope, opened.scope),
+    })
+    const { text: responseText } = await readStream(stream)
+    const parsed = normalizeParsedTagSuggestions(
+      parseTagResponse(responseText),
+      channels,
+    )
+    setSuggestions(parsed)
+
+    const saved = await upsertTagRun({
+      ...opened,
+      status: "completed",
+      promptText: prompt,
+      responseText,
+      suggestions: parsed,
+      ...tagRunSnapshot(parts.allTags, channelContextOptions()),
+    })
+    row.keep()
+    applySavedRun(saved)
+    setCurrentRunId(saved.id)
+    toast.success("Tag suggestions generated.")
   }
 
   const completePendingTagRun = async (
     responseText: string,
     modelName?: string,
   ): Promise<boolean> => {
-    const pending =
-      tagRuns.find((run) => run.status === "pending") ?? selectedRun
+    const pending = pendingTagRun(tagRuns, selectedRun)
     if (!pending) {
       toast.error("No pending tag run found. Use Copy Prompt first.")
       return false
     }
 
     try {
-      const parsed = normalizeParsedTagSuggestions(
-        parseTagResponse(responseText),
-        channels,
-      )
-      if (Object.keys(parsed).length === 0) {
-        throw new Error(
-          "No channel names in the response matched your channels.",
-        )
-      }
+      const parsed = parsePastedTagSuggestions(responseText, channels)
       setSuggestions(parsed)
-      const updated: TagRun = {
-        ...pending,
-        status: "completed",
-        responseText: responseText.trim(),
-        suggestions: parsed,
-        model: modelName?.trim() || pending.model || "external",
-        updatedAt: Date.now(),
-      }
-      const saved = await upsertTagRun(updated)
+      const saved = await upsertTagRun(
+        completedTagRun(pending, responseText, parsed, modelName, Date.now()),
+      )
       applySavedRun(saved)
       setCurrentRunId(saved.id)
       toast.success(
@@ -368,27 +350,22 @@ export const TagProvider: React.FC<{ children: React.ReactNode }> = ({
       )
       return true
     } catch (error) {
-      toast.error(
-        error instanceof Error
-          ? error.message
-          : "Failed to parse pasted response",
-      )
+      toast.error(errorText(error, "Failed to parse pasted response"))
       return false
     }
   }
 
   const applyCurrentSuggestions = async () => {
-    const activeRun = selectedRun
-    const suggestionSource = activeRun?.suggestions ?? suggestions
-    if (!activeRun || Object.keys(suggestionSource).length === 0) {
+    const target = applicableSuggestions(selectedRun, suggestions)
+    if (!target) {
       toast.error("No parsed suggestions to apply.")
       return
     }
 
     const { result, updatedChannels } = applyTagSuggestions({
-      suggestions: suggestionSource,
+      suggestions: target.suggestions,
       channels,
-      mode: activeRun.mode,
+      mode: target.run.mode,
       selectedChannelNames: selectedChannelNames,
     })
 
@@ -414,32 +391,19 @@ export const TagProvider: React.FC<{ children: React.ReactNode }> = ({
         prev.map((entry) => updatedById.get(entry.id) ?? entry),
       )
 
-      const updatedRun: TagRun = {
-        ...activeRun,
+      const saved = await upsertTagRun({
+        ...target.run,
         status: "completed",
         updatedAt: Date.now(),
         applyResult: result,
-      }
-      const saved = await upsertTagRun(updatedRun)
+      })
       applySavedRun(saved)
 
       toast.dismiss(applyingToastId)
-      if (activeRun.mode === "add") {
-        toast.success(
-          `Added ${result.tagsAdded} tags to ${result.channelsUpdated} channels.`,
-        )
-        return
-      }
-      toast.success(
-        `Removed ${result.tagsRemoved} tags from ${result.channelsUpdated} channels.`,
-      )
+      toast.success(appliedTagsMessage(target.run.mode, result))
     } catch (error) {
       toast.dismiss(applyingToastId)
-      toast.error(
-        error instanceof Error
-          ? error.message
-          : "Failed to apply tag suggestions",
-      )
+      toast.error(errorText(error, "Failed to apply tag suggestions"))
     } finally {
       setIsApplying(false)
     }

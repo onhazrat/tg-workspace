@@ -2,11 +2,11 @@ import { describe, expect, it } from "bun:test"
 import { AIServiceError } from "@/services/ai"
 import type { Channel, ChatMessage, Post } from "@/types"
 import {
-  channelsToSyncBeforeChat,
   chatErrorText,
   chatLLMLog,
   chatSessionRecord,
   replaceLastTurn,
+  staleSelectedChannels,
   type TurnResult,
 } from "./chat-turn"
 
@@ -34,7 +34,7 @@ describe("replaceLastTurn", () => {
   })
 })
 
-describe("channelsToSyncBeforeChat", () => {
+describe("staleSelectedChannels", () => {
   const minute = 60_000
   const channels = [
     { name: "stale", lastUpdated: 1_000_000 - minute - 1 },
@@ -47,7 +47,7 @@ describe("channelsToSyncBeforeChat", () => {
 
   it("syncs selected channels older than a minute before the window's end", () => {
     expect(
-      channelsToSyncBeforeChat(channels, selected, 1_000_000, 5_000_000).map(
+      staleSelectedChannels(channels, selected, 1_000_000, 5_000_000).map(
         (c) => c.name,
       ),
     ).toEqual(["stale", "never"])
@@ -55,7 +55,7 @@ describe("channelsToSyncBeforeChat", () => {
 
   it("measures from now when the window ends in the future", () => {
     expect(
-      channelsToSyncBeforeChat(channels, selected, 9_000_000, 1_000_000).map(
+      staleSelectedChannels(channels, selected, 9_000_000, 1_000_000).map(
         (c) => c.name,
       ),
     ).toEqual(["stale", "never"])

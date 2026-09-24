@@ -35,8 +35,11 @@ export function replaceLastTurn(
   return [...messages.slice(0, -1), turn]
 }
 
-/** Selected channels whose last sync is older than a minute before the window ends (or now, if sooner). */
-export function channelsToSyncBeforeChat(
+/**
+ * Selected channels whose last sync is older than a minute before the window
+ * ends (or now, if sooner). `AIContext` syncs these before a Summary too.
+ */
+export function staleSelectedChannels(
   channels: Channel[],
   selected: ReadonlySet<string>,
   windowEnd: number,
