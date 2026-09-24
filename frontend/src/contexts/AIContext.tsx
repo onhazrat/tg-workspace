@@ -19,10 +19,17 @@ import {
   submitSummary,
 } from "@/lib/summaries/store"
 import {
-  formatSummaryModelLabel,
-  isPendingSummary,
-  resolvePastedSummaryModel,
-} from "../constants"
+  autoPublishTarget,
+  channelsNeedingSync,
+  classifyAiError,
+  extractCitedPosts,
+  noPostsText,
+  parseCitationRefs,
+  publishedText,
+  successorSummary,
+  summaryMetadataText,
+} from "@/lib/summaries/summary-model"
+import { isPendingSummary, resolvePastedSummaryModel } from "../constants"
 import { useApiStatus } from "../hooks/useApiStatus"
 import { formatChannelsForPrompt } from "../lib/channels/format-channels-for-prompt"
 import { formatPostsForPrompt } from "../lib/posts/post-view"
@@ -34,72 +41,19 @@ import {
   getSummaryPrompt,
 } from "../services/ai"
 import { publishSummary } from "../services/telegram"
-import type { LLMLog, Post, PublishLog, Summary } from "../types"
+import type {
+  BotCredential,
+  ChatDestination,
+  LLMLog,
+  Post,
+  Summary,
+} from "../types"
 import { useChatContext } from "./ChatContext"
 import { useData } from "./DataContext"
 import { useScope } from "./ScopeContext"
 import { useScraper } from "./ScraperContext"
 import { useSettings } from "./SettingsContext"
 import { useUI } from "./UIContext"
-
-const extractCitedPosts = (
-  text: string,
-  availablePosts: Post[],
-): Record<string, Post> => {
-  const cited: Record<string, Post> = {}
-  const regex = /\[([^\]]+?)\s*#(\d+)\]/g
-  let match
-  while ((match = regex.exec(text)) !== null) {
-    const channelName = match[1].trim()
-    const postId = parseInt(match[2], 10)
-    const key = `${channelName}-${postId}`
-    if (!cited[key]) {
-      const post = availablePosts.find(
-        (p) => p.channelName === channelName && p.id === postId,
-      )
-      if (post) {
-        cited[key] = post
-      }
-    }
-  }
-  return cited
-}
-
-/**
- * Extract the distinct `[channelName #id]` citation references from a summary
- * body, so only the cited posts need to be looked up (rather than refetching a
- * channel's whole history). Mirrors the pattern `extractCitedPosts` matches.
- */
-const parseCitationRefs = (
-  text: string,
-): { channelName: string; postId: number }[] => {
-  const refs: { channelName: string; postId: number }[] = []
-  const seen = new Set<string>()
-  const regex = /\[([^\]]+?)\s*#(\d+)\]/g
-  let match
-  while ((match = regex.exec(text)) !== null) {
-    const channelName = match[1].trim()
-    const postId = parseInt(match[2], 10)
-    const key = `${channelName}-${postId}`
-    if (!seen.has(key)) {
-      seen.add(key)
-      refs.push({ channelName, postId })
-    }
-  }
-  return refs
-}
-
-export const generateDefaultMetadataText = (s: Summary): string => {
-  // Off the frozen Scope, which since AW-07 is the only window and channel list
-  // a Summary has. A row a legacy `PUT` opened records none, and the published
-  // metadata says so rather than reporting the epoch as a time range.
-  const channels = scopeChannels(s)
-  const range = scopeRange(s)
-  const timeRange = range
-    ? `${new Date(range.start).toLocaleString()} - ${new Date(range.end).toLocaleString()}`
-    : "not recorded"
-  return `📊 *Analysis Metadata*\n🕒 *Time Range:* ${timeRange}\n📡 *Channels Used:* ${channels.length}\n📋 *Channel List:* ${channels.map((c) => `@${c}`).join(", ")}\n🤖 *AI Model:* ${formatSummaryModelLabel(s.model)}\n📝 *Posts Analyzed:* ${s.postCount || 0}`
-}
 
 interface AIContextType {
   summary: string | null
@@ -569,23 +523,18 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({
       // dropped the trio this used to fall back to, and `submitSummary` with a
       // `derivedFrom` either returns a Scope or refuses, so a missing one here
       // would be a bug to surface rather than a window to guess.
-      const openedScope = scopeRange(opened)
-      if (!openedScope) {
+      const range = scopeRange(opened)
+      if (!range) {
         throw new Error("The regenerated summary came back with no scope.")
       }
-      const newStartDate = openedScope.start
-      const newEndDate = openedScope.end
       const summaryChannels = scopeChannels(opened)
 
-      const newEndDateTimestamp = newEndDate
-
-      // Sync channels first - only if they haven't been updated since the new summary's end date
-      const channelsToSync = channels.filter((c) => {
-        if (!summaryChannels.includes(c.name)) return false
-        const lastUpdated = c.lastUpdated || 0
-        return lastUpdated < newEndDateTimestamp
-      })
-
+      // Sync first, but only channels not already synced past the new end.
+      const channelsToSync = channelsNeedingSync(
+        channels,
+        summaryChannels,
+        range.end,
+      )
       if (channelsToSync.length > 0) {
         await scrapeChannelsInParallel(
           channelsToSync,
@@ -601,197 +550,70 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({
       // `semanticSearchQuery` — those are carried onto the new summary as
       // metadata but have never been *applied* when regenerating. That
       // asymmetry predates this change and is preserved, not fixed.
-      const scope: PromptScope = {
-        startDate: newStartDate,
-        endDate: newEndDate,
-      }
+      const scope: PromptScope = { startDate: range.start, endDate: range.end }
       // AW-02: the shifted window starts where the last Summary ended and runs
       // into the future, and `fixedWindow` holds its end to the server's
       // current minute. Inside the same minute that leaves start === end, which
       // the server refuses — so a regeneration that simply came round too soon
       // would fail instead of writing the "no new posts" note it always has.
       // Asking is what is skipped here, not the answer: the answer is zero.
-      const noTimeHasPassed = floorToMinute(newStartDate) >= serverMinuteStart()
+      const noTimeHasPassed = floorToMinute(range.start) >= serverMinuteStart()
       const counts = noTimeHasPassed
         ? {}
-        : await api.getPostsCounts({
-            channelNames: summaryChannels,
-            ...scope,
-          })
+        : await api.getPostsCounts({ channelNames: summaryChannels, ...scope })
       const postCount = Object.values(counts).reduce((sum, n) => sum + n, 0)
 
-      let fullSummaryText = ""
-      if (postCount === 0) {
-        fullSummaryText = `No new posts found in the selected channels between ${new Date(newStartDate).toLocaleString()} and ${new Date(newEndDate).toLocaleString()}.`
-      } else {
-        const startTime = Date.now()
-        const result = await generateSummary(
-          summaryChannels,
-          formatChannelsForPrompt(channels, summaryChannels, {
-            includeBio: includeChannelBioInPrompt,
-            includeTags: includeChannelTagsInPrompt,
-          }),
-          "",
-          s.language,
-          s.model || "gemini-3-flash-preview",
-          aiTemperature,
-          scope,
-        )
-        fullSummaryText = result.text
-        const { prompt, config, fullResponse } = result
-        const duration = Date.now() - startTime
-
-        // Log LLM Interaction
-        const llmLog: LLMLog = {
-          id:
-            Date.now().toString() + Math.random().toString(36).substring(2, 7),
-          model: s.model || "gemini-3-flash-preview",
-          prompt: prompt,
-          response: fullSummaryText,
-          modelConfig: config,
-          fullRequest: { contents: [{ parts: [{ text: prompt }] }], config },
-          fullResponse: fullResponse,
-          tokens: fullResponse?.usageMetadata?.totalTokenCount,
-          status: "success",
-          timestamp: Date.now(),
-          duration: duration,
-          type: "summary",
-        }
-        await saveLLMLog(llmLog)
-      }
+      const text =
+        postCount === 0
+          ? noPostsText(range.start, range.end)
+          : await generateAndLog(s, summaryChannels, scope)
 
       // The scope path never holds the posts, so citations are resolved by
       // lookup — the same two-step the interactive path uses.
       const citedPosts = extractCitedPosts(
-        fullSummaryText,
-        await lookupPosts(parseCitationRefs(fullSummaryText)),
+        text,
+        await lookupPosts(parseCitationRefs(text)),
       )
 
-      // What the run produced, and nothing the submission already settled.
-      // The frozen Scope is not here at all now (AW-07 dropped the `channels` /
-      // `startDate` / `endDate` trio that used to be sent back for `PUT` to
-      // discard): the submission wrote it and this write cannot touch it.
-      const newSummary: Summary = {
+      // **The Key that actually paid is the live selection** — not the one the
+      // old Summary stored (BYOK-03).
+      //
+      // Written the other way round first, and it was wrong: this path
+      // regenerates through `generateSummary`, whose `withAiKey` sends
+      // `selectedAiKeyId()` and never consults `s.aiKeyId`. So a Summary
+      // stamped key A, re-run after switching the chooser to B, billed B,
+      // logged B's provider — and then wrote A onto the successor, so tonight
+      // the scheduler charges A again. One chain, two Keys, depending on which
+      // path regenerated it: exactly the ambiguity this ticket set out to close.
+      const newSummary = successorSummary(s, {
         id: newId,
-        text: fullSummaryText,
-        language: s.language,
-        model: s.model,
+        text,
         postCount,
-        timestamp: Date.now(),
-        autoRegenerate: true,
-        // **The Key that actually paid, which is the live selection** — not
-        // the one the old Summary stored (BYOK-03).
-        //
-        // Written the other way round first, and it was wrong: this path
-        // regenerates through `generateSummary`, whose `withAiKey` sends
-        // `selectedAiKeyId()` and never consults `s.aiKeyId`. So a Summary
-        // stamped key A, re-run after switching the chooser to B, billed B,
-        // logged B's provider — and then wrote A onto the successor, so
-        // tonight the scheduler charges A again. One chain, two Keys,
-        // depending on which path regenerated it: exactly the ambiguity this
-        // ticket set out to close.
-        //
-        // `s.aiKeyId` remains the fallback for a Summary scheduled before this
-        // field existed, where nothing is selected and the server picked.
-        aiKeyId: selectedAiKeyId() ?? s.aiKeyId ?? undefined,
-        autoPublish: s.autoPublish,
-        publishBotId: s.publishBotId,
-        publishChatId: s.publishChatId,
-        sendMetadata: s.sendMetadata !== undefined ? s.sendMetadata : true,
-        postSearch: s.postSearch,
-        semanticSearchQuery: s.semanticSearchQuery,
-        semanticSearchRespectsChannels: s.semanticSearchRespectsChannels,
         citedPosts,
-      }
+        selectedAiKeyId: selectedAiKeyId(),
+        now: Date.now(),
+      })
       await saveSummary(newSummary)
       openedId = null
 
-      // Auto-publish if enabled
-      if (s.autoPublish && s.publishBotId && s.publishChatId && postCount > 0) {
-        const bot = botCredentials.find((b) => b.id === s.publishBotId)
-        const dest = chatDestinations.find((d) => d.id === s.publishChatId)
-        if (bot && dest) {
-          const activeProxies = getActiveProxies()
-          const generatedMetadata = generateDefaultMetadataText(newSummary)
-          const result = await publishSummary(
-            bot.id,
-            dest.chatId,
-            fullSummaryText,
-            newSummary.sendMetadata
-              ? newSummary.metadataText || generatedMetadata
-              : undefined,
-            activeProxies.length > 0,
-            torAutoRotate,
-            torRotationThreshold,
-          )
-
-          // Log the result
-          const log: PublishLog = {
-            id:
-              Date.now().toString() +
-              Math.random().toString(36).substring(2, 7),
-            summaryId: newId,
-            botId: bot.id,
-            botName: bot.name,
-            chatId: dest.chatId,
-            chatName: dest.name,
-            status: result.success ? "success" : "failed",
-            error: result.error,
-            timestamp: Date.now(),
-            fullRequest: result.requests,
-            fullResponse: result.responses,
-            textSent: newSummary.sendMetadata
-              ? `${newSummary.metadataText || generatedMetadata}\n\n${fullSummaryText}`
-              : fullSummaryText,
-          }
-          await savePublishLog(log)
-
-          if (result.success) {
-            toast.success(`Auto-published summary to ${dest.name}`)
-          } else {
-            console.error("Auto-publish failed:", result.error)
-            toast.error(`Auto-publish failed: ${result.error}`)
-          }
-        }
-      }
+      const target = autoPublishTarget(
+        s,
+        postCount,
+        botCredentials,
+        chatDestinations,
+      )
+      if (target) await autoPublish(newSummary, target.bot, target.dest)
 
       // Update the old summary to not auto-regenerate anymore
-      const oldSummary = { ...s, autoRegenerate: false }
-      await saveSummary(oldSummary)
-
+      await saveSummary({ ...s, autoRegenerate: false })
       await loadHistory()
     } catch (err: unknown) {
-      let errorMessage = err instanceof Error ? err.message : "Unknown error"
-      let isQuotaExceeded = false
-
-      try {
-        if (errorMessage.startsWith("{") && errorMessage.endsWith("}")) {
-          const parsed = JSON.parse(errorMessage)
-          if (parsed.error?.message) {
-            errorMessage = parsed.error.message
-            if (parsed.error.code === 429) {
-              isQuotaExceeded = true
-            }
-          }
-        } else if (
-          errorMessage.includes("429") ||
-          errorMessage.includes("RESOURCE_EXHAUSTED") ||
-          errorMessage.toLowerCase().includes("quota") ||
-          errorMessage.toLowerCase().includes("rate limit")
-        ) {
-          isQuotaExceeded = true
-        }
-      } catch (_e) {
-        // Ignore parse errors
-      }
-
+      const { message, quotaExceeded } = classifyAiError(err)
       console.error("Failed to generate background summary:", err)
-      toast.error(`Failed to generate background summary: ${errorMessage}`)
-
-      if (isQuotaExceeded) {
+      toast.error(`Failed to generate background summary: ${message}`)
+      if (quotaExceeded) {
         // Disable auto-regenerate to prevent spamming the API
-        const oldSummary = { ...s, autoRegenerate: false }
-        await saveSummary(oldSummary)
+        await saveSummary({ ...s, autoRegenerate: false })
         await loadHistory()
       }
     } finally {
@@ -801,6 +623,82 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({
         next.delete(s.id)
         return next
       })
+    }
+  }
+
+  /** Run the model over `scope` and file the LLM log; returns the text. */
+  const generateAndLog = async (
+    s: Summary,
+    summaryChannels: string[],
+    scope: PromptScope,
+  ) => {
+    const model = s.model || "gemini-3-flash-preview"
+    const startTime = Date.now()
+    const { text, prompt, config, fullResponse } = await generateSummary(
+      summaryChannels,
+      formatChannelsForPrompt(channels, summaryChannels, {
+        includeBio: includeChannelBioInPrompt,
+        includeTags: includeChannelTagsInPrompt,
+      }),
+      "",
+      s.language,
+      model,
+      aiTemperature,
+      scope,
+    )
+    await saveLLMLog({
+      id: Date.now().toString() + Math.random().toString(36).substring(2, 7),
+      model,
+      prompt,
+      response: text,
+      modelConfig: config,
+      fullRequest: { contents: [{ parts: [{ text: prompt }] }], config },
+      fullResponse,
+      tokens: fullResponse?.usageMetadata?.totalTokenCount,
+      status: "success",
+      timestamp: Date.now(),
+      duration: Date.now() - startTime,
+      type: "summary",
+    })
+    return text
+  }
+
+  const autoPublish = async (
+    newSummary: Summary,
+    bot: BotCredential,
+    dest: ChatDestination,
+  ) => {
+    const metadata = newSummary.sendMetadata
+      ? summaryMetadataText(newSummary)
+      : null
+    const result = await publishSummary(
+      bot.id,
+      dest.chatId,
+      newSummary.text,
+      metadata ?? undefined,
+      getActiveProxies().length > 0,
+      torAutoRotate,
+      torRotationThreshold,
+    )
+    await savePublishLog({
+      id: Date.now().toString() + Math.random().toString(36).substring(2, 7),
+      summaryId: newSummary.id,
+      botId: bot.id,
+      botName: bot.name,
+      chatId: dest.chatId,
+      chatName: dest.name,
+      status: result.success ? "success" : "failed",
+      error: result.error,
+      timestamp: Date.now(),
+      fullRequest: result.requests,
+      fullResponse: result.responses,
+      textSent: publishedText(metadata, newSummary.text),
+    })
+    if (result.success) {
+      toast.success(`Auto-published summary to ${dest.name}`)
+    } else {
+      console.error("Auto-publish failed:", result.error)
+      toast.error(`Auto-publish failed: ${result.error}`)
     }
   }
 
