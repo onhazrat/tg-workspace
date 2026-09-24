@@ -7,6 +7,15 @@ import {
   useChatSessionQuery,
   useInvalidateChatSessions,
 } from "@/hooks/useChatSessions"
+import {
+  channelsToSyncBeforeChat,
+  chatErrorText,
+  chatLLMLog,
+  chatSessionRecord,
+  NO_CONTEXT_REPLY,
+  replaceLastTurn,
+  type TurnResult,
+} from "@/lib/chat-sessions/chat-turn"
 import type { SendOptions } from "@/lib/chat-sessions/send-options"
 import { resolveSend } from "@/lib/chat-sessions/send-options"
 import {
@@ -17,12 +26,8 @@ import {
 import { saveLLMLog } from "@/lib/logs/write"
 import { formatChannelsForPrompt } from "../lib/channels/format-channels-for-prompt"
 import { formatPostsForPrompt } from "../lib/posts/post-view"
-import {
-  AIServiceError,
-  chatWithHistoryStream,
-  generateChatStream,
-} from "../services/ai"
-import type { ChatMessage, ChatMode, ChatSession, LLMLog } from "../types"
+import { chatWithHistoryStream, generateChatStream } from "../services/ai"
+import type { ChatMessage, ChatMode, ChatSession, Post } from "../types"
 import { useData } from "./DataContext"
 import { useRAG } from "./RAGContext"
 import { useScope } from "./ScopeContext"
@@ -139,6 +144,142 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
     }
   }, [activeTab])
 
+  /** Stream a reply into the last turn on screen; returns the text and the final chunk. */
+  const streamReply = async (
+    stream: AsyncIterable<{ text: string }>,
+    sources?: Post[],
+  ) => {
+    let text = ""
+    let lastChunk: unknown = null
+    for await (const chunk of stream) {
+      text += chunk.text || ""
+      lastChunk = chunk
+      const turn: ChatMessage = { role: "model", text, sources }
+      setChatMessages((prev) => replaceLastTurn(prev, turn))
+    }
+    return { text, lastChunk }
+  }
+
+  /** Answer from the posts most similar to the question (RAG). */
+  const answerFromSimilarPosts = async (
+    userMessage: string,
+    history: ChatMessage[],
+  ): Promise<TurnResult> => {
+    toast.info("Searching history for relevant context...")
+    let sources: Post[]
+    try {
+      sources = await searchSimilarPosts(userMessage, 20, {
+        startDate,
+        endDate,
+      })
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Semantic search failed",
+      )
+      throw error
+    }
+    if (sources.length === 0) {
+      const turn: ChatMessage = { role: "model", text: NO_CONTEXT_REPLY }
+      setChatMessages((prev) => replaceLastTurn(prev, turn))
+      return {
+        text: NO_CONTEXT_REPLY,
+        lastChunk: null,
+        prompt: "",
+        config: null,
+        systemInstruction: "",
+        sources,
+        postCount: 0,
+      }
+    }
+    const { stream, prompt, config, systemInstruction } =
+      await chatWithHistoryStream(
+        sources,
+        aiLanguage,
+        selectedModel,
+        history,
+        userMessage,
+        aiTemperature,
+      )
+    return {
+      ...(await streamReply(stream, sources)),
+      prompt,
+      config,
+      systemInstruction: systemInstruction ?? "",
+      sources,
+      postCount: sources.length,
+    }
+  }
+
+  /** Answer from every post in the Analysis window the session froze. */
+  const answerFromScope = async (
+    userMessage: string,
+    history: ChatMessage[],
+    selectedChannelNames: string[],
+    frozen: ChatSession["scope"],
+  ): Promise<TurnResult> => {
+    const channelsToSync = channelsToSyncBeforeChat(
+      channels,
+      selectedChannels,
+      endDate,
+      Date.now(),
+    )
+    if (channelsToSync.length > 0) {
+      toast.info(
+        `Syncing ${channelsToSync.length} channels to ensure up-to-date data...`,
+      )
+      await scrapeChannelsInParallel(channelsToSync, "Pre-Chat Sync")
+      // Refresh the eager Posts-tab list so the UI reflects the sync.
+      handleFilterPosts()
+    }
+
+    // Server-eligible → send the scope (backend assembles); semantic/related
+    // → client-built postsText. Refreshed after any pre-chat sync above.
+    const input = await getPromptPostsInput()
+    let postsText = ""
+    let scope: PromptScope | undefined
+    let postCount: number
+    if (input.scope) {
+      // Select by what was frozen, not by what the clock says now — the
+      // Chat and its prompt have to name the same two instants. The counts
+      // go through the same value, or the number stored beside the answer
+      // describes a different window than the answer does.
+      scope = frozen
+        ? { ...input.scope, window: frozenWindow(frozen) }
+        : input.scope
+      const counts = await api.getPostsCounts({
+        channelNames: selectedChannelNames,
+        ...scope,
+      })
+      postCount = Object.values(counts).reduce((sum, n) => sum + n, 0)
+    } else {
+      postsText = formatPostsForPrompt(input.posts)
+      postCount = input.posts.length
+    }
+
+    const { stream, prompt, config, systemInstruction } =
+      await generateChatStream(
+        selectedChannelNames,
+        formatChannelsForPrompt(channels, selectedChannels, {
+          includeBio: includeChannelBioInPrompt,
+          includeTags: includeChannelTagsInPrompt,
+        }),
+        postsText,
+        aiLanguage,
+        selectedModel,
+        history,
+        userMessage,
+        aiTemperature,
+        scope,
+      )
+    return {
+      ...(await streamReply(stream)),
+      prompt,
+      config,
+      systemInstruction: systemInstruction ?? "",
+      postCount,
+    }
+  }
+
   const handleSendMessage = async (options?: SendOptions) => {
     if (isChatting) return
 
@@ -215,203 +356,32 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
       const frozen = opened?.scope ?? openedSession?.scope
 
       const startTime = Date.now()
-      let fullModelText = ""
-      let lastResponse: any = null
-      let promptUsed = ""
-      let configUsed: any = null
-      let systemInstructionUsed = ""
-      let similarPostsUsed: any[] | undefined
-      // Post count for the summary-chat entry; history (RAG) mode uses
-      // similarPostsUsed instead.
-      let summaryChatPostCount = 0
-
-      // Add user message and placeholder for AI
-      const initialMessages: { role: "user" | "model"; text: string }[] = [
+      setChatMessages([
         ...history,
         { role: "user", text: userMessage },
         { role: "model", text: "" },
-      ]
-      setChatMessages(initialMessages)
+      ])
 
-      if (chatMode === "semantic") {
-        // RAG Logic
-        toast.info("Searching history for relevant context...")
-
-        let similarPosts
-        try {
-          similarPosts = await searchSimilarPosts(userMessage, 20, {
-            startDate,
-            endDate,
-          })
-        } catch (error) {
-          const message =
-            error instanceof Error ? error.message : "Semantic search failed"
-          toast.error(message)
-          throw error
-        }
-        similarPostsUsed = similarPosts
-
-        if (similarPosts.length === 0) {
-          fullModelText =
-            "I couldn't find any relevant information in your history to answer that question. Please ensure your posts have been synced and processed."
-          setChatMessages((prev) => {
-            const updated = [...prev]
-            updated[updated.length - 1] = { role: "model", text: fullModelText }
-            return updated
-          })
-        } else {
-          // 4. Chat with history stream
-          const { stream, prompt, config, systemInstruction } =
-            await chatWithHistoryStream(
-              similarPosts,
-              aiLanguage,
-              selectedModel,
-              history,
+      const turn =
+        chatMode === "semantic"
+          ? await answerFromSimilarPosts(userMessage, history)
+          : await answerFromScope(
               userMessage,
-              aiTemperature,
+              history,
+              selectedChannelNames,
+              frozen,
             )
 
-          promptUsed = prompt
-          configUsed = config
-          systemInstructionUsed = systemInstruction ?? ""
-
-          for await (const chunk of stream) {
-            const chunkText = chunk.text || ""
-            fullModelText += chunkText
-            lastResponse = chunk
-
-            setChatMessages((prev) => {
-              const updated = [...prev]
-              updated[updated.length - 1] = {
-                role: "model",
-                text: fullModelText,
-                sources: similarPosts,
-              }
-              return updated
-            })
-          }
-        }
-      } else {
-        // Standard Summary Chat Logic
-        const now = Date.now()
-        const targetTs = Math.min(endDate, now)
-
-        const channelsToSync = channels.filter(
-          (c) =>
-            selectedChannels.has(c.name) &&
-            (!c.lastUpdated || c.lastUpdated < targetTs - 60000), // 1 minute buffer
-        )
-
-        if (channelsToSync.length > 0) {
-          toast.info(
-            `Syncing ${channelsToSync.length} channels to ensure up-to-date data...`,
-          )
-          await scrapeChannelsInParallel(channelsToSync, "Pre-Chat Sync")
-
-          // Refresh the eager Posts-tab list so the UI reflects the sync.
-          handleFilterPosts()
-        }
-
-        // Server-eligible → send the scope (backend assembles); semantic/related
-        // → client-built postsText. Refreshed after any pre-chat sync above.
-        const input = await getPromptPostsInput()
-        let postsText = ""
-        let scope: PromptScope | undefined
-        if (input.scope) {
-          // Select by what was frozen, not by what the clock says now — the
-          // Chat and its prompt have to name the same two instants. The counts
-          // go through the same value, or the number stored beside the answer
-          // describes a different window than the answer does.
-          scope = frozen
-            ? { ...input.scope, window: frozenWindow(frozen) }
-            : input.scope
-          const counts = await api.getPostsCounts({
-            channelNames: selectedChannelNames,
-            ...scope,
-          })
-          summaryChatPostCount = Object.values(counts).reduce(
-            (sum, n) => sum + n,
-            0,
-          )
-        } else {
-          postsText = formatPostsForPrompt(input.posts)
-          summaryChatPostCount = input.posts.length
-        }
-        const channelsText = formatChannelsForPrompt(
-          channels,
-          selectedChannels,
-          {
-            includeBio: includeChannelBioInPrompt,
-            includeTags: includeChannelTagsInPrompt,
-          },
-        )
-
-        const { stream, prompt, config, systemInstruction } =
-          await generateChatStream(
-            selectedChannelNames,
-            channelsText,
-            postsText,
-            aiLanguage,
-            selectedModel,
-            history,
-            userMessage,
-            aiTemperature,
-            scope,
-          )
-
-        promptUsed = prompt
-        configUsed = config
-        systemInstructionUsed = systemInstruction ?? ""
-
-        for await (const chunk of stream) {
-          const chunkText = chunk.text || ""
-          fullModelText += chunkText
-          lastResponse = chunk
-
-          setChatMessages((prev) => {
-            const updated = [...prev]
-            updated[updated.length - 1] = { role: "model", text: fullModelText }
-            return updated
-          })
-        }
-      }
-
-      const duration = Date.now() - startTime
-
-      // Log LLM Interaction
-      if (promptUsed) {
-        const llmLog: LLMLog = {
-          id:
-            Date.now().toString() + Math.random().toString(36).substring(2, 7),
-          model: selectedModel,
-          prompt: userMessage, // For chat, the prompt is the user message
-          response: fullModelText,
-          systemInstruction: systemInstructionUsed,
-          modelConfig: configUsed,
-          fullRequest: {
-            message: userMessage,
-            history,
-            config: configUsed,
-          },
-          fullResponse: lastResponse,
-          tokens: lastResponse?.usageMetadata?.totalTokenCount,
-          status: fullModelText ? "success" : "failed",
-          timestamp: Date.now(),
-          duration: duration,
-          type: chatMode === "semantic" ? "chat_semantic" : "chat_full_scope",
-        }
-        await saveLLMLog(llmLog)
-      }
-
-      const finalMessages: {
-        role: "user" | "model"
-        text: string
-        sources?: any[]
-      }[] = [
-        ...history,
-        { role: "user", text: userMessage },
-        { role: "model", text: fullModelText, sources: similarPostsUsed },
-      ]
+      const log = chatLLMLog(turn, {
+        id: Date.now().toString() + Math.random().toString(36).substring(2, 7),
+        model: selectedModel,
+        mode: chatMode,
+        message: userMessage,
+        history,
+        now: Date.now(),
+        durationMs: Date.now() - startTime,
+      })
+      if (log) await saveLLMLog(log)
 
       /*
        * Persist as a chat session.
@@ -426,21 +396,9 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
        * no summary, it assembles its prompt from the same channels and dates a
        * summary would. So there is no link to write.
        */
-      // What the turn produced, and nothing the submission already settled
-      // (AW-06). `channels`, `startDate` and `endDate` are gone from this body
-      // because they are the frozen Scope — the server drops them here anyway,
-      // and sending them would only make the client look like it still owned
-      // them.
-      const session: Partial<ChatSession> = {
-        id: sessionId,
-        postCount:
-          chatMode === "semantic"
-            ? (similarPostsUsed?.length ?? 0)
-            : summaryChatPostCount,
-        timestamp: Date.now(),
-        messages: finalMessages,
-      }
-      await saveChatSession(session)
+      await saveChatSession(
+        chatSessionRecord(sessionId, history, userMessage, turn, Date.now()),
+      )
       openedId = null
       // Claim the id before publishing it, so the loader effect above treats
       // this session as already-loaded and never refetches over the turns we
@@ -450,29 +408,8 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
       await loadHistory()
     } catch (err: unknown) {
       console.error(err)
-      const errorMessage =
-        err instanceof AIServiceError
-          ? err.message
-          : err instanceof Error
-            ? err.message
-            : "Failed to generate response"
-      setChatMessages((prev) => {
-        const failure = {
-          role: "model" as const,
-          text: `Error: ${errorMessage}`,
-        }
-        /*
-         * The turns are written *after* the session is opened, so a submission
-         * that fails — offline, a 4xx, a refused Scope — lands here with none
-         * on screen at all. Overwriting `length - 1` then wrote index `-1`: a
-         * property, not an element, so the failure was invisible and the Chat
-         * tab sat empty with the question already cleared from Action.
-         */
-        if (prev.length === 0) return [failure]
-        const updated = [...prev]
-        updated[updated.length - 1] = failure
-        return updated
-      })
+      const failure: ChatMessage = { role: "model", text: chatErrorText(err) }
+      setChatMessages((prev) => replaceLastTurn(prev, failure))
     } finally {
       if (openedId) await deleteChatSession(openedId).catch(() => {})
       setIsChatting(false)
