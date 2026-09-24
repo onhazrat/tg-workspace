@@ -1,6 +1,6 @@
-import { describe, expect, it } from "bun:test"
+import { afterEach, beforeEach, describe, expect, it } from "bun:test"
 
-import { channelWritePayload } from "./data"
+import { channelWritePayload, dataApi } from "./data"
 
 describe("channelWritePayload", () => {
   it("strips inherited setting-group fields from channel PUT payloads", () => {
@@ -23,5 +23,152 @@ describe("channelWritePayload", () => {
       tags: ["news"],
       displayName: "Channel A",
     })
+  })
+})
+
+/**
+ * What the hand-written calls put on the wire.
+ *
+ * Each builds its request from optional params, and the recurring rule is
+ * "omit when unset, but keep a real zero": `offset: 0` is the first page and
+ * `olderThanDays: 0` is "everything", so a truthiness check would change what
+ * the server does. The `fetch` stub answers only `/api/v1/data/`, so another
+ * file's request still reaches the real `fetch`.
+ */
+type Sent = { url: string; method: string; body: unknown }
+let sent: Sent[] = []
+const realFetch = globalThis.fetch
+
+beforeEach(() => {
+  sent = []
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = String(input)
+    if (!url.startsWith("/api/v1/data/")) return realFetch(input, init)
+    sent.push({
+      url,
+      method: init?.method ?? "GET",
+      body: init?.body ? JSON.parse(String(init.body)) : undefined,
+    })
+    return new Response("[]")
+  }) as typeof fetch
+})
+
+afterEach(() => {
+  globalThis.fetch = realFetch
+})
+
+describe("getPostsFeed", () => {
+  it("sends the cap mode and seed alongside a cap, with paging and sort", async () => {
+    await dataApi.getPostsFeed({
+      channelNames: ["alpha"],
+      maxPerChannel: 5,
+      maxPerChannelMode: "random",
+      seed: 0,
+      sort: "channel_time",
+      limit: 50,
+      offset: 0,
+    })
+    expect(sent).toEqual([
+      {
+        url: "/api/v1/data/posts",
+        method: "POST",
+        body: {
+          channelNames: ["alpha"],
+          maxPerChannel: 5,
+          maxPerChannelMode: "random",
+          seed: 0,
+          sort: "channel_time",
+          limit: 50,
+          offset: 0,
+        },
+      },
+    ])
+  })
+
+  it("drops the cap mode and seed when there is no cap", async () => {
+    await dataApi.getPostsFeed({ maxPerChannelMode: "random", seed: 7 })
+    await dataApi.getPostsFeed({
+      maxPerChannel: 0,
+      maxPerChannelMode: "random",
+      seed: 7,
+    })
+    expect(sent.map((s) => s.body)).toEqual([{}, {}])
+  })
+})
+
+describe("getDiscoverCandidates", () => {
+  it("always sends channelNames, even empty, and nothing unset", async () => {
+    await dataApi.getDiscoverCandidates({})
+    expect(sent).toEqual([
+      {
+        url: "/api/v1/data/discover/candidates",
+        method: "POST",
+        body: { channelNames: [] },
+      },
+    ])
+  })
+
+  it("sends every scope field, keeping a zero seed and an empty postIds", async () => {
+    await dataApi.getDiscoverCandidates({
+      channelNames: ["alpha"],
+      signals: ["mentions"],
+      maxPerChannelMode: "latest",
+      seed: 0,
+      postIds: [],
+    })
+    expect(sent[0].body).toEqual({
+      channelNames: ["alpha"],
+      signals: ["mentions"],
+      maxPerChannelMode: "latest",
+      seed: 0,
+      postIds: [],
+    })
+  })
+})
+
+describe("listArtifacts", () => {
+  it("requests the bare path with no params", async () => {
+    await dataApi.listArtifacts()
+    await dataApi.listArtifacts({ starred: false })
+    expect(sent.map((s) => s.url)).toEqual([
+      "/api/v1/data/artifacts",
+      "/api/v1/data/artifacts",
+    ])
+  })
+
+  it("puts every set filter in the query string, keeping a zero offset", async () => {
+    await dataApi.listArtifacts({
+      kind: "chat",
+      search: "iran",
+      starred: true,
+      limit: 20,
+      offset: 0,
+    })
+    expect(sent[0].url).toBe(
+      "/api/v1/data/artifacts?kind=chat&search=iran&starred=true&limit=20&offset=0",
+    )
+  })
+})
+
+describe("deleteLogs", () => {
+  it("sends a DELETE with every set filter, keeping zero days", async () => {
+    await dataApi.deleteLogs({
+      olderThanDays: 0,
+      type: "sync",
+      logId: "log-1",
+      clearAll: true,
+    })
+    expect(sent).toEqual([
+      {
+        url: "/api/v1/data/logs?olderThanDays=0&type=sync&logId=log-1&clearAll=true",
+        method: "DELETE",
+        body: undefined,
+      },
+    ])
+  })
+
+  it("sends the bare path when nothing is set", async () => {
+    await dataApi.deleteLogs({ clearAll: false })
+    expect(sent[0].url).toBe("/api/v1/data/logs")
   })
 })

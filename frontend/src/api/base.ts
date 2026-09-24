@@ -147,56 +147,49 @@ export function handleAuthError(status: number, detail: string): void {
   }
 }
 
-export async function request<T>(path: string, init?: RequestInit): Promise<T> {
+/** Fetch `path`, turning a failed response into a thrown `ApiError`. */
+async function fetchOk(path: string, init: RequestInit): Promise<Response> {
   const url = path.startsWith("http") ? path : `${API_BASE}${path}`
-  const response = await fetch(url, {
-    ...init,
-    headers: { ...headers(), ...(init?.headers as Record<string, string>) },
-  })
+  const response = await fetch(url, init)
   if (!response.ok) {
     const detail = await parseErrorDetail(response)
     handleAuthError(response.status, detail)
     throw new ApiError(response.status, detail)
   }
+  return response
+}
+
+export async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const response = await fetchOk(path, {
+    ...init,
+    headers: { ...headers(), ...(init?.headers as Record<string, string>) },
+  })
   return response.json() as Promise<T>
 }
 
 export async function requestBlob(path: string): Promise<Blob> {
-  const url = path.startsWith("http") ? path : `${API_BASE}${path}`
-  const response = await fetch(url, { headers: headers(false) })
-  if (!response.ok) {
-    const detail = await parseErrorDetail(response)
-    handleAuthError(response.status, detail)
-    throw new ApiError(response.status, detail)
-  }
+  const response = await fetchOk(path, { headers: headers(false) })
   return response.blob()
 }
 
-/** Parse SSE `data:` lines and yield each JSON object payload. */
-export async function* sseJsonStream<T>(
-  path: string,
-  init?: RequestInit,
-): AsyncGenerator<T> {
-  const url = path.startsWith("http") ? path : `${API_BASE}${path}`
-  const response = await fetch(url, {
-    ...init,
-    headers: {
-      ...headers(false),
-      ...(init?.headers as Record<string, string>),
-    },
-  })
-  if (!response.ok) {
-    const detail = await parseErrorDetail(response)
-    handleAuthError(response.status, detail)
-    throw new ApiError(response.status, detail)
-  }
-  const reader = response.body?.getReader()
-  if (!reader) return
+/**
+ * The framing both SSE readers share: yield each `data: ` line's payload.
+ *
+ * One line is one payload. Consecutive `data:` lines are not joined into one
+ * event the way the SSE spec joins them, because no endpoint here sends a
+ * multi-line event. `[DONE]` ends the stream, and so does the body closing,
+ * which drops an unterminated last line.
+ */
+export async function* sseDataPayloads(
+  body: ReadableStream<Uint8Array> | null,
+): AsyncGenerator<string> {
+  if (!body) return
+  const reader = body.getReader()
   const decoder = new TextDecoder()
   let buffer = ""
   while (true) {
     const { done, value } = await reader.read()
-    if (done) break
+    if (done) return
     buffer += decoder.decode(value, { stream: true })
     const lines = buffer.split("\n")
     buffer = lines.pop() || ""
@@ -204,11 +197,28 @@ export async function* sseJsonStream<T>(
       if (!line.startsWith("data: ")) continue
       const payload = line.slice(6)
       if (payload === "[DONE]") return
-      try {
-        yield JSON.parse(payload) as T
-      } catch {
-        /* ignore malformed SSE chunks */
-      }
+      yield payload
+    }
+  }
+}
+
+/** Parse SSE `data:` lines and yield each JSON object payload. */
+export async function* sseJsonStream<T>(
+  path: string,
+  init?: RequestInit,
+): AsyncGenerator<T> {
+  const response = await fetchOk(path, {
+    ...init,
+    headers: {
+      ...headers(false),
+      ...(init?.headers as Record<string, string>),
+    },
+  })
+  for await (const payload of sseDataPayloads(response.body)) {
+    try {
+      yield JSON.parse(payload) as T
+    } catch {
+      /* ignore malformed SSE chunks */
     }
   }
 }
@@ -219,37 +229,17 @@ export async function* sseTextStream(
   body: Record<string, unknown>,
   field: string,
 ): AsyncGenerator<string> {
-  const url = path.startsWith("http") ? path : `${API_BASE}${path}`
-  const response = await fetch(url, {
+  const response = await fetchOk(path, {
     method: "POST",
     headers: headers(),
     body: JSON.stringify(body),
   })
-  if (!response.ok) {
-    const detail = await parseErrorDetail(response)
-    handleAuthError(response.status, detail)
-    throw new ApiError(response.status, detail)
-  }
-  const reader = response.body?.getReader()
-  if (!reader) return
-  const decoder = new TextDecoder()
-  let buffer = ""
-  while (true) {
-    const { done, value } = await reader.read()
-    if (done) break
-    buffer += decoder.decode(value, { stream: true })
-    const lines = buffer.split("\n")
-    buffer = lines.pop() || ""
-    for (const line of lines) {
-      if (!line.startsWith("data: ")) continue
-      const payload = line.slice(6)
-      if (payload === "[DONE]") return
-      try {
-        const parsed = JSON.parse(payload)
-        if (parsed[field]) yield parsed[field]
-      } catch {
-        /* ignore malformed SSE chunks */
-      }
+  for await (const payload of sseDataPayloads(response.body)) {
+    try {
+      const parsed = JSON.parse(payload)
+      if (parsed[field]) yield parsed[field]
+    } catch {
+      /* ignore malformed SSE chunks */
     }
   }
 }
