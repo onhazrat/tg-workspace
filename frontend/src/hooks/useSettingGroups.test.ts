@@ -16,6 +16,10 @@ const mockGroups: ChannelSettingGroup[] = [
     autoFollowForwarded: false,
     isFrozen: false,
     isUnavailableOnWebView: false,
+    includeInSyncAll: true,
+    includeInBulkSync: true,
+    allowIndividualSync: true,
+    resetSyncEnabled: true,
     channelCount: 1,
   },
   {
@@ -29,6 +33,10 @@ const mockGroups: ChannelSettingGroup[] = [
     autoFollowForwarded: false,
     isFrozen: false,
     isUnavailableOnWebView: false,
+    includeInSyncAll: true,
+    includeInBulkSync: true,
+    allowIndividualSync: true,
+    resetSyncEnabled: true,
     channelCount: 0,
   },
 ]

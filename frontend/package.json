@@ -10,6 +10,7 @@
     "lint": "biome check --write --unsafe --no-errors-on-unmatched --files-ignore-unknown=true ./",
     "generate-client": "openapi-ts",
     "test:unit": "bun test src",
+    "typecheck:tests": "tsc -p tsconfig.json --noEmit",
     "test:tg-ui": "bash scripts/check-tg-ui-duplicates.sh",
     "test": "bunx playwright test",
     "test:ui": "bunx playwright test --ui"
@@ -71,6 +72,7 @@
     "@tanstack/router-plugin": "^1.168.23",
     "@testing-library/dom": "^10.4.1",
     "@testing-library/react": "^16.3.2",
+    "@types/bun": "^1.4.2",
     "@types/node": "^25.9.2",
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",

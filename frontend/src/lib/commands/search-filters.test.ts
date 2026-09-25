@@ -32,9 +32,7 @@ const summaries: Summary[] = [
   {
     id: "h1",
     text: "Daily market wrap",
-    channels: ["news"],
-    startDate: 1,
-    endDate: 2,
+    scope: { channels: ["news"], start: 1, end: 2 },
     language: "en",
     model: "gpt",
     timestamp: 1,
@@ -43,9 +41,7 @@ const summaries: Summary[] = [
   {
     id: "h2",
     text: "Chat: follow-up",
-    channels: ["news"],
-    startDate: 1,
-    endDate: 2,
+    scope: { channels: ["news"], start: 1, end: 2 },
     language: "en",
     timestamp: 2,
     chatMessages: [{ role: "user", text: "hello" }],
@@ -63,6 +59,7 @@ describe("search-filters parity", () => {
     expect(filterSummariesByTextQuery(summaries, "markets")).toEqual([
       summaries[0],
     ])
+    expect(filterSummariesByTextQuery(summaries, "news")).toEqual(summaries)
     expect(filterSummariesByTextQuery(summaries, "gpt")).toEqual([summaries[0]])
     expect(filterSummariesByTextQuery(summaries, "summarize")).toEqual([
       summaries[0],

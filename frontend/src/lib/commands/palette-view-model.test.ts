@@ -46,11 +46,9 @@ function makePost(channelName: string, id: number, text: string): Post {
 
 function makeSummary(
   id: string,
-  overrides: Partial<SummaryListItem> = {},
+  overrides: Partial<SummaryListItem> & { channels?: string[] } = {},
 ): SummaryListItem {
-  const { channels, ...rest } = overrides as Partial<SummaryListItem> & {
-    channels?: string[]
-  }
+  const { channels, ...rest } = overrides
   return {
     id,
     text: "",

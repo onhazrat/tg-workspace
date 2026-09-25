@@ -18,13 +18,13 @@ function makeChannel(name: string, overrides: Partial<Channel> = {}): Channel {
   }
 }
 
-function makePost(channelName: string, id: string): Post {
+function makePost(channelName: string, id: number): Post {
   return {
     id,
     channelName,
     text: "",
-    date: 0,
-    messageId: 1,
+    date: "",
+    timestamp: 0,
   }
 }
 
@@ -45,9 +45,9 @@ const selectedChannels = new Set(["alpha", "beta", "gamma"])
 describe("buildPostsInScopeCounts", () => {
   it("counts filtered posts per channel name", () => {
     const filteredPosts = [
-      makePost("alpha", "a1"),
-      makePost("alpha", "a2"),
-      makePost("beta", "b1"),
+      makePost("alpha", 1),
+      makePost("alpha", 2),
+      makePost("beta", 3),
     ]
 
     expect(buildPostsInScopeCounts(filteredPosts)).toEqual({

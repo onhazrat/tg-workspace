@@ -46,6 +46,11 @@ jobs:
       - name: Run frontend unit tests
         run: bun run test:unit
         working-directory: frontend
+      # The build typecheck (tsconfig.build.json) excludes test files, so this
+      # is the only check that type-checks them.
+      - name: Typecheck frontend including tests
+        run: bun run typecheck:tests
+        working-directory: frontend
       - name: Check TG UI left-behind duplicates
         run: bun run test:tg-ui
         working-directory: frontend

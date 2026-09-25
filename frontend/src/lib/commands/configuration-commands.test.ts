@@ -43,7 +43,9 @@ describe("configuration palette commands", () => {
 
     await commands[0]?.run(
       {
-        openConfigurationEntry: (id) => opened.push(id),
+        openConfigurationEntry: (id) => {
+          opened.push(id)
+        },
       } as CommandContext,
       "deployment:POSTGRES_SERVER",
     )

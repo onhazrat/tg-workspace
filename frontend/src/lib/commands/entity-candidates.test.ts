@@ -52,7 +52,7 @@ describe("getExtendedEntityCandidates", () => {
       { id: "tg_logs", label: "tg_logs" },
     ])
     expect(
-      candidates("clear-db-table", { ...ctx, databaseTables: undefined }),
+      candidates("clear-db-table", { ...ctx, databaseTables: [] }),
     ).toEqual([])
   })
 

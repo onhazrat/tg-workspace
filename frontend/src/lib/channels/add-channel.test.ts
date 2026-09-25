@@ -47,9 +47,7 @@ const sampleSummaries: Summary[] = [
   {
     id: "s1",
     text: "Weekly crypto digest",
-    channels: ["alpha"],
-    startDate: 1,
-    endDate: 2,
+    scope: { channels: ["alpha"], start: 1, end: 2 },
     language: "en",
     model: "gemini",
     timestamp: 1,
@@ -59,9 +57,7 @@ const sampleSummaries: Summary[] = [
   {
     id: "s2",
     text: "Tech headlines",
-    channels: ["beta"],
-    startDate: 1,
-    endDate: 2,
+    scope: { channels: ["beta"], start: 1, end: 2 },
     language: "en",
     timestamp: 2,
   },
@@ -158,6 +154,7 @@ describe("search filter helpers", () => {
     expect(filterSummariesByTextQuery(sampleSummaries, "gemini")).toHaveLength(
       1,
     )
+    expect(filterSummariesByTextQuery(sampleSummaries, "alpha")).toHaveLength(1)
     expect(filterSummariesByTextQuery(sampleSummaries, "starred")).toHaveLength(
       1,
     )

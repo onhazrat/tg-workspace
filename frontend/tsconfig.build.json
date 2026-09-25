@@ -1,5 +1,10 @@
 {
   "extends": "./tsconfig.json",
+  "compilerOptions": {
+    // No ambient @types packages: @types/bun is installed for the tests, and
+    // auto-inclusion would let app code call Bun APIs that the browser lacks.
+    "types": []
+  },
   "exclude": [
     "tests/**/*.ts",
     "src/**/*.test.ts",

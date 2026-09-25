@@ -227,7 +227,7 @@ describe("committed changes", () => {
   test("a refused direct value returns the reason and commits nothing", () => {
     const clock = fakeClock()
     const { result } = mount(clock.read)
-    let refusal: string | null = null
+    let refusal = null as string | null
 
     act(() => {
       refusal = result.current.applyValue("end", NOW + HOUR_MS)

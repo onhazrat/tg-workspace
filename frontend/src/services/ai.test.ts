@@ -29,7 +29,7 @@ describe("generateTagStream", () => {
     } as typeof api.tagStream
 
     const result = await generateTagStream({ ...body, temperature: 0.2 })
-    const chunks = []
+    const chunks: { text: string }[] = []
     for await (const chunk of result.stream) chunks.push(chunk)
 
     expect(chunks).toEqual([{ text: "a" }, { text: "b" }])
