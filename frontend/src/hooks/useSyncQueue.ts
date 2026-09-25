@@ -2,6 +2,20 @@ import { useCallback, useEffect, useState } from "react"
 import { logger } from "../lib/logger"
 import type { Channel, SyncQueueItem } from "../types"
 
+/**
+ * The queued items to start now: those not already running, in queue order
+ * (newest first, since `addToSyncQueue` prepends), as many as the free
+ * concurrency slots allow.
+ */
+export function nextSyncItems(
+  queue: SyncQueueItem[],
+  inFlight: ReadonlySet<string>,
+  concurrency: number,
+): SyncQueueItem[] {
+  const free = Math.max(0, concurrency - inFlight.size)
+  return queue.filter((item) => !inFlight.has(item.queueId)).slice(0, free)
+}
+
 export function useSyncQueue(
   processItem: (channel: Channel, source: string) => Promise<void>,
   summarizing: boolean,
@@ -50,18 +64,8 @@ export function useSyncQueue(
 
   useEffect(() => {
     const processNext = async () => {
-      if (
-        syncQueue.length === 0 ||
-        summarizing ||
-        processingIds.size >= concurrency
-      )
-        return
-
-      // Find items that are not currently being processed
-      const nextItems = syncQueue
-        .filter((item) => !processingIds.has(item.queueId))
-        .slice(0, concurrency - processingIds.size)
-
+      if (summarizing) return
+      const nextItems = nextSyncItems(syncQueue, processingIds, concurrency)
       if (nextItems.length === 0) return
 
       // Mark as processing

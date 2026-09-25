@@ -6,19 +6,17 @@ import {
   useContext,
   useEffect,
   useRef,
+  useState,
 } from "react"
 import { toast } from "sonner"
 import { env } from "@/lib/env"
-import { isTranslationQuotaError } from "@/lib/translations/translation-errors"
+import {
+  createTranslationQueue,
+  sendTranslationBatch,
+  type TranslationRequest,
+} from "@/lib/translations/translation-batch"
 import { translateTextBatch } from "../services/ai"
 import { useSettings } from "./SettingsContext"
-
-interface TranslationRequest {
-  id: string
-  text: string
-  resolve: (translation: string) => void
-  reject: (error: Error) => void
-}
 
 interface TranslationContextType {
   requestTranslation: (id: string, text: string) => Promise<string>
@@ -38,110 +36,36 @@ export const TranslationProvider: React.FC<{ children: ReactNode }> = ({
     setAutoTranslate,
   } = useSettings()
 
-  const queueRef = useRef<TranslationRequest[]>([])
-  const timerRef = useRef<NodeJS.Timeout | null>(null)
+  // A queued batch is sent up to `translationDebounceMs` after it was queued,
+  // so it reads the settings current at send time, not at queue time.
+  const sendRef = useRef<(batch: TranslationRequest[]) => void>(() => {})
+  sendRef.current = (batch) =>
+    void sendTranslationBatch(batch, {
+      enabled: translationEnabled,
+      translate: (posts) =>
+        translateTextBatch(posts, translationTargetLanguage, translationModel),
+      onQuotaExceeded: () => setAutoTranslate(false),
+      notifyError: (message) => toast.error(message),
+    })
 
-  const processQueue = useCallback(async () => {
-    if (queueRef.current.length === 0) return
-
-    // Take a snapshot of the current queue and clear it
-    const batch = [...queueRef.current]
-    queueRef.current = []
-
-    if (!translationEnabled) {
-      // If translation is disabled, just resolve with original text
-      batch.forEach((req) => req.resolve(req.text))
-      return
-    }
-
-    try {
-      const postsToTranslate = batch.map((req) => ({
-        id: req.id,
-        text: req.text,
-      }))
-      const results = await translateTextBatch(
-        postsToTranslate,
-        translationTargetLanguage,
-        translationModel,
-      )
-
-      // Map results back to promises
-      const resultMap = new Map(results.map((r) => [r.id, r.translation]))
-
-      batch.forEach((req) => {
-        const translation = resultMap.get(req.id)
-        if (translation) {
-          req.resolve(translation)
-        } else {
-          req.reject(new Error("Translation missing from batch response"))
-        }
-      })
-    } catch (error: any) {
-      console.error("[TranslationProvider] Batch translation failed:", error)
-
-      if (isTranslationQuotaError(error)) {
-        setAutoTranslate(false)
-        toast.error(
-          "Translation failed: API Quota Exceeded. Auto-translate disabled.",
-        )
-      } else {
-        toast.error("Batch translation failed.")
-      }
-
-      // Reject all pending promises in this batch
-      batch.forEach((req) =>
-        req.reject(error instanceof Error ? error : new Error(String(error))),
-      )
-    }
-  }, [
-    translationEnabled,
-    translationTargetLanguage,
-    translationModel,
-    setAutoTranslate,
-  ])
+  const [queue] = useState(() =>
+    createTranslationQueue((batch) => sendRef.current(batch), {
+      maxChars: env.translationMaxBatchChars,
+      debounceMs: env.translationDebounceMs,
+    }),
+  )
 
   const requestTranslation = useCallback(
     (id: string, text: string): Promise<string> => {
-      return new Promise((resolve, reject) => {
-        if (!translationEnabled) {
-          resolve(text)
-          return
-        }
-
-        queueRef.current.push({ id, text, resolve, reject })
-
-        const currentChars = queueRef.current.reduce(
-          (acc, req) => acc + req.text.length,
-          0,
-        )
-
-        if (currentChars >= env.translationMaxBatchChars) {
-          if (timerRef.current) {
-            clearTimeout(timerRef.current)
-            timerRef.current = null
-          }
-          processQueue()
-        } else {
-          if (timerRef.current) {
-            clearTimeout(timerRef.current)
-          }
-          timerRef.current = setTimeout(() => {
-            processQueue()
-          }, env.translationDebounceMs)
-        }
-      })
+      if (!translationEnabled) return Promise.resolve(text)
+      return new Promise((resolve, reject) =>
+        queue.push({ id, text, resolve, reject }),
+      )
     },
-    [translationEnabled, processQueue],
+    [translationEnabled, queue],
   )
 
-  // Cleanup on unmount
-  useEffect(() => {
-    return () => {
-      if (timerRef.current) {
-        clearTimeout(timerRef.current)
-      }
-    }
-  }, [])
+  useEffect(() => () => queue.cancel(), [queue])
 
   return (
     <TranslationContext.Provider value={{ requestTranslation }}>

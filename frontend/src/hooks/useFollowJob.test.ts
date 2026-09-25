@@ -8,11 +8,15 @@
  * follow still resolves.
  */
 
-import { describe, expect, test } from "bun:test"
-import { renderHook } from "@testing-library/react"
+import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test"
+import { renderHook, waitFor } from "@testing-library/react"
 
 import type { FollowJobStatus, SyncJobStatus } from "@/api"
-import { type FollowJobDeps, useFollowJob } from "@/hooks/useFollowJob"
+import {
+  type FollowJobDeps,
+  followSummary,
+  useFollowJob,
+} from "@/hooks/useFollowJob"
 
 function followStatus(names: string[]): FollowJobStatus {
   return {
@@ -125,5 +129,101 @@ describe("followDiscoverChannels", () => {
     )
 
     expect([...scraping.read()].sort()).toEqual(["alpha", "beta"])
+  })
+})
+
+describe("the First sync, once it ends", () => {
+  let errors: ReturnType<typeof spyOn>
+  beforeEach(() => {
+    errors = spyOn(console, "error").mockImplementation(() => {})
+  })
+  afterEach(() => errors.mockRestore())
+
+  const failedSync = {
+    jobId: "sync-1",
+    status: "completed",
+    channels: [
+      { channelId: "id-alpha", channelName: "alpha", status: "failed" },
+    ],
+  } as SyncJobStatus
+
+  test("unmarks its Channels and refreshes the channel list and post views", async () => {
+    const scraping = scrapingSet()
+    const refreshed: string[] = []
+    const { result } = renderHook(() =>
+      useFollowJob(
+        deps({
+          setScrapingChannels: scraping.set,
+          waitSyncJob: async () => failedSync,
+          loadChannels: async () => {
+            refreshed.push("channels")
+          },
+          invalidatePostViews: () => refreshed.push("posts"),
+        }),
+      ),
+    )
+
+    await result.current.followDiscoverChannels([{ name: "alpha" }])
+
+    await waitFor(() => expect([...scraping.read()]).toEqual([]))
+    // Once for the Follow, then once more when its First sync ends.
+    expect(refreshed).toEqual(["channels", "channels", "posts"])
+  })
+
+  test("a First sync that throws still unmarks its Channels", async () => {
+    const scraping = scrapingSet()
+    const { result } = renderHook(() =>
+      useFollowJob(
+        deps({
+          setScrapingChannels: scraping.set,
+          waitSyncJob: () => Promise.reject(new Error("stream lost")),
+        }),
+      ),
+    )
+
+    await result.current.followDiscoverChannels([{ name: "alpha" }])
+
+    await waitFor(() => expect([...scraping.read()]).toEqual([]))
+  })
+})
+
+describe("followSummary", () => {
+  const status = (counts: Partial<FollowJobStatus>) =>
+    ({
+      added: 0,
+      unavailable: 0,
+      skipped: 0,
+      failed: 0,
+      ...counts,
+    }) as FollowJobStatus
+
+  test("lists every non-zero count, in a fixed order", () => {
+    expect(
+      followSummary(status({ failed: 1, added: 2, skipped: 3, unavailable: 4 }))
+        .message,
+    ).toBe("Follow finished: 2 added, 4 unavailable, 3 skipped, 1 failed")
+  })
+
+  test("any Channel added is a success, whatever else failed", () => {
+    expect(followSummary(status({ added: 1, failed: 3 })).level).toBe("success")
+  })
+
+  test("nothing added with a failure is an error", () => {
+    expect(followSummary(status({ failed: 1, unavailable: 2 })).level).toBe(
+      "error",
+    )
+  })
+
+  test("nothing added and only unavailable Channels is a warning", () => {
+    expect(followSummary(status({ unavailable: 2, skipped: 1 })).level).toBe(
+      "warning",
+    )
+  })
+
+  test("nothing to report at all is a plain success", () => {
+    expect(followSummary(status({}))).toEqual({
+      message: "Follow finished",
+      level: "success",
+    })
   })
 })

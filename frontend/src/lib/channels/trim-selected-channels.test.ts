@@ -1,8 +1,12 @@
-import { describe, expect, it } from "bun:test"
+import { afterEach, describe, expect, it, spyOn } from "bun:test"
+import { toast } from "sonner"
 
 import type { Channel, ChannelStats } from "@/types"
 
-import { trimSelectedChannelsToCount } from "./trim-selected-channels"
+import {
+  applyTrimChannelSelection,
+  trimSelectedChannelsToCount,
+} from "./trim-selected-channels"
 
 function makeChannel(name: string, overrides: Partial<Channel> = {}): Channel {
   return {
@@ -172,5 +176,57 @@ describe("trimSelectedChannelsToCount", () => {
     if (result.status !== "applied") return
     expect(result.keptNames).not.toContain("unselected")
     expect(result.keptNames).toEqual(["high-activity"])
+  })
+})
+
+describe("applyTrimChannelSelection", () => {
+  const spies: Array<{ mockRestore: () => void }> = []
+  const spy = (method: "success" | "info") => {
+    const s = spyOn(toast, method)
+    spies.push(s)
+    return s
+  }
+  afterEach(() => {
+    for (const s of spies.splice(0)) s.mockRestore()
+  })
+
+  const apply = (count: number, selection = selectedChannels) => {
+    const sets: Set<string>[] = []
+    applyTrimChannelSelection({
+      channels,
+      channelStats,
+      selectedChannels: selection,
+      sortBy: "activity_rate",
+      sortDirection: "desc",
+      count,
+      setSelectedChannels: (value) => sets.push(value),
+    })
+    return sets
+  }
+
+  it("replaces the selection and names the sort it trimmed by", () => {
+    const success = spy("success")
+    const sets = apply(2)
+    expect(sets).toEqual([new Set(["high-activity", "hidden-selected"])])
+    expect(success).toHaveBeenCalledWith(
+      "Trimmed selection from 4 → 2 (Activity Rate, descending)",
+    )
+  })
+
+  it("leaves the selection alone and says so when already within the limit", () => {
+    const info = spy("info")
+    const success = spy("success")
+    expect(apply(4)).toEqual([])
+    expect(info).toHaveBeenCalledWith("Already 4 or fewer selected")
+    expect(success).not.toHaveBeenCalled()
+  })
+
+  it("stays silent for an empty selection or an invalid count", () => {
+    const info = spy("info")
+    const success = spy("success")
+    expect(apply(2, new Set())).toEqual([])
+    expect(apply(0)).toEqual([])
+    expect(info).not.toHaveBeenCalled()
+    expect(success).not.toHaveBeenCalled()
   })
 })

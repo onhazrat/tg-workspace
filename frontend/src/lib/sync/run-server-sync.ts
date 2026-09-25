@@ -12,7 +12,10 @@ import type { Dispatch, SetStateAction } from "react"
 
 import type { SyncJobStatus } from "@/api"
 import { logger } from "@/lib/logger"
-import { isTerminalSyncStatus } from "@/lib/sync/job-state"
+import {
+  isTerminalSyncStatus,
+  shouldFallBackToPolling,
+} from "@/lib/sync/job-state"
 import type { ChannelStats } from "@/types"
 
 /** How the sync was triggered; the server records it on the job. */
@@ -139,6 +142,59 @@ export async function followUntilTerminal(
     if (isTerminalSyncStatus(status.status)) return status
   }
   return null
+}
+
+export interface WaitSyncJobIO {
+  subscribe: (
+    jobId: string,
+    signal: AbortSignal,
+  ) => AsyncIterable<SyncJobStatus>
+  getStatus: (jobId: string) => Promise<SyncJobStatus>
+  cancel: (jobId: string) => Promise<unknown>
+  apply: (status: SyncJobStatus) => void
+  /** Poll to a terminal state; used when the event stream fails. */
+  pollFallback: (jobId: string) => Promise<SyncJobStatus>
+  timeoutMs: number
+}
+
+export const SYNC_TIMED_OUT_MESSAGE = "Sync job timed out"
+
+/**
+ * Follow a job to a terminal state over its event stream.
+ *
+ * A stream that ends before the job does is settled by one status read. A
+ * stream that fails falls back to polling, unless the failure is the deadline
+ * aborting it: then the job is cancelled server-side, because nobody is left
+ * watching it.
+ */
+export async function waitSyncJob(
+  io: WaitSyncJobIO,
+  jobId: string,
+): Promise<SyncJobStatus> {
+  const abortController = new AbortController()
+  const timeoutId = setTimeout(() => abortController.abort(), io.timeoutMs)
+  try {
+    const terminal = await followUntilTerminal(
+      io.subscribe(jobId, abortController.signal),
+      io.apply,
+    )
+    if (terminal) return terminal
+    const finalStatus = await io.getStatus(jobId)
+    io.apply(finalStatus)
+    return finalStatus
+  } catch (err) {
+    if (!shouldFallBackToPolling(abortController.signal.aborted)) {
+      await io.cancel(jobId)
+      throw new Error(SYNC_TIMED_OUT_MESSAGE)
+    }
+    console.warn(
+      "[Scraper] SSE sync progress failed, falling back to polling:",
+      err,
+    )
+    return io.pollFallback(jobId)
+  } finally {
+    clearTimeout(timeoutId)
+  }
 }
 
 export async function runServerSync(

@@ -9,8 +9,9 @@ import {
 } from "react"
 import { toast } from "sonner"
 import { api } from "@/api"
+import { errorText } from "@/lib/artifacts/artifact-run"
 import { env } from "@/lib/env"
-import { searchSimilarPostsFromQuery } from "../services/rag"
+import { embeddingProgress, searchSimilarPostsFromQuery } from "../services/rag"
 import type { Post } from "../types"
 import { useSettings } from "./SettingsContext"
 
@@ -56,14 +57,9 @@ export const RAGProvider: React.FC<{ children: ReactNode }> = ({
       return
     }
     try {
-      const status = await api.ragStatus()
-      // Every field on `RagStatusResponse` has a server-side default, so all
-      // three are always on the wire — but a defaulted Pydantic field is
-      // `optional` in OpenAPI, so the generated type cannot say so.
-      const pending = status.pending ?? 0
-      const total = status.total ?? 0
-      setIsSyncing(pending > 0)
-      setProgress({ current: Math.max(0, total - pending), total })
+      const next = embeddingProgress(await api.ragStatus())
+      setIsSyncing(next.isSyncing)
+      setProgress(next.progress)
     } catch (error) {
       console.error("[RAGProvider] Failed to fetch embedding status:", error)
     }
@@ -94,9 +90,7 @@ export const RAGProvider: React.FC<{ children: ReactNode }> = ({
         )
       } catch (error) {
         console.error("[RAGProvider] Search failed:", error)
-        const message =
-          error instanceof Error ? error.message : "Semantic search failed"
-        throw new Error(message)
+        throw new Error(errorText(error, "Semantic search failed"))
       }
     },
     [embeddingsEnabled],
@@ -109,9 +103,7 @@ export const RAGProvider: React.FC<{ children: ReactNode }> = ({
       await refreshStatus()
     } catch (error) {
       console.error("[RAGProvider] Server embed backfill failed:", error)
-      const message =
-        error instanceof Error ? error.message : "Embedding backfill failed"
-      toast.error(message)
+      toast.error(errorText(error, "Embedding backfill failed"))
     }
   }, [embeddingsEnabled, refreshStatus])
 

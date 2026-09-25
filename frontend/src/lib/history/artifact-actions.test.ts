@@ -2,7 +2,37 @@ import { describe, expect, it } from "bun:test"
 
 import type { ArtifactListItem } from "@/types"
 
-import { setArtifactStarred, setSummaryFlag } from "./artifact-actions"
+import {
+  deleteArtifact,
+  setArtifactNote,
+  setArtifactStarred,
+  setSummaryFlag,
+} from "./artifact-actions"
+
+const KINDS = ["summary", "chat", "tag", "discovery"] as const
+
+/**
+ * Replace `methods` on the shared `api` for one run, recording which one each
+ * call reached and with what, then put the originals back.
+ */
+async function recordApi(
+  methods: string[],
+  run: () => Promise<void>,
+): Promise<[string, ...unknown[]][]> {
+  const { api } = await import("@/api")
+  const target = api as unknown as Record<string, unknown>
+  const originals = Object.fromEntries(methods.map((m) => [m, target[m]]))
+  const calls: [string, ...unknown[]][] = []
+  for (const m of methods) {
+    target[m] = async (...args: unknown[]) => void calls.push([m, ...args])
+  }
+  try {
+    await run()
+  } finally {
+    Object.assign(target, originals)
+  }
+  return calls
+}
 
 /**
  * The dispatcher must reach a different endpoint per kind.
@@ -110,5 +140,57 @@ describe("setSummaryFlag records which Key pays", () => {
     )
 
     expect(body).toEqual({ autoPublish: true })
+  })
+})
+
+/**
+ * Clearing a note must put an explicit `null` on the wire for every kind.
+ * `undefined` would vanish in `JSON.stringify` and the server would keep the
+ * note while the UI said it was deleted.
+ */
+describe("setArtifactNote", () => {
+  const writers = [
+    "upsertSummary",
+    "upsertChatSession",
+    "upsertTagRun",
+    "updateDiscoverReportFlags",
+  ]
+
+  it("routes every kind to its own aggregate with the note as sent", async () => {
+    const calls = await recordApi(writers, async () => {
+      for (const kind of KINDS) {
+        await setArtifactNote({ id: kind, kind } as ArtifactListItem, "hi")
+      }
+    })
+    expect(calls).toEqual(writers.map((m, i) => [m, KINDS[i], { note: "hi" }]))
+  })
+
+  it("sends a null note rather than dropping the key", async () => {
+    const calls = await recordApi(writers, async () => {
+      for (const kind of KINDS) {
+        await setArtifactNote({ id: kind, kind } as ArtifactListItem, null)
+      }
+    })
+    for (const [, , body] of calls) {
+      expect(JSON.stringify(body)).toBe('{"note":null}')
+    }
+    expect(calls).toHaveLength(KINDS.length)
+  })
+})
+
+describe("deleteArtifact", () => {
+  it("routes every kind to its own delete endpoint", async () => {
+    const deleters = [
+      "deleteSummary",
+      "deleteChatSession",
+      "deleteTagRun",
+      "deleteDiscoverReport",
+    ]
+    const calls = await recordApi(deleters, async () => {
+      for (const kind of KINDS) {
+        await deleteArtifact({ id: `id-${kind}`, kind } as ArtifactListItem)
+      }
+    })
+    expect(calls).toEqual(deleters.map((m, i) => [m, `id-${KINDS[i]}`]))
   })
 })

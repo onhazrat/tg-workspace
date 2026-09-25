@@ -1,4 +1,6 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, spyOn, test } from "bun:test"
+import { toast } from "sonner"
+
 import {
   buildExtendedCommands,
   getChainedEditorApply,
@@ -183,5 +185,84 @@ describe("getChainedEditorField", () => {
 
   test("other commands have no chained field", () => {
     expect(getChainedEditorField("add-channel", channel)).toBeNull()
+  })
+})
+
+/**
+ * Pasting an external AI response completes a summary that "Copy Summary
+ * Prompt" opened. The open one is preferred; otherwise any pending one.
+ */
+describe("paste-external-summary", () => {
+  const apply = buildExtendedCommands().find(
+    (command) => command.id === "paste-external-summary",
+  )?.editorField?.apply
+
+  async function paste(
+    ctx: Partial<CommandContext>,
+    completes = true,
+  ): Promise<{
+    completed: unknown[]
+    errors: unknown[]
+    successes: unknown[]
+  }> {
+    const error = spyOn(toast, "error")
+    const success = spyOn(toast, "success")
+    const completed: unknown[] = []
+    try {
+      await apply?.(
+        {
+          summariesHistory: [],
+          currentSummaryId: null,
+          completePendingSummary: async (id: string, text: string) => {
+            completed.push([id, text])
+            return completes
+          },
+          ...ctx,
+        } as unknown as CommandContext,
+        "the answer",
+      )
+      return {
+        completed,
+        errors: error.mock.calls.map((c) => c[0]),
+        successes: success.mock.calls.map((c) => c[0]),
+      }
+    } finally {
+      error.mockRestore()
+      success.mockRestore()
+    }
+  }
+
+  const history = [
+    { id: "done", status: "complete" },
+    { id: "waiting", status: "pending" },
+  ] as unknown as CommandContext["summariesHistory"]
+
+  test("completes the open summary before any pending one", async () => {
+    const result = await paste({
+      currentSummaryId: "open",
+      summariesHistory: history,
+    })
+    expect(result.completed).toEqual([["open", "the answer"]])
+    expect(result.successes).toEqual(["External summary saved"])
+  })
+
+  test("falls back to the pending summary", async () => {
+    const result = await paste({ summariesHistory: history })
+    expect(result.completed).toEqual([["waiting", "the answer"]])
+  })
+
+  test("refuses when there is nothing to complete", async () => {
+    const result = await paste({})
+    expect(result).toEqual({
+      completed: [],
+      errors: ["No pending summary — use Copy Summary Prompt first"],
+      successes: [],
+    })
+  })
+
+  test("stays quiet when the save fails", async () => {
+    const result = await paste({ currentSummaryId: "open" }, false)
+    expect(result.completed).toHaveLength(1)
+    expect(result.successes).toEqual([])
   })
 })

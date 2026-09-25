@@ -76,3 +76,24 @@ export async function resolveRagPosts(
   }
   return posts
 }
+
+/**
+ * The embedding backfill as the header shows it: syncing while anything is
+ * pending, and how many of the total are done.
+ *
+ * Every field on `RagStatusResponse` has a server-side default, so all of them
+ * are always on the wire, but a defaulted Pydantic field is `optional` in
+ * OpenAPI, so the generated type cannot say so. `current` is clamped so the
+ * bar never shows a negative count if `pending` ever exceeds `total`.
+ */
+export function embeddingProgress(status: {
+  pending?: number
+  total?: number
+}): { isSyncing: boolean; progress: { current: number; total: number } } {
+  const pending = status.pending ?? 0
+  const total = status.total ?? 0
+  return {
+    isSyncing: pending > 0,
+    progress: { current: Math.max(0, total - pending), total },
+  }
+}

@@ -7,49 +7,47 @@ import type { Channel } from "@/types"
 
 export { filterChannelsByQuery } from "@/lib/commands/filter-channels"
 
+const allChannels = (ctx: CommandContext) => ctx.channels
+
+/**
+ * The channels each entity flow offers to pick from. A flow with no entry here
+ * picks something other than a channel (a summary, a post, a table), so it
+ * offers no channels.
+ */
+const ENTITY_CANDIDATES: Partial<
+  Record<EntityFlowType, (ctx: CommandContext) => Channel[]>
+> = {
+  "search-channel": allChannels,
+  "select-channel": (ctx) =>
+    ctx.channels.filter((channel) => !ctx.selectedChannels.has(channel.name)),
+  "deselect-channel": (ctx) =>
+    ctx.channels.filter((channel) => ctx.selectedChannels.has(channel.name)),
+  "freeze-channel": (ctx) =>
+    ctx.channels.filter(
+      (channel) => !channel.isFrozen && !channel.isUnavailableOnWebView,
+    ),
+  "unfreeze-channel": (ctx) =>
+    ctx.channels.filter((channel) => channel.isFrozen),
+  "toggle-auto-follow": allChannels,
+  "fix-partial-history-channel": (ctx) =>
+    filterPartialHistoryChannels(ctx.channels),
+  "sync-channel": allChannels,
+  "delete-channel": allChannels,
+  "reset-sync-channel": allChannels,
+  "add-tag-channel": allChannels,
+  "edit-start-id-channel": allChannels,
+  "refresh-metadata-channel": allChannels,
+  "copy-channel-telegram-chat-id": (ctx) =>
+    filterChannelsWithTelegramChatId(ctx.channels),
+  "remove-tag-channel": (ctx) =>
+    ctx.channels.filter((channel) => getTagNames(channel.tags).length > 0),
+}
+
 export function getEntityCandidates(
   flow: EntityFlowType,
   ctx: CommandContext,
 ): Channel[] {
-  switch (flow) {
-    case "search-channel":
-      return ctx.channels
-    case "select-channel":
-      return ctx.channels.filter(
-        (channel) => !ctx.selectedChannels.has(channel.name),
-      )
-    case "deselect-channel":
-      return ctx.channels.filter((channel) =>
-        ctx.selectedChannels.has(channel.name),
-      )
-    case "freeze-channel":
-      return ctx.channels.filter(
-        (channel) => !channel.isFrozen && !channel.isUnavailableOnWebView,
-      )
-    case "unfreeze-channel":
-      return ctx.channels.filter((channel) => channel.isFrozen)
-    case "toggle-auto-follow":
-      return ctx.channels
-    case "fix-partial-history-channel":
-      return filterPartialHistoryChannels(ctx.channels)
-    case "sync-channel":
-    case "delete-channel":
-    case "reset-sync-channel":
-    case "add-tag-channel":
-    case "edit-start-id-channel":
-    case "refresh-metadata-channel":
-      return ctx.channels
-    case "copy-channel-telegram-chat-id":
-      return filterChannelsWithTelegramChatId(ctx.channels)
-    case "remove-tag-channel":
-      return ctx.channels.filter(
-        (channel) => getTagNames(channel.tags).length > 0,
-      )
-    case "open-post":
-      return []
-    default:
-      return []
-  }
+  return ENTITY_CANDIDATES[flow]?.(ctx) ?? []
 }
 
 export async function runEntityChannelAction(
@@ -120,49 +118,38 @@ export async function runEntityChannelAction(
   }
 }
 
+/**
+ * Save every selected channel with `isFrozen` set. A channel the web view
+ * cannot reach is left alone: its frozen state is not the user's to toggle.
+ */
+async function saveSelectedFrozen(
+  ctx: CommandContext,
+  isFrozen: boolean,
+  channelsApi?: ChannelsApi,
+): Promise<void> {
+  const affected = (channel: Channel) =>
+    ctx.selectedChannels.has(channel.name) && !channel.isUnavailableOnWebView
+  const updatedChannels = ctx.channels.map((channel) =>
+    affected(channel) ? { ...channel, isFrozen } : channel,
+  )
+  ctx.setChannels(updatedChannels)
+  for (const channel of updatedChannels.filter(affected)) {
+    await upsertChannel(channel, channelsApi)
+  }
+}
+
+/** Freezing also clears the selection; the frozen channels are skipped by sync. */
 export async function runBulkFreezeSelected(
   ctx: CommandContext,
+  channelsApi?: ChannelsApi,
 ): Promise<void> {
-  const updatedChannels = ctx.channels.map((channel) => {
-    if (
-      ctx.selectedChannels.has(channel.name) &&
-      !channel.isUnavailableOnWebView
-    ) {
-      return { ...channel, isFrozen: true }
-    }
-    return channel
-  })
-  ctx.setChannels(updatedChannels)
-  for (const channel of updatedChannels) {
-    if (
-      ctx.selectedChannels.has(channel.name) &&
-      !channel.isUnavailableOnWebView
-    ) {
-      await upsertChannel(channel)
-    }
-  }
+  await saveSelectedFrozen(ctx, true, channelsApi)
   ctx.setSelectedChannels(new Set())
 }
 
 export async function runBulkUnfreezeSelected(
   ctx: CommandContext,
+  channelsApi?: ChannelsApi,
 ): Promise<void> {
-  const updatedChannels = ctx.channels.map((channel) => {
-    if (
-      ctx.selectedChannels.has(channel.name) &&
-      !channel.isUnavailableOnWebView
-    ) {
-      return { ...channel, isFrozen: false }
-    }
-    return channel
-  })
-  ctx.setChannels(updatedChannels)
-  for (const channel of updatedChannels) {
-    if (
-      ctx.selectedChannels.has(channel.name) &&
-      !channel.isUnavailableOnWebView
-    ) {
-      await upsertChannel(channel)
-    }
-  }
+  await saveSelectedFrozen(ctx, false, channelsApi)
 }

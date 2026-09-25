@@ -48,66 +48,52 @@ export type NetworkSettingSetters = {
   ) => void
 }
 
+const isBoolean = (v: unknown) => typeof v === "boolean"
+const isNumber = (v: unknown) => typeof v === "number"
+const isString = (v: unknown) => typeof v === "string"
+const isObject = (v: unknown) => v !== null && typeof v === "object"
+const oneOf =
+  (...allowed: string[]) =>
+  (v: unknown) =>
+    allowed.includes(v as string)
+
+/**
+ * What each field accepts from a server payload. Keyed by every field of
+ * `NetworkSettings`, so adding a field without saying how to read it is a
+ * compile error rather than a setting that never loads.
+ */
+const ACCEPTS: Record<keyof NetworkSettings, (v: unknown) => boolean> = {
+  proxyEnabled: isBoolean,
+  defaultProxyUrls: isString,
+  proxyDefaultConcurrency: isNumber,
+  proxyConcurrencyOverrides: isObject,
+  envFallbackConfigured: isBoolean,
+  torAvailable: isBoolean,
+  torEnabled: isBoolean,
+  torMode: oneOf("auto", "custom"),
+  torProxyUrls: isString,
+  torRotationStrategy: oneOf("sequential", "random"),
+  torControlEnabled: isBoolean,
+  torControlPort: isNumber,
+  torAutoRotate: isBoolean,
+  torRotationThreshold: isNumber,
+}
+
 /** Pure server-payload -> state merge; absent or malformed fields are ignored. */
 export function mergeNetworkSettings(
   base: NetworkSettings,
   value: Record<string, unknown>,
 ): NetworkSettings {
-  const next = { ...base }
+  const next: Record<string, unknown> = { ...base }
+  for (const [key, accepts] of Object.entries(ACCEPTS)) {
+    if (accepts(value[key])) next[key] = value[key]
+  }
+  // The server stores the list; `defaultProxyUrls` is the textarea's joined
+  // form, and the list wins when both are present.
   if (Array.isArray(value.proxyUrls)) {
     next.defaultProxyUrls = (value.proxyUrls as string[]).join("\n")
-  } else if (typeof value.defaultProxyUrls === "string") {
-    next.defaultProxyUrls = value.defaultProxyUrls
   }
-  if (typeof value.envFallbackConfigured === "boolean") {
-    next.envFallbackConfigured = value.envFallbackConfigured
-  }
-  if (typeof value.torAvailable === "boolean") {
-    next.torAvailable = value.torAvailable
-  }
-  if (typeof value.proxyEnabled === "boolean") {
-    next.proxyEnabled = value.proxyEnabled
-  }
-  if (typeof value.proxyDefaultConcurrency === "number") {
-    next.proxyDefaultConcurrency = value.proxyDefaultConcurrency
-  }
-  if (
-    value.proxyConcurrencyOverrides &&
-    typeof value.proxyConcurrencyOverrides === "object"
-  ) {
-    next.proxyConcurrencyOverrides = value.proxyConcurrencyOverrides as Record<
-      string,
-      number
-    >
-  }
-  if (typeof value.torEnabled === "boolean") {
-    next.torEnabled = value.torEnabled
-  }
-  if (value.torMode === "auto" || value.torMode === "custom") {
-    next.torMode = value.torMode
-  }
-  if (typeof value.torProxyUrls === "string") {
-    next.torProxyUrls = value.torProxyUrls
-  }
-  if (
-    value.torRotationStrategy === "sequential" ||
-    value.torRotationStrategy === "random"
-  ) {
-    next.torRotationStrategy = value.torRotationStrategy
-  }
-  if (typeof value.torControlEnabled === "boolean") {
-    next.torControlEnabled = value.torControlEnabled
-  }
-  if (typeof value.torControlPort === "number") {
-    next.torControlPort = value.torControlPort
-  }
-  if (typeof value.torAutoRotate === "boolean") {
-    next.torAutoRotate = value.torAutoRotate
-  }
-  if (typeof value.torRotationThreshold === "number") {
-    next.torRotationThreshold = value.torRotationThreshold
-  }
-  return next
+  return next as unknown as NetworkSettings
 }
 
 /** Full payload for saveNetworkSettings (debounced save path). */
