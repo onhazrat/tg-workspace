@@ -1,11 +1,6 @@
 import { type KeyboardEvent, useEffect, useMemo, useRef, useState } from "react"
-import { CommandConfirmDialog } from "@/components/CommandConfirmDialog"
 import { useCommandPaletteContext } from "@/components/CommandPaletteProvider"
-import { AssistantPanel } from "@/components/command-palette/AssistantPanel"
-import { CommandListView } from "@/components/command-palette/CommandListView"
-import { EditorPanel } from "@/components/command-palette/EditorPanel"
-import { EntityListView } from "@/components/command-palette/EntityListView"
-import { SearchResultsView } from "@/components/command-palette/SearchResultsView"
+import { PalettePanelView } from "@/components/command-palette/PalettePanelView"
 import { useEditorFlow } from "@/components/command-palette/useEditorFlow"
 import { useEntityFlow } from "@/components/command-palette/useEntityFlow"
 import { usePaletteFocus } from "@/components/command-palette/usePaletteFocus"
@@ -22,16 +17,25 @@ import { useCommandRegistry } from "@/hooks/useCommandRegistry"
 import { useCommandSearchAffinity } from "@/hooks/useCommandSearchAffinity"
 import { usePaletteListSelection } from "@/hooks/usePaletteListSelection"
 import { useRecentCommands } from "@/hooks/useRecentCommands"
-import { getChainedEditorField } from "@/lib/commands/extended-commands"
+import {
+  activePalettePanel,
+  closeButtonTabIndex,
+  commandEnterTarget,
+  confirmStaysInEntity,
+  editorEnterApplies,
+  entityEnterPickId,
+  isBackspaceBack,
+  pickRecordedOnBack,
+  type SelectAction,
+  selectCommandAction,
+} from "@/lib/commands/palette-shell"
 import {
   getFirstNavigableCommandId,
   getGroupedPaletteCommands,
-  resolveEntityPickId,
 } from "@/lib/commands/palette-view-model"
 import { filterAndRank } from "@/lib/commands/rank-commands"
-import type { CommandDef } from "@/lib/commands/types"
+import type { CommandDef, PaletteMode } from "@/lib/commands/types"
 import { env } from "@/lib/env"
-import type { Channel } from "@/types"
 
 export function CommandPalette() {
   useCommandPalette()
@@ -58,17 +62,19 @@ export function CommandPalette() {
   } = palette
   const { refreshJobStatus } = context.jobToggles
 
+  /** Counts a command as used: its search affinity and the recents list. */
+  const recordUse = (commandId: string, rootQuery: string) => {
+    if (rootQuery.trim()) recordPick(rootQuery, commandId)
+    recordRecent(commandId)
+  }
+
   const finishCommand = async (
     command: CommandDef,
     rootQuery?: string,
     payload?: unknown,
   ) => {
     await command.run(context, payload)
-    const affinityQuery = rootQuery ?? palette.getRootQuery()
-    if (affinityQuery.trim()) {
-      recordPick(affinityQuery, command.id)
-    }
-    recordRecent(command.id)
+    recordUse(command.id, rootQuery ?? palette.getRootQuery())
     close()
   }
 
@@ -106,38 +112,35 @@ export function CommandPalette() {
     setLiveAnnouncement,
   })
 
+  /** What leaving each sub-view resets once the mode has popped. */
+  const leaveSubView: Partial<Record<PaletteMode, () => void>> = {
+    entity: () => {
+      entity.setEntityQuery("")
+      setQuery(palette.getRootQuery())
+    },
+    editor: () => editor.setEditorValue(""),
+    "search-results": () => {
+      editor.setEditorValue(
+        palette.searchResultsState?.query ?? editor.editorValue,
+      )
+      searchResults.setFilterQuery("")
+    },
+  }
+
   const goBackSubView = () => {
     if (modeStack.length <= 1) return
     const leaving = mode
-    if (leaving === "entity" && entityCommand?.closeOnPick === false) {
-      const rootQuery = palette.getRootQuery()
-      if (rootQuery.trim()) {
-        recordPick(rootQuery, entityCommand.id)
-      }
-      recordRecent(entityCommand.id)
-    }
+    const recorded = pickRecordedOnBack(leaving, entityCommand)
+    if (recorded) recordUse(recorded.id, palette.getRootQuery())
     popMode()
-    if (leaving === "entity") {
-      entity.setEntityQuery("")
-      setQuery(palette.getRootQuery())
-    }
-    if (leaving === "editor") {
-      editor.setEditorValue("")
-    }
-    if (leaving === "search-results") {
-      const preservedQuery =
-        palette.searchResultsState?.query ?? editor.editorValue
-      editor.setEditorValue(preservedQuery)
-      searchResults.setFilterQuery("")
-    }
+    leaveSubView[leaving]?.()
   }
 
   const handleSubViewBackspace = (
     event: KeyboardEvent,
     searchValue: string,
   ) => {
-    if (event.key !== "Backspace" || searchValue.trim() !== "") return
-    if (modeStack.length <= 1) return
+    if (!isBackspaceBack(event.key, searchValue, modeStack.length)) return
     event.preventDefault()
     goBackSubView()
   }
@@ -148,15 +151,8 @@ export function CommandPalette() {
   ) => {
     handleSubViewBackspace(event, editor.editorValue)
     if (event.defaultPrevented) return
-    if (editor.isApplying) return
-
-    if (event.key !== "Enter") return
-
-    const shouldApply = options.isTextarea
-      ? event.metaKey || event.ctrlKey
-      : true
-    if (!shouldApply) return
-
+    if (!editorEnterApplies(event, options.isTextarea, editor.isApplying))
+      return
     event.preventDefault()
     void editor.handleApply()
   }
@@ -229,44 +225,35 @@ export function CommandPalette() {
       listRef: commandListRef,
     })
 
-  const handleSelectCommand = async (command: CommandDef) => {
-    const disabled = command.disabled?.(context)
-    if (disabled?.disabled) return
-
-    if (command.kind === "editor") {
-      palette.openEditor(command)
-      return
-    }
-    if (command.kind === "entity-root" && command.entityFlow) {
+  const selectActions: Record<
+    SelectAction,
+    (command: CommandDef) => void | Promise<void>
+  > = {
+    disabled: () => {},
+    editor: (command) => palette.openEditor(command),
+    entity: (command) => {
       entity.setEntityQuery("")
       palette.openEntity(command)
-      return
-    }
-    if (command.kind === "assistant") {
-      palette.pushMode("assistant")
-      return
-    }
-    if (command.requiresConfirmation) {
-      palette.openConfirm(command)
-      return
-    }
+    },
+    assistant: () => palette.pushMode("assistant"),
+    confirm: (command) => palette.openConfirm(command),
+    run: (command) => finishCommand(command),
+  }
 
-    await finishCommand(command)
+  const handleSelectCommand = async (command: CommandDef) => {
+    await selectActions[selectCommandAction(command, context)](command)
   }
 
   const handleCommandInputKeyDown = (event: KeyboardEvent) => {
     handleSubViewBackspace(event, query)
     if (event.defaultPrevented) return
-    if (event.key !== "Enter") return
-    const isModifierEnter = event.metaKey || event.ctrlKey
-    if (event.shiftKey && !isModifierEnter) return
-
-    const command =
-      commands.find((entry) => entry.id === selectedCommandId) ??
-      rankedCommands.find((entry) => entry.id === selectedCommandId) ??
-      rankedCommands[0]
+    const command = commandEnterTarget(
+      event,
+      commands,
+      rankedCommands,
+      selectedCommandId,
+    )
     if (!command) return
-
     event.preventDefault()
     void handleSelectCommand(command)
   }
@@ -274,38 +261,31 @@ export function CommandPalette() {
   const handleEntityInputKeyDown = (event: KeyboardEvent) => {
     handleSubViewBackspace(event, entity.entityQuery)
     if (event.defaultPrevented) return
-    if (event.key !== "Enter") return
-
-    const flow = entityCommand?.entityFlow
-    if (!flow) return
-
-    const pickId = resolveEntityPickId({
-      flow,
-      entityQuery: entity.entityQuery,
-      candidates: entity.candidates,
-      selectedEntityId: entity.selectedId,
-    })
+    const pickId = entityEnterPickId(event.key, entityCommand, entity)
     if (!pickId) return
-
     event.preventDefault()
     void entity.handlePick(pickId)
   }
 
-  const isListMode =
-    mode === "commands" || mode === "entity" || mode === "search-results"
+  const handleConfirm = async () => {
+    const command = palette.pendingCommand
+    if (!command) return
+    if (confirmStaysInEntity(command, entityCommand)) {
+      await entity.finishEntityConfirm(command, palette.confirmPayload)
+      return
+    }
+    await finishCommand(command, undefined, palette.confirmPayload)
+  }
 
-  const chainedEditorField = editorCommand
-    ? getChainedEditorField(
-        editorCommand.id,
-        palette.entityPayload as Channel | undefined,
-      )
-    : null
-  const activeEditorField = editorCommand?.editorField
-  const showEditorPanel = Boolean(
-    mode === "editor" &&
-      editorCommand &&
-      (activeEditorField || chainedEditorField),
-  )
+  const panel = activePalettePanel({
+    mode,
+    pendingCommand: palette.pendingCommand,
+    editorCommand,
+    entityCommand,
+    entityPayload: palette.entityPayload,
+    searchResultsState,
+    searchResultsCommand,
+  })
 
   return (
     <Dialog
@@ -316,7 +296,7 @@ export function CommandPalette() {
     >
       <DialogContent
         showCloseButton
-        closeButtonTabIndex={isListMode ? -1 : undefined}
+        closeButtonTabIndex={closeButtonTabIndex(mode)}
         className="overflow-hidden border-app-ink/20 bg-app-card p-0 sm:max-w-xl"
         data-testid="command-palette"
         onOpenAutoFocus={(event) => event.preventDefault()}
@@ -335,85 +315,41 @@ export function CommandPalette() {
           {liveAnnouncement}
         </div>
 
-        {mode === "confirm" && palette.pendingCommand ? (
-          <CommandConfirmDialog
-            command={palette.pendingCommand}
-            context={context}
-            payload={palette.confirmPayload}
-            onCancel={goBackSubView}
-            onConfirm={async () => {
-              const command = palette.pendingCommand
-              if (!command) return
-              const stayInEntity =
-                entityCommand?.closeOnPick === false &&
-                command.id === entityCommand.id
-              if (stayInEntity) {
-                await entity.finishEntityConfirm(
-                  command,
-                  palette.confirmPayload,
-                )
-                return
-              }
-              await finishCommand(command, undefined, palette.confirmPayload)
-            }}
-          />
-        ) : null}
-
-        {mode === "assistant" ? (
-          <AssistantPanel onBack={goBackSubView} />
-        ) : null}
-
-        {showEditorPanel && editorCommand ? (
-          <EditorPanel
-            {...editor.viewProps}
-            command={editorCommand}
-            fieldLabel={chainedEditorField?.label ?? activeEditorField?.label}
-            field={activeEditorField}
-            globalStartTimeMode={context.settings.globalStartTimeMode}
-            onKeyDown={handleEditorKeyDown}
-            onBack={goBackSubView}
-          />
-        ) : null}
-
-        {mode === "entity" && entityCommand ? (
-          <EntityListView
-            {...entity.viewProps}
-            command={entityCommand}
-            onInputKeyDown={handleEntityInputKeyDown}
-            onBack={goBackSubView}
-          />
-        ) : null}
-
-        {mode === "search-results" &&
-        searchResultsState &&
-        searchResultsCommand ? (
-          <SearchResultsView
-            {...searchResults.viewProps}
-            command={searchResultsCommand}
-            state={searchResultsState}
-            onInputKeyDown={(event) =>
-              handleSubViewBackspace(event, searchResults.filterQuery)
-            }
-            onBack={goBackSubView}
-          />
-        ) : null}
-
-        {mode === "commands" ? (
-          <CommandListView
-            query={query}
-            onQueryChange={setQuery}
-            onInputKeyDown={handleCommandInputKeyDown}
-            selectedId={selectedCommandId}
-            onSelectedIdChange={setSelectedCommandId}
-            inputRef={commandInputRef}
-            listRef={commandListRef}
-            isEmptyQuery={isEmptyQuery}
-            displayedRecents={displayedRecents}
-            groupedCommands={groupedCommands}
-            context={context}
-            onSelectCommand={handleSelectCommand}
-          />
-        ) : null}
+        <PalettePanelView
+          panel={panel}
+          context={context}
+          confirmPayload={palette.confirmPayload}
+          onConfirm={handleConfirm}
+          onBack={goBackSubView}
+          editor={{
+            ...editor.viewProps,
+            globalStartTimeMode: context.settings.globalStartTimeMode,
+            onKeyDown: handleEditorKeyDown,
+          }}
+          entity={{
+            ...entity.viewProps,
+            onInputKeyDown: handleEntityInputKeyDown,
+          }}
+          searchResults={{
+            ...searchResults.viewProps,
+            onInputKeyDown: (event) =>
+              handleSubViewBackspace(event, searchResults.filterQuery),
+          }}
+          commandList={{
+            query,
+            onQueryChange: setQuery,
+            onInputKeyDown: handleCommandInputKeyDown,
+            selectedId: selectedCommandId,
+            onSelectedIdChange: setSelectedCommandId,
+            inputRef: commandInputRef,
+            listRef: commandListRef,
+            isEmptyQuery,
+            displayedRecents,
+            groupedCommands,
+            context,
+            onSelectCommand: handleSelectCommand,
+          }}
+        />
       </DialogContent>
     </Dialog>
   )

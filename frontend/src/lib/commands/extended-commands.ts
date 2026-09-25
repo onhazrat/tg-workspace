@@ -658,10 +658,14 @@ export function buildExtendedCommands(): CommandDef[] {
   return commands
 }
 
+/** The side effects a chained channel pick can end in; tests pass fakes. */
+const chainedPickEffects = { refreshChannelMetadata, copyChannelTelegramChatId }
+
 export async function runChainedChannelEntityPick(
   flow: EntityFlowType,
   channel: Channel,
   ctx: CommandContext,
+  effects = chainedPickEffects,
 ): Promise<"editor" | "tag-pick" | "confirm" | "done" | null> {
   switch (flow) {
     case "reset-sync-channel":
@@ -677,29 +681,33 @@ export async function runChainedChannelEntityPick(
       ctx.palette.setEntityPayload(channel)
       return "editor"
     case "refresh-metadata-channel":
-      await refreshChannelMetadata(channel, ctx)
+      await effects.refreshChannelMetadata(channel, ctx)
       return "done"
     case "copy-channel-telegram-chat-id":
-      await copyChannelTelegramChatId(channel)
+      await effects.copyChannelTelegramChatId(channel)
       return "done"
     default:
       return null
   }
 }
 
+/** The writes a chained editor applies; tests pass fakes. */
+const chainedApplyEffects = { addTagToChannel, updateChannelStartId }
+
 export function getChainedEditorApply(
   commandId: string,
   ctx: CommandContext,
   value: string,
+  effects = chainedApplyEffects,
 ): Promise<void> | void {
   const channel = ctx.palette.entityPayload as Channel | undefined
   switch (commandId) {
     case "add-tag-channel":
       if (!channel) return
-      return addTagToChannel(channel, value, ctx)
+      return effects.addTagToChannel(channel, value, ctx)
     case "edit-channel-start-id":
       if (!channel) return
-      return updateChannelStartId(channel, value, ctx)
+      return effects.updateChannelStartId(channel, value, ctx)
     default:
       return
   }
