@@ -7,8 +7,20 @@ import type { PostScopeQuery } from "@/api/data"
 import { isPendingSummary, resolvePastedSummaryModel } from "@/constants"
 import { floorToMinute } from "@/lib/analysis-window"
 import { scopeRange } from "@/lib/scope/artifact-scope"
-import type { LLMLog, Post, Summary } from "@/types"
-import { extractCitedPosts, parseCitationRefs } from "./summary-model"
+import type { PublishResult } from "@/services/telegram"
+import type {
+  BotCredential,
+  ChatDestination,
+  LLMLog,
+  Post,
+  PublishLog,
+  Summary,
+} from "@/types"
+import {
+  extractCitedPosts,
+  parseCitationRefs,
+  publishedText,
+} from "./summary-model"
 
 export const NO_POSTS_MESSAGE =
   "No posts found in the selected date range. Try scraping first."
@@ -59,6 +71,36 @@ export function summaryLLMLog(run: {
     timestamp: run.now,
     duration: run.durationMs,
     type: "summary",
+  }
+}
+
+/**
+ * The publish log an auto-publish files, whether Telegram took the message or
+ * not. `textSent` is what went out: the metadata block, when the Summary sends
+ * one, above the body.
+ */
+export function autoPublishLog(run: {
+  id: string
+  summary: Summary
+  bot: BotCredential
+  dest: ChatDestination
+  metadata: string | null
+  result: PublishResult
+  now: number
+}): PublishLog {
+  return {
+    id: run.id,
+    summaryId: run.summary.id,
+    botId: run.bot.id,
+    botName: run.bot.name,
+    chatId: run.dest.chatId,
+    chatName: run.dest.name,
+    status: run.result.success ? "success" : "failed",
+    error: run.result.error,
+    timestamp: run.now,
+    fullRequest: run.result.requests,
+    fullResponse: run.result.responses,
+    textSent: publishedText(run.metadata, run.summary.text),
   }
 }
 

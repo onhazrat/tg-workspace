@@ -1,4 +1,4 @@
-import { History as HistoryIcon, Search, Star } from "lucide-react"
+import { History as HistoryIcon } from "lucide-react"
 import { AnimatePresence, motion } from "motion/react"
 import type React from "react"
 import { useEffect, useRef, useState } from "react"
@@ -6,7 +6,18 @@ import { toast } from "sonner"
 
 import { ArtifactCard } from "@/components/history/ArtifactCard"
 import { ARTIFACT_KIND_LABELS } from "@/components/history/artifact-presentation"
-import { TgButton } from "@/components/ui/tg-button"
+import {
+  ArtifactNoteEditor,
+  HistoryKindFilters,
+  HistorySearchControls,
+} from "@/components/history/HistoryViewParts"
+import {
+  deleteDialogCopy,
+  historyEmptyDescription,
+  historyShowsEmpty,
+  type SummaryFlag,
+  summaryFlagChange,
+} from "@/components/history/history-view-model"
 import { TgConfirmDialog } from "@/components/ui/tg-confirm-dialog"
 import { TgHeroEmptyState } from "@/components/ui/tg-segmented"
 import { useArtifacts, useInvalidateArtifacts } from "@/hooks/useArtifacts"
@@ -25,14 +36,6 @@ interface HistoryViewProps {
   openArtifact: (artifact: ArtifactListItem) => void
   setActiveTab: (tab: TabType) => void
 }
-
-const KIND_FILTERS: (ArtifactKind | null)[] = [
-  null,
-  "summary",
-  "chat",
-  "tag",
-  "discovery",
-]
 
 /**
  * Everything you have made, newest first.
@@ -100,32 +103,28 @@ export const HistoryView: React.FC<HistoryViewProps> = ({ openArtifact }) => {
 
   const handleToggleSummaryFlag = async (
     artifact: ArtifactListItem,
-    flag: "autoRegenerate" | "autoPublish",
+    flag: SummaryFlag,
   ) => {
-    if (artifact.kind !== "summary") return
-    const next = !artifact[flag]
-    if (flag === "autoRegenerate" && next) {
-      // A scope shorter than a minute would have the job re-running over a
-      // window that barely moves. Read off the frozen Scope since AW-07: a
-      // Summary with none has no window to shift at all, which the server
-      // refuses too, so it fails the same check.
-      if ((artifact.scope?.durationMinutes ?? 0) < 1) {
-        toast.error(
-          "Cannot auto-regenerate a summary whose range is under a minute.",
-        )
-        return
-      }
+    const change = summaryFlagChange(artifact, flag)
+    if (!change) return
+    if ("refusal" in change) {
+      toast.error(change.refusal)
+      return
     }
-    await setSummaryFlag(artifact, flag, next)
+    await setSummaryFlag(artifact, flag, change.next)
     await invalidate()
+  }
+
+  const closeNoteEditor = () => {
+    setEditingNoteFor(null)
+    setNoteDraft("")
   }
 
   const handleSaveNote = async () => {
     if (!editingNoteFor) return
     await setArtifactNote(editingNoteFor, noteDraft.trim() || null)
     await invalidate()
-    setEditingNoteFor(null)
-    setNoteDraft("")
+    closeNoteEditor()
     toast.success(noteDraft.trim() ? "Note saved." : "Note deleted.")
   }
 
@@ -138,6 +137,8 @@ export const HistoryView: React.FC<HistoryViewProps> = ({ openArtifact }) => {
     toast.success(`${label} deleted.`)
   }
 
+  const deleteCopy = deleteDialogCopy(pendingDelete)
+
   return (
     <motion.div
       key="history"
@@ -147,69 +148,24 @@ export const HistoryView: React.FC<HistoryViewProps> = ({ openArtifact }) => {
       className="space-y-6"
     >
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <nav aria-label="Artifact kinds" className="flex flex-wrap gap-2">
-          {KIND_FILTERS.map((candidate) => {
-            const active = kind === candidate
-            const label = candidate ? ARTIFACT_KIND_LABELS[candidate] : "All"
-            return (
-              <button
-                key={label}
-                type="button"
-                aria-pressed={active}
-                data-testid={`history-kind-${candidate ?? "all"}`}
-                onClick={() => setKind(candidate)}
-                className={`rounded-md border px-3 py-1.5 font-mono text-[10px] uppercase tracking-widest transition-all ${
-                  active
-                    ? "border-app-ink bg-app-ink text-app-bg"
-                    : "border-app-ink/10 text-app-ink/60 hover:border-app-ink/40"
-                }`}
-              >
-                {label}
-              </button>
-            )
-          })}
-        </nav>
-
-        <div className="flex items-center gap-2">
-          <div className="relative">
-            <Search
-              size={13}
-              className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 opacity-40"
-            />
-            <input
-              type="search"
-              value={historySearchQuery}
-              onChange={(event) => setHistorySearchQuery(event.target.value)}
-              placeholder="Search channels, titles, notes"
-              aria-label="Search history"
-              className="w-64 rounded-md border border-app-ink/10 bg-app-card py-1.5 pl-8 pr-3 text-xs focus:border-app-ink/40 focus:outline-none"
-            />
-          </div>
-          <button
-            type="button"
-            aria-pressed={starredOnly}
-            aria-label="Show starred only"
-            onClick={() => setStarredOnly(!starredOnly)}
-            className={`rounded-md border p-1.5 transition-all ${
-              starredOnly
-                ? "border-amber-500/40 bg-amber-500/10 text-amber-500"
-                : "border-app-ink/10 text-app-ink/50 hover:border-app-ink/40"
-            }`}
-          >
-            <Star size={14} className={starredOnly ? "fill-amber-500" : ""} />
-          </button>
-        </div>
+        <HistoryKindFilters kind={kind} onSelect={setKind} />
+        <HistorySearchControls
+          searchQuery={historySearchQuery}
+          onSearchChange={setHistorySearchQuery}
+          starredOnly={starredOnly}
+          onStarredOnlyChange={setStarredOnly}
+        />
       </div>
 
-      {visible.length === 0 && !query.isLoading ? (
+      {historyShowsEmpty(visible.length, query.isLoading) ? (
         <TgHeroEmptyState
           icon={<HistoryIcon size={28} className="opacity-40" />}
           title="Nothing here yet"
-          description={
-            historySearchQuery || starredOnly || kind
-              ? "No artifacts match these filters."
-              : "Summaries, chats, tag runs and discovery reports you create will appear here."
-          }
+          description={historyEmptyDescription(
+            historySearchQuery,
+            starredOnly,
+            kind,
+          )}
         />
       ) : (
         <div className="grid gap-3">
@@ -262,50 +218,26 @@ export const HistoryView: React.FC<HistoryViewProps> = ({ openArtifact }) => {
       </div>
 
       {editingNoteFor && (
-        <div className="space-y-2 rounded-xl border border-app-ink/10 bg-app-card p-4">
-          <label
-            htmlFor="artifact-note"
-            className="font-mono text-[10px] uppercase tracking-widest opacity-50"
-          >
-            Note on {ARTIFACT_KIND_LABELS[editingNoteFor.kind]}
-          </label>
-          <textarea
-            id="artifact-note"
-            value={noteDraft}
-            onChange={(event) => setNoteDraft(event.target.value)}
-            rows={3}
-            className="w-full rounded-md border border-app-ink/10 bg-app-muted/30 p-2 text-xs focus:border-app-ink/40 focus:outline-none"
-          />
-          <div className="flex justify-end gap-2">
-            <TgButton
-              variant="ghost"
-              onClick={() => {
-                setEditingNoteFor(null)
-                setNoteDraft("")
-              }}
-            >
-              Cancel
-            </TgButton>
-            <TgButton onClick={handleSaveNote}>Save note</TgButton>
-          </div>
-        </div>
+        <ArtifactNoteEditor
+          artifact={editingNoteFor}
+          draft={noteDraft}
+          onDraftChange={setNoteDraft}
+          onCancel={closeNoteEditor}
+          onSave={() => void handleSaveNote()}
+        />
       )}
 
       <TgConfirmDialog
         open={pendingDelete !== null}
         onOpenChange={(open) => !open && setPendingDelete(null)}
-        title={`Delete this ${
-          pendingDelete ? ARTIFACT_KIND_LABELS[pendingDelete.kind] : "item"
-        }?`}
+        title={deleteCopy.title}
         /*
          * Clamped for the same reason the card is: some summaries name over a
          * thousand channels, and the un-clamped join filled the dialog and
          * pushed the buttons off-screen.
          */
         descriptionClassName="line-clamp-3 break-words text-sm text-app-ink/70"
-        description={
-          pendingDelete?.scope?.channels?.join(", ") || "This cannot be undone."
-        }
+        description={deleteCopy.description}
         confirmLabel="Delete"
         onConfirm={confirmDelete}
       />

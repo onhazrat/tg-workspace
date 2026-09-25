@@ -1,8 +1,9 @@
 import { describe, expect, it } from "bun:test"
 import type { PostScopeQuery } from "@/api/data"
 import { PASTED_SUMMARY_MODEL } from "@/constants"
-import type { Post, Summary } from "@/types"
+import type { BotCredential, ChatDestination, Post, Summary } from "@/types"
 import {
+  autoPublishLog,
   checkPastedSummary,
   countRegeneratedPosts,
   pastedSummaryRecord,
@@ -175,5 +176,45 @@ describe("countRegeneratedPosts", () => {
     expect(asked).toEqual([
       { channelNames: ["a", "b"], startDate: range.start, endDate: range.end },
     ])
+  })
+})
+
+describe("autoPublishLog", () => {
+  const summary = { ...pending, id: "s9", text: "Body", status: null }
+  const bot = { id: "b1", name: "Bot One" } as BotCredential
+  const dest = { chatId: "-100", name: "News" } as ChatDestination
+  const run = { id: "log1", summary, bot, dest, now: 42 }
+
+  it("files a sent message as success, with the metadata above the body", () => {
+    const log = autoPublishLog({
+      ...run,
+      metadata: "META",
+      result: { success: true, requests: [1], responses: [2] },
+    })
+    expect(log).toEqual({
+      id: "log1",
+      summaryId: "s9",
+      botId: "b1",
+      botName: "Bot One",
+      chatId: "-100",
+      chatName: "News",
+      status: "success",
+      error: undefined,
+      timestamp: 42,
+      fullRequest: [1],
+      fullResponse: [2],
+      textSent: "META\n\nBody",
+    })
+  })
+
+  it("files a refusal as failed, with Telegram's error and the bare body", () => {
+    const log = autoPublishLog({
+      ...run,
+      metadata: null,
+      result: { success: false, error: "chat not found" },
+    })
+    expect(log.status).toBe("failed")
+    expect(log.error).toBe("chat not found")
+    expect(log.textSent).toBe("Body")
   })
 })

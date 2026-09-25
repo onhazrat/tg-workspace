@@ -22,6 +22,7 @@ import {
   replaceLastTurn,
   staleSelectedChannels,
   type TurnResult,
+  transcriptLoad,
 } from "@/lib/chat-sessions/chat-turn"
 import type {
   ResolvedSend,
@@ -127,14 +128,14 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
   const { data: openedSession } = useChatSessionQuery(currentChatSessionId)
 
   useEffect(() => {
-    if (!currentChatSessionId) {
-      loadedSessionRef.current = null
-      return
-    }
-    if (loadedSessionRef.current === currentChatSessionId) return
-    if (!openedSession) return
-    loadedSessionRef.current = currentChatSessionId
-    setChatMessages(openedSession.messages ?? [])
+    const load = transcriptLoad(
+      currentChatSessionId,
+      loadedSessionRef.current,
+      openedSession,
+    )
+    if (!load) return
+    loadedSessionRef.current = load.loadedId
+    if (load.messages) setChatMessages(load.messages)
   }, [currentChatSessionId, openedSession])
 
   useEffect(() => {

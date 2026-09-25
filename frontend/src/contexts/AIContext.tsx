@@ -34,11 +34,11 @@ import {
   channelsNeedingSync,
   classifyAiError,
   noPostsText,
-  publishedText,
   successorSummary,
   summaryMetadataText,
 } from "@/lib/summaries/summary-model"
 import {
+  autoPublishLog,
   checkPastedSummary,
   countRegeneratedPosts,
   NO_POSTS_MESSAGE,
@@ -583,20 +583,17 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({
       torAutoRotate,
       torRotationThreshold,
     )
-    await savePublishLog({
-      id: Date.now().toString() + Math.random().toString(36).substring(2, 7),
-      summaryId: newSummary.id,
-      botId: bot.id,
-      botName: bot.name,
-      chatId: dest.chatId,
-      chatName: dest.name,
-      status: result.success ? "success" : "failed",
-      error: result.error,
-      timestamp: Date.now(),
-      fullRequest: result.requests,
-      fullResponse: result.responses,
-      textSent: publishedText(metadata, newSummary.text),
-    })
+    await savePublishLog(
+      autoPublishLog({
+        id: Date.now().toString() + Math.random().toString(36).substring(2, 7),
+        summary: newSummary,
+        bot,
+        dest,
+        metadata,
+        result,
+        now: Date.now(),
+      }),
+    )
     if (result.success) {
       toast.success(`Auto-published summary to ${dest.name}`)
     } else {
