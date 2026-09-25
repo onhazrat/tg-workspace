@@ -1,5 +1,6 @@
-import { expect, type Page, test } from "@playwright/test"
+import type { Page } from "@playwright/test"
 import { firstSuperuser, firstSuperuserPassword } from "./config.ts"
+import { expect, test } from "./fixtures.ts"
 import { randomPassword } from "./utils/random.ts"
 import { seedScopedStorage } from "./utils/scoped-storage.ts"
 

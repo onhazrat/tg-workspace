@@ -180,7 +180,7 @@ code { font-family: var(--mono); font-size: 12px; }
 <div class="wrap">
   <header>
     <h1>tg-workspace CRAP scores</h1>
-    <p class="lede">Every function in <code>backend/app</code> and <code>frontend/src</code>, scored at commit <code>__COMMIT__</code> on __DATE__. A score above 30 is the usual line for code that is risky to change.</p>
+    <p class="lede">Every function in <code>backend/app</code> and <code>frontend/src</code>, scored at commit <code>__COMMIT__</code> on __DATE__.__LEDE_COVERAGE__ A score above 30 is the usual line for code that is risky to change.</p>
     <div class="formula">CRAP = complexity² × (1 − coverage)³ + complexity</div>
   </header>
 
@@ -250,8 +250,8 @@ code { font-family: var(--mono); font-size: 12px; }
   <section class="notes" aria-label="How this was measured">
     <h2>How this was measured</h2>
     <p>Backend complexity is radon's cyclomatic complexity. Coverage is coverage.py line coverage from the full pytest suite (__BACKEND_TESTS__, __BACKEND_LINE_COV__ of lines).</p>
-    <p>Frontend complexity follows ESLint's <code>complexity</code> rule, counted on the TypeScript AST. Coverage is bun's line coverage from <code>bun test src</code> (__FRONTEND_TESTS__). Playwright runs are not counted, so components that only e2e exercises show as 0% covered and their scores overstate the risk.</p>
-    <p>Nested functions and closures are scored on their own on both sides, and their lines don't count toward the enclosing function. The generated client, tests and <code>.conform.ts</code> files are excluded.</p>
+    <p>Frontend complexity follows ESLint's <code>complexity</code> rule, counted on the TypeScript AST. Coverage is bun's line coverage from <code>bun test src</code> (__FRONTEND_TESTS__). __FRONTEND_E2E__</p>
+    <p>Nested functions and closures are scored on their own on both sides, and their lines don't count toward the enclosing function. The generated client, the vendored shadcn components in <code>frontend/src/components/ui</code>, tests and <code>.conform.ts</code> files are excluded.</p>
   </section>
 </div>
 <div id="tip" hidden></div>

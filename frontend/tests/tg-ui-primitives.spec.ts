@@ -1,5 +1,5 @@
 import type { Page } from "@playwright/test"
-import { expect, test } from "@playwright/test"
+import { expect, test } from "./fixtures.ts"
 
 import { seedTestChannel } from "./utils/seed-channel"
 

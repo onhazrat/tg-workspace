@@ -1,6 +1,5 @@
-import { expect, test } from "@playwright/test"
-
 import { WORKSPACE_TABS } from "../src/constants"
+import { expect, test } from "./fixtures.ts"
 import { seedAiKey } from "./utils/seed-ai-key"
 import { seedTestChannel } from "./utils/seed-channel"
 import {

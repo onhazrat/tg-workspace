@@ -1067,6 +1067,13 @@
     },
     {
       "default": null,
+      "name": "E2E_COVERAGE",
+      "required": false,
+      "scope": "tooling",
+      "sensitive": false
+    },
+    {
+      "default": null,
       "name": "MAILCATCHER_HOST",
       "required": false,
       "scope": "tooling",
