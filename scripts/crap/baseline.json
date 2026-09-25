@@ -1,0 +1,10 @@
+{
+  "backend/app/services/discover.py::compute_discover_candidates": {
+    "score": 32.0,
+    "reason": "Fully covered, so the score is its cc alone: one filter-cap-aggregate pass that the Posts tab and the semantic query must share exactly."
+  },
+  "backend/app/services/network.py::fetch_with_retry": {
+    "score": 35.84,
+    "reason": "The retry loop decides both proxy pacing and the quota charge per attempt; its uncovered lines are the local-Tor rotation and the unreachable exhaustion raise."
+  }
+}
