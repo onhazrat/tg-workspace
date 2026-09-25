@@ -23,6 +23,7 @@ module is not the place to introduce one.
 from __future__ import annotations
 
 import asyncio
+import json
 import uuid
 from collections.abc import Iterator
 from typing import Any
@@ -35,6 +36,7 @@ from sqlmodel import Session, col, delete
 from app import crud
 from app.ai import registry
 from app.ai.models import ChatMessage, ModelInfo
+from app.ai.providers.gemini import rtl_instruction
 from app.ai.providers.openai_compatible import (
     OpenAICompatibleError,
     OpenAICompatibleProvider,
@@ -255,6 +257,74 @@ def test_a_stream_reassembles_the_deltas_and_stops_at_done(
         return "".join(chunks)
 
     assert asyncio.run(collect()) == "one two"
+
+
+_TRANSLATED = [{"id": "1", "translation": "salam"}]
+
+
+@pytest.mark.parametrize(
+    "content",
+    [
+        pytest.param(json.dumps(_TRANSLATED), id="bare-array"),
+        pytest.param(f"```json\n{json.dumps(_TRANSLATED)}\n```", id="fenced"),
+        pytest.param(
+            json.dumps({"note": "x", "translations": _TRANSLATED}),
+            id="wrapped-by-json-object-mode",
+        ),
+    ],
+)
+def test_a_translation_batch_survives_every_way_an_endpoint_wraps_json(
+    monkeypatch: pytest.MonkeyPatch, content: str
+) -> None:
+    """Parsing the reply is ours even though its shape is not: Ollama ignores
+    `response_format` and fences the array, and strict `json_object` endpoints
+    force an object around it.
+
+    **Mutation:** drop the `isinstance(parsed, dict)` unwrap and the wrapped
+    case returns a dict the translation job cannot iterate.
+    """
+    original = httpx.AsyncClient.__init__
+    sent: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        sent.append(request)
+        return httpx.Response(
+            200, json={"choices": [{"message": {"content": content}}]}
+        )
+
+    def patched(self: httpx.AsyncClient, **kwargs: Any) -> None:
+        kwargs["transport"] = httpx.MockTransport(handler)
+        original(self, **kwargs)
+
+    monkeypatch.setattr(httpx.AsyncClient, "__init__", patched)
+    provider = OpenAICompatibleProvider(api_key=SECRET, base_url=BASE_URL)
+
+    result = asyncio.run(
+        provider.translate_batch(
+            [{"id": "1", "text": "hi"}], target_language="Persian", model="m"
+        )
+    )
+
+    assert result == _TRANSLATED
+    prompt = json.loads(sent[0].content)["messages"][-1]["content"]
+    # The twin's RTL directive, not a reworded copy.
+    assert rtl_instruction("Persian") in prompt
+    assert SECRET not in str(sent[0].url)
+
+
+def test_a_malformed_translation_reply_raises_rather_than_passing_as_empty(
+    seen: list[httpx.Request],
+) -> None:
+    """The shared stub answers the completion with the plain text `hi`.
+
+    `_unfenced` promises a malformed reply still raises: swallowing it would
+    turn a batch that produced nothing into one that silently produced nothing,
+    and the translation job would mark those Posts done.
+    """
+    provider = OpenAICompatibleProvider(api_key=SECRET, base_url=BASE_URL)
+
+    with pytest.raises(json.JSONDecodeError):
+        asyncio.run(provider.translate_batch([], target_language="English", model="m"))
 
 
 def test_an_openai_compatible_key_needs_an_address() -> None:

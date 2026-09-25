@@ -3,9 +3,15 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
+import copy
 import time
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import pytest
+from apscheduler.job import Job
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from fastapi.testclient import TestClient
 from sqlmodel import Session, select
 
@@ -15,8 +21,15 @@ from app.core.secrets import encrypt_token
 from app.jobs import scheduler as sched
 from app.jobs.auto_summary import run_auto_summary
 from app.jobs.auto_sync import run_auto_sync
+from app.jobs.directory_harvest import DIRECTORY_HARVEST_JOB_ID
+from app.jobs.discover_probe import DISCOVER_PROBE_JOB_ID
 from app.jobs.retention import run_retention_cleanup
-from app.jobs.settings import default_job_enabled, save_settings_section
+from app.jobs.settings import (
+    JOB_IDS,
+    default_job_enabled,
+    save_settings_section,
+    set_job_enabled,
+)
 from app.jobs.translation_batch import run_translation_batch
 from app.models_tg import (
     AICredential,
@@ -774,3 +787,230 @@ def test_trigger_job_runs_runner(mock_run: AsyncMock) -> None:
     entry = asyncio.run(sched.trigger_job("auto_sync"))
     mock_run.assert_awaited_once()
     assert entry["lastStatus"] == "ok"
+
+
+# --------------------------------------------------------------------------
+# `start_scheduler`: what the worker registers, and what it leaves paused
+# --------------------------------------------------------------------------
+
+
+@pytest.fixture
+def fresh_scheduler(monkeypatch: pytest.MonkeyPatch) -> AsyncIOScheduler:
+    """A private APScheduler and status table, so starting one binds nothing
+    the rest of the suite shares."""
+    fresh = AsyncIOScheduler()
+    monkeypatch.setattr(sched, "scheduler", fresh)
+    monkeypatch.setattr(sched, "_job_status", copy.deepcopy(sched._job_status))
+    return fresh
+
+
+def test_start_scheduler_registers_every_job_and_pauses_the_disabled_ones(
+    fresh_scheduler: AsyncIOScheduler,
+) -> None:
+    """**Mutation:** drop the pause loop and `embeddings` runs on its interval
+    although the operator switched it off; drop `misfire_grace_time=None` from
+    the probe sweep and a busy loop silently skips its ticks."""
+    with Session(engine) as session:
+        set_job_enabled(session, "embeddings", False)
+        set_job_enabled(session, "retention", True)
+
+    async def run() -> dict[str, Job]:
+        sched.start_scheduler()
+        try:
+            return {job.id: job for job in fresh_scheduler.get_jobs()}
+        finally:
+            sched.stop_scheduler()
+
+    started = time.time()
+    jobs = asyncio.run(run())
+
+    assert set(jobs) == set(JOB_IDS) | {"sync_queue"}
+    assert jobs["embeddings"].next_run_time is None
+    assert sched._job_status["embeddings"]["enabled"] is False
+    assert sched._job_status["retention"]["enabled"] is True
+    assert jobs["auto_sync"].next_run_time is not None
+
+    for job_id in ("retention", DISCOVER_PROBE_JOB_ID, DIRECTORY_HARVEST_JOB_ID):
+        assert jobs[job_id].misfire_grace_time is None, job_id
+        assert jobs[job_id].coalesce is True, job_id
+    retention_at = jobs["retention"].next_run_time.timestamp()
+    delay = settings.RETENTION_JOB_STARTUP_DELAY_SECONDS
+    assert started + delay - 1 <= retention_at <= time.time() + delay + 1
+
+
+def test_start_scheduler_is_a_no_op_while_running(
+    fresh_scheduler: AsyncIOScheduler,
+) -> None:
+    async def run() -> list[str]:
+        sched.start_scheduler()
+        try:
+            fresh_scheduler.remove_job("embeddings")
+            sched.start_scheduler()
+            return [job.id for job in fresh_scheduler.get_jobs()]
+        finally:
+            sched.stop_scheduler()
+
+    assert "embeddings" not in asyncio.run(run())
+
+
+# --------------------------------------------------------------------------
+# The two notification channels between the API and the worker
+# --------------------------------------------------------------------------
+
+
+@pytest.fixture
+def status_table(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(sched, "_job_status", copy.deepcopy(sched._job_status))
+    monkeypatch.setattr(sched, "_announce_seq", {})
+
+
+@pytest.mark.parametrize(
+    ("event", "status", "seq"),
+    [
+        pytest.param(
+            {
+                "pid": "worker",
+                "jobId": "retention",
+                "seq": 4,
+                "entry": {"lastStatus": "ok"},
+            },
+            "ok",
+            4,
+            id="applied",
+        ),
+        pytest.param(
+            {
+                "pid": sched._PROCESS_ID,
+                "jobId": "retention",
+                "seq": 4,
+                "entry": {"lastStatus": "ok"},
+            },
+            "idle",
+            None,
+            id="own-echo-ignored",
+        ),
+        pytest.param(
+            {"pid": "worker", "jobId": "nope", "seq": 4, "entry": {"lastStatus": "ok"}},
+            "idle",
+            None,
+            id="unknown-job-ignored",
+        ),
+        pytest.param(
+            {"pid": "worker", "jobId": "retention", "seq": "4", "entry": "ok"},
+            "idle",
+            None,
+            id="malformed-fields-ignored",
+        ),
+    ],
+)
+@pytest.mark.usefixtures("status_table")
+def test_a_status_event_is_folded_in_only_when_it_is_news(
+    event: dict[str, object], status: str, seq: int | None
+) -> None:
+    """**Mutation:** drop the `_PROCESS_ID` check and a late "running" echo
+    overwrites the "ok" the same process already wrote."""
+    sched._job_status["retention"]["lastStatus"] = "idle"
+
+    sched.apply_job_status_event(event)
+
+    assert sched._job_status["retention"]["lastStatus"] == status
+    assert sched._announce_seq.get("retention") == seq
+
+
+def test_request_job_run_refuses_an_unknown_job() -> None:
+    with pytest.raises(ValueError, match="Unknown job"):
+        asyncio.run(sched.request_job_run("nope"))
+
+
+@pytest.mark.parametrize(
+    ("before", "answered_seq", "answered_status", "waits_out_timeout"),
+    [
+        pytest.param(0, 1, "ok", False, id="finished"),
+        pytest.param(0, 1, "disabled", False, id="disabled-answers-at-once"),
+        pytest.param(9, 1, "ok", False, id="worker-restarted-its-counter"),
+        pytest.param(0, 1, "running", True, id="still-running"),
+    ],
+)
+@pytest.mark.usefixtures("status_table")
+def test_request_job_run_returns_once_the_worker_has_answered(
+    monkeypatch: pytest.MonkeyPatch,
+    before: int,
+    answered_seq: int,
+    answered_status: str,
+    waits_out_timeout: bool,
+) -> None:
+    """The worker answering is a changed counter plus a status that is not
+    `running`.
+
+    **Mutation:** compare the counter with `>` instead of `!=` and the first
+    "Run now" after a worker restart blocks for the whole timeout.
+    """
+    sched._announce_seq["retention"] = before
+    published: list[tuple[str, dict[str, object]]] = []
+
+    def publish(channel: str, payload: dict[str, object]) -> None:
+        published.append((channel, payload))
+        # The worker's answer, as `apply_job_status_event` would fold it in.
+        sched._announce_seq["retention"] = answered_seq
+        sched._job_status["retention"]["lastStatus"] = answered_status
+
+    monkeypatch.setattr(sched.pg_notify, "publish", publish)
+    timeout_s = 0.5 if waits_out_timeout else 10.0
+
+    started = time.monotonic()
+    entry = asyncio.run(sched.request_job_run("retention", timeout_s=timeout_s))
+    elapsed = time.monotonic() - started
+
+    assert published == [(sched.SCHEDULER_TRIGGER_CHANNEL, {"jobId": "retention"})]
+    assert entry["lastStatus"] == answered_status
+    if waits_out_timeout:
+        assert elapsed >= timeout_s
+    else:
+        assert elapsed < 2.0
+
+
+def test_the_trigger_consumer_survives_a_failing_run_and_ignores_junk(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A run that raises must not take the consumer down with it, or every
+    later "Run now" from the API is silently dropped until the worker restarts.
+
+    **Mutation:** remove the `try`/`except` around `await runner()` and the
+    second retention request is never run.
+    """
+    queue: asyncio.Queue[dict[str, object]] = asyncio.Queue()
+    ran: list[str] = []
+
+    async def flaky() -> None:
+        ran.append("retention")
+        if len(ran) == 1:
+            raise RuntimeError("first run fails")
+
+    monkeypatch.setitem(sched._JOB_RUNNERS, "retention", flaky)
+    monkeypatch.setattr(
+        sched.pg_notify,
+        "listener",
+        lambda _channel: SimpleNamespace(subscribe=lambda: queue),
+    )
+
+    async def run() -> None:
+        for event in (
+            {"jobId": "nope"},
+            {"jobId": 5},
+            {},
+            {"jobId": "retention"},
+            {"jobId": "retention"},
+        ):
+            queue.put_nowait(event)
+        consumer = asyncio.create_task(sched._consume_job_triggers())
+        for _ in range(100):
+            if len(ran) == 2:
+                break
+            await asyncio.sleep(0.01)
+        consumer.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await consumer
+
+    asyncio.run(run())
+
+    assert ran == ["retention", "retention"]
