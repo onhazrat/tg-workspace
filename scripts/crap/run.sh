@@ -80,7 +80,7 @@ testdb create
 # A failing test still leaves usable coverage, so report it and carry on.
 (cd "$ROOT/backend" && COVERAGE_FILE="$WORK/.coverage" TEST_POSTGRES_DB="$DB" \
   uv run coverage run -m pytest tests/ -q -p no:cacheprovider --color=no >"$WORK/pytest.log" 2>&1) \
-  || echo "warning: pytest reported failures, see the summary below" >&2
+  || { echo "warning: pytest reported failures:" >&2; grep -E "^(FAILED|ERROR) " "$WORK/pytest.log" >&2 || true; }
 BACKEND_TESTS=$(grep -E "^[0-9]+ (passed|failed)" "$WORK/pytest.log" | tail -1 | sed -E 's/, [0-9]+ warnings?//; s/ in [0-9.]+s.*//')
 (cd "$ROOT/backend" && COVERAGE_FILE="$WORK/.coverage" uv run coverage json -q -o "$WORK/coverage.json")
 BACKEND_LINE_COV=$(python3 -c "import json,sys; print(f\"{json.load(open(sys.argv[1]))['totals']['percent_covered']:.0f}%\")" "$WORK/coverage.json")
