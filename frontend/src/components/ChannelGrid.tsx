@@ -8,6 +8,7 @@ import { ChannelGridFilterBar } from "@/components/channel-grid/ChannelGridFilte
 import { ChannelGridToolbar } from "@/components/channel-grid/ChannelGridToolbar"
 import { ChannelGroupChips } from "@/components/channel-grid/ChannelGroupChips"
 import { ChannelTagChips } from "@/components/channel-grid/ChannelTagChips"
+import { channelGridGates } from "@/components/channel-grid/channel-grid-gates"
 import { useChannelGridActions } from "@/components/channel-grid/useChannelGridActions"
 import { useChannelGridSortState } from "@/components/channel-grid/useChannelGridSortState"
 import { useScopedPostCounts } from "@/hooks/usePostsView"
@@ -142,14 +143,22 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
     ],
   )
 
-  const parsedTrimCount = Number.parseInt(trimCount, 10)
-  const isTrimCountValid =
-    Number.isFinite(parsedTrimCount) && parsedTrimCount >= 1
-  const isTrimDisabled =
-    selectedChannels.size === 0 ||
-    !isTrimCountValid ||
-    summarizing ||
-    scrapingChannels.size > 0
+  const {
+    parsedTrimCount,
+    isTrimDisabled,
+    isScrapeSelectedDisabled,
+    isScrapeAllDisabled,
+    isFilteringActive,
+  } = channelGridGates({
+    trimCount,
+    selectedCount: selectedChannels.size,
+    summarizing,
+    scrapingCount: scrapingChannels.size,
+    isOffline,
+    languageFilter: selectedLanguageFilter,
+    groupFilter: selectedGroupFilter,
+    search: channelSearch,
+  })
 
   const handleTrimSelection = useCallback(() => {
     if (isTrimDisabled) return
@@ -254,11 +263,6 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
     )
   }
 
-  const isFilteringActive =
-    selectedLanguageFilter.length > 0 ||
-    selectedGroupFilter.length > 0 ||
-    channelSearch.trim().length > 0
-
   return (
     <motion.div
       key="channels"
@@ -282,15 +286,8 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
           onRevertSelection={handleRevertSelection}
           isRevertDisabled={filteredChannels.length === 0}
           isScraping={scrapingChannels.size > 0}
-          isScrapeSelectedDisabled={
-            isOffline ||
-            scrapingChannels.size > 0 ||
-            summarizing ||
-            selectedChannels.size === 0
-          }
-          isScrapeAllDisabled={
-            isOffline || scrapingChannels.size > 0 || summarizing
-          }
+          isScrapeSelectedDisabled={isScrapeSelectedDisabled}
+          isScrapeAllDisabled={isScrapeAllDisabled}
           onScrapeSelected={handleScrapeSelected}
           onScrapeAll={handleScrapeAll}
         />
