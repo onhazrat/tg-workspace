@@ -1,10 +1,6 @@
 import { useEffect, useRef, useState } from "react"
-import { normalizeChannelHandle } from "@/lib/commands/channel-ops"
-import {
-  getChainedEditorApply,
-  getChainedEditorField,
-} from "@/lib/commands/extended-commands"
-import { buildSearchResultsState } from "@/lib/commands/palette-search"
+import { getChainedEditorField } from "@/lib/commands/extended-commands"
+import { applyEditor } from "@/lib/commands/palette-editor-apply"
 import type {
   CommandContext,
   CommandDef,
@@ -61,66 +57,26 @@ export function useEditorFlow({
     setIsApplying(false)
   }
 
+  const clearAndRefocus = () => {
+    setEditorValue("")
+    requestAnimationFrame(() => {
+      ;(inputRef.current ?? textareaRef.current)?.focus()
+    })
+  }
+
   const handleApply = async () => {
     if (!editorCommand || isApplying) return
-
-    if (
-      editorCommand.id === "add-tag-channel" ||
-      editorCommand.id === "edit-channel-start-id"
-    ) {
-      setIsApplying(true)
-      try {
-        await getChainedEditorApply(editorCommand.id, context, editorValue)
-        recordRecent(editorCommand.id)
-        close()
-      } finally {
-        setIsApplying(false)
-      }
-      return
-    }
-
-    if (!editorCommand.editorField) return
-
-    const normalizedHandle = normalizeChannelHandle(editorValue)
-    if (
-      editorCommand.id === "add-channel" &&
-      !normalizedHandle &&
-      !editorCommand.allowEmptyApply
-    ) {
-      return
-    }
-
-    setIsApplying(true)
-    try {
-      await editorCommand.editorField.apply(context, editorValue)
-
-      const results = await buildSearchResultsState(
-        editorCommand,
-        context,
-        editorValue,
-      )
-      if (results) {
-        openSearchResults(results, editorCommand)
-        onSearchResultsOpened()
-        recordRecent(editorCommand.id)
-        return
-      }
-
-      recordRecent(editorCommand.id)
-
-      const shouldClose = editorCommand.closeOnApply !== false
-      if (shouldClose) {
-        close()
-        return
-      }
-
-      setEditorValue("")
-      requestAnimationFrame(() => {
-        ;(inputRef.current ?? textareaRef.current)?.focus()
-      })
-    } finally {
-      setIsApplying(false)
-    }
+    await applyEditor({
+      command: editorCommand,
+      context,
+      value: editorValue,
+      setApplying: setIsApplying,
+      openSearchResults,
+      onSearchResultsOpened,
+      recordRecent,
+      close,
+      onStayOpen: clearAndRefocus,
+    })
   }
 
   return {

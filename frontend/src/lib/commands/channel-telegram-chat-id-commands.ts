@@ -57,18 +57,40 @@ function countChannelsWithTelegramChatId(channels: Channel[]): number {
   return channels.filter((channel) => channel.telegramChatId != null).length
 }
 
-function emptyTelegramChatIdToast(filter: ExportFilter): void {
+/** The info toast shown when a filter leaves no channel with a chat id. */
+export function emptyTelegramChatIdMessage(filter: ExportFilter): string {
   const scope =
     filter === "selected"
       ? "for selected channels"
       : filter === "frozen"
         ? "for frozen channels"
         : ""
-  toast.info(
-    scope
-      ? `No Telegram chat IDs to copy ${scope} — sync channels to populate IDs`
-      : "No Telegram chat IDs to copy — sync channels to populate IDs",
-  )
+  return scope
+    ? `No Telegram chat IDs to copy ${scope} — sync channels to populate IDs`
+    : "No Telegram chat IDs to copy — sync channels to populate IDs"
+}
+
+/** The clipboard text (sorted lines) and the success toast for a copy. */
+export function telegramChatIdCopy(
+  items: Channel[],
+  isTsv: boolean,
+  isOffline: boolean,
+): { text: string; message: string } {
+  const lines = items
+    .map(
+      isTsv
+        ? channelToNameAndTelegramChatIdTsvLine
+        : channelToTelegramChatIdCopyLine,
+    )
+    .sort((a, b) => a.localeCompare(b))
+  const offlineHint = isOffline
+    ? " (from local cache — may not include latest server data)"
+    : ""
+  const plural = items.length === 1 ? "" : "s"
+  const message = isTsv
+    ? `Copied ${items.length} channel name${plural} with Telegram chat IDs${offlineHint}`
+    : `Copied ${items.length} Telegram chat ID${plural}${offlineHint}`
+  return { text: joinCopyLines(lines), message }
 }
 
 type TelegramChatIdCopyFormat = "ids" | "name-tsv"
@@ -111,23 +133,15 @@ function buildTelegramChatIdCopyCommands(
       run: async (ctx) => {
         const items = await listChannelsWithTelegramChatIdForFilter(filter, ctx)
         if (items.length === 0) {
-          emptyTelegramChatIdToast(filter)
+          toast.info(emptyTelegramChatIdMessage(filter))
           return
         }
-        const lines = items
-          .map(
-            isTsv
-              ? channelToNameAndTelegramChatIdTsvLine
-              : channelToTelegramChatIdCopyLine,
-          )
-          .sort((a, b) => a.localeCompare(b))
-        const offlineHint = ctx.isOffline
-          ? " (from local cache — may not include latest server data)"
-          : ""
-        const successMessage = isTsv
-          ? `Copied ${items.length} channel name${items.length === 1 ? "" : "s"} with Telegram chat IDs${offlineHint}`
-          : `Copied ${items.length} Telegram chat ID${items.length === 1 ? "" : "s"}${offlineHint}`
-        await copyTextToClipboard(joinCopyLines(lines), successMessage)
+        const { text, message } = telegramChatIdCopy(
+          items,
+          isTsv,
+          ctx.isOffline,
+        )
+        await copyTextToClipboard(text, message)
       },
     })
   }
