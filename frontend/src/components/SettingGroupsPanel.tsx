@@ -1,56 +1,30 @@
-import { Layers, Plus, Trash2 } from "lucide-react"
+import { Layers, Plus } from "lucide-react"
 import type React from "react"
 import { useEffect, useState } from "react"
 import { toast } from "sonner"
 import { api, type SettingGroupWriteBody } from "@/api"
-import { TgButton } from "@/components/ui/tg-button"
 import { TgHelpText } from "@/components/ui/tg-input"
-import {
-  AUTO_SYNC_INTERVAL_MAX_MINUTES,
-  AUTO_SYNC_INTERVAL_MIN_MINUTES,
-} from "@/constants"
 import {
   useInvalidateSettingGroups,
   useSettingGroupsQuery,
 } from "@/hooks/useSettingGroups"
 import { useWorkspaceGroupParams } from "@/hooks/useWorkspaceGroupParams"
-import {
-  isReservedSettingGroup,
-  resolveInitialSelectedGroupId,
-} from "@/lib/channels/setting-groups"
+import { errorText } from "@/lib/artifacts/artifact-run"
+import { resolveInitialSelectedGroupId } from "@/lib/channels/setting-groups"
 import type { ChannelSettingGroup } from "@/types"
-
-const isReservedGroup = isReservedSettingGroup
-
-const emptyDraft = (): SettingGroupWriteBody => ({
-  name: "",
-  regularSyncEnabled: true,
-  dynamicSyncEnabled: false,
-  autoSyncIntervalMinutes: 60,
-  dynamicSyncExpectedPosts: 15,
-  autoFollowForwarded: false,
-  isFrozen: false,
-  isUnavailableOnWebView: false,
-  includeInSyncAll: true,
-  includeInBulkSync: true,
-  allowIndividualSync: true,
-  resetSyncEnabled: true,
-})
-
-const draftFromGroup = (group: ChannelSettingGroup): SettingGroupWriteBody => ({
-  name: group.name,
-  regularSyncEnabled: group.regularSyncEnabled,
-  dynamicSyncEnabled: group.dynamicSyncEnabled,
-  autoSyncIntervalMinutes: group.autoSyncIntervalMinutes,
-  dynamicSyncExpectedPosts: group.dynamicSyncExpectedPosts,
-  autoFollowForwarded: group.autoFollowForwarded,
-  isFrozen: group.isFrozen,
-  isUnavailableOnWebView: group.isUnavailableOnWebView,
-  includeInSyncAll: group.includeInSyncAll,
-  includeInBulkSync: group.includeInBulkSync,
-  allowIndividualSync: group.allowIndividualSync,
-  resetSyncEnabled: group.resetSyncEnabled,
-})
+import {
+  type Busy,
+  CreateGroupForm,
+  GroupEditor,
+  GroupList,
+} from "./setting-groups/SettingGroupsParts"
+import {
+  draftFromGroup,
+  emptyDraft,
+  hasName,
+  isDeletable,
+  savedMessage,
+} from "./setting-groups/setting-groups-model"
 
 export const SettingGroupsPanel: React.FC = () => {
   const { selectedSettingGroupId, setSelectedSettingGroup } =
@@ -67,7 +41,7 @@ export const SettingGroupsPanel: React.FC = () => {
   const [createDraft, setCreateDraft] = useState<SettingGroupWriteBody>(
     emptyDraft(),
   )
-  const [busy, setBusy] = useState<"save" | "delete" | "create" | null>(null)
+  const [busy, setBusy] = useState<Busy>(null)
 
   useEffect(() => {
     const nextId = resolveInitialSelectedGroupId(
@@ -88,9 +62,7 @@ export const SettingGroupsPanel: React.FC = () => {
 
   useEffect(() => {
     if (!isError) return
-    toast.error(
-      error instanceof Error ? error.message : "Failed to load setting groups",
-    )
+    toast.error(errorText(error, "Failed to load setting groups"))
   }, [error, isError])
 
   const selectedGroup = groups.find((group) => group.id === selectedId)
@@ -103,7 +75,7 @@ export const SettingGroupsPanel: React.FC = () => {
   }
 
   const handleCreate = async () => {
-    if (!createDraft.name?.trim()) {
+    if (!hasName(createDraft)) {
       toast.error("Group name is required")
       return
     }
@@ -116,11 +88,7 @@ export const SettingGroupsPanel: React.FC = () => {
       setSelectedId(created.id)
       setSelectedSettingGroup(created.id)
     } catch (createError) {
-      toast.error(
-        createError instanceof Error
-          ? createError.message
-          : "Failed to create setting group",
-      )
+      toast.error(errorText(createError, "Failed to create setting group"))
     } finally {
       setBusy(null)
     }
@@ -131,21 +99,17 @@ export const SettingGroupsPanel: React.FC = () => {
     setBusy("save")
     try {
       await api.updateSettingGroup(selectedId, draft)
-      toast.success(`Updated group "${draft.name ?? selectedGroup.name}"`)
+      toast.success(savedMessage(draft, selectedGroup))
       await invalidateSettingGroups()
     } catch (saveError) {
-      toast.error(
-        saveError instanceof Error
-          ? saveError.message
-          : "Failed to update setting group",
-      )
+      toast.error(errorText(saveError, "Failed to update setting group"))
     } finally {
       setBusy(null)
     }
   }
 
   const handleDelete = async () => {
-    if (!selectedId || !selectedGroup || isReservedGroup(selectedGroup)) return
+    if (!selectedId || !isDeletable(selectedGroup)) return
     setBusy("delete")
     try {
       await api.deleteSettingGroup(selectedId)
@@ -153,11 +117,7 @@ export const SettingGroupsPanel: React.FC = () => {
       setSelectedId(null)
       await invalidateSettingGroups()
     } catch (deleteError) {
-      toast.error(
-        deleteError instanceof Error
-          ? deleteError.message
-          : "Cannot delete group",
-      )
+      toast.error(errorText(deleteError, "Cannot delete group"))
     } finally {
       setBusy(null)
     }
@@ -180,186 +140,20 @@ export const SettingGroupsPanel: React.FC = () => {
         <p className="text-[10px] opacity-50">Loading groups…</p>
       ) : (
         <div className="grid gap-6 lg:grid-cols-[220px_minmax(0,1fr)]">
-          <div className="space-y-2">
-            {groups.map((group) => (
-              <button
-                key={group.id}
-                type="button"
-                onClick={() => handleSelectGroup(group)}
-                className={`w-full text-left px-3 py-2 rounded-md border text-[11px] transition-all ${
-                  selectedId === group.id
-                    ? "border-app-ink bg-app-ink text-app-bg"
-                    : "border-app-ink/10 hover:border-app-ink/30"
-                }`}
-              >
-                <div className="font-bold uppercase tracking-wide">
-                  {group.name}
-                  {group.isDefault ? " (default)" : ""}
-                </div>
-                <div className="opacity-70 text-[9px] mt-1">
-                  {group.channelCount ?? 0} channel
-                  {(group.channelCount ?? 0) === 1 ? "" : "s"}
-                </div>
-              </button>
-            ))}
-          </div>
-
+          <GroupList
+            groups={groups}
+            selectedId={selectedId}
+            onSelect={handleSelectGroup}
+          />
           {selectedGroup ? (
-            <div className="space-y-4 rounded-xl border border-app-ink/10 p-4 bg-app-muted/20">
-              <div className="grid gap-3 sm:grid-cols-2">
-                <label className="space-y-1">
-                  <span className="text-[9px] uppercase font-bold opacity-60">
-                    Name
-                  </span>
-                  <input
-                    value={draft.name ?? ""}
-                    disabled={isReservedGroup(selectedGroup)}
-                    onChange={(e) =>
-                      setDraft((prev) => ({ ...prev, name: e.target.value }))
-                    }
-                    className="w-full bg-app-bg border border-app-ink/15 px-2 py-1.5 text-sm disabled:opacity-50"
-                  />
-                </label>
-                <label className="space-y-1">
-                  <span className="text-[9px] uppercase font-bold opacity-60">
-                    Regular interval (min)
-                  </span>
-                  <input
-                    type="number"
-                    min={AUTO_SYNC_INTERVAL_MIN_MINUTES}
-                    max={AUTO_SYNC_INTERVAL_MAX_MINUTES}
-                    value={draft.autoSyncIntervalMinutes ?? 60}
-                    onChange={(e) =>
-                      setDraft((prev) => ({
-                        ...prev,
-                        autoSyncIntervalMinutes: Number.parseInt(
-                          e.target.value,
-                          10,
-                        ),
-                      }))
-                    }
-                    className="w-full bg-app-bg border border-app-ink/15 px-2 py-1.5 text-sm"
-                  />
-                </label>
-              </div>
-
-              <div className="flex flex-wrap gap-4 text-[10px] uppercase font-bold">
-                {(
-                  [
-                    ["regularSyncEnabled", "Regular sync"],
-                    ["dynamicSyncEnabled", "Dynamic sync"],
-                    ["autoFollowForwarded", "Auto-follow"],
-                    ["isFrozen", "Frozen"],
-                    ["isUnavailableOnWebView", "Restricted"],
-                  ] as const
-                ).map(([key, label]) => (
-                  <label key={key} className="flex items-center gap-2">
-                    <input
-                      type="checkbox"
-                      checked={Boolean(draft[key])}
-                      onChange={(e) =>
-                        setDraft((prev) => ({
-                          ...prev,
-                          [key]: e.target.checked,
-                        }))
-                      }
-                    />
-                    {label}
-                  </label>
-                ))}
-              </div>
-
-              <div className="space-y-2">
-                <p className="text-[9px] uppercase font-bold opacity-60">
-                  Sync permissions
-                </p>
-                <div className="flex flex-wrap gap-4 text-[10px] uppercase font-bold">
-                  {(
-                    [
-                      ["includeInSyncAll", "Include in Sync All"],
-                      ["includeInBulkSync", "Include in bulk sync"],
-                      ["allowIndividualSync", "Allow individual sync"],
-                      ["resetSyncEnabled", "Reset & Sync enabled"],
-                    ] as const
-                  ).map(([key, label]) => (
-                    <label key={key} className="flex items-center gap-2">
-                      <input
-                        type="checkbox"
-                        checked={Boolean(draft[key])}
-                        onChange={(e) =>
-                          setDraft((prev) => ({
-                            ...prev,
-                            [key]: e.target.checked,
-                          }))
-                        }
-                      />
-                      {label}
-                    </label>
-                  ))}
-                </div>
-                <p className="text-[10px] normal-case opacity-60">
-                  Bulk sync covers Sync Selected, Fix Partial History, and bulk
-                  reset eligibility. Individual sync covers card and palette
-                  single-channel sync.
-                </p>
-              </div>
-
-              <label className="space-y-1 block max-w-xs">
-                <span className="text-[9px] uppercase font-bold opacity-60">
-                  Dynamic expected posts
-                </span>
-                <input
-                  type="number"
-                  min={1}
-                  value={draft.dynamicSyncExpectedPosts ?? 15}
-                  onChange={(e) =>
-                    setDraft((prev) => ({
-                      ...prev,
-                      dynamicSyncExpectedPosts: Number.parseInt(
-                        e.target.value,
-                        10,
-                      ),
-                    }))
-                  }
-                  className="w-full bg-app-bg border border-app-ink/15 px-2 py-1.5 text-sm"
-                />
-              </label>
-
-              <div className="flex flex-wrap gap-2 pt-2">
-                <TgButton
-                  type="button"
-                  variant="primary"
-                  size="md"
-                  loading={busy === "save"}
-                  loadingLabel="Save group"
-                  disabled={busy !== null}
-                  onClick={() => void handleSave()}
-                >
-                  Save group
-                </TgButton>
-                {!isReservedGroup(selectedGroup) && (
-                  <TgButton
-                    type="button"
-                    variant="dangerSoft"
-                    size="md"
-                    loading={busy === "delete"}
-                    loadingLabel="Delete"
-                    disabled={busy !== null}
-                    onClick={() => void handleDelete()}
-                  >
-                    <Trash2 size={12} />
-                    Delete
-                  </TgButton>
-                )}
-              </div>
-              {!isReservedGroup(selectedGroup) &&
-                (selectedGroup.channelCount ?? 0) > 0 && (
-                  <p className="text-[10px] text-amber-700/80">
-                    Move all {selectedGroup.channelCount} channel(s) to another
-                    group before deleting this one.
-                  </p>
-                )}
-            </div>
+            <GroupEditor
+              group={selectedGroup}
+              draft={draft}
+              setDraft={setDraft}
+              busy={busy}
+              onSave={() => void handleSave()}
+              onDelete={() => void handleDelete()}
+            />
           ) : null}
         </div>
       )}
@@ -369,27 +163,12 @@ export const SettingGroupsPanel: React.FC = () => {
           <Plus size={12} />
           New custom group
         </div>
-        <div className="flex flex-col sm:flex-row gap-2">
-          <input
-            value={createDraft.name ?? ""}
-            onChange={(e) =>
-              setCreateDraft((prev) => ({ ...prev, name: e.target.value }))
-            }
-            placeholder="Group name"
-            className="flex-1 bg-app-bg border border-app-ink/15 px-3 py-2 text-sm"
-          />
-          <TgButton
-            type="button"
-            variant="primary"
-            size="md"
-            loading={busy === "create"}
-            loadingLabel="Create group"
-            disabled={busy !== null}
-            onClick={() => void handleCreate()}
-          >
-            Create group
-          </TgButton>
-        </div>
+        <CreateGroupForm
+          name={createDraft.name}
+          onNameChange={(name) => setCreateDraft((prev) => ({ ...prev, name }))}
+          busy={busy}
+          onCreate={() => void handleCreate()}
+        />
       </div>
     </div>
   )
