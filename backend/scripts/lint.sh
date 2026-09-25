@@ -11,8 +11,9 @@ set -x
 # `backfill_post_media.py` had been reading `is_unavailable_on_web_view` off
 # `Channel` — a `ChannelSettingGroup` column — since long before any of this.
 # A script nothing type-checks breaks silently and is discovered by an operator
-# running it, which is the worst moment to discover it.
-mypy app scripts
+# running it, which is the worst moment to discover it. `../scripts/crap` feeds
+# the CRAP ratchet CI gate; ruff reaches it through the pre-commit hooks.
+mypy app scripts ../scripts/crap
 ty check app
 ruff check app scripts
 ruff format app scripts --check

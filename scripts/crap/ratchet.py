@@ -110,12 +110,12 @@ def check(
                 "bash scripts/crap/run.sh --update-baseline to lock in the gain."
             )
     for key, entry in sorted(mine.items()):
-        r = fns.get(key)
-        if r is None or crap(r["cc"], r["cov"]) <= THRESHOLD:
+        found = fns.get(key)
+        if found is None or crap(found["cc"], found["cov"]) <= THRESHOLD:
             now = (
                 "no longer exists"
-                if r is None
-                else f"now scores {crap(r['cc'], r['cov']):.1f}"
+                if found is None
+                else f"now scores {crap(found['cc'], found['cov']):.1f}"
             )
             failures.append(
                 f"(c) stale: {key} is in the baseline at {entry['score']} but {now}. "

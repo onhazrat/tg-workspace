@@ -60,3 +60,14 @@ module = [
 ]
 ignore_missing_imports = true
 disable_error_code = ["import-untyped"]
+
+# Python outside backend/ (scripts/) takes the backend's rules. The target is
+# lower because these scripts run on the CI runner's system python3 (3.12 on
+# ubuntu-latest), where py314 syntax such as `except A, B:` does not parse.
+[tool.ruff]
+extend = "backend/pyproject.toml"
+target-version = "py312"
+
+[tool.ruff.lint.extend-per-file-ignores]
+# CLI scripts report on stdout, as backend/scripts/ do.
+"scripts/**" = ["T201"]

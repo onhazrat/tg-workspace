@@ -34,7 +34,7 @@ repos:
         entry: bun run lint
         language: system
         types: [text]
-        files: ^frontend/
+        files: ^(frontend|scripts/crap)/
 
       - id: local-ruff-check
         name: ruff check

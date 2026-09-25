@@ -44,7 +44,8 @@ for (const path of e2ePaths)
   }
 
 // The generated client and the vendored shadcn components are not ours to test.
-const skip = /(^src\/client\/|^src\/components\/ui\/|\.test\.tsx?$|\.conform\.ts$|routeTree\.gen\.ts$|\.d\.ts$)/
+const skip =
+  /(^src\/client\/|^src\/components\/ui\/|\.test\.tsx?$|\.conform\.ts$|routeTree\.gen\.ts$|\.d\.ts$)/
 const rows: object[] = []
 
 const isFn = (n: ts.Node) =>
@@ -80,9 +81,14 @@ function fnName(n: ts.Node, sf: ts.SourceFile): string {
   const named = (n as ts.FunctionDeclaration).name
   if (named) return named.getText(sf)
   const p = n.parent
-  if (ts.isVariableDeclaration(p) || ts.isPropertyAssignment(p) || ts.isPropertyDeclaration(p))
+  if (
+    ts.isVariableDeclaration(p) ||
+    ts.isPropertyAssignment(p) ||
+    ts.isPropertyDeclaration(p)
+  )
     return p.name.getText(sf)
-  if (ts.isCallExpression(p)) return `<arg of ${p.expression.getText(sf).slice(0, 40)}>`
+  if (ts.isCallExpression(p))
+    return `<arg of ${p.expression.getText(sf).slice(0, 40)}>`
   if (ts.isJsxExpression(p)) return "<jsx callback>"
   return "<anonymous>"
 }
@@ -102,12 +108,17 @@ for (const file of new Glob("src/**/*.{ts,tsx}").scanSync(root)) {
     const nestedLines = new Set<number>()
     const walk = (n: ts.Node) => {
       if (n !== fn && isFn(n)) {
-        for (let l = line(n.getStart(sf)); l <= line(n.getEnd()); l++) nestedLines.add(l)
+        for (let l = line(n.getStart(sf)); l <= line(n.getEnd()); l++)
+          nestedLines.add(l)
         visitFn(n, `${name}.`)
         return
       }
       if (BRANCH_NODES.has(n.kind)) cc++
-      else if (ts.isBinaryExpression(n) && BRANCH_OPERATORS.has(n.operatorToken.kind)) cc++
+      else if (
+        ts.isBinaryExpression(n) &&
+        BRANCH_OPERATORS.has(n.operatorToken.kind)
+      )
+        cc++
       ts.forEachChild(n, walk)
     }
     ts.forEachChild(fn, walk)

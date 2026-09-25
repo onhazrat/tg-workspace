@@ -565,7 +565,7 @@ const state = { q: "", side: "all", min: 0, key: "crap", dir: -1, limit: 100 }
 const tbody = document.getElementById("tbody")
 function renderTable() {
   const needle = state.q.toLowerCase()
-  let list = rows.filter((r) =>
+  const list = rows.filter((r) =>
     (state.side === "all" || r.side === Number(state.side)) &&
     r.crap >= state.min &&
     (!needle || r.name.toLowerCase().includes(needle) || r.file.toLowerCase().includes(needle)))
