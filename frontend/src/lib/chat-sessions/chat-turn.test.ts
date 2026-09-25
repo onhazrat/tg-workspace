@@ -8,6 +8,7 @@ import {
   replaceLastTurn,
   staleSelectedChannels,
   type TurnResult,
+  transcriptLoad,
 } from "./chat-turn"
 
 /**
@@ -132,6 +133,38 @@ describe("chatSessionRecord", () => {
         { role: "user", text: "q" },
         { role: "model", text: "answer", sources },
       ],
+    })
+  })
+})
+
+describe("transcriptLoad", () => {
+  const turns: ChatMessage[] = [{ role: "user", text: "hi" }]
+
+  it("forgets the loaded session when the chat is closed, keeping the turns", () => {
+    expect(transcriptLoad(null, "c1", { messages: turns })).toEqual({
+      loadedId: null,
+    })
+  })
+
+  it("does nothing while the opened transcript is still loading", () => {
+    expect(transcriptLoad("c1", null, undefined)).toBeNull()
+  })
+
+  it("does nothing once that session is already loaded", () => {
+    expect(transcriptLoad("c1", "c1", { messages: [] })).toBeNull()
+  })
+
+  it("loads the opened session's transcript once it arrives", () => {
+    expect(transcriptLoad("c2", "c1", { messages: turns })).toEqual({
+      loadedId: "c2",
+      messages: turns,
+    })
+  })
+
+  it("loads an empty transcript for a session stored without one", () => {
+    expect(transcriptLoad("c2", null, { messages: null })).toEqual({
+      loadedId: "c2",
+      messages: [],
     })
   })
 })

@@ -1,7 +1,7 @@
 /**
  * The rules one chat turn follows, with no React and no I/O, so they can be
- * tested directly. `ChatContext.handleSendMessage` is the only caller; it keeps
- * the streaming, the saving and the state.
+ * tested directly. `ChatContext` is the only caller; it keeps the streaming,
+ * the saving and the state.
  */
 import type {
   Channel,
@@ -131,4 +131,22 @@ export function chatSessionRecord(
       { role: "model", text: turn.text, sources: turn.sources },
     ],
   }
+}
+
+/**
+ * What the transcript loader does when the open chat or its query changes.
+ *
+ * `null` is "leave everything alone": the transcript is already loaded, or has
+ * not arrived yet. Closing the chat forgets which one was loaded but keeps the
+ * turns on screen. Otherwise it loads the opened session's transcript once, so
+ * a live conversation's own turns are never overwritten by a refetch.
+ */
+export function transcriptLoad(
+  sessionId: string | null,
+  loadedId: string | null,
+  session: { messages?: ChatMessage[] | null } | undefined,
+): { loadedId: string | null; messages?: ChatMessage[] } | null {
+  if (!sessionId) return { loadedId: null }
+  if (loadedId === sessionId || !session) return null
+  return { loadedId: sessionId, messages: session.messages ?? [] }
 }

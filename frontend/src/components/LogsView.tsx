@@ -2,14 +2,13 @@ import { motion } from "motion/react"
 import type React from "react"
 import { useEffect, useMemo, useRef, useState } from "react"
 import { toast } from "sonner"
-import { EmbeddingLogsTab } from "@/components/logs/EmbeddingLogsTab"
-import { LlmLogsTab } from "@/components/logs/LlmLogsTab"
+import {
+  ActiveLogPanel,
+  type LogRowsByTab,
+} from "@/components/logs/ActiveLogPanel"
 import { LogFilterBar } from "@/components/logs/LogFilterBar"
 import { LogsHeader } from "@/components/logs/LogsHeader"
 import { LogTabBar } from "@/components/logs/LogTabBar"
-import { NetworkLogsTab } from "@/components/logs/NetworkLogsTab"
-import { PublishLogsTab } from "@/components/logs/PublishLogsTab"
-import { SyncLogsTab } from "@/components/logs/SyncLogsTab"
 import { TgConfirmDialog } from "@/components/ui/tg-confirm-dialog"
 import { useUI } from "@/contexts/UIContext"
 import { useDebouncedValue } from "@/hooks/useDebouncedValue"
@@ -31,7 +30,7 @@ import {
   type LogFilters,
   uniqueSorted,
 } from "@/lib/logs/filters"
-import { LOG_TAB_META, type LogTab } from "@/lib/logs/tabs"
+import { LOG_TAB_META, type LogTab, logQueryRows } from "@/lib/logs/tabs"
 import type {
   EmbeddingLog,
   LLMLog,
@@ -95,19 +94,23 @@ export const LogsView: React.FC = () => {
   const networkQuery = useNetworkLogsQuery(true, { search: logSearch })
   const embeddingQuery = useEmbeddingLogsQuery(true, { search: logSearch })
 
-  const publishLogs = publishQuery.data ?? EMPTY_PUBLISH
-  const syncLogs = syncQuery.data ?? EMPTY_SYNC
-  const llmLogs = llmQuery.data ?? EMPTY_LLM
-  const networkLogs = networkQuery.data ?? EMPTY_NETWORK
-  const embeddingLogs = embeddingQuery.data ?? EMPTY_EMBEDDING
+  const publish = logQueryRows(publishQuery, EMPTY_PUBLISH)
+  const sync = logQueryRows(syncQuery, EMPTY_SYNC)
+  const llm = logQueryRows(llmQuery, EMPTY_LLM)
+  const network = logQueryRows(networkQuery, EMPTY_NETWORK)
+  const embedding = logQueryRows(embeddingQuery, EMPTY_EMBEDDING)
+  const publishLogs = publish.rows
+  const syncLogs = sync.rows
+  const llmLogs = llm.rows
+  const networkLogs = network.rows
+  const embeddingLogs = embedding.rows
 
-  /** First-load only: a refetch must not blank a panel that already has rows. */
   const logsLoading: Record<LogTab, boolean> = {
-    publish: publishQuery.isPending && publishLogs.length === 0,
-    sync: syncQuery.isPending && syncLogs.length === 0,
-    llm: llmQuery.isPending && llmLogs.length === 0,
-    network: networkQuery.isPending && networkLogs.length === 0,
-    embedding: embeddingQuery.isPending && embeddingLogs.length === 0,
+    publish: publish.loading,
+    sync: sync.loading,
+    llm: llm.loading,
+    network: network.loading,
+    embedding: embedding.loading,
   }
 
   const { setActiveTab, setCurrentSummaryId } = useUI()
@@ -191,12 +194,12 @@ export const LogsView: React.FC = () => {
     [embeddingLogs, filters],
   )
 
-  const recordCountByTab: Record<LogTab, number> = {
-    publish: filteredPublishLogs.length,
-    sync: filteredSyncLogs.length,
-    llm: filteredLlmLogs.length,
-    network: filteredNetworkLogs.length,
-    embedding: filteredEmbeddingLogs.length,
+  const filteredByTab: LogRowsByTab = {
+    publish: filteredPublishLogs,
+    sync: filteredSyncLogs,
+    llm: filteredLlmLogs,
+    network: filteredNetworkLogs,
+    embedding: filteredEmbeddingLogs,
   }
 
   const deleteMutations: Record<
@@ -289,7 +292,7 @@ export const LogsView: React.FC = () => {
       <div className="flex flex-col gap-4 mb-6">
         <LogsHeader
           activeTab={activeLogTab}
-          recordCount={recordCountByTab[activeLogTab]}
+          recordCount={filteredByTab[activeLogTab].length}
           onClearLogs={handleClearLogs}
         />
         <LogTabBar activeTab={activeLogTab} onSelect={handleSelectTab} />
@@ -307,53 +310,16 @@ export const LogsView: React.FC = () => {
       </div>
 
       <div className="space-y-3">
-        {activeLogTab === "publish" ? (
-          <PublishLogsTab
-            logs={filteredPublishLogs}
-            isLoading={logsLoading.publish}
-            visibleCount={visibleByTab.publish}
-            expandedId={expandedByTab.publish}
-            onToggleExpand={handleToggleExpand("publish")}
-            onDelete={handleDelete("publish")}
-            onViewSummary={handleViewSummary}
-          />
-        ) : activeLogTab === "sync" ? (
-          <SyncLogsTab
-            logs={filteredSyncLogs}
-            isLoading={logsLoading.sync}
-            visibleCount={visibleByTab.sync}
-            expandedId={expandedByTab.sync}
-            onToggleExpand={handleToggleExpand("sync")}
-            onDelete={handleDelete("sync")}
-          />
-        ) : activeLogTab === "llm" ? (
-          <LlmLogsTab
-            logs={filteredLlmLogs}
-            isLoading={logsLoading.llm}
-            visibleCount={visibleByTab.llm}
-            expandedId={expandedByTab.llm}
-            onToggleExpand={handleToggleExpand("llm")}
-            onDelete={handleDelete("llm")}
-          />
-        ) : activeLogTab === "network" ? (
-          <NetworkLogsTab
-            logs={filteredNetworkLogs}
-            isLoading={logsLoading.network}
-            visibleCount={visibleByTab.network}
-            expandedId={expandedByTab.network}
-            onToggleExpand={handleToggleExpand("network")}
-            onDelete={handleDelete("network")}
-          />
-        ) : (
-          <EmbeddingLogsTab
-            logs={filteredEmbeddingLogs}
-            isLoading={logsLoading.embedding}
-            visibleCount={visibleByTab.embedding}
-            expandedId={expandedByTab.embedding}
-            onToggleExpand={handleToggleExpand("embedding")}
-            onDelete={handleDelete("embedding")}
-          />
-        )}
+        <ActiveLogPanel
+          activeTab={activeLogTab}
+          logs={filteredByTab}
+          loading={logsLoading}
+          visible={visibleByTab}
+          expanded={expandedByTab}
+          onToggleExpand={handleToggleExpand}
+          onDelete={handleDelete}
+          onViewSummary={handleViewSummary}
+        />
 
         {/* Intersection Observer Target */}
         <div ref={observerTarget} className="h-10 w-full" />

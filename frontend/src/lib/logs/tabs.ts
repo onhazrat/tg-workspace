@@ -44,3 +44,17 @@ export const LOG_TAB_META: Record<LogTab, LogTabMeta> = {
     description: "Track all embedding generations.",
   },
 }
+
+/**
+ * One panel's rows, and whether it is on its first load. First-load only: a
+ * refetch must not blank a panel that already has rows. `empty` is a stable
+ * module constant, because a fresh `[]` per render would re-run every `useMemo`
+ * keyed on the list.
+ */
+export function logQueryRows<T>(
+  query: { data?: T[]; isPending: boolean },
+  empty: T[],
+): { rows: T[]; loading: boolean } {
+  const rows = query.data ?? empty
+  return { rows, loading: query.isPending && rows.length === 0 }
+}
