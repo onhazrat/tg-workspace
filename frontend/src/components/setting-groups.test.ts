@@ -14,6 +14,10 @@ describe("channel setting groups types", () => {
       autoFollowForwarded: false,
       isFrozen: false,
       isUnavailableOnWebView: false,
+      includeInSyncAll: true,
+      includeInBulkSync: true,
+      allowIndividualSync: true,
+      resetSyncEnabled: true,
       channelCount: 3,
     }
     expect(group.isDefault).toBe(true)

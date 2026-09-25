@@ -175,7 +175,7 @@ describe("promptPosts", () => {
       },
       { start: 10, end: 20 },
     )
-    const window = { mode: "fixed", start: 10, end: 20 }
+    const window = { mode: "fixed" as const, start: 10, end: 20 }
     expect(result.scope?.window).toEqual(window)
     expect(result.postCount).toBe(0)
     expect(asked[0]).toMatchObject({ window })

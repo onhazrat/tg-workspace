@@ -27,6 +27,10 @@ const sampleGroups: ChannelSettingGroup[] = [
     autoFollowForwarded: false,
     isFrozen: false,
     isUnavailableOnWebView: false,
+    includeInSyncAll: true,
+    includeInBulkSync: true,
+    allowIndividualSync: true,
+    resetSyncEnabled: true,
     channelCount: 2,
   },
   {
@@ -40,6 +44,10 @@ const sampleGroups: ChannelSettingGroup[] = [
     autoFollowForwarded: false,
     isFrozen: false,
     isUnavailableOnWebView: false,
+    includeInSyncAll: true,
+    includeInBulkSync: true,
+    allowIndividualSync: true,
+    resetSyncEnabled: true,
     channelCount: 0,
   },
   {
@@ -53,6 +61,10 @@ const sampleGroups: ChannelSettingGroup[] = [
     autoFollowForwarded: false,
     isFrozen: false,
     isUnavailableOnWebView: false,
+    includeInSyncAll: true,
+    includeInBulkSync: true,
+    allowIndividualSync: true,
+    resetSyncEnabled: true,
   },
 ]
 
@@ -112,8 +124,8 @@ describe("buildGroupCommands", () => {
   })
 
   test("filter command navigates to channels tab and applies group filter", () => {
-    let activeTab: string | null = null
-    let filterId: string | null = null
+    let activeTab = null as string | null
+    let filterId = null as string | null
     const filter = commands.find(
       (command) => command.id === "filter-channels-by-setting-group",
     )
@@ -133,9 +145,9 @@ describe("buildGroupCommands", () => {
   })
 
   test("open command navigates to sync settings and selects group", () => {
-    let activeTab: string | null = null
-    let section: string | null = null
-    let groupId: string | null = null
+    let activeTab = null as string | null
+    let section = null as string | null
+    let groupId = null as string | null
     const open = commands.find((command) => command.id === "open-setting-group")
     open?.run(
       makeContext({

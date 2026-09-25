@@ -18,8 +18,13 @@ let lookupCalls: Array<{ channelName: string; postId: number }[]> = []
 let upserted: Post[][] = []
 let known = new Set<string>()
 
-const post = (channelName: string, postId: number): Post =>
-  ({ id: `${channelName}#${postId}`, channelName, postId }) as unknown as Post
+const post = (channelName: string, postId: number): Post => ({
+  id: postId,
+  channelName,
+  text: "",
+  date: "",
+  timestamp: 0,
+})
 
 const fakeApi = {
   lookupPosts: async (refs: { channelName: string; postId: number }[]) => {
@@ -93,7 +98,7 @@ describe("lookupPosts", () => {
       fakeApi,
     )
 
-    expect(found.map((p) => p.postId)).toEqual([1])
+    expect(found.map((p) => p.id)).toEqual([1])
   })
 
   it("de-duplicates concurrent lookups of the same refs", async () => {
@@ -133,7 +138,7 @@ describe("getPost", () => {
   it("resolves one post through the batched lookup", async () => {
     const found = await getPost("alpha", 1, fakeApi)
 
-    expect(found?.postId).toBe(1)
+    expect(found?.id).toBe(1)
     expect(lookupCalls).toEqual([[{ channelName: "alpha", postId: 1 }]])
   })
 

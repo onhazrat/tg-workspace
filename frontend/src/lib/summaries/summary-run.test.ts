@@ -180,7 +180,7 @@ describe("countRegeneratedPosts", () => {
 })
 
 describe("autoPublishLog", () => {
-  const summary = { ...pending, id: "s9", text: "Body", status: null }
+  const summary = { ...pending, id: "s9", text: "Body", status: undefined }
   const bot = { id: "b1", name: "Bot One" } as BotCredential
   const dest = { chatId: "-100", name: "News" } as ChatDestination
   const run = { id: "log1", summary, bot, dest, now: 42 }

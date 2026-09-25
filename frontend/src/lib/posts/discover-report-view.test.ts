@@ -16,6 +16,9 @@ const scope: DiscoverReportScope = {
   forwarded: "all",
   media: "all",
   maxPerChannel: 0,
+  maxPerChannelMode: "latest",
+  seed: 0,
+  scopedPostCount: null,
 }
 
 const candidate: DiscoveryCandidate = {

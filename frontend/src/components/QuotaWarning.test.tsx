@@ -16,6 +16,7 @@ const budget = (over: Partial<MyBudgetUsage>): MyBudgetUsage => ({
   budget: "auto_sync",
   spent: 10,
   status: "normal",
+  lifted: false,
   ...over,
 })
 

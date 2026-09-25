@@ -115,6 +115,6 @@ describe("PalettePanelView", () => {
   test("the root list gets its props unchanged", () => {
     const element = view({ kind: "commands" })
     expect(element?.type).toBe(CommandListView)
-    expect(element?.props).toEqual(props.commandList)
+    expect(element?.props).toEqual({ ...props.commandList })
   })
 })

@@ -21,6 +21,10 @@ const frozenGroup = (id: string): ChannelSettingGroup => ({
   autoFollowForwarded: false,
   isFrozen: true,
   isUnavailableOnWebView: false,
+  includeInSyncAll: true,
+  includeInBulkSync: true,
+  allowIndividualSync: true,
+  resetSyncEnabled: true,
 })
 
 describe("setting group helpers", () => {

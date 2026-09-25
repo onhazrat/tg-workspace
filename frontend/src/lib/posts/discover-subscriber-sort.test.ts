@@ -130,7 +130,7 @@ describe("sortDiscoveryCandidates — subscribers", () => {
   })
 
   test("the other sort keys are unaffected by a missing probe", () => {
-    const rows = [candidate("a", undefined, 1), candidate("b", "1M", 5)]
+    const rows = [candidate("a", undefined, 1), candidate("b", 1_000_000, 5)]
     expect(sortDiscoveryCandidates(rows, "total").map((c) => c.name)).toEqual([
       "b",
       "a",
