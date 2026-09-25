@@ -1,5 +1,9 @@
 import type { APIRequestContext } from "@playwright/test"
 
+// `compose.override.yml` sets this inside the container; a run from the host
+// reaches the published port instead.
+const mailcatcherHost = process.env.MAILCATCHER_HOST || "http://localhost:1080"
+
 type Email = {
   id: number
   recipients: string[]
@@ -13,7 +17,7 @@ async function findEmail({
   request: APIRequestContext
   filter?: (email: Email) => boolean
 }) {
-  const response = await request.get(`${process.env.MAILCATCHER_HOST}/messages`)
+  const response = await request.get(`${mailcatcherHost}/messages`)
 
   let emails = await response.json()
 

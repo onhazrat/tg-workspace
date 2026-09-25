@@ -26,6 +26,55 @@ test("a superuser sees every tab but the Danger zone", async ({ page }) => {
   await expect(page.getByRole("tab")).toHaveText(superuserTabs)
 })
 
+test("Usage shows this account's three Budgets as GET /quota/me reports them", async ({
+  page,
+}) => {
+  const labels: Record<string, string> = {
+    auto_sync: "Scheduled syncing",
+    manual_bulk: "Bulk actions",
+    manual_single: "Single-channel syncs",
+  }
+  const statusText: Record<string, string> = {
+    normal: "Normal priority",
+    degraded: "Low priority",
+    blocked: "Paused until UTC midnight",
+  }
+  const limit = (value: number | null) =>
+    value === null ? "no limit" : String(value)
+
+  await page.goto("/settings")
+  const quota = page.waitForResponse(
+    (r) => r.url().includes("/api/v1/quota/me") && r.ok(),
+  )
+  await page.getByRole("tab", { name: "Usage" }).click()
+  const { budgets } = (await (await quota).json()) as {
+    budgets: {
+      budget: string
+      spent: number
+      allowance: number | null
+      ceiling: number | null
+      status: string
+      lifted: boolean
+    }[]
+  }
+
+  expect(budgets.map((b) => b.budget).sort()).toEqual(Object.keys(labels))
+  await expect(page.getByText("Request usage")).toBeVisible()
+  for (const b of budgets) {
+    await expect(
+      page
+        .getByRole("row", { name: new RegExp(labels[b.budget]) })
+        .getByRole("cell"),
+    ).toHaveText([
+      labels[b.budget],
+      String(b.spent),
+      limit(b.allowance),
+      limit(b.ceiling),
+      statusText[b.status] + (b.lifted ? " (limit lifted today)" : ""),
+    ])
+  }
+})
+
 test.describe("an ordinary account", () => {
   test.use({ storageState: { cookies: [], origins: [] } })
 
