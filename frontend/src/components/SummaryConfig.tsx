@@ -10,6 +10,23 @@ import { useSelectedAiKeyId } from "../hooks/useAiKeys"
 import { useScopedPostCounts } from "../hooks/usePostsView"
 import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tg-tooltip"
 
+/** Both actions wait for any scrape or run in flight and need posts to read. */
+export function summaryActionsDisabled(state: {
+  scraping: boolean
+  summarizing: boolean
+  copyingPrompt: boolean
+  hasChannels: boolean
+  hasPostsInScope: boolean
+}): boolean {
+  return (
+    state.scraping ||
+    state.summarizing ||
+    state.copyingPrompt ||
+    !state.hasChannels ||
+    !state.hasPostsInScope
+  )
+}
+
 /**
  * The two ways to start a summary.
  *
@@ -33,12 +50,13 @@ export const SummaryConfig: React.FC = () => {
   // no Key at all — gating it too would leave a keyless account with nothing.
   const noKey = useSelectedAiKeyId() === null
 
-  const actionsDisabled =
-    scrapingChannels.size > 0 ||
-    summarizing ||
-    copyingPrompt ||
-    channels.length === 0 ||
-    !hasPostsInScope
+  const actionsDisabled = summaryActionsDisabled({
+    scraping: scrapingChannels.size > 0,
+    summarizing,
+    copyingPrompt,
+    hasChannels: channels.length > 0,
+    hasPostsInScope,
+  })
 
   const handleCopyPrompt = async () => {
     setCopyingPrompt(true)

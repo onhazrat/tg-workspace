@@ -11,24 +11,18 @@ import {
 } from "react"
 import { api } from "@/api"
 import { type Theme, useTheme } from "@/components/theme-provider"
-import {
-  RETENTION_LOG_DAYS_DEFAULT,
-  RETENTION_PAYLOAD_DAYS_DEFAULT,
-  RETENTION_POST_DAYS_DEFAULT,
-  RETENTION_SHARED_LOG_DAYS_DEFAULT,
-} from "@/constants"
 import type {
   DiscoverFollowState,
   DiscoverSignalWeights,
   DiscoverSortKey,
   DiscoverySignalKind,
 } from "@/lib/posts/discover-candidates"
+import { hydrateAppSettings } from "@/lib/settings/hydrate"
 import type { AppSettings } from "@/lib/settings/schema"
 import { computeEffectiveGlobalStartTime } from "@/lib/settings/start-time"
 import {
   buildSectionPayload,
   createAppSettingSetters,
-  decodeServerSection,
   loadAppSettings,
   persistAppSettings,
   sectionValues,
@@ -206,58 +200,20 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({
       api.jobsStatus().catch(() => null),
     ])
       .then(([syncRow, retentionRow, translationRow, jobsStatus]) => {
-        const sync = syncRow.value ?? {}
-        const retention = retentionRow.value ?? {}
-        const translation = translationRow.value ?? {}
-        const legacySync: Record<string, unknown> = {}
-        const legacyRetention: Record<string, unknown> = {}
-        const legacyInterval = scopedStorage.getItem("autoSyncInterval")
-        if (
-          legacyInterval !== null &&
-          sync.regularSyncIntervalMinutes === undefined
-        ) {
-          legacySync.regularSyncIntervalMinutes = Number.parseInt(
-            legacyInterval,
-            10,
-          )
-        }
-        const legacyPostRetention = scopedStorage.getItem("postRetentionDays")
-        if (
-          legacyPostRetention !== null &&
-          retention.postRetentionDays === undefined
-        ) {
-          legacyRetention.postRetentionDays = Number.parseInt(
-            legacyPostRetention,
-            10,
-          )
-        }
-        const updates: Partial<AppSettings> = {
-          ...decodeServerSection("sync", { ...sync, ...legacySync }),
-          ...decodeServerSection("retention", {
-            postRetentionDays: RETENTION_POST_DAYS_DEFAULT,
-            logRetentionDays: RETENTION_LOG_DAYS_DEFAULT,
-            sharedLogRetentionDays: RETENTION_SHARED_LOG_DAYS_DEFAULT,
-            payloadRetentionDays: RETENTION_PAYLOAD_DAYS_DEFAULT,
-            ...retention,
-            ...legacyRetention,
-          }),
-          ...decodeServerSection("translation", translation),
-        }
-        if (typeof jobsStatus?.embeddings?.enabled === "boolean") {
-          updates.embeddingsEnabled = jobsStatus.embeddings.enabled
-        }
+        const { updates, writeBack } = hydrateAppSettings(
+          {
+            sync: syncRow.value,
+            retention: retentionRow.value,
+            translation: translationRow.value,
+            jobsStatus,
+          },
+          scopedStorage,
+        )
         setSettings((prev) => ({ ...prev, ...updates }))
         appSettingsHydrated.current = true
-        if (
-          Object.keys(legacySync).length > 0 ||
-          Object.keys(legacyRetention).length > 0
-        ) {
-          api
-            .putSetting("sync", { ...sync, ...legacySync })
-            .catch(console.error)
-          api
-            .putSetting("retention", { ...retention, ...legacyRetention })
-            .catch(console.error)
+        if (writeBack) {
+          api.putSetting("sync", writeBack.sync).catch(console.error)
+          api.putSetting("retention", writeBack.retention).catch(console.error)
         }
       })
       .catch(console.error)
