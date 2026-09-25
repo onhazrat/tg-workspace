@@ -78,6 +78,40 @@ export function resolveDiscoveryEmptyState(
   return EMPTY_STATES[reason]
 }
 
+export interface DiscoveryQuickActionHandlers {
+  setForwardedFilter: (value: "all" | "forwarded") => void
+  goToTab: (tab: "channels" | "posts") => void
+  enableAllSignals: () => void
+  resetCandidateFilters: () => void
+}
+
+/**
+ * Run an empty state's button. A switch over the union rather than a chain of
+ * ifs ending in "go to a tab", so a new action type is a compile error here
+ * instead of a click that navigates to `undefined`.
+ */
+export function runDiscoveryQuickAction(
+  action: DiscoveryQuickAction,
+  handlers: DiscoveryQuickActionHandlers,
+): void {
+  switch (action.type) {
+    case "set_forwarded_filter":
+      handlers.setForwardedFilter(action.value)
+      break
+    case "go_to_tab":
+      handlers.goToTab(action.tab)
+      break
+    case "enable_all_signals":
+      handlers.enableAllSignals()
+      break
+    case "reset_candidate_filters":
+      handlers.resetCandidateFilters()
+      break
+    default:
+      action satisfies never
+  }
+}
+
 export const FORWARDED_FILTER_LABELS: Record<string, string> = {
   all: "All posts",
   forwarded: "Forwarded only",

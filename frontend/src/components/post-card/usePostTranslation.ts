@@ -18,6 +18,39 @@ export function usePostTranslation(post: Post) {
   const { translationEnabled, autoTranslate, translationTargetLanguage } =
     useSettings()
   const { requestTranslation } = useTranslation()
+  return usePostTranslationWith(post, {
+    translationEnabled,
+    autoTranslate,
+    translationTargetLanguage,
+    requestTranslation,
+    getTranslation,
+    saveTranslation,
+  })
+}
+
+/**
+ * Everything `usePostTranslation` reads from its providers and the store,
+ * injected so the hook renders in a test without `mock.module` (process-wide
+ * in bun, see `DataContext.test.tsx`).
+ */
+export interface PostTranslationDeps {
+  translationEnabled: boolean
+  autoTranslate: boolean
+  translationTargetLanguage: string
+  requestTranslation: (id: string, text: string) => Promise<string>
+  getTranslation: typeof getTranslation
+  saveTranslation: typeof saveTranslation
+}
+
+export function usePostTranslationWith(post: Post, deps: PostTranslationDeps) {
+  const {
+    translationEnabled,
+    autoTranslate,
+    translationTargetLanguage,
+    requestTranslation,
+    getTranslation,
+    saveTranslation,
+  } = deps
 
   const [translatedText, setTranslatedText] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
@@ -68,6 +101,7 @@ export function usePostTranslation(post: Post) {
     translatedText,
     showing,
     requestTranslation,
+    saveTranslation,
     post.channelName,
     post.id,
     post.text,
@@ -94,6 +128,7 @@ export function usePostTranslation(post: Post) {
     translatable,
     autoTranslate,
     translationTargetLanguage,
+    getTranslation,
     toggle,
   ])
 

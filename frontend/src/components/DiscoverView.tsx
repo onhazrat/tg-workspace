@@ -36,6 +36,7 @@ import {
 import {
   type DiscoveryQuickAction,
   resolveDiscoveryEmptyState,
+  runDiscoveryQuickAction,
 } from "@/lib/posts/discover-empty-state"
 import {
   type DiscoverReportView,
@@ -254,21 +255,13 @@ export const DiscoverView: React.FC = () => {
     setNameQuery("")
   }
 
-  const runQuickAction = (action: DiscoveryQuickAction) => {
-    if (action.type === "set_forwarded_filter") {
-      setForwardedFilter(action.value)
-      return
-    }
-    if (action.type === "enable_all_signals") {
-      setDiscoverSignals([...DISCOVERY_SIGNAL_KINDS])
-      return
-    }
-    if (action.type === "reset_candidate_filters") {
-      resetCandidateFilters()
-      return
-    }
-    setActiveTab(action.tab)
-  }
+  const runQuickAction = (action: DiscoveryQuickAction) =>
+    runDiscoveryQuickAction(action, {
+      setForwardedFilter,
+      goToTab: setActiveTab,
+      enableAllSignals: () => setDiscoverSignals([...DISCOVERY_SIGNAL_KINDS]),
+      resetCandidateFilters,
+    })
 
   return (
     <motion.div

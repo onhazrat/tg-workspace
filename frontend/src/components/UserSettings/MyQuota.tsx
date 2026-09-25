@@ -14,7 +14,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import { budgetLabel, useMyQuota } from "@/hooks/useMyQuota"
+import { budgetRow, useMyQuota } from "@/hooks/useMyQuota"
 
 /**
  * This account's own Request usage against its Budgets (ticket 24).
@@ -28,19 +28,6 @@ import { budgetLabel, useMyQuota } from "@/hooks/useMyQuota"
  * a sync is anywhere between one request and fifty, which is why the numbers
  * are larger than the channel counts next to them.
  */
-function limitText(value: number | null | undefined): string {
-  // `null` is unlimited on the wire — a negative setting resolved. Zero is a
-  // real limit, so it must not be rendered as "no limit"; that distinction is
-  // exactly what decision 18 turns on.
-  return value === null || value === undefined ? "no limit" : String(value)
-}
-
-const STATUS_TEXT: Record<string, string> = {
-  normal: "Normal priority",
-  degraded: "Low priority",
-  blocked: "Paused until UTC midnight",
-}
-
 export default function MyQuota() {
   const { data, isPending, isError } = useMyQuota()
 
@@ -76,26 +63,24 @@ export default function MyQuota() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {(data?.budgets ?? []).map((budget) => (
-                <TableRow key={budget.budget}>
-                  <TableCell className="font-medium">
-                    {budgetLabel(budget.budget)}
-                  </TableCell>
-                  <TableCell className="text-right tabular-nums">
-                    {budget.spent ?? 0}
-                  </TableCell>
-                  <TableCell className="text-right tabular-nums">
-                    {limitText(budget.allowance)}
-                  </TableCell>
-                  <TableCell className="text-right tabular-nums">
-                    {limitText(budget.ceiling)}
-                  </TableCell>
-                  <TableCell>
-                    {STATUS_TEXT[budget.status ?? "normal"] ?? budget.status}
-                    {budget.lifted ? " (limit lifted today)" : ""}
-                  </TableCell>
-                </TableRow>
-              ))}
+              {(data?.budgets ?? []).map((budget) => {
+                const row = budgetRow(budget)
+                return (
+                  <TableRow key={budget.budget}>
+                    <TableCell className="font-medium">{row.label}</TableCell>
+                    <TableCell className="text-right tabular-nums">
+                      {row.spent}
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums">
+                      {row.allowance}
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums">
+                      {row.ceiling}
+                    </TableCell>
+                    <TableCell>{row.status}</TableCell>
+                  </TableRow>
+                )
+              })}
             </TableBody>
           </Table>
         )}

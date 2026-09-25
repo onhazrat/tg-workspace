@@ -9,6 +9,7 @@ import {
   useSettingGroupsQuery,
 } from "@/hooks/useSettingGroups"
 import { addChannelByName } from "@/lib/channels/add-channel"
+import { assignChannelsToSettingGroup } from "@/lib/channels/assign-setting-group"
 import {
   addManualTag,
   removeTagsByName,
@@ -96,41 +97,13 @@ export function useChannelGridActions() {
     [settingGroups],
   )
 
-  const applyBulkGroupAssignment = async (settingGroupId: string) => {
-    if (!settingGroupId || selectedChannelIds.length === 0) return
-    await api.bulkAssignSettingGroup({
-      channelIds: selectedChannelIds,
-      settingGroupId,
+  const applyBulkGroupAssignment = (settingGroupId: string) =>
+    assignChannelsToSettingGroup(selectedChannelIds, settingGroupId, {
+      settingGroups,
+      setChannels,
+      loadChannels,
+      invalidateSettingGroups,
     })
-    const group = settingGroups.find((item) => item.id === settingGroupId)
-    if (!group) {
-      await loadChannels()
-      return
-    }
-    setChannels((prev) =>
-      prev.map((channel) =>
-        selectedChannelIds.includes(channel.id)
-          ? {
-              ...channel,
-              settingGroupId: group.id,
-              settingGroupName: group.name,
-              regularSyncEnabled: group.regularSyncEnabled,
-              dynamicSyncEnabled: group.dynamicSyncEnabled,
-              autoSyncIntervalMinutes: group.autoSyncIntervalMinutes,
-              dynamicSyncExpectedPosts: group.dynamicSyncExpectedPosts,
-              autoFollowForwarded: group.autoFollowForwarded,
-              isFrozen: group.isFrozen,
-              isUnavailableOnWebView: group.isUnavailableOnWebView,
-              includeInSyncAll: group.includeInSyncAll,
-              includeInBulkSync: group.includeInBulkSync,
-              allowIndividualSync: group.allowIndividualSync,
-              resetSyncEnabled: group.resetSyncEnabled,
-            }
-          : channel,
-      ),
-    )
-    await invalidateSettingGroups()
-  }
 
   const handleRemoveChannel = (channel: Channel) => {
     setConfirmDeleteChannel(channel)

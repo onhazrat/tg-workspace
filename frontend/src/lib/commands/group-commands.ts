@@ -1,6 +1,7 @@
 import { toast } from "sonner"
 
 import { api } from "@/api"
+import { applyGroupFieldsToChannel } from "@/lib/channels/assign-setting-group"
 import { sortSettingGroupsForDisplay } from "@/lib/channels/setting-groups"
 import type { CommandContext, CommandDef } from "@/lib/commands/types"
 import type { Channel, ChannelSettingGroup } from "@/types"
@@ -33,28 +34,6 @@ export function getSettingGroupEntityCandidates(
     id: group.id,
     label: formatSettingGroupCandidateLabel(group, ctx.channels),
   }))
-}
-
-function applyGroupFieldsToChannel(
-  channel: Channel,
-  group: ChannelSettingGroup,
-): Channel {
-  return {
-    ...channel,
-    settingGroupId: group.id,
-    settingGroupName: group.name,
-    regularSyncEnabled: group.regularSyncEnabled,
-    dynamicSyncEnabled: group.dynamicSyncEnabled,
-    autoSyncIntervalMinutes: group.autoSyncIntervalMinutes,
-    dynamicSyncExpectedPosts: group.dynamicSyncExpectedPosts,
-    autoFollowForwarded: group.autoFollowForwarded,
-    isFrozen: group.isFrozen,
-    isUnavailableOnWebView: group.isUnavailableOnWebView,
-    includeInSyncAll: group.includeInSyncAll,
-    includeInBulkSync: group.includeInBulkSync,
-    allowIndividualSync: group.allowIndividualSync,
-    resetSyncEnabled: group.resetSyncEnabled,
-  }
 }
 
 export async function moveSelectedChannelsToSettingGroup(
