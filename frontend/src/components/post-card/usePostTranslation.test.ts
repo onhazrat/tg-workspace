@@ -59,15 +59,22 @@ function harness(
       requests.push([id, text])
       return options.translate ? options.translate() : Promise.resolve("hello")
     },
-    getTranslation: async (channelName, postId) => {
-      reads.push(`${channelName}#${postId}`)
+    getTranslation: async (channelName, postId, language) => {
+      reads.push(`${channelName}#${postId}@${language}`)
       return store.get(`${channelName}#${postId}`)
     },
     saveTranslation: async (row) => {
       store.set(`${row.channelName}#${row.postId}`, row)
     },
   }
-  const hook = renderHook(() => usePostTranslationWith(post, deps))
+  const hook = renderHook(
+    ({ post, language }: { post: Post; language: string }) =>
+      usePostTranslationWith(post, {
+        ...deps,
+        translationTargetLanguage: language,
+      }),
+    { initialProps: { post, language: "English" } },
+  )
   return { ...hook, store, reads, requests }
 }
 
@@ -177,10 +184,12 @@ describe("on mount", () => {
   })
 
   test("nothing stored and auto-translate on fetches exactly once", async () => {
-    const { result, requests } = harness({ autoTranslate: true })
+    const { result, reads, requests } = harness({ autoTranslate: true })
     await waitFor(() => expect(result.current.text).toBe("hello"))
     expect(result.current.showing).toBe(true)
     expect(requests).toHaveLength(1)
+    // The fetch flips `busy`; that must not send the mount read round again.
+    expect(reads).toHaveLength(1)
   })
 
   test("nothing stored and auto-translate off asks the translator for nothing", async () => {
@@ -198,5 +207,33 @@ describe("on mount", () => {
     expect(result.current.translatable).toBe(false)
     await act(async () => {})
     expect(reads).toEqual([])
+  })
+
+  test("clicking toggle twice does not read the store again", async () => {
+    const { result, reads } = harness({ stored: cached("from the store") })
+    await waitFor(() => expect(reads).toEqual(["durov#42@English"]))
+
+    await act(() => result.current.toggle())
+    expect(result.current.text).toBe("from the store")
+    await act(() => result.current.toggle())
+    expect(result.current.text).toBe("salam")
+
+    expect(reads).toEqual(["durov#42@English"])
+  })
+
+  test("a different post or target language reads the store again", async () => {
+    const { rerender, reads } = harness()
+    await waitFor(() => expect(reads).toHaveLength(1))
+
+    rerender({ post: { ...post, id: 43 }, language: "English" })
+    await waitFor(() => expect(reads).toHaveLength(2))
+
+    rerender({ post: { ...post, id: 43 }, language: "German" })
+    await waitFor(() => expect(reads).toHaveLength(3))
+    expect(reads).toEqual([
+      "durov#42@English",
+      "durov#43@English",
+      "durov#43@German",
+    ])
   })
 })

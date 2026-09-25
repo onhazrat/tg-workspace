@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import { toast } from "sonner"
 import { needsTranslation } from "@/constants"
 import { useSettings } from "@/contexts/SettingsContext"
@@ -107,6 +107,11 @@ export function usePostTranslationWith(post: Post, deps: PostTranslationDeps) {
     post.text,
     translationTargetLanguage,
   ])
+  // The mount read calls the latest toggle through a ref. Listing `toggle`
+  // itself would re-read the store on every click, because its identity
+  // follows `busy`, `translatedText` and `showing`.
+  const toggleRef = useRef(toggle)
+  toggleRef.current = toggle
 
   useEffect(() => {
     if (!translatable) return
@@ -119,7 +124,7 @@ export function usePostTranslationWith(post: Post, deps: PostTranslationDeps) {
         setTranslatedText(existing.translatedText)
         if (autoTranslate) setShowing(true)
       } else if (autoTranslate) {
-        toggle()
+        void toggleRef.current()
       }
     })
   }, [
@@ -129,7 +134,6 @@ export function usePostTranslationWith(post: Post, deps: PostTranslationDeps) {
     autoTranslate,
     translationTargetLanguage,
     getTranslation,
-    toggle,
   ])
 
   return {
