@@ -79,6 +79,69 @@ def _post_int_from_item(item: dict[str, Any], camel: str, snake: str) -> int | N
     return value if isinstance(value, int) and not isinstance(value, bool) else None
 
 
+def _item_fields(item: dict[str, Any]) -> dict[str, Any]:
+    """The Post columns a payload item sets, read under either spelling.
+
+    The scraper and an export round trip send camelCase; import and
+    `/data/posts/bulk` take any JSON, so the snake_case column names are read
+    too. A key that is absent is absent from the answer, except for the three
+    columns an update has always overwritten unconditionally, so the update
+    branch can apply the answer as it stands and the insert branch lays it over
+    its defaults.
+
+    `replyTo` is the one field guarded on a single spelling: an update ignores a
+    snake-only `reply_to`, where an insert reads either.
+    """
+    fields: dict[str, Any] = {
+        "forwarded_from": item.get("forwardedFrom") or item.get("forwarded_from"),
+        "forwarded_from_name": item.get("forwardedFromName")
+        or item.get("forwarded_from_name"),
+        "reply_to_post_id": _post_int_from_item(
+            item, "replyToPostId", "reply_to_post_id"
+        ),
+    }
+    # Guarded on the key where the fields above are not, and the difference is
+    # which payloads carry the key. `post_to_camel` emits a fixed set of keys
+    # and CRG-03's column is not among them, so this function — which
+    # `POST /data/import` and `/data/posts/bulk` share with the scraper — would
+    # take an absent key as "no id" and null the column on every Post an export
+    # round trip restored. The href is gone, so nothing could put it back.
+    # `forwarded_from` and `reply_to_post_id` are exported, so their
+    # unconditional writes restore themselves; this one does not.
+    if "forwardedFromPostId" in item or "forwarded_from_post_id" in item:
+        fields["forwarded_from_post_id"] = _post_int_from_item(
+            item, "forwardedFromPostId", "forwarded_from_post_id"
+        )
+    for key in ("text", "date", "timestamp"):
+        if key in item:
+            fields[key] = item[key]
+    if "media" in item:
+        fields["media"] = _post_media_from_item(item)
+    if "links" in item:
+        fields["links"] = _post_links_from_item(item)
+    # Key-guarded like `forwardedFromPostId`, so an export from before LINK-01
+    # leaves the column alone. The update branch drops the stored spans when
+    # the words change and this key is absent (ADR-022).
+    if "linkSpans" in item or "link_spans" in item:
+        fields["link_spans"] = _post_link_spans_from_item(item)
+    if "replyTo" in item:
+        fields["reply_to"] = _post_reply_from_item(item)
+    return fields
+
+
+#: What a new Post holds in a column `_item_fields` leaves out. `reply_to` is
+#: not here: an insert reads it under either spelling, unlike the update guard.
+_INSERT_DEFAULTS: dict[str, Any] = {
+    "text": "",
+    "date": "",
+    "timestamp": 0,
+    "forwarded_from_post_id": None,
+    "media": None,
+    "links": None,
+    "link_spans": None,
+}
+
+
 def bulk_upsert_posts_impl(
     body: list[dict[str, Any]],
     session: Session,
@@ -112,45 +175,13 @@ def bulk_upsert_posts_impl(
             )
             was_words = own_words(existing)
             was_text = existing.text
-            existing.text = item.get("text", existing.text)
-            existing.date = item.get("date", existing.date)
-            existing.timestamp = item.get("timestamp", existing.timestamp)
-            existing.forwarded_from = item.get("forwardedFrom") or item.get(
-                "forwarded_from"
-            )
-            existing.forwarded_from_name = item.get("forwardedFromName") or item.get(
-                "forwarded_from_name"
-            )
-            existing.reply_to_post_id = _post_int_from_item(
-                item, "replyToPostId", "reply_to_post_id"
-            )
-            # Guarded on the key where the four fields around it are not, and
-            # the difference is which payloads carry the key. `post_to_camel`
-            # emits a fixed set of keys and CRG-03's column is not among them, so
-            # this function — which `POST /data/import` and `/data/posts/bulk`
-            # share with the scraper — would take an absent key as "no id" and
-            # null the column on every Post an export round trip restored. The
-            # href is gone, so nothing could put it back. `forwarded_from` and
-            # `reply_to_post_id` are exported, so their unconditional writes
-            # restore themselves; this one does not.
-            if "forwardedFromPostId" in item or "forwarded_from_post_id" in item:
-                existing.forwarded_from_post_id = _post_int_from_item(
-                    item, "forwardedFromPostId", "forwarded_from_post_id"
-                )
-            if "media" in item:
-                existing.media = _post_media_from_item(item)
-            if "links" in item:
-                existing.links = _post_links_from_item(item)
-            # Key-guarded like `forwardedFromPostId`, so an export from before
-            # LINK-01 leaves the column alone, but only while the words are the
-            # same. Positions measured against other words link the wrong ones,
-            # and null sends the renderer back to its regex (ADR-022).
-            if "linkSpans" in item or "link_spans" in item:
-                existing.link_spans = _post_link_spans_from_item(item)
-            elif existing.text != was_text:
+            fields = _item_fields(item)
+            for column, value in fields.items():
+                setattr(existing, column, value)
+            # Positions measured against other words link the wrong ones, and
+            # null sends the renderer back to its regex (ADR-022).
+            if "link_spans" not in fields and existing.text != was_text:
                 existing.link_spans = None
-            if "replyTo" in item:
-                existing.reply_to = _post_reply_from_item(item)
             # Conditional, and that is the whole point: an import restores a
             # whole export and a first sync re-upserts its page, so clearing the
             # flag unconditionally would hand reference extraction every
@@ -193,25 +224,15 @@ def bulk_upsert_posts_impl(
                 or item.get("retrieval_source")
                 or retrieval_source
             )
+            columns: dict[str, Any] = {
+                **_INSERT_DEFAULTS,
+                "reply_to": _post_reply_from_item(item),
+                **_item_fields(item),
+            }
             post = Post(
                 channel_name=channel,
                 post_id=post_id,
-                text=item.get("text", ""),
-                date=item.get("date", ""),
-                timestamp=item.get("timestamp", 0),
-                forwarded_from=item.get("forwardedFrom") or item.get("forwarded_from"),
-                forwarded_from_name=item.get("forwardedFromName")
-                or item.get("forwarded_from_name"),
-                forwarded_from_post_id=_post_int_from_item(
-                    item, "forwardedFromPostId", "forwarded_from_post_id"
-                ),
-                media=_post_media_from_item(item),
-                links=_post_links_from_item(item),
-                link_spans=_post_link_spans_from_item(item),
-                reply_to_post_id=_post_int_from_item(
-                    item, "replyToPostId", "reply_to_post_id"
-                ),
-                reply_to=_post_reply_from_item(item),
+                **columns,
                 retrieved_at=now_ms,
                 retrieval_job_id=job_id,
                 retrieval_pass=pass_val,

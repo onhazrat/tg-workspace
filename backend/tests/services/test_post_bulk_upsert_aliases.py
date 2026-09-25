@@ -7,6 +7,9 @@ insert defaults a missing field, an update leaves the stored value alone for the
 key-guarded fields and overwrites the rest. Nothing else pinned the snake half
 or the per-field guards, so a normaliser that read one spelling fewer, or
 guarded one field more, would have passed the suite.
+
+`_item_fields`, the one normaliser both branches share, is tested directly at
+the bottom.
 """
 
 from __future__ import annotations
@@ -17,7 +20,7 @@ from sqlmodel import Session, select
 
 from app.core.db import engine
 from app.models_tg import Post
-from app.services.posts import bulk_upsert_posts_impl
+from app.services.posts import _item_fields, bulk_upsert_posts_impl
 
 CHANNEL = "aliaschan"
 REPLY = {"channel": "other", "authorName": "a", "text": "t", "url": "u"}
@@ -160,3 +163,83 @@ def test_an_update_with_new_words_and_no_spans_drops_the_spans() -> None:
     _upsert([{"channelName": CHANNEL, "id": 1, "text": "new"}])
     with Session(engine) as session:
         assert _post(session, 1).link_spans is None
+
+
+def test_item_fields_of_an_empty_item_names_only_the_unguarded_three() -> None:
+    assert _item_fields({}) == {
+        "forwarded_from": None,
+        "forwarded_from_name": None,
+        "reply_to_post_id": None,
+    }
+
+
+def test_item_fields_reads_camel_case() -> None:
+    item = {
+        "text": "t",
+        "date": "d",
+        "timestamp": 5,
+        "forwardedFrom": "src",
+        "forwardedFromName": "Source",
+        "forwardedFromPostId": 9,
+        "replyToPostId": 3,
+        "media": {"kinds": []},
+        "links": ["x"],
+        "linkSpans": [SPAN],
+        "replyTo": REPLY,
+    }
+    assert _item_fields(item) == {
+        "text": "t",
+        "date": "d",
+        "timestamp": 5,
+        "forwarded_from": "src",
+        "forwarded_from_name": "Source",
+        "forwarded_from_post_id": 9,
+        "reply_to_post_id": 3,
+        "media": {"kinds": []},
+        "links": ["x"],
+        "link_spans": [SPAN],
+        "reply_to": REPLY,
+    }
+
+
+def test_item_fields_reads_snake_case_except_for_the_reply() -> None:
+    item = {
+        "forwarded_from": "src",
+        "forwarded_from_name": "Source",
+        "forwarded_from_post_id": 9,
+        "reply_to_post_id": 3,
+        "link_spans": [SPAN],
+        "reply_to": REPLY,
+    }
+    assert _item_fields(item) == {
+        "forwarded_from": "src",
+        "forwarded_from_name": "Source",
+        "forwarded_from_post_id": 9,
+        "reply_to_post_id": 3,
+        "link_spans": [SPAN],
+    }
+
+
+def test_item_fields_keeps_a_present_key_even_when_its_value_is_unusable() -> None:
+    """A guarded key that is present is written, as its normaliser reads it."""
+    item = {
+        "text": None,
+        "forwardedFrom": "",
+        "forwardedFromPostId": "9",
+        "replyToPostId": True,
+        "media": "nope",
+        "links": "nope",
+        "linkSpans": [{"offset": True, "length": 1, "url": "x"}],
+        "replyTo": [],
+    }
+    assert _item_fields(item) == {
+        "text": None,
+        "forwarded_from": None,
+        "forwarded_from_name": None,
+        "forwarded_from_post_id": None,
+        "reply_to_post_id": None,
+        "media": None,
+        "links": None,
+        "link_spans": [],
+        "reply_to": None,
+    }
